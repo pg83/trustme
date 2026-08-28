@@ -45,9 +45,6 @@ namespace {
 
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& /*mod*/, size_t /*mod_idx*/, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
     };
-}
-
-namespace {
 
     template <typename Contents>
     void localiseInnerMacroPaths(const WireBoard& wb, Contents& contents) {

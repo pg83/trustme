@@ -114,9 +114,7 @@ namespace {
 
         void emit() override;
     };
-}
 
-namespace {
     struct CodeGeneratorC: public CodeGenerator {
         Span sp;
 
@@ -528,9 +526,7 @@ namespace {
 
         bool isDst(const HIRTypeData* ty) const;
     };
-}
 
-namespace {
     std::ostream& operator<<(std::ostream& os, const FmtShell& x) {
         for (char c : x.s) {
             switch (c) {
@@ -544,9 +540,7 @@ namespace {
         }
         return os;
     }
-}
 
-namespace {
     std::ostream& operator<<(std::ostream& os, const FmtGccAsm& x) {
         bool inComment = false;
         for (const char& ch : x.s) {
@@ -588,9 +582,7 @@ namespace {
         }
         return os;
     }
-}
 
-namespace {
     enum class AtomicOp {
         Add,
         Sub,

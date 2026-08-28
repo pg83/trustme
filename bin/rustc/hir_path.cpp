@@ -23,6 +23,72 @@ namespace {
         ObjPool* pool = poolRef.mutPtr();
         IntMap<PathNode*> table{pool};
     };
+
+    u64 contentHash(const RcString& s) {
+        return s.contentHash();
+    }
+
+    const u64 POS_STEP = 0x9E3779B97F4A7C15;
+
+    u64 key1(u64 ch, size_t i) {
+        return splitMix64(ch + (i + 1) * POS_STEP);
+    }
+
+    u64 key2(u64 ch, size_t i) {
+        return splitMix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
+    }
+
+    PathInterner& interner() {
+        static PathInterner in;
+        return in;
+    }
+
+    const HIRSimplePathData* findPath(u64 h1, u64 h2) {
+        if (auto* head = interner().table.find(h1)) {
+            for (auto* n = *head; n; n = n->next) {
+                if (n->hash2 == h2) {
+                    return n;
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    const HIRSimplePathData* addPath(u64 h1, u64 h2, ThinVector<RcString> members) {
+        auto& in = interner();
+        auto* head = in.table.find(h1);
+        auto* node = in.pool->make<PathNode>(h1, h2, std::move(members), head ? *head : nullptr);
+        if (head) {
+            *head = node;
+        } else {
+            in.table.insert(h1, node);
+        }
+        return node;
+    }
+
+    const HIRSimplePathData* internMembers(ThinVector<RcString> members) {
+        if (members.empty()) {
+            return nullptr;
+        }
+        u64 h1 = 0, h2 = 0;
+        for (size_t i = 0; i < members.size(); i++) {
+            auto ch = contentHash(members[i]);
+            h1 ^= key1(ch, i);
+            h2 ^= key2(ch, i);
+        }
+        if (const auto* d = findPath(h1, h2)) {
+            return d;
+        }
+        return addPath(h1, h2, std::move(members));
+    }
+
+    HIRCompare compareWithPlaceholders(const Span& sp, const HIRPathParams& l, const HIRPathParams& r, tCbResolveType resolvePlaceholder) {
+        return l.compareWithPlaceholders(sp, r, resolvePlaceholder);
+    }
+
+    HIRCompare compareWithPlaceholders(const Span& sp, const HIRGenericPath& l, const HIRGenericPath& r, tCbResolveType resolvePlaceholder) {
+        return l.compareWithPlaceholders(sp, r, resolvePlaceholder);
+    }
 }
 
 HIRTraitPath::HIRTraitPath()
@@ -140,67 +206,6 @@ std::ostream& operator<<(std::ostream& os, const HIRPath& x) {
         }
     }
     return os;
-}
-
-namespace {
-
-    u64 contentHash(const RcString& s) {
-        return s.contentHash();
-    }
-
-    const u64 POS_STEP = 0x9E3779B97F4A7C15;
-
-    u64 key1(u64 ch, size_t i) {
-        return splitMix64(ch + (i + 1) * POS_STEP);
-    }
-
-    u64 key2(u64 ch, size_t i) {
-        return splitMix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
-    }
-
-    PathInterner& interner() {
-        static PathInterner in;
-        return in;
-    }
-
-    const HIRSimplePathData* findPath(u64 h1, u64 h2) {
-        if (auto* head = interner().table.find(h1)) {
-            for (auto* n = *head; n; n = n->next) {
-                if (n->hash2 == h2) {
-                    return n;
-                }
-            }
-        }
-        return nullptr;
-    }
-
-    const HIRSimplePathData* addPath(u64 h1, u64 h2, ThinVector<RcString> members) {
-        auto& in = interner();
-        auto* head = in.table.find(h1);
-        auto* node = in.pool->make<PathNode>(h1, h2, std::move(members), head ? *head : nullptr);
-        if (head) {
-            *head = node;
-        } else {
-            in.table.insert(h1, node);
-        }
-        return node;
-    }
-
-    const HIRSimplePathData* internMembers(ThinVector<RcString> members) {
-        if (members.empty()) {
-            return nullptr;
-        }
-        u64 h1 = 0, h2 = 0;
-        for (size_t i = 0; i < members.size(); i++) {
-            auto ch = contentHash(members[i]);
-            h1 ^= key1(ch, i);
-            h2 ^= key2(ch, i);
-        }
-        if (const auto* d = findPath(h1, h2)) {
-            return d;
-        }
-        return addPath(h1, h2, std::move(members));
-    }
 }
 
 HIRSimplePath HIRSimplePath::parent() const {
@@ -624,16 +629,6 @@ HIRCompare HIRGenericPath::compareWithPlaceholders(const Span& sp, const HIRGene
     }
 
     return this->params.compareWithPlaceholders(sp, x.params, resolvePlaceholder);
-}
-
-namespace {
-    HIRCompare compareWithPlaceholders(const Span& sp, const HIRPathParams& l, const HIRPathParams& r, tCbResolveType resolvePlaceholder) {
-        return l.compareWithPlaceholders(sp, r, resolvePlaceholder);
-    }
-
-    HIRCompare compareWithPlaceholders(const Span& sp, const HIRGenericPath& l, const HIRGenericPath& r, tCbResolveType resolvePlaceholder) {
-        return l.compareWithPlaceholders(sp, r, resolvePlaceholder);
-    }
 }
 
 #define CMP(rv, cmp)                        \

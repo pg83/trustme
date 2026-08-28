@@ -132,105 +132,6 @@ namespace {
         char** argv;
         int result;
     };
-}
-
-void ExpandTestHarness(ASTCrate& crate) {
-    ASSERT_BUG(Span(), crate.extCratenameTest != "", "Crate `test` not loaded");
-    ASSERT_BUG(Span(), crate.extCratenameStd != "", "Crate `std` not loaded");
-    auto cTest = crate.extCratenameTest;
-
-    auto mainFn = ASTFunction{Span(), mkType(*crate.pool, ASTTypeTags::Unit(), Span()), {}};
-    {
-        auto callNode = NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("test_main_static")}), ::makeVec1(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(NamedValue, ASTPath("", {ASTPathNode("test#"), ASTPathNode("TESTS")})))));
-        mainFn.setCode(mv$(callNode));
-    }
-
-    std::vector<ASTExprNodeP> testNodes;
-
-    for (const auto& test : crate.tests) {
-        ASTExprNodeStructLiteral::tValues descVals;
-        descVals.push_back({{}, "name", NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("StaticTestName")}), ::makeVec1(NEWNODE(String, test.name)))});
-        descVals.push_back({{}, "ignore", NEWNODE(Bool, test.ignore)});
-        {
-            ASTExprNodeP shouldPanicVal;
-            switch (test.panicType) {
-                case ASTTestDesc::ShouldPanic::No:
-                    shouldPanicVal = NEWNODE(NamedValue, ASTPath(cTest, {ASTPathNode("ShouldPanic"), ASTPathNode("No")}));
-                    break;
-                case ASTTestDesc::ShouldPanic::Yes:
-                    shouldPanicVal = NEWNODE(NamedValue, ASTPath(cTest, {ASTPathNode("ShouldPanic"), ASTPathNode("Yes")}));
-                    break;
-                case ASTTestDesc::ShouldPanic::YesWithMessage:
-                    shouldPanicVal = NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("ShouldPanic"), ASTPathNode("YesWithMessage")}), makeVec1(NEWNODE(String, test.expectedPanicMessage)));
-                    break;
-            }
-            descVals.push_back({{}, "should_panic", mv$(shouldPanicVal)});
-        }
-        {
-            // TODO: Get this from attributes
-            descVals.push_back({{}, "compile_fail", NEWNODE(Bool, false)});
-            descVals.push_back({{}, "no_run", NEWNODE(Bool, false)});
-            descVals.push_back({{}, "test_type", NEWNODE(NamedValue, ASTPath(cTest, {ASTPathNode("TestType"), ASTPathNode("UnitTest")}))});
-        }
-        {
-            descVals.push_back({{}, "ignore_message", NEWNODE(NamedValue, ASTPath(crate.extCratenameStd, {ASTPathNode("option"), ASTPathNode("Option"), ASTPathNode("None")}))});
-            auto sp = test.span.getTopFileSpan();
-            descVals.push_back({{}, "source_file", NEWNODE(String, sp.filename.c_str())});
-            descVals.push_back({{}, "start_line", NEWNODE(Integer, U128(sp.startLine), CORETYPE_UINT)});
-            descVals.push_back({{}, "start_col", NEWNODE(Integer, U128(sp.startOfs), CORETYPE_UINT)});
-            descVals.push_back({{}, "end_line", NEWNODE(Integer, U128(sp.endLine), CORETYPE_UINT)});
-            descVals.push_back({{}, "end_col", NEWNODE(Integer, U128(sp.endOfs), CORETYPE_UINT)});
-        }
-        auto descExpr = NEWNODE(StructLiteral, ASTPath(cTest, {ASTPathNode("TestDesc")}), nullptr, mv$(descVals));
-
-        ASTExprNodeStructLiteral::tValues descandfnVals;
-        descandfnVals.push_back({{}, RcString::newInterned("desc"), mv$(descExpr)});
-
-        auto testFcnNode = NEWNODE(NamedValue, ASTPath(test.path));
-        {
-            testFcnNode = NEWNODE(Closure, {}, mkType(*crate.pool, Span()), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, ASTPath(test.path), {}))), false, false, false);
-        }
-        auto testTypeVarName = test.isBenchmark ? "StaticBenchFn" : "StaticTestFn";
-        descandfnVals.push_back({{}, RcString::newInterned("testfn"), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode(testTypeVarName)}), ::makeVec1(std::move(testFcnNode)))});
-
-        testNodes.push_back(NEWNODE(StructLiteral, ASTPath(cTest, {ASTPathNode("TestDescAndFn")}), nullptr, mv$(descandfnVals)));
-        {
-            testNodes.back() = NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(testNodes.back()));
-        }
-    }
-    auto* testsArray = new ASTExprNodeArray(mv$(testNodes));
-
-    size_t testCount = testsArray->values.size();
-    auto listItemTy = mkType(*crate.pool, Span(), ASTPath(cTest, {ASTPathNode("TestDescAndFn")}));
-    {
-        listItemTy = mkType(*crate.pool, ASTTypeTags::Reference(), Span(), ASTLifetimeRef::newStatic(), false, mv$(listItemTy));
-    }
-    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mv$(listItemTy), std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
-
-    auto newmod = ASTModule{ASTAbsolutePath("", {"test#"})};
-    auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
-    // - TODO: These need to be loaded too.
-
-    newmod.addItem(Span(), visPrivate, "main", mv$(mainFn), {});
-    newmod.addItem(Span(), visPrivate, "TESTS", mv$(testsList), {});
-
-    crate.rootModule_.addItem(Span(), visPrivate, "test#", mv$(newmod), {});
-    crate.langItems["trustme-main"] = ASTAbsolutePath("", {"test#", "main"});
-}
-
-#undef NEWNODE
-
-#ifndef __has_feature
-    #define __has_feature(x) 0
-#endif
-
-#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)
-    #define TRUSTME_SANITIZER_BUILD 1
-#else
-    #define TRUSTME_SANITIZER_BUILD 0
-#endif
-
-namespace {
 
     std::string CrateNameFromFile(const std::string& infile) {
         auto s = infile.find_last_of('/');
@@ -251,9 +152,7 @@ namespace {
         }
         return rv;
     }
-}
 
-namespace {
     static int compile(int argc, char* argv[]) {
 #if TRUSTME_SANITIZER_BUILD
         auto poolOwner = ObjPool::fromMemory();
@@ -842,9 +741,6 @@ namespace {
 
         return 0;
     }
-}
-
-namespace {
 
     void* compileOnThread(void* raw) {
         auto& args = *static_cast<CompileArgs*>(raw);
@@ -856,7 +752,118 @@ namespace {
         }
         return nullptr;
     }
+
+    static void printRustcVersion(bool verbose) {
+        const char* rustcTarget = RUSTC_TARGET_VERSION;
+
+        std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << std::endl;
+        if (!verbose) {
+            return;
+        }
+        std::cout << "binary: rustc" << std::endl;
+        std::cout << "commit-hash: " << VersionGetGitHash() << std::endl;
+        std::cout << "commit-date: UNKNOWN" << std::endl;
+        std::cout << "build-date: " << VersionGetBuildTime() << std::endl;
+        std::cout << "host: UNKNOWN" << std::endl;
+        std::cout << "release: " << rustcTarget << ".100" << std::endl;
+    }
 }
+
+void ExpandTestHarness(ASTCrate& crate) {
+    ASSERT_BUG(Span(), crate.extCratenameTest != "", "Crate `test` not loaded");
+    ASSERT_BUG(Span(), crate.extCratenameStd != "", "Crate `std` not loaded");
+    auto cTest = crate.extCratenameTest;
+
+    auto mainFn = ASTFunction{Span(), mkType(*crate.pool, ASTTypeTags::Unit(), Span()), {}};
+    {
+        auto callNode = NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("test_main_static")}), ::makeVec1(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(NamedValue, ASTPath("", {ASTPathNode("test#"), ASTPathNode("TESTS")})))));
+        mainFn.setCode(mv$(callNode));
+    }
+
+    std::vector<ASTExprNodeP> testNodes;
+
+    for (const auto& test : crate.tests) {
+        ASTExprNodeStructLiteral::tValues descVals;
+        descVals.push_back({{}, "name", NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("StaticTestName")}), ::makeVec1(NEWNODE(String, test.name)))});
+        descVals.push_back({{}, "ignore", NEWNODE(Bool, test.ignore)});
+        {
+            ASTExprNodeP shouldPanicVal;
+            switch (test.panicType) {
+                case ASTTestDesc::ShouldPanic::No:
+                    shouldPanicVal = NEWNODE(NamedValue, ASTPath(cTest, {ASTPathNode("ShouldPanic"), ASTPathNode("No")}));
+                    break;
+                case ASTTestDesc::ShouldPanic::Yes:
+                    shouldPanicVal = NEWNODE(NamedValue, ASTPath(cTest, {ASTPathNode("ShouldPanic"), ASTPathNode("Yes")}));
+                    break;
+                case ASTTestDesc::ShouldPanic::YesWithMessage:
+                    shouldPanicVal = NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("ShouldPanic"), ASTPathNode("YesWithMessage")}), makeVec1(NEWNODE(String, test.expectedPanicMessage)));
+                    break;
+            }
+            descVals.push_back({{}, "should_panic", mv$(shouldPanicVal)});
+        }
+        {
+            // TODO: Get this from attributes
+            descVals.push_back({{}, "compile_fail", NEWNODE(Bool, false)});
+            descVals.push_back({{}, "no_run", NEWNODE(Bool, false)});
+            descVals.push_back({{}, "test_type", NEWNODE(NamedValue, ASTPath(cTest, {ASTPathNode("TestType"), ASTPathNode("UnitTest")}))});
+        }
+        {
+            descVals.push_back({{}, "ignore_message", NEWNODE(NamedValue, ASTPath(crate.extCratenameStd, {ASTPathNode("option"), ASTPathNode("Option"), ASTPathNode("None")}))});
+            auto sp = test.span.getTopFileSpan();
+            descVals.push_back({{}, "source_file", NEWNODE(String, sp.filename.c_str())});
+            descVals.push_back({{}, "start_line", NEWNODE(Integer, U128(sp.startLine), CORETYPE_UINT)});
+            descVals.push_back({{}, "start_col", NEWNODE(Integer, U128(sp.startOfs), CORETYPE_UINT)});
+            descVals.push_back({{}, "end_line", NEWNODE(Integer, U128(sp.endLine), CORETYPE_UINT)});
+            descVals.push_back({{}, "end_col", NEWNODE(Integer, U128(sp.endOfs), CORETYPE_UINT)});
+        }
+        auto descExpr = NEWNODE(StructLiteral, ASTPath(cTest, {ASTPathNode("TestDesc")}), nullptr, mv$(descVals));
+
+        ASTExprNodeStructLiteral::tValues descandfnVals;
+        descandfnVals.push_back({{}, RcString::newInterned("desc"), mv$(descExpr)});
+
+        auto testFcnNode = NEWNODE(NamedValue, ASTPath(test.path));
+        {
+            testFcnNode = NEWNODE(Closure, {}, mkType(*crate.pool, Span()), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, ASTPath(test.path), {}))), false, false, false);
+        }
+        auto testTypeVarName = test.isBenchmark ? "StaticBenchFn" : "StaticTestFn";
+        descandfnVals.push_back({{}, RcString::newInterned("testfn"), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode(testTypeVarName)}), ::makeVec1(std::move(testFcnNode)))});
+
+        testNodes.push_back(NEWNODE(StructLiteral, ASTPath(cTest, {ASTPathNode("TestDescAndFn")}), nullptr, mv$(descandfnVals)));
+        {
+            testNodes.back() = NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(testNodes.back()));
+        }
+    }
+    auto* testsArray = new ASTExprNodeArray(mv$(testNodes));
+
+    size_t testCount = testsArray->values.size();
+    auto listItemTy = mkType(*crate.pool, Span(), ASTPath(cTest, {ASTPathNode("TestDescAndFn")}));
+    {
+        listItemTy = mkType(*crate.pool, ASTTypeTags::Reference(), Span(), ASTLifetimeRef::newStatic(), false, mv$(listItemTy));
+    }
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mv$(listItemTy), std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
+
+    auto newmod = ASTModule{ASTAbsolutePath("", {"test#"})};
+    auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
+    // - TODO: These need to be loaded too.
+
+    newmod.addItem(Span(), visPrivate, "main", mv$(mainFn), {});
+    newmod.addItem(Span(), visPrivate, "TESTS", mv$(testsList), {});
+
+    crate.rootModule_.addItem(Span(), visPrivate, "test#", mv$(newmod), {});
+    crate.langItems["trustme-main"] = ASTAbsolutePath("", {"test#", "main"});
+}
+
+#undef NEWNODE
+
+#ifndef __has_feature
+    #define __has_feature(x) 0
+#endif
+
+#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)
+    #define TRUSTME_SANITIZER_BUILD 1
+#else
+    #define TRUSTME_SANITIZER_BUILD 0
+#endif
 
 int main(int argc, char* argv[]) {
     size_t stackSize = 1024u * 1024 * 1024;
@@ -877,23 +884,6 @@ int main(int argc, char* argv[]) {
     pthread_join(thread, nullptr);
     pthread_attr_destroy(&attr);
     return args.result;
-}
-
-namespace {
-    static void printRustcVersion(bool verbose) {
-        const char* rustcTarget = RUSTC_TARGET_VERSION;
-
-        std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << std::endl;
-        if (!verbose) {
-            return;
-        }
-        std::cout << "binary: rustc" << std::endl;
-        std::cout << "commit-hash: " << VersionGetGitHash() << std::endl;
-        std::cout << "commit-date: UNKNOWN" << std::endl;
-        std::cout << "build-date: " << VersionGetBuildTime() << std::endl;
-        std::cout << "host: UNKNOWN" << std::endl;
-        std::cout << "release: " << rustcTarget << ".100" << std::endl;
-    }
 }
 
 ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {

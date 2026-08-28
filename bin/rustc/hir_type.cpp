@@ -24,629 +24,6 @@ namespace {
 
         static TypeFmtStream* from(std::ostream& output);
     };
-}
-
-Ordering ord(const HIRTypeData* l, const HIRTypeData* r) {
-    if (l == r) {
-        return OrdEqual;
-    }
-    assert(l->uid != r->uid);
-    return l->uid < r->uid ? OrdLess : OrdGreater;
-}
-
-std::ostream& operator<<(std::ostream& os, const HIRTypeData* ty) {
-    if (ty) {
-        ty->fmt(os);
-    } else {
-        os << "NULL";
-    }
-    return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const HIRCoreType& ct) {
-    switch (ct) {
-        case HIRCoreType::Usize:
-            return os << "usize";
-        case HIRCoreType::Isize:
-            return os << "isize";
-        case HIRCoreType::U8:
-            return os << "u8";
-        case HIRCoreType::I8:
-            return os << "i8";
-        case HIRCoreType::U16:
-            return os << "u16";
-        case HIRCoreType::I16:
-            return os << "i16";
-        case HIRCoreType::U32:
-            return os << "u32";
-        case HIRCoreType::I32:
-            return os << "i32";
-        case HIRCoreType::U64:
-            return os << "u64";
-        case HIRCoreType::I64:
-            return os << "i64";
-        case HIRCoreType::U128:
-            return os << "u128";
-        case HIRCoreType::I128:
-            return os << "i128";
-
-        case HIRCoreType::F16:
-            return os << "f16";
-        case HIRCoreType::F32:
-            return os << "f32";
-        case HIRCoreType::F64:
-            return os << "f64";
-        case HIRCoreType::F128:
-            return os << "f128";
-
-        case HIRCoreType::Bool:
-            return os << "bool";
-        case HIRCoreType::Char:
-            return os << "char";
-        case HIRCoreType::Str:
-            return os << "str";
-    }
-    assert(!"Bad CoreType value");
-    return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const HIRBorrowType& bt) {
-    switch (bt) {
-        case HIRBorrowType::Owned:
-            return os << "Owned";
-        case HIRBorrowType::Unique:
-            return os << "Unique";
-        case HIRBorrowType::Shared:
-            return os << "Shared";
-    }
-    return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const HIRArraySize& x) {
-    switch (x.tag()) {
-        case HIRArraySize::TAG_Unevaluated: {
-            auto& se = x.as_Unevaluated();
-            os << se;
-            break;
-        }
-        case HIRArraySize::TAG_Known: {
-            auto& se = x.as_Known();
-            os << se;
-            break;
-        }
-    }
-    return os;
-}
-
-HIRTypePatternRange HIRTypePatternRange::clone() const {
-    return {hasStart, start.clone(), hasEnd, end.clone(), endInclusive};
-}
-
-Ordering HIRTypePatternRange::ord(const HIRTypePatternRange& x) const {
-    ORD(hasStart, x.hasStart);
-    if (hasStart) {
-        ORD(start, x.start);
-    }
-    ORD(hasEnd, x.hasEnd);
-    if (hasEnd) {
-        ORD(end, x.end);
-    }
-    ORD(endInclusive, x.endInclusive);
-    return OrdEqual;
-}
-
-void HIRTypePatternRange::fmt(std::ostream& os) const {
-    if (hasStart) {
-        os << start;
-    }
-    os << (endInclusive ? "..=" : "..");
-    if (hasEnd) {
-        os << end;
-    }
-}
-
-HIRTypePattern HIRTypePattern::clone() const {
-    HIRTypePattern rv;
-    rv.alternatives.reserve(alternatives.size());
-    for (const auto& range : alternatives) {
-        rv.alternatives.push_back(range.clone());
-    }
-    return rv;
-}
-
-Ordering HIRTypePattern::ord(const HIRTypePattern& x) const {
-    ORD(alternatives.size(), x.alternatives.size());
-    for (size_t i = 0; i < alternatives.size(); i++) {
-        auto rv = alternatives[i].ord(x.alternatives[i]);
-        if (rv != OrdEqual) {
-            return rv;
-        }
-    }
-    return OrdEqual;
-}
-
-void HIRTypePattern::fmt(std::ostream& os) const {
-    for (size_t i = 0; i < alternatives.size(); i++) {
-        if (i != 0) {
-            os << " | ";
-        }
-        alternatives[i].fmt(os);
-    }
-}
-
-void HIRGenericRef::fmt(std::ostream& os) const {
-    os << this->name << "/*";
-    if (this->isSolverExistential()) {
-        os << "E:" << this->solverScope << ":" << this->idx();
-    } else if (this->binding == GENERICSelf) {
-        os << "";
-    } else {
-        switch (this->group()) {
-            case 0:
-                os << "I:" << this->idx();
-                break;
-            case 1:
-                os << "M:" << this->idx();
-                break;
-            case 2:
-                os << "P:" << this->idx();
-                break;
-            case 3:
-                os << "H:" << this->idx();
-                break;
-            default:
-                os << this->binding;
-                break;
-        }
-    }
-    os << "*/";
-}
-
-Ordering HIRArraySize::ord(const HIRArraySize& x) const {
-    if (this->tag() != x.tag()) {
-        return ::ord(static_cast<unsigned>(this->tag()), static_cast<unsigned>(x.tag()));
-    }
-    switch ((*this).tag()) {
-        case HIRArraySize::TAG_Unevaluated: {
-            auto& tse = (*this).as_Unevaluated();
-            auto& xse = x.as_Unevaluated();
-            return ::ord(tse, xse);
-        }
-        case HIRArraySize::TAG_Known: {
-            auto& tse = (*this).as_Known();
-            auto& xse = x.as_Known();
-            return ::ord(tse, xse);
-        }
-    }
-    UNREACHABLE();
-}
-
-HIRArraySize HIRArraySize::clone() const {
-    switch ((*this).tag()) {
-        case HIRArraySize::TAG_Unevaluated: {
-            auto& se = (*this).as_Unevaluated();
-            return se.clone();
-        }
-        case HIRArraySize::TAG_Known: {
-            auto& se = (*this).as_Known();
-            return se;
-        }
-    }
-    UNREACHABLE();
-}
-
-HIRTypeDataErasedTypeAliasInner::HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& paramsOuter, const HIRGenericParams* paramsInner)
-    : path(p.getSimplePath())
-    , type()
-{
-    this->generics = paramsOuter.clone();
-    this->generics.bounds.clear();
-    if (!paramsInner) {
-        return;
-    }
-
-    this->generics.types.reserve(this->generics.types.size() + paramsInner->types.size());
-    for (const auto& type : paramsInner->types) {
-        this->generics.types.push_back(HIRTypeParamDef{type.name, type.defaultValue, type.isSized});
-    }
-    this->generics.values.reserve(this->generics.values.size() + paramsInner->values.size());
-    for (const auto& value : paramsInner->values) {
-        this->generics.values.push_back(HIRValueParamDef{value.name, value.type, value.defaultValue.clone()});
-    }
-
-    this->generics.paramKinds.clear();
-    this->generics.paramKinds.grow(paramsOuter.paramCount() + paramsInner->paramCount());
-    for (size_t i = 0; i < paramsOuter.paramCount(); i++) {
-        this->generics.paramKinds.pushBack(paramsOuter.paramKindAt(i));
-    }
-    for (size_t i = 0; i < paramsInner->paramCount(); i++) {
-        this->generics.paramKinds.pushBack(paramsInner->paramKindAt(i));
-    }
-}
-
-bool HIRTypeDataErasedTypeAliasInner::isLocalTo(const HIRSimplePath& p) const {
-    const auto components = path.components();
-    bool local = false;
-    for (size_t i = 0; i + 1 < components.size(); i++) {
-        if (components[i].c_str()[0] == '#') {
-            local = true;
-            break;
-        }
-    }
-    return local && p.startsWith(path, /*skip_last=*/true);
-}
-
-HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterner& types, const Span& sp) const {
-    const HIRTypeData* tySelf = nullptr;
-    const HIRPathParams* ppImpl = nullptr;
-    const HIRPathParams* ppMethod = nullptr;
-
-    switch (this->def.tag()) {
-        case HIRTypeDataNamedFunctionTy::TAG_Function: {
-            auto& fp = this->def.as_Function();
-            ASSERT_BUG(sp, fp, "Non-initialised NamedFunction definition: " << this->path);
-            switch (this->path.data.tag()) {
-                case HIRPathData::TAG_Generic: {
-                    auto& pe = this->path.data.as_Generic();
-                    ppMethod = &pe.params;
-                    break;
-                }
-                case HIRPathData::TAG_UfcsKnown: {
-                    auto& pe = this->path.data.as_UfcsKnown();
-                    tySelf = pe.type;
-                    ppImpl = &pe.trait.params;
-                    ppMethod = &pe.params;
-                    break;
-                }
-                case HIRPathData::TAG_UfcsInherent: {
-                    auto& pe = this->path.data.as_UfcsInherent();
-                    tySelf = pe.type;
-                    ppImpl = &pe.implParams;
-                    ppMethod = &pe.params;
-                    break;
-                }
-                case HIRPathData::TAG_UfcsUnknown: {
-                    BUG(sp, "UfcsUnknown seen");
-                    break;
-                }
-            }
-            MonomorphStatePtr ms{types, tySelf, ppImpl, ppMethod};
-            const auto& f = *fp;
-            HIRTypeDataFunctionPointer ft{f.unsafe, f.variadic, f.abi, ms.monomorphType(sp, f.returnType), {}};
-            for (size_t i = 0; i < f.fixedArgCount(); i++) {
-                ft.argTypes.push_back(ms.monomorphType(sp, f.args[i].second));
-            }
-            return mv$(ft);
-        }
-        case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
-            auto& ec = this->def.as_EnumConstructor();
-            const auto& e = this->path.data.as_Generic();
-            MonomorphStatePtr ms{types, nullptr, &e.params, nullptr};
-            auto enumPath = e.path.parent();
-            const auto& enm = *ec.e;
-            ASSERT_BUG(sp, enm.data.is_Data(), "Enum " << enumPath << " isn't a data-holding enum");
-            const auto& varTy = enm.data.as_Data()[ec.v].type;
-            const auto& str = *varTy->as_Path().binding.as_Struct();
-            const auto& varData = str.data.as_Tuple();
-
-            HIRTypeDataFunctionPointer ft{false, false, RcString::newInterned(ABI_RUST), types.path(HIRPath(HIRGenericPath(mv$(enumPath), e.params.clone())), HIRTypePathBinding::make_Enum(&enm)), {}};
-            for (const auto& arg : varData) {
-                ft.argTypes.push_back(ms.monomorphType(sp, arg.ent));
-            }
-            return ft;
-        }
-        case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
-            auto& p = this->def.as_StructConstructor();
-            const auto& e = this->path.data.as_Generic();
-            MonomorphStatePtr ms{types, nullptr, &e.params, nullptr};
-            HIRTypeDataFunctionPointer ft{false, false, RcString::newInterned(ABI_RUST), types.path(this->path.clone(), HIRTypePathBinding::make_Struct(p)), {}};
-            for (const auto& arg : p->data.as_Tuple()) {
-                ft.argTypes.push_back(ms.monomorphType(sp, arg.ent));
-            }
-            return ft;
-        }
-    }
-    BUG(sp, "Unreachable code?");
-}
-
-void HIRTypeData::fmt(std::ostream& os) const {
-    auto* context = TypeFmtStream::from(os);
-    if (!context) {
-        TypeFmtStream fmtStream(os);
-        fmt(fmtStream);
-        return;
-    }
-
-    for (auto* node = context->recurseStack; node; node = node->next) {
-        if (node->type == this) {
-            os << "RECURSE";
-            return;
-        }
-    }
-
-    const TypeFmtRecursionNode recursionNode{this, context->recurseStack};
-    context->recurseStack = &recursionNode;
-    STD_DEFER {
-        context->recurseStack = recursionNode.next;
-    };
-
-    switch ((*this).tag()) {
-        case HIRTypeData::TAG_Infer: {
-            auto& e = (*this).as_Infer();
-            os << "_";
-            if (e.index != ~0u || e.tyClass != HIRInferClass::None) {
-                os << "/*";
-                if (e.index != ~0u) {
-                    os << e.index;
-                }
-                switch (e.tyClass) {
-                    case HIRInferClass::None:
-                        break;
-                    case HIRInferClass::Float:
-                        os << ":f";
-                        break;
-                    case HIRInferClass::Integer:
-                        os << ":i";
-                        break;
-                }
-                os << "*/";
-            }
-            break;
-        }
-        case HIRTypeData::TAG_Diverge: {
-            os << "!";
-            break;
-        }
-        case HIRTypeData::TAG_Primitive: {
-            auto& e = (*this).as_Primitive();
-            os << e;
-            break;
-        }
-        case HIRTypeData::TAG_Path: {
-            auto& e = (*this).as_Path();
-            os << e.path;
-            switch (e.binding.tag()) {
-                case HIRTypePathBinding::TAG_Unbound: {
-                    os << "/*?*/";
-                    break;
-                }
-                case HIRTypePathBinding::TAG_Opaque: {
-                    os << "/*O*/";
-                    break;
-                }
-                case HIRTypePathBinding::TAG_ExternType: {
-                    os << "/*X*/";
-                    break;
-                }
-                case HIRTypePathBinding::TAG_Struct: {
-                    os << "/*S*/";
-                    break;
-                }
-                case HIRTypePathBinding::TAG_Union: {
-                    os << "/*U*/";
-                    break;
-                }
-                case HIRTypePathBinding::TAG_Enum: {
-                    os << "/*E*/";
-                    break;
-                }
-            }
-            break;
-        }
-        case HIRTypeData::TAG_Generic: {
-            auto& e = (*this).as_Generic();
-            os << e;
-            break;
-        }
-        case HIRTypeData::TAG_TraitObject: {
-            auto& e = (*this).as_TraitObject();
-            os << "dyn (";
-            if (e.trait.path != HIRGenericPath()) {
-                os << e.trait;
-            }
-            for (const auto& tr : e.markers) {
-                os << "+" << tr;
-            }
-            os << ")";
-            if (e.lifetimeIdentity != "") {
-                os << "/*regions:" << e.lifetimeIdentity << "*/";
-            }
-            break;
-        }
-        case HIRTypeData::TAG_ErasedType: {
-            auto& e = (*this).as_ErasedType();
-            os << "impl ";
-            for (const auto& tr : e.traits) {
-                if (&tr != &e.traits[0]) {
-                    os << "+";
-                }
-                os << tr;
-            }
-            os << "+use" << e.use;
-            os << "/*";
-            switch (e.inner.tag()) {
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& ee = e.inner.as_Known();
-                    os << "= " << ee;
-                    break;
-                }
-                case TypeDataErasedTypeInner::TAG_Fcn: {
-                    auto& ee = e.inner.as_Fcn();
-                    os << "fn " << ee.origin << "#" << ee.index;
-                    break;
-                }
-                case TypeDataErasedTypeInner::TAG_Alias: {
-                    auto& ee = e.inner.as_Alias();
-                    os << "type" << ee.params << " " << ee.inner->path;
-                    break;
-                }
-            }
-            os << "*/";
-            break;
-        }
-        case HIRTypeData::TAG_Array: {
-            auto& e = (*this).as_Array();
-            os << "[" << e.inner << "; " << e.size << "]";
-            break;
-        }
-        case HIRTypeData::TAG_Slice: {
-            auto& e = (*this).as_Slice();
-            os << "[" << e.inner << "]";
-            break;
-        }
-        case HIRTypeData::TAG_Pattern: {
-            auto& e = (*this).as_Pattern();
-            os << e.inner << " is ";
-            e.pattern.fmt(os);
-            break;
-        }
-        case HIRTypeData::TAG_Tuple: {
-            auto& e = (*this).as_Tuple();
-            os << "(";
-            for (const auto& t : e) {
-                os << t << ", ";
-            }
-            os << ")";
-            break;
-        }
-        case HIRTypeData::TAG_Borrow: {
-            auto& e = (*this).as_Borrow();
-            os << "&";
-            switch (e.type) {
-                case HIRBorrowType::Shared:
-                    os << "";
-                    break;
-                case HIRBorrowType::Unique:
-                    os << "mut ";
-                    break;
-                case HIRBorrowType::Owned:
-                    os << "move ";
-                    break;
-            }
-            os << e.inner;
-            break;
-        }
-        case HIRTypeData::TAG_Pointer: {
-            auto& e = (*this).as_Pointer();
-            switch (e.type) {
-                case HIRBorrowType::Shared:
-                    os << "*const ";
-                    break;
-                case HIRBorrowType::Unique:
-                    os << "*mut ";
-                    break;
-                case HIRBorrowType::Owned:
-                    os << "*move ";
-                    break;
-            }
-            os << e.inner;
-            break;
-        }
-        case HIRTypeData::TAG_NamedFunction: {
-            auto& e = (*this).as_NamedFunction();
-            os << "fn{" << (e.def.is_Function() && !e.def.as_Function() ? "!" : "") << e.path << "}";
-            break;
-        }
-        case HIRTypeData::TAG_Function: {
-            auto& e = (*this).as_Function();
-            if (e.trackCaller) {
-                os << "#[track_caller] ";
-            }
-            if (e.isUnsafe) {
-                os << "unsafe ";
-            }
-            if (e.abi != "") {
-                os << "extern \"" << e.abi << "\" ";
-            }
-            os << "fn(";
-            for (const auto& t : e.argTypes) {
-                os << t << ", ";
-            }
-            if (e.isVariadic) {
-                os << "...";
-            }
-            os << ") -> " << e.rettype;
-            if (e.lifetimeIdentity != "") {
-                os << "/*regions:" << e.lifetimeIdentity << "*/";
-            }
-            break;
-        }
-        case HIRTypeData::TAG_NodeType: {
-            auto& e = (*this).as_NodeType();
-            e.fmt(os);
-            break;
-        }
-    }
-}
-
-bool HIRTypeDataNodeType::operator==(const HIRTypeDataNodeType& x) const {
-    return this->ord(x) == OrdEqual;
-}
-
-Ordering HIRTypeDataNodeType::ord(const HIRTypeDataNodeType& x) const {
-    ORD(static_cast<int>(this->tag()), static_cast<int>(x.tag()));
-    switch ((*this).tag()) {
-        case HIRTypeDataNodeType::TAG_Closure: {
-            auto& te = (*this).as_Closure();
-            auto& xe = x.as_Closure();
-            ORD(reinterpret_cast<uintptr_t>(te), reinterpret_cast<uintptr_t>(xe));
-            break;
-        }
-        case HIRTypeDataNodeType::TAG_Generator: {
-            auto& te = (*this).as_Generator();
-            auto& xe = x.as_Generator();
-            ORD(reinterpret_cast<uintptr_t>(te), reinterpret_cast<uintptr_t>(xe));
-            break;
-        }
-        case HIRTypeDataNodeType::TAG_Async: {
-            auto& te = (*this).as_Async();
-            auto& xe = x.as_Async();
-            ORD(reinterpret_cast<uintptr_t>(te), reinterpret_cast<uintptr_t>(xe));
-            break;
-        }
-    }
-    return OrdEqual;
-}
-
-void HIRTypeDataNodeType::fmt(std::ostream& os) const {
-    switch ((*this).tag()) {
-        case HIRTypeDataNodeType::TAG_Closure: {
-            auto& e = (*this).as_Closure();
-            os << "closure[" << e << "]";
-            break;
-        }
-        case HIRTypeDataNodeType::TAG_Generator: {
-            auto& e = (*this).as_Generator();
-            os << "generator[" << e << "]";
-            break;
-        }
-        case HIRTypeDataNodeType::TAG_Async: {
-            auto& e = (*this).as_Async();
-            os << "async[" << e << "]";
-            break;
-        }
-    }
-}
-
-HIRTypeDataNodeType HIRTypeDataNodeType::clone() const {
-    switch ((*this).tag()) {
-        case HIRTypeDataNodeType::TAG_Closure: {
-            auto& e = (*this).as_Closure();
-            return e;
-        }
-        case HIRTypeDataNodeType::TAG_Generator: {
-            auto& e = (*this).as_Generator();
-            return e;
-        }
-        case HIRTypeDataNodeType::TAG_Async: {
-            auto& e = (*this).as_Async();
-            return e;
-        }
-    }
-    UNREACHABLE();
-}
-
-namespace {
 
     bool exactPathParamsEqual(const HIRPathParams& a, const HIRPathParams& b);
     bool exactGenericParamsEqual(const HIRGenericParams& a, const HIRGenericParams& b);
@@ -1532,6 +909,675 @@ namespace {
         }
         return h;
     }
+
+    HIRCompare matchGenericsPp(const Span& sp, const HIRPathParams& t, const HIRPathParams& x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) {
+        return t.matchTestGenericsFuzz(sp, x, resolvePlaceholder, callback);
+    }
+
+    HIRCompare matchValues(const Span& sp, const HIRConstGeneric& t, const HIRConstGeneric& x, HIRMatchGenerics& callback) {
+        if (const auto* e = t.opt_Generic()) {
+            return callback.matchVal(*e, x);
+        }
+
+        if (const auto* xep = x.opt_Infer()) {
+            const auto& xe = *xep;
+
+            if (xe.index != ~0u && t.is_Infer() && t.as_Infer().index == xe.index) {
+                return HIRCompare::Equal;
+            }
+
+            return HIRCompare::Fuzzy;
+        }
+        if (const auto* tep = t.opt_Infer()) {
+            const auto& te = *tep;
+            ASSERT_BUG(sp, te.index != ~0u, "Encountered ivar for `this` - " << t);
+            return HIRCompare::Fuzzy;
+        }
+
+        if (t.tag() != x.tag()) {
+            return HIRCompare::Unequal;
+        }
+
+        switch (t.tag()) {
+            case HIRConstGeneric::TAG_Infer: {
+                UNREACHABLE();
+            }
+            case HIRConstGeneric::TAG_Unevaluated: {
+                auto& te = t.as_Unevaluated();
+                auto& xe = x.as_Unevaluated();
+                return te->equivalent(*xe) ? HIRCompare::Equal : HIRCompare::Unequal;
+            }
+            case HIRConstGeneric::TAG_Generic: {
+                UNREACHABLE();
+            }
+            case HIRConstGeneric::TAG_Evaluated: {
+                auto& te = t.as_Evaluated();
+                auto& xe = x.as_Evaluated();
+                return *te == *xe ? HIRCompare::Equal : HIRCompare::Unequal;
+            }
+        }
+        UNREACHABLE();
+    }
+}
+
+Ordering ord(const HIRTypeData* l, const HIRTypeData* r) {
+    if (l == r) {
+        return OrdEqual;
+    }
+    assert(l->uid != r->uid);
+    return l->uid < r->uid ? OrdLess : OrdGreater;
+}
+
+std::ostream& operator<<(std::ostream& os, const HIRTypeData* ty) {
+    if (ty) {
+        ty->fmt(os);
+    } else {
+        os << "NULL";
+    }
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const HIRCoreType& ct) {
+    switch (ct) {
+        case HIRCoreType::Usize:
+            return os << "usize";
+        case HIRCoreType::Isize:
+            return os << "isize";
+        case HIRCoreType::U8:
+            return os << "u8";
+        case HIRCoreType::I8:
+            return os << "i8";
+        case HIRCoreType::U16:
+            return os << "u16";
+        case HIRCoreType::I16:
+            return os << "i16";
+        case HIRCoreType::U32:
+            return os << "u32";
+        case HIRCoreType::I32:
+            return os << "i32";
+        case HIRCoreType::U64:
+            return os << "u64";
+        case HIRCoreType::I64:
+            return os << "i64";
+        case HIRCoreType::U128:
+            return os << "u128";
+        case HIRCoreType::I128:
+            return os << "i128";
+
+        case HIRCoreType::F16:
+            return os << "f16";
+        case HIRCoreType::F32:
+            return os << "f32";
+        case HIRCoreType::F64:
+            return os << "f64";
+        case HIRCoreType::F128:
+            return os << "f128";
+
+        case HIRCoreType::Bool:
+            return os << "bool";
+        case HIRCoreType::Char:
+            return os << "char";
+        case HIRCoreType::Str:
+            return os << "str";
+    }
+    assert(!"Bad CoreType value");
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const HIRBorrowType& bt) {
+    switch (bt) {
+        case HIRBorrowType::Owned:
+            return os << "Owned";
+        case HIRBorrowType::Unique:
+            return os << "Unique";
+        case HIRBorrowType::Shared:
+            return os << "Shared";
+    }
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const HIRArraySize& x) {
+    switch (x.tag()) {
+        case HIRArraySize::TAG_Unevaluated: {
+            auto& se = x.as_Unevaluated();
+            os << se;
+            break;
+        }
+        case HIRArraySize::TAG_Known: {
+            auto& se = x.as_Known();
+            os << se;
+            break;
+        }
+    }
+    return os;
+}
+
+HIRTypePatternRange HIRTypePatternRange::clone() const {
+    return {hasStart, start.clone(), hasEnd, end.clone(), endInclusive};
+}
+
+Ordering HIRTypePatternRange::ord(const HIRTypePatternRange& x) const {
+    ORD(hasStart, x.hasStart);
+    if (hasStart) {
+        ORD(start, x.start);
+    }
+    ORD(hasEnd, x.hasEnd);
+    if (hasEnd) {
+        ORD(end, x.end);
+    }
+    ORD(endInclusive, x.endInclusive);
+    return OrdEqual;
+}
+
+void HIRTypePatternRange::fmt(std::ostream& os) const {
+    if (hasStart) {
+        os << start;
+    }
+    os << (endInclusive ? "..=" : "..");
+    if (hasEnd) {
+        os << end;
+    }
+}
+
+HIRTypePattern HIRTypePattern::clone() const {
+    HIRTypePattern rv;
+    rv.alternatives.reserve(alternatives.size());
+    for (const auto& range : alternatives) {
+        rv.alternatives.push_back(range.clone());
+    }
+    return rv;
+}
+
+Ordering HIRTypePattern::ord(const HIRTypePattern& x) const {
+    ORD(alternatives.size(), x.alternatives.size());
+    for (size_t i = 0; i < alternatives.size(); i++) {
+        auto rv = alternatives[i].ord(x.alternatives[i]);
+        if (rv != OrdEqual) {
+            return rv;
+        }
+    }
+    return OrdEqual;
+}
+
+void HIRTypePattern::fmt(std::ostream& os) const {
+    for (size_t i = 0; i < alternatives.size(); i++) {
+        if (i != 0) {
+            os << " | ";
+        }
+        alternatives[i].fmt(os);
+    }
+}
+
+void HIRGenericRef::fmt(std::ostream& os) const {
+    os << this->name << "/*";
+    if (this->isSolverExistential()) {
+        os << "E:" << this->solverScope << ":" << this->idx();
+    } else if (this->binding == GENERICSelf) {
+        os << "";
+    } else {
+        switch (this->group()) {
+            case 0:
+                os << "I:" << this->idx();
+                break;
+            case 1:
+                os << "M:" << this->idx();
+                break;
+            case 2:
+                os << "P:" << this->idx();
+                break;
+            case 3:
+                os << "H:" << this->idx();
+                break;
+            default:
+                os << this->binding;
+                break;
+        }
+    }
+    os << "*/";
+}
+
+Ordering HIRArraySize::ord(const HIRArraySize& x) const {
+    if (this->tag() != x.tag()) {
+        return ::ord(static_cast<unsigned>(this->tag()), static_cast<unsigned>(x.tag()));
+    }
+    switch ((*this).tag()) {
+        case HIRArraySize::TAG_Unevaluated: {
+            auto& tse = (*this).as_Unevaluated();
+            auto& xse = x.as_Unevaluated();
+            return ::ord(tse, xse);
+        }
+        case HIRArraySize::TAG_Known: {
+            auto& tse = (*this).as_Known();
+            auto& xse = x.as_Known();
+            return ::ord(tse, xse);
+        }
+    }
+    UNREACHABLE();
+}
+
+HIRArraySize HIRArraySize::clone() const {
+    switch ((*this).tag()) {
+        case HIRArraySize::TAG_Unevaluated: {
+            auto& se = (*this).as_Unevaluated();
+            return se.clone();
+        }
+        case HIRArraySize::TAG_Known: {
+            auto& se = (*this).as_Known();
+            return se;
+        }
+    }
+    UNREACHABLE();
+}
+
+HIRTypeDataErasedTypeAliasInner::HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& paramsOuter, const HIRGenericParams* paramsInner)
+    : path(p.getSimplePath())
+    , type()
+{
+    this->generics = paramsOuter.clone();
+    this->generics.bounds.clear();
+    if (!paramsInner) {
+        return;
+    }
+
+    this->generics.types.reserve(this->generics.types.size() + paramsInner->types.size());
+    for (const auto& type : paramsInner->types) {
+        this->generics.types.push_back(HIRTypeParamDef{type.name, type.defaultValue, type.isSized});
+    }
+    this->generics.values.reserve(this->generics.values.size() + paramsInner->values.size());
+    for (const auto& value : paramsInner->values) {
+        this->generics.values.push_back(HIRValueParamDef{value.name, value.type, value.defaultValue.clone()});
+    }
+
+    this->generics.paramKinds.clear();
+    this->generics.paramKinds.grow(paramsOuter.paramCount() + paramsInner->paramCount());
+    for (size_t i = 0; i < paramsOuter.paramCount(); i++) {
+        this->generics.paramKinds.pushBack(paramsOuter.paramKindAt(i));
+    }
+    for (size_t i = 0; i < paramsInner->paramCount(); i++) {
+        this->generics.paramKinds.pushBack(paramsInner->paramKindAt(i));
+    }
+}
+
+bool HIRTypeDataErasedTypeAliasInner::isLocalTo(const HIRSimplePath& p) const {
+    const auto components = path.components();
+    bool local = false;
+    for (size_t i = 0; i + 1 < components.size(); i++) {
+        if (components[i].c_str()[0] == '#') {
+            local = true;
+            break;
+        }
+    }
+    return local && p.startsWith(path, /*skip_last=*/true);
+}
+
+HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterner& types, const Span& sp) const {
+    const HIRTypeData* tySelf = nullptr;
+    const HIRPathParams* ppImpl = nullptr;
+    const HIRPathParams* ppMethod = nullptr;
+
+    switch (this->def.tag()) {
+        case HIRTypeDataNamedFunctionTy::TAG_Function: {
+            auto& fp = this->def.as_Function();
+            ASSERT_BUG(sp, fp, "Non-initialised NamedFunction definition: " << this->path);
+            switch (this->path.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& pe = this->path.data.as_Generic();
+                    ppMethod = &pe.params;
+                    break;
+                }
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& pe = this->path.data.as_UfcsKnown();
+                    tySelf = pe.type;
+                    ppImpl = &pe.trait.params;
+                    ppMethod = &pe.params;
+                    break;
+                }
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& pe = this->path.data.as_UfcsInherent();
+                    tySelf = pe.type;
+                    ppImpl = &pe.implParams;
+                    ppMethod = &pe.params;
+                    break;
+                }
+                case HIRPathData::TAG_UfcsUnknown: {
+                    BUG(sp, "UfcsUnknown seen");
+                    break;
+                }
+            }
+            MonomorphStatePtr ms{types, tySelf, ppImpl, ppMethod};
+            const auto& f = *fp;
+            HIRTypeDataFunctionPointer ft{f.unsafe, f.variadic, f.abi, ms.monomorphType(sp, f.returnType), {}};
+            for (size_t i = 0; i < f.fixedArgCount(); i++) {
+                ft.argTypes.push_back(ms.monomorphType(sp, f.args[i].second));
+            }
+            return mv$(ft);
+        }
+        case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
+            auto& ec = this->def.as_EnumConstructor();
+            const auto& e = this->path.data.as_Generic();
+            MonomorphStatePtr ms{types, nullptr, &e.params, nullptr};
+            auto enumPath = e.path.parent();
+            const auto& enm = *ec.e;
+            ASSERT_BUG(sp, enm.data.is_Data(), "Enum " << enumPath << " isn't a data-holding enum");
+            const auto& varTy = enm.data.as_Data()[ec.v].type;
+            const auto& str = *varTy->as_Path().binding.as_Struct();
+            const auto& varData = str.data.as_Tuple();
+
+            HIRTypeDataFunctionPointer ft{false, false, RcString::newInterned(ABI_RUST), types.path(HIRPath(HIRGenericPath(mv$(enumPath), e.params.clone())), HIRTypePathBinding::make_Enum(&enm)), {}};
+            for (const auto& arg : varData) {
+                ft.argTypes.push_back(ms.monomorphType(sp, arg.ent));
+            }
+            return ft;
+        }
+        case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
+            auto& p = this->def.as_StructConstructor();
+            const auto& e = this->path.data.as_Generic();
+            MonomorphStatePtr ms{types, nullptr, &e.params, nullptr};
+            HIRTypeDataFunctionPointer ft{false, false, RcString::newInterned(ABI_RUST), types.path(this->path.clone(), HIRTypePathBinding::make_Struct(p)), {}};
+            for (const auto& arg : p->data.as_Tuple()) {
+                ft.argTypes.push_back(ms.monomorphType(sp, arg.ent));
+            }
+            return ft;
+        }
+    }
+    BUG(sp, "Unreachable code?");
+}
+
+void HIRTypeData::fmt(std::ostream& os) const {
+    auto* context = TypeFmtStream::from(os);
+    if (!context) {
+        TypeFmtStream fmtStream(os);
+        fmt(fmtStream);
+        return;
+    }
+
+    for (auto* node = context->recurseStack; node; node = node->next) {
+        if (node->type == this) {
+            os << "RECURSE";
+            return;
+        }
+    }
+
+    const TypeFmtRecursionNode recursionNode{this, context->recurseStack};
+    context->recurseStack = &recursionNode;
+    STD_DEFER {
+        context->recurseStack = recursionNode.next;
+    };
+
+    switch ((*this).tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*this).as_Infer();
+            os << "_";
+            if (e.index != ~0u || e.tyClass != HIRInferClass::None) {
+                os << "/*";
+                if (e.index != ~0u) {
+                    os << e.index;
+                }
+                switch (e.tyClass) {
+                    case HIRInferClass::None:
+                        break;
+                    case HIRInferClass::Float:
+                        os << ":f";
+                        break;
+                    case HIRInferClass::Integer:
+                        os << ":i";
+                        break;
+                }
+                os << "*/";
+            }
+            break;
+        }
+        case HIRTypeData::TAG_Diverge: {
+            os << "!";
+            break;
+        }
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*this).as_Primitive();
+            os << e;
+            break;
+        }
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*this).as_Path();
+            os << e.path;
+            switch (e.binding.tag()) {
+                case HIRTypePathBinding::TAG_Unbound: {
+                    os << "/*?*/";
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Opaque: {
+                    os << "/*O*/";
+                    break;
+                }
+                case HIRTypePathBinding::TAG_ExternType: {
+                    os << "/*X*/";
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Struct: {
+                    os << "/*S*/";
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Union: {
+                    os << "/*U*/";
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Enum: {
+                    os << "/*E*/";
+                    break;
+                }
+            }
+            break;
+        }
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*this).as_Generic();
+            os << e;
+            break;
+        }
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*this).as_TraitObject();
+            os << "dyn (";
+            if (e.trait.path != HIRGenericPath()) {
+                os << e.trait;
+            }
+            for (const auto& tr : e.markers) {
+                os << "+" << tr;
+            }
+            os << ")";
+            if (e.lifetimeIdentity != "") {
+                os << "/*regions:" << e.lifetimeIdentity << "*/";
+            }
+            break;
+        }
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*this).as_ErasedType();
+            os << "impl ";
+            for (const auto& tr : e.traits) {
+                if (&tr != &e.traits[0]) {
+                    os << "+";
+                }
+                os << tr;
+            }
+            os << "+use" << e.use;
+            os << "/*";
+            switch (e.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    auto& ee = e.inner.as_Known();
+                    os << "= " << ee;
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    auto& ee = e.inner.as_Fcn();
+                    os << "fn " << ee.origin << "#" << ee.index;
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    auto& ee = e.inner.as_Alias();
+                    os << "type" << ee.params << " " << ee.inner->path;
+                    break;
+                }
+            }
+            os << "*/";
+            break;
+        }
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*this).as_Array();
+            os << "[" << e.inner << "; " << e.size << "]";
+            break;
+        }
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*this).as_Slice();
+            os << "[" << e.inner << "]";
+            break;
+        }
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = (*this).as_Pattern();
+            os << e.inner << " is ";
+            e.pattern.fmt(os);
+            break;
+        }
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*this).as_Tuple();
+            os << "(";
+            for (const auto& t : e) {
+                os << t << ", ";
+            }
+            os << ")";
+            break;
+        }
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*this).as_Borrow();
+            os << "&";
+            switch (e.type) {
+                case HIRBorrowType::Shared:
+                    os << "";
+                    break;
+                case HIRBorrowType::Unique:
+                    os << "mut ";
+                    break;
+                case HIRBorrowType::Owned:
+                    os << "move ";
+                    break;
+            }
+            os << e.inner;
+            break;
+        }
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*this).as_Pointer();
+            switch (e.type) {
+                case HIRBorrowType::Shared:
+                    os << "*const ";
+                    break;
+                case HIRBorrowType::Unique:
+                    os << "*mut ";
+                    break;
+                case HIRBorrowType::Owned:
+                    os << "*move ";
+                    break;
+            }
+            os << e.inner;
+            break;
+        }
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = (*this).as_NamedFunction();
+            os << "fn{" << (e.def.is_Function() && !e.def.as_Function() ? "!" : "") << e.path << "}";
+            break;
+        }
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*this).as_Function();
+            if (e.trackCaller) {
+                os << "#[track_caller] ";
+            }
+            if (e.isUnsafe) {
+                os << "unsafe ";
+            }
+            if (e.abi != "") {
+                os << "extern \"" << e.abi << "\" ";
+            }
+            os << "fn(";
+            for (const auto& t : e.argTypes) {
+                os << t << ", ";
+            }
+            if (e.isVariadic) {
+                os << "...";
+            }
+            os << ") -> " << e.rettype;
+            if (e.lifetimeIdentity != "") {
+                os << "/*regions:" << e.lifetimeIdentity << "*/";
+            }
+            break;
+        }
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*this).as_NodeType();
+            e.fmt(os);
+            break;
+        }
+    }
+}
+
+bool HIRTypeDataNodeType::operator==(const HIRTypeDataNodeType& x) const {
+    return this->ord(x) == OrdEqual;
+}
+
+Ordering HIRTypeDataNodeType::ord(const HIRTypeDataNodeType& x) const {
+    ORD(static_cast<int>(this->tag()), static_cast<int>(x.tag()));
+    switch ((*this).tag()) {
+        case HIRTypeDataNodeType::TAG_Closure: {
+            auto& te = (*this).as_Closure();
+            auto& xe = x.as_Closure();
+            ORD(reinterpret_cast<uintptr_t>(te), reinterpret_cast<uintptr_t>(xe));
+            break;
+        }
+        case HIRTypeDataNodeType::TAG_Generator: {
+            auto& te = (*this).as_Generator();
+            auto& xe = x.as_Generator();
+            ORD(reinterpret_cast<uintptr_t>(te), reinterpret_cast<uintptr_t>(xe));
+            break;
+        }
+        case HIRTypeDataNodeType::TAG_Async: {
+            auto& te = (*this).as_Async();
+            auto& xe = x.as_Async();
+            ORD(reinterpret_cast<uintptr_t>(te), reinterpret_cast<uintptr_t>(xe));
+            break;
+        }
+    }
+    return OrdEqual;
+}
+
+void HIRTypeDataNodeType::fmt(std::ostream& os) const {
+    switch ((*this).tag()) {
+        case HIRTypeDataNodeType::TAG_Closure: {
+            auto& e = (*this).as_Closure();
+            os << "closure[" << e << "]";
+            break;
+        }
+        case HIRTypeDataNodeType::TAG_Generator: {
+            auto& e = (*this).as_Generator();
+            os << "generator[" << e << "]";
+            break;
+        }
+        case HIRTypeDataNodeType::TAG_Async: {
+            auto& e = (*this).as_Async();
+            os << "async[" << e << "]";
+            break;
+        }
+    }
+}
+
+HIRTypeDataNodeType HIRTypeDataNodeType::clone() const {
+    switch ((*this).tag()) {
+        case HIRTypeDataNodeType::TAG_Closure: {
+            auto& e = (*this).as_Closure();
+            return e;
+        }
+        case HIRTypeDataNodeType::TAG_Generator: {
+            auto& e = (*this).as_Generator();
+            return e;
+        }
+        case HIRTypeDataNodeType::TAG_Async: {
+            auto& e = (*this).as_Async();
+            return e;
+        }
+    }
+    UNREACHABLE();
 }
 
 HIRTypeRef HIRTypeInterner::intern(HIRTypeData data) {
@@ -1919,57 +1965,6 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
         }
     }
     UNREACHABLE();
-}
-
-namespace {
-    HIRCompare matchGenericsPp(const Span& sp, const HIRPathParams& t, const HIRPathParams& x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) {
-        return t.matchTestGenericsFuzz(sp, x, resolvePlaceholder, callback);
-    }
-
-    HIRCompare matchValues(const Span& sp, const HIRConstGeneric& t, const HIRConstGeneric& x, HIRMatchGenerics& callback) {
-        if (const auto* e = t.opt_Generic()) {
-            return callback.matchVal(*e, x);
-        }
-
-        if (const auto* xep = x.opt_Infer()) {
-            const auto& xe = *xep;
-
-            if (xe.index != ~0u && t.is_Infer() && t.as_Infer().index == xe.index) {
-                return HIRCompare::Equal;
-            }
-
-            return HIRCompare::Fuzzy;
-        }
-        if (const auto* tep = t.opt_Infer()) {
-            const auto& te = *tep;
-            ASSERT_BUG(sp, te.index != ~0u, "Encountered ivar for `this` - " << t);
-            return HIRCompare::Fuzzy;
-        }
-
-        if (t.tag() != x.tag()) {
-            return HIRCompare::Unequal;
-        }
-
-        switch (t.tag()) {
-            case HIRConstGeneric::TAG_Infer: {
-                UNREACHABLE();
-            }
-            case HIRConstGeneric::TAG_Unevaluated: {
-                auto& te = t.as_Unevaluated();
-                auto& xe = x.as_Unevaluated();
-                return te->equivalent(*xe) ? HIRCompare::Equal : HIRCompare::Unequal;
-            }
-            case HIRConstGeneric::TAG_Generic: {
-                UNREACHABLE();
-            }
-            case HIRConstGeneric::TAG_Evaluated: {
-                auto& te = t.as_Evaluated();
-                auto& xe = x.as_Evaluated();
-                return *te == *xe ? HIRCompare::Equal : HIRCompare::Unequal;
-            }
-        }
-        UNREACHABLE();
-    }
 }
 
 bool HIRTypeData::matchTestGenerics(const Span& sp, HIRTypeRef xIn, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const {

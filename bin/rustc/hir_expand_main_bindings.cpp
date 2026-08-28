@@ -19,7 +19,6 @@
 using namespace stl;
 
 namespace {
-
 #include "hir_expand_crnode_tu.h"
 
     typedef std::vector<std::pair<HIRExprNodeClosure::Class, HIRTraitImpl>> outImplsClosureT;
@@ -748,9 +747,6 @@ namespace {
         void visitStruct(HIRItemPath ip, HIRStruct& str);
     };
 
-}
-
-namespace {
     struct StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
         const StaticTraitResolve& resolve_;
         const HIRTypeData* selfType;
@@ -959,9 +955,6 @@ namespace {
 
         void visitEnum(HIRItemPath p, HIREnum& item) override;
     };
-}
-
-namespace {
 
     bool typeIsUseCloned(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* type) {
         const auto& trait = resolve.hirCrate().getLangItemPathOpt("use_cloned");
@@ -969,32 +962,11 @@ namespace {
             return certainty == SolverCertainty::Proven;
         });
     }
-}
 
-void HIRExpandAnnotateUsageExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
-    assert(exp);
-    StaticTraitResolve resolve{wb};
-    resolve.setBothGenericsRaw(exp.state->implGenerics, exp.state->itemGenerics);
-    AnnotateExprVisitorMark ev{resolve, exp.bindings};
-    ev.visitRoot(exp);
-}
-
-void HIRExpandAnnotateUsage(const WireBoard& wb, HIRCrate& crate) {
-    AnnotateOuterVisitor ov(wb);
-    ov.visitCrate(crate);
-}
-
-namespace {
     inline HIRExprNodeP closureMkExprnodep(HIRExprNode* en, HIRTypeRef ty) {
         en->resType = mv$(ty);
         return HIRExprNodeP(en);
     }
-
-}
-
-#define NEWNODE(TY, CLASS, ...) closureMkExprnodep(pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
-
-namespace {
 
     template <typename K, typename V>
     std::map<K, V> makeMap1(K k1, V v1) {
@@ -1062,7 +1034,89 @@ namespace {
             return false;
         });
     }
+
+    void visitType(const Span& sp, const StaticTraitResolve& resolve, HIRTypeRef& ty) {
+        resolve.revealOpaqueTypes(sp, ty);
+    }
+
+    inline HIRExprNodeP reborrowMkExprnodep(HIRExprNode* en, HIRTypeRef ty) {
+        en->resType = mv$(ty);
+        return HIRExprNodeP(en);
+    }
+
+    inline HIRExprNodeP mkExprnodep(HIRExprNode* en, HIRTypeRef ty) {
+        en->resType = mv$(ty);
+        return HIRExprNodeP(en);
+    }
+
+    static void checkConstFinalBorrow(const StaticTraitResolve& resolve, HIRExprNode& root) {
+        HIRExprNode* node = &root;
+        while (auto* block = cast<HIRExprNodeBlock>(node)) {
+            if (!block->valueNode) {
+                return;
+            }
+            node = &*block->valueNode;
+        }
+        auto* borrow = cast<HIRExprNodeBorrow>(node);
+        if (!borrow) {
+            return;
+        }
+        bool isMutable = borrow->type != HIRBorrowType::Shared;
+        HIRExprNode* held = &*borrow->value;
+        while (auto* deref = cast<HIRExprNodeDeref>(held)) {
+            auto* inner = cast<HIRExprNodeBorrow>(&*deref->value);
+            if (!inner) {
+                break;
+            }
+            isMutable |= inner->type != HIRBorrowType::Shared;
+            held = &*inner->value;
+        }
+        if (cast<HIRExprNodePathValue>(held)) {
+            return;
+        }
+        if (isMutable) {
+            ERROR(borrow->span(), E0000, "A mutable reference is not allowed in the final value of a constant");
+        }
+        if (resolve.typeIsInteriorMutable(borrow->span(), held->resType) == HIRCompare::Equal) {
+            ERROR(borrow->span(), E0000, "A constant may not refer to interior mutable data - " << held->resType);
+        }
+    }
+
+    static HIRExprNodeP* staticBorrowPromotionRoot(HIRExprNodeP& value) {
+        auto* root = &value;
+        for (;;) {
+            if (auto* index = cast<HIRExprNodeIndex>(root->get())) {
+                root = &index->value;
+                continue;
+            }
+            if (auto* unsize = cast<HIRExprNodeUnsize>(root->get())) {
+                root = &unsize->value;
+                continue;
+            }
+            return root;
+        }
+    }
+
+    inline HIRExprNodeP ufcsMkExprnodep(HIRExprNode* en, HIRTypeRef ty) {
+        en->resType = mv$(ty);
+        return HIRExprNodeP(en);
+    }
 }
+
+void HIRExpandAnnotateUsageExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
+    assert(exp);
+    StaticTraitResolve resolve{wb};
+    resolve.setBothGenericsRaw(exp.state->implGenerics, exp.state->itemGenerics);
+    AnnotateExprVisitorMark ev{resolve, exp.bindings};
+    ev.visitRoot(exp);
+}
+
+void HIRExpandAnnotateUsage(const WireBoard& wb, HIRCrate& crate) {
+    AnnotateOuterVisitor ov(wb);
+    ov.visitCrate(crate);
+}
+
+#define NEWNODE(TY, CLASS, ...) closureMkExprnodep(pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
 
 void HIRExpandClosuresExpr(const WireBoard& wb, const HIRCrate& crateRo, HIRTypeRef& expTy, HIRExprPtr& exp) {
     Span sp;
@@ -1172,26 +1226,12 @@ void HIRExpandClosures(const WireBoard& wb, HIRCrate& crate) {
 
 #undef NEWNODE
 
-namespace {
-
-    void visitType(const Span& sp, const StaticTraitResolve& resolve, HIRTypeRef& ty) {
-        resolve.revealOpaqueTypes(sp, ty);
-    }
-}
-
 void HIRExpandErasedType(const WireBoard& wb, HIRCrate& crate) {
     ErasedOuterVisitor ov(wb);
     ov.visitCrate(crate);
 
     ErasedOuterVisitorFixup ovFix(wb);
     ovFix.visitCrate(crate);
-}
-
-namespace {
-    inline HIRExprNodeP reborrowMkExprnodep(HIRExprNode* en, HIRTypeRef ty) {
-        en->resType = mv$(ty);
-        return HIRExprNodeP(en);
-    }
 }
 
 #define NEWNODE(TY, CLASS, ...) reborrowMkExprnodep(crate.pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
@@ -1208,64 +1248,7 @@ void HIRExpandReborrows(const WireBoard& wb, HIRCrate& crate) {
 
 #undef NEWNODE
 
-namespace {
-    inline HIRExprNodeP mkExprnodep(HIRExprNode* en, HIRTypeRef ty) {
-        en->resType = mv$(ty);
-        return HIRExprNodeP(en);
-    }
-}
-
 #define NEWNODE(TY, CLASS, ...) mkExprnodep(resolve_.hirCrate().pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
-
-namespace {
-    static void checkConstFinalBorrow(const StaticTraitResolve& resolve, HIRExprNode& root) {
-        HIRExprNode* node = &root;
-        while (auto* block = cast<HIRExprNodeBlock>(node)) {
-            if (!block->valueNode) {
-                return;
-            }
-            node = &*block->valueNode;
-        }
-        auto* borrow = cast<HIRExprNodeBorrow>(node);
-        if (!borrow) {
-            return;
-        }
-        bool isMutable = borrow->type != HIRBorrowType::Shared;
-        HIRExprNode* held = &*borrow->value;
-        while (auto* deref = cast<HIRExprNodeDeref>(held)) {
-            auto* inner = cast<HIRExprNodeBorrow>(&*deref->value);
-            if (!inner) {
-                break;
-            }
-            isMutable |= inner->type != HIRBorrowType::Shared;
-            held = &*inner->value;
-        }
-        if (cast<HIRExprNodePathValue>(held)) {
-            return;
-        }
-        if (isMutable) {
-            ERROR(borrow->span(), E0000, "A mutable reference is not allowed in the final value of a constant");
-        }
-        if (resolve.typeIsInteriorMutable(borrow->span(), held->resType) == HIRCompare::Equal) {
-            ERROR(borrow->span(), E0000, "A constant may not refer to interior mutable data - " << held->resType);
-        }
-    }
-
-    static HIRExprNodeP* staticBorrowPromotionRoot(HIRExprNodeP& value) {
-        auto* root = &value;
-        for (;;) {
-            if (auto* index = cast<HIRExprNodeIndex>(root->get())) {
-                root = &index->value;
-                continue;
-            }
-            if (auto* unsize = cast<HIRExprNodeUnsize>(root->get())) {
-                root = &unsize->value;
-                continue;
-            }
-            return root;
-        }
-    }
-}
 
 void HIRExpandStaticBorrowConstantsMarkExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
     StaticTraitResolve resolve(wb);
@@ -1385,13 +1368,6 @@ void HIRExpandStaticBorrowConstants(const WireBoard& wb, HIRCrate& crate) {
 }
 
 #undef NEWNODE
-
-namespace {
-    inline HIRExprNodeP ufcsMkExprnodep(HIRExprNode* en, HIRTypeRef ty) {
-        en->resType = mv$(ty);
-        return HIRExprNodeP(en);
-    }
-}
 
 #define NEWNODE(TY, CLASS, ...) ufcsMkExprnodep(crate.pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
 

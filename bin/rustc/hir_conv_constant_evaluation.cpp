@@ -207,40 +207,12 @@ namespace {
         void visitEnum(HIRItemPath p, HIREnum& item) override;
     };
 
-}
-
-struct WireBoard::CtfeContext {
-    struct ActiveDiscriminant {
-        const HIREnum* enm;
-        size_t idx;
-    };
-
-    const bool capsOracle_ = getenv("TRUSTME_CAPS_ORACLE") != nullptr;
-    const RcString vtableName_ = RcString::newInterned("vtable#");
-    Vector<ActiveDiscriminant> activeDiscriminants_;
-
-    bool capsOracle() const;
-
-    const RcString& vtableName() const;
-
-    bool discriminantActive(const HIREnum& enm, size_t idx) const;
-
-    void pushDiscriminant(const HIREnum& enm, size_t idx);
-
-    void popDiscriminant();
-};
-
-namespace {
     using CtfeContext = WireBoard::CtfeContext;
-}
 
-namespace {
     using MIREvalAllocation = HIREvaluator::MIREvalAllocation;
     using MIREvalAllocationPtr = HIREvaluator::MIREvalAllocationPtr;
     using MIREvalCallStackEntry = HIREvaluator::MIREvalCallStackEntry;
-}
 
-namespace {
     struct MIREvalConstant;
     struct MIREvalStaticRef;
     struct MIREvalRelocPtr;
@@ -268,16 +240,6 @@ namespace {
         static MIREvalConstantPtr allocate(ObjPool* pool, const void* data, size_t len);
     };
 
-}
-
-struct HIREvaluator::MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
-    static MIREvalAllocationPtr allocate(ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty);
-    static MIREvalAllocationPtr allocateScratch(ObjPool* pool, size_t size);
-    static MIREvalAllocationPtr allocateHeap(ObjPool* pool, size_t size, size_t alignment);
-    static MIREvalAllocationPtr allocateRo(ObjPool* pool, const void* data, size_t len);
-};
-
-namespace {
     struct MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
         static MIREvalStaticRefPtr allocate(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending = false);
     };
@@ -381,74 +343,6 @@ namespace {
         void setReloc(size_t ofs, MIREvalRelocPtr ptr) override;
     };
 
-}
-
-struct HIREvaluator::MIREvalAllocation final: public IValue {
-    friend struct Embed<MIREvalAllocation>;
-    friend struct MIREvalAllocationPtr;
-
-    struct Reloc {
-        size_t offset;
-        MIREvalRelocPtr ptr;
-    };
-
-    unsigned length;
-    bool isReadonly;
-    HIRTypeRef type_;
-    bool isConstHeap;
-    bool isLive;
-    bool isGlobal;
-    size_t heapAlignment;
-    std::vector<Reloc> relocations;
-    u8* data;
-
-    MIREvalAllocation(u8* data, size_t len, const HIRTypeData* ty);
-
-    MIREvalAllocation(const MIREvalAllocation&) = delete;
-    MIREvalAllocation& operator=(const MIREvalAllocation&) = delete;
-
-    void fmtIdent(std::ostream& os) const override;
-
-    void fmt(std::ostream& os, size_t ofs, size_t len) const override;
-
-    size_t size() const override;
-
-    const u8* getBytes(size_t ofs, size_t len, bool checkMask) const override;
-
-    void readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const override;
-
-    bool isWritable() const override;
-
-    u8* extWriteBytes(size_t ofs, size_t len) override;
-
-    void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override;
-
-    MIREvalRelocPtr getReloc(size_t ofs) const override;
-
-    void setReloc(size_t ofs, MIREvalRelocPtr ptr) override;
-
-    const HIRTypeData* getType() const;
-
-    bool isConstHeapAllocation() const;
-
-    bool isAlive() const;
-
-    bool wasMadeGlobal() const;
-
-    size_t getHeapAlignment() const;
-
-    void makeGlobal();
-
-    void deallocate();
-
-    const std::vector<Reloc>& getRelocations() const;
-
-    u8* getMask();
-
-    const u8* getMask() const;
-};
-
-namespace {
     struct MIREvalStaticRef final: public IValue {
         friend struct Embed<MIREvalStaticRef>;
         friend struct MIREvalStaticRefPtr;
@@ -556,78 +450,6 @@ namespace {
         void write(std::ostream& os) const override;
     };
 
-}
-
-struct HIREvaluator::MIREvalCallStackEntry {
-    ObjPool* const valuePool;
-    const unsigned frameIndex;
-    const std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs;
-    const HIRTypeRef retType;
-    const SourceLocation callerLocation;
-    const bool tracksCaller;
-
-    const StaticTraitResolve& rootResolve;
-    StaticTraitResolve resolve;
-    MIREvalPathCallback pathCallback;
-    MIRTypeResolve state;
-    MonomorphState ms;
-
-    MIREvalAllocationPtr retval;
-
-    std::vector<MIREvalAllocationPtr> args;
-
-    std::vector<HIRTypeRef> localTypes;
-    std::vector<MIREvalAllocationPtr> locals;
-    std::vector<bool> dropFlags;
-
-    MIREvalCallStackEntry(const MIREvalCallStackEntry&) = delete;
-    MIREvalCallStackEntry(MIREvalCallStackEntry&&) = delete;
-
-    MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameIndex, const Span& rootSpan, const StaticTraitResolve& resolve, const MIREvalPathCallback& printPath, HIRTypeRef expTy, std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs, const MIRFunction& fcn, MonomorphState ms, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller);
-
-    HIRTypeRef monomorphExpand(const HIRTypeData* ty) const;
-
-    unsigned readEnumVariant(const HIRTypeData* ty, MIREvalValueRef value) const;
-
-    static bool allocationReachableFrom(const MIREvalAllocation* allocation, const MIREvalAllocation* target, std::set<const MIREvalAllocation*>& visited);
-
-    bool valueReachableFromReturn(MIREvalValueRef value) const;
-
-    bool valueNeedsNonConstDrop(const HIRTypeData* ty, MIREvalValueRef value) const;
-
-    MIREvalStaticRefPtr getStaticrefMono(const HIRPath& p, HIRTypeRef* outTy = nullptr) const;
-
-    MIREvalStaticRefPtr getStaticref(HIRPath p, HIRTypeRef* outTy = nullptr) const;
-
-    MIREvalValueRef getLval(const MIRLValue& lv, MIREvalValueRef* meta = nullptr, u64* rawAddress = nullptr);
-
-    const EncodedLiteral& getConst(const HIRPath& inP, HIRTypeRef* outTy) const;
-
-    void writeEncoded(MIREvalValueRef dst, const EncodedLiteral& encoded);
-
-    void writeConst(MIREvalValueRef dst, const MIRConstant& c);
-
-    void writeBorrow(MIREvalValueRef dst, HIRBorrowType bt, const MIRLValue& lv);
-
-    void writeParam(MIREvalValueRef dst, const MIRParam& p);
-
-    const EncodedLiteral& getConst(const HIRConstGeneric& v, EncodedLiteral& tmp) const;
-
-    FloatValue readParamFloat(unsigned bits, const MIRParam& p) const;
-
-    U128 readParamFloatBits(unsigned bits, const MIRParam& p) const;
-
-    U128 readParamUint(unsigned bits, const MIRParam& p) const;
-
-    S128 readParamSint(unsigned bits, const MIRParam& p) const;
-
-    std::pair<u64, MIREvalRelocPtr> readParamPtr(const MIRParam& p) const;
-
-    size_t sizeOfOrBug(const HIRTypeData* ty) const;
-};
-
-namespace {
-
     std::optional<U128> enumTagUnsignedMax(HIRCoreType ty) {
         switch (ty) {
             case HIRCoreType::U8:
@@ -656,19 +478,9 @@ namespace {
             }
         }
     }
-}
 
-void CtfeCreateContext(WireBoard& wb, ObjPool& pool) {
-    wb.ctfe = pool.make<CtfeContext>();
-}
-
-namespace {
     void ConvertHIRConstantEvaluateStatic(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRStatic& e);
     void ConvertHIRConstantEvaluateFcnSig(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRFunction& fcn);
-
-}
-
-namespace {
 
     bool constGenericIsConcrete(const HIRConstGeneric& value);
 
@@ -813,9 +625,7 @@ namespace {
     enum class EntNS {
         Value
     };
-}
 
-namespace {
     void putbHex(std::ostream& os, u8 v) {
         char tmp[3];
         tmp[0] = "0123456789ABCDEF"[v >> 4];
@@ -823,9 +633,7 @@ namespace {
         tmp[2] = '\0';
         os << tmp;
     }
-}
 
-namespace {
     U128 floatToUintSaturating(double v, unsigned bits) {
         const U128 maxValue = bits >= 128 ? U128::max() : (U128(1) << bits) - U128(1);
         if (!(v > 0.0)) {
@@ -860,9 +668,7 @@ namespace {
         const U128 magnitude = floatToUintSaturating(v, 128);
         return S128(magnitude > maxMagnitude ? maxMagnitude : magnitude);
     }
-}
 
-namespace {
     std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr) {
         if (!vr.storage) {
             os << "ValueRef(null)";
@@ -874,10 +680,807 @@ namespace {
         return os;
     }
 
-    std::ostream& operator<<(std::ostream& os, const MIREvalAllocationPtr& ap) {
-        os << MIREvalValueRef(ap);
-        return os;
+    void ConvertHIRConstantEvaluateStatic(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRStatic& e) {
+        Expander exp{wb};
+        exp.implParams = implParams;
+        exp.visitStatic(ip, e);
     }
+
+    void ConvertHIRConstantEvaluateFcnSig(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRFunction& fcn) {
+        Expander exp{wb};
+        exp.implParams = implParams;
+        exp.visitFunction(ip, fcn);
+    }
+}
+
+struct WireBoard::CtfeContext {
+    struct ActiveDiscriminant {
+        const HIREnum* enm;
+        size_t idx;
+    };
+
+    const bool capsOracle_ = getenv("TRUSTME_CAPS_ORACLE") != nullptr;
+    const RcString vtableName_ = RcString::newInterned("vtable#");
+    Vector<ActiveDiscriminant> activeDiscriminants_;
+
+    bool capsOracle() const;
+
+    const RcString& vtableName() const;
+
+    bool discriminantActive(const HIREnum& enm, size_t idx) const;
+
+    void pushDiscriminant(const HIREnum& enm, size_t idx);
+
+    void popDiscriminant();
+};
+
+struct HIREvaluator::MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
+    static MIREvalAllocationPtr allocate(ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty);
+    static MIREvalAllocationPtr allocateScratch(ObjPool* pool, size_t size);
+    static MIREvalAllocationPtr allocateHeap(ObjPool* pool, size_t size, size_t alignment);
+    static MIREvalAllocationPtr allocateRo(ObjPool* pool, const void* data, size_t len);
+};
+
+struct HIREvaluator::MIREvalAllocation final: public IValue {
+    friend struct Embed<MIREvalAllocation>;
+    friend struct MIREvalAllocationPtr;
+
+    struct Reloc {
+        size_t offset;
+        MIREvalRelocPtr ptr;
+    };
+
+    unsigned length;
+    bool isReadonly;
+    HIRTypeRef type_;
+    bool isConstHeap;
+    bool isLive;
+    bool isGlobal;
+    size_t heapAlignment;
+    std::vector<Reloc> relocations;
+    u8* data;
+
+    MIREvalAllocation(u8* data, size_t len, const HIRTypeData* ty);
+
+    MIREvalAllocation(const MIREvalAllocation&) = delete;
+    MIREvalAllocation& operator=(const MIREvalAllocation&) = delete;
+
+    void fmtIdent(std::ostream& os) const override;
+
+    void fmt(std::ostream& os, size_t ofs, size_t len) const override;
+
+    size_t size() const override;
+
+    const u8* getBytes(size_t ofs, size_t len, bool checkMask) const override;
+
+    void readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const override;
+
+    bool isWritable() const override;
+
+    u8* extWriteBytes(size_t ofs, size_t len) override;
+
+    void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override;
+
+    MIREvalRelocPtr getReloc(size_t ofs) const override;
+
+    void setReloc(size_t ofs, MIREvalRelocPtr ptr) override;
+
+    const HIRTypeData* getType() const;
+
+    bool isConstHeapAllocation() const;
+
+    bool isAlive() const;
+
+    bool wasMadeGlobal() const;
+
+    size_t getHeapAlignment() const;
+
+    void makeGlobal();
+
+    void deallocate();
+
+    const std::vector<Reloc>& getRelocations() const;
+
+    u8* getMask();
+
+    const u8* getMask() const;
+};
+
+struct HIREvaluator::MIREvalCallStackEntry {
+    ObjPool* const valuePool;
+    const unsigned frameIndex;
+    const std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs;
+    const HIRTypeRef retType;
+    const SourceLocation callerLocation;
+    const bool tracksCaller;
+
+    const StaticTraitResolve& rootResolve;
+    StaticTraitResolve resolve;
+    MIREvalPathCallback pathCallback;
+    MIRTypeResolve state;
+    MonomorphState ms;
+
+    MIREvalAllocationPtr retval;
+
+    std::vector<MIREvalAllocationPtr> args;
+
+    std::vector<HIRTypeRef> localTypes;
+    std::vector<MIREvalAllocationPtr> locals;
+    std::vector<bool> dropFlags;
+
+    MIREvalCallStackEntry(const MIREvalCallStackEntry&) = delete;
+    MIREvalCallStackEntry(MIREvalCallStackEntry&&) = delete;
+
+    MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameIndex, const Span& rootSpan, const StaticTraitResolve& resolve, const MIREvalPathCallback& printPath, HIRTypeRef expTy, std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs, const MIRFunction& fcn, MonomorphState ms, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller);
+
+    HIRTypeRef monomorphExpand(const HIRTypeData* ty) const;
+
+    unsigned readEnumVariant(const HIRTypeData* ty, MIREvalValueRef value) const;
+
+    static bool allocationReachableFrom(const MIREvalAllocation* allocation, const MIREvalAllocation* target, std::set<const MIREvalAllocation*>& visited);
+
+    bool valueReachableFromReturn(MIREvalValueRef value) const;
+
+    bool valueNeedsNonConstDrop(const HIRTypeData* ty, MIREvalValueRef value) const;
+
+    MIREvalStaticRefPtr getStaticrefMono(const HIRPath& p, HIRTypeRef* outTy = nullptr) const;
+
+    MIREvalStaticRefPtr getStaticref(HIRPath p, HIRTypeRef* outTy = nullptr) const;
+
+    MIREvalValueRef getLval(const MIRLValue& lv, MIREvalValueRef* meta = nullptr, u64* rawAddress = nullptr);
+
+    const EncodedLiteral& getConst(const HIRPath& inP, HIRTypeRef* outTy) const;
+
+    void writeEncoded(MIREvalValueRef dst, const EncodedLiteral& encoded);
+
+    void writeConst(MIREvalValueRef dst, const MIRConstant& c);
+
+    void writeBorrow(MIREvalValueRef dst, HIRBorrowType bt, const MIRLValue& lv);
+
+    void writeParam(MIREvalValueRef dst, const MIRParam& p);
+
+    const EncodedLiteral& getConst(const HIRConstGeneric& v, EncodedLiteral& tmp) const;
+
+    FloatValue readParamFloat(unsigned bits, const MIRParam& p) const;
+
+    U128 readParamFloatBits(unsigned bits, const MIRParam& p) const;
+
+    U128 readParamUint(unsigned bits, const MIRParam& p) const;
+
+    S128 readParamSint(unsigned bits, const MIRParam& p) const;
+
+    std::pair<u64, MIREvalRelocPtr> readParamPtr(const MIRParam& p) const;
+
+    size_t sizeOfOrBug(const HIRTypeData* ty) const;
+};
+
+static std::ostream& operator<<(std::ostream& os, const MIREvalAllocationPtr& ap) {
+    os << MIREvalValueRef(ap);
+    return os;
+}
+
+static size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr* r, const TypeRepr::FieldPath& outPath) {
+    assert(outPath.index < r->fields.size());
+    size_t ofs = r->fields[outPath.index].offset;
+
+    const auto* ty = &r->fields[outPath.index].ty;
+    for (const auto& f : outPath.subFields) {
+        if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
+            const auto* array = (*ty)->opt_Array();
+            if (!array || !array->size.is_Known() || array->size.as_Known() == 0) {
+                BUG(sp, "Layout not computable during const evaluation - " << "array element in " << *ty);
+            }
+            ty = &array->inner;
+            continue;
+        }
+        r = TargetGetTypeRepr(sp, resolve, *ty);
+        if (!r) {
+            BUG(sp, "Layout not computable during const evaluation - " << "repr of " << *ty);
+        }
+        assert(f < r->fields.size());
+        ofs += r->fields[f].offset;
+        ty = &r->fields[f].ty;
+    }
+
+    return ofs;
+}
+
+static EntPtr getEntFullpath(const Span& sp, const ::StaticTraitResolve& resolve, const HIRPath& path, EntNS ns, MonomorphState& outMs, const HIRGenericParams** outImplParamsDef = nullptr) {
+    if (const auto* gp = path.data.opt_Generic()) {
+        const auto& name = gp->path.components().back();
+        const auto* mod = (gp->path.components().size() > 1) ? resolve.hirCrate().getTypeitemByPath(sp, gp->path, false, /*ignore_last*/ true).opt_Module() : &resolve.hirCrate().getModByPath(sp, gp->path, true);
+        if (mod) {
+            // TODO: This pointer will be invalidated...
+            for (const auto& is : mod->inlineStatics) {
+                if (is.first == name) {
+                    return &*is.second;
+                }
+            }
+        }
+    }
+    auto v = resolve.getValue(sp, path, outMs, false, outImplParamsDef);
+    switch (v.tag()) {
+        case TypeckValuePtr::TAG_NotFound: {
+            return EntPtr();
+        }
+        case TypeckValuePtr::TAG_NotYetKnown: {
+            BUG(sp, "getValue could not commit to an impl for " << path);
+        }
+        case TypeckValuePtr::TAG_Constant: {
+            auto& e = v.as_Constant();
+            return e;
+        }
+        case TypeckValuePtr::TAG_Static: {
+            auto& e = v.as_Static();
+            return e;
+        }
+        case TypeckValuePtr::TAG_Function: {
+            auto& e = v.as_Function();
+            return e;
+        }
+        case TypeckValuePtr::TAG_EnumConstructor: {
+            auto& e = v.as_EnumConstructor();
+            return EntPtr::Data_Enum{e.e, e.v};
+        }
+        case TypeckValuePtr::TAG_EnumValue: {
+            TODO(sp, "Handle EnumValue - " << path);
+            break;
+        }
+        case TypeckValuePtr::TAG_StructConstructor: {
+            auto& e = v.as_StructConstructor();
+            return e.s;
+        }
+        case TypeckValuePtr::TAG_StructConstant: {
+            TODO(sp, "Handle StructConstant - " << path);
+            break;
+        }
+    }
+    UNREACHABLE();
+}
+
+static const RcString* getRustcIntrinsicName(const Span& sp, const StaticTraitResolve& resolve, const HIRPath& path) {
+    const auto* generic = path.data.opt_Generic();
+    if (!generic) {
+        return nullptr;
+    }
+    const auto& simple = generic->path;
+    const auto components = simple.components();
+    if (components.empty()) {
+        return nullptr;
+    }
+    MonomorphState intrinsicMs(resolve.hirCrate().types);
+    const auto entity = getEntFullpath(sp, resolve, path, EntNS::Value, intrinsicMs);
+    if (const auto* function = entity.opt_Function(); function && (**function).markings.isRustcIntrinsic) {
+        return &components.back();
+    }
+    return nullptr;
+}
+
+const unsigned TERM_RET_PUSHED = UINT_MAX - 1;
+const unsigned TERM_RET_RETURN = UINT_MAX;
+
+static void resolveStaticPointer(MIREvalCallStackEntry& localState, std::pair<u64, MIREvalRelocPtr>& value) {
+    if (const auto* staticRef = value.second.asStaticref()) {
+        value.second = MIREvalRelocPtr(localState.getStaticref(staticRef->path().clone()));
+    }
+}
+
+static bool samePointerProvenance(const MIREvalRelocPtr& left, const MIREvalRelocPtr& right) {
+    if (left == right) {
+        return true;
+    }
+    const auto* leftStatic = left.asStaticref();
+    const auto* rightStatic = right.asStaticref();
+    return leftStatic && rightStatic && leftStatic->path() == rightStatic->path();
+}
+
+static MIREvalValueRef pointerBytes(MIREvalCallStackEntry& localState, std::pair<u64, MIREvalRelocPtr> pointer, size_t length, const char* intrinsic) {
+    const auto& state = localState.state;
+    resolveStaticPointer(localState, pointer);
+    MIR_ASSERT(state, pointer.second, "`" << intrinsic << "` cannot access an absolute pointer");
+    MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, "Invalid pointer passed to `" << intrinsic << "`");
+    const u64 offset = pointer.first - EncodedLiteral::PTR_BASE;
+    MIR_ASSERT(state, offset <= pointer.second.asValue().size(), "Pointer passed to `" << intrinsic << "` is out of bounds");
+    MIR_ASSERT(state, length <= pointer.second.asValue().size() - offset, "Memory range passed to `" << intrinsic << "` is out of bounds");
+    return MIREvalValueRef(pointer.second, offset).slice(0, length);
+}
+
+static u8 pointerGuaranteedCmp(const std::pair<u64, MIREvalRelocPtr>& left, const std::pair<u64, MIREvalRelocPtr>& right) {
+    if (!left.second && !right.second) {
+        return left.first == right.first ? 1 : 0;
+    }
+
+    if (left.second && right.second) {
+        return 2;
+    }
+
+    const auto& relocated = left.second ? left : right;
+    const auto& absolute = left.second ? right : left;
+    if (absolute.first != 0 || relocated.first < EncodedLiteral::PTR_BASE) {
+        return 2;
+    }
+
+    const u64 offset = relocated.first - EncodedLiteral::PTR_BASE;
+    return offset <= relocated.second.asValue().size() ? 0 : 2;
+}
+
+static std::pair<MIREvalValueRef, MIREvalValueRef> getTupleTBool(const MIREvalCallStackEntry& localState, MIREvalValueRef& src, const HIRTypeData* t) {
+    auto tupleT = localState.rootResolve.crate.types.tuple({t, localState.rootResolve.crate.types.primitive(HIRCoreType::Bool)});
+    auto* repr = TargetGetTypeRepr(localState.state.sp, localState.rootResolve, tupleT);
+    MIR_ASSERT(localState.state, repr, "No repr for " << tupleT);
+    auto s = localState.sizeOfOrBug(t);
+    return std::make_pair(src.slice(repr->fields[0].offset, s), src.slice(repr->fields[1].offset, 1));
+}
+
+static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData* ty, MIREvalValueRef& dst, const MIRParam& valL, MIRBinOp op, const MIRParam& valR, bool saturate = false) {
+    auto ti = TypeInfo::forType(ty);
+    const auto& state = localState.state;
+    bool didOverflow = false;
+
+    if (op == MIRBinOp::BIT_SHL || op == MIRBinOp::BIT_SHR) {
+        HIRTypeRef tmpR;
+        const auto& tyR = localState.state.getParamType(tmpR, valR);
+        auto tiR = TypeInfo::forType(tyR);
+
+        auto r = tiR.ty == TypeInfo::Unsigned ? localState.readParamUint(tiR.bits, valR) : localState.readParamSint(tiR.bits, valR).getInner();
+        auto amt = r.truncateU64();
+        if (amt > ti.bits) {
+            didOverflow = true;
+            amt = 0;
+        }
+        switch (ti.ty) {
+            case TypeInfo::Unsigned: {
+                auto l = localState.readParamUint(ti.bits, valL);
+                switch (op) {
+                    case MIRBinOp::BIT_SHL:
+                        dst.writeUint(state, ti.bits, ti.mask(l << amt));
+                        break;
+                    case MIRBinOp::BIT_SHR:
+                        dst.writeUint(state, ti.bits, ti.mask(l >> amt));
+                        break;
+                    default:
+                        MIR_BUG(state, "This block should only be active for SHL/SHR");
+                }
+                break;
+            }
+            case TypeInfo::Signed: {
+                auto l = localState.readParamSint(ti.bits, valL);
+                switch (op) {
+                    case MIRBinOp::BIT_SHL:
+                        dst.writeUint(state, ti.bits, ti.mask(l << amt));
+                        break;
+                    case MIRBinOp::BIT_SHR:
+                        dst.writeUint(state, ti.bits, ti.mask(l >> amt));
+                        break;
+                    default:
+                        MIR_BUG(state, "This block should only be active for SHL/SHR");
+                }
+                break;
+            }
+            default:
+                MIR_BUG(state, "Invalid use of BIT_SHL/BIT_SHR on " << ty);
+        }
+        return didOverflow;
+    }
+    {
+        HIRTypeRef tmpR;
+        MIR_ASSERT(state, ty == localState.state.getParamType(tmpR, valR), "BinOp with mismatched types");
+    }
+
+    switch (ti.ty) {
+        case TypeInfo::Float: {
+            auto l = localState.readParamFloat(ti.bits, valL);
+            auto r = localState.readParamFloat(ti.bits, valR);
+            auto writeResult = [&](FloatValue value) {
+                if (!floatValueIsNan(value)) {
+                    dst.writeFloat(state, ti.bits, value);
+                    return;
+                }
+
+                switch (ti.bits) {
+                    case 16:
+                        dst.writeUint(state, ti.bits, U128(0x7e00));
+                        break;
+                    case 32:
+                        dst.writeUint(state, ti.bits, U128(0x7fc00000));
+                        break;
+                    case 64:
+                        dst.writeUint(state, ti.bits, U128(0x7ff8000000000000));
+                        break;
+                    case 128:
+                        dst.writeUint(state, ti.bits, U128(0, 0x7fff800000000000));
+                        break;
+                    default:
+                        MIR_BUG(state, "Invalid float width " << ti.bits);
+                }
+            };
+            switch (op) {
+                case MIRBinOp::ADD:
+                    writeResult(l + r);
+                    break;
+                case MIRBinOp::SUB:
+                    writeResult(l - r);
+                    break;
+                case MIRBinOp::MUL:
+                    writeResult(l * r);
+                    break;
+                case MIRBinOp::DIV:
+                    writeResult(l / r);
+                    break;
+                case MIRBinOp::MOD:
+                    writeResult(floatValueRemainder(l, r));
+                    break;
+                case MIRBinOp::ADD_OV:
+                case MIRBinOp::SUB_OV:
+                case MIRBinOp::MUL_OV:
+                case MIRBinOp::DIV_OV:
+                    MIR_TODO(state, "do_arith float unimplemented - val = " << l << " , " << r);
+
+                case MIRBinOp::BIT_OR:
+                case MIRBinOp::BIT_AND:
+                case MIRBinOp::BIT_XOR:
+                    MIR_BUG(state, "do_arith float with bitwise - val = " << l << " , " << r);
+                case MIRBinOp::BIT_SHL:
+                case MIRBinOp::BIT_SHR:
+                    MIR_BUG(state, "Bitshifts should be handled in caller");
+                case MIRBinOp::EQ:
+                    dst.writeByte(state, l == r);
+                    break;
+                case MIRBinOp::NE:
+                    dst.writeByte(state, l != r);
+                    break;
+                case MIRBinOp::GT:
+                    dst.writeByte(state, l > r);
+                    break;
+                case MIRBinOp::GE:
+                    dst.writeByte(state, l >= r);
+                    break;
+                case MIRBinOp::LT:
+                    dst.writeByte(state, l < r);
+                    break;
+                case MIRBinOp::LE:
+                    dst.writeByte(state, l <= r);
+                    break;
+            }
+            break;
+        };
+        case TypeInfo::Unsigned: {
+            auto l = localState.readParamUint(ti.bits, valL);
+            auto r = localState.readParamUint(ti.bits, valR);
+            switch (op) {
+                case MIRBinOp::ADD: {
+                    auto res = ti.mask(l + r);
+                    didOverflow = res < l;
+                    if (didOverflow && saturate) {
+                        res = ti.mask(~U128());
+                    }
+                    dst.writeUint(state, ti.bits, res);
+                    break;
+                }
+                case MIRBinOp::SUB: {
+                    auto res = ti.mask(l - r);
+                    didOverflow = res > l;
+                    if (didOverflow && saturate) {
+                        res = ti.mask(U128(0));
+                    }
+                    dst.writeUint(state, ti.bits, res);
+                    break;
+                }
+                case MIRBinOp::MUL: {
+                    auto res = ti.mask(l * r);
+                    auto max = ti.mask(~U128());
+                    didOverflow = r != 0 && l > max / r;
+                    if (didOverflow && saturate) {
+                        res = max;
+                    }
+                    dst.writeUint(state, ti.bits, res);
+                    break;
+                }
+                case MIRBinOp::DIV:
+                    if (r == 0) {
+                        dst.writeUint(state, ti.bits, U128(0));
+                        return true;
+                    }
+                    dst.writeUint(state, ti.bits, ti.mask(l / r));
+                    break;
+                case MIRBinOp::MOD:
+                    if (r == 0) {
+                        dst.writeUint(state, ti.bits, U128(0));
+                        return true;
+                    }
+                    dst.writeUint(state, ti.bits, ti.mask(l % r));
+                    break;
+                case MIRBinOp::ADD_OV:
+                case MIRBinOp::SUB_OV:
+                case MIRBinOp::MUL_OV:
+                case MIRBinOp::DIV_OV:
+                    MIR_TODO(state, "do_arith unsigned - val = " << l << " , " << r);
+
+                case MIRBinOp::BIT_OR:
+                    dst.writeUint(state, ti.bits, l | r);
+                    break;
+                case MIRBinOp::BIT_AND:
+                    dst.writeUint(state, ti.bits, l & r);
+                    break;
+                case MIRBinOp::BIT_XOR:
+                    dst.writeUint(state, ti.bits, l ^ r);
+                    break;
+                case MIRBinOp::BIT_SHL:
+                case MIRBinOp::BIT_SHR:
+                    MIR_BUG(state, "Bitshifts should be handled in caller");
+
+                case MIRBinOp::EQ:
+                    dst.writeByte(state, l == r);
+                    break;
+                case MIRBinOp::NE:
+                    dst.writeByte(state, l != r);
+                    break;
+                case MIRBinOp::GT:
+                    dst.writeByte(state, l > r);
+                    break;
+                case MIRBinOp::GE:
+                    dst.writeByte(state, l >= r);
+                    break;
+                case MIRBinOp::LT:
+                    dst.writeByte(state, l < r);
+                    break;
+                case MIRBinOp::LE:
+                    dst.writeByte(state, l <= r);
+                    break;
+            }
+            break;
+        }
+        case TypeInfo::Signed: {
+            auto l = localState.readParamSint(ti.bits, valL);
+            auto r = localState.readParamSint(ti.bits, valR);
+            const auto signBit = U128(1) << (ti.bits - 1);
+            const auto minValue = signBit;
+            const auto maxValue = signBit - 1u;
+            const auto lRaw = ti.mask(l.getInner());
+            const auto rRaw = ti.mask(r.getInner());
+            switch (op) {
+                case MIRBinOp::ADD: {
+                    auto res = ti.mask(lRaw + rRaw);
+                    didOverflow = (~(lRaw ^ rRaw) & (lRaw ^ res) & signBit) != 0;
+                    if (didOverflow && saturate) {
+                        res = (lRaw & signBit) != 0 ? minValue : maxValue;
+                    }
+                    dst.writeUint(state, ti.bits, res);
+                    break;
+                }
+                case MIRBinOp::SUB: {
+                    auto res = ti.mask(lRaw - rRaw);
+                    didOverflow = ((lRaw ^ rRaw) & (lRaw ^ res) & signBit) != 0;
+                    if (didOverflow && saturate) {
+                        res = (lRaw & signBit) != 0 ? minValue : maxValue;
+                    }
+                    dst.writeUint(state, ti.bits, res);
+                    break;
+                }
+                case MIRBinOp::MUL: {
+                    const bool lNegative = (lRaw & signBit) != 0;
+                    const bool rNegative = (rRaw & signBit) != 0;
+                    const bool resultNegative = lNegative != rNegative;
+                    const auto lMagnitude = lNegative ? ti.mask(~lRaw + 1u) : lRaw;
+                    const auto rMagnitude = rNegative ? ti.mask(~rRaw + 1u) : rRaw;
+                    const auto maxMagnitude = resultNegative ? minValue : maxValue;
+                    didOverflow = rMagnitude != 0 && lMagnitude > maxMagnitude / rMagnitude;
+                    auto res = ti.mask(lRaw * rRaw);
+                    if (didOverflow && saturate) {
+                        res = resultNegative ? minValue : maxValue;
+                    }
+                    dst.writeUint(state, ti.bits, res);
+                    break;
+                }
+                case MIRBinOp::DIV:
+                    if (r == 0) {
+                        dst.writeUint(state, ti.bits, U128(0));
+                        return true;
+                    }
+                    dst.writeSint(state, ti.bits, ti.mask(l / r));
+                    break;
+                case MIRBinOp::MOD:
+                    if (r == 0) {
+                        dst.writeUint(state, ti.bits, U128(0));
+                        return true;
+                    }
+                    dst.writeSint(state, ti.bits, ti.mask(l % r));
+                    break;
+                case MIRBinOp::ADD_OV:
+                case MIRBinOp::SUB_OV:
+                case MIRBinOp::MUL_OV:
+                case MIRBinOp::DIV_OV:
+                    MIR_TODO(state, "do_arith signed - val = " << l << " , " << r);
+
+                case MIRBinOp::BIT_OR:
+                    dst.writeUint(state, ti.bits, (l | r).getInner());
+                    break;
+                case MIRBinOp::BIT_AND:
+                    dst.writeUint(state, ti.bits, (l & r).getInner());
+                    break;
+                case MIRBinOp::BIT_XOR:
+                    dst.writeUint(state, ti.bits, (l ^ r).getInner());
+                    break;
+                case MIRBinOp::BIT_SHL:
+                case MIRBinOp::BIT_SHR:
+                    MIR_BUG(state, "Bitshifts should be handled in caller");
+
+                case MIRBinOp::EQ:
+                    dst.writeByte(state, l == r);
+                    break;
+                case MIRBinOp::NE:
+                    dst.writeByte(state, l != r);
+                    break;
+                case MIRBinOp::GT:
+                    dst.writeByte(state, l > r);
+                    break;
+                case MIRBinOp::GE:
+                    dst.writeByte(state, l >= r);
+                    break;
+                case MIRBinOp::LT:
+                    dst.writeByte(state, l < r);
+                    break;
+                case MIRBinOp::LE:
+                    dst.writeByte(state, l <= r);
+                    break;
+            }
+            break;
+        }
+        case TypeInfo::Other: {
+            const auto* borrowTy = ty->opt_Borrow();
+            if (borrowTy && ((borrowTy->inner->is_Slice() && borrowTy->inner->as_Slice().inner == HIRCoreType::U8) || borrowTy->inner == HIRCoreType::Str)) {
+                struct P {
+                    MIREvalRelocPtr reloc;
+                    const void* data;
+                    size_t len;
+
+                    P(MIREvalCallStackEntry& localState, const MIRParam& p) {
+                        auto vr = localState.getLval(p.as_LValue());
+                        auto ptr = vr.readPtr(localState.state);
+                        this->len = vr.slice(TargetGetPointerBits() / 8).readUsize(localState.state);
+                        this->data = ptr.second.asValue().getBytes(ptr.first - EncodedLiteral::PTR_BASE, this->len, true);
+                        MIR_ASSERT(localState.state, this->data, "Invalid pointer " << p << " : " << vr << " = " << ptr.second << " @ " << ptr.first << "+" << this->len);
+                        this->reloc = std::move(ptr.second);
+                    }
+                };
+
+                auto ptrL = P(localState, valL);
+                auto ptrR = P(localState, valR);
+                int cmp = memcmp(ptrL.data, ptrR.data, std::min(ptrL.len, ptrL.len));
+                if (cmp == 0) {
+                    if (ptrL.len != ptrR.len) {
+                        cmp = ptrL.len < ptrR.len ? -1 : 1;
+                    }
+                }
+                switch (op) {
+                    case MIRBinOp::EQ:
+                        dst.writeByte(state, cmp == 0);
+                        break;
+                    case MIRBinOp::NE:
+                        dst.writeByte(state, cmp != 0);
+                        break;
+                    case MIRBinOp::GT:
+                        dst.writeByte(state, cmp > 0);
+                        break;
+                    case MIRBinOp::GE:
+                        dst.writeByte(state, cmp >= 0);
+                        break;
+                    case MIRBinOp::LT:
+                        dst.writeByte(state, cmp < 0);
+                        break;
+                    case MIRBinOp::LE:
+                        dst.writeByte(state, cmp <= 0);
+                        break;
+                    default:
+                        MIR_BUG(state, "BinOp " << int(op) << " on " << ty << " - Byte slice or &str");
+                }
+                break;
+            } else {
+                MIR_BUG(state, "BinOp on " << ty);
+            }
+            break;
+        }
+    }
+    return didOverflow;
+}
+
+static void writeCtfeUnsizeMetadata(MIREvalCallStackEntry& localState, MIREvalValueRef dst, const HIRTypeData* dynamicTypeD, const HIRTypeData* dynamicTypeS) {
+    const auto& state = localState.state;
+    while (const auto* pathD = dynamicTypeD->opt_Path()) {
+        MIR_ASSERT(state, pathD->binding.is_Struct(), "Pointer unsize to " << dynamicTypeD);
+        const auto* pathS = dynamicTypeS->opt_Path();
+        MIR_ASSERT(state, pathS && pathS->binding.is_Struct() && pathS->binding.as_Struct() == pathD->binding.as_Struct(), "Pointer unsize from " << dynamicTypeS << " to " << dynamicTypeD);
+        const auto& markings = pathD->binding.as_Struct()->structMarkings;
+        MIR_ASSERT(state, markings.coerceUnsized != HIRStructMarkings::Coerce::None, "Pointer unsize through non-CoerceUnsized type " << dynamicTypeD);
+        dynamicTypeD = pathD->path.data.as_Generic().params.types.at(markings.unsizedParam);
+        dynamicTypeS = pathS->path.data.as_Generic().params.types.at(markings.unsizedParam);
+    }
+
+    const auto ptrSize = TargetGetPointerBits() / 8;
+    if (const auto* traitObject = dynamicTypeD->opt_TraitObject()) {
+        MIR_ASSERT(state, !dynamicTypeS->is_TraitObject(), "Trait-object pointer upcast must provide explicit metadata");
+        auto vtablePath = HIRPath(dynamicTypeS, traitObject->trait.path.clone(), localState.rootResolve.board().ctfe->vtableName());
+        auto vtable = MIREvalStaticRefPtr::allocate(localState.valuePool, std::move(vtablePath), nullptr, 0);
+        dst.slice(ptrSize).writePtr(state, EncodedLiteral::PTR_BASE, std::move(vtable));
+    } else if (dynamicTypeD->is_Slice()) {
+        const auto* array = dynamicTypeS->opt_Array();
+        MIR_ASSERT(state, array && array->size.is_Known(), "Pointer unsize to slice from " << dynamicTypeS);
+        dst.slice(ptrSize).writeUint(state, TargetGetPointerBits(), array->size.as_Known());
+    } else {
+        const auto metadataType = localState.resolve.metadataType(state.sp, dynamicTypeD);
+        MIR_ASSERT(state, metadataType == MetadataType::None || metadataType == MetadataType::Zero, "Unhandled pointer metadata " << metadataType << " for " << dynamicTypeD);
+    }
+}
+
+template <typename WriteField>
+static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallStackEntry& localState, MIREvalValueRef dst, const HIRTypeData* ty, size_t index, size_t valueCount, WriteField&& writeField) {
+    const auto& state = localState.state;
+    auto* enmRepr = TargetGetTypeRepr(state.sp, resolve, ty);
+    if (!enmRepr) {
+        BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
+    }
+    if (valueCount > 0) {
+        MIR_ASSERT(state, index < enmRepr->fields.size(), "Enum representation has no variant " << index << " for " << ty);
+        const auto ofs = enmRepr->fields[index].offset;
+        const auto& innerType = enmRepr->fields[index].ty;
+        auto* innerRepr = TargetGetTypeRepr(state.sp, resolve, innerType);
+        if (!innerRepr) {
+            BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << innerType);
+        }
+        MIR_ASSERT(state, valueCount <= innerRepr->fields.size(), "Enum variant " << index << " has " << innerRepr->fields.size() << " fields, got " << valueCount);
+        for (size_t i = 0; i < valueCount; i++) {
+            const size_t size = localState.sizeOfOrBug(innerRepr->fields[i].ty);
+            auto fieldDst = dst.slice(ofs + innerRepr->fields[i].offset, size);
+            writeField(fieldDst, i);
+        }
+    }
+
+    switch (enmRepr->variants.tag()) {
+        case TypeReprVariantMode::TAG_None: {
+            break;
+        }
+        case TypeReprVariantMode::TAG_NonZero: {
+            auto& variant = enmRepr->variants.as_NonZero();
+            if (index == variant.zeroVariant) {
+                auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
+                const auto savedOffset = offset;
+                for (size_t i = 0; i + 8 <= variant.field.size; i += 8) {
+                    dst.slice(offset, 8).writeUint(state, 64, 0);
+                    offset += 8;
+                }
+                if (variant.field.size % 8 > 0) {
+                    dst.slice(offset, variant.field.size % 8).writeUint(state, (variant.field.size % 8) * 8, 0);
+                }
+            }
+            break;
+        }
+        case TypeReprVariantMode::TAG_Linear: {
+            auto& variant = enmRepr->variants.as_Linear();
+            if (!variant.isNiche(index)) {
+                const auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
+                MIR_ASSERT(state, variant.field.size <= 64 / 8, "");
+                dst.slice(offset, variant.field.size).writeUint(state, variant.field.size * 8, variant.tagValue(index));
+            }
+            break;
+        }
+        case TypeReprVariantMode::TAG_Values: {
+            auto& variant = enmRepr->variants.as_Values();
+            const auto& field = enmRepr->fields[variant.field.index];
+            const auto typeInfo = TypeInfo::forType(field.ty);
+            MIR_ASSERT(state, typeInfo.ty == TypeInfo::Signed || typeInfo.ty == TypeInfo::Unsigned, "EnumVariant: Values not integer - " << field.ty);
+            auto tagDst = dst.slice(field.offset, (typeInfo.bits + 7) / 8);
+            if (typeInfo.ty == TypeInfo::Signed) {
+                tagDst.writeSint(state, typeInfo.bits, S128(variant.values.at(index)));
+            } else {
+                tagDst.writeUint(state, typeInfo.bits, variant.values.at(index));
+            }
+            break;
+        }
+    }
+}
+
+void CtfeCreateContext(WireBoard& wb, ObjPool& pool) {
+    wb.ctfe = pool.make<CtfeContext>();
 }
 
 MIREvalConstantPtr MIREvalConstantPtr::allocate(ObjPool* pool, const void* data, size_t len) {
@@ -947,535 +1550,6 @@ IValue* MIREvalRelocPtr::asValuePtr() const {
     abort();
 }
 
-namespace {
-    size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr* r, const TypeRepr::FieldPath& outPath) {
-        assert(outPath.index < r->fields.size());
-        size_t ofs = r->fields[outPath.index].offset;
-
-        const auto* ty = &r->fields[outPath.index].ty;
-        for (const auto& f : outPath.subFields) {
-            if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
-                const auto* array = (*ty)->opt_Array();
-                if (!array || !array->size.is_Known() || array->size.as_Known() == 0) {
-                    BUG(sp, "Layout not computable during const evaluation - " << "array element in " << *ty);
-                }
-                ty = &array->inner;
-                continue;
-            }
-            r = TargetGetTypeRepr(sp, resolve, *ty);
-            if (!r) {
-                BUG(sp, "Layout not computable during const evaluation - " << "repr of " << *ty);
-            }
-            assert(f < r->fields.size());
-            ofs += r->fields[f].offset;
-            ty = &r->fields[f].ty;
-        }
-
-        return ofs;
-    }
-
-    EntPtr getEntFullpath(const Span& sp, const ::StaticTraitResolve& resolve, const HIRPath& path, EntNS ns, MonomorphState& outMs, const HIRGenericParams** outImplParamsDef = nullptr) {
-        if (const auto* gp = path.data.opt_Generic()) {
-            const auto& name = gp->path.components().back();
-            const auto* mod = (gp->path.components().size() > 1) ? resolve.hirCrate().getTypeitemByPath(sp, gp->path, false, /*ignore_last*/ true).opt_Module() : &resolve.hirCrate().getModByPath(sp, gp->path, true);
-            if (mod) {
-                // TODO: This pointer will be invalidated...
-                for (const auto& is : mod->inlineStatics) {
-                    if (is.first == name) {
-                        return &*is.second;
-                    }
-                }
-            }
-        }
-        auto v = resolve.getValue(sp, path, outMs, false, outImplParamsDef);
-        switch (v.tag()) {
-            case TypeckValuePtr::TAG_NotFound: {
-                return EntPtr();
-            }
-            case TypeckValuePtr::TAG_NotYetKnown: {
-                BUG(sp, "getValue could not commit to an impl for " << path);
-            }
-            case TypeckValuePtr::TAG_Constant: {
-                auto& e = v.as_Constant();
-                return e;
-            }
-            case TypeckValuePtr::TAG_Static: {
-                auto& e = v.as_Static();
-                return e;
-            }
-            case TypeckValuePtr::TAG_Function: {
-                auto& e = v.as_Function();
-                return e;
-            }
-            case TypeckValuePtr::TAG_EnumConstructor: {
-                auto& e = v.as_EnumConstructor();
-                return EntPtr::Data_Enum{e.e, e.v};
-            }
-            case TypeckValuePtr::TAG_EnumValue: {
-                TODO(sp, "Handle EnumValue - " << path);
-                break;
-            }
-            case TypeckValuePtr::TAG_StructConstructor: {
-                auto& e = v.as_StructConstructor();
-                return e.s;
-            }
-            case TypeckValuePtr::TAG_StructConstant: {
-                TODO(sp, "Handle StructConstant - " << path);
-                break;
-            }
-        }
-        UNREACHABLE();
-    }
-
-    const RcString* getRustcIntrinsicName(const Span& sp, const StaticTraitResolve& resolve, const HIRPath& path) {
-        const auto* generic = path.data.opt_Generic();
-        if (!generic) {
-            return nullptr;
-        }
-        const auto& simple = generic->path;
-        const auto components = simple.components();
-        if (components.empty()) {
-            return nullptr;
-        }
-        MonomorphState intrinsicMs(resolve.hirCrate().types);
-        const auto entity = getEntFullpath(sp, resolve, path, EntNS::Value, intrinsicMs);
-        if (const auto* function = entity.opt_Function(); function && (**function).markings.isRustcIntrinsic) {
-            return &components.back();
-        }
-        return nullptr;
-    }
-
-    const unsigned TERM_RET_PUSHED = UINT_MAX - 1;
-    const unsigned TERM_RET_RETURN = UINT_MAX;
-}
-
-namespace {
-    void resolveStaticPointer(MIREvalCallStackEntry& localState, std::pair<u64, MIREvalRelocPtr>& value) {
-        if (const auto* staticRef = value.second.asStaticref()) {
-            value.second = MIREvalRelocPtr(localState.getStaticref(staticRef->path().clone()));
-        }
-    }
-
-    bool samePointerProvenance(const MIREvalRelocPtr& left, const MIREvalRelocPtr& right) {
-        if (left == right) {
-            return true;
-        }
-        const auto* leftStatic = left.asStaticref();
-        const auto* rightStatic = right.asStaticref();
-        return leftStatic && rightStatic && leftStatic->path() == rightStatic->path();
-    }
-
-    MIREvalValueRef pointerBytes(MIREvalCallStackEntry& localState, std::pair<u64, MIREvalRelocPtr> pointer, size_t length, const char* intrinsic) {
-        const auto& state = localState.state;
-        resolveStaticPointer(localState, pointer);
-        MIR_ASSERT(state, pointer.second, "`" << intrinsic << "` cannot access an absolute pointer");
-        MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, "Invalid pointer passed to `" << intrinsic << "`");
-        const u64 offset = pointer.first - EncodedLiteral::PTR_BASE;
-        MIR_ASSERT(state, offset <= pointer.second.asValue().size(), "Pointer passed to `" << intrinsic << "` is out of bounds");
-        MIR_ASSERT(state, length <= pointer.second.asValue().size() - offset, "Memory range passed to `" << intrinsic << "` is out of bounds");
-        return MIREvalValueRef(pointer.second, offset).slice(0, length);
-    }
-
-    u8 pointerGuaranteedCmp(const std::pair<u64, MIREvalRelocPtr>& left, const std::pair<u64, MIREvalRelocPtr>& right) {
-        if (!left.second && !right.second) {
-            return left.first == right.first ? 1 : 0;
-        }
-
-        if (left.second && right.second) {
-            return 2;
-        }
-
-        const auto& relocated = left.second ? left : right;
-        const auto& absolute = left.second ? right : left;
-        if (absolute.first != 0 || relocated.first < EncodedLiteral::PTR_BASE) {
-            return 2;
-        }
-
-        const u64 offset = relocated.first - EncodedLiteral::PTR_BASE;
-        return offset <= relocated.second.asValue().size() ? 0 : 2;
-    }
-
-    std::pair<MIREvalValueRef, MIREvalValueRef> getTupleTBool(const MIREvalCallStackEntry& localState, MIREvalValueRef& src, const HIRTypeData* t) {
-        auto tupleT = localState.rootResolve.crate.types.tuple({t, localState.rootResolve.crate.types.primitive(HIRCoreType::Bool)});
-        auto* repr = TargetGetTypeRepr(localState.state.sp, localState.rootResolve, tupleT);
-        MIR_ASSERT(localState.state, repr, "No repr for " << tupleT);
-        auto s = localState.sizeOfOrBug(t);
-        return std::make_pair(src.slice(repr->fields[0].offset, s), src.slice(repr->fields[1].offset, 1));
-    }
-
-    bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData* ty, MIREvalValueRef& dst, const MIRParam& valL, MIRBinOp op, const MIRParam& valR, bool saturate = false) {
-        auto ti = TypeInfo::forType(ty);
-        const auto& state = localState.state;
-        bool didOverflow = false;
-
-        if (op == MIRBinOp::BIT_SHL || op == MIRBinOp::BIT_SHR) {
-            HIRTypeRef tmpR;
-            const auto& tyR = localState.state.getParamType(tmpR, valR);
-            auto tiR = TypeInfo::forType(tyR);
-
-            auto r = tiR.ty == TypeInfo::Unsigned ? localState.readParamUint(tiR.bits, valR) : localState.readParamSint(tiR.bits, valR).getInner();
-            auto amt = r.truncateU64();
-            if (amt > ti.bits) {
-                didOverflow = true;
-                amt = 0;
-            }
-            switch (ti.ty) {
-                case TypeInfo::Unsigned: {
-                    auto l = localState.readParamUint(ti.bits, valL);
-                    switch (op) {
-                        case MIRBinOp::BIT_SHL:
-                            dst.writeUint(state, ti.bits, ti.mask(l << amt));
-                            break;
-                        case MIRBinOp::BIT_SHR:
-                            dst.writeUint(state, ti.bits, ti.mask(l >> amt));
-                            break;
-                        default:
-                            MIR_BUG(state, "This block should only be active for SHL/SHR");
-                    }
-                    break;
-                }
-                case TypeInfo::Signed: {
-                    auto l = localState.readParamSint(ti.bits, valL);
-                    switch (op) {
-                        case MIRBinOp::BIT_SHL:
-                            dst.writeUint(state, ti.bits, ti.mask(l << amt));
-                            break;
-                        case MIRBinOp::BIT_SHR:
-                            dst.writeUint(state, ti.bits, ti.mask(l >> amt));
-                            break;
-                        default:
-                            MIR_BUG(state, "This block should only be active for SHL/SHR");
-                    }
-                    break;
-                }
-                default:
-                    MIR_BUG(state, "Invalid use of BIT_SHL/BIT_SHR on " << ty);
-            }
-            return didOverflow;
-        }
-        {
-            HIRTypeRef tmpR;
-            MIR_ASSERT(state, ty == localState.state.getParamType(tmpR, valR), "BinOp with mismatched types");
-        }
-
-        switch (ti.ty) {
-            case TypeInfo::Float: {
-                auto l = localState.readParamFloat(ti.bits, valL);
-                auto r = localState.readParamFloat(ti.bits, valR);
-                auto writeResult = [&](FloatValue value) {
-                    if (!floatValueIsNan(value)) {
-                        dst.writeFloat(state, ti.bits, value);
-                        return;
-                    }
-
-                    switch (ti.bits) {
-                        case 16:
-                            dst.writeUint(state, ti.bits, U128(0x7e00));
-                            break;
-                        case 32:
-                            dst.writeUint(state, ti.bits, U128(0x7fc00000));
-                            break;
-                        case 64:
-                            dst.writeUint(state, ti.bits, U128(0x7ff8000000000000));
-                            break;
-                        case 128:
-                            dst.writeUint(state, ti.bits, U128(0, 0x7fff800000000000));
-                            break;
-                        default:
-                            MIR_BUG(state, "Invalid float width " << ti.bits);
-                    }
-                };
-                switch (op) {
-                    case MIRBinOp::ADD:
-                        writeResult(l + r);
-                        break;
-                    case MIRBinOp::SUB:
-                        writeResult(l - r);
-                        break;
-                    case MIRBinOp::MUL:
-                        writeResult(l * r);
-                        break;
-                    case MIRBinOp::DIV:
-                        writeResult(l / r);
-                        break;
-                    case MIRBinOp::MOD:
-                        writeResult(floatValueRemainder(l, r));
-                        break;
-                    case MIRBinOp::ADD_OV:
-                    case MIRBinOp::SUB_OV:
-                    case MIRBinOp::MUL_OV:
-                    case MIRBinOp::DIV_OV:
-                        MIR_TODO(state, "do_arith float unimplemented - val = " << l << " , " << r);
-
-                    case MIRBinOp::BIT_OR:
-                    case MIRBinOp::BIT_AND:
-                    case MIRBinOp::BIT_XOR:
-                        MIR_BUG(state, "do_arith float with bitwise - val = " << l << " , " << r);
-                    case MIRBinOp::BIT_SHL:
-                    case MIRBinOp::BIT_SHR:
-                        MIR_BUG(state, "Bitshifts should be handled in caller");
-                    case MIRBinOp::EQ:
-                        dst.writeByte(state, l == r);
-                        break;
-                    case MIRBinOp::NE:
-                        dst.writeByte(state, l != r);
-                        break;
-                    case MIRBinOp::GT:
-                        dst.writeByte(state, l > r);
-                        break;
-                    case MIRBinOp::GE:
-                        dst.writeByte(state, l >= r);
-                        break;
-                    case MIRBinOp::LT:
-                        dst.writeByte(state, l < r);
-                        break;
-                    case MIRBinOp::LE:
-                        dst.writeByte(state, l <= r);
-                        break;
-                }
-                break;
-            };
-            case TypeInfo::Unsigned: {
-                auto l = localState.readParamUint(ti.bits, valL);
-                auto r = localState.readParamUint(ti.bits, valR);
-                switch (op) {
-                    case MIRBinOp::ADD: {
-                        auto res = ti.mask(l + r);
-                        didOverflow = res < l;
-                        if (didOverflow && saturate) {
-                            res = ti.mask(~U128());
-                        }
-                        dst.writeUint(state, ti.bits, res);
-                        break;
-                    }
-                    case MIRBinOp::SUB: {
-                        auto res = ti.mask(l - r);
-                        didOverflow = res > l;
-                        if (didOverflow && saturate) {
-                            res = ti.mask(U128(0));
-                        }
-                        dst.writeUint(state, ti.bits, res);
-                        break;
-                    }
-                    case MIRBinOp::MUL: {
-                        auto res = ti.mask(l * r);
-                        auto max = ti.mask(~U128());
-                        didOverflow = r != 0 && l > max / r;
-                        if (didOverflow && saturate) {
-                            res = max;
-                        }
-                        dst.writeUint(state, ti.bits, res);
-                        break;
-                    }
-                    case MIRBinOp::DIV:
-                        if (r == 0) {
-                            dst.writeUint(state, ti.bits, U128(0));
-                            return true;
-                        }
-                        dst.writeUint(state, ti.bits, ti.mask(l / r));
-                        break;
-                    case MIRBinOp::MOD:
-                        if (r == 0) {
-                            dst.writeUint(state, ti.bits, U128(0));
-                            return true;
-                        }
-                        dst.writeUint(state, ti.bits, ti.mask(l % r));
-                        break;
-                    case MIRBinOp::ADD_OV:
-                    case MIRBinOp::SUB_OV:
-                    case MIRBinOp::MUL_OV:
-                    case MIRBinOp::DIV_OV:
-                        MIR_TODO(state, "do_arith unsigned - val = " << l << " , " << r);
-
-                    case MIRBinOp::BIT_OR:
-                        dst.writeUint(state, ti.bits, l | r);
-                        break;
-                    case MIRBinOp::BIT_AND:
-                        dst.writeUint(state, ti.bits, l & r);
-                        break;
-                    case MIRBinOp::BIT_XOR:
-                        dst.writeUint(state, ti.bits, l ^ r);
-                        break;
-                    case MIRBinOp::BIT_SHL:
-                    case MIRBinOp::BIT_SHR:
-                        MIR_BUG(state, "Bitshifts should be handled in caller");
-
-                    case MIRBinOp::EQ:
-                        dst.writeByte(state, l == r);
-                        break;
-                    case MIRBinOp::NE:
-                        dst.writeByte(state, l != r);
-                        break;
-                    case MIRBinOp::GT:
-                        dst.writeByte(state, l > r);
-                        break;
-                    case MIRBinOp::GE:
-                        dst.writeByte(state, l >= r);
-                        break;
-                    case MIRBinOp::LT:
-                        dst.writeByte(state, l < r);
-                        break;
-                    case MIRBinOp::LE:
-                        dst.writeByte(state, l <= r);
-                        break;
-                }
-                break;
-            }
-            case TypeInfo::Signed: {
-                auto l = localState.readParamSint(ti.bits, valL);
-                auto r = localState.readParamSint(ti.bits, valR);
-                const auto signBit = U128(1) << (ti.bits - 1);
-                const auto minValue = signBit;
-                const auto maxValue = signBit - 1u;
-                const auto lRaw = ti.mask(l.getInner());
-                const auto rRaw = ti.mask(r.getInner());
-                switch (op) {
-                    case MIRBinOp::ADD: {
-                        auto res = ti.mask(lRaw + rRaw);
-                        didOverflow = (~(lRaw ^ rRaw) & (lRaw ^ res) & signBit) != 0;
-                        if (didOverflow && saturate) {
-                            res = (lRaw & signBit) != 0 ? minValue : maxValue;
-                        }
-                        dst.writeUint(state, ti.bits, res);
-                        break;
-                    }
-                    case MIRBinOp::SUB: {
-                        auto res = ti.mask(lRaw - rRaw);
-                        didOverflow = ((lRaw ^ rRaw) & (lRaw ^ res) & signBit) != 0;
-                        if (didOverflow && saturate) {
-                            res = (lRaw & signBit) != 0 ? minValue : maxValue;
-                        }
-                        dst.writeUint(state, ti.bits, res);
-                        break;
-                    }
-                    case MIRBinOp::MUL: {
-                        const bool lNegative = (lRaw & signBit) != 0;
-                        const bool rNegative = (rRaw & signBit) != 0;
-                        const bool resultNegative = lNegative != rNegative;
-                        const auto lMagnitude = lNegative ? ti.mask(~lRaw + 1u) : lRaw;
-                        const auto rMagnitude = rNegative ? ti.mask(~rRaw + 1u) : rRaw;
-                        const auto maxMagnitude = resultNegative ? minValue : maxValue;
-                        didOverflow = rMagnitude != 0 && lMagnitude > maxMagnitude / rMagnitude;
-                        auto res = ti.mask(lRaw * rRaw);
-                        if (didOverflow && saturate) {
-                            res = resultNegative ? minValue : maxValue;
-                        }
-                        dst.writeUint(state, ti.bits, res);
-                        break;
-                    }
-                    case MIRBinOp::DIV:
-                        if (r == 0) {
-                            dst.writeUint(state, ti.bits, U128(0));
-                            return true;
-                        }
-                        dst.writeSint(state, ti.bits, ti.mask(l / r));
-                        break;
-                    case MIRBinOp::MOD:
-                        if (r == 0) {
-                            dst.writeUint(state, ti.bits, U128(0));
-                            return true;
-                        }
-                        dst.writeSint(state, ti.bits, ti.mask(l % r));
-                        break;
-                    case MIRBinOp::ADD_OV:
-                    case MIRBinOp::SUB_OV:
-                    case MIRBinOp::MUL_OV:
-                    case MIRBinOp::DIV_OV:
-                        MIR_TODO(state, "do_arith signed - val = " << l << " , " << r);
-
-                    case MIRBinOp::BIT_OR:
-                        dst.writeUint(state, ti.bits, (l | r).getInner());
-                        break;
-                    case MIRBinOp::BIT_AND:
-                        dst.writeUint(state, ti.bits, (l & r).getInner());
-                        break;
-                    case MIRBinOp::BIT_XOR:
-                        dst.writeUint(state, ti.bits, (l ^ r).getInner());
-                        break;
-                    case MIRBinOp::BIT_SHL:
-                    case MIRBinOp::BIT_SHR:
-                        MIR_BUG(state, "Bitshifts should be handled in caller");
-
-                    case MIRBinOp::EQ:
-                        dst.writeByte(state, l == r);
-                        break;
-                    case MIRBinOp::NE:
-                        dst.writeByte(state, l != r);
-                        break;
-                    case MIRBinOp::GT:
-                        dst.writeByte(state, l > r);
-                        break;
-                    case MIRBinOp::GE:
-                        dst.writeByte(state, l >= r);
-                        break;
-                    case MIRBinOp::LT:
-                        dst.writeByte(state, l < r);
-                        break;
-                    case MIRBinOp::LE:
-                        dst.writeByte(state, l <= r);
-                        break;
-                }
-                break;
-            }
-            case TypeInfo::Other: {
-                const auto* borrowTy = ty->opt_Borrow();
-                if (borrowTy && ((borrowTy->inner->is_Slice() && borrowTy->inner->as_Slice().inner == HIRCoreType::U8) || borrowTy->inner == HIRCoreType::Str)) {
-                    struct P {
-                        MIREvalRelocPtr reloc;
-                        const void* data;
-                        size_t len;
-
-                        P(MIREvalCallStackEntry& localState, const MIRParam& p) {
-                            auto vr = localState.getLval(p.as_LValue());
-                            auto ptr = vr.readPtr(localState.state);
-                            this->len = vr.slice(TargetGetPointerBits() / 8).readUsize(localState.state);
-                            this->data = ptr.second.asValue().getBytes(ptr.first - EncodedLiteral::PTR_BASE, this->len, true);
-                            MIR_ASSERT(localState.state, this->data, "Invalid pointer " << p << " : " << vr << " = " << ptr.second << " @ " << ptr.first << "+" << this->len);
-                            this->reloc = std::move(ptr.second);
-                        }
-                    };
-
-                    auto ptrL = P(localState, valL);
-                    auto ptrR = P(localState, valR);
-                    int cmp = memcmp(ptrL.data, ptrR.data, std::min(ptrL.len, ptrL.len));
-                    if (cmp == 0) {
-                        if (ptrL.len != ptrR.len) {
-                            cmp = ptrL.len < ptrR.len ? -1 : 1;
-                        }
-                    }
-                    switch (op) {
-                        case MIRBinOp::EQ:
-                            dst.writeByte(state, cmp == 0);
-                            break;
-                        case MIRBinOp::NE:
-                            dst.writeByte(state, cmp != 0);
-                            break;
-                        case MIRBinOp::GT:
-                            dst.writeByte(state, cmp > 0);
-                            break;
-                        case MIRBinOp::GE:
-                            dst.writeByte(state, cmp >= 0);
-                            break;
-                        case MIRBinOp::LT:
-                            dst.writeByte(state, cmp < 0);
-                            break;
-                        case MIRBinOp::LE:
-                            dst.writeByte(state, cmp <= 0);
-                            break;
-                        default:
-                            MIR_BUG(state, "BinOp " << int(op) << " on " << ty << " - Byte slice or &str");
-                    }
-                    break;
-                } else {
-                    MIR_BUG(state, "BinOp on " << ty);
-                }
-                break;
-            }
-        }
-        return didOverflow;
-    }
-}
-
 HIREvaluator::CsePtr::~CsePtr() {
     if (inner) {
         delete inner;
@@ -1533,104 +1607,6 @@ MIREvalAllocationPtr HIREvaluator::runUntilStackEmpty() {
         }
     }
     ERROR(this->rootSpan, E0000, "Constant evaluation ran for too long - " << numStmtsRun << " statements, " << idx << " blocks");
-}
-
-namespace {
-    static void writeCtfeUnsizeMetadata(MIREvalCallStackEntry& localState, MIREvalValueRef dst, const HIRTypeData* dynamicTypeD, const HIRTypeData* dynamicTypeS) {
-        const auto& state = localState.state;
-        while (const auto* pathD = dynamicTypeD->opt_Path()) {
-            MIR_ASSERT(state, pathD->binding.is_Struct(), "Pointer unsize to " << dynamicTypeD);
-            const auto* pathS = dynamicTypeS->opt_Path();
-            MIR_ASSERT(state, pathS && pathS->binding.is_Struct() && pathS->binding.as_Struct() == pathD->binding.as_Struct(), "Pointer unsize from " << dynamicTypeS << " to " << dynamicTypeD);
-            const auto& markings = pathD->binding.as_Struct()->structMarkings;
-            MIR_ASSERT(state, markings.coerceUnsized != HIRStructMarkings::Coerce::None, "Pointer unsize through non-CoerceUnsized type " << dynamicTypeD);
-            dynamicTypeD = pathD->path.data.as_Generic().params.types.at(markings.unsizedParam);
-            dynamicTypeS = pathS->path.data.as_Generic().params.types.at(markings.unsizedParam);
-        }
-
-        const auto ptrSize = TargetGetPointerBits() / 8;
-        if (const auto* traitObject = dynamicTypeD->opt_TraitObject()) {
-            MIR_ASSERT(state, !dynamicTypeS->is_TraitObject(), "Trait-object pointer upcast must provide explicit metadata");
-            auto vtablePath = HIRPath(dynamicTypeS, traitObject->trait.path.clone(), localState.rootResolve.board().ctfe->vtableName());
-            auto vtable = MIREvalStaticRefPtr::allocate(localState.valuePool, std::move(vtablePath), nullptr, 0);
-            dst.slice(ptrSize).writePtr(state, EncodedLiteral::PTR_BASE, std::move(vtable));
-        } else if (dynamicTypeD->is_Slice()) {
-            const auto* array = dynamicTypeS->opt_Array();
-            MIR_ASSERT(state, array && array->size.is_Known(), "Pointer unsize to slice from " << dynamicTypeS);
-            dst.slice(ptrSize).writeUint(state, TargetGetPointerBits(), array->size.as_Known());
-        } else {
-            const auto metadataType = localState.resolve.metadataType(state.sp, dynamicTypeD);
-            MIR_ASSERT(state, metadataType == MetadataType::None || metadataType == MetadataType::Zero, "Unhandled pointer metadata " << metadataType << " for " << dynamicTypeD);
-        }
-    }
-
-    template <typename WriteField>
-    static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallStackEntry& localState, MIREvalValueRef dst, const HIRTypeData* ty, size_t index, size_t valueCount, WriteField&& writeField) {
-        const auto& state = localState.state;
-        auto* enmRepr = TargetGetTypeRepr(state.sp, resolve, ty);
-        if (!enmRepr) {
-            BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
-        }
-        if (valueCount > 0) {
-            MIR_ASSERT(state, index < enmRepr->fields.size(), "Enum representation has no variant " << index << " for " << ty);
-            const auto ofs = enmRepr->fields[index].offset;
-            const auto& innerType = enmRepr->fields[index].ty;
-            auto* innerRepr = TargetGetTypeRepr(state.sp, resolve, innerType);
-            if (!innerRepr) {
-                BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << innerType);
-            }
-            MIR_ASSERT(state, valueCount <= innerRepr->fields.size(), "Enum variant " << index << " has " << innerRepr->fields.size() << " fields, got " << valueCount);
-            for (size_t i = 0; i < valueCount; i++) {
-                const size_t size = localState.sizeOfOrBug(innerRepr->fields[i].ty);
-                auto fieldDst = dst.slice(ofs + innerRepr->fields[i].offset, size);
-                writeField(fieldDst, i);
-            }
-        }
-
-        switch (enmRepr->variants.tag()) {
-            case TypeReprVariantMode::TAG_None: {
-                break;
-            }
-            case TypeReprVariantMode::TAG_NonZero: {
-                auto& variant = enmRepr->variants.as_NonZero();
-                if (index == variant.zeroVariant) {
-                    auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
-                    const auto savedOffset = offset;
-                    for (size_t i = 0; i + 8 <= variant.field.size; i += 8) {
-                        dst.slice(offset, 8).writeUint(state, 64, 0);
-                        offset += 8;
-                    }
-                    if (variant.field.size % 8 > 0) {
-                        dst.slice(offset, variant.field.size % 8).writeUint(state, (variant.field.size % 8) * 8, 0);
-                    }
-                }
-                break;
-            }
-            case TypeReprVariantMode::TAG_Linear: {
-                auto& variant = enmRepr->variants.as_Linear();
-                if (!variant.isNiche(index)) {
-                    const auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
-                    MIR_ASSERT(state, variant.field.size <= 64 / 8, "");
-                    dst.slice(offset, variant.field.size).writeUint(state, variant.field.size * 8, variant.tagValue(index));
-                }
-                break;
-            }
-            case TypeReprVariantMode::TAG_Values: {
-                auto& variant = enmRepr->variants.as_Values();
-                const auto& field = enmRepr->fields[variant.field.index];
-                const auto typeInfo = TypeInfo::forType(field.ty);
-                MIR_ASSERT(state, typeInfo.ty == TypeInfo::Signed || typeInfo.ty == TypeInfo::Unsigned, "EnumVariant: Values not integer - " << field.ty);
-                auto tagDst = dst.slice(field.offset, (typeInfo.bits + 7) / 8);
-                if (typeInfo.ty == TypeInfo::Signed) {
-                    tagDst.writeSint(state, typeInfo.bits, S128(variant.values.at(index)));
-                } else {
-                    tagDst.writeUint(state, typeInfo.bits, variant.values.at(index));
-                }
-                break;
-            }
-        }
-    }
-
 }
 
 void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStatement& stmt) {
@@ -3297,21 +3273,6 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
         return this->allocationToEncoded(exp, *rvRaw);
     } else {
         BUG(this->rootSpan, "Attempting to evaluate constant expression with no associated code");
-    }
-}
-
-namespace {
-
-    void ConvertHIRConstantEvaluateStatic(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRStatic& e) {
-        Expander exp{wb};
-        exp.implParams = implParams;
-        exp.visitStatic(ip, e);
-    }
-
-    void ConvertHIRConstantEvaluateFcnSig(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRFunction& fcn) {
-        Expander exp{wb};
-        exp.implParams = implParams;
-        exp.visitFunction(ip, fcn);
     }
 }
 

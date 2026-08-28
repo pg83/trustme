@@ -175,9 +175,6 @@ namespace {
         ~ActiveUseResolution();
     };
 
-}
-
-namespace {
     struct DelegationSignatureSource {
         const ASTFunction* ast = nullptr;
         const HIRFunction* hir = nullptr;
@@ -187,9 +184,6 @@ namespace {
         const ASTModule* module;
         const WildcardRecursionNode* next;
     };
-}
-
-namespace {
 
     RcString selfName() {
         return RcString::newInterned("Self");
@@ -207,9 +201,7 @@ namespace {
         }
         return it;
     }
-}
 
-namespace {
     std::ostream& operator<<(std::ostream& os, const Context::LookupMode& v) {
         switch (v) {
             case Context::LookupMode::Namespace:
@@ -3298,15 +3290,6 @@ namespace {
         }
     }
 
-}
-
-void ResolveAbsolutise(const WireBoard& wb, ASTCrate& crate) {
-    ResolveAbsoluteMod(*wb.settings, crate, crate.rootModule());
-}
-
-#undef FLAG_CONST_GENERIC
-
-namespace {
     bool WildcardRecursionContains(const WildcardRecursionNode* node, const ASTModule& module) {
         for (; node; node = node->next) {
             if (node->module == &module) {
@@ -4287,18 +4270,6 @@ namespace {
         }
     }
 
-}
-
-void ResolveIndex(ASTCrate& crate) {
-    ResolveIndexModuleBase(crate, crate.rootModule_);
-    ResolveIndexModuleWildcard(crate, crate.rootModule_, nullptr);
-
-    ResolveIndexModuleExportedMacros(crate, Span(), crate.rootModule_);
-
-    ResolveIndexModuleNormalise(crate, Span(), crate.rootModule_);
-}
-
-namespace {
     RcString crateBuiltinsName() {
         return RcString::newInterned(CRATE_BUILTINS);
     }
@@ -4319,14 +4290,6 @@ namespace {
     ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& ec, const HIRModule& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap = {});
     ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTPath& path, const ASTExternCrate& ec, unsigned int start);
 
-}
-
-void ResolveUse(const WireBoard& wb, ASTCrate& crate) {
-    UseResolutionContext resolveContext;
-    ResolveUseMod(resolveContext, *wb.settings, crate, crate.rootModule_, ASTPath("", {}));
-}
-
-namespace {
     ASTPath ResolveUseAbsolutisePath(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path) {
         switch (path.cls.tag()) {
             case ASTPathClass::TAG_Invalid: {
@@ -5681,7 +5644,26 @@ namespace {
         }
         return binding;
     }
+}
 
+void ResolveAbsolutise(const WireBoard& wb, ASTCrate& crate) {
+    ResolveAbsoluteMod(*wb.settings, crate, crate.rootModule());
+}
+
+#undef FLAG_CONST_GENERIC
+
+void ResolveIndex(ASTCrate& crate) {
+    ResolveIndexModuleBase(crate, crate.rootModule_);
+    ResolveIndexModuleWildcard(crate, crate.rootModule_, nullptr);
+
+    ResolveIndexModuleExportedMacros(crate, Span(), crate.rootModule_);
+
+    ResolveIndexModuleNormalise(crate, Span(), crate.rootModule_);
+}
+
+void ResolveUse(const WireBoard& wb, ASTCrate& crate) {
+    UseResolutionContext resolveContext;
+    ResolveUseMod(resolveContext, *wb.settings, crate, crate.rootModule_, ASTPath("", {}));
 }
 
 #include "resolve_ctx_ent_tu.cpp"

@@ -24,8 +24,6 @@
 
 using namespace stl;
 
-namespace {}
-
 struct Settings::CfgState {
     ObjPool* pool;
     std::multimap<std::string, std::string> values;
@@ -37,9 +35,7 @@ struct Settings::CfgState {
 
 namespace {
     using CfgState = Settings::CfgState;
-}
 
-namespace {
     struct CCfgExpander: public ExpandProcMacro {
         std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
     };
@@ -100,61 +96,7 @@ namespace {
 
         std::pair<std::string, std::optional<std::string>> parseCfgOption();
     };
-}
 
-CfgState* CfgCreateState(ObjPool& pool) {
-    return pool.make<CfgState>(pool);
-}
-
-void CfgDump(const Settings& settings, std::ostream& os) {
-    const auto& cfg = *settings.cfg;
-    for (const auto& v : cfg.values) {
-        os << ">" << v.first << "=" << v.second << std::endl;
-    }
-    for (const auto& f : cfg.flags) {
-        os << ">" << f << std::endl;
-    }
-}
-
-void CfgSetFlag(Settings& settings, std::string name) {
-    auto& cfg = *settings.cfg;
-    cfg.flags.insert(mv$(name));
-}
-
-void CfgSetValue(Settings& settings, std::string name, std::string val) {
-    auto& cfg = *settings.cfg;
-    cfg.values.insert(std::make_pair(mv$(name), mv$(val)));
-}
-
-void CfgSetValueCallback(Settings& settings, CfgString name, const CfgValueCallback& cb) {
-    auto& cfg = *settings.cfg;
-    cfg.valueFcns.insert(std::make_pair(mv$(name), cb.cloneIn(*cfg.pool)));
-}
-
-void CfgParseOption(const std::string& spec, std::string& name, bool& hasValue, std::string& value) {
-    auto parsed = CfgSpecParser(spec).parseCfgOption();
-    name = std::move(parsed.first);
-    hasValue = parsed.second.has_value();
-    value = parsed.second ? std::move(*parsed.second) : std::string();
-}
-
-bool CfgSetCheckSpec(Settings& settings, const std::string& spec, std::string& error) {
-    return true;
-}
-
-void CfgSetLintLevel(Settings& settings, std::string name, CfgLintLevel level) {
-    auto it = settings.lintLevels.find(name);
-    if (it != settings.lintLevels.end() && it->second == CfgLintLevel::Forbid) {
-        return;
-    }
-    settings.lintLevels[std::move(name)] = level;
-}
-
-void CfgSetLintCap(Settings& settings, CfgLintLevel level) {
-    settings.lintCap = level;
-}
-
-namespace {
     bool checkCfgInner1(const CfgState& cfg, const RcString& name, TokenStream& lex);
 
     bool checkCfgInner(const CfgState& cfg, TokenStream& lex) {
@@ -292,6 +234,58 @@ namespace {
                 return (it != cfg.flags.end());
         }
     }
+}
+
+CfgState* CfgCreateState(ObjPool& pool) {
+    return pool.make<CfgState>(pool);
+}
+
+void CfgDump(const Settings& settings, std::ostream& os) {
+    const auto& cfg = *settings.cfg;
+    for (const auto& v : cfg.values) {
+        os << ">" << v.first << "=" << v.second << std::endl;
+    }
+    for (const auto& f : cfg.flags) {
+        os << ">" << f << std::endl;
+    }
+}
+
+void CfgSetFlag(Settings& settings, std::string name) {
+    auto& cfg = *settings.cfg;
+    cfg.flags.insert(mv$(name));
+}
+
+void CfgSetValue(Settings& settings, std::string name, std::string val) {
+    auto& cfg = *settings.cfg;
+    cfg.values.insert(std::make_pair(mv$(name), mv$(val)));
+}
+
+void CfgSetValueCallback(Settings& settings, CfgString name, const CfgValueCallback& cb) {
+    auto& cfg = *settings.cfg;
+    cfg.valueFcns.insert(std::make_pair(mv$(name), cb.cloneIn(*cfg.pool)));
+}
+
+void CfgParseOption(const std::string& spec, std::string& name, bool& hasValue, std::string& value) {
+    auto parsed = CfgSpecParser(spec).parseCfgOption();
+    name = std::move(parsed.first);
+    hasValue = parsed.second.has_value();
+    value = parsed.second ? std::move(*parsed.second) : std::string();
+}
+
+bool CfgSetCheckSpec(Settings& settings, const std::string& spec, std::string& error) {
+    return true;
+}
+
+void CfgSetLintLevel(Settings& settings, std::string name, CfgLintLevel level) {
+    auto it = settings.lintLevels.find(name);
+    if (it != settings.lintLevels.end() && it->second == CfgLintLevel::Forbid) {
+        return;
+    }
+    settings.lintLevels[std::move(name)] = level;
+}
+
+void CfgSetLintCap(Settings& settings, CfgLintLevel level) {
+    settings.lintCap = level;
 }
 
 bool checkCfgStream(const Settings& settings, TokenStream& lex) {

@@ -316,9 +316,6 @@ namespace {
     template <>
     DEF_D(HIRExternLibrary, return d.deserialiseExtlib();)
 
-}
-
-namespace {
     struct TreeVisitor: public HIRVisitor, public HIRExprVisitor {
         std::ostream& os;
         unsigned int indentLevel;

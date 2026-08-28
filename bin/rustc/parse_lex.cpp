@@ -100,61 +100,7 @@ namespace {
         const char* chars;
         signed int type;
     };
-}
 
-Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edition, ParseState ps)
-    : TokenStream(ps)
-    , id(id)
-    , path_(filename.c_str())
-    , line(1)
-    , lineOfs(0)
-    , istreamFp(filename != "-" ? new std::ifstream(filename.c_str()) : nullptr)
-    , istream(filename != "-" ? *istreamFp : std::cin)
-    , lastCharValid(false)
-    , initialShebangChecked(false)
-    , initialFrontmatterAllowed(true)
-    , initialFrontmatterPrecededByWhitespace(false)
-    , replayCharOffset(0)
-    , edition(edition)
-    , hygiene_(Ident::Hygiene::newScope(id, pool))
-{
-    if (istreamFp) {
-        if (!istreamFp->is_open()) {
-            throw std::runtime_error("Unable to open file '" + filename + "'");
-        }
-        if (this->getcByte() == '\xef') {
-            if (this->getcByte() != '\xbb') {
-                throw std::runtime_error("Incomplete BOM - missing \\xBB in second position");
-            }
-            if (this->getcByte() != '\xbf') {
-                throw std::runtime_error("Incomplete BOM - missing \\xBF in third position");
-            }
-            lineOfs = 0;
-        } else {
-            istream.unget();
-        }
-    }
-}
-
-Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition, ParseState ps)
-    : TokenStream(ps)
-    , id(id)
-    , path_("-")
-    , line(1)
-    , lineOfs(0)
-    , istreamFp(nullptr)
-    , istream(ss)
-    , lastCharValid(false)
-    , initialShebangChecked(false)
-    , initialFrontmatterAllowed(true)
-    , initialFrontmatterPrecededByWhitespace(false)
-    , replayCharOffset(0)
-    , edition(edition)
-    , hygiene_(Ident::Hygiene::newScope(id, pool))
-{
-}
-
-namespace {
     static const sRWORD RWORDS_2015[] = {
         TOKENT("_", TOK_UNDERSCORE),
         TOKENT("abstract", TOK_RWORD_ABSTRACT),
@@ -259,6 +205,73 @@ namespace {
         TOKENT("yield", TOK_RWORD_YIELD),
     };
 
+    bool issym(Codepoint ch) {
+        if ('0' <= ch.v && ch.v <= '9') {
+            return true;
+        }
+        if (std::isalpha(ch.v)) {
+            return true;
+        }
+        if (ch == '_') {
+            return true;
+        }
+        if (ch.v >= 128) {
+            return !ch.isspace();
+        }
+        return false;
+    }
+}
+
+Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edition, ParseState ps)
+    : TokenStream(ps)
+    , id(id)
+    , path_(filename.c_str())
+    , line(1)
+    , lineOfs(0)
+    , istreamFp(filename != "-" ? new std::ifstream(filename.c_str()) : nullptr)
+    , istream(filename != "-" ? *istreamFp : std::cin)
+    , lastCharValid(false)
+    , initialShebangChecked(false)
+    , initialFrontmatterAllowed(true)
+    , initialFrontmatterPrecededByWhitespace(false)
+    , replayCharOffset(0)
+    , edition(edition)
+    , hygiene_(Ident::Hygiene::newScope(id, pool))
+{
+    if (istreamFp) {
+        if (!istreamFp->is_open()) {
+            throw std::runtime_error("Unable to open file '" + filename + "'");
+        }
+        if (this->getcByte() == '\xef') {
+            if (this->getcByte() != '\xbb') {
+                throw std::runtime_error("Incomplete BOM - missing \\xBB in second position");
+            }
+            if (this->getcByte() != '\xbf') {
+                throw std::runtime_error("Incomplete BOM - missing \\xBF in third position");
+            }
+            lineOfs = 0;
+        } else {
+            istream.unget();
+        }
+    }
+}
+
+Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition, ParseState ps)
+    : TokenStream(ps)
+    , id(id)
+    , path_("-")
+    , line(1)
+    , lineOfs(0)
+    , istreamFp(nullptr)
+    , istream(ss)
+    , lastCharValid(false)
+    , initialShebangChecked(false)
+    , initialFrontmatterAllowed(true)
+    , initialFrontmatterPrecededByWhitespace(false)
+    , replayCharOffset(0)
+    , edition(edition)
+    , hygiene_(Ident::Hygiene::newScope(id, pool))
+{
 }
 
 signed int Lexer::getSymbol() {
@@ -292,24 +305,6 @@ signed int Lexer::getSymbol() {
         this->ungetc();
     }
     return best;
-}
-
-namespace {
-    bool issym(Codepoint ch) {
-        if ('0' <= ch.v && ch.v <= '9') {
-            return true;
-        }
-        if (std::isalpha(ch.v)) {
-            return true;
-        }
-        if (ch == '_') {
-            return true;
-        }
-        if (ch.v >= 128) {
-            return !ch.isspace();
-        }
-        return false;
-    }
 }
 
 Token Lexer::withLiteralSuffix(Token tok) {

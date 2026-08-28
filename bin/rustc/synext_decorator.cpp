@@ -777,16 +777,11 @@ namespace {
 
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
     };
-}
-
-namespace {
 
     ASTType* mktypeSelf(ObjPool& pool, const Span& sp) {
         return mkType(pool, sp, RcString("Self"), 0xFFFF);
     }
-}
 
-namespace {
     template <typename T>
     static inline std::vector<T> vec$(T v1) {
         std::vector<T> tmp;
@@ -1429,6 +1424,119 @@ namespace {
         }
     }
 
+    void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path, const std::string& name, eItemType type, ASTItem& item) {
+        const char* realName = nullptr;
+        if (const auto* handler = registry.find(name.c_str())) {
+            if (type != handler->type) {
+                ERROR(sp, E0000, "Language item '" << name << "' " << path << " - on incorrect item type " << type << " != " << handler->type);
+            }
+            handler->cb(sp, crate, name, path);
+            return;
+        }
+
+        else if (name == "alloc_layout") {
+        } else if (name == "panic_info") {
+        } else if (name == "panic_location") {
+        } else if (name == "manually_drop") {
+        }
+
+        else if (name == "arc") {
+        } else if (name == "rc") {
+        }
+
+        else if (name == "maybe_uninit") {
+        }
+
+        else if (name == "unpin") {
+        } else if (name == "pin") {
+        } else if (name == "future_trait") {
+        } else if (name == "from_generator") {
+        } else if (name == "get_context") {
+        }
+
+        else if (name == "va_list") {
+        }
+
+        else if (name == "receiver") {
+        } else if (name == "dispatch_from_dyn") {
+        }
+
+        else if (name == "generator") {
+        } else if (name == "generator_state") {
+        }
+
+        else if (name == "Try") {
+            realName = "try";
+        }
+
+        else if (name == "msvc_try_filter") {
+        }
+
+        else if (name == "panic_impl") {
+        } else if (name == "oom") {
+        }
+
+        else if (name == "panic") {
+        } else if (name == "panic_bounds_check") {
+        } else if (name == "panic_fmt") {
+            item.as_Function().markings.linkName = "rust_begin_unwind";
+        } else if (name == "str_eq") {
+        } else if (name == "drop_in_place") {
+        } else if (name == "align_offset") {
+        } else if (name == "begin_panic") {
+        } else if (name == "panic_str") {
+        } else if (name == "exchange_malloc") {
+        } else if (name == "exchange_free") {
+        } else if (name == "box_free") {
+        } else if (name == "owned_box") {
+        } else if (name == "start") {
+        }
+
+        else if (name == "eh_personality") {
+        } else if (name == "i128_add") {
+        } else if (name == "i128_addo") {
+        } else if (name == "u128_add") {
+        } else if (name == "u128_addo") {
+        } else if (name == "i128_sub") {
+        } else if (name == "i128_subo") {
+        } else if (name == "u128_sub") {
+        } else if (name == "u128_subo") {
+        } else if (name == "i128_mul") {
+        } else if (name == "i128_mulo") {
+        } else if (name == "u128_mul") {
+        } else if (name == "u128_mulo") {
+        } else if (name == "i128_div") {
+        } else if (name == "i128_rem") {
+        } else if (name == "u128_div") {
+        } else if (name == "u128_rem") {
+        } else if (name == "i128_shl") {
+        } else if (name == "i128_shlo") {
+        } else if (name == "u128_shl") {
+        } else if (name == "u128_shlo") {
+        } else if (name == "i128_shr") {
+        } else if (name == "i128_shro") {
+        } else if (name == "u128_shr") {
+        } else if (name == "u128_shro") {
+        }
+
+        else {
+            ERROR(sp, E0000, "Unknown language item '" << name << "'");
+        }
+
+        if (type == ITEM_EXTERN_FN) {
+            // TODO: This should force a specific link name instead
+            return;
+        }
+
+        auto rv = crate.langItems.insert(std::make_pair(realName == nullptr ? name : realName, path));
+        if (!rv.second) {
+            const auto& otherPath = rv.first->second;
+            if (path != otherPath) {
+                // HACK: Anon modules get visited twice, so can lead to duplicate annotations
+                ERROR(sp, E0000, "Duplicate definition of language item '" << name << "' - " << otherPath << " and " << path);
+            }
+        }
+    }
 }
 
 LangItemRegistry::LangItemRegistry(ObjPool* pool)
@@ -1645,123 +1753,6 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
 
         add("global_alloc_ty", Handler(ITEM_STRUCT, handleSave));
     }
-}
-
-namespace {
-    void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path, const std::string& name, eItemType type, ASTItem& item) {
-        const char* realName = nullptr;
-        if (const auto* handler = registry.find(name.c_str())) {
-            if (type != handler->type) {
-                ERROR(sp, E0000, "Language item '" << name << "' " << path << " - on incorrect item type " << type << " != " << handler->type);
-            }
-            handler->cb(sp, crate, name, path);
-            return;
-        }
-
-        else if (name == "alloc_layout") {
-        } else if (name == "panic_info") {
-        } else if (name == "panic_location") {
-        } else if (name == "manually_drop") {
-        }
-
-        else if (name == "arc") {
-        } else if (name == "rc") {
-        }
-
-        else if (name == "maybe_uninit") {
-        }
-
-        else if (name == "unpin") {
-        } else if (name == "pin") {
-        } else if (name == "future_trait") {
-        } else if (name == "from_generator") {
-        } else if (name == "get_context") {
-        }
-
-        else if (name == "va_list") {
-        }
-
-        else if (name == "receiver") {
-        } else if (name == "dispatch_from_dyn") {
-        }
-
-        else if (name == "generator") {
-        } else if (name == "generator_state") {
-        }
-
-        else if (name == "Try") {
-            realName = "try";
-        }
-
-        else if (name == "msvc_try_filter") {
-        }
-
-        else if (name == "panic_impl") {
-        } else if (name == "oom") {
-        }
-
-        else if (name == "panic") {
-        } else if (name == "panic_bounds_check") {
-        } else if (name == "panic_fmt") {
-            item.as_Function().markings.linkName = "rust_begin_unwind";
-        } else if (name == "str_eq") {
-        } else if (name == "drop_in_place") {
-        } else if (name == "align_offset") {
-        } else if (name == "begin_panic") {
-        } else if (name == "panic_str") {
-        } else if (name == "exchange_malloc") {
-        } else if (name == "exchange_free") {
-        } else if (name == "box_free") {
-        } else if (name == "owned_box") {
-        } else if (name == "start") {
-        }
-
-        else if (name == "eh_personality") {
-        } else if (name == "i128_add") {
-        } else if (name == "i128_addo") {
-        } else if (name == "u128_add") {
-        } else if (name == "u128_addo") {
-        } else if (name == "i128_sub") {
-        } else if (name == "i128_subo") {
-        } else if (name == "u128_sub") {
-        } else if (name == "u128_subo") {
-        } else if (name == "i128_mul") {
-        } else if (name == "i128_mulo") {
-        } else if (name == "u128_mul") {
-        } else if (name == "u128_mulo") {
-        } else if (name == "i128_div") {
-        } else if (name == "i128_rem") {
-        } else if (name == "u128_div") {
-        } else if (name == "u128_rem") {
-        } else if (name == "i128_shl") {
-        } else if (name == "i128_shlo") {
-        } else if (name == "u128_shl") {
-        } else if (name == "u128_shlo") {
-        } else if (name == "i128_shr") {
-        } else if (name == "i128_shro") {
-        } else if (name == "u128_shr") {
-        } else if (name == "u128_shro") {
-        }
-
-        else {
-            ERROR(sp, E0000, "Unknown language item '" << name << "'");
-        }
-
-        if (type == ITEM_EXTERN_FN) {
-            // TODO: This should force a specific link name instead
-            return;
-        }
-
-        auto rv = crate.langItems.insert(std::make_pair(realName == nullptr ? name : realName, path));
-        if (!rv.second) {
-            const auto& otherPath = rv.first->second;
-            if (path != otherPath) {
-                // HACK: Anon modules get visited twice, so can lead to duplicate annotations
-                ERROR(sp, E0000, "Duplicate definition of language item '" << name << "' - " << otherPath << " and " << path);
-            }
-        }
-    }
-
 }
 
 void RegisterBuiltinDecorators(ExpandRegistry& registry) {

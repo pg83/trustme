@@ -99,6 +99,48 @@ namespace {
             return os;
         }
     };
+
+    static StringView literalBytes(const std::string& s) {
+        return StringView(reinterpret_cast<const u8*>(s.data()), s.size());
+    }
+
+    static size_t rawStringHashes(StringView text) {
+        size_t needed = 0;
+        for (size_t i = 0; i < text.length(); i++) {
+            if (text[i] != '"') {
+                continue;
+            }
+            size_t run = 0;
+            while (i + 1 + run < text.length() && text[i + 1 + run] == '#') {
+                run++;
+            }
+            if (run + 1 > needed) {
+                needed = run + 1;
+            }
+        }
+        return needed;
+    }
+
+    static void appendTokenTreeSource(StringBuilder& out, const TokenTree& tt, eTokenType& prev) {
+        if (tt.isToken()) {
+            if (!out.empty() && tokensNeedSpace(prev, tt.tok().type())) {
+                out.append(" ", 1);
+            }
+            auto text = tt.tok().toStr();
+            out.append(text.data(), text.size());
+            prev = tt.tok().type();
+        }
+        for (size_t i = 0; i < tt.size(); i++) {
+            appendTokenTreeSource(out, tt[i], prev);
+        }
+    }
+
+    static void attributeToSource(StringBuilder& out, const ASTAttribute& attr) {
+        auto name = FMT(attr.name());
+        out.append(name.data(), name.size());
+        auto prev = TOK_IDENT;
+        appendTokenTreeSource(out, attr.data(), prev);
+    }
 }
 
 Token::~Token() {
@@ -463,12 +505,6 @@ enum eTokenType Token::typefromstr(const std::string& s) {
     return TOK_NULL;
 }
 
-namespace {
-    static StringView literalBytes(const std::string& s) {
-        return StringView(reinterpret_cast<const u8*>(s.data()), s.size());
-    }
-}
-
 void printEscapedLiteral(std::ostream& os, eTokenType type, const u8* value, size_t size) {
     const auto bytes = StringView(value, size);
     switch (type) {
@@ -483,46 +519,6 @@ void printEscapedLiteral(std::ostream& os, eTokenType type, const u8* value, siz
             return;
         default:
             compileErrorBugCheck("printEscapedLiteral called for a non-string token");
-    }
-}
-
-namespace {
-    static size_t rawStringHashes(StringView text) {
-        size_t needed = 0;
-        for (size_t i = 0; i < text.length(); i++) {
-            if (text[i] != '"') {
-                continue;
-            }
-            size_t run = 0;
-            while (i + 1 + run < text.length() && text[i + 1 + run] == '#') {
-                run++;
-            }
-            if (run + 1 > needed) {
-                needed = run + 1;
-            }
-        }
-        return needed;
-    }
-
-    static void appendTokenTreeSource(StringBuilder& out, const TokenTree& tt, eTokenType& prev) {
-        if (tt.isToken()) {
-            if (!out.empty() && tokensNeedSpace(prev, tt.tok().type())) {
-                out.append(" ", 1);
-            }
-            auto text = tt.tok().toStr();
-            out.append(text.data(), text.size());
-            prev = tt.tok().type();
-        }
-        for (size_t i = 0; i < tt.size(); i++) {
-            appendTokenTreeSource(out, tt[i], prev);
-        }
-    }
-
-    static void attributeToSource(StringBuilder& out, const ASTAttribute& attr) {
-        auto name = FMT(attr.name());
-        out.append(name.data(), name.size());
-        auto prev = TOK_IDENT;
-        appendTokenTreeSource(out, attr.data(), prev);
     }
 }
 

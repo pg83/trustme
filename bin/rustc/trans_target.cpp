@@ -24,6 +24,8 @@
 
 using namespace stl;
 
+static void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, std::unique_ptr<TypeRepr> repr);
+
 namespace {
     constexpr size_t TRANSMUTE_BYTE_VALUES = 257;
     constexpr size_t TRANSMUTE_UNINITIALISED = 256;
@@ -186,24 +188,7 @@ namespace {
         bool check();
     };
 
-}
-
-struct WireBoard::TargetLayoutContext {
-    struct CachedTypeRepr {
-        HIRTypeRef canonical;
-        std::unique_ptr<TypeRepr> repr;
-    };
-
-    std::unordered_map<std::string, CachedTypeRepr> encoded;
-    std::unordered_map<HIRTypeRef, std::unique_ptr<TypeRepr>> unencoded;
-    std::unordered_map<HIRTypeRef, const TypeRepr*> exact;
-};
-
-namespace {
     using TargetLayoutContext = WireBoard::TargetLayoutContext;
-}
-
-namespace {
 
     TargetArch archX86_64() {
         return {
@@ -251,15 +236,7 @@ namespace {
     TargetArch archRiscv64() {
         return {"riscv64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
     }
-}
 
-bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
-
-void TargetCreateLayoutContext(WireBoard& wb, ObjPool& pool) {
-    wb.targetLayouts = pool.make<TargetLayoutContext>();
-}
-
-namespace {
     TargetSpec loadSpecFromFile(const std::string& filename) {
         TargetSpec rv;
 
@@ -551,111 +528,7 @@ namespace {
         }
         UNREACHABLE();
     }
-}
 
-const TargetSpec& TargetGetCurSpec(const WireBoard& wb) {
-    return *wb.target;
-}
-
-void TargetExportCurSpec(const WireBoard& wb, const std::string& filename) {
-    saveSpecToFile(filename, *wb.target);
-}
-
-void TargetSetCfg(WireBoard& wb, const std::string& targetName) {
-    auto& settings = *wb.settings;
-    auto* spec = wb.pool->make<TargetSpec>(initFromSpecName(targetName));
-    wb.target = spec;
-    if (spec->arch.pointerBits != 64 || spec->arch.bigEndian) {
-        std::cerr << "error: unsupported target `" << targetName << "`: only 64-bit little-endian targets are supported" << std::endl;
-        abort();
-    }
-    const TargetSpec& tgt = *spec;
-
-    if (tgt.family == "unix") {
-        CfgSetFlag(settings, "unix");
-    }
-    CfgSetValue(settings, "target_family", tgt.family);
-
-    if (tgt.osName == "linux") {
-        CfgSetFlag(settings, "linux");
-        CfgSetValue(settings, "target_vendor", "gnu");
-    }
-
-    if (tgt.osName == "macos") {
-        CfgSetFlag(settings, "apple");
-        CfgSetValue(settings, "target_vendor", "apple");
-    }
-
-    if (tgt.osName == "freebsd") {
-        CfgSetFlag(settings, "freebsd");
-        CfgSetValue(settings, "target_vendor", "unknown");
-    }
-
-    if (tgt.osName == "netbsd") {
-        CfgSetFlag(settings, "netbsd");
-        CfgSetValue(settings, "target_vendor", "unknown");
-    }
-
-    if (tgt.osName == "openbsd") {
-        CfgSetFlag(settings, "openbsd");
-        CfgSetValue(settings, "target_vendor", "unknown");
-    }
-
-    if (tgt.osName == "dragonfly") {
-        CfgSetFlag(settings, "dragonfly");
-        CfgSetValue(settings, "target_vendor", "unknown");
-    }
-
-    CfgSetValue(settings, "target_vendor", "");
-    CfgSetValue(settings, "target_env", tgt.envName);
-    CfgSetValue(settings, "target_os", tgt.osName);
-    CfgSetValue(settings, "target_pointer_width", FMT(tgt.arch.pointerBits));
-    CfgSetValue(settings, "target_endian", tgt.arch.bigEndian ? "big" : "little");
-    CfgSetValue(settings, "target_arch", tgt.arch.name);
-    CfgSetValue(settings, "target_abi", "llvm");
-    if (tgt.arch.atomics.u8) {
-        CfgSetValue(settings, "target_has_atomic", "8");
-        CfgSetValue(settings, "target_has_atomic_load_store", "8");
-        CfgSetValue(settings, "target_has_atomic_equal_alignment", "8");
-    }
-    if (tgt.arch.atomics.u16) {
-        CfgSetValue(settings, "target_has_atomic", "16");
-        CfgSetValue(settings, "target_has_atomic_load_store", "16");
-        if (tgt.arch.alignments.u16 >= 2) {
-            CfgSetValue(settings, "target_has_atomic_equal_alignment", "16");
-        }
-    }
-    if (tgt.arch.atomics.u32) {
-        CfgSetValue(settings, "target_has_atomic", "32");
-        CfgSetValue(settings, "target_has_atomic_load_store", "32");
-        if (tgt.arch.alignments.u32 >= 4) {
-            CfgSetValue(settings, "target_has_atomic_equal_alignment", "32");
-        }
-    }
-    if (tgt.arch.atomics.u64) {
-        CfgSetValue(settings, "target_has_atomic", "64");
-        CfgSetValue(settings, "target_has_atomic_load_store", "64");
-        if (tgt.arch.alignments.u64 >= 8) {
-            CfgSetValue(settings, "target_has_atomic_equal_alignment", "64");
-        }
-    }
-    if (tgt.arch.atomics.ptr) {
-        CfgSetValue(settings, "target_has_atomic", "ptr");
-        CfgSetValue(settings, "target_has_atomic_load_store", "ptr");
-        if (tgt.arch.alignments.ptr * 8u >= tgt.arch.pointerBits) {
-            CfgSetValue(settings, "target_has_atomic_equal_alignment", "ptr");
-        }
-    }
-    // TODO: Atomic compare-and-set option
-    if (tgt.arch.atomics.ptr) {
-        CfgSetValue(settings, "target_has_atomic", "cas");
-    }
-    CfgSetValueCb(settings, "target_feature", [](const std::string& s) {
-        return false;
-    });
-}
-
-namespace {
     bool closureHasNoCaptures(const StaticTraitResolve& resolve, const HIRExprNodeClosure& closure) {
         if (closure.cls == HIRExprNodeClosure::Class::NoCapture) {
             return true;
@@ -695,232 +568,6 @@ namespace {
             return std::binary_search(visitor.definitions.begin(), visitor.definitions.end(), slot);
         });
     }
-}
-
-bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign) {
-    switch ((*ty).tag()) {
-        case HIRTypeData::TAG_Infer: {
-            return false;
-        }
-        case HIRTypeData::TAG_Diverge: {
-            outSize = 0;
-            outAlign = 1;
-            return true;
-        }
-        case HIRTypeData::TAG_Primitive: {
-            auto& te = (*ty).as_Primitive();
-            switch (te) {
-                case HIRCoreType::Bool:
-                case HIRCoreType::U8:
-                case HIRCoreType::I8:
-                    outSize = 1;
-                    outAlign = 1;
-                    return true;
-                case HIRCoreType::U16:
-                case HIRCoreType::I16:
-                    outSize = 2;
-                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u16;
-                    return true;
-                case HIRCoreType::U32:
-                case HIRCoreType::I32:
-                case HIRCoreType::Char:
-                    outSize = 4;
-                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u32;
-                    return true;
-                case HIRCoreType::U64:
-                case HIRCoreType::I64:
-                    outSize = 8;
-                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u64;
-                    return true;
-                case HIRCoreType::U128:
-                case HIRCoreType::I128:
-                    outSize = 16;
-                    // TODO: If i128 is emulated, this can be 8 (as it is on x86, where it's actually 4 due to the above comment)
-                    if (TargetGetCurSpec(resolve.board()).backendC.emulatedI128) {
-                        outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u64;
-                    } else {
-                        outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u128;
-                    }
-                    return true;
-                case HIRCoreType::Usize:
-                case HIRCoreType::Isize:
-                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
-                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.ptr;
-                    return true;
-                case HIRCoreType::F16:
-                    outSize = 2;
-                    outAlign = 2;
-                    return true;
-                case HIRCoreType::F32:
-                    outSize = 4;
-                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.f32;
-                    return true;
-                case HIRCoreType::F64:
-                    outSize = 8;
-                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.f64;
-                    return true;
-                case HIRCoreType::F128:
-                    outSize = 16;
-                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u128;
-                    return true;
-                case HIRCoreType::Str:
-                    outSize = SIZE_MAX;
-                    outAlign = 1;
-                    return true;
-            }
-            break;
-        }
-        case HIRTypeData::TAG_Path: {
-            auto& te = (*ty).as_Path();
-            if (te.binding.is_Opaque()) {
-                return false;
-            }
-            if (te.binding.is_ExternType()) {
-                outAlign = 0;
-                outSize = SIZE_MAX;
-                return true;
-            }
-            const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
-            if (!repr) {
-                return false;
-            }
-            outSize = repr->size;
-            outAlign = repr->align;
-            return true;
-        }
-        case HIRTypeData::TAG_Generic: {
-            return false;
-        }
-        case HIRTypeData::TAG_TraitObject: {
-            outAlign = 0;
-            outSize = SIZE_MAX;
-            return true;
-        }
-        case HIRTypeData::TAG_ErasedType: {
-            BUG(sp, "sizeof on an erased type - shouldn't exist");
-            break;
-        }
-        case HIRTypeData::TAG_Array: {
-            auto& te = (*ty).as_Array();
-            if (!TargetGetSizeAndAlignOf(sp, resolve, te.inner, outSize, outAlign)) {
-                return false;
-            }
-            if (outSize == SIZE_MAX) {
-                return false;
-            }
-            if (!te.size.is_Known()) {
-                return false;
-            }
-            if (te.size.as_Known() == 0 || outSize == 0) {
-                outSize = 0;
-            } else {
-                if (SIZE_MAX / te.size.as_Known() <= outSize) {
-                    BUG(sp, "Integer overflow calculating array size");
-                }
-                outSize *= te.size.as_Known();
-            }
-            return true;
-        }
-        case HIRTypeData::TAG_Slice: {
-            auto& te = (*ty).as_Slice();
-            if (!TargetGetAlignOf(sp, resolve, te.inner, outAlign)) {
-                return false;
-            }
-            outSize = SIZE_MAX;
-            return true;
-        }
-        case HIRTypeData::TAG_Tuple: {
-            const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
-            if (!repr) {
-                return false;
-            }
-            outSize = repr->size;
-            outAlign = repr->align;
-            return true;
-        }
-        case HIRTypeData::TAG_Borrow: {
-            auto& te = (*ty).as_Borrow();
-            outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
-
-            // TODO: Handle different types of Unsized (ones with different pointer sizes)
-            switch (resolve.metadataType(sp, te.inner)) {
-                case MetadataType::Unknown:
-                    return false;
-                case MetadataType::None:
-                case MetadataType::Zero:
-                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
-                    break;
-                case MetadataType::Slice:
-                case MetadataType::TraitObject:
-                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8 * 2;
-                    break;
-            }
-            return true;
-        }
-        case HIRTypeData::TAG_Pointer: {
-            auto& te = (*ty).as_Pointer();
-            outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
-            switch (resolve.metadataType(sp, te.inner)) {
-                case MetadataType::Unknown:
-                    return false;
-                case MetadataType::None:
-                case MetadataType::Zero:
-                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
-                    break;
-                case MetadataType::Slice:
-                case MetadataType::TraitObject:
-                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8 * 2;
-                    break;
-            }
-            return true;
-        }
-        case HIRTypeData::TAG_NamedFunction: {
-            outSize = 0;
-            outAlign = 1;
-            return true;
-        }
-        case HIRTypeData::TAG_Function: {
-            outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
-            outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
-            return true;
-        }
-        case HIRTypeData::TAG_NodeType: {
-            auto& te = (*ty).as_NodeType();
-            if (const auto* closure = te.opt_Closure(); closure && closureHasNoCaptures(resolve, **closure)) {
-                outSize = 0;
-                outAlign = 1;
-                return true;
-            }
-            return false;
-        }
-        case HIRTypeData::TAG_Pattern: {
-            auto& te = (*ty).as_Pattern();
-            return TargetGetSizeAndAlignOf(sp, resolve, te.inner, outSize, outAlign);
-        }
-    }
-    return false;
-}
-
-bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize) {
-    size_t ignoreAlign;
-    bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, outSize, ignoreAlign);
-    if (rv && outSize == SIZE_MAX) {
-        BUG(sp, "Getting size of Unsized type - " << ty);
-    }
-    return rv;
-}
-
-bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outAlign) {
-    size_t ignoreSize;
-    bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, ignoreSize, outAlign);
-    if (rv && ignoreSize == SIZE_MAX) {
-        BUG(sp, "Getting alignment of Unsized type - " << ty);
-    }
-    return rv;
-}
-
-namespace {
-    void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, std::unique_ptr<TypeRepr> repr);
 
     std::ostream& operator<<(std::ostream& os, const Ent& e) {
         os << "Ent { #" << e.field << ": s=" << e.size << " a=" << e.align << (e.userAlign ? "!" : "") << " : " << e.ty << " }";
@@ -2516,20 +2163,388 @@ namespace {
         return !monomorphiseTypeNeeded(ty) && !ty->is_Infer() && !ty->is_ErasedType() && !ty->is_NodeType();
     }
 
-    void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, std::unique_ptr<TypeRepr> repr) {
-        auto& cache = *resolve.board().targetLayouts;
-        if (!hasAbiIdentity(ty)) {
-            const auto* reprPtr = repr.get();
-            auto ires = cache.unencoded.emplace(ty, mv$(repr));
-            ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
-            cache.exact.emplace(ty, reprPtr);
-            return;
+    bool TransmuteTypeChecker::check(const HIRTypeData* sourceType, const HIRTypeData* destinationType) {
+        const auto key = std::make_pair(sourceType, destinationType);
+        auto existing = cache.find(key);
+        if (existing != cache.end()) {
+            return existing->second >= 0;
         }
-        auto symbol = FMT(TransMangle(resolve.board(), ty));
-        auto ires = cache.encoded.emplace(mv$(symbol), TargetLayoutContext::CachedTypeRepr{ty, mv$(repr)});
-        ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
-        cache.exact.emplace(ty, ires.first->second.repr.get());
+        auto inserted = cache.insert({key, 0}).first;
+
+        TransmuteDfa source;
+        TransmuteLayoutBuilder sourceBuilder(sp, resolve, false, assumeSafety);
+        if (!sourceBuilder.makeDfa(sourceType, source)) {
+            inserted->second = -1;
+            return false;
+        }
+
+        TransmuteDfa destination;
+        TransmuteLayoutBuilder destinationBuilder(sp, resolve, true, assumeSafety);
+        if (!destinationBuilder.makeDfa(destinationType, destination)) {
+            inserted->second = -1;
+            return false;
+        }
+
+        const bool result = TransmuteRelation(source, destination, *this).check();
+        inserted->second = result ? 1 : -1;
+        return result;
     }
+}
+
+struct WireBoard::TargetLayoutContext {
+    struct CachedTypeRepr {
+        HIRTypeRef canonical;
+        std::unique_ptr<TypeRepr> repr;
+    };
+
+    std::unordered_map<std::string, CachedTypeRepr> encoded;
+    std::unordered_map<HIRTypeRef, std::unique_ptr<TypeRepr>> unencoded;
+    std::unordered_map<HIRTypeRef, const TypeRepr*> exact;
+};
+
+static void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, std::unique_ptr<TypeRepr> repr) {
+    auto& cache = *resolve.board().targetLayouts;
+    if (!hasAbiIdentity(ty)) {
+        const auto* reprPtr = repr.get();
+        auto ires = cache.unencoded.emplace(ty, mv$(repr));
+        ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
+        cache.exact.emplace(ty, reprPtr);
+        return;
+    }
+    auto symbol = FMT(TransMangle(resolve.board(), ty));
+    auto ires = cache.encoded.emplace(mv$(symbol), TargetLayoutContext::CachedTypeRepr{ty, mv$(repr)});
+    ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
+    cache.exact.emplace(ty, ires.first->second.repr.get());
+}
+
+bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
+
+void TargetCreateLayoutContext(WireBoard& wb, ObjPool& pool) {
+    wb.targetLayouts = pool.make<TargetLayoutContext>();
+}
+
+const TargetSpec& TargetGetCurSpec(const WireBoard& wb) {
+    return *wb.target;
+}
+
+void TargetExportCurSpec(const WireBoard& wb, const std::string& filename) {
+    saveSpecToFile(filename, *wb.target);
+}
+
+void TargetSetCfg(WireBoard& wb, const std::string& targetName) {
+    auto& settings = *wb.settings;
+    auto* spec = wb.pool->make<TargetSpec>(initFromSpecName(targetName));
+    wb.target = spec;
+    if (spec->arch.pointerBits != 64 || spec->arch.bigEndian) {
+        std::cerr << "error: unsupported target `" << targetName << "`: only 64-bit little-endian targets are supported" << std::endl;
+        abort();
+    }
+    const TargetSpec& tgt = *spec;
+
+    if (tgt.family == "unix") {
+        CfgSetFlag(settings, "unix");
+    }
+    CfgSetValue(settings, "target_family", tgt.family);
+
+    if (tgt.osName == "linux") {
+        CfgSetFlag(settings, "linux");
+        CfgSetValue(settings, "target_vendor", "gnu");
+    }
+
+    if (tgt.osName == "macos") {
+        CfgSetFlag(settings, "apple");
+        CfgSetValue(settings, "target_vendor", "apple");
+    }
+
+    if (tgt.osName == "freebsd") {
+        CfgSetFlag(settings, "freebsd");
+        CfgSetValue(settings, "target_vendor", "unknown");
+    }
+
+    if (tgt.osName == "netbsd") {
+        CfgSetFlag(settings, "netbsd");
+        CfgSetValue(settings, "target_vendor", "unknown");
+    }
+
+    if (tgt.osName == "openbsd") {
+        CfgSetFlag(settings, "openbsd");
+        CfgSetValue(settings, "target_vendor", "unknown");
+    }
+
+    if (tgt.osName == "dragonfly") {
+        CfgSetFlag(settings, "dragonfly");
+        CfgSetValue(settings, "target_vendor", "unknown");
+    }
+
+    CfgSetValue(settings, "target_vendor", "");
+    CfgSetValue(settings, "target_env", tgt.envName);
+    CfgSetValue(settings, "target_os", tgt.osName);
+    CfgSetValue(settings, "target_pointer_width", FMT(tgt.arch.pointerBits));
+    CfgSetValue(settings, "target_endian", tgt.arch.bigEndian ? "big" : "little");
+    CfgSetValue(settings, "target_arch", tgt.arch.name);
+    CfgSetValue(settings, "target_abi", "llvm");
+    if (tgt.arch.atomics.u8) {
+        CfgSetValue(settings, "target_has_atomic", "8");
+        CfgSetValue(settings, "target_has_atomic_load_store", "8");
+        CfgSetValue(settings, "target_has_atomic_equal_alignment", "8");
+    }
+    if (tgt.arch.atomics.u16) {
+        CfgSetValue(settings, "target_has_atomic", "16");
+        CfgSetValue(settings, "target_has_atomic_load_store", "16");
+        if (tgt.arch.alignments.u16 >= 2) {
+            CfgSetValue(settings, "target_has_atomic_equal_alignment", "16");
+        }
+    }
+    if (tgt.arch.atomics.u32) {
+        CfgSetValue(settings, "target_has_atomic", "32");
+        CfgSetValue(settings, "target_has_atomic_load_store", "32");
+        if (tgt.arch.alignments.u32 >= 4) {
+            CfgSetValue(settings, "target_has_atomic_equal_alignment", "32");
+        }
+    }
+    if (tgt.arch.atomics.u64) {
+        CfgSetValue(settings, "target_has_atomic", "64");
+        CfgSetValue(settings, "target_has_atomic_load_store", "64");
+        if (tgt.arch.alignments.u64 >= 8) {
+            CfgSetValue(settings, "target_has_atomic_equal_alignment", "64");
+        }
+    }
+    if (tgt.arch.atomics.ptr) {
+        CfgSetValue(settings, "target_has_atomic", "ptr");
+        CfgSetValue(settings, "target_has_atomic_load_store", "ptr");
+        if (tgt.arch.alignments.ptr * 8u >= tgt.arch.pointerBits) {
+            CfgSetValue(settings, "target_has_atomic_equal_alignment", "ptr");
+        }
+    }
+    // TODO: Atomic compare-and-set option
+    if (tgt.arch.atomics.ptr) {
+        CfgSetValue(settings, "target_has_atomic", "cas");
+    }
+    CfgSetValueCb(settings, "target_feature", [](const std::string& s) {
+        return false;
+    });
+}
+
+bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign) {
+    switch ((*ty).tag()) {
+        case HIRTypeData::TAG_Infer: {
+            return false;
+        }
+        case HIRTypeData::TAG_Diverge: {
+            outSize = 0;
+            outAlign = 1;
+            return true;
+        }
+        case HIRTypeData::TAG_Primitive: {
+            auto& te = (*ty).as_Primitive();
+            switch (te) {
+                case HIRCoreType::Bool:
+                case HIRCoreType::U8:
+                case HIRCoreType::I8:
+                    outSize = 1;
+                    outAlign = 1;
+                    return true;
+                case HIRCoreType::U16:
+                case HIRCoreType::I16:
+                    outSize = 2;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u16;
+                    return true;
+                case HIRCoreType::U32:
+                case HIRCoreType::I32:
+                case HIRCoreType::Char:
+                    outSize = 4;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u32;
+                    return true;
+                case HIRCoreType::U64:
+                case HIRCoreType::I64:
+                    outSize = 8;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u64;
+                    return true;
+                case HIRCoreType::U128:
+                case HIRCoreType::I128:
+                    outSize = 16;
+                    // TODO: If i128 is emulated, this can be 8 (as it is on x86, where it's actually 4 due to the above comment)
+                    if (TargetGetCurSpec(resolve.board()).backendC.emulatedI128) {
+                        outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u64;
+                    } else {
+                        outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u128;
+                    }
+                    return true;
+                case HIRCoreType::Usize:
+                case HIRCoreType::Isize:
+                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.ptr;
+                    return true;
+                case HIRCoreType::F16:
+                    outSize = 2;
+                    outAlign = 2;
+                    return true;
+                case HIRCoreType::F32:
+                    outSize = 4;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.f32;
+                    return true;
+                case HIRCoreType::F64:
+                    outSize = 8;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.f64;
+                    return true;
+                case HIRCoreType::F128:
+                    outSize = 16;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u128;
+                    return true;
+                case HIRCoreType::Str:
+                    outSize = SIZE_MAX;
+                    outAlign = 1;
+                    return true;
+            }
+            break;
+        }
+        case HIRTypeData::TAG_Path: {
+            auto& te = (*ty).as_Path();
+            if (te.binding.is_Opaque()) {
+                return false;
+            }
+            if (te.binding.is_ExternType()) {
+                outAlign = 0;
+                outSize = SIZE_MAX;
+                return true;
+            }
+            const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
+            if (!repr) {
+                return false;
+            }
+            outSize = repr->size;
+            outAlign = repr->align;
+            return true;
+        }
+        case HIRTypeData::TAG_Generic: {
+            return false;
+        }
+        case HIRTypeData::TAG_TraitObject: {
+            outAlign = 0;
+            outSize = SIZE_MAX;
+            return true;
+        }
+        case HIRTypeData::TAG_ErasedType: {
+            BUG(sp, "sizeof on an erased type - shouldn't exist");
+            break;
+        }
+        case HIRTypeData::TAG_Array: {
+            auto& te = (*ty).as_Array();
+            if (!TargetGetSizeAndAlignOf(sp, resolve, te.inner, outSize, outAlign)) {
+                return false;
+            }
+            if (outSize == SIZE_MAX) {
+                return false;
+            }
+            if (!te.size.is_Known()) {
+                return false;
+            }
+            if (te.size.as_Known() == 0 || outSize == 0) {
+                outSize = 0;
+            } else {
+                if (SIZE_MAX / te.size.as_Known() <= outSize) {
+                    BUG(sp, "Integer overflow calculating array size");
+                }
+                outSize *= te.size.as_Known();
+            }
+            return true;
+        }
+        case HIRTypeData::TAG_Slice: {
+            auto& te = (*ty).as_Slice();
+            if (!TargetGetAlignOf(sp, resolve, te.inner, outAlign)) {
+                return false;
+            }
+            outSize = SIZE_MAX;
+            return true;
+        }
+        case HIRTypeData::TAG_Tuple: {
+            const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
+            if (!repr) {
+                return false;
+            }
+            outSize = repr->size;
+            outAlign = repr->align;
+            return true;
+        }
+        case HIRTypeData::TAG_Borrow: {
+            auto& te = (*ty).as_Borrow();
+            outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
+
+            // TODO: Handle different types of Unsized (ones with different pointer sizes)
+            switch (resolve.metadataType(sp, te.inner)) {
+                case MetadataType::Unknown:
+                    return false;
+                case MetadataType::None:
+                case MetadataType::Zero:
+                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
+                    break;
+                case MetadataType::Slice:
+                case MetadataType::TraitObject:
+                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8 * 2;
+                    break;
+            }
+            return true;
+        }
+        case HIRTypeData::TAG_Pointer: {
+            auto& te = (*ty).as_Pointer();
+            outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
+            switch (resolve.metadataType(sp, te.inner)) {
+                case MetadataType::Unknown:
+                    return false;
+                case MetadataType::None:
+                case MetadataType::Zero:
+                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
+                    break;
+                case MetadataType::Slice:
+                case MetadataType::TraitObject:
+                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8 * 2;
+                    break;
+            }
+            return true;
+        }
+        case HIRTypeData::TAG_NamedFunction: {
+            outSize = 0;
+            outAlign = 1;
+            return true;
+        }
+        case HIRTypeData::TAG_Function: {
+            outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
+            outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
+            return true;
+        }
+        case HIRTypeData::TAG_NodeType: {
+            auto& te = (*ty).as_NodeType();
+            if (const auto* closure = te.opt_Closure(); closure && closureHasNoCaptures(resolve, **closure)) {
+                outSize = 0;
+                outAlign = 1;
+                return true;
+            }
+            return false;
+        }
+        case HIRTypeData::TAG_Pattern: {
+            auto& te = (*ty).as_Pattern();
+            return TargetGetSizeAndAlignOf(sp, resolve, te.inner, outSize, outAlign);
+        }
+    }
+    return false;
+}
+
+bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize) {
+    size_t ignoreAlign;
+    bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, outSize, ignoreAlign);
+    if (rv && outSize == SIZE_MAX) {
+        BUG(sp, "Getting size of Unsized type - " << ty);
+    }
+    return rv;
+}
+
+bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outAlign) {
+    size_t ignoreSize;
+    bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, ignoreSize, outAlign);
+    if (rv && ignoreSize == SIZE_MAX) {
+        BUG(sp, "Getting alignment of Unsized type - " << ty);
+    }
+    return rv;
 }
 
 bool TargetCapsMemberAlignment() {
@@ -2717,35 +2732,6 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
         }
     }
     return std::make_pair(varIdx, subHasTag);
-}
-
-namespace {
-    bool TransmuteTypeChecker::check(const HIRTypeData* sourceType, const HIRTypeData* destinationType) {
-        const auto key = std::make_pair(sourceType, destinationType);
-        auto existing = cache.find(key);
-        if (existing != cache.end()) {
-            return existing->second >= 0;
-        }
-        auto inserted = cache.insert({key, 0}).first;
-
-        TransmuteDfa source;
-        TransmuteLayoutBuilder sourceBuilder(sp, resolve, false, assumeSafety);
-        if (!sourceBuilder.makeDfa(sourceType, source)) {
-            inserted->second = -1;
-            return false;
-        }
-
-        TransmuteDfa destination;
-        TransmuteLayoutBuilder destinationBuilder(sp, resolve, true, assumeSafety);
-        if (!destinationBuilder.makeDfa(destinationType, destination)) {
-            inserted->second = -1;
-            return false;
-        }
-
-        const bool result = TransmuteRelation(source, destination, *this).check();
-        inserted->second = result ? 1 : -1;
-        return result;
-    }
 }
 
 bool TargetTypesAreTransmutable(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* src, const HIRTypeData* dst, bool assumeAlignment, bool assumeLifetimes, bool assumeSafety, bool assumeValidity) {

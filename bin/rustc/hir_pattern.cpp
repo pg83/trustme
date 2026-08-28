@@ -401,25 +401,7 @@ namespace {
             visitPatternCandidateSlots(useLastAlternative ? alternatives.back() : alternatives.front(), useLastAlternative, slots);
         }
     }
-}
 
-std::vector<unsigned> patternBindingSlots(const HIRPattern& pattern, HIRPatternBindingOrder order) {
-    std::vector<unsigned> slots;
-    switch (order) {
-        case HIRPatternBindingOrder::Declaration:
-            visitPatternDeclarationSlots(pattern, slots);
-            break;
-        case HIRPatternBindingOrder::FirstCandidate:
-            visitPatternCandidateSlots(pattern, false, slots);
-            break;
-        case HIRPatternBindingOrder::LastCandidate:
-            visitPatternCandidateSlots(pattern, true, slots);
-            break;
-    }
-    return slots;
-}
-
-namespace {
     std::vector<HIRPattern> clonePatVec(const std::vector<HIRPattern>& pats) {
         std::vector<HIRPattern> rv;
         rv.reserve(pats.size());
@@ -465,9 +447,7 @@ namespace {
         }
         UNREACHABLE();
     }
-}
 
-namespace {
     HIRPattern::Data clonePatternData(const HIRPattern::Data& data) {
         switch (data.tag()) {
             case HIRPatternData::TAG_Any: {
@@ -529,6 +509,22 @@ namespace {
 
         UNREACHABLE();
     }
+}
+
+std::vector<unsigned> patternBindingSlots(const HIRPattern& pattern, HIRPatternBindingOrder order) {
+    std::vector<unsigned> slots;
+    switch (order) {
+        case HIRPatternBindingOrder::Declaration:
+            visitPatternDeclarationSlots(pattern, slots);
+            break;
+        case HIRPatternBindingOrder::FirstCandidate:
+            visitPatternCandidateSlots(pattern, false, slots);
+            break;
+        case HIRPatternBindingOrder::LastCandidate:
+            visitPatternCandidateSlots(pattern, true, slots);
+            break;
+    }
+    return slots;
 }
 
 HIRPattern HIRPattern::clone() const {

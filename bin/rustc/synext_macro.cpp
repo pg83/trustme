@@ -116,9 +116,6 @@ namespace {
         FmtArgs args;
     };
 
-}
-
-namespace {
     struct CTraceMacrosExpander: public ExpandProcMacro {
         std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override;
     };
@@ -337,9 +334,6 @@ namespace {
     struct CExpander: public ExpandProcMacro {
         std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
     };
-}
-
-namespace {
 
     std::unique_ptr<TokenStream> makeMacroExpansionPlaceholder(const Span& sp) {
         auto rv = box$(TTStreamO(sp, ParseState(), TokenTree()));
@@ -368,9 +362,7 @@ namespace {
         }
         parseErrorUnexpected(lex, tok, TOK_IDENT);
     }
-}
 
-namespace {
     AsmRegisterClass getRegClassX8664(const Span& sp, const RcString& str) {
         if (str == "reg") {
             return AsmRegisterClass::x86Reg;
@@ -552,9 +544,7 @@ namespace {
         }
         ERROR(sp, E0000, "clobber_abi is unsupported for target architecture `" << arch << "`");
     }
-}
 
-namespace {
     std::string getString(const Span& sp, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const TokenTree& tt) {
         auto lex = TTStream(sp, ParseState(), tt);
         lex.parseState().wb = &wb;
@@ -575,9 +565,6 @@ namespace {
         }
         return mv$(stringNp->value);
     }
-}
-
-namespace {
 
     u32 parseUtf8(const char* s, int& outLen) {
         u8 v1 = s[0];
@@ -912,9 +899,7 @@ namespace {
 
         return std::make_tuple(mv$(frags), mv$(curLiteral));
     }
-}
 
-namespace {
     Token ident(const char* s) {
         return Token(TOK_IDENT, RcString::newInterned(s));
     }
@@ -1263,11 +1248,6 @@ namespace {
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(), Ident::Hygiene::newScope(wb.id, *crate.hirPool), mv$(toks))));
     }
-}
-
-#undef CMP
-
-namespace {
 
     std::string includeGetString(const Span& sp, TokenStream& lex, const ASTCrate& crate, ASTModule& mod) {
         auto n = ParseExprVal(lex);
@@ -1306,7 +1286,11 @@ namespace {
             }
         }
     }
-};
+}
+
+#undef CMP
+
+;
 
 // TODO: include_str! and include_bytes!
 

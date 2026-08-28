@@ -32,9 +32,7 @@ struct WireBoard::ManglingContext {
 
 namespace {
     using ManglingContext = WireBoard::ManglingContext;
-}
 
-namespace {
     enum class LifetimeIdentityMode {
         Erased,
         Closed,
@@ -71,13 +69,6 @@ namespace {
 
         void fmtType(const HIRTypeData* ty);
     };
-}
-
-void TransCreateManglingContext(WireBoard& wb, ObjPool& pool) {
-    wb.mangling = pool.make<ManglingContext>(pool);
-}
-
-namespace {
 
     StringBuilder& operator<<(StringBuilder& sb, char c) {
         sb.append(&c, 1);
@@ -95,9 +86,7 @@ namespace {
         sb.append(buf, static_cast<char*>(formatU64Base10(static_cast<u64>(v), buf)) - buf);
         return sb;
     }
-}
 
-namespace {
     StringBuilder& mangleBegin(ManglingContext& context) {
         context.buffer.reset();
         context.names.clear();
@@ -116,6 +105,21 @@ namespace {
         }
         return RcString::newInterned(symbol, sizeof(symbol));
     }
+
+    RcString transMangleType(ManglingContext& context, const HIRTypeData* v, bool includeLifetimeIdentity) {
+        auto& cache = includeLifetimeIdentity ? context.typeIdCache : context.ordinaryTypeCache;
+        if (const auto* hit = cache.find(reinterpret_cast<uintptr_t>(v))) {
+            return *hit;
+        }
+        auto& sb = mangleBegin(context);
+        sb << "ZRT";
+        Mangler(context, includeLifetimeIdentity ? LifetimeIdentityMode::All : LifetimeIdentityMode::Erased).fmtType(v);
+        return *cache.insert(reinterpret_cast<uintptr_t>(v), mangleFinish(sb));
+    }
+}
+
+void TransCreateManglingContext(WireBoard& wb, ObjPool& pool) {
+    wb.mangling = pool.make<ManglingContext>(pool);
 }
 
 RcString TransMangle(const WireBoard& wb, const HIRSimplePath& p) {
@@ -161,19 +165,6 @@ RcString TransMangleValue(const WireBoard& wb, const HIRPath& p) {
     sb << "ZR";
     Mangler(context, LifetimeIdentityMode::Closed).fmtPath(p);
     return mangleFinish(sb);
-}
-
-namespace {
-    RcString transMangleType(ManglingContext& context, const HIRTypeData* v, bool includeLifetimeIdentity) {
-        auto& cache = includeLifetimeIdentity ? context.typeIdCache : context.ordinaryTypeCache;
-        if (const auto* hit = cache.find(reinterpret_cast<uintptr_t>(v))) {
-            return *hit;
-        }
-        auto& sb = mangleBegin(context);
-        sb << "ZRT";
-        Mangler(context, includeLifetimeIdentity ? LifetimeIdentityMode::All : LifetimeIdentityMode::Erased).fmtType(v);
-        return *cache.insert(reinterpret_cast<uintptr_t>(v), mangleFinish(sb));
-    }
 }
 
 RcString TransMangle(const WireBoard& wb, const HIRTypeData* v) {

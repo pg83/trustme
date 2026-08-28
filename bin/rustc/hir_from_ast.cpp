@@ -396,6 +396,358 @@ namespace {
         }
         UNREACHABLE();
     }
+
+    HIRPatternBinding::Type convertBindingType(ASTPatternBinding::Type pbt) {
+        switch (pbt) {
+            case ASTPatternBinding::Type::MOVE:
+                return HIRPatternBinding::Type::Move;
+            case ASTPatternBinding::Type::REF:
+                return HIRPatternBinding::Type::Ref;
+            case ASTPatternBinding::Type::MUTREF:
+                return HIRPatternBinding::Type::MutRef;
+        }
+        UNREACHABLE();
+    }
+
+    GenericParamLayout getPathGenericParams(const Span& sp, const HIRCrate& crate, const HIRSimplePath& hirPath, const ASTPath& path, FromASTPathClass pc) {
+        if (pc == FromASTPathClass::Value) {
+            const auto& binding = path.bindings.value.binding;
+            if (const auto* e = binding.opt_Function()) {
+                if (e->func_) {
+                    return {&e->func_->params(), nullptr};
+                }
+                return {nullptr, &crate.getFunctionByPath(sp, hirPath).params};
+            }
+            if (const auto* e = binding.opt_Struct()) {
+                return e->struct_ ? GenericParamLayout{&e->struct_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+            }
+            if (const auto* e = binding.opt_EnumVar()) {
+                return e->enum_ ? GenericParamLayout{&e->enum_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+            }
+            if (const auto* e = binding.opt_Static()) {
+                return e->static_ ? GenericParamLayout{&e->static_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+            }
+            return {};
+        }
+        if (pc != FromASTPathClass::Type) {
+            return {};
+        }
+
+        const auto& binding = path.bindings.type.binding;
+        if (const auto* e = binding.opt_Struct()) {
+            return e->struct_ ? GenericParamLayout{&e->struct_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        }
+        if (const auto* e = binding.opt_Enum()) {
+            return e->enum_ ? GenericParamLayout{&e->enum_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        }
+        if (const auto* e = binding.opt_Union()) {
+            return e->union_ ? GenericParamLayout{&e->union_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        }
+        if (const auto* e = binding.opt_Trait()) {
+            return e->trait_ ? GenericParamLayout{&e->trait_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        }
+        if (const auto* e = binding.opt_TraitAlias()) {
+            return e->trait_ ? GenericParamLayout{&e->trait_->params, nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        }
+        if (const auto* e = binding.opt_EnumVar()) {
+            return e->enum_ ? GenericParamLayout{&e->enum_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        }
+        if (const auto* e = binding.opt_TypeAlias()) {
+            if (e->alias_) {
+                return {&e->alias_->params(), nullptr};
+            }
+            if (const auto* item = crate.getTypeitemByPathOpt(hirPath)) {
+                if (const auto* alias = item->opt_TypeAlias()) {
+                    return {nullptr, &alias->params};
+                }
+            }
+        }
+        return {};
+    }
+
+    GenericParamLayout getUfcsGenericParams(const ASTPath& path, FromASTPathClass pc) {
+        const auto& ufcs = path.cls.as_UFCS();
+        if (pc == FromASTPathClass::Value) {
+            if (const auto* e = path.bindings.value.binding.opt_Function(); e && e->func_) {
+                return {&e->func_->params(), nullptr};
+            }
+        }
+        if (!ufcs.trait || !ufcs.trait->isValid() || ufcs.nodes.empty()) {
+            return {};
+        }
+
+        const auto& itemName = ufcs.nodes.front().name();
+        const auto* traitBinding = ufcs.trait->bindings.type.binding.opt_Trait();
+        if (!traitBinding) {
+            return {};
+        }
+        if (traitBinding->trait_) {
+            for (const auto& item : traitBinding->trait_->items()) {
+                if (item.name != itemName) {
+                    continue;
+                }
+                if (pc == FromASTPathClass::Value) {
+                    if (const auto* function = item.data.opt_Function()) {
+                        return {&function->params(), nullptr};
+                    }
+                } else if (const auto* type = item.data.opt_Type()) {
+                    return {&type->params(), nullptr};
+                }
+                return {};
+            }
+        }
+        if (traitBinding->hir) {
+            if (pc == FromASTPathClass::Value) {
+                auto item = traitBinding->hir->values.find(itemName);
+                if (item != traitBinding->hir->values.end()) {
+                    if (const auto* function = item->second.opt_Function()) {
+                        return {nullptr, &function->params};
+                    }
+                }
+            } else {
+                auto item = traitBinding->hir->types.find(itemName);
+                if (item != traitBinding->hir->types.end()) {
+                    return {nullptr, &item->second.generics};
+                }
+            }
+        }
+        return {};
+    }
+
+    enum class GenericParamSlot {
+        None,
+        Type,
+        Value,
+    };
+
+    GenericParamSlot consumeGenericParam(GenericParamLayout defs, size_t& index, bool lifetime) {
+        if (defs.ast) {
+            while (index < defs.ast->params.size() && defs.ast->params[index].is_None()) {
+                index++;
+            }
+            if (lifetime) {
+                if (index < defs.ast->params.size() && defs.ast->params[index].is_Lifetime()) {
+                    index++;
+                }
+                return GenericParamSlot::None;
+            }
+            while (index < defs.ast->params.size() && defs.ast->params[index].is_Lifetime()) {
+                index++;
+            }
+            if (index >= defs.ast->params.size()) {
+                return GenericParamSlot::None;
+            }
+            return defs.ast->params[index++].is_Value() ? GenericParamSlot::Value : GenericParamSlot::Type;
+        }
+        if (!defs.hir || lifetime || index >= defs.hir->paramCount()) {
+            return GenericParamSlot::None;
+        }
+        return defs.hir->paramKindAt(index++) == HIRGenericParamKind::Value ? GenericParamSlot::Value : GenericParamSlot::Type;
+    }
+
+    bool isInferredConstArgument(const ASTPathParamEnt& param, GenericParamLayout defs, size_t& index) {
+        switch (param.tag()) {
+            case ASTPathParamEnt::TAG_Lifetime: {
+                consumeGenericParam(defs, index, true);
+                break;
+            }
+            case ASTPathParamEnt::TAG_Type: {
+                const auto slot = consumeGenericParam(defs, index, false);
+                return slot == GenericParamSlot::Value && param.as_Type()->data.is_Any();
+            }
+            case ASTPathParamEnt::TAG_Value: {
+                consumeGenericParam(defs, index, false);
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+        return false;
+    }
+
+    template <typename T>
+    HIRVisEnt<T> newVisent(HIRPublicity pub, T v) {
+        return HIRVisEnt<T>{pub, mv$(v)};
+    }
+
+    HIRSimplePath getParentModule(const HIRItemPath& p) {
+        const HIRItemPath* parentIp = p.parent;
+        assert(parentIp);
+        while (parentIp->name && parentIp->name[0] == '#') {
+            parentIp = parentIp->parent;
+            assert(parentIp);
+        }
+        return parentIp->getSimplePath();
+    }
+
+    void collectUsedTypeParams(HIRTypeInterner& types, const Span& sp, const HIRTypeData* ty, std::set<unsigned>& used, bool& opaque) {
+        cloneTyWith(types, sp, ty, [&](const HIRTypeData* tpl, HIRTypeRef&) {
+            if (const auto* ge = tpl->opt_Generic()) {
+                if (ge->isSelf()) {
+                    opaque = true;
+                } else if (ge->group() == GENERICImpl) {
+                    used.insert(ge->idx());
+                }
+            }
+            if (const auto* ae = tpl->opt_Array()) {
+                if (ae->size.is_Unevaluated() && ae->size.as_Unevaluated().is_Unevaluated()) {
+                    opaque = true;
+                }
+            }
+            if (const auto* pe = tpl->opt_Path()) {
+                if (!pe->path.data.is_Generic()) {
+                    opaque = true;
+                }
+            }
+            return false;
+        });
+    }
+
+    void collectUsedTypeParamsInBounds(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& params, std::set<unsigned>& used, bool& opaque) {
+        for (const auto& bound : params.bounds) {
+            switch (bound.tag()) {
+                case HIRGenericBound::TAG_TraitBound: {
+                    auto& be = bound.as_TraitBound();
+                    collectUsedTypeParams(types, sp, be.type, used, opaque);
+                    for (const auto& ty : be.trait.path.params.types) {
+                        collectUsedTypeParams(types, sp, ty, used, opaque);
+                    }
+                    for (const auto& assoc : be.trait.typeBounds) {
+                        collectUsedTypeParams(types, sp, assoc.second.type, used, opaque);
+                    }
+                    break;
+                }
+                case HIRGenericBound::TAG_TypeEquality: {
+                    auto& be = bound.as_TypeEquality();
+                    collectUsedTypeParams(types, sp, be.type, used, opaque);
+                    collectUsedTypeParams(types, sp, be.otherType, used, opaque);
+                    break;
+                }
+            }
+        }
+    }
+
+    void checkTypeParamsUsed(const Span& sp, const HIRGenericParams& params, const std::set<unsigned>& used, const char* what) {
+        for (size_t i = 0; i < params.types.size(); i++) {
+            if (used.count(static_cast<unsigned>(i))) {
+                continue;
+            }
+            ERROR(sp, E0000, "parameter `" << params.types[i].name << "` is never used in this " << what << " - consider a `PhantomData` field");
+        }
+    }
+
+    void _add_mod_ns_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRTypeItem ti) {
+        mod.modItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{isPub, mv$(ti)})));
+    }
+
+    void _add_mod_val_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRValueItem ti) {
+        mod.valueItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{isPub, mv$(ti)})));
+    }
+
+    void _add_mod_mac_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRMacroItem ti) {
+        mod.macroItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{isPub, mv$(ti)})));
+    }
+
+    template <typename Cb>
+    void collectPathLifetimes(const ASTPath& path, const Cb& cb) {
+        if (path.cls.is_Local() || !path.isValid()) {
+            return;
+        }
+        for (const auto& node : path.nodes()) {
+            for (const auto& ent : node.args().entries) {
+                switch (ent.tag()) {
+                    case ASTPathParamEnt::TAG_Lifetime:
+                        cb(ent.as_Lifetime());
+                        break;
+                    case ASTPathParamEnt::TAG_Type:
+                        collectTypeLifetimes(ent.as_Type(), cb);
+                        break;
+                    case ASTPathParamEnt::TAG_AssociatedTyEqual:
+                        collectTypeLifetimes(ent.as_AssociatedTyEqual().second, cb);
+                        break;
+                    case ASTPathParamEnt::TAG_AssociatedTyBound:
+                        for (const auto& trait : ent.as_AssociatedTyBound().second) {
+                            if (trait.path) {
+                                collectPathLifetimes(*trait.path, cb);
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
+    template <typename Cb>
+    void collectTypeLifetimes(const ASTType* ty, const Cb& cb) {
+        if (!ty) {
+            return;
+        }
+        switch (ty->data.tag()) {
+            case TypeData::TAG_Borrow: {
+                const auto& e = ty->data.as_Borrow();
+                cb(e.lifetime);
+                collectTypeLifetimes(e.inner, cb);
+                break;
+            }
+            case TypeData::TAG_Pointer:
+                collectTypeLifetimes(ty->data.as_Pointer().inner, cb);
+                break;
+            case TypeData::TAG_Array:
+                collectTypeLifetimes(ty->data.as_Array().inner, cb);
+                break;
+            case TypeData::TAG_Slice:
+                collectTypeLifetimes(ty->data.as_Slice().inner, cb);
+                break;
+            case TypeData::TAG_Pattern:
+                collectTypeLifetimes(ty->data.as_Pattern().inner, cb);
+                break;
+            case TypeData::TAG_Tuple:
+                for (const auto* inner : ty->data.as_Tuple().innerTypes) {
+                    collectTypeLifetimes(inner, cb);
+                }
+                break;
+            case TypeData::TAG_Function: {
+                const auto& e = ty->data.as_Function().info;
+                for (const auto* arg : e.argTypes) {
+                    collectTypeLifetimes(arg, cb);
+                }
+                collectTypeLifetimes(e.rettype, cb);
+                break;
+            }
+            case TypeData::TAG_Path:
+                collectPathLifetimes(*ty->data.as_Path(), cb);
+                break;
+            case TypeData::TAG_TraitObject: {
+                const auto& e = ty->data.as_TraitObject();
+                for (const auto& lft : e.lifetimes) {
+                    cb(lft);
+                }
+                for (const auto& tr : e.traits) {
+                    if (tr.path) {
+                        collectPathLifetimes(*tr.path, cb);
+                    }
+                }
+                break;
+            }
+            case TypeData::TAG_ErasedType: {
+                const auto* e = ty->data.as_ErasedType();
+                for (const auto& lft : e->lifetimes) {
+                    cb(lft);
+                }
+                for (const auto& tr : e->traits) {
+                    if (tr.path) {
+                        collectPathLifetimes(*tr.path, cb);
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
 }
 
 HIRPublicity AST2HIR::LowerHIRVis(const HIRSimplePath& modPath, const ASTVisibility& vis) {
@@ -561,20 +913,6 @@ HIRPath AST2HIR::LowerHIRPatternPath(const Span& sp, const ASTPath& path, FromAS
         }
     }
     return LowerHIRPath(sp, path, pc);
-}
-
-namespace {
-    HIRPatternBinding::Type convertBindingType(ASTPatternBinding::Type pbt) {
-        switch (pbt) {
-            case ASTPatternBinding::Type::MOVE:
-                return HIRPatternBinding::Type::Move;
-            case ASTPatternBinding::Type::REF:
-                return HIRPatternBinding::Type::Ref;
-            case ASTPatternBinding::Type::MUTREF:
-                return HIRPatternBinding::Type::MutRef;
-        }
-        UNREACHABLE();
-    }
 }
 
 HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
@@ -859,165 +1197,6 @@ HIRSimplePath AST2HIR::LowerHIRSimplePath(const Span& sp, const ASTPath& path, F
     }
     assert(ap);
     return HIRSimplePath((ap->crate == "" ? crateName : ap->crate), ap->nodes);
-}
-
-namespace {
-    GenericParamLayout getPathGenericParams(const Span& sp, const HIRCrate& crate, const HIRSimplePath& hirPath, const ASTPath& path, FromASTPathClass pc) {
-        if (pc == FromASTPathClass::Value) {
-            const auto& binding = path.bindings.value.binding;
-            if (const auto* e = binding.opt_Function()) {
-                if (e->func_) {
-                    return {&e->func_->params(), nullptr};
-                }
-                return {nullptr, &crate.getFunctionByPath(sp, hirPath).params};
-            }
-            if (const auto* e = binding.opt_Struct()) {
-                return e->struct_ ? GenericParamLayout{&e->struct_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
-            }
-            if (const auto* e = binding.opt_EnumVar()) {
-                return e->enum_ ? GenericParamLayout{&e->enum_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
-            }
-            if (const auto* e = binding.opt_Static()) {
-                return e->static_ ? GenericParamLayout{&e->static_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
-            }
-            return {};
-        }
-        if (pc != FromASTPathClass::Type) {
-            return {};
-        }
-
-        const auto& binding = path.bindings.type.binding;
-        if (const auto* e = binding.opt_Struct()) {
-            return e->struct_ ? GenericParamLayout{&e->struct_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
-        }
-        if (const auto* e = binding.opt_Enum()) {
-            return e->enum_ ? GenericParamLayout{&e->enum_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
-        }
-        if (const auto* e = binding.opt_Union()) {
-            return e->union_ ? GenericParamLayout{&e->union_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
-        }
-        if (const auto* e = binding.opt_Trait()) {
-            return e->trait_ ? GenericParamLayout{&e->trait_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
-        }
-        if (const auto* e = binding.opt_TraitAlias()) {
-            return e->trait_ ? GenericParamLayout{&e->trait_->params, nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
-        }
-        if (const auto* e = binding.opt_EnumVar()) {
-            return e->enum_ ? GenericParamLayout{&e->enum_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
-        }
-        if (const auto* e = binding.opt_TypeAlias()) {
-            if (e->alias_) {
-                return {&e->alias_->params(), nullptr};
-            }
-            if (const auto* item = crate.getTypeitemByPathOpt(hirPath)) {
-                if (const auto* alias = item->opt_TypeAlias()) {
-                    return {nullptr, &alias->params};
-                }
-            }
-        }
-        return {};
-    }
-
-    GenericParamLayout getUfcsGenericParams(const ASTPath& path, FromASTPathClass pc) {
-        const auto& ufcs = path.cls.as_UFCS();
-        if (pc == FromASTPathClass::Value) {
-            if (const auto* e = path.bindings.value.binding.opt_Function(); e && e->func_) {
-                return {&e->func_->params(), nullptr};
-            }
-        }
-        if (!ufcs.trait || !ufcs.trait->isValid() || ufcs.nodes.empty()) {
-            return {};
-        }
-
-        const auto& itemName = ufcs.nodes.front().name();
-        const auto* traitBinding = ufcs.trait->bindings.type.binding.opt_Trait();
-        if (!traitBinding) {
-            return {};
-        }
-        if (traitBinding->trait_) {
-            for (const auto& item : traitBinding->trait_->items()) {
-                if (item.name != itemName) {
-                    continue;
-                }
-                if (pc == FromASTPathClass::Value) {
-                    if (const auto* function = item.data.opt_Function()) {
-                        return {&function->params(), nullptr};
-                    }
-                } else if (const auto* type = item.data.opt_Type()) {
-                    return {&type->params(), nullptr};
-                }
-                return {};
-            }
-        }
-        if (traitBinding->hir) {
-            if (pc == FromASTPathClass::Value) {
-                auto item = traitBinding->hir->values.find(itemName);
-                if (item != traitBinding->hir->values.end()) {
-                    if (const auto* function = item->second.opt_Function()) {
-                        return {nullptr, &function->params};
-                    }
-                }
-            } else {
-                auto item = traitBinding->hir->types.find(itemName);
-                if (item != traitBinding->hir->types.end()) {
-                    return {nullptr, &item->second.generics};
-                }
-            }
-        }
-        return {};
-    }
-
-    enum class GenericParamSlot {
-        None,
-        Type,
-        Value,
-    };
-
-    GenericParamSlot consumeGenericParam(GenericParamLayout defs, size_t& index, bool lifetime) {
-        if (defs.ast) {
-            while (index < defs.ast->params.size() && defs.ast->params[index].is_None()) {
-                index++;
-            }
-            if (lifetime) {
-                if (index < defs.ast->params.size() && defs.ast->params[index].is_Lifetime()) {
-                    index++;
-                }
-                return GenericParamSlot::None;
-            }
-            while (index < defs.ast->params.size() && defs.ast->params[index].is_Lifetime()) {
-                index++;
-            }
-            if (index >= defs.ast->params.size()) {
-                return GenericParamSlot::None;
-            }
-            return defs.ast->params[index++].is_Value() ? GenericParamSlot::Value : GenericParamSlot::Type;
-        }
-        if (!defs.hir || lifetime || index >= defs.hir->paramCount()) {
-            return GenericParamSlot::None;
-        }
-        return defs.hir->paramKindAt(index++) == HIRGenericParamKind::Value ? GenericParamSlot::Value : GenericParamSlot::Type;
-    }
-
-    bool isInferredConstArgument(const ASTPathParamEnt& param, GenericParamLayout defs, size_t& index) {
-        switch (param.tag()) {
-            case ASTPathParamEnt::TAG_Lifetime: {
-                consumeGenericParam(defs, index, true);
-                break;
-            }
-            case ASTPathParamEnt::TAG_Type: {
-                const auto slot = consumeGenericParam(defs, index, false);
-                return slot == GenericParamSlot::Value && param.as_Type()->data.is_Any();
-            }
-            case ASTPathParamEnt::TAG_Value: {
-                consumeGenericParam(defs, index, false);
-                break;
-            }
-            default: {
-                break;
-            }
-        }
-        return false;
-    }
 }
 
 HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs) {
@@ -1711,23 +1890,6 @@ HIRTypeAlias AST2HIR::LowerHIRTypeAlias(const HIRItemPath& p, const ASTTypeAlias
     return HIRTypeAlias{std::move(params), std::move(ty)};
 }
 
-namespace {
-    template <typename T>
-    HIRVisEnt<T> newVisent(HIRPublicity pub, T v) {
-        return HIRVisEnt<T>{pub, mv$(v)};
-    }
-
-    HIRSimplePath getParentModule(const HIRItemPath& p) {
-        const HIRItemPath* parentIp = p.parent;
-        assert(parentIp);
-        while (parentIp->name && parentIp->name[0] == '#') {
-            parentIp = parentIp->parent;
-            assert(parentIp);
-        }
-        return parentIp->getSimplePath();
-    }
-}
-
 tStructFields AST2HIR::LowerHIRStructFields(HIRItemPath path, const HIRGenericParams& params, const std::vector<ASTStructItem>& inFields, HIRModule& outMod) {
     HIRStruct::Data::Data_Named fields;
     for (const auto& field : inFields) {
@@ -1752,64 +1914,6 @@ tStructFields AST2HIR::LowerHIRStructFields(HIRItemPath path, const HIRGenericPa
         fields.push_back(HIRStructField{field.name, LowerHIRVis(getParentModule(path), field.vis), std::move(type), std::move(fieldDefault)});
     }
     return fields;
-}
-
-namespace {
-    void collectUsedTypeParams(HIRTypeInterner& types, const Span& sp, const HIRTypeData* ty, std::set<unsigned>& used, bool& opaque) {
-        cloneTyWith(types, sp, ty, [&](const HIRTypeData* tpl, HIRTypeRef&) {
-            if (const auto* ge = tpl->opt_Generic()) {
-                if (ge->isSelf()) {
-                    opaque = true;
-                } else if (ge->group() == GENERICImpl) {
-                    used.insert(ge->idx());
-                }
-            }
-            if (const auto* ae = tpl->opt_Array()) {
-                if (ae->size.is_Unevaluated() && ae->size.as_Unevaluated().is_Unevaluated()) {
-                    opaque = true;
-                }
-            }
-            if (const auto* pe = tpl->opt_Path()) {
-                if (!pe->path.data.is_Generic()) {
-                    opaque = true;
-                }
-            }
-            return false;
-        });
-    }
-
-    void collectUsedTypeParamsInBounds(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& params, std::set<unsigned>& used, bool& opaque) {
-        for (const auto& bound : params.bounds) {
-            switch (bound.tag()) {
-                case HIRGenericBound::TAG_TraitBound: {
-                    auto& be = bound.as_TraitBound();
-                    collectUsedTypeParams(types, sp, be.type, used, opaque);
-                    for (const auto& ty : be.trait.path.params.types) {
-                        collectUsedTypeParams(types, sp, ty, used, opaque);
-                    }
-                    for (const auto& assoc : be.trait.typeBounds) {
-                        collectUsedTypeParams(types, sp, assoc.second.type, used, opaque);
-                    }
-                    break;
-                }
-                case HIRGenericBound::TAG_TypeEquality: {
-                    auto& be = bound.as_TypeEquality();
-                    collectUsedTypeParams(types, sp, be.type, used, opaque);
-                    collectUsedTypeParams(types, sp, be.otherType, used, opaque);
-                    break;
-                }
-            }
-        }
-    }
-
-    void checkTypeParamsUsed(const Span& sp, const HIRGenericParams& params, const std::set<unsigned>& used, const char* what) {
-        for (size_t i = 0; i < params.types.size(); i++) {
-            if (used.count(static_cast<unsigned>(i))) {
-                continue;
-            }
-            ERROR(sp, E0000, "parameter `" << params.types[i].name << "` is never used in this " << what << " - consider a `PhantomData` field");
-        }
-    }
 }
 
 HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStruct& ent, const ASTAttributeList& attrs, HIRModule& outMod) {
@@ -2770,20 +2874,6 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     return rv;
 }
 
-namespace {
-    void _add_mod_ns_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRTypeItem ti) {
-        mod.modItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{isPub, mv$(ti)})));
-    }
-
-    void _add_mod_val_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRValueItem ti) {
-        mod.valueItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{isPub, mv$(ti)})));
-    }
-
-    void _add_mod_mac_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRMacroItem ti) {
-        mod.macroItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{isPub, mv$(ti)})));
-    }
-}
-
 HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attrs, const ASTStatic& e, const Span& sp, const RcString& name) {
     auto params = LowerHIRGenericParams(e.params(), nullptr);
     auto value = LowerHIRExpr(e.value());
@@ -3098,109 +3188,6 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
     }
 
     return mod;
-}
-
-namespace {
-
-    template <typename Cb>
-    void collectPathLifetimes(const ASTPath& path, const Cb& cb) {
-        if (path.cls.is_Local() || !path.isValid()) {
-            return;
-        }
-        for (const auto& node : path.nodes()) {
-            for (const auto& ent : node.args().entries) {
-                switch (ent.tag()) {
-                    case ASTPathParamEnt::TAG_Lifetime:
-                        cb(ent.as_Lifetime());
-                        break;
-                    case ASTPathParamEnt::TAG_Type:
-                        collectTypeLifetimes(ent.as_Type(), cb);
-                        break;
-                    case ASTPathParamEnt::TAG_AssociatedTyEqual:
-                        collectTypeLifetimes(ent.as_AssociatedTyEqual().second, cb);
-                        break;
-                    case ASTPathParamEnt::TAG_AssociatedTyBound:
-                        for (const auto& trait : ent.as_AssociatedTyBound().second) {
-                            if (trait.path) {
-                                collectPathLifetimes(*trait.path, cb);
-                            }
-                        }
-                        break;
-                    default:
-                        break;
-                }
-            }
-        }
-    }
-
-    template <typename Cb>
-    void collectTypeLifetimes(const ASTType* ty, const Cb& cb) {
-        if (!ty) {
-            return;
-        }
-        switch (ty->data.tag()) {
-            case TypeData::TAG_Borrow: {
-                const auto& e = ty->data.as_Borrow();
-                cb(e.lifetime);
-                collectTypeLifetimes(e.inner, cb);
-                break;
-            }
-            case TypeData::TAG_Pointer:
-                collectTypeLifetimes(ty->data.as_Pointer().inner, cb);
-                break;
-            case TypeData::TAG_Array:
-                collectTypeLifetimes(ty->data.as_Array().inner, cb);
-                break;
-            case TypeData::TAG_Slice:
-                collectTypeLifetimes(ty->data.as_Slice().inner, cb);
-                break;
-            case TypeData::TAG_Pattern:
-                collectTypeLifetimes(ty->data.as_Pattern().inner, cb);
-                break;
-            case TypeData::TAG_Tuple:
-                for (const auto* inner : ty->data.as_Tuple().innerTypes) {
-                    collectTypeLifetimes(inner, cb);
-                }
-                break;
-            case TypeData::TAG_Function: {
-                const auto& e = ty->data.as_Function().info;
-                for (const auto* arg : e.argTypes) {
-                    collectTypeLifetimes(arg, cb);
-                }
-                collectTypeLifetimes(e.rettype, cb);
-                break;
-            }
-            case TypeData::TAG_Path:
-                collectPathLifetimes(*ty->data.as_Path(), cb);
-                break;
-            case TypeData::TAG_TraitObject: {
-                const auto& e = ty->data.as_TraitObject();
-                for (const auto& lft : e.lifetimes) {
-                    cb(lft);
-                }
-                for (const auto& tr : e.traits) {
-                    if (tr.path) {
-                        collectPathLifetimes(*tr.path, cb);
-                    }
-                }
-                break;
-            }
-            case TypeData::TAG_ErasedType: {
-                const auto* e = ty->data.as_ErasedType();
-                for (const auto& lft : e->lifetimes) {
-                    cb(lft);
-                }
-                for (const auto& tr : e->traits) {
-                    if (tr.path) {
-                        collectPathLifetimes(*tr.path, cb);
-                    }
-                }
-                break;
-            }
-            default:
-                break;
-        }
-    }
 }
 
 void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {

@@ -35,9 +35,7 @@ struct WireBoard::MirOperationsContext {
 
 namespace {
     using MirOperationsContext = WireBoard::MirOperationsContext;
-}
 
-namespace {
     struct MirMutator {
         MIRFunction& fcn;
         unsigned int curBlock;
@@ -60,9 +58,7 @@ namespace {
 
         decltype(newStatements.begin()) flush();
     };
-}
 
-namespace {
     struct LvalueVisitor {
         virtual bool visitLvalue(const MIRLValue& lv, MIRValUsage u) = 0;
     };
@@ -169,20 +165,11 @@ namespace {
 
         bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override;
     };
-}
-
-void MIRCreateOperationsContext(WireBoard& wb, ObjPool& pool) {
-    wb.mirOperations = pool.make<MirOperationsContext>();
-}
-
-namespace {
 
     MirOperationsContext& operationsContext(const MIRTypeResolve& state) {
         return *state.resolve.board().mirOperations;
     }
-}
 
-namespace {
     HIRTypeRef getMetadataType(const MIRTypeResolve& state, const HIRTypeData* unsizedTy) {
         Span sp;
         auto& types = state.crate.types;
@@ -246,9 +233,7 @@ namespace {
             return HIRTypeRef();
         }
     }
-}
 
-namespace {
     void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& lval);
 
     HIRTypeRef getVtableType(const Span& sp, const ::StaticTraitResolve& resolve, const HIRTypeData::Data_TraitObject& te) {
@@ -1204,529 +1189,6 @@ namespace {
         }
     }
 
-}
-
-void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
-    Span sp;
-    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
-        os << path;
-    });
-    MIRTypeResolve state{sp, resolve, pathCallback, retType, args, fcn};
-
-    MirMutator mutator{fcn, 0, 0};
-    for (auto& block : fcn.blocks) {
-        for (auto it = block.statements.begin(); it != block.statements.end(); ++it) {
-            mutator.updateState(state);
-            auto& stmt = *it;
-
-            HIRTypeRef tmp;
-            if ((stmt.is_Assign() && (stmt.as_Assign().src.is_Borrow())) && state.getLvalueType(tmp, stmt.as_Assign().src.as_Borrow().val)->is_Diverge()) {
-            } else {
-                if (visitMirLvalues(stmt, [&](const auto& lv, auto /*vu*/) {
-                    return state.getLvalueType(tmp, lv)->is_Diverge();
-                })) {
-                    block.statements.erase(it, block.statements.end());
-                    block.terminator = MIRTerminator::make_Unreachable({});
-                    break;
-                }
-            }
-            switch (stmt.tag()) {
-                case MIRStatement::TAG_SetDropFlag: {
-                    break;
-                }
-                case MIRStatement::TAG_SaveDropFlag: {
-                    auto& se = stmt.as_SaveDropFlag();
-                    MIRCleanupLValue(state, mutator, se.slot);
-                    break;
-                }
-                case MIRStatement::TAG_LoadDropFlag: {
-                    auto& se = stmt.as_LoadDropFlag();
-                    MIRCleanupLValue(state, mutator, se.slot);
-                    break;
-                }
-                case MIRStatement::TAG_ScopeEnd: {
-                    break;
-                }
-                case MIRStatement::TAG_Asm: {
-                    auto& se = stmt.as_Asm();
-                    for (auto& v : se.inputs) {
-                        MIRCleanupLValue(state, mutator, v.second);
-                    }
-                    for (auto& v : se.outputs) {
-                        MIRCleanupLValue(state, mutator, v.second);
-                    }
-                    break;
-                }
-                case MIRStatement::TAG_Asm2: {
-                    auto& e = stmt.as_Asm2();
-                    for (auto& p : e.params) {
-                        switch (p.tag()) {
-                            case MIRAsmParam::TAG_Const: {
-                                MIRCleanupAsmConst(state, mutator, p);
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Sym: {
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Reg: {
-                                auto& v = p.as_Reg();
-                                if (v.input) {
-                                    MIRCleanupParam(state, mutator, *v.input);
-                                }
-                                if (v.output) {
-                                    MIRCleanupLValue(state, mutator, *v.output);
-                                }
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Label: {
-                                break;
-                            }
-                        }
-                    }
-                    break;
-                }
-                case MIRStatement::TAG_Assign: {
-                    auto& se = stmt.as_Assign();
-                    MIRCleanupLValue(state, mutator, se.dst);
-                    switch (se.src.tag()) {
-                        case MIRRValue::TAG_Use: {
-                            auto& re = se.src.as_Use();
-                            MIRCleanupLValue(state, mutator, re);
-                            break;
-                        }
-                        case MIRRValue::TAG_Constant: {
-                            auto& re = se.src.as_Constant();
-                            MIRCleanupConstant(state, mutator, re);
-                            break;
-                        }
-                        case MIRRValue::TAG_SizedArray: {
-                            auto& re = se.src.as_SizedArray();
-                            MIRCleanupParam(state, mutator, re.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_Borrow: {
-                            auto& re = se.src.as_Borrow();
-                            MIRCleanupLValue(state, mutator, re.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_Cast: {
-                            auto& re = se.src.as_Cast();
-                            MIRCleanupLValue(state, mutator, re.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_BinOp: {
-                            auto& re = se.src.as_BinOp();
-                            MIRCleanupParam(state, mutator, re.valL);
-                            MIRCleanupParam(state, mutator, re.valR);
-                            break;
-                        }
-                        case MIRRValue::TAG_UniOp: {
-                            auto& re = se.src.as_UniOp();
-                            MIRCleanupLValue(state, mutator, re.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_DstMeta: {
-                            auto& re = se.src.as_DstMeta();
-                            HIRTypeRef tmp;
-                            const auto& ty = state.getLvalueType(tmp, re.val);
-
-                            if (const auto* array = ty->opt_Array()) {
-                                MIRCleanupLValue(state, mutator, re.val);
-                                if (array->size.is_Known()) {
-                                    se.src = MIRConstant::make_Uint({U128(array->size.as_Known()), HIRCoreType::Usize});
-                                } else if (const auto* value = array->size.as_Unevaluated().opt_Evaluated()) {
-                                    se.src = MIRConstant::make_Uint({U128((*value)->readUsize(0)), HIRCoreType::Usize});
-                                }
-                                break;
-                            }
-
-                            if (!state.resolve.typeIsSized(state.sp, ty)) {
-                                MIRCleanupLValue(state, mutator, re.val);
-                                break;
-                            }
-
-                            re.val.wrappers.push_back(MIRLValue::Wrapper::newDeref());
-                            MIRCleanupLValue(state, mutator, re.val);
-                            re.val.wrappers.pop_back();
-
-                            HIRTypeRef cleanedTmp;
-                            const auto* cleanedTy = state.getLvalueType(cleanedTmp, re.val);
-                            const HIRTypeData* ityP;
-                            if (const auto* te = cleanedTy->opt_Borrow()) {
-                                ityP = te->inner;
-                            } else if (const auto* te = cleanedTy->opt_Pointer()) {
-                                ityP = te->inner;
-                            } else if (cleanedTy->is_TraitObject()) {
-                                ityP = cleanedTy;
-                                MIR_ASSERT(state, !re.val.wrappers.empty() && re.val.wrappers.back().is_Deref(), "DstMeta on bare trait object with no deref: " << re.val);
-                                re.val.wrappers.pop_back();
-                            } else {
-                                BUG(Span(), "Unexpected input type for DstMeta - " << cleanedTy);
-                            }
-                            break;
-                        }
-                        case MIRRValue::TAG_DstPtr: {
-                            auto& re = se.src.as_DstPtr();
-                            HIRTypeRef tmp;
-                            const auto& ty = state.getLvalueType(tmp, re.val);
-                            if (!state.resolve.typeIsSized(state.sp, ty)) {
-                                MIRCleanupLValue(state, mutator, re.val);
-                                break;
-                            }
-
-                            re.val.wrappers.push_back(MIRLValue::Wrapper::newDeref());
-                            MIRCleanupLValue(state, mutator, re.val);
-                            re.val.wrappers.pop_back();
-
-                            HIRTypeRef cleanedTmp;
-                            const auto* cleanedTy = state.getLvalueType(cleanedTmp, re.val);
-                            const HIRTypeData* ityP;
-                            if (const auto* te = cleanedTy->opt_Borrow()) {
-                                ityP = te->inner;
-                            } else if (const auto* te = cleanedTy->opt_Pointer()) {
-                                ityP = te->inner;
-                            } else if (cleanedTy->is_TraitObject()) {
-                                ityP = cleanedTy;
-                                MIR_ASSERT(state, !re.val.wrappers.empty() && re.val.wrappers.back().is_Deref(), "DstPtr on bare trait object with no deref: " << re.val);
-                                re.val.wrappers.pop_back();
-                            } else {
-                                BUG(Span(), "Unexpected input type for DstMeta - " << cleanedTy);
-                            }
-                            (void)ityP; // TODO: What is this needed for?
-                            break;
-                        }
-                        case MIRRValue::TAG_MakeDst: {
-                            auto& re = se.src.as_MakeDst();
-                            MIRCleanupParam(state, mutator, re.ptrVal);
-                            MIRCleanupParam(state, mutator, re.metaVal);
-                            break;
-                        }
-                        case MIRRValue::TAG_Tuple: {
-                            auto& re = se.src.as_Tuple();
-                            for (auto& lv : re.vals) {
-                                MIRCleanupParam(state, mutator, lv);
-                            }
-                            break;
-                        }
-                        case MIRRValue::TAG_Array: {
-                            auto& re = se.src.as_Array();
-                            for (auto& lv : re.vals) {
-                                MIRCleanupParam(state, mutator, lv);
-                            }
-                            break;
-                        }
-                        case MIRRValue::TAG_UnionVariant: {
-                            auto& re = se.src.as_UnionVariant();
-                            MIRCleanupParam(state, mutator, re.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_EnumVariant: {
-                            auto& re = se.src.as_EnumVariant();
-                            for (auto& lv : re.vals) {
-                                MIRCleanupParam(state, mutator, lv);
-                            }
-                            break;
-                        }
-                        case MIRRValue::TAG_Struct: {
-                            auto& re = se.src.as_Struct();
-                            for (auto& lv : re.vals) {
-                                MIRCleanupParam(state, mutator, lv);
-                            }
-                            break;
-                        }
-                    }
-                    break;
-                }
-            }
-
-            if (stmt.is_Assign()) {
-                auto& se = stmt.as_Assign();
-
-                if (auto* e = se.src.opt_Constant()) {
-                    if (auto* ce = e->opt_Const()) {
-                        MonomorphState params(state.crate.types);
-                        HIRTypeRef ty;
-                        const auto* litPtr = MIRCleanupGetConstant(state, *ce->p, ty, params);
-                        if (litPtr) {
-                            se.src = MIRCleanupLiteralToRValue(state, mutator, *litPtr, mv$(ty), params, mv$(*ce->p));
-                            if (auto* p = se.src.opt_Constant()) {
-                                MIRCleanupConstant(state, mutator, *p);
-                            }
-                        } else {
-                        }
-                    }
-                }
-
-                if (auto* e = se.src.opt_MakeDst()) {
-                    if ((e->metaVal.is_Constant() && e->metaVal.as_Constant().is_ItemAddr() && e->metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
-                        HIRTypeRef tmp, tmp2;
-                        const auto& srcTy = state.getParamType(tmp, e->ptrVal);
-                        const auto& dstTy = state.getLvalueType(tmp2, se.dst);
-                        MIR_ASSERT(state, e->ptrVal.is_LValue(), "BUG: MakeDst with no metadata should be LValue");
-                        se.src = MIRCleanupCoerceUnsized(state, mutator, dstTy, srcTy, mv$(e->ptrVal.as_LValue()));
-                    }
-                }
-
-                if (auto* e = se.src.opt_MakeDst()) {
-                    if ((e->metaVal.is_Constant() && e->metaVal.as_Constant().is_ItemAddr() && e->metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
-                        // TODO: Check the validity?
-
-                        HIRTypeRef tmp;
-                        const auto& srcTy = state.getParamType(tmp, e->ptrVal);
-                        MIR_ASSERT(state, monomorphiseTypeNeeded(srcTy), "MakeDst Unsize with known source - " << srcTy);
-                    }
-                }
-            }
-
-            it = mutator.flushStmt();
-        }
-
-        mutator.updateState(state);
-
-        switch (block.terminator.tag()) {
-            case MIRTerminator::TAG_Incomplete: {
-                break;
-            }
-            case MIRTerminator::TAG_Return: {
-                break;
-            }
-            case MIRTerminator::TAG_UnwindResume: {
-                break;
-            }
-            case MIRTerminator::TAG_UnwindTerminate: {
-                break;
-            }
-            case MIRTerminator::TAG_Unreachable: {
-                break;
-            }
-            case MIRTerminator::TAG_Goto: {
-                break;
-            }
-            case MIRTerminator::TAG_If: {
-                auto& e = block.terminator.as_If();
-                MIRCleanupLValue(state, mutator, e.cond);
-                break;
-            }
-            case MIRTerminator::TAG_Switch: {
-                auto& e = block.terminator.as_Switch();
-                MIRCleanupLValue(state, mutator, e.val);
-                break;
-            }
-            case MIRTerminator::TAG_SwitchValue: {
-                auto& e = block.terminator.as_SwitchValue();
-                MIRCleanupLValue(state, mutator, e.val);
-                break;
-            }
-            case MIRTerminator::TAG_Drop: {
-                auto& e = block.terminator.as_Drop();
-                MIRCleanupLValue(state, mutator, e.slot);
-                break;
-            }
-            case MIRTerminator::TAG_Call: {
-                auto& e = block.terminator.as_Call();
-                MIRCleanupLValue(state, mutator, e.retVal);
-                if (e.fcn.is_Value()) {
-                    MIRCleanupLValue(state, mutator, e.fcn.as_Value());
-                }
-                for (auto& lv : e.args) {
-                    MIRCleanupParam(state, mutator, lv);
-                }
-                break;
-            }
-            case MIRTerminator::TAG_TailCall: {
-                auto& e = block.terminator.as_TailCall();
-                if (e.fcn.is_Value()) {
-                    MIRCleanupLValue(state, mutator, e.fcn.as_Value());
-                }
-                for (auto& param : e.args) {
-                    MIRCleanupParam(state, mutator, param);
-                }
-                break;
-            }
-            case MIRTerminator::TAG_Asm2: {
-                auto& e = block.terminator.as_Asm2();
-                for (auto& p : e.params) {
-                    if (auto* reg = p.opt_Reg()) {
-                        if (reg->input) {
-                            MIRCleanupParam(state, mutator, *reg->input);
-                        }
-                        if (reg->output) {
-                            MIRCleanupLValue(state, mutator, *reg->output);
-                        }
-                    } else if (p.is_Const()) {
-                        MIRCleanupAsmConst(state, mutator, p);
-                    }
-                }
-                break;
-            }
-        }
-
-        if (auto* ep = block.terminator.opt_Call()) {
-            auto& e = *ep;
-            if (auto* pathP = e.fcn.opt_Path()) {
-                auto& path = *pathP;
-                if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_TraitObject()) {
-                    const auto& pe = path.data.as_UfcsKnown();
-                    const auto& te = pe.type->as_TraitObject();
-                    // TODO: What if the method is from a supertrait?
-
-                    if (!te.trait.traitPtr || e.args.empty()) {
-                    } else if (te.trait.path == pe.trait || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *te.trait.traitPtr, te.trait.path.path, te.trait.path.params, pe.type, [](const auto&, auto) {
-                        return true;
-                    })) {
-                        auto tgtLvalue = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
-                        e.fcn = mv$(tgtLvalue);
-                    }
-                }
-
-                else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_Function()) {
-                    const auto& pe = path.data.as_UfcsKnown();
-                    const auto& fcnTy = pe.type->as_Function();
-                    if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
-                        MIR_ASSERT(state, e.args.size() == 2, "Fn* call requires two arguments");
-                        auto fcnLvalue = mv$(e.args[0].as_LValue());
-                        auto argsLvalue = mv$(e.args[1].as_LValue());
-
-                        e.args.clear();
-                        e.args.reserve(fcnTy.argTypes.size());
-                        for (unsigned int i = 0; i < fcnTy.argTypes.size(); i++) {
-                            e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
-                        }
-                        if (pe.trait.path == resolve.langFnOnce()) {
-                            e.fcn = mv$(fcnLvalue);
-                        } else {
-                            e.fcn = MIRLValue::newDeref(mv$(fcnLvalue));
-                        }
-                    }
-                } else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_NamedFunction()) {
-                    const auto& pe = path.data.as_UfcsKnown();
-                    const auto& fcnTy = pe.type->as_NamedFunction();
-                    if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
-                        auto nArgs = fcnTy.decay(state.crate.types, state.sp).argTypes.size();
-                        MIR_ASSERT(state, e.args.size() == 2, "Fn* call requires two arguments");
-                        auto fcnLvalue = mv$(e.args[0].as_LValue());
-                        auto argsLvalue = mv$(e.args[1].as_LValue());
-
-                        e.args.clear();
-                        e.args.reserve(nArgs);
-                        for (unsigned int i = 0; i < nArgs; i++) {
-                            e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
-                        }
-                        switch (fcnTy.def.tag()) {
-                            case HIRTypeDataNamedFunctionTy::TAG_Function: {
-                                e.fcn = fcnTy.path.clone();
-                                break;
-                            }
-                            case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
-                                block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRRValue::make_Struct({fcnTy.path.data.as_Generic().clone(), std::move(e.args)})}));
-                                block.terminator = MIRTerminator::make_Goto(e.retBlock);
-                                break;
-                            }
-                            case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
-                                auto& ve = fcnTy.def.as_EnumConstructor();
-                                auto enmPath = fcnTy.path.data.as_Generic().clone();
-                                enmPath.path.popComponent();
-                                block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRRValue::make_EnumVariant({std::move(enmPath), static_cast<unsigned>(ve.v), std::move(e.args)})}));
-                                block.terminator = MIRTerminator::make_Goto(e.retBlock);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (e.fcn.is_Intrinsic() && e.fcn.as_Intrinsic().name == "read_via_copy") {
-                // TODO: Replace with `res = *ptr;`
-                block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRLValue::newDeref(std::move(e.args.at(0).as_LValue()))}));
-                block.terminator = MIRTerminator::make_Goto(e.retBlock);
-            }
-            if (e.fcn.is_Intrinsic() && e.fcn.as_Intrinsic().name == "write_via_move") {
-                // TODO: Replace with `*ptr = arg;`
-                block.statements.push_back(MIRStatement::make_Assign({MIRLValue::newDeref(std::move(e.args.at(0).as_LValue())), std::move(e.args.at(1).as_LValue())}));
-                block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRRValue::make_Tuple({})}));
-                block.terminator = MIRTerminator::make_Goto(e.retBlock);
-            }
-        }
-
-        if (auto* ep = block.terminator.opt_TailCall()) {
-            auto& e = *ep;
-            if (auto* pathP = e.fcn.opt_Path()) {
-                auto& path = *pathP;
-                if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_TraitObject()) {
-                    const auto& pe = path.data.as_UfcsKnown();
-                    const auto& traitObject = pe.type->as_TraitObject();
-                    if (traitObject.trait.path == pe.trait || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *traitObject.trait.traitPtr, traitObject.trait.path.path, traitObject.trait.path.params, pe.type, [](const auto&, auto) {
-                        return true;
-                    })) {
-                        e.fcn = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
-                    }
-                }
-
-                else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_Function()) {
-                    const auto& pe = path.data.as_UfcsKnown();
-                    const auto& fcnTy = pe.type->as_Function();
-                    if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
-                        MIR_ASSERT(state, e.args.size() == 2, "Fn* tail call requires two arguments");
-                        auto fcnLvalue = mv$(e.args[0].as_LValue());
-                        auto argsLvalue = mv$(e.args[1].as_LValue());
-                        e.args.clear();
-                        e.args.reserve(fcnTy.argTypes.size());
-                        for (unsigned int i = 0; i < fcnTy.argTypes.size(); i++) {
-                            e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
-                        }
-                        e.fcn = pe.trait.path == resolve.langFnOnce() ? mv$(fcnLvalue) : MIRLValue::newDeref(mv$(fcnLvalue));
-                    }
-                }
-
-                else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_NamedFunction()) {
-                    const auto& pe = path.data.as_UfcsKnown();
-                    const auto& fcnTy = pe.type->as_NamedFunction();
-                    if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
-                        auto nArgs = fcnTy.decay(state.crate.types, state.sp).argTypes.size();
-                        MIR_ASSERT(state, e.args.size() == 2, "Named function tail call requires two arguments");
-                        auto argsLvalue = mv$(e.args[1].as_LValue());
-                        e.args.clear();
-                        e.args.reserve(nArgs);
-                        for (unsigned int i = 0; i < nArgs; i++) {
-                            e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
-                        }
-                        switch (fcnTy.def.tag()) {
-                            case HIRTypeDataNamedFunctionTy::TAG_Function: {
-                                auto& _ = fcnTy.def.as_Function();
-                                e.fcn = fcnTy.path.clone();
-                                break;
-                            }
-                            case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
-                                auto& _ = fcnTy.def.as_StructConstructor();
-                                MIR_BUG(state, "Struct constructor used as an explicit tail-call target");
-                                break;
-                            }
-                            case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
-                                auto& _ = fcnTy.def.as_EnumConstructor();
-                                MIR_BUG(state, "Enum constructor used as an explicit tail-call target");
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        mutator.flushBlock();
-    }
-}
-
-void MIRCleanupCrate(const WireBoard& wb, HIRCrate& crate) {
-    auto callback = makeCallable<MIRExprCb>([&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
-        if (exprPtr) {
-            MIRCleanup(res, p, exprPtr.getMirOrErrorMut(Span()), args, ty);
-        }
-    });
-    MIROuterVisitor ov{wb, crate, callback};
-    ov.visitCrate(crate);
-}
-
-namespace {
     bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn);
     bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, const TransList* list = nullptr);
     bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn);
@@ -1744,29 +1206,7 @@ namespace {
     bool MIROptimiseUselessReborrows(MIRTypeResolve& state, MIRFunction& fcn);
     bool MIROptimiseGarbageCollectPartial(MIRTypeResolve& state, MIRFunction& fcn);
     bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn);
-}
 
-void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
-    Span sp;
-    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
-        os << path;
-    });
-    MIRTypeResolve state{sp, resolve, pathCallback, retType, args, fcn};
-
-    while (MIROptimiseInlining(state, fcn, true)) {
-        MIRCleanup(resolve, path, fcn, args, retType);
-    }
-
-    MIROptimiseBlockSimplify(state, fcn);
-    MIROptimiseUnifyBlocks(state, fcn);
-
-    MIROptimiseGarbageCollect(state, fcn);
-    MIRSortBlocks(resolve, path, fcn);
-
-    return;
-}
-
-namespace {
     bool MIROptimiseInline(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType, const TransList& list, unsigned optLevel) {
         Span sp;
         bool rv = false;
@@ -1786,93 +1226,6 @@ namespace {
 
         return rv;
     }
-}
-
-void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType, unsigned optLevel, bool doInline /*=true*/, bool validate /*=true*/) {
-    Span sp;
-    assert(optLevel > 0);
-    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
-        os << path;
-    });
-    MIRTypeResolve state{sp, resolve, pathCallback, retType, args, fcn};
-
-    bool changeHappened;
-    unsigned int passNum = 0;
-    do {
-        MIR_ASSERT(state, passNum < 100, "Too many MIR optimisation iterations");
-
-        changeHappened = false;
-
-        if (MIROptimiseBlockSimplify(state, fcn)) {
-        }
-
-        if (MIROptimiseConstPropagate(state, fcn)) {
-            changeHappened = true;
-        }
-
-        if (MIROptimiseDeTemporary(state, fcn)) {
-            while (MIROptimiseDeTemporary(state, fcn)) {
-            }
-            changeHappened = true;
-        }
-
-        if (optLevel >= 2 && MIROptimiseSplitAggregates(state, fcn)) {
-            changeHappened = true;
-        }
-
-        if (optLevel >= 2 && MIROptimisePropagateKnownValues(state, fcn)) {
-            changeHappened = true;
-        }
-
-        // TODO: Convert `&mut *mut_foo` into `mut_foo` if the source is movable and not used afterwards
-
-        if (MIROptimisePropagateSingleAssignments(state, fcn)) {
-            while (MIROptimisePropagateSingleAssignments(state, fcn)) {
-            }
-            changeHappened = true;
-        }
-
-        if (MIROptimiseUnifyBlocks(state, fcn)) {
-            changeHappened = true;
-        }
-        if (MIROptimiseDeadDropFlags(state, fcn)) {
-            changeHappened = true;
-        }
-        if (optLevel >= 2 && MIROptimiseDeadAssignments(state, fcn)) {
-            changeHappened = true;
-        }
-        if (MIROptimiseNoopRemoval(state, fcn)) {
-            changeHappened = true;
-        }
-
-        if (MIROptimiseUselessReborrows(state, fcn)) {
-            changeHappened = true;
-        }
-
-        if (MIROptimiseGotoAssign(state, fcn)) {
-            changeHappened = true;
-        }
-
-        if (doInline && !changeHappened) {
-            if (MIROptimiseInlining(state, fcn, /*minimal=*/false)) {
-                MIRCleanup(resolve, path, fcn, args, retType);
-                changeHappened = true;
-            }
-        }
-
-        if (MIROptimiseGarbageCollectPartial(state, fcn)) {
-            changeHappened = true;
-        }
-
-        passNum += 1;
-    } while (changeHappened);
-
-    MIROptimiseGarbageCollect(state, fcn);
-
-    MIRSortBlocks(resolve, path, fcn);
-}
-
-namespace {
 
     bool optVisitMirLvaluesInner(const MIRLValue& lv, MIRValUsage u, LvalueVisitor& cb) {
         for (const auto& w : lv.wrappers) {
@@ -2346,9 +1699,7 @@ namespace {
         }
         throw std::runtime_error("Corrupted MIR::Param");
     }
-}
 
-namespace {
     bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
         bool changed = false;
 
@@ -7193,7 +6544,634 @@ namespace {
         // TODO: Detect if any optimisations happened, and return true in that case
         return false;
     }
+}
 
+void MIRCreateOperationsContext(WireBoard& wb, ObjPool& pool) {
+    wb.mirOperations = pool.make<MirOperationsContext>();
+}
+
+void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
+    Span sp;
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
+        os << path;
+    });
+    MIRTypeResolve state{sp, resolve, pathCallback, retType, args, fcn};
+
+    MirMutator mutator{fcn, 0, 0};
+    for (auto& block : fcn.blocks) {
+        for (auto it = block.statements.begin(); it != block.statements.end(); ++it) {
+            mutator.updateState(state);
+            auto& stmt = *it;
+
+            HIRTypeRef tmp;
+            if ((stmt.is_Assign() && (stmt.as_Assign().src.is_Borrow())) && state.getLvalueType(tmp, stmt.as_Assign().src.as_Borrow().val)->is_Diverge()) {
+            } else {
+                if (visitMirLvalues(stmt, [&](const auto& lv, auto /*vu*/) {
+                    return state.getLvalueType(tmp, lv)->is_Diverge();
+                })) {
+                    block.statements.erase(it, block.statements.end());
+                    block.terminator = MIRTerminator::make_Unreachable({});
+                    break;
+                }
+            }
+            switch (stmt.tag()) {
+                case MIRStatement::TAG_SetDropFlag: {
+                    break;
+                }
+                case MIRStatement::TAG_SaveDropFlag: {
+                    auto& se = stmt.as_SaveDropFlag();
+                    MIRCleanupLValue(state, mutator, se.slot);
+                    break;
+                }
+                case MIRStatement::TAG_LoadDropFlag: {
+                    auto& se = stmt.as_LoadDropFlag();
+                    MIRCleanupLValue(state, mutator, se.slot);
+                    break;
+                }
+                case MIRStatement::TAG_ScopeEnd: {
+                    break;
+                }
+                case MIRStatement::TAG_Asm: {
+                    auto& se = stmt.as_Asm();
+                    for (auto& v : se.inputs) {
+                        MIRCleanupLValue(state, mutator, v.second);
+                    }
+                    for (auto& v : se.outputs) {
+                        MIRCleanupLValue(state, mutator, v.second);
+                    }
+                    break;
+                }
+                case MIRStatement::TAG_Asm2: {
+                    auto& e = stmt.as_Asm2();
+                    for (auto& p : e.params) {
+                        switch (p.tag()) {
+                            case MIRAsmParam::TAG_Const: {
+                                MIRCleanupAsmConst(state, mutator, p);
+                                break;
+                            }
+                            case MIRAsmParam::TAG_Sym: {
+                                break;
+                            }
+                            case MIRAsmParam::TAG_Reg: {
+                                auto& v = p.as_Reg();
+                                if (v.input) {
+                                    MIRCleanupParam(state, mutator, *v.input);
+                                }
+                                if (v.output) {
+                                    MIRCleanupLValue(state, mutator, *v.output);
+                                }
+                                break;
+                            }
+                            case MIRAsmParam::TAG_Label: {
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                }
+                case MIRStatement::TAG_Assign: {
+                    auto& se = stmt.as_Assign();
+                    MIRCleanupLValue(state, mutator, se.dst);
+                    switch (se.src.tag()) {
+                        case MIRRValue::TAG_Use: {
+                            auto& re = se.src.as_Use();
+                            MIRCleanupLValue(state, mutator, re);
+                            break;
+                        }
+                        case MIRRValue::TAG_Constant: {
+                            auto& re = se.src.as_Constant();
+                            MIRCleanupConstant(state, mutator, re);
+                            break;
+                        }
+                        case MIRRValue::TAG_SizedArray: {
+                            auto& re = se.src.as_SizedArray();
+                            MIRCleanupParam(state, mutator, re.val);
+                            break;
+                        }
+                        case MIRRValue::TAG_Borrow: {
+                            auto& re = se.src.as_Borrow();
+                            MIRCleanupLValue(state, mutator, re.val);
+                            break;
+                        }
+                        case MIRRValue::TAG_Cast: {
+                            auto& re = se.src.as_Cast();
+                            MIRCleanupLValue(state, mutator, re.val);
+                            break;
+                        }
+                        case MIRRValue::TAG_BinOp: {
+                            auto& re = se.src.as_BinOp();
+                            MIRCleanupParam(state, mutator, re.valL);
+                            MIRCleanupParam(state, mutator, re.valR);
+                            break;
+                        }
+                        case MIRRValue::TAG_UniOp: {
+                            auto& re = se.src.as_UniOp();
+                            MIRCleanupLValue(state, mutator, re.val);
+                            break;
+                        }
+                        case MIRRValue::TAG_DstMeta: {
+                            auto& re = se.src.as_DstMeta();
+                            HIRTypeRef tmp;
+                            const auto& ty = state.getLvalueType(tmp, re.val);
+
+                            if (const auto* array = ty->opt_Array()) {
+                                MIRCleanupLValue(state, mutator, re.val);
+                                if (array->size.is_Known()) {
+                                    se.src = MIRConstant::make_Uint({U128(array->size.as_Known()), HIRCoreType::Usize});
+                                } else if (const auto* value = array->size.as_Unevaluated().opt_Evaluated()) {
+                                    se.src = MIRConstant::make_Uint({U128((*value)->readUsize(0)), HIRCoreType::Usize});
+                                }
+                                break;
+                            }
+
+                            if (!state.resolve.typeIsSized(state.sp, ty)) {
+                                MIRCleanupLValue(state, mutator, re.val);
+                                break;
+                            }
+
+                            re.val.wrappers.push_back(MIRLValue::Wrapper::newDeref());
+                            MIRCleanupLValue(state, mutator, re.val);
+                            re.val.wrappers.pop_back();
+
+                            HIRTypeRef cleanedTmp;
+                            const auto* cleanedTy = state.getLvalueType(cleanedTmp, re.val);
+                            const HIRTypeData* ityP;
+                            if (const auto* te = cleanedTy->opt_Borrow()) {
+                                ityP = te->inner;
+                            } else if (const auto* te = cleanedTy->opt_Pointer()) {
+                                ityP = te->inner;
+                            } else if (cleanedTy->is_TraitObject()) {
+                                ityP = cleanedTy;
+                                MIR_ASSERT(state, !re.val.wrappers.empty() && re.val.wrappers.back().is_Deref(), "DstMeta on bare trait object with no deref: " << re.val);
+                                re.val.wrappers.pop_back();
+                            } else {
+                                BUG(Span(), "Unexpected input type for DstMeta - " << cleanedTy);
+                            }
+                            break;
+                        }
+                        case MIRRValue::TAG_DstPtr: {
+                            auto& re = se.src.as_DstPtr();
+                            HIRTypeRef tmp;
+                            const auto& ty = state.getLvalueType(tmp, re.val);
+                            if (!state.resolve.typeIsSized(state.sp, ty)) {
+                                MIRCleanupLValue(state, mutator, re.val);
+                                break;
+                            }
+
+                            re.val.wrappers.push_back(MIRLValue::Wrapper::newDeref());
+                            MIRCleanupLValue(state, mutator, re.val);
+                            re.val.wrappers.pop_back();
+
+                            HIRTypeRef cleanedTmp;
+                            const auto* cleanedTy = state.getLvalueType(cleanedTmp, re.val);
+                            const HIRTypeData* ityP;
+                            if (const auto* te = cleanedTy->opt_Borrow()) {
+                                ityP = te->inner;
+                            } else if (const auto* te = cleanedTy->opt_Pointer()) {
+                                ityP = te->inner;
+                            } else if (cleanedTy->is_TraitObject()) {
+                                ityP = cleanedTy;
+                                MIR_ASSERT(state, !re.val.wrappers.empty() && re.val.wrappers.back().is_Deref(), "DstPtr on bare trait object with no deref: " << re.val);
+                                re.val.wrappers.pop_back();
+                            } else {
+                                BUG(Span(), "Unexpected input type for DstMeta - " << cleanedTy);
+                            }
+                            (void)ityP; // TODO: What is this needed for?
+                            break;
+                        }
+                        case MIRRValue::TAG_MakeDst: {
+                            auto& re = se.src.as_MakeDst();
+                            MIRCleanupParam(state, mutator, re.ptrVal);
+                            MIRCleanupParam(state, mutator, re.metaVal);
+                            break;
+                        }
+                        case MIRRValue::TAG_Tuple: {
+                            auto& re = se.src.as_Tuple();
+                            for (auto& lv : re.vals) {
+                                MIRCleanupParam(state, mutator, lv);
+                            }
+                            break;
+                        }
+                        case MIRRValue::TAG_Array: {
+                            auto& re = se.src.as_Array();
+                            for (auto& lv : re.vals) {
+                                MIRCleanupParam(state, mutator, lv);
+                            }
+                            break;
+                        }
+                        case MIRRValue::TAG_UnionVariant: {
+                            auto& re = se.src.as_UnionVariant();
+                            MIRCleanupParam(state, mutator, re.val);
+                            break;
+                        }
+                        case MIRRValue::TAG_EnumVariant: {
+                            auto& re = se.src.as_EnumVariant();
+                            for (auto& lv : re.vals) {
+                                MIRCleanupParam(state, mutator, lv);
+                            }
+                            break;
+                        }
+                        case MIRRValue::TAG_Struct: {
+                            auto& re = se.src.as_Struct();
+                            for (auto& lv : re.vals) {
+                                MIRCleanupParam(state, mutator, lv);
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+
+            if (stmt.is_Assign()) {
+                auto& se = stmt.as_Assign();
+
+                if (auto* e = se.src.opt_Constant()) {
+                    if (auto* ce = e->opt_Const()) {
+                        MonomorphState params(state.crate.types);
+                        HIRTypeRef ty;
+                        const auto* litPtr = MIRCleanupGetConstant(state, *ce->p, ty, params);
+                        if (litPtr) {
+                            se.src = MIRCleanupLiteralToRValue(state, mutator, *litPtr, mv$(ty), params, mv$(*ce->p));
+                            if (auto* p = se.src.opt_Constant()) {
+                                MIRCleanupConstant(state, mutator, *p);
+                            }
+                        } else {
+                        }
+                    }
+                }
+
+                if (auto* e = se.src.opt_MakeDst()) {
+                    if ((e->metaVal.is_Constant() && e->metaVal.as_Constant().is_ItemAddr() && e->metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
+                        HIRTypeRef tmp, tmp2;
+                        const auto& srcTy = state.getParamType(tmp, e->ptrVal);
+                        const auto& dstTy = state.getLvalueType(tmp2, se.dst);
+                        MIR_ASSERT(state, e->ptrVal.is_LValue(), "BUG: MakeDst with no metadata should be LValue");
+                        se.src = MIRCleanupCoerceUnsized(state, mutator, dstTy, srcTy, mv$(e->ptrVal.as_LValue()));
+                    }
+                }
+
+                if (auto* e = se.src.opt_MakeDst()) {
+                    if ((e->metaVal.is_Constant() && e->metaVal.as_Constant().is_ItemAddr() && e->metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
+                        // TODO: Check the validity?
+
+                        HIRTypeRef tmp;
+                        const auto& srcTy = state.getParamType(tmp, e->ptrVal);
+                        MIR_ASSERT(state, monomorphiseTypeNeeded(srcTy), "MakeDst Unsize with known source - " << srcTy);
+                    }
+                }
+            }
+
+            it = mutator.flushStmt();
+        }
+
+        mutator.updateState(state);
+
+        switch (block.terminator.tag()) {
+            case MIRTerminator::TAG_Incomplete: {
+                break;
+            }
+            case MIRTerminator::TAG_Return: {
+                break;
+            }
+            case MIRTerminator::TAG_UnwindResume: {
+                break;
+            }
+            case MIRTerminator::TAG_UnwindTerminate: {
+                break;
+            }
+            case MIRTerminator::TAG_Unreachable: {
+                break;
+            }
+            case MIRTerminator::TAG_Goto: {
+                break;
+            }
+            case MIRTerminator::TAG_If: {
+                auto& e = block.terminator.as_If();
+                MIRCleanupLValue(state, mutator, e.cond);
+                break;
+            }
+            case MIRTerminator::TAG_Switch: {
+                auto& e = block.terminator.as_Switch();
+                MIRCleanupLValue(state, mutator, e.val);
+                break;
+            }
+            case MIRTerminator::TAG_SwitchValue: {
+                auto& e = block.terminator.as_SwitchValue();
+                MIRCleanupLValue(state, mutator, e.val);
+                break;
+            }
+            case MIRTerminator::TAG_Drop: {
+                auto& e = block.terminator.as_Drop();
+                MIRCleanupLValue(state, mutator, e.slot);
+                break;
+            }
+            case MIRTerminator::TAG_Call: {
+                auto& e = block.terminator.as_Call();
+                MIRCleanupLValue(state, mutator, e.retVal);
+                if (e.fcn.is_Value()) {
+                    MIRCleanupLValue(state, mutator, e.fcn.as_Value());
+                }
+                for (auto& lv : e.args) {
+                    MIRCleanupParam(state, mutator, lv);
+                }
+                break;
+            }
+            case MIRTerminator::TAG_TailCall: {
+                auto& e = block.terminator.as_TailCall();
+                if (e.fcn.is_Value()) {
+                    MIRCleanupLValue(state, mutator, e.fcn.as_Value());
+                }
+                for (auto& param : e.args) {
+                    MIRCleanupParam(state, mutator, param);
+                }
+                break;
+            }
+            case MIRTerminator::TAG_Asm2: {
+                auto& e = block.terminator.as_Asm2();
+                for (auto& p : e.params) {
+                    if (auto* reg = p.opt_Reg()) {
+                        if (reg->input) {
+                            MIRCleanupParam(state, mutator, *reg->input);
+                        }
+                        if (reg->output) {
+                            MIRCleanupLValue(state, mutator, *reg->output);
+                        }
+                    } else if (p.is_Const()) {
+                        MIRCleanupAsmConst(state, mutator, p);
+                    }
+                }
+                break;
+            }
+        }
+
+        if (auto* ep = block.terminator.opt_Call()) {
+            auto& e = *ep;
+            if (auto* pathP = e.fcn.opt_Path()) {
+                auto& path = *pathP;
+                if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_TraitObject()) {
+                    const auto& pe = path.data.as_UfcsKnown();
+                    const auto& te = pe.type->as_TraitObject();
+                    // TODO: What if the method is from a supertrait?
+
+                    if (!te.trait.traitPtr || e.args.empty()) {
+                    } else if (te.trait.path == pe.trait || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *te.trait.traitPtr, te.trait.path.path, te.trait.path.params, pe.type, [](const auto&, auto) {
+                        return true;
+                    })) {
+                        auto tgtLvalue = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
+                        e.fcn = mv$(tgtLvalue);
+                    }
+                }
+
+                else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_Function()) {
+                    const auto& pe = path.data.as_UfcsKnown();
+                    const auto& fcnTy = pe.type->as_Function();
+                    if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
+                        MIR_ASSERT(state, e.args.size() == 2, "Fn* call requires two arguments");
+                        auto fcnLvalue = mv$(e.args[0].as_LValue());
+                        auto argsLvalue = mv$(e.args[1].as_LValue());
+
+                        e.args.clear();
+                        e.args.reserve(fcnTy.argTypes.size());
+                        for (unsigned int i = 0; i < fcnTy.argTypes.size(); i++) {
+                            e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
+                        }
+                        if (pe.trait.path == resolve.langFnOnce()) {
+                            e.fcn = mv$(fcnLvalue);
+                        } else {
+                            e.fcn = MIRLValue::newDeref(mv$(fcnLvalue));
+                        }
+                    }
+                } else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_NamedFunction()) {
+                    const auto& pe = path.data.as_UfcsKnown();
+                    const auto& fcnTy = pe.type->as_NamedFunction();
+                    if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
+                        auto nArgs = fcnTy.decay(state.crate.types, state.sp).argTypes.size();
+                        MIR_ASSERT(state, e.args.size() == 2, "Fn* call requires two arguments");
+                        auto fcnLvalue = mv$(e.args[0].as_LValue());
+                        auto argsLvalue = mv$(e.args[1].as_LValue());
+
+                        e.args.clear();
+                        e.args.reserve(nArgs);
+                        for (unsigned int i = 0; i < nArgs; i++) {
+                            e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
+                        }
+                        switch (fcnTy.def.tag()) {
+                            case HIRTypeDataNamedFunctionTy::TAG_Function: {
+                                e.fcn = fcnTy.path.clone();
+                                break;
+                            }
+                            case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
+                                block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRRValue::make_Struct({fcnTy.path.data.as_Generic().clone(), std::move(e.args)})}));
+                                block.terminator = MIRTerminator::make_Goto(e.retBlock);
+                                break;
+                            }
+                            case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
+                                auto& ve = fcnTy.def.as_EnumConstructor();
+                                auto enmPath = fcnTy.path.data.as_Generic().clone();
+                                enmPath.path.popComponent();
+                                block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRRValue::make_EnumVariant({std::move(enmPath), static_cast<unsigned>(ve.v), std::move(e.args)})}));
+                                block.terminator = MIRTerminator::make_Goto(e.retBlock);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (e.fcn.is_Intrinsic() && e.fcn.as_Intrinsic().name == "read_via_copy") {
+                // TODO: Replace with `res = *ptr;`
+                block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRLValue::newDeref(std::move(e.args.at(0).as_LValue()))}));
+                block.terminator = MIRTerminator::make_Goto(e.retBlock);
+            }
+            if (e.fcn.is_Intrinsic() && e.fcn.as_Intrinsic().name == "write_via_move") {
+                // TODO: Replace with `*ptr = arg;`
+                block.statements.push_back(MIRStatement::make_Assign({MIRLValue::newDeref(std::move(e.args.at(0).as_LValue())), std::move(e.args.at(1).as_LValue())}));
+                block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRRValue::make_Tuple({})}));
+                block.terminator = MIRTerminator::make_Goto(e.retBlock);
+            }
+        }
+
+        if (auto* ep = block.terminator.opt_TailCall()) {
+            auto& e = *ep;
+            if (auto* pathP = e.fcn.opt_Path()) {
+                auto& path = *pathP;
+                if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_TraitObject()) {
+                    const auto& pe = path.data.as_UfcsKnown();
+                    const auto& traitObject = pe.type->as_TraitObject();
+                    if (traitObject.trait.path == pe.trait || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *traitObject.trait.traitPtr, traitObject.trait.path.path, traitObject.trait.path.params, pe.type, [](const auto&, auto) {
+                        return true;
+                    })) {
+                        e.fcn = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
+                    }
+                }
+
+                else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_Function()) {
+                    const auto& pe = path.data.as_UfcsKnown();
+                    const auto& fcnTy = pe.type->as_Function();
+                    if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
+                        MIR_ASSERT(state, e.args.size() == 2, "Fn* tail call requires two arguments");
+                        auto fcnLvalue = mv$(e.args[0].as_LValue());
+                        auto argsLvalue = mv$(e.args[1].as_LValue());
+                        e.args.clear();
+                        e.args.reserve(fcnTy.argTypes.size());
+                        for (unsigned int i = 0; i < fcnTy.argTypes.size(); i++) {
+                            e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
+                        }
+                        e.fcn = pe.trait.path == resolve.langFnOnce() ? mv$(fcnLvalue) : MIRLValue::newDeref(mv$(fcnLvalue));
+                    }
+                }
+
+                else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_NamedFunction()) {
+                    const auto& pe = path.data.as_UfcsKnown();
+                    const auto& fcnTy = pe.type->as_NamedFunction();
+                    if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
+                        auto nArgs = fcnTy.decay(state.crate.types, state.sp).argTypes.size();
+                        MIR_ASSERT(state, e.args.size() == 2, "Named function tail call requires two arguments");
+                        auto argsLvalue = mv$(e.args[1].as_LValue());
+                        e.args.clear();
+                        e.args.reserve(nArgs);
+                        for (unsigned int i = 0; i < nArgs; i++) {
+                            e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
+                        }
+                        switch (fcnTy.def.tag()) {
+                            case HIRTypeDataNamedFunctionTy::TAG_Function: {
+                                auto& _ = fcnTy.def.as_Function();
+                                e.fcn = fcnTy.path.clone();
+                                break;
+                            }
+                            case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
+                                auto& _ = fcnTy.def.as_StructConstructor();
+                                MIR_BUG(state, "Struct constructor used as an explicit tail-call target");
+                                break;
+                            }
+                            case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
+                                auto& _ = fcnTy.def.as_EnumConstructor();
+                                MIR_BUG(state, "Enum constructor used as an explicit tail-call target");
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        mutator.flushBlock();
+    }
+}
+
+void MIRCleanupCrate(const WireBoard& wb, HIRCrate& crate) {
+    auto callback = makeCallable<MIRExprCb>([&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
+        if (exprPtr) {
+            MIRCleanup(res, p, exprPtr.getMirOrErrorMut(Span()), args, ty);
+        }
+    });
+    MIROuterVisitor ov{wb, crate, callback};
+    ov.visitCrate(crate);
+}
+
+void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
+    Span sp;
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
+        os << path;
+    });
+    MIRTypeResolve state{sp, resolve, pathCallback, retType, args, fcn};
+
+    while (MIROptimiseInlining(state, fcn, true)) {
+        MIRCleanup(resolve, path, fcn, args, retType);
+    }
+
+    MIROptimiseBlockSimplify(state, fcn);
+    MIROptimiseUnifyBlocks(state, fcn);
+
+    MIROptimiseGarbageCollect(state, fcn);
+    MIRSortBlocks(resolve, path, fcn);
+
+    return;
+}
+
+void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType, unsigned optLevel, bool doInline /*=true*/, bool validate /*=true*/) {
+    Span sp;
+    assert(optLevel > 0);
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
+        os << path;
+    });
+    MIRTypeResolve state{sp, resolve, pathCallback, retType, args, fcn};
+
+    bool changeHappened;
+    unsigned int passNum = 0;
+    do {
+        MIR_ASSERT(state, passNum < 100, "Too many MIR optimisation iterations");
+
+        changeHappened = false;
+
+        if (MIROptimiseBlockSimplify(state, fcn)) {
+        }
+
+        if (MIROptimiseConstPropagate(state, fcn)) {
+            changeHappened = true;
+        }
+
+        if (MIROptimiseDeTemporary(state, fcn)) {
+            while (MIROptimiseDeTemporary(state, fcn)) {
+            }
+            changeHappened = true;
+        }
+
+        if (optLevel >= 2 && MIROptimiseSplitAggregates(state, fcn)) {
+            changeHappened = true;
+        }
+
+        if (optLevel >= 2 && MIROptimisePropagateKnownValues(state, fcn)) {
+            changeHappened = true;
+        }
+
+        // TODO: Convert `&mut *mut_foo` into `mut_foo` if the source is movable and not used afterwards
+
+        if (MIROptimisePropagateSingleAssignments(state, fcn)) {
+            while (MIROptimisePropagateSingleAssignments(state, fcn)) {
+            }
+            changeHappened = true;
+        }
+
+        if (MIROptimiseUnifyBlocks(state, fcn)) {
+            changeHappened = true;
+        }
+        if (MIROptimiseDeadDropFlags(state, fcn)) {
+            changeHappened = true;
+        }
+        if (optLevel >= 2 && MIROptimiseDeadAssignments(state, fcn)) {
+            changeHappened = true;
+        }
+        if (MIROptimiseNoopRemoval(state, fcn)) {
+            changeHappened = true;
+        }
+
+        if (MIROptimiseUselessReborrows(state, fcn)) {
+            changeHappened = true;
+        }
+
+        if (MIROptimiseGotoAssign(state, fcn)) {
+            changeHappened = true;
+        }
+
+        if (doInline && !changeHappened) {
+            if (MIROptimiseInlining(state, fcn, /*minimal=*/false)) {
+                MIRCleanup(resolve, path, fcn, args, retType);
+                changeHappened = true;
+            }
+        }
+
+        if (MIROptimiseGarbageCollectPartial(state, fcn)) {
+            changeHappened = true;
+        }
+
+        passNum += 1;
+    } while (changeHappened);
+
+    MIROptimiseGarbageCollect(state, fcn);
+
+    MIRSortBlocks(resolve, path, fcn);
 }
 
 void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn) {

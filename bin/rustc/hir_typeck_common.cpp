@@ -64,9 +64,7 @@ namespace {
 
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
     };
-}
 
-namespace {
     struct TyVisitorGenericGroup final: TyVisitor<WConst> {
         HIRGenericGroup group;
 
