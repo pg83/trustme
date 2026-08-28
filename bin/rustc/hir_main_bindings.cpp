@@ -2651,6 +2651,7 @@ public:
     };
 
     void serialise(const HIRGenericRef& ge) {
+        ASSERT_BUG(Span(), !ge.isSolverExistential(), "solver existential escaped into serialised HIR: " << ge);
         out.writeString(ge.name);
         out.writeU16(ge.binding);
     }

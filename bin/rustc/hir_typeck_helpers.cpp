@@ -234,11 +234,15 @@ namespace {
         }
 
         HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
-            return generic.isPlaceholder() ? types.generic(canonicalPlaceholderName(generic.name), generic.binding) : types.generic(generic.name, generic.binding);
+            return generic.isPlaceholder() && !generic.isSolverExistential()
+                ? types.generic(canonicalPlaceholderName(generic.name), generic.binding)
+                : types.generic(generic);
         }
 
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
-            return HIRConstGeneric(generic.isPlaceholder() ? HIRGenericRef(canonicalPlaceholderName(generic.name), generic.binding) : generic);
+            return HIRConstGeneric(generic.isPlaceholder() && !generic.isSolverExistential()
+                ? HIRGenericRef(canonicalPlaceholderName(generic.name), generic.binding)
+                : generic);
         }
 
         HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override {
@@ -377,12 +381,16 @@ namespace {
         }
 
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
-            return HIRConstGeneric(generic.isPlaceholder() ? HIRGenericRef(instantiatePlaceholderName(generic.name), generic.binding) : generic);
+            return HIRConstGeneric(generic.isPlaceholder() && !generic.isSolverExistential()
+                ? HIRGenericRef(instantiatePlaceholderName(generic.name), generic.binding)
+                : generic);
         }
     };
 
     HIRTypeRef InstantiateCanonicalTraitResponse::getType(const Span&, const HIRGenericRef& generic) const {
-        return types.generic(generic.isPlaceholder() ? instantiatePlaceholderName(generic.name) : generic.name, generic.binding);
+        return generic.isPlaceholder() && !generic.isSolverExistential()
+            ? types.generic(instantiatePlaceholderName(generic.name), generic.binding)
+            : types.generic(generic);
     }
 
     // Canonical query variables created while evaluating a goal are
@@ -398,6 +406,9 @@ namespace {
         mutable ::std::vector<::std::pair<HIRGenericRef, HIRConstGeneric>> values;
 
         bool isGoalPlaceholder(const HIRGenericRef& generic) const {
+            if (generic.isSolverExistential()) {
+                return false;
+            }
             if (goalCanonicalizer) {
                 for (const auto& entry : goalCanonicalizer->placeholderNames()) {
                     if (entry.first == generic.name && goalCanonicalizer->originalPlaceholderName(entry.second)) {
@@ -455,7 +466,7 @@ namespace {
         // placeholders by their canonical spelling: translate those back to
         // the caller's names before deciding what is existential.
         HIRGenericRef callerGeneric(const HIRGenericRef& generic) const {
-            if (generic.isPlaceholder() && goalCanonicalizer) {
+            if (generic.isPlaceholder() && !generic.isSolverExistential() && goalCanonicalizer) {
                 if (const auto* original = goalCanonicalizer->originalResponsePlaceholderName(generic.name)) {
                     return HIRGenericRef(*original, generic.binding);
                 }
@@ -466,7 +477,7 @@ namespace {
         HIRTypeRef getType(const Span&, const HIRGenericRef& raw) const override {
             const auto generic = callerGeneric(raw);
             if (!generic.isPlaceholder() || isGoalPlaceholder(generic)) {
-                return Monomorphiser::types.generic(generic.name, generic.binding);
+                return Monomorphiser::types.generic(generic);
             }
             for (const auto& entry : typeValues) {
                 if (entry.first == generic) {
@@ -729,12 +740,12 @@ namespace {
         }
 
         HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
-            if (generic.isPlaceholder()) {
+            if (generic.isPlaceholder() && !generic.isSolverExistential()) {
                 if (const auto* original = canonicalizer_.originalPlaceholderName(generic.name)) {
                     return types.generic(*original, generic.binding);
                 }
             }
-            return types.generic(generic.name, generic.binding);
+            return types.generic(generic);
         }
 
         HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override {
@@ -747,7 +758,7 @@ namespace {
         }
 
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
-            if (generic.isPlaceholder()) {
+            if (generic.isPlaceholder() && !generic.isSolverExistential()) {
                 if (const auto* original = canonicalizer_.originalPlaceholderName(generic.name)) {
                     return HIRConstGeneric(HIRGenericRef(*original, generic.binding));
                 }
@@ -3896,6 +3907,15 @@ default:
             // warm across evaluations until either changes.
             mutable u64 ivarGenerationSeen_ = ~0ull;
             mutable u64 solverEnvGenerationSeen_ = ~0ull;
+            struct ImplExistentials {
+                const HIRGenericParams* definition;
+                HIRPathParams params;
+            };
+            // The definition pointer is only an in-memory lookup key. The HIR
+            // representation contains an invocation-scoped numeric binder,
+            // never a formatted address. Reusing one set per immutable impl
+            // preserves recursive-goal identity for cycle detection.
+            stl::IntMap<ThinVector<ImplExistentials>> implExistentials_;
 
             // Frames and candidates have stable pool-backed addresses.  Vectors
             // are pointer indexes only, so recursive growth never moves an ImplRef
@@ -3925,6 +3945,41 @@ default:
             const Span& span() const {
                 ASSERT_BUG(Span(), span_, "next-solver session used outside an evaluation");
                 return *span_;
+            }
+
+            const HIRPathParams& implExistentials(const HIRGenericParams& definition) {
+                const auto key = stl::splitMix64(reinterpret_cast<uintptr_t>(&definition));
+                auto* bucket = implExistentials_.find(key);
+                if (bucket) {
+                    for (const auto& entry : *bucket) {
+                        if (entry.definition == &definition) {
+                            return entry.params;
+                        }
+                    }
+                } else {
+                    bucket = implExistentials_.insert(key);
+                }
+
+                // One invocation-wide binder identity per immutable impl.
+                // The ordinary placeholder binding still carries each
+                // parameter's kind/index, so legacy group()/idx() invariants
+                // remain intact while equality no longer depends on a name.
+                const auto scope = ++resolve_.board().id;
+                ASSERT_BUG(span(), scope != 0, "solver existential scope exhausted");
+
+                HIRPathParams params;
+                params.types.reserve(definition.types.size());
+                for (size_t i = 0; i < definition.types.size(); i++) {
+                    ASSERT_BUG(span(), i < 256, "Too many candidate type parameters");
+                    params.types.push_back(crate.types.generic(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i))));
+                }
+                params.values.reserve(definition.values.size());
+                for (size_t i = 0; i < definition.values.size(); i++) {
+                    ASSERT_BUG(span(), i < 256, "Too many candidate value parameters");
+                    params.values.push_back(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i)));
+                }
+                bucket->push_back(ImplExistentials{&definition, mv$(params)});
+                return bucket->back().params;
             }
 
             // ---- Crate-lifetime concrete-goal cache ----
@@ -5627,19 +5682,21 @@ default:
 
                 // Candidate storage outlives this inference snapshot.  Resolve
                 // every bound existential now and represent the still-free
-                // ones with the solver's stable candidate placeholders; no
-                // inference-table index is allowed to escape the rollback.
+                // ones with solver-owned tagged variables; no string identity
+                // and no inference-table index is allowed to escape rollback.
+                const auto& stableExistentials = implExistentials(implParamsDef);
+
                 class MaterializeCandidate final: public MonomorphiserNop {
                     const HMTypeInferrence& table;
                     const HIRPathParams& inferenceParams;
-                    const RcString placeholderName;
+                    const HIRPathParams& stableExistentials;
 
                 public:
-                    MaterializeCandidate(HIRTypeInterner& types, const HMTypeInferrence& table, const HIRPathParams& inferenceParams, const HIRGenericParams& implParamsDef)
+                    MaterializeCandidate(HIRTypeInterner& types, const HMTypeInferrence& table, const HIRPathParams& inferenceParams, const HIRPathParams& stableExistentials)
                         : MonomorphiserNop(types)
                         , table(table)
                         , inferenceParams(inferenceParams)
-                        , placeholderName(RcString::newInterned(FMT("impl_?_" << &implParamsDef)))
+                        , stableExistentials(stableExistentials)
                     {
                     }
 
@@ -5652,8 +5709,7 @@ default:
                                 }
                                 const auto* resolved = table.getType(type);
                                 if (resolved == type) {
-                                    ASSERT_BUG(sp, i < 256, "Too many candidate type parameters");
-                                    return types.generic(placeholderName, GENERICPlaceholder * 256 + static_cast<unsigned>(i));
+                                    return stableExistentials.types[i];
                                 }
                                 return this->monomorphType(sp, resolved, allowInfer);
                             }
@@ -5671,8 +5727,7 @@ default:
                                 }
                                 const auto& resolved = table.getValue(value);
                                 if (resolved == value) {
-                                    ASSERT_BUG(sp, i < 256, "Too many candidate value parameters");
-                                    return HIRGenericRef(placeholderName, GENERICPlaceholder * 256 + static_cast<unsigned>(i));
+                                    return stableExistentials.values[i].clone();
                                 }
                                 return this->monomorphConstgeneric(sp, resolved, allowInfer);
                             }
@@ -5681,7 +5736,7 @@ default:
                     }
                 };
 
-                MaterializeCandidate materialize(crate.types, resolve_.ivars, inferenceParams, implParamsDef);
+                MaterializeCandidate materialize(crate.types, resolve_.ivars, inferenceParams, stableExistentials);
                 outputParams = materialize.monomorphPathParams(span(), inferenceParams, true);
                 headNormalizationAmbiguity = !unifier.pendingValues().empty();
                 for (const auto& equality : unifier.pending()) {
@@ -7354,6 +7409,7 @@ default:
             NextTraitGoalEvaluator(const TraitResolution& resolve, const HIRCrate& crate)
                 : resolve_(resolve)
                 , crate(crate)
+                , implExistentials_(crate.pool)
                 , overlapCache(crate.pool)
                 , candidateNodes(crate.pool)
                 , activeGoalNodes(crate.pool)

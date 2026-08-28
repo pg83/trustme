@@ -20,10 +20,17 @@ struct HIRGenericRef {
     RcString name;
     // 0xFFFF = Self, 0-255 = Type/Trait, 256-511 = Method, 512-767 = Placeholder
     u32 binding;
+    // Ordinary HIR generics and legacy named placeholders have scope zero.
+    // Solver candidate existentials use an invocation-unique non-zero scope,
+    // keeping their binder identity as typed data instead of an RcString.
+    // They are transient and must be instantiated before HIR serialisation.
+    u32 solverScope = 0;
 
     HIRGenericRef(RcString name, u32 binding);
 
     HIRGenericRef(RcString name, HIRGenericGroup group, u16 idx);
+
+    static HIRGenericRef newSolverExistential(u32 scope, u16 idx);
 
     static HIRGenericRef newSelf() {
         return HIRGenericRef(RcString::newInterned("Self"), GENERICSelf);
@@ -41,8 +48,12 @@ struct HIRGenericRef {
         return binding >> 8;
     }
 
+    bool isSolverExistential() const {
+        return solverScope != 0;
+    }
+
     bool isPlaceholder() const {
-        return (binding >> 8) == GENERICPlaceholder;
+        return group() == GENERICPlaceholder;
     }
 
     Ordering ord(const HIRGenericRef& x) const;

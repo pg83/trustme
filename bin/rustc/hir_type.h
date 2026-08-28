@@ -222,6 +222,7 @@ public:
     HIRTypeRef infer(unsigned int idx = ~0u, HIRInferClass tyClass = HIRInferClass::None);
     unsigned newAliasInputInfer();
     HIRTypeRef primitive(HIRCoreType ct);
+    HIRTypeRef generic(HIRGenericRef generic);
     HIRTypeRef generic(RcString name, unsigned int slot);
     HIRTypeRef self();
     HIRTypeRef unit();

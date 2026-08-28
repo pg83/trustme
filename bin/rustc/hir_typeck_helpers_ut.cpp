@@ -285,6 +285,29 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(unifier.pending().length() == 0);
     }
 
+    STD_TEST(testSolverExistentialHasTypedBinderIdentity) {
+        auto pool = stl::ObjPool::fromMemory();
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
+
+        const auto first = HIRGenericRef::newSolverExistential(41, 3);
+        const auto same = HIRGenericRef::newSolverExistential(41, 3);
+        const auto otherBinder = HIRGenericRef::newSolverExistential(42, 3);
+        const auto otherIndex = HIRGenericRef::newSolverExistential(41, 4);
+        const auto named = HIRGenericRef(RcString::newInterned("legacy"), GENERICPlaceholder, 3);
+
+        STD_INSIST(first.isPlaceholder());
+        STD_INSIST(first.isSolverExistential());
+        STD_INSIST(first.group() == GENERICPlaceholder);
+        STD_INSIST(first.idx() == 3);
+        STD_INSIST(first == same);
+        STD_INSIST(first != otherBinder);
+        STD_INSIST(first != otherIndex);
+        STD_INSIST(first != named);
+        STD_INSIST(types.generic(first) == types.generic(same));
+        STD_INSIST(types.generic(first) != types.generic(otherBinder));
+    }
+
     STD_TEST(testCanonicalLiteralSlotRejectsStructuralType) {
         auto pool = stl::ObjPool::fromMemory();
         u32 id = 0;

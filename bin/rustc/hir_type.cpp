@@ -172,7 +172,9 @@ void HIRTypePattern::fmt(::std::ostream& os) const {
 
 void HIRGenericRef::fmt(std::ostream& os) const {
     os << this->name << "/*";
-    if (this->binding == GENERICSelf) {
+    if (this->isSolverExistential()) {
+        os << "E:" << this->solverScope << ":" << this->idx();
+    } else if (this->binding == GENERICSelf) {
         os << "";
     } else {
         switch (this->group()) {
@@ -1229,7 +1231,11 @@ namespace {
     size_t hashGenericRef(const HIRGenericRef& generic) {
         size_t h = generic.binding;
         if (generic.group() == GENERICPlaceholder) {
-            h = hashMix(h, ::std::hash<RcString>()(generic.name));
+            if (generic.isSolverExistential()) {
+                h = hashMix(h, generic.solverScope);
+            } else {
+                h = hashMix(h, ::std::hash<RcString>()(generic.name));
+            }
         }
         return h;
     }
@@ -1552,8 +1558,12 @@ HIRTypeRef HIRTypeInterner::primitive(HIRCoreType ct) {
     return intern(HIRTypeData::make_Primitive(ct));
 }
 
+HIRTypeRef HIRTypeInterner::generic(HIRGenericRef generic) {
+    return intern(HIRTypeData::make_Generic(mv$(generic)));
+}
+
 HIRTypeRef HIRTypeInterner::generic(RcString name, unsigned int slot) {
-    return intern(HIRTypeData::make_Generic({mv$(name), slot}));
+    return generic(HIRGenericRef(mv$(name), slot));
 }
 
 HIRTypeRef HIRTypeInterner::self() {

@@ -99,7 +99,7 @@ void MonomorphState::setImplParams(HIRPathParams pp) {
 }
 
 HIRTypeRef MonomorphiserNop::getType(const Span& sp, const HIRGenericRef& ty) const {
-    return types.generic(ty.name, ty.binding);
+    return types.generic(ty);
 }
 
 HIRConstGeneric MonomorphiserNop::getValue(const Span& sp, const HIRGenericRef& val) const {
