@@ -343,6 +343,11 @@ public:
     struct Options {
         bool bindRigidValues = false;
         bool relateProjectionInputs = false;
+        // Ordinary HIR parameters in a ParamEnv are universal rigid
+        // constants, not candidate existentials.  Once pointer/structural
+        // equality above has failed, a relation involving one is impossible.
+        // Solver existentials remain placeholders and are still deferred.
+        bool rigidGenericsAreDistinct = false;
     };
 
     enum class Outcome : u8 {
@@ -405,6 +410,7 @@ private:
     // constructor. Matching two occurrences of that constructor relates its
     // Self and generic inputs instead of treating the whole alias as opaque.
     bool relateProjectionInputs_;
+    bool rigidGenericsAreDistinct_;
     stl::Vector<PendingEquality> pending_;
     ThinVector<PendingValueEquality> pendingValues_;
 };

@@ -413,6 +413,15 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
             rigidInput,
             projection(types.primitive(HIRCoreType::U16))
         ) == Unifier::Outcome::Ambiguous);
+
+        Unifier paramEnv(sp, table, nullptr, {
+            .relateProjectionInputs = true,
+            .rigidGenericsAreDistinct = true,
+        });
+        STD_INSIST(paramEnv.unify(
+            rigidInput,
+            projection(types.primitive(HIRCoreType::U16))
+        ) == Unifier::Outcome::Mismatch);
     }
 
     STD_TEST(testCandidateConstExistentialCapturesRigidPlaceholder) {

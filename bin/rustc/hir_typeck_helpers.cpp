@@ -2227,6 +2227,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             , resolve_(resolve)
             , bindRigidValues_(options.bindRigidValues)
             , relateProjectionInputs_(options.relateProjectionInputs)
+            , rigidGenericsAreDistinct_(options.rigidGenericsAreDistinct)
         {
         }
 
@@ -2365,6 +2366,16 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return Outcome::Mismatch;
                 }
                 return this->defer(left, right);
+            }
+
+            if (rigidGenericsAreDistinct_) {
+                const auto isOrdinaryGeneric = [](const HIRTypeData* type) {
+                    const auto* generic = type->opt_Generic();
+                    return generic && !generic->isPlaceholder();
+                };
+                if (isOrdinaryGeneric(left) || isOrdinaryGeneric(right)) {
+                    return Outcome::Mismatch;
+                }
             }
 
             if (relateProjectionInputs_) {
@@ -11183,7 +11194,7 @@ default: {
                         if (const auto* ptr = ty->opt_Pointer()) {
                             if (ptr->type != HIRBorrowType::Shared) {
                                 auto constTy = crate.types.pointer(HIRBorrowType::Shared, ptr->inner);
-                                if (this->findMethod(sp, traits, ivars, typeIvarCount, constTy, methodName, expectedResult, curAccess, AutoderefBorrow::RawShared, possibilities)) {
+                                if (this->findMethod(sp, traits, ivars, typeIvarCount, constTy, methodName, expectedResult, curAccess, AutoderefBorrow::RawShared, possibilities, &undecided)) {
                                 }
                             }
                         }
@@ -11434,7 +11445,6 @@ default: {
 
         bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities, /* Out -> */ bool* outUndecided) const {
             bool rv = false;
-            auto cbInfer = this->ivars.callbackResolveInfer();
 
             auto getIvaredParams = [&](const HIRGenericParams& tpl) -> HIRPathParams {
                 unsigned int nParams = tpl.types.size();
@@ -11599,26 +11609,27 @@ default: {
                     if (((**selfTy).is_Infer() && ((**selfTy).as_Infer().isLit() == false))) {
                         return false;
                     }
-                    // TODO: Do a fuzzy match here?
-                    auto cmp = (*selfTy)->compareWithPlaceholders(sp, eType, cbInfer);
-                    if (cmp == HIRCompare::Equal) {
-                        // TODO: Re-monomorphise final trait using `ty`?
-                        // - Could collide with legitimate uses of `Self`
-
-                        // Found the method, return the UFCS path for it
-                        possibilities.push_back(::std::make_pair(borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
-                        rv = true;
-                        foundBound = true;
-                        recordBoundGlobalness(eType, eTraitGp, eTraitInfo);
-                    } else if (cmp == HIRCompare::Fuzzy) {
-
-                        // Found the method, return the UFCS path for it
-                        possibilities.push_back(::std::make_pair(borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
-                        rv = true;
-                        foundBound = true;
-                        recordBoundGlobalness(eType, eTraitGp, eTraitInfo);
-                    } else {
+                    const auto snapshot = this->ivars.snapshot();
+                    Unifier relation(sp, this->ivars, this, {
+                        .relateProjectionInputs = true,
+                        .rigidGenericsAreDistinct = true,
+                    });
+                    const auto outcome = relation.unify(*selfTy, eType);
+                    const bool boundInference = this->ivars.mutationGeneration != snapshot.generation;
+                    this->ivars.rollbackTo(snapshot);
+                    if (outcome == Unifier::Outcome::Mismatch) {
+                        continue;
                     }
+                    if (outUndecided && (outcome == Unifier::Outcome::Ambiguous || boundInference)) {
+                        *outUndecided = true;
+                    }
+
+                    // TODO: Re-monomorphise final trait using `ty`?
+                    // - Could collide with legitimate uses of `Self`
+                    possibilities.push_back(::std::make_pair(borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
+                    rv = true;
+                    foundBound = true;
+                    recordBoundGlobalness(eType, eTraitGp, eTraitInfo);
                 } else {
                 }
             }
