@@ -791,7 +791,7 @@ HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
     auto rv = members.empty() ? HIRSimplePath() : HIRSimplePath(members[0], std::span<RcString>(members.begin() + 1, members.end()));
     // HACK! If the read crate name is empty, replace it with the name we're loaded with
     if (rv.crateName() == "" && rv.components().size() > 0) {
-        assert(crateName != "");
+        BUG_ASSERT(crateName != "");
         rv.updateCrateName(crateName);
     }
     return rv;
@@ -1260,7 +1260,7 @@ HIRExternLibrary HirDeserialiser::deserialiseExtlib() {
 
 void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     this->crateName = in.readIstring();
-    assert(this->crateName != "" && "Empty crate name loaded from metadata");
+    BUG_ASSERT(this->crateName != "" && "Empty crate name loaded from metadata");
     privateVisibility = HIRPublicity::newPriv(HIRSimplePath(this->crateName));
     rv.crateName = this->crateName;
     rv.edition = static_cast<ASTEdition>(in.readTag());
@@ -1312,7 +1312,7 @@ RcString HIRDeserialiseJustName(const std::string& filename) {
         HIRSerialiseReader in{metadataFilename(filename)};
 
         auto crateName = in.readIstring();
-        assert(crateName != "" && "Empty crate name loaded from metadata");
+        BUG_ASSERT(crateName != "" && "Empty crate name loaded from metadata");
         return crateName;
     }
 }
@@ -1333,7 +1333,7 @@ void HIRDumpExpr(std::ostream& sink, const HIRExprPtr& expr) {
         return;
     }
 
-    assert(expr.state);
+    BUG_ASSERT(expr.state);
     TreeVisitor tv{expr.state->types, sink};
 
     const_cast<HIRExprPtr&>(expr)->visit(tv);
@@ -1627,7 +1627,7 @@ auto HirDeserialiser::deserialiseHygine() -> Ident::Hygiene {
         mp.ents = deserialiseVec<RcString>();
 
         if (mp.crate == "") {
-            assert(crateName != "");
+            BUG_ASSERT(crateName != "");
             mp.crate = crateName;
         }
         rv.setModPath(pool, mv$(mp));
@@ -3094,7 +3094,7 @@ auto HirSerialiser::serialise(const HIRVisEnt<T>& e) -> void {
 
 template <typename T>
 auto HirSerialiser::serialise(const HIRVisEnt<T>* e) -> void {
-    assert(e);
+    BUG_ASSERT(e);
     serialise(*e);
 }
 
@@ -3359,7 +3359,7 @@ auto HirSerialiser::serialisePath(const HIRPath& path) -> void {
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            assert(!"Unexpected UfcsUnknown");
+            BUG_ASSERT(!"Unexpected UfcsUnknown");
             break;
         }
     }
@@ -3600,7 +3600,7 @@ auto HirSerialiser::serialise(const ::MacroRulesPtr& mac) -> void {
 auto HirSerialiser::serialise(const ::MacroRules& mac) -> void {
     out.writeString(mac.sourceCrate);
     out.writeTag(static_cast<unsigned int>(mac.edition));
-    assert(mac.rules.size() > 0);
+    BUG_ASSERT(mac.rules.size() > 0);
     out.writeBool(mac.isMacroItem);
     out.writeBool(mac.transparent);
     serialiseVec(mac.rules);
@@ -3759,7 +3759,7 @@ auto HirSerialiser::serialise(const TokenData& td) -> void {
         } break;
             break;
         case TokenData::TAG_Fragment: {
-            assert(!"Serialising interpolated macro fragment - should have been handled in HIR lowering");
+            BUG_ASSERT(!"Serialising interpolated macro fragment - should have been handled in HIR lowering");
         }
     }
 }
@@ -4455,7 +4455,7 @@ auto HirSerialiser::serialise(const HIRLinkage& linkage) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRFunction& fcn) -> void {
-    assert(!fcn.traitReturnType);
+    BUG_ASSERT(!fcn.traitReturnType);
     auto _ = out.openObject("HIR::Function");
 
     serialise(fcn.linkage);

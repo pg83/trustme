@@ -340,7 +340,7 @@ namespace {
                         tok = lex.getToken();
                         return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, tok.takeFragStmtItem());
                     }
-                    assert(lex.parseState().module);
+                    BUG_ASSERT(lex.parseState().module);
                     const auto& curMod = *lex.parseState().module;
                     return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, ParseModItemS(lex, curMod.fileInfo, curMod.path(), ASTAttributeList{}));
                 }
@@ -366,7 +366,7 @@ namespace {
             case MacroPatEnt::PAT_META:
                 return InterpolatedFragment(ParseMetaItem(lex));
             case MacroPatEnt::PAT_ITEM: {
-                assert(lex.parseState().module);
+                BUG_ASSERT(lex.parseState().module);
                 const auto& curMod = *lex.parseState().module;
                 return InterpolatedFragment(ParseModItemS(lex, curMod.fileInfo, curMod.path(), ASTAttributeList{}));
             } break;
@@ -468,7 +468,7 @@ namespace {
             if (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT) {
                 level += (lex.next() == TOK_DOUBLE_LT ? 2 : 1);
             } else if (lex.next() == TOK_DOUBLE_GT_EQUAL) {
-                assert(level > 0);
+                BUG_ASSERT(level > 0);
                 if (level == 1) {
                     lex.consumeAndPush(TOK_GTE);
                     return true;
@@ -479,7 +479,7 @@ namespace {
                     return true;
                 }
             } else if (lex.next() == TOK_GT || lex.next() == TOK_DOUBLE_GT) {
-                assert(level > 0);
+                BUG_ASSERT(level > 0);
                 if (lex.next() == TOK_DOUBLE_GT) {
                     if (level == 1) {
                         lex.consumeAndPush(TOK_GT);
@@ -1105,7 +1105,7 @@ namespace {
                     break;
                 case TOK_RWORD_IF:
                     while (1) {
-                        assert(lex.next() == TOK_RWORD_IF);
+                        BUG_ASSERT(lex.next() == TOK_RWORD_IF);
                         lex.consume();
                         if (lex.next() == TOK_RWORD_LET) {
                             lex.consume();
@@ -2117,7 +2117,7 @@ namespace {
                                         parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
                                     }
                             }
-                            assert(sepFlag);
+                            BUG_ASSERT(sepFlag);
                             ret.push_back(MacroPatEnt(sp, Token(joiner), sepFlag, loopIdx, std::move(subpat)));
                             break;
                         }
@@ -2470,7 +2470,7 @@ namespace {
                                     indirectOfs++;
 
                                     if (ent.name != "?") {
-                                        assert(ent.subpats.size() > 0);
+                                        BUG_ASSERT(ent.subpats.size() > 0);
                                         macroPatternGetHeadSetInner(rv, ent.subpats, 0, indirectPath, indirectOfs + ent.subpats.size());
                                     }
                                 } else {
@@ -2478,7 +2478,7 @@ namespace {
                                 }
                             } else {
                                 if (ent.name != "?") {
-                                    assert(ent.subpats.size() > 0);
+                                    BUG_ASSERT(ent.subpats.size() > 0);
                                     macroPatternGetHeadSetInner(rv, ent.subpats, 0, indirectPath, indirectOfs + ent.subpats.size());
                                 }
                             }
@@ -2567,13 +2567,13 @@ namespace {
                                     path.push_back(ExpTok(it->ty, it->tok));
                                 }
                                 auto entryPats2 = macroPatternGetHeadSet(ent.subpats, 0, path);
-                                assert(entryPats2.size() > 0);
+                                BUG_ASSERT(entryPats2.size() > 0);
                                 if (std::find(entryPats2.begin(), entryPats2.end(), TOK_EOF) != entryPats2.end()) {
                                     entryPats2.erase(std::find(entryPats2.begin(), entryPats2.end(), TOK_EOF));
                                     entryPats2.insert(entryPats2.end(), skipPats1.begin(), skipPats1.end());
                                 }
                                 auto skipPats2 = macroPatternGetHeadSet(pattern, idx + 1, path);
-                                assert(skipPats2.size() > 0);
+                                BUG_ASSERT(skipPats2.size() > 0);
                                 {
                                     auto e2It = entryPats2.begin();
                                     eIt->push_back({e2It->ty, e2It->tok});
@@ -2695,7 +2695,7 @@ namespace {
                                         pushIfv(/*is_equal*/ true, ee, checkPos);
                                     }
                                     push(SimplePatEnt::make_Jump({~0u}));
-                                    assert(rv.size() == checkPos);
+                                    BUG_ASSERT(rv.size() == checkPos);
                                     push(SimplePatEnt::make_ExpectTok(ent.tok));
                                 }
                             }
@@ -2770,7 +2770,7 @@ void ParameterMappings::insert(unsigned int nameIndex, const std::vector<unsigne
             auto iter = iterations[i];
 
             if (layer->is_Vals()) {
-                assert(layer->as_Vals().size() == 0);
+                BUG_ASSERT(layer->as_Vals().size() == 0);
                 *layer = CaptureLayer::make_Nested({});
             }
             auto& e = layer->as_Nested();
@@ -2785,7 +2785,7 @@ void ParameterMappings::insert(unsigned int nameIndex, const std::vector<unsigne
         }
         ASSERT_BUG(Span(), layer->as_Vals().size() == iterations.back(), "Capture count mismatch with iteration index - iterations=[" << iterations << "]");
     } else {
-        assert(layer->as_Vals().size() == 0);
+        BUG_ASSERT(layer->as_Vals().size() == 0);
     }
     layer->as_Vals().push_back(CapturedVal{0, 0, mv$(data)});
 }
@@ -2874,13 +2874,13 @@ unsigned int ParameterMappings::getVariableCount(const Span& sp, const std::vect
 
 void ParameterMappings::incCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx) {
     auto& cap = getCap(sp, iterations, nameIdx);
-    assert(cap.numUsed == 0);
+    BUG_ASSERT(cap.numUsed == 0);
     cap.numUses += 1;
 }
 
 bool ParameterMappings::decCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx) {
     auto& cap = getCap(sp, iterations, nameIdx);
-    assert(cap.numUsed < cap.numUses);
+    BUG_ASSERT(cap.numUsed < cap.numUses);
     cap.numUsed += 1;
     return (cap.numUsed < cap.numUses);
 }
@@ -2936,8 +2936,8 @@ const SimplePatEnt& MacroPatternStream::next() {
                 break;
             }
             case SimplePatEnt::TAG_LoopEnd: {
-                assert(!loopIterations.empty());
-                assert(!currentLoops.empty());
+                BUG_ASSERT(!loopIterations.empty());
+                BUG_ASSERT(!currentLoops.empty());
                 auto loopIndex = currentLoops.back();
                 auto numIter = loopIterations.back();
                 loopIterations.pop_back();
@@ -2953,9 +2953,9 @@ const SimplePatEnt& MacroPatternStream::next() {
 }
 
 void MacroPatternStream::ifSucceeded() {
-    assert(curPos_ > 0);
-    assert(curPos_ <= simpleEnts.size());
-    assert(lastWasCond);
+    BUG_ASSERT(curPos_ > 0);
+    BUG_ASSERT(curPos_ <= simpleEnts.size());
+    BUG_ASSERT(lastWasCond);
     const auto& ent = simpleEnts[curPos_ - 1];
     ASSERT_BUG(Span(), ent.is_If(), "Expected If when calling `if_succeeded`, got " << ent);
     const auto& e = ent.as_If();
@@ -3175,7 +3175,7 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
                 }
                 case MacroExpansionEnt::TAG_Loop: {
                     auto& e = ent.as_Loop();
-                    assert(!e.controllingInputLoops.empty());
+                    BUG_ASSERT(!e.controllingInputLoops.empty());
                     unsigned int numRepeats = mappings_.getLoopRepeats(Span(), iterations_, *e.controllingInputLoops.begin());
                     for (auto loopIdent : e.controllingInputLoops) {
                         if (loopIdent == *e.controllingInputLoops.begin()) {
@@ -3218,7 +3218,7 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
             }
         } else {
             offsets.pop_back();
-            assert(offsets.size() == 0);
+            BUG_ASSERT(offsets.size() == 0);
         }
     }
 
@@ -3226,23 +3226,23 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
 }
 
 const MacroExpansionEnt& MacroExpandState::getCurLayerEnt() const {
-    assert(offsets.size() > 1);
+    BUG_ASSERT(offsets.size() > 1);
 
     const auto* ents = &rootContents;
     for (unsigned int i = 0; i < offsets.size() - 2; i++) {
         unsigned int ofs = offsets[i].readPos;
-        assert(ofs > 0 && ofs <= ents->size());
+        BUG_ASSERT(ofs > 0 && ofs <= ents->size());
         ents = &(*ents)[ofs - 1].as_Loop().entries;
     }
     return (*ents)[offsets[offsets.size() - 2].readPos - 1];
 }
 
 const std::vector<MacroExpansionEnt>* MacroExpandState::getCurLayer() const {
-    assert(offsets.size() > 0);
+    BUG_ASSERT(offsets.size() > 0);
     const auto* ents = &rootContents;
     for (unsigned int i = 0; i < offsets.size() - 1; i++) {
         unsigned int ofs = offsets[i].readPos;
-        assert(ofs > 0 && ofs <= ents->size());
+        BUG_ASSERT(ofs > 0 && ofs <= ents->size());
         ents = &(*ents)[ofs - 1].as_Loop().entries;
     }
     return ents;
@@ -3712,7 +3712,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansio
                 emitTokenTree(tokens);
                 out.push_back(Token(e->isBraced ? TOK_BRACE_CLOSE : TOK_PAREN_CLOSE));
             } else {
-                throw std::runtime_error(FMT("Unknown node type: " << typeid(node).name()));
+                BUG(Span(), "Unknown node type: " << typeid(node).name());
             }
         }
 
@@ -4003,7 +4003,7 @@ TokenStreamRO::TokenStreamRO(const TokenTree& tt)
     , eofToken(TOK_EOF)
     , consumeCount(0)
 {
-    assert(!tt.isToken());
+    BUG_ASSERT(!tt.isToken());
     if (tt.size() == 0) {
         activeOffset = 0;
     } else {
@@ -4012,7 +4012,7 @@ TokenStreamRO::TokenStreamRO(const TokenTree& tt)
             curTree = &(*curTree)[0];
             offsets.push_back(0);
         }
-        assert(offsets.size() > 0);
+        BUG_ASSERT(offsets.size() > 0);
         offsets.pop_back();
         activeOffset = 0;
     }
@@ -4050,7 +4050,7 @@ auto TokenStreamRO::consume() -> void {
     }
 
     if (offsets.empty() && activeOffset == tt.size()) {
-        throw std::runtime_error("Attempting to consume EOS");
+        BUG(Span(), "Attempting to consume EOS");
     }
     consumeCount++;
     for (;;) {
@@ -4110,7 +4110,7 @@ auto RuleParseState::addName(const Ident& ident) -> unsigned {
     unsigned idx = this->nextNameIndex++;
     auto& list = this->names[ident.name];
     for (const auto& e : list) {
-        assert(e.hygiene != ident.hygiene);
+        BUG_ASSERT(e.hygiene != ident.hygiene);
     }
     list.push_back(NameState{idx, this->loopStack, ident.hygiene});
     return idx;
@@ -4136,7 +4136,7 @@ auto RuleParseState::openLoop() -> unsigned {
 }
 
 auto RuleParseState::closeLoop() -> void {
-    assert(!loopStack.empty());
+    BUG_ASSERT(!loopStack.empty());
     loopStack.pop_back();
 }
 

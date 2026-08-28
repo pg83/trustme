@@ -376,7 +376,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
                     break;
                 }
                 default: {
-                    throw std::runtime_error(FMT("Unexpected item type in impl block - " << it.data->tagStr()));
+                    BUG(Span(), "Unexpected item type in impl block - " << it.data->tagStr());
                 }
             }
         }

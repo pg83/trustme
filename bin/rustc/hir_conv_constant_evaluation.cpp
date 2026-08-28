@@ -860,7 +860,7 @@ static std::ostream& operator<<(std::ostream& os, const MIREvalAllocationPtr& ap
 }
 
 static size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr* r, const TypeRepr::FieldPath& outPath) {
-    assert(outPath.index < r->fields.size());
+    BUG_ASSERT(outPath.index < r->fields.size());
     size_t ofs = r->fields[outPath.index].offset;
 
     const auto* ty = &r->fields[outPath.index].ty;
@@ -877,7 +877,7 @@ static size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const
         if (!r) {
             BUG(sp, "Layout not computable during const evaluation - " << "repr of " << *ty);
         }
-        assert(f < r->fields.size());
+        BUG_ASSERT(f < r->fields.size());
         ofs += r->fields[f].offset;
         ty = &r->fields[f].ty;
     }
@@ -1533,19 +1533,19 @@ MIREvalStaticRefPtr MIREvalStaticRefPtr::allocate(ObjPool* pool, HIRPath p, cons
 }
 
 IValue* MIREvalRelocPtr::asValuePtr() const {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     switch (ptr & 3) {
         case TAG_Allocation:
-            assert(asAllocation());
+            BUG_ASSERT(asAllocation());
             return asAllocation();
         case TAG_Constant:
-            assert(asConstant());
+            BUG_ASSERT(asConstant());
             return asConstant();
         case TAG_StaticRef:
-            assert(asStaticref());
+            BUG_ASSERT(asStaticref());
             return asStaticref();
         case 3:
-            assert(!"Unexpected tag 3");
+            BUG_ASSERT(!"Unexpected tag 3");
     }
     abort();
 }
@@ -1566,7 +1566,7 @@ void HIREvaluator::pushStackEntry(HIRItemPath printPath, const MIRFunction& fcn,
 MIREvalAllocationPtr HIREvaluator::runUntilStackEmpty() {
     const unsigned MAX_BLOCK_COUNT = 4'000'000;
     const unsigned MAX_STMT_COUNT = 8'000'000;
-    assert(!this->callStack.empty());
+    BUG_ASSERT(!this->callStack.empty());
     unsigned int numStmtsRun = 0;
     unsigned int idx;
     for (idx = 0; idx < MAX_BLOCK_COUNT; idx += 1) {
@@ -2954,7 +2954,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             break;
         }
     }
-    throw std::runtime_error("Unreachable?");
+    MIR_BUG(state, "Unreachable terminator");
 }
 
 bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, HIRPath* fcnPath, std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect) {
@@ -3263,7 +3263,7 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
             ms.selfTy = resolve.hirCrate().types.self();
         }
 
-        assert(this->callStack.empty());
+        BUG_ASSERT(this->callStack.empty());
         this->numFrames = 0;
         this->pushStackEntry(ip, *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenericsPtr(), resolve.implGenericsPtr(), SourceLocation(this->rootSpan), false);
         auto rvRaw = this->runUntilStackEmpty();
@@ -3738,9 +3738,8 @@ auto MIREvalRelocPtr::asStaticref() const -> MIREvalStaticRef* {
 }
 
 auto MIREvalRelocPtr::set(uintptr_t ptr, Tag tag) -> void {
-    assert(this->ptr == 0);
-    assert((ptr & 3) == 0);
-    assert(tag < 4);
+    BUG_ASSERT(this->ptr == 0);
+    BUG_ASSERT((ptr & 3) == 0);
     this->ptr = ptr | tag;
 }
 
@@ -3755,8 +3754,8 @@ auto MIREvalConstant::fmtIdent(std::ostream& os) const -> void {
 }
 
 auto MIREvalConstant::fmt(std::ostream& os, size_t ofs, size_t len) const -> void {
-    assert(ofs <= length);
-    assert(ofs + len <= length);
+    BUG_ASSERT(ofs <= length);
+    BUG_ASSERT(ofs + len <= length);
     for (size_t i = 0; i < len; i++) {
         if (i != 0 && (ofs + i) % 8 == 0) {
             os << " ";
@@ -3827,8 +3826,8 @@ auto MIREvalAllocation::fmtIdent(std::ostream& os) const -> void {
 }
 
 auto MIREvalAllocation::fmt(std::ostream& os, size_t ofs, size_t len) const -> void {
-    assert(ofs <= length);
-    assert(ofs + len <= length);
+    BUG_ASSERT(ofs <= length);
+    BUG_ASSERT(ofs + len <= length);
     for (size_t i = 0; i < len; i++) {
         auto j = ofs + i;
         if (i != 0 && j % 8 == 0) {
@@ -3880,9 +3879,9 @@ auto MIREvalAllocation::getBytes(size_t ofs, size_t len, bool checkMask) const -
 }
 
 auto MIREvalAllocation::readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const -> void {
-    assert(ofs <= length);
-    assert(len <= length);
-    assert(ofs + len <= length);
+    BUG_ASSERT(ofs <= length);
+    BUG_ASSERT(len <= length);
+    BUG_ASSERT(ofs + len <= length);
 
     dst += dstOfs / 8;
     const auto* src = getMask() + ofs / 8;
@@ -3936,9 +3935,9 @@ auto MIREvalAllocation::extWriteBytes(size_t ofs, size_t len) -> u8* {
 }
 
 auto MIREvalAllocation::writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) -> void {
-    assert(ofs <= length);
-    assert(len <= length);
-    assert(ofs + len <= length);
+    BUG_ASSERT(ofs <= length);
+    BUG_ASSERT(len <= length);
+    BUG_ASSERT(ofs + len <= length);
     src.readMask(getMask(), ofs, srcOfs, len);
 }
 
@@ -3990,13 +3989,13 @@ auto MIREvalAllocation::getHeapAlignment() const -> size_t {
 }
 
 auto MIREvalAllocation::makeGlobal() -> void {
-    assert(isConstHeap && isLive && !isGlobal);
+    BUG_ASSERT(isConstHeap && isLive && !isGlobal);
     isGlobal = true;
     isReadonly = true;
 }
 
 auto MIREvalAllocation::deallocate() -> void {
-    assert(isConstHeap && isLive && !isGlobal);
+    BUG_ASSERT(isConstHeap && isLive && !isGlobal);
     isLive = false;
 }
 
@@ -4019,7 +4018,7 @@ MIREvalStaticRef::MIREvalStaticRef(ObjPool* pool, HIRPath p, const EncodedLitera
     , length(len)
     , valuePending(valuePending)
 {
-    assert(!encoded || encoded->bytes.size() == length);
+    BUG_ASSERT(!encoded || encoded->bytes.size() == length);
 }
 
 auto MIREvalStaticRef::fmtIdent(std::ostream& os) const -> void {
@@ -4045,9 +4044,9 @@ auto MIREvalStaticRef::hasValue() const -> bool {
 
 auto MIREvalStaticRef::getBytes(size_t ofs, size_t len, bool checkMask) const -> const u8* {
     if (encoded) {
-        assert(ofs <= encoded->bytes.size());
-        assert(len <= encoded->bytes.size());
-        assert(ofs + len <= encoded->bytes.size());
+        BUG_ASSERT(ofs <= encoded->bytes.size());
+        BUG_ASSERT(len <= encoded->bytes.size());
+        BUG_ASSERT(ofs + len <= encoded->bytes.size());
         if (encoded->bytes.size() == 0) {
             return reinterpret_cast<const u8*>("");
         }
@@ -4126,7 +4125,7 @@ MIREvalValueRef::MIREvalValueRef(MIREvalRelocPtr alloc, size_t ofs)
     , len(0)
 {
     if (alloc) {
-        assert(ofs <= alloc.asValue().size());
+        BUG_ASSERT(ofs <= alloc.asValue().size());
         len = alloc.asValue().size() - ofs;
     }
 }
@@ -4246,7 +4245,7 @@ auto MIREvalValueRef::writeFloat(const MIRTypeResolve& state, unsigned bits, Flo
 }
 
 auto MIREvalValueRef::writeUint(const MIRTypeResolve& state, unsigned bits, u64 v) -> void {
-    assert(bits <= 64);
+    BUG_ASSERT(bits <= 64);
     writeUint(state, bits, U128(v));
 }
 
@@ -4280,7 +4279,7 @@ auto MIREvalValueRef::extReadBytes(const MIRTypeResolve& state, size_t len) cons
 
 auto MIREvalValueRef::readBytes(const MIRTypeResolve& state, void* data, size_t len) const -> void {
     const auto* src = extReadBytes(state, len);
-    assert(src);
+    BUG_ASSERT(src);
     memcpy(data, src, len);
 }
 
@@ -4312,7 +4311,7 @@ auto MIREvalValueRef::readFloat(const MIRTypeResolve& state, unsigned bits) cons
 }
 
 auto MIREvalValueRef::readUint(const MIRTypeResolve& state, unsigned bits) const -> U128 {
-    assert(bits <= 128);
+    BUG_ASSERT(bits <= 128);
     auto nBytes = (bits + 7) / 8;
     U128 rv;
     rv.fromLeBytes(extReadBytes(state, nBytes), nBytes);
@@ -4400,13 +4399,13 @@ auto TypeInfo::forType(const HIRTypeData* ty) -> TypeInfo {
 auto TypeInfo::mask(U128 v) const -> U128 {
     if (bits < 64) {
         u64 maskVal = (static_cast<u64>(1ull) << bits) - 1;
-        assert(maskVal != 0);
+        BUG_ASSERT(maskVal != 0);
         return U128(v.getLo() & maskVal);
     } else if (bits == 64) {
         return U128(v.getLo());
     } else if (bits < 128) {
         U128 maskVal = (U128(1) << bits) - 1u;
-        assert(maskVal != 0);
+        BUG_ASSERT(maskVal != 0);
         return U128(v & maskVal);
     } else if (bits == 128) {
         return v;
@@ -4645,7 +4644,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRTypeData* ty, MIREva
                     return valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size));
                 }
             }
-            throw std::runtime_error("Unreachable path binding");
+            MIR_BUG(state, "Unreachable path binding");
         }
         case HIRTypeData::TAG_Array: {
             auto& te = (*ty).as_Array();
@@ -4679,7 +4678,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRTypeData* ty, MIREva
             return false;
         }
     }
-    throw std::runtime_error("Unreachable type while checking a constant drop");
+    MIR_BUG(state, "Unreachable type while checking a constant drop");
 }
 
 auto MIREvalCallStackEntry::getStaticrefMono(const HIRPath& p, HIRTypeRef* outTy) const -> MIREvalStaticRefPtr {
@@ -5074,7 +5073,7 @@ auto MIREvalCallStackEntry::writeConst(MIREvalValueRef dst, const MIRConstant& c
         case MIRConstant::TAG_Const: {
             auto& e2 = c.as_Const();
             HIRTypeRef ty;
-            assert(e2.p);
+            BUG_ASSERT(e2.p);
             const auto& encoded = getConst(*e2.p, &ty);
 
             writeEncoded(dst, encoded);
@@ -5093,7 +5092,7 @@ auto MIREvalCallStackEntry::writeConst(MIREvalValueRef dst, const MIRConstant& c
         }
         case MIRConstant::TAG_ItemAddr: {
             auto& e2 = c.as_ItemAddr();
-            assert(e2);
+            BUG_ASSERT(e2);
             MIR_ASSERT(state, e2.offset.isU64(), "Item address offset is too large: " << e2.offset);
             dst.writePtr(state, EncodedLiteral::PTR_BASE + e2.offset.truncateU64(), getStaticrefMono(*e2));
             break;
@@ -5425,7 +5424,7 @@ auto Expander::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl
 
     HIRVisitor::visitTraitImpl(traitPath, impl);
 
-    assert(implParams);
+    BUG_ASSERT(implParams);
     implParams = nullptr;
     monomorphState.ppImpl = nullptr;
     monomorphState.selfTy = std::move(savedSelf);
@@ -5449,7 +5448,7 @@ auto Expander::visitTypeImpl(HIRTypeImpl& impl) -> void {
 
     HIRVisitor::visitTypeImpl(impl);
 
-    assert(implParams);
+    BUG_ASSERT(implParams);
     implParams = nullptr;
     monomorphState.ppImpl = nullptr;
     monomorphState.selfTy = std::move(savedSelf);
@@ -5476,7 +5475,7 @@ auto Expander::visitTrait(HIRItemPath ip, HIRTrait& trait) -> void {
 
     HIRVisitor::visitTrait(ip, trait);
 
-    assert(implParams);
+    BUG_ASSERT(implParams);
     implParams = nullptr;
     monomorphState.ppImpl = nullptr;
     monomorphState.selfTy = std::move(savedSelf);
@@ -5869,18 +5868,18 @@ auto Expander::visitStatic(HIRItemPath p, HIRStatic& item) -> void {
 
 auto Expander::visitEnum(HIRItemPath p, HIREnum& item) -> void {
     Span sp;
-    assert(!implParams);
+    BUG_ASSERT(!implParams);
     implParams = &item.params;
 
     visitEnumInner(wb, crate, p, *mod, *modPath, p.getName(), item);
     HIRVisitor::visitEnum(p, item);
 
-    assert(implParams);
+    BUG_ASSERT(implParams);
     implParams = nullptr;
 }
 
 auto Expander::visitStruct(HIRItemPath p, HIRStruct& item) -> void {
-    assert(!implParams);
+    BUG_ASSERT(!implParams);
     implParams = &item.params;
     if (item.constEvalState != HIRConstEvalState::Complete) {
         ASSERT_BUG(Span(), item.constEvalState == HIRConstEvalState::None, "Constant evaluation loop involving " << p);
@@ -5888,7 +5887,7 @@ auto Expander::visitStruct(HIRItemPath p, HIRStruct& item) -> void {
         HIRVisitor::visitStruct(p, item);
         item.constEvalState = HIRConstEvalState::Complete;
     }
-    assert(implParams);
+    BUG_ASSERT(implParams);
     implParams = nullptr;
 }
 

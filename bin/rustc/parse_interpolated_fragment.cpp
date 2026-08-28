@@ -75,7 +75,7 @@ InterpolatedFragment::InterpolatedFragment(InterpolatedFragment::Type type, ASTN
     : type(type)
     , ptr(new ASTNamed<ASTItem>(mv$(v)))
 {
-    assert(type == InterpolatedFragment::STMT_ITEM || type == InterpolatedFragment::ITEM);
+    BUG_ASSERT(type == InterpolatedFragment::STMT_ITEM || type == InterpolatedFragment::ITEM);
 }
 
 InterpolatedFragment::InterpolatedFragment(TokenTree v)
@@ -153,11 +153,11 @@ std::ostream& operator<<(std::ostream& os, InterpolatedFragment const& x) {
 }
 
 TokenTree& InterpolatedFragment::asTt() {
-    assert(type == TT);
+    BUG_ASSERT(type == TT);
     return *reinterpret_cast<TokenTree*>(ptr);
 }
 
 const TokenTree& InterpolatedFragment::asTt() const {
-    assert(type == TT);
+    BUG_ASSERT(type == TT);
     return *reinterpret_cast<TokenTree*>(ptr);
 }

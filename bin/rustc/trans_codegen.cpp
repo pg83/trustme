@@ -162,7 +162,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
         }
     } else {
         for (const auto& ent : list.functions) {
-            assert(ent.second->ptr);
+            BUG_ASSERT(ent.second->ptr);
             const auto& fcn = *ent.second->ptr;
             bool isExtern = !static_cast<bool>(fcn.code);
             if (fcn.code.mir && !ent.second->forcePrototype) {
@@ -171,7 +171,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
         }
     }
     for (const auto& ent : list.functions) {
-        assert(ent.second->ptr);
+        BUG_ASSERT(ent.second->ptr);
         const auto& fcn = *ent.second->ptr;
         if (fcn.code.mir && !ent.second->forcePrototype) {
         } else {
@@ -183,9 +183,9 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
             }
         }
     }
-    assert(list.vtables.empty());
+    BUG_ASSERT(list.vtables.empty());
     for (const auto& ent : list.statics) {
-        assert(ent.second->ptr);
+        BUG_ASSERT(ent.second->ptr);
         const auto& stat = *ent.second->ptr;
 
         if ((stat.valueGenerated && !stat.noEmitValue) || stat.params.isGeneric()) {
@@ -196,7 +196,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
     }
     auto emitStaticDefinitions = [&]() {
         for (const auto& ent : list.statics) {
-            assert(ent.second->ptr);
+            BUG_ASSERT(ent.second->ptr);
             const auto& stat = *ent.second->ptr;
 
             if (stat.params.isGeneric()) {

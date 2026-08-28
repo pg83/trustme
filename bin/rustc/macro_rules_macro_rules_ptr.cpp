@@ -1,5 +1,7 @@
 #include "macro_rules_macro_rules_ptr.h"
 
+#include "compile_error.h"
+
 MacroRulesPtr::MacroRulesPtr()
     : ptr(nullptr)
 {
@@ -18,21 +20,21 @@ MacroRulesPtr& MacroRulesPtr::operator=(MacroRulesPtr&& x) {
 }
 
 const MacroRules& MacroRulesPtr::operator*() const {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     return *ptr;
 }
 
 MacroRules& MacroRulesPtr::operator*() {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     return *ptr;
 }
 
 const MacroRules* MacroRulesPtr::operator->() const {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     return ptr;
 }
 
 MacroRules* MacroRulesPtr::operator->() {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     return ptr;
 }

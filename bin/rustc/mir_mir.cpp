@@ -63,7 +63,7 @@ std::ostream& operator<<(std::ostream& os, const MIRConstant& v) {
         }
         case MIRConstant::TAG_Const: {
             auto& e = v.as_Const();
-            assert(e.p);
+            BUG_ASSERT(e.p);
             os << *e.p;
             break;
         }
@@ -74,7 +74,7 @@ std::ostream& operator<<(std::ostream& os, const MIRConstant& v) {
         }
         case MIRConstant::TAG_Function: {
             auto& e = v.as_Function();
-            assert(e.p);
+            BUG_ASSERT(e.p);
             os << "fn " << *e.p;
             break;
         }
@@ -2031,12 +2031,12 @@ MIRLValue::Storage::~Storage() {
 }
 
 MIRLValue::Storage MIRLValue::Storage::newArgument(unsigned idx) {
-    assert(idx < MAX_ARG);
+    BUG_ASSERT(idx < MAX_ARG);
     return Storage((idx + 1) << 2);
 }
 
 MIRLValue::Storage MIRLValue::Storage::newLocal(unsigned idx) {
-    assert(idx <= MAX_ARG);
+    BUG_ASSERT(idx <= MAX_ARG);
     return Storage((idx << 2) | 1);
 }
 
@@ -2046,12 +2046,12 @@ MIRLValue::Storage MIRLValue::Storage::newStatic(HIRPath p) {
 }
 
 uintptr_t MIRLValue::Storage::getInner() const {
-    assert(!is_Static());
+    BUG_ASSERT(!is_Static());
     return val;
 }
 
 MIRLValue::Storage MIRLValue::Storage::fromInner(uintptr_t v) {
-    assert((v & 3) < 2);
+    BUG_ASSERT((v & 3) < 2);
     return Storage(v);
 }
 
@@ -2063,27 +2063,27 @@ MIRLValue::Storage::Tag MIRLValue::Storage::tag() const {
 }
 
 char MIRLValue::Storage::as_Return() const {
-    assert(is_Return());
+    BUG_ASSERT(is_Return());
     return 0;
 }
 
 unsigned MIRLValue::Storage::as_Argument() const {
-    assert(is_Argument());
+    BUG_ASSERT(is_Argument());
     return static_cast<unsigned>((val >> 2) - 1);
 }
 
 unsigned MIRLValue::Storage::as_Local() const {
-    assert(is_Local());
+    BUG_ASSERT(is_Local());
     return static_cast<unsigned>(val >> 2);
 }
 
 const HIRPath& MIRLValue::Storage::as_Static() const {
-    assert(is_Static());
+    BUG_ASSERT(is_Static());
     return *reinterpret_cast<const HIRPath*>(val & ~3llu);
 }
 
 HIRPath& MIRLValue::Storage::as_Static() {
-    assert(is_Static());
+    BUG_ASSERT(is_Static());
     return *reinterpret_cast<HIRPath*>(val & ~3llu);
 }
 
@@ -2100,34 +2100,34 @@ MIRLValue::Wrapper MIRLValue::Wrapper::newIndex(unsigned idx) {
 }
 
 char MIRLValue::Wrapper::as_Deref() const {
-    assert(is_Deref());
+    BUG_ASSERT(is_Deref());
     return 0;
 }
 
 unsigned MIRLValue::Wrapper::as_Field() const {
-    assert(is_Field());
+    BUG_ASSERT(is_Field());
     return (val >> 2);
 }
 
 unsigned MIRLValue::Wrapper::as_Downcast() const {
-    assert(is_Downcast());
+    BUG_ASSERT(is_Downcast());
     return (val >> 2);
 }
 
 // TODO: Should this return a LValue?
 unsigned MIRLValue::Wrapper::as_Index() const {
-    assert(is_Index());
+    BUG_ASSERT(is_Index());
     unsigned rv = (val >> 2);
     return rv;
 }
 
 void MIRLValue::Wrapper::incField() {
-    assert(is_Field());
+    BUG_ASSERT(is_Field());
     *this = Wrapper::newField(as_Field() + 1);
 }
 
 void MIRLValue::Wrapper::incDowncast() {
-    assert(is_Downcast());
+    BUG_ASSERT(is_Downcast());
     *this = Wrapper::newDowncast(as_Downcast() + 1);
 }
 
@@ -2163,22 +2163,22 @@ MIRLValue MIRLValue::newIndex(MIRLValue lv, unsigned localIdx) {
 }
 
 unsigned MIRLValue::as_Local() const {
-    assert(wrappers.empty());
+    BUG_ASSERT(wrappers.empty());
     return root.as_Local();
 }
 
 unsigned MIRLValue::as_Field() const {
-    assert(!wrappers.empty());
+    BUG_ASSERT(!wrappers.empty());
     return wrappers.back().as_Field();
 }
 
 void MIRLValue::incField() {
-    assert(wrappers.size() > 0);
+    BUG_ASSERT(wrappers.size() > 0);
     wrappers.back().incField();
 }
 
 void MIRLValue::incDowncast() {
-    assert(wrappers.size() > 0);
+    BUG_ASSERT(wrappers.size() > 0);
     wrappers.back().incDowncast();
 }
 
@@ -2191,8 +2191,8 @@ MIRLValue MIRLValue::cloneWrapped(std::vector<Wrapper> wrappers) const {
 }
 
 MIRLValue MIRLValue::cloneUnwrapped(unsigned count) const {
-    assert(count > 0);
-    assert(count <= wrappers.size());
+    BUG_ASSERT(count > 0);
+    BUG_ASSERT(count <= wrappers.size());
     return MIRLValue(root.clone(), std::vector<Wrapper>(wrappers.begin(), wrappers.end() - count));
 }
 
@@ -2211,7 +2211,7 @@ MIRLValue::RefCommon::RefCommon(const MIRLValue& lv, size_t wrapperCount)
     : lv_(&lv)
     , wrapperCount_(wrapperCount)
 {
-    assert(wrapperCount <= lv.wrappers.size());
+    BUG_ASSERT(wrapperCount <= lv.wrappers.size());
 }
 
 bool MIRLValue::RefCommon::tryUnwrap() {
@@ -2251,42 +2251,42 @@ MIRLValue::RefCommon::Tag MIRLValue::RefCommon::tag() const {
 }
 
 unsigned MIRLValue::RefCommon::as_Local() const {
-    assert(is_Local());
+    BUG_ASSERT(is_Local());
     return lv_->root.as_Local();
 }
 
 char MIRLValue::RefCommon::as_Return() const {
-    assert(is_Return());
+    BUG_ASSERT(is_Return());
     return lv_->root.as_Return();
 }
 
 unsigned MIRLValue::RefCommon::as_Argument() const {
-    assert(is_Argument());
+    BUG_ASSERT(is_Argument());
     return lv_->root.as_Argument();
 }
 
 const HIRPath& MIRLValue::RefCommon::as_Static() const {
-    assert(is_Static());
+    BUG_ASSERT(is_Static());
     return lv_->root.as_Static();
 }
 
 char MIRLValue::RefCommon::as_Deref() const {
-    assert(is_Deref());
+    BUG_ASSERT(is_Deref());
     return lv_->wrappers[wrapperCount_ - 1].as_Deref();
 }
 
 unsigned MIRLValue::RefCommon::as_Field() const {
-    assert(is_Field());
+    BUG_ASSERT(is_Field());
     return lv_->wrappers[wrapperCount_ - 1].as_Field();
 }
 
 unsigned MIRLValue::RefCommon::as_Downcast() const {
-    assert(is_Downcast());
+    BUG_ASSERT(is_Downcast());
     return lv_->wrappers[wrapperCount_ - 1].as_Downcast();
 }
 
 unsigned MIRLValue::RefCommon::as_Index() const {
-    assert(is_Index());
+    BUG_ASSERT(is_Index());
     return lv_->wrappers[wrapperCount_ - 1].as_Index();
 }
 
@@ -2301,7 +2301,7 @@ MIRLValue::CRef::CRef(const MIRLValue& lv, size_t wc)
 }
 
 const MIRLValue::CRef MIRLValue::CRef::innerRef() const {
-    assert(wrapperCount_ > 0);
+    BUG_ASSERT(wrapperCount_ > 0);
     auto rv = *this;
     rv.wrapperCount_--;
     return rv;
@@ -2313,7 +2313,7 @@ MIRLValue::MRef::MRef(MIRLValue& lv)
 }
 
 MIRLValue::MRef MIRLValue::MRef::innerRef() {
-    assert(wrapperCount_ > 0);
+    BUG_ASSERT(wrapperCount_ > 0);
     auto rv = *this;
     rv.wrapperCount_--;
     return rv;

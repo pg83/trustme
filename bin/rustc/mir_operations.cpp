@@ -726,9 +726,9 @@ namespace {
     }
 
     MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& receiverLvp, const HIRPath::Data::Data_UfcsKnown& pe) {
-        assert(pe.type->is_TraitObject());
+        BUG_ASSERT(pe.type->is_TraitObject());
         const HIRTypeData::Data_TraitObject& te = pe.type->as_TraitObject();
-        assert(te.trait.traitPtr);
+        BUG_ASSERT(te.trait.traitPtr);
         const auto& trait = *te.trait.traitPtr;
 
         unsigned int vtableIdx = trait.getVtableValueIndex(pe.trait.path, pe.item);
@@ -907,7 +907,7 @@ namespace {
                     if (de.trait.path == HIRSimplePath()) {
                         outMetaVal = mutator.inTemporary(outMetaTy, MIRRValue::make_DstMeta({ptrValue.clone()}));
                     } else if (se->trait.traitPtr != de.trait.traitPtr) {
-                        assert(se->trait.traitPtr);
+                        BUG_ASSERT(se->trait.traitPtr);
                         const auto& trait = *se->trait.traitPtr;
                         auto vtableTy = trait.getVtableType(state.sp, state.crate, *se);
                         auto inMetaTy = state.crate.types.pointer(HIRBorrowType::Shared, vtableTy);
@@ -1250,7 +1250,7 @@ namespace {
                 auto ilv = MIRLValue::newLocal(lvr.as_Index());
                 auto ilvR = MIRLValue::MRef(ilv);
                 bool rv = cb.visitLvalue(ilvR, MIRValUsage::Read);
-                assert(ilv.is_Local() && ilv.as_Local() == lvr.as_Index());
+                BUG_ASSERT(ilv.is_Local() && ilv.as_Local() == lvr.as_Index());
                 if (rv) {
                     return true;
                 }
@@ -1697,7 +1697,7 @@ namespace {
                 return mv$(c);
             }
         }
-        throw std::runtime_error("Corrupted MIR::Param");
+        BUG(Span(), "Corrupted MIR::Param");
     }
 
     bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
@@ -1835,7 +1835,7 @@ namespace {
                             break;
                         }
 
-                        assert(&fcn.blocks[tgt] != &block);
+                        BUG_ASSERT(&fcn.blocks[tgt] != &block);
                         auto srcBlock = mv$(fcn.blocks[tgt]);
                         fcn.blocks[tgt].terminator = MIRTerminator::make_Incomplete({});
 
@@ -2203,7 +2203,7 @@ namespace {
                     if (this->copyArgs[se] != ~0u) {
                         return MIRLValue(MIRLValue::Storage::newLocal(this->copyArgs[se]), std::move(rv.wrappers));
                     } else {
-                        assert(!arg.is_Constant());
+                        BUG_ASSERT(!arg.is_Constant());
                         return arg.as_LValue().cloneWrapped(std::move(rv.wrappers));
                     }
                 }
@@ -2315,7 +2315,7 @@ namespace {
 
     IterPathRes iterPathWith(const MIRFunction& fcn, const OptimiseStmtRef& start, const OptimiseStmtRef& end, IterPathCallback& cb) {
         if (start.bbIdx == end.bbIdx) {
-            assert(start.stmtIdx <= end.stmtIdx);
+            BUG_ASSERT(start.stmtIdx <= end.stmtIdx);
         }
 
         auto vistedBbs = std::set<unsigned>();
@@ -2774,8 +2774,8 @@ namespace {
                             }
                             lvr.replace(srcLv.clone());
                         }
-                        assert(lv.root != thisVar.root);
-                        assert(numReplaced < slot.nDerefRead);
+                        BUG_ASSERT(lv.root != thisVar.root);
+                        BUG_ASSERT(numReplaced < slot.nDerefRead);
                         numReplaced += 1;
                     }
                     return false;
@@ -3025,7 +3025,7 @@ namespace {
                                     while (vPos > 0 && sccStack[vPos - 1] != v) {
                                         vPos--;
                                     }
-                                    assert(vPos > 0);
+                                    BUG_ASSERT(vPos > 0);
                                     vPos--;
                                     bool multi = (sccStack.size() - vPos) > 1;
                                     for (size_t i = vPos; i < sccStack.size(); i++) {
@@ -3838,7 +3838,7 @@ namespace {
                                         return nullptr;
                                     }
                                 }
-                                assert(blockOrigins[bbIdx] != SIZE_MAX);
+                                BUG_ASSERT(blockOrigins[bbIdx] != SIZE_MAX);
                                 bbIdx = blockOrigins[bbIdx];
                                 stmtIdx = fcn.blocks[bbIdx].statements.size() + 1;
                             }
@@ -5000,7 +5000,7 @@ namespace {
                             if (ce->is_Local()) {
                                 auto it1 = knownValues.find(*ce);
                                 auto it2 = knownValuesVar.find(*ce);
-                                assert(!(it1 != knownValues.end() && it2 != knownValuesVar.end()));
+                                BUG_ASSERT(!(it1 != knownValues.end() && it2 != knownValuesVar.end()));
                                 if (it1 != knownValues.end()) {
                                     knownValues.insert(std::make_pair(e->dst.clone(), it1->second.clone()));
                                 } else if (it2 != knownValuesVar.end()) {
@@ -5929,7 +5929,7 @@ namespace {
                 for (auto it = block.statements.begin(); it != block.statements.end();) {
                     if (const auto* e = it->opt_SetDropFlag()) {
                         if (!editedDropFlags[e->idx]) {
-                            assert(e->newVal == fcn.dropFlags[e->idx]);
+                            BUG_ASSERT(e->newVal == fcn.dropFlags[e->idx]);
                             removedStatement = true;
                             it = block.statements.erase(it);
                         } else {
@@ -6296,7 +6296,7 @@ namespace {
         bool rv = false;
         std::vector<bool> visited(fcn.blocks.size());
         visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&visited](auto bb, const auto& /*block*/) {
-            assert(!visited[bb]);
+            BUG_ASSERT(!visited[bb]);
             visited[bb] = true;
         }));
         for (unsigned int i = 0; i < visited.size(); i++) {
@@ -6480,7 +6480,7 @@ namespace {
                     }
                 }
 
-                assert(it->statements.size() == toRemoveStatements.size());
+                BUG_ASSERT(it->statements.size() == toRemoveStatements.size());
                 auto newEnd = std::remove_if(it->statements.begin(), it->statements.end(), [&](const auto& s) {
                     size_t stmtIdx = (&s - &it->statements.front());
                     return toRemoveStatements[stmtIdx];
@@ -7083,7 +7083,7 @@ void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, 
 
 void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType, unsigned optLevel, bool doInline /*=true*/, bool validate /*=true*/) {
     Span sp;
-    assert(optLevel > 0);
+    BUG_ASSERT(optLevel > 0);
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << path;
     });
@@ -7438,7 +7438,7 @@ auto MirMutator::flushBlock() -> void {
 
 auto MirMutator::flush() -> decltype(newStatements.begin()) {
     auto& block = fcn.blocks.at(curBlock);
-    assert(curStmt <= block.statements.size());
+    BUG_ASSERT(curStmt <= block.statements.size());
     auto it = block.statements.begin() + curStmt;
     if (newStatements.size() > 0) {
         for (auto& stmt : newStatements) {

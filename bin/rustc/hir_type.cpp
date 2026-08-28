@@ -6,7 +6,6 @@
 #include <std/alg/defer.h>
 #include <std/mem/obj_pool.h>
 
-#include <cassert>
 #include <cstdint>
 
 using namespace stl;
@@ -964,7 +963,7 @@ Ordering ord(const HIRTypeData* l, const HIRTypeData* r) {
     if (l == r) {
         return OrdEqual;
     }
-    assert(l->uid != r->uid);
+    BUG_ASSERT(l->uid != r->uid);
     return l->uid < r->uid ? OrdLess : OrdGreater;
 }
 
@@ -1020,7 +1019,7 @@ std::ostream& operator<<(std::ostream& os, const HIRCoreType& ct) {
         case HIRCoreType::Str:
             return os << "str";
     }
-    assert(!"Bad CoreType value");
+    BUG_ASSERT(!"Bad CoreType value");
     return os;
 }
 
@@ -1648,7 +1647,7 @@ HIRTypeRef HIRTypeInterner::array(HIRTypeRef inner, HIRArraySize size) {
 }
 
 HIRTypeRef HIRTypeInterner::array(HIRTypeRef inner, u64 size) {
-    assert(size != ~0u);
+    BUG_ASSERT(size != ~0u);
     return intern(HIRTypeData::make_Array({inner, size}));
 }
 
@@ -2411,7 +2410,7 @@ HIRTypePathBinding HIRTypePathBinding::clone() const {
             return HIRTypePathBinding(e);
         }
     }
-    assert(!"Fell off end of clone_binding");
+    BUG_ASSERT(!"Fell off end of clone_binding");
     UNREACHABLE();
 }
 
@@ -2827,7 +2826,7 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
     }
     switch ((*left).tag()) {
         case HIRTypeData::TAG_Infer: {
-            assert(!"infer");
+            BUG_ASSERT(!"infer");
             break;
         }
         case HIRTypeData::TAG_Diverge: {

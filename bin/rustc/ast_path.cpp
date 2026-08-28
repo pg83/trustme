@@ -528,7 +528,7 @@ void ASTPath::printPretty(std::ostream& os, bool isTypeContext, bool isDebug) co
                     os << "/*var*/";
                 }
             } else {
-                assert(bindings.value.binding.is_Variable() || bindings.value.binding.is_Generic() || bindings.type.binding.is_TypeParameter());
+                BUG_ASSERT(bindings.value.binding.is_Variable() || bindings.value.binding.is_Generic() || bindings.type.binding.is_TypeParameter());
             }
             os << ent.name;
             break;
@@ -743,7 +743,7 @@ ASTPath::ASTPath(const ASTAbsolutePath& p, ASTPathParams pp)
     : ASTPath(p)
 {
     auto& n = cls.as_Absolute().nodes;
-    assert(n.size() > 0);
+    BUG_ASSERT(n.size() > 0);
     n.back().args() = std::move(pp);
 }
 
@@ -777,15 +777,13 @@ const RcString& ASTPath::asTrivial() const {
             return e.nodes[0].name();
         }
     }
-    throw std::runtime_error("as_trivial on non-trivial path");
+    BUG(Span(), "as_trivial on non-trivial path");
 }
 
 size_t ASTPath::size() const {
     switch (cls.tag()) {
         case Class::TAG_Invalid: {
-            assert(!cls.is_Invalid());
-            throw std::runtime_error("Path::nodes() on Invalid");
-            break;
+            BUG(Span(), "Path::size() on Invalid");
         }
         case Class::TAG_Local: {
             return 1;
@@ -811,20 +809,16 @@ size_t ASTPath::size() const {
             return ent.nodes.size();
         }
     }
-    throw std::runtime_error("Path::nodes() fell off");
+    BUG(Span(), "Path::size() fell off");
 }
 
 std::vector<ASTPathNode>& ASTPath::nodes() {
     switch (cls.tag()) {
         case Class::TAG_Invalid: {
-            assert(!cls.is_Invalid());
-            throw std::runtime_error("Path::nodes() on Invalid");
-            break;
+            BUG(Span(), "Path::nodes() on Invalid");
         }
         case Class::TAG_Local: {
-            assert(!cls.is_Local());
-            throw std::runtime_error("Path::nodes() on Local");
-            break;
+            BUG(Span(), "Path::nodes() on Local");
         }
         case Class::TAG_Relative: {
             auto& ent = cls.as_Relative();
@@ -847,7 +841,7 @@ std::vector<ASTPathNode>& ASTPath::nodes() {
             return ent.nodes;
         }
     }
-    throw std::runtime_error("Path::nodes() fell off");
+    BUG(Span(), "Path::nodes() fell off");
 }
 
 std::ostream& operator<<(std::ostream& os, const ASTAbsolutePath& x) {
@@ -863,7 +857,7 @@ std::ostream& operator<<(std::ostream& os, const ASTAbsolutePath& x) {
 }
 
 void ASTPath::append(ASTPathNode node) {
-    assert(!cls.is_Invalid());
+    BUG_ASSERT(!cls.is_Invalid());
     nodes().push_back(mv$(node));
     bindings = Bindings();
 }

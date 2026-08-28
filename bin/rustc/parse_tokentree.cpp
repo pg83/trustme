@@ -83,11 +83,11 @@ TokenTree::TokenTree(ASTEdition edition, Ident::Hygiene hygiene, std::vector<Tok
 }
 
 const TokenTree& TokenTree::operator[](unsigned int idx) const {
-    assert(idx < subtrees.size());
+    BUG_ASSERT(idx < subtrees.size());
     return subtrees[idx];
 }
 
 TokenTree& TokenTree::operator[](unsigned int idx) {
-    assert(idx < subtrees.size());
+    BUG_ASSERT(idx < subtrees.size());
     return subtrees[idx];
 }

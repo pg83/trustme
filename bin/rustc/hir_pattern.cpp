@@ -1,7 +1,5 @@
 #include "hir_pattern.h"
 
-#include <cassert>
-
 std::ostream& operator<<(std::ostream& os, const HIRPattern::Value& x) {
     switch (x.tag()) {
         case HIRPattern::Value::TAG_Integer: {
@@ -291,7 +289,7 @@ namespace {
             }
             case HIRPatternData::TAG_Or: {
                 auto& e = pattern.data.as_Or();
-                assert(!e.empty());
+                BUG_ASSERT(!e.empty());
                 visitPatternDeclarationSlots(e.front(), slots);
                 break;
             }
@@ -384,7 +382,7 @@ namespace {
                     break;
                 }
                 case HIRPatternData::TAG_Or: {
-                    assert(!current.data.as_Or().empty());
+                    BUG_ASSERT(!current.data.as_Or().empty());
                     deferredOrPatterns.push_back(&current);
                     break;
                 }

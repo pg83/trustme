@@ -179,7 +179,7 @@ const char* HIRExprNode::typeName() const {
 }
 
 void HIRExprVisitor::visitNodePtr(HIRExprNodeP& nodePtr) {
-    assert(nodePtr);
+    BUG_ASSERT(nodePtr);
     nodePtr->visit(*this);
 }
 
@@ -187,7 +187,7 @@ void HIRExprVisitor::visitNode(HIRExprNode& node) {
 }
 
 void HIRExprVisitorDef::visitNodePtr(HIRExprNodeP& nodePtr) {
-    assert(nodePtr);
+    BUG_ASSERT(nodePtr);
     nodePtr->visit(*this);
     if (nodePtr->resType != HIRTypeRef()) {
         updateType(nodePtr->resType);

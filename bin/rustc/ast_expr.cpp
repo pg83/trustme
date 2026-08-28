@@ -43,7 +43,7 @@ void ASTExpr::visitNodes(ASTNodeVisitor& v) {
 
 void ASTExpr::visitNodes(ASTNodeVisitor& v) const {
     if (node_) {
-        assert(v.isConst());
+        BUG_ASSERT(v.isConst());
         node_->visit(v);
     }
 }
@@ -65,7 +65,7 @@ std::ostream& operator<<(std::ostream& os, const ASTExpr& pat) {
 }
 
 std::ostream& operator<<(std::ostream& os, const ASTExprNode& node) {
-    assert(static_cast<const void*>(&node) != nullptr);
+    BUG_ASSERT(static_cast<const void*>(&node) != nullptr);
     node.print(os);
     return os;
 }

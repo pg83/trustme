@@ -436,7 +436,7 @@ namespace {
 
     ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ThinVector<HIRTypeRef>& le, const ThinVector<HIRTypeRef>& re) {
         auto rv = ::OrdEqual;
-        assert(le.size() == re.size());
+        BUG_ASSERT(le.size() == re.size());
         for (unsigned int i = 0; i < le.size(); i++) {
             auto a = typeOrdSpecific(context, sp, le[i], re[i]);
             if (a != ::OrdEqual) {
@@ -452,7 +452,7 @@ namespace {
 
     ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const std::vector<HIRTypeRef>& le, const std::vector<HIRTypeRef>& re) {
         auto rv = ::OrdEqual;
-        assert(le.size() == re.size());
+        BUG_ASSERT(le.size() == re.size());
         for (unsigned int i = 0; i < le.size(); i++) {
             auto a = typeOrdSpecific(context, sp, le[i], re[i]);
             if (a != ::OrdEqual) {
@@ -468,7 +468,7 @@ namespace {
 
     void addBoundFromTrait(HIRTypeInterner& types, std::vector<HIRGenericBound>& rv, const HIRTypeData* type, const HIRTraitPath& curTrait, bool isTrivial) {
         Span sp;
-        assert(curTrait.traitPtr);
+        BUG_ASSERT(curTrait.traitPtr);
         const auto& tr = *curTrait.traitPtr;
         auto monomorphCb = MonomorphStatePtr(types, type, &curTrait.path.params, nullptr);
 
@@ -950,18 +950,18 @@ U128 HIREnum::getDiscriminant(size_t idx) const {
         return this->getValue(idx);
     }
     const auto& variants = data.as_Data();
-    assert(idx < variants.size());
+    BUG_ASSERT(idx < variants.size());
     return variants[idx].discriminantValue;
 }
 
 U128 HIREnum::getValue(size_t idx) const {
     if (data.is_Value()) {
         const auto& e = data.as_Value();
-        assert(idx < e.variants.size());
+        BUG_ASSERT(idx < e.variants.size());
 
         return e.variants[idx].val;
     } else {
-        assert(!"TODO: Enum::get_value on non-value enum?");
+        BUG_ASSERT(!"TODO: Enum::get_value on non-value enum?");
         UNREACHABLE();
     }
 }
@@ -1781,14 +1781,14 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
                 HIRGenerateMIRExpr(wb, *this, ip, epMut, args, retTy);
                 ep.state->stage = HIRExprState::Stage::Mir;
             }
-            assert(ep.mir);
+            BUG_ASSERT(ep.mir);
         }
         return &*ep.mir;
     }
 }
 
 HIRTypeRef HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, const HIRTypeData::Data_TraitObject& te) const {
-    assert(te.trait.traitPtr == this);
+    BUG_ASSERT(te.trait.traitPtr == this);
 
     const auto& vtableTySpath = this->vtablePath;
     const auto& vtableRef = crate.getStructByPath(sp, vtableTySpath);
@@ -1810,7 +1810,7 @@ unsigned HIRTrait::getVtableValueIndex(const HIRGenericPath& traitPath, const Rc
     for (auto it = its.first; it != its.second; ++it) {
         if (it->second.second.path == traitPath.path) {
             // TODO: Match generics using match_test_generics comparing to the trait args
-            assert(it->second.first > 0);
+            BUG_ASSERT(it->second.first > 0);
             return it->second.first;
         }
     }
@@ -1921,7 +1921,7 @@ EncodedLiteral EncodedLiteral::clone() const {
 }
 
 void EncodedLiteral::writeUint(size_t ofs, size_t size, u64 v) {
-    assert(ofs + size <= bytes.size());
+    BUG_ASSERT(ofs + size <= bytes.size());
     for (size_t i = 0; i < size; i++) {
         size_t bit = i * 8;
         if (bit < 64) {
@@ -1969,7 +1969,7 @@ FloatValue EncodedLiteralSlice::readFloat(size_t size /*=0*/) const {
     if (size == 0) {
         size = this->size;
     }
-    assert(size <= this->size);
+    BUG_ASSERT(size <= this->size);
     switch (size) {
         case 2: {
             F16 v;
@@ -2185,7 +2185,7 @@ HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, st
     , hasDefault(defaultType && !defaultType->is_Infer())
     , defaultValue(defaultType)
 {
-    assert(defaultType);
+    BUG_ASSERT(defaultType);
 }
 
 HIRTrait::HIRTrait(HIRGenericParams gps, std::vector<HIRTraitPath> parents)
@@ -2311,7 +2311,7 @@ ImplMatcher::ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGe
 }
 
 auto ImplMatcher::matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) -> HIRCompare {
-    assert(g.binding < implTypes.length());
+    BUG_ASSERT(g.binding < implTypes.length());
     if (implTypes[g.binding]) {
         return implTypes[g.binding]->compareWithPlaceholders(Span(), ty, resolveCb);
     }
@@ -2361,7 +2361,7 @@ ImplTyMatcher::ImplTyMatcher(HIRTypeInterner& types)
 }
 
 auto ImplTyMatcher::matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) -> HIRCompare {
-    assert(g.binding < implTys.size());
+    BUG_ASSERT(g.binding < implTys.size());
     if (implTys.at(g.binding)) {
         return (ty == *implTys.at(g.binding) ? HIRCompare::Equal : HIRCompare::Unequal);
     } else {
@@ -2371,7 +2371,7 @@ auto ImplTyMatcher::matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbRe
 }
 
 auto ImplTyMatcher::matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) -> HIRCompare {
-    assert(g.binding < implVals.size());
+    BUG_ASSERT(g.binding < implVals.size());
     if (implVals.at(g.binding)) {
         return (sz == *implVals.at(g.binding) ? HIRCompare::Equal : HIRCompare::Unequal);
     } else {

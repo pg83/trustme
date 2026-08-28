@@ -573,10 +573,10 @@ namespace {
 
     HIRSimplePath getParentModule(const HIRItemPath& p) {
         const HIRItemPath* parentIp = p.parent;
-        assert(parentIp);
+        BUG_ASSERT(parentIp);
         while (parentIp->name && parentIp->name[0] == '#') {
             parentIp = parentIp->parent;
-            assert(parentIp);
+            BUG_ASSERT(parentIp);
         }
         return parentIp->getSimplePath();
     }
@@ -879,10 +879,10 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                 auto trait = LowerHIRGenericPath(bound.span, e.trait, FromASTPathClass::Type);
                 if (trait.path == pathSized) {
                     if (paramIdx == 0xFFFF) {
-                        assert(selfIsSized);
+                        BUG_ASSERT(selfIsSized);
                         *selfIsSized = false;
                     } else {
-                        assert(paramIdx < rv.types.size());
+                        BUG_ASSERT(paramIdx < rv.types.size());
                         rv.types[paramIdx].isSized = false;
                     }
                 } else {
@@ -1062,7 +1062,7 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
             if (e.hasWildcard) {
                 return HIRPattern(mv$(bindings), HIRPattern::Data::make_SplitTuple({mv$(leading), mv$(trailing)}));
             } else {
-                assert(trailing.size() == 0);
+                BUG_ASSERT(trailing.size() == 0);
                 return HIRPattern(mv$(bindings), HIRPattern::Data::make_Tuple({mv$(leading)}));
             }
             break;
@@ -1073,7 +1073,7 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
             auto trailing = H(*this).lowerhirPatternvec(e.tupPat.end);
 
             if (!e.tupPat.hasWildcard) {
-                assert(trailing.size() == 0);
+                BUG_ASSERT(trailing.size() == 0);
             }
 
             return HIRPattern(mv$(bindings), HIRPattern::Data::make_PathTuple({LowerHIRPatternPath(pat.span(), e.path, FromASTPathClass::Value), HIRPattern::PathBinding(), mv$(leading), e.tupPat.hasWildcard, mv$(trailing), 0}));
@@ -1195,7 +1195,7 @@ HIRSimplePath AST2HIR::LowerHIRSimplePath(const Span& sp, const ASTPath& path, F
             ap = &path.bindings.macro.path;
             break;
     }
-    assert(ap);
+    BUG_ASSERT(ap);
     return HIRSimplePath((ap->crate == "" ? crateName : ap->crate), ap->nodes);
 }
 
@@ -1405,10 +1405,10 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             if (pb.is_Trait()) {
                 const auto& pbe = pb.as_Trait();
                 if (pbe.hir) {
-                    assert(pbe.hir);
+                    BUG_ASSERT(pbe.hir);
                     return findSourceTraitHir(sp, path, *pbe.hir, name, ns, ms);
                 } else if (pbe.trait_) {
-                    assert(pbe.trait_);
+                    BUG_ASSERT(pbe.trait_);
                     return findSourceTraitAst(sp, path, *pbe.trait_, name, ns, ms);
                 } else {
                     BUG(sp, "Unbound path");
@@ -1874,7 +1874,7 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
         }
         case TypeData::TAG_Generic: {
             auto& e = ty->data.as_Generic();
-            assert(e.index < 0x10000);
+            BUG_ASSERT(e.index < 0x10000);
             return crate->types.generic(e.name, e.index);
         }
     }
@@ -1882,7 +1882,7 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
 }
 
 HIRTypeAlias AST2HIR::LowerHIRTypeAlias(const HIRItemPath& p, const ASTTypeAlias& ta) {
-    assert(!implTraitSource.path);
+    BUG_ASSERT(!implTraitSource.path);
     auto params = LowerHIRGenericParams(ta.params(), nullptr);
     implTraitSource = ImplTraitSource(&p, &params);
     auto ty = LowerHIRType(ta.type());
@@ -2105,7 +2105,7 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
         if (var.data.is_Tuple() || var.data.is_Struct()) {
             hasData = true;
         } else {
-            assert(var.data.is_Unit());
+            BUG_ASSERT(var.data.is_Unit());
         }
     }
 
@@ -3133,7 +3133,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
 
         if (ie.second.isImport) {
             auto hirPath = LowerHIRSimplePath(sp, ie.second.path, FromASTPathClass::Type);
-            assert(hirPath.components().empty() || hirPath.components().back() != "");
+            BUG_ASSERT(hirPath.components().empty() || hirPath.components().back() != "");
             HIRTypeItem ti;
             if (const auto* pb = ie.second.path.bindings.type.binding.opt_EnumVar()) {
                 ti = HIRTypeItem::make_Import({mv$(hirPath), true, pb->idx});
@@ -3154,8 +3154,8 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
                 continue;
             }
             auto hirPath = LowerHIRSimplePath(sp, ie.second.path, FromASTPathClass::Value);
-            assert(!hirPath.components().empty());
-            assert(hirPath.components().back() != "");
+            BUG_ASSERT(!hirPath.components().empty());
+            BUG_ASSERT(hirPath.components().back() != "");
             HIRValueItem vi;
 
             switch (ie.second.path.bindings.value.binding.tag()) {
@@ -3179,8 +3179,8 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
         }
         auto hirPath = LowerHIRSimplePath(sp, ie.second.path, FromASTPathClass::Macro);
         if (ie.second.isImport) {
-            assert(!hirPath.components().empty());
-            assert(hirPath.components().back() != "");
+            BUG_ASSERT(!hirPath.components().empty());
+            BUG_ASSERT(hirPath.components().back() != "");
 
             auto mi = HIRMacroItem::make_Import({mv$(hirPath)});
             _add_mod_mac_item(*crate->pool, mod, ie.first, getVis(ie.second.vis), mv$(mi));
@@ -3320,7 +3320,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                             auto atyParams = LowerHIRGenericParams(e.params(), nullptr);
                             //ASSERT_BUG(Span(), aty_params.is_empty(), "TODO: GATs");
 
-                            assert(!implTraitSource.path);
+                            BUG_ASSERT(!implTraitSource.path);
                             HIRItemPath ip1(modPath);
                             std::string name2 = std::string("#impl_") + std::to_string((uintptr_t)&impl) + "_" + item.name.c_str();
                             HIRItemPath ip2(ip1, name2.c_str());
@@ -3389,7 +3389,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                         auto& e = (*item.data).as_Type();
                         auto atyParams = LowerHIRGenericParams(e.params(), nullptr);
 
-                        assert(!implTraitSource.path);
+                        BUG_ASSERT(!implTraitSource.path);
                         implTraitSource = ImplTraitSource(&itemPath, &params, &atyParams);
                         auto atyType = LowerHIRType(e.type());
                         implTraitSource = ImplTraitSource();
@@ -3472,8 +3472,8 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
                     if (&mod == &crate.rootModule_) {
                         mi = mv$(mac.data);
                     } else {
-                        assert(mac.data);
-                        assert(!mac.data->rules.empty());
+                        BUG_ASSERT(mac.data);
+                        BUG_ASSERT(!mac.data->rules.empty());
                         auto pc = mod.path().nodes;
                         pc.push_back(mac.name);
                         mi = HIRMacroItem::make_Import({HIRSimplePath(crateName, std::move(pc))});
@@ -3546,7 +3546,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
 
     auto sp = Span();
     for (const auto& langItemPath : crate.langItems) {
-        assert(langItemPath.second.crate == "");
+        BUG_ASSERT(langItemPath.second.crate == "");
         rv.langItems.insert(std::make_pair(langItemPath.first, HIRSimplePath(crateName, langItemPath.second.nodes)));
     }
     rv.extCratesOrdered = crate.externCratesOrd;
@@ -4233,8 +4233,8 @@ auto LowerHIRExprNodeVisitor::leaveLoopLabel(const RcString& lowered) -> void {
     if (lowered == "") {
         return;
     }
-    assert(!loopLabels.empty());
-    assert(loopLabels.back().lowered == lowered);
+    BUG_ASSERT(!loopLabels.empty());
+    BUG_ASSERT(loopLabels.back().lowered == lowered);
     loopLabels.pop_back();
 }
 
@@ -4257,7 +4257,7 @@ auto LowerHIRExprNodeVisitor::resolveLoopLabel(const Span& sp, const Ident& targ
 }
 
 auto LowerHIRExprNodeVisitor::lower(ASTExprNodeP& ep) -> HIRExprNodeP {
-    assert(ep);
+    BUG_ASSERT(ep);
     ep->visit(*this);
     ASSERT_BUG(ep->span(), rv, ep.typeName() << " - Yielded a nullptr HIR node");
     rv->resType = ctx.crate->types.infer();
@@ -4276,7 +4276,7 @@ auto LowerHIRExprNodeVisitor::lowerIsolated(ASTExprNodeP& ep) -> HIRExprNodeP {
     std::vector<LoopLabel> outerLabels;
     outerLabels.swap(loopLabels);
     auto rv = lower(ep);
-    assert(loopLabels.empty());
+    BUG_ASSERT(loopLabels.empty());
     outerLabels.swap(loopLabels);
     return rv;
 }
@@ -5308,7 +5308,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeNamedValue& v) -> void {
                     auto it = std::find_if(enm.variants().begin(), enm.variants().end(), [&](const auto& x) {
                         return x.name == varName;
                     });
-                    assert(it != enm.variants().end());
+                    BUG_ASSERT(it != enm.variants().end());
 
                     varIdx = static_cast<unsigned int>(it - enm.variants().begin());
                     if (it->data.is_Struct()) {
@@ -5318,7 +5318,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeNamedValue& v) -> void {
                 } else {
                     const auto& enm = *e.hir;
                     auto idx = enm.findVariant(varName);
-                    assert(idx != SIZE_MAX);
+                    BUG_ASSERT(idx != SIZE_MAX);
 
                     varIdx = idx;
                     if (const auto* ee = enm.data.opt_Data()) {

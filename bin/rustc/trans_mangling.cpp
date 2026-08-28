@@ -197,7 +197,7 @@ auto Mangler::fmtBase26Int(unsigned val) -> void {
         os << char('a' + (val % 26));
         val /= 26;
     }
-    assert(val < 26);
+    BUG_ASSERT(val < 26);
     os << char('A' + val);
 }
 

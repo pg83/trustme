@@ -24,6 +24,11 @@ void compileErrorBugCheck(const TokenStream& lex, const char* message) {
     std::abort();
 }
 
+void compileErrorBugCheckAt(const char* file, int line, const char* condition) {
+    std::cerr << file << ":" << line << ": BUG: assertion failed: " << condition << std::endl;
+    std::abort();
+}
+
 void compileErrorTodo(const char* message) {
     std::cout << "Todo(" << message << ")" << std::endl;
     std::abort();

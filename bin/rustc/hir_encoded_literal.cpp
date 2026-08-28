@@ -31,14 +31,14 @@ EncodedLiteralSlice::EncodedLiteralSlice(const EncodedLiteral& base)
 }
 
 EncodedLiteralSlice EncodedLiteralSlice::slice(size_t ofs) const {
-    assert(ofs <= size);
+    BUG_ASSERT(ofs <= size);
     return slice(ofs, size - ofs);
 }
 
 EncodedLiteralSlice EncodedLiteralSlice::slice(size_t ofs, size_t len) const {
-    assert(ofs <= size);
-    assert(len <= size);
-    assert(ofs + len <= size);
+    BUG_ASSERT(ofs <= size);
+    BUG_ASSERT(len <= size);
+    BUG_ASSERT(ofs + len <= size);
     auto rv = EncodedLiteralSlice(base);
     rv.ofs = this->ofs + ofs;
     rv.size = len;

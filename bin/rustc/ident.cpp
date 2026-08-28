@@ -120,16 +120,16 @@ Ident::Hygiene Ident::Hygiene::newScopeChained(u32& id, ObjPool& pool, const Hyg
     v.contexts.reserve(v.contexts.size() + 1);
     v.macroDefinitions.reserve(v.macroDefinitions.size() + 1);
     v.contexts.push_back(++id);
-    assert((macroDefinition & ITEM_OPAQUE) == 0);
+    BUG_ASSERT((macroDefinition & ITEM_OPAQUE) == 0);
     v.macroDefinitions.push_back(macroDefinition | (itemOpaque ? ITEM_OPAQUE : 0));
     return Hygiene(store(pool, std::move(v)));
 }
 
 Ident::Hygiene Ident::Hygiene::withTailScope(ObjPool& pool, const Hygiene& scope, bool inheritModPath) const {
-    assert(scope.inner);
+    BUG_ASSERT(scope.inner);
     const auto& s = *scope.inner;
-    assert(!s.contexts.empty());
-    assert(s.contexts.size() == s.macroDefinitions.size());
+    BUG_ASSERT(!s.contexts.empty());
+    BUG_ASSERT(s.contexts.size() == s.macroDefinitions.size());
     Inner v = clone();
     v.contexts.push_back(s.contexts.back());
     v.macroDefinitions.push_back(s.macroDefinitions.back());
@@ -140,7 +140,7 @@ Ident::Hygiene Ident::Hygiene::withTailScope(ObjPool& pool, const Hygiene& scope
 }
 
 Ident::Hygiene Ident::Hygiene::getParent(ObjPool& pool) const {
-    assert(inner);
+    BUG_ASSERT(inner);
     const auto& c = *inner;
     Inner v;
     v.contexts.insert(v.contexts.begin(), c.contexts.begin(), c.contexts.end() - 1);
@@ -153,7 +153,7 @@ bool Ident::Hygiene::leaveMacroDefinition(ObjPool& pool, unsigned int definition
         return false;
     }
     const auto& c = *inner;
-    assert(c.contexts.size() == c.macroDefinitions.size());
+    BUG_ASSERT(c.contexts.size() == c.macroDefinitions.size());
     if (c.macroDefinitions.empty() || macroDefinitionId(c.macroDefinitions.back()) != definition) {
         return false;
     }
@@ -174,7 +174,7 @@ void Ident::Hygiene::setModPath(ObjPool& pool, ModPath p) {
 }
 
 const Ident::ModPath& Ident::Hygiene::modPath() const {
-    assert(inner && inner->searchModule);
+    BUG_ASSERT(inner && inner->searchModule);
     return *inner->searchModule;
 }
 

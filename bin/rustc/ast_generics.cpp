@@ -19,7 +19,7 @@ ASTTypeParam::ASTTypeParam(ObjPool& pool, Span sp, ASTAttributeList attrs, RcStr
 }
 
 void ASTTypeParam::setDefault(ASTType* type) {
-    assert(defaultValue_->isWildcard());
+    BUG_ASSERT(defaultValue_->isWildcard());
     defaultValue_ = std::move(type);
 }
 

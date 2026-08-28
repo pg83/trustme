@@ -305,7 +305,7 @@ void HIRSimplePath::updateCrateName(RcString v) {
 
 void HIRSimplePath::updateLastComponent(RcString v) {
     const auto& m = p->members;
-    assert(m.size() >= 2);
+    BUG_ASSERT(m.size() >= 2);
     auto i = m.size() - 1;
     auto chOld = contentHash(m.back());
     auto chNew = contentHash(v);

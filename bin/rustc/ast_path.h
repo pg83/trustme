@@ -10,9 +10,7 @@
 #include <string>
 #include <string>
 #include <vector>
-#include <cassert>
 #include <cstdint>
-#include <stdexcept>
 #include <initializer_list>
 
 class MacroRules;

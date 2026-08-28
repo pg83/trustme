@@ -63,7 +63,7 @@ void HIRSerialiseWriter::open(const std::string& filename) {
         istringCache[s] = i;
     }
     for (const auto& e : istringCache) {
-        assert(e.second < sorted.size());
+        BUG_ASSERT(e.second < sorted.size());
     }
 }
 
@@ -102,7 +102,7 @@ HIRSerialiseWriter::Inner::Inner(const std::string& filename)
 }
 
 HIRSerialiseWriter::Inner::~Inner() {
-    assert(zstream.avail_in == 0);
+    BUG_ASSERT(zstream.avail_in == 0);
 
     int ret;
     do {
@@ -130,7 +130,7 @@ void HIRSerialiseWriter::Inner::write(const void* buf, size_t len) {
     size_t lastAvailIn = zstream.avail_in;
 
     while (zstream.avail_in > 0) {
-        assert(zstream.avail_out != 0);
+        BUG_ASSERT(zstream.avail_out != 0);
 
         int ret = deflate(&zstream, Z_NO_FLUSH);
         if (ret == Z_STREAM_ERROR) {
@@ -345,7 +345,7 @@ void HIRSerialiseWriter::writeFloatValue(FloatValue value) {
 }
 
 void HIRSerialiseWriter::writeTag(unsigned int t) {
-    assert(t < 256);
+    BUG_ASSERT(t < 256);
     writeU8(static_cast<u8>(t));
 }
 
@@ -358,7 +358,7 @@ void HIRSerialiseWriter::writeCount(size_t c) {
         writeU8(0xFD);
         writeU16(static_cast<u16>(c));
     } else {
-        assert(c < (1u << 31));
+        BUG_ASSERT(c < (1u << 31));
         writeU8(0xFE);
         writeU32(static_cast<u32>(c));
     }
@@ -368,7 +368,7 @@ void HIRSerialiseWriter::writeString(size_t len, const char* s) {
     if (len < 128) {
         writeU8(static_cast<u8>(len));
     } else {
-        assert(len < (1u << (16 + 7)));
+        BUG_ASSERT(len < (1u << (16 + 7)));
         writeU8(static_cast<u8>(128 + (len >> 16)));
         writeU16(static_cast<u16>(len & 0xFFFF));
     }
@@ -386,7 +386,7 @@ void HIRSerialiseWriter::rawWriteUint(u64 val) {
         u8 bytes[8];
         u8 len = 0;
         while (val > 0) {
-            assert(len < 8);
+            BUG_ASSERT(len < 8);
             bytes[len] = static_cast<u8>(val);
             val >>= 8;
             len += 1;
@@ -568,7 +568,7 @@ bool HIRSerialiseReader::readBool() {
 
 u64 HIRSerialiseReader::rawReadUint() {
     auto v = readU8();
-    assert(v <= 0xC0 + 8);
+    BUG_ASSERT(v <= 0xC0 + 8);
     if (v < 0xC0) {
         return v;
     } else {
@@ -631,7 +631,7 @@ HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openObject(const char* name)
     if (key == objnameCache.size()) {
         objnameCache.push_back(rawReadBytesStdstring());
     }
-    assert(key < objnameCache.size());
+    BUG_ASSERT(key < objnameCache.size());
     if (objnameCache[key] != name) {
         std::cerr << "Expecting OpenNamed(" << name << "), got OpenNamed(" << objnameCache[key] << ")" << std::endl;
         abort();

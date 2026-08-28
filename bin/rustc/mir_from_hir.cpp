@@ -1061,7 +1061,7 @@ namespace {
 
         bool foundNonAny = false;
         for (size_t i = 0; i < rulesets.size(); i++) {
-            assert(idx < rulesets[i].size());
+            BUG_ASSERT(idx < rulesets[i].size());
             if (!rulesets[i][idx].is_Any()) {
                 foundNonAny = true;
             }
@@ -1602,7 +1602,7 @@ namespace {
                                     }
 
                                     if (re.last.as_Uint().v >= 0x10FFFF) {
-                                        assert(re.isInclusive);
+                                        BUG_ASSERT(re.isInclusive);
                                         builder.endBlock(MIRTerminator::make_Goto({succBb}));
                                     } else {
                                         auto testGtVal = MIRParam(MIRConstant::make_Uint({re.last.as_Uint().v, te}));
@@ -2195,7 +2195,7 @@ namespace {
                     case VarState::TAG_Partial: {
                         const auto& nse = newState.as_Partial();
                         const auto* lvTy = builder.valType(sp, lv);
-                        assert(!builder.isTypeOwnedBox(lvTy));
+                        BUG_ASSERT(!builder.isTypeOwnedBox(lvTy));
                         const bool is_enum = lvTy->is_Path() && lvTy->as_Path().binding.is_Enum();
                         const auto oldOptionalFlag = oldState.as_Optional();
 
@@ -2312,7 +2312,7 @@ namespace {
             case VarState::TAG_Partial: {
                 auto& ose = oldState.as_Partial();
                 const auto* lvTy = builder.valType(sp, lv);
-                assert(!builder.isTypeOwnedBox(lvTy));
+                BUG_ASSERT(!builder.isTypeOwnedBox(lvTy));
                 const bool is_enum = lvTy->is_Path() && lvTy->as_Path().binding.is_Enum();
                 switch (newState.tag()) {
                     case VarState::TAG_Invalid:
@@ -2782,7 +2782,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 
                 auto entryBlock = builder.newBbUnlinked();
                 builder.setCurBlock(entryBlock);
-                assert(bindingTemps.size() == armRules[i].bindings.size());
+                BUG_ASSERT(bindingTemps.size() == armRules[i].bindings.size());
                 for (size_t j = 0; j < bindingTemps.size(); j++) {
                     const auto& b = armRules[i].bindings[j];
                     auto val = getPatternBindingValue(conv, sp, armRules[i], matchTy, matchVal, b);
@@ -2824,7 +2824,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                 auto res = builder.getResult(arm.code->span());
                 builder.pushStmtAssign(arm.code->span(), resultVal.clone(), mv$(res));
             } else {
-                assert(!builder.hasResult());
+                BUG_ASSERT(!builder.hasResult());
             }
             while (!scopes.empty()) {
                 if (scopes.back().isSplit) {
@@ -2879,7 +2879,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
             return columnWeights[a] > columnWeights[b];
         });
         for (auto& armRule : armRules) {
-            assert(columnsSorted.size() == armRule.rules.size());
+            BUG_ASSERT(columnsSorted.size() == armRule.rules.size());
             std::vector<PatternRule> sorted;
             sorted.reserve(columnsSorted.size());
             for (auto idx : columnsSorted) {
@@ -3048,7 +3048,7 @@ PatternRule PatternRule::clone() const {
             if (le.idx != re.idx) {
                 return ::ord(le.idx, re.idx);
             }
-            assert(le.subRules.size() == re.subRules.size());
+            BUG_ASSERT(le.subRules.size() == re.subRules.size());
             for (unsigned int i = 0; i < le.subRules.size(); i++) {
                 auto cmp = ruleIsBefore(le.subRules[i], re.subRules[i]);
                 if (cmp != ::OrdEqual) {
@@ -3063,7 +3063,7 @@ PatternRule PatternRule::clone() const {
             if (le.len != re.len) {
                 return ::ord(le.len, re.len);
             }
-            assert(le.subRules.size() == re.subRules.size());
+            BUG_ASSERT(le.subRules.size() == re.subRules.size());
             for (unsigned int i = 0; i < le.subRules.size(); i++) {
                 auto cmp = ruleIsBefore(le.subRules[i], re.subRules[i]);
                 if (cmp != ::OrdEqual) {
@@ -3094,7 +3094,7 @@ PatternRule PatternRule::clone() const {
 }
 
 bool PatternRuleset::isBefore(const PatternRuleset& other) const {
-    assert(rules.size() == other.rules.size());
+    BUG_ASSERT(rules.size() == other.rules.size());
     for (unsigned int i = 0; i < rules.size(); i++) {
         const auto& l = rules[i];
         const auto& r = other.rules[i];
@@ -3107,8 +3107,8 @@ bool PatternRuleset::isBefore(const PatternRuleset& other) const {
 }
 
 void PatternRulesetBuilder::pushRule(PatternRule r) {
-    assert(this->subsetStart < this->subsetEnd);
-    assert(this->subsetEnd <= rulesets.size());
+    BUG_ASSERT(this->subsetStart < this->subsetEnd);
+    BUG_ASSERT(this->subsetEnd <= rulesets.size());
     for (size_t i = subsetStart; i < subsetEnd; i++) {
         rulesets[i].rules.push_back(i == subsetEnd - 1 ? std::move(r) : r.clone());
         rulesets[i].rules.back().fieldPath = fieldPath;
@@ -3117,8 +3117,8 @@ void PatternRulesetBuilder::pushRule(PatternRule r) {
 }
 
 void PatternRulesetBuilder::pushBinding(PatternBinding b) {
-    assert(this->subsetStart < this->subsetEnd);
-    assert(this->subsetEnd <= rulesets.size());
+    BUG_ASSERT(this->subsetStart < this->subsetEnd);
+    BUG_ASSERT(this->subsetEnd <= rulesets.size());
     for (size_t i = subsetStart; i < subsetEnd; i++) {
         b.rootIndex = rootIndex;
         rulesets[i].bindings.push_back(b);
@@ -3126,8 +3126,8 @@ void PatternRulesetBuilder::pushBinding(PatternBinding b) {
 }
 
 void PatternRulesetBuilder::pushBindings(std::vector<PatternBinding> bindings) {
-    assert(this->subsetStart < this->subsetEnd);
-    assert(this->subsetEnd <= rulesets.size());
+    BUG_ASSERT(this->subsetStart < this->subsetEnd);
+    BUG_ASSERT(this->subsetEnd <= rulesets.size());
     for (size_t i = subsetStart; i < subsetEnd; i++) {
         auto& l = rulesets[i].bindings;
         l.insert(l.end(), bindings.begin(), bindings.end());
@@ -3135,8 +3135,8 @@ void PatternRulesetBuilder::pushBindings(std::vector<PatternBinding> bindings) {
 }
 
 void PatternRulesetBuilder::pushDerefs(std::vector<PatternRuleset::Deref> derefs) {
-    assert(this->subsetStart < this->subsetEnd);
-    assert(this->subsetEnd <= rulesets.size());
+    BUG_ASSERT(this->subsetStart < this->subsetEnd);
+    BUG_ASSERT(this->subsetEnd <= rulesets.size());
     for (size_t i = subsetStart; i < subsetEnd; i++) {
         auto& out = rulesets[i].derefs;
         out.insert(out.end(), derefs.begin(), derefs.end());
@@ -3144,28 +3144,28 @@ void PatternRulesetBuilder::pushDerefs(std::vector<PatternRuleset::Deref> derefs
 }
 
 void PatternRulesetBuilder::setImpossible() {
-    assert(this->subsetStart < this->subsetEnd);
-    assert(this->subsetEnd <= rulesets.size());
+    BUG_ASSERT(this->subsetStart < this->subsetEnd);
+    BUG_ASSERT(this->subsetEnd <= rulesets.size());
     for (size_t i = subsetStart; i < subsetEnd; i++) {
         rulesets[i].isImpossible = true;
     }
 }
 
 void PatternRulesetBuilder::multiplyRulesetsWith(size_t n, PatternSubsetCallback& cb) {
-    assert(n > 0);
+    BUG_ASSERT(n > 0);
     if (n == 1) {
         cb.visitSubset(0);
         return;
     }
-    assert(this->subsetStart < this->subsetEnd);
-    assert(this->subsetEnd <= rulesets.size());
+    BUG_ASSERT(this->subsetStart < this->subsetEnd);
+    BUG_ASSERT(this->subsetEnd <= rulesets.size());
     size_t subsetSize = this->subsetEnd - this->subsetStart;
     size_t ofs = (n - 1) * subsetSize;
-    assert(ofs > 0);
+    BUG_ASSERT(ofs > 0);
     size_t newSubsetEnd = this->subsetStart + n * subsetSize;
     size_t nTail = rulesets.size() - this->subsetEnd;
     rulesets.resize(rulesets.size() + (n - 1) * subsetSize);
-    assert(newSubsetEnd == rulesets.size() - nTail);
+    BUG_ASSERT(newSubsetEnd == rulesets.size() - nTail);
     for (size_t i = rulesets.size(); i-- > newSubsetEnd;) {
         rulesets[i] = std::move(rulesets[i - ofs]);
     }
@@ -3192,8 +3192,8 @@ void PatternRulesetBuilder::multiplyRulesetsWith(size_t n, PatternSubsetCallback
             rulesets[j].orPath.push_back(static_cast<unsigned>(i));
         }
         cb.visitSubset(i);
-        assert(this->subsetStart == origStart);
-        assert(this->subsetEnd >= this->subsetStart + subsetSize);
+        BUG_ASSERT(this->subsetStart == origStart);
+        BUG_ASSERT(this->subsetEnd >= this->subsetStart + subsetSize);
         this->subsetStart = this->subsetEnd;
     }
     this->subsetStart = savedStart;
@@ -3347,8 +3347,8 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                         auto varLit = lit.slice(enmRepr->fields[varIdx].offset);
                         if (subHasTag && varTy != resolve.hirCrate().types.unit()) {
                             auto* innerRepr = TargetGetTypeRepr(sp, resolve, varTy);
-                            assert(innerRepr->variants.is_None());
-                            assert(innerRepr->fields.size() > 0);
+                            BUG_ASSERT(innerRepr->variants.is_None());
+                            BUG_ASSERT(innerRepr->fields.size() > 0);
                             subBuilder.fieldPath.push_back(0);
                             for (size_t i = 0; i < innerRepr->fields.size() - 1; i++) {
                                 subBuilder.appendFromLit(sp, varLit.slice(innerRepr->fields[i].offset), innerRepr->fields[i].ty);
@@ -3758,8 +3758,8 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
 
     if (pat.data.is_Or()) {
         const auto& e = pat.data.as_Or();
-        assert(pat.implicitDerefCount == 0);
-        assert(e.size() > 0);
+        BUG_ASSERT(pat.implicitDerefCount == 0);
+        BUG_ASSERT(e.size() > 0);
         this->multiplyRulesets(e.size(), [&](size_t i) {
             this->appendFrom(sp, e[i], topTy);
         });
@@ -3787,7 +3787,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 case HIRPatternData::TAG_Range: {
                     auto& pe = pat.data.as_Range();
                     if (!pe.start || !pe.end) {
-                        assert(pe.start || pe.end);
+                        BUG_ASSERT(pe.start || pe.end);
                         if (pe.start) {
                             this->pushRule(PatternRule::make_ValueRange({H::getPatternValue(sp, resolve, pat, *pe.start, e), H::getPatternValueMax(sp, pat, e), true}));
                         } else {
@@ -3836,7 +3836,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
                 case HIRPattern::Data::TAG_Tuple: {
                     auto& pe = pat.data.as_Tuple();
-                    assert(e.size() == pe.subPatterns.size());
+                    BUG_ASSERT(e.size() == pe.subPatterns.size());
                     for (unsigned int i = 0; i < e.size(); i++) {
                         this->appendFrom(sp, pe.subPatterns[i], e[i]);
                         fieldPath.back()++;
@@ -3845,7 +3845,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
                 case HIRPattern::Data::TAG_SplitTuple: {
                     auto& pe = pat.data.as_SplitTuple();
-                    assert(e.size() >= pe.leading.size() + pe.trailing.size());
+                    BUG_ASSERT(e.size() >= pe.leading.size() + pe.trailing.size());
                     unsigned trailingStart = e.size() - pe.trailing.size();
                     for (unsigned int i = 0; i < e.size(); i++) {
                         if (i < pe.leading.size()) {
@@ -3873,7 +3873,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             struct PH {
                 static void pushPatternTuple(PatternRulesetBuilder& builder, const Span& sp, const HIRPattern::Data::Data_PathTuple& pe, PatternTypeCallback& maybeMonomorph) {
                     const auto& sd = patternGetTuple(sp, pe.path, pe.binding);
-                    assert(sd.size() >= pe.leading.size() + pe.trailing.size());
+                    BUG_ASSERT(sd.size() >= pe.leading.size() + pe.trailing.size());
                     size_t trailingStart = sd.size() - pe.trailing.size();
                     for (unsigned int i = 0; i < sd.size(); i++) {
                         const auto& fld = sd[i];
@@ -4013,7 +4013,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                                 }
                                 case HIRPatternData::TAG_PathTuple: {
                                     auto& pe = pat.data.as_PathTuple();
-                                    assert(pe.binding.is_Struct());
+                                    BUG_ASSERT(pe.binding.is_Struct());
                                     PH::pushPatternTuple(*this, sp, pe, patternType);
                                     break;
                                 }
@@ -4038,7 +4038,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                                 }
                                 case HIRPatternData::TAG_PathNamed: {
                                     auto& pe = pat.data.as_PathNamed();
-                                    assert(pe.binding.is_Struct());
+                                    BUG_ASSERT(pe.binding.is_Struct());
                                     fieldPath.push_back(0);
                                     PH::pushPatternStruct(*this, sp, pe, patternType);
                                     fieldPath.pop_back();
@@ -4111,13 +4111,13 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                         }
                         case HIRPatternData::TAG_PathValue: {
                             auto& pe = pat.data.as_PathValue();
-                            assert(pe.binding.is_Enum());
+                            BUG_ASSERT(pe.binding.is_Enum());
                             this->pushRule(PatternRule::make_Variant({pe.binding.as_Enum().varIdx, {}}));
                             break;
                         }
                         case HIRPatternData::TAG_PathTuple: {
                             auto& pe = pat.data.as_PathTuple();
-                            assert(pe.binding.is_Enum());
+                            BUG_ASSERT(pe.binding.is_Enum());
                             const auto& be = pe.binding.as_Enum();
 
                             PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
@@ -4142,7 +4142,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                         }
                         case HIRPatternData::TAG_PathNamed: {
                             auto& pe = pat.data.as_PathNamed();
-                            assert(pe.binding.is_Enum());
+                            BUG_ASSERT(pe.binding.is_Enum());
                             const auto& be = pe.binding.as_Enum();
 
                             PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
@@ -4153,11 +4153,11 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                             subBuilder.fieldPath.push_back(0);
 
                             if (be.ptr->isValue()) {
-                                assert(pe.subPatterns.empty());
+                                BUG_ASSERT(pe.subPatterns.empty());
                             } else if (be.ptr->data.as_Data().at(be.varIdx).type == resolve.hirCrate().types.unit()) {
-                                assert(pe.subPatterns.empty());
+                                BUG_ASSERT(pe.subPatterns.empty());
                             } else if (!be.ptr->data.as_Data().at(be.varIdx).isStruct) {
-                                assert(pe.subPatterns.empty());
+                                BUG_ASSERT(pe.subPatterns.empty());
                                 const auto& sd = patternGetTuple(sp, pe.path, pe.binding);
                                 for (unsigned int i = 0; i < sd.size(); i++) {
                                     const auto& fld = sd[i];
@@ -4609,7 +4609,7 @@ void MatchGenGrouped::genForSlice(tRulesSubset armRules, size_t ofs, MIRBasicBlo
             continue;
         }
 
-        assert(firstAny == idx);
+        BUG_ASSERT(firstAny == idx);
         if (firstAny < armRules.size() && armRules[idx].size() > ofs) {
             while (idx < armRules.size() && armRules[idx][ofs] == armRules[firstAny][ofs]) {
                 idx++;
@@ -4990,7 +4990,7 @@ void MatchGenGrouped::genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::v
 
         arms[varIdx] = armTargets[armIdx];
         for (size_t j = 0; j < rules[i].size(); j++) {
-            assert(arms[varIdx] == armTargets[armIdx]);
+            BUG_ASSERT(arms[varIdx] == armTargets[armIdx]);
             armIdx++;
         }
     }
@@ -5012,7 +5012,7 @@ void MatchGenGrouped::genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::
             auto valTst = MIRConstant::make_Uint({U128(re->len), HIRCoreType::Usize});
 
             for (size_t j = 0; j < rules[i].size(); j++) {
-                assert(armTargets[tgtOfs] == armTargets[tgtOfs + j]);
+                BUG_ASSERT(armTargets[tgtOfs] == armTargets[tgtOfs + j]);
             }
 
             if (re->len > 0) {
@@ -5300,7 +5300,7 @@ void MirBuilder::registerVariableState(unsigned int idx) {
                 auto& e = scopeDef.data.as_Owning();
                 if (!e.isTemporary) {
                     auto it = std::find(e.slots.begin(), e.slots.end(), idx);
-                    assert(it == e.slots.end());
+                    BUG_ASSERT(it == e.slots.end());
                     e.slots.push_back(idx);
                     return;
                 }
@@ -5326,11 +5326,11 @@ void MirBuilder::scheduleRegisteredVariableDrop(unsigned int idx) {
                 auto& e = scopeDef.data.as_Owning();
                 if (!e.isTemporary) {
                     auto stateIt = std::find(e.slots.begin(), e.slots.end(), idx);
-                    assert(stateIt != e.slots.end());
+                    BUG_ASSERT(stateIt != e.slots.end());
                     auto dropIt = std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
                         return !slot.isArgument && slot.index == idx;
                     });
-                    assert(dropIt == e.dropSlots.end());
+                    BUG_ASSERT(dropIt == e.dropSlots.end());
                     e.dropSlots.push_back(ScopeDropSlot{false, idx});
                     return;
                 }
@@ -5358,7 +5358,7 @@ void MirBuilder::scheduleArgumentDrop(unsigned int idx) {
                     auto it = std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
                         return slot.isArgument && slot.index == idx;
                     });
-                    assert(it == e.dropSlots.end());
+                    BUG_ASSERT(it == e.dropSlots.end());
                     e.dropSlots.push_back(ScopeDropSlot{true, idx});
                     return;
                 }
@@ -5469,10 +5469,10 @@ void MirBuilder::dropLvalue(const Span& sp, const MIRLValue& value) {
 MIRLValue MirBuilder::newTemporary(const HIRTypeData* ty) {
     unsigned int rv = output.locals.size();
 
-    assert(output.locals.size() == slotStates.size());
+    BUG_ASSERT(output.locals.size() == slotStates.size());
     output.locals.push_back(ty);
     slotStates.push_back(VarState::make_Invalid(InvalidType::Uninit));
-    assert(output.locals.size() == slotStates.size());
+    BUG_ASSERT(output.locals.size() == slotStates.size());
 
     ScopeDef* topScope = nullptr;
     for (unsigned int i = scopeStack.size(); i--;) {
@@ -5489,9 +5489,9 @@ MIRLValue MirBuilder::newTemporary(const HIRTypeData* ty) {
         } else {
         }
     }
-    assert(topScope);
+    BUG_ASSERT(topScope);
     auto& tmpScope = topScope->data.as_Owning();
-    assert(tmpScope.isTemporary);
+    BUG_ASSERT(tmpScope.isTemporary);
     tmpScope.slots.push_back(rv);
     tmpScope.dropSlots.push_back(ScopeDropSlot{false, rv});
     return MIRLValue::newLocal(rv);
@@ -6009,9 +6009,9 @@ MirBuilder::SaveCodeProto MirBuilder::codeSaveStart() {
 }
 
 MirBuilder::SavedCode MirBuilder::codeSaveEnd(SaveCodeProto h) {
-    assert(!blockActive());
-    assert(!codeSaveStack.empty());
-    assert(h.index == codeSaveStack.back().index);
+    BUG_ASSERT(!blockActive());
+    BUG_ASSERT(!codeSaveStack.empty());
+    BUG_ASSERT(h.index == codeSaveStack.back().index);
     SavedCode rv;
     rv.blocks = std::move(codeSaveStack.back().blocks);
     codeSaveStack.pop_back();
@@ -6019,7 +6019,7 @@ MirBuilder::SavedCode MirBuilder::codeSaveEnd(SaveCodeProto h) {
 }
 
 void MirBuilder::insertCloned(const Span& sp, const SavedCode& c, CloneMapper& mapper) {
-    assert(blockActive());
+    BUG_ASSERT(blockActive());
     if (!c.blocks.empty()) {
         struct Cloner: MIRCloner {
             CloneMapper& mapper;
@@ -6210,7 +6210,7 @@ void MirBuilder::raiseAll(const Span& sp, ScopeHandle source, const ScopeHandle&
     ASSERT_BUG(sp, srcScopeDef.data.as_Owning().isTemporary, "Rasising scopes can only be done on temporaries (source)");
     auto& srcList = srcScopeDef.data.as_Owning().slots;
     for (auto idx : srcList) {
-        assert(idx >= firstTempIdx);
+        BUG_ASSERT(idx >= firstTempIdx);
     }
 
     auto it = scopeStack.rbegin() + 1;
@@ -6240,7 +6240,7 @@ void MirBuilder::raiseAll(const Span& sp, ScopeHandle source, const ScopeHandle&
             }
 
             // TODO: Insert current state in the current arm
-            assert(!sdSplit->arms.empty());
+            BUG_ASSERT(!sdSplit->arms.empty());
             auto& arm = sdSplit->arms.back();
             for (auto idx : srcList) {
                 arm.states.insert(std::make_pair(idx, mv$(slotStates.at(idx))));
@@ -6418,7 +6418,7 @@ void MirBuilder::endSplitArm(const Span& sp, const ScopeHandle& handle, bool rea
     }
 
     if (reachable) {
-        assert(blockActive_);
+        BUG_ASSERT(blockActive_);
     }
     if (!early) {
         SplitArm arm;
@@ -6580,7 +6580,7 @@ HIRTypeRef MirBuilder::valType(const Span& sp, const MIRLValue& val, const MIRLV
             break;
         }
     }
-    assert(ty);
+    BUG_ASSERT(ty);
     for (const auto& w : val.wrappers) {
         if (&w == stopWrapper) {
             stopWrapper = nullptr;
@@ -6727,7 +6727,7 @@ HIRTypeRef MirBuilder::valType(const Span& sp, const MIRLValue& val, const MIRLV
                 break;
             }
         }
-        assert(ty);
+        BUG_ASSERT(ty);
     }
     ASSERT_BUG(sp, !stopWrapper, "A stop wrapper was passed, but not found");
     return revealType(ty);
@@ -6870,7 +6870,7 @@ outOfLoop:
                 break;
         }
     }
-    assert(ret);
+    BUG_ASSERT(ret);
     return *ret;
 }
 
@@ -6896,7 +6896,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
             return nullptr;
         }
     }
-    assert(vs);
+    BUG_ASSERT(vs);
 
     if (expectValid && vs->is_Valid()) {
         return nullptr;
@@ -7050,7 +7050,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                 break;
             }
         }
-        assert(vs);
+        BUG_ASSERT(vs);
     }
     return vs;
 }
@@ -7594,7 +7594,7 @@ MirBuilder::SavedAliases MirBuilder::saveAliases() const {
 }
 
 void MirBuilder::restoreAliases(SavedAliases a) {
-    assert(a.setAliases.size() == variableAliases.size());
+    BUG_ASSERT(a.setAliases.size() == variableAliases.size());
     for (size_t i = 0; i < a.setAliases.size(); i++) {
         if (!a.setAliases[i]) {
             variableAliases.at(i).second = MIRLValue();
@@ -8222,7 +8222,7 @@ auto ExprVisitorConv::generatorFinalise(const Span& sp, HIREnum& stateEnm) -> st
 auto ExprVisitorConv::generatorMakeDrop(const Span& sp, MirBuilder& outBuilder, size_t nCaptures, const std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, unsigned dropStateFieldIdx, const std::map<unsigned, unsigned>& dropFlagMapping) const -> void {
     MIRLValue self = MIRLValue::newDeref(MIRLValue::newArgument(0));
 
-    assert(generatorState.states.size() > 0);
+    BUG_ASSERT(generatorState.states.size() > 0);
     std::vector<MIRBasicBlockId> arms;
     arms.reserve(generatorState.states.size() + 2);
 
@@ -8235,7 +8235,7 @@ auto ExprVisitorConv::generatorMakeDrop(const Span& sp, MirBuilder& outBuilder, 
         slot.wrappers.push_back(MIRLValue::Wrapper::newField(dropStateFieldIdx));
         for (const auto& flagMapping : dropFlagMapping) {
             auto i = outBuilder.newDropFlag(false);
-            assert(i == flagMapping.second);
+            BUG_ASSERT(i == flagMapping.second);
             outBuilder.pushStmt(
                 sp,
                 MIRStatement::make_LoadDropFlag({
@@ -8615,7 +8615,7 @@ auto ExprVisitorConv::visit(HIRExprNodeAsm2& node) -> void {
                         ASSERT_BUG(node.span(), e.valIn, "`in` register with no input");
                         this->visitNodePtr(e.valIn);
                         input = box$(builder.getResultInParam(e.valIn->span(), e.valIn->resType));
-                        assert(!e.valOut);
+                        BUG_ASSERT(!e.valOut);
                         break;
                     case AsmDirection::Out:
                     case AsmDirection::LateOut:
@@ -8910,7 +8910,7 @@ auto ExprVisitorConv::visit(HIRExprNodeLoop& node) -> void {
     loopStack.pop_back();
 
     if (builder.hasResult()) {
-        assert(builder.blockActive());
+        BUG_ASSERT(builder.blockActive());
         // TODO: Properly drop this? Or just discard it? It should be ()
         builder.getResult(node.span());
     }
@@ -8927,11 +8927,11 @@ auto ExprVisitorConv::visit(HIRExprNodeLoop& node) -> void {
         builder.setCurBlock(loopNext);
         builder.setResult(node.span(), mv$(loopResultLvaue));
     } else {
-        assert(!builder.hasResult());
+        BUG_ASSERT(!builder.hasResult());
 
         builder.setCurBlock(loopNext);
         builder.endSplitArmEarly(node.span());
-        assert(!builder.hasResult());
+        BUG_ASSERT(!builder.hasResult());
         builder.endBlock(MIRTerminator::make_Unreachable({}));
     }
 
@@ -10016,8 +10016,8 @@ auto ExprVisitorConv::visitIndexOperator(HIRExprNodeIndex& node, const HIRTypeDa
             TODO(sp, "Support moving out of indexed values");
             break;
     }
-    assert(langitem);
-    assert(method);
+    BUG_ASSERT(langitem);
+    BUG_ASSERT(method);
 
     HIRPathParams ppTrait;
     ppTrait.types.push_back(tyIdx);
@@ -10178,8 +10178,8 @@ auto ExprVisitorConv::visit(HIRExprNodeDeref& node) -> void {
                 TODO(sp, "ValueUsage::Move for desugared Deref of " << node.value->resType);
                 break;
         }
-        assert(langitem);
-        assert(method);
+        BUG_ASSERT(langitem);
+        BUG_ASSERT(method);
 
         auto methodPath = HIRPath(tyVal, HIRGenericPath(builder.resolve().crate.getLangItemPath(node.span(), langitem), {}), method, HIRPathParams());
 
@@ -10200,7 +10200,7 @@ auto ExprVisitorConv::visit(HIRExprNodeDeref& node) -> void {
 }
 
 auto ExprVisitorConv::visit(HIRExprNodeEmplace& node) -> void {
-    assert(node.type == HIRExprNodeEmplace::Type::Boxer);
+    BUG_ASSERT(node.type == HIRExprNodeEmplace::Type::Boxer);
     const auto& dataTy = node.value->resType;
 
     node.value->visit(*this);
@@ -10833,7 +10833,7 @@ auto ExprVisitorConv::visitSlInner(HIRExprNodeStructLiteral& node, const HIRStru
         auto idx = std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
             return x.name == ent.first;
         }) - fields.begin();
-        assert(!valuesSet[idx]);
+        BUG_ASSERT(!valuesSet[idx]);
         valuesSet[idx] = true;
         this->visitNodePtr(valnode);
         if (!builder.blockActive()) {
@@ -10926,7 +10926,7 @@ auto ExprVisitorConv::visit(HIRExprNodeStructLiteral& node) -> void {
                 auto it = std::find_if(unm.variants.begin(), unm.variants.end(), [&](const HIRStructField& v) -> auto {
                     return v.name == variantName;
                 });
-                assert(it != unm.variants.end());
+                BUG_ASSERT(it != unm.variants.end());
                 unsigned int idx = it - unm.variants.begin();
 
                 builder.setResult(node.span(), MIRRValue::make_UnionVariant({node.realPath.clone(), idx, mv$(val)}));
@@ -11195,7 +11195,7 @@ auto RulesetRef::swap(size_t a, size_t b) -> void {
     if (rulesVec) {
         std::swap((*rulesVec)[a], (*rulesVec)[b]);
     } else {
-        assert(parent);
+        BUG_ASSERT(parent);
         if (parentLen) {
             parent->swap(parentOfs + a, parentOfs + b);
         } else {
@@ -11209,8 +11209,8 @@ auto tRulesSubset::decodeArmIdx(size_t v) -> std::pair<size_t, size_t> {
 }
 
 auto tRulesSubset::encodeArmIdx(size_t armIdx, size_t patIdx) -> size_t {
-    assert(armIdx <= 0x3FFF);
-    assert(patIdx <= 0x3FFF);
+    BUG_ASSERT(armIdx <= 0x3FFF);
+    BUG_ASSERT(patIdx <= 0x3FFF);
     return armIdx | (patIdx << 14);
 }
 
@@ -11234,13 +11234,13 @@ auto tRulesSubset::isArm() const -> bool {
 }
 
 auto tRulesSubset::armIdx(size_t n) const -> ArmIdxes {
-    assert(isArmIndexes);
+    BUG_ASSERT(isArmIndexes);
     auto v = decodeArmIdx(armIdxes.at(n));
     return ArmIdxes{v.first, v.second};
 }
 
 auto tRulesSubset::bbIdx(size_t n) const -> MIRBasicBlockId {
-    assert(!isArmIndexes);
+    BUG_ASSERT(!isArmIndexes);
     return armIdxes.at(n);
 }
 
@@ -11280,13 +11280,13 @@ auto tRulesSubset::subSlice(size_t ofs, size_t n) -> tRulesSubset {
 }
 
 auto tRulesSubset::pushArm(const std::vector<PatternRule>& x, size_t armIdx, size_t patIdx) -> void {
-    assert(isArmIndexes);
+    BUG_ASSERT(isArmIndexes);
     ruleSets.push_back(&x);
     armIdxes.push_back(encodeArmIdx(armIdx, patIdx));
 }
 
 auto tRulesSubset::pushBb(const std::vector<PatternRule>& x, MIRBasicBlockId bb) -> void {
-    assert(!isArmIndexes);
+    BUG_ASSERT(!isArmIndexes);
     ruleSets.push_back(&x);
     armIdxes.push_back(bb);
 }

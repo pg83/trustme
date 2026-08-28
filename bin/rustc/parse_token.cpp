@@ -218,7 +218,7 @@ Token Token::makeFloat(FloatValue val, enum eCoreType datatype) {
         case CORETYPE_ANY:
             break;
         default:
-            throw std::runtime_error("Bad type for float");
+            BUG(Span(), "Bad type for float");
     }
     return rv;
 }
@@ -336,7 +336,7 @@ Token::Token(const Token& t)
     , hygiene_(t.hygiene_)
     , isDocComment_(t.isDocComment_)
 {
-    assert(!t.data_.isDead());
+    BUG_ASSERT(!t.data_.isDead());
     switch (t.data_.tag()) {
         case TokenData::TAG_None: {
             break;
@@ -374,7 +374,7 @@ Token Token::clone() const {
     rv.hygiene_ = hygiene_;
     rv.isDocComment_ = isDocComment_;
 
-    assert(!data_.isDead());
+    BUG_ASSERT(!data_.isDead());
     switch (data_.tag()) {
         case Data::TAG_None: {
             break;
@@ -401,7 +401,7 @@ Token Token::clone() const {
         }
         case Data::TAG_Fragment: {
             auto& e = data_.as_Fragment();
-            assert(e);
+            BUG_ASSERT(e);
             switch (type_) {
                 case TOK_INTERPOLATED_TYPE:
                     rv.data_ = new ASTType*((*reinterpret_cast<ASTType**>(e))->clone());
@@ -435,7 +435,7 @@ Token Token::clone() const {
                     BUG(Span(Span(), pos), "Fragment with invalid token type (" << *this << ")");
                     break;
             }
-            assert(rv.data_.is_Fragment());
+            BUG_ASSERT(rv.data_.is_Fragment());
             break;
         }
     }
@@ -443,20 +443,20 @@ Token Token::clone() const {
 }
 
 ASTExprNode& Token::fragNode() {
-    assert(type_ == TOK_INTERPOLATED_EXPR || type_ == TOK_INTERPOLATED_STMT || type_ == TOK_INTERPOLATED_BLOCK);
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_EXPR || type_ == TOK_INTERPOLATED_STMT || type_ == TOK_INTERPOLATED_BLOCK);
     auto ptr = data_.as_Fragment();
     return *reinterpret_cast<ASTExprNode*>(ptr);
 }
 
 std::unique_ptr<ASTExprNode> Token::takeFragNode() {
-    assert(type_ == TOK_INTERPOLATED_EXPR || type_ == TOK_INTERPOLATED_STMT || type_ == TOK_INTERPOLATED_BLOCK);
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_EXPR || type_ == TOK_INTERPOLATED_STMT || type_ == TOK_INTERPOLATED_BLOCK);
     auto ptr = data_.as_Fragment();
     data_.as_Fragment() = nullptr;
     return std::unique_ptr<ASTExprNode>(reinterpret_cast<ASTExprNode*>(ptr));
 }
 
 ASTNamed<ASTItem> Token::takeFragItem() {
-    assert(type_ == TOK_INTERPOLATED_ITEM);
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_ITEM);
     auto ptr = reinterpret_cast<ASTNamed<ASTItem>*>(data_.as_Fragment());
     data_.as_Fragment() = nullptr;
     auto rv = mv$(*ptr);
@@ -465,7 +465,7 @@ ASTNamed<ASTItem> Token::takeFragItem() {
 }
 
 ASTNamed<ASTItem> Token::takeFragStmtItem() {
-    assert(type_ == TOK_INTERPOLATED_STMT_ITEM);
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_STMT_ITEM);
     auto ptr = reinterpret_cast<ASTNamed<ASTItem>*>(data_.as_Fragment());
     data_.as_Fragment() = nullptr;
     auto rv = mv$(*ptr);
@@ -474,7 +474,7 @@ ASTNamed<ASTItem> Token::takeFragStmtItem() {
 }
 
 ASTVisibility Token::takeFragVis() {
-    assert(type_ == TOK_INTERPOLATED_VIS);
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_VIS);
     auto ptr = reinterpret_cast<ASTVisibility*>(data_.as_Fragment());
     data_.as_Fragment() = nullptr;
     auto rv = mv$(*ptr);
@@ -1024,22 +1024,22 @@ Token& Token::operator=(const Token& t) {
 
 // TODO: Replace these with a way of getting a InterpolatedFragment&
 ASTType*& Token::fragType() {
-    assert(type_ == TOK_INTERPOLATED_TYPE);
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_TYPE);
     return *reinterpret_cast<ASTType**>(data_.as_Fragment());
 }
 
 ASTPath& Token::fragPath() {
-    assert(type_ == TOK_INTERPOLATED_PATH);
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_PATH);
     return *reinterpret_cast<ASTPath*>(data_.as_Fragment());
 }
 
 ASTPattern& Token::fragPattern() {
-    assert(type_ == TOK_INTERPOLATED_PATTERN);
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_PATTERN);
     return *reinterpret_cast<ASTPattern*>(data_.as_Fragment());
 }
 
 ASTAttribute& Token::fragMeta() {
-    assert(type_ == TOK_INTERPOLATED_META);
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_META);
     return *reinterpret_cast<ASTAttribute*>(data_.as_Fragment());
 }
 
@@ -1072,7 +1072,7 @@ bool Token::operator==(const Token& r) const {
             return e.datatype == re.datatype && e.floatval == re.floatval;
         }
         case Data::TAG_Fragment: {
-            assert(!"Token equality on Fragment");
+            BUG_ASSERT(!"Token equality on Fragment");
             break;
         }
     }

@@ -1185,7 +1185,7 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
         if (auto* ee = te->inner.opt_Fcn()) {
             if (ee->origin != HIRSimplePath()) {
             } else if (fcnPath) {
-                assert(fcnPtr);
+                BUG_ASSERT(fcnPtr);
 
                 HIRPathParams params = fcnPtr->params.makeNopParams(crate.types, 1);
                 ee->origin = fcnPath->getFullPath();
@@ -1552,7 +1552,7 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
                     } else if (node.args.size() == fcn.args.size() + fcn.markings.rustcLegacyConstGenerics.size()) {
                         for (auto idx : fcn.markings.rustcLegacyConstGenerics) {
                             auto& argNode = node.args.at(idx);
-                            assert(argNode);
+                            BUG_ASSERT(argNode);
                             // TODO: Check that the expression is a valid const (no locals referenced, no function calls?)
 
                             HIRExprPtr ep{std::move(argNode)};
@@ -3177,7 +3177,7 @@ auto Visitor2::getCoerceType(const Span& sp, HIRItemPath ip, const HIRStruct& st
             break;
         }
     }
-    assert(fieldTy);
+    BUG_ASSERT(fieldTy);
     HIRTypeRef normalizedFieldTy;
 tryAgain:
     normalizedFieldTy = fieldTy;
@@ -3697,7 +3697,7 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
 
         pp = KillPlaceholders(crate.types).monomorphPathParams(sp, pp, true);
         if (auto* innerE = pd.opt_UfcsKnown()) {
-            assert(pp.types.size() == innerE->trait.params.types.size());
+            BUG_ASSERT(pp.types.size() == innerE->trait.params.types.size());
             for (unsigned int i = 0; i < pp.types.size(); i++) {
                 auto& eTy = innerE->trait.params.types[i];
                 const auto& thisTy = pp.types[i];
@@ -3941,7 +3941,7 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                 traitPath.params = currentTrait->params.makeNopParams(crate.types, 0);
             }
             if (locateInTraitAndSet(pc, traitPath, *currentTrait, p.data)) {
-                assert(!p.data.is_UfcsUnknown());
+                BUG_ASSERT(!p.data.is_UfcsUnknown());
                 if (inExpr && !inTraitDef_) {
                     for (auto& t : p.data.as_UfcsKnown().trait.params.types) {
                         t = crate.types.infer();
@@ -3961,18 +3961,18 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
         }
 
         if (resolve_.itemGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *resolve_.itemGenericsPtr(), p.data)) {
-            assert(!p.data.is_UfcsUnknown());
+            BUG_ASSERT(!p.data.is_UfcsUnknown());
             return;
         }
         if (resolve_.implGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *resolve_.implGenericsPtr(), p.data)) {
-            assert(!p.data.is_UfcsUnknown());
+            BUG_ASSERT(!p.data.is_UfcsUnknown());
             return;
         }
 
         if (const auto* traitObject = e.type->opt_TraitObject()) {
             const auto& principal = traitObject->trait;
             if (principal.traitPtr && locateInTraitAndSet(pc, principal.path, *principal.traitPtr, p.data)) {
-                assert(!p.data.is_UfcsUnknown());
+                BUG_ASSERT(!p.data.is_UfcsUnknown());
                 return;
             }
         }
@@ -3980,10 +3980,10 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
         // TODO: Control ordering with a flag in UfcsUnknown
 
         if (this->resolve_UfcsUnknown_inherent(curModPath, p, pc, p.data)) {
-            assert(!p.data.is_UfcsUnknown());
+            BUG_ASSERT(!p.data.is_UfcsUnknown());
             return;
         }
-        assert(p.data.is_UfcsUnknown());
+        BUG_ASSERT(p.data.is_UfcsUnknown());
 
         // TODO: Should this look up in-scope traits instead of hard-coding this hack?
         if (currentType_ && currentTrait && e.type == currentType_) {
@@ -3997,7 +3997,7 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
             }
 
             if (locateInTraitAndSet(pc, traitPath, *currentTrait, p.data)) {
-                assert(!p.data.is_UfcsUnknown());
+                BUG_ASSERT(!p.data.is_UfcsUnknown());
                 if (inExpr) {
                     for (auto& t : p.data.as_UfcsKnown().trait.params.types) {
                         t = crate.types.infer();
@@ -4015,7 +4015,7 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
             for (const auto& t : atyDef.traitBounds) {
                 auto traitPath = mstate.monomorphGenericpath(sp, t.path, /*allow_infer*/ true);
                 if (this->locateInTraitImplAndSet(sp, pc, mv$(traitPath), *t.traitPtr, p.data)) {
-                    assert(!p.data.is_UfcsUnknown());
+                    BUG_ASSERT(!p.data.is_UfcsUnknown());
                     return;
                 }
             }
@@ -4023,10 +4023,10 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
         }
 
         if (this->resolve_UfcsUnknown_trait(p, pc, p.data)) {
-            assert(!p.data.is_UfcsUnknown());
+            BUG_ASSERT(!p.data.is_UfcsUnknown());
             return;
         }
-        assert(p.data.is_UfcsUnknown());
+        BUG_ASSERT(p.data.is_UfcsUnknown());
 
         if ((pc == HIRVisitor::PathContext::VALUE /*|| pc == HIR::Visitor::PathContext::PATTERN*/) && e.type->is_Path() && e.type->as_Path().binding.is_Enum()) {
             const auto& enm = *e.type->as_Path().binding.as_Enum();

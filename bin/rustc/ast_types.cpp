@@ -297,7 +297,7 @@ Ordering ASTType::ord(const ASTType& x) const {
                 return rv;
             }
             if (ent.size.get()) {
-                throw std::runtime_error("TODO: Sized array comparisons");
+                TODO(Span(), "Sized array comparisons");
             }
             return OrdEqual;
             break;
@@ -347,7 +347,7 @@ Ordering ASTType::ord(const ASTType& x) const {
             break;
         }
     }
-    throw std::runtime_error(FMT("BUGCHECK - Unhandled ASTType* class '" << data.tag() << "'"));
+    BUG(Span(), "Unhandled ASTType* class '" << data.tag() << "'");
 }
 
 std::ostream& operator<<(std::ostream& os, const eCoreType ct) {

@@ -18,7 +18,7 @@ TTStream::~TTStream() {
 Token TTStream::realGetToken() {
     while (stack.size() > 0) {
         unsigned int& idx = stack.back().first;
-        assert(stack.back().second);
+        BUG_ASSERT(stack.back().second);
         const TokenTree& tree = *stack.back().second;
 
         if (idx == 0 && tree.isToken()) {
@@ -68,7 +68,7 @@ TTStreamO::TTStreamO(Span parent, ParseState ps, TokenTree inputTt)
     , parentSpan(mv$(parent))
     , inputTt(mv$(inputTt))
 {
-    assert(parentSpan);
+    BUG_ASSERT(parentSpan);
     stack.push_back(std::make_pair(0, nullptr));
 }
 

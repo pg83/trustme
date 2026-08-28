@@ -122,7 +122,7 @@ public:
                 return e.datatype;
             }
             default: {
-                assert(!"Getting datatype of invalid token type");
+                BUG_ASSERT(!"Getting datatype of invalid token type");
                 break;
             }
         }

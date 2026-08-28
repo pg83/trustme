@@ -18,7 +18,6 @@
 
 #include <std/mem/obj_pool.h>
 
-#include <cassert>
 #include <fstream>
 #include <iostream>
 
@@ -129,7 +128,7 @@ namespace {
             if (rv) {
                 lines.push_back({addSilenceIfEnd, mv$(rv)});
             } else {
-                assert(!addSilenceIfEnd);
+                BUG_ASSERT(!addSilenceIfEnd);
             }
         }
         GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
@@ -485,7 +484,7 @@ namespace {
                 return std::move(left);
             }
         }
-        assert(tok.type() == TOK_DOUBLE_DOT);
+        BUG_ASSERT(tok.type() == TOK_DOUBLE_DOT);
         const bool braceIsValue = LOOK_AHEAD(lex) == TOK_BRACE_OPEN && !lex.parseState().disallowStructLiteral;
         if (ParseIsTokValue(LOOK_AHEAD(lex)) || braceIsValue) {
             right = ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : next(lex);
@@ -1244,8 +1243,8 @@ namespace {
                 default: {
                     auto name = tok.ident();
                     if (true /*is_refutable*/) {
-                        assert(bindType == ASTPatternBinding::Type::MOVE);
-                        assert(isMut == false);
+                        BUG_ASSERT(bindType == ASTPatternBinding::Type::MOVE);
+                        BUG_ASSERT(isMut == false);
                         return ASTPattern(ASTPattern::TagMaybeBind(), lex.endSpan(ps), mv$(name));
                     } else {
                         return ASTPattern(ASTPattern::TagBind(), lex.endSpan(ps), mv$(name), bindType, isMut);
@@ -1425,9 +1424,9 @@ namespace {
                 bool justParen = false;
                 auto tpat = ParsePatternTuple(lex, &justParen);
                 if (justParen) {
-                    assert(tpat.start.size() == 1);
-                    assert(!tpat.hasWildcard);
-                    assert(tpat.end.size() == 0);
+                    BUG_ASSERT(tpat.start.size() == 1);
+                    BUG_ASSERT(!tpat.hasWildcard);
+                    BUG_ASSERT(tpat.end.size() == 0);
                     return std::move(tpat.start.front());
                 }
                 return ASTPattern(ASTPattern::TagTuple(), lex.endSpan(ps), std::move(tpat));
@@ -1517,8 +1516,8 @@ namespace {
         if (isSplit) {
             return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_SplitSlice({mv$(leading), mv$(innerBinding), mv$(trailing), extraRest}));
         } else {
-            assert(!innerBinding.isValid());
-            assert(trailing.empty());
+            BUG_ASSERT(!innerBinding.isValid());
+            BUG_ASSERT(trailing.empty());
             return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Slice({mv$(leading)}));
         }
     }

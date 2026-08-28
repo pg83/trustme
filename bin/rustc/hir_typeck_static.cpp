@@ -363,7 +363,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
         }
     }
 
-    assert(implParamsDef.types.size() == implParams.types.size());
+    BUG_ASSERT(implParamsDef.types.size() == implParams.types.size());
     for (size_t i = 0; i < implParamsDef.types.size(); i++) {
         if (implParamsDef.types.at(i).isSized) {
             if (!implParams.types[i]->is_Infer()) {
@@ -2000,7 +2000,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             return false;
         }
     }
-    assert(!"Fell off the end of type_needs_drop_glue");
+    BUG_ASSERT(!"Fell off the end of type_needs_drop_glue");
     UNREACHABLE();
 }
 
@@ -2534,7 +2534,7 @@ NullOnDrop<const HIRGenericParams> StaticTraitResolve::setImplGenerics(const HIR
 }
 
 void StaticTraitResolve::updateImplSelfMetadata(const HIRTypeData* selfTy) {
-    assert(implGenerics_);
+    BUG_ASSERT(implGenerics_);
     selfMetadata = metadataType(Span(), selfTy);
 }
 
@@ -2544,7 +2544,7 @@ NullOnDrop<const HIRGenericParams> StaticTraitResolve::setItemGenerics(const HIR
 }
 
 void StaticTraitResolve::setImplGenericsRaw(MetadataType selfMetaType, const HIRGenericParams& gps) {
-    assert(!implGenerics_);
+    BUG_ASSERT(!implGenerics_);
     selfMetadata = selfMetaType;
     implGenerics_ = &gps;
     prepIndexes();
@@ -2557,7 +2557,7 @@ void StaticTraitResolve::clearImplGenerics() {
 }
 
 void StaticTraitResolve::setItemGenericsRaw(const HIRGenericParams& gps) {
-    assert(!itemGenerics_);
+    BUG_ASSERT(!itemGenerics_);
     itemGenerics_ = &gps;
     prepIndexes();
 }
@@ -2568,8 +2568,8 @@ void StaticTraitResolve::clearItemGenerics() {
 }
 
 void StaticTraitResolve::setBothGenericsRaw(const HIRGenericParams* gpsImpl, const HIRGenericParams* gpsFcn) {
-    assert(!implGenerics_);
-    assert(!itemGenerics_);
+    BUG_ASSERT(!implGenerics_);
+    BUG_ASSERT(!itemGenerics_);
     implGenerics_ = gpsImpl;
     itemGenerics_ = gpsFcn;
     prepIndexes();

@@ -10,11 +10,11 @@ HIRGenericRef::HIRGenericRef(RcString name, HIRGenericGroup group, u16 idx)
     : name(std::move(name))
     , binding(group * 256 + idx)
 {
-    assert(idx < 256);
+    BUG_ASSERT(idx < 256);
 }
 
 HIRGenericRef HIRGenericRef::newSolverExistential(u32 scope, u16 idx) {
-    assert(scope != 0);
+    BUG_ASSERT(scope != 0);
     auto result = HIRGenericRef(RcString(), GENERICPlaceholder, idx);
     result.solverScope = scope;
     return result;

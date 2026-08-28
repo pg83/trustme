@@ -211,7 +211,7 @@ struct ASTType {
                 return e.inner;
             }
             default: {
-                throw std::runtime_error("Called inner_type on non-wrapper");
+                BUG(Span(), "Called inner_type on non-wrapper");
             }
         }
     }

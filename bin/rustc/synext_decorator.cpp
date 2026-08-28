@@ -4020,14 +4020,14 @@ auto DeriverRustcDecodable::handleItem(Span sp, const DeriveOpts& opts, const AS
         }
         case ASTStructData::TAG_Struct: {
             auto& e = str.data.as_Struct();
-            assert(!args[2]);
+            BUG_ASSERT(!args[2]);
             args[2] = NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT);
             node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_struct", mv$(args));
             break;
         }
         case ASTStructData::TAG_Tuple: {
             auto& e = str.data.as_Tuple();
-            assert(!args[2]);
+            BUG_ASSERT(!args[2]);
             args[2] = NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT);
             node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_tuple_struct", mv$(args));
             break;

@@ -1104,7 +1104,7 @@ namespace {
 }
 
 void HIRExpandAnnotateUsageExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
-    assert(exp);
+    BUG_ASSERT(exp);
     StaticTraitResolve resolve{wb};
     resolve.setBothGenericsRaw(exp.state->implGenerics, exp.state->itemGenerics);
     AnnotateExprVisitorMark ev{resolve, exp.bindings};
@@ -1123,7 +1123,7 @@ void HIRExpandClosuresExpr(const WireBoard& wb, const HIRCrate& crateRo, HIRType
     auto& crate = const_cast<HIRCrate&>(crateRo);
 
     StaticTraitResolve resolve{wb};
-    assert(exp);
+    BUG_ASSERT(exp);
     resolve.setBothGenericsRaw(exp.state->implGenerics, exp.state->itemGenerics);
 
     const HIRTypeData* selfType = nullptr; // TODO: Need to be able to get this?
@@ -1455,11 +1455,11 @@ auto AnnotateExprVisitorMark::visitRoot(HIRExprPtr& rootPtr) -> void {
         rootPtr->visit(iv);
     }
 
-    assert(rootPtr);
+    BUG_ASSERT(rootPtr);
     rootPtr->usage = this->getUsage();
     auto expectedSize = usage.size();
     rootPtr->visit(*this);
-    assert(usage.size() == expectedSize);
+    BUG_ASSERT(usage.size() == expectedSize);
 
     for (auto* call : pendingCalls) {
         const auto* nodePp = (*call->value->resType).is_NodeType() ? ((*call->value->resType).as_NodeType().opt_Closure()) : nullptr;
@@ -1489,7 +1489,7 @@ auto AnnotateExprVisitorMark::visitRoot(HIRExprPtr& rootPtr) -> void {
 }
 
 auto AnnotateExprVisitorMark::visitNodePtr(HIRExprNodeP& nodePtr) -> void {
-    assert(nodePtr);
+    BUG_ASSERT(nodePtr);
 
     const auto& nodeRef = *nodePtr;
     const char* nodeTyname = typeid(nodeRef).name();
@@ -1498,7 +1498,7 @@ auto AnnotateExprVisitorMark::visitNodePtr(HIRExprNodeP& nodePtr) -> void {
 
     auto expectedSize = usage.size();
     nodePtr->visit(*this);
-    assert(usage.size() == expectedSize);
+    BUG_ASSERT(usage.size() == expectedSize);
 }
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeBlock& node) -> void {
@@ -1586,7 +1586,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeYield& node) -> void {
     if (scope && scope->node.is_Generator()) {
         for (size_t i = 0; i < scope->yieldStack.size(); i++) {
             if (scope->yieldStack[i] != CoroutineScope::STACK_MARKER_LOOP) {
-                assert(scope->yieldStack[i] < CoroutineScope::STACK_MARKER_LOOP - 1);
+                BUG_ASSERT(scope->yieldStack[i] < CoroutineScope::STACK_MARKER_LOOP - 1);
                 scope->yieldStack[i] += 1;
             }
         }
@@ -1601,7 +1601,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeAWait& node) -> void {
     if (scope && scope->node.is_Async()) {
         for (size_t i = 0; i < scope->yieldStack.size(); i++) {
             if (scope->yieldStack[i] != CoroutineScope::STACK_MARKER_LOOP) {
-                assert(scope->yieldStack[i] < CoroutineScope::STACK_MARKER_LOOP - 1);
+                BUG_ASSERT(scope->yieldStack[i] < CoroutineScope::STACK_MARKER_LOOP - 1);
                 scope->yieldStack[i] += 1;
             }
         }
@@ -1889,7 +1889,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeCallValue& node) -> void {
     HIRValueUsage vu = HIRValueUsage::Borrow;
 
     if (const auto* nodePp = ((*node.value->resType).is_NodeType() ? ((*node.value->resType).as_NodeType().opt_Closure()) : nullptr)) {
-        assert(*nodePp);
+        BUG_ASSERT(*nodePp);
         if ((*nodePp)->cls == HIRExprNodeClosure::Class::Unknown) {
             auto _ = pushUsage(HIRValueUsage::Move);
             this->visitNodePtr(node.value);
@@ -1948,7 +1948,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeCallValue& node) -> void {
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeCallMethod& node) -> void {
     {
-        assert(node.cache.fcn);
+        BUG_ASSERT(node.cache.fcn);
         HIRValueUsage vu = HIRValueUsage::Borrow;
         switch (node.cache.fcn->receiver) {
             case HIRFunction::Receiver::Free:
@@ -2216,7 +2216,7 @@ auto AnnotateExprVisitorMark::addVarDefGenerator(const Span& sp, CoroutineScope&
 }
 
 auto AnnotateExprVisitorMark::addVarDef(const Span& sp, unsigned int slot) -> void {
-    assert(closureStack.size() > 0);
+    BUG_ASSERT(closureStack.size() > 0);
     auto& ent = closureStack.back();
     switch (ent.tag()) {
         case Scope::TAG_None: {
@@ -2324,7 +2324,7 @@ auto AnnotateExprVisitorMark::addClosureDefFromPattern(const Span& sp, const HIR
         }
         case HIRPatternData::TAG_Or: {
             auto& e = pat.data.as_Or();
-            assert(e.size() > 0);
+            BUG_ASSERT(e.size() > 0);
             addClosureDefFromPattern(sp, e.front());
             break;
         }
@@ -2401,7 +2401,7 @@ auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPatter
             auto& pe = pat.data.as_Tuple();
             ASSERT_BUG(sp, ty->is_Tuple(), "Tuple pattern with non-tuple type - " << ty);
             const auto& subtys = ty->as_Tuple();
-            assert(pe.subPatterns.size() == subtys.size());
+            BUG_ASSERT(pe.subPatterns.size() == subtys.size());
             auto rv = HIRValueUsage::Borrow;
             for (unsigned int i = 0; i < subtys.size(); i++) {
                 rv = std::max(rv, getUsageForPattern(sp, pe.subPatterns[i], subtys[i]));
@@ -2412,7 +2412,7 @@ auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPatter
             auto& pe = pat.data.as_SplitTuple();
             ASSERT_BUG(sp, ty->is_Tuple(), "SplitTuple pattern with non-tuple type - " << ty);
             const auto& subtys = ty->as_Tuple();
-            assert(pe.leading.size() + pe.trailing.size() <= subtys.size());
+            BUG_ASSERT(pe.leading.size() + pe.trailing.size() <= subtys.size());
             auto rv = HIRValueUsage::Borrow;
             for (unsigned int i = 0; i < pe.leading.size(); i++) {
                 rv = std::max(rv, getUsageForPattern(sp, pe.leading[i], subtys[i]));
@@ -2427,18 +2427,18 @@ auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPatter
         }
         case HIRPatternData::TAG_PathTuple: {
             auto& pe = pat.data.as_PathTuple();
-            assert(!pe.binding.is_Unbound());
+            BUG_ASSERT(!pe.binding.is_Unbound());
 
             const auto& flds = patternGetTuple(sp, pe.path, pe.binding);
             if (pe.isSplit) {
-                assert(pe.leading.size() + pe.trailing.size() <= flds.size());
+                BUG_ASSERT(pe.leading.size() + pe.trailing.size() <= flds.size());
             } else {
-                assert(pe.leading.size() == flds.size());
-                assert(pe.trailing.size() == 0);
+                BUG_ASSERT(pe.leading.size() == flds.size());
+                BUG_ASSERT(pe.trailing.size() == 0);
             }
 
             // TODO: Is it possible to avoid monomorphising here?
-            assert(pe.path.data.is_Generic());
+            BUG_ASSERT(pe.path.data.is_Generic());
             auto monomorphState = MonomorphStatePtr(resolve_.hirCrate().types, nullptr, &pe.path.data.as_Generic().params, nullptr);
 
             auto rv = HIRValueUsage::Borrow;
@@ -2454,7 +2454,7 @@ auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPatter
         }
         case HIRPatternData::TAG_PathNamed: {
             auto& pe = pat.data.as_PathNamed();
-            assert(!pe.binding.is_Unbound());
+            BUG_ASSERT(!pe.binding.is_Unbound());
 
             if (pe.isWildcard()) {
                 return HIRValueUsage::Borrow;
@@ -2574,22 +2574,22 @@ auto AnnotateExprVisitorMark::markUsedVariableClosure(const Span& sp, ClosureSco
     if (its.first == its.second) {
         closureRec.capturedVars.insert(its.first, newEnt);
     } else if (its.first->fields.size() <= newEnt.fields.size()) {
-        assert(its.first->rootSlot == newEnt.rootSlot);
+        BUG_ASSERT(its.first->rootSlot == newEnt.rootSlot);
         for (size_t i = 0; i < its.first->fields.size(); i++) {
-            assert(its.first->fields[i] == newEnt.fields[i]);
+            BUG_ASSERT(its.first->fields[i] == newEnt.fields[i]);
         }
         ASSERT_BUG(sp, its.first + 1 == its.second, "Prefix total match, but multiple matching entries?");
         its.first->usage = std::max(its.first->usage, newEnt.usage);
     } else {
-        assert(its.first->rootSlot == newEnt.rootSlot);
-        assert(its.first->fields.size() >= newEnt.fields.size());
+        BUG_ASSERT(its.first->rootSlot == newEnt.rootSlot);
+        BUG_ASSERT(its.first->fields.size() >= newEnt.fields.size());
         for (size_t i = 0; i < newEnt.fields.size(); i++) {
-            assert(its.first->fields[i] == newEnt.fields[i]);
+            BUG_ASSERT(its.first->fields[i] == newEnt.fields[i]);
         }
 
         if (its.first + 1 == its.second) {
         } else {
-            assert(its.first->fields.size() > newEnt.fields.size());
+            BUG_ASSERT(its.first->fields.size() > newEnt.fields.size());
             for (auto it = its.first + 1; it != its.second; ++it) {
                 its.first->usage = std::max(its.first->usage, it->usage);
             }
@@ -2633,7 +2633,7 @@ auto AnnotateExprVisitorMark::markUsedVariableGenerator(const Span& sp, Coroutin
 }
 
 auto AnnotateExprVisitorMark::markUsedVariable(const Span& sp, unsigned int slot, std::vector<RcString> fields, HIRValueUsage usage) -> void {
-    assert(closureStack.size() > 0);
+    BUG_ASSERT(closureStack.size() > 0);
     auto& ent = closureStack.back();
     switch (ent.tag()) {
         case Scope::TAG_None: {
@@ -2843,7 +2843,7 @@ auto ClosureExprVisitorMutate::visit(HIRExprNodeArraySized& node) -> void {
 }
 
 auto ClosureExprVisitorMutate::visitNodePtr(HIRExprNodeP& nodePtr) -> void {
-    assert(nodePtr);
+    BUG_ASSERT(nodePtr);
     auto& node = *nodePtr;
     const char* nodeTy = typeid(node).name();
     node.visit(*this);
@@ -2856,7 +2856,7 @@ auto ClosureExprVisitorMutate::visitNodePtr(HIRExprNodeP& nodePtr) -> void {
 }
 
 auto ClosureExprVisitorMutate::visit(HIRExprNodeClosure& node) -> void {
-    assert(!node.code);
+    BUG_ASSERT(!node.code);
 
     visitGenericPath(HIRVisitor::PathContext::VALUE, node.objPath);
     for (auto& subnode : node.captures) {
@@ -2865,7 +2865,7 @@ auto ClosureExprVisitorMutate::visit(HIRExprNodeClosure& node) -> void {
 }
 
 auto ClosureExprVisitorMutate::visit(HIRExprNodeGenerator& node) -> void {
-    assert(!node.code);
+    BUG_ASSERT(!node.code);
 
     visitGenericPath(HIRVisitor::PathContext::VALUE, node.objPath);
     updateType(node.stateDataType);
@@ -2875,7 +2875,7 @@ auto ClosureExprVisitorMutate::visit(HIRExprNodeGenerator& node) -> void {
 }
 
 auto ClosureExprVisitorMutate::visit(HIRExprNodeAsyncBlock& node) -> void {
-    assert(!node.code);
+    BUG_ASSERT(!node.code);
 
     visitGenericPath(HIRVisitor::PathContext::VALUE, node.objPath);
     updateType(node.stateDataType);
@@ -3166,14 +3166,14 @@ auto H::fixFnParams(HIRExprPtr& code, const HIRTypeData* selfTy, const HIRTypeDa
         code.bindings.push_back(selfTy);
         code.bindings.push_back(argsTy);
     } else {
-        assert(code.bindings.size() >= 1);
-        assert(code.bindings[0]->is_Infer() && code.bindings[0]->as_Infer().index == ~0u);
+        BUG_ASSERT(code.bindings.size() >= 1);
+        BUG_ASSERT(code.bindings[0]->is_Infer() && code.bindings[0]->as_Infer().index == ~0u);
         code.bindings[0] = selfTy;
     }
 }
 
 auto H::makeFnfree(HIRTypeInterner& types, HIRGenericParams params, HIRTypeRef closureType, std::vector<std::pair<HIRPattern, HIRTypeRef>> args, HIRTypeRef retTy, HIRExprPtr code) -> HIRTypeImpl {
-    assert(code.bindings.size() > 0);
+    BUG_ASSERT(code.bindings.size() > 0);
     code.bindings[0] = types.unit();
     return HIRTypeImpl{std::move(params), std::move(closureType), makeMap1(RcString("call_free"), HIRTypeImpl::VisImplEnt<HIRFunction>{HIRPublicity::newGlobal(), false, HIRFunction(HIRFunction::Receiver::Free, HIRGenericParams{}, mv$(args), retTy, mv$(code))}), {}, {}, HIRSimplePath()};
 }
@@ -4227,7 +4227,7 @@ auto ClosureExprVisitorExtract::Monomorph::maybeMonomorphBound(const Span& sp, c
 }
 
 auto ClosureExprVisitorExtract::Monomorph::addBounds(const Span& sp, const StaticTraitResolve& resolve) -> void {
-    assert(&resolve == &this->resolve);
+    BUG_ASSERT(&resolve == &this->resolve);
     size_t l = SIZE_MAX;
     while (l != params.bounds.size()) {
         l = params.bounds.size();
@@ -4364,7 +4364,7 @@ auto ClosureExprVisitorExtract::ExprVisitorGeneratorRewrite::visit(HIRExprNodeAr
 }
 
 auto ClosureExprVisitorExtract::ExprVisitorGeneratorRewrite::visit(HIRExprNodeClosure& node) -> void {
-    assert(!node.code);
+    BUG_ASSERT(!node.code);
     visitGenericPath(HIRVisitor::PathContext::TYPE, node.objPath);
 
     for (auto& cap : node.captures) {
@@ -4373,7 +4373,7 @@ auto ClosureExprVisitorExtract::ExprVisitorGeneratorRewrite::visit(HIRExprNodeCl
 }
 
 auto ClosureExprVisitorExtract::ExprVisitorGeneratorRewrite::visit(HIRExprNodeGenerator& node) -> void {
-    assert(!node.code);
+    BUG_ASSERT(!node.code);
     visitGenericPath(HIRVisitor::PathContext::TYPE, node.objPath);
     updateType(node.stateDataType);
 
@@ -4383,7 +4383,7 @@ auto ClosureExprVisitorExtract::ExprVisitorGeneratorRewrite::visit(HIRExprNodeGe
 }
 
 auto ClosureExprVisitorExtract::ExprVisitorGeneratorRewrite::visit(HIRExprNodeAsyncBlock& node) -> void {
-    assert(!node.code);
+    BUG_ASSERT(!node.code);
     visitGenericPath(HIRVisitor::PathContext::TYPE, node.objPath);
     updateType(node.stateDataType);
 
@@ -4502,7 +4502,7 @@ auto ClosureOuterVisitor::visitConstgeneric(HIRConstGeneric&) -> void {
 auto ClosureOuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     auto _ = this->resolve_.setItemGenerics(item.params);
     if (item.code) {
-        assert(curModPath);
+        BUG_ASSERT(curModPath);
 
         {
             const bool isAsyncDropIntrinsic = !p.getTopIp().ty && p.getSimplePath() == resolve_.hirCrate().getLangItemPathOpt("async_drop_in_place");
@@ -4606,7 +4606,7 @@ auto ErasedExprVisitorExtract::visitRoot(HIRExprPtr& root) -> void {
 }
 
 auto ErasedExprVisitorExtract::visitNodePtr(HIRExprNodeP& nodePtr) -> void {
-    assert(nodePtr);
+    BUG_ASSERT(nodePtr);
     nodePtr->visit(*this);
     updateType(nodePtr->resType);
 }
@@ -4683,7 +4683,7 @@ auto ReborrowExprVisitorMutate::visitNodePtr(HIRExprPtr& root) -> void {
 auto ReborrowExprVisitorMutate::visitNodePtr(HIRExprNodeP& node) -> void {
     const auto& nodeRef = *node;
     const char* nodeTy = typeid(nodeRef).name();
-    assert(node);
+    BUG_ASSERT(node);
     node->visit(*this);
 }
 
@@ -4693,7 +4693,7 @@ auto ReborrowExprVisitorMutate::visitNodePtr(HIRExprNodeP& node) -> void {
 #define NEWNODE(TY, CLASS, ...) reborrowMkExprnodep(crate.pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
 
 auto ReborrowExprVisitorMutate::doReborrow(HIRExprNodeP nodePtr) -> HIRExprNodeP {
-    assert(nodePtr);
+    BUG_ASSERT(nodePtr);
     if (const auto* e = nodePtr->resType->opt_Borrow()) {
         if (e->type == HIRBorrowType::Unique) {
             if (cast<HIRExprNodeIndex>(nodePtr.get()) || cast<HIRExprNodeVariable>(nodePtr.get()) || cast<HIRExprNodeField>(nodePtr.get()) || cast<HIRExprNodeDeref>(nodePtr.get())) {
@@ -4855,14 +4855,14 @@ auto StaticBorrowExprVisitorMark::allConstant() const -> bool {
 auto StaticBorrowExprVisitorMark::visitNodePtr(HIRExprPtr& root) -> void {
     const auto& nodeRef = *root;
     const char* nodeTy = typeid(nodeRef).name();
-    assert(&root == &exprPtr);
+    BUG_ASSERT(&root == &exprPtr);
 
     allConstant_ = true;
     root->visit(*this);
 }
 
 auto StaticBorrowExprVisitorMark::visitNodePtr(HIRExprNodeP& node) -> void {
-    assert(node);
+    BUG_ASSERT(node);
     isConstant = false;
     {
         node->visit(*this);
@@ -5494,7 +5494,7 @@ auto StaticBorrowExprVisitorMutate::extractNode(HIRExprNodeP& node, StaticTraitR
                     ASSERT_BUG(node.span(), bindingMapping.count(l) != 0, "");
                     l = bindingMapping.at(l);
                 }
-                assert(node.avuCache.capturedVars.empty());
+                BUG_ASSERT(node.avuCache.capturedVars.empty());
             }
         }
 
@@ -5898,7 +5898,7 @@ auto UfcsExprVisitorMutate::visitNodePtr(HIRExprPtr& root) -> void {
 auto UfcsExprVisitorMutate::visitNodePtr(HIRExprNodeP& node) -> void {
     const auto& nodeRef = *node;
     const char* nodeTy = typeid(nodeRef).name();
-    assert(node);
+    BUG_ASSERT(node);
     node->visit(*this);
     if (replacement_) {
         auto usage = node->usage;
@@ -6019,7 +6019,7 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
         default:
             BUG(node.span(), "Encountered CallValue with TraitUsed::Unknown, ty=" << node.value->resType);
     }
-    assert(selfArgType != HIRTypeRef());
+    BUG_ASSERT(selfArgType != HIRTypeRef());
 
     std::vector<HIRExprNodeP> args;
     args.reserve(2);
@@ -6204,8 +6204,8 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeAssign& node) -> void {
         break;
     }
 #undef _
-    assert(langitem);
-    assert(opname);
+    BUG_ASSERT(langitem);
+    BUG_ASSERT(opname);
 
     HIRGenericPath trait{crate.getLangItemPath(node.span(), langitem), HIRPathParams(tyVal)};
 
@@ -6364,8 +6364,8 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeBinOp& node) -> void {
         return;
     }
 
-    assert(langitem);
-    assert(method);
+    BUG_ASSERT(langitem);
+    BUG_ASSERT(method);
 
     HIRPathParams traitParams;
     traitParams.types.push_back(tyR);
@@ -6405,8 +6405,8 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeUniOp& node) -> void {
             operatorKind = TypeckPrimitiveOperator::Neg;
             break;
     }
-    assert(langitem);
-    assert(method);
+    BUG_ASSERT(langitem);
+    BUG_ASSERT(method);
 
     if (tyVal->is_Diverge()) {
         return;
@@ -6562,7 +6562,7 @@ VisitorImplTrait::VisitorImplTrait(HIRTypeInterner& types)
                 }
                 targetTrait->types.insert(std::make_pair(tyName, HIRAssociatedType{methodParams->clone(), e->isSized, std::move(traits), typeInterner().infer()}));
                 const auto& f = e->inner.as_Fcn();
-                assert(methodName == f.origin.data.as_UfcsKnown().item);
+                BUG_ASSERT(methodName == f.origin.data.as_UfcsKnown().item);
                 const auto& fcn = targetTrait->values.at(f.origin.data.as_UfcsKnown().item);
                 if (fcn.as_Function().code) {
                     const auto& t = fcn.as_Function().code.erasedTypes.at(f.index);
@@ -6629,8 +6629,8 @@ auto VisitorImplTrait::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
 }
 
 auto VtableOuterVisitor::createType(bool isPublic, RcString name, HIRStruct value) -> HIRSimplePath {
-    assert(currentModulePath);
-    assert(currentNewTypes);
+    BUG_ASSERT(currentModulePath);
+    BUG_ASSERT(currentNewTypes);
     auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{(isPublic ? HIRPublicity::newGlobal() : HIRPublicity::newNone()), HIRTypeItem(mv$(value))});
     auto result = (*currentModulePath + name).getSimplePath();
     currentNewTypes->push_back(std::make_pair(mv$(name), boxed));
@@ -6719,7 +6719,7 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
     }
     visitor.addTypesFromTrait(traitPath, tr, {});
     for (const auto& st : tr.allParentTraits) {
-        assert(st.traitPtr);
+        BUG_ASSERT(st.traitPtr);
         visitor.addTypesFromTrait(st.path, *st.traitPtr, st.typeBounds);
     }
     bool hasConflictingAtyName = visitor.hasConflict;

@@ -223,14 +223,14 @@ namespace {
             });
             mirFcn.blocks.push_back(mv$(block));
         }
-        assert(mirFcn.blocks.size() == resume);
+        BUG_ASSERT(mirFcn.blocks.size() == resume);
         MIRBasicBlock resumeBlock;
         resumeBlock.isCleanup = true;
         resumeBlock.terminator = MIRTerminator::make_UnwindResume({});
         mirFcn.blocks.push_back(mv$(resumeBlock));
 
         for (const auto call : cleanup.calls) {
-            assert(mirFcn.blocks.at(call).terminator.is_Call());
+            BUG_ASSERT(mirFcn.blocks.at(call).terminator.is_Call());
             mirFcn.blocks[call].terminator.as_Call().unwind = MIRUnwindAction::make_Cleanup(cleanupStart);
         }
     }
@@ -290,7 +290,7 @@ namespace {
                 }
                 case HIRTypeData::TAG_Tuple: {
                     auto& te = (*ty).as_Tuple();
-                    assert(te.size() > 0);
+                    BUG_ASSERT(te.size() > 0);
 
                     CloneCleanupState cleanup;
                     std::vector<MIRParam> values;
@@ -940,8 +940,8 @@ static void TransEnumerateTypes(EnumState& state) {
     do {
         for (unsigned int i = 0; i < state.fcnsToTypeVisit.size(); i++) {
             auto* p = state.fcnsToTypeVisit[i];
-            assert(p->path);
-            assert(p->ptr);
+            BUG_ASSERT(p->path);
+            BUG_ASSERT(p->ptr);
             auto& fcnPath = *p->path;
             const auto& fcn = *p->ptr;
             const auto& pp = p->pp;
@@ -952,14 +952,14 @@ static void TransEnumerateTypes(EnumState& state) {
         // TODO: Similarly restrict revisiting of statics.
 
         for (const auto& ent : state.rv.statics) {
-            assert(ent.second->ptr);
+            BUG_ASSERT(ent.second->ptr);
             const auto& stat = *ent.second->ptr;
             const auto& pp = ent.second->pp;
 
             tv.visitType(pp.monomorph(tv.resolve, stat.type));
         }
         for (const auto& ent : state.rv.constants) {
-            assert(ent.second->ptr);
+            BUG_ASSERT(ent.second->ptr);
             const auto& stat = *ent.second->ptr;
             const auto& pp = ent.second->pp;
 
@@ -1199,7 +1199,7 @@ static EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate
     if (ms.getImplParams()) {
         params.ppImpl = ms.getImplParams()->clone();
         if (params.ppImpl.hasParams()) {
-            assert(params.gdefImpl);
+            BUG_ASSERT(params.gdefImpl);
         }
     }
     switch (ent.tag()) {
@@ -1902,7 +1902,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
         auto implListIt = crate.traitImpls.find(state.langClone);
         for (const auto& ty : state.doneList) {
-            assert(implListIt != crate.traitImpls.end());
+            BUG_ASSERT(implListIt != crate.traitImpls.end());
             // TODO: Find a way of turning a set into a vector so items can be erased.
 
             const auto* implList = implListIt->second.getListForType(ty);
@@ -1963,7 +1963,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 auto e = transList.addFunction(crate.types, std::move(p));
 
                 auto& impl = *list.back();
-                assert(impl.methods.size() == 1);
+                BUG_ASSERT(impl.methods.size() == 1);
                 e->ptr = &impl.methods.begin()->second.data;
             }
         }
@@ -2193,7 +2193,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             auto vtableTy = crate.types.tuple(std::move(tupleTys));
 
             const auto* repr = TargetGetTypeRepr(sp, state.resolve, vtableTy);
-            assert(repr);
+            BUG_ASSERT(repr);
 
             HIRLinkage linkage;
             linkage.type = HIRLinkage::Type::Weak;
@@ -2203,11 +2203,11 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             vtableData.bytes.resize(repr->size);
             size_t ofs = 0;
             auto pushPtr = [&vtableData, &ofs, ptrBytes](HIRPath p, bool preserveTrackCaller = false) {
-                assert(ofs + ptrBytes <= vtableData.bytes.size());
+                BUG_ASSERT(ofs + ptrBytes <= vtableData.bytes.size());
                 vtableData.relocations.push_back(Reloc::newNamed(ofs, ptrBytes, mv$(p), preserveTrackCaller));
                 vtableData.writeUint(ofs, ptrBytes, EncodedLiteral::PTR_BASE);
                 ofs += ptrBytes;
-                assert(ofs <= vtableData.bytes.size());
+                BUG_ASSERT(ofs <= vtableData.bytes.size());
             };
             transList.dropGlue.insert(type);
             pushPtr(HIRPath(type, "#drop_glue"));
@@ -2219,7 +2219,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 vtableData.writeUint(ofs, ptrBytes, align);
                 ofs += ptrBytes;
             }
-            assert(ofs == vtableData.bytes.size());
+            BUG_ASSERT(ofs == vtableData.bytes.size());
             vtableStatic.valueGenerated = true;
 
             transList.autoStatics.push_back(box$(vtableStatic));
@@ -2254,7 +2254,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             transList.addType(vtableTy, false);
 
             const auto* repr = TargetGetTypeRepr(sp, state.resolve, vtableTy);
-            assert(repr);
+            BUG_ASSERT(repr);
 
             auto monomorphCbTrait = MonomorphStatePtr(crate.types, type, &traitPath.params, nullptr);
 
@@ -2266,11 +2266,11 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             vtableData.bytes.resize(repr->size);
             size_t ofs = 0;
             auto pushPtr = [&vtableData, &ofs, ptrBytes](HIRPath p, bool preserveTrackCaller = false) {
-                assert(ofs + ptrBytes <= vtableData.bytes.size());
+                BUG_ASSERT(ofs + ptrBytes <= vtableData.bytes.size());
                 vtableData.relocations.push_back(Reloc::newNamed(ofs, ptrBytes, mv$(p), preserveTrackCaller));
                 vtableData.writeUint(ofs, ptrBytes, EncodedLiteral::PTR_BASE);
                 ofs += ptrBytes;
-                assert(ofs <= vtableData.bytes.size());
+                BUG_ASSERT(ofs <= vtableData.bytes.size());
             };
             transList.dropGlue.insert(type);
             pushPtr(HIRPath(type, "#drop_glue"));
@@ -2355,7 +2355,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     pushPtr(mv$(ptVtablePath));
                 }
             }
-            assert(ofs == vtableData.bytes.size());
+            BUG_ASSERT(ofs == vtableData.bytes.size());
             vtableStatic.valueGenerated = true;
 
             transList.autoStatics.push_back(box$(vtableStatic));
@@ -3158,7 +3158,7 @@ auto Builder::pushDropSequence(std::vector<MIRLValue> values, MIRBasicBlockId cu
     const size_t cleanupFirst = customDropCall == ~0u ? 1 : 0;
     const auto cleanupStart = static_cast<MIRBasicBlockId>(mir.blocks.size());
     const auto cleanupBlock = [&](size_t field) {
-        assert(field >= cleanupFirst && field < values.size());
+        BUG_ASSERT(field >= cleanupFirst && field < values.size());
         return static_cast<MIRBasicBlockId>(cleanupStart + field - cleanupFirst);
     };
 
@@ -3201,13 +3201,13 @@ auto Builder::pushDropSequence(std::vector<MIRLValue> values, MIRBasicBlockId cu
     mir.blocks.push_back(MIRBasicBlock());
 
     if (customDropCall != ~0u) {
-        assert(mir.blocks.at(customDropCall).terminator.is_Call());
+        BUG_ASSERT(mir.blocks.at(customDropCall).terminator.is_Call());
         mir.blocks[customDropCall].terminator.as_Call().unwind = MIRUnwindAction::make_Cleanup(cleanupBlock(0));
     }
 }
 
 auto Builder::terminateBlock(MIRTerminator term) -> void {
-    assert(mir.blocks.back().terminator.is_Incomplete());
+    BUG_ASSERT(mir.blocks.back().terminator.is_Incomplete());
     mir.blocks.back().terminator = mv$(term);
 }
 
@@ -3811,7 +3811,7 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                             break;
                         }
                     }
-                    assert(ty);
+                    BUG_ASSERT(ty);
 
                     for (const auto& w : lv.wrappers) {
                         ty = localMirRes.getUnwrappedType(tmp, w, ty);

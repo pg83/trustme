@@ -558,7 +558,7 @@ void HIRVisitor::visitUnion(HIRItemPath p, HIRUnion& item) {
     this->visitParams(item.params);
     for (auto& var : item.variants) {
         updateType(var.ty);
-        assert(!var.defaultValue);
+        BUG_ASSERT(!var.defaultValue);
     }
     if (resolve_) {
         resolve_->clearImplGenerics();
@@ -773,7 +773,7 @@ void HIRVisitor::visitPatternVal(HIRPattern::Value& val) {
 }
 
 HIRTypeRef HIRVisitor::visitType(HIRTypeRef ty) {
-    assert(ty);
+    BUG_ASSERT(ty);
     switch (ty->tag()) {
         case HIRTypeData::TAG_Infer:
         case HIRTypeData::TAG_Diverge:

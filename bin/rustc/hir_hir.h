@@ -16,7 +16,6 @@
 #include <set>
 #include <memory>
 #include <vector>
-#include <cassert>
 #include <optional>
 #include <unordered_map>
 
@@ -213,7 +212,7 @@ public:
     HIRFunction(Receiver receiver, HIRGenericParams params, argsT args, HIRTypeRef retTy, HIRExprPtr code);
 
     size_t fixedArgCount() const {
-        assert(!hasNamedVariadic || (variadic && !args.empty()));
+        BUG_ASSERT(!hasNamedVariadic || (variadic && !args.empty()));
         return args.size() - hasNamedVariadic;
     }
 

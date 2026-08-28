@@ -346,7 +346,7 @@ namespace {
             if (!pb.as_Trait().trait_) {
                 return;
             }
-            assert(pb.as_Trait().trait_);
+            BUG_ASSERT(pb.as_Trait().trait_);
             const auto& tr = *pb.as_Trait().trait_;
             if (itemName != node.name()) {
                 const auto exact = std::find_if(tr.items().begin(), tr.items().end(), [&](const auto& item) {
@@ -609,7 +609,7 @@ namespace {
     }
 
     void ResolveAbsolutePathBindAbsoluteHirFrom(Context& context, const Span& sp, Context::LookupMode& mode, ASTPath& path, const ASTExternCrate& crate, unsigned int start) {
-        assert(crate.hir->crateName == crate.name);
+        BUG_ASSERT(crate.hir->crateName == crate.name);
         auto& pathAbs = path.cls.as_Absolute();
 
         if (pathAbs.nodes.empty()) {
@@ -627,7 +627,7 @@ namespace {
         for (unsigned int i = start; i < pathAbs.nodes.size() - 1; i++) {
             auto& n = pathAbs.nodes[i];
             const auto nodeName = n.hygienicName();
-            assert(hmod);
+            BUG_ASSERT(hmod);
             auto it = findHygienicItem(hmod->modItems, n.name(), nodeName);
             if (it == hmod->modItems.end()) {
                 ERROR(sp, E0000, "Couldn't find path component '" << n.name() << "' of " << path);
@@ -946,8 +946,8 @@ namespace {
                 std::stringstream ss(n.name().c_str());
                 ss >> c;
                 ss >> idx;
-                assert(idx < mod->anonMods().size());
-                assert(mod->anonMods()[idx]);
+                BUG_ASSERT(idx < mod->anonMods().size());
+                BUG_ASSERT(mod->anonMods()[idx]);
                 mod = mod->anonMods()[idx].get();
             } else {
                 const auto nodeName = n.hygienicName();
@@ -971,7 +971,7 @@ namespace {
                     }
                     case ASTPathBindingType::TAG_Trait: {
                         auto& e = nameRef.path.bindings.type.binding.as_Trait();
-                        assert(e.trait_ || e.hir);
+                        BUG_ASSERT(e.trait_ || e.hir);
                         auto traitPath = ASTPath(nameRef.path);
                         // HACK! If this was an import, recurse on it to fix paths. (Ideally, all index entries should have the canonical path, but don't currently)
                         if (nameRef.isImport) {
@@ -1009,7 +1009,7 @@ namespace {
 
                         ASTPath newPath;
                         bool found = false;
-                        assert(i + 1 < pathAbs.nodes.size());
+                        BUG_ASSERT(i + 1 < pathAbs.nodes.size());
                         auto itemName = pathAbs.nodes[i + 1].hygienicName();
                         if (e.trait_) {
                             auto it = std::find_if(e.trait_->items().begin(), e.trait_->items().end(), [&](const auto& x) {
@@ -1061,7 +1061,7 @@ namespace {
                             ResolveAbsolutePathBindAbsolute(context, sp, mode, path);
                             return;
                         } else {
-                            assert(e.enum_);
+                            BUG_ASSERT(e.enum_);
                             auto& lastNode = pathAbs.nodes.back();
                             auto variantName = lastNode.hygienicName();
                             const auto exact = std::find_if(e.enum_->variants().begin(), e.enum_->variants().end(), [&](const auto& var) {
@@ -1180,7 +1180,7 @@ namespace {
                             const auto& nextNode = e.nodes[1];
                             const auto name = nextNode.hygienicName();
                             if (!pe.module_) {
-                                assert(pe.hir.mod);
+                                BUG_ASSERT(pe.hir.mod);
                                 const auto& mod = *pe.hir.mod;
 
                                 switch (e.nodes.size() == 2 ? mode : Context::LookupMode::Namespace) {
@@ -1236,8 +1236,8 @@ namespace {
                             p = ASTPath::newUfcsTy(mkType(context.typePool(), sp, mv$(p)));
                         }
                         if (!e.nodes[0].args().isEmpty()) {
-                            assert(p.nodes().size() > 0);
-                            assert(p.nodes().back().args().isEmpty());
+                            BUG_ASSERT(p.nodes().size() > 0);
+                            BUG_ASSERT(p.nodes().back().args().isEmpty());
                             p.nodes().back().args() = mv$(e.nodes[0].args());
                         }
                         for (unsigned int i = 1; i < e.nodes.size(); i++) {
@@ -1253,7 +1253,7 @@ namespace {
                         p = ASTPath::newUfcsTy(mkType(context.typePool(), sp, coreType));
                     }
                     if (p.isAbsolute()) {
-                        assert(!p.nodes().empty());
+                        BUG_ASSERT(!p.nodes().empty());
                         if (e.nodes[0].name() != selfName()) {
                             p.nodes().back().args() = mv$(e.nodes.back().args());
                         }
@@ -1307,7 +1307,7 @@ namespace {
             case ASTPathClass::TAG_Super: {
                 auto& e = path.cls.as_Super();
                 const auto& mpNodes = context.mod.path().nodes;
-                assert(e.count >= 1);
+                BUG_ASSERT(e.count >= 1);
                 // TODO: The first super should ignore any anon modules.
                 unsigned int startLen = e.count > mpNodes.size() ? 0 : mpNodes.size() - e.count;
                 while (startLen > 0 && mpNodes[startLen - 1].c_str()[0] == '#') {
@@ -1594,7 +1594,7 @@ namespace {
                         type = ufcs->type;
                         return;
                     }
-                    assert(ufcs->nodes.size() == 1);
+                    BUG_ASSERT(ufcs->nodes.size() == 1);
                 }
 
                 if (e->bindings.type.binding.opt_Trait()) {
@@ -1698,7 +1698,7 @@ namespace {
                             this->context.endPatbind();
                         }
                     }
-                    assert(arm.code);
+                    BUG_ASSERT(arm.code);
                     arm.code->visit(*this);
 
                     this->context.popBlock();
@@ -3149,7 +3149,7 @@ namespace {
                         itemContext.push(def.params(), GenericSlot::Level::Top);
 
                         itemContext.iblTargetGenerics = &def.params();
-                        assert(def.trait().ent.isValid());
+                        BUG_ASSERT(def.trait().ent.isValid());
                         ResolveAbsolutePath(itemContext, def.trait().sp, Context::LookupMode::Type, def.trait().ent);
                         itemContext.iblTargetGenerics = nullptr;
 
@@ -3330,7 +3330,7 @@ namespace {
     }
 
     ASTPath hirToAst(const HIRSimplePath& p) {
-        assert(p.crateName() != "");
+        BUG_ASSERT(p.crateName() != "");
         ASTPath rv(p.crateName(), {});
         rv.nodes().reserve(p.components().size());
         for (const auto& n : p.components()) {
@@ -3383,7 +3383,7 @@ namespace {
             }
         } else {
             auto rec = list.insert(std::make_pair(name, ASTModule::IndexEnt{wasImport, fromPrelude, mv$(vis), mv$(ir), fromGlob, fromGlob && globIsNested, fromMacro || spanIsFromMacro(sp), false}));
-            assert(rec.second);
+            BUG_ASSERT(rec.second);
         }
     }
 
@@ -3768,7 +3768,7 @@ namespace {
                 } else {
                     pb.path = modAp + it.first;
                 }
-                assert(vep);
+                BUG_ASSERT(vep);
                 switch ((*vep).tag()) {
                     case HIRValueItem::TAG_Import: {
                         UNREACHABLE();
@@ -4208,7 +4208,7 @@ namespace {
                         }
                     }
                     if (found && found->ref.is_MacroRules()) {
-                        assert(path != found->path);
+                        BUG_ASSERT(path != found->path);
                         path = found->path;
                         path.bindings.macro.set(found->path, ASTPathBindingMacro::make_MacroRules({nullptr, found->ref.as_MacroRules()}));
                         ResolveIndexModuleNormalisePath(crate, sp, path, loc);
@@ -4343,7 +4343,7 @@ namespace {
                                 BUG(span, "Invalid anon path segment '" << name << "'");
                             }
                             ASSERT_BUG(span, idx < curMod->anonMods().size(), "Invalid anon path segment '" << name << "'");
-                            assert(curMod->anonMods()[idx]);
+                            BUG_ASSERT(curMod->anonMods()[idx]);
                             nextMod = &*curMod->anonMods()[idx];
                         } else {
                             for (const auto& item : curMod->items) {
@@ -4419,7 +4419,7 @@ namespace {
             }
             case ASTPathClass::TAG_Super: {
                 auto& e = path.cls.as_Super();
-                assert(e.count >= 1);
+                BUG_ASSERT(e.count >= 1);
                 ASTPath np("", {});
                 size_t startLen = basePath.nodes().size();
                 while (startLen > 0 && basePath.nodes()[startLen - 1].name().c_str()[0] == '#') {
@@ -4661,7 +4661,7 @@ namespace {
                 BUG(span, "Invalid anon path segment '" << desItemName << "'");
             }
             ASSERT_BUG(span, idx < mod.anonMods().size(), "Invalid anon path segment '" << desItemName << "'");
-            assert(mod.anonMods()[idx]);
+            BUG_ASSERT(mod.anonMods()[idx]);
             const auto& m = *mod.anonMods()[idx];
             rv.type.set(m.path(), ASTPathBindingType::make_Module({&m, {nullptr}}));
             return rv;
@@ -4918,7 +4918,7 @@ namespace {
                     switch (bindings->type.binding.tag()) {
                         case ASTPathBindingType::TAG_Crate: {
                             auto& e = bindings->type.binding.as_Crate();
-                            assert(e.crate_);
+                            BUG_ASSERT(e.crate_);
                             rv.mergeFrom(ResolveUseGetBindingExt(sp2, crate, ASTPath("", {ASTPathNode(desItemName, {})}), *e.crate_, 0));
                             break;
                         }
@@ -4942,7 +4942,7 @@ namespace {
                         }
                         case ASTPathBindingType::TAG_Trait: {
                             auto& e = bindings->type.binding.as_Trait();
-                            assert(e.trait_ || e.hir);
+                            BUG_ASSERT(e.trait_ || e.hir);
                             bool isValue = false;
                             bool isType = false;
                             if (e.hir) {
@@ -4972,7 +4972,7 @@ namespace {
                         }
                         case ASTPathBindingType::TAG_Enum: {
                             auto& e = bindings->type.binding.as_Enum();
-                            assert(e.enum_ || e.hir);
+                            BUG_ASSERT(e.enum_ || e.hir);
                             if (e.enum_) {
                                 const auto& enm = *e.enum_;
                                 unsigned int i = 0;
@@ -5241,7 +5241,7 @@ namespace {
                         const auto& ec = crate.externCrates.at(e.path.crateName());
                         if (e.isVariant) {
                             const auto& enm = ec.hir->getTypeitemByPath(span, e.path, /*ignore_crate_name*/ true, /*ignore_last_node*/ true).as_Enum();
-                            assert(e.idx < enm.numVariants());
+                            BUG_ASSERT(e.idx < enm.numVariants());
                             rv.type.set(ap, ASTPathBindingType::make_EnumVar({nullptr, e.idx, &enm}));
                         } else if (e.path.components().empty()) {
                             rv.type.set(ap, ASTPathBindingType::make_Module({nullptr, {&ec, &ec.hir->rootModule}}));
@@ -5316,7 +5316,7 @@ namespace {
                         auto p = e.path;
                         p.popComponent();
                         const auto& enm = ec.hir->getTypeitemByPath(span, p, true).as_Enum();
-                        assert(e.idx < enm.numVariants());
+                        BUG_ASSERT(e.idx < enm.numVariants());
                         rv.value.set(ap, ASTPathBindingValue::make_EnumVar({nullptr, e.idx, &enm}));
                     } else {
                         itemPtr = &ec.hir->getValitemByPath(span, e.path, true);
@@ -5463,7 +5463,7 @@ namespace {
         for (unsigned int i = 0; i < nodes.size() - 1; i++) {
             // TODO: If this came from an import, return the real path?
 
-            assert(mod);
+            BUG_ASSERT(mod);
             const auto& node = nodes.at(i);
             const auto nodeName = node.hygienicName();
             auto b = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceModPath, *mod, nodeName, innerParentModules, /*types_only=*/true);
@@ -5624,8 +5624,8 @@ namespace {
                     auto& e = b.type.binding.as_Module();
                     ASSERT_BUG(span, e.module_ || e.hir.mod, "nullptr module pointer in node " << i << " of " << path);
                     if (!e.module_) {
-                        assert(e.hir.crate);
-                        assert(e.hir.mod);
+                        BUG_ASSERT(e.hir.crate);
+                        BUG_ASSERT(e.hir.mod);
                         return ResolveUseGetBindingExt(span, crate, *e.hir.crate, *e.hir.mod, path, i + 1, b.type.path);
                     }
                     innerParentModules.push_back(mod);
@@ -5635,7 +5635,7 @@ namespace {
             }
         }
 
-        assert(mod);
+        BUG_ASSERT(mod);
         const auto& node = nodes.back();
         const auto nodeName = node.hygienicName();
         auto binding = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceModPath, *mod, nodeName, parentModules, typesOnly);
@@ -5872,7 +5872,7 @@ auto Context::pushBlock() -> void {
 }
 
 auto Context::pushMacroDefinition(unsigned int definitionId, const Ident::Hygiene& tokenHygiene, const Ident::Hygiene& definitionHygiene) -> void {
-    assert(blockLevel > 0);
+    BUG_ASSERT(blockLevel > 0);
     nameContext.push_back(Ent::make_MacroDefinition({blockLevel, definitionId, tokenHygiene, definitionHygiene}));
 }
 
@@ -5903,21 +5903,21 @@ auto Context::pushVar(const Span& sp, const Ident& name) -> unsigned int {
         }
         ERROR(sp, E0000, "Mismatched bindings in pattern (`" << name << "` wasn't in the first arm)");
     } else {
-        assert(blockLevel > 0);
+        BUG_ASSERT(blockLevel > 0);
         if (nameContext.empty() || !nameContext.back().is_VarBlock() || nameContext.back().as_VarBlock().level < blockLevel) {
             nameContext.push_back(Ent::make_VarBlock({blockLevel, {}}));
         }
         auto& vb = nameContext.back().as_VarBlock();
-        assert(vb.level == blockLevel);
+        BUG_ASSERT(vb.level == blockLevel);
         vb.variables.push_back(std::make_pair(mv$(name), varCount));
         varCount += 1;
-        assert(varCount >= vb.variables.size());
+        BUG_ASSERT(varCount >= vb.variables.size());
         return varCount - 1;
     }
 }
 
 auto Context::popBlock() -> void {
-    assert(blockLevel > 0);
+    BUG_ASSERT(blockLevel > 0);
     while (!nameContext.empty()) {
         if (const auto* e = nameContext.back().opt_VarBlock()) {
             if (e->level != blockLevel) {
@@ -5937,7 +5937,7 @@ auto Context::popBlock() -> void {
 }
 
 auto Context::startPatbind() -> void {
-    assert(blockLevel > 0);
+    BUG_ASSERT(blockLevel > 0);
     patternStack.push_back(PatternStackEnt());
 }
 
@@ -5955,7 +5955,7 @@ auto Context::endPatbindArm(const Span& sp) -> void {
 }
 
 auto Context::endPatbind() -> void {
-    assert(!patternStack.empty());
+    BUG_ASSERT(!patternStack.empty());
     if (patternStack.size() > 1) {
         const auto& cur = patternStack[patternStack.size() - 1];
         auto& next = patternStack[patternStack.size() - 2];
@@ -6233,8 +6233,8 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                     std::stringstream ss(node.c_str());
                     ss >> c;
                     ss >> idx;
-                    assert(idx < mod->anonMods().size());
-                    assert(mod->anonMods()[idx]);
+                    BUG_ASSERT(idx < mod->anonMods().size());
+                    BUG_ASSERT(mod->anonMods()[idx]);
                     next = mod->anonMods()[idx].get();
                 } else {
                     for (const auto& i : mod->items) {
@@ -6284,8 +6284,8 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                                 // HACK! If `Self` points to a `type`, look through it
 
                                 if (const auto* pbe = (**p).bindings.type.binding.opt_TypeAlias()) {
-                                    assert(pbe->alias_);
-                                    assert(pbe->alias_->type_->isPath());
+                                    BUG_ASSERT(pbe->alias_);
+                                    BUG_ASSERT(pbe->alias_->type_->isPath());
                                     return *pbe->alias_->type_->data.as_Path();
                                 }
                                 return **p;
@@ -6298,7 +6298,7 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
             }
             case Ent::TAG_VarBlock: {
                 auto& e = (*it).as_VarBlock();
-                assert(e.level <= blockLevel);
+                BUG_ASSERT(e.level <= blockLevel);
                 if (mode != LookupMode::Variable) {
                 } else {
                     for (auto it2 = e.variables.rbegin(); it2 != e.variables.rend(); ++it2) {
@@ -6488,6 +6488,6 @@ ActiveUseResolution::ActiveUseResolution(UseResolutionContext& context, const AS
 }
 
 ActiveUseResolution::~ActiveUseResolution() {
-    assert(context.activeUse == this);
+    BUG_ASSERT(context.activeUse == this);
     context.activeUse = parent;
 }

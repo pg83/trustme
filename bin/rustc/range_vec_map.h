@@ -186,7 +186,7 @@ public:
             data_.insert(its.first.inner, std::make_unique<itemT>(std::move(kv)));
             return std::make_pair(iterator(data_.begin() + i), true);
         } else {
-            assert(its.first + 1 == its.second);
+            BUG_ASSERT(its.first + 1 == its.second);
             return std::make_pair(its.first, false);
         }
     }
@@ -198,7 +198,7 @@ public:
             data_.insert(its.first.inner, std::make_unique<itemT>(std::make_pair(std::move(k), V())));
             return data_[i]->second;
         } else {
-            assert(its.first.inner + 1 == its.second.inner);
+            BUG_ASSERT(its.first.inner + 1 == its.second.inner);
             return its.first->second;
         }
     }

@@ -299,7 +299,7 @@ namespace {
                             auto lex = ProcMacroInvoke(sp, wb, crate, this->macPath, attr.data(), attrs, vis, name, i);
                             if (lex) {
                                 i = ASTItem::make_None({});
-                                assert(currentMod);
+                                BUG_ASSERT(currentMod);
                                 lex->parseState().module = currentMod;
                                 while (lex->lookahead(0) != TOK_EOF) {
                                     ParseImplItem(*lex, impl);
@@ -1104,7 +1104,7 @@ namespace {
                     auto miOwned = mv$(e);
 
                     if (!miOwned.isExpanded()) {
-                        assert(miOwned.span());
+                        BUG_ASSERT(miOwned.span());
 
                         auto ttl = ExpandMacro(es, mod, miOwned);
                         if (ttl) {
@@ -1300,7 +1300,7 @@ namespace {
                     auto miOwned = mv$(e);
 
                     if (!miOwned.isExpanded()) {
-                        assert(miOwned.span());
+                        BUG_ASSERT(miOwned.span());
 
                         auto ttl = ExpandMacro(es, mod, miOwned);
                         if (ttl) {
@@ -1726,10 +1726,10 @@ namespace {
                     ExpandState es{wb, crate, {}, ExpandMode::Iterate, &mod};
                     auto ttl = ExpandMacro(es, mod, miOwned);
                     ASSERT_BUG(miOwned.span(), ttl, "BUG: macro_rules not expanded");
-                    assert(miOwned.path().isValid());
+                    BUG_ASSERT(miOwned.path().isValid());
 
                     if (ttl.get()) {
-                        assert(ttl.get());
+                        BUG_ASSERT(ttl.get());
                         ParseModRootItemsInto(mod, idx, *ttl);
                     } else {
                     }
@@ -2067,7 +2067,7 @@ auto CExpandExpr::visit(ASTExprNodeP& cnode) -> void {
             cnode->attrs() = mv$(attrs);
         }
     }
-    assert(!this->replacement);
+    BUG_ASSERT(!this->replacement);
 }
 
 auto CExpandExpr::visitNodelete(const ASTExprNode& parent, ASTExprNodeP& cnode) -> void {
@@ -2077,12 +2077,12 @@ auto CExpandExpr::visitNodelete(const ASTExprNode& parent, ASTExprNodeP& cnode) 
             ERROR(parent.span(), E0000, "#[cfg] not allowed in this position");
         }
     }
-    assert(!this->replacement);
+    BUG_ASSERT(!this->replacement);
 }
 
 auto CExpandExpr::visitVector(std::vector<ASTExprNodeP>& cnodes) -> void {
     for (auto it = cnodes.begin(); it != cnodes.end();) {
-        assert(it->get());
+        BUG_ASSERT(it->get());
         this->visit(*it);
         if (it->get() == nullptr) {
             it = cnodes.erase(it);
@@ -2180,7 +2180,7 @@ auto CExpandExpr::visit(ASTExprNodeMacro& node) -> void {
         auto n = mv$(this->replacement);
         this->visit(n);
         if (n) {
-            assert(!this->replacement);
+            BUG_ASSERT(!this->replacement);
             this->replacement = mv$(n);
         }
     }
@@ -2207,7 +2207,7 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
     this->currentBlock = &node;
 
     for (auto it = node.nodes.begin(); it != node.nodes.end();) {
-        assert(it->node.get());
+        BUG_ASSERT(it->node.get());
 
         if (auto* nodeMac = cast<ASTExprNodeMacro>(it->node.get())) {
             const bool definesMacro = nodeMac->path.isTrivial() && nodeMac->path.asTrivial() == "macro_rules";
@@ -2223,7 +2223,7 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
             }
             it->node->attrs() = std::move(attrs);
 
-            assert(it->node.get() == nodeMac);
+            BUG_ASSERT(it->node.get() == nodeMac);
 
             std::vector<ASTExprNodeBlock::Line> newNodes;
             this->visitMacro(*nodeMac, &newNodes);
@@ -2390,12 +2390,12 @@ auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
             bool isSlot = false;
 
             ASTPattern lower(ASTExprNodeP& ep) {
-                assert(ep);
+                BUG_ASSERT(ep);
                 ep->visit(*this);
                 ASSERT_BUG(ep->span(), rvSet, ep.typeName() << " - Didn't yield a pattern");
                 if (isSlot) {
-                    assert(!slots.empty());
-                    assert(!slots.back().second);
+                    BUG_ASSERT(!slots.empty());
+                    BUG_ASSERT(!slots.back().second);
                     slots.back().second = std::move(ep);
                     isSlot = false;
                 }
@@ -2404,10 +2404,10 @@ auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
             }
 
             void pat(ASTPattern rv) {
-                assert(!rvSet);
-                assert(!isSlot);
+                BUG_ASSERT(!rvSet);
+                BUG_ASSERT(!isSlot);
                 rvSet = true;
-                assert(rv.bindings().empty());
+                BUG_ASSERT(rv.bindings().empty());
                 this->rv = std::move(rv);
             }
 
@@ -2649,9 +2649,9 @@ auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
 
         auto pat = v.lower(node.slot);
         if (pat.bindings().size() > 0) {
-            assert(pat.bindings().size() == 1);
-            assert(!node.slot);
-            assert(v.slots.front().second);
+            BUG_ASSERT(pat.bindings().size() == 1);
+            BUG_ASSERT(!node.slot);
+            BUG_ASSERT(v.slots.front().second);
             node.slot = std::move(v.slots.front().second);
         } else {
             auto rv = new ASTExprNodeBlock();

@@ -851,7 +851,7 @@ namespace {
 
         ASSERT_BUG(Span(), origNodePtr, "Null node pointer passed to `add_coerce_borrow`");
         while (auto* p = cast<HIRExprNodeBlock>(&**nodePtrPtr)) {
-            assert(p->valueNode);
+            BUG_ASSERT(p->valueNode);
             ASSERT_BUG(p->span(), context.ivars.typesEqual(p->resType, p->valueNode->resType), "Block and result mismatch - " << context.ivars.fmtType(p->resType) << " != " << context.ivars.fmtType(p->valueNode->resType));
             p->resType = context.crate.types.borrow(borrowType, desBorrowInner);
             nodePtrPtr = &p->valueNode;
@@ -1032,7 +1032,7 @@ namespace {
                 if (contextMut && nodePtrPtr) {
                     auto& nodePtr = *nodePtrPtr;
                     addCoerceBorrow(*contextMut, nodePtr, types.back(), [&](auto& nodePtr) -> void {
-                        assert(count == types.size());
+                        BUG_ASSERT(count == types.size());
                         for (unsigned int i = 0; i < types.size(); i++) {
                             auto span = nodePtr->span();
                             // TODO: Replace with a call to context.create_autoderef to handle cases where the below assertion would fire.
@@ -1498,7 +1498,7 @@ namespace {
                 const auto& binding = ty->as_Path().binding;
                 const auto& sm = binding.as_Struct()->structMarkings;
                 HIRGenericPath gp = ty->as_Path().path.data.as_Generic().clone();
-                assert(sm.coerceParam != ~0u);
+                BUG_ASSERT(sm.coerceParam != ~0u);
                 gp.params.types.at(sm.coerceParam) = context.ivars.newIvarTr();
                 return context.crate.types.path(mv$(gp), binding.as_Struct());
             }
@@ -1631,7 +1631,7 @@ namespace {
 
             const auto& ppDst = dst->as_Path().path.data.as_Generic().params;
             const auto& ppSrc = src->as_Path().path.data.as_Generic().params;
-            assert(ppDst.types.size() == ppSrc.types.size());
+            BUG_ASSERT(ppDst.types.size() == ppSrc.types.size());
             for (size_t i = 0; i < ppSrc.types.size(); i++) {
                 if (i == sm.coerceParam) {
                     continue;
@@ -1640,7 +1640,7 @@ namespace {
                     contextMut->equateTypes(sp, ppDst.types.at(i), ppSrc.types.at(i));
                 }
             }
-            assert(ppDst.values.size() == ppSrc.values.size());
+            BUG_ASSERT(ppDst.values.size() == ppSrc.values.size());
             for (size_t i = 0; i < ppSrc.values.size(); i++) {
                 TODO(sp, "Handle values in CoerceUnsized");
             }
@@ -3764,7 +3764,7 @@ namespace {
         if (count > 1) {
             return false;
         }
-        assert(implPtr);
+        BUG_ASSERT(implPtr);
         for (const auto& equality : implEqualities) {
             context.equateTypes(sp, equality.left, equality.right);
         }
@@ -4290,12 +4290,12 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     if (lE.size != rE.size) {
                         if (lE.size.is_Unevaluated() || rE.size.is_Unevaluated()) {
                             if (!lE.size.is_Unevaluated()) {
-                                assert(lE.size.is_Known());
-                                assert(rE.size.is_Unevaluated());
+                                BUG_ASSERT(lE.size.is_Known());
+                                BUG_ASSERT(rE.size.is_Unevaluated());
                                 this->equateValues(sp, freezeEncodedLiteral(*crate.pool, EncodedLiteral::makeUsize(lE.size.as_Known())), rE.size.as_Unevaluated());
                             } else if (!rE.size.is_Unevaluated()) {
-                                assert(lE.size.is_Unevaluated());
-                                assert(rE.size.is_Known());
+                                BUG_ASSERT(lE.size.is_Unevaluated());
+                                BUG_ASSERT(rE.size.is_Known());
                                 this->equateValues(sp, lE.size.as_Unevaluated(), freezeEncodedLiteral(*crate.pool, EncodedLiteral::makeUsize(rE.size.as_Known())));
                             } else {
                                 this->equateValues(sp, lE.size.as_Unevaluated(), rE.size.as_Unevaluated());
@@ -4466,7 +4466,7 @@ void Context::equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRC
 }
 
 void Context::addBindingInner(const Span& sp, const HIRPatternBinding& pb, HIRTypeRef type) {
-    assert(pb.isValid());
+    BUG_ASSERT(pb.isValid());
     switch (pb.type) {
         case HIRPatternBinding::Type::Move:
             this->addVar(sp, pb.slot, pb.name, mv$(type));
@@ -4650,7 +4650,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
                                 auto& p = e.path.data.as_Generic();
-                                assert(be);
+                                BUG_ASSERT(be);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                                 break;
@@ -4658,7 +4658,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             case HIRPatternPathBinding::TAG_Union: {
                                 auto& be = e.binding.as_Union();
                                 auto& p = e.path.data.as_Generic();
-                                assert(be);
+                                BUG_ASSERT(be);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                                 break;
@@ -4666,7 +4666,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             case HIRPatternPathBinding::TAG_Enum: {
                                 auto& be = e.binding.as_Enum();
                                 auto& p = e.path.data.as_Generic();
-                                assert(be.ptr);
+                                BUG_ASSERT(be.ptr);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(getParentPath(p), HIRTypePathBinding(be.ptr));
                                 break;
@@ -4685,7 +4685,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
                                 auto& p = e.path.data.as_Generic();
-                                assert(be);
+                                BUG_ASSERT(be);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                                 break;
@@ -4693,7 +4693,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             case HIRPatternPathBinding::TAG_Union: {
                                 auto& be = e.binding.as_Union();
                                 auto& p = e.path.data.as_Generic();
-                                assert(be);
+                                BUG_ASSERT(be);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                                 break;
@@ -4701,7 +4701,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             case HIRPatternPathBinding::TAG_Enum: {
                                 auto& be = e.binding.as_Enum();
                                 auto& p = e.path.data.as_Generic();
-                                assert(be.ptr);
+                                BUG_ASSERT(be.ptr);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(getParentPath(p), HIRTypePathBinding(be.ptr));
                                 break;
@@ -4720,7 +4720,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
                                 auto& p = e.path.data.as_Generic();
-                                assert(be);
+                                BUG_ASSERT(be);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                                 break;
@@ -4728,7 +4728,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             case HIRPatternPathBinding::TAG_Union: {
                                 auto& be = e.binding.as_Union();
                                 auto& p = e.path.data.as_Generic();
-                                assert(be);
+                                BUG_ASSERT(be);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                                 break;
@@ -4736,7 +4736,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             case HIRPatternPathBinding::TAG_Enum: {
                                 auto& be = e.binding.as_Enum();
                                 auto& p = e.path.data.as_Generic();
-                                assert(be.ptr);
+                                BUG_ASSERT(be.ptr);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(getParentPath(p), HIRTypePathBinding(be.ptr));
                                 break;
@@ -4989,7 +4989,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         default:
                             TODO(sp, "Assign variable type using mode " << (int)bindingMode << " and " << type);
                     }
-                    assert(bindingType);
+                    BUG_ASSERT(bindingType);
                     context.equateTypes(sp, context.getVar(sp, pb.slot), bindingType);
                 }
 
@@ -5606,7 +5606,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     }
                     case HIRPatternData::TAG_Or: {
                         auto& e = pat.data.as_Or();
-                        assert(e.size() > 0);
+                        BUG_ASSERT(e.size() > 0);
                         createBindings(sp, context, e[0]);
                         // TODO: Ensure that the other arms have the same binding set
                         break;
@@ -5680,21 +5680,21 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                 case HIRPatternPathBinding::TAG_Struct: {
                     auto& be = binding.as_Struct();
                     auto& p = path.data.as_Generic();
-                    assert(be);
+                    BUG_ASSERT(be);
                     context.addIvarsParams(p.params);
                     return context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                 }
                 case HIRPatternPathBinding::TAG_Union: {
                     auto& be = binding.as_Union();
                     auto& p = path.data.as_Generic();
-                    assert(be);
+                    BUG_ASSERT(be);
                     context.addIvarsParams(p.params);
                     return context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                 }
                 case HIRPatternPathBinding::TAG_Enum: {
                     auto& be = binding.as_Enum();
                     auto& p = path.data.as_Generic();
-                    assert(be.ptr);
+                    BUG_ASSERT(be.ptr);
                     context.addIvarsParams(p.params);
                     return context.crate.types.path(getParentPath(p), HIRTypePathBinding(be.ptr));
                 }
@@ -6091,7 +6091,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     break;
                 }
                 case HIRPatternPathBinding::TAG_Struct: {
-                    assert(e.binding.as_Struct()->data.is_Unit());
+                    BUG_ASSERT(e.binding.as_Struct()->data.is_Unit());
                     break;
                 }
                 case HIRPatternPathBinding::TAG_Union: {
@@ -6132,7 +6132,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                 ASSERT_BUG(sp, e.leading.size() + e.trailing.size() <= sd.size(), "PathTuple size mismatch, expected at most " << sd.size() << " fields but got " << e.leading.size() + e.trailing.size());
             } else {
                 ASSERT_BUG(sp, e.leading.size() == sd.size(), "PathTuple size mismatch, expected " << sd.size() << " fields but got " << e.leading.size());
-                assert(e.trailing.size() == 0);
+                BUG_ASSERT(e.trailing.size() == 0);
             }
             e.totalSize = sd.size();
 
@@ -6351,7 +6351,7 @@ void Context::indexAssociated(unsigned index) {
 
 void Context::unindexAssociated(unsigned index, u64 key) {
     auto* bucket = linkAssocIndex.find(key);
-    assert(bucket);
+    BUG_ASSERT(bucket);
     for (size_t i = 0; i < bucket->length(); i++) {
         if ((*bucket)[i] == index) {
             const auto replacement = bucket->popBack();
@@ -6361,7 +6361,7 @@ void Context::unindexAssociated(unsigned index, u64 key) {
             return;
         }
     }
-    assert(!"associated type rule is absent from its index");
+    BUG_ASSERT(!"associated type rule is absent from its index");
 }
 
 void Context::storeAssociated(unsigned index, Associated rule, u64 oldKey) {
@@ -6656,7 +6656,7 @@ void Context::possibleEquateIvarUnknown(const Span& sp, unsigned int ivarIndex, 
 }
 
 void Context::addVar(const Span& sp, unsigned int index, const RcString& name, HIRTypeRef type) {
-    assert(index != ~0u);
+    BUG_ASSERT(index != ~0u);
     ASSERT_BUG(sp, type != HIRTypeRef(), "Unset ivar in variable type");
     if (bindings.size() <= index) {
         const auto oldSize = bindings.size();
@@ -6793,7 +6793,7 @@ void Context::compactIvars() {
 
 void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr) {
     HIRExprNodeP rootPtr(expr.get());
-    assert(!ms.modPaths.empty());
+    BUG_ASSERT(!ms.modPaths.empty());
     Context context{ms.wb, ms.implGenerics, ms.itemGenerics, ms.modPaths.back(), ms.currentTrait, ms.currentTraitImpl};
     if (resultType) {
         visitTyWith(resultType, [&](const HIRTypeData* inner) {
@@ -7291,7 +7291,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                         break;
                     }
                 }
-                assert(paramsPtr);
+                BUG_ASSERT(paramsPtr);
 
                 bool found = false;
                 for (auto& v : paramsPtr->values) {
@@ -7315,7 +7315,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
 
 /// TODO: If the function has multiple mismatched options, tell the caller to try again later?
 bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) {
-    assert(cache.argTypes.size() == 0);
+    BUG_ASSERT(cache.argTypes.size() == 0);
 
     const HIRFunction* fcnPtr = nullptr;
 
@@ -7451,7 +7451,7 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
         }
     }
 
-    assert(fcnPtr);
+    BUG_ASSERT(fcnPtr);
     cache.fcn = fcnPtr;
     const auto& fcn = *fcnPtr;
     cache.monomorph->setConstevalState(context.resolve.board(), HIRItemPath(path));
@@ -7842,7 +7842,7 @@ auto ExprVisitorRevisit::nodeCompleted() const -> bool {
 }
 
 auto ExprVisitorRevisit::visit(HIRExprNodeBlock& node) -> void {
-    assert(!node.nodes.empty());
+    BUG_ASSERT(!node.nodes.empty());
     const auto& lastNode = *node.nodes.back();
     const auto& lastTy = this->context.getType(lastNode.resType);
 
@@ -8299,7 +8299,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
     } while (currentTy);
 
     if (currentTy) {
-        assert(derefCount == derefResTypes.size());
+        BUG_ASSERT(derefCount == derefResTypes.size());
         for (auto& tyR : derefResTypes) {
             auto ty = mv$(tyR);
 
@@ -8388,7 +8388,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallPath& node) -> void {
     if (!visitCallPopulateCache(this->context, node.span(), node.path, node.cache)) {
         return;
     }
-    assert(node.cache.argTypes.size() >= 1);
+    BUG_ASSERT(node.cache.argTypes.size() >= 1);
     unsigned int expArgc = node.cache.argTypes.size() - 1;
     if (node.args.size() != expArgc) {
         if (node.cache.fcn->variadic && node.args.size() > expArgc) {
@@ -8607,7 +8607,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
         ty = tyO;
         while (derefCount-- > 0) {
             const auto* nextTy = this->context.resolve.autoderef(node.span(), ty, tmpType);
-            assert(nextTy);
+            BUG_ASSERT(nextTy);
             ty = nextTy;
             node.value = this->context.createAutoderef(mv$(node.value), ty);
         }
@@ -8731,7 +8731,7 @@ tryAgain:
                     if (e1.trait.path != e2.trait.path) {
                         continue;
                     }
-                    assert(!(e1.trait.params == e2.trait.params));
+                    BUG_ASSERT(!(e1.trait.params == e2.trait.params));
 
                     // TODO: If `Into<Foo>` and `Into<_>` is seen, we want to pick the solid type, BUT
 
@@ -8776,7 +8776,7 @@ tryAgain:
                 }
             }
         }
-        assert(!possibleMethods.empty());
+        BUG_ASSERT(!possibleMethods.empty());
         if (possibleMethods.size() != 1 && possibleMethods.front().second.data.is_UfcsKnown()) {
             // TODO: If the type is fully known, then this is an error.
             return;
@@ -8859,7 +8859,7 @@ tryAgain:
             }
             return;
         }
-        assert(node.cache.argTypes.size() >= 1);
+        BUG_ASSERT(node.cache.argTypes.size() >= 1);
 
         if (node.args.size() + 1 != node.cache.argTypes.size() - 1) {
             ERROR(node.span(), E0000, "Incorrect number of arguments to " << node.methodPath << " - exp " << node.cache.argTypes.size() - 2 << " got " << node.args.size());
@@ -8871,7 +8871,7 @@ tryAgain:
         this->context.equateTypes(sp, node.resType, node.cache.argTypes.back());
 
         if (derefCount > 0) {
-            assert(derefCount < (1 << 16));
+            BUG_ASSERT(derefCount < (1 << 16));
             auto& nodePtr = node.value;
             HIRTypeRef tmpTy;
             const HIRTypeData* curTy = nodePtr->resType;
@@ -8969,7 +8969,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeField& node) -> void {
         ERROR(node.span(), E0000, "Couldn't find the field " << fieldName << " in " << this->context.ivars.fmtType(node.value->resType));
     }
 
-    assert(derefCount == derefResTypes.size());
+    BUG_ASSERT(derefCount == derefResTypes.size());
     for (unsigned int i = 0; i < derefResTypes.size(); i++) {
         auto ty = mv$(derefResTypes[i]);
         if (node.value->resType->is_Array()) {
@@ -10725,7 +10725,7 @@ auto InfoOrdering::compareTop(const Context& context, const HIRTypeData* tyL, co
                 return Incompatible;
             }
             auto paramIdx = le.binding.as_Struct()->structMarkings.coerceParam;
-            assert(paramIdx != ~0u);
+            BUG_ASSERT(paramIdx != ~0u);
             return compareTop(context, context.ivars.getType(le.path.data.as_Generic().params.types.at(paramIdx)), context.ivars.getType(re.path.data.as_Generic().params.types.at(paramIdx)), false);
         } else if (const auto* le = tyL->opt_NodeType()) {
             const auto& re = tyR->as_NodeType();
@@ -10759,7 +10759,7 @@ OwnedImplMatcher::OwnedImplMatcher(HIRTypeInterner& types, HIRPathParams& implPa
 }
 
 auto OwnedImplMatcher::matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) -> HIRCompare {
-    assert(g.binding < implParams.types.size());
+    BUG_ASSERT(g.binding < implParams.types.size());
     auto& slot = implParams.types[g.binding];
     if (!(slot->is_Infer() && slot->as_Infer().index == ~0u)) {
         return slot->compareWithPlaceholders(Span(), ty, _resolve_cb);
@@ -10769,7 +10769,7 @@ auto OwnedImplMatcher::matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tC
 }
 
 auto OwnedImplMatcher::matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) -> HIRCompare {
-    assert(g.binding < implParams.values.size());
+    BUG_ASSERT(g.binding < implParams.values.size());
     ASSERT_BUG(Span(), implParams.values[g.binding] == HIRConstGeneric(), "TODO: Multiple values? " << implParams.values[g.binding] << " and " << sz);
     implParams.values[g.binding] = sz.clone();
     return HIRCompare::Equal;
@@ -11346,7 +11346,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeAssign& node) -> void {
                 operatorKind = TypeckPrimitiveOperator::ShlAssign;
                 break;
         }
-        assert(langItem);
+        BUG_ASSERT(langItem);
         const auto& traitPath = this->context.crate.getLangItemPathOpt(langItem);
 
         auto ty = this->context.ivars.newIvarTr();
@@ -11428,7 +11428,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
                 default:
                     break;
             }
-            assert(itemName);
+            BUG_ASSERT(itemName);
             const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
 
             auto operatorKind = node.op == HIRExprNodeBinOp::Op::CmpEqu || node.op == HIRExprNodeBinOp::Op::CmpNEqu ? TypeckPrimitiveOperator::Equal : TypeckPrimitiveOperator::Order;
@@ -11510,7 +11510,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
                     operatorKind = TypeckPrimitiveOperator::Shl;
                     break;
             }
-            assert(itemName);
+            BUG_ASSERT(itemName);
             const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
 
             if (!opTrait.components().empty()) {
@@ -11545,7 +11545,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeUniOp& node) -> void {
             operatorKind = TypeckPrimitiveOperator::Neg;
             break;
     }
-    assert(itemName);
+    BUG_ASSERT(itemName);
     const HIRTypeData* inputType = node.value->resType;
     if (this->context.getType(inputType)->is_Diverge()) {
         const HIRTypeData* expectedType = this->context.coercionHint(node);
@@ -11777,8 +11777,8 @@ auto ExprVisitorEnum::visit(HIRExprNodeTupleVariant& node) -> void {
             }
         }
     }
-    assert(fieldsPtr);
-    assert(generics);
+    BUG_ASSERT(fieldsPtr);
+    BUG_ASSERT(generics);
     const tTupleFields& fields = *fieldsPtr;
     if (fields.size() != node.args.size()) {
         ERROR(node.span(), E0000, "Tuple variant constructor argument count doesn't match type - " << node.path);
@@ -11931,7 +11931,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
         }
     }
     ASSERT_BUG(node.span(), fieldsPtr, "");
-    assert(generics);
+    BUG_ASSERT(generics);
     const tStructFields& fields = *fieldsPtr;
 
     auto monomorphCb = MonomorphStatePtr(this->context.crate.types, ty, &tyPath.params, nullptr);
@@ -12018,7 +12018,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallPath& node) -> void {
 
     const bool cacheOk = visitCallPopulateCache(this->context, node.span(), node.path, node.cache);
     if (cacheOk) {
-        assert(node.cache.argTypes.size() >= 1);
+        BUG_ASSERT(node.cache.argTypes.size() >= 1);
         unsigned int expArgc = node.cache.argTypes.size() - 1;
 
         if (node.args.size() != expArgc) {
@@ -12189,7 +12189,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeTuple& node) -> void {
             ERROR(node.span(), E0000, "Tuple literal used where a non-tuple expected - " << ty);
         }
         const auto& innerTys = this->context.getType(node.resType)->as_Tuple();
-        assert(innerTys.size() == node.vals.size());
+        BUG_ASSERT(innerTys.size() == node.vals.size());
 
         for (unsigned int i = 0; i < innerTys.size(); i++) {
             this->context.equateTypesCoerce(node.span(), innerTys[i], node.vals[i]);
@@ -12451,8 +12451,8 @@ auto ExprVisitorEnum::visit(HIRExprNodePathValue& node) -> void {
                 TODO(sp, "Revisit _PathValue when UfcsInherent has multiple options - " << node.path);
             }
 
-            assert(fcnPtr || constPtr);
-            assert(implPtr);
+            BUG_ASSERT(fcnPtr || constPtr);
+            BUG_ASSERT(implPtr);
 
             if (fcnPtr) {
                 fixParamCount(sp, this->context, e.type, false, node.path, fcnPtr->params, e.params);
@@ -12496,7 +12496,7 @@ auto ExprVisitorEnum::visit(HIRExprNodePathValue& node) -> void {
                 auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), fcnPtr}));
                 this->context.equateTypes(node.span(), node.resType, ty);
             } else {
-                assert(constPtr);
+                BUG_ASSERT(constPtr);
                 auto monomorphCb = MonomorphStatePtr(this->context.crate.types, e.type, &implParams, &e.params);
 
                 HIRTypeRef tmp;
@@ -12647,7 +12647,7 @@ auto ExprVisitorEnum::pushInnerCoerce(bool val) -> void {
 }
 
 auto ExprVisitorEnum::popInnerCoerce() -> void {
-    assert(this->innerCoerceEnabledStack.size());
+    BUG_ASSERT(this->innerCoerceEnabledStack.size());
     this->innerCoerceEnabledStack.pop_back();
 }
 

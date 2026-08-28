@@ -124,7 +124,7 @@ Span TokenStream::endSpan(ProtoSpan ps) const {
         }
     }
     if (ps.filename == "") {
-        assert(this->outerSpan());
+        BUG_ASSERT(this->outerSpan());
         return this->outerSpan();
     }
     return Span(this->outerSpan(), std::move(ps.filename), ps.startLine, ps.startOfs, p.line, p.ofs);
@@ -136,7 +136,7 @@ Span TokenStream::pointSpan() const {
         return p.span;
     }
     if (p.filename == "") {
-        assert(this->outerSpan());
+        BUG_ASSERT(this->outerSpan());
         return this->outerSpan();
     }
     return Span(this->outerSpan(), p);
@@ -158,7 +158,7 @@ ParseState::ParseState() {
 }
 
 ASTModule& ParseState::getCurrentMod() {
-    assert(this->module);
+    BUG_ASSERT(this->module);
     return *this->module;
 }
 

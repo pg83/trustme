@@ -91,7 +91,7 @@ MIRFunction* HIRExprPtr::getExtMirMut() {
 }
 
 void HIRExprPtr::setMir(MIRFunctionPointer mir) {
-    assert(!this->mir);
+    BUG_ASSERT(!this->mir);
     this->mir = std::move(mir);
 }
 
@@ -130,22 +130,22 @@ void HIRExprNodeP::swap(HIRExprNodeP& x) {
 }
 
 HIRExprNode& HIRExprNodeP::operator*() {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     return *ptr;
 }
 
 const HIRExprNode& HIRExprNodeP::operator*() const {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     return *ptr;
 }
 
 HIRExprNode* HIRExprNodeP::operator->() {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     return ptr;
 }
 
 const HIRExprNode* HIRExprNodeP::operator->() const {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     return ptr;
 }
 
@@ -167,21 +167,21 @@ HIRExprStatePtr& HIRExprStatePtr::operator=(HIRExprStatePtr&& x) {
 }
 
 HIRExprState& HIRExprStatePtr::operator*() {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     return *ptr;
 }
 
 const HIRExprState& HIRExprStatePtr::operator*() const {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     return *ptr;
 }
 
 HIRExprState* HIRExprStatePtr::operator->() {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     return ptr;
 }
 
 const HIRExprState* HIRExprStatePtr::operator->() const {
-    assert(ptr);
+    BUG_ASSERT(ptr);
     return ptr;
 }

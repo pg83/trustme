@@ -1,7 +1,6 @@
 #pragma once
 
 #include <iosfwd>
-#include <stdexcept>
 
 struct Span;
 class ExpandProcMacro;

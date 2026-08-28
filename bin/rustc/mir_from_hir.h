@@ -261,7 +261,7 @@ public:
     }
 
     MIRBasicBlockId activeBlock() const {
-        assert(blockActive_);
+        BUG_ASSERT(blockActive_);
         return currentBlock;
     }
 

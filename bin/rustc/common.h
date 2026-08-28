@@ -6,7 +6,6 @@
 #include <set>
 #include <memory>
 #include <vector>
-#include <cassert>
 #include <sstream>
 #include <utility>
 #include <iostream>
@@ -273,7 +272,7 @@ struct LList {
     }
 
     void operator++() {
-        assert(prev);
+        BUG_ASSERT(prev);
         *this = *prev;
     }
 

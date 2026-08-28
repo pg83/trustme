@@ -627,7 +627,7 @@ void HMTypeInferrence::checkForLoops() {
                         ASSERT_BUG(Span(), e.index != idx, "Recursion in ivar #" << indexes[0] << " " << ivars.ivars[indexes[0]].type << " - loop with " << idx << " " << ivars.ivars[idx].type);
                     }
                     const auto& ivd = ivars.getPointedIvar(e.index);
-                    assert(!ivd.isAlias());
+                    BUG_ASSERT(!ivd.isAlias());
                     if (!ivd.type->is_Infer()) {
                         indexes.pushBack(e.index);
                         this->checkTy(ivars, ivd.type);
@@ -663,7 +663,7 @@ void HMTypeInferrence::compactIvars() {
         } else {
             auto index = v.alias;
             unsigned int count = 0;
-            assert(index < ivars.size());
+            BUG_ASSERT(index < ivars.size());
             while (ivars.at(index).isAlias()) {
                 index = ivars.at(index).alias;
 
@@ -1449,7 +1449,7 @@ const HIRTypeData* HMTypeInferrence::getType(const HIRTypeData* type) const {
 }
 
 HIRTypeRef& HMTypeInferrence::getType(unsigned idx) {
-    assert(idx != ~0u);
+    BUG_ASSERT(idx != ~0u);
     auto* current = &getPointedIvar(idx).type;
     for (size_t count = 0; count <= ivars.size(); count++) {
         const auto* e = (*current)->opt_Infer();
@@ -1466,7 +1466,7 @@ HIRTypeRef& HMTypeInferrence::getType(unsigned idx) {
 }
 
 const HIRTypeData* HMTypeInferrence::getType(unsigned idx) const {
-    assert(idx != ~0u);
+    BUG_ASSERT(idx != ~0u);
     const auto* current = &getPointedIvar(idx).type;
     for (size_t count = 0; count <= ivars.size(); count++) {
         const auto* e = (*current)->opt_Infer();
@@ -1488,7 +1488,7 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
     auto& rootIvar = ivars.at(rootIndex);
 
     if (const auto* lE = type->opt_Infer(); lE && !isAliasInputInfer(lE->index)) {
-        assert(lE->index != slot);
+        BUG_ASSERT(lE->index != slot);
         if (lE->tyClass != HIRInferClass::None) {
             switch ((*rootIvar.type).tag()) {
                 case HIRTypeData::TAG_Primitive: {
@@ -1649,7 +1649,7 @@ const HIRConstGeneric& HMTypeInferrence::getValue(unsigned slot) const {
 unsigned int HMTypeInferrence::rootIvarIndex(unsigned int slot) const {
     auto index = slot;
     unsigned int count = 0;
-    assert(index < ivars.size());
+    BUG_ASSERT(index < ivars.size());
     while (ivars.at(index).isAlias()) {
         index = ivars.at(index).alias;
 
@@ -2856,7 +2856,7 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         };
         auto cmp = this->canUnsize(sp, dstTy, type, cb);
         if (cmp == HIRCompare::Equal) {
-            assert(!rv);
+            BUG_ASSERT(!rv);
             rv = callback.visit(ImplRef(type, params.clone(), {}));
         }
         return rv;
@@ -3527,7 +3527,7 @@ void TraitResolution::compactIvars(HMTypeInferrence& ivars, SolverResponseCallba
         } else {
             auto index = ivars.ivars[i].alias;
             unsigned int count = 0;
-            assert(index < ivars.ivars.size());
+            BUG_ASSERT(index < ivars.ivars.size());
             while (ivars.ivars.at(index).isAlias()) {
                 index = ivars.ivars.at(index).alias;
 
@@ -4226,7 +4226,7 @@ HIRCompare TraitResolution::fticCheckParams(
         }
 
         HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override {
-            assert(g.binding < outImplParams.types.size());
+            BUG_ASSERT(g.binding < outImplParams.types.size());
             if (outImplParams.types[g.binding] == HIRTypeRef()) {
                 outImplParams.types[g.binding] = ty;
                 return HIRCompare::Equal;
@@ -4681,7 +4681,7 @@ const HIRFunction* TraitResolution::traitContainsMethod(const Span& sp, const HI
     const HIRFunction* rv = nullptr;
 
     if (traitContainsMethodInner(traitPtr, name, rv)) {
-        assert(rv);
+        BUG_ASSERT(rv);
         outPath = traitPath.clone();
         return rv;
     }
@@ -4689,7 +4689,7 @@ const HIRFunction* TraitResolution::traitContainsMethod(const Span& sp, const HI
     auto monomorphCb = MonomorphStatePtr(crate.types, self, &traitPath.params, nullptr);
     for (const auto& st : traitPtr.allParentTraits) {
         if (traitContainsMethodInner(*st.traitPtr, name, rv)) {
-            assert(rv);
+            BUG_ASSERT(rv);
             outPath.path = st.path.path;
             outPath.params = monomorphCb.monomorphPathParams(sp, st.path.params, false);
             return rv;
@@ -5093,7 +5093,7 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                     const auto& srcInner = ivars.getType(srcGp.params.types.at(str.structMarkings.unsizedParam));
 
                     auto cb = [&](auto d) {
-                        assert(newTypeCallback);
+                        BUG_ASSERT(newTypeCallback);
 
                         auto dstGpNew = dstGp.clone();
                         dstGpNew.params.types.at(str.structMarkings.unsizedParam) = mv$(d);
@@ -5812,7 +5812,7 @@ unsigned int TraitResolution::autoderefFindMethod(
             return ~0u;
         }
 
-        assert(possibilities.empty());
+        BUG_ASSERT(possibilities.empty());
         return 0;
     }
 }
@@ -6095,7 +6095,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
         const auto& eTraitGp = tb.first.second;
         const auto& eTraitInfo = tb.second;
 
-        assert(eTraitInfo.traitPtr);
+        BUG_ASSERT(eTraitInfo.traitPtr);
         HIRGenericPath finalTraitPath;
         const HIRFunction* fcnPtr;
         if (!(fcnPtr = this->traitContainsMethod(sp, eTraitGp, *eTraitInfo.traitPtr, eType, methodName, finalTraitPath))) {
@@ -6212,7 +6212,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
         const HIRFunction* fcnPtr = nullptr;
         if (traitContainsMethodInner(trait, methodName, fcnPtr)) {
-            assert(fcnPtr);
+            BUG_ASSERT(fcnPtr);
             addTraitObjectMethod(*fcnPtr, e.trait.path.clone());
         } else {
             const auto selfTy = crate.types.self();
@@ -6222,7 +6222,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 if (!traitContainsMethodInner(*st.traitPtr, methodName, fcnPtr)) {
                     continue;
                 }
-                assert(fcnPtr);
+                BUG_ASSERT(fcnPtr);
                 auto finalTraitPath = HIRGenericPath(st.path.path, monomorphCb.monomorphPathParams(sp, st.path.params, false));
                 addTraitObjectMethod(*fcnPtr, std::move(finalTraitPath));
             }
@@ -8428,7 +8428,7 @@ auto NextTraitGoalEvaluator::pushActiveGoal(size_t hash, const HIRSimplePath& tr
 }
 
 auto NextTraitGoalEvaluator::popActiveGoal(GoalKey* goal) -> void {
-    assert(!goalStack.empty() && goalStack.back() == goal);
+    BUG_ASSERT(!goalStack.empty() && goalStack.back() == goal);
     const auto range = activeGoalIndex.equal_range(goal->hash);
     for (auto it = range.first; it != range.second; ++it) {
         if (it->second == goal) {
@@ -8438,7 +8438,7 @@ auto NextTraitGoalEvaluator::popActiveGoal(GoalKey* goal) -> void {
             return;
         }
     }
-    assert(!"next-solver active goal missing from hash index");
+    BUG_ASSERT(!"next-solver active goal missing from hash index");
     std::abort();
 }
 
@@ -10041,7 +10041,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     STD_DEFER {
         const bool encounteredOverflow = frames[frameIndex]->encounteredOverflow;
         frames[frameIndex]->clear(candidateNodes);
-        assert(frameDepth == frameIndex + 1);
+        BUG_ASSERT(frameDepth == frameIndex + 1);
         frameDepth--;
         if (encounteredOverflow && frameIndex > 0) {
             frames[frameIndex - 1]->encounteredOverflow = true;
@@ -10405,8 +10405,8 @@ auto NextTraitGoalEvaluator::evaluateCertainty(const Span& callSpan, const HIRSi
 
     STD_DEFER {
         if (outermost) {
-            assert(goalStack.empty());
-            assert(activeGoalIndex.empty());
+            BUG_ASSERT(goalStack.empty());
+            BUG_ASSERT(activeGoalIndex.empty());
             if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
                 ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
                 solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
@@ -10457,8 +10457,8 @@ auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const
     coherenceMode = true;
 
     STD_DEFER {
-        assert(goalStack.empty());
-        assert(activeGoalIndex.empty());
+        BUG_ASSERT(goalStack.empty());
+        BUG_ASSERT(activeGoalIndex.empty());
         clearGoalCache();
         frameDepth = 0;
         coherenceMode = false;
@@ -10489,7 +10489,7 @@ auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const
     STD_DEFER {
         const bool encounteredOverflow = frames[frameIndex]->encounteredOverflow;
         frames[frameIndex]->clear(candidateNodes);
-        assert(frameDepth == frameIndex + 1);
+        BUG_ASSERT(frameDepth == frameIndex + 1);
         frameDepth--;
         if (encounteredOverflow && frameIndex > 0) {
             frames[frameIndex - 1]->encounteredOverflow = true;
@@ -10544,8 +10544,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
 
     STD_DEFER {
         if (outermost) {
-            assert(goalStack.empty());
-            assert(activeGoalIndex.empty());
+            BUG_ASSERT(goalStack.empty());
+            BUG_ASSERT(activeGoalIndex.empty());
             if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
                 ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
                 solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
@@ -11005,7 +11005,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     STD_DEFER {
         const bool encounteredOverflow = frames[frameIndex]->encounteredOverflow;
         frames[frameIndex]->clear(candidateNodes);
-        assert(frameDepth == frameIndex + 1);
+        BUG_ASSERT(frameDepth == frameIndex + 1);
         frameDepth--;
         if (encounteredOverflow && frameIndex > 0) {
             frames[frameIndex - 1]->encounteredOverflow = true;

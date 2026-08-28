@@ -70,7 +70,7 @@ const char* RcString::c_str() const {
 }
 
 char RcString::back() const {
-    assert(size() > 0);
+    BUG_ASSERT(size() > 0);
     return *(ent(id).end - 1);
 }
 
@@ -119,7 +119,7 @@ std::ostream& operator<<(std::ostream& os, const RcString& x) {
 }
 
 int RcString::compare(size_t o, size_t l, const char* s) const {
-    assert(o <= this->size());
+    BUG_ASSERT(o <= this->size());
     if (l <= this->size() - o) {
         return memcmp(this->c_str() + o, s, l);
     } else {

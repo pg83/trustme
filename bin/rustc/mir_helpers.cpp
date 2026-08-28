@@ -107,8 +107,8 @@ namespace {
             }
 
             void fillTo(size_t stmtIdx) {
-                assert(!isBorrowed_);
-                assert(bbHistory.size() > 0);
+                BUG_ASSERT(!isBorrowed_);
+                BUG_ASSERT(bbHistory.size() > 0);
                 if (bbHistory.size() == 1) {
                     outVl.fill(blockOffsets, bbHistory[0], lastReadOfs, stmtIdx);
                 } else {
@@ -118,7 +118,7 @@ namespace {
 
                     for (size_t i = 1; i < bbHistory.size() - 1; i++) {
                         size_t bbIdx = bbHistory[i];
-                        assert(bbIdx + 1 < blockOffsets.size());
+                        BUG_ASSERT(bbIdx + 1 < blockOffsets.size());
                         size_t limit = blockOffsets[bbIdx + 1] - blockOffsets[bbIdx] - 1;
                         outVl.fill(blockOffsets, bbIdx, 0, limit);
                     }
@@ -165,7 +165,7 @@ namespace {
 
             void runBlock(size_t bbIdx, size_t stmtIdx, State state) {
                 const auto& bb = fcn.blocks.at(bbIdx);
-                assert(stmtIdx <= bb.statements.size());
+                BUG_ASSERT(stmtIdx <= bb.statements.size());
 
                 bool wasMoved = false;
                 bool wasUpdated = false;
@@ -542,7 +542,7 @@ const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValu
         }
     }
     if (val.wrappers.size() > 0) {
-        assert(wrapperSkipCount <= val.wrappers.size());
+        BUG_ASSERT(wrapperSkipCount <= val.wrappers.size());
         const auto* stopWrapper = val.wrappers.data() + (val.wrappers.size() - wrapperSkipCount);
         for (const auto& w : val.wrappers) {
             if (&w == stopWrapper) {
@@ -551,7 +551,7 @@ const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValu
             rv = this->getUnwrappedType(tmp, w, rv);
         }
     } else {
-        assert(wrapperSkipCount == 0);
+        BUG_ASSERT(wrapperSkipCount == 0);
     }
     return rv;
 }
@@ -1494,8 +1494,8 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 
         // TODO: Maybe also store the range (as a sequence of {block,start,end})
         auto addLifetimeS = [&](State& valState, const MIRLValue& lv, const Position& start, const Position& end) {
-            assert(start.pathIndex <= end.pathIndex);
-            assert(start.pathIndex < end.pathIndex || start.stmtIdx <= end.stmtIdx);
+            BUG_ASSERT(start.pathIndex <= end.pathIndex);
+            BUG_ASSERT(start.pathIndex < end.pathIndex || start.stmtIdx <= end.stmtIdx);
             if (start.pathIndex == end.pathIndex && start.stmtIdx == end.stmtIdx) {
                 return;
             }
@@ -1599,7 +1599,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                 if (valState.blockChangeIdx[idx] == valState.curChangeIdx) {
                     continue;
                 } else {
-                    assert(valState.blockChangeIdx[idx] < valState.curChangeIdx);
+                    BUG_ASSERT(valState.blockChangeIdx[idx] < valState.curChangeIdx);
                 }
             } else {
             }
@@ -1807,14 +1807,14 @@ MIRTypeResolve::MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resol
 }
 
 void MIRTypeResolve::setCurStmt(const MIRBasicBlock& bb, const MIRStatement& stmt) {
-    assert(&stmt >= &bb.statements.front());
-    assert(&stmt <= &bb.statements.back());
+    BUG_ASSERT(&stmt >= &bb.statements.front());
+    BUG_ASSERT(&stmt <= &bb.statements.back());
     this->setCurStmt(bb, &stmt - bb.statements.data());
 }
 
 void MIRTypeResolve::setCurStmt(const MIRBasicBlock& bb, unsigned int stmtIdx) {
-    assert(&bb >= &fcn.blocks.front());
-    assert(&bb <= &fcn.blocks.back());
+    BUG_ASSERT(&bb >= &fcn.blocks.front());
+    BUG_ASSERT(&bb <= &fcn.blocks.back());
     this->setCurStmt(&bb - fcn.blocks.data(), stmtIdx);
 }
 
@@ -1824,8 +1824,8 @@ void MIRTypeResolve::setCurStmt(unsigned int bbIdx, unsigned int stmtIdx) {
 }
 
 void MIRTypeResolve::setCurStmtTerm(const MIRBasicBlock& bb) {
-    assert(&bb >= &fcn.blocks.front());
-    assert(&bb <= &fcn.blocks.back());
+    BUG_ASSERT(&bb >= &fcn.blocks.front());
+    BUG_ASSERT(&bb <= &fcn.blocks.back());
     this->setCurStmtTerm(&bb - fcn.blocks.data());
 }
 
@@ -1849,7 +1849,7 @@ bool MIRValueLifetime::isUsed() const {
 }
 
 bool MIRValueLifetime::overlaps(const MIRValueLifetime& x) const {
-    assert(statements.size() == x.statements.size());
+    BUG_ASSERT(statements.size() == x.statements.size());
     for (unsigned int i = 0; i < statements.size(); i++) {
         if (statements[i] && x.statements[i]) {
             return true;
@@ -1859,7 +1859,7 @@ bool MIRValueLifetime::overlaps(const MIRValueLifetime& x) const {
 }
 
 void MIRValueLifetime::unify(const MIRValueLifetime& x) {
-    assert(statements.size() == x.statements.size());
+    BUG_ASSERT(statements.size() == x.statements.size());
     for (unsigned int i = 0; i < statements.size(); i++) {
         if (x.statements[i]) {
             statements[i] = true;
@@ -1924,8 +1924,8 @@ ValueLifetime::ValueLifetime(size_t stmtCount)
 
 auto ValueLifetime::fill(const std::vector<size_t>& blockOffsets, size_t bb, size_t firstStmt, size_t lastStmt) -> void {
     size_t limit = blockOffsets[bb + 1] - blockOffsets[bb] - 1;
-    assert(firstStmt <= limit);
-    assert(lastStmt <= limit);
+    BUG_ASSERT(firstStmt <= limit);
+    BUG_ASSERT(lastStmt <= limit);
     for (size_t stmt = firstStmt; stmt <= lastStmt; stmt++) {
         stmtBitmap[blockOffsets[bb] + stmt] = true;
     }

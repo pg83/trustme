@@ -864,7 +864,7 @@ namespace {
                                 traitName = "UpperExp";
                                 break;
                         }
-                        assert(*s == '}');
+                        BUG_ASSERT(*s == '}');
                     } else {
                         if (strncmp(s, "x?}", 3) == 0) {
                             args.debugTy = FmtArgs::Debug::LowerHex;
@@ -1871,7 +1871,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                     }
                     frag.index = it - names.begin();
                 }
-                assert(*c == ':' || *c == '}');
+                BUG_ASSERT(*c == ':' || *c == '}');
                 if (*c == ':') {
                     c++;
                     if (!*c) {

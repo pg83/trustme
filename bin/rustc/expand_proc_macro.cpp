@@ -533,7 +533,7 @@ void ProcMacroInv::recvBytesRaw(void* outVoid, size_t len) {
         if (n < 0) {
             BUG(this->parentSpan, "Error while reading from child process");
         }
-        assert(static_cast<size_t>(n) <= rem);
+        BUG_ASSERT(static_cast<size_t>(n) <= rem);
         ofs += n;
         rem -= n;
     }
@@ -1837,7 +1837,7 @@ auto ProcMacroVisitor::visitPath(const ASTPath& path, bool isExpr) -> void {
         }
         case ASTPathClass::TAG_Super: {
             auto& pe = path.cls.as_Super();
-            assert(pe.count > 0);
+            BUG_ASSERT(pe.count > 0);
             for (unsigned i = 0; i < pe.count; i++) {
                 if (i > 0) {
                     pmi.sendSymbol("::");
@@ -1856,7 +1856,7 @@ auto ProcMacroVisitor::visitPath(const ASTPath& path, bool isExpr) -> void {
                 pmi.sendRword("crate");
             } else {
                 pmi.sendSymbol("::");
-                assert(pe.crate.c_str()[0] == '=');
+                BUG_ASSERT(pe.crate.c_str()[0] == '=');
                 pmi.sendIdent(pe.crate.c_str() + 1);
             }
             pmi.sendSymbol("::");
@@ -1960,7 +1960,7 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                                 }
                                 case ASTGenericBound::TAG_IsTrait: {
                                     auto& be = tuMatch.as_IsTrait();
-                                    assert(be.outerHrbs.empty());
+                                    BUG_ASSERT(be.outerHrbs.empty());
                                     if (!be.innerHrbs.empty()) {
                                         TODO(sp, "be.inner_hrbs");
                                     }
@@ -1990,7 +1990,7 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                     pmi.sendIdent(p.name().name.c_str());
                     pmi.sendSymbol(":");
                     visitType(p.type());
-                    assert(param.boundsStart == param.boundsEnd);
+                    BUG_ASSERT(param.boundsStart == param.boundsEnd);
                     break;
                 }
             }

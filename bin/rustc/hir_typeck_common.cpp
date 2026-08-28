@@ -362,7 +362,7 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
             sz = this->monomorphConstgeneric(sp, *se, true);
         }
         se = sz.opt_Unevaluated();
-        assert(se);
+        BUG_ASSERT(se);
 
         if (se->is_Unevaluated()) {
             if (this->constevalWb) {

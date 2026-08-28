@@ -676,7 +676,7 @@ namespace {
                     case ASTCrate::Type::Executable:
                         return TransEnumerateMain(wb, *hirCrate);
                 }
-                throw std::runtime_error("Invalid crate_type value");
+                BUG(Span(), "Invalid crate_type value");
             }();
             {
                 // TODO: Drop glue generation?

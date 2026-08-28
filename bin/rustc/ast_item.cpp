@@ -12,11 +12,11 @@ ASTVisibility ASTVisibility::makeBarePrivate() {
 }
 
 const ASTPath& ASTVisibility::inPath() const {
-    assert(inPath_);
+    BUG_ASSERT(inPath_);
     return *inPath_;
 }
 
 const ASTAbsolutePath& ASTVisibility::visPath() const {
-    assert(visPath_);
+    BUG_ASSERT(visPath_);
     return *visPath_;
 }

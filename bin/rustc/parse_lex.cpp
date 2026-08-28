@@ -10,7 +10,6 @@
 
 #include <cctype>
 #include <limits>
-#include <cassert>
 #include <cstdlib>
 #include <iostream>
 #include <typeinfo>
@@ -736,7 +735,7 @@ Token Lexer::getTokenInt() {
                     this->ungetc();
                     FloatValue fval = this->parseFloat(val);
                     if (fval != fval) {
-                        assert(!this->nextTokens.empty());
+                        BUG_ASSERT(!this->nextTokens.empty());
                         auto t = std::move(this->nextTokens.back());
                         this->nextTokens.pop_back();
                         return t;
@@ -828,7 +827,7 @@ Token Lexer::getTokenInt() {
                 if (ch == 'r') {
                     return this->getTokenIntRawString(isByte ? TOK_BYTESTRING : TOK_STRING);
                 } else {
-                    assert(isByte);
+                    BUG_ASSERT(isByte);
 
                     if (ch == '"') {
                         std::string str;
@@ -861,7 +860,7 @@ Token Lexer::getTokenInt() {
                             return this->withLiteralSuffix(Token(U128(ch.v), CORETYPE_U8));
                         }
                     } else {
-                        assert(isByte);
+                        BUG_ASSERT(isByte);
                         this->ungetc();
                         return this->getTokenIntIdentifier('b');
                     }
@@ -1076,7 +1075,7 @@ Token Lexer::getTokenInt() {
                     return this->withLiteralSuffix(Token(TOK_STRING, mv$(str), realGetHygiene()));
                 }
                 default:
-                    assert(!"bugcheck");
+                    BUG_ASSERT(!"bugcheck");
             }
         }
     } catch (const Lexer::EndOfFile& /*e*/) {
@@ -1121,7 +1120,7 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
         }
 
         if (terminatingHashes > 0) {
-            assert(terminatingHashes > 0);
+            BUG_ASSERT(terminatingHashes > 0);
             if (ch != '#') {
                 val += terminator;
                 while (terminatingHashes < hashes) {
@@ -1270,7 +1269,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
     auto ch = this->getcNum();
 #define PUTC(ch)                                                                                                                          \
     do {                                                                                                                                  \
-        assert(ch.v < 127);                                                                                                               \
+        BUG_ASSERT(ch.v < 127);                                                                                                           \
         sbuf += char(ch.v); /* if( ofs < MAX_SIG ) { buf[ofs] = ch.v; ofs ++; } else { throw ParseError::Generic("Oversized float"); } */ \
     } while (0)
     while (ch.isdigit()) {
@@ -1557,7 +1556,7 @@ void Lexer::ungetc() {
 #ifdef TRACE_CHARS
     std::cout << "ungetc(): cache U+" << std::hex << lastChar.v << std::endl;
 #endif
-    assert(!lastCharValid);
+    BUG_ASSERT(!lastCharValid);
     lastCharValid = true;
 }
 
@@ -1604,7 +1603,7 @@ std::string& operator+=(std::string& s, const Codepoint& cp) {
         s += (char)(0x80 | ((cp.v >> 6) & 0x3F));
         s += (char)(0x80 | ((cp.v >> 0) & 0x3F));
     } else {
-        throw std::runtime_error(FMT("BUGCHECK: Bad unicode codepoint encountered - " << std::hex << cp.v));
+        BUG(Span(), "Bad unicode codepoint encountered - " << std::hex << cp.v);
     }
     return s;
 }
@@ -1625,7 +1624,7 @@ std::ostream& operator<<(std::ostream& os, const Codepoint& cp) {
         os << (char)(0x80 | ((cp.v >> 6) & 0x3F));
         os << (char)(0x80 | ((cp.v >> 0) & 0x3F));
     } else {
-        throw std::runtime_error("BUGCHECK: Bad unicode codepoint encountered");
+        BUG(Span(), "Bad unicode codepoint encountered");
     }
     return os;
 }
@@ -1670,14 +1669,14 @@ Token LexFindReservedWord(const std::string& s, ASTEdition edition) {
             RWORDS = RWORDS_2018;
             break;
     }
-    assert(len > 0);
+    BUG_ASSERT(len > 0);
     for (size_t i = 0; i < len; i++) {
         const auto& e = RWORDS[i];
         if (s < e.chars) {
             break;
         }
         if (s == e.chars) {
-            assert(e.type > 0);
+            BUG_ASSERT(e.type > 0);
             return static_cast<eTokenType>(e.type);
         }
     }

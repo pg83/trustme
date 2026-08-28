@@ -242,7 +242,7 @@ namespace {
 
         TomlFile tomlFile(filename);
         for (auto keyVal : tomlFile) {
-            assert(keyVal.path.size() > 1);
+            BUG_ASSERT(keyVal.path.size() > 1);
 
             auto checkPathLength = [&](const TomlKeyValue& kv, unsigned len) {
                 if (kv.path.size() != len) {
@@ -1286,19 +1286,19 @@ namespace {
     }
 
     size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr* r, const TypeRepr::FieldPath& outPath) {
-        assert(outPath.index < r->fields.size());
+        BUG_ASSERT(outPath.index < r->fields.size());
         size_t ofs = r->fields[outPath.index].offset;
 
         const auto* ty = &r->fields[outPath.index].ty;
         for (const auto& f : outPath.subFields) {
             if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
                 const auto* array = (*ty)->opt_Array();
-                assert(array && array->size.is_Known() && array->size.as_Known() > 0);
+                BUG_ASSERT(array && array->size.is_Known() && array->size.as_Known() > 0);
                 ty = &array->inner;
                 continue;
             }
             r = TargetGetTypeRepr(sp, resolve, *ty);
-            assert(f < r->fields.size());
+            BUG_ASSERT(f < r->fields.size());
             ofs += r->fields[f].offset;
             ty = &r->fields[f].ty;
         }
@@ -1351,8 +1351,8 @@ namespace {
                     }
 
                     if (minOffset == 0 && requiredCount == 1 && str->structMarkings.isNonzero) {
-                        assert(r->fields.size() >= 1);
-                        assert(r->fields[0].offset == 0);
+                        BUG_ASSERT(r->fields.size() >= 1);
+                        BUG_ASSERT(r->fields[0].offset == 0);
                         auto size = getSizeOrZero(sp, resolve, r->fields[0].ty);
                         if ((r->fields[0].ty->is_Pointer() || r->fields[0].ty->is_Borrow()) && size > TargetGetPointerBits() / 8) {
                             size = TargetGetPointerBits() / 8;
@@ -1366,8 +1366,8 @@ namespace {
                     }
 
                     if (minOffset == 0 && str->structMarkings.boundedMax) {
-                        assert(r->fields.size() >= 1);
-                        assert(r->fields[0].offset == 0);
+                        BUG_ASSERT(r->fields.size() >= 1);
+                        BUG_ASSERT(r->fields[0].offset == 0);
                         auto size = getSizeOrZero(sp, resolve, r->fields[0].ty);
                         if (size <= maxOffset && size <= sizeof(size_t)) {
                             const size_t scalarMax = size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (size * 8)) - 1;
@@ -1595,7 +1595,7 @@ namespace {
 
         if (!enm.discriminantsEvaluated) {
             ConvertHIRConstantEvaluateEnum(resolve.board(), resolve.hirCrate(), te.path.data.as_Generic().path, enm);
-            assert(enm.discriminantsEvaluated);
+            BUG_ASSERT(enm.discriminantsEvaluated);
         }
 
         TypeRepr rv;
@@ -1761,7 +1761,7 @@ namespace {
                                         nzPath.index = biggestVar;
                                         std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
-                                        assert(rv.variants.is_None());
+                                        BUG_ASSERT(rv.variants.is_None());
                                         rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nzPath), nicheStart, e.size()});
                                         break;
                                     }
@@ -1784,7 +1784,7 @@ namespace {
 
                                             nicheBeforeData = true;
                                             nonNicheOffset = nzPath.size;
-                                            assert(rv.variants.is_None());
+                                            BUG_ASSERT(rv.variants.is_None());
                                             rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nzPath), nicheStart, e.size()});
                                             break;
                                         }
@@ -1820,7 +1820,7 @@ namespace {
                                     default:
                                         BUG(sp, "Unknown niche size: " << nichePath);
                                 }
-                                assert(reprs.size() == variants.size());
+                                BUG_ASSERT(reprs.size() == variants.size());
                                 size_t finalSize = 0;
                                 size_t finalAlign = 1;
                                 for (size_t i = 0; i < reprs.size(); i++) {
@@ -1840,8 +1840,8 @@ namespace {
                                             variants[i].ents[0].field = variants[i].ents.size() - 1;
                                             variants[i].ents[0].ty = nicheTy;
                                             reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forcedAlignment, 0);
-                                            assert(reprs[i]->size <= maxSize);
-                                            assert(reprs[i]->align <= maxAlign);
+                                            BUG_ASSERT(reprs[i]->size <= maxSize);
+                                            BUG_ASSERT(reprs[i]->align <= maxAlign);
                                         } else {
                                             auto tagFldIdx = variants[i].ents.size();
                                             size_t maxOfs = 0;
@@ -1851,8 +1851,8 @@ namespace {
                                             if (maxOfs % nichePath.size != 0) {
                                                 maxOfs += nichePath.size - (maxOfs % nichePath.size);
                                             }
-                                            assert(nicheOffset % nichePath.size == 0);
-                                            assert(maxOfs % nichePath.size == 0);
+                                            BUG_ASSERT(nicheOffset % nichePath.size == 0);
+                                            BUG_ASSERT(maxOfs % nichePath.size == 0);
                                             ASSERT_BUG(sp, nicheOffset >= maxOfs, "Niche offset (" << nicheOffset << ") overlaps with variant data (" << maxOfs << ")");
                                             auto reqPadding = nicheOffset - maxOfs;
                                             if (reqPadding > 0) {
@@ -1867,8 +1867,8 @@ namespace {
                                             variants[i].ents.back().field = tagFldIdx;
                                             variants[i].ents.back().ty = nicheTy;
                                             reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forcedAlignment, 0);
-                                            assert(reprs[i]->size <= maxSize);
-                                            assert(reprs[i]->align <= maxAlign);
+                                            BUG_ASSERT(reprs[i]->size <= maxSize);
+                                            BUG_ASSERT(reprs[i]->align <= maxAlign);
                                         }
                                         finalSize = std::max(finalSize, reprs[i]->size);
                                         finalAlign = std::max(finalAlign, reprs[i]->align);
@@ -2618,20 +2618,20 @@ const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& 
 
 size_t TypeRepr::getOffset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr::FieldPath& path) const {
     const auto* r = this;
-    assert(path.index < r->fields.size());
+    BUG_ASSERT(path.index < r->fields.size());
     size_t ofs = r->fields[path.index].offset;
 
     const auto* ty = &r->fields[path.index].ty;
     for (const auto& f : path.subFields) {
         if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
             const auto* array = (*ty)->opt_Array();
-            assert(array && array->size.is_Known() && array->size.as_Known() > 0);
+            BUG_ASSERT(array && array->size.is_Known() && array->size.as_Known() > 0);
             ty = &array->inner;
             continue;
         }
         r = TargetGetTypeRepr(sp, resolve, *ty);
-        assert(r);
-        assert(f < r->fields.size());
+        BUG_ASSERT(r);
+        BUG_ASSERT(f < r->fields.size());
         ofs += r->fields[f].offset;
         ty = &r->fields[f].ty;
     }
@@ -2640,12 +2640,12 @@ size_t TypeRepr::getOffset(const Span& sp, const StaticTraitResolve& resolve, co
 }
 
 size_t TypeRepr::VariantMode::Data_Linear::nicheVariantStart() const {
-    assert(this->usesNiche());
+    BUG_ASSERT(this->usesNiche());
     return this->field.index == 0 ? 1 : 0;
 }
 
 size_t TypeRepr::VariantMode::Data_Linear::nicheVariantCount() const {
-    assert(this->usesNiche());
+    BUG_ASSERT(this->usesNiche());
     const size_t start = this->nicheVariantStart();
     const size_t end = this->field.index + 1 == this->numVariants ? this->field.index - 1 : this->numVariants - 1;
     return end - start + 1;
@@ -2655,8 +2655,8 @@ size_t TypeRepr::VariantMode::Data_Linear::tagValue(unsigned varIdx) const {
     if (!this->usesNiche()) {
         return this->offset + varIdx;
     }
-    assert(varIdx < this->numVariants);
-    assert(varIdx != this->field.index);
+    BUG_ASSERT(varIdx < this->numVariants);
+    BUG_ASSERT(varIdx != this->field.index);
     const size_t start = this->nicheVariantStart();
     return this->offset + varIdx - start;
 }
