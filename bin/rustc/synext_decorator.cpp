@@ -22,18 +22,17 @@
 using namespace stl;
 
 namespace {
-enum eItemType {
-    ITEM_TRAIT,
-    ITEM_STRUCT,
-    ITEM_ENUM,
-    ITEM_UNION,
-    ITEM_FN,
-    ITEM_EXTERN_FN,
-    ITEM_STATIC,
-    ITEM_TYPE_ALIAS,
-};
+    enum eItemType {
+        ITEM_TRAIT,
+        ITEM_STRUCT,
+        ITEM_ENUM,
+        ITEM_UNION,
+        ITEM_FN,
+        ITEM_EXTERN_FN,
+        ITEM_STATIC,
+        ITEM_TYPE_ALIAS,
+    };
 
-namespace {
     struct CommonFunction: public ExpandDecorator {
         virtual void handle(const ASTAttribute& mi, ASTFunction& fcn) const = 0;
 
@@ -45,740 +44,739 @@ namespace {
 
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
     };
-}
 
-struct CHandlerInline: public CommonFunction {
-    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
-};
+    struct CHandlerInline: public CommonFunction {
+        void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
+    };
 
-struct CHandlerCold: public CommonFunction {
-    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
-};
+    struct CHandlerCold: public CommonFunction {
+        void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
+    };
 
-struct CHandlerRustcAlign: public CommonFunction {
-    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
-};
+    struct CHandlerRustcAlign: public CommonFunction {
+        void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
+    };
 
-struct CHandlerRustcLegacyConstGenerics: public CommonFunction {
-    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
-};
+    struct CHandlerRustcLegacyConstGenerics: public CommonFunction {
+        void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
+    };
 
-struct CHandlerRepr: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerRepr: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    static RcString getReprName(TokenStream& lex);
+        static RcString getReprName(TokenStream& lex);
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerRustcNonnullOptimizationGuaranteed: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerRustcNonnullOptimizationGuaranteed: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerRustcLayoutScalarValidRangeStart: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerRustcLayoutScalarValidRangeStart: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerRustcLayoutScalarValidRangeEnd: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerRustcLayoutScalarValidRangeEnd: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerLinkName: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerLinkName: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerLinkSection: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerLinkSection: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerLink: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerLink: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerLinkage: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerLinkage: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerTargetFeature: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerTargetFeature: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerRustcIntrinsic: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerRustcIntrinsic: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerTrackCaller: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerTrackCaller: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
+    };
 
-struct CHandlerUnsafe: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerUnsafe: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handleItem(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, const RcString& name, ASTItem& i) const;
+        void handleItem(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, const RcString& name, ASTItem& i) const;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, ASTImpl&, const RcString& name, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, ASTImpl&, const RcString& name, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, const ASTAbsolutePath& path, ASTTrait&, slice<const ASTAttribute>, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, const ASTAbsolutePath& path, ASTTrait&, slice<const ASTAttribute>, ASTItem& i) const override;
+    };
 
-struct DecoratorCrateType: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorCrateType: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
+    };
 
-struct DecoratorCrateName: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorCrateName: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
+    };
 
-struct DecoratorRecursionLimit: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorRecursionLimit: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
+    };
 
-struct DecoratorFeature: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorFeature: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
+    };
 
-struct DecoratorAllocator: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorAllocator: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorPanicRuntime: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorPanicRuntime: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
+    };
 
-struct DecoratorNeedsPanicRuntime: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorNeedsPanicRuntime: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
+    };
 
-struct DeriveOpts {
-    RcString coreName;
-    bool derivesCopy = false;
-    Settings::FmtDebug fmtDebug = Settings::FmtDebug::Full;
-};
+    struct DeriveOpts {
+        RcString coreName;
+        bool derivesCopy = false;
+        Settings::FmtDebug fmtDebug = Settings::FmtDebug::Full;
+    };
 
-struct Deriver {
-    virtual ~Deriver() = default;
-    virtual const char* traitName() const = 0;
-    virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const = 0;
-    virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const = 0;
+    struct Deriver {
+        virtual ~Deriver() = default;
+        virtual const char* traitName() const = 0;
+        virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const = 0;
+        virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const = 0;
 
-    virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const;
+        virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const;
 
-    template <typename F>
-    void iterateStructFields(const ASTStruct& str, F cb) const;
+        template <typename F>
+        void iterateStructFields(const ASTStruct& str, F cb) const;
 
-    ASTGenericParams getParamsWithBounds(ObjPool& pool, const Span& sp, const ASTGenericParams& p, const ASTPath& traitPath, std::vector<ASTType*> additionalBoundedTypes, bool boundTypeParams = true) const;
+        ASTGenericParams getParamsWithBounds(ObjPool& pool, const Span& sp, const ASTGenericParams& p, const ASTPath& traitPath, std::vector<ASTType*> additionalBoundedTypes, bool boundTypeParams = true) const;
 
-    std::vector<ASTType*> getFieldBounds(const ASTStruct& str) const;
+        std::vector<ASTType*> getFieldBounds(const ASTStruct& str) const;
 
-    std::vector<ASTType*> getFieldBounds(const ASTEnum& enm) const;
+        std::vector<ASTType*> getFieldBounds(const ASTEnum& enm) const;
 
-    std::vector<ASTType*> getFieldBounds(const ASTUnion& unn) const;
+        std::vector<ASTType*> getFieldBounds(const ASTUnion& unn) const;
 
-    void addFieldBoundFromTy(const ASTGenericParams& params, std::vector<ASTType*>& outList, ASTType* ty) const;
+        void addFieldBoundFromTy(const ASTGenericParams& params, std::vector<ASTType*>& outList, ASTType* ty) const;
 
-    void addFieldBound(std::vector<ASTType*>& outList, ASTType* type) const;
-};
+        void addFieldBound(std::vector<ASTType*>& outList, ASTType* type) const;
+    };
 
-struct DeriverDebug: public Deriver {
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+    struct DeriverDebug: public Deriver {
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
-    const char* traitName() const override;
+        const char* traitName() const override;
 
-    static ASTExprNodeP callPath(ASTPath path, const char* method, std::vector<ASTExprNodeP> args);
+        static ASTExprNodeP callPath(ASTPath path, const char* method, std::vector<ASTExprNodeP> args);
 
-    static ASTExprNodeP builderRef();
+        static ASTExprNodeP builderRef();
 
-    static ASTPattern builderPattern(const Span& sp);
+        static ASTPattern builderPattern(const Span& sp);
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
-};
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
+    };
 
-struct DeriverInnerCompare: public Deriver {
-    virtual ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const = 0;
-    virtual ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const = 0;
-    virtual ASTExprNodeP equalValue(Span sp, const RcString& coreName) const = 0;
-    virtual ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const = 0;
-    virtual ASTExprNodeP compareFieldlessEnum(Span sp, const RcString& coreName) const;
+    struct DeriverInnerCompare: public Deriver {
+        virtual ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const = 0;
+        virtual ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const = 0;
+        virtual ASTExprNodeP equalValue(Span sp, const RcString& coreName) const = 0;
+        virtual ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const = 0;
+        virtual ASTExprNodeP compareFieldlessEnum(Span sp, const RcString& coreName) const;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
-};
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
+    };
 
-struct DeriverPartialEq: public DeriverInnerCompare {
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override;
+    struct DeriverPartialEq: public DeriverInnerCompare {
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override;
 
-    ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override;
+        ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override;
 
-    ASTExprNodeP equalValue(Span sp, const RcString& coreName) const override;
+        ASTExprNodeP equalValue(Span sp, const RcString& coreName) const override;
 
-    ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override;
+        ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override;
 
-    ASTExprNodeP compareFieldlessEnum(Span sp, const RcString& coreName) const override;
+        ASTExprNodeP compareFieldlessEnum(Span sp, const RcString& coreName) const override;
 
-    const char* traitName() const override;
-};
+        const char* traitName() const override;
+    };
 
-struct DeriverPartialOrd: public DeriverInnerCompare {
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override;
+    struct DeriverPartialOrd: public DeriverInnerCompare {
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override;
 
-    ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override;
+        ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override;
 
-    ASTExprNodeP equalValue(Span sp, const RcString& coreName) const override;
+        ASTExprNodeP equalValue(Span sp, const RcString& coreName) const override;
 
-    ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override;
+        ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override;
 
-    const char* traitName() const override;
-};
+        const char* traitName() const override;
+    };
 
-struct DeriverEq: public Deriver {
-    ASTPath getTraitPath(const RcString& coreName) const;
+    struct DeriverEq: public Deriver {
+        ASTPath getTraitPath(const RcString& coreName) const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
-    ASTExprNodeP assertIsEq(const ASTPath& methodPath, ASTExprNodeP val) const;
+        ASTExprNodeP assertIsEq(const ASTPath& methodPath, ASTExprNodeP val) const;
 
-    ASTExprNodeP field(const std::string& name) const;
+        ASTExprNodeP field(const std::string& name) const;
 
-    ASTExprNodeP field(const RcString& name) const;
+        ASTExprNodeP field(const RcString& name) const;
 
-    const char* traitName() const override;
+        const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override;
-};
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override;
+    };
 
-struct DeriverOrd: public DeriverInnerCompare {
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override;
+    struct DeriverOrd: public DeriverInnerCompare {
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override;
 
-    ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override;
+        ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override;
 
-    ASTExprNodeP equalValue(Span sp, const RcString& coreName) const override;
+        ASTExprNodeP equalValue(Span sp, const RcString& coreName) const override;
 
-    ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override;
+        ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override;
 
-    const char* traitName() const override;
-};
+        const char* traitName() const override;
+    };
 
-struct DeriverClone: public Deriver {
-    ASTPath getTraitPath(const RcString& coreName) const;
+    struct DeriverClone: public Deriver {
+        ASTPath getTraitPath(const RcString& coreName) const;
 
-    ASTPath getMethodPath(const RcString& coreName) const;
+        ASTPath getMethodPath(const RcString& coreName) const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
-    ASTExprNodeP cloneValRef(const RcString& coreName, ASTExprNodeP val) const;
+        ASTExprNodeP cloneValRef(const RcString& coreName, ASTExprNodeP val) const;
 
-    ASTExprNodeP cloneValDirect(const RcString& coreName, ASTExprNodeP val) const;
+        ASTExprNodeP cloneValDirect(const RcString& coreName, ASTExprNodeP val) const;
 
-    ASTExprNodeP field(const RcString& name) const;
+        ASTExprNodeP field(const RcString& name) const;
 
-    ASTExprNodeP field(const std::string& name) const;
+        ASTExprNodeP field(const std::string& name) const;
 
-    const char* traitName() const override;
+        const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override;
 
-    ASTImpl makeCopyClone(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> fieldBounds) const;
-};
+        ASTImpl makeCopyClone(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> fieldBounds) const;
+    };
 
-struct DeriverCopy: public Deriver {
-    ASTPath getTraitPath(const RcString& coreName) const;
+    struct DeriverCopy: public Deriver {
+        ASTPath getTraitPath(const RcString& coreName) const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
-    const char* traitName() const override;
+        const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override;
-};
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override;
+    };
 
-struct DeriverDefault: public Deriver {
-    ASTPath getTraitPath(const RcString& coreName) const;
+    struct DeriverDefault: public Deriver {
+        ASTPath getTraitPath(const RcString& coreName) const;
 
-    ASTPath getMethodPath(ObjPool& pool, const RcString& coreName) const;
+        ASTPath getMethodPath(ObjPool& pool, const RcString& coreName) const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node, bool boundTypeParams = true) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node, bool boundTypeParams = true) const;
 
-    ASTExprNodeP defaultCall(ObjPool& pool, const RcString& coreName) const;
+        ASTExprNodeP defaultCall(ObjPool& pool, const RcString& coreName) const;
 
-    const char* traitName() const override;
+        const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
-};
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
+    };
 
-struct DeriverHash: public Deriver {
-    ASTPath getTraitPath(const RcString& coreName) const;
+    struct DeriverHash: public Deriver {
+        ASTPath getTraitPath(const RcString& coreName) const;
 
-    ASTPath getTraitPathHasher(const RcString& coreName) const;
+        ASTPath getTraitPathHasher(const RcString& coreName) const;
 
-    ASTPath getMethodPath(const RcString& coreName) const;
+        ASTPath getMethodPath(const RcString& coreName) const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
-    ASTExprNodeP hashValRef(const RcString& coreName, ASTExprNodeP val) const;
+        ASTExprNodeP hashValRef(const RcString& coreName, ASTExprNodeP val) const;
 
-    ASTExprNodeP hashValDirect(const RcString& coreName, ASTExprNodeP val) const;
+        ASTExprNodeP hashValDirect(const RcString& coreName, ASTExprNodeP val) const;
 
-    ASTExprNodeP field(const RcString& name) const;
+        ASTExprNodeP field(const RcString& name) const;
 
-    ASTExprNodeP field(const std::string& name) const;
+        ASTExprNodeP field(const std::string& name) const;
 
-    const char* traitName() const override;
+        const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    static eCoreType discriminantCoreType(const ASTEnum& enm);
+        static eCoreType discriminantCoreType(const ASTEnum& enm);
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
-};
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
+    };
 
-struct DeriverRustcEncodable: public Deriver {
-    ASTPath getTraitPath() const;
+    struct DeriverRustcEncodable: public Deriver {
+        ASTPath getTraitPath() const;
 
-    ASTPath getTraitPathEncoder() const;
+        ASTPath getTraitPathEncoder() const;
 
-    ASTPath getMethodPath() const;
+        ASTPath getMethodPath() const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
-    ASTExprNodeP encValDirect(ASTExprNodeP val) const;
+        ASTExprNodeP encValDirect(ASTExprNodeP val) const;
 
-    ASTExprNodeP encValRef(ASTExprNodeP val) const;
+        ASTExprNodeP encValRef(ASTExprNodeP val) const;
 
-    ASTExprNodeP field(const RcString& name) const;
+        ASTExprNodeP field(const RcString& name) const;
 
-    ASTExprNodeP field(std::string name) const;
+        ASTExprNodeP field(std::string name) const;
 
-    ASTExprNodeP encClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const;
+        ASTExprNodeP encClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const;
 
-    ASTExprNodeP getValOk(const RcString& coreName) const;
+        ASTExprNodeP getValOk(const RcString& coreName) const;
 
-    const char* traitName() const override;
+        const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
-};
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
+    };
 
-struct DeriverRustcDecodable: public Deriver {
-    ASTPath getTraitPath() const;
+    struct DeriverRustcDecodable: public Deriver {
+        ASTPath getTraitPath() const;
 
-    ASTPath getTraitPathDecoder() const;
+        ASTPath getTraitPathDecoder() const;
 
-    ASTPath getMethodPath() const;
+        ASTPath getMethodPath() const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
-    ASTExprNodeP decVal() const;
+        ASTExprNodeP decVal() const;
 
-    ASTExprNodeP field(const std::string& name) const;
+        ASTExprNodeP field(const std::string& name) const;
 
-    ASTExprNodeP decClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const;
+        ASTExprNodeP decClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const;
 
-    ASTExprNodeP getValErrStr(const RcString& coreName, std::string errStr) const;
+        ASTExprNodeP getValErrStr(const RcString& coreName, std::string errStr) const;
 
-    ASTExprNodeP getValOk(const RcString& coreName, ASTExprNodeP inner) const;
+        ASTExprNodeP getValOk(const RcString& coreName, ASTExprNodeP inner) const;
 
-    ASTExprNodeP getValOkUnit(const RcString& coreName) const;
+        ASTExprNodeP getValOkUnit(const RcString& coreName) const;
 
-    const char* traitName() const override;
+        const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
-};
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
+    };
 
-struct DeriverConstParamTy: public Deriver {
-    ASTImpl handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound) const;
+    struct DeriverConstParamTy: public Deriver {
+        ASTImpl handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound) const;
 
-    const char* traitName() const override;
+        const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
-};
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
+    };
 
-struct DeriverUnsizedConstParamTy: public Deriver {
-    ASTImpl handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound) const;
+    struct DeriverUnsizedConstParamTy: public Deriver {
+        ASTImpl handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, std::vector<ASTType*> typesToBound) const;
 
-    const char* traitName() const override;
+        const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
-};
+        ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
+    };
 
-struct DeriveRegistry {
-    DeriverDebug debug;
-    DeriverPartialEq partialEq;
-    DeriverPartialOrd partialOrd;
-    DeriverEq eq;
-    DeriverOrd ord;
-    DeriverClone clone;
-    DeriverCopy copy;
-    DeriverDefault default_;
-    DeriverHash hash;
-    DeriverRustcEncodable rustcEncodable;
-    DeriverRustcDecodable rustcDecodable;
-    DeriverConstParamTy constParamTy;
-    DeriverUnsizedConstParamTy unsizedConstParamTy;
+    struct DeriveRegistry {
+        DeriverDebug debug;
+        DeriverPartialEq partialEq;
+        DeriverPartialOrd partialOrd;
+        DeriverEq eq;
+        DeriverOrd ord;
+        DeriverClone clone;
+        DeriverCopy copy;
+        DeriverDefault default_;
+        DeriverHash hash;
+        DeriverRustcEncodable rustcEncodable;
+        DeriverRustcDecodable rustcDecodable;
+        DeriverConstParamTy constParamTy;
+        DeriverUnsizedConstParamTy unsizedConstParamTy;
 
-    const Deriver* find(const RcString& traitName) const;
-};
+        const Deriver* find(const RcString& traitName) const;
+    };
 
-struct DecoratorDerive: public ExpandDecorator {
-    const DeriveRegistry& registry;
+    struct DecoratorDerive: public ExpandDecorator {
+        const DeriveRegistry& registry;
 
-    explicit DecoratorDerive(const DeriveRegistry& registry);
+        explicit DecoratorDerive(const DeriveRegistry& registry);
 
-    AttrStage stage() const override;
+        AttrStage stage() const override;
 
-    bool wantsAllAttrs() const override;
+        bool wantsAllAttrs() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorDeriveConst: public DecoratorDerive {
-    using DecoratorDerive::DecoratorDerive;
-};
+    struct DecoratorDeriveConst: public DecoratorDerive {
+        using DecoratorDerive::DecoratorDerive;
+    };
 
-struct CDocHandler: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CDocHandler: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override;
+    };
 
-struct Handler {
-    typedef void (*cbT)(const Span& sp, ASTCrate& crate, const std::string&, const ASTAbsolutePath&);
-    eItemType type;
-    cbT cb;
+    struct Handler {
+        typedef void (*cbT)(const Span& sp, ASTCrate& crate, const std::string&, const ASTAbsolutePath&);
+        eItemType type;
+        cbT cb;
 
-    Handler(eItemType type, cbT cb);
-};
+        Handler(eItemType type, cbT cb);
+    };
 
-struct LangItemRegistry {
-    SymbolMap<Handler> handlers;
+    struct LangItemRegistry {
+        SymbolMap<Handler> handlers;
 
-    explicit LangItemRegistry(ObjPool* pool);
+        explicit LangItemRegistry(ObjPool* pool);
 
-    const Handler* find(const char* name) const;
-};
+        const Handler* find(const char* name) const;
+    };
 
-struct DecoratorLangItem: public ExpandDecorator {
-    const LangItemRegistry& registry;
+    struct DecoratorLangItem: public ExpandDecorator {
+        const LangItemRegistry& registry;
 
-    explicit DecoratorLangItem(const LangItemRegistry& registry);
+        explicit DecoratorLangItem(const LangItemRegistry& registry);
 
-    AttrStage stage() const override;
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorMain: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorMain: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorStart: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorStart: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorPanicImplementation: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorPanicImplementation: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorPanicHandler: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorPanicHandler: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorRustcStdInternalSymbol: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorRustcStdInternalSymbol: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorAllocErrorHandler: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorAllocErrorHandler: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorGlobalAllocator: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorGlobalAllocator: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute&, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& item) const override;
-};
+        void handle(const Span& sp, const ASTAttribute&, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& item) const override;
+    };
 
-struct CMultiHandlerLint: public ExpandDecorator {
-    virtual CfgLintLevel level() const = 0;
+    struct CMultiHandlerLint: public ExpandDecorator {
+        virtual CfgLintLevel level() const = 0;
 
-    AttrStage stage() const override;
+        AttrStage stage() const override;
 
-    template <typename F>
-    static void collectLintNames(const ASTAttribute& mi, const F& cb);
+        template <typename F>
+        static void collectLintNames(const ASTAttribute& mi, const F& cb);
 
-    void recordItemLevel(const ASTAttribute& mi, ASTItem& item) const;
+        void recordItemLevel(const ASTAttribute& mi, ASTItem& item) const;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const override;
+    };
 
-struct CHandlerAllow: public CMultiHandlerLint {
-    CfgLintLevel level() const override;
-};
+    struct CHandlerAllow: public CMultiHandlerLint {
+        CfgLintLevel level() const override;
+    };
 
-struct CHandlerWarn: public CMultiHandlerLint {
-    CfgLintLevel level() const override;
-};
+    struct CHandlerWarn: public CMultiHandlerLint {
+        CfgLintLevel level() const override;
+    };
 
-struct CHandlerDeny: public CMultiHandlerLint {
-    CfgLintLevel level() const override;
-};
+    struct CHandlerDeny: public CMultiHandlerLint {
+        CfgLintLevel level() const override;
+    };
 
-struct CHandlerForbid: public CMultiHandlerLint {
-    CfgLintLevel level() const override;
-};
+    struct CHandlerForbid: public CMultiHandlerLint {
+        CfgLintLevel level() const override;
+    };
 
-struct CHandlerMustUse: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerMustUse: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
+    };
 
-struct CHandlerNonExhaustive: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerNonExhaustive: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerPath: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerPath: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerRustcPromotable: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerRustcPromotable: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
+    };
 
-struct CHandlerRustcInheritOverflowChecks: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerRustcInheritOverflowChecks: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
+    };
 
-struct CHandlerRustcOnUnimiplemented: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerRustcOnUnimiplemented: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CHandlerRustBox: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerRustBox: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
+    };
 
-struct CMultiHandlerStability: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CMultiHandlerStability: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
+    };
 
-struct CHandlerStable: public CMultiHandlerStability {};
+    struct CHandlerStable: public CMultiHandlerStability {};
 
-struct CHandlerUnstable: public CMultiHandlerStability {};
+    struct CHandlerUnstable: public CMultiHandlerStability {};
 
-struct CHandlerRustcDeprecated: public CMultiHandlerStability {};
+    struct CHandlerRustcDeprecated: public CMultiHandlerStability {};
 
-struct CHandlerRustcConstUnstable: public CMultiHandlerStability {};
+    struct CHandlerRustcConstUnstable: public CMultiHandlerStability {};
 
-struct CHandlerDeprecated: public CMultiHandlerStability {};
+    struct CHandlerDeprecated: public CMultiHandlerStability {};
 
-struct CHandlerAllowInternalUnstable: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CHandlerAllowInternalUnstable: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorNoStd: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorNoStd: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
+    };
 
-struct DecoratorNoCore: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorNoCore: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
+    };
 
-struct DecoratorNoMain: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorNoMain: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span&, const ASTAttribute&, const WireBoard&, ASTCrate& crate) const override;
-};
+        void handle(const Span&, const ASTAttribute&, const WireBoard&, ASTCrate& crate) const override;
+    };
 
-struct DecoratorNoPrelude: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorNoPrelude: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorPreludeImport: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorPreludeImport: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CTestHandler: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CTestHandler: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CTestHandlerSP: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CTestHandlerSP: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CTestHandlerIgnore: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CTestHandlerIgnore: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 }
 
 namespace {
@@ -789,139 +787,138 @@ namespace {
 }
 
 namespace {
-template <typename T>
-static inline std::vector<T> vec$(T v1) {
-    std::vector<T> tmp;
-    tmp.push_back(mv$(v1));
-    return mv$(tmp);
-}
+    template <typename T>
+    static inline std::vector<T> vec$(T v1) {
+        std::vector<T> tmp;
+        tmp.push_back(mv$(v1));
+        return mv$(tmp);
+    }
 
-template <typename T>
-static inline std::vector<T> vec$(T v1, T v2) {
-    std::vector<T> tmp;
-    tmp.reserve(2);
-    tmp.push_back(mv$(v1));
-    tmp.push_back(mv$(v2));
-    return mv$(tmp);
-}
+    template <typename T>
+    static inline std::vector<T> vec$(T v1, T v2) {
+        std::vector<T> tmp;
+        tmp.reserve(2);
+        tmp.push_back(mv$(v1));
+        tmp.push_back(mv$(v2));
+        return mv$(tmp);
+    }
 
-template <typename T>
-static inline std::vector<T> vec$(T v1, T v2, T v3) {
-    std::vector<T> tmp;
-    tmp.reserve(3);
-    tmp.push_back(mv$(v1));
-    tmp.push_back(mv$(v2));
-    tmp.push_back(mv$(v3));
-    return mv$(tmp);
-}
+    template <typename T>
+    static inline std::vector<T> vec$(T v1, T v2, T v3) {
+        std::vector<T> tmp;
+        tmp.reserve(3);
+        tmp.push_back(mv$(v1));
+        tmp.push_back(mv$(v2));
+        tmp.push_back(mv$(v3));
+        return mv$(tmp);
+    }
 
-template <typename T>
-static inline std::vector<T> vec$(T v1, T v2, T v3, T v4) {
-    std::vector<T> tmp;
-    tmp.reserve(4);
-    tmp.push_back(mv$(v1));
-    tmp.push_back(mv$(v2));
-    tmp.push_back(mv$(v3));
-    tmp.push_back(mv$(v4));
-    return mv$(tmp);
-}
+    template <typename T>
+    static inline std::vector<T> vec$(T v1, T v2, T v3, T v4) {
+        std::vector<T> tmp;
+        tmp.reserve(4);
+        tmp.push_back(mv$(v1));
+        tmp.push_back(mv$(v2));
+        tmp.push_back(mv$(v3));
+        tmp.push_back(mv$(v4));
+        return mv$(tmp);
+    }
 
-template <typename T>
-static inline std::vector<T> vec$(T v1, T v2, T v3, T v4, T v5) {
-    std::vector<T> tmp;
-    tmp.reserve(5);
-    tmp.push_back(mv$(v1));
-    tmp.push_back(mv$(v2));
-    tmp.push_back(mv$(v3));
-    tmp.push_back(mv$(v4));
-    tmp.push_back(mv$(v5));
-    return mv$(tmp);
-}
+    template <typename T>
+    static inline std::vector<T> vec$(T v1, T v2, T v3, T v4, T v5) {
+        std::vector<T> tmp;
+        tmp.reserve(5);
+        tmp.push_back(mv$(v1));
+        tmp.push_back(mv$(v2));
+        tmp.push_back(mv$(v3));
+        tmp.push_back(mv$(v4));
+        tmp.push_back(mv$(v5));
+        return mv$(tmp);
+    }
 
-static ASTPath getPath(const RcString& coreName, const char* c1, const char* c2) {
-    return ASTAbsolutePath(coreName, {RcString::newInterned(c1), RcString::newInterned(c2)});
-}
+    static ASTPath getPath(const RcString& coreName, const char* c1, const char* c2) {
+        return ASTAbsolutePath(coreName, {RcString::newInterned(c1), RcString::newInterned(c2)});
+    }
 
-static ASTPath getPath(const RcString& coreName, const char* c1, const char* c2, const char* c3) {
-    return ASTAbsolutePath(coreName, {RcString::newInterned(c1), RcString::newInterned(c2), RcString::newInterned(c3)});
-}
+    static ASTPath getPath(const RcString& coreName, const char* c1, const char* c2, const char* c3) {
+        return ASTAbsolutePath(coreName, {RcString::newInterned(c1), RcString::newInterned(c2), RcString::newInterned(c3)});
+    }
 
-static std::unique_ptr<ASTExprNodeBlock> newBlock(const Span& sp) {
-    auto rv = std::make_unique<ASTExprNodeBlock>();
-    rv->setSpan(sp);
-    return rv;
-}
+    static std::unique_ptr<ASTExprNodeBlock> newBlock(const Span& sp) {
+        auto rv = std::make_unique<ASTExprNodeBlock>();
+        rv->setSpan(sp);
+        return rv;
+    }
 
-static inline ASTExprNodeP mkExprnodep(ASTExprNode* en) {
-    return ASTExprNodeP(en);
-}
+    static inline ASTExprNodeP mkExprnodep(ASTExprNode* en) {
+        return ASTExprNodeP(en);
+    }
 
 #define NEWNODE(type, ...) mkExprnodep(new ASTExprNode##type(__VA_ARGS__))
 
-template <typename F>
-static void makeRefpatA(const Span& sp, ASTExprNodeBlock& block, std::vector<ASTPattern>& patsA, const std::vector<ASTTupleItem>& subTypes, F cb) {
-    std::vector<ASTExprNodeBlock::Line> nodes;
-    for (size_t idx = 0; idx < subTypes.size(); idx++) {
-        auto nameA = RcString::newInterned(FMT("a" << idx));
-        patsA.push_back(ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF));
-        block.pushStmt(cb(idx, NEWNODE(NamedValue, ASTPath(nameA))));
-    }
-}
-
-template <typename F>
-static void makeRefpatA(const Span& sp, ASTExprNodeBlock& block, std::vector<ASTStructPatternEntry>& patsA, const std::vector<ASTStructItem>& fields, F cb) {
-    std::vector<ASTExprNodeBlock::Line> nodes;
-    size_t idx = 0;
-    for (const auto& fld : fields) {
-        auto nameA = RcString::newInterned(FMT("a" << fld.name));
-        patsA.push_back(ASTStructPatternEntry{ASTAttributeList(), fld.name, ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF)});
-        block.pushStmt(cb(idx, NEWNODE(NamedValue, ASTPath(nameA))));
-        idx++;
-    }
-}
-
-template <typename F>
-static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, std::vector<ASTPattern>& patsA, std::vector<ASTPattern>& patsB, const std::vector<ASTTupleItem>& subTypes, F cb) {
-    for (size_t idx = 0; idx < subTypes.size(); idx++) {
-        auto nameA = RcString::newInterned(FMT("a" << idx));
-        auto nameB = RcString::newInterned(FMT("b" << idx));
-        patsA.push_back(ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF));
-        patsB.push_back(ASTPattern(ASTPattern::TagBind(), sp, nameB, ASTPatternBinding::Type::REF));
-        block.pushStmt(cb(idx, NEWNODE(NamedValue, ASTPath(nameA)), NEWNODE(NamedValue, ASTPath(nameB))));
-    }
-}
-
-template <typename F>
-static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, std::vector<ASTStructPatternEntry>& patsA, std::vector<ASTStructPatternEntry>& patsB, const std::vector<ASTStructItem>& fields, F cb) {
-    size_t idx = 0;
-    for (const auto& fld : fields) {
-        auto nameA = RcString::newInterned(FMT("a" << fld.name));
-        auto nameB = RcString::newInterned(FMT("b" << fld.name));
-        patsA.push_back(ASTStructPatternEntry{ASTAttributeList(), fld.name, ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF)});
-        patsB.push_back(ASTStructPatternEntry{ASTAttributeList(), fld.name, ASTPattern(ASTPattern::TagBind(), sp, nameB, ASTPatternBinding::Type::REF)});
-        block.pushStmt(cb(idx, NEWNODE(NamedValue, ASTPath(nameA)), NEWNODE(NamedValue, ASTPath(nameB))));
-        idx++;
-    }
-}
-
-static const Deriver* findBuiltinDerive(const DeriveRegistry& registry, const ASTPath& traitPath) {
-    if (traitPath.isTrivial()) {
-        return registry.find(traitPath.asTrivial());
-    }
-    if (const auto* path = traitPath.cls.opt_Relative()) {
-        if (path->nodes.size() >= 2 && (path->nodes.front().name() == "core" || path->nodes.front().name() == "std")) {
-            return registry.find(path->nodes.back().name());
+    template <typename F>
+    static void makeRefpatA(const Span& sp, ASTExprNodeBlock& block, std::vector<ASTPattern>& patsA, const std::vector<ASTTupleItem>& subTypes, F cb) {
+        std::vector<ASTExprNodeBlock::Line> nodes;
+        for (size_t idx = 0; idx < subTypes.size(); idx++) {
+            auto nameA = RcString::newInterned(FMT("a" << idx));
+            patsA.push_back(ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF));
+            block.pushStmt(cb(idx, NEWNODE(NamedValue, ASTPath(nameA))));
         }
     }
-    if (const auto* path = traitPath.cls.opt_Absolute()) {
-        if (!path->nodes.empty() && (path->crate == "=core" || path->crate == "=std")) {
-            return registry.find(path->nodes.back().name());
+
+    template <typename F>
+    static void makeRefpatA(const Span& sp, ASTExprNodeBlock& block, std::vector<ASTStructPatternEntry>& patsA, const std::vector<ASTStructItem>& fields, F cb) {
+        std::vector<ASTExprNodeBlock::Line> nodes;
+        size_t idx = 0;
+        for (const auto& fld : fields) {
+            auto nameA = RcString::newInterned(FMT("a" << fld.name));
+            patsA.push_back(ASTStructPatternEntry{ASTAttributeList(), fld.name, ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF)});
+            block.pushStmt(cb(idx, NEWNODE(NamedValue, ASTPath(nameA))));
+            idx++;
         }
     }
-    return nullptr;
-}
 
-namespace {
+    template <typename F>
+    static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, std::vector<ASTPattern>& patsA, std::vector<ASTPattern>& patsB, const std::vector<ASTTupleItem>& subTypes, F cb) {
+        for (size_t idx = 0; idx < subTypes.size(); idx++) {
+            auto nameA = RcString::newInterned(FMT("a" << idx));
+            auto nameB = RcString::newInterned(FMT("b" << idx));
+            patsA.push_back(ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF));
+            patsB.push_back(ASTPattern(ASTPattern::TagBind(), sp, nameB, ASTPatternBinding::Type::REF));
+            block.pushStmt(cb(idx, NEWNODE(NamedValue, ASTPath(nameA)), NEWNODE(NamedValue, ASTPath(nameB))));
+        }
+    }
+
+    template <typename F>
+    static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, std::vector<ASTStructPatternEntry>& patsA, std::vector<ASTStructPatternEntry>& patsB, const std::vector<ASTStructItem>& fields, F cb) {
+        size_t idx = 0;
+        for (const auto& fld : fields) {
+            auto nameA = RcString::newInterned(FMT("a" << fld.name));
+            auto nameB = RcString::newInterned(FMT("b" << fld.name));
+            patsA.push_back(ASTStructPatternEntry{ASTAttributeList(), fld.name, ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF)});
+            patsB.push_back(ASTStructPatternEntry{ASTAttributeList(), fld.name, ASTPattern(ASTPattern::TagBind(), sp, nameB, ASTPatternBinding::Type::REF)});
+            block.pushStmt(cb(idx, NEWNODE(NamedValue, ASTPath(nameA)), NEWNODE(NamedValue, ASTPath(nameB))));
+            idx++;
+        }
+    }
+
+    static const Deriver* findBuiltinDerive(const DeriveRegistry& registry, const ASTPath& traitPath) {
+        if (traitPath.isTrivial()) {
+            return registry.find(traitPath.asTrivial());
+        }
+        if (const auto* path = traitPath.cls.opt_Relative()) {
+            if (path->nodes.size() >= 2 && (path->nodes.front().name() == "core" || path->nodes.front().name() == "std")) {
+                return registry.find(path->nodes.back().name());
+            }
+        }
+        if (const auto* path = traitPath.cls.opt_Absolute()) {
+            if (!path->nodes.empty() && (path->crate == "=core" || path->crate == "=std")) {
+                return registry.find(path->nodes.back().name());
+            }
+        }
+        return nullptr;
+    }
+
     std::vector<ASTPath> getDeriveItems(const ASTAttribute& attr) {
         Token tok;
         std::vector<ASTPath> rv;
@@ -1353,85 +1350,84 @@ namespace {
         }
         return macPath;
     }
-}
 
-template <typename T>
-static void deriveItem(const DeriveRegistry& registry, const Span& sp, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const ASTAttribute& attr, const ASTAbsolutePath& path, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const T& item) {
-    auto deriveItems = getDeriveItems(attr);
-    if (deriveItems.empty()) {
-        return;
-    }
-    const bool isConstDerive = attr.name() == "derive_const";
-
-    auto type = makeType(*crate.pool, sp, path, item.params());
-
-    DeriveOpts opts = {crate.extCratenameCore};
-    opts.fmtDebug = wb.settings->fmtDebug;
-    for (const auto& a : attrs) {
-        if (a.name() != "derive") {
-            continue;
+    template <typename T>
+    static void deriveItem(const DeriveRegistry& registry, const Span& sp, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const ASTAttribute& attr, const ASTAbsolutePath& path, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const T& item) {
+        auto deriveItems = getDeriveItems(attr);
+        if (deriveItems.empty()) {
+            return;
         }
-        for (const auto& derived : getDeriveItems(a)) {
-            if (!derived.nodes().empty() && derived.nodes().back().name() == "Copy") {
-                opts.derivesCopy = true;
+        const bool isConstDerive = attr.name() == "derive_const";
+
+        auto type = makeType(*crate.pool, sp, path, item.params());
+
+        DeriveOpts opts = {crate.extCratenameCore};
+        opts.fmtDebug = wb.settings->fmtDebug;
+        for (const auto& a : attrs) {
+            if (a.name() != "derive") {
+                continue;
             }
-        }
-    }
-
-    std::vector<ASTPath> missingHandlers;
-    for (const auto& traitPath : deriveItems) {
-        if (isCoercePointee(traitPath)) {
-            deriveCoercePointee(sp, opts, mod, item.params(), type, item);
-            continue;
-        }
-
-        if (auto dp = findBuiltinDerive(registry, traitPath)) {
-            auto derivedImpl = dp->handleItem(sp, opts, item.params(), type, item);
-            if (isConstDerive) {
-                derivedImpl.def().setIsConst();
-                const auto& implTrait = derivedImpl.def().trait().ent;
-                auto& bounds = derivedImpl.def().params().bounds;
-                for (size_t i = item.params().bounds.size(); i < bounds.size(); i++) {
-                    if (auto* bound = bounds[i].opt_IsTrait(); bound && bound->trait == implTrait) {
-                        bound->constness = ASTBoundConstness::Maybe;
-                    }
+            for (const auto& derived : getDeriveItems(a)) {
+                if (!derived.nodes().empty() && derived.nodes().back().name() == "Copy") {
+                    opts.derivesCopy = true;
                 }
             }
-            mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", mv$(derivedImpl), {});
-            continue;
         }
 
-        std::vector<RcString> macPath = findMacro(sp, wb, crate, mod, traitPath);
-        if (!macPath.empty()) {
-            auto lex = ProcMacroInvoke(sp, wb, crate, macPath, attrs, vis, path.nodes.back(), item);
-            if (lex) {
-                lex->parseState().module = &mod;
-                ParseModRootItems(*lex, mod);
-            } else {
-                ERROR(sp, E0000, "proc_macro derive failed");
+        std::vector<ASTPath> missingHandlers;
+        for (const auto& traitPath : deriveItems) {
+            if (isCoercePointee(traitPath)) {
+                deriveCoercePointee(sp, opts, mod, item.params(), type, item);
+                continue;
             }
-            continue;
+
+            if (auto dp = findBuiltinDerive(registry, traitPath)) {
+                auto derivedImpl = dp->handleItem(sp, opts, item.params(), type, item);
+                if (isConstDerive) {
+                    derivedImpl.def().setIsConst();
+                    const auto& implTrait = derivedImpl.def().trait().ent;
+                    auto& bounds = derivedImpl.def().params().bounds;
+                    for (size_t i = item.params().bounds.size(); i < bounds.size(); i++) {
+                        if (auto* bound = bounds[i].opt_IsTrait(); bound && bound->trait == implTrait) {
+                            bound->constness = ASTBoundConstness::Maybe;
+                        }
+                    }
+                }
+                mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", mv$(derivedImpl), {});
+                continue;
+            }
+
+            std::vector<RcString> macPath = findMacro(sp, wb, crate, mod, traitPath);
+            if (!macPath.empty()) {
+                auto lex = ProcMacroInvoke(sp, wb, crate, macPath, attrs, vis, path.nodes.back(), item);
+                if (lex) {
+                    lex->parseState().module = &mod;
+                    ParseModRootItems(*lex, mod);
+                } else {
+                    ERROR(sp, E0000, "proc_macro derive failed");
+                }
+                continue;
+            }
+
+            missingHandlers.push_back(traitPath);
         }
 
-        missingHandlers.push_back(traitPath);
-    }
-
-    if (!missingHandlers.empty()) {
-        ERROR(sp, E0000, "Failed to apply #[derive] - Missing handlers for " << missingHandlers);
-    }
-}
-
-void handleSave(const Span& sp, ASTCrate& crate, const std::string& name, const ASTAbsolutePath& path) {
-    auto rv = crate.langItems.insert(std::make_pair(name, path));
-    if (!rv.second) {
-        const auto& otherPath = rv.first->second;
-        if (path != otherPath) {
-            // HACK: Anon modules get visited twice, so can lead to duplicate annotations
-            ERROR(sp, E0000, "Duplicate definition of language item '" << name << "' - " << otherPath << " and " << path);
+        if (!missingHandlers.empty()) {
+            ERROR(sp, E0000, "Failed to apply #[derive] - Missing handlers for " << missingHandlers);
         }
-    } else {
     }
-}
+
+    void handleSave(const Span& sp, ASTCrate& crate, const std::string& name, const ASTAbsolutePath& path) {
+        auto rv = crate.langItems.insert(std::make_pair(name, path));
+        if (!rv.second) {
+            const auto& otherPath = rv.first->second;
+            if (path != otherPath) {
+                // HACK: Anon modules get visited twice, so can lead to duplicate annotations
+                ERROR(sp, E0000, "Duplicate definition of language item '" << name << "' - " << otherPath << " and " << path);
+            }
+        } else {
+        }
+    }
 
 }
 
@@ -1652,119 +1648,119 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
 }
 
 namespace {
-void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path, const std::string& name, eItemType type, ASTItem& item) {
-    const char* realName = nullptr;
-    if (const auto* handler = registry.find(name.c_str())) {
-        if (type != handler->type) {
-            ERROR(sp, E0000, "Language item '" << name << "' " << path << " - on incorrect item type " << type << " != " << handler->type);
+    void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path, const std::string& name, eItemType type, ASTItem& item) {
+        const char* realName = nullptr;
+        if (const auto* handler = registry.find(name.c_str())) {
+            if (type != handler->type) {
+                ERROR(sp, E0000, "Language item '" << name << "' " << path << " - on incorrect item type " << type << " != " << handler->type);
+            }
+            handler->cb(sp, crate, name, path);
+            return;
         }
-        handler->cb(sp, crate, name, path);
-        return;
-    }
 
-    else if (name == "alloc_layout") {
-    } else if (name == "panic_info") {
-    } else if (name == "panic_location") {
-    } else if (name == "manually_drop") {
-    }
+        else if (name == "alloc_layout") {
+        } else if (name == "panic_info") {
+        } else if (name == "panic_location") {
+        } else if (name == "manually_drop") {
+        }
 
-    else if (name == "arc") {
-    } else if (name == "rc") {
-    }
+        else if (name == "arc") {
+        } else if (name == "rc") {
+        }
 
-    else if (name == "maybe_uninit") {
-    }
+        else if (name == "maybe_uninit") {
+        }
 
-    else if (name == "unpin") {
-    } else if (name == "pin") {
-    } else if (name == "future_trait") {
-    } else if (name == "from_generator") {
-    } else if (name == "get_context") {
-    }
+        else if (name == "unpin") {
+        } else if (name == "pin") {
+        } else if (name == "future_trait") {
+        } else if (name == "from_generator") {
+        } else if (name == "get_context") {
+        }
 
-    else if (name == "va_list") {
-    }
+        else if (name == "va_list") {
+        }
 
-    else if (name == "receiver") {
-    } else if (name == "dispatch_from_dyn") {
-    }
+        else if (name == "receiver") {
+        } else if (name == "dispatch_from_dyn") {
+        }
 
-    else if (name == "generator") {
-    } else if (name == "generator_state") {
-    }
+        else if (name == "generator") {
+        } else if (name == "generator_state") {
+        }
 
-    else if (name == "Try") {
-        realName = "try";
-    }
+        else if (name == "Try") {
+            realName = "try";
+        }
 
-    else if (name == "msvc_try_filter") {
-    }
+        else if (name == "msvc_try_filter") {
+        }
 
-    else if (name == "panic_impl") {
-    } else if (name == "oom") {
-    }
+        else if (name == "panic_impl") {
+        } else if (name == "oom") {
+        }
 
-    else if (name == "panic") {
-    } else if (name == "panic_bounds_check") {
-    } else if (name == "panic_fmt") {
-        item.as_Function().markings.linkName = "rust_begin_unwind";
-    } else if (name == "str_eq") {
-    } else if (name == "drop_in_place") {
-    } else if (name == "align_offset") {
-    } else if (name == "begin_panic") {
-    } else if (name == "panic_str") {
-    } else if (name == "exchange_malloc") {
-    } else if (name == "exchange_free") {
-    } else if (name == "box_free") {
-    } else if (name == "owned_box") {
-    } else if (name == "start") {
-    }
+        else if (name == "panic") {
+        } else if (name == "panic_bounds_check") {
+        } else if (name == "panic_fmt") {
+            item.as_Function().markings.linkName = "rust_begin_unwind";
+        } else if (name == "str_eq") {
+        } else if (name == "drop_in_place") {
+        } else if (name == "align_offset") {
+        } else if (name == "begin_panic") {
+        } else if (name == "panic_str") {
+        } else if (name == "exchange_malloc") {
+        } else if (name == "exchange_free") {
+        } else if (name == "box_free") {
+        } else if (name == "owned_box") {
+        } else if (name == "start") {
+        }
 
-    else if (name == "eh_personality") {
-    } else if (name == "i128_add") {
-    } else if (name == "i128_addo") {
-    } else if (name == "u128_add") {
-    } else if (name == "u128_addo") {
-    } else if (name == "i128_sub") {
-    } else if (name == "i128_subo") {
-    } else if (name == "u128_sub") {
-    } else if (name == "u128_subo") {
-    } else if (name == "i128_mul") {
-    } else if (name == "i128_mulo") {
-    } else if (name == "u128_mul") {
-    } else if (name == "u128_mulo") {
-    } else if (name == "i128_div") {
-    } else if (name == "i128_rem") {
-    } else if (name == "u128_div") {
-    } else if (name == "u128_rem") {
-    } else if (name == "i128_shl") {
-    } else if (name == "i128_shlo") {
-    } else if (name == "u128_shl") {
-    } else if (name == "u128_shlo") {
-    } else if (name == "i128_shr") {
-    } else if (name == "i128_shro") {
-    } else if (name == "u128_shr") {
-    } else if (name == "u128_shro") {
-    }
+        else if (name == "eh_personality") {
+        } else if (name == "i128_add") {
+        } else if (name == "i128_addo") {
+        } else if (name == "u128_add") {
+        } else if (name == "u128_addo") {
+        } else if (name == "i128_sub") {
+        } else if (name == "i128_subo") {
+        } else if (name == "u128_sub") {
+        } else if (name == "u128_subo") {
+        } else if (name == "i128_mul") {
+        } else if (name == "i128_mulo") {
+        } else if (name == "u128_mul") {
+        } else if (name == "u128_mulo") {
+        } else if (name == "i128_div") {
+        } else if (name == "i128_rem") {
+        } else if (name == "u128_div") {
+        } else if (name == "u128_rem") {
+        } else if (name == "i128_shl") {
+        } else if (name == "i128_shlo") {
+        } else if (name == "u128_shl") {
+        } else if (name == "u128_shlo") {
+        } else if (name == "i128_shr") {
+        } else if (name == "i128_shro") {
+        } else if (name == "u128_shr") {
+        } else if (name == "u128_shro") {
+        }
 
-    else {
-        ERROR(sp, E0000, "Unknown language item '" << name << "'");
-    }
+        else {
+            ERROR(sp, E0000, "Unknown language item '" << name << "'");
+        }
 
-    if (type == ITEM_EXTERN_FN) {
-        // TODO: This should force a specific link name instead
-        return;
-    }
+        if (type == ITEM_EXTERN_FN) {
+            // TODO: This should force a specific link name instead
+            return;
+        }
 
-    auto rv = crate.langItems.insert(std::make_pair(realName == nullptr ? name : realName, path));
-    if (!rv.second) {
-        const auto& otherPath = rv.first->second;
-        if (path != otherPath) {
-            // HACK: Anon modules get visited twice, so can lead to duplicate annotations
-            ERROR(sp, E0000, "Duplicate definition of language item '" << name << "' - " << otherPath << " and " << path);
+        auto rv = crate.langItems.insert(std::make_pair(realName == nullptr ? name : realName, path));
+        if (!rv.second) {
+            const auto& otherPath = rv.first->second;
+            if (path != otherPath) {
+                // HACK: Anon modules get visited twice, so can lead to duplicate annotations
+                ERROR(sp, E0000, "Duplicate definition of language item '" << name << "' - " << otherPath << " and " << path);
+            }
         }
     }
-}
 
 }
 

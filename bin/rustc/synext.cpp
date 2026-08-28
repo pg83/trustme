@@ -12,39 +12,39 @@
 #include "macro_rules_macro_rules.h"
 
 namespace {
-struct CMacroRulesExpander: public ExpandProcMacro {
-    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+    struct CMacroRulesExpander: public ExpandProcMacro {
+        std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 
-    std::unique_ptr<TokenStream> expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) override;
-};
+        std::unique_ptr<TokenStream> expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) override;
+    };
 
-struct CMacroUseHandler: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CMacroUseHandler: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    bool runDuringIter() const override;
+        bool runDuringIter() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CMacroExportHandler: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CMacroExportHandler: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    bool runDuringIter() const override;
+        bool runDuringIter() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CMacroReexportHandler: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CMacroReexportHandler: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct CBuiltinMacroHandler: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct CBuiltinMacroHandler: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& /*mod*/, size_t /*mod_idx*/, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& /*mod*/, size_t /*mod_idx*/, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 }
 
 namespace {

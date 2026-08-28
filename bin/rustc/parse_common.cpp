@@ -25,38 +25,94 @@
 using namespace stl;
 
 namespace {
-// TODO: Use a ProtoSpan instead of a point span?
-static inline ASTExprNodeP mkExprnodep(const TokenStream& lex, ASTExprNode* en) {
-    en->setSpan(lex.pointSpan());
-    return ASTExprNodeP(en);
-}
+    // TODO: Use a ProtoSpan instead of a point span?
+    static inline ASTExprNodeP mkExprnodep(const TokenStream& lex, ASTExprNode* en) {
+        en->setSpan(lex.pointSpan());
+        return ASTExprNodeP(en);
+    }
 }
 
 #define NEWNODE(type, ...) mkExprnodep(lex, new type(__VA_ARGS__))
 
-ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty, Ident label = Ident(""));
-ASTExprNodeP ParseExprBlockLineStmt(TokenStream& lex, bool& hasSemicolon);
-ASTExprNodeP ParseStmtLet(TokenStream& lex, bool isSuper = false);
-ASTExprNodeP ParseExpr0(TokenStream& lex);
-ASTExprNodeP ParseExpr1e(TokenStream& lex);
-ASTExprNodeP ParseExpr3(TokenStream& lex);
-ASTExprNodeP ParseIfStmt(TokenStream& lex);
-ASTExprNodeP ParseWhileStmt(TokenStream& lex, Ident lifetime);
-ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime);
-std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStructLiteral = false);
-RcString getOptionalIdent(TokenStream& lex, RcString* sourceName = nullptr);
-ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs = {});
-bool ParseParamAttrsKeep(TokenStream& lex, ASTAttributeList* attrsOut = nullptr);
 namespace {
-static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex);
+    ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty, Ident label = Ident(""));
 }
-ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee = ASTExprNodeP());
-ASTExprNodeP ParseExpr1(TokenStream& lex);
-ASTExprNodeP ParseExprFC(TokenStream& lex);
+
+namespace {
+    ASTExprNodeP ParseExprBlockLineStmt(TokenStream& lex, bool& hasSemicolon);
+}
+
+namespace {
+    ASTExprNodeP ParseStmtLet(TokenStream& lex, bool isSuper = false);
+}
+
+ASTExprNodeP ParseExpr0(TokenStream& lex);
+
+namespace {
+    ASTExprNodeP ParseExpr1e(TokenStream& lex);
+}
+
+namespace {
+    ASTExprNodeP ParseExpr3(TokenStream& lex);
+}
+
+namespace {
+    ASTExprNodeP ParseIfStmt(TokenStream& lex);
+}
+
+namespace {
+    ASTExprNodeP ParseWhileStmt(TokenStream& lex, Ident lifetime);
+}
+
+namespace {
+    ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime);
+}
+
+namespace {
+    std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStructLiteral = false);
+}
+
+namespace {
+    RcString getOptionalIdent(TokenStream& lex, RcString* sourceName = nullptr);
+}
+
+namespace {
+    ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs = {});
+}
+
+namespace {
+    bool ParseParamAttrsKeep(TokenStream& lex, ASTAttributeList* attrsOut = nullptr);
+}
+
+namespace {
+    static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex);
+}
+
+namespace {
+    ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee = ASTExprNodeP());
+}
+
+namespace {
+    ASTExprNodeP ParseExpr1(TokenStream& lex);
+}
+
+namespace {
+    ASTExprNodeP ParseExprFC(TokenStream& lex);
+}
+
 ASTExprNodeP ParseExprVal(TokenStream& lex);
-ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath tok, Span pathSpan);
-ASTFunction ParseDelegationFunction(TokenStream& lex, RcString& itemName);
-std::vector<std::pair<RcString, ASTFunction>> SplitDelegationFunction(const ASTFunction& fcn);
+
+namespace {
+    ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath tok, Span pathSpan);
+}
+
+namespace {
+    ASTFunction ParseDelegationFunction(TokenStream& lex, RcString& itemName);
+}
+
+namespace {
+    std::vector<std::pair<RcString, ASTFunction>> SplitDelegationFunction(const ASTFunction& fcn);
+}
 
 ASTExpr ParseExpr(TokenStream& lex) {
     return ASTExpr(ParseExpr0(lex));
@@ -70,56 +126,58 @@ ASTExprNodeP ParseExprBlockNode(TokenStream& lex) {
     return ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare, RcString());
 }
 
-ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty /*=Bare*/, Ident label /*=RcString()*/) {
-    CLEAR_PARSE_FLAGS_EXPR(lex);
-    Token tok;
+namespace {
+    ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty /*=Bare*/, Ident label /*=RcString()*/) {
+        CLEAR_PARSE_FLAGS_EXPR(lex);
+        Token tok;
 
-    std::vector<ASTExprNodeBlock::Line> lines;
-    ASTAttributeList attrs;
+        std::vector<ASTExprNodeBlock::Line> lines;
+        ASTAttributeList attrs;
 
-    auto ps = lex.startSpan();
-    auto origModule = lex.parseState().module;
-    std::shared_ptr<ASTModule> localMod;
+        auto ps = lex.startSpan();
+        auto origModule = lex.parseState().module;
+        std::shared_ptr<ASTModule> localMod;
 
-    if (LOOK_AHEAD(lex) == TOK_INTERPOLATED_BLOCK) {
-        GET_TOK(tok, lex);
-        auto node = tok.takeFragNode();
+        if (LOOK_AHEAD(lex) == TOK_INTERPOLATED_BLOCK) {
+            GET_TOK(tok, lex);
+            auto node = tok.takeFragNode();
 
-        if (ty != ASTExprNodeBlock::Type::Bare) {
-            if (auto* b = cast<ASTExprNodeBlock>(node.get())) {
-                b->blockType = ty;
+            if (ty != ASTExprNodeBlock::Type::Bare) {
+                if (auto* b = cast<ASTExprNodeBlock>(node.get())) {
+                    b->blockType = ty;
+                }
+            }
+            return node;
+        }
+
+        GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
+
+        while (LOOK_AHEAD(lex) != TOK_BRACE_CLOSE) {
+            ParseParentAttrs(lex, attrs);
+            if (LOOK_AHEAD(lex) == TOK_BRACE_CLOSE) {
+                break;
+            }
+
+            bool addSilenceIfEnd = false;
+            auto rv = ParseExprBlockLineWithItems(lex, localMod, addSilenceIfEnd);
+            if (rv) {
+                lines.push_back({addSilenceIfEnd, mv$(rv)});
+            } else {
+                assert(!addSilenceIfEnd);
             }
         }
-        return node;
-    }
+        GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
 
-    GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
-
-    while (LOOK_AHEAD(lex) != TOK_BRACE_CLOSE) {
-        ParseParentAttrs(lex, attrs);
-        if (LOOK_AHEAD(lex) == TOK_BRACE_CLOSE) {
-            break;
+        if (lex.parseState().module != origModule) {
+            lex.parseState().module = origModule;
         }
-
-        bool addSilenceIfEnd = false;
-        auto rv = ParseExprBlockLineWithItems(lex, localMod, addSilenceIfEnd);
-        if (rv) {
-            lines.push_back({addSilenceIfEnd, mv$(rv)});
-        } else {
-            assert(!addSilenceIfEnd);
-        }
+        auto* rvBlk = new ASTExprNodeBlock(ty, mv$(lines), mv$(localMod));
+        rvBlk->label = label;
+        auto rv = ASTExprNodeP(rvBlk);
+        rv->setSpan(lex.endSpan(ps));
+        rv->setAttrs(mv$(attrs));
+        return rv;
     }
-    GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
-
-    if (lex.parseState().module != origModule) {
-        lex.parseState().module = origModule;
-    }
-    auto* rvBlk = new ASTExprNodeBlock(ty, mv$(lines), mv$(localMod));
-    rvBlk->label = label;
-    auto rv = ASTExprNodeP(rvBlk);
-    rv->setSpan(lex.endSpan(ps));
-    rv->setAttrs(mv$(attrs));
-    return rv;
 }
 
 ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTModule>& localMod, bool& addSilenceIfEnd) {
@@ -261,29 +319,29 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
 }
 
 namespace {
-static void normaliseAbiFragment(TokenStream& lex) {
-    if (lex.lookahead(0) != TOK_INTERPOLATED_EXPR) {
-        return;
+    static void normaliseAbiFragment(TokenStream& lex) {
+        if (lex.lookahead(0) != TOK_INTERPOLATED_EXPR) {
+            return;
+        }
+        auto tok = lex.getToken();
+        auto node = tok.takeFragNode();
+        if (const auto* s = cast<const ASTExprNodeString>(&*node)) {
+            lex.putback(Token(TOK_STRING, std::string(s->value), Ident::Hygiene()));
+            return;
+        }
+        parseErrorUnexpected(lex, tok, TOK_STRING);
     }
-    auto tok = lex.getToken();
-    auto node = tok.takeFragNode();
-    if (const auto* s = cast<const ASTExprNodeString>(&*node)) {
-        lex.putback(Token(TOK_STRING, std::string(s->value), Ident::Hygiene()));
-        return;
-    }
-    parseErrorUnexpected(lex, tok, TOK_STRING);
-}
 
-static bool getAbiStringOpt(TokenStream& lex, std::string& out) {
-    normaliseAbiFragment(lex);
-    if (lex.lookahead(0) == TOK_STRING) {
-        out = lex.getToken().str();
-        return true;
+    static bool getAbiStringOpt(TokenStream& lex, std::string& out) {
+        normaliseAbiFragment(lex);
+        if (lex.lookahead(0) == TOK_STRING) {
+            out = lex.getToken().str();
+            return true;
+        }
+        return false;
     }
-    return false;
-}
 
-static bool exprIsBlockHeaded(ASTExprNode& node);
+    static bool exprIsBlockHeaded(ASTExprNode& node);
 }
 
 ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
@@ -458,244 +516,260 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
     }
 }
 
-ASTExprNodeP ParseExprBlockLineStmt(TokenStream& lex, bool& hasSemicolon) {
-    Token tok;
+namespace {
+    ASTExprNodeP ParseExprBlockLineStmt(TokenStream& lex, bool& hasSemicolon) {
+        Token tok;
 
-    bool isParen = lex.lookahead(0) == TOK_PAREN_OPEN;
+        bool isParen = lex.lookahead(0) == TOK_PAREN_OPEN;
 
-    auto ret = ParseStmt(lex);
+        auto ret = ParseStmt(lex);
 
-    if (const auto* mac = cast<ASTExprNodeMacro>(&*ret)) {
-        if (!isParen && mac->isBraced) {
-            return ret;
-        }
-    }
-
-    if (!lex.getTokenIf(TOK_SEMICOLON)) {
-        switch (lex.lookahead(0)) {
-            case TOK_EOF:
-            case TOK_BRACE_CLOSE:
-            case TOK_HASH: // Hack, some crates have `#[cfg()] foo #[cfg()] bar`
-                break;
-            default:
-                GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
-                break;
-        }
-    } else {
-        hasSemicolon = true;
-    }
-    return ret;
-}
-
-std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStructLiteral /*=false*/) {
-    Token tok;
-    std::vector<ASTIfLetCondition> conditions;
-    bool hadPat = false;
-    do {
-        if (lex.getTokenIf(TOK_RWORD_LET)) {
-            lex.getTokenIf(TOK_PIPE);
-            auto pat = ParsePattern(lex, AllowOrPattern::Yes);
-            GET_CHECK_TOK(tok, lex, TOK_EQUAL);
-            ASTExprNodeP val;
-            if (allowStructLiteral) {
-                val = ParseExpr3(lex);
-            } else {
-                SET_PARSE_FLAG(lex, disallowStructLiteral);
-                val = ParseExpr3(lex);
+        if (const auto* mac = cast<ASTExprNodeMacro>(&*ret)) {
+            if (!isParen && mac->isBraced) {
+                return ret;
             }
-            conditions.push_back(ASTIfLetCondition{box$(pat), std::move(val)});
-            hadPat = true;
+        }
+
+        if (!lex.getTokenIf(TOK_SEMICOLON)) {
+            switch (lex.lookahead(0)) {
+                case TOK_EOF:
+                case TOK_BRACE_CLOSE:
+                case TOK_HASH: // Hack, some crates have `#[cfg()] foo #[cfg()] bar`
+                    break;
+                default:
+                    GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
+                    break;
+            }
         } else {
-            ASTExprNodeP val;
-            if (allowStructLiteral) {
-                val = ParseExpr3(lex);
-            } else {
-                SET_PARSE_FLAG(lex, disallowStructLiteral);
-                val = ParseExpr3(lex);
-            }
-
-            conditions.push_back(ASTIfLetCondition{std::unique_ptr<ASTPattern>(), std::move(val)});
+            hasSemicolon = true;
         }
-    } while (lex.getTokenIf(TOK_DOUBLE_AMP));
-
-    if (lex.lookahead(0) == TOK_DOUBLE_PIPE) {
-        if (hadPat) {
-            TODO(lex.pointSpan(), "lazy boolean or in let chains not yet implemented (not yet valid rust, at 1.75)");
-        } else {
-            auto prev = std::move(conditions[0].value);
-            for (size_t i = 1; i < conditions.size(); i++) {
-                prev = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLAND, std::move(prev), std::move(conditions[i].value));
-            }
-            GET_CHECK_TOK(tok, lex, TOK_DOUBLE_PIPE);
-            SET_PARSE_FLAG(lex, disallowStructLiteral);
-            auto n = ParseExpr1e(lex);
-            auto rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLOR, std::move(prev), std::move(n));
-
-            conditions.clear();
-            conditions.push_back(ASTIfLetCondition{std::unique_ptr<ASTPattern>(), std::move(rv)});
-        }
+        return ret;
     }
-
-    return conditions;
-}
-
-ASTExprNodeP ParseWhileStmt(TokenStream& lex, Ident lifetime) {
-    auto conditions = ParseIfLetChain(lex);
-    return NEWNODE(ASTExprNodeWhile, lifetime, std::move(conditions), ParseExprBlockNode(lex));
-}
-
-ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime) {
-    CLEAR_PARSE_FLAGS_EXPR(lex);
-    Token tok;
-
-    const bool isAwait = lex.getTokenIf(TOK_RWORD_AWAIT);
-
-    auto pat = ParsePattern(lex, AllowOrPattern::Yes);
-    GET_CHECK_TOK(tok, lex, TOK_RWORD_IN);
-    ASTExprNodeP val;
-    {
-        SET_PARSE_FLAG(lex, disallowStructLiteral);
-        val = ParseExpr0(lex);
-    }
-    return NEWNODE(ASTExprNodeFor, lifetime, std::move(pat), std::move(val), ParseExprBlockNode(lex), isAwait);
-}
-
-ASTExprNodeP ParseIfStmt(TokenStream& lex) {
-    Token tok;
-    std::vector<ASTExprNodeIf::Arm> arms;
-    ASTExprNodeP elseBlock;
-    do {
-        std::vector<ASTIfLetCondition> conditions;
-
-        {
-            SET_PARSE_FLAG(lex, disallowStructLiteral);
-            conditions = ParseIfLetChain(lex);
-        }
-
-        ASTExprNodeP code = ParseExprBlockNode(lex);
-
-        arms.push_back(ASTExprNodeIf::Arm{std::move(conditions), std::move(code)});
-
-        if (!lex.getTokenIf(TOK_RWORD_ELSE)) {
-            break;
-        }
-        if (!lex.getTokenIf(TOK_RWORD_IF)) {
-            elseBlock = ParseExprBlockNode(lex);
-            break;
-        }
-    } while (true);
-
-    return NEWNODE(ASTExprNodeIf, std::move(arms), std::move(elseBlock));
-}
-
-ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee) {
-    Token tok;
-    ASTAttributeList nodeAttrs;
-
-    CLEAR_PARSE_FLAGS_EXPR(lex);
-    ASTExprNodeP switchVal = std::move(scrutinee);
-    if (!switchVal) {
-        SET_PARSE_FLAG(lex, disallowStructLiteral);
-        switchVal = ParseExpr1(lex);
-    }
-    GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
-
-    std::vector<ASTExprNodeMatchArm> arms;
-    do {
-        if (lex.getTokenIf(TOK_BRACE_CLOSE, tok)) {
-            break;
-        }
-        ASTExprNodeMatchArm arm;
-
-        ParseParentAttrs(lex, nodeAttrs);
-        arm.attrs = ParseItemAttrs(lex);
-
-        lex.getTokenIf(TOK_PIPE);
-
-        do {
-            arm.patterns.push_back(ParsePattern(lex, AllowOrPattern::No));
-        } while (GET_TOK(tok, lex) == TOK_PIPE);
-
-        {
-            std::vector<ASTPattern> reachable;
-            for (auto& p : arm.patterns) {
-                if (!PatternContainsNever(p)) {
-                    reachable.push_back(mv$(p));
-                }
-            }
-            arm.patterns = mv$(reachable);
-        }
-        if (arm.patterns.empty()) {
-            if (tok.type() == TOK_FATARROW) {
-                (void)ParseStmt(lex);
-            } else {
-                PUTBACK(tok, lex);
-            }
-            lex.getTokenIf(TOK_COMMA);
-            continue;
-        }
-
-        if (tok.type() == TOK_RWORD_IF) {
-            arm.guard = ParseIfLetChain(lex, /*allowStructLiteral=*/true);
-            GET_TOK(tok, lex);
-        }
-        CHECK_TOK(tok, TOK_FATARROW);
-
-        arm.code = ParseStmt(lex);
-
-        arms.push_back(std::move(arm));
-
-        // Match arms don't need a trailing comma (TODO: Only if braced)
-        lex.getTokenIf(TOK_COMMA);
-    } while (1);
-    CHECK_TOK(tok, TOK_BRACE_CLOSE);
-
-    auto rv = NEWNODE(ASTExprNodeMatch, std::move(switchVal), std::move(arms));
-    rv->setAttrs(std::move(nodeAttrs));
-    return rv;
-}
-
-ASTExprNodeP ParseExprTry(TokenStream& lex) {
-    auto inner = ParseExprBlockNode(lex);
-    //TODO(lex.point_span(), "do catch");
-    return NEWNODE(ASTExprNodeTry, std::move(inner));
-}
-
-ASTExprNodeP ParseFlowControl(TokenStream& lex, ASTExprNodeFlow::Type type) {
-    Token tok;
-    Ident lifetime = Ident("");
-    if (type == ASTExprNodeFlow::CONTINUE || type == ASTExprNodeFlow::BREAK) {
-        if (lex.lookahead(0) == TOK_LIFETIME) {
-            GET_TOK(tok, lex);
-            lifetime = tok.ident();
-        }
-    }
-
-    // TODO: Should this prevent `continue value;`?
-    ASTExprNodeP val;
-    if (type == ASTExprNodeFlow::BREAK && LOOK_AHEAD(lex) == TOK_BRACE_OPEN && CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
-        return NEWNODE(ASTExprNodeFlow, type, std::move(lifetime), std::move(val));
-    }
-    switch (LOOK_AHEAD(lex)) {
-        case TOK_EOF:
-        case TOK_SEMICOLON:
-        case TOK_COMMA:
-        case TOK_BRACE_CLOSE:
-        case TOK_PAREN_CLOSE:
-        case TOK_SQUARE_CLOSE:
-        case TOK_FATARROW:
-            break;
-        default:
-            val = ParseExpr0(lex);
-            break;
-    }
-    return NEWNODE(ASTExprNodeFlow, type, std::move(lifetime), std::move(val));
 }
 
 namespace {
-static bool exprIsBlockHeaded(ASTExprNode& node) {
-    return cast<ASTExprNodeBlock>(&node) || cast<ASTExprNodeAsyncBlock>(&node) || cast<ASTExprNodeGeneratorBlock>(&node) || cast<ASTExprNodeTry>(&node) || cast<ASTExprNodeLoop>(&node) || cast<ASTExprNodeFor>(&node) || cast<ASTExprNodeWhile>(&node) || cast<ASTExprNodeMatch>(&node) || cast<ASTExprNodeIf>(&node);
+    std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStructLiteral /*=false*/) {
+        Token tok;
+        std::vector<ASTIfLetCondition> conditions;
+        bool hadPat = false;
+        do {
+            if (lex.getTokenIf(TOK_RWORD_LET)) {
+                lex.getTokenIf(TOK_PIPE);
+                auto pat = ParsePattern(lex, AllowOrPattern::Yes);
+                GET_CHECK_TOK(tok, lex, TOK_EQUAL);
+                ASTExprNodeP val;
+                if (allowStructLiteral) {
+                    val = ParseExpr3(lex);
+                } else {
+                    SET_PARSE_FLAG(lex, disallowStructLiteral);
+                    val = ParseExpr3(lex);
+                }
+                conditions.push_back(ASTIfLetCondition{box$(pat), std::move(val)});
+                hadPat = true;
+            } else {
+                ASTExprNodeP val;
+                if (allowStructLiteral) {
+                    val = ParseExpr3(lex);
+                } else {
+                    SET_PARSE_FLAG(lex, disallowStructLiteral);
+                    val = ParseExpr3(lex);
+                }
+
+                conditions.push_back(ASTIfLetCondition{std::unique_ptr<ASTPattern>(), std::move(val)});
+            }
+        } while (lex.getTokenIf(TOK_DOUBLE_AMP));
+
+        if (lex.lookahead(0) == TOK_DOUBLE_PIPE) {
+            if (hadPat) {
+                TODO(lex.pointSpan(), "lazy boolean or in let chains not yet implemented (not yet valid rust, at 1.75)");
+            } else {
+                auto prev = std::move(conditions[0].value);
+                for (size_t i = 1; i < conditions.size(); i++) {
+                    prev = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLAND, std::move(prev), std::move(conditions[i].value));
+                }
+                GET_CHECK_TOK(tok, lex, TOK_DOUBLE_PIPE);
+                SET_PARSE_FLAG(lex, disallowStructLiteral);
+                auto n = ParseExpr1e(lex);
+                auto rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLOR, std::move(prev), std::move(n));
+
+                conditions.clear();
+                conditions.push_back(ASTIfLetCondition{std::unique_ptr<ASTPattern>(), std::move(rv)});
+            }
+        }
+
+        return conditions;
+    }
 }
+
+namespace {
+    ASTExprNodeP ParseWhileStmt(TokenStream& lex, Ident lifetime) {
+        auto conditions = ParseIfLetChain(lex);
+        return NEWNODE(ASTExprNodeWhile, lifetime, std::move(conditions), ParseExprBlockNode(lex));
+    }
+}
+
+namespace {
+    ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime) {
+        CLEAR_PARSE_FLAGS_EXPR(lex);
+        Token tok;
+
+        const bool isAwait = lex.getTokenIf(TOK_RWORD_AWAIT);
+
+        auto pat = ParsePattern(lex, AllowOrPattern::Yes);
+        GET_CHECK_TOK(tok, lex, TOK_RWORD_IN);
+        ASTExprNodeP val;
+        {
+            SET_PARSE_FLAG(lex, disallowStructLiteral);
+            val = ParseExpr0(lex);
+        }
+        return NEWNODE(ASTExprNodeFor, lifetime, std::move(pat), std::move(val), ParseExprBlockNode(lex), isAwait);
+    }
+}
+
+namespace {
+    ASTExprNodeP ParseIfStmt(TokenStream& lex) {
+        Token tok;
+        std::vector<ASTExprNodeIf::Arm> arms;
+        ASTExprNodeP elseBlock;
+        do {
+            std::vector<ASTIfLetCondition> conditions;
+
+            {
+                SET_PARSE_FLAG(lex, disallowStructLiteral);
+                conditions = ParseIfLetChain(lex);
+            }
+
+            ASTExprNodeP code = ParseExprBlockNode(lex);
+
+            arms.push_back(ASTExprNodeIf::Arm{std::move(conditions), std::move(code)});
+
+            if (!lex.getTokenIf(TOK_RWORD_ELSE)) {
+                break;
+            }
+            if (!lex.getTokenIf(TOK_RWORD_IF)) {
+                elseBlock = ParseExprBlockNode(lex);
+                break;
+            }
+        } while (true);
+
+        return NEWNODE(ASTExprNodeIf, std::move(arms), std::move(elseBlock));
+    }
+}
+
+namespace {
+    ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee) {
+        Token tok;
+        ASTAttributeList nodeAttrs;
+
+        CLEAR_PARSE_FLAGS_EXPR(lex);
+        ASTExprNodeP switchVal = std::move(scrutinee);
+        if (!switchVal) {
+            SET_PARSE_FLAG(lex, disallowStructLiteral);
+            switchVal = ParseExpr1(lex);
+        }
+        GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
+
+        std::vector<ASTExprNodeMatchArm> arms;
+        do {
+            if (lex.getTokenIf(TOK_BRACE_CLOSE, tok)) {
+                break;
+            }
+            ASTExprNodeMatchArm arm;
+
+            ParseParentAttrs(lex, nodeAttrs);
+            arm.attrs = ParseItemAttrs(lex);
+
+            lex.getTokenIf(TOK_PIPE);
+
+            do {
+                arm.patterns.push_back(ParsePattern(lex, AllowOrPattern::No));
+            } while (GET_TOK(tok, lex) == TOK_PIPE);
+
+            {
+                std::vector<ASTPattern> reachable;
+                for (auto& p : arm.patterns) {
+                    if (!PatternContainsNever(p)) {
+                        reachable.push_back(mv$(p));
+                    }
+                }
+                arm.patterns = mv$(reachable);
+            }
+            if (arm.patterns.empty()) {
+                if (tok.type() == TOK_FATARROW) {
+                    (void)ParseStmt(lex);
+                } else {
+                    PUTBACK(tok, lex);
+                }
+                lex.getTokenIf(TOK_COMMA);
+                continue;
+            }
+
+            if (tok.type() == TOK_RWORD_IF) {
+                arm.guard = ParseIfLetChain(lex, /*allowStructLiteral=*/true);
+                GET_TOK(tok, lex);
+            }
+            CHECK_TOK(tok, TOK_FATARROW);
+
+            arm.code = ParseStmt(lex);
+
+            arms.push_back(std::move(arm));
+
+            // Match arms don't need a trailing comma (TODO: Only if braced)
+            lex.getTokenIf(TOK_COMMA);
+        } while (1);
+        CHECK_TOK(tok, TOK_BRACE_CLOSE);
+
+        auto rv = NEWNODE(ASTExprNodeMatch, std::move(switchVal), std::move(arms));
+        rv->setAttrs(std::move(nodeAttrs));
+        return rv;
+    }
+}
+
+namespace {
+    ASTExprNodeP ParseExprTry(TokenStream& lex) {
+        auto inner = ParseExprBlockNode(lex);
+        //TODO(lex.point_span(), "do catch");
+        return NEWNODE(ASTExprNodeTry, std::move(inner));
+    }
+}
+
+namespace {
+    ASTExprNodeP ParseFlowControl(TokenStream& lex, ASTExprNodeFlow::Type type) {
+        Token tok;
+        Ident lifetime = Ident("");
+        if (type == ASTExprNodeFlow::CONTINUE || type == ASTExprNodeFlow::BREAK) {
+            if (lex.lookahead(0) == TOK_LIFETIME) {
+                GET_TOK(tok, lex);
+                lifetime = tok.ident();
+            }
+        }
+
+        // TODO: Should this prevent `continue value;`?
+        ASTExprNodeP val;
+        if (type == ASTExprNodeFlow::BREAK && LOOK_AHEAD(lex) == TOK_BRACE_OPEN && CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
+            return NEWNODE(ASTExprNodeFlow, type, std::move(lifetime), std::move(val));
+        }
+        switch (LOOK_AHEAD(lex)) {
+            case TOK_EOF:
+            case TOK_SEMICOLON:
+            case TOK_COMMA:
+            case TOK_BRACE_CLOSE:
+            case TOK_PAREN_CLOSE:
+            case TOK_SQUARE_CLOSE:
+            case TOK_FATARROW:
+                break;
+            default:
+                val = ParseExpr0(lex);
+                break;
+        }
+        return NEWNODE(ASTExprNodeFlow, type, std::move(lifetime), std::move(val));
+    }
+}
+
+namespace {
+    static bool exprIsBlockHeaded(ASTExprNode& node) {
+        return cast<ASTExprNodeBlock>(&node) || cast<ASTExprNodeAsyncBlock>(&node) || cast<ASTExprNodeGeneratorBlock>(&node) || cast<ASTExprNodeTry>(&node) || cast<ASTExprNodeLoop>(&node) || cast<ASTExprNodeFor>(&node) || cast<ASTExprNodeWhile>(&node) || cast<ASTExprNodeMatch>(&node) || cast<ASTExprNodeIf>(&node);
+    }
 }
 
 ASTExprNodeP ParseStmt(TokenStream& lex) {
@@ -768,41 +842,45 @@ ASTExprNodeP ParseStmt(TokenStream& lex) {
     }
 }
 
-ASTExprNodeP ParseStmtLet(TokenStream& lex, bool isSuper) {
-    Token tok;
-    ASTPattern pat = ParsePattern(lex, AllowOrPattern::Yes);
-    ASTType* type = mkType(lex.typePool(), lex.pointSpan());
-    if (lex.getTokenIf(TOK_COLON)) {
-        type = ParseType(lex);
-    }
-    ASTExprNodeP val;
-    ASTExprNodeP elseArm;
-    if (lex.getTokenIf(TOK_EQUAL)) {
-        val = ParseExpr0(lex);
-        if (lex.getTokenIf(TOK_RWORD_ELSE)) {
-            elseArm = ParseExprBlockNode(lex);
+namespace {
+    ASTExprNodeP ParseStmtLet(TokenStream& lex, bool isSuper) {
+        Token tok;
+        ASTPattern pat = ParsePattern(lex, AllowOrPattern::Yes);
+        ASTType* type = mkType(lex.typePool(), lex.pointSpan());
+        if (lex.getTokenIf(TOK_COLON)) {
+            type = ParseType(lex);
         }
+        ASTExprNodeP val;
+        ASTExprNodeP elseArm;
+        if (lex.getTokenIf(TOK_EQUAL)) {
+            val = ParseExpr0(lex);
+            if (lex.getTokenIf(TOK_RWORD_ELSE)) {
+                elseArm = ParseExprBlockNode(lex);
+            }
+        }
+        return NEWNODE(ASTExprNodeLetBinding, std::move(pat), mv$(type), std::move(val), std::move(elseArm), isSuper);
     }
-    return NEWNODE(ASTExprNodeLetBinding, std::move(pat), mv$(type), std::move(val), std::move(elseArm), isSuper);
 }
 
-std::vector<ASTExprNodeP> ParseParenList(TokenStream& lex) {
-    Token tok;
+namespace {
+    std::vector<ASTExprNodeP> ParseParenList(TokenStream& lex) {
+        Token tok;
 
-    CLEAR_PARSE_FLAGS_EXPR(lex);
+        CLEAR_PARSE_FLAGS_EXPR(lex);
 
-    std::vector<ASTExprNodeP> rv;
-    GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-    if (!lex.getTokenIf(TOK_PAREN_CLOSE)) {
-        do {
-            if (lex.getTokenIf(TOK_PAREN_CLOSE, tok)) {
-                break;
-            }
-            rv.push_back(ParseExpr0(lex));
-        } while (GET_TOK(tok, lex) == TOK_COMMA);
-        CHECK_TOK(tok, TOK_PAREN_CLOSE);
+        std::vector<ASTExprNodeP> rv;
+        GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+        if (!lex.getTokenIf(TOK_PAREN_CLOSE)) {
+            do {
+                if (lex.getTokenIf(TOK_PAREN_CLOSE, tok)) {
+                    break;
+                }
+                rv.push_back(ParseExpr0(lex));
+            } while (GET_TOK(tok, lex) == TOK_COMMA);
+            CHECK_TOK(tok, TOK_PAREN_CLOSE);
+        }
+        return rv;
     }
-    return rv;
 }
 
 ASTExprNodeP ParseExpr0(TokenStream& lex) {
@@ -888,8 +966,10 @@ ASTExprNodeP ParseExpr0(TokenStream& lex) {
         }                                                                                 \
     }
 
-bool ParseIsRangeSeparator(eTokenType tokType) {
-    return tokType == TOK_DOUBLE_DOT || tokType == TOK_DOUBLE_DOT_EQUAL || tokType == TOK_TRIPLE_DOT;
+namespace {
+    bool ParseIsRangeSeparator(eTokenType tokType) {
+        return tokType == TOK_DOUBLE_DOT || tokType == TOK_DOUBLE_DOT_EQUAL || tokType == TOK_TRIPLE_DOT;
+    }
 }
 
 bool ParseIsTokValue(eTokenType tokType) {
@@ -934,77 +1014,93 @@ bool ParseIsTokValue(eTokenType tokType) {
     }
 }
 
-ASTExprNodeP ParseExpr1a(TokenStream& lex);
-
-ASTExprNodeP ParseExpr1(TokenStream& lex) {
-    Token tok;
-    ASTExprNodeP (*next)(TokenStream&) = ParseExpr1a;
-
-    auto dest = next(lex);
-    if (lex.lookahead(0) == TOK_THINARROW_LEFT) {
-        GET_TOK(tok, lex);
-        auto val = ParseExpr1(lex);
-        return NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::PLACE_IN, mv$(dest), mv$(val));
-    } else {
-        return dest;
-    }
+namespace {
+    ASTExprNodeP ParseExpr1a(TokenStream& lex);
 }
 
-ASTExprNodeP ParseExpr1b(TokenStream& lex);
+namespace {
+    ASTExprNodeP ParseExpr1(TokenStream& lex) {
+        Token tok;
+        ASTExprNodeP (*next)(TokenStream&) = ParseExpr1a;
 
-ASTExprNodeP ParseExpr1a(TokenStream& lex) {
-    Token tok;
-    ASTExprNodeP (*next)(TokenStream&) = ParseExpr1b;
-    ASTExprNodeP left, right;
-
-    if (GET_TOK(tok, lex) == TOK_TRIPLE_DOT || tok.type() == TOK_DOUBLE_DOT_EQUAL) {
-        right = ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : next(lex);
-        return NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE_INC, nullptr, mv$(right));
-    } else {
-        PUTBACK(tok, lex);
-    }
-
-    if (!lex.getTokenIf(TOK_DOUBLE_DOT, tok)) {
-        left = next(lex);
-
-        if (!lex.getTokenIf(TOK_DOUBLE_DOT, tok)) {
-            return std::move(left);
+        auto dest = next(lex);
+        if (lex.lookahead(0) == TOK_THINARROW_LEFT) {
+            GET_TOK(tok, lex);
+            auto val = ParseExpr1(lex);
+            return NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::PLACE_IN, mv$(dest), mv$(val));
+        } else {
+            return dest;
         }
     }
-    assert(tok.type() == TOK_DOUBLE_DOT);
-    const bool braceIsValue = LOOK_AHEAD(lex) == TOK_BRACE_OPEN && !lex.parseState().disallowStructLiteral;
-    if (ParseIsTokValue(LOOK_AHEAD(lex)) || braceIsValue) {
-        right = ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : next(lex);
-    } else {
-    }
-
-    return NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE, std::move(left), std::move(right));
 }
-LEFTASSOC(ParseExpr1b, ParseExpr1e, case TOK_TRIPLE_DOT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE_INC, mv$(rv), parseNext()); break; case TOK_DOUBLE_DOT_EQUAL : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE_INC, mv$(rv), parseNext()); break;)
-LEFTASSOC(ParseExpr1e, ParseExpr2, case TOK_DOUBLE_PIPE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLOR, std::move(rv), parseNext()); break;)
-LEFTASSOC(ParseExpr2, ParseExpr3, case TOK_DOUBLE_AMP : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLAND, std::move(rv), parseNext()); break;)
-LEFTASSOC(ParseExpr3, ParseExpr4, case TOK_DOUBLE_EQUAL : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPEQU, std::move(rv), parseNext()); break; case TOK_EXCLAM_EQUAL : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPNEQU, std::move(rv), parseNext()); break;)
-LEFTASSOC(ParseExpr4, ParseExpr5, case TOK_LT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPLT, std::move(rv), parseNext()); break; case TOK_GT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPGT, std::move(rv), parseNext()); break; case TOK_LTE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPLTE, std::move(rv), parseNext()); break; case TOK_GTE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPGTE, std::move(rv), parseNext()); break;)
-LEFTASSOC(ParseExpr5, ParseExpr6, case TOK_PIPE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BITOR, std::move(rv), parseNext()); break;)
-LEFTASSOC(ParseExpr6, ParseExpr7, case TOK_CARET : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BITXOR, std::move(rv), parseNext()); break;)
-LEFTASSOC(ParseExpr7, ParseExpr8, case TOK_AMP : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BITAND, std::move(rv), parseNext()); break;)
-LEFTASSOC(ParseExpr8, ParseExpr9, case TOK_DOUBLE_LT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::SHL, std::move(rv), parseNext()); break; case TOK_DOUBLE_GT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::SHR, std::move(rv), parseNext()); break;)
-LEFTASSOC(ParseExpr9, ParseExpr10, case TOK_PLUS : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::ADD, std::move(rv), parseNext()); break; case TOK_DASH : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::SUB, std::move(rv), parseNext()); break;)
-LEFTASSOC(ParseExpr10, ParseExpr11, case TOK_STAR : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::MULTIPLY, std::move(rv), parseNext()); break; case TOK_SLASH : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::DIVIDE, std::move(rv), parseNext()); break; case TOK_PERCENT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::MODULO, std::move(rv), parseNext()); break;)
-LEFTASSOC(ParseExpr11, ParseExpr12, case TOK_RWORD_AS : rv = NEWNODE(ASTExprNodeCast, std::move(rv), ParseType(lex, false)); break;)
+
+namespace {
+    ASTExprNodeP ParseExpr1b(TokenStream& lex);
+}
+
+namespace {
+    ASTExprNodeP ParseExpr1a(TokenStream& lex) {
+        Token tok;
+        ASTExprNodeP (*next)(TokenStream&) = ParseExpr1b;
+        ASTExprNodeP left, right;
+
+        if (GET_TOK(tok, lex) == TOK_TRIPLE_DOT || tok.type() == TOK_DOUBLE_DOT_EQUAL) {
+            right = ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : next(lex);
+            return NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE_INC, nullptr, mv$(right));
+        } else {
+            PUTBACK(tok, lex);
+        }
+
+        if (!lex.getTokenIf(TOK_DOUBLE_DOT, tok)) {
+            left = next(lex);
+
+            if (!lex.getTokenIf(TOK_DOUBLE_DOT, tok)) {
+                return std::move(left);
+            }
+        }
+        assert(tok.type() == TOK_DOUBLE_DOT);
+        const bool braceIsValue = LOOK_AHEAD(lex) == TOK_BRACE_OPEN && !lex.parseState().disallowStructLiteral;
+        if (ParseIsTokValue(LOOK_AHEAD(lex)) || braceIsValue) {
+            right = ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : next(lex);
+        } else {
+        }
+
+        return NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE, std::move(left), std::move(right));
+    }
+}
+
+namespace {
+    LEFTASSOC(ParseExpr1b, ParseExpr1e, case TOK_TRIPLE_DOT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE_INC, mv$(rv), parseNext()); break; case TOK_DOUBLE_DOT_EQUAL : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE_INC, mv$(rv), parseNext()); break;)
+    LEFTASSOC(ParseExpr1e, ParseExpr2, case TOK_DOUBLE_PIPE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLOR, std::move(rv), parseNext()); break;)
+    LEFTASSOC(ParseExpr2, ParseExpr3, case TOK_DOUBLE_AMP : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLAND, std::move(rv), parseNext()); break;)
+    LEFTASSOC(ParseExpr3, ParseExpr4, case TOK_DOUBLE_EQUAL : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPEQU, std::move(rv), parseNext()); break; case TOK_EXCLAM_EQUAL : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPNEQU, std::move(rv), parseNext()); break;)
+    LEFTASSOC(ParseExpr4, ParseExpr5, case TOK_LT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPLT, std::move(rv), parseNext()); break; case TOK_GT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPGT, std::move(rv), parseNext()); break; case TOK_LTE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPLTE, std::move(rv), parseNext()); break; case TOK_GTE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPGTE, std::move(rv), parseNext()); break;)
+    LEFTASSOC(ParseExpr5, ParseExpr6, case TOK_PIPE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BITOR, std::move(rv), parseNext()); break;)
+    LEFTASSOC(ParseExpr6, ParseExpr7, case TOK_CARET : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BITXOR, std::move(rv), parseNext()); break;)
+    LEFTASSOC(ParseExpr7, ParseExpr8, case TOK_AMP : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BITAND, std::move(rv), parseNext()); break;)
+    LEFTASSOC(ParseExpr8, ParseExpr9, case TOK_DOUBLE_LT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::SHL, std::move(rv), parseNext()); break; case TOK_DOUBLE_GT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::SHR, std::move(rv), parseNext()); break;)
+    LEFTASSOC(ParseExpr9, ParseExpr10, case TOK_PLUS : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::ADD, std::move(rv), parseNext()); break; case TOK_DASH : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::SUB, std::move(rv), parseNext()); break;)
+    LEFTASSOC(ParseExpr10, ParseExpr11, case TOK_STAR : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::MULTIPLY, std::move(rv), parseNext()); break; case TOK_SLASH : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::DIVIDE, std::move(rv), parseNext()); break; case TOK_PERCENT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::MODULO, std::move(rv), parseNext()); break;)
+    LEFTASSOC(ParseExpr11, ParseExpr12, case TOK_RWORD_AS : rv = NEWNODE(ASTExprNodeCast, std::move(rv), ParseType(lex, false)); break;)
+}
+
 ASTExprNodeP ParseExpr13(TokenStream& lex);
 
-ASTExprNodeP ParseExpr12(TokenStream& lex) {
-    Token tok;
-    auto rv = ParseExpr13(lex);
-    if (lex.getTokenIf(TOK_COLON)) {
-        rv = NEWNODE(ASTExprNodeTypeAnnotation, mv$(rv), ParseType(lex));
+namespace {
+    ASTExprNodeP ParseExpr12(TokenStream& lex) {
+        Token tok;
+        auto rv = ParseExpr13(lex);
+        if (lex.getTokenIf(TOK_COLON)) {
+            rv = NEWNODE(ASTExprNodeTypeAnnotation, mv$(rv), ParseType(lex));
+        }
+        return rv;
     }
-    return rv;
 }
 
-ASTExprNodeP ParseExprUnaryOperand(TokenStream& lex) {
-    return ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : ParseExpr12(lex);
+namespace {
+    ASTExprNodeP ParseExprUnaryOperand(TokenStream& lex) {
+        return ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : ParseExpr12(lex);
+    }
 }
 
 ASTExprNodeP ParseExpr13(TokenStream& lex) {
@@ -1067,599 +1163,607 @@ ASTExprNodeP ParseExpr13(TokenStream& lex) {
 
 ASTExprNodeP ParseExprVal(TokenStream& lex);
 
-ASTExprNodeP ParseExprFC(TokenStream& lex) {
-    ASTExprNodeP val = ParseExprVal(lex);
-    while (true) {
-        Token tok;
-        switch (GET_TOK(tok, lex)) {
-            case TOK_PAREN_OPEN:
-                if (CHECK_PARSE_FLAG(lex, disallowCallOrIndex)) {
-                    PUTBACK(tok, lex);
-                    return val;
-                }
-                {
-                    auto callSpan = val->span();
-                    PUTBACK(tok, lex);
-                    val = NEWNODE(ASTExprNodeCallObject, std::move(val), ParseParenList(lex));
-                    val->setSpan(std::move(callSpan));
-                }
-                break;
-            case TOK_SQUARE_OPEN:
-                if (CHECK_PARSE_FLAG(lex, disallowCallOrIndex)) {
-                    PUTBACK(tok, lex);
-                    return val;
-                }
-                {
-                    const auto indexPosition = tok.getPos();
-                    val = NEWNODE(ASTExprNodeIndex, std::move(val), ParseExpr0(lex));
-                    GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
-                    val->setSpan(lex.subSpan(indexPosition));
-                }
-                break;
-
-            case TOK_QMARK:
-                val = NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::QMARK, mv$(val));
-                break;
-
-            case TOK_DOT:
-                switch (GET_TOK(tok, lex)) {
-                    case TOK_IDENT: {
-                        const auto methodPosition = tok.getPos();
-                        ASTPathNode pn(tok.ident().hygiene, tok.ident().name, {});
-                        switch (GET_TOK(tok, lex)) {
-                            case TOK_PAREN_OPEN:
-                                PUTBACK(tok, lex);
-                                val = NEWNODE(ASTExprNodeCallMethod, std::move(val), std::move(pn), ParseParenList(lex));
-                                val->setSpan(lex.subSpan(methodPosition));
-                                break;
-                            case TOK_DOUBLE_COLON:
-                                if (lex.getTokenIf(TOK_DOUBLE_LT)) {
-                                    lex.putback(Token(TOK_LT));
-                                } else {
-                                    GET_CHECK_TOK(tok, lex, TOK_LT);
-                                }
-                                pn.args() = ParsePathGenericList(lex);
-                                val = NEWNODE(ASTExprNodeCallMethod, std::move(val), std::move(pn), ParseParenList(lex));
-                                val->setSpan(lex.subSpan(methodPosition));
-                                break;
-                            default:
-                                val = NEWNODE(ASTExprNodeField, std::move(val), pn.name());
-                                PUTBACK(tok, lex);
-                                break;
-                        }
-                        break;
+namespace {
+    ASTExprNodeP ParseExprFC(TokenStream& lex) {
+        ASTExprNodeP val = ParseExprVal(lex);
+        while (true) {
+            Token tok;
+            switch (GET_TOK(tok, lex)) {
+                case TOK_PAREN_OPEN:
+                    if (CHECK_PARSE_FLAG(lex, disallowCallOrIndex)) {
+                        PUTBACK(tok, lex);
+                        return val;
                     }
-                    case TOK_INTEGER:
-                        val = NEWNODE(ASTExprNodeField, std::move(val), RcString::newInterned(FMT(tok.intval())));
-                        break;
-                    case TOK_FLOAT: {
-                        const auto value = tok.floatval();
-                        const auto whole = floatValueTrunc(value);
-                        const auto fraction = value - whole;
-                        auto scale = FloatValue(1.0);
-                        FloatValue fractionalIndex;
-                        const auto tolerancePerUnit = parseFloatValue("1e-32");
-                        bool foundFractionalIndex = false;
-                        for (unsigned digits = 0; digits < 20; digits++) {
-                            scale = scale * FloatValue(10.0);
-                            const auto scaled = fraction * scale;
-                            fractionalIndex = floatValueRound(scaled);
-                            if (floatValueAbs(scaled - fractionalIndex) <= scale * tolerancePerUnit) {
-                                foundFractionalIndex = true;
-                                break;
+                    {
+                        auto callSpan = val->span();
+                        PUTBACK(tok, lex);
+                        val = NEWNODE(ASTExprNodeCallObject, std::move(val), ParseParenList(lex));
+                        val->setSpan(std::move(callSpan));
+                    }
+                    break;
+                case TOK_SQUARE_OPEN:
+                    if (CHECK_PARSE_FLAG(lex, disallowCallOrIndex)) {
+                        PUTBACK(tok, lex);
+                        return val;
+                    }
+                    {
+                        const auto indexPosition = tok.getPos();
+                        val = NEWNODE(ASTExprNodeIndex, std::move(val), ParseExpr0(lex));
+                        GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
+                        val->setSpan(lex.subSpan(indexPosition));
+                    }
+                    break;
+
+                case TOK_QMARK:
+                    val = NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::QMARK, mv$(val));
+                    break;
+
+                case TOK_DOT:
+                    switch (GET_TOK(tok, lex)) {
+                        case TOK_IDENT: {
+                            const auto methodPosition = tok.getPos();
+                            ASTPathNode pn(tok.ident().hygiene, tok.ident().name, {});
+                            switch (GET_TOK(tok, lex)) {
+                                case TOK_PAREN_OPEN:
+                                    PUTBACK(tok, lex);
+                                    val = NEWNODE(ASTExprNodeCallMethod, std::move(val), std::move(pn), ParseParenList(lex));
+                                    val->setSpan(lex.subSpan(methodPosition));
+                                    break;
+                                case TOK_DOUBLE_COLON:
+                                    if (lex.getTokenIf(TOK_DOUBLE_LT)) {
+                                        lex.putback(Token(TOK_LT));
+                                    } else {
+                                        GET_CHECK_TOK(tok, lex, TOK_LT);
+                                    }
+                                    pn.args() = ParsePathGenericList(lex);
+                                    val = NEWNODE(ASTExprNodeCallMethod, std::move(val), std::move(pn), ParseParenList(lex));
+                                    val->setSpan(lex.subSpan(methodPosition));
+                                    break;
+                                default:
+                                    val = NEWNODE(ASTExprNodeField, std::move(val), pn.name());
+                                    PUTBACK(tok, lex);
+                                    break;
                             }
+                            break;
                         }
-                        const auto indexLimit = FloatValue(18446744073709551616.0);
-                        if (!foundFractionalIndex || value < FloatValue() || whole >= indexLimit || fractionalIndex >= indexLimit) {
+                        case TOK_INTEGER:
+                            val = NEWNODE(ASTExprNodeField, std::move(val), RcString::newInterned(FMT(tok.intval())));
+                            break;
+                        case TOK_FLOAT: {
+                            const auto value = tok.floatval();
+                            const auto whole = floatValueTrunc(value);
+                            const auto fraction = value - whole;
+                            auto scale = FloatValue(1.0);
+                            FloatValue fractionalIndex;
+                            const auto tolerancePerUnit = parseFloatValue("1e-32");
+                            bool foundFractionalIndex = false;
+                            for (unsigned digits = 0; digits < 20; digits++) {
+                                scale = scale * FloatValue(10.0);
+                                const auto scaled = fraction * scale;
+                                fractionalIndex = floatValueRound(scaled);
+                                if (floatValueAbs(scaled - fractionalIndex) <= scale * tolerancePerUnit) {
+                                    foundFractionalIndex = true;
+                                    break;
+                                }
+                            }
+                            const auto indexLimit = FloatValue(18446744073709551616.0);
+                            if (!foundFractionalIndex || value < FloatValue() || whole >= indexLimit || fractionalIndex >= indexLimit) {
+                                parseErrorUnexpected(lex, mv$(tok));
+                            }
+                            val = NEWNODE(ASTExprNodeField, std::move(val), RcString::newInterned(FMT(static_cast<u64>(whole))));
+                            val = NEWNODE(ASTExprNodeField, std::move(val), RcString::newInterned(FMT(static_cast<u64>(fractionalIndex))));
+                            break;
+                        }
+                        case TOK_RWORD_AWAIT:
+                            val = NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::AWait, std::move(val));
+                            break;
+                        case TOK_RWORD_MATCH:
+                            val = ParseExprMatch(lex, std::move(val));
+                            break;
+                        case TOK_RWORD_USE:
+                            val = NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::USE, std::move(val));
+                            break;
+                        case TOK_RWORD_YIELD:
+                            val = NEWNODE(ASTExprNodeFlow, ASTExprNodeFlow::YIELD, Ident(""), std::move(val));
+                            break;
+                        default:
                             parseErrorUnexpected(lex, mv$(tok));
-                        }
-                        val = NEWNODE(ASTExprNodeField, std::move(val), RcString::newInterned(FMT(static_cast<u64>(whole))));
-                        val = NEWNODE(ASTExprNodeField, std::move(val), RcString::newInterned(FMT(static_cast<u64>(fractionalIndex))));
-                        break;
                     }
-                    case TOK_RWORD_AWAIT:
-                        val = NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::AWait, std::move(val));
-                        break;
-                    case TOK_RWORD_MATCH:
-                        val = ParseExprMatch(lex, std::move(val));
-                        break;
-                    case TOK_RWORD_USE:
-                        val = NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::USE, std::move(val));
-                        break;
-                    case TOK_RWORD_YIELD:
-                        val = NEWNODE(ASTExprNodeFlow, ASTExprNodeFlow::YIELD, Ident(""), std::move(val));
-                        break;
-                    default:
-                        parseErrorUnexpected(lex, mv$(tok));
-                }
-                break;
-            default:
-                PUTBACK(tok, lex);
-                return val;
+                    break;
+                default:
+                    PUTBACK(tok, lex);
+                    return val;
+            }
         }
     }
 }
 
-ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
-    Token tok;
+namespace {
+    ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
+        Token tok;
 
-    if (LOOK_AHEAD(lex) == TOK_INTEGER) {
-        std::map<unsigned int, ASTExprNodeP> nodes;
-        while (GET_TOK(tok, lex) == TOK_INTEGER) {
-            unsigned int ofs = static_cast<unsigned int>(tok.intval().truncateU64());
-            GET_CHECK_TOK(tok, lex, TOK_COLON);
-            ASTExprNodeP val = ParseStmt(lex);
-            if (!nodes.insert(std::make_pair(ofs, mv$(val))).second) {
-                ERROR(lex.pointSpan(), E0000, "Duplicate index");
+        if (LOOK_AHEAD(lex) == TOK_INTEGER) {
+            std::map<unsigned int, ASTExprNodeP> nodes;
+            while (GET_TOK(tok, lex) == TOK_INTEGER) {
+                unsigned int ofs = static_cast<unsigned int>(tok.intval().truncateU64());
+                GET_CHECK_TOK(tok, lex, TOK_COLON);
+                ASTExprNodeP val = ParseStmt(lex);
+                if (!nodes.insert(std::make_pair(ofs, mv$(val))).second) {
+                    ERROR(lex.pointSpan(), E0000, "Duplicate index");
+                }
+
+                if (GET_TOK(tok, lex) == TOK_BRACE_CLOSE) {
+                    break;
+                }
+                CHECK_TOK(tok, TOK_COMMA);
+                if (LOOK_AHEAD(lex) != TOK_INTEGER) {
+                    GET_TOK(tok, lex);
+                    break;
+                }
             }
+            ASTExprNodeP baseVal;
+            if (tok.type() == TOK_DOUBLE_DOT) {
+                baseVal = ParseExpr0(lex);
+                GET_TOK(tok, lex);
+            }
+            CHECK_TOK(tok, TOK_BRACE_CLOSE);
+
+            ASTExprNodeStructLiteral::tValues items;
+            unsigned int i = 0;
+            for (auto& p : nodes) {
+                if (!baseVal && p.first != i) {
+                    ERROR(lex.pointSpan(), E0000, "Missing index " << i);
+                }
+                items.push_back(ASTExprNodeStructLiteral::Ent{ASTAttributeList(), RcString::newInterned(FMT(p.first)), mv$(p.second)});
+                i++;
+            }
+
+            return NEWNODE(ASTExprNodeStructLiteral, mv$(path), mv$(baseVal), mv$(items));
+        }
+
+        ASTExprNodeStructLiteral::tValues items;
+        while (GET_TOK(tok, lex) == TOK_IDENT || tok.type() == TOK_HASH) {
+            ASTAttributeList attrs;
+            if (tok.type() == TOK_HASH) {
+                PUTBACK(tok, lex);
+                attrs = ParseItemAttrs(lex);
+                GET_TOK(tok, lex);
+            }
+            CHECK_TOK(tok, TOK_IDENT);
+            auto h = tok.ident().hygiene;
+            auto name = tok.ident().name;
+
+            ASTExprNodeP val;
+            if (lex.lookahead(0) != TOK_COLON) {
+                val = NEWNODE(ASTExprNodeNamedValue, ASTPath::newRelative(h, {ASTPathNode(h, name)}));
+            } else {
+                GET_CHECK_TOK(tok, lex, TOK_COLON);
+                val = ParseExpr0(lex);
+            }
+            items.push_back(ASTExprNodeStructLiteral::Ent{mv$(attrs), mv$(name), mv$(val)});
 
             if (GET_TOK(tok, lex) == TOK_BRACE_CLOSE) {
                 break;
             }
             CHECK_TOK(tok, TOK_COMMA);
-            if (LOOK_AHEAD(lex) != TOK_INTEGER) {
-                GET_TOK(tok, lex);
-                break;
-            }
         }
         ASTExprNodeP baseVal;
         if (tok.type() == TOK_DOUBLE_DOT) {
-            baseVal = ParseExpr0(lex);
+            if (lex.getTokenIf(TOK_BRACE_CLOSE)) {
+                return NEWNODE(ASTExprNodeStructLiteralPattern, path, std::move(items));
+            } else {
+                baseVal = ParseExpr0(lex);
+            }
             GET_TOK(tok, lex);
         }
         CHECK_TOK(tok, TOK_BRACE_CLOSE);
 
-        ASTExprNodeStructLiteral::tValues items;
-        unsigned int i = 0;
-        for (auto& p : nodes) {
-            if (!baseVal && p.first != i) {
-                ERROR(lex.pointSpan(), E0000, "Missing index " << i);
-            }
-            items.push_back(ASTExprNodeStructLiteral::Ent{ASTAttributeList(), RcString::newInterned(FMT(p.first)), mv$(p.second)});
-            i++;
-        }
-
-        return NEWNODE(ASTExprNodeStructLiteral, mv$(path), mv$(baseVal), mv$(items));
+        return NEWNODE(ASTExprNodeStructLiteral, path, std::move(baseVal), std::move(items));
     }
-
-    ASTExprNodeStructLiteral::tValues items;
-    while (GET_TOK(tok, lex) == TOK_IDENT || tok.type() == TOK_HASH) {
-        ASTAttributeList attrs;
-        if (tok.type() == TOK_HASH) {
-            PUTBACK(tok, lex);
-            attrs = ParseItemAttrs(lex);
-            GET_TOK(tok, lex);
-        }
-        CHECK_TOK(tok, TOK_IDENT);
-        auto h = tok.ident().hygiene;
-        auto name = tok.ident().name;
-
-        ASTExprNodeP val;
-        if (lex.lookahead(0) != TOK_COLON) {
-            val = NEWNODE(ASTExprNodeNamedValue, ASTPath::newRelative(h, {ASTPathNode(h, name)}));
-        } else {
-            GET_CHECK_TOK(tok, lex, TOK_COLON);
-            val = ParseExpr0(lex);
-        }
-        items.push_back(ASTExprNodeStructLiteral::Ent{mv$(attrs), mv$(name), mv$(val)});
-
-        if (GET_TOK(tok, lex) == TOK_BRACE_CLOSE) {
-            break;
-        }
-        CHECK_TOK(tok, TOK_COMMA);
-    }
-    ASTExprNodeP baseVal;
-    if (tok.type() == TOK_DOUBLE_DOT) {
-        if (lex.getTokenIf(TOK_BRACE_CLOSE)) {
-            return NEWNODE(ASTExprNodeStructLiteralPattern, path, std::move(items));
-        } else {
-            baseVal = ParseExpr0(lex);
-        }
-        GET_TOK(tok, lex);
-    }
-    CHECK_TOK(tok, TOK_BRACE_CLOSE);
-
-    return NEWNODE(ASTExprNodeStructLiteral, path, std::move(baseVal), std::move(items));
 }
 
 namespace {
-static bool isClosureStart(TokenStream& lex) {
-    unsigned int ofs = 0;
-    if (lex.lookahead(ofs) == TOK_RWORD_STATIC) {
-        ofs++;
+    static bool isClosureStart(TokenStream& lex) {
+        unsigned int ofs = 0;
+        if (lex.lookahead(ofs) == TOK_RWORD_STATIC) {
+            ofs++;
+        }
+        if (lex.lookahead(ofs) == TOK_RWORD_MOVE || lex.lookahead(ofs) == TOK_RWORD_USE) {
+            ofs++;
+        }
+        return lex.lookahead(ofs) == TOK_PIPE || lex.lookahead(ofs) == TOK_DOUBLE_PIPE;
     }
-    if (lex.lookahead(ofs) == TOK_RWORD_MOVE || lex.lookahead(ofs) == TOK_RWORD_USE) {
-        ofs++;
+
+    static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex) {
+        auto hrbs = ParseHRBOpt(lex);
+        const bool isAsync = lex.getTokenIf(TOK_RWORD_ASYNC);
+        return ParseExprValClosure(lex, isAsync, std::move(hrbs));
     }
-    return lex.lookahead(ofs) == TOK_PIPE || lex.lookahead(ofs) == TOK_DOUBLE_PIPE;
 }
 
-static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex) {
-    auto hrbs = ParseHRBOpt(lex);
-    const bool isAsync = lex.getTokenIf(TOK_RWORD_ASYNC);
-    return ParseExprValClosure(lex, isAsync, std::move(hrbs));
-}
-}
+namespace {
+    ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs) {
+        Token tok;
 
-ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs) {
-    Token tok;
-
-    GET_TOK(tok, lex);
-
-    bool isImmovable = false;
-    if (tok == TOK_RWORD_STATIC) {
         GET_TOK(tok, lex);
-        isImmovable = true;
-    }
 
-    bool isMove = false;
-    bool isUse = false;
-    if (tok == TOK_RWORD_MOVE) {
-        GET_TOK(tok, lex);
-        isMove = true;
-    } else if (tok == TOK_RWORD_USE) {
-        GET_TOK(tok, lex);
-        isUse = true;
-    }
-
-    std::vector<std::pair<ASTPattern, ASTType*>> args;
-    if (tok == TOK_DOUBLE_PIPE) {
-    } else if (tok == TOK_PIPE) {
-        while (!lex.getTokenIf(TOK_PIPE, tok)) {
-            const bool keepArg = ParseParamAttrsKeep(lex);
-            ASTPattern pat = ParsePattern(lex, AllowOrPattern::No);
-
-            ASTType* type = mkType(lex.typePool(), lex.pointSpan());
-            if (lex.getTokenIf(TOK_COLON)) {
-                type = ParseType(lex);
-            }
-
-            if (keepArg) {
-                args.push_back(std::make_pair(std::move(pat), std::move(type)));
-            }
-
-            if (!lex.getTokenIf(TOK_COMMA)) {
-                GET_TOK(tok, lex);
-                break;
-            }
-        }
-        if (tok.type() == TOK_DOUBLE_PIPE) {
-            lex.putback(Token(TOK_PIPE));
-            tok = Token(TOK_PIPE);
-        }
-        CHECK_TOK(tok, TOK_PIPE);
-    } else {
-        parseErrorUnexpected(lex, tok, {TOK_PIPE, TOK_DOUBLE_PIPE, TOK_RWORD_MOVE, TOK_RWORD_USE, TOK_RWORD_STATIC});
-    }
-
-    auto rt = mkType(lex.typePool(), lex.pointSpan());
-    if (lex.getTokenIf(TOK_THINARROW)) {
-        rt = ParseType(lex);
-    }
-
-    auto code = ParseExpr0(lex);
-    if (isAsync) {
-        code = NEWNODE(ASTExprNodeAsyncBlock, std::move(code), /*isMove=*/true, isUse);
-    }
-
-    if (isAsync) {
-        rt = mkType(lex.typePool(), lex.pointSpan());
-    }
-    auto rv = NEWNODE(ASTExprNodeClosure, std::move(args), std::move(rt), std::move(code), isMove, isUse, isImmovable);
-    static_cast<ASTExprNodeClosure&>(*rv).hrbs = std::move(hrbs);
-    return rv;
-}
-
-ASTExprNodeP ParseExprValInner(TokenStream& lex) {
-    Token tok;
-    ASTPath path;
-
-    if (lex.lookahead(0) == TOK_INTERPOLATED_PATH && ((lex.lookahead(1) == TOK_RWORD_MOVE && lex.lookahead(2) == TOK_BRACE_OPEN) || lex.lookahead(1) == TOK_BRACE_OPEN)) {
-        GET_TOK(tok, lex);
-        if (tok.fragPath().isTrivial() && tok.fragPath().asTrivial() == "gen") {
-            bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
-            return NEWNODE(ASTExprNodeGeneratorBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), mkType(lex.typePool(), lex.pointSpan()), isMove, false);
-        }
-        PUTBACK(tok, lex);
-    }
-    if (lex.editionAfter(ASTEdition::Rust2021) && lex.lookahead(0) == TOK_IDENT && ((lex.lookahead(1) == TOK_RWORD_MOVE && lex.lookahead(2) == TOK_BRACE_OPEN) || lex.lookahead(1) == TOK_BRACE_OPEN)) {
-        GET_TOK(tok, lex);
-        if (tok.ident().name == "gen") {
-            bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
-            return NEWNODE(ASTExprNodeGeneratorBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), mkType(lex.typePool(), lex.pointSpan()), isMove, false);
-        }
-        PUTBACK(tok, lex);
-    }
-
-    switch (GET_TOK(tok, lex)) {
-        case TOK_BRACE_OPEN:
-            PUTBACK(tok, lex);
-            return ParseExprBlockNode(lex);
-
-        case TOK_INTERPOLATED_EXPR:
-        case TOK_INTERPOLATED_BLOCK:
-            return tok.takeFragNode();
-
-        case TOK_RWORD_RETURN:
-        case TOK_RWORD_BECOME:
-        case TOK_RWORD_YIELD:
-        case TOK_RWORD_CONTINUE:
-        case TOK_RWORD_BREAK:
-            PUTBACK(tok, lex);
-            return ParseStmt(lex);
-
-        case TOK_LIFETIME:
-            PUTBACK(tok, lex);
-            return ParseExprBlockLine(lex, nullptr);
-
-        case TOK_RWORD_LOOP:
-            return NEWNODE(ASTExprNodeLoop, "", ParseExprBlockNode(lex));
-        case TOK_RWORD_WHILE:
-            return ParseWhileStmt(lex, Ident(""));
-        case TOK_RWORD_FOR:
-            if (lex.lookahead(0) == TOK_LT) {
-                PUTBACK(tok, lex);
-                return ParseExprValClosureBinder(lex);
-            }
-            return ParseForStmt(lex, Ident(""));
-        case TOK_RWORD_TRY:
-            return ParseExprTry(lex);
-        case TOK_RWORD_DO:
+        bool isImmovable = false;
+        if (tok == TOK_RWORD_STATIC) {
             GET_TOK(tok, lex);
-            if (tok.type() == TOK_IDENT && tok.ident().name == "catch") {
-                return ParseExprTry(lex);
-            } else if (tok.type() == TOK_IDENT && tok.ident().name == "yeet") {
-                return ParseFlowControl(lex, ASTExprNodeFlow::YEET);
-            } else {
-                parseErrorUnexpected(lex, tok);
-            }
-        case TOK_RWORD_MATCH:
-            return ParseExprMatch(lex);
-        case TOK_RWORD_IF:
-            return ParseIfStmt(lex);
-        case TOK_RWORD_ASYNC: {
-            if (isClosureStart(lex)) {
-                return ParseExprValClosure(lex, true);
-            }
-            {
-                Token genTok;
-                if (GET_TOK(genTok, lex) == TOK_IDENT && genTok.ident().name == "gen") {
-                    const bool genIsMove = lex.getTokenIf(TOK_RWORD_MOVE);
-                    return NEWNODE(ASTExprNodeGeneratorBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), mkType(lex.typePool(), lex.pointSpan()), genIsMove, false, /*isAsync=*/true);
-                }
-                PUTBACK(genTok, lex);
-            }
-            const bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
-            const bool isUse = !isMove && lex.getTokenIf(TOK_RWORD_USE);
-            return NEWNODE(ASTExprNodeAsyncBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), isMove, isUse);
+            isImmovable = true;
         }
-        case TOK_RWORD_UNSAFE:
-            return ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Unsafe);
-        case TOK_RWORD_CONST:
-            if (isClosureStart(lex)) {
-                return ParseExprValClosure(lex, false);
-            }
-            return ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Const);
 
-        case TOK_RWORD_SELF:
-            if (LOOK_AHEAD(lex) != TOK_DOUBLE_COLON) {
-                const RcString rcstringSelfLower = RcString::newInterned("self");
-                return NEWNODE(ASTExprNodeNamedValue, ASTPath(rcstringSelfLower));
+        bool isMove = false;
+        bool isUse = false;
+        if (tok == TOK_RWORD_MOVE) {
+            GET_TOK(tok, lex);
+            isMove = true;
+        } else if (tok == TOK_RWORD_USE) {
+            GET_TOK(tok, lex);
+            isUse = true;
+        }
+
+        std::vector<std::pair<ASTPattern, ASTType*>> args;
+        if (tok == TOK_DOUBLE_PIPE) {
+        } else if (tok == TOK_PIPE) {
+            while (!lex.getTokenIf(TOK_PIPE, tok)) {
+                const bool keepArg = ParseParamAttrsKeep(lex);
+                ASTPattern pat = ParsePattern(lex, AllowOrPattern::No);
+
+                ASTType* type = mkType(lex.typePool(), lex.pointSpan());
+                if (lex.getTokenIf(TOK_COLON)) {
+                    type = ParseType(lex);
+                }
+
+                if (keepArg) {
+                    args.push_back(std::make_pair(std::move(pat), std::move(type)));
+                }
+
+                if (!lex.getTokenIf(TOK_COMMA)) {
+                    GET_TOK(tok, lex);
+                    break;
+                }
             }
-        case TOK_DOUBLE_LT:
-        case TOK_LT:
-        case TOK_RWORD_CRATE:
-        case TOK_RWORD_SUPER:
-        case TOK_DOUBLE_COLON:
-        case TOK_IDENT:
-        case TOK_INTERPOLATED_PATH: {
-            auto pathSpan = lex.tokenStartSpan(tok);
+            if (tok.type() == TOK_DOUBLE_PIPE) {
+                lex.putback(Token(TOK_PIPE));
+                tok = Token(TOK_PIPE);
+            }
+            CHECK_TOK(tok, TOK_PIPE);
+        } else {
+            parseErrorUnexpected(lex, tok, {TOK_PIPE, TOK_DOUBLE_PIPE, TOK_RWORD_MOVE, TOK_RWORD_USE, TOK_RWORD_STATIC});
+        }
+
+        auto rt = mkType(lex.typePool(), lex.pointSpan());
+        if (lex.getTokenIf(TOK_THINARROW)) {
+            rt = ParseType(lex);
+        }
+
+        auto code = ParseExpr0(lex);
+        if (isAsync) {
+            code = NEWNODE(ASTExprNodeAsyncBlock, std::move(code), /*isMove=*/true, isUse);
+        }
+
+        if (isAsync) {
+            rt = mkType(lex.typePool(), lex.pointSpan());
+        }
+        auto rv = NEWNODE(ASTExprNodeClosure, std::move(args), std::move(rt), std::move(code), isMove, isUse, isImmovable);
+        static_cast<ASTExprNodeClosure&>(*rv).hrbs = std::move(hrbs);
+        return rv;
+    }
+}
+
+namespace {
+    ASTExprNodeP ParseExprValInner(TokenStream& lex) {
+        Token tok;
+        ASTPath path;
+
+        if (lex.lookahead(0) == TOK_INTERPOLATED_PATH && ((lex.lookahead(1) == TOK_RWORD_MOVE && lex.lookahead(2) == TOK_BRACE_OPEN) || lex.lookahead(1) == TOK_BRACE_OPEN)) {
+            GET_TOK(tok, lex);
+            if (tok.fragPath().isTrivial() && tok.fragPath().asTrivial() == "gen") {
+                bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
+                return NEWNODE(ASTExprNodeGeneratorBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), mkType(lex.typePool(), lex.pointSpan()), isMove, false);
+            }
             PUTBACK(tok, lex);
-            path = ParsePath(lex, PATH_GENERIC_EXPR);
+        }
+        if (lex.editionAfter(ASTEdition::Rust2021) && lex.lookahead(0) == TOK_IDENT && ((lex.lookahead(1) == TOK_RWORD_MOVE && lex.lookahead(2) == TOK_BRACE_OPEN) || lex.lookahead(1) == TOK_BRACE_OPEN)) {
+            GET_TOK(tok, lex);
+            if (tok.ident().name == "gen") {
+                bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
+                return NEWNODE(ASTExprNodeGeneratorBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), mkType(lex.typePool(), lex.pointSpan()), isMove, false);
+            }
+            PUTBACK(tok, lex);
+        }
 
-            switch (GET_TOK(tok, lex)) {
-                case TOK_EXCLAM:
-                    return ParseExprMacro(lex, mv$(path), mv$(pathSpan));
-                case TOK_PAREN_OPEN:
+        switch (GET_TOK(tok, lex)) {
+            case TOK_BRACE_OPEN:
+                PUTBACK(tok, lex);
+                return ParseExprBlockNode(lex);
+
+            case TOK_INTERPOLATED_EXPR:
+            case TOK_INTERPOLATED_BLOCK:
+                return tok.takeFragNode();
+
+            case TOK_RWORD_RETURN:
+            case TOK_RWORD_BECOME:
+            case TOK_RWORD_YIELD:
+            case TOK_RWORD_CONTINUE:
+            case TOK_RWORD_BREAK:
+                PUTBACK(tok, lex);
+                return ParseStmt(lex);
+
+            case TOK_LIFETIME:
+                PUTBACK(tok, lex);
+                return ParseExprBlockLine(lex, nullptr);
+
+            case TOK_RWORD_LOOP:
+                return NEWNODE(ASTExprNodeLoop, "", ParseExprBlockNode(lex));
+            case TOK_RWORD_WHILE:
+                return ParseWhileStmt(lex, Ident(""));
+            case TOK_RWORD_FOR:
+                if (lex.lookahead(0) == TOK_LT) {
                     PUTBACK(tok, lex);
-                    {
-                        auto rv = NEWNODE(ASTExprNodeCallPath, std::move(path), ParseParenList(lex));
-                        rv->setSpan(std::move(pathSpan));
-                        return rv;
+                    return ParseExprValClosureBinder(lex);
+                }
+                return ParseForStmt(lex, Ident(""));
+            case TOK_RWORD_TRY:
+                return ParseExprTry(lex);
+            case TOK_RWORD_DO:
+                GET_TOK(tok, lex);
+                if (tok.type() == TOK_IDENT && tok.ident().name == "catch") {
+                    return ParseExprTry(lex);
+                } else if (tok.type() == TOK_IDENT && tok.ident().name == "yeet") {
+                    return ParseFlowControl(lex, ASTExprNodeFlow::YEET);
+                } else {
+                    parseErrorUnexpected(lex, tok);
+                }
+            case TOK_RWORD_MATCH:
+                return ParseExprMatch(lex);
+            case TOK_RWORD_IF:
+                return ParseIfStmt(lex);
+            case TOK_RWORD_ASYNC: {
+                if (isClosureStart(lex)) {
+                    return ParseExprValClosure(lex, true);
+                }
+                {
+                    Token genTok;
+                    if (GET_TOK(genTok, lex) == TOK_IDENT && genTok.ident().name == "gen") {
+                        const bool genIsMove = lex.getTokenIf(TOK_RWORD_MOVE);
+                        return NEWNODE(ASTExprNodeGeneratorBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), mkType(lex.typePool(), lex.pointSpan()), genIsMove, false, /*isAsync=*/true);
                     }
-                case TOK_BRACE_OPEN:
-                    if (!CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
-                        return ParseExprValStructLiteral(lex, std::move(path));
-                    } else {
-                    }
-                    PUTBACK(tok, lex);
-                    return NEWNODE(ASTExprNodeNamedValue, std::move(path));
-                    // `builtin # <name>` - seems to be a 1.74 era hack to extend syntax
+                    PUTBACK(genTok, lex);
+                }
+                const bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
+                const bool isUse = !isMove && lex.getTokenIf(TOK_RWORD_USE);
+                return NEWNODE(ASTExprNodeAsyncBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), isMove, isUse);
+            }
+            case TOK_RWORD_UNSAFE:
+                return ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Unsafe);
+            case TOK_RWORD_CONST:
+                if (isClosureStart(lex)) {
+                    return ParseExprValClosure(lex, false);
+                }
+                return ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Const);
 
-                case TOK_HASH:
-                    if (path.isTrivial() && path.asTrivial() == "builtin") {
-                        GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                        if (tok.ident() == "offset_of") {
-                            GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-                            auto ty = ParseType(lex);
-                            std::vector<ASTExprNodeP> args;
-                            do {
-                                GET_CHECK_TOK(tok, lex, TOK_COMMA);
-                                if (lex.lookahead(0) == TOK_INTERPOLATED_EXPR) {
-                                    GET_CHECK_TOK(tok, lex, TOK_INTERPOLATED_EXPR);
-                                    const auto* expr = &tok.fragNode();
-                                    std::vector<ASTExprNodeP> exprArgs;
-                                    for (;;) {
-                                        if (const auto* n = cast<const ASTExprNodeNamedValue>(expr)) {
-                                            exprArgs.push_back(NEWNODE(ASTExprNodeString, n->path.asTrivial().c_str(), {}));
-                                            break;
-                                        } else if (const auto* n = cast<const ASTExprNodeInteger>(expr)) {
-                                            exprArgs.push_back(NEWNODE(ASTExprNodeInteger, n->value, n->datatype));
-                                            break;
-                                        } else if (const auto* n = cast<const ASTExprNodeFloat>(expr)) {
-                                            const auto value = n->value;
-                                            if (value < FloatValue() || floatValueIsNan(value) || floatValueIsInfinite(value)) {
-                                                TODO(lex.pointSpan(), "offset_of - invalid tuple indices " << *expr);
-                                            }
-                                            const auto indexLimit = FloatValue(18446744073709551616.0);
-                                            const auto whole = floatValueTrunc(value);
-                                            if (whole >= indexLimit) {
-                                                TODO(lex.pointSpan(), "offset_of - tuple index is too large " << *expr);
-                                            }
+            case TOK_RWORD_SELF:
+                if (LOOK_AHEAD(lex) != TOK_DOUBLE_COLON) {
+                    const RcString rcstringSelfLower = RcString::newInterned("self");
+                    return NEWNODE(ASTExprNodeNamedValue, ASTPath(rcstringSelfLower));
+                }
+            case TOK_DOUBLE_LT:
+            case TOK_LT:
+            case TOK_RWORD_CRATE:
+            case TOK_RWORD_SUPER:
+            case TOK_DOUBLE_COLON:
+            case TOK_IDENT:
+            case TOK_INTERPOLATED_PATH: {
+                auto pathSpan = lex.tokenStartSpan(tok);
+                PUTBACK(tok, lex);
+                path = ParsePath(lex, PATH_GENERIC_EXPR);
 
-                                            const auto fraction = value - whole;
-                                            auto scale = FloatValue(1.0);
-                                            FloatValue fractionalIndex;
-                                            const auto tolerancePerUnit = parseFloatValue("1e-32");
-                                            bool foundFractionalIndex = false;
-                                            for (unsigned digits = 0; digits < 20; digits++) {
-                                                scale = scale * FloatValue(10.0);
-                                                const auto scaled = fraction * scale;
-                                                fractionalIndex = floatValueRound(scaled);
-                                                if (floatValueAbs(scaled - fractionalIndex) <= scale * tolerancePerUnit) {
-                                                    foundFractionalIndex = true;
-                                                    break;
+                switch (GET_TOK(tok, lex)) {
+                    case TOK_EXCLAM:
+                        return ParseExprMacro(lex, mv$(path), mv$(pathSpan));
+                    case TOK_PAREN_OPEN:
+                        PUTBACK(tok, lex);
+                        {
+                            auto rv = NEWNODE(ASTExprNodeCallPath, std::move(path), ParseParenList(lex));
+                            rv->setSpan(std::move(pathSpan));
+                            return rv;
+                        }
+                    case TOK_BRACE_OPEN:
+                        if (!CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
+                            return ParseExprValStructLiteral(lex, std::move(path));
+                        } else {
+                        }
+                        PUTBACK(tok, lex);
+                        return NEWNODE(ASTExprNodeNamedValue, std::move(path));
+                        // `builtin # <name>` - seems to be a 1.74 era hack to extend syntax
+
+                    case TOK_HASH:
+                        if (path.isTrivial() && path.asTrivial() == "builtin") {
+                            GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                            if (tok.ident() == "offset_of") {
+                                GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+                                auto ty = ParseType(lex);
+                                std::vector<ASTExprNodeP> args;
+                                do {
+                                    GET_CHECK_TOK(tok, lex, TOK_COMMA);
+                                    if (lex.lookahead(0) == TOK_INTERPOLATED_EXPR) {
+                                        GET_CHECK_TOK(tok, lex, TOK_INTERPOLATED_EXPR);
+                                        const auto* expr = &tok.fragNode();
+                                        std::vector<ASTExprNodeP> exprArgs;
+                                        for (;;) {
+                                            if (const auto* n = cast<const ASTExprNodeNamedValue>(expr)) {
+                                                exprArgs.push_back(NEWNODE(ASTExprNodeString, n->path.asTrivial().c_str(), {}));
+                                                break;
+                                            } else if (const auto* n = cast<const ASTExprNodeInteger>(expr)) {
+                                                exprArgs.push_back(NEWNODE(ASTExprNodeInteger, n->value, n->datatype));
+                                                break;
+                                            } else if (const auto* n = cast<const ASTExprNodeFloat>(expr)) {
+                                                const auto value = n->value;
+                                                if (value < FloatValue() || floatValueIsNan(value) || floatValueIsInfinite(value)) {
+                                                    TODO(lex.pointSpan(), "offset_of - invalid tuple indices " << *expr);
                                                 }
+                                                const auto indexLimit = FloatValue(18446744073709551616.0);
+                                                const auto whole = floatValueTrunc(value);
+                                                if (whole >= indexLimit) {
+                                                    TODO(lex.pointSpan(), "offset_of - tuple index is too large " << *expr);
+                                                }
+
+                                                const auto fraction = value - whole;
+                                                auto scale = FloatValue(1.0);
+                                                FloatValue fractionalIndex;
+                                                const auto tolerancePerUnit = parseFloatValue("1e-32");
+                                                bool foundFractionalIndex = false;
+                                                for (unsigned digits = 0; digits < 20; digits++) {
+                                                    scale = scale * FloatValue(10.0);
+                                                    const auto scaled = fraction * scale;
+                                                    fractionalIndex = floatValueRound(scaled);
+                                                    if (floatValueAbs(scaled - fractionalIndex) <= scale * tolerancePerUnit) {
+                                                        foundFractionalIndex = true;
+                                                        break;
+                                                    }
+                                                }
+                                                if (!foundFractionalIndex || fractionalIndex >= indexLimit) {
+                                                    TODO(lex.pointSpan(), "offset_of - invalid tuple indices " << *expr);
+                                                }
+                                                exprArgs.push_back(NEWNODE(ASTExprNodeInteger, U128(static_cast<u64>(fractionalIndex)), CORETYPE_ANY));
+                                                exprArgs.push_back(NEWNODE(ASTExprNodeInteger, U128(static_cast<u64>(whole)), CORETYPE_ANY));
+                                                break;
+                                            } else if (const auto* n = cast<const ASTExprNodeField>(expr)) {
+                                                exprArgs.push_back(NEWNODE(ASTExprNodeString, n->name.c_str(), {}));
+                                                expr = &*n->obj;
+                                            } else {
+                                                TODO(lex.pointSpan(), "offset_of - " << *expr);
                                             }
-                                            if (!foundFractionalIndex || fractionalIndex >= indexLimit) {
-                                                TODO(lex.pointSpan(), "offset_of - invalid tuple indices " << *expr);
-                                            }
-                                            exprArgs.push_back(NEWNODE(ASTExprNodeInteger, U128(static_cast<u64>(fractionalIndex)), CORETYPE_ANY));
-                                            exprArgs.push_back(NEWNODE(ASTExprNodeInteger, U128(static_cast<u64>(whole)), CORETYPE_ANY));
-                                            break;
-                                        } else if (const auto* n = cast<const ASTExprNodeField>(expr)) {
-                                            exprArgs.push_back(NEWNODE(ASTExprNodeString, n->name.c_str(), {}));
-                                            expr = &*n->obj;
-                                        } else {
-                                            TODO(lex.pointSpan(), "offset_of - " << *expr);
                                         }
+                                        while (!exprArgs.empty()) {
+                                            args.push_back(std::move(exprArgs.back()));
+                                            exprArgs.pop_back();
+                                        }
+                                    } else if (lex.lookahead(0) == TOK_INTEGER) {
+                                        GET_CHECK_TOK(tok, lex, TOK_INTEGER);
+                                        args.push_back(NEWNODE(ASTExprNodeInteger, tok.intval(), tok.datatype()));
+                                    } else {
+                                        GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                                        args.push_back(NEWNODE(ASTExprNodeString, tok.ident().name.c_str(), tok.ident().hygiene));
                                     }
-                                    while (!exprArgs.empty()) {
-                                        args.push_back(std::move(exprArgs.back()));
-                                        exprArgs.pop_back();
-                                    }
-                                } else if (lex.lookahead(0) == TOK_INTEGER) {
-                                    GET_CHECK_TOK(tok, lex, TOK_INTEGER);
-                                    args.push_back(NEWNODE(ASTExprNodeInteger, tok.intval(), tok.datatype()));
-                                } else {
-                                    GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                                    args.push_back(NEWNODE(ASTExprNodeString, tok.ident().name.c_str(), tok.ident().hygiene));
+                                } while (lex.lookahead(0) == TOK_COMMA);
+                                GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+
+                                // TODO: How to emit this, maybe as a hacky intrinsic?
+
+                                path = ASTPath(RcString::newInterned("#intrinsics"), {ASTPathNode("offset_of")});
+                                path.nodes().back().args().entries.push_back(std::move(ty));
+                                return NEWNODE(ASTExprNodeCallPath, std::move(path), std::move(args));
+                            } else if (tok.ident() == "wrap_binder" || tok.ident() == "unwrap_binder") {
+                                GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+                                auto value = ParseExpr0(lex);
+                                if (lex.getTokenIf(TOK_COMMA)) {
+                                    auto ty = ParseType(lex);
+                                    GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+                                    return NEWNODE(ASTExprNodeTypeAnnotation, std::move(value), std::move(ty));
                                 }
-                            } while (lex.lookahead(0) == TOK_COMMA);
-                            GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
-
-                            // TODO: How to emit this, maybe as a hacky intrinsic?
-
-                            path = ASTPath(RcString::newInterned("#intrinsics"), {ASTPathNode("offset_of")});
-                            path.nodes().back().args().entries.push_back(std::move(ty));
-                            return NEWNODE(ASTExprNodeCallPath, std::move(path), std::move(args));
-                        } else if (tok.ident() == "wrap_binder" || tok.ident() == "unwrap_binder") {
-                            GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-                            auto value = ParseExpr0(lex);
-                            if (lex.getTokenIf(TOK_COMMA)) {
+                                GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+                                return value;
+                            } else if (tok.ident() == "type_ascribe") {
+                                GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+                                auto value = ParseExpr0(lex);
+                                GET_CHECK_TOK(tok, lex, TOK_COMMA);
                                 auto ty = ParseType(lex);
                                 GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                                 return NEWNODE(ASTExprNodeTypeAnnotation, std::move(value), std::move(ty));
+                            } else {
+                                TODO(lex.pointSpan(), "`builtin #` support - " << tok.ident());
                             }
-                            GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
-                            return value;
-                        } else if (tok.ident() == "type_ascribe") {
-                            GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-                            auto value = ParseExpr0(lex);
-                            GET_CHECK_TOK(tok, lex, TOK_COMMA);
-                            auto ty = ParseType(lex);
-                            GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
-                            return NEWNODE(ASTExprNodeTypeAnnotation, std::move(value), std::move(ty));
-                        } else {
-                            TODO(lex.pointSpan(), "`builtin #` support - " << tok.ident());
                         }
-                    }
-                default:
-                    PUTBACK(tok, lex);
-                    return NEWNODE(ASTExprNodeNamedValue, std::move(path));
-            }
-        }
-        case TOK_RWORD_STATIC:
-        case TOK_RWORD_MOVE:
-        case TOK_RWORD_USE:
-        case TOK_PIPE:
-        case TOK_DOUBLE_PIPE:
-            PUTBACK(tok, lex);
-            return ParseExprValClosure(lex, false);
-
-        case TOK_UNDERSCORE:
-            return NEWNODE(ASTExprNodeWildcardPattern);
-        case TOK_INTEGER:
-            return NEWNODE(ASTExprNodeInteger, tok.intval(), tok.datatype());
-        case TOK_FLOAT:
-            return NEWNODE(ASTExprNodeFloat, tok.floatval(), tok.datatype());
-        case TOK_STRING:
-            return NEWNODE(ASTExprNodeString, tok.str(), tok.strHygiene());
-        case TOK_BYTESTRING:
-            return NEWNODE(ASTExprNodeByteString, tok.str());
-        case TOK_CSTRING:
-            return NEWNODE(ASTExprNodeCString, tok.str());
-        case TOK_LITERAL_SUFFIXED:
-            return NEWNODE(ASTExprNodeSuffixedLiteral, tok.str());
-        case TOK_RWORD_TRUE:
-            return NEWNODE(ASTExprNodeBool, true);
-        case TOK_RWORD_FALSE:
-            return NEWNODE(ASTExprNodeBool, false);
-        case TOK_PAREN_OPEN:
-            if (lex.getTokenIf(TOK_PAREN_CLOSE)) {
-                return NEWNODE(ASTExprNodeTuple, std::vector<ASTExprNodeP>());
-            } else {
-                CLEAR_PARSE_FLAGS_EXPR(lex);
-
-                ASTExprNodeP rv = ParseExpr0(lex);
-                if (GET_TOK(tok, lex) == TOK_COMMA) {
-                    std::vector<ASTExprNodeP> ents;
-                    ents.push_back(std::move(rv));
-                    do {
-                        if (lex.getTokenIf(TOK_PAREN_CLOSE, tok)) {
-                            break;
-                        }
-                        ents.push_back(ParseExpr0(lex));
-                    } while (GET_TOK(tok, lex) == TOK_COMMA);
-                    rv = NEWNODE(ASTExprNodeTuple, std::move(ents));
+                    default:
+                        PUTBACK(tok, lex);
+                        return NEWNODE(ASTExprNodeNamedValue, std::move(path));
                 }
-                CHECK_TOK(tok, TOK_PAREN_CLOSE);
-                if (auto* e = cast<ASTExprNodeBinOp>(rv.get())) {
-                    if (e->type == ASTExprNodeBinOp::RANGE && !e->left && !e->right) {
-                        e->parenthesised = true;
-                    }
-                }
-                return rv;
             }
-        case TOK_SQUARE_OPEN:
-            if (lex.getTokenIf(TOK_SQUARE_CLOSE)) {
-                return NEWNODE(ASTExprNodeArray, std::vector<ASTExprNodeP>());
-            } else {
-                CLEAR_PARSE_FLAGS_EXPR(lex);
-                auto first = ParseExpr0(lex);
-                if (GET_TOK(tok, lex) == TOK_SEMICOLON) {
-                    auto count = ParseExpr0(lex);
-                    GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
-                    return NEWNODE(ASTExprNodeArray, std::move(first), std::move(count));
+            case TOK_RWORD_STATIC:
+            case TOK_RWORD_MOVE:
+            case TOK_RWORD_USE:
+            case TOK_PIPE:
+            case TOK_DOUBLE_PIPE:
+                PUTBACK(tok, lex);
+                return ParseExprValClosure(lex, false);
+
+            case TOK_UNDERSCORE:
+                return NEWNODE(ASTExprNodeWildcardPattern);
+            case TOK_INTEGER:
+                return NEWNODE(ASTExprNodeInteger, tok.intval(), tok.datatype());
+            case TOK_FLOAT:
+                return NEWNODE(ASTExprNodeFloat, tok.floatval(), tok.datatype());
+            case TOK_STRING:
+                return NEWNODE(ASTExprNodeString, tok.str(), tok.strHygiene());
+            case TOK_BYTESTRING:
+                return NEWNODE(ASTExprNodeByteString, tok.str());
+            case TOK_CSTRING:
+                return NEWNODE(ASTExprNodeCString, tok.str());
+            case TOK_LITERAL_SUFFIXED:
+                return NEWNODE(ASTExprNodeSuffixedLiteral, tok.str());
+            case TOK_RWORD_TRUE:
+                return NEWNODE(ASTExprNodeBool, true);
+            case TOK_RWORD_FALSE:
+                return NEWNODE(ASTExprNodeBool, false);
+            case TOK_PAREN_OPEN:
+                if (lex.getTokenIf(TOK_PAREN_CLOSE)) {
+                    return NEWNODE(ASTExprNodeTuple, std::vector<ASTExprNodeP>());
                 } else {
-                    std::vector<ASTExprNodeP> items;
-                    items.push_back(std::move(first));
-                    while (tok.type() == TOK_COMMA) {
-                        if (GET_TOK(tok, lex) == TOK_SQUARE_CLOSE) {
-                            break;
-                        } else {
-                            PUTBACK(tok, lex);
-                        }
-                        items.push_back(ParseExpr0(lex));
-                        GET_TOK(tok, lex);
+                    CLEAR_PARSE_FLAGS_EXPR(lex);
+
+                    ASTExprNodeP rv = ParseExpr0(lex);
+                    if (GET_TOK(tok, lex) == TOK_COMMA) {
+                        std::vector<ASTExprNodeP> ents;
+                        ents.push_back(std::move(rv));
+                        do {
+                            if (lex.getTokenIf(TOK_PAREN_CLOSE, tok)) {
+                                break;
+                            }
+                            ents.push_back(ParseExpr0(lex));
+                        } while (GET_TOK(tok, lex) == TOK_COMMA);
+                        rv = NEWNODE(ASTExprNodeTuple, std::move(ents));
                     }
-                    CHECK_TOK(tok, TOK_SQUARE_CLOSE);
-                    return NEWNODE(ASTExprNodeArray, std::move(items));
+                    CHECK_TOK(tok, TOK_PAREN_CLOSE);
+                    if (auto* e = cast<ASTExprNodeBinOp>(rv.get())) {
+                        if (e->type == ASTExprNodeBinOp::RANGE && !e->left && !e->right) {
+                            e->parenthesised = true;
+                        }
+                    }
+                    return rv;
                 }
-            }
-            compileErrorBugCheck(lex, "Array literal fell");
-        default:
-            parseErrorUnexpected(lex, tok);
+            case TOK_SQUARE_OPEN:
+                if (lex.getTokenIf(TOK_SQUARE_CLOSE)) {
+                    return NEWNODE(ASTExprNodeArray, std::vector<ASTExprNodeP>());
+                } else {
+                    CLEAR_PARSE_FLAGS_EXPR(lex);
+                    auto first = ParseExpr0(lex);
+                    if (GET_TOK(tok, lex) == TOK_SEMICOLON) {
+                        auto count = ParseExpr0(lex);
+                        GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
+                        return NEWNODE(ASTExprNodeArray, std::move(first), std::move(count));
+                    } else {
+                        std::vector<ASTExprNodeP> items;
+                        items.push_back(std::move(first));
+                        while (tok.type() == TOK_COMMA) {
+                            if (GET_TOK(tok, lex) == TOK_SQUARE_CLOSE) {
+                                break;
+                            } else {
+                                PUTBACK(tok, lex);
+                            }
+                            items.push_back(ParseExpr0(lex));
+                            GET_TOK(tok, lex);
+                        }
+                        CHECK_TOK(tok, TOK_SQUARE_CLOSE);
+                        return NEWNODE(ASTExprNodeArray, std::move(items));
+                    }
+                }
+                compileErrorBugCheck(lex, "Array literal fell");
+            default:
+                parseErrorUnexpected(lex, tok);
+        }
     }
 }
 
@@ -1670,33 +1774,35 @@ ASTExprNodeP ParseExprVal(TokenStream& lex) {
     return rv;
 }
 
-ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath path, Span pathSpan) {
-    Token tok;
-    auto definitionHygiene = lex.getHygiene();
+namespace {
+    ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath path, Span pathSpan) {
+        Token tok;
+        auto definitionHygiene = lex.getHygiene();
 
-    RcString ident;
-    if (lex.getTokenIf(TOK_IDENT, tok)) {
-        ident = tok.ident().name;
+        RcString ident;
+        if (lex.getTokenIf(TOK_IDENT, tok)) {
+            ident = tok.ident().name;
+        }
+
+        bool isMacro = (path.isTrivial() && path.asTrivial() == "macro_rules");
+
+        bool isBraced = lex.lookahead(0) == TOK_BRACE_OPEN;
+
+        if (isMacro) {
+            lex.pushHygine();
+        }
+        TokenTree tt = ParseTT(lex, true);
+        if (tt.isToken()) {
+            parseErrorUnexpected(lex, tt.tok());
+        }
+        if (isMacro) {
+            lex.popHygine();
+        }
+
+        auto rv = NEWNODE(ASTExprNodeMacro, mv$(path), mv$(ident), mv$(tt), isBraced, mv$(definitionHygiene));
+        rv->setSpan(mv$(pathSpan));
+        return rv;
     }
-
-    bool isMacro = (path.isTrivial() && path.asTrivial() == "macro_rules");
-
-    bool isBraced = lex.lookahead(0) == TOK_BRACE_OPEN;
-
-    if (isMacro) {
-        lex.pushHygine();
-    }
-    TokenTree tt = ParseTT(lex, true);
-    if (tt.isToken()) {
-        parseErrorUnexpected(lex, tt.tok());
-    }
-    if (isMacro) {
-        lex.popHygine();
-    }
-
-    auto rv = NEWNODE(ASTExprNodeMacro, mv$(path), mv$(ident), mv$(tt), isBraced, mv$(definitionHygiene));
-    rv->setSpan(mv$(pathSpan));
-    return rv;
 }
 
 TokenTree ParseTT(TokenStream& lex, bool unwrapped) {
@@ -2042,18 +2148,43 @@ ASTPathParams ParsePathGenericList(TokenStream& lex) {
     return rv;
 }
 
-typedef std::unique_ptr<ASTExprNode> PatternExprNodeP;
+namespace {
+    typedef std::unique_ptr<ASTExprNode> PatternExprNodeP;
+}
+
 #define NEWNODE(type, ...) PatternExprNodeP(new type(__VA_ARGS__))
 
-ASTPattern ParsePattern1(TokenStream& lex, AllowOrPattern allowOr);
-ASTPattern::Value ParsePatternValue(TokenStream& lex);
-ASTPattern::TuplePat ParsePatternTuple(TokenStream& lex, bool* maybeJustParen = nullptr);
-ASTPattern ParsePatternRealSlice(TokenStream& lex);
-ASTPattern ParsePatternRealPath(TokenStream& lex, ProtoSpan ps, ASTPath path);
-ASTPattern ParsePatternStruct(TokenStream& lex, ProtoSpan ps, ASTPath path);
+namespace {
+    ASTPattern ParsePattern1(TokenStream& lex, AllowOrPattern allowOr);
+}
 
-ASTPattern ParsePatternReal(TokenStream& lex, AllowOrPattern allowOr);
-ASTPattern ParsePatternReal1(TokenStream& lex, AllowOrPattern allowOr);
+namespace {
+    ASTPattern::Value ParsePatternValue(TokenStream& lex);
+}
+
+namespace {
+    ASTPattern::TuplePat ParsePatternTuple(TokenStream& lex, bool* maybeJustParen = nullptr);
+}
+
+namespace {
+    ASTPattern ParsePatternRealSlice(TokenStream& lex);
+}
+
+namespace {
+    ASTPattern ParsePatternRealPath(TokenStream& lex, ProtoSpan ps, ASTPath path);
+}
+
+namespace {
+    ASTPattern ParsePatternStruct(TokenStream& lex, ProtoSpan ps, ASTPath path);
+}
+
+namespace {
+    ASTPattern ParsePatternReal(TokenStream& lex, AllowOrPattern allowOr);
+}
+
+namespace {
+    ASTPattern ParsePatternReal1(TokenStream& lex, AllowOrPattern allowOr);
+}
 
 ASTPattern ParsePattern(TokenStream& lex, AllowOrPattern allowOr) {
     auto ps = lex.startSpan();
@@ -2086,507 +2217,36 @@ ASTPattern ParsePattern(TokenStream& lex, AllowOrPattern allowOr) {
     }
 }
 
-ASTPattern ParsePattern1(TokenStream& lex, AllowOrPattern allowOr) {
-    auto ps = lex.startSpan();
-
-    Token tok;
-    tok = lex.getToken();
-
-    // TODO: Why is this here explicitly?
-    if (tok.type() == TOK_IDENT && lex.lookahead(0) == TOK_EXCLAM) {
-        lex.getToken();
-        if (tok.ident().name == "deref") {
-            GET_TOK(tok, lex);
-            CHECK_TOK(tok, TOK_PAREN_OPEN);
-            auto sub = ParsePattern(lex, AllowOrPattern::Yes);
-            GET_TOK(tok, lex);
-            CHECK_TOK(tok, TOK_PAREN_CLOSE);
-            return ASTPattern(ASTPattern::TagDeref(), lex.endSpan(ps), mv$(sub));
-        }
-        return ASTPattern(ASTPattern::TagMacro(), lex.endSpan(ps), box$(ParseMacroInvocation(ps, tok.ident().name, lex)));
-    }
-    if (tok.type() == TOK_INTERPOLATED_PATTERN) {
-        return mv$(tok.fragPattern());
-    }
-
-    bool expectBind = false;
-    auto bindType = ASTPatternBinding::Type::MOVE;
-    bool isMut = false;
-    if (tok.type() == TOK_RWORD_REF) {
-        expectBind = true;
-        tok = lex.getToken();
-        if (tok.type() == TOK_RWORD_MUT) {
-            bindType = ASTPatternBinding::Type::MUTREF;
-            GET_TOK(tok, lex);
-        } else {
-            bindType = ASTPatternBinding::Type::REF;
-        }
-    } else if (tok.type() == TOK_RWORD_MUT) {
-        isMut = true;
-        expectBind = true;
-        GET_TOK(tok, lex);
-        if (tok.type() == TOK_RWORD_REF) {
-            GET_TOK(tok, lex);
-            if (tok.type() == TOK_RWORD_MUT) {
-                bindType = ASTPatternBinding::Type::MUTREF;
-                GET_TOK(tok, lex);
-            } else {
-                bindType = ASTPatternBinding::Type::REF;
-            }
-        }
-    } else {
-    }
-
-    ASTPatternBinding binding;
-    ASTPattern pat;
-    if (expectBind) {
-        CHECK_TOK(tok, TOK_IDENT);
-        auto bindName = tok.ident();
-        if (GET_TOK(tok, lex) != TOK_AT) {
-            PUTBACK(tok, lex);
-            return ASTPattern(ASTPattern::TagBind(), lex.endSpan(ps), mv$(bindName), bindType, isMut);
-        }
-        binding = ASTPatternBinding(mv$(bindName), bindType, isMut);
-
-        pat = ParsePattern1(lex, allowOr);
-    } else if (tok.type() == TOK_IDENT) {
-        switch (LOOK_AHEAD(lex)) {
-            case TOK_DOUBLE_COLON:
-            case TOK_BRACE_OPEN:
-            case TOK_PAREN_OPEN:
-            case TOK_DOUBLE_DOT:
-            case TOK_TRIPLE_DOT:
-            case TOK_DOUBLE_DOT_EQUAL:
-                PUTBACK(tok, lex);
-                pat = ParsePatternReal(lex, allowOr);
-                break;
-            case TOK_AT:
-                binding = ASTPatternBinding(tok.ident(), bindType /*MOVE*/, isMut /*false*/);
-                GET_TOK(tok, lex);
-                pat = ParsePattern1(lex, allowOr);
-                break;
-            default: {
-                auto name = tok.ident();
-                if (true /*is_refutable*/) {
-                    assert(bindType == ASTPatternBinding::Type::MOVE);
-                    assert(isMut == false);
-                    return ASTPattern(ASTPattern::TagMaybeBind(), lex.endSpan(ps), mv$(name));
-                } else {
-                    return ASTPattern(ASTPattern::TagBind(), lex.endSpan(ps), mv$(name), bindType, isMut);
-                }
-                UNREACHABLE();
-            }
-        }
-    } else {
-        PUTBACK(tok, lex);
-        pat = ParsePatternReal(lex, allowOr);
-    }
-    if (binding.isValid()) {
-        pat.bindings().insert(pat.bindings().begin(), mv$(binding));
-    }
-    return pat;
-}
-
-ASTPattern ParsePatternReal(TokenStream& lex, AllowOrPattern allowOr) {
-    Token tok;
-    if (LOOK_AHEAD(lex) == TOK_INTERPOLATED_PATTERN) {
-        GET_TOK(tok, lex);
-        return mv$(tok.fragPattern());
-    }
-    auto ps = lex.startSpan();
-    ASTPattern ret = ParsePatternReal1(lex, allowOr);
-    if ((GET_TOK(tok, lex) == TOK_TRIPLE_DOT) || tok.type() == TOK_DOUBLE_DOT_EQUAL) {
-        if (!ret.data().is_Value()) {
-            compileErrorGeneric(lex, "Using '...' with a non-value on left");
-        }
-        auto& retV = ret.data().as_Value();
-        auto leftval = std::move(retV.start);
-
-        auto rightval = ParsePatternValue(lex);
-        if (rightval.is_Invalid()) {
-            compileErrorGeneric(lex, "Using '...' with a no RHS value");
-        }
-
-        return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Value({mv$(leftval), mv$(rightval)}));
-    } else if (tok.type() == TOK_DOUBLE_DOT) {
-        if (!ret.data().is_Value()) {
-            compileErrorGeneric(lex, "Using `..` with a non-value on left");
-        }
-        auto& retV = ret.data().as_Value();
-        auto leftval = std::move(retV.start);
-
-        auto rightval = ParsePatternValue(lex);
-        if (rightval.is_Invalid()) {
-        }
-
-        return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_ValueLeftInc({mv$(leftval), mv$(rightval)}));
-    } else {
-        PUTBACK(tok, lex);
-        return ret;
-    }
-}
-
-ASTPattern::Value ParsePatternValue(TokenStream& lex) {
-    Token tok;
-    switch (GET_TOK(tok, lex)) {
-        case TOK_RWORD_CRATE:
-        case TOK_RWORD_SELF:
-        case TOK_RWORD_SUPER:
-        case TOK_IDENT:
-        case TOK_LT:
-        case TOK_DOUBLE_LT:
-        case TOK_INTERPOLATED_PATH:
-        case TOK_DOUBLE_COLON:
-            PUTBACK(tok, lex);
-            return ASTPattern::Value::make_Named(ParsePath(lex, PATH_GENERIC_EXPR));
-
-        case TOK_DASH:
-            if (GET_TOK(tok, lex) == TOK_INTEGER) {
-                auto dt = tok.datatype();
-                // TODO: Ensure that the type is ANY or a signed integer
-                return ASTPattern::Value::make_Integer({dt, ~tok.intval() + 1u});
-            } else if (tok.type() == TOK_FLOAT) {
-                return ASTPattern::Value::make_Float({tok.datatype(), -tok.floatval()});
-            } else {
-                parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT});
-            }
-        case TOK_FLOAT:
-            return ASTPattern::Value::make_Float({tok.datatype(), tok.floatval()});
-        case TOK_INTEGER:
-            return ASTPattern::Value::make_Integer({tok.datatype(), tok.intval()});
-        case TOK_RWORD_TRUE:
-            return ASTPattern::Value::make_Integer({CORETYPE_BOOL, U128(1)});
-        case TOK_RWORD_FALSE:
-            return ASTPattern::Value::make_Integer({CORETYPE_BOOL, U128(0)});
-        case TOK_STRING:
-            return ASTPattern::Value::make_String(mv$(tok.str()));
-        case TOK_BYTESTRING:
-            return ASTPattern::Value::make_ByteString({mv$(tok.str())});
-        case TOK_INTERPOLATED_EXPR: {
-            auto e = tok.takeFragNode();
-            // TODO: Visitor?
-            if (auto* n = cast<ASTExprNodeString>(e.get())) {
-                return ASTPattern::Value::make_String(mv$(n->value));
-            } else if (auto* n = cast<ASTExprNodeByteString>(e.get())) {
-                return ASTPattern::Value::make_ByteString({mv$(n->value)});
-            } else if (auto* n = cast<ASTExprNodeBool>(e.get())) {
-                return ASTPattern::Value::make_Integer({CORETYPE_BOOL, U128(n->value ? 1 : 0)});
-            } else if (auto* n = cast<ASTExprNodeInteger>(e.get())) {
-                return ASTPattern::Value::make_Integer({n->datatype, n->value});
-            } else if (auto* n = cast<ASTExprNodeFloat>(e.get())) {
-                return ASTPattern::Value::make_Float({n->datatype, n->value});
-            } else if (auto* n = cast<ASTExprNodeUniOp>(e.get())) {
-                if (n->type == ASTExprNodeUniOp::NEGATE) {
-                    if (auto* v = cast<ASTExprNodeInteger>(n->value.get())) {
-                        return ASTPattern::Value::make_Integer({v->datatype, ~v->value + 1u});
-                    }
-                    if (auto* v = cast<ASTExprNodeFloat>(n->value.get())) {
-                        return ASTPattern::Value::make_Float({v->datatype, -v->value});
-                    }
-                }
-                TODO(lex.pointSpan(), "Convert :expr into a pattern value - " << *e);
-            } else {
-                TODO(lex.pointSpan(), "Convert :expr into a pattern value - " << *e);
-            }
-        } break;
-        default:
-            PUTBACK(tok, lex);
-            return ASTPattern::Value::make_Invalid({});
-    }
-}
-
-ASTPattern ParsePatternReal1(TokenStream& lex, AllowOrPattern allowOr) {
-    auto ps = lex.startSpan();
-
-    Token tok;
-    ASTPath path;
-
-    switch (GET_TOK(tok, lex)) {
-        case TOK_UNDERSCORE:
-            return ASTPattern(lex.endSpan(ps), ASTPattern::Data());
-        case TOK_EXCLAM:
-            return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Never({}));
-        case TOK_RWORD_BOX:
-            return ASTPattern(ASTPattern::TagBox(), lex.endSpan(ps), ParsePattern1(lex, allowOr));
-        case TOK_DOUBLE_AMP:
-            lex.putback(TOK_AMP);
-        case TOK_AMP: {
-            bool isMut = false;
-            if (GET_TOK(tok, lex) == TOK_RWORD_MUT) {
-                isMut = true;
-            } else {
-                PUTBACK(tok, lex);
-            }
-            return ASTPattern(ASTPattern::TagReference(), lex.endSpan(ps), isMut, ParsePattern1(lex, allowOr));
-        }
-        case TOK_RWORD_CRATE:
-        case TOK_RWORD_SELF:
-        case TOK_RWORD_SUPER:
-        case TOK_IDENT:
-        case TOK_LT:
-        case TOK_DOUBLE_LT:
-        case TOK_INTERPOLATED_PATH:
-        case TOK_DOUBLE_COLON:
-            PUTBACK(tok, lex);
-            return ParsePatternRealPath(lex, ps, ParsePath(lex, PATH_GENERIC_EXPR));
-        case TOK_DOUBLE_DOT_EQUAL:
-        case TOK_TRIPLE_DOT:
-            return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Value({{}, ParsePatternValue(lex)}));
-        case TOK_DOUBLE_DOT:
-            return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_ValueLeftInc({{}, ParsePatternValue(lex)}));
-        case TOK_DASH:
-        case TOK_FLOAT:
-        case TOK_INTEGER:
-        case TOK_RWORD_TRUE:
-        case TOK_RWORD_FALSE:
-        case TOK_STRING:
-        case TOK_BYTESTRING:
-        case TOK_INTERPOLATED_EXPR:
-            PUTBACK(tok, lex);
-            return ASTPattern(ASTPattern::TagValue(), lex.endSpan(ps), ParsePatternValue(lex));
-
-        case TOK_PAREN_OPEN: {
-            bool justParen = false;
-            auto tpat = ParsePatternTuple(lex, &justParen);
-            if (justParen) {
-                assert(tpat.start.size() == 1);
-                assert(!tpat.hasWildcard);
-                assert(tpat.end.size() == 0);
-                return std::move(tpat.start.front());
-            }
-            return ASTPattern(ASTPattern::TagTuple(), lex.endSpan(ps), std::move(tpat));
-        }
-        case TOK_SQUARE_OPEN:
-            return ParsePatternRealSlice(lex);
-        default:
-            parseErrorUnexpected(lex, tok);
-    }
-    UNREACHABLE();
-}
-
-ASTPattern ParsePatternRealPath(TokenStream& lex, ProtoSpan ps, ASTPath path) {
-    Token tok;
-
-    switch (GET_TOK(tok, lex)) {
-        case TOK_PAREN_OPEN:
-            return ASTPattern(ASTPattern::TagNamedTuple(), lex.endSpan(ps), mv$(path), ParsePatternTuple(lex, nullptr));
-        case TOK_BRACE_OPEN:
-            return ParsePatternStruct(lex, ps, mv$(path));
-        default:
-            PUTBACK(tok, lex);
-            return ASTPattern(ASTPattern::TagValue(), lex.endSpan(ps), ASTPattern::Value::make_Named(mv$(path)));
-    }
-}
-
-ASTPattern ParsePatternRealSlice(TokenStream& lex) {
-    auto ps = lex.startSpan();
-    Token tok;
-
-    std::vector<ASTPattern> leading;
-    std::vector<ASTPattern> trailing;
-    ASTPatternBinding innerBinding;
-    bool isSplit = false;
-    bool extraRest = false;
-
-    while (GET_TOK(tok, lex) != TOK_SQUARE_CLOSE) {
-        bool hasBinding = true;
-        ASTPatternBinding binding;
-        if (tok.type() == TOK_RWORD_REF && ((lex.lookahead(0) == TOK_IDENT && (lex.lookahead(1) == TOK_DOUBLE_DOT || (lex.lookahead(1) == TOK_AT && lex.lookahead(2) == TOK_DOUBLE_DOT))) || (lex.lookahead(0) == TOK_RWORD_MUT && lex.lookahead(1) == TOK_IDENT && (lex.lookahead(2) == TOK_DOUBLE_DOT || (lex.lookahead(2) == TOK_AT && lex.lookahead(3) == TOK_DOUBLE_DOT))))) {
-            auto bindingType = ASTPatternBinding::Type::REF;
-            if (lex.lookahead(0) == TOK_RWORD_MUT) {
-                GET_CHECK_TOK(tok, lex, TOK_RWORD_MUT);
-                bindingType = ASTPatternBinding::Type::MUTREF;
-            }
-            GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            binding = ASTPatternBinding(tok.ident(), bindingType, false);
-        } else if (tok.type() == TOK_IDENT && (lex.lookahead(0) == TOK_DOUBLE_DOT || (lex.lookahead(0) == TOK_AT && lex.lookahead(1) == TOK_DOUBLE_DOT))) {
-            binding = ASTPatternBinding(tok.ident(), ASTPatternBinding::Type::MOVE, false);
-        } else if (tok.type() == TOK_UNDERSCORE && (lex.lookahead(0) == TOK_DOUBLE_DOT || (lex.lookahead(0) == TOK_AT && lex.lookahead(1) == TOK_DOUBLE_DOT))) {
-        } else if (tok.type() == TOK_DOUBLE_DOT) {
-            PUTBACK(tok, lex);
-        } else {
-            hasBinding = false;
-        }
-
-        if (hasBinding) {
-            if (isSplit) {
-                extraRest = true;
-            } else {
-                innerBinding = mv$(binding);
-            }
-            isSplit = true;
-            if (lex.lookahead(0) == TOK_AT) {
-                GET_CHECK_TOK(tok, lex, TOK_AT);
-            }
-            GET_CHECK_TOK(tok, lex, TOK_DOUBLE_DOT);
-            while (lex.getTokenIf(TOK_PIPE)) {
-                extraRest = true;
-                (void)ParsePattern(lex, AllowOrPattern::No);
-            }
-        } else {
-            PUTBACK(tok, lex);
-            if (!isSplit) {
-                leading.push_back(ParsePattern(lex));
-            } else {
-                trailing.push_back(ParsePattern(lex));
-            }
-        }
-
-        if (GET_TOK(tok, lex) != TOK_COMMA) {
-            break;
-        }
-    }
-    CHECK_TOK(tok, TOK_SQUARE_CLOSE);
-
-    if (isSplit) {
-        return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_SplitSlice({mv$(leading), mv$(innerBinding), mv$(trailing), extraRest}));
-    } else {
-        assert(!innerBinding.isValid());
-        assert(trailing.empty());
-        return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Slice({mv$(leading)}));
-    }
-}
-
-ASTPattern::TuplePat ParsePatternTuple(TokenStream& lex, bool* justParen) {
-    auto sp = lex.startSpan();
-    Token tok;
-    if (justParen) {
-        *justParen = false;
-    }
-
-    auto atRest = [&]() {
-        return LOOK_AHEAD(lex) == TOK_DOUBLE_DOT && (lex.lookahead(1) == TOK_COMMA || lex.lookahead(1) == TOK_PAREN_CLOSE);
-    };
-
-    auto parseElement = [&]() {
+namespace {
+    ASTPattern ParsePattern1(TokenStream& lex, AllowOrPattern allowOr) {
         auto ps = lex.startSpan();
-        auto pat = ParsePattern(lex);
-        if (lex.getTokenIf(TOK_RWORD_IF)) {
-            auto cond = ParseExpr0(lex);
-            return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Guard({std::unique_ptr<ASTPattern>(new ASTPattern(mv$(pat))), mv$(cond)}));
-        }
-        return pat;
-    };
 
-    std::vector<ASTPattern> leading;
-    while (LOOK_AHEAD(lex) != TOK_PAREN_CLOSE && !atRest()) {
-        leading.push_back(parseElement());
+        Token tok;
+        tok = lex.getToken();
 
-        if (GET_TOK(tok, lex) != TOK_COMMA) {
-            CHECK_TOK(tok, TOK_PAREN_CLOSE);
-            if (justParen) {
-                *justParen = (leading.size() == 1);
+        // TODO: Why is this here explicitly?
+        if (tok.type() == TOK_IDENT && lex.lookahead(0) == TOK_EXCLAM) {
+            lex.getToken();
+            if (tok.ident().name == "deref") {
+                GET_TOK(tok, lex);
+                CHECK_TOK(tok, TOK_PAREN_OPEN);
+                auto sub = ParsePattern(lex, AllowOrPattern::Yes);
+                GET_TOK(tok, lex);
+                CHECK_TOK(tok, TOK_PAREN_CLOSE);
+                return ASTPattern(ASTPattern::TagDeref(), lex.endSpan(ps), mv$(sub));
             }
-            return ASTPattern::TuplePat{mv$(leading), false, {}};
+            return ASTPattern(ASTPattern::TagMacro(), lex.endSpan(ps), box$(ParseMacroInvocation(ps, tok.ident().name, lex)));
         }
-    }
-
-    if (!atRest()) {
-        GET_TOK(tok, lex);
-
-        CHECK_TOK(tok, TOK_PAREN_CLOSE);
-        return ASTPattern::TuplePat{mv$(leading), false, {}};
-    }
-    GET_CHECK_TOK(tok, lex, TOK_DOUBLE_DOT);
-
-    std::vector<ASTPattern> trailing;
-    if (GET_TOK(tok, lex) == TOK_COMMA) {
-        while (LOOK_AHEAD(lex) != TOK_PAREN_CLOSE) {
-            trailing.push_back(parseElement());
-
-            if (GET_TOK(tok, lex) != TOK_COMMA) {
-                PUTBACK(tok, lex);
-                break;
-            }
-        }
-        GET_TOK(tok, lex);
-    }
-
-    CHECK_TOK(tok, TOK_PAREN_CLOSE);
-    return ASTPattern::TuplePat{mv$(leading), true, mv$(trailing)};
-}
-
-ASTPattern ParsePatternStruct(TokenStream& lex, ProtoSpan ps, ASTPath path) {
-    Token tok;
-
-    if (LOOK_AHEAD(lex) == TOK_INTEGER) {
-        bool splitAllowed = false;
-        std::map<unsigned int, ASTPattern> pats;
-        while (GET_TOK(tok, lex) == TOK_INTEGER) {
-            unsigned int ofs = static_cast<unsigned int>(tok.intval().truncateU64());
-            GET_CHECK_TOK(tok, lex, TOK_COLON);
-            auto val = ParsePattern(lex);
-            if (!pats.insert(std::make_pair(ofs, mv$(val))).second) {
-                ERROR(lex.pointSpan(), E0000, "Duplicate index");
-            }
-
-            if (GET_TOK(tok, lex) == TOK_BRACE_CLOSE) {
-                break;
-            }
-            CHECK_TOK(tok, TOK_COMMA);
-        }
-        if (tok.type() == TOK_DOUBLE_DOT) {
-            splitAllowed = true;
-            GET_TOK(tok, lex);
-        }
-        CHECK_TOK(tok, TOK_BRACE_CLOSE);
-
-        std::vector<ASTPattern> leading;
-        std::vector<ASTPattern> trailing;
-        unsigned int i = 0;
-        if (splitAllowed) {
-            for (auto& p : pats) {
-                while (i < p.first) {
-                    leading.push_back(ASTPattern(lex.pointSpan(), {}));
-                    i++;
-                }
-                leading.push_back(mv$(p.second));
-                i++;
-            }
-        } else {
-            for (auto& p : pats) {
-                if (p.first != i) {
-                    ERROR(lex.pointSpan(), E0000, "Missing index " << i);
-                }
-                leading.push_back(mv$(p.second));
-                i++;
-            }
+        if (tok.type() == TOK_INTERPOLATED_PATTERN) {
+            return mv$(tok.fragPattern());
         }
 
-        return ASTPattern(ASTPattern::TagNamedTuple(), lex.endSpan(ps), mv$(path), ASTPattern::TuplePat{mv$(leading), splitAllowed, mv$(trailing)});
-    }
-
-    bool isExhaustive = true;
-    std::vector<ASTStructPatternEntry> subpats;
-    do {
-        if (lex.lookahead(0) == TOK_BRACE_CLOSE) {
-            GET_TOK(tok, lex);
-            break;
-        }
-        if (lex.lookahead(0) == TOK_DOUBLE_DOT) {
-            GET_CHECK_TOK(tok, lex, TOK_DOUBLE_DOT);
-            isExhaustive = false;
-            GET_TOK(tok, lex);
-            break;
-        }
-
-        auto attrs = ParseItemAttrs(lex);
-
-        GET_TOK(tok, lex);
-
-        auto innerPs = lex.startSpan();
-        bool isShortBind = false;
-        bool isBox = false;
+        bool expectBind = false;
         auto bindType = ASTPatternBinding::Type::MOVE;
         bool isMut = false;
-        if (tok.type() == TOK_RWORD_BOX) {
-            isBox = true;
-            isShortBind = true;
-            GET_TOK(tok, lex);
-        }
         if (tok.type() == TOK_RWORD_REF) {
-            isShortBind = true;
-            GET_TOK(tok, lex);
+            expectBind = true;
+            tok = lex.getToken();
             if (tok.type() == TOK_RWORD_MUT) {
                 bindType = ASTPatternBinding::Type::MUTREF;
                 GET_TOK(tok, lex);
@@ -2595,44 +2255,533 @@ ASTPattern ParsePatternStruct(TokenStream& lex, ProtoSpan ps, ASTPath path) {
             }
         } else if (tok.type() == TOK_RWORD_MUT) {
             isMut = true;
-            isShortBind = true;
+            expectBind = true;
+            GET_TOK(tok, lex);
+            if (tok.type() == TOK_RWORD_REF) {
+                GET_TOK(tok, lex);
+                if (tok.type() == TOK_RWORD_MUT) {
+                    bindType = ASTPatternBinding::Type::MUTREF;
+                    GET_TOK(tok, lex);
+                } else {
+                    bindType = ASTPatternBinding::Type::REF;
+                }
+            }
+        } else {
+        }
+
+        ASTPatternBinding binding;
+        ASTPattern pat;
+        if (expectBind) {
+            CHECK_TOK(tok, TOK_IDENT);
+            auto bindName = tok.ident();
+            if (GET_TOK(tok, lex) != TOK_AT) {
+                PUTBACK(tok, lex);
+                return ASTPattern(ASTPattern::TagBind(), lex.endSpan(ps), mv$(bindName), bindType, isMut);
+            }
+            binding = ASTPatternBinding(mv$(bindName), bindType, isMut);
+
+            pat = ParsePattern1(lex, allowOr);
+        } else if (tok.type() == TOK_IDENT) {
+            switch (LOOK_AHEAD(lex)) {
+                case TOK_DOUBLE_COLON:
+                case TOK_BRACE_OPEN:
+                case TOK_PAREN_OPEN:
+                case TOK_DOUBLE_DOT:
+                case TOK_TRIPLE_DOT:
+                case TOK_DOUBLE_DOT_EQUAL:
+                    PUTBACK(tok, lex);
+                    pat = ParsePatternReal(lex, allowOr);
+                    break;
+                case TOK_AT:
+                    binding = ASTPatternBinding(tok.ident(), bindType /*MOVE*/, isMut /*false*/);
+                    GET_TOK(tok, lex);
+                    pat = ParsePattern1(lex, allowOr);
+                    break;
+                default: {
+                    auto name = tok.ident();
+                    if (true /*is_refutable*/) {
+                        assert(bindType == ASTPatternBinding::Type::MOVE);
+                        assert(isMut == false);
+                        return ASTPattern(ASTPattern::TagMaybeBind(), lex.endSpan(ps), mv$(name));
+                    } else {
+                        return ASTPattern(ASTPattern::TagBind(), lex.endSpan(ps), mv$(name), bindType, isMut);
+                    }
+                    UNREACHABLE();
+                }
+            }
+        } else {
+            PUTBACK(tok, lex);
+            pat = ParsePatternReal(lex, allowOr);
+        }
+        if (binding.isValid()) {
+            pat.bindings().insert(pat.bindings().begin(), mv$(binding));
+        }
+        return pat;
+    }
+}
+
+namespace {
+    ASTPattern ParsePatternReal(TokenStream& lex, AllowOrPattern allowOr) {
+        Token tok;
+        if (LOOK_AHEAD(lex) == TOK_INTERPOLATED_PATTERN) {
+            GET_TOK(tok, lex);
+            return mv$(tok.fragPattern());
+        }
+        auto ps = lex.startSpan();
+        ASTPattern ret = ParsePatternReal1(lex, allowOr);
+        if ((GET_TOK(tok, lex) == TOK_TRIPLE_DOT) || tok.type() == TOK_DOUBLE_DOT_EQUAL) {
+            if (!ret.data().is_Value()) {
+                compileErrorGeneric(lex, "Using '...' with a non-value on left");
+            }
+            auto& retV = ret.data().as_Value();
+            auto leftval = std::move(retV.start);
+
+            auto rightval = ParsePatternValue(lex);
+            if (rightval.is_Invalid()) {
+                compileErrorGeneric(lex, "Using '...' with a no RHS value");
+            }
+
+            return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Value({mv$(leftval), mv$(rightval)}));
+        } else if (tok.type() == TOK_DOUBLE_DOT) {
+            if (!ret.data().is_Value()) {
+                compileErrorGeneric(lex, "Using `..` with a non-value on left");
+            }
+            auto& retV = ret.data().as_Value();
+            auto leftval = std::move(retV.start);
+
+            auto rightval = ParsePatternValue(lex);
+            if (rightval.is_Invalid()) {
+            }
+
+            return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_ValueLeftInc({mv$(leftval), mv$(rightval)}));
+        } else {
+            PUTBACK(tok, lex);
+            return ret;
+        }
+    }
+}
+
+namespace {
+    ASTPattern::Value ParsePatternValue(TokenStream& lex) {
+        Token tok;
+        switch (GET_TOK(tok, lex)) {
+            case TOK_RWORD_CRATE:
+            case TOK_RWORD_SELF:
+            case TOK_RWORD_SUPER:
+            case TOK_IDENT:
+            case TOK_LT:
+            case TOK_DOUBLE_LT:
+            case TOK_INTERPOLATED_PATH:
+            case TOK_DOUBLE_COLON:
+                PUTBACK(tok, lex);
+                return ASTPattern::Value::make_Named(ParsePath(lex, PATH_GENERIC_EXPR));
+
+            case TOK_DASH:
+                if (GET_TOK(tok, lex) == TOK_INTEGER) {
+                    auto dt = tok.datatype();
+                    // TODO: Ensure that the type is ANY or a signed integer
+                    return ASTPattern::Value::make_Integer({dt, ~tok.intval() + 1u});
+                } else if (tok.type() == TOK_FLOAT) {
+                    return ASTPattern::Value::make_Float({tok.datatype(), -tok.floatval()});
+                } else {
+                    parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT});
+                }
+            case TOK_FLOAT:
+                return ASTPattern::Value::make_Float({tok.datatype(), tok.floatval()});
+            case TOK_INTEGER:
+                return ASTPattern::Value::make_Integer({tok.datatype(), tok.intval()});
+            case TOK_RWORD_TRUE:
+                return ASTPattern::Value::make_Integer({CORETYPE_BOOL, U128(1)});
+            case TOK_RWORD_FALSE:
+                return ASTPattern::Value::make_Integer({CORETYPE_BOOL, U128(0)});
+            case TOK_STRING:
+                return ASTPattern::Value::make_String(mv$(tok.str()));
+            case TOK_BYTESTRING:
+                return ASTPattern::Value::make_ByteString({mv$(tok.str())});
+            case TOK_INTERPOLATED_EXPR: {
+                auto e = tok.takeFragNode();
+                // TODO: Visitor?
+                if (auto* n = cast<ASTExprNodeString>(e.get())) {
+                    return ASTPattern::Value::make_String(mv$(n->value));
+                } else if (auto* n = cast<ASTExprNodeByteString>(e.get())) {
+                    return ASTPattern::Value::make_ByteString({mv$(n->value)});
+                } else if (auto* n = cast<ASTExprNodeBool>(e.get())) {
+                    return ASTPattern::Value::make_Integer({CORETYPE_BOOL, U128(n->value ? 1 : 0)});
+                } else if (auto* n = cast<ASTExprNodeInteger>(e.get())) {
+                    return ASTPattern::Value::make_Integer({n->datatype, n->value});
+                } else if (auto* n = cast<ASTExprNodeFloat>(e.get())) {
+                    return ASTPattern::Value::make_Float({n->datatype, n->value});
+                } else if (auto* n = cast<ASTExprNodeUniOp>(e.get())) {
+                    if (n->type == ASTExprNodeUniOp::NEGATE) {
+                        if (auto* v = cast<ASTExprNodeInteger>(n->value.get())) {
+                            return ASTPattern::Value::make_Integer({v->datatype, ~v->value + 1u});
+                        }
+                        if (auto* v = cast<ASTExprNodeFloat>(n->value.get())) {
+                            return ASTPattern::Value::make_Float({v->datatype, -v->value});
+                        }
+                    }
+                    TODO(lex.pointSpan(), "Convert :expr into a pattern value - " << *e);
+                } else {
+                    TODO(lex.pointSpan(), "Convert :expr into a pattern value - " << *e);
+                }
+            } break;
+            default:
+                PUTBACK(tok, lex);
+                return ASTPattern::Value::make_Invalid({});
+        }
+    }
+}
+
+namespace {
+    ASTPattern ParsePatternReal1(TokenStream& lex, AllowOrPattern allowOr) {
+        auto ps = lex.startSpan();
+
+        Token tok;
+        ASTPath path;
+
+        switch (GET_TOK(tok, lex)) {
+            case TOK_UNDERSCORE:
+                return ASTPattern(lex.endSpan(ps), ASTPattern::Data());
+            case TOK_EXCLAM:
+                return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Never({}));
+            case TOK_RWORD_BOX:
+                return ASTPattern(ASTPattern::TagBox(), lex.endSpan(ps), ParsePattern1(lex, allowOr));
+            case TOK_DOUBLE_AMP:
+                lex.putback(TOK_AMP);
+            case TOK_AMP: {
+                bool isMut = false;
+                if (GET_TOK(tok, lex) == TOK_RWORD_MUT) {
+                    isMut = true;
+                } else {
+                    PUTBACK(tok, lex);
+                }
+                return ASTPattern(ASTPattern::TagReference(), lex.endSpan(ps), isMut, ParsePattern1(lex, allowOr));
+            }
+            case TOK_RWORD_CRATE:
+            case TOK_RWORD_SELF:
+            case TOK_RWORD_SUPER:
+            case TOK_IDENT:
+            case TOK_LT:
+            case TOK_DOUBLE_LT:
+            case TOK_INTERPOLATED_PATH:
+            case TOK_DOUBLE_COLON:
+                PUTBACK(tok, lex);
+                return ParsePatternRealPath(lex, ps, ParsePath(lex, PATH_GENERIC_EXPR));
+            case TOK_DOUBLE_DOT_EQUAL:
+            case TOK_TRIPLE_DOT:
+                return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Value({{}, ParsePatternValue(lex)}));
+            case TOK_DOUBLE_DOT:
+                return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_ValueLeftInc({{}, ParsePatternValue(lex)}));
+            case TOK_DASH:
+            case TOK_FLOAT:
+            case TOK_INTEGER:
+            case TOK_RWORD_TRUE:
+            case TOK_RWORD_FALSE:
+            case TOK_STRING:
+            case TOK_BYTESTRING:
+            case TOK_INTERPOLATED_EXPR:
+                PUTBACK(tok, lex);
+                return ASTPattern(ASTPattern::TagValue(), lex.endSpan(ps), ParsePatternValue(lex));
+
+            case TOK_PAREN_OPEN: {
+                bool justParen = false;
+                auto tpat = ParsePatternTuple(lex, &justParen);
+                if (justParen) {
+                    assert(tpat.start.size() == 1);
+                    assert(!tpat.hasWildcard);
+                    assert(tpat.end.size() == 0);
+                    return std::move(tpat.start.front());
+                }
+                return ASTPattern(ASTPattern::TagTuple(), lex.endSpan(ps), std::move(tpat));
+            }
+            case TOK_SQUARE_OPEN:
+                return ParsePatternRealSlice(lex);
+            default:
+                parseErrorUnexpected(lex, tok);
+        }
+        UNREACHABLE();
+    }
+}
+
+namespace {
+    ASTPattern ParsePatternRealPath(TokenStream& lex, ProtoSpan ps, ASTPath path) {
+        Token tok;
+
+        switch (GET_TOK(tok, lex)) {
+            case TOK_PAREN_OPEN:
+                return ASTPattern(ASTPattern::TagNamedTuple(), lex.endSpan(ps), mv$(path), ParsePatternTuple(lex, nullptr));
+            case TOK_BRACE_OPEN:
+                return ParsePatternStruct(lex, ps, mv$(path));
+            default:
+                PUTBACK(tok, lex);
+                return ASTPattern(ASTPattern::TagValue(), lex.endSpan(ps), ASTPattern::Value::make_Named(mv$(path)));
+        }
+    }
+}
+
+namespace {
+    ASTPattern ParsePatternRealSlice(TokenStream& lex) {
+        auto ps = lex.startSpan();
+        Token tok;
+
+        std::vector<ASTPattern> leading;
+        std::vector<ASTPattern> trailing;
+        ASTPatternBinding innerBinding;
+        bool isSplit = false;
+        bool extraRest = false;
+
+        while (GET_TOK(tok, lex) != TOK_SQUARE_CLOSE) {
+            bool hasBinding = true;
+            ASTPatternBinding binding;
+            if (tok.type() == TOK_RWORD_REF && ((lex.lookahead(0) == TOK_IDENT && (lex.lookahead(1) == TOK_DOUBLE_DOT || (lex.lookahead(1) == TOK_AT && lex.lookahead(2) == TOK_DOUBLE_DOT))) || (lex.lookahead(0) == TOK_RWORD_MUT && lex.lookahead(1) == TOK_IDENT && (lex.lookahead(2) == TOK_DOUBLE_DOT || (lex.lookahead(2) == TOK_AT && lex.lookahead(3) == TOK_DOUBLE_DOT))))) {
+                auto bindingType = ASTPatternBinding::Type::REF;
+                if (lex.lookahead(0) == TOK_RWORD_MUT) {
+                    GET_CHECK_TOK(tok, lex, TOK_RWORD_MUT);
+                    bindingType = ASTPatternBinding::Type::MUTREF;
+                }
+                GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                binding = ASTPatternBinding(tok.ident(), bindingType, false);
+            } else if (tok.type() == TOK_IDENT && (lex.lookahead(0) == TOK_DOUBLE_DOT || (lex.lookahead(0) == TOK_AT && lex.lookahead(1) == TOK_DOUBLE_DOT))) {
+                binding = ASTPatternBinding(tok.ident(), ASTPatternBinding::Type::MOVE, false);
+            } else if (tok.type() == TOK_UNDERSCORE && (lex.lookahead(0) == TOK_DOUBLE_DOT || (lex.lookahead(0) == TOK_AT && lex.lookahead(1) == TOK_DOUBLE_DOT))) {
+            } else if (tok.type() == TOK_DOUBLE_DOT) {
+                PUTBACK(tok, lex);
+            } else {
+                hasBinding = false;
+            }
+
+            if (hasBinding) {
+                if (isSplit) {
+                    extraRest = true;
+                } else {
+                    innerBinding = mv$(binding);
+                }
+                isSplit = true;
+                if (lex.lookahead(0) == TOK_AT) {
+                    GET_CHECK_TOK(tok, lex, TOK_AT);
+                }
+                GET_CHECK_TOK(tok, lex, TOK_DOUBLE_DOT);
+                while (lex.getTokenIf(TOK_PIPE)) {
+                    extraRest = true;
+                    (void)ParsePattern(lex, AllowOrPattern::No);
+                }
+            } else {
+                PUTBACK(tok, lex);
+                if (!isSplit) {
+                    leading.push_back(ParsePattern(lex));
+                } else {
+                    trailing.push_back(ParsePattern(lex));
+                }
+            }
+
+            if (GET_TOK(tok, lex) != TOK_COMMA) {
+                break;
+            }
+        }
+        CHECK_TOK(tok, TOK_SQUARE_CLOSE);
+
+        if (isSplit) {
+            return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_SplitSlice({mv$(leading), mv$(innerBinding), mv$(trailing), extraRest}));
+        } else {
+            assert(!innerBinding.isValid());
+            assert(trailing.empty());
+            return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Slice({mv$(leading)}));
+        }
+    }
+}
+
+namespace {
+    ASTPattern::TuplePat ParsePatternTuple(TokenStream& lex, bool* justParen) {
+        auto sp = lex.startSpan();
+        Token tok;
+        if (justParen) {
+            *justParen = false;
+        }
+
+        auto atRest = [&]() {
+            return LOOK_AHEAD(lex) == TOK_DOUBLE_DOT && (lex.lookahead(1) == TOK_COMMA || lex.lookahead(1) == TOK_PAREN_CLOSE);
+        };
+
+        auto parseElement = [&]() {
+            auto ps = lex.startSpan();
+            auto pat = ParsePattern(lex);
+            if (lex.getTokenIf(TOK_RWORD_IF)) {
+                auto cond = ParseExpr0(lex);
+                return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Guard({std::unique_ptr<ASTPattern>(new ASTPattern(mv$(pat))), mv$(cond)}));
+            }
+            return pat;
+        };
+
+        std::vector<ASTPattern> leading;
+        while (LOOK_AHEAD(lex) != TOK_PAREN_CLOSE && !atRest()) {
+            leading.push_back(parseElement());
+
+            if (GET_TOK(tok, lex) != TOK_COMMA) {
+                CHECK_TOK(tok, TOK_PAREN_CLOSE);
+                if (justParen) {
+                    *justParen = (leading.size() == 1);
+                }
+                return ASTPattern::TuplePat{mv$(leading), false, {}};
+            }
+        }
+
+        if (!atRest()) {
+            GET_TOK(tok, lex);
+
+            CHECK_TOK(tok, TOK_PAREN_CLOSE);
+            return ASTPattern::TuplePat{mv$(leading), false, {}};
+        }
+        GET_CHECK_TOK(tok, lex, TOK_DOUBLE_DOT);
+
+        std::vector<ASTPattern> trailing;
+        if (GET_TOK(tok, lex) == TOK_COMMA) {
+            while (LOOK_AHEAD(lex) != TOK_PAREN_CLOSE) {
+                trailing.push_back(parseElement());
+
+                if (GET_TOK(tok, lex) != TOK_COMMA) {
+                    PUTBACK(tok, lex);
+                    break;
+                }
+            }
             GET_TOK(tok, lex);
         }
 
-        CHECK_TOK(tok, TOK_IDENT);
-        auto fieldIdent = tok.ident();
-        RcString fieldName;
-        GET_TOK(tok, lex);
+        CHECK_TOK(tok, TOK_PAREN_CLOSE);
+        return ASTPattern::TuplePat{mv$(leading), true, mv$(trailing)};
+    }
+}
 
-        ASTPattern pat;
-        if (isShortBind || tok.type() != TOK_COLON) {
-            PUTBACK(tok, lex);
-            pat = ASTPattern(lex.endSpan(innerPs), {});
-            fieldName = fieldIdent.name;
-            pat.bindings().push_back(ASTPatternBinding(mv$(fieldIdent), bindType, isMut));
-            if (isBox) {
-                pat = ASTPattern(ASTPattern::TagBox(), lex.endSpan(innerPs), mv$(pat));
+namespace {
+    ASTPattern ParsePatternStruct(TokenStream& lex, ProtoSpan ps, ASTPath path) {
+        Token tok;
+
+        if (LOOK_AHEAD(lex) == TOK_INTEGER) {
+            bool splitAllowed = false;
+            std::map<unsigned int, ASTPattern> pats;
+            while (GET_TOK(tok, lex) == TOK_INTEGER) {
+                unsigned int ofs = static_cast<unsigned int>(tok.intval().truncateU64());
+                GET_CHECK_TOK(tok, lex, TOK_COLON);
+                auto val = ParsePattern(lex);
+                if (!pats.insert(std::make_pair(ofs, mv$(val))).second) {
+                    ERROR(lex.pointSpan(), E0000, "Duplicate index");
+                }
+
+                if (GET_TOK(tok, lex) == TOK_BRACE_CLOSE) {
+                    break;
+                }
+                CHECK_TOK(tok, TOK_COMMA);
             }
-        } else {
-            CHECK_TOK(tok, TOK_COLON);
-            fieldName = mv$(fieldIdent.name);
-            pat = ParsePattern(lex);
+            if (tok.type() == TOK_DOUBLE_DOT) {
+                splitAllowed = true;
+                GET_TOK(tok, lex);
+            }
+            CHECK_TOK(tok, TOK_BRACE_CLOSE);
+
+            std::vector<ASTPattern> leading;
+            std::vector<ASTPattern> trailing;
+            unsigned int i = 0;
+            if (splitAllowed) {
+                for (auto& p : pats) {
+                    while (i < p.first) {
+                        leading.push_back(ASTPattern(lex.pointSpan(), {}));
+                        i++;
+                    }
+                    leading.push_back(mv$(p.second));
+                    i++;
+                }
+            } else {
+                for (auto& p : pats) {
+                    if (p.first != i) {
+                        ERROR(lex.pointSpan(), E0000, "Missing index " << i);
+                    }
+                    leading.push_back(mv$(p.second));
+                    i++;
+                }
+            }
+
+            return ASTPattern(ASTPattern::TagNamedTuple(), lex.endSpan(ps), mv$(path), ASTPattern::TuplePat{mv$(leading), splitAllowed, mv$(trailing)});
         }
 
-        subpats.push_back(ASTStructPatternEntry{mv$(attrs), mv$(fieldName), mv$(pat)});
-    } while (GET_TOK(tok, lex) == TOK_COMMA);
-    CHECK_TOK(tok, TOK_BRACE_CLOSE);
+        bool isExhaustive = true;
+        std::vector<ASTStructPatternEntry> subpats;
+        do {
+            if (lex.lookahead(0) == TOK_BRACE_CLOSE) {
+                GET_TOK(tok, lex);
+                break;
+            }
+            if (lex.lookahead(0) == TOK_DOUBLE_DOT) {
+                GET_CHECK_TOK(tok, lex, TOK_DOUBLE_DOT);
+                isExhaustive = false;
+                GET_TOK(tok, lex);
+                break;
+            }
 
-    return ASTPattern(ASTPattern::TagStruct(), lex.endSpan(ps), std::move(path), std::move(subpats), isExhaustive);
+            auto attrs = ParseItemAttrs(lex);
+
+            GET_TOK(tok, lex);
+
+            auto innerPs = lex.startSpan();
+            bool isShortBind = false;
+            bool isBox = false;
+            auto bindType = ASTPatternBinding::Type::MOVE;
+            bool isMut = false;
+            if (tok.type() == TOK_RWORD_BOX) {
+                isBox = true;
+                isShortBind = true;
+                GET_TOK(tok, lex);
+            }
+            if (tok.type() == TOK_RWORD_REF) {
+                isShortBind = true;
+                GET_TOK(tok, lex);
+                if (tok.type() == TOK_RWORD_MUT) {
+                    bindType = ASTPatternBinding::Type::MUTREF;
+                    GET_TOK(tok, lex);
+                } else {
+                    bindType = ASTPatternBinding::Type::REF;
+                }
+            } else if (tok.type() == TOK_RWORD_MUT) {
+                isMut = true;
+                isShortBind = true;
+                GET_TOK(tok, lex);
+            }
+
+            CHECK_TOK(tok, TOK_IDENT);
+            auto fieldIdent = tok.ident();
+            RcString fieldName;
+            GET_TOK(tok, lex);
+
+            ASTPattern pat;
+            if (isShortBind || tok.type() != TOK_COLON) {
+                PUTBACK(tok, lex);
+                pat = ASTPattern(lex.endSpan(innerPs), {});
+                fieldName = fieldIdent.name;
+                pat.bindings().push_back(ASTPatternBinding(mv$(fieldIdent), bindType, isMut));
+                if (isBox) {
+                    pat = ASTPattern(ASTPattern::TagBox(), lex.endSpan(innerPs), mv$(pat));
+                }
+            } else {
+                CHECK_TOK(tok, TOK_COLON);
+                fieldName = mv$(fieldIdent.name);
+                pat = ParsePattern(lex);
+            }
+
+            subpats.push_back(ASTStructPatternEntry{mv$(attrs), mv$(fieldName), mv$(pat)});
+        } while (GET_TOK(tok, lex) == TOK_COMMA);
+        CHECK_TOK(tok, TOK_BRACE_CLOSE);
+
+        return ASTPattern(ASTPattern::TagStruct(), lex.endSpan(ps), std::move(path), std::move(subpats), isExhaustive);
+    }
 }
 
 #undef NEWNODE
 
-template <typename T, typename F>
-Spanned<T> getSpanned(TokenStream& lex, F f) {
-    auto ps = lex.startSpan();
-    auto v = f();
-    return Spanned<T>{lex.endSpan(ps), mv$(v)};
+namespace {
+    template <typename T, typename F>
+    Spanned<T> getSpanned(TokenStream& lex, F f) {
+        auto ps = lex.startSpan();
+        auto v = f();
+        return Spanned<T>{lex.endSpan(ps), mv$(v)};
+    }
 }
 
 #define GET_SPANNED(type, lex, val) \
@@ -2642,27 +2791,35 @@ Spanned<T> getSpanned(TokenStream& lex, F f) {
 
 #define LOOKAHEAD2(lex, tok1, tok2) ((lex).lookahead(0) == (tok1) && (lex).lookahead(1) == (tok2))
 
-FsPath dirname(std::string input) {
-    while (input.size() > 0 && input.back() != '/' && input.back() != '\\') {
-        input.pop_back();
+namespace {
+    FsPath dirname(std::string input) {
+        while (input.size() > 0 && input.back() != '/' && input.back() != '\\') {
+            input.pop_back();
+        }
+        return input;
     }
-    return input;
 }
 
 ASTAttributeList ParseItemAttrs(TokenStream& lex);
 void ParseParentAttrs(TokenStream& lex, ASTAttributeList& out);
 ASTAttribute ParseMetaItem(TokenStream& lex);
-void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs);
-bool ParseMacroInvocationOpt(TokenStream& lex, ASTMacroInvocation& outInv);
 
 namespace {
-static ASTAbsolutePath VisibilityModulePath(TokenStream& lex) {
-    auto path = lex.parseState().getCurrentMod().path();
-    while (!path.nodes.empty() && path.nodes.back().c_str()[0] == '#') {
-        path.nodes.pop_back();
-    }
-    return path;
+    void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs);
 }
+
+namespace {
+    bool ParseMacroInvocationOpt(TokenStream& lex, ASTMacroInvocation& outInv);
+}
+
+namespace {
+    static ASTAbsolutePath VisibilityModulePath(TokenStream& lex) {
+        auto path = lex.parseState().getCurrentMod().path();
+        while (!path.nodes.empty() && path.nodes.back().c_str()[0] == '#') {
+            path.nodes.pop_back();
+        }
+        return path;
+    }
 }
 
 ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
@@ -2840,299 +2997,323 @@ namespace {
     }
 }
 
-void ParseTypeBound(TokenStream& lex, ASTGenericParams& ret, ASTType* checkedType, ASTHigherRankedBounds outerHrbs = {}, bool retainBareType = false) {
-    Token tok;
+namespace {
+    void ParseTypeBound(TokenStream& lex, ASTGenericParams& ret, ASTType* checkedType, ASTHigherRankedBounds outerHrbs = {}, bool retainBareType = false) {
+        Token tok;
 
-    if (lex.lookahead(0) == TOK_COMMA || lex.lookahead(0) == TOK_BRACE_OPEN || lex.lookahead(0) == TOK_SEMICOLON) {
-        if (retainBareType) {
-            ret.bareBoundTypes.push_back(mv$(checkedType));
-        }
-        return;
-    }
-
-    bool isFirst = true;
-    do {
-        auto ps = lex.startSpan();
-        if (!isFirst && (LOOK_AHEAD(lex) == TOK_SEMICOLON || LOOK_AHEAD(lex) == TOK_COMMA || LOOK_AHEAD(lex) == TOK_GT)) {
+        if (lex.lookahead(0) == TOK_COMMA || lex.lookahead(0) == TOK_BRACE_OPEN || lex.lookahead(0) == TOK_SEMICOLON) {
+            if (retainBareType) {
+                ret.bareBoundTypes.push_back(mv$(checkedType));
+            }
             return;
         }
-        isFirst = false;
 
-        if (lex.getTokenIf(TOK_LIFETIME, tok)) {
-            auto lft = getLifetimeRef(lex, mv$(tok));
-            bool boundByOuterHrb = false;
-            for (const auto& l : outerHrbs.lifetimes) {
-                if (l.name().name == lft.name().name) {
-                    boundByOuterHrb = true;
+        bool isFirst = true;
+        do {
+            auto ps = lex.startSpan();
+            if (!isFirst && (LOOK_AHEAD(lex) == TOK_SEMICOLON || LOOK_AHEAD(lex) == TOK_COMMA || LOOK_AHEAD(lex) == TOK_GT)) {
+                return;
+            }
+            isFirst = false;
+
+            if (lex.getTokenIf(TOK_LIFETIME, tok)) {
+                auto lft = getLifetimeRef(lex, mv$(tok));
+                bool boundByOuterHrb = false;
+                for (const auto& l : outerHrbs.lifetimes) {
+                    if (l.name().name == lft.name().name) {
+                        boundByOuterHrb = true;
+                    }
                 }
-            }
-            if (!boundByOuterHrb) {
-                ret.addBound(ASTGenericBound::make_TypeLifetime({checkedType->clone(), mv$(lft)}));
-            }
-        } else if (lex.getTokenIf(TOK_QMARK)) {
-            auto hrbs = ParseHRBOpt(lex);
-            (void)hrbs;
-            ret.addBound(ASTGenericBound::make_MaybeTrait({checkedType->clone(), ParsePath(lex, PATH_GENERIC_TYPE)}));
-        } else if (lex.getTokenIf(TOK_EXCLAM)) {
-            ParsePath(lex, PATH_GENERIC_TYPE);
-        } else {
-            auto constness = ParseBoundConstness(lex);
-            ASTHigherRankedBounds innerHrls;
-            if (lex.getTokenIf(TOK_RWORD_FOR)) {
-                innerHrls = ParseHRB(lex);
-            }
-            auto postHrbConstness = ParseBoundConstness(lex);
-            if (postHrbConstness != ASTBoundConstness::Never) {
-                constness = postHrbConstness;
-            }
-            auto traitPath = ParsePath(lex, PATH_GENERIC_TYPE);
+                if (!boundByOuterHrb) {
+                    ret.addBound(ASTGenericBound::make_TypeLifetime({checkedType->clone(), mv$(lft)}));
+                }
+            } else if (lex.getTokenIf(TOK_QMARK)) {
+                auto hrbs = ParseHRBOpt(lex);
+                (void)hrbs;
+                ret.addBound(ASTGenericBound::make_MaybeTrait({checkedType->clone(), ParsePath(lex, PATH_GENERIC_TYPE)}));
+            } else if (lex.getTokenIf(TOK_EXCLAM)) {
+                ParsePath(lex, PATH_GENERIC_TYPE);
+            } else {
+                auto constness = ParseBoundConstness(lex);
+                ASTHigherRankedBounds innerHrls;
+                if (lex.getTokenIf(TOK_RWORD_FOR)) {
+                    innerHrls = ParseHRB(lex);
+                }
+                auto postHrbConstness = ParseBoundConstness(lex);
+                if (postHrbConstness != ASTBoundConstness::Never) {
+                    constness = postHrbConstness;
+                }
+                auto traitPath = ParsePath(lex, PATH_GENERIC_TYPE);
 
-            auto thisOuterHrbs = (lex.lookahead(0) == TOK_PLUS ? ASTHigherRankedBounds(outerHrbs) : mv$(outerHrbs));
-            ret.addBound(ASTGenericBound::make_IsTrait({lex.endSpan(ps), mv$(thisOuterHrbs), checkedType->clone(), mv$(innerHrls), mv$(traitPath), constness}));
-        }
-    } while ([&]() {
-        if (lex.getTokenIf(TOK_PLUS_EQUAL)) {
-            lex.putback(Token(TOK_EQUAL));
-            return false;
-        }
-        if (!lex.getTokenIf(TOK_PLUS)) {
-            return false;
-        }
-        switch (lex.lookahead(0)) {
-            case TOK_GT:
-            case TOK_DOUBLE_GT:
-            case TOK_GTE:
-            case TOK_DOUBLE_GT_EQUAL:
-            case TOK_EQUAL:
-            case TOK_COMMA:
-            case TOK_SEMICOLON:
-            case TOK_BRACE_OPEN:
-            case TOK_PAREN_CLOSE:
-            case TOK_SQUARE_CLOSE:
-            case TOK_RWORD_WHERE:
-            case TOK_EOF:
+                auto thisOuterHrbs = (lex.lookahead(0) == TOK_PLUS ? ASTHigherRankedBounds(outerHrbs) : mv$(outerHrbs));
+                ret.addBound(ASTGenericBound::make_IsTrait({lex.endSpan(ps), mv$(thisOuterHrbs), checkedType->clone(), mv$(innerHrls), mv$(traitPath), constness}));
+            }
+        } while ([&]() {
+            if (lex.getTokenIf(TOK_PLUS_EQUAL)) {
+                lex.putback(Token(TOK_EQUAL));
                 return false;
-            default:
-                return true;
-        }
-    }());
+            }
+            if (!lex.getTokenIf(TOK_PLUS)) {
+                return false;
+            }
+            switch (lex.lookahead(0)) {
+                case TOK_GT:
+                case TOK_DOUBLE_GT:
+                case TOK_GTE:
+                case TOK_DOUBLE_GT_EQUAL:
+                case TOK_EQUAL:
+                case TOK_COMMA:
+                case TOK_SEMICOLON:
+                case TOK_BRACE_OPEN:
+                case TOK_PAREN_CLOSE:
+                case TOK_SQUARE_CLOSE:
+                case TOK_RWORD_WHERE:
+                case TOK_EOF:
+                    return false;
+                default:
+                    return true;
+            }
+        }());
+    }
 }
 
-ASTGenericParams ParseGenericParams(TokenStream& lex) {
-    ASTGenericParams ret;
-    Token tok;
-    do {
-        if (GET_TOK(tok, lex) == TOK_GT || tok.type() == TOK_GTE) {
-            break;
-        }
-
-        PUTBACK(tok, lex);
-        auto attrs = ParseItemAttrs(lex);
-
-        GET_TOK(tok, lex);
-        if (tok.type() == TOK_IDENT) {
-            auto paramName = tok.ident().name;
-            auto paramDef = ASTTypeParam(lex.typePool(), lex.pointSpan(), std::move(attrs), paramName);
-
-            size_t boundStart = SIZE_MAX;
-            size_t boundEnd = SIZE_MAX;
-            auto paramTy = mkType(lex.typePool(), lex.pointSpan(), paramName);
-            if (GET_TOK(tok, lex) == TOK_COLON) {
-                boundStart = ret.bounds.size();
-                ParseTypeBound(lex, ret, mv$(paramTy));
-                boundEnd = ret.bounds.size();
-
-                GET_TOK(tok, lex);
+namespace {
+    ASTGenericParams ParseGenericParams(TokenStream& lex) {
+        ASTGenericParams ret;
+        Token tok;
+        do {
+            if (GET_TOK(tok, lex) == TOK_GT || tok.type() == TOK_GTE) {
+                break;
             }
 
-            if (tok.type() == TOK_EQUAL) {
-                paramDef.setDefault(ParseType(lex));
-                GET_TOK(tok, lex);
-            }
-            ret.addTyParam(mv$(paramDef), boundStart, boundEnd);
-        } else if (tok.type() == TOK_LIFETIME) {
-            size_t boundStart = SIZE_MAX;
-            size_t boundEnd = SIZE_MAX;
-            auto paramName = tok.ident();
-            auto ref = getLifetimeRef(lex, mv$(tok));
-            if (GET_TOK(tok, lex) == TOK_COLON) {
-                boundStart = ret.bounds.size();
-                if (lex.lookahead(0) == TOK_LIFETIME) {
-                    do {
-                        GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
-                        ret.addBound(ASTGenericBound::make_Lifetime({ASTLifetimeRef(ref), getLifetimeRef(lex, mv$(tok))}));
-                    } while (GET_TOK(tok, lex) == TOK_PLUS);
-                } else {
+            PUTBACK(tok, lex);
+            auto attrs = ParseItemAttrs(lex);
+
+            GET_TOK(tok, lex);
+            if (tok.type() == TOK_IDENT) {
+                auto paramName = tok.ident().name;
+                auto paramDef = ASTTypeParam(lex.typePool(), lex.pointSpan(), std::move(attrs), paramName);
+
+                size_t boundStart = SIZE_MAX;
+                size_t boundEnd = SIZE_MAX;
+                auto paramTy = mkType(lex.typePool(), lex.pointSpan(), paramName);
+                if (GET_TOK(tok, lex) == TOK_COLON) {
+                    boundStart = ret.bounds.size();
+                    ParseTypeBound(lex, ret, mv$(paramTy));
+                    boundEnd = ret.bounds.size();
+
                     GET_TOK(tok, lex);
                 }
-                boundEnd = ret.bounds.size();
-            }
-            ret.addLftParam(ASTLifetimeParam(lex.pointSpan(), std::move(attrs), paramName), boundStart, boundEnd);
-        } else if (tok.type() == TOK_RWORD_CONST) {
-            GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            auto paramName = tok.ident();
-            GET_CHECK_TOK(tok, lex, TOK_COLON);
-            auto ty = ParseType(lex);
 
-            ASTExpr val;
-            if (GET_TOK(tok, lex) == TOK_EQUAL) {
-                if (lex.lookahead(0) == TOK_BRACE_OPEN) {
-                    val = ParseExprBlock(lex);
-                } else {
-                    val = ParseExprVal(lex);
+                if (tok.type() == TOK_EQUAL) {
+                    paramDef.setDefault(ParseType(lex));
+                    GET_TOK(tok, lex);
                 }
-                GET_TOK(tok, lex);
-            }
+                ret.addTyParam(mv$(paramDef), boundStart, boundEnd);
+            } else if (tok.type() == TOK_LIFETIME) {
+                size_t boundStart = SIZE_MAX;
+                size_t boundEnd = SIZE_MAX;
+                auto paramName = tok.ident();
+                auto ref = getLifetimeRef(lex, mv$(tok));
+                if (GET_TOK(tok, lex) == TOK_COLON) {
+                    boundStart = ret.bounds.size();
+                    if (lex.lookahead(0) == TOK_LIFETIME) {
+                        do {
+                            GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
+                            ret.addBound(ASTGenericBound::make_Lifetime({ASTLifetimeRef(ref), getLifetimeRef(lex, mv$(tok))}));
+                        } while (GET_TOK(tok, lex) == TOK_PLUS);
+                    } else {
+                        GET_TOK(tok, lex);
+                    }
+                    boundEnd = ret.bounds.size();
+                }
+                ret.addLftParam(ASTLifetimeParam(lex.pointSpan(), std::move(attrs), paramName), boundStart, boundEnd);
+            } else if (tok.type() == TOK_RWORD_CONST) {
+                GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                auto paramName = tok.ident();
+                GET_CHECK_TOK(tok, lex, TOK_COLON);
+                auto ty = ParseType(lex);
 
-            ret.addValueParam(lex.pointSpan(), mv$(attrs), mv$(paramName), mv$(ty), mv$(val));
-        } else {
-            parseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_LIFETIME});
-        }
-    } while (tok.type() == TOK_COMMA);
+                ASTExpr val;
+                if (GET_TOK(tok, lex) == TOK_EQUAL) {
+                    if (lex.lookahead(0) == TOK_BRACE_OPEN) {
+                        val = ParseExprBlock(lex);
+                    } else {
+                        val = ParseExprVal(lex);
+                    }
+                    GET_TOK(tok, lex);
+                }
 
-    if (tok.type() == TOK_GT) {
-    } else if (tok.type() == TOK_GTE) {
-        lex.putback(TOK_EQUAL);
-    } else {
-        parseErrorUnexpected(lex, tok, {TOK_GT, TOK_GTE});
-    }
-    return ret;
-}
-
-ASTGenericParams ParseGenericParamsOpt(TokenStream& lex) {
-    if (lex.getTokenIf(TOK_LT)) {
-        return ParseGenericParams(lex);
-    } else {
-        return ASTGenericParams();
-    }
-}
-
-void ParseWhereClause(TokenStream& lex, ASTGenericParams& params) {
-    Token tok;
-
-    do {
-        if (lex.lookahead(0) == TOK_BRACE_OPEN || lex.lookahead(0) == TOK_SEMICOLON || lex.lookahead(0) == TOK_EQUAL) {
-            break;
-        }
-
-        if (lex.getTokenIf(TOK_LIFETIME, tok)) {
-            auto lhs = getLifetimeRef(lex, std::move(tok));
-            GET_CHECK_TOK(tok, lex, TOK_COLON);
-            do {
-                GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
-                auto rhs = getLifetimeRef(lex, mv$(tok));
-                params.addBound(ASTGenericBound::make_Lifetime({lhs, rhs}));
-            } while (lex.getTokenIf(TOK_PLUS));
-        } else if (lex.getTokenIf(TOK_RWORD_FOR)) {
-            auto hrbs = ParseHRB(lex);
-            const bool bindsTypes = !hrbs.types.empty();
-
-            ASTType* type = ParseType(lex);
-            GET_CHECK_TOK(tok, lex, TOK_COLON);
-            if (bindsTypes) {
-                ASTGenericParams dropped;
-                ParseTypeBound(lex, dropped, mv$(type), mv$(hrbs), /*retainBareType=*/false);
+                ret.addValueParam(lex.pointSpan(), mv$(attrs), mv$(paramName), mv$(ty), mv$(val));
             } else {
-                ParseTypeBound(lex, params, mv$(type), mv$(hrbs), /*retainBareType=*/true);
+                parseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_LIFETIME});
             }
+        } while (tok.type() == TOK_COMMA);
+
+        if (tok.type() == TOK_GT) {
+        } else if (tok.type() == TOK_GTE) {
+            lex.putback(TOK_EQUAL);
         } else {
-            ASTType* type = ParseType(lex);
-            GET_CHECK_TOK(tok, lex, TOK_COLON);
-            ParseTypeBound(lex, params, mv$(type), {}, /*retainBareType=*/true);
+            parseErrorUnexpected(lex, tok, {TOK_GT, TOK_GTE});
         }
-    } while (lex.getTokenIf(TOK_COMMA));
+        return ret;
+    }
 }
 
-bool ParseParamAttrsKeep(TokenStream& lex, ASTAttributeList* attrsOut) {
-    auto attrs = ParseItemAttrs(lex);
-    bool keep = true;
-    if (const auto* wb = lex.parseState().wb) {
-        const RcString rcstringCfgAttr = RcString::newInterned("cfg_attr");
-        for (auto it = attrs.items.begin(); it != attrs.items.end();) {
-            if (it->name() == rcstringCfgAttr) {
-                auto produced = checkCfgAttr(*wb->settings, *it);
-                it = attrs.items.erase(it);
-                it = attrs.items.insert(it, std::make_move_iterator(produced.begin()), std::make_move_iterator(produced.end()));
+namespace {
+    ASTGenericParams ParseGenericParamsOpt(TokenStream& lex) {
+        if (lex.getTokenIf(TOK_LT)) {
+            return ParseGenericParams(lex);
+        } else {
+            return ASTGenericParams();
+        }
+    }
+}
+
+namespace {
+    void ParseWhereClause(TokenStream& lex, ASTGenericParams& params) {
+        Token tok;
+
+        do {
+            if (lex.lookahead(0) == TOK_BRACE_OPEN || lex.lookahead(0) == TOK_SEMICOLON || lex.lookahead(0) == TOK_EQUAL) {
+                break;
+            }
+
+            if (lex.getTokenIf(TOK_LIFETIME, tok)) {
+                auto lhs = getLifetimeRef(lex, std::move(tok));
+                GET_CHECK_TOK(tok, lex, TOK_COLON);
+                do {
+                    GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
+                    auto rhs = getLifetimeRef(lex, mv$(tok));
+                    params.addBound(ASTGenericBound::make_Lifetime({lhs, rhs}));
+                } while (lex.getTokenIf(TOK_PLUS));
+            } else if (lex.getTokenIf(TOK_RWORD_FOR)) {
+                auto hrbs = ParseHRB(lex);
+                const bool bindsTypes = !hrbs.types.empty();
+
+                ASTType* type = ParseType(lex);
+                GET_CHECK_TOK(tok, lex, TOK_COLON);
+                if (bindsTypes) {
+                    ASTGenericParams dropped;
+                    ParseTypeBound(lex, dropped, mv$(type), mv$(hrbs), /*retainBareType=*/false);
+                } else {
+                    ParseTypeBound(lex, params, mv$(type), mv$(hrbs), /*retainBareType=*/true);
+                }
             } else {
-                ++it;
+                ASTType* type = ParseType(lex);
+                GET_CHECK_TOK(tok, lex, TOK_COLON);
+                ParseTypeBound(lex, params, mv$(type), {}, /*retainBareType=*/true);
             }
-        }
-        keep = checkCfgAttrs(*wb->settings, attrs);
+        } while (lex.getTokenIf(TOK_COMMA));
     }
-    if (attrsOut) {
-        *attrsOut = mv$(attrs);
-    }
-    return keep;
 }
 
-ASTFunction::Arg ParseFunctionArg(TokenStream& lex, bool expectNamed, ASTAttributeList attrs) {
-    Token tok;
-
-    ASTPattern pat;
-    if (expectNamed || LOOK_AHEAD(lex) == TOK_UNDERSCORE || LOOK_AHEAD(lex) == TOK_RWORD_REF || LOOK_AHEAD(lex) == TOK_RWORD_MUT || (LOOK_AHEAD(lex) == TOK_IDENT && lex.lookahead(1) == TOK_COLON)) {
-        pat = ParsePattern(lex, AllowOrPattern::No);
-        GET_CHECK_TOK(tok, lex, TOK_COLON);
+namespace {
+    bool ParseParamAttrsKeep(TokenStream& lex, ASTAttributeList* attrsOut) {
+        auto attrs = ParseItemAttrs(lex);
+        bool keep = true;
+        if (const auto* wb = lex.parseState().wb) {
+            const RcString rcstringCfgAttr = RcString::newInterned("cfg_attr");
+            for (auto it = attrs.items.begin(); it != attrs.items.end();) {
+                if (it->name() == rcstringCfgAttr) {
+                    auto produced = checkCfgAttr(*wb->settings, *it);
+                    it = attrs.items.erase(it);
+                    it = attrs.items.insert(it, std::make_move_iterator(produced.begin()), std::make_move_iterator(produced.end()));
+                } else {
+                    ++it;
+                }
+            }
+            keep = checkCfgAttrs(*wb->settings, attrs);
+        }
+        if (attrsOut) {
+            *attrsOut = mv$(attrs);
+        }
+        return keep;
     }
-
-    auto ty = ParseType(lex);
-
-    return ASTFunction::Arg(mv$(pat), mv$(ty), mv$(attrs));
 }
 
-ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSelf, bool canBePrototype, std::string abi, ASTFunction::Flags flags) {
-    const RcString rcstringSelfLower = RcString::newInterned("self");
-    const RcString rcstringSelf = RcString::newInterned("Self");
-    ProtoSpan ps = lex.startSpan();
+namespace {
+    ASTFunction::Arg ParseFunctionArg(TokenStream& lex, bool expectNamed, ASTAttributeList attrs) {
+        Token tok;
 
-    Token tok;
-
-    ASTGenericParams params = ParseGenericParamsOpt(lex);
-
-    ASTFunction::Arglist args;
-
-    GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-    ASTAttributeList firstAttrs;
-    const bool firstKeep = ParseParamAttrsKeep(lex, &firstAttrs);
-    bool firstAttrsUsed = false;
-    GET_TOK(tok, lex);
-
-    if (tok.type() == TOK_AMP) {
-        unsigned int ofs = 0;
-        if (lex.lookahead(0) == TOK_LIFETIME) {
-            ofs++;
+        ASTPattern pat;
+        if (expectNamed || LOOK_AHEAD(lex) == TOK_UNDERSCORE || LOOK_AHEAD(lex) == TOK_RWORD_REF || LOOK_AHEAD(lex) == TOK_RWORD_MUT || (LOOK_AHEAD(lex) == TOK_IDENT && lex.lookahead(1) == TOK_COLON)) {
+            pat = ParsePattern(lex, AllowOrPattern::No);
+            GET_CHECK_TOK(tok, lex, TOK_COLON);
         }
-        const bool selfIsPinned = lex.lookahead(ofs) == TOK_IDENT && lex.lookaheadIdentIs(ofs, "pin") && (lex.lookahead(ofs + 1) == TOK_RWORD_MUT || lex.lookahead(ofs + 1) == TOK_RWORD_CONST) && lex.lookahead(ofs + 2) == TOK_RWORD_SELF;
 
-        if (selfIsPinned || lex.lookahead(ofs) == TOK_RWORD_SELF || (lex.lookahead(ofs) == TOK_RWORD_MUT && lex.lookahead(ofs + 1) == TOK_RWORD_SELF)) {
-            auto ps = lex.startSpan();
-            ASTLifetimeRef lifetime;
-            if (GET_TOK(tok, lex) == TOK_LIFETIME) {
-                lifetime = getLifetimeRef(lex, mv$(tok));
+        auto ty = ParseType(lex);
+
+        return ASTFunction::Arg(mv$(pat), mv$(ty), mv$(attrs));
+    }
+}
+
+namespace {
+    ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSelf, bool canBePrototype, std::string abi, ASTFunction::Flags flags) {
+        const RcString rcstringSelfLower = RcString::newInterned("self");
+        const RcString rcstringSelf = RcString::newInterned("Self");
+        ProtoSpan ps = lex.startSpan();
+
+        Token tok;
+
+        ASTGenericParams params = ParseGenericParamsOpt(lex);
+
+        ASTFunction::Arglist args;
+
+        GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+        ASTAttributeList firstAttrs;
+        const bool firstKeep = ParseParamAttrsKeep(lex, &firstAttrs);
+        bool firstAttrsUsed = false;
+        GET_TOK(tok, lex);
+
+        if (tok.type() == TOK_AMP) {
+            unsigned int ofs = 0;
+            if (lex.lookahead(0) == TOK_LIFETIME) {
+                ofs++;
+            }
+            const bool selfIsPinned = lex.lookahead(ofs) == TOK_IDENT && lex.lookaheadIdentIs(ofs, "pin") && (lex.lookahead(ofs + 1) == TOK_RWORD_MUT || lex.lookahead(ofs + 1) == TOK_RWORD_CONST) && lex.lookahead(ofs + 2) == TOK_RWORD_SELF;
+
+            if (selfIsPinned || lex.lookahead(ofs) == TOK_RWORD_SELF || (lex.lookahead(ofs) == TOK_RWORD_MUT && lex.lookahead(ofs + 1) == TOK_RWORD_SELF)) {
+                auto ps = lex.startSpan();
+                ASTLifetimeRef lifetime;
+                if (GET_TOK(tok, lex) == TOK_LIFETIME) {
+                    lifetime = getLifetimeRef(lex, mv$(tok));
+                    GET_TOK(tok, lex);
+                }
+
+                bool isPin = false;
+                if (selfIsPinned) {
+                    isPin = true;
+                    GET_TOK(tok, lex);
+                }
+                bool isMut = false;
+                if (tok.type() == TOK_RWORD_MUT) {
+                    isMut = true;
+                    GET_TOK(tok, lex);
+                } else if (isPin && tok.type() == TOK_RWORD_CONST) {
+                    GET_TOK(tok, lex);
+                }
+                CHECK_TOK(tok, TOK_RWORD_SELF);
+                auto sp = lex.endSpan(ps);
+                args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(lex.typePool(), ASTTypeTags::Reference(), sp, std::move(lifetime), isMut, mkType(lex.typePool(), sp, rcstringSelf, 0xFFFF), isPin)));
+
+                GET_TOK(tok, lex);
+            } else {
+            }
+        } else if (tok.type() == TOK_RWORD_MUT) {
+            if (LOOK_AHEAD(lex) == TOK_RWORD_SELF) {
+                GET_TOK(tok, lex);
+                auto bindingSp = lex.endSpan(ps);
+                ASTType* ty = mkType(lex.typePool(), lex.pointSpan(), rcstringSelf, 0xFFFF);
+                if (GET_TOK(tok, lex) == TOK_COLON) {
+                    ty = ParseType(lex);
+                } else {
+                    PUTBACK(tok, lex);
+                }
+                args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), bindingSp, rcstringSelfLower), mv$(ty)));
                 GET_TOK(tok, lex);
             }
-
-            bool isPin = false;
-            if (selfIsPinned) {
-                isPin = true;
-                GET_TOK(tok, lex);
-            }
-            bool isMut = false;
-            if (tok.type() == TOK_RWORD_MUT) {
-                isMut = true;
-                GET_TOK(tok, lex);
-            } else if (isPin && tok.type() == TOK_RWORD_CONST) {
-                GET_TOK(tok, lex);
-            }
-            CHECK_TOK(tok, TOK_RWORD_SELF);
-            auto sp = lex.endSpan(ps);
-            args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(lex.typePool(), ASTTypeTags::Reference(), sp, std::move(lifetime), isMut, mkType(lex.typePool(), sp, rcstringSelf, 0xFFFF), isPin)));
-
-            GET_TOK(tok, lex);
-        } else {
-        }
-    } else if (tok.type() == TOK_RWORD_MUT) {
-        if (LOOK_AHEAD(lex) == TOK_RWORD_SELF) {
-            GET_TOK(tok, lex);
+        } else if (tok.type() == TOK_RWORD_SELF) {
             auto bindingSp = lex.endSpan(ps);
             ASTType* ty = mkType(lex.typePool(), lex.pointSpan(), rcstringSelf, 0xFFFF);
             if (GET_TOK(tok, lex) == TOK_COLON) {
@@ -3142,259 +3323,255 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
             }
             args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), bindingSp, rcstringSelfLower), mv$(ty)));
             GET_TOK(tok, lex);
-        }
-    } else if (tok.type() == TOK_RWORD_SELF) {
-        auto bindingSp = lex.endSpan(ps);
-        ASTType* ty = mkType(lex.typePool(), lex.pointSpan(), rcstringSelf, 0xFFFF);
-        if (GET_TOK(tok, lex) == TOK_COLON) {
-            ty = ParseType(lex);
         } else {
-            PUTBACK(tok, lex);
-        }
-        args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), bindingSp, rcstringSelfLower), mv$(ty)));
-        GET_TOK(tok, lex);
-    } else {
-    }
-
-    if (lex.editionAfter(ASTEdition::Rust2018)) {
-        canBePrototype = false;
-    }
-
-    bool isVariadic = false;
-    bool hasNamedVariadic = false;
-    if (tok.type() != TOK_PAREN_CLOSE) {
-        if (args.size()) {
-            CHECK_TOK(tok, TOK_COMMA);
-        } else {
-            PUTBACK(tok, lex);
         }
 
-        do {
-            if (LOOK_AHEAD(lex) == TOK_PAREN_CLOSE) {
-                GET_TOK(tok, lex);
-                break;
-            }
-            ASTAttributeList argAttrs;
-            bool keepArg;
-            if (!firstAttrsUsed && args.empty()) {
-                firstAttrsUsed = true;
-                argAttrs = mv$(firstAttrs);
-                keepArg = firstKeep;
+        if (lex.editionAfter(ASTEdition::Rust2018)) {
+            canBePrototype = false;
+        }
+
+        bool isVariadic = false;
+        bool hasNamedVariadic = false;
+        if (tok.type() != TOK_PAREN_CLOSE) {
+            if (args.size()) {
+                CHECK_TOK(tok, TOK_COMMA);
             } else {
-                keepArg = ParseParamAttrsKeep(lex, &argAttrs);
+                PUTBACK(tok, lex);
             }
-            if (LOOK_AHEAD(lex) == TOK_TRIPLE_DOT) {
-                GET_TOK(tok, lex);
-                if (keepArg) {
-                    isVariadic = true;
-                }
-                continue;
-            }
-            const bool plainNamedVariadic = (lex.lookahead(0) == TOK_IDENT || lex.lookahead(0) == TOK_UNDERSCORE) && lex.lookahead(1) == TOK_COLON && lex.lookahead(2) == TOK_TRIPLE_DOT;
-            const bool mutableNamedVariadic = lex.lookahead(0) == TOK_RWORD_MUT && lex.lookahead(1) == TOK_IDENT && lex.lookahead(2) == TOK_COLON && lex.lookahead(3) == TOK_TRIPLE_DOT;
-            if (plainNamedVariadic || mutableNamedVariadic) {
-                auto pat = ParsePattern(lex, AllowOrPattern::No);
-                GET_CHECK_TOK(tok, lex, TOK_COLON);
-                GET_CHECK_TOK(tok, lex, TOK_TRIPLE_DOT);
-                if (keepArg) {
-                    args.push_back(ASTFunction::Arg(mv$(pat), mkType(lex.typePool(), lex.pointSpan()), mv$(argAttrs)));
-                    isVariadic = true;
-                    hasNamedVariadic = true;
-                }
-                continue;
-            }
-            {
-                auto arg = ParseFunctionArg(lex, !canBePrototype, mv$(argAttrs));
-                if (keepArg) {
-                    args.push_back(mv$(arg));
-                }
-            }
-        } while (GET_TOK(tok, lex) == TOK_COMMA);
-        CHECK_TOK(tok, TOK_PAREN_CLOSE);
-    } else {
-    }
 
-    ASTType* retType = lex.getTokenIf(TOK_THINARROW) ? ParseType(lex) : mkType(lex.typePool(), ASTTypeTags::Unit(), lex.pointSpan());
-
-    while (lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_PAREN_OPEN) {
-        auto name = lex.getToken();
-        if (name.ident().name != "contract_requires" && name.ident().name != "contract_ensures") {
-            PUTBACK(name, lex);
-            break;
+            do {
+                if (LOOK_AHEAD(lex) == TOK_PAREN_CLOSE) {
+                    GET_TOK(tok, lex);
+                    break;
+                }
+                ASTAttributeList argAttrs;
+                bool keepArg;
+                if (!firstAttrsUsed && args.empty()) {
+                    firstAttrsUsed = true;
+                    argAttrs = mv$(firstAttrs);
+                    keepArg = firstKeep;
+                } else {
+                    keepArg = ParseParamAttrsKeep(lex, &argAttrs);
+                }
+                if (LOOK_AHEAD(lex) == TOK_TRIPLE_DOT) {
+                    GET_TOK(tok, lex);
+                    if (keepArg) {
+                        isVariadic = true;
+                    }
+                    continue;
+                }
+                const bool plainNamedVariadic = (lex.lookahead(0) == TOK_IDENT || lex.lookahead(0) == TOK_UNDERSCORE) && lex.lookahead(1) == TOK_COLON && lex.lookahead(2) == TOK_TRIPLE_DOT;
+                const bool mutableNamedVariadic = lex.lookahead(0) == TOK_RWORD_MUT && lex.lookahead(1) == TOK_IDENT && lex.lookahead(2) == TOK_COLON && lex.lookahead(3) == TOK_TRIPLE_DOT;
+                if (plainNamedVariadic || mutableNamedVariadic) {
+                    auto pat = ParsePattern(lex, AllowOrPattern::No);
+                    GET_CHECK_TOK(tok, lex, TOK_COLON);
+                    GET_CHECK_TOK(tok, lex, TOK_TRIPLE_DOT);
+                    if (keepArg) {
+                        args.push_back(ASTFunction::Arg(mv$(pat), mkType(lex.typePool(), lex.pointSpan()), mv$(argAttrs)));
+                        isVariadic = true;
+                        hasNamedVariadic = true;
+                    }
+                    continue;
+                }
+                {
+                    auto arg = ParseFunctionArg(lex, !canBePrototype, mv$(argAttrs));
+                    if (keepArg) {
+                        args.push_back(mv$(arg));
+                    }
+                }
+            } while (GET_TOK(tok, lex) == TOK_COMMA);
+            CHECK_TOK(tok, TOK_PAREN_CLOSE);
+        } else {
         }
-        lex.getTokenCheck(TOK_PAREN_OPEN);
-        (void)ParseExpr0(lex);
-        lex.getTokenCheck(TOK_PAREN_CLOSE);
-    }
 
-    if (lex.getTokenIf(TOK_RWORD_WHERE)) {
-        ParseWhereClause(lex, params);
-    }
+        ASTType* retType = lex.getTokenIf(TOK_THINARROW) ? ParseType(lex) : mkType(lex.typePool(), ASTTypeTags::Unit(), lex.pointSpan());
 
-    return ASTFunction(std::move(definitionSpan), mv$(abi), mv$(flags), mv$(params), mv$(retType), mv$(args), isVariadic, hasNamedVariadic);
-}
-
-ASTFunction ParseFunctionDefWithCode(TokenStream& lex, Span definitionSpan, bool allowSelf, std::string abi, ASTFunction::Flags flags) {
-    Token tok;
-    auto ret = ParseFunctionDef(lex, std::move(definitionSpan), allowSelf, /*can_be_prototype=*/false, std::move(abi), flags);
-    GET_TOK(tok, lex);
-    if (tok == TOK_BRACE_OPEN) {
-    } else if (tok.type() == TOK_INTERPOLATED_BLOCK) {
-    } else if (tok.type() == TOK_SEMICOLON) {
-        return ret;
-    } else {
-        parseErrorUnexpected(lex, tok, {TOK_BRACE_OPEN, TOK_INTERPOLATED_BLOCK});
-    }
-    // Enter a new hygine scope for the function (TODO: Should this be in Parse_ExprBlock?)
-    lex.pushHygine();
-    PUTBACK(tok, lex);
-    ret.setCode(ParseExprBlock(lex));
-    lex.popHygine();
-    return ret;
-}
-
-ASTTypeAlias ParseTypeAlias(TokenStream& lex) {
-    Token tok;
-
-    ASTGenericParams params = ParseGenericParamsOpt(lex);
-
-    if (lex.getTokenIf(TOK_COLON)) {
-        ASTGenericParams dropped;
-        ParseTypeBound(lex, dropped, ::mkType(lex.typePool(), lex.pointSpan()));
-    }
-
-    GET_TOK(tok, lex);
-    if (tok.type() == TOK_RWORD_WHERE) {
-        ParseWhereClause(lex, params);
-        GET_TOK(tok, lex);
-    }
-
-    ASTType* type;
-    if (tok.type() == TOK_EQUAL) {
-        type = ParseType(lex);
-        GET_TOK(tok, lex);
-    } else {
-        type = ::mkType(lex.typePool(), lex.pointSpan());
-    }
-    CHECK_TOK(tok, TOK_SEMICOLON);
-
-    return ASTTypeAlias(std::move(params), std::move(type));
-}
-
-ASTStruct ParseStruct(TokenStream& lex, const ASTAttributeList& metaItems) {
-    Token tok;
-
-    tok = lex.getToken();
-    ASTGenericParams params;
-    if (tok.type() == TOK_LT) {
-        params = ParseGenericParams(lex);
-        tok = lex.getToken();
-    }
-
-    if (tok.type() == TOK_PAREN_OPEN) {
-        std::vector<ASTTupleItem> refs;
-        while (!lex.getTokenIf(TOK_PAREN_CLOSE)) {
-            auto itemAttrs = ParseItemAttrs(lex);
-            SET_ATTRS(lex, itemAttrs);
-
-            auto vis = ParsePublicity(lex, /*allow_restricted=*/false);
-
-            refs.push_back(ASTTupleItem(mv$(itemAttrs), vis, ParseType(lex)));
-            if (GET_TOK(tok, lex) != TOK_COMMA) {
-                CHECK_TOK(tok, TOK_PAREN_CLOSE);
+        while (lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_PAREN_OPEN) {
+            auto name = lex.getToken();
+            if (name.ident().name != "contract_requires" && name.ident().name != "contract_ensures") {
+                PUTBACK(name, lex);
                 break;
             }
+            lex.getTokenCheck(TOK_PAREN_OPEN);
+            (void)ParseExpr0(lex);
+            lex.getTokenCheck(TOK_PAREN_CLOSE);
         }
 
         if (lex.getTokenIf(TOK_RWORD_WHERE)) {
             ParseWhereClause(lex, params);
         }
-        GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
-        return ASTStruct(mv$(params), mv$(refs));
-    } else {
+
+        return ASTFunction(std::move(definitionSpan), mv$(abi), mv$(flags), mv$(params), mv$(retType), mv$(args), isVariadic, hasNamedVariadic);
+    }
+}
+
+namespace {
+    ASTFunction ParseFunctionDefWithCode(TokenStream& lex, Span definitionSpan, bool allowSelf, std::string abi, ASTFunction::Flags flags) {
+        Token tok;
+        auto ret = ParseFunctionDef(lex, std::move(definitionSpan), allowSelf, /*can_be_prototype=*/false, std::move(abi), flags);
+        GET_TOK(tok, lex);
+        if (tok == TOK_BRACE_OPEN) {
+        } else if (tok.type() == TOK_INTERPOLATED_BLOCK) {
+        } else if (tok.type() == TOK_SEMICOLON) {
+            return ret;
+        } else {
+            parseErrorUnexpected(lex, tok, {TOK_BRACE_OPEN, TOK_INTERPOLATED_BLOCK});
+        }
+        // Enter a new hygine scope for the function (TODO: Should this be in Parse_ExprBlock?)
+        lex.pushHygine();
+        PUTBACK(tok, lex);
+        ret.setCode(ParseExprBlock(lex));
+        lex.popHygine();
+        return ret;
+    }
+}
+
+namespace {
+    ASTTypeAlias ParseTypeAlias(TokenStream& lex) {
+        Token tok;
+
+        ASTGenericParams params = ParseGenericParamsOpt(lex);
+
+        if (lex.getTokenIf(TOK_COLON)) {
+            ASTGenericParams dropped;
+            ParseTypeBound(lex, dropped, ::mkType(lex.typePool(), lex.pointSpan()));
+        }
+
+        GET_TOK(tok, lex);
         if (tok.type() == TOK_RWORD_WHERE) {
             ParseWhereClause(lex, params);
+            GET_TOK(tok, lex);
+        }
+
+        ASTType* type;
+        if (tok.type() == TOK_EQUAL) {
+            type = ParseType(lex);
+            GET_TOK(tok, lex);
+        } else {
+            type = ::mkType(lex.typePool(), lex.pointSpan());
+        }
+        CHECK_TOK(tok, TOK_SEMICOLON);
+
+        return ASTTypeAlias(std::move(params), std::move(type));
+    }
+}
+
+namespace {
+    ASTStruct ParseStruct(TokenStream& lex, const ASTAttributeList& metaItems) {
+        Token tok;
+
+        tok = lex.getToken();
+        ASTGenericParams params;
+        if (tok.type() == TOK_LT) {
+            params = ParseGenericParams(lex);
             tok = lex.getToken();
         }
 
-        if (tok.type() == TOK_SEMICOLON) {
-            CHECK_TOK(tok, TOK_SEMICOLON);
-            return ASTStruct(mv$(params));
-        } else if (tok.type() == TOK_BRACE_OPEN) {
-            std::vector<ASTStructItem> items;
-            while (!lex.getTokenIf(TOK_BRACE_CLOSE)) {
+        if (tok.type() == TOK_PAREN_OPEN) {
+            std::vector<ASTTupleItem> refs;
+            while (!lex.getTokenIf(TOK_PAREN_CLOSE)) {
                 auto itemAttrs = ParseItemAttrs(lex);
                 SET_ATTRS(lex, itemAttrs);
 
-                auto vis = ParsePublicity(lex);
+                auto vis = ParsePublicity(lex, /*allow_restricted=*/false);
 
-                GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                auto name = tok.ident().name;
-                GET_CHECK_TOK(tok, lex, TOK_COLON);
-                ASTType* type = ParseType(lex);
-                ASTExpr defaultValue = lex.getTokenIf(TOK_EQUAL) ? ParseExpr(lex) : ASTExpr();
-
-                items.push_back(ASTStructItem(mv$(itemAttrs), vis, mv$(name), mv$(type), std::move(defaultValue)));
-                if (GET_TOK(tok, lex) == TOK_BRACE_CLOSE) {
+                refs.push_back(ASTTupleItem(mv$(itemAttrs), vis, ParseType(lex)));
+                if (GET_TOK(tok, lex) != TOK_COMMA) {
+                    CHECK_TOK(tok, TOK_PAREN_CLOSE);
                     break;
                 }
-                CHECK_TOK(tok, TOK_COMMA);
             }
-            return ASTStruct(mv$(params), mv$(items));
+
+            if (lex.getTokenIf(TOK_RWORD_WHERE)) {
+                ParseWhereClause(lex, params);
+            }
+            GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+            return ASTStruct(mv$(params), mv$(refs));
         } else {
-            parseErrorUnexpected(lex, tok);
+            if (tok.type() == TOK_RWORD_WHERE) {
+                ParseWhereClause(lex, params);
+                tok = lex.getToken();
+            }
+
+            if (tok.type() == TOK_SEMICOLON) {
+                CHECK_TOK(tok, TOK_SEMICOLON);
+                return ASTStruct(mv$(params));
+            } else if (tok.type() == TOK_BRACE_OPEN) {
+                std::vector<ASTStructItem> items;
+                while (!lex.getTokenIf(TOK_BRACE_CLOSE)) {
+                    auto itemAttrs = ParseItemAttrs(lex);
+                    SET_ATTRS(lex, itemAttrs);
+
+                    auto vis = ParsePublicity(lex);
+
+                    GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                    auto name = tok.ident().name;
+                    GET_CHECK_TOK(tok, lex, TOK_COLON);
+                    ASTType* type = ParseType(lex);
+                    ASTExpr defaultValue = lex.getTokenIf(TOK_EQUAL) ? ParseExpr(lex) : ASTExpr();
+
+                    items.push_back(ASTStructItem(mv$(itemAttrs), vis, mv$(name), mv$(type), std::move(defaultValue)));
+                    if (GET_TOK(tok, lex) == TOK_BRACE_CLOSE) {
+                        break;
+                    }
+                    CHECK_TOK(tok, TOK_COMMA);
+                }
+                return ASTStruct(mv$(params), mv$(items));
+            } else {
+                parseErrorUnexpected(lex, tok);
+            }
         }
     }
 }
 
 namespace {
-static void ParseFunctionQualifiers(TokenStream& lex, Token& tok, ASTFunction::Flags& flags, std::string& abi) {
-    if (tok.type() == TOK_RWORD_CONST) {
-        switch (lex.lookahead(0)) {
-            case TOK_RWORD_ASYNC:
-            case TOK_RWORD_UNSAFE:
-            case TOK_RWORD_EXTERN:
-            case TOK_RWORD_FN:
-                break;
-            default:
-                return;
-        }
-    }
-
-    for (;;) {
-        switch (tok.type()) {
-            case TOK_RWORD_CONST:
-                flags.isConst = true;
-                GET_TOK(tok, lex);
-                break;
-            case TOK_RWORD_ASYNC:
-                flags.isAsync = true;
-                GET_TOK(tok, lex);
-                break;
-            case TOK_IDENT:
-                if (tok.ident().name != "gen" || lex.lookahead(0) != TOK_RWORD_FN) {
+    static void ParseFunctionQualifiers(TokenStream& lex, Token& tok, ASTFunction::Flags& flags, std::string& abi) {
+        if (tok.type() == TOK_RWORD_CONST) {
+            switch (lex.lookahead(0)) {
+                case TOK_RWORD_ASYNC:
+                case TOK_RWORD_UNSAFE:
+                case TOK_RWORD_EXTERN:
+                case TOK_RWORD_FN:
+                    break;
+                default:
                     return;
-                }
-                flags.isGen = true;
-                GET_TOK(tok, lex);
-                break;
-            case TOK_RWORD_UNSAFE:
-                flags.isUnsafe = true;
-                GET_TOK(tok, lex);
-                break;
-            case TOK_RWORD_EXTERN:
-                if (GET_TOK(tok, lex) == TOK_STRING) {
-                    abi = tok.str();
+            }
+        }
+
+        for (;;) {
+            switch (tok.type()) {
+                case TOK_RWORD_CONST:
+                    flags.isConst = true;
                     GET_TOK(tok, lex);
-                } else {
-                    abi = "C";
-                }
-                break;
-            default:
-                return;
+                    break;
+                case TOK_RWORD_ASYNC:
+                    flags.isAsync = true;
+                    GET_TOK(tok, lex);
+                    break;
+                case TOK_IDENT:
+                    if (tok.ident().name != "gen" || lex.lookahead(0) != TOK_RWORD_FN) {
+                        return;
+                    }
+                    flags.isGen = true;
+                    GET_TOK(tok, lex);
+                    break;
+                case TOK_RWORD_UNSAFE:
+                    flags.isUnsafe = true;
+                    GET_TOK(tok, lex);
+                    break;
+                case TOK_RWORD_EXTERN:
+                    if (GET_TOK(tok, lex) == TOK_STRING) {
+                        abi = tok.str();
+                        GET_TOK(tok, lex);
+                    } else {
+                        abi = "C";
+                    }
+                    break;
+                default:
+                    return;
+            }
         }
     }
-}
 }
 
 ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
@@ -3562,182 +3739,188 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
     return ASTNamed<ASTItem>(lex.endSpan(ps), mv$(itemAttrs), ASTVisibility::makeGlobal(), mv$(name), mv$(rv));
 }
 
-ASTTrait ParseTraitDef(TokenStream& lex, const ASTAttributeList& metaItems, ASTGenericParams params) {
-    Token tok;
+namespace {
+    ASTTrait ParseTraitDef(TokenStream& lex, const ASTAttributeList& metaItems, ASTGenericParams params) {
+        Token tok;
 
-    GET_TOK(tok, lex);
+        GET_TOK(tok, lex);
 
-    std::vector<Spanned<TypeTraitPath>> supertraits;
-    std::vector<Spanned<ASTLifetimeRef>> lifetimes;
-    if (tok.type() == TOK_COLON) {
-        // TODO: Just add these as `where Self: <foo>` (would that break typecheck?)
-        do {
-            if (GET_TOK(tok, lex) == TOK_LIFETIME) {
-                lifetimes.push_back(GET_SPANNED(ASTLifetimeRef, lex, ASTLifetimeRef(tok.ident())));
-            } else if (tok.type() == TOK_BRACE_OPEN) {
-                break;
+        std::vector<Spanned<TypeTraitPath>> supertraits;
+        std::vector<Spanned<ASTLifetimeRef>> lifetimes;
+        if (tok.type() == TOK_COLON) {
+            // TODO: Just add these as `where Self: <foo>` (would that break typecheck?)
+            do {
+                if (GET_TOK(tok, lex) == TOK_LIFETIME) {
+                    lifetimes.push_back(GET_SPANNED(ASTLifetimeRef, lex, ASTLifetimeRef(tok.ident())));
+                } else if (tok.type() == TOK_BRACE_OPEN) {
+                    break;
+                } else {
+                    PUTBACK(tok, lex);
+                    if (lex.getTokenIf(TOK_EXCLAM)) {
+                        ParsePath(lex, PATH_GENERIC_TYPE);
+                        continue;
+                    }
+                    auto constness = ParseBoundConstness(lex);
+                    auto hrbs = ParseHRBOpt(lex);
+                    auto postHrbConstness = ParseBoundConstness(lex);
+                    if (postHrbConstness != ASTBoundConstness::Never) {
+                        constness = postHrbConstness;
+                    }
+                    supertraits.push_back(GET_SPANNED(TypeTraitPath, lex, (TypeTraitPath(mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE), constness))));
+                }
+            } while (GET_TOK(tok, lex) == TOK_PLUS);
+        }
+
+        if (tok.type() == TOK_RWORD_WHERE) {
+            ParseWhereClause(lex, params);
+            tok = lex.getToken();
+        }
+
+        ASTTrait trait(mv$(params), mv$(supertraits), mv$(lifetimes));
+
+        CHECK_TOK(tok, TOK_BRACE_OPEN);
+        {
+            ASTAttributeList innerAttrs;
+            ParseParentAttrs(lex, innerAttrs);
+        }
+        while (GET_TOK(tok, lex) != TOK_BRACE_CLOSE) {
+            PUTBACK(tok, lex);
+
+            auto item = ParseTraitItem(lex);
+            if (item.data.is_Function() && item.data.as_Function().delegation() && item.data.as_Function().delegation()->targets.size() > 1) {
+                for (auto& split : SplitDelegationFunction(item.data.as_Function())) {
+                    trait.items().push_back(ASTNamed<ASTItem>{item.span, item.attrs.clone(), item.vis, mv$(split.first), ASTItem(mv$(split.second))});
+                }
             } else {
-                PUTBACK(tok, lex);
-                if (lex.getTokenIf(TOK_EXCLAM)) {
-                    ParsePath(lex, PATH_GENERIC_TYPE);
-                    continue;
-                }
-                auto constness = ParseBoundConstness(lex);
-                auto hrbs = ParseHRBOpt(lex);
-                auto postHrbConstness = ParseBoundConstness(lex);
-                if (postHrbConstness != ASTBoundConstness::Never) {
-                    constness = postHrbConstness;
-                }
-                supertraits.push_back(GET_SPANNED(TypeTraitPath, lex, (TypeTraitPath(mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE), constness))));
+                trait.items().push_back(mv$(item));
             }
-        } while (GET_TOK(tok, lex) == TOK_PLUS);
-    }
-
-    if (tok.type() == TOK_RWORD_WHERE) {
-        ParseWhereClause(lex, params);
-        tok = lex.getToken();
-    }
-
-    ASTTrait trait(mv$(params), mv$(supertraits), mv$(lifetimes));
-
-    CHECK_TOK(tok, TOK_BRACE_OPEN);
-    {
-        ASTAttributeList innerAttrs;
-        ParseParentAttrs(lex, innerAttrs);
-    }
-    while (GET_TOK(tok, lex) != TOK_BRACE_CLOSE) {
-        PUTBACK(tok, lex);
-
-        auto item = ParseTraitItem(lex);
-        if (item.data.is_Function() && item.data.as_Function().delegation() && item.data.as_Function().delegation()->targets.size() > 1) {
-            for (auto& split : SplitDelegationFunction(item.data.as_Function())) {
-                trait.items().push_back(ASTNamed<ASTItem>{item.span, item.attrs.clone(), item.vis, mv$(split.first), ASTItem(mv$(split.second))});
-            }
-        } else {
-            trait.items().push_back(mv$(item));
         }
-    }
 
-    return trait;
+        return trait;
+    }
 }
 
-ASTEnum ParseEnumDef(TokenStream& lex, const ASTAttributeList& metaItems) {
-    Token tok;
+namespace {
+    ASTEnum ParseEnumDef(TokenStream& lex, const ASTAttributeList& metaItems) {
+        Token tok;
 
-    tok = lex.getToken();
-    ASTGenericParams params;
-    if (tok.type() == TOK_LT) {
-        params = ParseGenericParams(lex);
         tok = lex.getToken();
+        ASTGenericParams params;
+        if (tok.type() == TOK_LT) {
+            params = ParseGenericParams(lex);
+            tok = lex.getToken();
+        }
+        if (tok.type() == TOK_RWORD_WHERE) {
+            ParseWhereClause(lex, params);
+            tok = lex.getToken();
+        }
+
+        CHECK_TOK(tok, TOK_BRACE_OPEN);
+        std::vector<ASTEnumVariant> variants;
+        while (lex.lookahead(0) != TOK_BRACE_CLOSE) {
+            auto sp = lex.startSpan();
+
+            auto itemAttrs = ParseItemAttrs(lex);
+            SET_ATTRS(lex, itemAttrs);
+
+            // TODO: reject a non-default visibility on a variant that survives cfg.
+            if (lex.lookahead(0) == TOK_RWORD_PUB || lex.lookahead(0) == TOK_INTERPOLATED_VIS) {
+                (void)ParsePublicity(lex);
+            }
+
+            GET_CHECK_TOK(tok, lex, TOK_IDENT);
+            auto name = tok.ident().hygienicName();
+            if (lex.getTokenIf(TOK_PAREN_OPEN)) {
+                std::vector<ASTTupleItem> items;
+                do {
+                    if (lex.getTokenIf(TOK_PAREN_CLOSE, tok)) {
+                        break;
+                    }
+
+                    auto fieldAttrs = ParseItemAttrs(lex);
+                    auto ty = ParseType(lex);
+                    items.emplace_back(std::move(fieldAttrs), ASTVisibility::makeGlobal(), std::move(ty));
+                } while (GET_TOK(tok, lex) == TOK_COMMA);
+                CHECK_TOK(tok, TOK_PAREN_CLOSE);
+                variants.push_back(ASTEnumVariant(mv$(itemAttrs), mv$(name), mv$(items)));
+            } else if (lex.getTokenIf(TOK_BRACE_OPEN)) {
+                std::vector<ASTStructItem> fields;
+                do {
+                    if (lex.getTokenIf(TOK_BRACE_CLOSE, tok)) {
+                        break;
+                    }
+
+                    auto fieldAttrs = ParseItemAttrs(lex);
+
+                    GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                    auto name = tok.ident().name;
+                    GET_CHECK_TOK(tok, lex, TOK_COLON);
+                    auto ty = ParseType(lex);
+                    auto def = lex.getTokenIf(TOK_EQUAL) ? ParseExpr(lex) : ASTExpr();
+                    fields.push_back(ASTStructItem(mv$(fieldAttrs), ASTVisibility::makeGlobal(), mv$(name), mv$(ty), mv$(def)));
+                } while (GET_TOK(tok, lex) == TOK_COMMA);
+                CHECK_TOK(tok, TOK_BRACE_CLOSE);
+
+                variants.push_back(ASTEnumVariant(mv$(itemAttrs), mv$(name), mv$(fields)));
+            } else {
+                variants.push_back(ASTEnumVariant(mv$(itemAttrs), mv$(name)));
+            }
+
+            if (lex.getTokenIf(TOK_EQUAL)) {
+                variants.back().discriminantValue = ParseExpr(lex);
+            }
+
+            if (!lex.getTokenIf(TOK_COMMA)) {
+                break;
+            }
+        }
+        GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
+
+        return ASTEnum(mv$(params), mv$(variants));
     }
-    if (tok.type() == TOK_RWORD_WHERE) {
-        ParseWhereClause(lex, params);
-        tok = lex.getToken();
-    }
-
-    CHECK_TOK(tok, TOK_BRACE_OPEN);
-    std::vector<ASTEnumVariant> variants;
-    while (lex.lookahead(0) != TOK_BRACE_CLOSE) {
-        auto sp = lex.startSpan();
-
-        auto itemAttrs = ParseItemAttrs(lex);
-        SET_ATTRS(lex, itemAttrs);
-
-        // TODO: reject a non-default visibility on a variant that survives cfg.
-        if (lex.lookahead(0) == TOK_RWORD_PUB || lex.lookahead(0) == TOK_INTERPOLATED_VIS) {
-            (void)ParsePublicity(lex);
-        }
-
-        GET_CHECK_TOK(tok, lex, TOK_IDENT);
-        auto name = tok.ident().hygienicName();
-        if (lex.getTokenIf(TOK_PAREN_OPEN)) {
-            std::vector<ASTTupleItem> items;
-            do {
-                if (lex.getTokenIf(TOK_PAREN_CLOSE, tok)) {
-                    break;
-                }
-
-                auto fieldAttrs = ParseItemAttrs(lex);
-                auto ty = ParseType(lex);
-                items.emplace_back(std::move(fieldAttrs), ASTVisibility::makeGlobal(), std::move(ty));
-            } while (GET_TOK(tok, lex) == TOK_COMMA);
-            CHECK_TOK(tok, TOK_PAREN_CLOSE);
-            variants.push_back(ASTEnumVariant(mv$(itemAttrs), mv$(name), mv$(items)));
-        } else if (lex.getTokenIf(TOK_BRACE_OPEN)) {
-            std::vector<ASTStructItem> fields;
-            do {
-                if (lex.getTokenIf(TOK_BRACE_CLOSE, tok)) {
-                    break;
-                }
-
-                auto fieldAttrs = ParseItemAttrs(lex);
-
-                GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                auto name = tok.ident().name;
-                GET_CHECK_TOK(tok, lex, TOK_COLON);
-                auto ty = ParseType(lex);
-                auto def = lex.getTokenIf(TOK_EQUAL) ? ParseExpr(lex) : ASTExpr();
-                fields.push_back(ASTStructItem(mv$(fieldAttrs), ASTVisibility::makeGlobal(), mv$(name), mv$(ty), mv$(def)));
-            } while (GET_TOK(tok, lex) == TOK_COMMA);
-            CHECK_TOK(tok, TOK_BRACE_CLOSE);
-
-            variants.push_back(ASTEnumVariant(mv$(itemAttrs), mv$(name), mv$(fields)));
-        } else {
-            variants.push_back(ASTEnumVariant(mv$(itemAttrs), mv$(name)));
-        }
-
-        if (lex.getTokenIf(TOK_EQUAL)) {
-            variants.back().discriminantValue = ParseExpr(lex);
-        }
-
-        if (!lex.getTokenIf(TOK_COMMA)) {
-            break;
-        }
-    }
-    GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
-
-    return ASTEnum(mv$(params), mv$(variants));
 }
 
-ASTUnion ParseUnion(TokenStream& lex, ASTAttributeList& metaItems) {
-    Token tok;
+namespace {
+    ASTUnion ParseUnion(TokenStream& lex, ASTAttributeList& metaItems) {
+        Token tok;
 
-    ASTGenericParams params;
-    if (GET_TOK(tok, lex) == TOK_LT) {
-        params = ParseGenericParams(lex);
-        tok = lex.getToken();
-    }
-    if (tok.type() == TOK_RWORD_WHERE) {
-        ParseWhereClause(lex, params);
-        tok = lex.getToken();
-    }
-
-    std::vector<ASTStructItem> variants;
-
-    CHECK_TOK(tok, TOK_BRACE_OPEN);
-    do {
-        if (LOOK_AHEAD(lex) == TOK_BRACE_CLOSE) {
-            GET_TOK(tok, lex);
-            break;
+        ASTGenericParams params;
+        if (GET_TOK(tok, lex) == TOK_LT) {
+            params = ParseGenericParams(lex);
+            tok = lex.getToken();
+        }
+        if (tok.type() == TOK_RWORD_WHERE) {
+            ParseWhereClause(lex, params);
+            tok = lex.getToken();
         }
 
-        auto itemAttrs = ParseItemAttrs(lex);
-        SET_ATTRS(lex, itemAttrs);
+        std::vector<ASTStructItem> variants;
 
-        auto vis = ParsePublicity(lex);
+        CHECK_TOK(tok, TOK_BRACE_OPEN);
+        do {
+            if (LOOK_AHEAD(lex) == TOK_BRACE_CLOSE) {
+                GET_TOK(tok, lex);
+                break;
+            }
 
-        GET_CHECK_TOK(tok, lex, TOK_IDENT);
-        auto name = tok.ident().name;
-        GET_CHECK_TOK(tok, lex, TOK_COLON);
+            auto itemAttrs = ParseItemAttrs(lex);
+            SET_ATTRS(lex, itemAttrs);
 
-        auto ty = ParseType(lex);
+            auto vis = ParsePublicity(lex);
 
-        variants.push_back(ASTStructItem(mv$(itemAttrs), mv$(vis), mv$(name), mv$(ty), {}));
+            GET_CHECK_TOK(tok, lex, TOK_IDENT);
+            auto name = tok.ident().name;
+            GET_CHECK_TOK(tok, lex, TOK_COLON);
 
-    } while (GET_TOK(tok, lex) == TOK_COMMA);
-    CHECK_TOK(tok, TOK_BRACE_CLOSE);
+            auto ty = ParseType(lex);
 
-    return ASTUnion(mv$(params), mv$(variants));
+            variants.push_back(ASTStructItem(mv$(itemAttrs), mv$(vis), mv$(name), mv$(ty), {}));
+
+        } while (GET_TOK(tok, lex) == TOK_COMMA);
+        CHECK_TOK(tok, TOK_BRACE_CLOSE);
+
+        return ASTUnion(mv$(params), mv$(variants));
+    }
 }
 
 ASTAttributeList ParseItemAttrs(TokenStream& lex) {
@@ -3819,99 +4002,101 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
     return ASTAttribute(lex.endSpan(ps), name, mv$(attrData));
 }
 
-ASTItem ParseImpl(TokenStream& lex, ASTAttributeList& attrs, bool isUnsafe = false, bool isDefault = false) {
-    Token tok;
-    auto ps = lex.startSpan();
+namespace {
+    ASTItem ParseImpl(TokenStream& lex, ASTAttributeList& attrs, bool isUnsafe = false, bool isDefault = false) {
+        Token tok;
+        auto ps = lex.startSpan();
 
-    ASTGenericParams params;
-    if (lex.lookahead(0) == TOK_LT) {
-        bool isParams;
-        switch (lex.lookahead(1)) {
-            case TOK_GT:
-            case TOK_RWORD_CONST:
-            case TOK_HASH:
-                isParams = true;
-                break;
-            case TOK_LIFETIME:
-                isParams = lex.lookahead(2) != TOK_PLUS;
-                break;
-            case TOK_IDENT:
-                isParams = lex.lookahead(2) != TOK_RWORD_AS;
-                break;
-            default:
-                isParams = false;
-                break;
+        ASTGenericParams params;
+        if (lex.lookahead(0) == TOK_LT) {
+            bool isParams;
+            switch (lex.lookahead(1)) {
+                case TOK_GT:
+                case TOK_RWORD_CONST:
+                case TOK_HASH:
+                    isParams = true;
+                    break;
+                case TOK_LIFETIME:
+                    isParams = lex.lookahead(2) != TOK_PLUS;
+                    break;
+                case TOK_IDENT:
+                    isParams = lex.lookahead(2) != TOK_RWORD_AS;
+                    break;
+                default:
+                    isParams = false;
+                    break;
+            }
+            if (isParams) {
+                lex.getToken();
+                params = ParseGenericParams(lex);
+            }
         }
-        if (isParams) {
-            lex.getToken();
-            params = ParseGenericParams(lex);
+
+        Spanned<ASTPath> traitPath;
+
+        const bool isConst = lex.getTokenIf(TOK_RWORD_CONST);
+
+        if (GET_TOK(tok, lex) == TOK_EXCLAM && lex.lookahead(0) != TOK_BRACE_OPEN) {
+            traitPath = GET_SPANNED(ASTPath, lex, ParsePath(lex, PATH_GENERIC_TYPE));
+            GET_CHECK_TOK(tok, lex, TOK_RWORD_FOR);
+            auto implType = ParseType(lex, true);
+
+            if (GET_TOK(tok, lex) == TOK_RWORD_WHERE) {
+                ParseWhereClause(lex, params);
+                GET_TOK(tok, lex);
+            }
+            CHECK_TOK(tok, TOK_BRACE_OPEN);
+            GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
+
+            return ASTItem::make_NegImpl(ASTImplDef(mv$(params), mv$(traitPath), mv$(implType)));
         }
-    }
 
-    Spanned<ASTPath> traitPath;
+        PUTBACK(tok, lex);
 
-    const bool isConst = lex.getTokenIf(TOK_RWORD_CONST);
-
-    if (GET_TOK(tok, lex) == TOK_EXCLAM && lex.lookahead(0) != TOK_BRACE_OPEN) {
-        traitPath = GET_SPANNED(ASTPath, lex, ParsePath(lex, PATH_GENERIC_TYPE));
-        GET_CHECK_TOK(tok, lex, TOK_RWORD_FOR);
         auto implType = ParseType(lex, true);
+
+        if (GET_TOK(tok, lex) == TOK_RWORD_FOR) {
+            if (!implType->isPath()) {
+                compileErrorGeneric(lex, "Trait was not a path");
+            }
+            traitPath = Spanned<ASTPath>{implType->span(), mv$(implType->path())};
+            if (GET_TOK(tok, lex) == TOK_DOUBLE_DOT) {
+                implType = mkType(lex.typePool(), ASTTypeTags::Invalid(), lex.pointSpan());
+            } else {
+                PUTBACK(tok, lex);
+                implType = ParseType(lex, true);
+            }
+        } else {
+            PUTBACK(tok, lex);
+        }
 
         if (GET_TOK(tok, lex) == TOK_RWORD_WHERE) {
             ParseWhereClause(lex, params);
-            GET_TOK(tok, lex);
-        }
-        CHECK_TOK(tok, TOK_BRACE_OPEN);
-        GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
-
-        return ASTItem::make_NegImpl(ASTImplDef(mv$(params), mv$(traitPath), mv$(implType)));
-    }
-
-    PUTBACK(tok, lex);
-
-    auto implType = ParseType(lex, true);
-
-    if (GET_TOK(tok, lex) == TOK_RWORD_FOR) {
-        if (!implType->isPath()) {
-            compileErrorGeneric(lex, "Trait was not a path");
-        }
-        traitPath = Spanned<ASTPath>{implType->span(), mv$(implType->path())};
-        if (GET_TOK(tok, lex) == TOK_DOUBLE_DOT) {
-            implType = mkType(lex.typePool(), ASTTypeTags::Invalid(), lex.pointSpan());
         } else {
             PUTBACK(tok, lex);
-            implType = ParseType(lex, true);
         }
-    } else {
-        PUTBACK(tok, lex);
-    }
+        GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
 
-    if (GET_TOK(tok, lex) == TOK_RWORD_WHERE) {
-        ParseWhereClause(lex, params);
-    } else {
-        PUTBACK(tok, lex);
-    }
-    GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
+        ParseParentAttrs(lex, attrs);
 
-    ParseParentAttrs(lex, attrs);
-
-    auto impl = ASTImpl(ASTImplDef(mv$(params), mv$(traitPath), mv$(implType)));
-    if (isConst) {
-        impl.def().setIsConst();
-    }
-
-    while (lex.lookahead(0) != TOK_BRACE_CLOSE) {
-        ParseImplItem(lex, impl);
-    }
-    GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
-
-    if (isDefault) {
-        for (auto& item : impl.items()) {
-            item.isSpecialisable = true;
+        auto impl = ASTImpl(ASTImplDef(mv$(params), mv$(traitPath), mv$(implType)));
+        if (isConst) {
+            impl.def().setIsConst();
         }
-    }
 
-    return ASTItem::make_Impl(mv$(impl));
+        while (lex.lookahead(0) != TOK_BRACE_CLOSE) {
+            ParseImplItem(lex, impl);
+        }
+        GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
+
+        if (isDefault) {
+            for (auto& item : impl.items()) {
+                item.isSpecialisable = true;
+            }
+        }
+
+        return ASTItem::make_Impl(mv$(impl));
+    }
 }
 
 void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
@@ -4129,339 +4314,353 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
     }
 }
 
-ASTExternBlock ParseExternBlock(TokenStream& lex, std::string abi, ASTAttributeList& blockAttrs) {
-    Token tok;
+namespace {
+    ASTExternBlock ParseExternBlock(TokenStream& lex, std::string abi, ASTAttributeList& blockAttrs) {
+        Token tok;
 
-    ParseParentAttrs(lex, blockAttrs);
+        ParseParentAttrs(lex, blockAttrs);
 
-    ASTExternBlock rv{abi};
+        ASTExternBlock rv{abi};
 
-    while (GET_TOK(tok, lex) != TOK_BRACE_CLOSE) {
-        PUTBACK(tok, lex);
+        while (GET_TOK(tok, lex) != TOK_BRACE_CLOSE) {
+            PUTBACK(tok, lex);
 
-        rv.addItem(ParseExternBlockItem(lex, abi));
-    }
-
-    return rv;
-}
-
-RcString getOptionalIdent(TokenStream& lex, RcString* sourceName) {
-    Token tok;
-    GET_TOK(tok, lex);
-    if (tok.type() == TOK_UNDERSCORE) {
-        ASSERT_BUG(lex.pointSpan(), lex.parseState().wb, "Parser has no WireBoard");
-        auto name = RcString::newInterned(FMT(" " << ++lex.parseState().wb->id));
-        if (sourceName) {
-            *sourceName = name;
+            rv.addItem(ParseExternBlockItem(lex, abi));
         }
-        return name;
-    } else if (tok.type() == TOK_IDENT) {
-        if (sourceName) {
-            *sourceName = tok.ident().name;
-        }
-        return tok.ident().hygienicName();
-    } else {
-        parseErrorUnexpected(lex, tok, {TOK_UNDERSCORE, TOK_IDENT});
+
+        return rv;
     }
 }
 
-void ParseUseInner(TokenStream& lex, std::vector<ASTUseItem::Ent>& entries, ASTPath& path, bool explicitAbsolute = false) {
-    Token tok;
-
-    while (lex.getTokenIf(TOK_RWORD_SUPER)) {
-        lex.getTokenCheck(TOK_DOUBLE_COLON);
-        if (auto* p = path.cls.opt_Super()) {
-            if (p->nodes.empty()) {
-                p->count += 1;
-            } else {
-                p->nodes.pop_back();
+namespace {
+    RcString getOptionalIdent(TokenStream& lex, RcString* sourceName) {
+        Token tok;
+        GET_TOK(tok, lex);
+        if (tok.type() == TOK_UNDERSCORE) {
+            ASSERT_BUG(lex.pointSpan(), lex.parseState().wb, "Parser has no WireBoard");
+            auto name = RcString::newInterned(FMT(" " << ++lex.parseState().wb->id));
+            if (sourceName) {
+                *sourceName = name;
             }
-        } else if (auto* p = path.cls.opt_Self()) {
-            if (p->nodes.empty()) {
-                path = ASTPath::newSuper(1, {});
-            } else {
-                p->nodes.pop_back();
+            return name;
+        } else if (tok.type() == TOK_IDENT) {
+            if (sourceName) {
+                *sourceName = tok.ident().name;
             }
+            return tok.ident().hygienicName();
         } else {
-            ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, "super in empty path");
-            path.nodes().pop_back();
+            parseErrorUnexpected(lex, tok, {TOK_UNDERSCORE, TOK_IDENT});
         }
     }
+}
 
-    do {
-        switch (GET_TOK(tok, lex)) {
-            case TOK_IDENT:
-                if (explicitAbsolute && lex.editionAfter(ASTEdition::Rust2018) && path.cls.is_Absolute() && path.cls.as_Absolute().crate == "" && path.cls.as_Absolute().nodes.empty()) {
-                    path = ASTPath(RcString(std::string("=") + tok.ident().name.c_str()), {});
+namespace {
+    void ParseUseInner(TokenStream& lex, std::vector<ASTUseItem::Ent>& entries, ASTPath& path, bool explicitAbsolute = false) {
+        Token tok;
+
+        while (lex.getTokenIf(TOK_RWORD_SUPER)) {
+            lex.getTokenCheck(TOK_DOUBLE_COLON);
+            if (auto* p = path.cls.opt_Super()) {
+                if (p->nodes.empty()) {
+                    p->count += 1;
                 } else {
-                    path.append(ASTPathNode(tok.ident().hygiene, tok.ident().name, {}));
+                    p->nodes.pop_back();
                 }
-                break;
-            case TOK_RWORD_SELF: {
-                ASSERT_BUG(lex.pointSpan(), !path.nodes().empty(), "`self` with no path");
-                auto name = path.nodes().back().hygienicName();
-                if (lex.getTokenIf(TOK_RWORD_AS)) {
-                    name = getOptionalIdent(lex);
+            } else if (auto* p = path.cls.opt_Self()) {
+                if (p->nodes.empty()) {
+                    path = ASTPath::newSuper(1, {});
+                } else {
+                    p->nodes.pop_back();
                 }
-                entries.push_back({lex.pointSpan(), ASTPath(path), mv$(name), /*isSelf=*/true});
-                return;
+            } else {
+                ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, "super in empty path");
+                path.nodes().pop_back();
             }
-            case TOK_BRACE_OPEN:
-                if (LOOK_AHEAD(lex) == TOK_BRACE_CLOSE) {
-                    GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
+        }
+
+        do {
+            switch (GET_TOK(tok, lex)) {
+                case TOK_IDENT:
+                    if (explicitAbsolute && lex.editionAfter(ASTEdition::Rust2018) && path.cls.is_Absolute() && path.cls.as_Absolute().crate == "" && path.cls.as_Absolute().nodes.empty()) {
+                        path = ASTPath(RcString(std::string("=") + tok.ident().name.c_str()), {});
+                    } else {
+                        path.append(ASTPathNode(tok.ident().hygiene, tok.ident().name, {}));
+                    }
+                    break;
+                case TOK_RWORD_SELF: {
+                    ASSERT_BUG(lex.pointSpan(), !path.nodes().empty(), "`self` with no path");
+                    auto name = path.nodes().back().hygienicName();
+                    if (lex.getTokenIf(TOK_RWORD_AS)) {
+                        name = getOptionalIdent(lex);
+                    }
+                    entries.push_back({lex.pointSpan(), ASTPath(path), mv$(name), /*isSelf=*/true});
                     return;
                 }
-                do {
-                    if (lex.getTokenIf(TOK_BRACE_CLOSE, tok)) {
-                        break;
-                    } else if (lex.getTokenIf(TOK_RWORD_SELF)) {
-                        RcString name;
-                        if (lex.getTokenIf(TOK_RWORD_AS)) {
-                            name = getOptionalIdent(lex);
-                        } else {
-                            if (path.nodes().size() == 0) {
-                                ERROR(lex.pointSpan(), E0000, "`self` with no path, use `as` to give it a name");
-                            }
-                            name = path.nodes().back().hygienicName();
-                        }
-                        entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name), /*isSelf=*/true});
-                    } else {
-                        auto savedPath = ASTPath(path);
-
-                        ParseUseInner(lex, entries, path, explicitAbsolute);
-
-                        path = std::move(savedPath);
+                case TOK_BRACE_OPEN:
+                    if (LOOK_AHEAD(lex) == TOK_BRACE_CLOSE) {
+                        GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
+                        return;
                     }
-                } while (GET_TOK(tok, lex) == TOK_COMMA);
-                CHECK_TOK(tok, TOK_BRACE_CLOSE);
-                return;
-            case TOK_DOUBLE_COLON: {
-                auto absolutePath = ASTPath("", {});
-                ParseUseInner(lex, entries, absolutePath, true);
-                return;
+                    do {
+                        if (lex.getTokenIf(TOK_BRACE_CLOSE, tok)) {
+                            break;
+                        } else if (lex.getTokenIf(TOK_RWORD_SELF)) {
+                            RcString name;
+                            if (lex.getTokenIf(TOK_RWORD_AS)) {
+                                name = getOptionalIdent(lex);
+                            } else {
+                                if (path.nodes().size() == 0) {
+                                    ERROR(lex.pointSpan(), E0000, "`self` with no path, use `as` to give it a name");
+                                }
+                                name = path.nodes().back().hygienicName();
+                            }
+                            entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name), /*isSelf=*/true});
+                        } else {
+                            auto savedPath = ASTPath(path);
+
+                            ParseUseInner(lex, entries, path, explicitAbsolute);
+
+                            path = std::move(savedPath);
+                        }
+                    } while (GET_TOK(tok, lex) == TOK_COMMA);
+                    CHECK_TOK(tok, TOK_BRACE_CLOSE);
+                    return;
+                case TOK_DOUBLE_COLON: {
+                    auto absolutePath = ASTPath("", {});
+                    ParseUseInner(lex, entries, absolutePath, true);
+                    return;
+                }
+                case TOK_STAR:
+                    entries.push_back({lex.pointSpan(), ASTPath(path), ""});
+                    return;
+                default:
+                    parseErrorUnexpected(lex, tok);
             }
-            case TOK_STAR:
-                entries.push_back({lex.pointSpan(), ASTPath(path), ""});
-                return;
-            default:
-                parseErrorUnexpected(lex, tok);
+        } while (GET_TOK(tok, lex) == TOK_DOUBLE_COLON);
+
+        RcString name;
+
+        if (tok.type() == TOK_RWORD_AS) {
+            name = getOptionalIdent(lex);
+        } else {
+            PUTBACK(tok, lex);
+            ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, "`use` with no path");
+            name = path.nodes().back().hygienicName();
         }
-    } while (GET_TOK(tok, lex) == TOK_DOUBLE_COLON);
 
-    RcString name;
-
-    if (tok.type() == TOK_RWORD_AS) {
-        name = getOptionalIdent(lex);
-    } else {
-        PUTBACK(tok, lex);
-        ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, "`use` with no path");
-        name = path.nodes().back().hygienicName();
+        // TODO: Get a span covering the final node.
+        entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name)});
     }
-
-    // TODO: Get a span covering the final node.
-    entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name)});
 }
 
-void ParseUseRoot(TokenStream& lex, std::vector<ASTUseItem::Ent>& entries) {
-    ASTPath path = ASTPath("", {});
-    bool explicitAbsolute = false;
-    Token tok;
-    switch (GET_TOK(tok, lex)) {
-        case TOK_RWORD_SELF:
-            path = ASTPath::newSelf({});
-            GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
-            break;
-        case TOK_RWORD_SUPER: {
-            unsigned int count = 1;
-            while (LOOK_AHEAD(lex) == TOK_DOUBLE_COLON && lex.lookahead(1) == TOK_RWORD_SUPER) {
+namespace {
+    void ParseUseRoot(TokenStream& lex, std::vector<ASTUseItem::Ent>& entries) {
+        ASTPath path = ASTPath("", {});
+        bool explicitAbsolute = false;
+        Token tok;
+        switch (GET_TOK(tok, lex)) {
+            case TOK_RWORD_SELF:
+                path = ASTPath::newSelf({});
                 GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
-                GET_CHECK_TOK(tok, lex, TOK_RWORD_SUPER);
-                count += 1;
+                break;
+            case TOK_RWORD_SUPER: {
+                unsigned int count = 1;
+                while (LOOK_AHEAD(lex) == TOK_DOUBLE_COLON && lex.lookahead(1) == TOK_RWORD_SUPER) {
+                    GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
+                    GET_CHECK_TOK(tok, lex, TOK_RWORD_SUPER);
+                    count += 1;
+                }
+                path = ASTPath::newSuper(count, {});
+                GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
+                break;
             }
-            path = ASTPath::newSuper(count, {});
-            GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
-            break;
-        }
-        case TOK_RWORD_CRATE:
-            if (lex.lookahead(0) == TOK_RWORD_AS) {
-                GET_CHECK_TOK(tok, lex, TOK_RWORD_AS);
-                auto name = getOptionalIdent(lex);
-                entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name)});
-                return;
-            }
-            GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
-            break;
-        case TOK_DOUBLE_COLON:
-            explicitAbsolute = true;
-            if (LOOK_AHEAD(lex) == TOK_STRING) {
-                GET_CHECK_TOK(tok, lex, TOK_STRING);
-                path = ASTPath(RcString::newInterned(tok.str()), {});
-                explicitAbsolute = false;
-            } else if (lex.editionAfter(ASTEdition::Rust2018) && LOOK_AHEAD(lex) == TOK_IDENT) {
-                GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                path = ASTPath(RcString(std::string("=") + tok.ident().name.c_str()), {});
-                explicitAbsolute = false;
-                // TODO: Is `use ::foo as bar` valid?
-                if (lex.lookahead(0) != TOK_DOUBLE_COLON) {
-                    RcString name;
-                    if (lex.lookahead(0) == TOK_RWORD_AS) {
-                        GET_CHECK_TOK(tok, lex, TOK_RWORD_AS);
-                        name = getOptionalIdent(lex);
-                    } else {
-                        name = path.cls.as_Absolute().crate.c_str() + 1;
-                    }
-
-                    // TODO: Get a span covering the final node.
+            case TOK_RWORD_CRATE:
+                if (lex.lookahead(0) == TOK_RWORD_AS) {
+                    GET_CHECK_TOK(tok, lex, TOK_RWORD_AS);
+                    auto name = getOptionalIdent(lex);
                     entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name)});
                     return;
                 }
-            } else {
+                GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
+                break;
+            case TOK_DOUBLE_COLON:
+                explicitAbsolute = true;
+                if (LOOK_AHEAD(lex) == TOK_STRING) {
+                    GET_CHECK_TOK(tok, lex, TOK_STRING);
+                    path = ASTPath(RcString::newInterned(tok.str()), {});
+                    explicitAbsolute = false;
+                } else if (lex.editionAfter(ASTEdition::Rust2018) && LOOK_AHEAD(lex) == TOK_IDENT) {
+                    GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                    path = ASTPath(RcString(std::string("=") + tok.ident().name.c_str()), {});
+                    explicitAbsolute = false;
+                    // TODO: Is `use ::foo as bar` valid?
+                    if (lex.lookahead(0) != TOK_DOUBLE_COLON) {
+                        RcString name;
+                        if (lex.lookahead(0) == TOK_RWORD_AS) {
+                            GET_CHECK_TOK(tok, lex, TOK_RWORD_AS);
+                            name = getOptionalIdent(lex);
+                        } else {
+                            name = path.cls.as_Absolute().crate.c_str() + 1;
+                        }
+
+                        // TODO: Get a span covering the final node.
+                        entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name)});
+                        return;
+                    }
+                } else {
+                    PUTBACK(tok, lex);
+                }
+                GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
+                break;
+            case TOK_INTERPOLATED_TYPE: {
+                if (!tok.fragType()->isPath()) {
+                    parseErrorUnexpected(lex, tok);
+                }
+                auto& p = tok.fragType()->path();
+                if (p.cls.is_UFCS()) {
+                    parseErrorUnexpected(lex, tok);
+                }
+                path = std::move(tok.fragType()->path());
+                GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
+            } break;
+            case TOK_INTERPOLATED_PATH: {
+                path = mv$(tok.fragPath());
+                if (!lex.getTokenIf(TOK_DOUBLE_COLON)) {
+                    RcString name;
+                    if (lex.getTokenIf(TOK_RWORD_AS)) {
+                        name = getOptionalIdent(lex);
+                    } else {
+                        ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, "`use` with an empty path fragment");
+                        name = path.nodes().back().hygienicName();
+                    }
+                    entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name)});
+                    return;
+                }
+            } break;
+            default:
+                if (lex.editionAfter(ASTEdition::Rust2018)) {
+                    path = ASTPath::newRelative(/*hygine=*/{}, {});
+                }
+                PUTBACK(tok, lex);
+                break;
+        }
+
+        ParseUseInner(lex, entries, path, explicitAbsolute);
+    }
+}
+
+namespace {
+    ASTUseItem ParseUse(TokenStream& lex) {
+        Token tok;
+        ProtoSpan spanStart = lex.startSpan();
+
+        std::vector<ASTUseItem::Ent> entries;
+
+        if (lex.lookahead(0) == TOK_BRACE_OPEN) {
+            GET_TOK(tok, lex);
+            do {
+                if (lex.lookahead(0) == TOK_BRACE_CLOSE) {
+                    GET_TOK(tok, lex);
+                    break;
+                }
+                ParseUseRoot(lex, entries);
+            } while (GET_TOK(tok, lex) == TOK_COMMA);
+            CHECK_TOK(tok, TOK_BRACE_CLOSE);
+        } else {
+            ParseUseRoot(lex, entries);
+        }
+
+        return ASTUseItem{lex.endSpan(spanStart), false, mv$(entries)};
+    }
+}
+
+namespace {
+    ASTFunction ParseDelegationFunction(TokenStream& lex, RcString& itemName) {
+        Token tok;
+        auto ps = lex.startSpan();
+        std::vector<ASTUseItem::Ent> entries;
+
+        if (lex.lookahead(0) == TOK_LT) {
+            GET_TOK(tok, lex);
+            auto type = ParseType(lex, true);
+            std::unique_ptr<ASTPath> trait;
+            if (lex.getTokenIf(TOK_RWORD_AS)) {
+                trait = std::make_unique<ASTPath>(ParsePath(lex, PATH_GENERIC_TYPE));
+            }
+            GET_CHECK_TOK(tok, lex, TOK_GT);
+            GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
+            auto path = trait ? ASTPath::newUfcsTrait(mv$(type), mv$(*trait), {}) : ASTPath::newUfcsTy(mv$(type), {});
+            ParseUseInner(lex, entries, path);
+        } else {
+            Ident::Hygiene relativeHygiene;
+            const bool relativeRoot = lex.lookahead(0) == TOK_IDENT;
+            if (relativeRoot) {
+                GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                relativeHygiene = tok.ident().hygiene;
                 PUTBACK(tok, lex);
             }
-            GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
-            break;
-        case TOK_INTERPOLATED_TYPE: {
-            if (!tok.fragType()->isPath()) {
-                parseErrorUnexpected(lex, tok);
-            }
-            auto& p = tok.fragType()->path();
-            if (p.cls.is_UFCS()) {
-                parseErrorUnexpected(lex, tok);
-            }
-            path = std::move(tok.fragType()->path());
-            GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
-        } break;
-        case TOK_INTERPOLATED_PATH: {
-            path = mv$(tok.fragPath());
-            if (!lex.getTokenIf(TOK_DOUBLE_COLON)) {
-                RcString name;
-                if (lex.getTokenIf(TOK_RWORD_AS)) {
-                    name = getOptionalIdent(lex);
-                } else {
-                    ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, "`use` with an empty path fragment");
-                    name = path.nodes().back().hygienicName();
-                }
-                entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name)});
-                return;
-            }
-        } break;
-        default:
-            if (lex.editionAfter(ASTEdition::Rust2018)) {
-                path = ASTPath::newRelative(/*hygine=*/{}, {});
-            }
-            PUTBACK(tok, lex);
-            break;
-    }
-
-    ParseUseInner(lex, entries, path, explicitAbsolute);
-}
-
-ASTUseItem ParseUse(TokenStream& lex) {
-    Token tok;
-    ProtoSpan spanStart = lex.startSpan();
-
-    std::vector<ASTUseItem::Ent> entries;
-
-    if (lex.lookahead(0) == TOK_BRACE_OPEN) {
-        GET_TOK(tok, lex);
-        do {
-            if (lex.lookahead(0) == TOK_BRACE_CLOSE) {
-                GET_TOK(tok, lex);
-                break;
-            }
             ParseUseRoot(lex, entries);
-        } while (GET_TOK(tok, lex) == TOK_COMMA);
-        CHECK_TOK(tok, TOK_BRACE_CLOSE);
-    } else {
-        ParseUseRoot(lex, entries);
-    }
-
-    return ASTUseItem{lex.endSpan(spanStart), false, mv$(entries)};
-}
-
-ASTFunction ParseDelegationFunction(TokenStream& lex, RcString& itemName) {
-    Token tok;
-    auto ps = lex.startSpan();
-    std::vector<ASTUseItem::Ent> entries;
-
-    if (lex.lookahead(0) == TOK_LT) {
-        GET_TOK(tok, lex);
-        auto type = ParseType(lex, true);
-        std::unique_ptr<ASTPath> trait;
-        if (lex.getTokenIf(TOK_RWORD_AS)) {
-            trait = std::make_unique<ASTPath>(ParsePath(lex, PATH_GENERIC_TYPE));
-        }
-        GET_CHECK_TOK(tok, lex, TOK_GT);
-        GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
-        auto path = trait ? ASTPath::newUfcsTrait(mv$(type), mv$(*trait), {}) : ASTPath::newUfcsTy(mv$(type), {});
-        ParseUseInner(lex, entries, path);
-    } else {
-        Ident::Hygiene relativeHygiene;
-        const bool relativeRoot = lex.lookahead(0) == TOK_IDENT;
-        if (relativeRoot) {
-            GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            relativeHygiene = tok.ident().hygiene;
-            PUTBACK(tok, lex);
-        }
-        ParseUseRoot(lex, entries);
-        if (relativeRoot) {
-            for (auto& entry : entries) {
-                if (entry.path.cls.is_Absolute() && entry.path.cls.as_Absolute().crate == "") {
-                    auto nodes = mv$(entry.path.cls.as_Absolute().nodes);
-                    entry.path = ASTPath::newRelative(relativeHygiene, mv$(nodes));
+            if (relativeRoot) {
+                for (auto& entry : entries) {
+                    if (entry.path.cls.is_Absolute() && entry.path.cls.as_Absolute().crate == "") {
+                        auto nodes = mv$(entry.path.cls.as_Absolute().nodes);
+                        entry.path = ASTPath::newRelative(relativeHygiene, mv$(nodes));
+                    }
                 }
             }
         }
-    }
 
-    ASTExpr body;
-    if (lex.lookahead(0) == TOK_BRACE_OPEN) {
-        body = ParseExprBlock(lex);
+        ASTExpr body;
+        if (lex.lookahead(0) == TOK_BRACE_OPEN) {
+            body = ParseExprBlock(lex);
 
-        struct MarkDelegationSelf: ASTNodeVisitorDef {
-            void visit(ASTExprNodeMacro&) override {
-            }
-
-            void visit(ASTExprNodeNamedValue& node) override {
-                if (node.path.cls.is_Local() && node.path.cls.as_Local().name == "self") {
-                    node.path = ASTPath(RcString::newInterned("#delegation-self"));
+            struct MarkDelegationSelf: ASTNodeVisitorDef {
+                void visit(ASTExprNodeMacro&) override {
                 }
-            }
-        } visitor;
 
-        body.node().visit(visitor);
-    } else {
-        GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+                void visit(ASTExprNodeNamedValue& node) override {
+                    if (node.path.cls.is_Local() && node.path.cls.as_Local().name == "self") {
+                        node.path = ASTPath(RcString::newInterned("#delegation-self"));
+                    }
+                }
+            } visitor;
+
+            body.node().visit(visitor);
+        } else {
+            GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+        }
+
+        ASSERT_BUG(lex.endSpan(ps), !entries.empty(), "Empty delegation");
+        ASTFunction::Delegation delegation;
+        for (auto& entry : entries) {
+            delegation.targets.push_back({mv$(entry.path), entry.name});
+        }
+        delegation.body = mv$(body);
+        itemName = delegation.targets.size() == 1 ? delegation.targets.front().name : RcString();
+
+        auto span = lex.endSpan(ps);
+        auto fcn = ASTFunction(span, ABI_RUST, ASTFunction::Flags(), {}, mkType(lex.typePool(), span), {}, false);
+        fcn.setDelegation(mv$(delegation));
+        return fcn;
     }
-
-    ASSERT_BUG(lex.endSpan(ps), !entries.empty(), "Empty delegation");
-    ASTFunction::Delegation delegation;
-    for (auto& entry : entries) {
-        delegation.targets.push_back({mv$(entry.path), entry.name});
-    }
-    delegation.body = mv$(body);
-    itemName = delegation.targets.size() == 1 ? delegation.targets.front().name : RcString();
-
-    auto span = lex.endSpan(ps);
-    auto fcn = ASTFunction(span, ABI_RUST, ASTFunction::Flags(), {}, mkType(lex.typePool(), span), {}, false);
-    fcn.setDelegation(mv$(delegation));
-    return fcn;
 }
 
-std::vector<std::pair<RcString, ASTFunction>> SplitDelegationFunction(const ASTFunction& fcn) {
-    ASSERT_BUG(fcn.sp(), fcn.delegation(), "Splitting a non-delegation function");
-    std::vector<std::pair<RcString, ASTFunction>> rv;
-    for (size_t i = 0; i < fcn.delegation()->targets.size(); i++) {
-        auto split = fcn.clone();
-        auto delegation = split.takeDelegation();
-        auto target = mv$(delegation->targets[i]);
-        delegation->targets.clear();
-        delegation->targets.push_back(mv$(target));
-        auto name = delegation->targets.front().name;
-        split.setDelegation(mv$(*delegation));
-        rv.push_back(std::make_pair(mv$(name), mv$(split)));
+namespace {
+    std::vector<std::pair<RcString, ASTFunction>> SplitDelegationFunction(const ASTFunction& fcn) {
+        ASSERT_BUG(fcn.sp(), fcn.delegation(), "Splitting a non-delegation function");
+        std::vector<std::pair<RcString, ASTFunction>> rv;
+        for (size_t i = 0; i < fcn.delegation()->targets.size(); i++) {
+            auto split = fcn.clone();
+            auto delegation = split.takeDelegation();
+            auto target = mv$(delegation->targets[i]);
+            delegation->targets.clear();
+            delegation->targets.push_back(mv$(target));
+            auto name = delegation->targets.front().name;
+            split.setDelegation(mv$(*delegation));
+            rv.push_back(std::make_pair(mv$(name), mv$(split)));
+        }
+        return rv;
     }
-    return rv;
 }
 
 ASTMacroInvocation ParseMacroInvocation(ProtoSpan spanStart, ASTPath name, TokenStream& lex) {
@@ -4487,41 +4686,43 @@ ASTMacroInvocation ParseMacroInvocation(ProtoSpan spanStart, ASTPath name, Token
     return ASTMacroInvocation(lex.endSpan(spanStart), mv$(name), mv$(ident), mv$(tt));
 }
 
-bool ParseMacroInvocationOpt(TokenStream& lex, ASTMacroInvocation& outInv) {
-    Token tok;
+namespace {
+    bool ParseMacroInvocationOpt(TokenStream& lex, ASTMacroInvocation& outInv) {
+        Token tok;
 
-    switch (lex.lookahead(0)) {
-        case TOK_IDENT:
-            if (!(lex.lookahead(1) == TOK_DOUBLE_COLON || lex.lookahead(1) == TOK_EXCLAM)) {
+        switch (lex.lookahead(0)) {
+            case TOK_IDENT:
+                if (!(lex.lookahead(1) == TOK_DOUBLE_COLON || lex.lookahead(1) == TOK_EXCLAM)) {
+                    return false;
+                }
+                break;
+            case TOK_RWORD_CRATE:
+                if (!(lex.lookahead(1) == TOK_DOUBLE_COLON)) {
+                    return false;
+                }
+                break;
+            case TOK_DOUBLE_COLON:
+            case TOK_RWORD_SUPER:
+            case TOK_RWORD_SELF:
+            case TOK_INTERPOLATED_PATH:
+                break;
+            default:
                 return false;
-            }
-            break;
-        case TOK_RWORD_CRATE:
-            if (!(lex.lookahead(1) == TOK_DOUBLE_COLON)) {
-                return false;
-            }
-            break;
-        case TOK_DOUBLE_COLON:
-        case TOK_RWORD_SUPER:
-        case TOK_RWORD_SELF:
-        case TOK_INTERPOLATED_PATH:
-            break;
-        default:
-            return false;
+        }
+
+        auto ps = lex.startSpan();
+        auto namePath = ParsePath(lex, PATH_GENERIC_NONE);
+        GET_CHECK_TOK(tok, lex, TOK_EXCLAM);
+
+        bool isBraced = (lex.lookahead(0) == TOK_BRACE_OPEN || (lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_BRACE_OPEN));
+
+        outInv = ParseMacroInvocation(ps, namePath, lex);
+
+        if (!isBraced) {
+            GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+        }
+        return true;
     }
-
-    auto ps = lex.startSpan();
-    auto namePath = ParsePath(lex, PATH_GENERIC_NONE);
-    GET_CHECK_TOK(tok, lex, TOK_EXCLAM);
-
-    bool isBraced = (lex.lookahead(0) == TOK_BRACE_OPEN || (lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_BRACE_OPEN));
-
-    outInv = ParseMacroInvocation(ps, namePath, lex);
-
-    if (!isBraced) {
-        GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
-    }
-    return true;
 }
 
 ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& modFileinfo, const ASTAbsolutePath& modPath, ASTAttributeList metaItems) {
@@ -5126,13 +5327,15 @@ void ParseModRootItems(TokenStream& lex, ASTModule& mod) {
     }
 }
 
-void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs) {
-    auto prevMod = lex.parseState().module;
-    lex.parseState().module = &mod;
-    ParseParentAttrs(lex, modAttrs);
+namespace {
+    void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs) {
+        auto prevMod = lex.parseState().module;
+        lex.parseState().module = &mod;
+        ParseParentAttrs(lex, modAttrs);
 
-    ParseModRootItems(lex, mod);
-    lex.parseState().module = prevMod;
+        ParseModRootItems(lex, mod);
+        lex.parseState().module = prevMod;
+    }
 }
 
 ASTCrate* ParseCrate(const WireBoard& wb, ObjPool* pool, std::string mainfile, ASTEdition edition) {
@@ -5160,11 +5363,25 @@ ASTCrate* ParseCrate(const WireBoard& wb, ObjPool* pool, std::string mainfile, A
 #undef GET_SPANNED
 #undef LOOKAHEAD2
 
-ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList);
-ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs = {});
-ASTType* ParseTypePath(TokenStream& lex, ASTHigherRankedBounds hrbs, bool allowTraitList);
-ASTType* ParseTypeTraitObject(TokenStream& lex, ASTHigherRankedBounds hrbs = {});
-ASTType* ParseTypeErasedType(TokenStream& lex, bool allowTraitList);
+namespace {
+    ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList);
+}
+
+namespace {
+    ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs = {});
+}
+
+namespace {
+    ASTType* ParseTypePath(TokenStream& lex, ASTHigherRankedBounds hrbs, bool allowTraitList);
+}
+
+namespace {
+    ASTType* ParseTypeTraitObject(TokenStream& lex, ASTHigherRankedBounds hrbs = {});
+}
+
+namespace {
+    ASTType* ParseTypeErasedType(TokenStream& lex, bool allowTraitList);
+}
 
 ASTType* ParseType(TokenStream& lex, bool allowTraitList) {
     ASTType* rv = ParseTypeInt(lex, allowTraitList);
@@ -5179,406 +5396,416 @@ ASTType* ParseType(TokenStream& lex, bool allowTraitList) {
     return rv;
 }
 
-ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
-    auto ps = lex.startSpan();
+namespace {
+    ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
+        auto ps = lex.startSpan();
 
-    Token tok;
+        Token tok;
 
-    switch (GET_TOK(tok, lex)) {
-        case TOK_INTERPOLATED_TYPE:
-            return mv$(tok.fragType());
-        case TOK_EXCLAM:
-            return mkType(lex.typePool(), lex.subSpan(tok.getPos()), TypeData::make_Bang({}));
-        case TOK_UNDERSCORE:
-            return mkType(lex.typePool(), lex.subSpan(tok.getPos()));
+        switch (GET_TOK(tok, lex)) {
+            case TOK_INTERPOLATED_TYPE:
+                return mv$(tok.fragType());
+            case TOK_EXCLAM:
+                return mkType(lex.typePool(), lex.subSpan(tok.getPos()), TypeData::make_Bang({}));
+            case TOK_UNDERSCORE:
+                return mkType(lex.typePool(), lex.subSpan(tok.getPos()));
 
-        case TOK_RWORD_UNSAFE:
+            case TOK_RWORD_UNSAFE:
 
-            if (LOOK_AHEAD(lex) == TOK_LT) {
-                const auto binder = ParseHRB(lex);
-                const auto savedErased = lex.parseState().erasedLifetimes;
-                for (const auto& lifetime : binder.lifetimes) {
-                    lex.parseState().erasedLifetimes.push_back(lifetime.name().name);
+                if (LOOK_AHEAD(lex) == TOK_LT) {
+                    const auto binder = ParseHRB(lex);
+                    const auto savedErased = lex.parseState().erasedLifetimes;
+                    for (const auto& lifetime : binder.lifetimes) {
+                        lex.parseState().erasedLifetimes.push_back(lifetime.name().name);
+                    }
+                    auto* inner = ParseTypeInt(lex, allowTraitList);
+                    lex.parseState().erasedLifetimes = savedErased;
+                    return inner;
                 }
-                auto* inner = ParseTypeInt(lex, allowTraitList);
-                lex.parseState().erasedLifetimes = savedErased;
-                return inner;
-            }
-        case TOK_RWORD_EXTERN:
-        case TOK_RWORD_FN:
-            PUTBACK(tok, lex);
-            return ParseTypeFn(lex);
-
-        case TOK_RWORD_IMPL:
-            return ParseTypeErasedType(lex, allowTraitList);
-
-        case TOK_LT:
-        case TOK_THINARROW_LEFT:
-        case TOK_DOUBLE_LT: {
-            PUTBACK(tok, lex);
-            auto path = ParsePath(lex, PATH_GENERIC_TYPE);
-            return mkType(lex.typePool(), ASTTypeTags::Path(), lex.endSpan(ps), mv$(path));
-        }
-        case TOK_RWORD_FOR: {
-            auto hrls = ParseHRB(lex);
-            switch (LOOK_AHEAD(lex)) {
-                case TOK_RWORD_UNSAFE:
-                case TOK_RWORD_EXTERN:
-                case TOK_RWORD_FN:
-                    return ParseTypeFn(lex, hrls);
-                default:
-                    return ParseTypePath(lex, hrls, true);
-            }
-        }
-        case TOK_RWORD_DYN: {
-            ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
-            return ParseTypeTraitObject(lex, mv$(hrbs));
-        }
-        case TOK_QMARK:
-            if (allowTraitList) {
-                return ParseTypeTraitObject(lex, {});
-            }
-            parseErrorUnexpected(lex, tok);
-        case TOK_LIFETIME:
-            if (allowTraitList) {
+            case TOK_RWORD_EXTERN:
+            case TOK_RWORD_FN:
                 PUTBACK(tok, lex);
-                return ParseTypeTraitObject(lex, {});
+                return ParseTypeFn(lex);
+
+            case TOK_RWORD_IMPL:
+                return ParseTypeErasedType(lex, allowTraitList);
+
+            case TOK_LT:
+            case TOK_THINARROW_LEFT:
+            case TOK_DOUBLE_LT: {
+                PUTBACK(tok, lex);
+                auto path = ParsePath(lex, PATH_GENERIC_TYPE);
+                return mkType(lex.typePool(), ASTTypeTags::Path(), lex.endSpan(ps), mv$(path));
             }
-            parseErrorUnexpected(lex, tok);
-        case TOK_IDENT:
-            // TODO: Only allow if the next token isn't `::` or `!`
-            if (tok.ident().name == "dyn") {
+            case TOK_RWORD_FOR: {
+                auto hrls = ParseHRB(lex);
+                switch (LOOK_AHEAD(lex)) {
+                    case TOK_RWORD_UNSAFE:
+                    case TOK_RWORD_EXTERN:
+                    case TOK_RWORD_FN:
+                        return ParseTypeFn(lex, hrls);
+                    default:
+                        return ParseTypePath(lex, hrls, true);
+                }
+            }
+            case TOK_RWORD_DYN: {
                 ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
                 return ParseTypeTraitObject(lex, mv$(hrbs));
             }
-            PUTBACK(tok, lex);
-            return ParseTypePath(lex, {}, allowTraitList);
-        case TOK_DOUBLE_COLON:
-        case TOK_RWORD_SELF:
-        case TOK_RWORD_SUPER:
-        case TOK_RWORD_CRATE:
-        case TOK_INTERPOLATED_PATH:
-            PUTBACK(tok, lex);
-            return ParseTypePath(lex, {}, allowTraitList);
-
-        case TOK_DOUBLE_AMP:
-            lex.putback(Token(TOK_AMP));
-        case TOK_AMP: {
-            ASTLifetimeRef lifetime;
-            tok = lex.getToken();
-            if (tok.type() == TOK_LIFETIME) {
-                if (!lex.parseState().lifetimeIsErased(tok.ident().name)) {
-                    lifetime = ASTLifetimeRef(/*lex.point_span(), */ tok.ident());
+            case TOK_QMARK:
+                if (allowTraitList) {
+                    return ParseTypeTraitObject(lex, {});
                 }
-                tok = lex.getToken();
-            }
-            bool isPin = false;
-            if (tok.type() == TOK_IDENT && tok.ident().name == "pin" && (lex.lookahead(0) == TOK_RWORD_MUT || lex.lookahead(0) == TOK_RWORD_CONST)) {
-                isPin = true;
-                tok = lex.getToken();
-            }
-            bool isMut = false;
-            if (tok.type() == TOK_RWORD_MUT) {
-                isMut = true;
-            } else if (isPin && tok.type() == TOK_RWORD_CONST) {
-            } else {
+                parseErrorUnexpected(lex, tok);
+            case TOK_LIFETIME:
+                if (allowTraitList) {
+                    PUTBACK(tok, lex);
+                    return ParseTypeTraitObject(lex, {});
+                }
+                parseErrorUnexpected(lex, tok);
+            case TOK_IDENT:
+                // TODO: Only allow if the next token isn't `::` or `!`
+                if (tok.ident().name == "dyn") {
+                    ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
+                    return ParseTypeTraitObject(lex, mv$(hrbs));
+                }
                 PUTBACK(tok, lex);
-            }
-            return mkType(lex.typePool(), ASTTypeTags::Reference(), lex.endSpan(ps), std::move(lifetime), isMut, ParseType(lex, false), isPin);
-        }
-        case TOK_STAR:
-            switch (GET_TOK(tok, lex)) {
-                case TOK_RWORD_MUT:
-                    return mkType(lex.typePool(), ASTTypeTags::Pointer(), lex.endSpan(ps), true, ParseType(lex, false));
-                case TOK_RWORD_CONST:
-                    return mkType(lex.typePool(), ASTTypeTags::Pointer(), lex.endSpan(ps), false, ParseType(lex, false));
-                default:
-                    parseErrorUnexpected(lex, tok, {TOK_RWORD_CONST, TOK_RWORD_MUT});
-            }
-            compileErrorBugCheck("Reached end of Parse_Type:STAR");
-        case TOK_SQUARE_OPEN: {
-            ASTType* inner = ParseType(lex);
-            if (GET_TOK(tok, lex) == TOK_SEMICOLON) {
-                if (lex.getTokenIf(TOK_UNDERSCORE)) {
-                    GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
-                    return mkType(lex.typePool(), ASTTypeTags::SizedArray(), lex.endSpan(ps), mv$(inner), nullptr);
-                } else {
-                    ASTExpr arraySize = ParseExpr(lex);
-                    GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
-                    return mkType(lex.typePool(), ASTTypeTags::SizedArray(), lex.endSpan(ps), mv$(inner), arraySize.takeNode());
-                }
-            } else if (tok.type() == TOK_SQUARE_CLOSE) {
-                return mkType(lex.typePool(), ASTTypeTags::UnsizedArray(), lex.endSpan(ps), mv$(inner));
-            } else {
-                parseErrorUnexpected(lex, tok /*, "; or ]"*/);
-            }
-        }
+                return ParseTypePath(lex, {}, allowTraitList);
+            case TOK_DOUBLE_COLON:
+            case TOK_RWORD_SELF:
+            case TOK_RWORD_SUPER:
+            case TOK_RWORD_CRATE:
+            case TOK_INTERPOLATED_PATH:
+                PUTBACK(tok, lex);
+                return ParseTypePath(lex, {}, allowTraitList);
 
-        case TOK_PAREN_OPEN: {
-            if (GET_TOK(tok, lex) == TOK_PAREN_CLOSE) {
-                return mkType(lex.typePool(), ASTTypeTags::Tuple(), lex.endSpan(ps), {});
-            }
-            PUTBACK(tok, lex);
-
-            ASTType* inner = ParseType(lex, true);
-            if (LOOK_AHEAD(lex) == TOK_PAREN_CLOSE) {
-                GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
-                return inner;
-            } else {
-                std::vector<ASTType*> types;
-                types.push_back(mv$(inner));
-                while (GET_TOK(tok, lex) == TOK_COMMA) {
-                    if (GET_TOK(tok, lex) == TOK_PAREN_CLOSE) {
-                        break;
-                    } else {
-                        PUTBACK(tok, lex);
+            case TOK_DOUBLE_AMP:
+                lex.putback(Token(TOK_AMP));
+            case TOK_AMP: {
+                ASTLifetimeRef lifetime;
+                tok = lex.getToken();
+                if (tok.type() == TOK_LIFETIME) {
+                    if (!lex.parseState().lifetimeIsErased(tok.ident().name)) {
+                        lifetime = ASTLifetimeRef(/*lex.point_span(), */ tok.ident());
                     }
-                    types.push_back(ParseType(lex));
+                    tok = lex.getToken();
                 }
-                CHECK_TOK(tok, TOK_PAREN_CLOSE);
-                return mkType(lex.typePool(), ASTTypeTags::Tuple(), lex.endSpan(ps), mv$(types));
+                bool isPin = false;
+                if (tok.type() == TOK_IDENT && tok.ident().name == "pin" && (lex.lookahead(0) == TOK_RWORD_MUT || lex.lookahead(0) == TOK_RWORD_CONST)) {
+                    isPin = true;
+                    tok = lex.getToken();
+                }
+                bool isMut = false;
+                if (tok.type() == TOK_RWORD_MUT) {
+                    isMut = true;
+                } else if (isPin && tok.type() == TOK_RWORD_CONST) {
+                } else {
+                    PUTBACK(tok, lex);
+                }
+                return mkType(lex.typePool(), ASTTypeTags::Reference(), lex.endSpan(ps), std::move(lifetime), isMut, ParseType(lex, false), isPin);
             }
+            case TOK_STAR:
+                switch (GET_TOK(tok, lex)) {
+                    case TOK_RWORD_MUT:
+                        return mkType(lex.typePool(), ASTTypeTags::Pointer(), lex.endSpan(ps), true, ParseType(lex, false));
+                    case TOK_RWORD_CONST:
+                        return mkType(lex.typePool(), ASTTypeTags::Pointer(), lex.endSpan(ps), false, ParseType(lex, false));
+                    default:
+                        parseErrorUnexpected(lex, tok, {TOK_RWORD_CONST, TOK_RWORD_MUT});
+                }
+                compileErrorBugCheck("Reached end of Parse_Type:STAR");
+            case TOK_SQUARE_OPEN: {
+                ASTType* inner = ParseType(lex);
+                if (GET_TOK(tok, lex) == TOK_SEMICOLON) {
+                    if (lex.getTokenIf(TOK_UNDERSCORE)) {
+                        GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
+                        return mkType(lex.typePool(), ASTTypeTags::SizedArray(), lex.endSpan(ps), mv$(inner), nullptr);
+                    } else {
+                        ASTExpr arraySize = ParseExpr(lex);
+                        GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
+                        return mkType(lex.typePool(), ASTTypeTags::SizedArray(), lex.endSpan(ps), mv$(inner), arraySize.takeNode());
+                    }
+                } else if (tok.type() == TOK_SQUARE_CLOSE) {
+                    return mkType(lex.typePool(), ASTTypeTags::UnsizedArray(), lex.endSpan(ps), mv$(inner));
+                } else {
+                    parseErrorUnexpected(lex, tok /*, "; or ]"*/);
+                }
+            }
+
+            case TOK_PAREN_OPEN: {
+                if (GET_TOK(tok, lex) == TOK_PAREN_CLOSE) {
+                    return mkType(lex.typePool(), ASTTypeTags::Tuple(), lex.endSpan(ps), {});
+                }
+                PUTBACK(tok, lex);
+
+                ASTType* inner = ParseType(lex, true);
+                if (LOOK_AHEAD(lex) == TOK_PAREN_CLOSE) {
+                    GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+                    return inner;
+                } else {
+                    std::vector<ASTType*> types;
+                    types.push_back(mv$(inner));
+                    while (GET_TOK(tok, lex) == TOK_COMMA) {
+                        if (GET_TOK(tok, lex) == TOK_PAREN_CLOSE) {
+                            break;
+                        } else {
+                            PUTBACK(tok, lex);
+                        }
+                        types.push_back(ParseType(lex));
+                    }
+                    CHECK_TOK(tok, TOK_PAREN_CLOSE);
+                    return mkType(lex.typePool(), ASTTypeTags::Tuple(), lex.endSpan(ps), mv$(types));
+                }
+            }
+            default:
+                parseErrorUnexpected(lex, tok);
         }
-        default:
-            parseErrorUnexpected(lex, tok);
+        compileErrorBugCheck("Reached end of Parse_Type");
     }
-    compileErrorBugCheck("Reached end of Parse_Type");
 }
 
-ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs) {
-    auto ps = lex.startSpan();
-    Token tok;
+namespace {
+    ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs) {
+        auto ps = lex.startSpan();
+        Token tok;
 
-    std::string abi = "";
-    bool isUnsafe = false;
+        std::string abi = "";
+        bool isUnsafe = false;
 
-    GET_TOK(tok, lex);
-
-    if (tok.type() == TOK_RWORD_UNSAFE) {
-        isUnsafe = true;
         GET_TOK(tok, lex);
-    }
-    if (tok.type() == TOK_RWORD_EXTERN) {
-        std::string fragAbi;
-        if (getAbiStringOpt(lex, fragAbi)) {
-            abi = fragAbi;
-            if (abi == "") {
-                ERROR(lex.pointSpan(), E0000, "Empty ABI");
+
+        if (tok.type() == TOK_RWORD_UNSAFE) {
+            isUnsafe = true;
+            GET_TOK(tok, lex);
+        }
+        if (tok.type() == TOK_RWORD_EXTERN) {
+            std::string fragAbi;
+            if (getAbiStringOpt(lex, fragAbi)) {
+                abi = fragAbi;
+                if (abi == "") {
+                    ERROR(lex.pointSpan(), E0000, "Empty ABI");
+                }
+            } else {
+                abi = "C";
             }
-        } else {
-            abi = "C";
+            GET_TOK(tok, lex);
         }
-        GET_TOK(tok, lex);
-    }
-    CHECK_TOK(tok, TOK_RWORD_FN);
+        CHECK_TOK(tok, TOK_RWORD_FN);
 
-    std::vector<ASTType*> args;
-    bool isVariadic = false;
-    GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-    while (LOOK_AHEAD(lex) != TOK_PAREN_CLOSE) {
-        const bool keepArg = ParseParamAttrsKeep(lex);
-        if (LOOK_AHEAD(lex) == TOK_TRIPLE_DOT) {
-            GET_TOK(tok, lex);
-            isVariadic = true;
-            break;
-        }
-        if ((lex.lookahead(0) == TOK_IDENT || lex.lookahead(0) == TOK_UNDERSCORE) && lex.lookahead(1) == TOK_COLON) {
-            GET_TOK(tok, lex);
-            GET_TOK(tok, lex);
-        }
+        std::vector<ASTType*> args;
+        bool isVariadic = false;
+        GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+        while (LOOK_AHEAD(lex) != TOK_PAREN_CLOSE) {
+            const bool keepArg = ParseParamAttrsKeep(lex);
+            if (LOOK_AHEAD(lex) == TOK_TRIPLE_DOT) {
+                GET_TOK(tok, lex);
+                isVariadic = true;
+                break;
+            }
+            if ((lex.lookahead(0) == TOK_IDENT || lex.lookahead(0) == TOK_UNDERSCORE) && lex.lookahead(1) == TOK_COLON) {
+                GET_TOK(tok, lex);
+                GET_TOK(tok, lex);
+            }
 
-        // TODO: reject a `self` parameter in a function type.
-        {
-            unsigned selfOfs = 0;
-            if (lex.lookahead(selfOfs) == TOK_AMP) {
-                selfOfs += 1;
-                if (lex.lookahead(selfOfs) == TOK_LIFETIME) {
+            // TODO: reject a `self` parameter in a function type.
+            {
+                unsigned selfOfs = 0;
+                if (lex.lookahead(selfOfs) == TOK_AMP) {
+                    selfOfs += 1;
+                    if (lex.lookahead(selfOfs) == TOK_LIFETIME) {
+                        selfOfs += 1;
+                    }
+                }
+                if (lex.lookahead(selfOfs) == TOK_RWORD_MUT) {
                     selfOfs += 1;
                 }
+                if (lex.lookahead(selfOfs) == TOK_RWORD_SELF) {
+                    for (unsigned i = 0; i <= selfOfs; i++) {
+                        GET_TOK(tok, lex);
+                    }
+                    if (lex.getTokenIf(TOK_COLON)) {
+                        args.push_back(ParseType(lex));
+                    } else {
+                        args.push_back(mkType(lex.typePool(), lex.pointSpan(), RcString::newInterned("Self"), 0xFFFF));
+                    }
+                    if (GET_TOK(tok, lex) != TOK_COMMA) {
+                        PUTBACK(tok, lex);
+                        break;
+                    }
+                    continue;
+                }
             }
-            if (lex.lookahead(selfOfs) == TOK_RWORD_MUT) {
-                selfOfs += 1;
+            {
+                auto* argTy = ParseType(lex);
+                if (keepArg) {
+                    args.push_back(argTy);
+                }
             }
-            if (lex.lookahead(selfOfs) == TOK_RWORD_SELF) {
-                for (unsigned i = 0; i <= selfOfs; i++) {
-                    GET_TOK(tok, lex);
-                }
-                if (lex.getTokenIf(TOK_COLON)) {
-                    args.push_back(ParseType(lex));
-                } else {
-                    args.push_back(mkType(lex.typePool(), lex.pointSpan(), RcString::newInterned("Self"), 0xFFFF));
-                }
-                if (GET_TOK(tok, lex) != TOK_COMMA) {
-                    PUTBACK(tok, lex);
-                    break;
-                }
-                continue;
+            if (GET_TOK(tok, lex) != TOK_COMMA) {
+                PUTBACK(tok, lex);
+                break;
             }
         }
-        {
-            auto* argTy = ParseType(lex);
-            if (keepArg) {
-                args.push_back(argTy);
-            }
-        }
-        if (GET_TOK(tok, lex) != TOK_COMMA) {
+        GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+
+        ASTType* retType = mkType(lex.typePool(), ASTTypeTags::Unit(), lex.pointSpan());
+        if (GET_TOK(tok, lex) == TOK_THINARROW) {
+            retType = ParseType(lex, false);
+        } else {
             PUTBACK(tok, lex);
-            break;
         }
-    }
-    GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
-    ASTType* retType = mkType(lex.typePool(), ASTTypeTags::Unit(), lex.pointSpan());
-    if (GET_TOK(tok, lex) == TOK_THINARROW) {
-        retType = ParseType(lex, false);
-    } else {
-        PUTBACK(tok, lex);
+        return mkType(lex.typePool(), ASTTypeTags::Function(), lex.endSpan(ps), mv$(hrbs), isUnsafe, mv$(abi), mv$(args), isVariadic, mv$(retType));
     }
-
-    return mkType(lex.typePool(), ASTTypeTags::Function(), lex.endSpan(ps), mv$(hrbs), isUnsafe, mv$(abi), mv$(args), isVariadic, mv$(retType));
 }
 
-ASTType* ParseTypePath(TokenStream& lex, ASTHigherRankedBounds hrbs, bool allowTraitList) {
-    Token tok;
+namespace {
+    ASTType* ParseTypePath(TokenStream& lex, ASTHigherRankedBounds hrbs, bool allowTraitList) {
+        Token tok;
 
-    auto ps = lex.startSpan();
+        auto ps = lex.startSpan();
 
-    auto path = ParsePath(lex, PATH_GENERIC_TYPE);
-    if (lex.lookahead(0) == TOK_EXCLAM) {
-        GET_CHECK_TOK(tok, lex, TOK_EXCLAM);
-        return mkType(lex.typePool(), ASTTypeTags::Macro(), ParseMacroInvocation(ps, path, lex));
-    } else if (hrbs.empty() && !allowTraitList) {
-        return mkType(lex.typePool(), ASTTypeTags::Path(), lex.endSpan(ps), mv$(path));
-    } else {
+        auto path = ParsePath(lex, PATH_GENERIC_TYPE);
+        if (lex.lookahead(0) == TOK_EXCLAM) {
+            GET_CHECK_TOK(tok, lex, TOK_EXCLAM);
+            return mkType(lex.typePool(), ASTTypeTags::Macro(), ParseMacroInvocation(ps, path, lex));
+        } else if (hrbs.empty() && !allowTraitList) {
+            return mkType(lex.typePool(), ASTTypeTags::Path(), lex.endSpan(ps), mv$(path));
+        } else {
+            std::vector<TypeTraitPath> traits;
+            std::vector<ASTLifetimeRef> lifetimes;
+
+            traits.push_back(TypeTraitPath{mv$(hrbs), mv$(path)});
+
+            if (allowTraitList) {
+                while (lex.getTokenIf(TOK_PLUS)) {
+                    if (lex.getTokenIf(TOK_LIFETIME, tok)) {
+                        lifetimes.push_back(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
+                    } else {
+                        if (lex.lookahead(0) == TOK_RWORD_FOR) {
+                            hrbs = ParseHRB(lex);
+                        }
+                        traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
+                    }
+                }
+            }
+
+            if (!traits[0].hrbs.empty() || traits.size() > 1 || lifetimes.size() > 0) {
+                if (lifetimes.empty()) {
+                    lifetimes.push_back(ASTLifetimeRef());
+                }
+                return mkType(lex.typePool(), lex.endSpan(ps), mv$(traits), mv$(lifetimes));
+            } else {
+                return mkType(lex.typePool(), ASTTypeTags::Path(), lex.endSpan(ps), mv$(*traits.at(0).path));
+            }
+        }
+    }
+}
+
+namespace {
+    ASTType* ParseTypeTraitObject(TokenStream& lex, ASTHigherRankedBounds hrbs) {
+        Token tok;
+        auto ps = lex.startSpan();
+
         std::vector<TypeTraitPath> traits;
         std::vector<ASTLifetimeRef> lifetimes;
 
-        traits.push_back(TypeTraitPath{mv$(hrbs), mv$(path)});
+        for (;;) {
+            bool isFirst = traits.empty() && lifetimes.empty();
+            if (LOOK_AHEAD(lex) == TOK_LIFETIME) {
+                GET_TOK(tok, lex);
 
-        if (allowTraitList) {
-            while (lex.getTokenIf(TOK_PLUS)) {
-                if (lex.getTokenIf(TOK_LIFETIME, tok)) {
-                    lifetimes.push_back(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
+                if (isFirst && !hrbs.empty()) {
+                    // TODO: Error
+                }
+
+                lifetimes.push_back(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
+            } else {
+                auto constness = ParseBoundConstness(lex);
+                if (lex.getTokenIf(TOK_RWORD_FOR)) {
+                    hrbs = ParseHRB(lex);
                 } else {
-                    if (lex.lookahead(0) == TOK_RWORD_FOR) {
-                        hrbs = ParseHRB(lex);
-                    }
-                    traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
+                }
+                auto postHrbConstness = ParseBoundConstness(lex);
+                if (postHrbConstness != ASTBoundConstness::Never) {
+                    constness = postHrbConstness;
+                }
+
+                bool isParen = lex.getTokenIf(TOK_PAREN_OPEN);
+
+                traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE), constness});
+
+                if (isParen) {
+                    GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                 }
             }
-        }
 
-        if (!traits[0].hrbs.empty() || traits.size() > 1 || lifetimes.size() > 0) {
-            if (lifetimes.empty()) {
-                lifetimes.push_back(ASTLifetimeRef());
-            }
-            return mkType(lex.typePool(), lex.endSpan(ps), mv$(traits), mv$(lifetimes));
-        } else {
-            return mkType(lex.typePool(), ASTTypeTags::Path(), lex.endSpan(ps), mv$(*traits.at(0).path));
-        }
-    }
-}
-
-ASTType* ParseTypeTraitObject(TokenStream& lex, ASTHigherRankedBounds hrbs) {
-    Token tok;
-    auto ps = lex.startSpan();
-
-    std::vector<TypeTraitPath> traits;
-    std::vector<ASTLifetimeRef> lifetimes;
-
-    for (;;) {
-        bool isFirst = traits.empty() && lifetimes.empty();
-        if (LOOK_AHEAD(lex) == TOK_LIFETIME) {
-            GET_TOK(tok, lex);
-
-            if (isFirst && !hrbs.empty()) {
-                // TODO: Error
-            }
-
-            lifetimes.push_back(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
-        } else {
-            auto constness = ParseBoundConstness(lex);
-            if (lex.getTokenIf(TOK_RWORD_FOR)) {
-                hrbs = ParseHRB(lex);
-            } else {
-            }
-            auto postHrbConstness = ParseBoundConstness(lex);
-            if (postHrbConstness != ASTBoundConstness::Never) {
-                constness = postHrbConstness;
-            }
-
-            bool isParen = lex.getTokenIf(TOK_PAREN_OPEN);
-
-            traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE), constness});
-
-            if (isParen) {
-                GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
-            }
-        }
-
-        if (!lex.getTokenIf(TOK_PLUS)) {
-            break;
-        }
-        switch (lex.lookahead(0)) {
-            case TOK_GT:
-            case TOK_DOUBLE_GT:
-            case TOK_GTE:
-            case TOK_DOUBLE_GT_EQUAL:
-            case TOK_COMMA:
-            case TOK_SEMICOLON:
-            case TOK_EQUAL:
-            case TOK_BRACE_OPEN:
-            case TOK_PAREN_CLOSE:
-            case TOK_SQUARE_CLOSE:
-            case TOK_RWORD_WHERE:
-            case TOK_EOF:
-                goto boundsDone;
-            default:
+            if (!lex.getTokenIf(TOK_PLUS)) {
                 break;
+            }
+            switch (lex.lookahead(0)) {
+                case TOK_GT:
+                case TOK_DOUBLE_GT:
+                case TOK_GTE:
+                case TOK_DOUBLE_GT_EQUAL:
+                case TOK_COMMA:
+                case TOK_SEMICOLON:
+                case TOK_EQUAL:
+                case TOK_BRACE_OPEN:
+                case TOK_PAREN_CLOSE:
+                case TOK_SQUARE_CLOSE:
+                case TOK_RWORD_WHERE:
+                case TOK_EOF:
+                    goto boundsDone;
+                default:
+                    break;
+            }
         }
-    }
-boundsDone:
+    boundsDone:
 
-    if (lifetimes.empty()) {
-        lifetimes.push_back(ASTLifetimeRef());
+        if (lifetimes.empty()) {
+            lifetimes.push_back(ASTLifetimeRef());
+        }
+        return mkType(lex.typePool(), lex.endSpan(ps), mv$(traits), mv$(lifetimes));
     }
-    return mkType(lex.typePool(), lex.endSpan(ps), mv$(traits), mv$(lifetimes));
 }
 
-ASTType* ParseTypeErasedType(TokenStream& lex, bool allowTraitList) {
-    Token tok;
+namespace {
+    ASTType* ParseTypeErasedType(TokenStream& lex, bool allowTraitList) {
+        Token tok;
 
-    auto ps = lex.startSpan();
-    TypeErasedType rvData;
-    rvData.isEdition2024OrLater = lex.editionAfter(ASTEdition::Rust2024);
-    do {
-        if (lex.getTokenIf(TOK_LIFETIME, tok)) {
-            rvData.lifetimes.push_back(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
-        } else if (lex.getTokenIf(TOK_QMARK)) {
-            ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
-            rvData.maybeTraits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
-        } else if (lex.getTokenIf(TOK_PAREN_OPEN)) {
-            ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
-            rvData.traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
-            lex.getTokenCheck(TOK_PAREN_CLOSE);
-        } else if (lex.getTokenIf(TOK_RWORD_USE)) {
-            lex.getTokenCheck(TOK_LT);
-            if (rvData.use) {
-                ERROR(lex.pointSpan(), E0000, "Multiple `use` seen in erased type");
+        auto ps = lex.startSpan();
+        TypeErasedType rvData;
+        rvData.isEdition2024OrLater = lex.editionAfter(ASTEdition::Rust2024);
+        do {
+            if (lex.getTokenIf(TOK_LIFETIME, tok)) {
+                rvData.lifetimes.push_back(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
+            } else if (lex.getTokenIf(TOK_QMARK)) {
+                ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
+                rvData.maybeTraits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
+            } else if (lex.getTokenIf(TOK_PAREN_OPEN)) {
+                ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
+                rvData.traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
+                lex.getTokenCheck(TOK_PAREN_CLOSE);
+            } else if (lex.getTokenIf(TOK_RWORD_USE)) {
+                lex.getTokenCheck(TOK_LT);
+                if (rvData.use) {
+                    ERROR(lex.pointSpan(), E0000, "Multiple `use` seen in erased type");
+                }
+                rvData.use.reset(new ASTPathParams(ParsePathGenericList(lex)));
+            } else {
+                auto constness = ParseBoundConstness(lex);
+                ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
+                auto postHrbConstness = ParseBoundConstness(lex);
+                if (postHrbConstness != ASTBoundConstness::Never) {
+                    constness = postHrbConstness;
+                }
+                const bool isAsyncBound = lex.getTokenIf(TOK_RWORD_ASYNC);
+                rvData.traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE), constness});
+                rvData.traits.back().isAsync = isAsyncBound;
             }
-            rvData.use.reset(new ASTPathParams(ParsePathGenericList(lex)));
-        } else {
-            auto constness = ParseBoundConstness(lex);
-            ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
-            auto postHrbConstness = ParseBoundConstness(lex);
-            if (postHrbConstness != ASTBoundConstness::Never) {
-                constness = postHrbConstness;
-            }
-            const bool isAsyncBound = lex.getTokenIf(TOK_RWORD_ASYNC);
-            rvData.traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE), constness});
-            rvData.traits.back().isAsync = isAsyncBound;
-        }
-    } while (lex.getTokenIf(TOK_PLUS));
+        } while (lex.getTokenIf(TOK_PLUS));
 
-    return mkType(lex.typePool(), lex.endSpan(ps), TypeData::make_ErasedType(lex.typePool().make<TypeErasedType>(mv$(rvData))));
+        return mkType(lex.typePool(), lex.endSpan(ps), TypeData::make_ErasedType(lex.typePool().make<TypeErasedType>(mv$(rvData))));
+    }
 }

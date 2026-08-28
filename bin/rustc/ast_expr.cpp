@@ -784,17 +784,17 @@ NODE(ASTExprNodeCString, { printEscapedLiteral(os, TOK_CSTRING, reinterpret_cast
 NODE(ASTExprNodeSuffixedLiteral, { os << text; }, { return NEWNODE(ASTExprNodeSuffixedLiteral, text); })
 
 namespace {
-static void printClosureParameterPattern(std::ostream& os, const ASTPattern& pattern) {
-    if (pattern.bindings().empty() && pattern.data().is_MaybeBind()) {
-        const auto& ident = pattern.data().as_MaybeBind().name;
-        if (ident.isRaw) {
-            os << "r#";
+    static void printClosureParameterPattern(std::ostream& os, const ASTPattern& pattern) {
+        if (pattern.bindings().empty() && pattern.data().is_MaybeBind()) {
+            const auto& ident = pattern.data().as_MaybeBind().name;
+            if (ident.isRaw) {
+                os << "r#";
+            }
+            os << ident.name;
+            return;
         }
-        os << ident.name;
-        return;
+        os << pattern;
     }
-    os << pattern;
-}
 }
 
 NODE(

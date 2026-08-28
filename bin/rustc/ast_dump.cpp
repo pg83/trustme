@@ -23,122 +23,122 @@
     } while (0)
 
 namespace {
-struct RustPrinter: public ASTNodeVisitor {
-    std::ostream& os;
-    int indentLevel;
-    bool exprRoot;
+    struct RustPrinter: public ASTNodeVisitor {
+        std::ostream& os;
+        int indentLevel;
+        bool exprRoot;
 
-    RustPrinter(std::ostream& os);
+        RustPrinter(std::ostream& os);
 
-    void handleModule(const ASTModule& mod);
-    void handleStruct(const ASTStruct& s);
-    void handleEnum(const ASTEnum& s);
-    void handleTrait(const ASTTrait& s);
+        void handleModule(const ASTModule& mod);
+        void handleStruct(const ASTStruct& s);
+        void handleEnum(const ASTEnum& s);
+        void handleTrait(const ASTTrait& s);
 
-    void handleFunction(const ASTVisibility& vis, const RcString& name, const ASTFunction& f);
-    void handleStatic(const ASTVisibility& vis, const RcString& name, const ASTStatic& s);
+        void handleFunction(const ASTVisibility& vis, const RcString& name, const ASTFunction& f);
+        void handleStatic(const ASTVisibility& vis, const RcString& name, const ASTStatic& s);
 
-    virtual bool isConst() const override;
+        virtual bool isConst() const override;
 
-    virtual void visit(ASTExprNodeBlock& n) override;
+        virtual void visit(ASTExprNodeBlock& n) override;
 
-    virtual void visit(ASTExprNodeAsyncBlock& n) override;
+        virtual void visit(ASTExprNodeAsyncBlock& n) override;
 
-    virtual void visit(ASTExprNodeGeneratorBlock& n) override;
+        virtual void visit(ASTExprNodeGeneratorBlock& n) override;
 
-    virtual void visit(ASTExprNodeTry& n) override;
+        virtual void visit(ASTExprNodeTry& n) override;
 
-    void dumpToken(const Token& t);
+        void dumpToken(const Token& t);
 
-    void dumpTokentree(const TokenTree& tt);
+        void dumpTokentree(const TokenTree& tt);
 
-    virtual void visit(ASTExprNodeMacro& n) override;
+        virtual void visit(ASTExprNodeMacro& n) override;
 
-    virtual void visit(ASTExprNodeAsm& n) override;
+        virtual void visit(ASTExprNodeAsm& n) override;
 
-    virtual void visit(ASTExprNodeAsm2& n) override;
+        virtual void visit(ASTExprNodeAsm2& n) override;
 
-    virtual void visit(ASTExprNodeFlow& n) override;
+        virtual void visit(ASTExprNodeFlow& n) override;
 
-    virtual void visit(ASTExprNodeLetBinding& n) override;
+        virtual void visit(ASTExprNodeLetBinding& n) override;
 
-    virtual void visit(ASTExprNodeAssign& n) override;
+        virtual void visit(ASTExprNodeAssign& n) override;
 
-    virtual void visit(ASTExprNodeCallPath& n) override;
+        virtual void visit(ASTExprNodeCallPath& n) override;
 
-    virtual void visit(ASTExprNodeCallMethod& n) override;
+        virtual void visit(ASTExprNodeCallMethod& n) override;
 
-    virtual void visit(ASTExprNodeCallObject& n) override;
+        virtual void visit(ASTExprNodeCallObject& n) override;
 
-    virtual void visit(ASTExprNodeLoop& n) override;
+        virtual void visit(ASTExprNodeLoop& n) override;
 
-    virtual void visit(ASTExprNodeFor& n) override;
+        virtual void visit(ASTExprNodeFor& n) override;
 
-    void visitIfletConditions(std::vector<ASTIfLetCondition>& conds);
+        void visitIfletConditions(std::vector<ASTIfLetCondition>& conds);
 
-    void visit(ASTExprNodeWhile& n) override;
+        void visit(ASTExprNodeWhile& n) override;
 
-    virtual void visit(ASTExprNodeMatch& n) override;
+        virtual void visit(ASTExprNodeMatch& n) override;
 
-    virtual void visit(ASTExprNodeIf& n) override;
+        virtual void visit(ASTExprNodeIf& n) override;
 
-    virtual void visit(ASTExprNodeClosure& n) override;
+        virtual void visit(ASTExprNodeClosure& n) override;
 
-    virtual void visit(ASTExprNodeWildcardPattern& n) override;
+        virtual void visit(ASTExprNodeWildcardPattern& n) override;
 
-    virtual void visit(ASTExprNodeInteger& n) override;
+        virtual void visit(ASTExprNodeInteger& n) override;
 
-    virtual void visit(ASTExprNodeFloat& n) override;
+        virtual void visit(ASTExprNodeFloat& n) override;
 
-    virtual void visit(ASTExprNodeBool& n) override;
+        virtual void visit(ASTExprNodeBool& n) override;
 
-    virtual void visit(ASTExprNodeString& n) override;
+        virtual void visit(ASTExprNodeString& n) override;
 
-    virtual void visit(ASTExprNodeByteString& n) override;
+        virtual void visit(ASTExprNodeByteString& n) override;
 
-    virtual void visit(ASTExprNodeCString& n) override;
+        virtual void visit(ASTExprNodeCString& n) override;
 
-    virtual void visit(ASTExprNodeSuffixedLiteral& n) override;
+        virtual void visit(ASTExprNodeSuffixedLiteral& n) override;
 
-    virtual void visit(ASTExprNodeStructLiteral& n) override;
+        virtual void visit(ASTExprNodeStructLiteral& n) override;
 
-    virtual void visit(ASTExprNodeStructLiteralPattern& n) override;
+        virtual void visit(ASTExprNodeStructLiteralPattern& n) override;
 
-    virtual void visit(ASTExprNodeArray& n) override;
+        virtual void visit(ASTExprNodeArray& n) override;
 
-    virtual void visit(ASTExprNodeTuple& n) override;
+        virtual void visit(ASTExprNodeTuple& n) override;
 
-    virtual void visit(ASTExprNodeNamedValue& n) override;
+        virtual void visit(ASTExprNodeNamedValue& n) override;
 
-    virtual void visit(ASTExprNodeField& n) override;
+        virtual void visit(ASTExprNodeField& n) override;
 
-    virtual void visit(ASTExprNodeIndex& n) override;
+        virtual void visit(ASTExprNodeIndex& n) override;
 
-    virtual void visit(ASTExprNodeDeref& n) override;
+        virtual void visit(ASTExprNodeDeref& n) override;
 
-    virtual void visit(ASTExprNodeCast& n) override;
+        virtual void visit(ASTExprNodeCast& n) override;
 
-    virtual void visit(ASTExprNodeTypeAnnotation& n) override;
+        virtual void visit(ASTExprNodeTypeAnnotation& n) override;
 
-    virtual void visit(ASTExprNodeBinOp& n) override;
+        virtual void visit(ASTExprNodeBinOp& n) override;
 
-    virtual void visit(ASTExprNodeUniOp& n) override;
+        virtual void visit(ASTExprNodeUniOp& n) override;
 
-    virtual void visit(ASTExprNodeMacroDefinition& n) override;
+        virtual void visit(ASTExprNodeMacroDefinition& n) override;
 
-    void parenWrap(ASTExprNodeP& node);
+        void parenWrap(ASTExprNodeP& node);
 
-    void printAttrs(const ASTAttributeList& attrs);
-    void printParams(const ASTGenericParams& params);
-    void printBounds(const ASTGenericParams& params);
-    void printPatternTuple(const ASTPattern::TuplePat& v, bool isRefutable);
-    void printPattern(const ASTPattern& p, bool isRefutable);
-    void printType(ASTType* t);
+        void printAttrs(const ASTAttributeList& attrs);
+        void printParams(const ASTGenericParams& params);
+        void printBounds(const ASTGenericParams& params);
+        void printPatternTuple(const ASTPattern::TuplePat& v, bool isRefutable);
+        void printPattern(const ASTPattern& p, bool isRefutable);
+        void printType(ASTType* t);
 
-    void incIndent();
-    RepeatLitStr indent();
-    void decIndent();
-};
+        void incIndent();
+        RepeatLitStr indent();
+        void decIndent();
+    };
 }
 
 void RustPrinter::printAttrs(const ASTAttributeList& attrs) {

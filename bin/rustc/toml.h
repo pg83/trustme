@@ -15,11 +15,10 @@
 class TomlFileIter;
 struct TomlKeyValue;
 
-struct TomlToken;
-
 class TomlLexer {
-    friend class TomlFile;
+    struct TomlToken;
 
+    friend class TomlFile;
     std::ifstream input;
 
     std::string filename;

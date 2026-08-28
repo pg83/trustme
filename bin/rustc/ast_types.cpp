@@ -10,31 +10,31 @@
 using namespace stl;
 
 namespace {
-static const struct {
-    const char* name;
-    enum eCoreType type;
-} CORETYPES[] = {
-    {"_", CORETYPE_ANY},
-    {"bool", CORETYPE_BOOL},
-    {"char", CORETYPE_CHAR},
-    {"f128", CORETYPE_F128},
-    {"f16", CORETYPE_F16},
-    {"f32", CORETYPE_F32},
-    {"f64", CORETYPE_F64},
-    {"i128", CORETYPE_I128},
-    {"i16", CORETYPE_I16},
-    {"i32", CORETYPE_I32},
-    {"i64", CORETYPE_I64},
-    {"i8", CORETYPE_I8},
-    {"isize", CORETYPE_INT},
-    {"str", CORETYPE_STR},
-    {"u128", CORETYPE_U128},
-    {"u16", CORETYPE_U16},
-    {"u32", CORETYPE_U32},
-    {"u64", CORETYPE_U64},
-    {"u8", CORETYPE_U8},
-    {"usize", CORETYPE_UINT},
-};
+    static const struct {
+        const char* name;
+        enum eCoreType type;
+    } CORETYPES[] = {
+        {"_", CORETYPE_ANY},
+        {"bool", CORETYPE_BOOL},
+        {"char", CORETYPE_CHAR},
+        {"f128", CORETYPE_F128},
+        {"f16", CORETYPE_F16},
+        {"f32", CORETYPE_F32},
+        {"f64", CORETYPE_F64},
+        {"i128", CORETYPE_I128},
+        {"i16", CORETYPE_I16},
+        {"i32", CORETYPE_I32},
+        {"i64", CORETYPE_I64},
+        {"i8", CORETYPE_I8},
+        {"isize", CORETYPE_INT},
+        {"str", CORETYPE_STR},
+        {"u128", CORETYPE_U128},
+        {"u16", CORETYPE_U16},
+        {"u32", CORETYPE_U32},
+        {"u64", CORETYPE_U64},
+        {"u8", CORETYPE_U8},
+        {"usize", CORETYPE_UINT},
+    };
 }
 
 ASTHigherRankedBounds::ASTHigherRankedBounds() = default;

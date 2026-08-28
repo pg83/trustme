@@ -45,87 +45,87 @@ using namespace stl;
 #define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
 
 namespace {
-struct ProgramParams {
-    enum eLastStage {
-        STAGE_PARSE,
-        STAGE_EXPAND,
-        STAGE_RESOLVE,
-        STAGE_TYPECK,
-        STAGE_BORROWCK,
-        STAGE_HIR,
-        STAGE_MIR,
-        STAGE_ALL,
-    } lastStage = STAGE_ALL;
+    struct ProgramParams {
+        enum eLastStage {
+            STAGE_PARSE,
+            STAGE_EXPAND,
+            STAGE_RESOLVE,
+            STAGE_TYPECK,
+            STAGE_BORROWCK,
+            STAGE_HIR,
+            STAGE_MIR,
+            STAGE_ALL,
+        } lastStage = STAGE_ALL;
 
-    bool emitMetadataOnly = false;
+        bool emitMetadataOnly = false;
 
-    std::string infile;
-    std::string outfile;
-    std::string outputDir = "";
-    std::string target = DEFAULT_TARGET_NAME;
-    RcString crateNameQuery;
+        std::string infile;
+        std::string outfile;
+        std::string outputDir = "";
+        std::string target = DEFAULT_TARGET_NAME;
+        RcString crateNameQuery;
 
-    std::string emitDepfile;
+        std::string emitDepfile;
 
-    ASTEdition edition = ASTEdition::Rust2015;
-    ASTCrate::Type crateType = ASTCrate::Type::Unknown;
-    std::string crateName;
-    std::string crateNameSuffix;
+        ASTEdition edition = ASTEdition::Rust2015;
+        ASTCrate::Type crateType = ASTCrate::Type::Unknown;
+        std::string crateName;
+        std::string crateNameSuffix;
 
-    OptimizationLevel optLevel = OptimizationLevel::None;
-    bool debugAssertions = false;
-    bool debugAssertionsExplicit = false;
-    bool ubChecks = false;
-    bool ubChecksExplicit = false;
-    Settings::FmtDebug fmtDebug = Settings::FmtDebug::Full;
-    bool overflowChecks = false;
-    bool overflowChecksExplicit = false;
-    unsigned mirOptLevel = 0;
-    bool mirOptLevelExplicit = false;
-    DebugInfoLevel debugInfo = DebugInfoLevel::None;
+        OptimizationLevel optLevel = OptimizationLevel::None;
+        bool debugAssertions = false;
+        bool debugAssertionsExplicit = false;
+        bool ubChecks = false;
+        bool ubChecksExplicit = false;
+        Settings::FmtDebug fmtDebug = Settings::FmtDebug::Full;
+        bool overflowChecks = false;
+        bool overflowChecksExplicit = false;
+        unsigned mirOptLevel = 0;
+        bool mirOptLevelExplicit = false;
+        DebugInfoLevel debugInfo = DebugInfoLevel::None;
 
-    bool testHarness = false;
+        bool testHarness = false;
 
-    std::string targetSaveback;
-    bool printCfgs = false;
+        std::string targetSaveback;
+        bool printCfgs = false;
 
-    std::vector<std::string> crateSearchDirs;
-    std::vector<std::string> nativeLibSearchDirs;
-    std::vector<std::string> frameworkSearchDirs;
-    std::vector<const char*> libraries;
-    std::set<std::string> features;
+        std::vector<std::string> crateSearchDirs;
+        std::vector<std::string> nativeLibSearchDirs;
+        std::vector<std::string> frameworkSearchDirs;
+        std::vector<const char*> libraries;
+        std::set<std::string> features;
 
-    struct {
-        bool pause = false;
+        struct {
+            bool pause = false;
 
-        bool dumpAst = false;
-        bool dumpHir = false;
-        bool dumpMir = false;
-    } debug;
+            bool dumpAst = false;
+            bool dumpHir = false;
+            bool dumpMir = false;
+        } debug;
 
-    struct {
-        std::string codegenType;
-        std::string emitBuildCommand;
-        RcString emitLinkManifest;
-        bool emitCppOnly = false;
-        std::string panicType;
-        std::vector<std::string> linkerArgs;
-    } codegen;
+        struct {
+            std::string codegenType;
+            std::string emitBuildCommand;
+            RcString emitLinkManifest;
+            bool emitCppOnly = false;
+            std::string panicType;
+            std::vector<std::string> linkerArgs;
+        } codegen;
 
-    ProgramParams(Settings& settings, int argc, char* argv[]);
+        ProgramParams(Settings& settings, int argc, char* argv[]);
 
-    unsigned effectiveMirOptLevel() const;
+        unsigned effectiveMirOptLevel() const;
 
-    bool enableMirInlining() const;
+        bool enableMirInlining() const;
 
-    bool debugAssertionsEnabled() const;
+        bool debugAssertionsEnabled() const;
 
-    bool ubChecksEnabled() const;
+        bool ubChecksEnabled() const;
 
-    bool overflowChecksEnabled() const;
+        bool overflowChecksEnabled() const;
 
-    void showHelp() const;
-};
+        void showHelp() const;
+    };
 
     struct CompileArgs {
         int argc;
@@ -254,113 +254,136 @@ namespace {
 }
 
 namespace {
-static int compile(int argc, char* argv[]) {
+    static int compile(int argc, char* argv[]) {
 #if TRUSTME_SANITIZER_BUILD
-    auto poolOwner = ObjPool::fromMemory();
-    auto* pool = poolOwner.mutPtr();
+        auto poolOwner = ObjPool::fromMemory();
+        auto* pool = poolOwner.mutPtr();
 #else
-    auto* pool = ObjPool::fromMemoryRaw();
+        auto* pool = ObjPool::fromMemoryRaw();
 #endif
-    WireBoard& wb = *pool->make<WireBoard>(pool);
-    unsigned memoryDumpSequence = 0;
-    wb.types = pool->make<HIRTypeInterner>(*pool, wb.id);
-    wb.settings = pool->make<Settings>(pool);
-    wb.settings->cfg = CfgCreateState(*pool);
-    ProgramParams params(*wb.settings, argc, argv);
-    wb.settings->overflowChecks = params.overflowChecksEnabled();
-    wb.settings->ubChecks = params.ubChecksEnabled();
-    wb.settings->fmtDebug = params.fmtDebug;
-    const auto mirOptLevel = params.effectiveMirOptLevel();
-    const auto enableMirInlining = params.enableMirInlining();
-    if (params.codegen.panicType.empty()) {
-        params.codegen.panicType = "unwind";
-    }
-
-    if (params.debug.pause) {
-        char c;
-        std::cerr << "Pausing to attach a debugger\nType any text to continue" << std::endl;
-        std::cin >> c;
-    }
-
-    wb.inherentMethods = HIRInherentCache::create(*pool);
-
-    {
-        CfgSetValue(*wb.settings, "rust_compiler", "trustme");
-        CfgSetValue(*wb.settings, "panic", params.codegen.panicType);
-        if (params.debugAssertionsEnabled()) {
-            CfgSetFlag(*wb.settings, "debug_assertions");
+        WireBoard& wb = *pool->make<WireBoard>(pool);
+        unsigned memoryDumpSequence = 0;
+        wb.types = pool->make<HIRTypeInterner>(*pool, wb.id);
+        wb.settings = pool->make<Settings>(pool);
+        wb.settings->cfg = CfgCreateState(*pool);
+        ProgramParams params(*wb.settings, argc, argv);
+        wb.settings->overflowChecks = params.overflowChecksEnabled();
+        wb.settings->ubChecks = params.ubChecksEnabled();
+        wb.settings->fmtDebug = params.fmtDebug;
+        const auto mirOptLevel = params.effectiveMirOptLevel();
+        const auto enableMirInlining = params.enableMirInlining();
+        if (params.codegen.panicType.empty()) {
+            params.codegen.panicType = "unwind";
         }
-        if (params.overflowChecksEnabled()) {
-            CfgSetFlag(*wb.settings, "overflow_checks");
+
+        if (params.debug.pause) {
+            char c;
+            std::cerr << "Pausing to attach a debugger\nType any text to continue" << std::endl;
+            std::cin >> c;
         }
-        if (params.ubChecksEnabled()) {
-            CfgSetFlag(*wb.settings, "ub_checks");
+
+        wb.inherentMethods = HIRInherentCache::create(*pool);
+
+        {
+            CfgSetValue(*wb.settings, "rust_compiler", "trustme");
+            CfgSetValue(*wb.settings, "panic", params.codegen.panicType);
+            if (params.debugAssertionsEnabled()) {
+                CfgSetFlag(*wb.settings, "debug_assertions");
+            }
+            if (params.overflowChecksEnabled()) {
+                CfgSetFlag(*wb.settings, "overflow_checks");
+            }
+            if (params.ubChecksEnabled()) {
+                CfgSetFlag(*wb.settings, "ub_checks");
+            }
+            CfgSetValue(*wb.settings, "fmt_debug", params.fmtDebug == Settings::FmtDebug::Shallow ? "shallow" : params.fmtDebug == Settings::FmtDebug::None ? "none" : "full");
+            CfgSetValueCb(*wb.settings, "feature", [&params](const std::string& s) {
+                return params.features.count(s) != 0;
+            });
         }
-        CfgSetValue(*wb.settings, "fmt_debug", params.fmtDebug == Settings::FmtDebug::Shallow ? "shallow" : params.fmtDebug == Settings::FmtDebug::None ? "none" : "full");
-        CfgSetValueCb(*wb.settings, "feature", [&params](const std::string& s) {
-            return params.features.count(s) != 0;
-        });
-    }
-    {
-        TargetSetCfg(wb, params.target);
-    }
-    if (params.printCfgs) {
-        CfgDump(*wb.settings, std::cout);
-        return 0;
-    }
-    if (params.crateNameQuery != "") {
-        std::cout << HIRDeserialiseJustName(params.crateNameQuery.c_str()) << std::endl;
-        return 0;
-    }
-    if (params.targetSaveback != "") {
-        TargetExportCurSpec(wb, params.targetSaveback);
-        return 0;
-    }
-
-    if (params.infile == "") {
-        std::cerr << "No input file passed" << std::endl;
-        return 1;
-    }
-
-    if (params.testHarness) {
-        CfgSetFlag(*wb.settings, "test");
-    }
-
-    ExpandInit(*wb.expandRegistry);
-
-#if TRUSTME_SANITIZER_BUILD
-    auto astPoolOwner = ObjPool::fromMemory();
-    auto* astPool = astPoolOwner.mutPtr();
-#else
-    auto* astPool = ObjPool::fromMemoryRaw();
-#endif
-    wb.astPool = astPool;
-
-    {
-        ASTCrate* cratePtr = [&]() {
-            return ParseCrate(wb, wb.astPool, params.infile, params.edition);
-        }();
-        ASTCrate& crate = *cratePtr;
-        wb.astCrate = cratePtr;
-        crate.testHarness = params.testHarness;
-        crate.crateNameSuffix = params.crateNameSuffix;
-
-        if (params.lastStage == ProgramParams::STAGE_PARSE) {
+        {
+            TargetSetCfg(wb, params.target);
+        }
+        if (params.printCfgs) {
+            CfgDump(*wb.settings, std::cout);
             return 0;
         }
-        memoryDump(memoryDumpSequence, "Parsed");
+        if (params.crateNameQuery != "") {
+            std::cout << HIRDeserialiseJustName(params.crateNameQuery.c_str()) << std::endl;
+            return 0;
+        }
+        if (params.targetSaveback != "") {
+            TargetExportCurSpec(wb, params.targetSaveback);
+            return 0;
+        }
+
+        if (params.infile == "") {
+            std::cerr << "No input file passed" << std::endl;
+            return 1;
+        }
+
+        if (params.testHarness) {
+            CfgSetFlag(*wb.settings, "test");
+        }
+
+        ExpandInit(*wb.expandRegistry);
+
+#if TRUSTME_SANITIZER_BUILD
+        auto astPoolOwner = ObjPool::fromMemory();
+        auto* astPool = astPoolOwner.mutPtr();
+#else
+        auto* astPool = ObjPool::fromMemoryRaw();
+#endif
+        wb.astPool = astPool;
 
         {
-            for (const auto& ld : params.crateSearchDirs) {
-                wb.settings->crateLoadDirs.push_back(ld);
+            ASTCrate* cratePtr = [&]() {
+                return ParseCrate(wb, wb.astPool, params.infile, params.edition);
+            }();
+            ASTCrate& crate = *cratePtr;
+            wb.astCrate = cratePtr;
+            crate.testHarness = params.testHarness;
+            crate.crateNameSuffix = params.crateNameSuffix;
+
+            if (params.lastStage == ProgramParams::STAGE_PARSE) {
+                return 0;
             }
-            crate.loadExterns(*wb.settings);
-            if (params.testHarness) {
-                auto testCrateName = RcString::newInterned("test");
-                wb.settings->implicitCrates.insert(std::make_pair(testCrateName, crate.loadExternCrate(*wb.settings, Span(), testCrateName)));
+            memoryDump(memoryDumpSequence, "Parsed");
+
+            {
+                for (const auto& ld : params.crateSearchDirs) {
+                    wb.settings->crateLoadDirs.push_back(ld);
+                }
+                crate.loadExterns(*wb.settings);
+                if (params.testHarness) {
+                    auto testCrateName = RcString::newInterned("test");
+                    wb.settings->implicitCrates.insert(std::make_pair(testCrateName, crate.loadExternCrate(*wb.settings, Span(), testCrateName)));
+                }
             }
-        }
-        {
+            {
+                auto crateType = params.crateType;
+                if (crateType == ASTCrate::Type::Unknown) {
+                    crateType = crate.crateType;
+                }
+                if (crateType == ASTCrate::Type::Unknown) {
+                    crateType = ASTCrate::Type::Executable;
+                }
+                crate.crateType = crateType;
+
+                crate.setCrateName(params.crateName != "" ? params.crateName : CrateNameFromFile(params.infile));
+                crate.crateType = ASTCrate::Type::Unknown;
+            }
+
+            {
+                Expand(wb, crate);
+
+                if (params.testHarness) {
+                    ExpandTestHarness(crate);
+                }
+            }
+            {
+                LintCheckForbid(wb, crate);
+            }
             auto crateType = params.crateType;
             if (crateType == ASTCrate::Type::Unknown) {
                 crateType = crate.crateType;
@@ -370,478 +393,455 @@ static int compile(int argc, char* argv[]) {
             }
             crate.crateType = crateType;
 
-            crate.setCrateName(params.crateName != "" ? params.crateName : CrateNameFromFile(params.infile));
-            crate.crateType = ASTCrate::Type::Unknown;
-        }
+            if (crate.crateType == ASTCrate::Type::ProcMacro) {
+                ExpandProcMacroHarness(wb, crate);
+            }
 
-        {
-            Expand(wb, crate);
+            auto crateName = params.crateName;
+            if (crateName == "") {
+                crateName = crate.crateNameSet;
+            }
+            if (crateName == "") {
+                crateName = CrateNameFromFile(params.infile);
+            }
+            if (params.testHarness) {
+                crateName += "$test";
+            }
+            crate.setCrateName(crateName);
+
+            if (params.outfile == "") {
+                switch (crate.crateType) {
+                    case ASTCrate::Type::RustLib:
+                        params.outfile = FMT(params.outputDir << "lib" << crate.crateNameSet << ".rlib");
+                        break;
+                    case ASTCrate::Type::Executable:
+                        params.outfile = FMT(params.outputDir << crate.crateNameSet);
+                        break;
+                    case ASTCrate::Type::ProcMacro:
+                        params.outfile = FMT(params.outputDir << "lib" << crate.crateNameSet << "-plugin");
+                        break;
+                    default:
+                        params.outfile = FMT(params.outputDir << crate.crateNameSet << ".o");
+                        break;
+                }
+            }
+
+            if (params.debug.dumpAst) {
+                {
+                    DumpRust(FMT(params.outfile << "_1_ast.rs").c_str(), crate);
+                }
+            }
+
+            if (params.lastStage == ProgramParams::STAGE_EXPAND) {
+                return 0;
+            }
+            memoryDump(memoryDumpSequence, "Expanded");
+
+            {
+                if (crate.crateType == ASTCrate::Type::Executable || params.testHarness || crate.crateType == ASTCrate::Type::ProcMacro) {
+                    bool allocatorCrateLoaded = false;
+                    RcString allocCrateName;
+                    bool panicRuntimeLoaded = false;
+                    RcString panicCrateName;
+                    bool panicRuntimeNeeded = false;
+                    for (const auto& ec : crate.externCrates) {
+                        if (ec.second.hir->langItems.count("trustme-allocator")) {
+                            if (allocatorCrateLoaded) {
+                                ERROR(Span(), E0000, "Multiple allocator crates loaded - " << allocCrateName << " and " << ec.first);
+                            }
+                            allocCrateName = ec.first;
+                            allocatorCrateLoaded = true;
+                        }
+                        if (ec.second.hir->langItems.count("trustme-panic_runtime")) {
+                            if (panicRuntimeLoaded) {
+                                WARNING(Span(), W0000, "Multiple panic_runtime crates loaded - " << panicCrateName << " and " << ec.first);
+                            } else {
+                                panicCrateName = ec.first;
+                                panicRuntimeLoaded = true;
+                            }
+                        }
+                        if (ec.second.hir->langItems.count("trustme-needs_panic_runtime")) {
+                            panicRuntimeNeeded = true;
+                        }
+                    }
+                    allocatorCrateLoaded = true;
+                    if (!allocatorCrateLoaded) {
+                        crate.loadExternCrate(*wb.settings, Span(), "alloc_system");
+                    }
+
+                    if (panicRuntimeNeeded /*&& !panic_runtime_loaded*/) {
+                        auto panicCrate = "panic_" + params.codegen.panicType;
+                        crate.loadExternCrate(*wb.settings, Span(), panicCrate.c_str());
+                    }
+
+                    if (!crate.noMain) {
+                        crate.langItems.insert(std::make_pair(std::string("trustme-main"), ASTAbsolutePath("", {"main"})));
+                    }
+                }
+            }
+            if (params.emitDepfile != "") {
+                struct PathEnumerator {
+                    std::vector<std::string> out;
+
+                    void visitModule(ASTModule& mod) {
+                        if (mod.fileInfo.path != "!" && mod.fileInfo.path.back() != '/') {
+                            out.push_back(mod.fileInfo.path);
+                        }
+                        // TODO: Should we check anon modules?
+
+                        for (auto& i : mod.items) {
+                            if (i->data.is_Module()) {
+                                this->visitModule(i->data.as_Module());
+                            }
+                        }
+                    }
+                };
+
+                PathEnumerator pe;
+                pe.visitModule(crate.rootModule_);
+
+                std::ofstream of{params.emitDepfile};
+                // TODO: Escape spaces and colons in these paths
+                of << params.outfile << ": " << params.infile;
+                for (const auto& modPath : pe.out) {
+                    of << " " << modPath;
+                }
+                of << std::endl;
+
+                of << params.outfile << ":";
+                for (const auto& ec : crate.externCrates) {
+                    of << " " << ec.second.filename;
+                }
+            }
+
+            {
+                ResolveUse(wb, crate);
+            }
+            {
+                ResolveIndex(crate);
+            }
+            {
+                ResolveAbsolutise(wb, crate);
+            }
+            memoryDump(memoryDumpSequence, "Resolved");
+
+            if (params.debug.dumpAst) {
+                {
+                    DumpRust(FMT(params.outfile << "_1_ast.rs").c_str(), crate);
+                }
+            }
+
+            if (params.lastStage == ProgramParams::STAGE_RESOLVE) {
+                return 0;
+            }
+
+            HIRCrate* hirCrate = [&]() {
+                return LowerHIRFromAST(wb, pool, crate);
+            }();
+            wb.crate = hirCrate;
+            wb.langItems = LangItems::create(*pool, *hirCrate);
+            memoryDump(memoryDumpSequence, "HIR Gen");
+
+            {
+                wb.astCrate = nullptr;
+                wb.astPool = nullptr;
+#if !TRUSTME_SANITIZER_BUILD
+                delete astPool;
+#endif
+                astPool = nullptr;
+            }
+            memoryDump(memoryDumpSequence, "AST Dropped");
+            if (params.debug.dumpHir) {
+                {
+                    std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
+                    HIRDump(os, *hirCrate);
+                }
+            }
+            memoryDump(memoryDumpSequence, "HIR");
+
+            {
+                ConvertHIRExpandAliases(wb, *hirCrate);
+            }
+            {
+                ConvertHIRValidateReceivers(wb, *hirCrate);
+            }
+            {
+                ConvertHIRBind(wb, *hirCrate);
+            }
+            {
+                ConvertHIRIndexInherentMethods(wb, *hirCrate);
+            }
+            {
+                ConvertHIRResolveUFCSOuter(wb, *hirCrate);
+            }
+
+            // - TODO: Move this later on, but that requires fixing some of the resolve logic around trait impl lookup
+            {
+                ConvertHIRExpandAliasesSelf(*hirCrate);
+            }
+            {
+                ConvertHIRMarkings(wb, *hirCrate);
+            }
+            {
+                ConvertHIRResolveUFCSSortImpls(wb, *hirCrate);
+            }
+            {
+                ConvertHIRResolveUFCS(wb, *hirCrate);
+            }
+            if (params.debug.dumpHir) {
+                {
+                    std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
+                    HIRDump(os, *hirCrate);
+                }
+            }
+            // TODO: Expand vtables here?
+
+            if (params.lastStage == ProgramParams::STAGE_HIR) {
+                return 0;
+            }
+
+            {
+                ConvertHIRConstantEvaluate(wb, *hirCrate);
+            }
+            if (params.debug.dumpHir) {
+                {
+                    std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
+                    HIRDump(os, *hirCrate);
+                }
+            }
+
+            {
+                TypecheckModuleLevel(wb, *hirCrate);
+            }
+            {
+                TypecheckExpressions(wb, *hirCrate);
+            }
+            {
+                LintUnusedMustUse(wb, *hirCrate);
+                LintUnsafeCode(wb, *hirCrate);
+            }
+            {
+                HIRExpandAnnotateUsage(wb, *hirCrate);
+            }
+            {
+                HIRExpandStaticBorrowConstantsMark(wb, *hirCrate);
+            }
+            {
+                HIRExpandClosures(wb, *hirCrate);
+            }
+            {
+                HIRExpandStaticBorrowConstants(wb, *hirCrate);
+            }
+
+            //  TODO: How early can this be done?
+
+            //  TODO: Would prefer to have this done before consteval, as consteval might reference a vtable
+            {
+                HIRExpandVTables(wb, *hirCrate);
+            }
+            {
+                HIRExpandUfcsEverything(wb, *hirCrate);
+            }
+            {
+                HIRExpandReborrows(wb, *hirCrate);
+            }
+            {
+                HIRExpandErasedType(wb, *hirCrate);
+            }
+            if (params.debug.dumpHir) {
+                {
+                    std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
+                    HIRDump(os, *hirCrate);
+                }
+            }
+            if (params.lastStage == ProgramParams::STAGE_TYPECK) {
+                return 0;
+            }
+            memoryDump(memoryDumpSequence, "Typecheck");
+
+            {
+                HIRGenerateMIR(wb, *hirCrate);
+            }
+            if (params.debug.dumpMir) {
+                {
+                    std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
+                    MIRDump(os, *hirCrate);
+                }
+            }
+            memoryDump(memoryDumpSequence, "MIR Gen");
+
+            {
+                MIRCleanupCrate(wb, *hirCrate);
+            }
+            {
+                MIROptimiseCrate(wb, *hirCrate, mirOptLevel, enableMirInlining);
+            }
+            if (params.debug.dumpMir) {
+                {
+                    std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
+                    MIRDump(os, *hirCrate);
+                }
+            }
+            if (params.lastStage == ProgramParams::STAGE_MIR) {
+                return 0;
+            }
+            memoryDump(memoryDumpSequence, "MIR Opt");
+
+            // TODO: Pass to mark items that are..
+
+            TransOptions transOpt;
+            transOpt.mode = params.codegen.codegenType == "" ? "c" : params.codegen.codegenType;
+            transOpt.buildCommandFile = params.codegen.emitBuildCommand;
+            transOpt.emitCppOnly = params.codegen.emitCppOnly;
+            transOpt.linkerArgs = params.codegen.linkerArgs;
+            transOpt.optLevel = params.optLevel;
+            transOpt.panicCrate = "panic_" + params.codegen.panicType;
+            transOpt.librarySearchDirs = params.nativeLibSearchDirs;
+            transOpt.frameworkSearchDirs = params.frameworkSearchDirs;
+            for (const char* libname : params.libraries) {
+                hirCrate->extLibs.push_back(HIRExternLibrary{libname});
+            }
+            transOpt.debugInfo = params.debugInfo;
+
+            if (params.codegen.emitLinkManifest != "") {
+                std::ofstream manifest(params.codegen.emitLinkManifest.c_str());
+                ASSERT_BUG(Span(), manifest.is_open(), "Failed to open link manifest `" << params.codegen.emitLinkManifest << "`");
+                for (const auto& path : params.nativeLibSearchDirs) {
+                    manifest << "search\t" << path << "\n";
+                }
+                for (const auto& path : hirCrate->linkPaths) {
+                    manifest << "search\t" << path << "\n";
+                }
+                for (const auto& lib : hirCrate->extLibs) {
+                    manifest << "lib\t" << lib.name << "\n";
+                }
+                for (const auto& arg : params.codegen.linkerArgs) {
+                    manifest << "arg\t" << arg << "\n";
+                }
+                for (const auto& crateName : hirCrate->extCratesOrdered) {
+                    const auto& ext = hirCrate->extCrates.at(crateName);
+                    if (ext.objectPath == "" || ext.isProcMacro) {
+                        continue;
+                    }
+                    if (ext.data->langItems.count("trustme-panic_runtime") && strncmp(crateName.c_str(), transOpt.panicCrate.c_str(), transOpt.panicCrate.size()) != 0) {
+                        continue;
+                    }
+                    manifest << "object\t" << ext.objectPath << "\n";
+                }
+                manifest.close();
+                ASSERT_BUG(Span(), !manifest.bad(), "Failed to write link manifest `" << params.codegen.emitLinkManifest << "`");
+            }
 
             if (params.testHarness) {
-                ExpandTestHarness(crate);
+                crateType = ASTCrate::Type::Executable;
             }
-        }
-        {
-            LintCheckForbid(wb, crate);
-        }
-        auto crateType = params.crateType;
-        if (crateType == ASTCrate::Type::Unknown) {
-            crateType = crate.crateType;
-        }
-        if (crateType == ASTCrate::Type::Unknown) {
-            crateType = ASTCrate::Type::Executable;
-        }
-        crate.crateType = crateType;
 
-        if (crate.crateType == ASTCrate::Type::ProcMacro) {
-            ExpandProcMacroHarness(wb, crate);
-        }
+            // TODO: For 1.29 executables/dylibs, add oom/panic shims
+            if (crateType == ASTCrate::Type::ProcMacro) {
+                {
+                    HIRCrate crateForSer(pool, *wb.types);
+                    crateForSer.crateName = hirCrate->crateName;
+                    crateForSer.edition = hirCrate->edition;
+                    for (const auto& i : hirCrate->rootModule.macroItems) {
+                        if (const auto* e = i.second->ent.opt_ProcMacro()) {
+                            crateForSer.rootModule.macroItems.insert(std::make_pair(i.first, crateForSer.pool->make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{i.second->publicity, *e})));
+                        }
+                    }
+                    crateForSer.exportedMacroNames = hirCrate->exportedMacroNames;
+                    HIRSerialise(params.outfile + ".rlib", crateForSer);
+                }
+            }
 
-        auto crateName = params.crateName;
-        if (crateName == "") {
-            crateName = crate.crateNameSet;
-        }
-        if (crateName == "") {
-            crateName = CrateNameFromFile(params.infile);
-        }
-        if (params.testHarness) {
-            crateName += "$test";
-        }
-        crate.setCrateName(crateName);
+            if (params.emitMetadataOnly) {
+                if (crateType == ASTCrate::Type::RustLib) {
+                    HIRSerialise(params.outfile, *hirCrate);
+                } else {
+                    {
+                        std::ofstream marker(params.outfile);
+                    }
+                }
+                return 0;
+            }
 
-        if (params.outfile == "") {
-            switch (crate.crateType) {
+            TransList items = [&]() {
+                switch (crateType) {
+                    case ASTCrate::Type::Unknown:
+                        std::cerr << "BUG? Unknown crate type" << std::endl;
+                        exit(1);
+                        break;
+                    case ASTCrate::Type::RustLib:
+                    case ASTCrate::Type::RustDylib:
+                    case ASTCrate::Type::CDylib:
+                        return TransEnumeratePublic(wb, *hirCrate);
+                    case ASTCrate::Type::ProcMacro:
+                    case ASTCrate::Type::Executable:
+                        return TransEnumerateMain(wb, *hirCrate);
+                }
+                throw std::runtime_error("Invalid crate_type value");
+            }();
+            {
+                // TODO: Drop glue generation?
+                TransAutoImpls(wb, *hirCrate, items);
+            }
+            {
+                TransMonomorphiseList(wb, *hirCrate, items, mirOptLevel);
+            }
+            {
+                MIROptimiseCrateInlining(wb, *hirCrate, items, false, mirOptLevel, enableMirInlining);
+            }
+            {
+                MIRCleanupCrate(wb, *hirCrate);
+            }
+            memoryDump(memoryDumpSequence, "Trans");
+
+            std::string hirFile;
+            switch (crateType) {
                 case ASTCrate::Type::RustLib:
-                    params.outfile = FMT(params.outputDir << "lib" << crate.crateNameSet << ".rlib");
+                    hirFile = params.outfile;
+                    {
+                        HIRSerialise(hirFile, *hirCrate);
+                    }
                     break;
-                case ASTCrate::Type::Executable:
-                    params.outfile = FMT(params.outputDir << crate.crateNameSet);
-                    break;
-                case ASTCrate::Type::ProcMacro:
-                    params.outfile = FMT(params.outputDir << "lib" << crate.crateNameSet << "-plugin");
+                case ASTCrate::Type::RustDylib:
+                    hirFile = params.outfile + ".rlib";
+                    {
+                        HIRSerialise(hirFile, *hirCrate);
+                    }
                     break;
                 default:
-                    params.outfile = FMT(params.outputDir << crate.crateNameSet << ".o");
                     break;
             }
-        }
 
-        if (params.debug.dumpAst) {
             {
-                DumpRust(FMT(params.outfile << "_1_ast.rs").c_str(), crate);
+                MIROptimiseCrateInlining(wb, *hirCrate, items, true, mirOptLevel, enableMirInlining);
             }
-        }
-
-        if (params.lastStage == ProgramParams::STAGE_EXPAND) {
-            return 0;
-        }
-        memoryDump(memoryDumpSequence, "Expanded");
-
-        {
-            if (crate.crateType == ASTCrate::Type::Executable || params.testHarness || crate.crateType == ASTCrate::Type::ProcMacro) {
-                bool allocatorCrateLoaded = false;
-                RcString allocCrateName;
-                bool panicRuntimeLoaded = false;
-                RcString panicCrateName;
-                bool panicRuntimeNeeded = false;
-                for (const auto& ec : crate.externCrates) {
-                    if (ec.second.hir->langItems.count("trustme-allocator")) {
-                        if (allocatorCrateLoaded) {
-                            ERROR(Span(), E0000, "Multiple allocator crates loaded - " << allocCrateName << " and " << ec.first);
-                        }
-                        allocCrateName = ec.first;
-                        allocatorCrateLoaded = true;
-                    }
-                    if (ec.second.hir->langItems.count("trustme-panic_runtime")) {
-                        if (panicRuntimeLoaded) {
-                            WARNING(Span(), W0000, "Multiple panic_runtime crates loaded - " << panicCrateName << " and " << ec.first);
-                        } else {
-                            panicCrateName = ec.first;
-                            panicRuntimeLoaded = true;
-                        }
-                    }
-                    if (ec.second.hir->langItems.count("trustme-needs_panic_runtime")) {
-                        panicRuntimeNeeded = true;
-                    }
-                }
-                allocatorCrateLoaded = true;
-                if (!allocatorCrateLoaded) {
-                    crate.loadExternCrate(*wb.settings, Span(), "alloc_system");
-                }
-
-                if (panicRuntimeNeeded /*&& !panic_runtime_loaded*/) {
-                    auto panicCrate = "panic_" + params.codegen.panicType;
-                    crate.loadExternCrate(*wb.settings, Span(), panicCrate.c_str());
-                }
-
-                if (!crate.noMain) {
-                    crate.langItems.insert(std::make_pair(std::string("trustme-main"), ASTAbsolutePath("", {"main"})));
-                }
-            }
-        }
-        if (params.emitDepfile != "") {
-            struct PathEnumerator {
-                std::vector<std::string> out;
-
-                void visitModule(ASTModule& mod) {
-                    if (mod.fileInfo.path != "!" && mod.fileInfo.path.back() != '/') {
-                        out.push_back(mod.fileInfo.path);
-                    }
-                    // TODO: Should we check anon modules?
-
-                    for (auto& i : mod.items) {
-                        if (i->data.is_Module()) {
-                            this->visitModule(i->data.as_Module());
-                        }
-                    }
-                }
-            };
-
-            PathEnumerator pe;
-            pe.visitModule(crate.rootModule_);
-
-            std::ofstream of{params.emitDepfile};
-            // TODO: Escape spaces and colons in these paths
-            of << params.outfile << ": " << params.infile;
-            for (const auto& modPath : pe.out) {
-                of << " " << modPath;
-            }
-            of << std::endl;
-
-            of << params.outfile << ":";
-            for (const auto& ec : crate.externCrates) {
-                of << " " << ec.second.filename;
-            }
-        }
-
-        {
-            ResolveUse(wb, crate);
-        }
-        {
-            ResolveIndex(crate);
-        }
-        {
-            ResolveAbsolutise(wb, crate);
-        }
-        memoryDump(memoryDumpSequence, "Resolved");
-
-        if (params.debug.dumpAst) {
             {
-                DumpRust(FMT(params.outfile << "_1_ast.rs").c_str(), crate);
+                TransEnumerateCleanup(wb, *hirCrate, items);
             }
-        }
-
-        if (params.lastStage == ProgramParams::STAGE_RESOLVE) {
-            return 0;
-        }
-
-        HIRCrate* hirCrate = [&]() {
-            return LowerHIRFromAST(wb, pool, crate);
-        }();
-        wb.crate = hirCrate;
-        wb.langItems = LangItems::create(*pool, *hirCrate);
-        memoryDump(memoryDumpSequence, "HIR Gen");
-
-        {
-            wb.astCrate = nullptr;
-            wb.astPool = nullptr;
-#if !TRUSTME_SANITIZER_BUILD
-            delete astPool;
-#endif
-            astPool = nullptr;
-        }
-        memoryDump(memoryDumpSequence, "AST Dropped");
-        if (params.debug.dumpHir) {
-            {
-                std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
-                HIRDump(os, *hirCrate);
-            }
-        }
-        memoryDump(memoryDumpSequence, "HIR");
-
-        {
-            ConvertHIRExpandAliases(wb, *hirCrate);
-        }
-        {
-            ConvertHIRValidateReceivers(wb, *hirCrate);
-        }
-        {
-            ConvertHIRBind(wb, *hirCrate);
-        }
-        {
-            ConvertHIRIndexInherentMethods(wb, *hirCrate);
-        }
-        {
-            ConvertHIRResolveUFCSOuter(wb, *hirCrate);
-        }
-
-        // - TODO: Move this later on, but that requires fixing some of the resolve logic around trait impl lookup
-        {
-            ConvertHIRExpandAliasesSelf(*hirCrate);
-        }
-        {
-            ConvertHIRMarkings(wb, *hirCrate);
-        }
-        {
-            ConvertHIRResolveUFCSSortImpls(wb, *hirCrate);
-        }
-        {
-            ConvertHIRResolveUFCS(wb, *hirCrate);
-        }
-        if (params.debug.dumpHir) {
-            {
-                std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
-                HIRDump(os, *hirCrate);
-            }
-        }
-        // TODO: Expand vtables here?
-
-        if (params.lastStage == ProgramParams::STAGE_HIR) {
-            return 0;
-        }
-
-        {
-            ConvertHIRConstantEvaluate(wb, *hirCrate);
-        }
-        if (params.debug.dumpHir) {
-            {
-                std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
-                HIRDump(os, *hirCrate);
-            }
-        }
-
-        {
-            TypecheckModuleLevel(wb, *hirCrate);
-        }
-        {
-            TypecheckExpressions(wb, *hirCrate);
-        }
-        {
-            LintUnusedMustUse(wb, *hirCrate);
-            LintUnsafeCode(wb, *hirCrate);
-        }
-        {
-            HIRExpandAnnotateUsage(wb, *hirCrate);
-        }
-        {
-            HIRExpandStaticBorrowConstantsMark(wb, *hirCrate);
-        }
-        {
-            HIRExpandClosures(wb, *hirCrate);
-        }
-        {
-            HIRExpandStaticBorrowConstants(wb, *hirCrate);
-        }
-
-        //  TODO: How early can this be done?
-
-        //  TODO: Would prefer to have this done before consteval, as consteval might reference a vtable
-        {
-            HIRExpandVTables(wb, *hirCrate);
-        }
-        {
-            HIRExpandUfcsEverything(wb, *hirCrate);
-        }
-        {
-            HIRExpandReborrows(wb, *hirCrate);
-        }
-        {
-            HIRExpandErasedType(wb, *hirCrate);
-        }
-        if (params.debug.dumpHir) {
-            {
-                std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
-                HIRDump(os, *hirCrate);
-            }
-        }
-        if (params.lastStage == ProgramParams::STAGE_TYPECK) {
-            return 0;
-        }
-        memoryDump(memoryDumpSequence, "Typecheck");
-
-        {
-            HIRGenerateMIR(wb, *hirCrate);
-        }
-        if (params.debug.dumpMir) {
-            {
-                std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
-                MIRDump(os, *hirCrate);
-            }
-        }
-        memoryDump(memoryDumpSequence, "MIR Gen");
-
-        {
-            MIRCleanupCrate(wb, *hirCrate);
-        }
-        {
-            MIROptimiseCrate(wb, *hirCrate, mirOptLevel, enableMirInlining);
-        }
-        if (params.debug.dumpMir) {
-            {
-                std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
-                MIRDump(os, *hirCrate);
-            }
-        }
-        if (params.lastStage == ProgramParams::STAGE_MIR) {
-            return 0;
-        }
-        memoryDump(memoryDumpSequence, "MIR Opt");
-
-        // TODO: Pass to mark items that are..
-
-        TransOptions transOpt;
-        transOpt.mode = params.codegen.codegenType == "" ? "c" : params.codegen.codegenType;
-        transOpt.buildCommandFile = params.codegen.emitBuildCommand;
-        transOpt.emitCppOnly = params.codegen.emitCppOnly;
-        transOpt.linkerArgs = params.codegen.linkerArgs;
-        transOpt.optLevel = params.optLevel;
-        transOpt.panicCrate = "panic_" + params.codegen.panicType;
-        transOpt.librarySearchDirs = params.nativeLibSearchDirs;
-        transOpt.frameworkSearchDirs = params.frameworkSearchDirs;
-        for (const char* libname : params.libraries) {
-            hirCrate->extLibs.push_back(HIRExternLibrary{libname});
-        }
-        transOpt.debugInfo = params.debugInfo;
-
-        if (params.codegen.emitLinkManifest != "") {
-            std::ofstream manifest(params.codegen.emitLinkManifest.c_str());
-            ASSERT_BUG(Span(), manifest.is_open(), "Failed to open link manifest `" << params.codegen.emitLinkManifest << "`");
-            for (const auto& path : params.nativeLibSearchDirs) {
-                manifest << "search\t" << path << "\n";
-            }
-            for (const auto& path : hirCrate->linkPaths) {
-                manifest << "search\t" << path << "\n";
-            }
-            for (const auto& lib : hirCrate->extLibs) {
-                manifest << "lib\t" << lib.name << "\n";
-            }
-            for (const auto& arg : params.codegen.linkerArgs) {
-                manifest << "arg\t" << arg << "\n";
-            }
-            for (const auto& crateName : hirCrate->extCratesOrdered) {
-                const auto& ext = hirCrate->extCrates.at(crateName);
-                if (ext.objectPath == "" || ext.isProcMacro) {
-                    continue;
-                }
-                if (ext.data->langItems.count("trustme-panic_runtime") && strncmp(crateName.c_str(), transOpt.panicCrate.c_str(), transOpt.panicCrate.size()) != 0) {
-                    continue;
-                }
-                manifest << "object\t" << ext.objectPath << "\n";
-            }
-            manifest.close();
-            ASSERT_BUG(Span(), !manifest.bad(), "Failed to write link manifest `" << params.codegen.emitLinkManifest << "`");
-        }
-
-        if (params.testHarness) {
-            crateType = ASTCrate::Type::Executable;
-        }
-
-        // TODO: For 1.29 executables/dylibs, add oom/panic shims
-        if (crateType == ASTCrate::Type::ProcMacro) {
-            {
-                HIRCrate crateForSer(pool, *wb.types);
-                crateForSer.crateName = hirCrate->crateName;
-                crateForSer.edition = hirCrate->edition;
-                for (const auto& i : hirCrate->rootModule.macroItems) {
-                    if (const auto* e = i.second->ent.opt_ProcMacro()) {
-                        crateForSer.rootModule.macroItems.insert(std::make_pair(i.first, crateForSer.pool->make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{i.second->publicity, *e})));
-                    }
-                }
-                crateForSer.exportedMacroNames = hirCrate->exportedMacroNames;
-                HIRSerialise(params.outfile + ".rlib", crateForSer);
-            }
-        }
-
-        if (params.emitMetadataOnly) {
-            if (crateType == ASTCrate::Type::RustLib) {
-                HIRSerialise(params.outfile, *hirCrate);
-            } else {
-                {
-                    std::ofstream marker(params.outfile);
-                }
-            }
-            return 0;
-        }
-
-        TransList items = [&]() {
             switch (crateType) {
                 case ASTCrate::Type::Unknown:
-                    std::cerr << "BUG? Unknown crate type" << std::endl;
-                    exit(1);
-                    break;
-                case ASTCrate::Type::RustLib:
+                    UNREACHABLE();
+                case ASTCrate::Type::RustLib: {
+                    TransCodegen(wb, params.outfile, CodegenOutput::StaticLibrary, transOpt, hirCrate, std::move(items), hirFile);
+                } break;
                 case ASTCrate::Type::RustDylib:
-                case ASTCrate::Type::CDylib:
-                    return TransEnumeratePublic(wb, *hirCrate);
-                case ASTCrate::Type::ProcMacro:
-                case ASTCrate::Type::Executable:
-                    return TransEnumerateMain(wb, *hirCrate);
+                case ASTCrate::Type::CDylib: {
+                    TransCodegen(wb, params.outfile, CodegenOutput::DynamicLibrary, transOpt, hirCrate, std::move(items), hirFile);
+                } break;
+                case ASTCrate::Type::ProcMacro: {
+                    {
+                        TransCodegen(wb, params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), hirFile);
+                    }
+                    break;
+                }
+                case ASTCrate::Type::Executable: {
+                    TransCodegen(wb, params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), "");
+                } break;
             }
-            throw std::runtime_error("Invalid crate_type value");
-        }();
-        {
-            // TODO: Drop glue generation?
-            TransAutoImpls(wb, *hirCrate, items);
-        }
-        {
-            TransMonomorphiseList(wb, *hirCrate, items, mirOptLevel);
-        }
-        {
-            MIROptimiseCrateInlining(wb, *hirCrate, items, false, mirOptLevel, enableMirInlining);
-        }
-        {
-            MIRCleanupCrate(wb, *hirCrate);
-        }
-        memoryDump(memoryDumpSequence, "Trans");
-
-        std::string hirFile;
-        switch (crateType) {
-            case ASTCrate::Type::RustLib:
-                hirFile = params.outfile;
-                {
-                    HIRSerialise(hirFile, *hirCrate);
-                }
-                break;
-            case ASTCrate::Type::RustDylib:
-                hirFile = params.outfile + ".rlib";
-                {
-                    HIRSerialise(hirFile, *hirCrate);
-                }
-                break;
-            default:
-                break;
         }
 
-        {
-            MIROptimiseCrateInlining(wb, *hirCrate, items, true, mirOptLevel, enableMirInlining);
-        }
-        {
-            TransEnumerateCleanup(wb, *hirCrate, items);
-        }
-        switch (crateType) {
-            case ASTCrate::Type::Unknown:
-                UNREACHABLE();
-            case ASTCrate::Type::RustLib: {
-                TransCodegen(wb, params.outfile, CodegenOutput::StaticLibrary, transOpt, hirCrate, std::move(items), hirFile);
-            } break;
-            case ASTCrate::Type::RustDylib:
-            case ASTCrate::Type::CDylib: {
-                TransCodegen(wb, params.outfile, CodegenOutput::DynamicLibrary, transOpt, hirCrate, std::move(items), hirFile);
-            } break;
-            case ASTCrate::Type::ProcMacro: {
-                {
-                    TransCodegen(wb, params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), hirFile);
-                }
-                break;
-            }
-            case ASTCrate::Type::Executable: {
-                TransCodegen(wb, params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), "");
-            } break;
-        }
+        return 0;
     }
-
-    return 0;
-}
 }
 
 namespace {
@@ -880,20 +880,20 @@ int main(int argc, char* argv[]) {
 }
 
 namespace {
-static void printRustcVersion(bool verbose) {
-    const char* rustcTarget = RUSTC_TARGET_VERSION;
+    static void printRustcVersion(bool verbose) {
+        const char* rustcTarget = RUSTC_TARGET_VERSION;
 
-    std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << std::endl;
-    if (!verbose) {
-        return;
+        std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << std::endl;
+        if (!verbose) {
+            return;
+        }
+        std::cout << "binary: rustc" << std::endl;
+        std::cout << "commit-hash: " << VersionGetGitHash() << std::endl;
+        std::cout << "commit-date: UNKNOWN" << std::endl;
+        std::cout << "build-date: " << VersionGetBuildTime() << std::endl;
+        std::cout << "host: UNKNOWN" << std::endl;
+        std::cout << "release: " << rustcTarget << ".100" << std::endl;
     }
-    std::cout << "binary: rustc" << std::endl;
-    std::cout << "commit-hash: " << VersionGetGitHash() << std::endl;
-    std::cout << "commit-date: UNKNOWN" << std::endl;
-    std::cout << "build-date: " << VersionGetBuildTime() << std::endl;
-    std::cout << "host: UNKNOWN" << std::endl;
-    std::cout << "release: " << rustcTarget << ".100" << std::endl;
-}
 }
 
 ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {

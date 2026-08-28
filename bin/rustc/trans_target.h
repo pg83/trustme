@@ -127,8 +127,7 @@ struct TypeRepr {
 std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x);
 
 struct WireBoard;
-class TargetLayoutContext;
-extern TargetLayoutContext* TargetCreateLayoutContext(stl::ObjPool& pool);
+extern void TargetCreateLayoutContext(WireBoard& wb, stl::ObjPool& pool);
 extern const TargetSpec& TargetGetCurSpec(const WireBoard& wb);
 extern void TargetSetCfg(WireBoard& wb, const std::string& targetName);
 extern void TargetExportCurSpec(const WireBoard& wb, const std::string& filename);

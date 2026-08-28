@@ -50,8 +50,6 @@ struct LintLevelOverrides {
     }
 };
 
-struct CfgState;
-
 struct CrateOverride {
     RcString name;
     RcString metadataPath;
@@ -67,6 +65,8 @@ struct CrateOverride {
 };
 
 struct Settings {
+    struct CfgState;
+
     explicit Settings(stl::ObjPool* pool)
         : crateOverrides(pool)
     {

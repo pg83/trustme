@@ -24,7 +24,7 @@ namespace {
     struct CanonicalizeTraitGoal;
 }
 
-struct NextTraitGoalEvaluator {
+struct TraitResolution::NextTraitGoalEvaluator {
     using Certainty = SolverCertainty;
 
     enum class CandidateSource {
@@ -347,6 +347,10 @@ struct NextTraitGoalEvaluator {
 
     bool evaluateNormalizesTo(const Span& callSpan, const NormalizesTo& goal, NormalizesToCallback& callback, bool callerBoundary = false);
 };
+
+namespace {
+    using NextTraitGoalEvaluator = TraitResolution::NextTraitGoalEvaluator;
+}
 
 namespace {
     struct CanonicalizeTraitGoal final: public Monomorphiser {

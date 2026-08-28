@@ -12,7 +12,6 @@ struct WireBoard;
 #include <memory>
 #include <cstring>
 
-class MacroExpander;
 class SimplePatEnt;
 class MacroExpansionEnt;
 

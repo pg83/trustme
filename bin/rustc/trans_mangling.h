@@ -13,9 +13,7 @@ class HIRPath;
 class HIRTypeData;
 using HIRTypeRef = const HIRTypeData*;
 
-class ManglingContext;
-
-extern ManglingContext* TransCreateManglingContext(stl::ObjPool& pool);
+extern void TransCreateManglingContext(WireBoard& wb, stl::ObjPool& pool);
 extern RcString TransMangle(const WireBoard& wb, const HIRSimplePath& path);
 extern RcString TransMangle(const WireBoard& wb, const HIRGenericPath& path);
 extern RcString TransMangle(const WireBoard& wb, const HIRPath& path);

@@ -11,8 +11,6 @@
 
 struct EncodedLiteral;
 class Monomorphiser;
-class HirSerialiser;
-class HirDeserialiser;
 
 namespace stl {
     class ObjPool;
@@ -53,9 +51,6 @@ struct HIRSimplePathData {
 };
 
 struct HIRSimplePath {
-    friend HirSerialiser;
-    friend HirDeserialiser;
-
 private:
     const HIRSimplePathData* p;
 

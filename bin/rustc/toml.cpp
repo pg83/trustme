@@ -10,7 +10,7 @@
 #include <string>
 #include <iostream>
 
-struct TomlToken {
+struct TomlLexer::TomlToken {
     enum class Type {
         Eof,
         SquareOpen,
@@ -101,6 +101,8 @@ TomlFileIter TomlFile::end() {
 }
 
 TomlKeyValue TomlFile::getNextValue() {
+    using TomlToken = TomlLexer::TomlToken;
+
     auto t = lexer_.getToken();
 
     if (currentComposite.empty()) {
@@ -285,6 +287,8 @@ TomlKeyValue TomlFile::getNextValue() {
 }
 
 void TomlFile::skipCompositeValue() {
+    using TomlToken = TomlLexer::TomlToken;
+
     unsigned depth = 1;
     while (depth > 0) {
         auto t = lexer_.getToken();
@@ -325,7 +329,7 @@ TomlLexer::TomlLexer(const std::string& filename)
     }
 }
 
-TomlToken TomlLexer::getToken() {
+TomlLexer::TomlToken TomlLexer::getToken() {
     auto rv = TomlToken::lexFrom(input, line);
     if (rv.type == TomlToken::Type::Newline) {
         line++;
@@ -338,7 +342,7 @@ std::ostream& operator<<(std::ostream& os, const TomlLexer& x) {
     return os;
 }
 
-TomlToken TomlToken::lexFrom(std::ifstream& is, unsigned& line) {
+TomlLexer::TomlToken TomlLexer::TomlToken::lexFrom(std::ifstream& is, unsigned& line) {
     auto rv = TomlToken::lexFromInner(is, line);
     return rv;
 }
@@ -405,7 +409,7 @@ namespace {
     }
 }
 
-TomlToken TomlToken::lexFromInner(std::ifstream& is, unsigned& line) {
+TomlLexer::TomlToken TomlLexer::TomlToken::lexFromInner(std::ifstream& is, unsigned& line) {
     int c;
     do {
         c = is.get();
@@ -754,24 +758,24 @@ const char* TomlValue::TypeError::what() const noexcept {
     return message;
 }
 
-TomlToken::TomlToken(Type ty)
+TomlLexer::TomlToken::TomlToken(Type ty)
     : type(ty)
 {
 }
 
-TomlToken::TomlToken(Type ty, std::string s)
+TomlLexer::TomlToken::TomlToken(Type ty, std::string s)
     : type(ty)
     , data(s)
 {
 }
 
-TomlToken::TomlToken(Type ty, i64 i)
+TomlLexer::TomlToken::TomlToken(Type ty, i64 i)
     : type(ty)
     , intval(i)
 {
 }
 
-auto TomlToken::asString() const -> const std::string& {
+auto TomlLexer::TomlToken::asString() const -> const std::string& {
     assert(type == Type::Ident || type == Type::String);
     return data;
 }

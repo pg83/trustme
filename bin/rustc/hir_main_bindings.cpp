@@ -16,202 +16,200 @@
 using namespace stl;
 
 namespace {
-template <typename T>
-struct D {};
-}
-
-struct HirDeserialiser {
-    RcString crateName;
-    std::vector<HIRTypeRef> types;
-    HIRSerialiseReader& in;
-    HIRTypeInterner& typeInterner;
-    u32& id;
-    HIRPublicity privateVisibility = HIRPublicity::newNone();
-
-    ObjPool& pool;
-
-    HirDeserialiser(u32& id, ObjPool& pool, HIRSerialiseReader& in, HIRTypeInterner& typeInterner);
-
-    RcString readIstring();
-
-    std::string readString();
-
-    bool readBool();
-
-    u8 readU8();
-
-    size_t deserialiseCount();
-
-    template <typename V>
-    std::map<std::string, V> deserialiseStrmap();
-
-    template <typename V>
-    std::unordered_map<std::string, V> deserialiseStrumap();
-
-    template <typename V>
-    std::unordered_multimap<std::string, V> deserialiseStrummap();
-
-    template <typename V>
-    std::map<RcString, V> deserialiseIstrmap();
-
     template <typename T>
-    std::unordered_map<RcString, T*> deserialiseIstrumapPooled();
+    struct D {};
 
-    template <typename V>
-    std::unordered_map<RcString, V> deserialiseIstrumap();
+    struct HirDeserialiser {
+        RcString crateName;
+        std::vector<HIRTypeRef> types;
+        HIRSerialiseReader& in;
+        HIRTypeInterner& typeInterner;
+        u32& id;
+        HIRPublicity privateVisibility = HIRPublicity::newNone();
 
-    template <typename V>
-    std::unordered_multimap<RcString, V> deserialiseIstrummap();
+        ObjPool& pool;
 
-    template <typename V>
-    std::map<HIRSimplePath, V> deserialisePathmap();
+        HirDeserialiser(u32& id, ObjPool& pool, HIRSerialiseReader& in, HIRTypeInterner& typeInterner);
 
-    template <typename T, typename F>
-    std::vector<T> deserialiseVecC(F cb);
+        RcString readIstring();
 
-    template <typename T>
-    std::vector<T> deserialiseVec();
+        std::string readString();
 
-    template <typename T, typename F>
-    ThinVector<T> deserialiseThinvecC(F cb);
+        bool readBool();
 
-    template <typename T>
-    ThinVector<T> deserialiseThinvec();
+        u8 readU8();
 
-    template <typename T>
-    std::set<T> deserialiseSet();
+        size_t deserialiseCount();
 
-    HIRPublicity deserialisePub();
+        template <typename V>
+        std::map<std::string, V> deserialiseStrmap();
 
-    template <typename T>
-    HIRVisEnt<T> deserialiseVisent();
+        template <typename V>
+        std::unordered_map<std::string, V> deserialiseStrumap();
 
-    template <typename T>
-    std::unique_ptr<T> deserialisePtr();
+        template <typename V>
+        std::unordered_multimap<std::string, V> deserialiseStrummap();
 
-    HIRArraySize deserialiseArraysize();
-    HIRGenericRef deserialiseGenericref();
-    HIRTypeRef deserialiseType();
-    HIRSimplePath deserialiseSimplepath();
-    HIRPathParams deserialisePathparams();
-    HIRGenericPath deserialiseGenericpath();
-    HIRTraitPath deserialiseTraitpath();
-    HIRPath deserialisePath();
+        template <typename V>
+        std::map<RcString, V> deserialiseIstrmap();
 
-    HIRGenericParams deserialiseGenericparams();
-    HIRTypeParamDef deserialiseTyparamdef();
-    HIRValueParamDef deserialiseValueparamdef();
-    HIRGenericBound deserialiseGenericbound();
+        template <typename T>
+        std::unordered_map<RcString, T*> deserialiseIstrumapPooled();
 
-    void deserialiseCrate(HIRCrate& rv);
-    HIRExternLibrary deserialiseExtlib();
-    HIRModule deserialiseModule();
+        template <typename V>
+        std::unordered_map<RcString, V> deserialiseIstrumap();
 
-    HIRProcMacro deserialiseProcmacro();
+        template <typename V>
+        std::unordered_multimap<RcString, V> deserialiseIstrummap();
 
-    HIRTypeImpl deserialiseTypeimpl();
+        template <typename V>
+        std::map<HIRSimplePath, V> deserialisePathmap();
 
-    HIRTraitImpl deserialiseTraitimpl();
+        template <typename T, typename F>
+        std::vector<T> deserialiseVecC(F cb);
 
-    HIRMarkerImpl deserialiseMarkerimpl();
+        template <typename T>
+        std::vector<T> deserialiseVec();
 
-    Ident::Hygiene deserialiseHygine();
+        template <typename T, typename F>
+        ThinVector<T> deserialiseThinvecC(F cb);
 
-    ::MacroRulesPtr deserialiseMacrorulesptr();
+        template <typename T>
+        ThinVector<T> deserialiseThinvec();
 
-    ::MacroRules deserialiseMacrorules();
+        template <typename T>
+        std::set<T> deserialiseSet();
 
-    ::SimplePatIfCheck deserialiseSimplepatifcheck();
+        HIRPublicity deserialisePub();
 
-    ::SimplePatEnt deserialiseSimplepatent();
+        template <typename T>
+        HIRVisEnt<T> deserialiseVisent();
 
-    ::MacroPatEnt deserialiseMacropatent();
+        template <typename T>
+        std::unique_ptr<T> deserialisePtr();
 
-    ::MacroRulesArm deserialiseMacrorulesarm();
+        HIRArraySize deserialiseArraysize();
+        HIRGenericRef deserialiseGenericref();
+        HIRTypeRef deserialiseType();
+        HIRSimplePath deserialiseSimplepath();
+        HIRPathParams deserialisePathparams();
+        HIRGenericPath deserialiseGenericpath();
+        HIRTraitPath deserialiseTraitpath();
+        HIRPath deserialisePath();
 
-    ::MacroExpansionEnt deserialiseMacroexpansionent();
+        HIRGenericParams deserialiseGenericparams();
+        HIRTypeParamDef deserialiseTyparamdef();
+        HIRValueParamDef deserialiseValueparamdef();
+        HIRGenericBound deserialiseGenericbound();
 
-    ::MacroExpansionConcatEnt deserialiseMacroexpansionconcatent();
+        void deserialiseCrate(HIRCrate& rv);
+        HIRExternLibrary deserialiseExtlib();
+        HIRModule deserialiseModule();
 
-    ::Token deserialiseToken();
+        HIRProcMacro deserialiseProcmacro();
 
-    ::Token::Data deserialiseTokendata();
+        HIRTypeImpl deserialiseTypeimpl();
 
-    HIRConstGenericUnevaluated deserialiseConstgenericUnevaluated();
-    HIRConstGeneric deserialiseConstgeneric();
-    EncodedLiteral deserialiseEncodedliteral();
+        HIRTraitImpl deserialiseTraitimpl();
 
-    HIRExprPtr deserialiseExprptr();
+        HIRMarkerImpl deserialiseMarkerimpl();
 
-    MIRFunctionPointer deserialiseMir();
-    MIRBasicBlock deserialiseMirBasicblock();
-    MIRStatement deserialiseMirStatement();
-    AsmOptions deserialiseAsmOptions();
-    AsmLineFragment deserialiseAsmLineFrag();
-    AsmLine deserialiseAsmLine();
-    AsmRegisterSpec deserialiseAsmSpec();
-    MIRAsmParam deserialiseAsmParam();
-    MIRTerminator deserialiseMirTerminator();
-    MIRTerminator deserialise_mir_terminator_();
-    MIRUnwindAction deserialiseMirUnwindAction();
-    MIRSwitchValues deserialiseMirSwitchvalues();
-    MIRCallTarget deserialiseMirCalltarget();
+        Ident::Hygiene deserialiseHygine();
 
-    MIRParam deserialiseMirParam();
+        ::MacroRulesPtr deserialiseMacrorulesptr();
 
-    MIRLValue deserialiseMirLvalue();
+        ::MacroRules deserialiseMacrorules();
 
-    MIRLValue::Wrapper deserialiseMirLvalueWrapper();
+        ::SimplePatIfCheck deserialiseSimplepatifcheck();
 
-    MIRLValue deserialise_mir_lvalue_();
+        ::SimplePatEnt deserialiseSimplepatent();
 
-    MIRRValue deserialiseMirRvalue();
+        ::MacroPatEnt deserialiseMacropatent();
 
-    MIRConstant deserialiseMirConstant();
+        ::MacroRulesArm deserialiseMacrorulesarm();
 
-    HIRExternType deserialiseExterntype();
+        ::MacroExpansionEnt deserialiseMacroexpansionent();
 
-    HIRTraitAlias deserialiseTraitalias();
+        ::MacroExpansionConcatEnt deserialiseMacroexpansionconcatent();
 
-    HIRTypeItem deserialiseTypeitem();
+        ::Token deserialiseToken();
 
-    HIRValueItem deserialiseValueitem();
+        TokenData deserialiseTokendata();
 
-    HIRMacroItem deserialiseMacroitem();
+        HIRConstGenericUnevaluated deserialiseConstgenericUnevaluated();
+        HIRConstGeneric deserialiseConstgeneric();
+        EncodedLiteral deserialiseEncodedliteral();
 
-    HIRLinkage deserialiseLinkage();
+        HIRExprPtr deserialiseExprptr();
 
-    HIRFunction deserialiseFunction();
+        MIRFunctionPointer deserialiseMir();
+        MIRBasicBlock deserialiseMirBasicblock();
+        MIRStatement deserialiseMirStatement();
+        AsmOptions deserialiseAsmOptions();
+        AsmLineFragment deserialiseAsmLineFrag();
+        AsmLine deserialiseAsmLine();
+        AsmRegisterSpec deserialiseAsmSpec();
+        MIRAsmParam deserialiseAsmParam();
+        MIRTerminator deserialiseMirTerminator();
+        MIRTerminator deserialise_mir_terminator_();
+        MIRUnwindAction deserialiseMirUnwindAction();
+        MIRSwitchValues deserialiseMirSwitchvalues();
+        MIRCallTarget deserialiseMirCalltarget();
 
-    HIRFunction::Markings deserialiseFunctionMarkings();
+        MIRParam deserialiseMirParam();
 
-    std::vector<std::pair<HIRPattern, HIRTypeRef>> deserialiseFcnargs();
+        MIRLValue deserialiseMirLvalue();
 
-    HIRConstant deserialiseConstant();
+        MIRLValue::Wrapper deserialiseMirLvalueWrapper();
 
-    HIRStatic deserialiseStatic();
+        MIRLValue deserialise_mir_lvalue_();
 
-    HIRTypeAlias deserialiseTypealias();
+        MIRRValue deserialiseMirRvalue();
 
-    HIRTraitMarkings deserialiseMarkings();
+        MIRConstant deserialiseMirConstant();
 
-    HIRStructMarkings deserialiseStrMarkings();
+        HIRExternType deserialiseExterntype();
 
-    HIREnum deserialiseEnum();
-    HIREnum::DataVariant deserialiseEnumdatavariant();
-    HIREnum::ValueVariant deserialiseEnumvaluevariant();
+        HIRTraitAlias deserialiseTraitalias();
 
-    HIRStruct deserialiseStruct();
-    HIRStructField deserialiseStructField();
-    HIRUnion deserialiseUnion();
-    HIRTrait deserialiseTrait();
+        HIRTypeItem deserialiseTypeitem();
 
-    HIRTraitValueItem deserialiseTraitvalueitem();
+        HIRValueItem deserialiseValueitem();
 
-    HIRAssociatedType deserialiseAssociatedtype();
-};
+        HIRMacroItem deserialiseMacroitem();
 
-namespace {
+        HIRLinkage deserialiseLinkage();
+
+        HIRFunction deserialiseFunction();
+
+        HIRFunction::Markings deserialiseFunctionMarkings();
+
+        std::vector<std::pair<HIRPattern, HIRTypeRef>> deserialiseFcnargs();
+
+        HIRConstant deserialiseConstant();
+
+        HIRStatic deserialiseStatic();
+
+        HIRTypeAlias deserialiseTypealias();
+
+        HIRTraitMarkings deserialiseMarkings();
+
+        HIRStructMarkings deserialiseStrMarkings();
+
+        HIREnum deserialiseEnum();
+        HIREnum::DataVariant deserialiseEnumdatavariant();
+        HIREnum::ValueVariant deserialiseEnumvaluevariant();
+
+        HIRStruct deserialiseStruct();
+        HIRStructField deserialiseStructField();
+        HIRUnion deserialiseUnion();
+        HIRTrait deserialiseTrait();
+
+        HIRTraitValueItem deserialiseTraitvalueitem();
+
+        HIRAssociatedType deserialiseAssociatedtype();
+    };
+
 #define DEF_D(ty, ...)                      \
     struct D<ty> {                          \
         static ty des(HirDeserialiser& d) { \
@@ -219,104 +217,104 @@ namespace {
         }                                   \
     };
 
-template <>
-DEF_D(std::string, return d.readString(););
-template <>
-DEF_D(RcString, return d.readIstring(););
-template <>
-DEF_D(bool, return d.readBool(););
-template <>
-DEF_D(u8, return d.readU8(););
+    template <>
+    DEF_D(std::string, return d.readString(););
+    template <>
+    DEF_D(RcString, return d.readIstring(););
+    template <>
+    DEF_D(bool, return d.readBool(););
+    template <>
+    DEF_D(u8, return d.readU8(););
 
-template <typename T>
-DEF_D(std::unique_ptr<T>, return d.deserialisePtr<T>();)
+    template <typename T>
+    DEF_D(std::unique_ptr<T>, return d.deserialisePtr<T>();)
 
-template <typename T>
-DEF_D(std::vector<T>, return d.deserialiseVec<T>();)
-template <typename T, typename U>
-struct D<std::pair<T, U>> {
-    static std::pair<T, U> des(HirDeserialiser& d);
-};
+    template <typename T>
+    DEF_D(std::vector<T>, return d.deserialiseVec<T>();)
+    template <typename T, typename U>
+    struct D<std::pair<T, U>> {
+        static std::pair<T, U> des(HirDeserialiser& d);
+    };
 
-template <typename T>
-DEF_D(HIRVisEnt<T>, return d.deserialiseVisent<T>();)
+    template <typename T>
+    DEF_D(HIRVisEnt<T>, return d.deserialiseVisent<T>();)
 
-template <>
-DEF_D(HIRTypeRef, return d.deserialiseType();)
-template <>
-DEF_D(HIRSimplePath, return d.deserialiseSimplepath();)
-template <>
-DEF_D(HIRGenericPath, return d.deserialiseGenericpath();)
-template <>
-DEF_D(HIRTraitPath, return d.deserialiseTraitpath();)
+    template <>
+    DEF_D(HIRTypeRef, return d.deserialiseType();)
+    template <>
+    DEF_D(HIRSimplePath, return d.deserialiseSimplepath();)
+    template <>
+    DEF_D(HIRGenericPath, return d.deserialiseGenericpath();)
+    template <>
+    DEF_D(HIRTraitPath, return d.deserialiseTraitpath();)
 
-template <>
-DEF_D(HIRTypeParamDef, return d.deserialiseTyparamdef();)
-template <>
-DEF_D(HIRValueParamDef, return d.deserialiseValueparamdef();)
-template <>
-DEF_D(HIRGenericBound, return d.deserialiseGenericbound();)
+    template <>
+    DEF_D(HIRTypeParamDef, return d.deserialiseTyparamdef();)
+    template <>
+    DEF_D(HIRValueParamDef, return d.deserialiseValueparamdef();)
+    template <>
+    DEF_D(HIRGenericBound, return d.deserialiseGenericbound();)
 
-template <>
-DEF_D(HIRValueItem, return d.deserialiseValueitem();)
-template <>
-DEF_D(HIRTypeItem, return d.deserialiseTypeitem();)
-template <>
-DEF_D(HIRMacroItem, return d.deserialiseMacroitem();)
+    template <>
+    DEF_D(HIRValueItem, return d.deserialiseValueitem();)
+    template <>
+    DEF_D(HIRTypeItem, return d.deserialiseTypeitem();)
+    template <>
+    DEF_D(HIRMacroItem, return d.deserialiseMacroitem();)
 
-template <>
-DEF_D(HIREnum::ValueVariant, return d.deserialiseEnumvaluevariant();)
-template <>
-DEF_D(HIREnum::DataVariant, return d.deserialiseEnumdatavariant();)
-template <>
-DEF_D(HIRStructField, return d.deserialiseStructField();)
-template <>
-DEF_D(HIRConstGeneric, return d.deserialiseConstgeneric();)
+    template <>
+    DEF_D(HIREnum::ValueVariant, return d.deserialiseEnumvaluevariant();)
+    template <>
+    DEF_D(HIREnum::DataVariant, return d.deserialiseEnumdatavariant();)
+    template <>
+    DEF_D(HIRStructField, return d.deserialiseStructField();)
+    template <>
+    DEF_D(HIRConstGeneric, return d.deserialiseConstgeneric();)
 
-template <>
-DEF_D(HIRAssociatedType, return d.deserialiseAssociatedtype();)
-template <>
-DEF_D(HIRTraitValueItem, return d.deserialiseTraitvalueitem();)
+    template <>
+    DEF_D(HIRAssociatedType, return d.deserialiseAssociatedtype();)
+    template <>
+    DEF_D(HIRTraitValueItem, return d.deserialiseTraitvalueitem();)
 
-template <>
-DEF_D(MIRParam, return d.deserialiseMirParam();)
-template <>
-DEF_D(MIRLValue::Wrapper, return d.deserialiseMirLvalueWrapper();)
-template <>
-DEF_D(MIRLValue, return d.deserialiseMirLvalue();)
-template <>
-DEF_D(AsmLineFragment, return d.deserialiseAsmLineFrag();)
-template <>
-DEF_D(AsmLine, return d.deserialiseAsmLine();)
-template <>
-DEF_D(MIRAsmParam, return d.deserialiseAsmParam();)
-template <>
-DEF_D(MIRStatement, return d.deserialiseMirStatement();)
-template <>
-DEF_D(MIRBasicBlock, return d.deserialiseMirBasicblock();)
+    template <>
+    DEF_D(MIRParam, return d.deserialiseMirParam();)
+    template <>
+    DEF_D(MIRLValue::Wrapper, return d.deserialiseMirLvalueWrapper();)
+    template <>
+    DEF_D(MIRLValue, return d.deserialiseMirLvalue();)
+    template <>
+    DEF_D(AsmLineFragment, return d.deserialiseAsmLineFrag();)
+    template <>
+    DEF_D(AsmLine, return d.deserialiseAsmLine();)
+    template <>
+    DEF_D(MIRAsmParam, return d.deserialiseAsmParam();)
+    template <>
+    DEF_D(MIRStatement, return d.deserialiseMirStatement();)
+    template <>
+    DEF_D(MIRBasicBlock, return d.deserialiseMirBasicblock();)
 
-template <>
-DEF_D(HIRTraitPath::AtyEqual, auto src = d.deserialiseGenericpath(); return HIRTraitPath::AtyEqual{mv$(src), d.deserialisePathparams(), d.deserialiseType()};)
-template <>
-DEF_D(HIRTraitPath::AtyBound, auto src = d.deserialiseGenericpath(); return HIRTraitPath::AtyBound{mv$(src), d.deserialisePathparams(), d.deserialiseVec<HIRTraitPath>()};);
+    template <>
+    DEF_D(HIRTraitPath::AtyEqual, auto src = d.deserialiseGenericpath(); return HIRTraitPath::AtyEqual{mv$(src), d.deserialisePathparams(), d.deserialiseType()};)
+    template <>
+    DEF_D(HIRTraitPath::AtyBound, auto src = d.deserialiseGenericpath(); return HIRTraitPath::AtyBound{mv$(src), d.deserialisePathparams(), d.deserialiseVec<HIRTraitPath>()};);
 
-template <>
-DEF_D(HIRProcMacro, return d.deserialiseProcmacro();)
-template <>
-DEF_D(HIRTypeImpl, return d.deserialiseTypeimpl();)
-template <>
-DEF_D(HIRTraitImpl, return d.deserialiseTraitimpl();)
-template <>
-DEF_D(HIRMarkerImpl, return d.deserialiseMarkerimpl();)
-template <>
-DEF_D(::MacroRulesPtr, return d.deserialiseMacrorulesptr();)
-template <>
-DEF_D(unsigned int, return static_cast<unsigned int>(d.deserialiseCount());)
+    template <>
+    DEF_D(HIRProcMacro, return d.deserialiseProcmacro();)
+    template <>
+    DEF_D(HIRTypeImpl, return d.deserialiseTypeimpl();)
+    template <>
+    DEF_D(HIRTraitImpl, return d.deserialiseTraitimpl();)
+    template <>
+    DEF_D(HIRMarkerImpl, return d.deserialiseMarkerimpl();)
+    template <>
+    DEF_D(::MacroRulesPtr, return d.deserialiseMacrorulesptr();)
+    template <>
+    DEF_D(unsigned int, return static_cast<unsigned int>(d.deserialiseCount());)
 
-template <typename T>
-DEF_D(HIRCrate::ImplGroup<std::unique_ptr<T>>, HIRCrate::ImplGroup<std::unique_ptr<T>> rv; rv.named = d.deserialisePathmap<std::vector<std::unique_ptr<T>>>(); rv.nonNamed = d.deserialiseVec<std::unique_ptr<T>>(); rv.generic = d.deserialiseVec<std::unique_ptr<T>>(); return rv;)
-template <>
-DEF_D(HIRExternLibrary, return d.deserialiseExtlib();)
+    template <typename T>
+    DEF_D(HIRCrate::ImplGroup<std::unique_ptr<T>>, HIRCrate::ImplGroup<std::unique_ptr<T>> rv; rv.named = d.deserialisePathmap<std::vector<std::unique_ptr<T>>>(); rv.nonNamed = d.deserialiseVec<std::unique_ptr<T>>(); rv.generic = d.deserialiseVec<std::unique_ptr<T>>(); return rv;)
+    template <>
+    DEF_D(HIRExternLibrary, return d.deserialiseExtlib();)
 
 }
 
@@ -441,258 +439,256 @@ namespace {
 
         void decIndent();
     };
-}
 
-struct HirSerialiser {
-    std::map<std::string, size_t> types;
-    HIRSerialiseWriter& out;
-    HIRTypeInterner& typeInterner;
+    struct HirSerialiser {
+        std::map<std::string, size_t> types;
+        HIRSerialiseWriter& out;
+        HIRTypeInterner& typeInterner;
 
-    HirSerialiser(HIRSerialiseWriter& out, HIRTypeInterner& typeInterner);
+        HirSerialiser(HIRSerialiseWriter& out, HIRTypeInterner& typeInterner);
 
-    void clear();
+        void clear();
 
-    template <typename V>
-    void serialiseStrmap(const std::map<RcString, V>& map);
+        template <typename V>
+        void serialiseStrmap(const std::map<RcString, V>& map);
 
-    template <typename V>
-    void serialiseStrmap(const std::map<std::string, V>& map);
+        template <typename V>
+        void serialiseStrmap(const std::map<std::string, V>& map);
 
-    template <typename V>
-    void serialisePathmap(const std::map<HIRSimplePath, V>& map);
+        template <typename V>
+        void serialisePathmap(const std::map<HIRSimplePath, V>& map);
 
-    template <typename V>
-    void serialiseStrmap(const std::unordered_map<RcString, V>& map);
+        template <typename V>
+        void serialiseStrmap(const std::unordered_map<RcString, V>& map);
 
-    template <typename V>
-    void serialiseStrmap(const std::unordered_map<std::string, V>& map);
+        template <typename V>
+        void serialiseStrmap(const std::unordered_map<std::string, V>& map);
 
-    template <typename V>
-    void serialiseStrmap(const std::unordered_multimap<RcString, V>& map);
+        template <typename V>
+        void serialiseStrmap(const std::unordered_multimap<RcString, V>& map);
 
-    template <typename V>
-    void serialiseStrmap(const std::unordered_multimap<std::string, V>& map);
+        template <typename V>
+        void serialiseStrmap(const std::unordered_multimap<std::string, V>& map);
 
-    template <typename T>
-    void serialiseVec(const ThinVector<T>& vec);
+        template <typename T>
+        void serialiseVec(const ThinVector<T>& vec);
 
-    template <typename T>
-    void serialiseVec(const std::vector<T>& vec);
+        template <typename T>
+        void serialiseVec(const std::vector<T>& vec);
 
-    template <typename T>
-    void serialise(const std::vector<T>& vec);
+        template <typename T>
+        void serialise(const std::vector<T>& vec);
 
-    template <typename T>
-    void serialise(const std::set<T>& s);
+        template <typename T>
+        void serialise(const std::set<T>& s);
 
-    void serialise(const HIRPublicity& pub);
+        void serialise(const HIRPublicity& pub);
 
-    template <typename T>
-    void serialise(const HIRVisEnt<T>& e);
+        template <typename T>
+        void serialise(const HIRVisEnt<T>& e);
 
-    template <typename T>
-    void serialise(const HIRVisEnt<T>* e);
+        template <typename T>
+        void serialise(const HIRVisEnt<T>* e);
 
-    template <typename T>
-    void serialise(const std::unique_ptr<T>& e);
+        template <typename T>
+        void serialise(const std::unique_ptr<T>& e);
 
-    template <typename T>
-    void serialise(const std::pair<std::string, T>& e);
+        template <typename T>
+        void serialise(const std::pair<std::string, T>& e);
 
-    template <typename T>
-    void serialise(const std::pair<RcString, T>& e);
+        template <typename T>
+        void serialise(const std::pair<RcString, T>& e);
 
-    template <typename T>
-    void serialise(const std::pair<unsigned int, T>& e);
+        template <typename T>
+        void serialise(const std::pair<unsigned int, T>& e);
 
-    void serialise(bool v);
-    ;
+        void serialise(bool v);
+        ;
 
-    void serialise(unsigned int v);
-    ;
+        void serialise(unsigned int v);
+        ;
 
-    void serialise(u8 v);
-    ;
+        void serialise(u8 v);
+        ;
 
-    void serialise(u64 v);
-    ;
+        void serialise(u64 v);
+        ;
 
-    void serialise(i64 v);
-    ;
+        void serialise(i64 v);
+        ;
 
-    void serialise(const HIRGenericRef& ge);
+        void serialise(const HIRGenericRef& ge);
 
-    void serialiseArraysize(const HIRArraySize& as);
+        void serialiseArraysize(const HIRArraySize& as);
 
-    void serialiseType(const HIRTypeData* ty);
+        void serialiseType(const HIRTypeData* ty);
 
-    void serialiseSimplepath(const HIRSimplePath& path);
+        void serialiseSimplepath(const HIRSimplePath& path);
 
-    void serialisePathparams(const HIRPathParams& pp);
+        void serialisePathparams(const HIRPathParams& pp);
 
-    void serialiseGenericpath(const HIRGenericPath& path);
+        void serialiseGenericpath(const HIRGenericPath& path);
 
-    void serialise(const HIRGenericPath& path);
+        void serialise(const HIRGenericPath& path);
 
-    void serialiseTraitpath(const HIRTraitPath& path);
+        void serialiseTraitpath(const HIRTraitPath& path);
 
-    void serialise(const HIRTraitPath::AtyEqual& e);
+        void serialise(const HIRTraitPath::AtyEqual& e);
 
-    void serialise(const HIRTraitPath::AtyBound& e);
+        void serialise(const HIRTraitPath::AtyBound& e);
 
-    void serialisePath(const HIRPath& path);
+        void serialisePath(const HIRPath& path);
 
-    void serialiseGenerics(const HIRGenericParams& params);
+        void serialiseGenerics(const HIRGenericParams& params);
 
-    void serialise(const HIRTypeParamDef& pd);
+        void serialise(const HIRTypeParamDef& pd);
 
-    void serialise(const HIRValueParamDef& pd);
+        void serialise(const HIRValueParamDef& pd);
 
-    void serialise(const HIRGenericBound& b);
+        void serialise(const HIRGenericBound& b);
 
-    void serialise(const HIRProcMacro& pm);
+        void serialise(const HIRProcMacro& pm);
 
-    template <typename T>
-    void serialise(const HIRCrate::ImplGroup<T>& ig);
+        template <typename T>
+        void serialise(const HIRCrate::ImplGroup<T>& ig);
 
-    void serialiseCrate(const HIRCrate& crate);
+        void serialiseCrate(const HIRCrate& crate);
 
-    void serialise(const HIRExternLibrary& lib);
+        void serialise(const HIRExternLibrary& lib);
 
-    void serialiseModule(const HIRModule& mod);
+        void serialiseModule(const HIRModule& mod);
 
-    void serialiseTypeimpl(const HIRTypeImpl& impl);
+        void serialiseTypeimpl(const HIRTypeImpl& impl);
 
-    void serialise(const HIRTypeImpl& impl);
+        void serialise(const HIRTypeImpl& impl);
 
-    void serialiseTraitimpl(const HIRTraitImpl& impl);
+        void serialiseTraitimpl(const HIRTraitImpl& impl);
 
-    void serialise(const HIRTraitImpl& impl);
+        void serialise(const HIRTraitImpl& impl);
 
-    void serialiseMarkerimpl(const HIRMarkerImpl& impl);
+        void serialiseMarkerimpl(const HIRMarkerImpl& impl);
 
-    void serialise(const HIRMarkerImpl& impl);
+        void serialise(const HIRMarkerImpl& impl);
 
-    void serialise(const HIRTypeData* ty);
+        void serialise(const HIRTypeData* ty);
 
-    void serialise(const HIRSimplePath& p);
+        void serialise(const HIRSimplePath& p);
 
-    void serialise(const HIRTraitPath& p);
+        void serialise(const HIRTraitPath& p);
 
-    void serialise(const std::string& v);
+        void serialise(const std::string& v);
 
-    void serialise(const RcString& v);
+        void serialise(const RcString& v);
 
-    void serialise(const Ident::Hygiene& h);
+        void serialise(const Ident::Hygiene& h);
 
-    void serialise(const ::MacroRulesPtr& mac);
+        void serialise(const ::MacroRulesPtr& mac);
 
-    void serialise(const ::MacroRules& mac);
+        void serialise(const ::MacroRules& mac);
 
-    void serialise(const ::MacroPatEnt& pe);
+        void serialise(const ::MacroPatEnt& pe);
 
-    void serialise(const ::SimplePatIfCheck& e);
+        void serialise(const ::SimplePatIfCheck& e);
 
-    void serialise(const ::SimplePatEnt& pe);
+        void serialise(const ::SimplePatEnt& pe);
 
-    void serialise(const ::MacroRulesArm& arm);
+        void serialise(const ::MacroRulesArm& arm);
 
-    void serialise(const ::MacroExpansionEnt& ent);
+        void serialise(const ::MacroExpansionEnt& ent);
 
-    void serialise(const ::MacroExpansionConcatEnt& e);
+        void serialise(const ::MacroExpansionConcatEnt& e);
 
-    void serialise(const ::Token& tok);
+        void serialise(const ::Token& tok);
 
-    void serialise(const ::Token::Data& td);
+        void serialise(const TokenData& td);
 
-    void serialise(const EncodedLiteral& lit);
+        void serialise(const EncodedLiteral& lit);
 
-    void serialise(const HIRConstGenericUnevaluated& v);
+        void serialise(const HIRConstGenericUnevaluated& v);
 
-    void serialise(const HIRConstGeneric& v);
+        void serialise(const HIRConstGeneric& v);
 
-    void serialise(const HIRExprPtr& exp, bool saveMir = true);
+        void serialise(const HIRExprPtr& exp, bool saveMir = true);
 
-    void serialise(const MIRFunction& mir);
+        void serialise(const MIRFunction& mir);
 
-    void serialise(const MIRBasicBlock& block);
+        void serialise(const MIRBasicBlock& block);
 
-    void serialise(const AsmLineFragment& l);
+        void serialise(const AsmLineFragment& l);
 
-    void serialise(const AsmLine& l);
+        void serialise(const AsmLine& l);
 
-    void serialise(const AsmRegisterSpec& r);
+        void serialise(const AsmRegisterSpec& r);
 
-    void serialise(const MIRAsmParam& p);
+        void serialise(const MIRAsmParam& p);
 
-    void serialise(const AsmOptions& o);
+        void serialise(const AsmOptions& o);
 
-    void serialise(const MIRStatement& stmt);
+        void serialise(const MIRStatement& stmt);
 
-    void serialise(const MIRTerminator& term);
+        void serialise(const MIRTerminator& term);
 
-    void serialise(const MIRSwitchValues& sv);
+        void serialise(const MIRSwitchValues& sv);
 
-    void serialise(const MIRCallTarget& ct);
+        void serialise(const MIRCallTarget& ct);
 
-    void serialise(const MIRParam& p);
+        void serialise(const MIRParam& p);
 
-    void serialise(const MIRLValue& lv);
+        void serialise(const MIRLValue& lv);
 
-    void serialise(const MIRLValue::Wrapper& w);
+        void serialise(const MIRLValue::Wrapper& w);
 
-    void serialise(const MIRRValue& val);
+        void serialise(const MIRRValue& val);
 
-    void serialise(const MIRConstant& v);
+        void serialise(const MIRConstant& v);
 
-    void serialise(const HIRTypeItem& item);
+        void serialise(const HIRTypeItem& item);
 
-    void serialise(const HIRMacroItem& item);
+        void serialise(const HIRMacroItem& item);
 
-    void serialise(const HIRValueItem& item);
+        void serialise(const HIRValueItem& item);
 
-    void serialise(const HIRLinkage& linkage);
+        void serialise(const HIRLinkage& linkage);
 
-    void serialise(const HIRFunction& fcn);
+        void serialise(const HIRFunction& fcn);
 
-    void serialise(const HIRFunction::Markings& m);
+        void serialise(const HIRFunction::Markings& m);
 
-    void serialise(const HIRConstant& item);
+        void serialise(const HIRConstant& item);
 
-    void serialise(const HIRStatic& item);
+        void serialise(const HIRStatic& item);
 
-    void serialise(const HIRTypeAlias& ta);
+        void serialise(const HIRTypeAlias& ta);
 
-    void serialise(const HIRTraitAlias& ta);
+        void serialise(const HIRTraitAlias& ta);
 
-    void serialise(const HIREnum& item);
+        void serialise(const HIREnum& item);
 
-    void serialise(const HIREnum::Class& v);
+        void serialise(const HIREnum::Class& v);
 
-    void serialise(const HIREnum::ValueVariant& v);
+        void serialise(const HIREnum::ValueVariant& v);
 
-    void serialise(const HIREnum::DataVariant& v);
+        void serialise(const HIREnum::DataVariant& v);
 
-    void serialise(const HIRTraitMarkings& m);
+        void serialise(const HIRTraitMarkings& m);
 
-    void serialise(const HIRStructMarkings& m);
+        void serialise(const HIRStructMarkings& m);
 
-    void serialise(const HIRStruct& item);
+        void serialise(const HIRStruct& item);
 
-    void serialise(const HIRStructField& fld);
+        void serialise(const HIRStructField& fld);
 
-    void serialise(const HIRUnion& item);
+        void serialise(const HIRUnion& item);
 
-    void serialise(const HIRExternType& item);
+        void serialise(const HIRExternType& item);
 
-    void serialise(const HIRTrait& item);
+        void serialise(const HIRTrait& item);
 
-    void serialise(const HIRTraitValueItem& tvi);
+        void serialise(const HIRTraitValueItem& tvi);
 
-    void serialise(const HIRAssociatedType& at);
-};
+        void serialise(const HIRAssociatedType& at);
+    };
 
-namespace {
     bool isMetadataFile(const auto& filename) {
         std::ifstream direct(filename, std::ios_base::in | std::ios_base::binary);
         unsigned char header[2] = {};
@@ -794,7 +790,8 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
 }
 
 HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
-    auto rv = HIRSimplePath{deserialiseThinvec<RcString>()};
+    auto members = deserialiseThinvec<RcString>();
+    auto rv = members.empty() ? HIRSimplePath() : HIRSimplePath(members[0], std::span<RcString>(members.begin() + 1, members.end()));
     // HACK! If the read crate name is empty, replace it with the name we're loaded with
     if (rv.crateName() == "" && rv.components().size() > 0) {
         assert(crateName != "");
@@ -1779,28 +1776,28 @@ auto HirDeserialiser::deserialiseMacroexpansionconcatent() -> ::MacroExpansionCo
 auto HirDeserialiser::deserialiseToken() -> ::Token {
     auto ty = static_cast<enum eTokenType>(in.readTag());
     auto d = deserialiseTokendata();
-    return ::Token(ty, std::move(d), {});
+    return ::Token::fromSerialised(ty, std::move(d));
 }
 
-auto HirDeserialiser::deserialiseTokendata() -> ::Token::Data {
-    auto tag = static_cast<::Token::Data::Tag>(in.readTag());
+auto HirDeserialiser::deserialiseTokendata() -> TokenData {
+    auto tag = static_cast<TokenData::Tag>(in.readTag());
     switch (tag) {
-        case ::Token::Data::TAG_None:
-            return ::Token::Data::make_None({});
-        case ::Token::Data::TAG_String:
-            return ::Token::Data::make_String(in.readString());
-        case ::Token::Data::TAG_Ident: {
+        case TokenData::TAG_None:
+            return TokenData::make_None({});
+        case TokenData::TAG_String:
+            return TokenData::make_String(in.readString());
+        case TokenData::TAG_Ident: {
             auto hygine = deserialiseHygine();
             auto name = in.readIstring();
-            return ::Token::Data::make_Ident(Ident(std::move(hygine), std::move(name)));
+            return TokenData::make_Ident(Ident(std::move(hygine), std::move(name)));
         }
-        case ::Token::Data::TAG_Integer: {
+        case TokenData::TAG_Integer: {
             auto dty = static_cast<eCoreType>(in.readTag());
-            return ::Token::Data::make_Integer({dty, in.readU128()});
+            return TokenData::make_Integer({dty, in.readU128()});
         }
-        case ::Token::Data::TAG_Float: {
+        case TokenData::TAG_Float: {
             auto dty = static_cast<eCoreType>(in.readTag());
-            return ::Token::Data::make_Float({dty, in.readFloatValue()});
+            return TokenData::make_Float({dty, in.readFloatValue()});
         }
         default:
             BUG(Span(), "Bad tag for Token::Data - " << static_cast<int>(tag));
@@ -3295,12 +3292,13 @@ auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
 }
 
 auto HirSerialiser::serialiseSimplepath(const HIRSimplePath& path) -> void {
-    if (!path.p) {
+    const auto* data = path.rawData();
+    if (!data) {
         auto _ = out.openObject(typeid(ThinVector<RcString>).name());
         out.writeCount(0);
         return;
     }
-    serialiseVec(path.p->members);
+    serialiseVec(data->members);
 }
 
 auto HirSerialiser::serialisePathparams(const HIRPathParams& pp) -> void {
@@ -3728,12 +3726,12 @@ auto HirSerialiser::serialise(const ::MacroExpansionConcatEnt& e) -> void {
 }
 
 auto HirSerialiser::serialise(const ::Token& tok) -> void {
-    out.writeTag(tok.type_);
-    serialise(tok.data_);
+    out.writeTag(tok.type());
+    serialise(tok.rawData());
     // TODO: Position information.
 }
 
-auto HirSerialiser::serialise(const ::Token::Data& td) -> void {
+auto HirSerialiser::serialise(const TokenData& td) -> void {
     out.writeTag(td.tag());
     switch (td.tag()) {
         break;

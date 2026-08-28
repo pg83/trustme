@@ -15,90 +15,90 @@
 using namespace stl;
 
 namespace {
-struct EscapedString {
-    StringView s;
+    struct EscapedString {
+        StringView s;
 
-    EscapedString(StringView s);
+        EscapedString(StringView s);
 
-    static size_t utf8Run(StringView s, size_t i);
+        static size_t utf8Run(StringView s, size_t i);
 
-    friend std::ostream& operator<<(std::ostream& os, const EscapedString& x) {
-        for (size_t i = 0; i < x.s.length(); i++) {
-            const u8 b = x.s[i];
-            switch (b) {
-                case '"':
-                    os << "\\\"";
+        friend std::ostream& operator<<(std::ostream& os, const EscapedString& x) {
+            for (size_t i = 0; i < x.s.length(); i++) {
+                const u8 b = x.s[i];
+                switch (b) {
+                    case '"':
+                        os << "\\\"";
+                        continue;
+                    case '\\':
+                        os << "\\\\";
+                        continue;
+                    case '\n':
+                        os << "\\n";
+                        continue;
+                    case '\r':
+                        os << "\\r";
+                        continue;
+                    case '\t':
+                        os << "\\t";
+                        continue;
+                    default:
+                        break;
+                }
+                if (' ' <= b && b < 0x7F) {
+                    os << static_cast<char>(b);
                     continue;
-                case '\\':
-                    os << "\\\\";
+                }
+                if (b < 0x80) {
+                    os << "\\u{" << std::hex << static_cast<unsigned int>(b) << std::dec << "}";
                     continue;
-                case '\n':
-                    os << "\\n";
+                }
+                if (const auto run = utf8Run(x.s, i)) {
+                    os.write(reinterpret_cast<const char*>(x.s.data() + i), run);
+                    i += run - 1;
                     continue;
-                case '\r':
-                    os << "\\r";
-                    continue;
-                case '\t':
-                    os << "\\t";
-                    continue;
-                default:
-                    break;
+                }
+                os << "\\x" << std::hex << std::uppercase << static_cast<unsigned int>(b) << std::nouppercase << std::dec;
             }
-            if (' ' <= b && b < 0x7F) {
-                os << static_cast<char>(b);
-                continue;
-            }
-            if (b < 0x80) {
-                os << "\\u{" << std::hex << static_cast<unsigned int>(b) << std::dec << "}";
-                continue;
-            }
-            if (const auto run = utf8Run(x.s, i)) {
-                os.write(reinterpret_cast<const char*>(x.s.data() + i), run);
-                i += run - 1;
-                continue;
-            }
-            os << "\\x" << std::hex << std::uppercase << static_cast<unsigned int>(b) << std::nouppercase << std::dec;
+            return os;
         }
-        return os;
-    }
-};
+    };
 
-struct EscapedByteString {
-    StringView s;
+    struct EscapedByteString {
+        StringView s;
 
-    EscapedByteString(StringView s);
+        EscapedByteString(StringView s);
 
-    friend std::ostream& operator<<(std::ostream& os, const EscapedByteString& x) {
-        for (size_t i = 0; i < x.s.length(); i++) {
-            const u8 b = x.s[i];
-            switch (b) {
-                case '"':
-                    os << "\\\"";
+        friend std::ostream& operator<<(std::ostream& os, const EscapedByteString& x) {
+            for (size_t i = 0; i < x.s.length(); i++) {
+                const u8 b = x.s[i];
+                switch (b) {
+                    case '"':
+                        os << "\\\"";
+                        continue;
+                    case '\\':
+                        os << "\\\\";
+                        continue;
+                    case '\n':
+                        os << "\\n";
+                        continue;
+                    case '\r':
+                        os << "\\r";
+                        continue;
+                    case '\t':
+                        os << "\\t";
+                        continue;
+                    default:
+                        break;
+                }
+                if (' ' <= b && b < 0x7F) {
+                    os << static_cast<char>(b);
                     continue;
-                case '\\':
-                    os << "\\\\";
-                    continue;
-                case '\n':
-                    os << "\\n";
-                    continue;
-                case '\r':
-                    os << "\\r";
-                    continue;
-                case '\t':
-                    os << "\\t";
-                    continue;
-                default:
-                    break;
+                }
+                os << "\\x" << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(b) << std::nouppercase << std::dec << std::setfill(' ');
             }
-            if (' ' <= b && b < 0x7F) {
-                os << static_cast<char>(b);
-                continue;
-            }
-            os << "\\x" << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(b) << std::nouppercase << std::dec << std::setfill(' ');
+            return os;
         }
-        return os;
-    }
-};
+    };
 }
 
 Token::~Token() {
@@ -464,9 +464,9 @@ enum eTokenType Token::typefromstr(const std::string& s) {
 }
 
 namespace {
-static StringView literalBytes(const std::string& s) {
-    return StringView(reinterpret_cast<const u8*>(s.data()), s.size());
-}
+    static StringView literalBytes(const std::string& s) {
+        return StringView(reinterpret_cast<const u8*>(s.data()), s.size());
+    }
 }
 
 void printEscapedLiteral(std::ostream& os, eTokenType type, const u8* value, size_t size) {
@@ -991,6 +991,14 @@ Token::Token(enum eTokenType t, Data d, Position p)
     , data_(std::move(d))
     , pos(std::move(p))
 {
+}
+
+Token Token::fromSerialised(enum eTokenType type, TokenData data) {
+    return Token(type, std::move(data), {});
+}
+
+auto Token::rawData() const -> const TokenData& {
+    return data_;
 }
 
 Token& Token::operator=(Token&& t) {

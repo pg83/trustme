@@ -29,77 +29,77 @@ using namespace stl;
 #define LEN(arr) (sizeof(arr) / sizeof(arr[0]))
 
 namespace {
-static const struct {
-    unsigned char len;
-    const char* chars;
-    signed int type;
-} TOKENMAP[] = {
-    TOKENT("!", TOK_EXCLAM),
-    TOKENT("!=", TOK_EXCLAM_EQUAL),
-    TOKENT("\"", DOUBLEQUOTE),
-    TOKENT("#", TOK_HASH),
-    TOKENT("$", TOK_DOLLAR),
-    TOKENT("%", TOK_PERCENT),
-    TOKENT("%=", TOK_PERCENT_EQUAL),
-    TOKENT("&", TOK_AMP),
-    TOKENT("&&", TOK_DOUBLE_AMP),
-    TOKENT("&=", TOK_AMP_EQUAL),
-    TOKENT("'", SINGLEQUOTE),
-    TOKENT("(", TOK_PAREN_OPEN),
-    TOKENT(")", TOK_PAREN_CLOSE),
-    TOKENT("*", TOK_STAR),
-    TOKENT("*=", TOK_STAR_EQUAL),
-    TOKENT("+", TOK_PLUS),
-    TOKENT("+=", TOK_PLUS_EQUAL),
-    TOKENT(",", TOK_COMMA),
-    TOKENT("-", TOK_DASH),
-    TOKENT("-=", TOK_DASH_EQUAL),
-    TOKENT("->", TOK_THINARROW),
-    TOKENT(".", TOK_DOT),
-    TOKENT("..", TOK_DOUBLE_DOT),
-    TOKENT("...", TOK_TRIPLE_DOT),
-    TOKENT("..=", TOK_DOUBLE_DOT_EQUAL),
-    TOKENT("/", TOK_SLASH),
-    TOKENT("/*", BLOCKCOMMENT),
-    TOKENT("//", LINECOMMENT),
-    TOKENT("/=", TOK_SLASH_EQUAL),
-    TOKENT(":", TOK_COLON),
-    TOKENT("::", TOK_DOUBLE_COLON),
-    TOKENT(";", TOK_SEMICOLON),
-    TOKENT("<", TOK_LT),
-    TOKENT("<-", TOK_THINARROW_LEFT),
-    TOKENT("<<", TOK_DOUBLE_LT),
-    TOKENT("<<=", TOK_DOUBLE_LT_EQUAL),
-    TOKENT("<=", TOK_LTE),
-    TOKENT("=", TOK_EQUAL),
-    TOKENT("==", TOK_DOUBLE_EQUAL),
-    TOKENT("=>", TOK_FATARROW),
-    TOKENT(">", TOK_GT),
-    TOKENT(">=", TOK_GTE),
-    TOKENT(">>", TOK_DOUBLE_GT),
-    TOKENT(">>=", TOK_DOUBLE_GT_EQUAL),
-    TOKENT("?", TOK_QMARK),
-    TOKENT("@", TOK_AT),
-    TOKENT("[", TOK_SQUARE_OPEN),
-    TOKENT("\\", TOK_BACKSLASH),
-    TOKENT("]", TOK_SQUARE_CLOSE),
-    TOKENT("^", TOK_CARET),
-    TOKENT("^=", TOK_CARET_EQUAL),
-    TOKENT("`", TOK_BACKTICK),
+    static const struct {
+        unsigned char len;
+        const char* chars;
+        signed int type;
+    } TOKENMAP[] = {
+        TOKENT("!", TOK_EXCLAM),
+        TOKENT("!=", TOK_EXCLAM_EQUAL),
+        TOKENT("\"", DOUBLEQUOTE),
+        TOKENT("#", TOK_HASH),
+        TOKENT("$", TOK_DOLLAR),
+        TOKENT("%", TOK_PERCENT),
+        TOKENT("%=", TOK_PERCENT_EQUAL),
+        TOKENT("&", TOK_AMP),
+        TOKENT("&&", TOK_DOUBLE_AMP),
+        TOKENT("&=", TOK_AMP_EQUAL),
+        TOKENT("'", SINGLEQUOTE),
+        TOKENT("(", TOK_PAREN_OPEN),
+        TOKENT(")", TOK_PAREN_CLOSE),
+        TOKENT("*", TOK_STAR),
+        TOKENT("*=", TOK_STAR_EQUAL),
+        TOKENT("+", TOK_PLUS),
+        TOKENT("+=", TOK_PLUS_EQUAL),
+        TOKENT(",", TOK_COMMA),
+        TOKENT("-", TOK_DASH),
+        TOKENT("-=", TOK_DASH_EQUAL),
+        TOKENT("->", TOK_THINARROW),
+        TOKENT(".", TOK_DOT),
+        TOKENT("..", TOK_DOUBLE_DOT),
+        TOKENT("...", TOK_TRIPLE_DOT),
+        TOKENT("..=", TOK_DOUBLE_DOT_EQUAL),
+        TOKENT("/", TOK_SLASH),
+        TOKENT("/*", BLOCKCOMMENT),
+        TOKENT("//", LINECOMMENT),
+        TOKENT("/=", TOK_SLASH_EQUAL),
+        TOKENT(":", TOK_COLON),
+        TOKENT("::", TOK_DOUBLE_COLON),
+        TOKENT(";", TOK_SEMICOLON),
+        TOKENT("<", TOK_LT),
+        TOKENT("<-", TOK_THINARROW_LEFT),
+        TOKENT("<<", TOK_DOUBLE_LT),
+        TOKENT("<<=", TOK_DOUBLE_LT_EQUAL),
+        TOKENT("<=", TOK_LTE),
+        TOKENT("=", TOK_EQUAL),
+        TOKENT("==", TOK_DOUBLE_EQUAL),
+        TOKENT("=>", TOK_FATARROW),
+        TOKENT(">", TOK_GT),
+        TOKENT(">=", TOK_GTE),
+        TOKENT(">>", TOK_DOUBLE_GT),
+        TOKENT(">>=", TOK_DOUBLE_GT_EQUAL),
+        TOKENT("?", TOK_QMARK),
+        TOKENT("@", TOK_AT),
+        TOKENT("[", TOK_SQUARE_OPEN),
+        TOKENT("\\", TOK_BACKSLASH),
+        TOKENT("]", TOK_SQUARE_CLOSE),
+        TOKENT("^", TOK_CARET),
+        TOKENT("^=", TOK_CARET_EQUAL),
+        TOKENT("`", TOK_BACKTICK),
 
-    TOKENT("{", TOK_BRACE_OPEN),
-    TOKENT("|", TOK_PIPE),
-    TOKENT("|=", TOK_PIPE_EQUAL),
-    TOKENT("||", TOK_DOUBLE_PIPE),
-    TOKENT("}", TOK_BRACE_CLOSE),
-    TOKENT("~", TOK_TILDE),
-};
+        TOKENT("{", TOK_BRACE_OPEN),
+        TOKENT("|", TOK_PIPE),
+        TOKENT("|=", TOK_PIPE_EQUAL),
+        TOKENT("||", TOK_DOUBLE_PIPE),
+        TOKENT("}", TOK_BRACE_CLOSE),
+        TOKENT("~", TOK_TILDE),
+    };
 
-struct sRWORD {
-    unsigned char len;
-    const char* chars;
-    signed int type;
-};
+    struct sRWORD {
+        unsigned char len;
+        const char* chars;
+        signed int type;
+    };
 }
 
 Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edition, ParseState ps)
@@ -155,109 +155,109 @@ Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition,
 }
 
 namespace {
-static const sRWORD RWORDS_2015[] = {
-    TOKENT("_", TOK_UNDERSCORE),
-    TOKENT("abstract", TOK_RWORD_ABSTRACT),
-    TOKENT("as", TOK_RWORD_AS),
-    TOKENT("become", TOK_RWORD_BECOME),
-    TOKENT("box", TOK_RWORD_BOX),
-    TOKENT("break", TOK_RWORD_BREAK),
-    TOKENT("const", TOK_RWORD_CONST),
-    TOKENT("continue", TOK_RWORD_CONTINUE),
-    TOKENT("crate", TOK_RWORD_CRATE),
-    TOKENT("do", TOK_RWORD_DO),
-    TOKENT("else", TOK_RWORD_ELSE),
-    TOKENT("enum", TOK_RWORD_ENUM),
-    TOKENT("extern", TOK_RWORD_EXTERN),
-    TOKENT("false", TOK_RWORD_FALSE),
-    TOKENT("final", TOK_RWORD_FINAL),
-    TOKENT("fn", TOK_RWORD_FN),
-    TOKENT("for", TOK_RWORD_FOR),
-    TOKENT("if", TOK_RWORD_IF),
-    TOKENT("impl", TOK_RWORD_IMPL),
-    TOKENT("in", TOK_RWORD_IN),
-    TOKENT("let", TOK_RWORD_LET),
-    TOKENT("loop", TOK_RWORD_LOOP),
-    TOKENT("macro", TOK_RWORD_MACRO),
-    TOKENT("match", TOK_RWORD_MATCH),
-    TOKENT("mod", TOK_RWORD_MOD),
-    TOKENT("move", TOK_RWORD_MOVE),
-    TOKENT("mut", TOK_RWORD_MUT),
-    TOKENT("override", TOK_RWORD_OVERRIDE),
-    TOKENT("priv", TOK_RWORD_PRIV),
-    TOKENT("pub", TOK_RWORD_PUB),
-    TOKENT("ref", TOK_RWORD_REF),
-    TOKENT("return", TOK_RWORD_RETURN),
-    TOKENT("self", TOK_RWORD_SELF),
-    TOKENT("static", TOK_RWORD_STATIC),
-    TOKENT("struct", TOK_RWORD_STRUCT),
-    TOKENT("super", TOK_RWORD_SUPER),
-    TOKENT("trait", TOK_RWORD_TRAIT),
-    TOKENT("true", TOK_RWORD_TRUE),
-    TOKENT("type", TOK_RWORD_TYPE),
-    TOKENT("typeof", TOK_RWORD_TYPEOF),
-    TOKENT("unsafe", TOK_RWORD_UNSAFE),
-    TOKENT("unsized", TOK_RWORD_UNSIZED),
-    TOKENT("use", TOK_RWORD_USE),
-    TOKENT("virtual", TOK_RWORD_VIRTUAL),
-    TOKENT("where", TOK_RWORD_WHERE),
-    TOKENT("while", TOK_RWORD_WHILE),
-    TOKENT("yield", TOK_RWORD_YIELD),
-};
+    static const sRWORD RWORDS_2015[] = {
+        TOKENT("_", TOK_UNDERSCORE),
+        TOKENT("abstract", TOK_RWORD_ABSTRACT),
+        TOKENT("as", TOK_RWORD_AS),
+        TOKENT("become", TOK_RWORD_BECOME),
+        TOKENT("box", TOK_RWORD_BOX),
+        TOKENT("break", TOK_RWORD_BREAK),
+        TOKENT("const", TOK_RWORD_CONST),
+        TOKENT("continue", TOK_RWORD_CONTINUE),
+        TOKENT("crate", TOK_RWORD_CRATE),
+        TOKENT("do", TOK_RWORD_DO),
+        TOKENT("else", TOK_RWORD_ELSE),
+        TOKENT("enum", TOK_RWORD_ENUM),
+        TOKENT("extern", TOK_RWORD_EXTERN),
+        TOKENT("false", TOK_RWORD_FALSE),
+        TOKENT("final", TOK_RWORD_FINAL),
+        TOKENT("fn", TOK_RWORD_FN),
+        TOKENT("for", TOK_RWORD_FOR),
+        TOKENT("if", TOK_RWORD_IF),
+        TOKENT("impl", TOK_RWORD_IMPL),
+        TOKENT("in", TOK_RWORD_IN),
+        TOKENT("let", TOK_RWORD_LET),
+        TOKENT("loop", TOK_RWORD_LOOP),
+        TOKENT("macro", TOK_RWORD_MACRO),
+        TOKENT("match", TOK_RWORD_MATCH),
+        TOKENT("mod", TOK_RWORD_MOD),
+        TOKENT("move", TOK_RWORD_MOVE),
+        TOKENT("mut", TOK_RWORD_MUT),
+        TOKENT("override", TOK_RWORD_OVERRIDE),
+        TOKENT("priv", TOK_RWORD_PRIV),
+        TOKENT("pub", TOK_RWORD_PUB),
+        TOKENT("ref", TOK_RWORD_REF),
+        TOKENT("return", TOK_RWORD_RETURN),
+        TOKENT("self", TOK_RWORD_SELF),
+        TOKENT("static", TOK_RWORD_STATIC),
+        TOKENT("struct", TOK_RWORD_STRUCT),
+        TOKENT("super", TOK_RWORD_SUPER),
+        TOKENT("trait", TOK_RWORD_TRAIT),
+        TOKENT("true", TOK_RWORD_TRUE),
+        TOKENT("type", TOK_RWORD_TYPE),
+        TOKENT("typeof", TOK_RWORD_TYPEOF),
+        TOKENT("unsafe", TOK_RWORD_UNSAFE),
+        TOKENT("unsized", TOK_RWORD_UNSIZED),
+        TOKENT("use", TOK_RWORD_USE),
+        TOKENT("virtual", TOK_RWORD_VIRTUAL),
+        TOKENT("where", TOK_RWORD_WHERE),
+        TOKENT("while", TOK_RWORD_WHILE),
+        TOKENT("yield", TOK_RWORD_YIELD),
+    };
 
-static const sRWORD RWORDS_2018[] = {
-    TOKENT("_", TOK_UNDERSCORE),
-    TOKENT("abstract", TOK_RWORD_ABSTRACT),
-    TOKENT("as", TOK_RWORD_AS),
-    TOKENT("async", TOK_RWORD_ASYNC),
-    TOKENT("await", TOK_RWORD_AWAIT),
-    TOKENT("become", TOK_RWORD_BECOME),
-    TOKENT("box", TOK_RWORD_BOX),
-    TOKENT("break", TOK_RWORD_BREAK),
-    TOKENT("const", TOK_RWORD_CONST),
-    TOKENT("continue", TOK_RWORD_CONTINUE),
-    TOKENT("crate", TOK_RWORD_CRATE),
-    TOKENT("do", TOK_RWORD_DO),
-    TOKENT("dyn", TOK_RWORD_DYN),
-    TOKENT("else", TOK_RWORD_ELSE),
-    TOKENT("enum", TOK_RWORD_ENUM),
-    TOKENT("extern", TOK_RWORD_EXTERN),
-    TOKENT("false", TOK_RWORD_FALSE),
-    TOKENT("final", TOK_RWORD_FINAL),
-    TOKENT("fn", TOK_RWORD_FN),
-    TOKENT("for", TOK_RWORD_FOR),
-    TOKENT("if", TOK_RWORD_IF),
-    TOKENT("impl", TOK_RWORD_IMPL),
-    TOKENT("in", TOK_RWORD_IN),
-    TOKENT("let", TOK_RWORD_LET),
-    TOKENT("loop", TOK_RWORD_LOOP),
-    TOKENT("macro", TOK_RWORD_MACRO),
-    TOKENT("match", TOK_RWORD_MATCH),
-    TOKENT("mod", TOK_RWORD_MOD),
-    TOKENT("move", TOK_RWORD_MOVE),
-    TOKENT("mut", TOK_RWORD_MUT),
-    TOKENT("override", TOK_RWORD_OVERRIDE),
-    TOKENT("priv", TOK_RWORD_PRIV),
-    TOKENT("pub", TOK_RWORD_PUB),
-    TOKENT("ref", TOK_RWORD_REF),
-    TOKENT("return", TOK_RWORD_RETURN),
-    TOKENT("self", TOK_RWORD_SELF),
-    TOKENT("static", TOK_RWORD_STATIC),
-    TOKENT("struct", TOK_RWORD_STRUCT),
-    TOKENT("super", TOK_RWORD_SUPER),
-    TOKENT("trait", TOK_RWORD_TRAIT),
-    TOKENT("true", TOK_RWORD_TRUE),
-    TOKENT("try", TOK_RWORD_TRY),
-    TOKENT("type", TOK_RWORD_TYPE),
-    TOKENT("typeof", TOK_RWORD_TYPEOF),
-    TOKENT("unsafe", TOK_RWORD_UNSAFE),
-    TOKENT("unsized", TOK_RWORD_UNSIZED),
-    TOKENT("use", TOK_RWORD_USE),
-    TOKENT("virtual", TOK_RWORD_VIRTUAL),
-    TOKENT("where", TOK_RWORD_WHERE),
-    TOKENT("while", TOK_RWORD_WHILE),
-    TOKENT("yield", TOK_RWORD_YIELD),
-};
+    static const sRWORD RWORDS_2018[] = {
+        TOKENT("_", TOK_UNDERSCORE),
+        TOKENT("abstract", TOK_RWORD_ABSTRACT),
+        TOKENT("as", TOK_RWORD_AS),
+        TOKENT("async", TOK_RWORD_ASYNC),
+        TOKENT("await", TOK_RWORD_AWAIT),
+        TOKENT("become", TOK_RWORD_BECOME),
+        TOKENT("box", TOK_RWORD_BOX),
+        TOKENT("break", TOK_RWORD_BREAK),
+        TOKENT("const", TOK_RWORD_CONST),
+        TOKENT("continue", TOK_RWORD_CONTINUE),
+        TOKENT("crate", TOK_RWORD_CRATE),
+        TOKENT("do", TOK_RWORD_DO),
+        TOKENT("dyn", TOK_RWORD_DYN),
+        TOKENT("else", TOK_RWORD_ELSE),
+        TOKENT("enum", TOK_RWORD_ENUM),
+        TOKENT("extern", TOK_RWORD_EXTERN),
+        TOKENT("false", TOK_RWORD_FALSE),
+        TOKENT("final", TOK_RWORD_FINAL),
+        TOKENT("fn", TOK_RWORD_FN),
+        TOKENT("for", TOK_RWORD_FOR),
+        TOKENT("if", TOK_RWORD_IF),
+        TOKENT("impl", TOK_RWORD_IMPL),
+        TOKENT("in", TOK_RWORD_IN),
+        TOKENT("let", TOK_RWORD_LET),
+        TOKENT("loop", TOK_RWORD_LOOP),
+        TOKENT("macro", TOK_RWORD_MACRO),
+        TOKENT("match", TOK_RWORD_MATCH),
+        TOKENT("mod", TOK_RWORD_MOD),
+        TOKENT("move", TOK_RWORD_MOVE),
+        TOKENT("mut", TOK_RWORD_MUT),
+        TOKENT("override", TOK_RWORD_OVERRIDE),
+        TOKENT("priv", TOK_RWORD_PRIV),
+        TOKENT("pub", TOK_RWORD_PUB),
+        TOKENT("ref", TOK_RWORD_REF),
+        TOKENT("return", TOK_RWORD_RETURN),
+        TOKENT("self", TOK_RWORD_SELF),
+        TOKENT("static", TOK_RWORD_STATIC),
+        TOKENT("struct", TOK_RWORD_STRUCT),
+        TOKENT("super", TOK_RWORD_SUPER),
+        TOKENT("trait", TOK_RWORD_TRAIT),
+        TOKENT("true", TOK_RWORD_TRUE),
+        TOKENT("try", TOK_RWORD_TRY),
+        TOKENT("type", TOK_RWORD_TYPE),
+        TOKENT("typeof", TOK_RWORD_TYPEOF),
+        TOKENT("unsafe", TOK_RWORD_UNSAFE),
+        TOKENT("unsized", TOK_RWORD_UNSIZED),
+        TOKENT("use", TOK_RWORD_USE),
+        TOKENT("virtual", TOK_RWORD_VIRTUAL),
+        TOKENT("where", TOK_RWORD_WHERE),
+        TOKENT("while", TOK_RWORD_WHILE),
+        TOKENT("yield", TOK_RWORD_YIELD),
+    };
 
 }
 
@@ -295,21 +295,21 @@ signed int Lexer::getSymbol() {
 }
 
 namespace {
-bool issym(Codepoint ch) {
-    if ('0' <= ch.v && ch.v <= '9') {
-        return true;
+    bool issym(Codepoint ch) {
+        if ('0' <= ch.v && ch.v <= '9') {
+            return true;
+        }
+        if (std::isalpha(ch.v)) {
+            return true;
+        }
+        if (ch == '_') {
+            return true;
+        }
+        if (ch.v >= 128) {
+            return !ch.isspace();
+        }
+        return false;
     }
-    if (std::isalpha(ch.v)) {
-        return true;
-    }
-    if (ch == '_') {
-        return true;
-    }
-    if (ch.v >= 128) {
-        return !ch.isspace();
-    }
-    return false;
-}
 }
 
 Token Lexer::withLiteralSuffix(Token tok) {

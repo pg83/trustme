@@ -18,205 +18,203 @@
 using namespace stl;
 
 namespace {
-typedef std::map<unsigned, std::map<std::vector<unsigned>, unsigned>> loopCountsT;
+    typedef std::map<unsigned, std::map<std::vector<unsigned>, unsigned>> loopCountsT;
 
-struct CapturedVal {
-    unsigned int numUses;
-    unsigned int numUsed;
-    InterpolatedFragment frag;
-};
+    struct CapturedVal {
+        unsigned int numUses;
+        unsigned int numUsed;
+        InterpolatedFragment frag;
+    };
 
 #include "macro_rules_capture_tu.h"
 
-inline std::ostream& operator<<(std::ostream& os, const CapturedVal& x);
-inline std::ostream& operator<<(std::ostream& os, const CaptureLayer& x);
+    inline std::ostream& operator<<(std::ostream& os, const CapturedVal& x);
+    inline std::ostream& operator<<(std::ostream& os, const CaptureLayer& x);
 
-struct ParameterMappings {
-    struct CapturedVar {
-        CaptureLayer topLayer;
+    struct ParameterMappings {
+        struct CapturedVar {
+            CaptureLayer topLayer;
 
-        friend std::ostream& operator<<(std::ostream& os, const CapturedVar& x) {
-            os << "CapturedVar { " << x.topLayer << " }";
-            return os;
+            friend std::ostream& operator<<(std::ostream& os, const CapturedVar& x) {
+                os << "CapturedVar { " << x.topLayer << " }";
+                return os;
+            }
+        };
+
+        loopCountsT loopCounts;
+
+        std::vector<CapturedVar> mappings_;
+        unsigned layerCount_;
+
+        ParameterMappings();
+
+        ParameterMappings(ParameterMappings&&) = default;
+
+        const std::vector<CapturedVar>& mappings() const;
+
+        size_t layerCount() const;
+
+        void setLoopCounts(loopCountsT loopCounts);
+
+        void insert(unsigned int nameIndex, const std::vector<unsigned int>& iterations, InterpolatedFragment data);
+
+        InterpolatedFragment* get(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
+
+        unsigned int getLoopRepeats(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int loopIdx) const;
+
+        unsigned int getVariableCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth = 0) const;
+
+        void incCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
+        bool decCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
+
+        CapturedVal& getCap(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
+    };
+
+    struct MacroPatternStream {
+        const std::vector<SimplePatEnt>& simpleEnts;
+        SimplePatEnt endEnt;
+        size_t curPos_;
+
+        bool lastWasCond;
+        bool conditionMet;
+        std::vector<bool> conditionHistory;
+
+        const std::vector<bool>* conditionReplay;
+        size_t conditionReplayPos;
+
+        std::vector<unsigned int> currentLoops;
+        std::vector<unsigned int> loopIterations;
+
+        loopCountsT loopCounts;
+
+        bool peekCacheValid = false;
+        const SimplePatEnt* peekCache;
+
+        MacroPatternStream(const std::vector<SimplePatEnt>& ents, const std::vector<bool>* conditionReplay = nullptr);
+
+        size_t curPos() const;
+
+        const SimplePatEnt& next();
+
+        const SimplePatEnt& peek();
+
+        void ifSucceeded();
+
+        const std::vector<unsigned int>& getLoopIters() const;
+
+        std::vector<bool> takeHistory();
+
+        loopCountsT takeLoopCounts();
+    };
+
+    struct MacroExpandState {
+        const std::vector<MacroExpansionEnt>& rootContents;
+        const ParameterMappings& mappings_;
+
+        struct tOffset {
+            unsigned readPos;
+            unsigned loopIndex;
+            unsigned maxIndex;
+        };
+
+        std::vector<tOffset> offsets;
+        std::vector<unsigned int> iterations_;
+
+        const std::vector<MacroExpansionEnt>* curEnts;
+
+        MacroExpandState(const std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings);
+
+        const MacroExpansionEnt* nextEnt();
+
+        const std::vector<unsigned int> iterations() const;
+
+        unsigned int loopIndexAt(unsigned int depth) const;
+
+        unsigned int loopLengthAt(unsigned int depth) const;
+
+        unsigned int topPos() const;
+
+        const MacroExpansionEnt& getCurLayerEnt() const;
+        const std::vector<MacroExpansionEnt>* getCurLayer() const;
+    };
+
+    struct MacroExpander: public TokenStream {
+        Span thisSpan;
+        const RcString crateName;
+        Span invocationSpan;
+        ASTEdition invocationEdition;
+
+        ParameterMappings mappings_;
+        MacroExpandState state;
+
+        Token nextToken;
+        std::unique_ptr<TTStreamO> ttstream;
+        ASTEdition sourceEdition;
+        bool isMacroItem;
+        bool transparent;
+        Ident::Hygiene hygiene_;
+        Ident::Hygiene lastHygiene;
+
+        ObjPool& pool;
+
+        MacroExpander(const MacroExpander& x) = delete;
+
+        MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition);
+
+        Position getPosition() const override;
+
+        Span outerSpan() const override;
+
+        Ident::Hygiene realGetHygiene() const override;
+        ASTEdition realGetEdition() const override;
+        Token realGetToken() override;
+    };
+
+    struct MacroRule {
+        std::vector<MacroPatEnt> pattern;
+        Span patSpan;
+        std::vector<MacroExpansionEnt> contents;
+
+        MacroRule();
+
+        MacroRule(MacroRule&&) = default;
+        MacroRule(const MacroRule&) = delete;
+    };
+
+    struct RuleParseState {
+        struct NameState {
+            unsigned idx;
+            std::vector<unsigned> loops;
+            Ident::Hygiene hygiene;
+        };
+
+        std::map<RcString, std::vector<NameState>> names;
+        unsigned nextNameIndex;
+
+        unsigned nextLoopIndex;
+        std::vector<unsigned> loopStack;
+
+        RuleParseState();
+
+        unsigned addName(const Ident& ident);
+
+        const NameState* findName(const Ident& ident) const;
+
+        unsigned openLoop();
+
+        void closeLoop();
+    };
+
+    struct ContentLoopVariableUse {
+        std::vector<unsigned> loopStack;
+        bool isOptional;
+
+        ContentLoopVariableUse(std::vector<unsigned> loopStack);
+
+        friend std::ostream& operator<<(std::ostream& os, const ContentLoopVariableUse& x) {
+            return os << "[" << x.loopStack << "] " << (x.isOptional ? "optional" : "required");
         }
     };
-
-    loopCountsT loopCounts;
-
-    std::vector<CapturedVar> mappings_;
-    unsigned layerCount_;
-
-    ParameterMappings();
-
-    ParameterMappings(ParameterMappings&&) = default;
-
-    const std::vector<CapturedVar>& mappings() const;
-
-    size_t layerCount() const;
-
-    void setLoopCounts(loopCountsT loopCounts);
-
-    void insert(unsigned int nameIndex, const std::vector<unsigned int>& iterations, InterpolatedFragment data);
-
-    InterpolatedFragment* get(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
-
-    unsigned int getLoopRepeats(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int loopIdx) const;
-
-    unsigned int getVariableCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth = 0) const;
-
-    void incCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
-    bool decCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
-
-    CapturedVal& getCap(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
-};
-
-struct MacroPatternStream {
-    const std::vector<SimplePatEnt>& simpleEnts;
-    SimplePatEnt endEnt;
-    size_t curPos_;
-
-    bool lastWasCond;
-    bool conditionMet;
-    std::vector<bool> conditionHistory;
-
-    const std::vector<bool>* conditionReplay;
-    size_t conditionReplayPos;
-
-    std::vector<unsigned int> currentLoops;
-    std::vector<unsigned int> loopIterations;
-
-    loopCountsT loopCounts;
-
-    bool peekCacheValid = false;
-    const SimplePatEnt* peekCache;
-
-    MacroPatternStream(const std::vector<SimplePatEnt>& ents, const std::vector<bool>* conditionReplay = nullptr);
-
-    size_t curPos() const;
-
-    const SimplePatEnt& next();
-
-    const SimplePatEnt& peek();
-
-    void ifSucceeded();
-
-    const std::vector<unsigned int>& getLoopIters() const;
-
-    std::vector<bool> takeHistory();
-
-    loopCountsT takeLoopCounts();
-};
-
-struct MacroExpandState {
-    const std::vector<MacroExpansionEnt>& rootContents;
-    const ParameterMappings& mappings_;
-
-    struct tOffset {
-        unsigned readPos;
-        unsigned loopIndex;
-        unsigned maxIndex;
-    };
-
-    std::vector<tOffset> offsets;
-    std::vector<unsigned int> iterations_;
-
-    const std::vector<MacroExpansionEnt>* curEnts;
-
-    MacroExpandState(const std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings);
-
-    const MacroExpansionEnt* nextEnt();
-
-    const std::vector<unsigned int> iterations() const;
-
-    unsigned int loopIndexAt(unsigned int depth) const;
-
-    unsigned int loopLengthAt(unsigned int depth) const;
-
-    unsigned int topPos() const;
-
-    const MacroExpansionEnt& getCurLayerEnt() const;
-    const std::vector<MacroExpansionEnt>* getCurLayer() const;
-};
-}
-
-struct MacroExpander: public TokenStream {
-    Span thisSpan;
-    const RcString crateName;
-    Span invocationSpan;
-    ASTEdition invocationEdition;
-
-    ParameterMappings mappings_;
-    MacroExpandState state;
-
-    Token nextToken;
-    std::unique_ptr<TTStreamO> ttstream;
-    ASTEdition sourceEdition;
-    bool isMacroItem;
-    bool transparent;
-    Ident::Hygiene hygiene_;
-    Ident::Hygiene lastHygiene;
-
-    ObjPool& pool;
-
-    MacroExpander(const MacroExpander& x) = delete;
-
-    MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition);
-
-    Position getPosition() const override;
-
-    Span outerSpan() const override;
-
-    Ident::Hygiene realGetHygiene() const override;
-    ASTEdition realGetEdition() const override;
-    Token realGetToken() override;
-};
-
-namespace {
-struct MacroRule {
-    std::vector<MacroPatEnt> pattern;
-    Span patSpan;
-    std::vector<MacroExpansionEnt> contents;
-
-    MacroRule();
-
-    MacroRule(MacroRule&&) = default;
-    MacroRule(const MacroRule&) = delete;
-};
-
-struct RuleParseState {
-    struct NameState {
-        unsigned idx;
-        std::vector<unsigned> loops;
-        Ident::Hygiene hygiene;
-    };
-
-    std::map<RcString, std::vector<NameState>> names;
-    unsigned nextNameIndex;
-
-    unsigned nextLoopIndex;
-    std::vector<unsigned> loopStack;
-
-    RuleParseState();
-
-    unsigned addName(const Ident& ident);
-
-    const NameState* findName(const Ident& ident) const;
-
-    unsigned openLoop();
-
-    void closeLoop();
-};
-
-struct ContentLoopVariableUse {
-    std::vector<unsigned> loopStack;
-    bool isOptional;
-
-    ContentLoopVariableUse(std::vector<unsigned> loopStack);
-
-    friend std::ostream& operator<<(std::ostream& os, const ContentLoopVariableUse& x) {
-        return os << "[" << x.loopStack << "] " << (x.isOptional ? "optional" : "required");
-    }
-};
 }
 
 namespace {
@@ -261,31 +259,31 @@ namespace {
 }
 
 namespace {
-inline std::ostream& operator<<(std::ostream& os, const CapturedVal& x) {
-    os << x.frag;
-    return os;
-}
-
-inline std::ostream& operator<<(std::ostream& os, const CaptureLayer& x) {
-    switch (x.tag()) {
-        case CaptureLayer::TAG_Vals: {
-            auto& e = x.as_Vals();
-            os << "[" << e << "]";
-            break;
-        }
-        case CaptureLayer::TAG_Nested: {
-            auto& e = x.as_Nested();
-            os << "{" << e << "}";
-            break;
-        }
+    inline std::ostream& operator<<(std::ostream& os, const CapturedVal& x) {
+        os << x.frag;
+        return os;
     }
-    return os;
-}
+
+    inline std::ostream& operator<<(std::ostream& os, const CaptureLayer& x) {
+        switch (x.tag()) {
+            case CaptureLayer::TAG_Vals: {
+                auto& e = x.as_Vals();
+                os << "[" << e << "]";
+                break;
+            }
+            case CaptureLayer::TAG_Nested: {
+                auto& e = x.as_Nested();
+                os << "{" << e << "}";
+                break;
+            }
+        }
+        return os;
+    }
 }
 
 namespace {
-unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts);
-void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents);
+    unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts);
+    void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents);
 }
 
 void ParameterMappings::insert(unsigned int nameIndex, const std::vector<unsigned int>& iterations, InterpolatedFragment data) {
@@ -525,114 +523,114 @@ void MacroPatternStream::ifSucceeded() {
 }
 
 namespace {
-void MacroInitDefaults() {
-}
+    void MacroInitDefaults() {
+    }
 
-InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type type, bool stmtIsItem) {
-    Token tok;
-    switch (type) {
-        case MacroPatEnt::PAT_TOKEN:
-            BUG(lex.pointSpan(), "Encountered PAT_TOKEN when handling capture");
-        case MacroPatEnt::PAT_LOOP:
-            BUG(lex.pointSpan(), "Encountered PAT_LOOP when handling capture");
+    InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type type, bool stmtIsItem) {
+        Token tok;
+        switch (type) {
+            case MacroPatEnt::PAT_TOKEN:
+                BUG(lex.pointSpan(), "Encountered PAT_TOKEN when handling capture");
+            case MacroPatEnt::PAT_LOOP:
+                BUG(lex.pointSpan(), "Encountered PAT_LOOP when handling capture");
 
-        case MacroPatEnt::PAT_TT:
-            if (GET_TOK(tok, lex) == TOK_EOF) {
-                parseErrorUnexpected(lex, TOK_EOF);
-            } else {
-                PUTBACK(tok, lex);
-            }
-            return InterpolatedFragment(ParseTT(lex, false));
-        case MacroPatEnt::PAT_PAT:
-            return InterpolatedFragment(ParsePattern(lex, AllowOrPattern::Yes));
-        case MacroPatEnt::PAT_PAT_PARAM:
-            return InterpolatedFragment(ParsePattern(lex, AllowOrPattern::No));
-        case MacroPatEnt::PAT_TYPE:
-            return InterpolatedFragment(ParseType(lex));
-        case MacroPatEnt::PAT_EXPR:
-            return InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release());
-        case MacroPatEnt::PAT_STMT:
-            if (stmtIsItem) {
-                if (lex.lookahead(0) == TOK_INTERPOLATED_STMT_ITEM) {
-                    tok = lex.getToken();
-                    return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, tok.takeFragStmtItem());
+            case MacroPatEnt::PAT_TT:
+                if (GET_TOK(tok, lex) == TOK_EOF) {
+                    parseErrorUnexpected(lex, TOK_EOF);
+                } else {
+                    PUTBACK(tok, lex);
                 }
-                assert(lex.parseState().module);
-                const auto& curMod = *lex.parseState().module;
-                return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, ParseModItemS(lex, curMod.fileInfo, curMod.path(), ASTAttributeList{}));
-            }
-            {
-                auto attrs = ParseItemAttrs(lex);
-                auto stmt = ParseStmt(lex);
-                stmt->setAttrs(mv$(attrs));
-                return InterpolatedFragment(InterpolatedFragment::STMT, stmt.release());
-            }
-        case MacroPatEnt::PAT_PATH:
-            // HACK for `rustc-1.90.0-src/vendor/icu_locid_transform_data-1.5.0/data/macros.rs::23`
-            if (lex.lookahead(0) == TOK_INTERPOLATED_TYPE) {
-                return InterpolatedFragment(std::move(lex.getToken().fragType()));
-            }
-            GET_TOK(tok, lex);
-            {
-                auto span = lex.tokenStartSpan(tok);
-                PUTBACK(tok, lex);
-                return InterpolatedFragment(ParsePath(lex, PATH_GENERIC_TYPE), std::move(span));
-            }
-        case MacroPatEnt::PAT_BLOCK:
-            return InterpolatedFragment(InterpolatedFragment::BLOCK, ParseExprBlockNode(lex).release());
-        case MacroPatEnt::PAT_META:
-            return InterpolatedFragment(ParseMetaItem(lex));
-        case MacroPatEnt::PAT_ITEM: {
-            assert(lex.parseState().module);
-            const auto& curMod = *lex.parseState().module;
-            return InterpolatedFragment(ParseModItemS(lex, curMod.fileInfo, curMod.path(), ASTAttributeList{}));
-        } break;
-        case MacroPatEnt::PAT_IDENT:
-            GET_TOK(tok, lex);
-            if (Token::typeIsRword(tok.type())) {
-                return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
-            } else {
-                CHECK_TOK(tok, TOK_IDENT);
-                return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
-            }
-        case MacroPatEnt::PAT_VIS:
-            return InterpolatedFragment(ParsePublicity(lex, /*allow_restricted=*/true));
-        case MacroPatEnt::PAT_LIFETIME:
-            GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
-            return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
-        case MacroPatEnt::PAT_LITERAL:
-            GET_TOK(tok, lex);
-            if (tok.type() == TOK_DASH) {
-                std::vector<TokenTree> toks;
-                switch (lex.lookahead(0)) {
-                    case TOK_INTEGER:
-                    case TOK_FLOAT:
-                        toks.push_back(tok);
-                        break;
-                    default:
-                        parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT});
+                return InterpolatedFragment(ParseTT(lex, false));
+            case MacroPatEnt::PAT_PAT:
+                return InterpolatedFragment(ParsePattern(lex, AllowOrPattern::Yes));
+            case MacroPatEnt::PAT_PAT_PARAM:
+                return InterpolatedFragment(ParsePattern(lex, AllowOrPattern::No));
+            case MacroPatEnt::PAT_TYPE:
+                return InterpolatedFragment(ParseType(lex));
+            case MacroPatEnt::PAT_EXPR:
+                return InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release());
+            case MacroPatEnt::PAT_STMT:
+                if (stmtIsItem) {
+                    if (lex.lookahead(0) == TOK_INTERPOLATED_STMT_ITEM) {
+                        tok = lex.getToken();
+                        return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, tok.takeFragStmtItem());
+                    }
+                    assert(lex.parseState().module);
+                    const auto& curMod = *lex.parseState().module;
+                    return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, ParseModItemS(lex, curMod.fileInfo, curMod.path(), ASTAttributeList{}));
+                }
+                {
+                    auto attrs = ParseItemAttrs(lex);
+                    auto stmt = ParseStmt(lex);
+                    stmt->setAttrs(mv$(attrs));
+                    return InterpolatedFragment(InterpolatedFragment::STMT, stmt.release());
+                }
+            case MacroPatEnt::PAT_PATH:
+                // HACK for `rustc-1.90.0-src/vendor/icu_locid_transform_data-1.5.0/data/macros.rs::23`
+                if (lex.lookahead(0) == TOK_INTERPOLATED_TYPE) {
+                    return InterpolatedFragment(std::move(lex.getToken().fragType()));
                 }
                 GET_TOK(tok, lex);
-                toks.push_back(tok);
-                return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), std::move(toks)));
-            }
-            switch (tok.type()) {
-                case TOK_INTEGER:
-                case TOK_FLOAT:
-                case TOK_STRING:
-                case TOK_BYTESTRING:
-                case TOK_CSTRING:
-                case TOK_LITERAL_SUFFIXED:
-                case TOK_RWORD_TRUE:
-                case TOK_RWORD_FALSE:
-                    break;
-                default:
-                    parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT, TOK_STRING, TOK_BYTESTRING, TOK_CSTRING, TOK_RWORD_TRUE, TOK_RWORD_FALSE});
-            }
-            return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
+                {
+                    auto span = lex.tokenStartSpan(tok);
+                    PUTBACK(tok, lex);
+                    return InterpolatedFragment(ParsePath(lex, PATH_GENERIC_TYPE), std::move(span));
+                }
+            case MacroPatEnt::PAT_BLOCK:
+                return InterpolatedFragment(InterpolatedFragment::BLOCK, ParseExprBlockNode(lex).release());
+            case MacroPatEnt::PAT_META:
+                return InterpolatedFragment(ParseMetaItem(lex));
+            case MacroPatEnt::PAT_ITEM: {
+                assert(lex.parseState().module);
+                const auto& curMod = *lex.parseState().module;
+                return InterpolatedFragment(ParseModItemS(lex, curMod.fileInfo, curMod.path(), ASTAttributeList{}));
+            } break;
+            case MacroPatEnt::PAT_IDENT:
+                GET_TOK(tok, lex);
+                if (Token::typeIsRword(tok.type())) {
+                    return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
+                } else {
+                    CHECK_TOK(tok, TOK_IDENT);
+                    return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
+                }
+            case MacroPatEnt::PAT_VIS:
+                return InterpolatedFragment(ParsePublicity(lex, /*allow_restricted=*/true));
+            case MacroPatEnt::PAT_LIFETIME:
+                GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
+                return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
+            case MacroPatEnt::PAT_LITERAL:
+                GET_TOK(tok, lex);
+                if (tok.type() == TOK_DASH) {
+                    std::vector<TokenTree> toks;
+                    switch (lex.lookahead(0)) {
+                        case TOK_INTEGER:
+                        case TOK_FLOAT:
+                            toks.push_back(tok);
+                            break;
+                        default:
+                            parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT});
+                    }
+                    GET_TOK(tok, lex);
+                    toks.push_back(tok);
+                    return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), std::move(toks)));
+                }
+                switch (tok.type()) {
+                    case TOK_INTEGER:
+                    case TOK_FLOAT:
+                    case TOK_STRING:
+                    case TOK_BYTESTRING:
+                    case TOK_CSTRING:
+                    case TOK_LITERAL_SUFFIXED:
+                    case TOK_RWORD_TRUE:
+                    case TOK_RWORD_FALSE:
+                        break;
+                    default:
+                        parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT, TOK_STRING, TOK_BYTESTRING, TOK_CSTRING, TOK_RWORD_TRUE, TOK_RWORD_FALSE});
+                }
+                return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
+        }
+        UNREACHABLE();
     }
-    UNREACHABLE();
-}
 }
 
 std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, const WireBoard& wb, TokenTree input, const ASTCrate& crate, ASTModule& mod) {
@@ -2032,195 +2030,195 @@ namespace {
 }
 
 namespace {
-unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts) {
-    ASSERT_BUG(sp, rules.rules.size() > 0, "Empty macro_rules set");
+    unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts) {
+        ASSERT_BUG(sp, rules.rules.size() > 0, "Empty macro_rules set");
 
-    struct Match {
-        size_t armIndex;
-        std::vector<bool> conditionHistory;
-        std::vector<bool> stmtIsItemHistory;
-    };
-
-    std::vector<Match> matches;
-    std::vector<std::pair<size_t, eTokenType>> failPos;
-    for (size_t i = 0; i < rules.rules.size(); i++) {
-        auto lex = TokenStreamRO(input);
-        auto armStream = MacroPatternStream(rules.rules[i].pattern);
-        std::vector<bool> stmtIsItemHistory;
-
-        bool fail = false;
-        for (;;) {
-            const auto pos = armStream.curPos();
-            const auto& pat = armStream.next();
-            if (pat.is_End()) {
-                if (lex.next() != TOK_EOF) {
-                    fail = true;
-                }
-                break;
-            } else if (const auto* e = pat.opt_If()) {
-                auto lc = lex.clone();
-                bool rv = true;
-                for (const auto& check : e->ents) {
-                    const bool atConditionStart = lc.position() == lex.position();
-                    if (check.ty != MacroPatEnt::PAT_TOKEN) {
-                        if (!consumeFromFrag(lc, check.ty)) {
-                            rv = false;
-                            break;
-                        }
-                    } else {
-                        if (lc.nextTok() != check.tok) {
-                            rv = false;
-                            break;
-                        }
-                        if (lc.nextTok() != TOK_EOF) {
-                            lc.consume();
-                        }
-                    }
-                    if (atConditionStart && check.isLocalAmbiguity()) {
-                        ERROR(sp, E0000, "local ambiguity when calling macro: multiple parsing options");
-                    }
-                }
-                if (rv == e->isEqual) {
-                    armStream.ifSucceeded();
-                }
-            } else if (const auto* e = pat.opt_ExpectTok()) {
-                const auto& tok = lex.nextTok();
-                if (tok != *e) {
-                    fail = true;
-                    break;
-                }
-                lex.consume();
-            } else if (const auto* e = pat.opt_ExpectPat()) {
-                bool stmtIsItem = false;
-                if (!consumeFromFrag(lex, e->type, &stmtIsItem)) {
-                    fail = true;
-                    break;
-                }
-                if (e->type == MacroPatEnt::PAT_STMT) {
-                    stmtIsItemHistory.push_back(stmtIsItem);
-                }
-            } else {
-            }
-        }
-
-        if (!fail) {
-            matches.push_back(Match{i, armStream.takeHistory(), mv$(stmtIsItemHistory)});
-        } else {
-            failPos.push_back(std::make_pair(lex.position(), lex.next()));
-        }
-    }
-
-    if (matches.size() == 0) {
-        // TODO: Keep track of where each arm failed.
-        TODO(sp, "No arm matched - " << failPos);
-    } else {
-        auto i = matches[0].armIndex;
-        const auto& history = matches[0].conditionHistory;
-        const auto& stmtIsItemHistory = matches[0].stmtIsItemHistory;
-
-        auto lex = TTStreamO(sp, ParseState(), mv$(input));
-        lex.parseState().crate = &crate;
-        lex.parseState().wb = &wb;
-        SET_MODULE(lex, mod);
-        auto armStream = MacroPatternStream(rules.rules[i].pattern, &history);
-
-        struct Capture {
-            unsigned int bindingIdx;
-            std::vector<unsigned int> iterations;
-            unsigned int capIdx;
+        struct Match {
+            size_t armIndex;
+            std::vector<bool> conditionHistory;
+            std::vector<bool> stmtIsItemHistory;
         };
 
-        std::vector<InterpolatedFragment> captures;
-        std::vector<Capture> captureInfo;
-        size_t stmtCaptureIndex = 0;
+        std::vector<Match> matches;
+        std::vector<std::pair<size_t, eTokenType>> failPos;
+        for (size_t i = 0; i < rules.rules.size(); i++) {
+            auto lex = TokenStreamRO(input);
+            auto armStream = MacroPatternStream(rules.rules[i].pattern);
+            std::vector<bool> stmtIsItemHistory;
 
-        for (;;) {
-            const auto& pat = armStream.next();
-            if (pat.is_End()) {
-                break;
-            } else if (pat.is_If()) {
-                BUG(sp, "Unexpected If pattern during final matching - " << pat);
-            } else if (const auto* e = pat.opt_ExpectTok()) {
-                auto tok = lex.getToken();
-                if (tok != *e) {
-                    ERROR(sp, E0000, "Expected token " << *e << " in macro arm, got " << tok);
+            bool fail = false;
+            for (;;) {
+                const auto pos = armStream.curPos();
+                const auto& pat = armStream.next();
+                if (pat.is_End()) {
+                    if (lex.next() != TOK_EOF) {
+                        fail = true;
+                    }
                     break;
-                }
-            } else if (const auto* e = pat.opt_ExpectPat()) {
-                bool stmtIsItem = false;
-                if (e->type == MacroPatEnt::PAT_STMT) {
-                    ASSERT_BUG(sp, stmtCaptureIndex < stmtIsItemHistory.size(), "Missing statement fragment classification");
-                    stmtIsItem = stmtIsItemHistory[stmtCaptureIndex++];
-                }
-                auto cap = MacroHandlePatternCap(lex, e->type, stmtIsItem);
-
-                unsigned int capIdx = captures.size();
-                captures.push_back(mv$(cap));
-                captureInfo.push_back(Capture{e->idx, armStream.getLoopIters(), capIdx});
-            } else {
-            }
-        }
-        ASSERT_BUG(sp, stmtCaptureIndex == stmtIsItemHistory.size(), "Unused statement fragment classification");
-
-        for (const auto& cap : captureInfo) {
-            boundTts.insert(cap.bindingIdx, cap.iterations, mv$(captures[cap.capIdx]));
-        }
-        boundTts.setLoopCounts(armStream.takeLoopCounts());
-        return i;
-    }
-}
-
-void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents) {
-    MacroExpandState state(contents, boundTts);
-
-    while (const auto* entPtr = state.nextEnt()) {
-        switch ((*entPtr).tag()) {
-            case MacroExpansionEnt::TAG_Token: {
-                break;
-            }
-            case MacroExpansionEnt::TAG_Loop: {
-                break;
-            }
-            case MacroExpansionEnt::TAG_NamedValue: {
-                auto& e = (*entPtr).as_NamedValue();
-                switch (e & ~NAMEDVALUE_VALMASK) {
-                    case 0:
-                        boundTts.incCount(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
-                        break;
-                    case NAMEDVALUE_TY_IGNORE:
-                    case NAMEDVALUE_TY_MAGIC:
-                    default:
-                        break;
-                }
-                break;
-            }
-            case MacroExpansionEnt::TAG_Concat: {
-                auto& ccEnts = (*entPtr).as_Concat();
-                for (const auto& ccEnt : ccEnts) {
-                    switch (ccEnt.tag()) {
-                        case MacroExpansionConcatEnt::TAG_Ident: {
-                            break;
-                        }
-                        case MacroExpansionConcatEnt::TAG_Named: {
-                            auto& e = ccEnt.as_Named();
-                            switch (e & ~NAMEDVALUE_VALMASK) {
-                                case 0:
-                                case NAMEDVALUE_TY_IGNORE:
-                                    boundTts.incCount(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
-                                    break;
-                                case NAMEDVALUE_TY_MAGIC:
-                                default:
-                                    break;
+                } else if (const auto* e = pat.opt_If()) {
+                    auto lc = lex.clone();
+                    bool rv = true;
+                    for (const auto& check : e->ents) {
+                        const bool atConditionStart = lc.position() == lex.position();
+                        if (check.ty != MacroPatEnt::PAT_TOKEN) {
+                            if (!consumeFromFrag(lc, check.ty)) {
+                                rv = false;
+                                break;
                             }
-                            break;
+                        } else {
+                            if (lc.nextTok() != check.tok) {
+                                rv = false;
+                                break;
+                            }
+                            if (lc.nextTok() != TOK_EOF) {
+                                lc.consume();
+                            }
+                        }
+                        if (atConditionStart && check.isLocalAmbiguity()) {
+                            ERROR(sp, E0000, "local ambiguity when calling macro: multiple parsing options");
                         }
                     }
+                    if (rv == e->isEqual) {
+                        armStream.ifSucceeded();
+                    }
+                } else if (const auto* e = pat.opt_ExpectTok()) {
+                    const auto& tok = lex.nextTok();
+                    if (tok != *e) {
+                        fail = true;
+                        break;
+                    }
+                    lex.consume();
+                } else if (const auto* e = pat.opt_ExpectPat()) {
+                    bool stmtIsItem = false;
+                    if (!consumeFromFrag(lex, e->type, &stmtIsItem)) {
+                        fail = true;
+                        break;
+                    }
+                    if (e->type == MacroPatEnt::PAT_STMT) {
+                        stmtIsItemHistory.push_back(stmtIsItem);
+                    }
+                } else {
                 }
-                break;
+            }
+
+            if (!fail) {
+                matches.push_back(Match{i, armStream.takeHistory(), mv$(stmtIsItemHistory)});
+            } else {
+                failPos.push_back(std::make_pair(lex.position(), lex.next()));
+            }
+        }
+
+        if (matches.size() == 0) {
+            // TODO: Keep track of where each arm failed.
+            TODO(sp, "No arm matched - " << failPos);
+        } else {
+            auto i = matches[0].armIndex;
+            const auto& history = matches[0].conditionHistory;
+            const auto& stmtIsItemHistory = matches[0].stmtIsItemHistory;
+
+            auto lex = TTStreamO(sp, ParseState(), mv$(input));
+            lex.parseState().crate = &crate;
+            lex.parseState().wb = &wb;
+            SET_MODULE(lex, mod);
+            auto armStream = MacroPatternStream(rules.rules[i].pattern, &history);
+
+            struct Capture {
+                unsigned int bindingIdx;
+                std::vector<unsigned int> iterations;
+                unsigned int capIdx;
+            };
+
+            std::vector<InterpolatedFragment> captures;
+            std::vector<Capture> captureInfo;
+            size_t stmtCaptureIndex = 0;
+
+            for (;;) {
+                const auto& pat = armStream.next();
+                if (pat.is_End()) {
+                    break;
+                } else if (pat.is_If()) {
+                    BUG(sp, "Unexpected If pattern during final matching - " << pat);
+                } else if (const auto* e = pat.opt_ExpectTok()) {
+                    auto tok = lex.getToken();
+                    if (tok != *e) {
+                        ERROR(sp, E0000, "Expected token " << *e << " in macro arm, got " << tok);
+                        break;
+                    }
+                } else if (const auto* e = pat.opt_ExpectPat()) {
+                    bool stmtIsItem = false;
+                    if (e->type == MacroPatEnt::PAT_STMT) {
+                        ASSERT_BUG(sp, stmtCaptureIndex < stmtIsItemHistory.size(), "Missing statement fragment classification");
+                        stmtIsItem = stmtIsItemHistory[stmtCaptureIndex++];
+                    }
+                    auto cap = MacroHandlePatternCap(lex, e->type, stmtIsItem);
+
+                    unsigned int capIdx = captures.size();
+                    captures.push_back(mv$(cap));
+                    captureInfo.push_back(Capture{e->idx, armStream.getLoopIters(), capIdx});
+                } else {
+                }
+            }
+            ASSERT_BUG(sp, stmtCaptureIndex == stmtIsItemHistory.size(), "Unused statement fragment classification");
+
+            for (const auto& cap : captureInfo) {
+                boundTts.insert(cap.bindingIdx, cap.iterations, mv$(captures[cap.capIdx]));
+            }
+            boundTts.setLoopCounts(armStream.takeLoopCounts());
+            return i;
+        }
+    }
+
+    void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents) {
+        MacroExpandState state(contents, boundTts);
+
+        while (const auto* entPtr = state.nextEnt()) {
+            switch ((*entPtr).tag()) {
+                case MacroExpansionEnt::TAG_Token: {
+                    break;
+                }
+                case MacroExpansionEnt::TAG_Loop: {
+                    break;
+                }
+                case MacroExpansionEnt::TAG_NamedValue: {
+                    auto& e = (*entPtr).as_NamedValue();
+                    switch (e & ~NAMEDVALUE_VALMASK) {
+                        case 0:
+                            boundTts.incCount(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
+                            break;
+                        case NAMEDVALUE_TY_IGNORE:
+                        case NAMEDVALUE_TY_MAGIC:
+                        default:
+                            break;
+                    }
+                    break;
+                }
+                case MacroExpansionEnt::TAG_Concat: {
+                    auto& ccEnts = (*entPtr).as_Concat();
+                    for (const auto& ccEnt : ccEnts) {
+                        switch (ccEnt.tag()) {
+                            case MacroExpansionConcatEnt::TAG_Ident: {
+                                break;
+                            }
+                            case MacroExpansionConcatEnt::TAG_Named: {
+                                auto& e = ccEnt.as_Named();
+                                switch (e & ~NAMEDVALUE_VALMASK) {
+                                    case 0:
+                                    case NAMEDVALUE_TY_IGNORE:
+                                        boundTts.incCount(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
+                                        break;
+                                    case NAMEDVALUE_TY_MAGIC:
+                                    default:
+                                        break;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                }
             }
         }
     }
-}
 
 }
 
@@ -2876,151 +2874,151 @@ namespace {
 }
 
 namespace {
-std::vector<MacroPatEnt> ParseMacroRulesPat(TokenStream& lex, enum eTokenType open, enum eTokenType close, RuleParseState& state) {
-    Token tok;
+    std::vector<MacroPatEnt> ParseMacroRulesPat(TokenStream& lex, enum eTokenType open, enum eTokenType close, RuleParseState& state) {
+        Token tok;
 
-    std::vector<MacroPatEnt> ret;
+        std::vector<MacroPatEnt> ret;
 
-    int depth = 0;
-    auto ps = lex.startSpan();
-    while (GET_TOK(tok, lex) != close || depth > 0) {
-        if (tok.isDocComment()) {
-            lex.getTokenIf(TOK_EXCLAM);
-            GET_CHECK_TOK(tok, lex, TOK_SQUARE_OPEN);
-            GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            GET_CHECK_TOK(tok, lex, TOK_EQUAL);
-            GET_CHECK_TOK(tok, lex, TOK_STRING);
-            GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
-            continue;
-        }
-        if (tok.type() == open) {
-            depth++;
-        } else if (tok.type() == close) {
-            if (depth == 0) {
-                compileErrorGeneric(FMT("Unmatched " << Token(close) << " in macro pattern").c_str());
+        int depth = 0;
+        auto ps = lex.startSpan();
+        while (GET_TOK(tok, lex) != close || depth > 0) {
+            if (tok.isDocComment()) {
+                lex.getTokenIf(TOK_EXCLAM);
+                GET_CHECK_TOK(tok, lex, TOK_SQUARE_OPEN);
+                GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                GET_CHECK_TOK(tok, lex, TOK_EQUAL);
+                GET_CHECK_TOK(tok, lex, TOK_STRING);
+                GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
+                continue;
             }
-            depth--;
-        }
-
-        switch (tok.type()) {
-            case TOK_DOLLAR:
-                switch (GET_TOK(tok, lex)) {
-                    case TOK_SQUARE_CLOSE:
-                    case TOK_PAREN_CLOSE:
-                        ret.push_back(MacroPatEnt(lex.endSpan(ps), TOK_DOLLAR));
-                        PUTBACK(tok, lex);
-                        break;
-                    case TOK_RWORD_CRATE:
-                        parseErrorUnexpected(lex, tok);
-                    default:
-                        if (!Token::typeIsRword(tok.type())) {
-                            parseErrorUnexpected(lex, tok);
-                        }
-                    case TOK_UNDERSCORE:
-                    case TOK_IDENT: {
-                        auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(tok.type() == TOK_UNDERSCORE ? RcString() : RcString::newInterned(tok.toStr()));
-                        const auto& name = nameIdent.name;
-                        GET_CHECK_TOK(tok, lex, TOK_COLON);
-                        GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                        RcString type = tok.ident().name;
-
-                        auto idx = state.addName(nameIdent);
-
-                        auto sp = lex.endSpan(ps);
-                        MacroPatEnt::Type ty;
-                        if (0)
-                            ;
-                        else if (type == "tt") {
-                            ty = MacroPatEnt::PAT_TT;
-                        } else if (type == "pat") {
-                            ty = lex.editionAfter(ASTEdition::Rust2021) ? MacroPatEnt::PAT_PAT : MacroPatEnt::PAT_PAT_PARAM;
-                        } else if (type == "pat_param") {
-                            ty = MacroPatEnt::PAT_PAT_PARAM;
-                        } else if (type == "ident") {
-                            ty = MacroPatEnt::PAT_IDENT;
-                        } else if (type == "path") {
-                            ty = MacroPatEnt::PAT_PATH;
-                        } else if (type == "expr") {
-                            ty = MacroPatEnt::PAT_EXPR;
-                        } else if (type == "expr_2021") {
-                            ty = MacroPatEnt::PAT_EXPR;
-                        } else if (type == "stmt") {
-                            ty = MacroPatEnt::PAT_STMT;
-                        } else if (type == "ty") {
-                            ty = MacroPatEnt::PAT_TYPE;
-                        } else if (type == "meta") {
-                            ty = MacroPatEnt::PAT_META;
-                        } else if (type == "block") {
-                            ty = MacroPatEnt::PAT_BLOCK;
-                        } else if (type == "item") {
-                            ty = MacroPatEnt::PAT_ITEM;
-                        } else if (type == "vis") { // TODO: Should this be selective?
-                            ty = MacroPatEnt::PAT_VIS;
-                        } else if (type == "lifetime") { // TODO: Should this be selective?
-                            ty = MacroPatEnt::PAT_LIFETIME;
-                        } else if (type == "literal") { // TODO: Should this be selective?
-                            ty = MacroPatEnt::PAT_LITERAL;
-                        } else {
-                            ERROR(lex.pointSpan(), E0000, "Unknown fragment type '" << type << "'");
-                        }
-                        ret.push_back(MacroPatEnt(sp, name, idx, ty));
-                        break;
-                    }
-                    case TOK_PAREN_OPEN: {
-                        auto loopIdx = state.openLoop();
-                        auto subpat = ParseMacroRulesPat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
-                        state.closeLoop();
-
-                        enum eTokenType joiner = TOK_NULL;
-
-                        GET_TOK(tok, lex);
-                        if (/*lex.edition_after(AST::Edition::Rust2018) &&*/ tok.type() == TOK_QMARK) {
-                        } else if (tok.type() == TOK_PLUS || tok.type() == TOK_STAR) {
-                        } else {
-                            if (tok.hasData()) {
-                                ERROR(lex.pointSpan(), E0000, "Invalid macro joiner " << tok << ", must be punctuation");
-                            }
-                            joiner = tok.type();
-                            GET_TOK(tok, lex);
-                        }
-                        auto sp = lex.endSpan(ps);
-
-                        const char* sepFlag = nullptr;
-                        switch (tok.type()) {
-                            case TOK_PLUS:
-                                sepFlag = "+";
-                                break;
-                            case TOK_STAR:
-                                sepFlag = "*";
-                                break;
-                            case TOK_QMARK:
-                                sepFlag = "?";
-                                // TODO: Can a `$()?` have a joiner?
-                                break;
-                            default:
-                                if (lex.editionAfter(ASTEdition::Rust2018)) {
-                                    parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
-                                } else {
-                                    parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
-                                }
-                        }
-                        assert(sepFlag);
-                        ret.push_back(MacroPatEnt(sp, Token(joiner), sepFlag, loopIdx, std::move(subpat)));
-                        break;
-                    }
+            if (tok.type() == open) {
+                depth++;
+            } else if (tok.type() == close) {
+                if (depth == 0) {
+                    compileErrorGeneric(FMT("Unmatched " << Token(close) << " in macro pattern").c_str());
                 }
-                break;
-            case TOK_EOF:
-                parseErrorUnexpected(lex, tok);
-            default:
-                ret.push_back(MacroPatEnt(lex.endSpan(ps), tok));
-                break;
-        }
-        ps = lex.startSpan();
-    }
+                depth--;
+            }
 
-    return ret;
-}
+            switch (tok.type()) {
+                case TOK_DOLLAR:
+                    switch (GET_TOK(tok, lex)) {
+                        case TOK_SQUARE_CLOSE:
+                        case TOK_PAREN_CLOSE:
+                            ret.push_back(MacroPatEnt(lex.endSpan(ps), TOK_DOLLAR));
+                            PUTBACK(tok, lex);
+                            break;
+                        case TOK_RWORD_CRATE:
+                            parseErrorUnexpected(lex, tok);
+                        default:
+                            if (!Token::typeIsRword(tok.type())) {
+                                parseErrorUnexpected(lex, tok);
+                            }
+                        case TOK_UNDERSCORE:
+                        case TOK_IDENT: {
+                            auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(tok.type() == TOK_UNDERSCORE ? RcString() : RcString::newInterned(tok.toStr()));
+                            const auto& name = nameIdent.name;
+                            GET_CHECK_TOK(tok, lex, TOK_COLON);
+                            GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                            RcString type = tok.ident().name;
+
+                            auto idx = state.addName(nameIdent);
+
+                            auto sp = lex.endSpan(ps);
+                            MacroPatEnt::Type ty;
+                            if (0)
+                                ;
+                            else if (type == "tt") {
+                                ty = MacroPatEnt::PAT_TT;
+                            } else if (type == "pat") {
+                                ty = lex.editionAfter(ASTEdition::Rust2021) ? MacroPatEnt::PAT_PAT : MacroPatEnt::PAT_PAT_PARAM;
+                            } else if (type == "pat_param") {
+                                ty = MacroPatEnt::PAT_PAT_PARAM;
+                            } else if (type == "ident") {
+                                ty = MacroPatEnt::PAT_IDENT;
+                            } else if (type == "path") {
+                                ty = MacroPatEnt::PAT_PATH;
+                            } else if (type == "expr") {
+                                ty = MacroPatEnt::PAT_EXPR;
+                            } else if (type == "expr_2021") {
+                                ty = MacroPatEnt::PAT_EXPR;
+                            } else if (type == "stmt") {
+                                ty = MacroPatEnt::PAT_STMT;
+                            } else if (type == "ty") {
+                                ty = MacroPatEnt::PAT_TYPE;
+                            } else if (type == "meta") {
+                                ty = MacroPatEnt::PAT_META;
+                            } else if (type == "block") {
+                                ty = MacroPatEnt::PAT_BLOCK;
+                            } else if (type == "item") {
+                                ty = MacroPatEnt::PAT_ITEM;
+                            } else if (type == "vis") { // TODO: Should this be selective?
+                                ty = MacroPatEnt::PAT_VIS;
+                            } else if (type == "lifetime") { // TODO: Should this be selective?
+                                ty = MacroPatEnt::PAT_LIFETIME;
+                            } else if (type == "literal") { // TODO: Should this be selective?
+                                ty = MacroPatEnt::PAT_LITERAL;
+                            } else {
+                                ERROR(lex.pointSpan(), E0000, "Unknown fragment type '" << type << "'");
+                            }
+                            ret.push_back(MacroPatEnt(sp, name, idx, ty));
+                            break;
+                        }
+                        case TOK_PAREN_OPEN: {
+                            auto loopIdx = state.openLoop();
+                            auto subpat = ParseMacroRulesPat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
+                            state.closeLoop();
+
+                            enum eTokenType joiner = TOK_NULL;
+
+                            GET_TOK(tok, lex);
+                            if (/*lex.edition_after(AST::Edition::Rust2018) &&*/ tok.type() == TOK_QMARK) {
+                            } else if (tok.type() == TOK_PLUS || tok.type() == TOK_STAR) {
+                            } else {
+                                if (tok.hasData()) {
+                                    ERROR(lex.pointSpan(), E0000, "Invalid macro joiner " << tok << ", must be punctuation");
+                                }
+                                joiner = tok.type();
+                                GET_TOK(tok, lex);
+                            }
+                            auto sp = lex.endSpan(ps);
+
+                            const char* sepFlag = nullptr;
+                            switch (tok.type()) {
+                                case TOK_PLUS:
+                                    sepFlag = "+";
+                                    break;
+                                case TOK_STAR:
+                                    sepFlag = "*";
+                                    break;
+                                case TOK_QMARK:
+                                    sepFlag = "?";
+                                    // TODO: Can a `$()?` have a joiner?
+                                    break;
+                                default:
+                                    if (lex.editionAfter(ASTEdition::Rust2018)) {
+                                        parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
+                                    } else {
+                                        parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
+                                    }
+                            }
+                            assert(sepFlag);
+                            ret.push_back(MacroPatEnt(sp, Token(joiner), sepFlag, loopIdx, std::move(subpat)));
+                            break;
+                        }
+                    }
+                    break;
+                case TOK_EOF:
+                    parseErrorUnexpected(lex, tok);
+                default:
+                    ret.push_back(MacroPatEnt(lex.endSpan(ps), tok));
+                    break;
+            }
+            ps = lex.startSpan();
+        }
+
+        return ret;
+    }
 
 }
 
@@ -3189,295 +3187,295 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansio
 
 namespace {
 
-std::vector<MacroExpansionEnt> ParseMacroRulesCont(TokenStream& lex, enum eTokenType open, enum eTokenType close, const RuleParseState& state, unsigned loopDepth = 0, std::map<unsigned int, ContentLoopVariableUse>* varUsagePtr = nullptr) {
-    Token tok;
-    std::vector<MacroExpansionEnt> ret;
+    std::vector<MacroExpansionEnt> ParseMacroRulesCont(TokenStream& lex, enum eTokenType open, enum eTokenType close, const RuleParseState& state, unsigned loopDepth = 0, std::map<unsigned int, ContentLoopVariableUse>* varUsagePtr = nullptr) {
+        Token tok;
+        std::vector<MacroExpansionEnt> ret;
 
-    int depth = 0;
-    while (GET_TOK(tok, lex) != close || depth > 0) {
-        if (tok.type() == TOK_EOF) {
-            parseErrorUnexpected(lex, tok);
-        }
-        if (tok.type() == TOK_NULL) {
-            continue;
-        }
-
-        if (tok.type() == open) {
-            depth++;
-        } else if (tok.type() == close) {
-            if (depth == 0) {
-                ERROR(lex.pointSpan(), E0000, "Unmatched " << Token(close) << " in macro content");
+        int depth = 0;
+        while (GET_TOK(tok, lex) != close || depth > 0) {
+            if (tok.type() == TOK_EOF) {
+                parseErrorUnexpected(lex, tok);
             }
-            depth--;
-        } else {
-        }
-
-        if (tok.type() == TOK_DOLLAR) {
-            GET_TOK(tok, lex);
-
-            if (tok.type() == TOK_DOLLAR) {
-                ret.push_back(MacroExpansionEnt(Token(TOK_DOLLAR)));
+            if (tok.type() == TOK_NULL) {
                 continue;
             }
 
-            if (tok.type() == TOK_PAREN_OPEN) {
-                std::map<unsigned int, ContentLoopVariableUse> varUsage;
-                auto content = ParseMacroRulesCont(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state, loopDepth + 1, &varUsage);
+            if (tok.type() == open) {
+                depth++;
+            } else if (tok.type() == close) {
+                if (depth == 0) {
+                    ERROR(lex.pointSpan(), E0000, "Unmatched " << Token(close) << " in macro content");
+                }
+                depth--;
+            } else {
+            }
 
+            if (tok.type() == TOK_DOLLAR) {
                 GET_TOK(tok, lex);
-                enum eTokenType joiner = TOK_NULL;
-                if (tok.type() == TOK_QMARK) {
-                } else if (tok.type() == TOK_PLUS || tok.type() == TOK_STAR) {
-                } else {
-                    joiner = tok.type();
-                    GET_TOK(tok, lex);
-                }
 
-                char loopType;
-                switch (tok.type()) {
-                    case TOK_PLUS:
-                        loopType = '+';
-                        break;
-                    case TOK_STAR:
-                        loopType = '*';
-                        break;
-                    case TOK_QMARK:
-                        loopType = '?';
-                        break;
-                    default:
-                        if (lex.editionAfter(ASTEdition::Rust2018)) {
-                            parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
-                        } else {
-                            parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
-                        }
-                }
-                bool isOptional = (loopType != '+');
-
-                std::set<unsigned> controllingLoops;
-                for (const auto& v : varUsage) {
-                    if (v.second.loopStack.size() != 0 && loopDepth < v.second.loopStack.size()) {
-                        controllingLoops.insert(v.second.loopStack[loopDepth]);
-                    }
-                }
-                if (controllingLoops.empty()) {
-                    WARNING(lex.pointSpan(), W0000, "Macro loop doesn't contain any variables at this depth, omitting as it'll not run");
+                if (tok.type() == TOK_DOLLAR) {
+                    ret.push_back(MacroExpansionEnt(Token(TOK_DOLLAR)));
                     continue;
                 }
-                // TODO: Check that +/*/? matches for the controlling loops
 
-                if (varUsagePtr) {
+                if (tok.type() == TOK_PAREN_OPEN) {
+                    std::map<unsigned int, ContentLoopVariableUse> varUsage;
+                    auto content = ParseMacroRulesCont(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state, loopDepth + 1, &varUsage);
+
+                    GET_TOK(tok, lex);
+                    enum eTokenType joiner = TOK_NULL;
+                    if (tok.type() == TOK_QMARK) {
+                    } else if (tok.type() == TOK_PLUS || tok.type() == TOK_STAR) {
+                    } else {
+                        joiner = tok.type();
+                        GET_TOK(tok, lex);
+                    }
+
+                    char loopType;
+                    switch (tok.type()) {
+                        case TOK_PLUS:
+                            loopType = '+';
+                            break;
+                        case TOK_STAR:
+                            loopType = '*';
+                            break;
+                        case TOK_QMARK:
+                            loopType = '?';
+                            break;
+                        default:
+                            if (lex.editionAfter(ASTEdition::Rust2018)) {
+                                parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
+                            } else {
+                                parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
+                            }
+                    }
+                    bool isOptional = (loopType != '+');
+
+                    std::set<unsigned> controllingLoops;
                     for (const auto& v : varUsage) {
-                        auto it = varUsagePtr->insert(v).first;
-                        if (isOptional) {
-                            it->second.isOptional = true;
+                        if (v.second.loopStack.size() != 0 && loopDepth < v.second.loopStack.size()) {
+                            controllingLoops.insert(v.second.loopStack[loopDepth]);
                         }
                     }
-                }
-
-                ret.push_back(MacroExpansionEnt::make_Loop({mv$(content), joiner, mv$(controllingLoops)}));
-            } else if (tok.type() == TOK_BRACE_OPEN) {
-                auto ident = lex.getTokenCheck(TOK_IDENT).ident().name;
-                if (ident == "ignore") {
-                    lex.getTokenCheck(TOK_PAREN_OPEN);
-                    lex.getTokenIf(TOK_DOLLAR);
-                    GET_TOK(tok, lex);
-                    if (!(tok.type() == TOK_IDENT || Token::typeIsRword(tok.type()))) {
-                        CHECK_TOK(tok, TOK_IDENT);
+                    if (controllingLoops.empty()) {
+                        WARNING(lex.pointSpan(), W0000, "Macro loop doesn't contain any variables at this depth, omitting as it'll not run");
+                        continue;
                     }
-                    auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
-                    const auto& name = nameIdent.name;
-                    lex.getTokenCheck(TOK_PAREN_CLOSE);
-                    const auto* ns = state.findName(nameIdent);
-                    if (!ns) {
-                        TODO(lex.pointSpan(), "Handle ${ignore(" << name << ")} - Missing");
-                    }
+                    // TODO: Check that +/*/? matches for the controlling loops
 
                     if (varUsagePtr) {
-                        varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
-                    }
-                    ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_IGNORE | ns->idx));
-                } else if (ident == "count") {
-                    lex.getTokenCheck(TOK_PAREN_OPEN);
-                    lex.getTokenIf(TOK_DOLLAR);
-                    GET_TOK(tok, lex);
-                    if (!(tok.type() == TOK_IDENT || Token::typeIsRword(tok.type()))) {
-                        CHECK_TOK(tok, TOK_IDENT);
-                    }
-                    auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
-                    const auto& name = nameIdent.name;
-                    unsigned int countDepth = 0;
-                    if (lex.getTokenIf(TOK_COMMA)) {
-                        countDepth = static_cast<unsigned int>(lex.getTokenCheck(TOK_INTEGER).intval().truncateU64());
-                    }
-                    lex.getTokenCheck(TOK_PAREN_CLOSE);
-                    const auto* ns = state.findName(nameIdent);
-                    if (!ns) {
-                        TODO(lex.pointSpan(), "Handle ${count(" << name << ")} - Missing");
+                        for (const auto& v : varUsage) {
+                            auto it = varUsagePtr->insert(v).first;
+                            if (isOptional) {
+                                it->second.isOptional = true;
+                            }
+                        }
                     }
 
-                    if (varUsagePtr) {
-                        varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
-                    }
-                    ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_COUNT | (countDepth << NAMEDVALUE_COUNT_DEPTHSHIFT) | ns->idx));
-                } else if (ident == "index" || ident == "len") {
-                    lex.getTokenCheck(TOK_PAREN_OPEN);
-                    unsigned int loopDepthArg = 0;
-                    if (!lex.getTokenIf(TOK_PAREN_CLOSE)) {
-                        loopDepthArg = static_cast<unsigned int>(lex.getTokenCheck(TOK_INTEGER).intval().truncateU64());
+                    ret.push_back(MacroExpansionEnt::make_Loop({mv$(content), joiner, mv$(controllingLoops)}));
+                } else if (tok.type() == TOK_BRACE_OPEN) {
+                    auto ident = lex.getTokenCheck(TOK_IDENT).ident().name;
+                    if (ident == "ignore") {
+                        lex.getTokenCheck(TOK_PAREN_OPEN);
+                        lex.getTokenIf(TOK_DOLLAR);
+                        GET_TOK(tok, lex);
+                        if (!(tok.type() == TOK_IDENT || Token::typeIsRword(tok.type()))) {
+                            CHECK_TOK(tok, TOK_IDENT);
+                        }
+                        auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
+                        const auto& name = nameIdent.name;
                         lex.getTokenCheck(TOK_PAREN_CLOSE);
-                    }
-                    ret.push_back(MacroExpansionEnt((ident == "index" ? NAMEDVALUE_MAGIC_INDEX_AT : NAMEDVALUE_MAGIC_LEN_AT) + loopDepthArg));
-                } else if (ident == "concat") {
-                    std::vector<MacroExpansionConcatEnt> ents;
-                    lex.getTokenCheck(TOK_PAREN_OPEN);
-                    while (true) {
-                        if (lex.getTokenIf(TOK_DOLLAR)) {
-                            if (lex.getTokenIf(TOK_RWORD_CRATE)) {
-                                ents.push_back(MacroExpansionConcatEnt(NAMEDVALUE_MAGIC_CRATE));
+                        const auto* ns = state.findName(nameIdent);
+                        if (!ns) {
+                            TODO(lex.pointSpan(), "Handle ${ignore(" << name << ")} - Missing");
+                        }
+
+                        if (varUsagePtr) {
+                            varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
+                        }
+                        ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_IGNORE | ns->idx));
+                    } else if (ident == "count") {
+                        lex.getTokenCheck(TOK_PAREN_OPEN);
+                        lex.getTokenIf(TOK_DOLLAR);
+                        GET_TOK(tok, lex);
+                        if (!(tok.type() == TOK_IDENT || Token::typeIsRword(tok.type()))) {
+                            CHECK_TOK(tok, TOK_IDENT);
+                        }
+                        auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
+                        const auto& name = nameIdent.name;
+                        unsigned int countDepth = 0;
+                        if (lex.getTokenIf(TOK_COMMA)) {
+                            countDepth = static_cast<unsigned int>(lex.getTokenCheck(TOK_INTEGER).intval().truncateU64());
+                        }
+                        lex.getTokenCheck(TOK_PAREN_CLOSE);
+                        const auto* ns = state.findName(nameIdent);
+                        if (!ns) {
+                            TODO(lex.pointSpan(), "Handle ${count(" << name << ")} - Missing");
+                        }
+
+                        if (varUsagePtr) {
+                            varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
+                        }
+                        ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_COUNT | (countDepth << NAMEDVALUE_COUNT_DEPTHSHIFT) | ns->idx));
+                    } else if (ident == "index" || ident == "len") {
+                        lex.getTokenCheck(TOK_PAREN_OPEN);
+                        unsigned int loopDepthArg = 0;
+                        if (!lex.getTokenIf(TOK_PAREN_CLOSE)) {
+                            loopDepthArg = static_cast<unsigned int>(lex.getTokenCheck(TOK_INTEGER).intval().truncateU64());
+                            lex.getTokenCheck(TOK_PAREN_CLOSE);
+                        }
+                        ret.push_back(MacroExpansionEnt((ident == "index" ? NAMEDVALUE_MAGIC_INDEX_AT : NAMEDVALUE_MAGIC_LEN_AT) + loopDepthArg));
+                    } else if (ident == "concat") {
+                        std::vector<MacroExpansionConcatEnt> ents;
+                        lex.getTokenCheck(TOK_PAREN_OPEN);
+                        while (true) {
+                            if (lex.getTokenIf(TOK_DOLLAR)) {
+                                if (lex.getTokenIf(TOK_RWORD_CRATE)) {
+                                    ents.push_back(MacroExpansionConcatEnt(NAMEDVALUE_MAGIC_CRATE));
+                                } else {
+                                    GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                                    auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
+                                    const auto& name = nameIdent.name;
+                                    const auto* ns = state.findName(nameIdent);
+                                    if (!ns) {
+                                        TODO(lex.pointSpan(), "concat - unmapped name");
+                                    } else {
+                                        if (loopDepth < ns->loops.size()) {
+                                            ERROR(lex.pointSpan(), E0000, "Variable $" << name << " is still repeating at this depth (" << loopDepth << " < " << ns->loops.size() << ")");
+                                        }
+
+                                        if (varUsagePtr) {
+                                            varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
+                                        }
+                                        ents.push_back(MacroExpansionConcatEnt(ns->idx));
+                                    }
+                                }
+                            } else if (lex.lookahead(0) == TOK_STRING) {
+                                GET_CHECK_TOK(tok, lex, TOK_STRING);
+                                ents.push_back(MacroExpansionConcatEnt(Ident(RcString::newInterned(tok.str()))));
                             } else {
                                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                                auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
-                                const auto& name = nameIdent.name;
-                                const auto* ns = state.findName(nameIdent);
-                                if (!ns) {
-                                    TODO(lex.pointSpan(), "concat - unmapped name");
-                                } else {
-                                    if (loopDepth < ns->loops.size()) {
-                                        ERROR(lex.pointSpan(), E0000, "Variable $" << name << " is still repeating at this depth (" << loopDepth << " < " << ns->loops.size() << ")");
-                                    }
-
-                                    if (varUsagePtr) {
-                                        varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
-                                    }
-                                    ents.push_back(MacroExpansionConcatEnt(ns->idx));
-                                }
+                                ents.push_back(MacroExpansionConcatEnt(tok.ident()));
                             }
-                        } else if (lex.lookahead(0) == TOK_STRING) {
-                            GET_CHECK_TOK(tok, lex, TOK_STRING);
-                            ents.push_back(MacroExpansionConcatEnt(Ident(RcString::newInterned(tok.str()))));
-                        } else {
-                            GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                            ents.push_back(MacroExpansionConcatEnt(tok.ident()));
+                            if (!lex.getTokenIf(TOK_COMMA)) {
+                                break;
+                            }
+                            if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
+                                break;
+                            }
                         }
-                        if (!lex.getTokenIf(TOK_COMMA)) {
-                            break;
-                        }
-                        if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
-                            break;
-                        }
+                        lex.getTokenCheck(TOK_PAREN_CLOSE);
+                        ret.push_back(MacroExpansionEnt(std::move(ents)));
+                    } else {
+                        TODO(lex.pointSpan(), "Handle ${" << ident << "...}");
                     }
-                    lex.getTokenCheck(TOK_PAREN_CLOSE);
-                    ret.push_back(MacroExpansionEnt(std::move(ents)));
-                } else {
-                    TODO(lex.pointSpan(), "Handle ${" << ident << "...}");
-                }
-                lex.getTokenCheck(TOK_BRACE_CLOSE);
-            } else if (tok.type() == TOK_RWORD_CRATE) {
-                ret.push_back(MacroExpansionEnt(NAMEDVALUE_MAGIC_CRATE));
-            } else if (tok.type() == TOK_IDENT || Token::typeIsRword(tok.type())) {
-                auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
-                const auto& name = nameIdent.name;
-                const auto* ns = state.findName(nameIdent);
-                if (!ns) {
+                    lex.getTokenCheck(TOK_BRACE_CLOSE);
+                } else if (tok.type() == TOK_RWORD_CRATE) {
+                    ret.push_back(MacroExpansionEnt(NAMEDVALUE_MAGIC_CRATE));
+                } else if (tok.type() == TOK_IDENT || Token::typeIsRword(tok.type())) {
+                    auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
+                    const auto& name = nameIdent.name;
+                    const auto* ns = state.findName(nameIdent);
+                    if (!ns) {
+                        ret.push_back(MacroExpansionEnt(Token(TOK_DOLLAR)));
+                        ret.push_back(MacroExpansionEnt(mv$(tok)));
+                    } else {
+                        if (loopDepth < ns->loops.size()) {
+                            ERROR(lex.pointSpan(), E0000, "Variable $" << name << " is still repeating at this depth (" << loopDepth << " < " << ns->loops.size() << ")");
+                        }
+
+                        if (varUsagePtr) {
+                            varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
+                        }
+                        ret.push_back(MacroExpansionEnt(ns->idx));
+                    }
+                } else if (tok.type() == TOK_PAREN_CLOSE || tok.type() == TOK_SQUARE_CLOSE || tok.type() == TOK_BRACE_CLOSE) {
+                    PUTBACK(tok, lex);
                     ret.push_back(MacroExpansionEnt(Token(TOK_DOLLAR)));
-                    ret.push_back(MacroExpansionEnt(mv$(tok)));
                 } else {
-                    if (loopDepth < ns->loops.size()) {
-                        ERROR(lex.pointSpan(), E0000, "Variable $" << name << " is still repeating at this depth (" << loopDepth << " < " << ns->loops.size() << ")");
-                    }
-
-                    if (varUsagePtr) {
-                        varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
-                    }
-                    ret.push_back(MacroExpansionEnt(ns->idx));
+                    parseErrorUnexpected(lex, tok);
                 }
-            } else if (tok.type() == TOK_PAREN_CLOSE || tok.type() == TOK_SQUARE_CLOSE || tok.type() == TOK_BRACE_CLOSE) {
-                PUTBACK(tok, lex);
-                ret.push_back(MacroExpansionEnt(Token(TOK_DOLLAR)));
             } else {
-                parseErrorUnexpected(lex, tok);
+                ret.push_back(MacroExpansionEnt(mv$(tok)));
             }
-        } else {
-            ret.push_back(MacroExpansionEnt(mv$(tok)));
         }
+
+        return ret;
     }
 
-    return ret;
-}
+    MacroRule ParseMacroRulesVar(TokenStream& lex) {
+        Token tok;
 
-MacroRule ParseMacroRulesVar(TokenStream& lex) {
-    Token tok;
+        MacroRule rule;
 
-    MacroRule rule;
+        enum eTokenType close;
+        switch (GET_TOK(tok, lex)) {
+            case TOK_BRACE_OPEN:
+                close = TOK_BRACE_CLOSE;
+                break;
+            case TOK_PAREN_OPEN:
+                close = TOK_PAREN_CLOSE;
+                break;
+            case TOK_SQUARE_OPEN:
+                close = TOK_SQUARE_CLOSE;
+                break;
+            default:
+                parseErrorUnexpected(lex, tok);
+        }
+        RuleParseState state;
+        {
+            auto ps = lex.startSpan();
+            rule.pattern = ParseMacroRulesPat(lex, tok.type(), close, state);
+            rule.patSpan = lex.endSpan(ps);
+        }
 
-    enum eTokenType close;
-    switch (GET_TOK(tok, lex)) {
-        case TOK_BRACE_OPEN:
-            close = TOK_BRACE_CLOSE;
-            break;
-        case TOK_PAREN_OPEN:
-            close = TOK_PAREN_CLOSE;
-            break;
-        case TOK_SQUARE_OPEN:
-            close = TOK_SQUARE_CLOSE;
-            break;
-        default:
-            parseErrorUnexpected(lex, tok);
+        GET_CHECK_TOK(tok, lex, TOK_FATARROW);
+
+        switch (GET_TOK(tok, lex)) {
+            case TOK_BRACE_OPEN:
+                close = TOK_BRACE_CLOSE;
+                break;
+            case TOK_PAREN_OPEN:
+                close = TOK_PAREN_CLOSE;
+                break;
+            case TOK_SQUARE_OPEN:
+                close = TOK_SQUARE_CLOSE;
+                break;
+            default:
+                parseErrorUnexpected(lex, tok);
+        }
+        rule.contents = ParseMacroRulesCont(lex, tok.type(), close, state);
+        ASSERT_BUG(lex.pointSpan(), lex.parseState().wb, "Macro parser has no WireBoard");
+        MacroRulesNormaliseFragments(*lex.parseState().wb, rule.contents);
+
+        return rule;
     }
-    RuleParseState state;
-    {
-        auto ps = lex.startSpan();
-        rule.pattern = ParseMacroRulesPat(lex, tok.type(), close, state);
-        rule.patSpan = lex.endSpan(ps);
-    }
-
-    GET_CHECK_TOK(tok, lex, TOK_FATARROW);
-
-    switch (GET_TOK(tok, lex)) {
-        case TOK_BRACE_OPEN:
-            close = TOK_BRACE_CLOSE;
-            break;
-        case TOK_PAREN_OPEN:
-            close = TOK_PAREN_CLOSE;
-            break;
-        case TOK_SQUARE_OPEN:
-            close = TOK_SQUARE_CLOSE;
-            break;
-        default:
-            parseErrorUnexpected(lex, tok);
-    }
-    rule.contents = ParseMacroRulesCont(lex, tok.type(), close, state);
-    ASSERT_BUG(lex.pointSpan(), lex.parseState().wb, "Macro parser has no WireBoard");
-    MacroRulesNormaliseFragments(*lex.parseState().wb, rule.contents);
-
-    return rule;
-}
 
 }
 
 // TODO: Also count the number of times each variable is used?
 namespace {
-void enumerateNames(const std::vector<MacroPatEnt>& pats, std::vector<RcString>& names) {
-    for (const auto& pat : pats) {
-        if (pat.type == MacroPatEnt::PAT_LOOP) {
-            enumerateNames(pat.subpats, names);
-        } else if (pat.name != "") {
-            auto b = names.begin();
-            auto e = names.end();
-            if (std::find(b, e, pat.name) == e) {
-                names.push_back(pat.name);
+    void enumerateNames(const std::vector<MacroPatEnt>& pats, std::vector<RcString>& names) {
+        for (const auto& pat : pats) {
+            if (pat.type == MacroPatEnt::PAT_LOOP) {
+                enumerateNames(pat.subpats, names);
+            } else if (pat.name != "") {
+                auto b = names.begin();
+                auto e = names.end();
+                if (std::find(b, e, pat.name) == e) {
+                    names.push_back(pat.name);
+                }
             }
         }
     }
-}
 
-MacroRulesArm ParseMacroRulesMakeArm(Span patSp, std::vector<MacroPatEnt> pattern, std::vector<MacroExpansionEnt> contents) {
-    MacroRulesCheckFollowSets(pattern.data(), pattern.size());
-    auto ruleSequence = macroPatternToSimple(patSp, pattern);
-    auto arm = MacroRulesArm(mv$(ruleSequence), mv$(contents));
-    enumerateNames(pattern, arm.paramNames);
-    return arm;
-}
+    MacroRulesArm ParseMacroRulesMakeArm(Span patSp, std::vector<MacroPatEnt> pattern, std::vector<MacroExpansionEnt> contents) {
+        MacroRulesCheckFollowSets(pattern.data(), pattern.size());
+        auto ruleSequence = macroPatternToSimple(patSp, pattern);
+        auto arm = MacroRulesArm(mv$(ruleSequence), mv$(contents));
+        enumerateNames(pattern, arm.paramNames);
+        return arm;
+    }
 }
 
 namespace {

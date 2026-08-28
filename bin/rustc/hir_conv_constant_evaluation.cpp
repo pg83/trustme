@@ -209,7 +209,7 @@ namespace {
 
 }
 
-struct CtfeContext {
+struct WireBoard::CtfeContext {
     struct ActiveDiscriminant {
         const HIREnum* enm;
         size_t idx;
@@ -230,39 +230,47 @@ struct CtfeContext {
     void popDiscriminant();
 };
 
-struct MIREvalAllocation;
+namespace {
+    using CtfeContext = WireBoard::CtfeContext;
+}
 
 namespace {
-struct MIREvalConstant;
-struct MIREvalStaticRef;
-struct MIREvalRelocPtr;
+    using MIREvalAllocation = HIREvaluator::MIREvalAllocation;
+    using MIREvalAllocationPtr = HIREvaluator::MIREvalAllocationPtr;
+    using MIREvalCallStackEntry = HIREvaluator::MIREvalCallStackEntry;
+}
 
-template <typename T>
-struct MIREvalPtr {
-    friend struct MIREvalRelocPtr;
+namespace {
+    struct MIREvalConstant;
+    struct MIREvalStaticRef;
+    struct MIREvalRelocPtr;
 
-    T* ptr;
+    template <typename T>
+    struct MIREvalPtr {
+        friend struct MIREvalRelocPtr;
 
-    MIREvalPtr();
+        T* ptr;
 
-    operator bool() const;
+        MIREvalPtr();
 
-    T* operator->();
+        operator bool() const;
 
-    const T* operator->() const;
+        T* operator->();
 
-    T& operator*();
+        const T* operator->() const;
 
-    const T& operator*() const;
-};
+        T& operator*();
 
-struct MIREvalConstantPtr final: public MIREvalPtr<MIREvalConstant> {
-    static MIREvalConstantPtr allocate(ObjPool* pool, const void* data, size_t len);
-};
+        const T& operator*() const;
+    };
+
+    struct MIREvalConstantPtr final: public MIREvalPtr<MIREvalConstant> {
+        static MIREvalConstantPtr allocate(ObjPool* pool, const void* data, size_t len);
+    };
 
 }
 
-struct MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
+struct HIREvaluator::MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
     static MIREvalAllocationPtr allocate(ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty);
     static MIREvalAllocationPtr allocateScratch(ObjPool* pool, size_t size);
     static MIREvalAllocationPtr allocateHeap(ObjPool* pool, size_t size, size_t alignment);
@@ -270,112 +278,112 @@ struct MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
 };
 
 namespace {
-struct MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
-    static MIREvalStaticRefPtr allocate(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending = false);
-};
-
-struct IValue {
-    virtual void fmtIdent(std::ostream& os) const = 0;
-    virtual void fmt(std::ostream& os, size_t ofs, size_t len) const = 0;
-
-    virtual size_t size() const = 0;
-    virtual const u8* getBytes(size_t ofs, size_t len, bool checkMask) const = 0;
-    virtual void readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const = 0;
-
-    virtual bool isWritable() const = 0;
-    virtual u8* extWriteBytes(size_t ofs, size_t len) = 0;
-
-    void writeBytes(size_t ofs, const void* data, size_t len);
-
-    virtual void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) = 0;
-
-    virtual MIREvalRelocPtr getReloc(size_t ofs) const = 0;
-    virtual void setReloc(size_t ofs, MIREvalRelocPtr ptr) = 0;
-};
-
-struct MIREvalRelocPtr {
-    uintptr_t ptr;
-
-    enum Tag {
-        TAG_Allocation = 0,
-        TAG_Constant,
-        TAG_StaticRef,
+    struct MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
+        static MIREvalStaticRefPtr allocate(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending = false);
     };
 
-    ~MIREvalRelocPtr() = default;
-    MIREvalRelocPtr(const MIREvalRelocPtr&) = default;
-    MIREvalRelocPtr(MIREvalRelocPtr&&) = default;
-    MIREvalRelocPtr& operator=(const MIREvalRelocPtr&) = default;
-    MIREvalRelocPtr& operator=(MIREvalRelocPtr&&) = default;
+    struct IValue {
+        virtual void fmtIdent(std::ostream& os) const = 0;
+        virtual void fmt(std::ostream& os, size_t ofs, size_t len) const = 0;
 
-    MIREvalRelocPtr();
+        virtual size_t size() const = 0;
+        virtual const u8* getBytes(size_t ofs, size_t len, bool checkMask) const = 0;
+        virtual void readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const = 0;
 
-    MIREvalRelocPtr(MIREvalAllocationPtr p);
+        virtual bool isWritable() const = 0;
+        virtual u8* extWriteBytes(size_t ofs, size_t len) = 0;
 
-    MIREvalRelocPtr(MIREvalConstantPtr p);
+        void writeBytes(size_t ofs, const void* data, size_t len);
 
-    MIREvalRelocPtr(MIREvalStaticRefPtr p);
+        virtual void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) = 0;
 
-    operator bool() const;
+        virtual MIREvalRelocPtr getReloc(size_t ofs) const = 0;
+        virtual void setReloc(size_t ofs, MIREvalRelocPtr ptr) = 0;
+    };
 
-    bool operator==(const MIREvalRelocPtr& x) const;
+    struct MIREvalRelocPtr {
+        uintptr_t ptr;
 
-    IValue& asValue();
+        enum Tag {
+            TAG_Allocation = 0,
+            TAG_Constant,
+            TAG_StaticRef,
+        };
 
-    const IValue& asValue() const;
+        ~MIREvalRelocPtr() = default;
+        MIREvalRelocPtr(const MIREvalRelocPtr&) = default;
+        MIREvalRelocPtr(MIREvalRelocPtr&&) = default;
+        MIREvalRelocPtr& operator=(const MIREvalRelocPtr&) = default;
+        MIREvalRelocPtr& operator=(MIREvalRelocPtr&&) = default;
 
-    MIREvalAllocation* asAllocation() const;
+        MIREvalRelocPtr();
 
-    MIREvalConstant* asConstant() const;
+        MIREvalRelocPtr(MIREvalAllocationPtr p);
 
-    MIREvalStaticRef* asStaticref() const;
+        MIREvalRelocPtr(MIREvalConstantPtr p);
 
-    friend std::ostream& operator<<(std::ostream& os, const MIREvalRelocPtr& ptr) {
-        if (ptr.ptr) {
-            ptr.asValuePtr()->fmtIdent(os);
-        } else {
-            os << "NULL";
+        MIREvalRelocPtr(MIREvalStaticRefPtr p);
+
+        operator bool() const;
+
+        bool operator==(const MIREvalRelocPtr& x) const;
+
+        IValue& asValue();
+
+        const IValue& asValue() const;
+
+        MIREvalAllocation* asAllocation() const;
+
+        MIREvalConstant* asConstant() const;
+
+        MIREvalStaticRef* asStaticref() const;
+
+        friend std::ostream& operator<<(std::ostream& os, const MIREvalRelocPtr& ptr) {
+            if (ptr.ptr) {
+                ptr.asValuePtr()->fmtIdent(os);
+            } else {
+                os << "NULL";
+            }
+            return os;
         }
-        return os;
-    }
 
-    IValue* asValuePtr() const;
+        IValue* asValuePtr() const;
 
-    void set(uintptr_t ptr, Tag tag);
-};
+        void set(uintptr_t ptr, Tag tag);
+    };
 
-struct MIREvalConstant final: public IValue {
-    friend struct Embed<MIREvalConstant>;
-    friend struct MIREvalConstantPtr;
-    unsigned const length;
-    const u8* const data;
+    struct MIREvalConstant final: public IValue {
+        friend struct Embed<MIREvalConstant>;
+        friend struct MIREvalConstantPtr;
+        unsigned const length;
+        const u8* const data;
 
-    MIREvalConstant(const void* data, size_t len);
+        MIREvalConstant(const void* data, size_t len);
 
-    void fmtIdent(std::ostream& os) const override;
+        void fmtIdent(std::ostream& os) const override;
 
-    void fmt(std::ostream& os, size_t ofs, size_t len) const override;
+        void fmt(std::ostream& os, size_t ofs, size_t len) const override;
 
-    size_t size() const override;
+        size_t size() const override;
 
-    const u8* getBytes(size_t ofs, size_t len, bool /*check_mask*/) const override;
+        const u8* getBytes(size_t ofs, size_t len, bool /*check_mask*/) const override;
 
-    void readMask(u8* dst, size_t dstOfs, size_t /*ofs*/, size_t len) const override;
+        void readMask(u8* dst, size_t dstOfs, size_t /*ofs*/, size_t len) const override;
 
-    bool isWritable() const override;
+        bool isWritable() const override;
 
-    u8* extWriteBytes(size_t ofs, size_t len) override;
+        u8* extWriteBytes(size_t ofs, size_t len) override;
 
-    void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override;
+        void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override;
 
-    MIREvalRelocPtr getReloc(size_t ofs) const override;
+        MIREvalRelocPtr getReloc(size_t ofs) const override;
 
-    void setReloc(size_t ofs, MIREvalRelocPtr ptr) override;
-};
+        void setReloc(size_t ofs, MIREvalRelocPtr ptr) override;
+    };
 
 }
 
-struct MIREvalAllocation final: public IValue {
+struct HIREvaluator::MIREvalAllocation final: public IValue {
     friend struct Embed<MIREvalAllocation>;
     friend struct MIREvalAllocationPtr;
 
@@ -441,116 +449,116 @@ struct MIREvalAllocation final: public IValue {
 };
 
 namespace {
-struct MIREvalStaticRef final: public IValue {
-    friend struct Embed<MIREvalStaticRef>;
-    friend struct MIREvalStaticRefPtr;
+    struct MIREvalStaticRef final: public IValue {
+        friend struct Embed<MIREvalStaticRef>;
+        friend struct MIREvalStaticRefPtr;
 
-    ObjPool* pool;
-    HIRPath path_;
-    const EncodedLiteral* encoded;
-    size_t length;
-    bool valuePending;
+        ObjPool* pool;
+        HIRPath path_;
+        const EncodedLiteral* encoded;
+        size_t length;
+        bool valuePending;
 
-    MIREvalStaticRef(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending);
+        MIREvalStaticRef(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending);
 
-    void fmtIdent(std::ostream& os) const override;
+        void fmtIdent(std::ostream& os) const override;
 
-    void fmt(std::ostream& os, size_t ofs, size_t len) const override;
+        void fmt(std::ostream& os, size_t ofs, size_t len) const override;
 
-    size_t size() const override;
+        size_t size() const override;
 
-    bool hasValue() const;
+        bool hasValue() const;
 
-    const u8* getBytes(size_t ofs, size_t len, bool checkMask) const override;
+        const u8* getBytes(size_t ofs, size_t len, bool checkMask) const override;
 
-    void readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const override;
+        void readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const override;
 
-    bool isWritable() const override;
+        bool isWritable() const override;
 
-    u8* extWriteBytes(size_t ofs, size_t len) override;
+        u8* extWriteBytes(size_t ofs, size_t len) override;
 
-    void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override;
+        void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override;
 
-    MIREvalRelocPtr getReloc(size_t ofs) const override;
+        MIREvalRelocPtr getReloc(size_t ofs) const override;
 
-    void setReloc(size_t ofs, MIREvalRelocPtr ptr) override;
+        void setReloc(size_t ofs, MIREvalRelocPtr ptr) override;
 
-    const HIRPath& path() const;
-};
+        const HIRPath& path() const;
+    };
 
-struct MIREvalValueRef {
-    MIREvalRelocPtr storage;
-    u32 ofs;
-    u32 len;
+    struct MIREvalValueRef {
+        MIREvalRelocPtr storage;
+        u32 ofs;
+        u32 len;
 
-    MIREvalValueRef();
+        MIREvalValueRef();
 
-    MIREvalValueRef(MIREvalRelocPtr alloc, size_t ofs = 0);
+        MIREvalValueRef(MIREvalRelocPtr alloc, size_t ofs = 0);
 
-    MIREvalValueRef slice(size_t ofs, size_t len) const;
+        MIREvalValueRef slice(size_t ofs, size_t len) const;
 
-    MIREvalValueRef slice(size_t ofs) const;
+        MIREvalValueRef slice(size_t ofs) const;
 
-    bool isValid() const;
+        bool isValid() const;
 
-    MIREvalRelocPtr getStorage() const;
+        MIREvalRelocPtr getStorage() const;
 
-    size_t getOfs() const;
+        size_t getOfs() const;
 
-    size_t getLen() const;
+        size_t getLen() const;
 
-    void copyFrom(const MIRTypeResolve& state, const MIREvalValueRef& other);
+        void copyFrom(const MIRTypeResolve& state, const MIREvalValueRef& other);
 
-    void copyFromOverlapping(const MIRTypeResolve& state, const MIREvalValueRef& other, ObjPool* pool);
+        void copyFromOverlapping(const MIRTypeResolve& state, const MIREvalValueRef& other, ObjPool* pool);
 
-    void writeBytes(const MIRTypeResolve& state, const void* data, size_t len);
+        void writeBytes(const MIRTypeResolve& state, const void* data, size_t len);
 
-    u8* extWriteBytes(const MIRTypeResolve& state, size_t len);
+        u8* extWriteBytes(const MIRTypeResolve& state, size_t len);
 
-    void writeByte(const MIRTypeResolve& state, u8 v);
+        void writeByte(const MIRTypeResolve& state, u8 v);
 
-    void writeFloat(const MIRTypeResolve& state, unsigned bits, FloatValue v);
+        void writeFloat(const MIRTypeResolve& state, unsigned bits, FloatValue v);
 
-    void writeUint(const MIRTypeResolve& state, unsigned bits, u64 v);
+        void writeUint(const MIRTypeResolve& state, unsigned bits, u64 v);
 
-    void writeUint(const MIRTypeResolve& state, unsigned bits, U128 v);
+        void writeUint(const MIRTypeResolve& state, unsigned bits, U128 v);
 
-    void writeSint(const MIRTypeResolve& state, unsigned bits, S128 v);
+        void writeSint(const MIRTypeResolve& state, unsigned bits, S128 v);
 
-    void writePtr(const MIRTypeResolve& state, u64 val, MIREvalRelocPtr reloc);
+        void writePtr(const MIRTypeResolve& state, u64 val, MIREvalRelocPtr reloc);
 
-    void setReloc(MIREvalRelocPtr reloc);
+        void setReloc(MIREvalRelocPtr reloc);
 
-    const u8* extReadBytes(const MIRTypeResolve& state, size_t len) const;
+        const u8* extReadBytes(const MIRTypeResolve& state, size_t len) const;
 
-    void readBytes(const MIRTypeResolve& state, void* data, size_t len) const;
+        void readBytes(const MIRTypeResolve& state, void* data, size_t len) const;
 
-    FloatValue readFloat(const MIRTypeResolve& state, unsigned bits) const;
+        FloatValue readFloat(const MIRTypeResolve& state, unsigned bits) const;
 
-    U128 readUint(const MIRTypeResolve& state, unsigned bits) const;
+        U128 readUint(const MIRTypeResolve& state, unsigned bits) const;
 
-    S128 readSint(const MIRTypeResolve& state, unsigned bits) const;
+        S128 readSint(const MIRTypeResolve& state, unsigned bits) const;
 
-    u64 readUsize(const MIRTypeResolve& state) const;
+        u64 readUsize(const MIRTypeResolve& state) const;
 
-    std::pair<u64, MIREvalRelocPtr> readPtr(const MIRTypeResolve& state) const;
+        std::pair<u64, MIREvalRelocPtr> readPtr(const MIRTypeResolve& state) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr);
+        friend std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr);
 
-    void ensureLive(const MIRTypeResolve& state) const;
-};
+        void ensureLive(const MIRTypeResolve& state) const;
+    };
 
-struct MIREvalPathCallback final: public MIRPathCallback {
-    HIRItemPath path;
+    struct MIREvalPathCallback final: public MIRPathCallback {
+        HIRItemPath path;
 
-    explicit MIREvalPathCallback(const HIRItemPath& path);
+        explicit MIREvalPathCallback(const HIRItemPath& path);
 
-    void write(std::ostream& os) const override;
-};
+        void write(std::ostream& os) const override;
+    };
 
 }
 
-struct MIREvalCallStackEntry {
+struct HIREvaluator::MIREvalCallStackEntry {
     ObjPool* const valuePool;
     const unsigned frameIndex;
     const std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs;
@@ -650,8 +658,8 @@ namespace {
     }
 }
 
-CtfeContext* CtfeCreateContext(ObjPool& pool) {
-    return pool.make<CtfeContext>();
+void CtfeCreateContext(WireBoard& wb, ObjPool& pool) {
+    wb.ctfe = pool.make<CtfeContext>();
 }
 
 namespace {
@@ -808,13 +816,13 @@ namespace {
 }
 
 namespace {
-void putbHex(std::ostream& os, u8 v) {
-    char tmp[3];
-    tmp[0] = "0123456789ABCDEF"[v >> 4];
-    tmp[1] = "0123456789ABCDEF"[v & 0xF];
-    tmp[2] = '\0';
-    os << tmp;
-}
+    void putbHex(std::ostream& os, u8 v) {
+        char tmp[3];
+        tmp[0] = "0123456789ABCDEF"[v >> 4];
+        tmp[1] = "0123456789ABCDEF"[v & 0xF];
+        tmp[2] = '\0';
+        os << tmp;
+    }
 }
 
 namespace {
@@ -855,21 +863,21 @@ namespace {
 }
 
 namespace {
-std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr) {
-    if (!vr.storage) {
-        os << "ValueRef(null)";
-    } else {
-        os << "ValueRef({" << vr.ofs << "+" << vr.len << "}";
-        vr.storage.asValue().fmt(os, vr.ofs, vr.len);
-        os << ")";
+    std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr) {
+        if (!vr.storage) {
+            os << "ValueRef(null)";
+        } else {
+            os << "ValueRef({" << vr.ofs << "+" << vr.len << "}";
+            vr.storage.asValue().fmt(os, vr.ofs, vr.len);
+            os << ")";
+        }
+        return os;
     }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const MIREvalAllocationPtr& ap) {
-    os << MIREvalValueRef(ap);
-    return os;
-}
+    std::ostream& operator<<(std::ostream& os, const MIREvalAllocationPtr& ap) {
+        os << MIREvalValueRef(ap);
+        return os;
+    }
 }
 
 MIREvalConstantPtr MIREvalConstantPtr::allocate(ObjPool* pool, const void* data, size_t len) {
@@ -1528,100 +1536,100 @@ MIREvalAllocationPtr HIREvaluator::runUntilStackEmpty() {
 }
 
 namespace {
-static void writeCtfeUnsizeMetadata(MIREvalCallStackEntry& localState, MIREvalValueRef dst, const HIRTypeData* dynamicTypeD, const HIRTypeData* dynamicTypeS) {
-    const auto& state = localState.state;
-    while (const auto* pathD = dynamicTypeD->opt_Path()) {
-        MIR_ASSERT(state, pathD->binding.is_Struct(), "Pointer unsize to " << dynamicTypeD);
-        const auto* pathS = dynamicTypeS->opt_Path();
-        MIR_ASSERT(state, pathS && pathS->binding.is_Struct() && pathS->binding.as_Struct() == pathD->binding.as_Struct(), "Pointer unsize from " << dynamicTypeS << " to " << dynamicTypeD);
-        const auto& markings = pathD->binding.as_Struct()->structMarkings;
-        MIR_ASSERT(state, markings.coerceUnsized != HIRStructMarkings::Coerce::None, "Pointer unsize through non-CoerceUnsized type " << dynamicTypeD);
-        dynamicTypeD = pathD->path.data.as_Generic().params.types.at(markings.unsizedParam);
-        dynamicTypeS = pathS->path.data.as_Generic().params.types.at(markings.unsizedParam);
-    }
-
-    const auto ptrSize = TargetGetPointerBits() / 8;
-    if (const auto* traitObject = dynamicTypeD->opt_TraitObject()) {
-        MIR_ASSERT(state, !dynamicTypeS->is_TraitObject(), "Trait-object pointer upcast must provide explicit metadata");
-        auto vtablePath = HIRPath(dynamicTypeS, traitObject->trait.path.clone(), localState.rootResolve.board().ctfe->vtableName());
-        auto vtable = MIREvalStaticRefPtr::allocate(localState.valuePool, std::move(vtablePath), nullptr, 0);
-        dst.slice(ptrSize).writePtr(state, EncodedLiteral::PTR_BASE, std::move(vtable));
-    } else if (dynamicTypeD->is_Slice()) {
-        const auto* array = dynamicTypeS->opt_Array();
-        MIR_ASSERT(state, array && array->size.is_Known(), "Pointer unsize to slice from " << dynamicTypeS);
-        dst.slice(ptrSize).writeUint(state, TargetGetPointerBits(), array->size.as_Known());
-    } else {
-        const auto metadataType = localState.resolve.metadataType(state.sp, dynamicTypeD);
-        MIR_ASSERT(state, metadataType == MetadataType::None || metadataType == MetadataType::Zero, "Unhandled pointer metadata " << metadataType << " for " << dynamicTypeD);
-    }
-}
-
-template <typename WriteField>
-static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallStackEntry& localState, MIREvalValueRef dst, const HIRTypeData* ty, size_t index, size_t valueCount, WriteField&& writeField) {
-    const auto& state = localState.state;
-    auto* enmRepr = TargetGetTypeRepr(state.sp, resolve, ty);
-    if (!enmRepr) {
-        BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
-    }
-    if (valueCount > 0) {
-        MIR_ASSERT(state, index < enmRepr->fields.size(), "Enum representation has no variant " << index << " for " << ty);
-        const auto ofs = enmRepr->fields[index].offset;
-        const auto& innerType = enmRepr->fields[index].ty;
-        auto* innerRepr = TargetGetTypeRepr(state.sp, resolve, innerType);
-        if (!innerRepr) {
-            BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << innerType);
+    static void writeCtfeUnsizeMetadata(MIREvalCallStackEntry& localState, MIREvalValueRef dst, const HIRTypeData* dynamicTypeD, const HIRTypeData* dynamicTypeS) {
+        const auto& state = localState.state;
+        while (const auto* pathD = dynamicTypeD->opt_Path()) {
+            MIR_ASSERT(state, pathD->binding.is_Struct(), "Pointer unsize to " << dynamicTypeD);
+            const auto* pathS = dynamicTypeS->opt_Path();
+            MIR_ASSERT(state, pathS && pathS->binding.is_Struct() && pathS->binding.as_Struct() == pathD->binding.as_Struct(), "Pointer unsize from " << dynamicTypeS << " to " << dynamicTypeD);
+            const auto& markings = pathD->binding.as_Struct()->structMarkings;
+            MIR_ASSERT(state, markings.coerceUnsized != HIRStructMarkings::Coerce::None, "Pointer unsize through non-CoerceUnsized type " << dynamicTypeD);
+            dynamicTypeD = pathD->path.data.as_Generic().params.types.at(markings.unsizedParam);
+            dynamicTypeS = pathS->path.data.as_Generic().params.types.at(markings.unsizedParam);
         }
-        MIR_ASSERT(state, valueCount <= innerRepr->fields.size(), "Enum variant " << index << " has " << innerRepr->fields.size() << " fields, got " << valueCount);
-        for (size_t i = 0; i < valueCount; i++) {
-            const size_t size = localState.sizeOfOrBug(innerRepr->fields[i].ty);
-            auto fieldDst = dst.slice(ofs + innerRepr->fields[i].offset, size);
-            writeField(fieldDst, i);
+
+        const auto ptrSize = TargetGetPointerBits() / 8;
+        if (const auto* traitObject = dynamicTypeD->opt_TraitObject()) {
+            MIR_ASSERT(state, !dynamicTypeS->is_TraitObject(), "Trait-object pointer upcast must provide explicit metadata");
+            auto vtablePath = HIRPath(dynamicTypeS, traitObject->trait.path.clone(), localState.rootResolve.board().ctfe->vtableName());
+            auto vtable = MIREvalStaticRefPtr::allocate(localState.valuePool, std::move(vtablePath), nullptr, 0);
+            dst.slice(ptrSize).writePtr(state, EncodedLiteral::PTR_BASE, std::move(vtable));
+        } else if (dynamicTypeD->is_Slice()) {
+            const auto* array = dynamicTypeS->opt_Array();
+            MIR_ASSERT(state, array && array->size.is_Known(), "Pointer unsize to slice from " << dynamicTypeS);
+            dst.slice(ptrSize).writeUint(state, TargetGetPointerBits(), array->size.as_Known());
+        } else {
+            const auto metadataType = localState.resolve.metadataType(state.sp, dynamicTypeD);
+            MIR_ASSERT(state, metadataType == MetadataType::None || metadataType == MetadataType::Zero, "Unhandled pointer metadata " << metadataType << " for " << dynamicTypeD);
         }
     }
 
-    switch (enmRepr->variants.tag()) {
-        case TypeReprVariantMode::TAG_None: {
-            break;
+    template <typename WriteField>
+    static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallStackEntry& localState, MIREvalValueRef dst, const HIRTypeData* ty, size_t index, size_t valueCount, WriteField&& writeField) {
+        const auto& state = localState.state;
+        auto* enmRepr = TargetGetTypeRepr(state.sp, resolve, ty);
+        if (!enmRepr) {
+            BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
         }
-        case TypeReprVariantMode::TAG_NonZero: {
-            auto& variant = enmRepr->variants.as_NonZero();
-            if (index == variant.zeroVariant) {
-                auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
-                const auto savedOffset = offset;
-                for (size_t i = 0; i + 8 <= variant.field.size; i += 8) {
-                    dst.slice(offset, 8).writeUint(state, 64, 0);
-                    offset += 8;
+        if (valueCount > 0) {
+            MIR_ASSERT(state, index < enmRepr->fields.size(), "Enum representation has no variant " << index << " for " << ty);
+            const auto ofs = enmRepr->fields[index].offset;
+            const auto& innerType = enmRepr->fields[index].ty;
+            auto* innerRepr = TargetGetTypeRepr(state.sp, resolve, innerType);
+            if (!innerRepr) {
+                BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << innerType);
+            }
+            MIR_ASSERT(state, valueCount <= innerRepr->fields.size(), "Enum variant " << index << " has " << innerRepr->fields.size() << " fields, got " << valueCount);
+            for (size_t i = 0; i < valueCount; i++) {
+                const size_t size = localState.sizeOfOrBug(innerRepr->fields[i].ty);
+                auto fieldDst = dst.slice(ofs + innerRepr->fields[i].offset, size);
+                writeField(fieldDst, i);
+            }
+        }
+
+        switch (enmRepr->variants.tag()) {
+            case TypeReprVariantMode::TAG_None: {
+                break;
+            }
+            case TypeReprVariantMode::TAG_NonZero: {
+                auto& variant = enmRepr->variants.as_NonZero();
+                if (index == variant.zeroVariant) {
+                    auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
+                    const auto savedOffset = offset;
+                    for (size_t i = 0; i + 8 <= variant.field.size; i += 8) {
+                        dst.slice(offset, 8).writeUint(state, 64, 0);
+                        offset += 8;
+                    }
+                    if (variant.field.size % 8 > 0) {
+                        dst.slice(offset, variant.field.size % 8).writeUint(state, (variant.field.size % 8) * 8, 0);
+                    }
                 }
-                if (variant.field.size % 8 > 0) {
-                    dst.slice(offset, variant.field.size % 8).writeUint(state, (variant.field.size % 8) * 8, 0);
+                break;
+            }
+            case TypeReprVariantMode::TAG_Linear: {
+                auto& variant = enmRepr->variants.as_Linear();
+                if (!variant.isNiche(index)) {
+                    const auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
+                    MIR_ASSERT(state, variant.field.size <= 64 / 8, "");
+                    dst.slice(offset, variant.field.size).writeUint(state, variant.field.size * 8, variant.tagValue(index));
                 }
+                break;
             }
-            break;
-        }
-        case TypeReprVariantMode::TAG_Linear: {
-            auto& variant = enmRepr->variants.as_Linear();
-            if (!variant.isNiche(index)) {
-                const auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
-                MIR_ASSERT(state, variant.field.size <= 64 / 8, "");
-                dst.slice(offset, variant.field.size).writeUint(state, variant.field.size * 8, variant.tagValue(index));
+            case TypeReprVariantMode::TAG_Values: {
+                auto& variant = enmRepr->variants.as_Values();
+                const auto& field = enmRepr->fields[variant.field.index];
+                const auto typeInfo = TypeInfo::forType(field.ty);
+                MIR_ASSERT(state, typeInfo.ty == TypeInfo::Signed || typeInfo.ty == TypeInfo::Unsigned, "EnumVariant: Values not integer - " << field.ty);
+                auto tagDst = dst.slice(field.offset, (typeInfo.bits + 7) / 8);
+                if (typeInfo.ty == TypeInfo::Signed) {
+                    tagDst.writeSint(state, typeInfo.bits, S128(variant.values.at(index)));
+                } else {
+                    tagDst.writeUint(state, typeInfo.bits, variant.values.at(index));
+                }
+                break;
             }
-            break;
-        }
-        case TypeReprVariantMode::TAG_Values: {
-            auto& variant = enmRepr->variants.as_Values();
-            const auto& field = enmRepr->fields[variant.field.index];
-            const auto typeInfo = TypeInfo::forType(field.ty);
-            MIR_ASSERT(state, typeInfo.ty == TypeInfo::Signed || typeInfo.ty == TypeInfo::Unsigned, "EnumVariant: Values not integer - " << field.ty);
-            auto tagDst = dst.slice(field.offset, (typeInfo.bits + 7) / 8);
-            if (typeInfo.ty == TypeInfo::Signed) {
-                tagDst.writeSint(state, typeInfo.bits, S128(variant.values.at(index)));
-            } else {
-                tagDst.writeUint(state, typeInfo.bits, variant.values.at(index));
-            }
-            break;
         }
     }
-}
 
 }
 
