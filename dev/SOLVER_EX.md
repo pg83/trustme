@@ -45,3 +45,148 @@
 Ответ переносит type/const-слоты, equalities и obligations; associated output нормализуется до экспорта. Позднее ожидаемое значение diverging closure хранится явным `ClosureReturnObligation`, без `const_cast` HIR-узла. Candidate ranking различает global/non-global ParamEnv и alias bounds: environment-head получает преимущество только когда входные coercion-цели доказаны, а ambiguous identity начинает с нейтральных слотов и экспортирует лишь связывания, общие всем жизнеспособным кандидатам. Это закрывает реальные случаи из `compiler_builtins`, `alloc` и `rand-0.9.2` без потребительского угадывания. Целевые solver-регрессии и итоговый полный Nix `unit` зелёные: 1004/1004.
 
 Порядок П0→П5 завершён. Исходные костыли удалялись только после появления соответствующих примитивов: транзакций инференса, типизированного canonical response, obligations/equalities и единой `NormalizesTo`.
+
+
+## Вердикт
+
+  Миграция солвера не закончена. Основной evaluator, транзакции, typed response и NormalizesTo уже есть, но поверх них оставлены
+  мосты, воспроизводящие старую fuzzy-семантику.
+
+  Утверждения в dev/SOLVER.md:3, что снаружи больше нет выбора кандидатов и retry, неверны. Более того, dev/SOLVER_EX.md:31 оставляет
+  P1 «Один примитив унификации» незакрытым, а ниже внезапно объявляет весь P0–P5 завершённым.
+
+  ## Самая большая дыра: кандидата всё ещё выбирает потребитель
+
+  Есть семь exportAmbiguousCandidates = true. Fuzzy формально превращён в Ambiguous + candidates, но смысл не изменился:
+
+   Потребитель            Что делает с неоднозначностью
+  ━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Index                  Считает кандидатов, при одном связывает Output; при нескольких перебирает все integer-типы и выбирает
+                          единственный подходящий — bin/rustc/hir_typeck_expr_cs.cpp:594
+  ─────────────────────  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   AsyncFn                При одном exported candidate применяет именно его response — bin/rustc/hir_typeck_expr_cs.cpp:834
+  ─────────────────────  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   FnOnce                 Ровно так же применяет единственный ambiguous candidate — bin/rustc/hir_typeck_expr_cs.cpp:970
+  ─────────────────────  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Unsize                 Сам делает implsOverlap/moreSpecificThan, выбирает лучший и применяет его — bin/rustc/
+                          hir_typeck_expr_cs.cpp:6324
+  ─────────────────────  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Closure expectation    Берёт первый exported proven candidate с пригодной сигнатурой — bin/rustc/hir_typeck_expr_cs.cpp:7147
+  ─────────────────────  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Operators              Обходит кандидатов и по их impl-заголовкам решает, разрешать ли builtin inference — bin/rustc/
+                          hir_typeck_expr_cs.cpp:7641
+  ─────────────────────  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Autoderef              Сам принимает единственного кандидата и извлекает Deref::Target — bin/rustc/hir_typeck_helpers.cpp:10690
+
+  Для этого даже существует публичный Context::applySolverResponse(SolverCandidateResponse) — bin/rustc/hir_typeck_expr_cs.h:184. То
+  есть документационное «typeck не повторяет выбор кандидата» опровергается самим API.
+
+  ## Внутри солвера P1 тоже не закончен
+
+  Новый Unifier существует, но возвращает только Unified/Mismatch, складывая всё недоказанное в pending — bin/rustc/
+  hir_typeck_helpers.h:342. Единого результата Proven/Ambiguous(nested goals)/Fail пока нет.
+
+  Из-за этого:
+
+  - Нормальные trait impl heads проходят через unifyImplHead, но свободные existential-параметры снова материализуются строкой с
+    адресом impl_?_<address> — bin/rustc/hir_typeck_helpers.cpp:5420.
+
+  - Builtin, ParamEnv, trait-object и opaque-кандидаты по-прежнему приходят через TraitImplCallback(ImplRef, HIRCompare) — bin/rustc/
+    hir_typeck_helpers.h:526, bin/rustc/hir_typeck_helpers.cpp:5555.
+
+  - Для них typed equalities восстанавливаются постфактум из ImplRef, потому что collector сам настоящую унификацию не делал.
+  - Fuzzy environment/builtin head при определённых условиях повышается до Proven — bin/rustc/hir_typeck_helpers.cpp:6310.
+  - Associated relation всё ещё делает normalize-and-retry под mutable-флагом aliasRelateActive_ — bin/rustc/
+    hir_typeck_helpers.cpp:6150.
+
+  - Root associated equality использует compareTy, а отдельный случай повышает Fuzzy до Proven, если output concrete — bin/rustc/
+    hir_typeck_helpers.cpp:6777.
+
+  То есть новый unifier используется кусками, а не является единственной relation-машиной.
+
+  ## ParamEnv и builtin assembly остаются legacy
+
+  ParamEnv — большой самостоятельный fuzzy matcher:
+
+  - Собственный HrtbBoundMatcher, comparePp, matchTestGenericsFuzz — bin/rustc/hir_typeck_helpers.cpp:9082.
+  - Associated declaration bounds с generic/GAT-параметрами просто пропускаются — bin/rustc/hir_typeck_helpers.cpp:9295.
+  - Fuzzy associated-bound случай оставлен с TODO — bin/rustc/hir_typeck_helpers.cpp:9325.
+  - Bounded candidate с GAT equality принудительно остаётся Ambiguous — bin/rustc/hir_typeck_helpers.cpp:6119.
+
+  Builtin assembly вручную сопоставляет closure/async arguments и переводит nested SolverCertainty обратно в HIRCompare — bin/rustc/
+  hir_typeck_helpers.cpp:3197. Есть и особенно плохой fallback: placeholder generic из группы 2 считается fuzzy-реализацией любого
+  trait — bin/rustc/hir_typeck_helpers.cpp:3602.
+
+  Открытые функциональные дыры: MetaSized, object safety trait-object кандидатов и часть GAT-associated bounds.
+
+  ## Coercion замыкает solver обратно на typeck
+
+  Solver принимает внешний SolverCoercionEvaluator, а реализация в Context вызывает старые checkCoerceTys, checkUnsizeTys, autoderef и
+  compareWithPlaceholders — bin/rustc/hir_typeck_expr_cs.cpp:7342.
+
+  После этого solver фильтрует и Pareto-ранжирует кандидатов результатами callback — bin/rustc/hir_typeck_helpers.cpp:7410. Затем
+  потребитель ещё раз проверяет те же coercion constraints и явно просит retry после стабилизации графа — bin/rustc/
+  hir_typeck_expr_cs.cpp:7924.
+
+  Это прямое опровержение пункта «нет retry после ответа goal solver».
+
+  ## Static и inherent остаются отдельными мирами
+
+  Static bridge вызывает новый solver, но выбрасывает slots/equalities/obligations/candidates и возвращает старый ImplRef + certainty;
+  при отсутствующих trait params создаёт static_find_impl_<address> — bin/rustc/hir_typeck_static.cpp:36.
+
+  Дальше остаются:
+
+  - findImplCheckCrateRaw: GetParams + Matcher, fuzzy placeholders, допущение «если bound type _, считать bound успешным», незакрытый
+    GAT — bin/rustc/hir_typeck_static.cpp:173.
+
+  - fticCheckParams: ещё одна пара GetParams/Matcher, четырёхпроходный fixed point, fuzzy save/restore и вообще не реализованный
+    TypeEquality bound — bin/rustc/hir_typeck_helpers.cpp:9378.
+
+  - OwnedImplMatcher для inherent impl — bin/rustc/hir_typeck_expr_cs.cpp:10590.
+  - Method lookup добавляет и Equal, и Fuzzy bounds как кандидатов, после чего отдельный expression visitor дедуплицирует, угадывает
+    параметры и делает fallback/goto — bin/rustc/hir_typeck_helpers.cpp:11189, bin/rustc/hir_typeck_expr_cs.cpp:1134.
+
+  - Static canUnsize остаётся отдельной ручной реализацией с собственным ParamEnv/trait-object поиском — bin/rustc/
+    hir_typeck_static.cpp:1430.
+
+  ## Общий fallback inference
+
+  Trait possibilities действительно удалены из IVarPossible; там теперь coercion graph, defaults и raw-pointer fallback. Эта узкая
+  часть документации честная.
+
+  Но сам inference всё ещё имеет пять режимов, включая FinalOption с буквальным комментарием «Just picks an option (even if it might
+  be wrong)» — bin/rustc/hir_typeck_expr_cs.cpp:8635, и запускает их последовательно — bin/rustc/hir_typeck_expr_cs.cpp:10192. Это уже
+  не trait solver, но это настоящий legacy/fallback-контур, влияющий на его входы.
+
+  ## Почему зелёный unit ничего не доказывает
+
+  Часть тестов прямо закрепляет мосты:
+
+  - test_next_solver_globally_ivar_goal_legacy_possibilities.rs требует «legacy fuzzy walk» и single-candidate commit — tst/unit/
+    test_next_solver_globally_ivar_goal_legacy_possibilities.rs:4.
+
+  - test_next_solver_globally_operator_overload_probe_legacy.rs требует обхода legacy paths — tst/unit/
+    test_next_solver_globally_operator_overload_probe_legacy.rs:3.
+
+  Поэтому 1004/1004 совместимы с незаконченной миграцией: gate охраняет текущее поведение, включая костыли.
+
+  ## Реальный порядок доделки
+
+  1. Удалить exportAmbiguousCandidates и возможность применять SolverCandidateResponse. Потребитель получает только общий ответ или
+     Ambiguous.
+
+  2. Сделать coercion/unsize полноценными relation/goals, без callback в Context и post-solver retry.
+  3. Закончить P1: одна унификация для TraitImpl, ParamEnv, builtin, objects и projections; pending alias relations становятся nested
+     goals.
+
+  4. Удалить TraitImplCallback, адресные placeholders и ручные HrtbBoundMatcher/GetParams/Matcher.
+  5. Отдельно перевести inherent/method selection: убрать fticCheckParams, OwnedImplMatcher, raw static matcher и method fallback
+     selection.
+
+  6. Перевести static consumers на полный SolverResponse, не на lossy ImplRef.
+  7. Только после этого исправить SOLVER.md и поставить реальные zero-gates на перечисленные API.
+
+  Коротко: фундамент нового солвера есть, но граница, ParamEnv/builtins, coercion и весь inherent/method слой ещё не мигрированы.
+  Текущее «finish next solver migration» — преждевременное.
+  
