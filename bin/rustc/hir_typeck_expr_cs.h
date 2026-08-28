@@ -17,7 +17,7 @@ struct Context {
     public:
         virtual ~Revisitor() = default;
         virtual const Span& span() const = 0;
-        virtual void fmt(::std::ostream& os) const = 0;
+        virtual void fmt(std::ostream& os) const = 0;
         virtual bool revisit(Context& context, bool isFallback) = 0;
     };
 
@@ -31,7 +31,7 @@ struct Context {
         HIRTypeRef leftTy;
         HIRExprNodeP* rightNodePtr;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const Coercion& v);
+        friend std::ostream& operator<<(std::ostream& os, const Coercion& v);
     };
 
     struct IVarPossible {
@@ -50,9 +50,9 @@ struct Context {
         bool forceNoTo = false;
         bool forceNoFrom = false;
 
-        ::std::vector<CoerceTy> typesCoerceTo;
+        std::vector<CoerceTy> typesCoerceTo;
 
-        ::std::vector<CoerceTy> typesCoerceFrom;
+        std::vector<CoerceTy> typesCoerceFrom;
 
         HIRTypeRefSet typesDefault;
 
@@ -91,31 +91,31 @@ struct Context {
         TypeckPrimitiveOperator operatorKind;
         bool isAmbiguous = false;
 
-        ::std::vector<StallDependency> stalledOn;
-        ::std::vector<CapturedIvarPossible> stalledPossibilities;
+        std::vector<StallDependency> stalledOn;
+        std::vector<CapturedIvarPossible> stalledPossibilities;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const Associated& v);
+        friend std::ostream& operator<<(std::ostream& os, const Associated& v);
     };
 
     const HIRCrate& crate;
     const HIRTraitImpl* currentTraitImpl;
 
-    ::std::vector<Binding> bindings;
+    std::vector<Binding> bindings;
     HMTypeInferrence ivars;
     TraitResolution resolve;
 
     unsigned nextRuleIdx;
 
-    ::std::vector<::std::unique_ptr<Coercion>> linkCoerce;
+    std::vector<std::unique_ptr<Coercion>> linkCoerce;
 
-    ::std::unordered_map<const HIRExprNode*, HIRTypeRef> coercionHints;
-    ::std::vector<Associated> linkAssoc;
+    std::unordered_map<const HIRExprNode*, HIRTypeRef> coercionHints;
+    std::vector<Associated> linkAssoc;
     stl::ObjPool::Ref linkAssocIndexPool;
     stl::IntMap<stl::Vector<unsigned>> linkAssocIndex;
 
-    ::std::vector<HIRExprNode*> toVisit;
+    std::vector<HIRExprNode*> toVisit;
 
-    ::std::vector<::std::unique_ptr<Revisitor>> advRevisits;
+    std::vector<std::unique_ptr<Revisitor>> advRevisits;
 
     struct ClosureReturnObligation {
         const HIRExprNodeClosure* closure;
@@ -125,9 +125,9 @@ struct Context {
     stl::Vector<ClosureReturnObligation> closureReturnObligations;
 
     HIRGenericParams emptyGenericParams;
-    ::std::vector<bool> ivarsSized;
-    ::std::vector<IVarPossible> possibleIvarVals;
-    ::std::vector<Associated::CapturedIvarPossible>* possibleIvarSink = nullptr;
+    std::vector<bool> ivarsSized;
+    std::vector<IVarPossible> possibleIvarVals;
+    std::vector<Associated::CapturedIvarPossible>* possibleIvarSink = nullptr;
 
     IVarPossible* getPossibleIvarSink(unsigned index);
 
@@ -138,7 +138,7 @@ struct Context {
         TaitEntry(const HIRPathParams& p, HIRTypeRef t);
     };
 
-    ::std::map<HIRTypeDataErasedTypeAliasInner*, TaitEntry> erasedTypeAliases;
+    std::map<HIRTypeDataErasedTypeAliasInner*, TaitEntry> erasedTypeAliases;
 
     struct RpitEntry {
         const HIRPath* origin;
@@ -147,7 +147,7 @@ struct Context {
         bool selfReferenced;
     };
 
-    ::std::vector<RpitEntry> rpitTypes;
+    std::vector<RpitEntry> rpitTypes;
 
     const HIRSimplePath langBox;
 
@@ -213,7 +213,7 @@ struct Context {
 
     void possibleEquateTypeUnknown(const Span& sp, const HIRTypeData* ty, IvarUnknownType srcTy);
 
-    void possibleEquateTypeBounds(const Span& sp, const HIRTypeData* ty, ::std::vector<HIRTypeRef> t);
+    void possibleEquateTypeBounds(const Span& sp, const HIRTypeData* ty, std::vector<HIRTypeRef> t);
 
     enum class PossibleTypeSource {
         CoerceTo,
@@ -236,7 +236,7 @@ struct Context {
     const HIRTypeData* getVar(const Span& sp, unsigned int idx) const;
 
     void addRevisit(HIRExprNode& node);
-    void addRevisitAdv(::std::unique_ptr<Revisitor> ent);
+    void addRevisitAdv(std::unique_ptr<Revisitor> ent);
 
     const HIRTypeData* getType(const HIRTypeData* ty) const {
         return ivars.getType(ty);

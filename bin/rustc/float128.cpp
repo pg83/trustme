@@ -1016,7 +1016,7 @@ Float128 Float128::parseDecimal(const char* text) {
     return roundPack(false, static_cast<i32>(exponent2), significand, sticky);
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Float128& value) {
+std::ostream& operator<<(std::ostream& os, const Float128& value) {
     const auto unpacked = unpack(value.hi, value.lo);
     if (unpacked.kind == Kind::NotANumber) {
         return os << (unpacked.negative ? "-nan" : "nan");
@@ -1025,11 +1025,11 @@ Float128 Float128::parseDecimal(const char* text) {
         return os << (unpacked.negative ? "-inf" : "inf");
     }
     const int precision = static_cast<int>(os.precision());
-    const auto field = os.flags() & ::std::ios_base::floatfield;
+    const auto field = os.flags() & std::ios_base::floatfield;
     std::string text;
-    if (field == ::std::ios_base::scientific) {
+    if (field == std::ios_base::scientific) {
         text = formatScientific(unpacked, precision < 0 ? 6 : precision);
-    } else if (field == ::std::ios_base::fixed) {
+    } else if (field == std::ios_base::fixed) {
         text = formatFixed(unpacked, precision < 0 ? 6 : precision);
     } else {
         text = formatDefault(unpacked, precision < 0 ? 6 : precision);

@@ -2,7 +2,7 @@
 
 #include "hir_type.h"
 
-::std::ostream& operator<<(::std::ostream& os, const HIRGenericBound& x) {
+std::ostream& operator<<(std::ostream& os, const HIRGenericBound& x) {
     switch (x.tag()) {
         case HIRGenericBound::TAG_TraitBound: {
             auto& e = x.as_TraitBound();
@@ -18,7 +18,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRGenericParams::PrintArgs& x) {
+std::ostream& operator<<(std::ostream& os, const HIRGenericParams::PrintArgs& x) {
     if (x.gp.types.size() > 0 || x.gp.values.size() > 0) {
         os << "<";
         size_t typeIndex = 0;
@@ -44,7 +44,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRGenericParams::PrintBounds& x) {
+std::ostream& operator<<(std::ostream& os, const HIRGenericParams::PrintBounds& x) {
     if (x.gp.bounds.size() > 0) {
         os << " where ";
         bool commaNeeded = false;

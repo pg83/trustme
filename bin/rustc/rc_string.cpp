@@ -51,11 +51,11 @@ RcString::RcString(const char* s, size_t len)
 }
 
 RcString::RcString(const char* s)
-    : RcString(s, ::std::strlen(s))
+    : RcString(s, std::strlen(s))
 {
 }
 
-RcString::RcString(const ::std::string& s)
+RcString::RcString(const std::string& s)
     : RcString(s.data(), s.size())
 {
 }
@@ -79,7 +79,7 @@ u64 RcString::contentHash() const {
 }
 
 Ordering RcString::ord(const char* s, size_t len) const {
-    auto cmpLen = ::std::min(len, this->size());
+    auto cmpLen = std::min(len, this->size());
     if (cmpLen > 0) {
         int cmp = memcmp(this->c_str(), s, cmpLen);
         if (cmp != 0) {
@@ -113,7 +113,7 @@ Ordering RcString::ord(const char* s) const {
     return ::ord(cmp, 0);
 }
 
-::std::ostream& operator<<(::std::ostream& os, const RcString& x) {
+std::ostream& operator<<(std::ostream& os, const RcString& x) {
     os.write(x.c_str(), x.size());
     return os;
 }
@@ -170,7 +170,7 @@ auto StrInterner::intern(const char* s, size_t len) -> u32 {
     }
 
     auto* data = static_cast<char*>(pool->allocate(len + 1));
-    ::std::memcpy(data, s, len);
+    std::memcpy(data, s, len);
     data[len] = '\0';
 
     const auto id = static_cast<u32>(strs.length());

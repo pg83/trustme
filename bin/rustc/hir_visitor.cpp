@@ -626,7 +626,7 @@ namespace {
         if (nself == u.selfType && !cimpl && !citem) {
             return false;
         }
-        out = HIRConstGeneric(::std::make_unique<HIRConstGenericUnevaluated>(u.clone()));
+        out = HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(u.clone()));
         auto& ou = *out.as_Unevaluated();
         ou.selfType = nself;
         if (cimpl) {

@@ -87,7 +87,7 @@ namespace {
     struct TyRewriter {
         HIRTypeInterner& types;
         HIRTypeRewriteCallback& callback;
-        ::std::vector<HIRTypeRef> stack;
+        std::vector<HIRTypeRef> stack;
 
         bool rewritePathParams(HIRPathParams& params);
 
@@ -172,7 +172,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         }
         case HIRTypeData::TAG_ErasedType: {
             auto& e = (*tpl).as_ErasedType();
-            ::std::vector<HIRTraitPath> traits;
+            std::vector<HIRTraitPath> traits;
             traits.reserve(e.traits.size());
             for (const auto& trait : e.traits) {
                 traits.push_back(this->monomorphTraitpath(sp, trait, allowInfer));
@@ -225,7 +225,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         }
         case HIRTypeData::TAG_Tuple: {
             auto& e = (*tpl).as_Tuple();
-            ::std::vector<HIRTypeRef> types;
+            std::vector<HIRTypeRef> types;
             for (const auto& ty : e) {
                 types.push_back(this->monomorphType(sp, ty, allowInfer));
             }
@@ -292,14 +292,14 @@ HIRTraitPath Monomorphiser::monomorphTraitpath(const Span& sp, const HIRTraitPat
     HIRTraitPath rv{this->monomorphGenericpath(sp, tpl.path, allowInfer), {}, {}, tpl.traitPtr, tpl.constness};
 
     for (const auto& assoc : tpl.typeBounds) {
-        rv.typeBounds.insert(::std::make_pair(assoc.first, this->monomorphTpAtyEqual(sp, assoc.second, allowInfer)));
+        rv.typeBounds.insert(std::make_pair(assoc.first, this->monomorphTpAtyEqual(sp, assoc.second, allowInfer)));
     }
     for (const auto& assoc : tpl.traitBounds) {
         auto v = HIRTraitPath::AtyBound{this->monomorphGenericpath(sp, assoc.second.sourceTrait, allowInfer), this->monomorphPathParams(sp, assoc.second.atyParams, allowInfer), {}};
         for (const auto& trait : assoc.second.traits) {
             v.traits.push_back(monomorphTraitpath(sp, trait, allowInfer));
         }
-        rv.traitBounds.insert(::std::make_pair(assoc.first, std::move(v)));
+        rv.traitBounds.insert(std::make_pair(assoc.first, std::move(v)));
     }
 
     return rv;
@@ -467,7 +467,7 @@ HIRConstGeneric MonomorphiserPP::getValue(const Span& sp, const HIRGenericRef& v
     }
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MonomorphState& ms) {
+std::ostream& operator<<(std::ostream& os, const MonomorphState& ms) {
     os << "MonomorphState {";
     if (ms.selfTy != HIRTypeRef()) {
         os << " self=" << ms.selfTy;
@@ -974,7 +974,7 @@ auto TyRewriter::rewritePath(HIRPath& path) -> bool {
 }
 
 auto TyRewriter::rewriteType(HIRTypeRef& type) -> bool {
-    if (!type || ::std::find(stack.begin(), stack.end(), type) != stack.end()) {
+    if (!type || std::find(stack.begin(), stack.end(), type) != stack.end()) {
         return false;
     }
     const auto original = type;

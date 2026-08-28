@@ -31,7 +31,7 @@ public:
     ScopeHandle& operator=(ScopeHandle&& x) = delete;
     ~ScopeHandle();
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ScopeHandle& x);
+    friend std::ostream& operator<<(std::ostream& os, const ScopeHandle& x);
 };
 
 enum class InvalidType {
@@ -41,19 +41,19 @@ enum class InvalidType {
 };
 
 #include "mir_from_hir_tu.h"
-extern ::std::ostream& operator<<(::std::ostream& os, const VarState& x);
+extern std::ostream& operator<<(std::ostream& os, const VarState& x);
 
 struct SplitArm {
     bool hasEarlyTerminated = false;
     bool alwaysEarlyTerminated = false;
 
-    ::std::map<unsigned int, VarState> states;
-    ::std::map<unsigned int, VarState> argStates;
+    std::map<unsigned int, VarState> states;
+    std::map<unsigned int, VarState> argStates;
 };
 
 struct SplitEnd {
-    ::std::map<unsigned int, VarState> states;
-    ::std::map<unsigned int, VarState> argStates;
+    std::map<unsigned int, VarState> states;
+    std::map<unsigned int, VarState> argStates;
 };
 
 struct ScopeDropSlot {
@@ -67,7 +67,7 @@ struct ScopeDropSlot {
 #define FIELD_INDEX_MAX 0x8000
 
 struct fieldPathT {
-    ::std::vector<u16> data;
+    std::vector<u16> data;
 
     size_t size() const {
         return data.size();
@@ -93,7 +93,7 @@ struct fieldPathT {
         return ::ord(data, x.data);
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const fieldPathT& x);
+    friend std::ostream& operator<<(std::ostream& os, const fieldPathT& x);
 };
 
 struct PatternBinding {
@@ -112,7 +112,7 @@ struct PatternBinding {
         return rootIndex == x.rootIndex && field == x.field && binding == x.binding && splitSlice == x.splitSlice;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x);
+    friend std::ostream& operator<<(std::ostream& os, const PatternBinding& x);
 };
 
 class MirBuilder {
@@ -136,17 +136,17 @@ class MirBuilder {
 
     // TODO: Extra information (e.g. mutability)
     VarState returnState;
-    ::std::vector<VarState> argStates;
-    ::std::vector<VarState> slotStates;
+    std::vector<VarState> argStates;
+    std::vector<VarState> slotStates;
     size_t firstTempIdx;
 
     bool frozenExitStateActive = false;
-    ::std::map<unsigned int, VarState> frozenExitSlotStates;
-    ::std::map<unsigned int, VarState> frozenExitArgStates;
+    std::map<unsigned int, VarState> frozenExitSlotStates;
+    std::map<unsigned int, VarState> frozenExitArgStates;
 
-    ::std::map<unsigned, unsigned> varArgMappings;
+    std::map<unsigned, unsigned> varArgMappings;
 
-    ::std::map<unsigned, std::vector<unsigned>> dropFlagAliases;
+    std::map<unsigned, std::vector<unsigned>> dropFlagAliases;
 
     struct ScopeDef {
         const Span& span;
@@ -158,12 +158,12 @@ class MirBuilder {
         ScopeDef(const Span& span, ScopeType data);
     };
 
-    ::std::vector<ScopeDef> scopes;
-    ::std::vector<unsigned int> scopeStack;
+    std::vector<ScopeDef> scopes;
+    std::vector<unsigned int> scopeStack;
     ScopeHandle fcnScope_;
 
     typedef std::pair<HIRPatternBinding::Type, MIRLValue> varAliasT;
-    ::std::vector<varAliasT> variableAliases;
+    std::vector<varAliasT> variableAliases;
 
     MIRLValue ifCondLval;
 
@@ -191,7 +191,7 @@ public:
     class SavedAliases {
         friend class MirBuilder;
 
-        ::std::vector<bool> setAliases;
+        std::vector<bool> setAliases;
     };
 
     SavedAliases saveAliases() const;
@@ -374,7 +374,7 @@ private:
 
     VarState* getValStateMutP(const Span& sp, const MIRLValue& lv, bool expectValid = false);
 
-    void mergeSplitLists(const Span& sp, const ScopeHandle& handle, const ::std::map<unsigned int, VarState>& states, ::std::map<unsigned int, VarState>& endStates, MirBuilder::SlotType type);
+    void mergeSplitLists(const Span& sp, const ScopeHandle& handle, const std::map<unsigned int, VarState>& states, std::map<unsigned int, VarState>& endStates, MirBuilder::SlotType type);
 
     void terminateLoopEarly(const Span& sp, ScopeType::Data_Loop& sdLoop);
 
@@ -429,7 +429,7 @@ struct SaveAndEditVal {
 };
 
 template <typename T>
-SaveAndEditVal<T> saveAndEdit(T& dst, typename ::std::remove_reference<T&>::type newval) {
+SaveAndEditVal<T> saveAndEdit(T& dst, typename std::remove_reference<T&>::type newval) {
     return SaveAndEditVal<T>{dst, mv$(newval)};
 }
 
@@ -441,7 +441,7 @@ public:
     virtual void registerPatternVariables(const Span& sp, const HIRPattern& pat, PatternDropOrder order) = 0;
     virtual void scheduleRegisteredPatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) = 0;
 
-    virtual void destructureFromList(const Span& sp, const HIRTypeData* ty, MIRLValue lval, const ::std::vector<PatternBinding>& bindings, bool updateStates = true) = 0;
+    virtual void destructureFromList(const Span& sp, const HIRTypeData* ty, MIRLValue lval, const std::vector<PatternBinding>& bindings, bool updateStates = true) = 0;
     virtual MIRLValue getValueForBindingPath(const Span& sp, const HIRTypeData* outerTy, const MIRLValue& outerLval, const PatternBinding& b) = 0;
     virtual const HIRTypeData* getBindingType(const Span& sp, unsigned index) const = 0;
 

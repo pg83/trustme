@@ -14,8 +14,8 @@ using namespace stl;
 namespace {
     struct InherentCacheImpl final: public HIRInherentCache {
         struct Lowest {
-            typedef ::std::vector<const HIRTypeImpl*> listT;
-            ::std::map<HIRSimplePath, listT> named;
+            typedef std::vector<const HIRTypeImpl*> listT;
+            std::map<HIRSimplePath, listT> named;
             listT nonNamed; // TODO: use a map of HIR::ASTType*::Data::Tag
             listT generic;
 
@@ -85,7 +85,7 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
     struct H {
         static void insertInner(const Span& sp, const HIRTypeData* innerTy, const HIRTypeImpl& impl, std::unique_ptr<Inner>& slot) {
             if (!slot) {
-                slot = ::std::make_unique<Inner>();
+                slot = std::make_unique<Inner>();
             }
             slot->insert(sp, innerTy, impl);
         }
@@ -278,7 +278,7 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
             const HIRFunction& fcn = impl.methods.at(name).data;
 
             struct GetSelf: public HIRMatchGenerics {
-                ::std::optional<HIRTypeRef> detectedSelfTy;
+                std::optional<HIRTypeRef> detectedSelfTy;
 
                 GetSelf()
                     : HIRMatchGenerics(BorrowMatchedValues{})

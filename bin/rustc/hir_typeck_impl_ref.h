@@ -62,5 +62,5 @@ struct ImplRef {
     bool typeIsSpecialisable(const char* name) const;
     HIRTypeRef getType(HIRTypeInterner& types, const char* name, const HIRPathParams& params) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ImplRef& x);
+    friend std::ostream& operator<<(std::ostream& os, const ImplRef& x);
 };

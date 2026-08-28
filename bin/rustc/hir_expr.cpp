@@ -435,7 +435,7 @@ DEF_VISIT_H(HIRExprNodeClosure, node) {
     }
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRExprNodeClosure::AvuCache::Capture& x) {
+std::ostream& operator<<(std::ostream& os, const HIRExprNodeClosure::AvuCache::Capture& x) {
     os << "#" << x.rootSlot;
     for (const auto& n : x.fields) {
         if (n == RcString()) {
@@ -783,7 +783,7 @@ HIRExprNodeBlock::HIRExprNodeBlock(Span sp)
 {
 }
 
-HIRExprNodeBlock::HIRExprNodeBlock(Span sp, bool isUnsafe, ::std::vector<HIRExprNodeP> nodes, HIRExprNodeP valueNode)
+HIRExprNodeBlock::HIRExprNodeBlock(Span sp, bool isUnsafe, std::vector<HIRExprNodeP> nodes, HIRExprNodeP valueNode)
     : HIRExprNode(mv$(sp))
     , isUnsafe(isUnsafe)
     , nodes(mv$(nodes))
@@ -800,8 +800,8 @@ HIRExprNodeConstBlock::HIRExprNodeConstBlock(Span sp, HIRExprNodeP inner)
 HIRExprNodeAsm2::HIRExprNodeAsm2(Span sp, AsmOptions options, std::vector<AsmLine> lines, std::vector<Param> params)
     : HIRExprNode(mv$(sp))
     , options(options)
-    , lines(::std::move(lines))
-    , params(::std::move(params))
+    , lines(std::move(lines))
+    , params(std::move(params))
 {
 }
 
@@ -856,7 +856,7 @@ HIRExprNodeLet::HIRExprNodeLet(Span sp, HIRPattern pat, HIRTypeRef ty, HIRExprNo
 {
 }
 
-HIRExprNodeMatch::HIRExprNodeMatch(Span sp, HIRExprNodeP val, ::std::vector<Arm> arms, bool isLetElse)
+HIRExprNodeMatch::HIRExprNodeMatch(Span sp, HIRExprNodeP val, std::vector<Arm> arms, bool isLetElse)
     : HIRExprNode(mv$(sp))
     , value(mv$(val))
     , arms(mv$(arms))
@@ -1024,7 +1024,7 @@ HIRExprNodeEmplace::HIRExprNodeEmplace(Span sp, Type ty, HIRExprNodeP place, HIR
 {
 }
 
-HIRExprNodeTupleVariant::HIRExprNodeTupleVariant(Span sp, HIRGenericPath path, bool isStruct, ::std::vector<HIRExprNodeP> args)
+HIRExprNodeTupleVariant::HIRExprNodeTupleVariant(Span sp, HIRGenericPath path, bool isStruct, std::vector<HIRExprNodeP> args)
     : HIRExprNode(mv$(sp))
     , path(mv$(path))
     , isStruct(isStruct)
@@ -1032,21 +1032,21 @@ HIRExprNodeTupleVariant::HIRExprNodeTupleVariant(Span sp, HIRGenericPath path, b
 {
 }
 
-HIRExprNodeCallPath::HIRExprNodeCallPath(Span sp, HIRPath path, ::std::vector<HIRExprNodeP> args)
+HIRExprNodeCallPath::HIRExprNodeCallPath(Span sp, HIRPath path, std::vector<HIRExprNodeP> args)
     : HIRExprNode(mv$(sp))
     , path(mv$(path))
     , args(mv$(args))
 {
 }
 
-HIRExprNodeCallValue::HIRExprNodeCallValue(Span sp, HIRExprNodeP val, ::std::vector<HIRExprNodeP> args)
+HIRExprNodeCallValue::HIRExprNodeCallValue(Span sp, HIRExprNodeP val, std::vector<HIRExprNodeP> args)
     : HIRExprNode(mv$(sp))
     , value(mv$(val))
     , args(mv$(args))
 {
 }
 
-HIRExprNodeCallMethod::HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString methodName, HIRPathParams params, ::std::vector<HIRExprNodeP> args, RcString fallbackMethod)
+HIRExprNodeCallMethod::HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString methodName, HIRPathParams params, std::vector<HIRExprNodeP> args, RcString fallbackMethod)
     : HIRExprNode(mv$(sp))
     , value(mv$(val))
     , method(mv$(methodName))
@@ -1121,13 +1121,13 @@ HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, HIRTypeRef ty, bool 
 {
 }
 
-HIRExprNodeTuple::HIRExprNodeTuple(Span sp, ::std::vector<HIRExprNodeP> vals)
+HIRExprNodeTuple::HIRExprNodeTuple(Span sp, std::vector<HIRExprNodeP> vals)
     : HIRExprNode(mv$(sp))
     , vals(mv$(vals))
 {
 }
 
-HIRExprNodeArrayList::HIRExprNodeArrayList(Span sp, ::std::vector<HIRExprNodeP> vals)
+HIRExprNodeArrayList::HIRExprNodeArrayList(Span sp, std::vector<HIRExprNodeP> vals)
     : HIRExprNode(mv$(sp))
     , vals(mv$(vals))
 {
@@ -1149,9 +1149,9 @@ HIRExprNodeArraySized::HIRExprNodeArraySized(Span sp, HIRExprNodeP val, HIRArray
 
 HIRExprNodeClosure::HIRExprNodeClosure(Span sp, argsT args, HIRTypeRef rv, HIRExprNodeP code, bool isMove, bool isUse)
     : HIRExprNode(mv$(sp))
-    , args(::std::move(args))
-    , returnType(::std::move(rv))
-    , code(::std::move(code))
+    , args(std::move(args))
+    , returnType(std::move(rv))
+    , code(std::move(code))
     , isMove(isMove)
     , isUse(isUse)
 {
@@ -1159,12 +1159,12 @@ HIRExprNodeClosure::HIRExprNodeClosure(Span sp, argsT args, HIRTypeRef rv, HIREx
 
 HIRExprNodeGenerator::HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef resumeTy, HIRPattern resumePattern, bool hasResumePattern, HIRTypeRef yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody)
     : HIRExprNode(mv$(sp))
-    , returnType(::std::move(rv))
+    , returnType(std::move(rv))
     , resumeTy(resumeTy)
-    , resumePattern(::std::move(resumePattern))
+    , resumePattern(std::move(resumePattern))
     , hasResumePattern(hasResumePattern)
     , yieldTy(yieldTy)
-    , code(::std::move(code))
+    , code(std::move(code))
     , isMove(isMove)
     , isPinned(isPinned)
     , isCoroutineClosureBody(isCoroutineClosureBody)
@@ -1176,7 +1176,7 @@ HIRExprNodeGeneratorWrapper::HIRExprNodeGeneratorWrapper(Span sp, HIRTypeRef rv,
     , isFuture(isFuture)
     , returnType(rv)
     , yieldTy(yieldTy)
-    , code(::std::move(code))
+    , code(std::move(code))
 {
 }
 
@@ -1194,7 +1194,7 @@ HIRExprVisitorDef::HIRExprVisitorDef(HIRTypeInterner& types)
 {
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRValueUsage& x) {
+std::ostream& operator<<(std::ostream& os, const HIRValueUsage& x) {
     switch (x) {
         case HIRValueUsage::Unknown:
             os << "Unknown";

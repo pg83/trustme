@@ -28,8 +28,8 @@ class ASTCrate;
 class ASTModule;
 class ASTItem;
 
-using ::std::move;
-using ::std::unique_ptr;
+using std::move;
+using std::unique_ptr;
 
 struct ASTStructItem {
     ASTAttributeList attrs;
@@ -41,7 +41,7 @@ struct ASTStructItem {
 
     ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExpr defaultValue);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTStructItem& x) {
+    friend std::ostream& operator<<(std::ostream& os, const ASTStructItem& x) {
         return os << x.vis << x.name << ": " << x.type;
     }
 
@@ -55,7 +55,7 @@ struct ASTTupleItem {
 
     ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, ASTType* ty);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTTupleItem& x) {
+    friend std::ostream& operator<<(std::ostream& os, const ASTTupleItem& x) {
         return os << x.vis << x.type;
     }
 
@@ -173,7 +173,7 @@ public:
         Arg(ASTPattern pat, ASTType* ty, ASTAttributeList attrs = {});
     };
 
-    typedef ::std::vector<Arg> Arglist;
+    typedef std::vector<Arg> Arglist;
 
     struct Delegation {
         struct Target {
@@ -181,7 +181,7 @@ public:
             RcString name;
         };
 
-        ::std::vector<Target> targets;
+        std::vector<Target> targets;
         ASTExpr body;
     };
 
@@ -216,9 +216,9 @@ private:
     bool isVariadic_;
     bool hasNamedVariadic_;
 
-    ::std::string abi_;
+    std::string abi_;
     Flags flags;
-    ::std::unique_ptr<Delegation> delegation_;
+    std::unique_ptr<Delegation> delegation_;
 
 public:
     struct Markings {
@@ -247,19 +247,19 @@ public:
     ASTFunction(ASTFunction&&) = default;
     ASTFunction& operator=(ASTFunction&&) = default;
 
-    ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic, bool hasNamedVariadic = false);
+    ASTFunction(Span sp, std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic, bool hasNamedVariadic = false);
 
     ASTFunction(Span sp, ASTType* retType, Arglist args);
 
     void setCode(ASTExpr code) {
-        code_ = ::std::move(code);
+        code_ = std::move(code);
     }
 
     const Span& sp() const {
         return span_;
     }
 
-    const ::std::string& abi() const {
+    const std::string& abi() const {
         return abi_;
     };
 
@@ -332,11 +332,11 @@ public:
     }
 
     void setDelegation(Delegation delegation) {
-        delegation_ = ::std::make_unique<Delegation>(::std::move(delegation));
+        delegation_ = std::make_unique<Delegation>(std::move(delegation));
     }
 
-    ::std::unique_ptr<Delegation> takeDelegation() {
-        return ::std::move(delegation_);
+    std::unique_ptr<Delegation> takeDelegation() {
+        return std::move(delegation_);
     }
 
     ASTFunction clone() const;
@@ -344,8 +344,8 @@ public:
 
 class ASTTrait {
     ASTGenericParams params_;
-    ::std::vector<Spanned<TypeTraitPath>> supertraits_;
-    ::std::vector<Spanned<ASTLifetimeRef>> lifetimes_;
+    std::vector<Spanned<TypeTraitPath>> supertraits_;
+    std::vector<Spanned<ASTLifetimeRef>> lifetimes_;
 
     bool isMarker_;
     bool isUnsafe_;
@@ -353,7 +353,7 @@ class ASTTrait {
 
 public:
     ASTTrait();
-    ASTTrait(ASTGenericParams params, ::std::vector<Spanned<TypeTraitPath>> supertraits, ::std::vector<Spanned<ASTLifetimeRef>> lifetimes);
+    ASTTrait(ASTGenericParams params, std::vector<Spanned<TypeTraitPath>> supertraits, std::vector<Spanned<ASTLifetimeRef>> lifetimes);
     ~ASTTrait();
     ASTTrait(ASTTrait&&);
     ASTTrait& operator=(ASTTrait&&);
@@ -366,19 +366,19 @@ public:
         return params_;
     }
 
-    const ::std::vector<Spanned<TypeTraitPath>>& supertraits() const {
+    const std::vector<Spanned<TypeTraitPath>>& supertraits() const {
         return supertraits_;
     }
 
-    ::std::vector<Spanned<TypeTraitPath>>& supertraits() {
+    std::vector<Spanned<TypeTraitPath>>& supertraits() {
         return supertraits_;
     }
 
-    const ::std::vector<Spanned<ASTLifetimeRef>>& lifetimes() const {
+    const std::vector<Spanned<ASTLifetimeRef>>& lifetimes() const {
         return lifetimes_;
     }
 
-    ::std::vector<Spanned<ASTLifetimeRef>>& lifetimes() {
+    std::vector<Spanned<ASTLifetimeRef>>& lifetimes() {
         return lifetimes_;
     }
 
@@ -432,16 +432,16 @@ struct ASTEnumVariant {
 
     ASTEnumVariant(ASTAttributeList attrs, RcString name);
 
-    ASTEnumVariant(ASTAttributeList attrs, RcString name, ::std::vector<ASTTupleItem> subTypes);
+    ASTEnumVariant(ASTAttributeList attrs, RcString name, std::vector<ASTTupleItem> subTypes);
 
-    ASTEnumVariant(ASTAttributeList attrs, RcString name, ::std::vector<ASTStructItem> fields);
+    ASTEnumVariant(ASTAttributeList attrs, RcString name, std::vector<ASTStructItem> fields);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTEnumVariant& x);
+    friend std::ostream& operator<<(std::ostream& os, const ASTEnumVariant& x);
 };
 
 class ASTEnum {
     ASTGenericParams params_;
-    ::std::vector<ASTEnumVariant> variants_;
+    std::vector<ASTEnumVariant> variants_;
 
 public:
     struct Markings {
@@ -466,7 +466,7 @@ public:
 
     ASTEnum();
 
-    ASTEnum(ASTGenericParams params, ::std::vector<ASTEnumVariant> variants);
+    ASTEnum(ASTGenericParams params, std::vector<ASTEnumVariant> variants);
 
     const ASTGenericParams& params() const {
         return params_;
@@ -476,11 +476,11 @@ public:
         return params_;
     }
 
-    const ::std::vector<ASTEnumVariant>& variants() const {
+    const std::vector<ASTEnumVariant>& variants() const {
         return variants_;
     }
 
-    ::std::vector<ASTEnumVariant>& variants() {
+    std::vector<ASTEnumVariant>& variants() {
         return variants_;
     }
 
@@ -516,9 +516,9 @@ public:
 
     ASTStruct(ASTGenericParams params);
 
-    ASTStruct(ASTGenericParams params, ::std::vector<ASTStructItem> fields);
+    ASTStruct(ASTGenericParams params, std::vector<ASTStructItem> fields);
 
-    ASTStruct(ASTGenericParams params, ::std::vector<ASTTupleItem> fields);
+    ASTStruct(ASTGenericParams params, std::vector<ASTTupleItem> fields);
 
     const ASTGenericParams& params() const {
         return params_;
@@ -534,7 +534,7 @@ public:
 class ASTUnion {
 public:
     ASTGenericParams params_;
-    ::std::vector<ASTStructItem> variants;
+    std::vector<ASTStructItem> variants;
 
     struct Markings {
         enum class Repr {
@@ -548,7 +548,7 @@ public:
         u64 maxFieldAlign = 0;
     } markings;
 
-    ASTUnion(ASTGenericParams params, ::std::vector<ASTStructItem> fields);
+    ASTUnion(ASTGenericParams params, std::vector<ASTStructItem> fields);
 
     const ASTGenericParams& params() const {
         return params_;
@@ -614,7 +614,7 @@ public:
         return type_;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTImplDef& impl);
+    friend std::ostream& operator<<(std::ostream& os, const ASTImplDef& impl);
 };
 
 class ASTImpl {
@@ -627,13 +627,13 @@ public:
         RcString name;
         RcString sourceName;
 
-        ::std::unique_ptr<ASTItem> data;
+        std::unique_ptr<ASTItem> data;
     };
 
 private:
     ASTImplDef def_;
 
-    ::std::vector<ImplItem> items_;
+    std::vector<ImplItem> items_;
 
 public:
     ASTImpl(ASTImpl&&) /*noexcept*/;
@@ -654,17 +654,17 @@ public:
         return def_;
     }
 
-    const ::std::vector<ImplItem>& items() const {
+    const std::vector<ImplItem>& items() const {
         return items_;
     }
 
-    ::std::vector<ImplItem>& items() {
+    std::vector<ImplItem>& items() {
         return items_;
     }
 
     bool hasNamedItem(const RcString& name) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTImpl& impl);
+    friend std::ostream& operator<<(std::ostream& os, const ASTImpl& impl);
 
 private:
 };
@@ -679,17 +679,17 @@ struct ASTUseItem {
         RcString name;
 
         bool isSelf = false;
-        friend ::std::ostream& operator<<(::std::ostream& os, const ASTUseItem::Ent& x);
+        friend std::ostream& operator<<(std::ostream& os, const ASTUseItem::Ent& x);
     };
 
-    ::std::vector<Ent> entries;
+    std::vector<Ent> entries;
 
     ASTUseItem clone() const;
 };
 
 class ASTExternBlock {
-    ::std::string abi_;
-    ::std::vector<ASTNamed<ASTItem>> items_;
+    std::string abi_;
+    std::vector<ASTNamed<ASTItem>> items_;
 
 public:
     struct Link {
@@ -698,22 +698,22 @@ public:
 
     std::vector<Link> libraries;
 
-    ASTExternBlock(::std::string abi);
+    ASTExternBlock(std::string abi);
     ~ASTExternBlock();
     ASTExternBlock(ASTExternBlock&&);
     ASTExternBlock& operator=(ASTExternBlock&&);
 
-    const ::std::string& abi() const {
+    const std::string& abi() const {
         return abi_;
     }
 
     void addItem(ASTNamed<ASTItem> namedItem);
 
-    ::std::vector<ASTNamed<ASTItem>>& items() {
+    std::vector<ASTNamed<ASTItem>>& items() {
         return items_;
     }
 
-    const ::std::vector<ASTNamed<ASTItem>>& items() const {
+    const std::vector<ASTNamed<ASTItem>>& items() const {
         return items_;
     }
 
@@ -724,8 +724,8 @@ class ASTGlobalAsm {
 public:
     using Operand = ASTGlobalAsmOperand;
 
-    ::std::vector<AsmLine> lines;
-    ::std::vector<Operand> operands;
+    std::vector<AsmLine> lines;
+    std::vector<Operand> operands;
     AsmOptions options;
 
     ASTGlobalAsm clone() const;
@@ -735,12 +735,12 @@ class ASTModule {
     ASTAbsolutePath myPath;
 
 public:
-    ::std::vector<std::unique_ptr<ASTNamed<ASTItem>>> items;
+    std::vector<std::unique_ptr<ASTNamed<ASTItem>>> items;
 
 private:
-    ::std::vector<::std::shared_ptr<ASTModule>> anonModules;
+    std::vector<std::shared_ptr<ASTModule>> anonModules;
 
-    ::std::vector<ASTNamed<MacroRulesPtr>> macros_;
+    std::vector<ASTNamed<MacroRulesPtr>> macros_;
 
 public:
     struct FileInfo {
@@ -750,9 +750,9 @@ public:
 
         bool inModBlock = false;
 
-        ::std::string path = "!";
+        std::string path = "!";
 
-        ::std::string dir = "";
+        std::string dir = "";
     };
 
     FileInfo fileInfo;
@@ -779,12 +779,12 @@ public:
 
     // TODO: Document difference between namespace and Type
     // TODO: These should use IndexEnt<AST::PathBinding<AST::PathBinding_*>>` instead
-    ::std::unordered_map<RcString, IndexEnt> namespaceItems;
-    ::std::unordered_map<RcString, IndexEnt> typeItems;
-    ::std::unordered_map<RcString, IndexEnt> valueItems;
-    ::std::unordered_map<RcString, IndexEnt> macroItems;
+    std::unordered_map<RcString, IndexEnt> namespaceItems;
+    std::unordered_map<RcString, IndexEnt> typeItems;
+    std::unordered_map<RcString, IndexEnt> valueItems;
+    std::unordered_map<RcString, IndexEnt> macroItems;
 
-    ::std::vector<ASTAbsolutePath> traits;
+    std::vector<ASTAbsolutePath> traits;
 
     struct MacroImport {
         bool isPub;
@@ -797,7 +797,7 @@ public:
         }
     };
 
-    ::std::vector<MacroImport> macroImports;
+    std::vector<MacroImport> macroImports;
 
     struct Import {
         bool isPub;
@@ -805,7 +805,7 @@ public:
         ASTPath path;
     };
 
-    ::std::vector<Import> itemImports;
+    std::vector<Import> itemImports;
 
 public:
     ASTModule();
@@ -818,7 +818,7 @@ public:
         return myPath.nodes.size() > 0 && myPath.nodes.back().c_str()[0] == '#';
     }
 
-    ::std::shared_ptr<ASTModule> addAnon();
+    std::shared_ptr<ASTModule> addAnon();
 
     void addItem(ASTNamed<ASTItem> item);
     void addItem(Span sp, ASTVisibility vis, RcString name, ASTItem it, ASTAttributeList attrs);
@@ -831,11 +831,11 @@ public:
         return myPath;
     }
 
-    ::std::vector<::std::shared_ptr<ASTModule>>& anonMods() {
+    std::vector<std::shared_ptr<ASTModule>>& anonMods() {
         return anonModules;
     }
 
-    const ::std::vector<::std::shared_ptr<ASTModule>>& anonMods() const {
+    const std::vector<std::shared_ptr<ASTModule>>& anonMods() const {
         return anonModules;
     }
 

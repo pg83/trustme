@@ -20,8 +20,8 @@ public:
     };
 
 private:
-    ::std::shared_ptr<ASTPath> inPath_;
-    ::std::shared_ptr<ASTAbsolutePath> visPath_;
+    std::shared_ptr<ASTPath> inPath_;
+    std::shared_ptr<ASTAbsolutePath> visPath_;
     Ty ty_;
 
     ASTVisibility();
@@ -33,8 +33,8 @@ public:
     static ASTVisibility makeRestricted(Ty ty, ASTAbsolutePath p);
     static ASTVisibility makeRestricted(ASTAbsolutePath p, ASTPath inPath);
 
-    void fmt(::std::ostream& os) const;
-    friend std::ostream& operator<<(::std::ostream& os, const ASTVisibility& x);
+    void fmt(std::ostream& os) const;
+    friend std::ostream& operator<<(std::ostream& os, const ASTVisibility& x);
 
     Ty ty() const {
         return ty_;
@@ -77,14 +77,14 @@ struct ASTNamed {
 
     ASTNamed(Span sp, ASTAttributeList attrs, ASTVisibility vis, RcString name, T data)
         : span(sp)
-        , attrs(::std::move(attrs))
-        , vis(::std::move(vis))
-        , name(::std::move(name))
+        , attrs(std::move(attrs))
+        , vis(std::move(vis))
+        , name(std::move(name))
         , cachedCfg(ASTCachedCfg::Unknown)
-        , data(::std::move(data))
+        , data(std::move(data))
     {
     }
 };
 
 template <typename T>
-using ASTNamedList = ::std::vector<ASTNamed<T>>;
+using ASTNamedList = std::vector<ASTNamed<T>>;

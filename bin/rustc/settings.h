@@ -97,19 +97,19 @@ struct Settings {
         None,
     } fmtDebug = FmtDebug::Full;
 
-    ::std::vector<::std::string> crateLoadDirs;
+    std::vector<std::string> crateLoadDirs;
     stl::IntMap<CrateOverride> crateOverrides;
-    ::std::map<RcString, RcString> implicitCrates;
+    std::map<RcString, RcString> implicitCrates;
 
     RcString coreCrate;
     RcString crateName;
 
     CfgState* cfg = nullptr;
 
-    ::std::map<::std::string, CfgLintLevel> lintLevels;
-    ::std::optional<CfgLintLevel> lintCap;
+    std::map<std::string, CfgLintLevel> lintLevels;
+    std::optional<CfgLintLevel> lintCap;
 
-    static bool lintGroupContains(const ::std::string& group, const ::std::string& name) {
+    static bool lintGroupContains(const std::string& group, const std::string& name) {
         if (group == "warnings") {
             return true;
         }
@@ -119,7 +119,7 @@ struct Settings {
         return false;
     }
 
-    CfgLintLevel lintLevel(const ::std::string& name, CfgLintLevel builtin) const {
+    CfgLintLevel lintLevel(const std::string& name, CfgLintLevel builtin) const {
         auto it = lintLevels.find(name);
         auto level = (it != lintLevels.end() ? it->second : builtin);
         if (lintCap && level > *lintCap && level != CfgLintLevel::ForceWarn) {

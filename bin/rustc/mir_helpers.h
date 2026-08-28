@@ -23,10 +23,10 @@ class MIRParam;
 
 typedef unsigned int MIRBasicBlockId;
 
-struct CheckFailure: public ::std::exception {};
+struct CheckFailure: public std::exception {};
 
 struct MIRPathCallback {
-    virtual void write(::std::ostream& os) const = 0;
+    virtual void write(std::ostream& os) const = 0;
 };
 
 template <typename F>
@@ -38,7 +38,7 @@ struct MIRPathCb final: MIRPathCallback {
     {
     }
 
-    void write(::std::ostream& os) const override {
+    void write(std::ostream& os) const override {
         f(os);
     }
 };
@@ -68,7 +68,7 @@ struct MIRPathCb final: MIRPathCallback {
 
 class MIRTypeResolve {
 public:
-    typedef ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> argsT;
+    typedef std::vector<std::pair<HIRPattern, HIRTypeRef>> argsT;
     using TypeNameString = std::string;
 
 private:
@@ -88,7 +88,7 @@ public:
     const MIRFunction& fcn;
 
     const HIRTypeData* monomorphedRettype;
-    const ::std::vector<HIRTypeRef>* monomorphedLocals;
+    const std::vector<HIRTypeRef>* monomorphedLocals;
 
 private:
     const HIRSimplePath* langBox_ = nullptr;
@@ -120,7 +120,7 @@ public:
 
     unsigned int getCurStmtOfs() const;
 
-    void fmtPos(::std::ostream& os, bool includePath = false) const;
+    void fmtPos(std::ostream& os, bool includePath = false) const;
 
     template <typename F>
     void printBug(F f) const {
@@ -157,18 +157,18 @@ public:
     bool lvalueIsCopy(const MIRLValue& val) const;
     const HIRTypeData* isTypeOwnedBox(const HIRTypeData* ty) const;
 
-    size_t intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vector<MIRParam>& params) const;
+    size_t intrinsicOffsetOf(const HIRTypeData* ty, const std::vector<MIRParam>& params) const;
 
     TypeNameString intrinsicTypeName(const HIRTypeData* ty) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const MIRTypeResolve& x);
+    friend std::ostream& operator<<(std::ostream& os, const MIRTypeResolve& x);
 };
 
 class MIRValueLifetime {
-    ::std::vector<bool> statements;
+    std::vector<bool> statements;
 
 public:
-    MIRValueLifetime(::std::vector<bool> stmts);
+    MIRValueLifetime(std::vector<bool> stmts);
 
     bool validAt(size_t ofs) const {
         return statements.at(ofs);
@@ -182,8 +182,8 @@ public:
 };
 
 struct MIRValueLifetimes {
-    ::std::vector<size_t> blockOffsets;
-    ::std::vector<MIRValueLifetime> slots;
+    std::vector<size_t> blockOffsets;
+    std::vector<MIRValueLifetime> slots;
 
     bool slotValid(unsigned idx, unsigned bbIdx, unsigned stmtIdx) const {
         return slots.at(idx).validAt(blockOffsets[bbIdx] + stmtIdx);
@@ -277,7 +277,7 @@ public:
 template <template <typename> class Dec>
 class MIRVisitorBase {
 public:
-    using TypeVisitArg = ::std::conditional_t<::std::is_const_v<typename Dec<int>::Type>, HIRTypeRef, HIRTypeRef&>;
+    using TypeVisitArg = std::conditional_t<std::is_const_v<typename Dec<int>::Type>, HIRTypeRef, HIRTypeRef&>;
 
     virtual void visitType(TypeVisitArg t) {
     }
@@ -718,4 +718,4 @@ public:
     virtual bool visitLvalue(MIRLValue& lv, MIRValUsage u) override;
 };
 
-extern MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const ::std::vector<bool>* mask = nullptr);
+extern MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const std::vector<bool>* mask = nullptr);

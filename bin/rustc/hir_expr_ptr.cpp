@@ -23,7 +23,7 @@ HIRExprNodeP HIRExprPtr::takeNode() {
 }
 
 HIRExprStatePtr::HIRExprStatePtr(ObjPool* pool, HIRExprState x)
-    : ptr(pool->make<HIRExprState>(::std::move(x)))
+    : ptr(pool->make<HIRExprState>(std::move(x)))
 {
 }
 
@@ -92,7 +92,7 @@ MIRFunction* HIRExprPtr::getExtMirMut() {
 
 void HIRExprPtr::setMir(MIRFunctionPointer mir) {
     assert(!this->mir);
-    this->mir = ::std::move(mir);
+    this->mir = std::move(mir);
 }
 
 HIRExprNodeP::HIRExprNodeP()

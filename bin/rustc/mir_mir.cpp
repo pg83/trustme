@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-::std::ostream& operator<<(::std::ostream& os, const MIRConstant& v) {
+std::ostream& operator<<(std::ostream& os, const MIRConstant& v) {
     switch (v.tag()) {
         case MIRConstant::TAG_Int: {
             auto& e = v.as_Int();
@@ -35,7 +35,7 @@
         case MIRConstant::TAG_Bytes: {
             auto& e = v.as_Bytes();
             os << "b\"";
-            os << ::std::hex;
+            os << std::hex;
             for (auto v : e) {
                 if (v == '\\' || v == '"') {
                     os << "\\" << v;
@@ -48,7 +48,7 @@
                 }
             }
             os << "\"";
-            os << ::std::dec;
+            os << std::dec;
             break;
         }
         case MIRConstant::TAG_StaticString: {
@@ -178,19 +178,19 @@
     UNREACHABLE();
 }
 
-void MIRLValue::RefCommon::fmt(::std::ostream& os) const {
+void MIRLValue::RefCommon::fmt(std::ostream& os) const {
     os << lv_->root;
     for (size_t i = 0; i < wrapperCount_; i++) {
         os << lv_->wrappers.at(i);
     }
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MIRLValue& x) {
+std::ostream& operator<<(std::ostream& os, const MIRLValue& x) {
     MIRLValue::CRef(x).fmt(os);
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MIRLValue::Storage& r) {
+std::ostream& operator<<(std::ostream& os, const MIRLValue::Storage& r) {
     switch (r.tag()) {
         case MIRLValue::Storage::TAG_Return: {
             os << "retval";
@@ -215,7 +215,7 @@ void MIRLValue::RefCommon::fmt(::std::ostream& os) const {
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MIRLValue::Wrapper& w) {
+std::ostream& operator<<(std::ostream& os, const MIRLValue::Wrapper& w) {
     switch (w.tag()) {
         case MIRLValue::Wrapper::TAG_Field: {
             decltype(w.as_Field()) e = w.as_Field();
@@ -270,7 +270,7 @@ Ordering MIRLValue::RefCommon::ord(const MIRLValue::RefCommon& x) const {
     if (rv != OrdEqual) {
         return rv;
     }
-    for (size_t i = 0; i < ::std::min(wrapperCount_, x.wrapperCount_); i++) {
+    for (size_t i = 0; i < std::min(wrapperCount_, x.wrapperCount_); i++) {
         rv = lv_->wrappers[i].ord(x.lv_->wrappers[i]);
         if (rv != OrdEqual) {
             return rv;
@@ -279,7 +279,7 @@ Ordering MIRLValue::RefCommon::ord(const MIRLValue::RefCommon& x) const {
     return (rv = ::ord(wrapperCount_, x.wrapperCount_));
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MIRParam& x) {
+std::ostream& operator<<(std::ostream& os, const MIRParam& x) {
     switch (x.tag()) {
         case MIRParam::TAG_LValue: {
             auto& e = x.as_LValue();
@@ -324,7 +324,7 @@ bool MIRParam::operator==(const MIRParam& x) const {
     UNREACHABLE();
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MIRRValue& x) {
+std::ostream& operator<<(std::ostream& os, const MIRRValue& x) {
     switch (x.tag()) {
         case MIRRValue::TAG_Use: {
             auto& e = x.as_Use();
@@ -626,7 +626,7 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
     UNREACHABLE();
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MIRTerminator& x) {
+std::ostream& operator<<(std::ostream& os, const MIRTerminator& x) {
     auto fmtUnwind = [&os](const MIRUnwindAction& action) {
         switch (action.tag()) {
             case MIRUnwindAction::TAG_Continue: {
@@ -1081,7 +1081,7 @@ bool operator==(const MIRAsmParam& a, const MIRAsmParam& b) {
     return true;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MIRStatement& x) {
+std::ostream& operator<<(std::ostream& os, const MIRStatement& x) {
     switch (x.tag()) {
         case MIRStatement::TAG_Assign: {
             auto& e = x.as_Assign();
@@ -1552,8 +1552,8 @@ HIRPathParams MIRCloner::monomorph(const HIRPathParams& ty) const {
     return rv;
 }
 
-::std::vector<MIRAsmParam> MIRCloner::cloneAsmParams(const ::std::vector<MIRAsmParam>& params) const {
-    ::std::vector<MIRAsmParam> rv;
+std::vector<MIRAsmParam> MIRCloner::cloneAsmParams(const std::vector<MIRAsmParam>& params) const {
+    std::vector<MIRAsmParam> rv;
     for (const auto& p : params) {
         switch (p.tag()) {
             case MIRAsmParam::TAG_Const: {
@@ -1647,7 +1647,7 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
         }
         case MIRTerminator::TAG_Switch: {
             auto& se = src.as_Switch();
-            ::std::vector<MIRBasicBlockId> arms;
+            std::vector<MIRBasicBlockId> arms;
             arms.reserve(se.targets.size());
             for (const auto& bbi : se.targets) {
                 arms.push_back(mapBbIdx(bbi));
@@ -1656,7 +1656,7 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
         }
         case MIRTerminator::TAG_SwitchValue: {
             auto& se = src.as_SwitchValue();
-            ::std::vector<MIRBasicBlockId> arms;
+            std::vector<MIRBasicBlockId> arms;
             arms.reserve(se.targets.size());
             for (const auto& bbi : se.targets) {
                 arms.push_back(mapBbIdx(bbi));
@@ -1759,17 +1759,17 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
     UNREACHABLE();
 }
 
-::std::vector<::std::pair<::std::string, MIRLValue>> MIRCloner::cloneNameLvalVec(const ::std::vector<::std::pair<::std::string, MIRLValue>>& src) const {
-    ::std::vector<::std::pair<::std::string, MIRLValue>> rv;
+std::vector<std::pair<std::string, MIRLValue>> MIRCloner::cloneNameLvalVec(const std::vector<std::pair<std::string, MIRLValue>>& src) const {
+    std::vector<std::pair<std::string, MIRLValue>> rv;
     rv.reserve(src.size());
     for (const auto& e : src) {
-        rv.push_back(::std::make_pair(e.first, this->cloneLval(e.second)));
+        rv.push_back(std::make_pair(e.first, this->cloneLval(e.second)));
     }
     return rv;
 }
 
-::std::vector<MIRLValue> MIRCloner::cloneLvalVec(const ::std::vector<MIRLValue>& src) const {
-    ::std::vector<MIRLValue> rv;
+std::vector<MIRLValue> MIRCloner::cloneLvalVec(const std::vector<MIRLValue>& src) const {
+    std::vector<MIRLValue> rv;
     rv.reserve(src.size());
     for (const auto& lv : src) {
         rv.push_back(this->cloneLval(lv));
@@ -1777,8 +1777,8 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
     return rv;
 }
 
-::std::vector<MIRParam> MIRCloner::cloneParamVec(const ::std::vector<MIRParam>& src) const {
-    ::std::vector<MIRParam> rv;
+std::vector<MIRParam> MIRCloner::cloneParamVec(const std::vector<MIRParam>& src) const {
+    std::vector<MIRParam> rv;
     rv.reserve(src.size());
     for (const auto& lv : src) {
         rv.push_back(this->cloneParam(lv));
@@ -2041,7 +2041,7 @@ MIRLValue::Storage MIRLValue::Storage::newLocal(unsigned idx) {
 }
 
 MIRLValue::Storage MIRLValue::Storage::newStatic(HIRPath p) {
-    HIRPath* ptr = new HIRPath(::std::move(p));
+    HIRPath* ptr = new HIRPath(std::move(p));
     return Storage(reinterpret_cast<uintptr_t>(ptr) | 2);
 }
 
@@ -2136,9 +2136,9 @@ MIRLValue::MIRLValue()
 {
 }
 
-MIRLValue::MIRLValue(Storage root, ::std::vector<Wrapper> wrappers)
-    : root(::std::move(root))
-    , wrappers(::std::move(wrappers))
+MIRLValue::MIRLValue(Storage root, std::vector<Wrapper> wrappers)
+    : root(std::move(root))
+    , wrappers(std::move(wrappers))
 {
 }
 
@@ -2182,9 +2182,9 @@ void MIRLValue::incDowncast() {
     wrappers.back().incDowncast();
 }
 
-MIRLValue MIRLValue::cloneWrapped(::std::vector<Wrapper> wrappers) const {
+MIRLValue MIRLValue::cloneWrapped(std::vector<Wrapper> wrappers) const {
     if (this->wrappers.empty()) {
-        return MIRLValue(root.clone(), ::std::move(wrappers));
+        return MIRLValue(root.clone(), std::move(wrappers));
     } else {
         return cloneWrapped(wrappers.begin(), wrappers.end());
     }
@@ -2193,7 +2193,7 @@ MIRLValue MIRLValue::cloneWrapped(::std::vector<Wrapper> wrappers) const {
 MIRLValue MIRLValue::cloneUnwrapped(unsigned count) const {
     assert(count > 0);
     assert(count <= wrappers.size());
-    return MIRLValue(root.clone(), ::std::vector<Wrapper>(wrappers.begin(), wrappers.end() - count));
+    return MIRLValue(root.clone(), std::vector<Wrapper>(wrappers.begin(), wrappers.end() - count));
 }
 
 bool MIRLValue::isEitherSubset(const MIRLValue& other) const {
@@ -2201,9 +2201,9 @@ bool MIRLValue::isEitherSubset(const MIRLValue& other) const {
         return false;
     }
     if (other.wrappers.size() > wrappers.size()) {
-        return ::std::equal(wrappers.begin(), wrappers.end(), other.wrappers.begin());
+        return std::equal(wrappers.begin(), wrappers.end(), other.wrappers.begin());
     } else {
-        return ::std::equal(other.wrappers.begin(), other.wrappers.end(), wrappers.begin());
+        return std::equal(other.wrappers.begin(), other.wrappers.end(), wrappers.begin());
     }
 }
 
@@ -2322,17 +2322,17 @@ MIRLValue::MRef MIRLValue::MRef::innerRef() {
 void MIRLValue::MRef::replace(MIRLValue x) {
     auto& mutLv = const_cast<MIRLValue&>(*lv_);
     if (wrapperCount_ == 0 && x.wrappers.empty()) {
-        mutLv.root = ::std::move(x.root);
+        mutLv.root = std::move(x.root);
         return;
     }
     if (wrapperCount_ < lv_->wrappers.size()) {
         x.wrappers.insert(x.wrappers.end(), lv_->wrappers.begin() + wrapperCount_, lv_->wrappers.end());
     }
-    mutLv = ::std::move(x);
+    mutLv = std::move(x);
 }
 
-ItemAddress::ItemAddress(::std::unique_ptr<HIRPath> p, U128 offset)
-    : p(::std::move(p))
+ItemAddress::ItemAddress(std::unique_ptr<HIRPath> p, U128 offset)
+    : p(std::move(p))
     , offset(offset)
 {
 }
@@ -2355,12 +2355,12 @@ MIREnumCachePtr& MIREnumCachePtr::operator=(MIREnumCachePtr&& x) {
     return *this;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MIRLValue::CRef& x) {
+std::ostream& operator<<(std::ostream& os, const MIRLValue::CRef& x) {
     x.fmt(os);
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MIRLValue::MRef& x) {
+std::ostream& operator<<(std::ostream& os, const MIRLValue::MRef& x) {
     x.fmt(os);
     return os;
 }

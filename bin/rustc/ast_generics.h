@@ -43,7 +43,7 @@ public:
         return defaultValue_;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTTypeParam& tp);
+    friend std::ostream& operator<<(std::ostream& os, const ASTTypeParam& tp);
 };
 
 class ASTLifetimeParam {
@@ -70,7 +70,7 @@ public:
         return name_;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTLifetimeParam& p);
+    friend std::ostream& operator<<(std::ostream& os, const ASTLifetimeParam& p);
 };
 
 class ASTValueParam {
@@ -116,19 +116,19 @@ public:
         return defaultValue_;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTValueParam& p);
+    friend std::ostream& operator<<(std::ostream& os, const ASTValueParam& p);
 };
 
 #include "ast_generics_tu.h"
 
-::std::ostream& operator<<(::std::ostream& os, const ASTGenericBound& x);
+std::ostream& operator<<(std::ostream& os, const ASTGenericBound& x);
 
 class ASTGenericParams {
 public:
-    ::std::vector<GenericParam> params;
-    ::std::vector<ASTGenericBound> bounds;
+    std::vector<GenericParam> params;
+    std::vector<ASTGenericBound> bounds;
 
-    ::std::vector<ASTType*> bareBoundTypes;
+    std::vector<ASTType*> bareBoundTypes;
 
     ASTGenericParams();
 
@@ -141,19 +141,19 @@ public:
     void addParam(GenericParam gp, size_t boundsStart, size_t boundsEnd);
 
     void addLftParam(ASTLifetimeParam lft) {
-        addParam(::std::move(lft), SIZE_MAX, SIZE_MAX);
+        addParam(std::move(lft), SIZE_MAX, SIZE_MAX);
     }
 
     void addLftParam(ASTLifetimeParam lft, size_t boundsStart, size_t boundsEnd) {
-        addParam(::std::move(lft), boundsStart, boundsEnd);
+        addParam(std::move(lft), boundsStart, boundsEnd);
     }
 
     void addTyParam(ASTTypeParam param) {
-        addParam(::std::move(param), SIZE_MAX, SIZE_MAX);
+        addParam(std::move(param), SIZE_MAX, SIZE_MAX);
     }
 
     void addTyParam(ASTTypeParam param, size_t boundsStart, size_t boundsEnd) {
-        addParam(::std::move(param), boundsStart, boundsEnd);
+        addParam(std::move(param), boundsStart, boundsEnd);
     }
 
     void addValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* ty, ASTExpr val) {
@@ -161,10 +161,10 @@ public:
     }
 
     void addBound(ASTGenericBound bound) {
-        bounds.push_back(::std::move(bound));
+        bounds.push_back(std::move(bound));
     }
 
     int findName(const char* name) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTGenericParams& tp);
+    friend std::ostream& operator<<(std::ostream& os, const ASTGenericParams& tp);
 };

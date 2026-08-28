@@ -26,14 +26,14 @@ struct ASTAttributeIdentCb final: ASTAttributeIdentCallback {
 };
 
 class ASTAttribute;
-::std::ostream& operator<<(::std::ostream& os, const ASTAttribute& x);
+std::ostream& operator<<(std::ostream& os, const ASTAttribute& x);
 
 class ASTAttributeList {
 public:
-    ::std::vector<ASTAttribute> items;
+    std::vector<ASTAttribute> items;
 
     ASTAttributeList();
-    ASTAttributeList(::std::vector<ASTAttribute> items);
+    ASTAttributeList(std::vector<ASTAttribute> items);
     ~ASTAttributeList();
 
     ASTAttributeList(ASTAttributeList&&);
@@ -56,12 +56,12 @@ public:
         return get(name) != 0;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTAttributeList& x);
+    friend std::ostream& operator<<(std::ostream& os, const ASTAttributeList& x);
 };
 
 struct ASTAttributeName {
     bool hasLeading = false;
-    ::std::vector<RcString> elems;
+    std::vector<RcString> elems;
 
     bool isTrivial() const {
         return elems.size() == 1;
@@ -141,7 +141,7 @@ public:
         parseParenIdentListCb(cb);
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTAttribute& x);
+    friend std::ostream& operator<<(std::ostream& os, const ASTAttribute& x);
 };
 
 #include "ast_attrs_tu.h"

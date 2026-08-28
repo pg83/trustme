@@ -7,7 +7,7 @@ generate(
     variants=[
         v("None"),
         v("ValueUnexpanded", "ASTExprNodeP", copy=False),
-        v("String", fields=[("::std::string", "val")]),
-        v("List", fields=[("::std::vector<ASTAttribute>", "subItems")]),
+        v("String", fields=[("std::string", "val")]),
+        v("List", fields=[("std::vector<ASTAttribute>", "subItems")]),
     ],
 )

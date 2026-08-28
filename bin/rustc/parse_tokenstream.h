@@ -28,10 +28,10 @@ public:
 
     bool noExpandMacros = false;
 
-    ::std::vector<RcString> erasedLifetimes;
+    std::vector<RcString> erasedLifetimes;
 
     bool lifetimeIsErased(const RcString& name) const {
-        return ::std::find(erasedLifetimes.begin(), erasedLifetimes.end(), name) != erasedLifetimes.end();
+        return std::find(erasedLifetimes.begin(), erasedLifetimes.end(), name) != erasedLifetimes.end();
     }
 
     const ASTCrate* crate = nullptr; // TODO: Remove this (needed for MetaItem)
@@ -41,7 +41,7 @@ public:
 
     ASTModule& getCurrentMod();
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ParseState& ps);
+    friend std::ostream& operator<<(std::ostream& os, const ParseState& ps);
 };
 
 class TokenStream {
@@ -58,7 +58,7 @@ class TokenStream {
         Ident::Hygiene hygiene;
     };
 
-    ::std::vector<LookaheadEnt> lookahead_;
+    std::vector<LookaheadEnt> lookahead_;
     ParseState parseState_;
     bool macroExpansionPlaceholder_ = false;
 

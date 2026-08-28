@@ -23,7 +23,7 @@
 
 using namespace stl;
 
-::std::ostream& operator<<(::std::ostream& os, const HIRPublicity& x) {
+std::ostream& operator<<(std::ostream& os, const HIRPublicity& x) {
     switch (x.kind) {
         case HIRPublicity::Kind::Global:
             os << "pub";
@@ -38,7 +38,7 @@ using namespace stl;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRConstGeneric& x) {
+std::ostream& operator<<(std::ostream& os, const HIRConstGeneric& x) {
     switch (x.tag()) {
         case HIRConstGeneric::TAG_Infer: {
             auto& e = x.as_Infer();
@@ -141,7 +141,7 @@ Ordering HIRConstGeneric::ord(const HIRConstGeneric& x) const {
     return OrdEqual;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRConstGenericUnevaluated& x) {
+std::ostream& operator<<(std::ostream& os, const HIRConstGenericUnevaluated& x) {
     x.fmt(os);
     return os;
 }
@@ -317,7 +317,7 @@ Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) co
     return OrdEqual;
 }
 
-void HIRConstGenericUnevaluated::fmt(::std::ostream& os) const {
+void HIRConstGenericUnevaluated::fmt(std::ostream& os) const {
     os << "{";
     if (this->selfType) {
         os << "S=" << this->selfType;
@@ -335,11 +335,11 @@ void HIRConstGenericUnevaluated::fmt(::std::ostream& os) const {
             os << " }";
         }
     } else {
-        struct NoNewline: public ::std::ostream, ::std::streambuf {
-            ::std::ostream& inner;
+        struct NoNewline: public std::ostream, std::streambuf {
+            std::ostream& inner;
 
-            NoNewline(::std::ostream& inner)
-                : ::std::ostream(this)
+            NoNewline(std::ostream& inner)
+                : std::ostream(this)
                 , inner(inner)
             {
             }
@@ -361,7 +361,7 @@ void HIRConstGenericUnevaluated::fmt(::std::ostream& os) const {
     }
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRStruct::Repr& x) {
+std::ostream& operator<<(std::ostream& os, const HIRStruct::Repr& x) {
     os << "repr(";
     switch (x) {
         case HIRStruct::Repr::Rust:
@@ -389,7 +389,7 @@ HIRConstGeneric HIRConstGeneric::clone() const {
         }
         case HIRConstGeneric::TAG_Unevaluated: {
             auto& e = (*this).as_Unevaluated();
-            return ::std::make_unique<HIRConstGenericUnevaluated>(e->clone());
+            return std::make_unique<HIRConstGenericUnevaluated>(e->clone());
         }
         case HIRConstGeneric::TAG_Generic: {
             auto& e = (*this).as_Generic();
@@ -444,7 +444,7 @@ HIRTypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIRTyp
 size_t HIREnum::findVariant(const RcString& name) const {
     if (data.is_Value()) {
         const auto& e = data.as_Value();
-        auto it = ::std::find_if(e.variants.begin(), e.variants.end(), [&](const auto& x) {
+        auto it = std::find_if(e.variants.begin(), e.variants.end(), [&](const auto& x) {
             return x.name == name;
         });
         if (it == e.variants.end()) {
@@ -454,7 +454,7 @@ size_t HIREnum::findVariant(const RcString& name) const {
     } else {
         const auto& e = data.as_Data();
 
-        auto it = ::std::find_if(e.begin(), e.end(), [&](const auto& x) {
+        auto it = std::find_if(e.begin(), e.end(), [&](const auto& x) {
             return x.name == name;
         });
         if (it == e.end()) {
@@ -663,8 +663,8 @@ const HIRTrait& HIRCrate::getTraitByPath(const Span& sp, const HIRSimplePath& pa
     }
 }
 
-::std::optional<size_t> HIRCrate::findMostSpecificTrait(const Span& sp, const ::std::vector<HIRSimplePath>& candidates) const {
-    ::std::optional<size_t> selected;
+std::optional<size_t> HIRCrate::findMostSpecificTrait(const Span& sp, const std::vector<HIRSimplePath>& candidates) const {
+    std::optional<size_t> selected;
     for (size_t candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {
         const auto& candidate = candidates[candidateIndex];
         const auto& trait = this->getTraitByPath(sp, candidate);
@@ -674,7 +674,7 @@ const HIRTrait& HIRCrate::getTraitByPath(const Span& sp, const HIRSimplePath& pa
             if (candidate == other) {
                 continue;
             }
-            const bool hasSupertrait = ::std::any_of(trait.allParentTraits.begin(), trait.allParentTraits.end(), [&](const auto& parent) {
+            const bool hasSupertrait = std::any_of(trait.allParentTraits.begin(), trait.allParentTraits.end(), [&](const auto& parent) {
                 return parent.path.path == other;
             });
             if (!hasSupertrait) {
@@ -889,7 +889,7 @@ namespace {
     };
 
     ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ThinVector<HIRTypeRef>& left, const ThinVector<HIRTypeRef>& right);
-    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ::std::vector<HIRTypeRef>& left, const ::std::vector<HIRTypeRef>& right);
+    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const std::vector<HIRTypeRef>& left, const std::vector<HIRTypeRef>& right);
 
     ::Ordering arraySizeOrdSpecific(const Span& sp, const HIRArraySize& left, const HIRArraySize& right) {
         if (left == right) {
@@ -1106,7 +1106,7 @@ namespace {
         return rv;
     }
 
-    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ::std::vector<HIRTypeRef>& le, const ::std::vector<HIRTypeRef>& re) {
+    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const std::vector<HIRTypeRef>& le, const std::vector<HIRTypeRef>& re) {
         auto rv = ::OrdEqual;
         assert(le.size() == re.size());
         for (unsigned int i = 0; i < le.size(); i++) {
@@ -1124,7 +1124,7 @@ namespace {
 }
 
 namespace {
-    void addBoundFromTrait(HIRTypeInterner& types, ::std::vector<HIRGenericBound>& rv, const HIRTypeData* type, const HIRTraitPath& curTrait, bool isTrivial) {
+    void addBoundFromTrait(HIRTypeInterner& types, std::vector<HIRGenericBound>& rv, const HIRTypeData* type, const HIRTraitPath& curTrait, bool isTrivial) {
         Span sp;
         assert(curTrait.traitPtr);
         const auto& tr = *curTrait.traitPtr;
@@ -1139,15 +1139,15 @@ namespace {
         // TODO: Move associated types to the source trait.
     }
 
-    ::std::vector<HIRGenericBound> flattenBounds(HIRTypeInterner& types, const ::std::vector<HIRGenericBound>& bounds) {
-        ::std::vector<HIRGenericBound> rv;
+    std::vector<HIRGenericBound> flattenBounds(HIRTypeInterner& types, const std::vector<HIRGenericBound>& bounds) {
+        std::vector<HIRGenericBound> rv;
         for (const auto& b : bounds) {
             rv.push_back(b.clone());
             if (const auto* be = b.opt_TraitBound()) {
                 addBoundFromTrait(types, rv, be->type, be->trait, be->isTrivial);
             }
         }
-        ::std::sort(rv.begin(), rv.end(), [](const auto& a, const auto& b) {
+        std::sort(rv.begin(), rv.end(), [](const auto& a, const auto& b) {
             return ::ord(a, b) == OrdLess;
         });
         return rv;
@@ -1320,8 +1320,8 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
 namespace {
 
     struct ImplTyMatcher: public HIRMatchGenerics, public Monomorphiser {
-        ::std::vector<::std::optional<HIRTypeRef>> implTys;
-        ::std::vector<::std::optional<HIRConstGeneric>> implVals;
+        std::vector<std::optional<HIRTypeRef>> implTys;
+        std::vector<std::optional<HIRConstGeneric>> implVals;
 
         explicit ImplTyMatcher(HIRTypeInterner& types);
 
@@ -1335,7 +1335,7 @@ namespace {
 
         void reinit(const HIRGenericParams& params);
 
-        void fmt(::std::ostream& os) const;
+        void fmt(std::ostream& os) const;
     };
 }
 
@@ -1343,7 +1343,7 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
     // TODO: Pre-calculate impl trees (with pointers to parent impls)
     struct H {
         static bool typesOverlap(const HIRPathParams& a, const HIRPathParams& b) {
-            for (unsigned int i = 0; i < ::std::min(a.types.size(), b.types.size()); i++) {
+            for (unsigned int i = 0; i < std::min(a.types.size(), b.types.size()); i++) {
                 if (!H::typesOverlap(a.types[i], b.types[i])) {
                     return false;
                 }
@@ -1850,7 +1850,7 @@ unsigned HIRTrait::getVtableParentIndex(HIRTypeInterner& types, const Span& sp, 
     return 0;
 }
 
-::std::pair<const HIRAssociatedType*, const HIRPathParams*> HIRTrait::getAtyDef(const RcString& name) const {
+std::pair<const HIRAssociatedType*, const HIRPathParams*> HIRTrait::getAtyDef(const RcString& name) const {
     auto it = types.find(name);
     if (it != types.end()) {
         return std::make_pair(&it->second, nullptr);
@@ -2105,7 +2105,7 @@ Ordering EncodedLiteralSlice::ord(const EncodedLiteralSlice& x) const {
     return OrdEqual;
 }
 
-::std::ostream& operator<<(std::ostream& os, const EncodedLiteralSlice& x) {
+std::ostream& operator<<(std::ostream& os, const EncodedLiteralSlice& x) {
     auto it = std::find_if(x.base.relocations.begin(), x.base.relocations.end(), [&](const Reloc& r) {
         return r.ofs >= x.ofs;
     });
@@ -2130,7 +2130,7 @@ Ordering EncodedLiteralSlice::ord(const EncodedLiteralSlice& x) const {
     return os;
 }
 
-HIRPublicity::HIRPublicity(Kind kind, ::std::shared_ptr<HIRSimplePath> p)
+HIRPublicity::HIRPublicity(Kind kind, std::shared_ptr<HIRSimplePath> p)
     : kind(kind)
     , visPath(p)
 {
@@ -2142,7 +2142,7 @@ HIRPublicity HIRPublicity::newPriv(HIRSimplePath p) {
         nComp--;
     }
     auto s = std::span<const RcString>(p.components().data(), nComp);
-    return HIRPublicity(Kind::Restricted, ::std::make_shared<HIRSimplePath>(p.crateName(), s));
+    return HIRPublicity(Kind::Restricted, std::make_shared<HIRSimplePath>(p.crateName(), s));
 }
 
 HIRStatic::HIRStatic(HIRLinkage linkage, bool isMut, HIRTypeRef type, HIRExprPtr value)
@@ -2157,9 +2157,9 @@ HIRConstant::HIRConstant() {
 }
 
 HIRConstant::HIRConstant(HIRGenericParams params, HIRTypeRef type, HIRExprPtr value)
-    : params(::std::move(params))
-    , type(::std::move(type))
-    , value(::std::move(value))
+    : params(std::move(params))
+    , type(std::move(type))
+    , value(std::move(value))
 {
 }
 
@@ -2199,17 +2199,17 @@ HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data, unsigned ali
 {
 }
 
-HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, ::std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType)
-    : generics(::std::move(generics))
+HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType)
+    : generics(std::move(generics))
     , isSized(isSized)
-    , traitBounds(::std::move(traitBounds))
+    , traitBounds(std::move(traitBounds))
     , hasDefault(defaultType && !defaultType->is_Infer())
     , defaultValue(defaultType)
 {
     assert(defaultType);
 }
 
-HIRTrait::HIRTrait(HIRGenericParams gps, ::std::vector<HIRTraitPath> parents)
+HIRTrait::HIRTrait(HIRGenericParams gps, std::vector<HIRTraitPath> parents)
     : params(mv$(gps))
     , parentTraits(mv$(parents))
     , isMarker(false)
@@ -2424,7 +2424,7 @@ auto ImplTyMatcher::reinit(const HIRGenericParams& params) -> void {
     this->implVals.resize(params.values.size());
 }
 
-auto ImplTyMatcher::fmt(::std::ostream& os) const -> void {
+auto ImplTyMatcher::fmt(std::ostream& os) const -> void {
     for (const auto& p : this->implTys) {
         if (p) {
             os << *p;

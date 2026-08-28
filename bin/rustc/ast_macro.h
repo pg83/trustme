@@ -55,5 +55,5 @@ public:
         return input;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTMacroInvocation& x);
+    friend std::ostream& operator<<(std::ostream& os, const ASTMacroInvocation& x);
 };

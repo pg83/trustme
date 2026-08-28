@@ -2,7 +2,7 @@
 
 #include <cassert>
 
-::std::ostream& operator<<(::std::ostream& os, const HIRPattern::Value& x) {
+std::ostream& operator<<(std::ostream& os, const HIRPattern::Value& x) {
     switch (x.tag()) {
         case HIRPattern::Value::TAG_Integer: {
             auto& e = x.as_Integer();
@@ -35,7 +35,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRPatternBinding& x) {
+std::ostream& operator<<(std::ostream& os, const HIRPatternBinding& x) {
     if (x.isMutable) {
         os << "mut ";
     }
@@ -53,7 +53,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRPattern& x) {
+std::ostream& operator<<(std::ostream& os, const HIRPattern& x) {
     for (const auto& pb : x.bindings) {
         os << pb;
     }
@@ -202,7 +202,7 @@
 }
 
 namespace {
-    void visitPatternDeclarationSlots(const HIRPattern& pattern, ::std::vector<unsigned>& slots) {
+    void visitPatternDeclarationSlots(const HIRPattern& pattern, std::vector<unsigned>& slots) {
         for (const auto& binding : pattern.bindings) {
             slots.push_back(binding.slot);
         }
@@ -298,8 +298,8 @@ namespace {
         }
     }
 
-    void visitPatternCandidateSlots(const HIRPattern& pattern, bool useLastAlternative, ::std::vector<unsigned>& slots) {
-        ::std::vector<const HIRPattern*> deferredOrPatterns;
+    void visitPatternCandidateSlots(const HIRPattern& pattern, bool useLastAlternative, std::vector<unsigned>& slots) {
+        std::vector<const HIRPattern*> deferredOrPatterns;
         auto visitImmediate = [&](this auto& visitImmediate, const HIRPattern& current) -> void {
             switch (current.data.tag()) {
                 case HIRPatternData::TAG_Any: {
@@ -420,8 +420,8 @@ std::vector<unsigned> patternBindingSlots(const HIRPattern& pattern, HIRPatternB
 }
 
 namespace {
-    ::std::vector<HIRPattern> clonePatVec(const ::std::vector<HIRPattern>& pats) {
-        ::std::vector<HIRPattern> rv;
+    std::vector<HIRPattern> clonePatVec(const std::vector<HIRPattern>& pats) {
+        std::vector<HIRPattern> rv;
         rv.reserve(pats.size());
         for (const auto& pat : pats) {
             rv.push_back(pat.clone());
@@ -429,13 +429,13 @@ namespace {
         return rv;
     }
 
-    typedef ::std::vector<::std::pair<RcString, HIRPattern>> patFieldsT;
+    typedef std::vector<std::pair<RcString, HIRPattern>> patFieldsT;
 
     patFieldsT clonePatFields(const patFieldsT& pats) {
         patFieldsT rv;
         rv.reserve(pats.size());
         for (const auto& field : pats) {
-            rv.push_back(::std::make_pair(field.first, field.second.clone()));
+            rv.push_back(std::make_pair(field.first, field.second.clone()));
         }
         return rv;
     }

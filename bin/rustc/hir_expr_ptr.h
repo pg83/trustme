@@ -96,9 +96,9 @@ class HIRExprPtr {
     HIRExprNodeP node;
 
 public:
-    ::std::vector<HIRTypeRef> bindings;
-    ::std::vector<HIRTypeRef> erasedTypes;
-    ::std::vector<HIRSimplePath> defineOpaque;
+    std::vector<HIRTypeRef> bindings;
+    std::vector<HIRTypeRef> erasedTypes;
+    std::vector<HIRSimplePath> defineOpaque;
 
     MIRFunctionPointer mir;
 

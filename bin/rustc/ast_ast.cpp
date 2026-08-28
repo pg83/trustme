@@ -19,7 +19,7 @@ ASTTrait::ASTTrait()
 {
 }
 
-ASTTrait::ASTTrait(ASTGenericParams params, ::std::vector<Spanned<TypeTraitPath>> supertraits, ::std::vector<Spanned<ASTLifetimeRef>> lifetimes)
+ASTTrait::ASTTrait(ASTGenericParams params, std::vector<Spanned<TypeTraitPath>> supertraits, std::vector<Spanned<ASTLifetimeRef>> lifetimes)
     : params_(mv$(params))
     , supertraits_(mv$(supertraits))
     , lifetimes_(mv$(lifetimes))
@@ -42,8 +42,8 @@ ASTImpl::ASTImpl(ASTImpl&&) = default;
 ASTImpl& ASTImpl::operator=(ASTImpl&&) = default;
 
 namespace {
-    ::std::vector<ASTAttribute> cloneMivec(const ::std::vector<ASTAttribute>& v) {
-        ::std::vector<ASTAttribute> ri;
+    std::vector<ASTAttribute> cloneMivec(const std::vector<ASTAttribute>& v) {
+        std::vector<ASTAttribute> ri;
         ri.reserve(v.size());
         for (const auto& i : v) {
             ri.push_back(i.clone());
@@ -57,7 +57,7 @@ ASTAttributeList ASTAttributeList::clone() const {
 }
 
 void ASTAttributeList::push_back(ASTAttribute i) {
-    items.push_back(::std::move(i));
+    items.push_back(std::move(i));
 }
 
 const ASTAttribute* ASTAttributeList::get(const char* name) const {
@@ -69,14 +69,14 @@ const ASTAttribute* ASTAttributeList::get(const char* name) const {
     return nullptr;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTAttributeList& x) {
+std::ostream& operator<<(std::ostream& os, const ASTAttributeList& x) {
     for (const auto& i : x.items) {
         os << "#[" << i << "]";
     }
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTAttributeName& x) {
+std::ostream& operator<<(std::ostream& os, const ASTAttributeName& x) {
     if (x.elems.empty()) {
         os << "<empty>";
     } else {
@@ -163,7 +163,7 @@ ASTVisibility ASTVisibility::makeRestricted(ASTAbsolutePath p, ASTPath inPath) {
     return rv;
 }
 
-void ASTVisibility::fmt(::std::ostream& os) const {
+void ASTVisibility::fmt(std::ostream& os) const {
     switch (ty_) {
         case Ty::Private:
             break;
@@ -194,7 +194,7 @@ void ASTVisibility::fmt(::std::ostream& os) const {
     }
 }
 
-std::ostream& operator<<(::std::ostream& os, const ASTVisibility& x) {
+std::ostream& operator<<(std::ostream& os, const ASTVisibility& x) {
     x.fmt(os);
     return os;
 }
@@ -251,7 +251,7 @@ ASTStatic ASTStatic::clone() const {
     return ASTStatic(cls, type_->clone(), value_.isValid() ? ASTExpr(value_.node().clone()) : ASTExpr(), params_.clone());
 }
 
-ASTFunction::ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic, bool hasNamedVariadic)
+ASTFunction::ASTFunction(Span sp, std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic, bool hasNamedVariadic)
     : span_(sp)
     , params_(mv$(params))
     , rettype_(mv$(retType))
@@ -394,7 +394,7 @@ ASTUnion ASTUnion::clone() const {
     return ASTUnion(params_.clone(), mv$(newVars));
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTImplDef& impl) {
+std::ostream& operator<<(std::ostream& os, const ASTImplDef& impl) {
     return os << "impl " << (impl.isConst_ ? "const " : "") << "<" << impl.params_ << "> " << impl.trait_.ent << " for " << impl.type_ << "";
 }
 
@@ -432,11 +432,11 @@ bool ASTImpl::hasNamedItem(const RcString& name) const {
     return false;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTImpl& impl) {
+std::ostream& operator<<(std::ostream& os, const ASTImpl& impl) {
     return os << impl.def_;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTUseItem::Ent& x) {
+std::ostream& operator<<(std::ostream& os, const ASTUseItem::Ent& x) {
     return os << x.name << "=" << x.path;
 }
 
@@ -452,7 +452,7 @@ ASTUseItem ASTUseItem::clone() const {
     return ASTUseItem{this->sp, this->isPrelude, mv$(entries)};
 }
 
-ASTExternBlock::ASTExternBlock(::std::string abi)
+ASTExternBlock::ASTExternBlock(std::string abi)
     : abi_(mv$(abi))
 {
 }
@@ -501,8 +501,8 @@ ASTModule::~ASTModule() = default;
 ASTModule::ASTModule(ASTModule&&) = default;
 ASTModule& ASTModule::operator=(ASTModule&&) = default;
 
-::std::shared_ptr<ASTModule> ASTModule::addAnon() {
-    auto rv = ::std::shared_ptr<ASTModule>(new ASTModule(myPath + RcString::newInterned(FMT("#" << anonModules.size()))));
+std::shared_ptr<ASTModule> ASTModule::addAnon() {
+    auto rv = std::shared_ptr<ASTModule>(new ASTModule(myPath + RcString::newInterned(FMT("#" << anonModules.size()))));
     rv->fileInfo = fileInfo;
 
     anonModules.push_back(rv);
@@ -618,24 +618,24 @@ ASTItem ASTItem::clone() const {
     UNREACHABLE();
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTTypeParam& tp) {
+std::ostream& operator<<(std::ostream& os, const ASTTypeParam& tp) {
     os << tp.name_;
     os << " = ";
     os << tp.defaultValue_;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTLifetimeParam& p) {
+std::ostream& operator<<(std::ostream& os, const ASTLifetimeParam& p) {
     os << "'" << p.name_;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTValueParam& p) {
+std::ostream& operator<<(std::ostream& os, const ASTValueParam& p) {
     os << "const " << p.name_ << ": " << p.type_;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTHigherRankedBounds& x) {
+std::ostream& operator<<(std::ostream& os, const ASTHigherRankedBounds& x) {
     if (!x.empty()) {
         os << "for<";
         for (const auto& l : x.lifetimes) {
@@ -674,7 +674,7 @@ std::ostream& operator<<(std::ostream& os, const GenericParam& x) {
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTGenericBound& x) {
+std::ostream& operator<<(std::ostream& os, const ASTGenericBound& x) {
     switch (x.tag()) {
         case ASTGenericBound::TAG_None: {
             os << "/*-*/";
@@ -720,13 +720,13 @@ std::ostream& operator<<(std::ostream& os, const GenericParam& x) {
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTGenericParams& tps) {
+std::ostream& operator<<(std::ostream& os, const ASTGenericParams& tps) {
     return os << "<" << tps.params << "> where {" << tps.bounds << "}";
 }
 
 ASTAttributeList::ASTAttributeList() = default;
 
-ASTAttributeList::ASTAttributeList(::std::vector<ASTAttribute> items)
+ASTAttributeList::ASTAttributeList(std::vector<ASTAttribute> items)
     : items(mv$(items))
 {
 }
@@ -836,16 +836,16 @@ ASTEnumVariant::ASTEnumVariant(ASTAttributeList attrs, RcString name)
 {
 }
 
-ASTEnumVariant::ASTEnumVariant(ASTAttributeList attrs, RcString name, ::std::vector<ASTTupleItem> subTypes)
+ASTEnumVariant::ASTEnumVariant(ASTAttributeList attrs, RcString name, std::vector<ASTTupleItem> subTypes)
     : attrs(mv$(attrs))
-    , name(::std::move(name))
+    , name(std::move(name))
     , data(ASTEnumVariantData::make_Tuple({std::move(subTypes)}))
 {
 }
 
-ASTEnumVariant::ASTEnumVariant(ASTAttributeList attrs, RcString name, ::std::vector<ASTStructItem> fields)
+ASTEnumVariant::ASTEnumVariant(ASTAttributeList attrs, RcString name, std::vector<ASTStructItem> fields)
     : attrs(mv$(attrs))
-    , name(::std::move(name))
+    , name(std::move(name))
     , data(ASTEnumVariantData::make_Struct({std::move(fields)}))
 {
 }
@@ -853,9 +853,9 @@ ASTEnumVariant::ASTEnumVariant(ASTAttributeList attrs, RcString name, ::std::vec
 ASTEnum::ASTEnum() {
 }
 
-ASTEnum::ASTEnum(ASTGenericParams params, ::std::vector<ASTEnumVariant> variants)
-    : params_(::std::move(params))
-    , variants_(::std::move(variants))
+ASTEnum::ASTEnum(ASTGenericParams params, std::vector<ASTEnumVariant> variants)
+    : params_(std::move(params))
+    , variants_(std::move(variants))
 {
 }
 
@@ -866,26 +866,26 @@ ASTStruct::ASTStruct() {
 }
 
 ASTStruct::ASTStruct(ASTGenericParams params)
-    : params_(::std::move(params))
+    : params_(std::move(params))
     , data(ASTStructData::make_Unit({}))
 {
 }
 
-ASTStruct::ASTStruct(ASTGenericParams params, ::std::vector<ASTStructItem> fields)
-    : params_(::std::move(params))
+ASTStruct::ASTStruct(ASTGenericParams params, std::vector<ASTStructItem> fields)
+    : params_(std::move(params))
     , data(ASTStructData::make_Struct({mv$(fields)}))
 {
 }
 
-ASTStruct::ASTStruct(ASTGenericParams params, ::std::vector<ASTTupleItem> fields)
-    : params_(::std::move(params))
+ASTStruct::ASTStruct(ASTGenericParams params, std::vector<ASTTupleItem> fields)
+    : params_(std::move(params))
     , data(ASTStructData::make_Tuple({mv$(fields)}))
 {
 }
 
-ASTUnion::ASTUnion(ASTGenericParams params, ::std::vector<ASTStructItem> fields)
-    : params_(::std::move(params))
-    , variants(::std::move(fields))
+ASTUnion::ASTUnion(ASTGenericParams params, std::vector<ASTStructItem> fields)
+    : params_(std::move(params))
+    , variants(std::move(fields))
 {
 }
 
@@ -898,7 +898,7 @@ ASTImplDef::ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, ASTT
 {
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTEnumVariant& x) {
+std::ostream& operator<<(std::ostream& os, const ASTEnumVariant& x) {
     os << "EnumVariant(" << x.name;
     switch (x.data.tag()) {
         case ASTEnumVariantData::TAG_Unit: {

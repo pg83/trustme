@@ -65,7 +65,7 @@ Token::Token(enum eTokenType type, Ident i)
 {
 }
 
-Token::Token(enum eTokenType type, ::std::string str, Ident::Hygiene h)
+Token::Token(enum eTokenType type, std::string str, Ident::Hygiene h)
     : type_(type)
     , data_(Data::make_String(mv$(str)))
     , hygiene_(std::move(h))
@@ -319,11 +319,11 @@ ASTExprNode& Token::fragNode() {
     return *reinterpret_cast<ASTExprNode*>(ptr);
 }
 
-::std::unique_ptr<ASTExprNode> Token::takeFragNode() {
+std::unique_ptr<ASTExprNode> Token::takeFragNode() {
     assert(type_ == TOK_INTERPOLATED_EXPR || type_ == TOK_INTERPOLATED_STMT || type_ == TOK_INTERPOLATED_BLOCK);
     auto ptr = data_.as_Fragment();
     data_.as_Fragment() = nullptr;
-    return ::std::unique_ptr<ASTExprNode>(reinterpret_cast<ASTExprNode*>(ptr));
+    return std::unique_ptr<ASTExprNode>(reinterpret_cast<ASTExprNode*>(ptr));
 }
 
 ASTNamed<ASTItem> Token::takeFragItem() {
@@ -364,7 +364,7 @@ const char* Token::typestr(enum eTokenType type) {
     return ">>BUGCHECK: BADTOK<<";
 }
 
-enum eTokenType Token::typefromstr(const ::std::string& s) {
+enum eTokenType Token::typefromstr(const std::string& s) {
     if (s == "") {
         return TOK_NULL;
     }
@@ -376,7 +376,7 @@ enum eTokenType Token::typefromstr(const ::std::string& s) {
     return TOK_NULL;
 }
 
-static StringView literalBytes(const ::std::string& s) {
+static StringView literalBytes(const std::string& s) {
     return StringView(reinterpret_cast<const u8*>(s.data()), s.size());
 }
 
@@ -387,7 +387,7 @@ struct EscapedString {
 
     static size_t utf8Run(StringView s, size_t i);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const EscapedString& x) {
+    friend std::ostream& operator<<(std::ostream& os, const EscapedString& x) {
         for (size_t i = 0; i < x.s.length(); i++) {
             const u8 b = x.s[i];
             switch (b) {
@@ -414,7 +414,7 @@ struct EscapedString {
                 continue;
             }
             if (b < 0x80) {
-                os << "\\u{" << ::std::hex << static_cast<unsigned int>(b) << ::std::dec << "}";
+                os << "\\u{" << std::hex << static_cast<unsigned int>(b) << std::dec << "}";
                 continue;
             }
             if (const auto run = utf8Run(x.s, i)) {
@@ -422,7 +422,7 @@ struct EscapedString {
                 i += run - 1;
                 continue;
             }
-            os << "\\x" << ::std::hex << ::std::uppercase << static_cast<unsigned int>(b) << ::std::nouppercase << ::std::dec;
+            os << "\\x" << std::hex << std::uppercase << static_cast<unsigned int>(b) << std::nouppercase << std::dec;
         }
         return os;
     }
@@ -433,7 +433,7 @@ struct EscapedByteString {
 
     EscapedByteString(StringView s);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const EscapedByteString& x) {
+    friend std::ostream& operator<<(std::ostream& os, const EscapedByteString& x) {
         for (size_t i = 0; i < x.s.length(); i++) {
             const u8 b = x.s[i];
             switch (b) {
@@ -459,13 +459,13 @@ struct EscapedByteString {
                 os << static_cast<char>(b);
                 continue;
             }
-            os << "\\x" << ::std::hex << ::std::uppercase << ::std::setw(2) << ::std::setfill('0') << static_cast<unsigned int>(b) << ::std::nouppercase << ::std::dec << ::std::setfill(' ');
+            os << "\\x" << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(b) << std::nouppercase << std::dec << std::setfill(' ');
         }
         return os;
     }
 };
 
-void printEscapedLiteral(::std::ostream& os, eTokenType type, const u8* value, size_t size) {
+void printEscapedLiteral(std::ostream& os, eTokenType type, const u8* value, size_t size) {
     const auto bytes = StringView(value, size);
     switch (type) {
         case TOK_STRING:
@@ -558,8 +558,8 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
     return true;
 }
 
-::std::string Token::toStr() const {
-    ::std::stringstream ss;
+std::string Token::toStr() const {
+    std::stringstream ss;
     switch (type_) {
         case TOK_NULL:
             return "/*null*/";
@@ -584,7 +584,7 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         case TOK_INTERPOLATED_STMT:
         case TOK_INTERPOLATED_BLOCK:
         case TOK_INTERPOLATED_EXPR: {
-            ::std::stringstream ss;
+            std::stringstream ss;
             reinterpret_cast<const ASTExprNode*>(data_.as_Fragment())->print(ss);
             return ss.str();
         }
@@ -598,12 +598,12 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         case TOK_INTERPOLATED_ITEM:
             return "/*:item*/";
         case TOK_INTERPOLATED_VIS: {
-            ::std::stringstream ss;
+            std::stringstream ss;
             ss << *reinterpret_cast<const ASTVisibility*>(data_.as_Fragment());
             return ss.str();
         }
         case TOK_IDENT:
-            return data_.as_Ident().isRaw ? "r#" + ::std::string(data_.as_Ident().name.c_str()) : ::std::string(data_.as_Ident().name.c_str());
+            return data_.as_Ident().isRaw ? "r#" + std::string(data_.as_Ident().name.c_str()) : std::string(data_.as_Ident().name.c_str());
         case TOK_LIFETIME:
             return FMT("'" << data_.as_Ident().name.c_str());
         case TOK_INTEGER: {
@@ -620,7 +620,7 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
                                 return FMT("'" << (char)v.truncateU64() << "'");
                         }
                     }
-                    return FMT("'\\u{" << ::std::hex << v << ::std::dec << "}'");
+                    return FMT("'\\u{" << std::hex << v << std::dec << "}'");
                 case CORETYPE_ANY:
                     return FMT(data_.as_Integer().intval);
                 default:
@@ -629,7 +629,7 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
             break;
         }
         case TOK_CHAR:
-            return FMT("'\\u{" << ::std::hex << data_.as_Integer().intval << "}");
+            return FMT("'\\u{" << std::hex << data_.as_Integer().intval << "}");
         case TOK_FLOAT:
             if (data_.as_Float().datatype == CORETYPE_ANY) {
                 return formatFloatValueForToken(data_.as_Float().floatval);
@@ -891,7 +891,7 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
     compileErrorBugCheck("Reached end of Token::to_str");
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Token& tok) {
+std::ostream& operator<<(std::ostream& os, const Token& tok) {
     os << Token::typestr(tok.type());
     switch (tok.type()) {
         case TOK_STRING:
@@ -956,8 +956,8 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Position& p) {
-    return os << ::std::dec << p.filename << ":" << p.line;
+std::ostream& operator<<(std::ostream& os, const Position& p) {
+    return os << std::dec << p.filename << ":" << p.line;
 }
 
 Position::Position()
@@ -984,8 +984,8 @@ Position::Position(RcString filename, unsigned int line, unsigned int ofs)
 
 Token::Token(enum eTokenType t, Data d, Position p)
     : type_(t)
-    , data_(::std::move(d))
-    , pos(::std::move(p))
+    , data_(std::move(d))
+    , pos(std::move(p))
 {
 }
 
@@ -994,14 +994,14 @@ Token& Token::operator=(Token&& t) {
         return *this;
     }
     this->~Token();
-    new (this) Token(::std::move(t));
+    new (this) Token(std::move(t));
     return *this;
 }
 
 Token::Token(Token&& t)
     : type_(t.type_)
-    , data_(::std::move(t.data_))
-    , pos(::std::move(t.pos))
+    , data_(std::move(t.data_))
+    , pos(std::move(t.pos))
     , hygiene_(std::move(t.hygiene_))
     , isDocComment_(t.isDocComment_)
 {

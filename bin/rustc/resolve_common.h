@@ -28,7 +28,7 @@ enum class ResolveNamespace {
     Value,
     Macro,
 };
-extern ::std::ostream& operator<<(::std::ostream& os, ResolveNamespace ns);
+extern std::ostream& operator<<(std::ostream& os, ResolveNamespace ns);
 
 extern ResolveModuleRef ResolveLookupGetModule(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, bool ignoreLast, ASTAbsolutePath* outPath);
 extern ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, ASTAbsolutePath* outPath);

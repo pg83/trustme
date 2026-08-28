@@ -17,7 +17,7 @@ using namespace stl;
 
 namespace {
     bool isMetadataFile(const auto& filename) {
-        ::std::ifstream direct(filename, ::std::ios_base::in | ::std::ios_base::binary);
+        std::ifstream direct(filename, std::ios_base::in | std::ios_base::binary);
         unsigned char header[2] = {};
         if (direct.read(reinterpret_cast<char*>(header), sizeof(header))) {
             const unsigned word = static_cast<unsigned>(header[0]) * 256 + header[1];
@@ -45,7 +45,7 @@ struct D {};
 
 struct HirDeserialiser {
     RcString crateName;
-    ::std::vector<HIRTypeRef> types;
+    std::vector<HIRTypeRef> types;
     HIRSerialiseReader& in;
     HIRTypeInterner& typeInterner;
     u32& id;
@@ -57,7 +57,7 @@ struct HirDeserialiser {
 
     RcString readIstring();
 
-    ::std::string readString();
+    std::string readString();
 
     bool readBool();
 
@@ -66,34 +66,34 @@ struct HirDeserialiser {
     size_t deserialiseCount();
 
     template <typename V>
-    ::std::map<::std::string, V> deserialiseStrmap();
+    std::map<std::string, V> deserialiseStrmap();
 
     template <typename V>
-    ::std::unordered_map<::std::string, V> deserialiseStrumap();
+    std::unordered_map<std::string, V> deserialiseStrumap();
 
     template <typename V>
-    ::std::unordered_multimap<::std::string, V> deserialiseStrummap();
+    std::unordered_multimap<std::string, V> deserialiseStrummap();
 
     template <typename V>
-    ::std::map<RcString, V> deserialiseIstrmap();
+    std::map<RcString, V> deserialiseIstrmap();
 
     template <typename T>
-    ::std::unordered_map<RcString, T*> deserialiseIstrumapPooled();
+    std::unordered_map<RcString, T*> deserialiseIstrumapPooled();
 
     template <typename V>
-    ::std::unordered_map<RcString, V> deserialiseIstrumap();
+    std::unordered_map<RcString, V> deserialiseIstrumap();
 
     template <typename V>
-    ::std::unordered_multimap<RcString, V> deserialiseIstrummap();
+    std::unordered_multimap<RcString, V> deserialiseIstrummap();
 
     template <typename V>
-    ::std::map<HIRSimplePath, V> deserialisePathmap();
+    std::map<HIRSimplePath, V> deserialisePathmap();
 
     template <typename T, typename F>
-    ::std::vector<T> deserialiseVecC(F cb);
+    std::vector<T> deserialiseVecC(F cb);
 
     template <typename T>
-    ::std::vector<T> deserialiseVec();
+    std::vector<T> deserialiseVec();
 
     template <typename T, typename F>
     ThinVector<T> deserialiseThinvecC(F cb);
@@ -102,7 +102,7 @@ struct HirDeserialiser {
     ThinVector<T> deserialiseThinvec();
 
     template <typename T>
-    ::std::set<T> deserialiseSet();
+    std::set<T> deserialiseSet();
 
     HIRPublicity deserialisePub();
 
@@ -110,7 +110,7 @@ struct HirDeserialiser {
     HIRVisEnt<T> deserialiseVisent();
 
     template <typename T>
-    ::std::unique_ptr<T> deserialisePtr();
+    std::unique_ptr<T> deserialisePtr();
 
     HIRArraySize deserialiseArraysize();
     HIRGenericRef deserialiseGenericref();
@@ -208,7 +208,7 @@ struct HirDeserialiser {
 
     HIRFunction::Markings deserialiseFunctionMarkings();
 
-    ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> deserialiseFcnargs();
+    std::vector<std::pair<HIRPattern, HIRTypeRef>> deserialiseFcnargs();
 
     HIRConstant deserialiseConstant();
 
@@ -242,7 +242,7 @@ struct HirDeserialiser {
     };
 
 template <>
-DEF_D(::std::string, return d.readString(););
+DEF_D(std::string, return d.readString(););
 template <>
 DEF_D(RcString, return d.readIstring(););
 template <>
@@ -251,13 +251,13 @@ template <>
 DEF_D(u8, return d.readU8(););
 
 template <typename T>
-DEF_D(::std::unique_ptr<T>, return d.deserialisePtr<T>();)
+DEF_D(std::unique_ptr<T>, return d.deserialisePtr<T>();)
 
 template <typename T>
-DEF_D(::std::vector<T>, return d.deserialiseVec<T>();)
+DEF_D(std::vector<T>, return d.deserialiseVec<T>();)
 template <typename T, typename U>
-struct D<::std::pair<T, U>> {
-    static ::std::pair<T, U> des(HirDeserialiser& d);
+struct D<std::pair<T, U>> {
+    static std::pair<T, U> des(HirDeserialiser& d);
 };
 
 template <typename T>
@@ -336,7 +336,7 @@ template <>
 DEF_D(unsigned int, return static_cast<unsigned int>(d.deserialiseCount());)
 
 template <typename T>
-DEF_D(HIRCrate::ImplGroup<std::unique_ptr<T>>, HIRCrate::ImplGroup<std::unique_ptr<T>> rv; rv.named = d.deserialisePathmap<::std::vector<::std::unique_ptr<T>>>(); rv.nonNamed = d.deserialiseVec<::std::unique_ptr<T>>(); rv.generic = d.deserialiseVec<::std::unique_ptr<T>>(); return rv;)
+DEF_D(HIRCrate::ImplGroup<std::unique_ptr<T>>, HIRCrate::ImplGroup<std::unique_ptr<T>> rv; rv.named = d.deserialisePathmap<std::vector<std::unique_ptr<T>>>(); rv.nonNamed = d.deserialiseVec<std::unique_ptr<T>>(); rv.generic = d.deserialiseVec<std::unique_ptr<T>>(); return rv;)
 template <>
 DEF_D(HIRExternLibrary, return d.deserialiseExtlib();)
 
@@ -592,7 +592,7 @@ HIRStruct HirDeserialiser::deserialiseStruct() {
 }
 
 HIRStructField HirDeserialiser::deserialiseStructField() {
-    return HIRStructField{in.readIstring(), deserialisePub(), deserialiseType(), in.readBool() ? ::std::make_unique<HIRGenericPath>(deserialiseGenericpath()) : nullptr};
+    return HIRStructField{in.readIstring(), deserialisePub(), deserialiseType(), in.readBool() ? std::make_unique<HIRGenericPath>(deserialiseGenericpath()) : nullptr};
 }
 
 HIRTrait HirDeserialiser::deserialiseTrait() {
@@ -609,7 +609,7 @@ HIRTrait HirDeserialiser::deserialiseTrait() {
     rv.mustUse = traitFlags & 64;
     rv.types = deserialiseIstrumap<HIRAssociatedType>();
     rv.values = deserialiseIstrumap<HIRTraitValueItem>();
-    rv.valueIndexes = deserialiseIstrummap<::std::pair<unsigned int, HIRGenericPath>>();
+    rv.valueIndexes = deserialiseIstrummap<std::pair<unsigned int, HIRGenericPath>>();
     rv.typeIndexes = deserialiseIstrumap<unsigned int>();
     rv.vtableParentTraitsStart = in.readCount();
     rv.allParentTraits = deserialiseVec<HIRTraitPath>();
@@ -735,7 +735,7 @@ MIRAsmParam HirDeserialiser::deserialiseAsmParam() {
         case MIRAsmParam::TAG_Const:
             return MIRAsmParam::make_Const(deserialiseMirConstant());
         case MIRAsmParam::TAG_Reg:
-            return MIRAsmParam::make_Reg({static_cast<AsmDirection>(in.readTag()), deserialiseAsmSpec(), in.readBool() ? ::std::make_unique<MIRParam>(deserialiseMirParam()) : std::unique_ptr<MIRParam>(), in.readBool() ? ::std::make_unique<MIRLValue>(deserialiseMirLvalue()) : std::unique_ptr<MIRLValue>()});
+            return MIRAsmParam::make_Reg({static_cast<AsmDirection>(in.readTag()), deserialiseAsmSpec(), in.readBool() ? std::make_unique<MIRParam>(deserialiseMirParam()) : std::unique_ptr<MIRParam>(), in.readBool() ? std::make_unique<MIRLValue>(deserialiseMirLvalue()) : std::unique_ptr<MIRLValue>()});
         case MIRAsmParam::TAG_Label:
             return MIRAsmParam::make_Label(static_cast<unsigned int>(in.readCount()));
         default:
@@ -754,7 +754,7 @@ MIRStatement HirDeserialiser::deserialiseMirStatement() {
         case 1:
             BUG(Span(), "Obsolete MIR statement Drop in metadata");
         case 2:
-            rv = MIRStatement::make_Asm({in.readString(), deserialiseVec<::std::pair<::std::string, MIRLValue>>(), deserialiseVec<::std::pair<::std::string, MIRLValue>>(), deserialiseVec<::std::string>(), deserialiseVec<::std::string>()});
+            rv = MIRStatement::make_Asm({in.readString(), deserialiseVec<std::pair<std::string, MIRLValue>>(), deserialiseVec<std::pair<std::string, MIRLValue>>(), deserialiseVec<std::string>(), deserialiseVec<std::string>()});
             break;
         case 3: {
             MIRStatement::Data_SetDropFlag sdf;
@@ -849,8 +849,8 @@ MIRSwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
         _(Signed, deserialiseVecC<i64>([&]() {
             return in.readI64c();
         }))
-        _(String, deserialiseVec<::std::string>())
-        _(ByteString, deserialiseVec<::std::vector<u8>>())
+        _(String, deserialiseVec<std::string>())
+        _(ByteString, deserialiseVec<std::vector<u8>>())
 #undef _
         default:
             BUG(Span(), "Bad tag for MIR::SwitchValues - " << tag);
@@ -917,15 +917,15 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
             auto extCrate = HIRExternCrate{};
             extCrate.basename = extCrateFile;
             extCrate.path = extCrateFile;
-            rv.extCrates.insert(::std::make_pair(mv$(extCrateName), mv$(extCrate)));
+            rv.extCrates.insert(std::make_pair(mv$(extCrateName), mv$(extCrate)));
         }
     }
 
     rv.extLibs = deserialiseVec<HIRExternLibrary>();
-    rv.linkPaths = deserialiseVec<::std::string>();
+    rv.linkPaths = deserialiseVec<std::string>();
 }
 
-HIRCrate* HIRDeserialise(u32& id, ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename) {
+HIRCrate* HIRDeserialise(u32& id, ObjPool* pool, HIRTypeInterner& types, const std::string& filename) {
     {
         HIRSerialiseReader in{metadataFilename(filename)};
         HirDeserialiser s{id, *pool, in, types};
@@ -936,7 +936,7 @@ HIRCrate* HIRDeserialise(u32& id, ObjPool* pool, HIRTypeInterner& types, const :
     }
 }
 
-RcString HIRDeserialiseJustName(const ::std::string& filename) {
+RcString HIRDeserialiseJustName(const std::string& filename) {
     {
         HIRSerialiseReader in{metadataFilename(filename)};
 
@@ -953,10 +953,10 @@ RcString HIRDeserialiseJustName(const ::std::string& filename) {
 namespace {
 
     struct TreeVisitor: public HIRVisitor, public HIRExprVisitor {
-        ::std::ostream& os;
+        std::ostream& os;
         unsigned int indentLevel;
 
-        TreeVisitor(HIRTypeInterner& types, ::std::ostream& os);
+        TreeVisitor(HIRTypeInterner& types, std::ostream& os);
 
         void visitModule(HIRItemPath p, HIRModule& mod) override;
 
@@ -1074,13 +1074,13 @@ namespace {
     };
 }
 
-void HIRDump(::std::ostream& sink, const HIRCrate& crate) {
+void HIRDump(std::ostream& sink, const HIRCrate& crate) {
     TreeVisitor tv{crate.types, sink};
 
     tv.visitCrate(const_cast<HIRCrate&>(crate));
 }
 
-void HIRDumpExpr(::std::ostream& sink, const HIRExprPtr& expr) {
+void HIRDumpExpr(std::ostream& sink, const HIRExprPtr& expr) {
     if (!expr) {
         sink << "/*NULL*/";
         return;
@@ -1095,7 +1095,7 @@ void HIRDumpExpr(::std::ostream& sink, const HIRExprPtr& expr) {
 #undef NODE_IS
 
 struct HirSerialiser {
-    ::std::map<std::string, size_t> types;
+    std::map<std::string, size_t> types;
     HIRSerialiseWriter& out;
     HIRTypeInterner& typeInterner;
 
@@ -1104,37 +1104,37 @@ struct HirSerialiser {
     void clear();
 
     template <typename V>
-    void serialiseStrmap(const ::std::map<RcString, V>& map);
+    void serialiseStrmap(const std::map<RcString, V>& map);
 
     template <typename V>
-    void serialiseStrmap(const ::std::map<::std::string, V>& map);
+    void serialiseStrmap(const std::map<std::string, V>& map);
 
     template <typename V>
-    void serialisePathmap(const ::std::map<HIRSimplePath, V>& map);
+    void serialisePathmap(const std::map<HIRSimplePath, V>& map);
 
     template <typename V>
-    void serialiseStrmap(const ::std::unordered_map<RcString, V>& map);
+    void serialiseStrmap(const std::unordered_map<RcString, V>& map);
 
     template <typename V>
-    void serialiseStrmap(const ::std::unordered_map<::std::string, V>& map);
+    void serialiseStrmap(const std::unordered_map<std::string, V>& map);
 
     template <typename V>
-    void serialiseStrmap(const ::std::unordered_multimap<RcString, V>& map);
+    void serialiseStrmap(const std::unordered_multimap<RcString, V>& map);
 
     template <typename V>
-    void serialiseStrmap(const ::std::unordered_multimap<::std::string, V>& map);
+    void serialiseStrmap(const std::unordered_multimap<std::string, V>& map);
 
     template <typename T>
     void serialiseVec(const ThinVector<T>& vec);
 
     template <typename T>
-    void serialiseVec(const ::std::vector<T>& vec);
+    void serialiseVec(const std::vector<T>& vec);
 
     template <typename T>
-    void serialise(const ::std::vector<T>& vec);
+    void serialise(const std::vector<T>& vec);
 
     template <typename T>
-    void serialise(const ::std::set<T>& s);
+    void serialise(const std::set<T>& s);
 
     void serialise(const HIRPublicity& pub);
 
@@ -1145,16 +1145,16 @@ struct HirSerialiser {
     void serialise(const HIRVisEnt<T>* e);
 
     template <typename T>
-    void serialise(const ::std::unique_ptr<T>& e);
+    void serialise(const std::unique_ptr<T>& e);
 
     template <typename T>
-    void serialise(const ::std::pair<::std::string, T>& e);
+    void serialise(const std::pair<std::string, T>& e);
 
     template <typename T>
-    void serialise(const ::std::pair<RcString, T>& e);
+    void serialise(const std::pair<RcString, T>& e);
 
     template <typename T>
-    void serialise(const ::std::pair<unsigned int, T>& e);
+    void serialise(const std::pair<unsigned int, T>& e);
 
     void serialise(bool v);
     ;
@@ -1230,7 +1230,7 @@ struct HirSerialiser {
 
     void serialise(const HIRTraitPath& p);
 
-    void serialise(const ::std::string& v);
+    void serialise(const std::string& v);
 
     void serialise(const RcString& v);
 
@@ -1343,7 +1343,7 @@ struct HirSerialiser {
     void serialise(const HIRAssociatedType& at);
 };
 
-void HIRSerialise(const ::std::string& filename, const HIRCrate& crate) {
+void HIRSerialise(const std::string& filename, const HIRCrate& crate) {
     HIRSerialiseWriter out;
     HirSerialiser s{out, crate.types};
     s.serialiseCrate(crate);
@@ -1364,7 +1364,7 @@ auto HirDeserialiser::readIstring() -> RcString {
     return in.readIstring();
 }
 
-auto HirDeserialiser::readString() -> ::std::string {
+auto HirDeserialiser::readString() -> std::string {
     return in.readString();
 }
 
@@ -1381,98 +1381,98 @@ auto HirDeserialiser::deserialiseCount() -> size_t {
 }
 
 template <typename V>
-auto HirDeserialiser::deserialiseStrmap() -> ::std::map<::std::string, V> {
+auto HirDeserialiser::deserialiseStrmap() -> std::map<std::string, V> {
     size_t n = in.readCount();
-    ::std::map<::std::string, V> rv;
+    std::map<std::string, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readString();
-        rv.insert(::std::make_pair(mv$(s), D<V>::des(*this)));
+        rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
 }
 
 template <typename V>
-auto HirDeserialiser::deserialiseStrumap() -> ::std::unordered_map<::std::string, V> {
+auto HirDeserialiser::deserialiseStrumap() -> std::unordered_map<std::string, V> {
     size_t n = in.readCount();
-    ::std::unordered_map<::std::string, V> rv;
+    std::unordered_map<std::string, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readString();
-        rv.insert(::std::make_pair(mv$(s), D<V>::des(*this)));
+        rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
 }
 
 template <typename V>
-auto HirDeserialiser::deserialiseStrummap() -> ::std::unordered_multimap<::std::string, V> {
+auto HirDeserialiser::deserialiseStrummap() -> std::unordered_multimap<std::string, V> {
     size_t n = in.readCount();
-    ::std::unordered_multimap<::std::string, V> rv;
+    std::unordered_multimap<std::string, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readString();
-        rv.insert(::std::make_pair(mv$(s), D<V>::des(*this)));
+        rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
 }
 
 template <typename V>
-auto HirDeserialiser::deserialiseIstrmap() -> ::std::map<RcString, V> {
+auto HirDeserialiser::deserialiseIstrmap() -> std::map<RcString, V> {
     size_t n = in.readCount();
-    ::std::map<RcString, V> rv;
+    std::map<RcString, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readIstring();
-        rv.insert(::std::make_pair(mv$(s), D<V>::des(*this)));
+        rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
 }
 
 template <typename T>
-auto HirDeserialiser::deserialiseIstrumapPooled() -> ::std::unordered_map<RcString, T*> {
+auto HirDeserialiser::deserialiseIstrumapPooled() -> std::unordered_map<RcString, T*> {
     size_t n = in.readCount();
-    ::std::unordered_map<RcString, T*> rv;
+    std::unordered_map<RcString, T*> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readIstring();
-        rv.insert(::std::make_pair(mv$(s), pool.make<T>(D<T>::des(*this))));
+        rv.insert(std::make_pair(mv$(s), pool.make<T>(D<T>::des(*this))));
     }
     return rv;
 }
 
 template <typename V>
-auto HirDeserialiser::deserialiseIstrumap() -> ::std::unordered_map<RcString, V> {
+auto HirDeserialiser::deserialiseIstrumap() -> std::unordered_map<RcString, V> {
     size_t n = in.readCount();
-    ::std::unordered_map<RcString, V> rv;
+    std::unordered_map<RcString, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readIstring();
-        rv.insert(::std::make_pair(mv$(s), D<V>::des(*this)));
+        rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
 }
 
 template <typename V>
-auto HirDeserialiser::deserialiseIstrummap() -> ::std::unordered_multimap<RcString, V> {
+auto HirDeserialiser::deserialiseIstrummap() -> std::unordered_multimap<RcString, V> {
     size_t n = in.readCount();
-    ::std::unordered_multimap<RcString, V> rv;
+    std::unordered_multimap<RcString, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readIstring();
-        rv.insert(::std::make_pair(mv$(s), D<V>::des(*this)));
+        rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
 }
 
 template <typename V>
-auto HirDeserialiser::deserialisePathmap() -> ::std::map<HIRSimplePath, V> {
+auto HirDeserialiser::deserialisePathmap() -> std::map<HIRSimplePath, V> {
     size_t n = in.readCount();
-    ::std::map<HIRSimplePath, V> rv;
+    std::map<HIRSimplePath, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = deserialiseSimplepath();
-        rv.insert(::std::make_pair(mv$(s), D<V>::des(*this)));
+        rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
 }
 
 template <typename T, typename F>
-auto HirDeserialiser::deserialiseVecC(F cb) -> ::std::vector<T> {
-    auto _ = in.openObject(typeid(::std::vector<T>).name());
+auto HirDeserialiser::deserialiseVecC(F cb) -> std::vector<T> {
+    auto _ = in.openObject(typeid(std::vector<T>).name());
     size_t n = in.readCount();
-    ::std::vector<T> rv;
+    std::vector<T> rv;
     rv.reserve(n);
     for (size_t i = 0; i < n; i++) {
         rv.push_back(cb());
@@ -1481,7 +1481,7 @@ auto HirDeserialiser::deserialiseVecC(F cb) -> ::std::vector<T> {
 }
 
 template <typename T>
-auto HirDeserialiser::deserialiseVec() -> ::std::vector<T> {
+auto HirDeserialiser::deserialiseVec() -> std::vector<T> {
     return deserialiseVecC<T>([&]() {
         return D<T>::des(*this);
     });
@@ -1507,10 +1507,10 @@ auto HirDeserialiser::deserialiseThinvec() -> ThinVector<T> {
 }
 
 template <typename T>
-auto HirDeserialiser::deserialiseSet() -> ::std::set<T> {
-    auto _ = in.openObject(typeid(::std::set<T>).name());
+auto HirDeserialiser::deserialiseSet() -> std::set<T> {
+    auto _ = in.openObject(typeid(std::set<T>).name());
     size_t n = in.readCount();
-    ::std::set<T> rv;
+    std::set<T> rv;
     for (size_t i = 0; i < n; i++) {
         rv.insert(D<T>::des(*this));
     }
@@ -1527,7 +1527,7 @@ auto HirDeserialiser::deserialiseVisent() -> HIRVisEnt<T> {
 }
 
 template <typename T>
-auto HirDeserialiser::deserialisePtr() -> ::std::unique_ptr<T> {
+auto HirDeserialiser::deserialisePtr() -> std::unique_ptr<T> {
     return box$(D<T>::des(*this));
 }
 
@@ -1546,7 +1546,7 @@ auto HirDeserialiser::deserialiseProcmacro() -> HIRProcMacro {
     }
     pm.name = in.readIstring();
     pm.path = deserialiseSimplepath();
-    pm.attributes = deserialiseVec<::std::string>();
+    pm.attributes = deserialiseVec<std::string>();
     return pm;
 }
 
@@ -1559,17 +1559,17 @@ auto HirDeserialiser::deserialiseTypeimpl() -> HIRTypeImpl {
     size_t methodCount = in.readCount();
     for (size_t i = 0; i < methodCount; i++) {
         auto name = in.readIstring();
-        rv.methods.insert(::std::make_pair(mv$(name), HIRTypeImpl::VisImplEnt<HIRFunction>{deserialisePub(), in.readBool(), deserialiseFunction()}));
+        rv.methods.insert(std::make_pair(mv$(name), HIRTypeImpl::VisImplEnt<HIRFunction>{deserialisePub(), in.readBool(), deserialiseFunction()}));
     }
     size_t constCount = in.readCount();
     for (size_t i = 0; i < constCount; i++) {
         auto name = in.readIstring();
-        rv.constants.insert(::std::make_pair(mv$(name), HIRTypeImpl::VisImplEnt<HIRConstant>{deserialisePub(), in.readBool(), deserialiseConstant()}));
+        rv.constants.insert(std::make_pair(mv$(name), HIRTypeImpl::VisImplEnt<HIRConstant>{deserialisePub(), in.readBool(), deserialiseConstant()}));
     }
     size_t typeCount = in.readCount();
     for (size_t i = 0; i < typeCount; i++) {
         auto name = in.readIstring();
-        rv.types.insert(::std::make_pair(mv$(name), HIRTypeImpl::VisImplEnt<HIRTypeAlias>{deserialisePub(), in.readBool(), deserialiseTypealias()}));
+        rv.types.insert(std::make_pair(mv$(name), HIRTypeImpl::VisImplEnt<HIRTypeAlias>{deserialisePub(), in.readBool(), deserialiseTypealias()}));
     }
     return rv;
 }
@@ -1587,25 +1587,25 @@ auto HirDeserialiser::deserialiseTraitimpl() -> HIRTraitImpl {
     for (size_t i = 0; i < methodCount; i++) {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
-        rv.methods.insert(::std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRFunction>{isSpec, deserialiseFunction()}));
+        rv.methods.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRFunction>{isSpec, deserialiseFunction()}));
     }
     size_t constCount = in.readCount();
     for (size_t i = 0; i < constCount; i++) {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
-        rv.constants.insert(::std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRConstant>{isSpec, deserialiseConstant()}));
+        rv.constants.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRConstant>{isSpec, deserialiseConstant()}));
     }
     size_t staticCount = in.readCount();
     for (size_t i = 0; i < staticCount; i++) {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
-        rv.statics.insert(::std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRStatic>{isSpec, deserialiseStatic()}));
+        rv.statics.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRStatic>{isSpec, deserialiseStatic()}));
     }
     size_t typeCount = in.readCount();
     for (size_t i = 0; i < typeCount; i++) {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
-        rv.types.insert(::std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRTypeRef>{isSpec, deserialiseType()}));
+        rv.types.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRTypeRef>{isSpec, deserialiseType()}));
     }
 
     return rv;
@@ -1775,7 +1775,7 @@ auto HirDeserialiser::deserialiseMacroexpansionconcatent() -> ::MacroExpansionCo
 auto HirDeserialiser::deserialiseToken() -> ::Token {
     auto ty = static_cast<enum eTokenType>(in.readTag());
     auto d = deserialiseTokendata();
-    return ::Token(ty, ::std::move(d), {});
+    return ::Token(ty, std::move(d), {});
 }
 
 auto HirDeserialiser::deserialiseTokendata() -> ::Token::Data {
@@ -1878,7 +1878,7 @@ auto HirDeserialiser::deserialiseMirConstant() -> MIRConstant {
         _(Float, {in.readFloatValue(), static_cast<HIRCoreType>(in.readTag())})
         _(Bool, {in.readBool()})
         case MIRConstant::TAG_Bytes: {
-            ::std::vector<u8> bytes;
+            std::vector<u8> bytes;
             bytes.resize(in.readCount());
             in.read(bytes.data(), bytes.size());
             return MIRConstant::make_Bytes(mv$(bytes));
@@ -2015,12 +2015,12 @@ auto HirDeserialiser::deserialiseFunctionMarkings() -> HIRFunction::Markings {
     return rv;
 }
 
-auto HirDeserialiser::deserialiseFcnargs() -> ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> {
+auto HirDeserialiser::deserialiseFcnargs() -> std::vector<std::pair<HIRPattern, HIRTypeRef>> {
     size_t n = in.readCount();
-    ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> rv;
+    std::vector<std::pair<HIRPattern, HIRTypeRef>> rv;
     rv.reserve(n);
     for (size_t i = 0; i < n; i++) {
-        rv.push_back(::std::make_pair(HIRPattern{}, deserialiseType()));
+        rv.push_back(std::make_pair(HIRPattern{}, deserialiseType()));
     }
     return rv;
 }
@@ -2061,7 +2061,7 @@ auto HirDeserialiser::deserialiseStatic() -> HIRStatic {
     if (params.isGeneric()) {
         rv.value = deserialiseExprptr();
     }
-    rv.params = ::std::move(params);
+    rv.params = std::move(params);
     if (saveLiteral) {
         rv.valueRes = deserialiseEncodedliteral();
         rv.valueGenerated = true;
@@ -2131,12 +2131,12 @@ auto HirDeserialiser::deserialiseAssociatedtype() -> HIRAssociatedType {
 }
 
 template <typename T, typename U>
-auto D<::std::pair<T, U>>::des(HirDeserialiser& d) -> ::std::pair<T, U> {
+auto D<std::pair<T, U>>::des(HirDeserialiser& d) -> std::pair<T, U> {
     auto a = D<T>::des(d);
-    return ::std::make_pair(mv$(a), D<U>::des(d));
+    return std::make_pair(mv$(a), D<U>::des(d));
 }
 
-TreeVisitor::TreeVisitor(HIRTypeInterner& types, ::std::ostream& os)
+TreeVisitor::TreeVisitor(HIRTypeInterner& types, std::ostream& os)
     : HIRVisitor(nullptr, types)
     , os(os)
     , indentLevel(0)
@@ -2784,7 +2784,7 @@ auto TreeVisitor::visit(HIRExprNodeLiteral& node) -> void {
                     } else if (' ' <= v && v <= 0x7F) {
                         os << "'" << static_cast<char>(v) << "'";
                     } else {
-                        os << "'\\u{" << ::std::hex << v << ::std::dec << "}'";
+                        os << "'\\u{" << std::hex << v << std::dec << "}'";
                     }
                 } break;
                 default:
@@ -2990,7 +2990,7 @@ auto HirSerialiser::clear() -> void {
 }
 
 template <typename V>
-auto HirSerialiser::serialiseStrmap(const ::std::map<RcString, V>& map) -> void {
+auto HirSerialiser::serialiseStrmap(const std::map<RcString, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
         out.writeString(v.first);
@@ -2999,7 +2999,7 @@ auto HirSerialiser::serialiseStrmap(const ::std::map<RcString, V>& map) -> void 
 }
 
 template <typename V>
-auto HirSerialiser::serialiseStrmap(const ::std::map<::std::string, V>& map) -> void {
+auto HirSerialiser::serialiseStrmap(const std::map<std::string, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
         out.writeString(v.first);
@@ -3008,7 +3008,7 @@ auto HirSerialiser::serialiseStrmap(const ::std::map<::std::string, V>& map) -> 
 }
 
 template <typename V>
-auto HirSerialiser::serialisePathmap(const ::std::map<HIRSimplePath, V>& map) -> void {
+auto HirSerialiser::serialisePathmap(const std::map<HIRSimplePath, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
         serialise(v.first);
@@ -3017,7 +3017,7 @@ auto HirSerialiser::serialisePathmap(const ::std::map<HIRSimplePath, V>& map) ->
 }
 
 template <typename V>
-auto HirSerialiser::serialiseStrmap(const ::std::unordered_map<RcString, V>& map) -> void {
+auto HirSerialiser::serialiseStrmap(const std::unordered_map<RcString, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
         out.writeString(v.first);
@@ -3026,7 +3026,7 @@ auto HirSerialiser::serialiseStrmap(const ::std::unordered_map<RcString, V>& map
 }
 
 template <typename V>
-auto HirSerialiser::serialiseStrmap(const ::std::unordered_map<::std::string, V>& map) -> void {
+auto HirSerialiser::serialiseStrmap(const std::unordered_map<std::string, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
         out.writeString(v.first);
@@ -3035,7 +3035,7 @@ auto HirSerialiser::serialiseStrmap(const ::std::unordered_map<::std::string, V>
 }
 
 template <typename V>
-auto HirSerialiser::serialiseStrmap(const ::std::unordered_multimap<RcString, V>& map) -> void {
+auto HirSerialiser::serialiseStrmap(const std::unordered_multimap<RcString, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
         out.writeString(v.first);
@@ -3044,7 +3044,7 @@ auto HirSerialiser::serialiseStrmap(const ::std::unordered_multimap<RcString, V>
 }
 
 template <typename V>
-auto HirSerialiser::serialiseStrmap(const ::std::unordered_multimap<::std::string, V>& map) -> void {
+auto HirSerialiser::serialiseStrmap(const std::unordered_multimap<std::string, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
         out.writeString(v.first);
@@ -3062,8 +3062,8 @@ auto HirSerialiser::serialiseVec(const ThinVector<T>& vec) -> void {
 }
 
 template <typename T>
-auto HirSerialiser::serialiseVec(const ::std::vector<T>& vec) -> void {
-    auto _ = out.openObject(typeid(::std::vector<T>).name());
+auto HirSerialiser::serialiseVec(const std::vector<T>& vec) -> void {
+    auto _ = out.openObject(typeid(std::vector<T>).name());
     out.writeCount(vec.size());
     for (const auto& i : vec) {
         serialise(i);
@@ -3071,13 +3071,13 @@ auto HirSerialiser::serialiseVec(const ::std::vector<T>& vec) -> void {
 }
 
 template <typename T>
-auto HirSerialiser::serialise(const ::std::vector<T>& vec) -> void {
+auto HirSerialiser::serialise(const std::vector<T>& vec) -> void {
     serialiseVec(vec);
 }
 
 template <typename T>
-auto HirSerialiser::serialise(const ::std::set<T>& s) -> void {
-    auto _ = out.openObject(typeid(::std::set<T>).name());
+auto HirSerialiser::serialise(const std::set<T>& s) -> void {
+    auto _ = out.openObject(typeid(std::set<T>).name());
     out.writeCount(s.size());
     for (const auto& i : s) {
         serialise(i);
@@ -3101,24 +3101,24 @@ auto HirSerialiser::serialise(const HIRVisEnt<T>* e) -> void {
 }
 
 template <typename T>
-auto HirSerialiser::serialise(const ::std::unique_ptr<T>& e) -> void {
+auto HirSerialiser::serialise(const std::unique_ptr<T>& e) -> void {
     serialise(*e);
 }
 
 template <typename T>
-auto HirSerialiser::serialise(const ::std::pair<::std::string, T>& e) -> void {
+auto HirSerialiser::serialise(const std::pair<std::string, T>& e) -> void {
     out.writeString(e.first);
     serialise(e.second);
 }
 
 template <typename T>
-auto HirSerialiser::serialise(const ::std::pair<RcString, T>& e) -> void {
+auto HirSerialiser::serialise(const std::pair<RcString, T>& e) -> void {
     out.writeString(e.first);
     serialise(e.second);
 }
 
 template <typename T>
-auto HirSerialiser::serialise(const ::std::pair<unsigned int, T>& e) -> void {
+auto HirSerialiser::serialise(const std::pair<unsigned int, T>& e) -> void {
     out.writeCount(e.first);
     serialise(e.second);
 }
@@ -3577,7 +3577,7 @@ auto HirSerialiser::serialise(const HIRTraitPath& p) -> void {
     serialiseTraitpath(p);
 }
 
-auto HirSerialiser::serialise(const ::std::string& v) -> void {
+auto HirSerialiser::serialise(const std::string& v) -> void {
     out.writeString(v);
 }
 

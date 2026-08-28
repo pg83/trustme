@@ -22,7 +22,7 @@ namespace {
         MIRFunction output;
         unsigned statePtrLocal;
         unsigned nextPhase = 3;
-        Vector<::std::pair<unsigned, MIRBasicBlockId>> resumeTargets;
+        Vector<std::pair<unsigned, MIRBasicBlockId>> resumeTargets;
 
         struct CoroutineDropCloner: public MIRCloner {
             const AsyncDropPollBuilder& owner;
@@ -134,7 +134,7 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
     Cloner c{sp, resolve, params};
     output.blocks.reserve(tpl->blocks.size());
     for (const auto& block : tpl->blocks) {
-        ::std::vector<MIRStatement> statements;
+        std::vector<MIRStatement> statements;
 
         statements.reserve(block.statements.size());
         for (const auto& stmt : block.statements) {
@@ -171,7 +171,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         TransList& out;
         const HIRCrate& crate;
         unsigned count;
-        ::std::vector<std::pair<HIRSimplePath, HIRStatic*>> added;
+        std::vector<std::pair<HIRSimplePath, HIRStatic*>> added;
 
         Nvs(TransList& out, const HIRCrate& crate)
             : out(out)
@@ -200,8 +200,8 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         }
     } nvs{list, crate};
 
-    ::std::set<const TransListConst*> evaluatedConstants;
-    ::std::set<const TransListStatic*> evaluatedStatics;
+    std::set<const TransListConst*> evaluatedConstants;
+    std::set<const TransListStatic*> evaluatedStatics;
     size_t insertedStatics = 0;
 
     bool changed;
@@ -226,8 +226,8 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             ms.ppImpl = &pp.ppImpl;
             ms.ppMethod = &pp.ppMethod;
             {
-                auto newLit = eval.evaluateConstant(path, c.value, ::std::move(ty), ::std::move(ms));
-                auto inserted = c.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
+                auto newLit = eval.evaluateConstant(path, c.value, std::move(ty), std::move(ms));
+                auto inserted = c.monomorphCache.insert(std::make_pair(path.clone(), std::move(newLit)));
                 generatedLiterals.pushBack(&inserted.first->second);
             }
         }
@@ -249,12 +249,12 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             ms.ppImpl = &pp.ppImpl;
             ms.ppMethod = &pp.ppMethod;
             {
-                auto newLit = eval.evaluateConstant(path, s.value, ::std::move(ty), ::std::move(ms));
-                s.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
+                auto newLit = eval.evaluateConstant(path, s.value, std::move(ty), std::move(ms));
+                s.monomorphCache.insert(std::make_pair(path.clone(), std::move(newLit)));
             }
         }
 
-        ::std::vector<HIRPath> generated;
+        std::vector<HIRPath> generated;
         generated.reserve(nvs.added.size() - insertedStatics);
         while (insertedStatics < nvs.added.size()) {
             auto& value = nvs.added[insertedStatics++];
@@ -279,7 +279,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         }
     } while (changed);
 
-    ::std::set<const TransListFunction*> processedFunctions;
+    std::set<const TransListFunction*> processedFunctions;
     while (processedFunctions.size() < list.functions.size()) {
         Vector<const TransListFunction*> generatedFunctions;
         for (auto& fcnEnt : list.functions) {
@@ -311,7 +311,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
                 auto retType = pp.monomorph(resolve, fcn.returnType);
                 HIRFunction::argsT args;
                 for (const auto& a : fcn.args) {
-                    args.push_back(::std::make_pair(HIRPattern{}, pp.monomorph(resolve, a.second)));
+                    args.push_back(std::make_pair(HIRPattern{}, pp.monomorph(resolve, a.second)));
                 }
 
                 HIRItemPath ip(path);
@@ -322,9 +322,9 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
                     MIROptimise(resolve, ip, *mir, args, retType, mirOptLevel, /*do_inline*/ false);
                 }
 
-                transFcn->monomorphised.retTy = ::std::move(retType);
-                transFcn->monomorphised.argTys = ::std::move(args);
-                transFcn->monomorphised.code = ::std::move(mir);
+                transFcn->monomorphised.retTy = std::move(retType);
+                transFcn->monomorphised.argTys = std::move(args);
+                transFcn->monomorphised.code = std::move(mir);
                 generatedFunctions.pushBack(transFcn);
                 resolve.clearBothGenerics();
             } else {
@@ -583,7 +583,7 @@ auto AsyncDropPollBuilder::buildFields(const HIRTypeData* ty, MIRLValue value, M
             return next;
         }
         auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, ty, &pathTy->path.data.as_Generic().params, nullptr);
-        auto targets = ::std::vector<MIRBasicBlockId>();
+        auto targets = std::vector<MIRBasicBlockId>();
         targets.reserve(variants->size());
         for (size_t i = 0; i < variants->size(); i++) {
             auto variantTy = resolve.monomorphExpand(sp, variants->at(i).type, monomorph);

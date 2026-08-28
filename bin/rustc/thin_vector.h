@@ -126,7 +126,7 @@ public:
         if (cap > 0) {
             auto* p = static_cast<T*>(malloc(sizeof(T) * (cap + metadataLen())));
             if (!p) {
-                throw ::std::bad_alloc();
+                throw std::bad_alloc();
             }
             auto* meta = (Meta*)p;
             ptr = p + metadataLen();
@@ -305,7 +305,7 @@ private:
 };
 
 template <typename T>
-inline ::std::ostream& operator<<(::std::ostream& os, const ThinVector<T>& v) {
+inline std::ostream& operator<<(std::ostream& os, const ThinVector<T>& v) {
     if (v.size() > 0) {
         bool isFirst = true;
         for (const auto& i : v) {

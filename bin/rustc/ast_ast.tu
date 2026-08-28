@@ -8,8 +8,8 @@ generate(
     default="Unit",
     variants=[
         v("Unit"),
-        v("Tuple", fields=[("::std::vector<ASTTupleItem>", "items")]),
-        v("Struct", fields=[("::std::vector<ASTStructItem>", "fields")]),
+        v("Tuple", fields=[("std::vector<ASTTupleItem>", "items")]),
+        v("Struct", fields=[("std::vector<ASTStructItem>", "fields")]),
     ],
 )
 
@@ -18,8 +18,8 @@ generate(
     default="Struct",
     variants=[
         v("Unit"),
-        v("Tuple", fields=[("::std::vector<ASTTupleItem>", "ents")]),
-        v("Struct", fields=[("::std::vector<ASTStructItem>", "ents")]),
+        v("Tuple", fields=[("std::vector<ASTTupleItem>", "ents")]),
+        v("Struct", fields=[("std::vector<ASTStructItem>", "ents")]),
     ],
 )
 

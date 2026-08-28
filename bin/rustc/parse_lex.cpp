@@ -18,7 +18,7 @@
 
 using namespace stl;
 
-Lexer::Lexer(u32& id, ObjPool& pool, const ::std::string& filename, ASTEdition edition, ParseState ps)
+Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edition, ParseState ps)
     : TokenStream(ps)
     , id(id)
     , path_(filename.c_str())
@@ -36,14 +36,14 @@ Lexer::Lexer(u32& id, ObjPool& pool, const ::std::string& filename, ASTEdition e
 {
     if (istreamFp) {
         if (!istreamFp->is_open()) {
-            throw ::std::runtime_error("Unable to open file '" + filename + "'");
+            throw std::runtime_error("Unable to open file '" + filename + "'");
         }
         if (this->getcByte() == '\xef') {
             if (this->getcByte() != '\xbb') {
-                throw ::std::runtime_error("Incomplete BOM - missing \\xBB in second position");
+                throw std::runtime_error("Incomplete BOM - missing \\xBB in second position");
             }
             if (this->getcByte() != '\xbf') {
-                throw ::std::runtime_error("Incomplete BOM - missing \\xBF in third position");
+                throw std::runtime_error("Incomplete BOM - missing \\xBF in third position");
             }
             lineOfs = 0;
         } else {
@@ -52,7 +52,7 @@ Lexer::Lexer(u32& id, ObjPool& pool, const ::std::string& filename, ASTEdition e
     }
 }
 
-Lexer::Lexer(u32& id, ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, ParseState ps)
+Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition, ParseState ps)
     : TokenStream(ps)
     , id(id)
     , path_("-")
@@ -293,7 +293,7 @@ bool issym(Codepoint ch) {
     if ('0' <= ch.v && ch.v <= '9') {
         return true;
     }
-    if (::std::isalpha(ch.v)) {
+    if (std::isalpha(ch.v)) {
         return true;
     }
     if (ch == '_') {
@@ -317,7 +317,7 @@ Token Lexer::withLiteralSuffix(Token tok) {
         return tok;
     }
 
-    ::std::string suffix;
+    std::string suffix;
     do {
         suffix += ch;
         try {
@@ -346,7 +346,7 @@ Token Lexer::realGetToken() {
         }
         Token tok = getTokenInt();
 #ifdef TRACE_RAW_TOKENS
-        ::std::cout << "getTokenInt: tok = " << tok << ::std::endl;
+        std::cout << "getTokenInt: tok = " << tok << std::endl;
 #endif
         switch (tok.type()) {
             case TOK_NEWLINE:
@@ -370,7 +370,7 @@ void Lexer::checkInitialShebang() {
 
     const auto initialLine = line;
     const auto initialLineOfs = lineOfs;
-    ::std::vector<Codepoint> consumed;
+    std::vector<Codepoint> consumed;
     bool eof = false;
     auto read = [&]() {
         try {
@@ -386,7 +386,7 @@ void Lexer::checkInitialShebang() {
         line = initialLine;
         lineOfs = initialLineOfs;
         lastCharValid = false;
-        replayChars = ::std::move(consumed);
+        replayChars = std::move(consumed);
         replayCharOffset = start;
     };
 
@@ -522,7 +522,7 @@ bool Lexer::trySkipInitialFrontmatter() {
 
     const auto initialLine = line;
     const auto initialLineOfs = lineOfs;
-    ::std::vector<Codepoint> consumed;
+    std::vector<Codepoint> consumed;
     bool eof = false;
     auto read = [&]() {
         try {
@@ -538,7 +538,7 @@ bool Lexer::trySkipInitialFrontmatter() {
         line = initialLine;
         lineOfs = initialLineOfs;
         lastCharValid = false;
-        replayChars = ::std::move(consumed);
+        replayChars = std::move(consumed);
         replayCharOffset = 0;
     };
 
@@ -581,7 +581,7 @@ bool Lexer::trySkipInitialFrontmatter() {
         ch = read();
     }
     if (!eof && ch != '\n') {
-        const bool validIdentifierStart = ch == '_' || (ch.v < 128 && ::std::isalpha(ch.v)) || ch.v >= 128;
+        const bool validIdentifierStart = ch == '_' || (ch.v < 128 && std::isalpha(ch.v)) || ch.v >= 128;
         if (!validIdentifierStart) {
             initialFrontmatterAllowed = false;
             restore();
@@ -658,7 +658,7 @@ bool Lexer::trySkipInitialFrontmatter() {
 
 Token Lexer::getTokenInt() {
     if (!this->nextTokens.empty()) {
-        auto rv = ::std::move(this->nextTokens.back());
+        auto rv = std::move(this->nextTokens.back());
         nextTokens.pop_back();
         return rv;
     }
@@ -740,7 +740,7 @@ Token Lexer::getTokenInt() {
                         return t;
                     }
                     if (issym(ch = this->getc())) {
-                        ::std::string suffix;
+                        std::string suffix;
                         while (issym(ch)) {
                             suffix += ch;
                             ch = this->getc();
@@ -767,7 +767,7 @@ Token Lexer::getTokenInt() {
                     return Token::makeFloat(fval, numType);
 
                 } else if (issym(ch)) {
-                    ::std::string suffix;
+                    std::string suffix;
                     while (issym(ch)) {
                         suffix += ch;
                         ch = this->getc();
@@ -830,7 +830,7 @@ Token Lexer::getTokenInt() {
                     assert(isByte);
 
                     if (ch == '"') {
-                        ::std::string str;
+                        std::string str;
                         while ((ch = this->getc()) != '"') {
                             if (ch == '\\') {
                                 auto v = this->parseEscape('"');
@@ -912,7 +912,7 @@ Token Lexer::getTokenInt() {
         } else {
             switch (sym) {
                 case LINECOMMENT: {
-                    ::std::string str;
+                    std::string str;
                     auto ch = this->getc();
                     bool isDoc = false;
                     bool isPdoc = false;
@@ -953,7 +953,7 @@ Token Lexer::getTokenInt() {
                     return Token(TOK_COMMENT, str, realGetHygiene());
                 }
                 case BLOCKCOMMENT: {
-                    ::std::string str;
+                    std::string str;
                     bool isDoc = false;
                     bool isPdoc = false;
                     ch = this->getc();
@@ -1034,7 +1034,7 @@ Token Lexer::getTokenInt() {
                         if (ch == '\'') {
                             return this->withLiteralSuffix(Token(U128(firstchar.v), CORETYPE_CHAR));
                         } else if (firstchar == 'r' && ch == '#' && this->editionAfter(ASTEdition::Rust2018)) {
-                            ::std::string str;
+                            std::string str;
                             ch = this->getc();
                             if (!issym(ch)) {
                                 compileErrorGeneric(*this, "Invalid raw lifetime");
@@ -1046,7 +1046,7 @@ Token Lexer::getTokenInt() {
                             this->ungetc();
                             return Token(TOK_LIFETIME, Ident(this->realGetHygiene(), RcString::newInterned(str)));
                         } else if (issym(firstchar.v)) {
-                            ::std::string str;
+                            std::string str;
                             str += firstchar;
                             while (issym(ch)) {
                                 str += ch;
@@ -1061,7 +1061,7 @@ Token Lexer::getTokenInt() {
                     break;
                 }
                 case DOUBLEQUOTE: {
-                    ::std::string str;
+                    std::string str;
                     while ((ch = this->getc()) != '"') {
                         if (ch == '\\') {
                             auto v = this->parseEscape('"');
@@ -1109,7 +1109,7 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
         }
     }
     auto terminator = ch;
-    ::std::string val;
+    std::string val;
 
     unsigned terminatingHashes = 0;
     for (;;) {
@@ -1151,7 +1151,7 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
 }
 
 Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool parseReservedWord) {
-    ::std::string str;
+    std::string str;
     if (leader2 != '\0') {
         str += leader;
     }
@@ -1376,15 +1376,15 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
             }
             ch = this->getc();
             if (!ch.isxdigit()) {
-                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence").c_str());
+                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << std::hex << ch.v << "' in \\u sequence").c_str());
             }
             char tmp[3] = {static_cast<char>(ch.v), 0, 0};
             ch = this->getc();
             if (!ch.isxdigit()) {
-                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence").c_str());
+                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << std::hex << ch.v << "' in \\u sequence").c_str());
             }
             tmp[1] = static_cast<char>(ch.v);
-            return ::std::strtol(tmp, NULL, 16);
+            return std::strtol(tmp, NULL, 16);
         } break;
         case 'u': {
             u32 val = 0;
@@ -1395,13 +1395,13 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
                 ch = this->getc();
             }
             if (!ch.isxdigit()) {
-                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence").c_str());
+                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << std::hex << ch.v << "' in \\u sequence").c_str());
             }
             while (ch.isxdigit() || ch == '_') {
                 if (ch != '_') {
                     char tmp[2] = {static_cast<char>(ch.v), 0};
                     val *= 16;
-                    val += ::std::strtol(tmp, NULL, 16);
+                    val += std::strtol(tmp, NULL, 16);
                 }
                 ch = this->getc();
             }
@@ -1470,7 +1470,7 @@ Codepoint Lexer::getc() {
     if (lastCharValid) {
         lastCharValid = false;
 #ifdef TRACE_CHARS
-        ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << " (cached)" << ::std::endl;
+        std::cout << "getc(): U+" << std::hex << lastChar.v << " (cached)" << std::endl;
 #endif
     } else if (replayCharOffset < replayChars.size()) {
         lastChar = replayChars[replayCharOffset++];
@@ -1481,7 +1481,7 @@ Codepoint Lexer::getc() {
             lineOfs += 1;
         }
 #ifdef TRACE_CHARS
-        ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << " (replayed)" << ::std::endl;
+        std::cout << "getc(): U+" << std::hex << lastChar.v << " (replayed)" << std::endl;
 #endif
     } else {
         replayChars.clear();
@@ -1491,7 +1491,7 @@ Codepoint Lexer::getc() {
             lineOfs += 1;
         }
 #ifdef TRACE_CHARS
-        ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << ::std::endl;
+        std::cout << "getc(): U+" << std::hex << lastChar.v << std::endl;
 #endif
     }
     return lastChar;
@@ -1554,7 +1554,7 @@ Codepoint Lexer::getcCp() {
 
 void Lexer::ungetc() {
 #ifdef TRACE_CHARS
-    ::std::cout << "ungetc(): cache U+" << ::std::hex << lastChar.v << ::std::endl;
+    std::cout << "ungetc(): cache U+" << std::hex << lastChar.v << std::endl;
 #endif
     assert(!lastCharValid);
     lastCharValid = true;
@@ -1587,7 +1587,7 @@ bool Codepoint::isxdigit() const {
     return this->v < 128 && std::isxdigit(static_cast<int>(this->v));
 }
 
-::std::string& operator+=(::std::string& s, const Codepoint& cp) {
+std::string& operator+=(std::string& s, const Codepoint& cp) {
     if (cp.v < 0x80) {
         s += (char)cp.v;
     } else if (cp.v < (0x1F + 1) << (1 * 6)) {
@@ -1603,12 +1603,12 @@ bool Codepoint::isxdigit() const {
         s += (char)(0x80 | ((cp.v >> 6) & 0x3F));
         s += (char)(0x80 | ((cp.v >> 0) & 0x3F));
     } else {
-        throw ::std::runtime_error(FMT("BUGCHECK: Bad unicode codepoint encountered - " << ::std::hex << cp.v));
+        throw std::runtime_error(FMT("BUGCHECK: Bad unicode codepoint encountered - " << std::hex << cp.v));
     }
     return s;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Codepoint& cp) {
+std::ostream& operator<<(std::ostream& os, const Codepoint& cp) {
     if (cp.v < 0x80) {
         os << (char)cp.v;
     } else if (cp.v < (0x1F + 1) << (1 * 6)) {
@@ -1624,7 +1624,7 @@ bool Codepoint::isxdigit() const {
         os << (char)(0x80 | ((cp.v >> 6) & 0x3F));
         os << (char)(0x80 | ((cp.v >> 0) & 0x3F));
     } else {
-        throw ::std::runtime_error("BUGCHECK: Bad unicode codepoint encountered");
+        throw std::runtime_error("BUGCHECK: Bad unicode codepoint encountered");
     }
     return os;
 }
@@ -1650,11 +1650,11 @@ Token LexFindOperator(StringView s) {
     return TOK_NULL;
 }
 
-Token LexFindOperator(const ::std::string& s) {
+Token LexFindOperator(const std::string& s) {
     return LexFindOperator(StringView(reinterpret_cast<const u8*>(s.data()), s.size()));
 }
 
-Token LexFindReservedWord(const ::std::string& s, ASTEdition edition) {
+Token LexFindReservedWord(const std::string& s, ASTEdition edition) {
     size_t len = 0;
     const sRWORD* RWORDS = nullptr;
     switch (edition) {

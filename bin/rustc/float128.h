@@ -57,5 +57,5 @@ public:
     static Float128 minimumNumber(const Float128& a, const Float128& b);
     static Float128 maximumNumber(const Float128& a, const Float128& b);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const Float128& value);
+    friend std::ostream& operator<<(std::ostream& os, const Float128& value);
 };

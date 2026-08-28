@@ -16,8 +16,8 @@ class MacroExpander;
 class SimplePatEnt;
 class MacroExpansionEnt;
 
-extern ::std::ostream& operator<<(::std::ostream& os, const MacroExpansionEnt& x);
-extern void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpansionEnt>& contents);
+extern std::ostream& operator<<(std::ostream& os, const MacroExpansionEnt& x);
+extern void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansionEnt>& contents);
 
 enum : unsigned int {
     NAMEDVALUE_VALMASK = (1 << 30) - 1,
@@ -42,7 +42,7 @@ struct MacroPatEnt {
     // TODO: Include a point span for the token?
     Token tok;
 
-    ::std::vector<MacroPatEnt> subpats;
+    std::vector<MacroPatEnt> subpats;
 
     enum Type {
         PAT_TOKEN,
@@ -71,10 +71,10 @@ struct MacroPatEnt {
 
     MacroPatEnt(Span sp, RcString name, unsigned int nameIndex, Type type);
 
-    MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, ::std::vector<MacroPatEnt> ents);
+    MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, std::vector<MacroPatEnt> ents);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const MacroPatEnt& x);
-    friend ::std::ostream& operator<<(::std::ostream& os, const MacroPatEnt::Type& x);
+    friend std::ostream& operator<<(std::ostream& os, const MacroPatEnt& x);
+    friend std::ostream& operator<<(std::ostream& os, const MacroPatEnt::Type& x);
 };
 
 struct SimplePatIfCheck {
@@ -93,25 +93,25 @@ struct SimplePatIfCheck {
         return this->ty == x.ty && this->tok == x.tok;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const SimplePatIfCheck& x);
+    friend std::ostream& operator<<(std::ostream& os, const SimplePatIfCheck& x);
 };
 
 #include "macro_rules_macro_rules_tu.h"
 
-extern ::std::ostream& operator<<(::std::ostream& os, const SimplePatEnt& x);
+extern std::ostream& operator<<(std::ostream& os, const SimplePatEnt& x);
 
 struct MacroRulesArm {
-    ::std::vector<RcString> paramNames;
+    std::vector<RcString> paramNames;
 
-    ::std::vector<SimplePatEnt> pattern;
+    std::vector<SimplePatEnt> pattern;
 
-    ::std::vector<MacroExpansionEnt> contents;
+    std::vector<MacroExpansionEnt> contents;
 
     ~MacroRulesArm();
 
     MacroRulesArm();
 
-    MacroRulesArm(::std::vector<SimplePatEnt> pattern, ::std::vector<MacroExpansionEnt> contents);
+    MacroRulesArm(std::vector<SimplePatEnt> pattern, std::vector<MacroExpansionEnt> contents);
 
     MacroRulesArm(const MacroRulesArm&) = delete;
     MacroRulesArm& operator=(const MacroRulesArm&) = delete;
@@ -138,7 +138,7 @@ public:
 
     Span definitionSpan;
 
-    ::std::vector<MacroRulesArm> rules;
+    std::vector<MacroRulesArm> rules;
 
     MacroRules(u32& id, RcString sourceCrate, ASTEdition edition);
 
@@ -146,7 +146,7 @@ public:
     MacroRules(MacroRules&&) = default;
 };
 
-extern ::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, const WireBoard& wb, TokenTree input, const ASTCrate& crate, ASTModule& mod);
+extern std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, const WireBoard& wb, TokenTree input, const ASTCrate& crate, ASTModule& mod);
 
 extern MacroRulesPtr ParseMacroRules(TokenStream& lex);
 

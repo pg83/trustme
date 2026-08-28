@@ -21,7 +21,7 @@ class ASTTestDesc {
 public:
     Span span;
     ASTAbsolutePath path;
-    ::std::string name;
+    std::string name;
     bool ignore = false;
     bool isBenchmark = false;
 
@@ -31,7 +31,7 @@ public:
         YesWithMessage,
     } panicType = ShouldPanic::No;
 
-    ::std::string expectedPanicMessage;
+    std::string expectedPanicMessage;
 };
 
 enum class ASTProcMacroTy {
@@ -45,7 +45,7 @@ public:
     ASTProcMacroTy ty;
     RcString name;
     ASTAbsolutePath path;
-    ::std::vector<::std::string> attributes;
+    std::vector<std::string> attributes;
 };
 
 class ASTCrate {
@@ -57,16 +57,16 @@ public:
     HIRTypeInterner& types;
     ASTAttributeList attrs;
 
-    ::std::map<::std::string, ASTAbsolutePath> langItems;
-    ::std::set<RcString> features;
+    std::map<std::string, ASTAbsolutePath> langItems;
+    std::set<RcString> features;
 
 public:
     ASTModule rootModule_;
 
-    ::std::vector<RcString> externCratesOrd;
-    ::std::map<RcString, ASTExternCrate> externCrates;
+    std::vector<RcString> externCratesOrd;
+    std::map<RcString, ASTExternCrate> externCrates;
 
-    ::std::map<RcString, const MacroRules*> exportedMacros;
+    std::map<RcString, const MacroRules*> exportedMacros;
 
     RcString extCratenameCore;
     RcString extCratenameStd;
@@ -75,11 +75,11 @@ public:
 
     bool testHarness = false;
     bool noMain = false;
-    ::std::vector<ASTTestDesc> tests;
+    std::vector<ASTTestDesc> tests;
 
-    mutable ::std::vector<::std::string> extraFiles;
+    mutable std::vector<std::string> extraFiles;
 
-    ::std::vector<ASTProcMacroDef> procMacros;
+    std::vector<ASTProcMacroDef> procMacros;
 
     ASTEdition edition;
     enum class Type {
@@ -97,8 +97,8 @@ public:
         LOAD_NONE,
     } loadStd = LOAD_STD;
 
-    ::std::string crateNameSuffix;
-    ::std::string crateNameSet;
+    std::string crateNameSuffix;
+    std::string crateNameSet;
     RcString crateNameReal;
     ASTPath preludePath;
 
@@ -116,7 +116,7 @@ public:
 
     void loadExterns(Settings& settings);
 
-    RcString loadExternCrate(Settings& settings, Span sp, const RcString& name, const ::std::string& file = "");
+    RcString loadExternCrate(Settings& settings, Span sp, const RcString& name, const std::string& file = "");
 };
 
 class ASTExternCrate {
@@ -124,13 +124,13 @@ public:
     RcString name;
     RcString shortName;
 
-    ::std::string filename;
+    std::string filename;
     RcString objectFilename;
     RcString procMacroFilename;
     bool isProcMacro = false;
     HIRCrate* hir = nullptr;
 
-    ASTExternCrate(u32& id, stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name, const ::std::string& path);
+    ASTExternCrate(u32& id, stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name, const std::string& path);
 
     ASTExternCrate(ASTExternCrate&&) = default;
     ASTExternCrate& operator=(ASTExternCrate&&) = default;

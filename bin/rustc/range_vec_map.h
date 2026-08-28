@@ -15,7 +15,7 @@ public:
     typedef std::pair<K, V> itemT;
 
 private:
-    typedef std::vector<::std::unique_ptr<itemT>> innerT;
+    typedef std::vector<std::unique_ptr<itemT>> innerT;
     innerT data_;
     Cmp cmp;
 
@@ -125,14 +125,14 @@ public:
 
     template <typename K2>
     iterator lower_bound(const K2& k) {
-        return iterator(std::lower_bound(data_.begin(), data_.end(), k, [&](const ::std::unique_ptr<itemT>& kv, const K2& k) {
+        return iterator(std::lower_bound(data_.begin(), data_.end(), k, [&](const std::unique_ptr<itemT>& kv, const K2& k) {
             return cmp(kv->first, k);
         }));
     }
 
     template <typename K2>
     iterator upper_bound(const K2& k) {
-        return iterator(std::upper_bound(data_.begin(), data_.end(), k, [&](const K2& k, const ::std::unique_ptr<itemT>& kv) {
+        return iterator(std::upper_bound(data_.begin(), data_.end(), k, [&](const K2& k, const std::unique_ptr<itemT>& kv) {
             return cmp(k, kv->first);
         }));
     }
@@ -144,14 +144,14 @@ public:
 
     template <typename K2>
     const_iterator lower_bound(const K2& k) const {
-        return const_iterator(std::lower_bound(data_.begin(), data_.end(), k, [&](const ::std::unique_ptr<itemT>& kv, const K2& k) {
+        return const_iterator(std::lower_bound(data_.begin(), data_.end(), k, [&](const std::unique_ptr<itemT>& kv, const K2& k) {
             return cmp(kv->first, k);
         }));
     }
 
     template <typename K2>
     const_iterator upper_bound(const K2& k) const {
-        return const_iterator(std::upper_bound(data_.begin(), data_.end(), k, [&](const K2& k, const ::std::unique_ptr<itemT>& kv) {
+        return const_iterator(std::upper_bound(data_.begin(), data_.end(), k, [&](const K2& k, const std::unique_ptr<itemT>& kv) {
             return cmp(k, kv->first);
         }));
     }

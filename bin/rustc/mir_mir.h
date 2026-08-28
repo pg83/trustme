@@ -182,11 +182,11 @@ struct MIRLValue {
     };
 
     Storage root;
-    ::std::vector<Wrapper> wrappers;
+    std::vector<Wrapper> wrappers;
 
     MIRLValue();
 
-    MIRLValue(Storage root, ::std::vector<Wrapper> wrappers);
+    MIRLValue(Storage root, std::vector<Wrapper> wrappers);
 
     static MIRLValue newReturn() {
         return MIRLValue(Storage::newReturn(), {});
@@ -201,7 +201,7 @@ struct MIRLValue {
     }
 
     static MIRLValue newStatic(HIRPath p) {
-        return MIRLValue(Storage::newStatic(::std::move(p)), {});
+        return MIRLValue(Storage::newStatic(std::move(p)), {});
     }
 
     static MIRLValue newDeref(MIRLValue lv);
@@ -248,15 +248,15 @@ struct MIRLValue {
         return MIRLValue(root.clone(), wrappers);
     }
 
-    MIRLValue cloneWrapped(::std::vector<Wrapper> wrappers) const;
+    MIRLValue cloneWrapped(std::vector<Wrapper> wrappers) const;
 
     template <typename It>
     MIRLValue cloneWrapped(It beginIt, It endIt) const {
-        ::std::vector<Wrapper> newWrappers;
-        newWrappers.reserve(wrappers.size() + ::std::distance(beginIt, endIt));
+        std::vector<Wrapper> newWrappers;
+        newWrappers.reserve(wrappers.size() + std::distance(beginIt, endIt));
         newWrappers.insert(newWrappers.end(), wrappers.begin(), wrappers.end());
         newWrappers.insert(newWrappers.end(), beginIt, endIt);
-        return MIRLValue(root.clone(), ::std::move(newWrappers));
+        return MIRLValue(root.clone(), std::move(newWrappers));
     }
 
     MIRLValue cloneUnwrapped(unsigned count = 1) const;
@@ -276,7 +276,7 @@ struct MIRLValue {
 
     public:
         MIRLValue clone() const {
-            return MIRLValue(lv_->root.clone(), ::std::vector<Wrapper>(lv_->wrappers.begin(), lv_->wrappers.begin() + wrapperCount_));
+            return MIRLValue(lv_->root.clone(), std::vector<Wrapper>(lv_->wrappers.begin(), lv_->wrappers.begin() + wrapperCount_));
         }
 
         const MIRLValue& lv() const {
@@ -350,7 +350,7 @@ struct MIRLValue {
 
         unsigned as_Index() const;
 
-        void fmt(::std::ostream& os) const;
+        void fmt(std::ostream& os) const;
         Ordering ord(const RefCommon& b) const;
     };
 
@@ -362,7 +362,7 @@ struct MIRLValue {
 
         const CRef innerRef() const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const CRef& x);
+        friend std::ostream& operator<<(std::ostream& os, const CRef& x);
 
         bool operator<(const CRef& b) const {
             return this->ord(b) == OrdLess;
@@ -385,16 +385,16 @@ struct MIRLValue {
 
         void replace(MIRLValue x);
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const MRef& x);
+        friend std::ostream& operator<<(std::ostream& os, const MRef& x);
     };
 
     Ordering ord(const MIRLValue::CRef& x) const;
     Ordering ord(const MIRLValue::MRef& x) const;
 };
 
-extern ::std::ostream& operator<<(::std::ostream& os, const MIRLValue& x);
-extern ::std::ostream& operator<<(::std::ostream& os, const MIRLValue::Storage& x);
-extern ::std::ostream& operator<<(::std::ostream& os, const MIRLValue::Wrapper& x);
+extern std::ostream& operator<<(std::ostream& os, const MIRLValue& x);
+extern std::ostream& operator<<(std::ostream& os, const MIRLValue::Storage& x);
+extern std::ostream& operator<<(std::ostream& os, const MIRLValue::Wrapper& x);
 
 static inline bool operator<(const MIRLValue& a, const MIRLValue::CRef& b) {
     return a.ord(b) == OrdLess;
@@ -455,10 +455,10 @@ enum class MIRUniOp {
 };
 
 struct ItemAddress {
-    ::std::unique_ptr<HIRPath> p;
+    std::unique_ptr<HIRPath> p;
     U128 offset;
 
-    ItemAddress(::std::unique_ptr<HIRPath> p = {}, U128 offset = U128(0));
+    ItemAddress(std::unique_ptr<HIRPath> p = {}, U128 offset = U128(0));
 
     explicit operator bool() const {
         return static_cast<bool>(p);
@@ -500,7 +500,7 @@ enum class MIRDropKind {
 
 #include "mir_mir_tu.h"
 
-extern ::std::ostream& operator<<(::std::ostream& os, const MIRRValue& x);
+extern std::ostream& operator<<(std::ostream& os, const MIRRValue& x);
 extern bool operator==(const MIRRValue& a, const MIRRValue& b);
 
 static inline bool operator!=(const MIRRValue& a, const MIRRValue& b) {
@@ -509,14 +509,14 @@ static inline bool operator!=(const MIRRValue& a, const MIRRValue& b) {
 
 extern bool operator==(const MIRAsmParam& a, const MIRAsmParam& b);
 
-extern ::std::ostream& operator<<(::std::ostream& os, const MIRTerminator& x);
+extern std::ostream& operator<<(std::ostream& os, const MIRTerminator& x);
 extern bool operator==(const MIRTerminator& a, const MIRTerminator& b);
 
 static inline bool operator!=(const MIRTerminator& a, const MIRTerminator& b) {
     return !(a == b);
 }
 
-extern ::std::ostream& operator<<(::std::ostream& os, const MIRStatement& x);
+extern std::ostream& operator<<(std::ostream& os, const MIRStatement& x);
 extern bool operator==(const MIRStatement& a, const MIRStatement& b);
 
 static inline bool operator!=(const MIRStatement& a, const MIRStatement& b) {
@@ -524,7 +524,7 @@ static inline bool operator!=(const MIRStatement& a, const MIRStatement& b) {
 }
 
 struct MIRBasicBlock {
-    ::std::vector<MIRStatement> statements;
+    std::vector<MIRStatement> statements;
     MIRTerminator terminator;
     bool isCleanup = false;
 };
@@ -558,17 +558,17 @@ public:
 
 class MIRFunction {
 public:
-    ::std::vector<HIRTypeRef> locals;
+    std::vector<HIRTypeRef> locals;
 
-    ::std::vector<bool> dropFlags;
+    std::vector<bool> dropFlags;
 
-    ::std::vector<MIRBasicBlock> blocks;
+    std::vector<MIRBasicBlock> blocks;
 
     mutable MIREnumCachePtr transEnumState;
 };
 
 class MIRCloner {
-    ::std::unique_ptr<MonomorphiserNop> nop;
+    std::unique_ptr<MonomorphiserNop> nop;
 
 public:
     const Span& sp;
@@ -595,10 +595,10 @@ public:
     virtual MIRParam cloneParam(const MIRParam& src) const;
     virtual MIRConstant cloneConstant(const MIRConstant& src) const;
 
-    ::std::vector<MIRAsmParam> cloneAsmParams(const ::std::vector<MIRAsmParam>& params) const;
-    ::std::vector<::std::pair<::std::string, MIRLValue>> cloneNameLvalVec(const ::std::vector<::std::pair<::std::string, MIRLValue>>& src) const;
-    ::std::vector<MIRParam> cloneParamVec(const ::std::vector<MIRParam>& src) const;
-    ::std::vector<MIRLValue> cloneLvalVec(const ::std::vector<MIRLValue>& src) const;
+    std::vector<MIRAsmParam> cloneAsmParams(const std::vector<MIRAsmParam>& params) const;
+    std::vector<std::pair<std::string, MIRLValue>> cloneNameLvalVec(const std::vector<std::pair<std::string, MIRLValue>>& src) const;
+    std::vector<MIRParam> cloneParamVec(const std::vector<MIRParam>& src) const;
+    std::vector<MIRLValue> cloneLvalVec(const std::vector<MIRLValue>& src) const;
 
     HIRTypeRef monomorph(const HIRTypeData* x) const;
     HIRGenericPath monomorph(const HIRGenericPath& x) const;

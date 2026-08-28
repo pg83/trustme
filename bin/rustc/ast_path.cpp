@@ -10,7 +10,7 @@
 
 #define PRETTY_PATH_PRINT 1
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingType& x) {
+std::ostream& operator<<(std::ostream& os, const ASTPathBindingType& x) {
     switch (x.tag()) {
         case ASTPathBindingType::TAG_Unbound: {
             os << "_";
@@ -66,7 +66,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingValue& x) {
+std::ostream& operator<<(std::ostream& os, const ASTPathBindingValue& x) {
     switch (x.tag()) {
         case ASTPathBindingValue::TAG_Unbound: {
             os << "_";
@@ -103,7 +103,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingMacro& x) {
+std::ostream& operator<<(std::ostream& os, const ASTPathBindingMacro& x) {
     switch (x.tag()) {
         case ASTPathBindingMacro::TAG_Unbound: {
             os << "_";
@@ -132,7 +132,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPathParams& x) {
+std::ostream& operator<<(std::ostream& os, const ASTPathParams& x) {
     if (x.isRtn) {
         os << "(..)";
         return os;
@@ -203,15 +203,15 @@ ASTPathParamEnt ASTPathParamEnt::clone() const {
         }
         case ASTPathParamEnt::TAG_AssociatedTyEqual: {
             auto& v = (*this).as_AssociatedTyEqual();
-            return ::std::make_pair(v.first, v.second->clone());
+            return std::make_pair(v.first, v.second->clone());
         }
         case ASTPathParamEnt::TAG_AssociatedValueEqual: {
             auto& v = (*this).as_AssociatedValueEqual();
-            return ::std::make_pair(v.first, v.second->clone());
+            return std::make_pair(v.first, v.second->clone());
         }
         case ASTPathParamEnt::TAG_AssociatedTyBound: {
             auto& v = (*this).as_AssociatedTyBound();
-            return ::std::make_pair(v.first, v.second);
+            return std::make_pair(v.first, v.second);
         }
     }
     UNREACHABLE();
@@ -266,7 +266,7 @@ Ordering ASTPathParamEnt::ord(const ASTPathParamEnt& x) const {
     UNREACHABLE();
 }
 
-void ASTPathParamEnt::fmt(::std::ostream& os) const {
+void ASTPathParamEnt::fmt(std::ostream& os) const {
     switch ((*this).tag()) {
         case ASTPathParamEnt::TAG_Null: {
             auto& _ = (*this).as_Null();
@@ -337,7 +337,7 @@ Ordering ASTPathNode::ord(const ASTPathNode& x) const {
     return OrdEqual;
 }
 
-void ASTPathNode::printPretty(::std::ostream& os, bool isTypeContext) const {
+void ASTPathNode::printPretty(std::ostream& os, bool isTypeContext) const {
     os << ident_.name;
     if (!params_.isEmpty()) {
         if (!isTypeContext) {
@@ -347,14 +347,14 @@ void ASTPathNode::printPretty(::std::ostream& os, bool isTypeContext) const {
     }
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPathNode& pn) {
+std::ostream& operator<<(std::ostream& os, const ASTPathNode& pn) {
     pn.printPretty(os, false);
     return os;
 }
 
 template <typename T>
-typename ::std::vector<ASTNamed<T>>::const_iterator findNamed(const ::std::vector<ASTNamed<T>>& vec, const ::std::string& name) {
-    return ::std::find_if(vec.begin(), vec.end(), [&name](const ASTNamed<T>& x) {
+typename std::vector<ASTNamed<T>>::const_iterator findNamed(const std::vector<ASTNamed<T>>& vec, const std::string& name) {
+    return std::find_if(vec.begin(), vec.end(), [&name](const ASTNamed<T>& x) {
         return x.name == name;
     });
 }
@@ -362,11 +362,11 @@ typename ::std::vector<ASTNamed<T>>::const_iterator findNamed(const ::std::vecto
 ASTPath::~ASTPath() {
 }
 
-ASTPath ASTPath::newUfcsTy(ASTType* type, ::std::vector<ASTPathNode> nodes) {
+ASTPath ASTPath::newUfcsTy(ASTType* type, std::vector<ASTPathNode> nodes) {
     return ASTPath(ASTPath::Class::make_UFCS({type, nullptr, nodes}));
 }
 
-ASTPath ASTPath::newUfcsTrait(ASTType* type, ASTPath trait, ::std::vector<ASTPathNode> nodes) {
+ASTPath ASTPath::newUfcsTrait(ASTType* type, ASTPath trait, std::vector<ASTPathNode> nodes) {
     return ASTPath(ASTPath::Class::make_UFCS({type, box$(trait), nodes}));
 }
 
@@ -407,7 +407,7 @@ ASTPath::ASTPath(const ASTPath& x)
         case Class::TAG_UFCS: {
             auto& ent = x.cls.as_UFCS();
             if (ent.trait) {
-                cls = Class::make_UFCS({ent.type->clone(), ::std::unique_ptr<ASTPath>(new ASTPath(*ent.trait)), ent.nodes});
+                cls = Class::make_UFCS({ent.type->clone(), std::unique_ptr<ASTPath>(new ASTPath(*ent.trait)), ent.nodes});
             } else {
                 cls = Class::make_UFCS({ent.type->clone(), nullptr, ent.nodes});
             }
@@ -513,7 +513,7 @@ Ordering ASTPath::ord(const ASTPath& x) const {
     return OrdEqual;
 }
 
-void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) const {
+void ASTPath::printPretty(std::ostream& os, bool isTypeContext, bool isDebug) const {
     switch (cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
             os << "/*inv*/";
@@ -629,7 +629,7 @@ void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) 
     }
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPath& path) {
+std::ostream& operator<<(std::ostream& os, const ASTPath& path) {
     path.printPretty(os, false, true);
     return os;
 }
@@ -637,9 +637,9 @@ void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) 
 ASTAbsolutePath::ASTAbsolutePath() {
 }
 
-ASTAbsolutePath::ASTAbsolutePath(RcString crate, ::std::vector<RcString> nodes)
-    : crate(::std::move(crate))
-    , nodes(::std::move(nodes))
+ASTAbsolutePath::ASTAbsolutePath(RcString crate, std::vector<RcString> nodes)
+    : crate(std::move(crate))
+    , nodes(std::move(nodes))
 {
 }
 
@@ -648,7 +648,7 @@ ASTAbsolutePath ASTAbsolutePath::operator+(RcString n) const {
     rv.crate = this->crate;
     rv.nodes.reserve(this->nodes.size() + 1);
     rv.nodes.insert(rv.nodes.end(), this->nodes.begin(), this->nodes.end());
-    rv.nodes.push_back(::std::move(n));
+    rv.nodes.push_back(std::move(n));
     return rv;
 }
 
@@ -695,7 +695,7 @@ void ASTPath::Bindings::mergeFrom(const Bindings& x) {
 }
 
 ASTPath::ASTPath(Class c)
-    : cls(::std::move(c))
+    : cls(std::move(c))
 {
 }
 
@@ -704,7 +704,7 @@ ASTPath::ASTPath()
 {
 }
 
-ASTPath::ASTPath(RcString crate, ::std::vector<ASTPathNode> nodes)
+ASTPath::ASTPath(RcString crate, std::vector<ASTPathNode> nodes)
     : cls(Class::make_Absolute({mv$(crate), mv$(nodes)}))
 {
 }
@@ -742,7 +742,7 @@ ASTPath::ASTPath(const ASTAbsolutePath& p, ASTPathParams pp)
 {
     auto& n = cls.as_Absolute().nodes;
     assert(n.size() > 0);
-    n.back().args() = ::std::move(pp);
+    n.back().args() = std::move(pp);
 }
 
 ASTPath ASTPath::operator+(ASTPathNode pn) const {
@@ -782,7 +782,7 @@ size_t ASTPath::size() const {
     switch (cls.tag()) {
         case Class::TAG_Invalid: {
             assert(!cls.is_Invalid());
-            throw ::std::runtime_error("Path::nodes() on Invalid");
+            throw std::runtime_error("Path::nodes() on Invalid");
             break;
         }
         case Class::TAG_Local: {
@@ -809,19 +809,19 @@ size_t ASTPath::size() const {
             return ent.nodes.size();
         }
     }
-    throw ::std::runtime_error("Path::nodes() fell off");
+    throw std::runtime_error("Path::nodes() fell off");
 }
 
-::std::vector<ASTPathNode>& ASTPath::nodes() {
+std::vector<ASTPathNode>& ASTPath::nodes() {
     switch (cls.tag()) {
         case Class::TAG_Invalid: {
             assert(!cls.is_Invalid());
-            throw ::std::runtime_error("Path::nodes() on Invalid");
+            throw std::runtime_error("Path::nodes() on Invalid");
             break;
         }
         case Class::TAG_Local: {
             assert(!cls.is_Local());
-            throw ::std::runtime_error("Path::nodes() on Local");
+            throw std::runtime_error("Path::nodes() on Local");
             break;
         }
         case Class::TAG_Relative: {
@@ -845,10 +845,10 @@ size_t ASTPath::size() const {
             return ent.nodes;
         }
     }
-    throw ::std::runtime_error("Path::nodes() fell off");
+    throw std::runtime_error("Path::nodes() fell off");
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTAbsolutePath& x) {
+std::ostream& operator<<(std::ostream& os, const ASTAbsolutePath& x) {
     if (x.crate != "") {
         os << "::\"" << x.crate << "\"";
     } else {

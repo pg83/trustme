@@ -17,12 +17,12 @@ namespace {
         const TypeFmtRecursionNode* next;
     };
 
-    struct TypeFmtStream final: public ::std::ostream {
+    struct TypeFmtStream final: public std::ostream {
         const TypeFmtRecursionNode* recurseStack = nullptr;
 
-        explicit TypeFmtStream(::std::ostream& output);
+        explicit TypeFmtStream(std::ostream& output);
 
-        static TypeFmtStream* from(::std::ostream& output);
+        static TypeFmtStream* from(std::ostream& output);
     };
 }
 
@@ -34,7 +34,7 @@ Ordering ord(const HIRTypeData* l, const HIRTypeData* r) {
     return l->uid < r->uid ? OrdLess : OrdGreater;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRTypeData* ty) {
+std::ostream& operator<<(std::ostream& os, const HIRTypeData* ty) {
     if (ty) {
         ty->fmt(os);
     } else {
@@ -43,7 +43,7 @@ Ordering ord(const HIRTypeData* l, const HIRTypeData* r) {
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRCoreType& ct) {
+std::ostream& operator<<(std::ostream& os, const HIRCoreType& ct) {
     switch (ct) {
         case HIRCoreType::Usize:
             return os << "usize";
@@ -90,7 +90,7 @@ Ordering ord(const HIRTypeData* l, const HIRTypeData* r) {
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRBorrowType& bt) {
+std::ostream& operator<<(std::ostream& os, const HIRBorrowType& bt) {
     switch (bt) {
         case HIRBorrowType::Owned:
             return os << "Owned";
@@ -102,7 +102,7 @@ Ordering ord(const HIRTypeData* l, const HIRTypeData* r) {
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRArraySize& x) {
+std::ostream& operator<<(std::ostream& os, const HIRArraySize& x) {
     switch (x.tag()) {
         case HIRArraySize::TAG_Unevaluated: {
             auto& se = x.as_Unevaluated();
@@ -135,7 +135,7 @@ Ordering HIRTypePatternRange::ord(const HIRTypePatternRange& x) const {
     return OrdEqual;
 }
 
-void HIRTypePatternRange::fmt(::std::ostream& os) const {
+void HIRTypePatternRange::fmt(std::ostream& os) const {
     if (hasStart) {
         os << start;
     }
@@ -165,7 +165,7 @@ Ordering HIRTypePattern::ord(const HIRTypePattern& x) const {
     return OrdEqual;
 }
 
-void HIRTypePattern::fmt(::std::ostream& os) const {
+void HIRTypePattern::fmt(std::ostream& os) const {
     for (size_t i = 0; i < alternatives.size(); i++) {
         if (i != 0) {
             os << " | ";
@@ -349,7 +349,7 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
     BUG(sp, "Unreachable code?");
 }
 
-void HIRTypeData::fmt(::std::ostream& os) const {
+void HIRTypeData::fmt(std::ostream& os) const {
     auto* context = TypeFmtStream::from(os);
     if (!context) {
         TypeFmtStream fmtStream(os);
@@ -608,7 +608,7 @@ Ordering HIRTypeDataNodeType::ord(const HIRTypeDataNodeType& x) const {
     return OrdEqual;
 }
 
-void HIRTypeDataNodeType::fmt(::std::ostream& os) const {
+void HIRTypeDataNodeType::fmt(std::ostream& os) const {
     switch ((*this).tag()) {
         case HIRTypeDataNodeType::TAG_Closure: {
             auto& e = (*this).as_Closure();
@@ -706,7 +706,7 @@ namespace {
         return a.path == b.path && exactPathParamsEqual(a.params, b.params);
     }
 
-    bool exactOptionalGenericParamsEqual(const ::std::unique_ptr<HIRGenericParams>& a, const ::std::unique_ptr<HIRGenericParams>& b) {
+    bool exactOptionalGenericParamsEqual(const std::unique_ptr<HIRGenericParams>& a, const std::unique_ptr<HIRGenericParams>& b) {
         return (!a && !b) || (a && b && exactGenericParamsEqual(*a, *b));
     }
 
@@ -1217,15 +1217,15 @@ namespace {
     }
 
     size_t hashSimplePath(const HIRSimplePath& path) {
-        size_t h = ::std::hash<RcString>()(path.crateName());
+        size_t h = std::hash<RcString>()(path.crateName());
         for (const auto& component : path.components()) {
-            h = hashMix(h, ::std::hash<RcString>()(component));
+            h = hashMix(h, std::hash<RcString>()(component));
         }
         return h;
     }
 
     size_t hashTypeRef(HIRTypeRef type) {
-        return ::std::hash<const void*>()(type);
+        return std::hash<const void*>()(type);
     }
 
     size_t hashPathParams(const HIRPathParams& params);
@@ -1236,7 +1236,7 @@ namespace {
             if (generic.isSolverExistential()) {
                 h = hashMix(h, generic.solverScope);
             } else {
-                h = hashMix(h, ::std::hash<RcString>()(generic.name));
+                h = hashMix(h, std::hash<RcString>()(generic.name));
             }
         }
         return h;
@@ -1296,7 +1296,7 @@ namespace {
             case HIRPathData::TAG_UfcsInherent: {
                 auto& e = path.data.as_UfcsInherent();
                 h = hashMix(h, hashTypeRef(e.type));
-                h = hashMix(h, ::std::hash<RcString>()(e.item));
+                h = hashMix(h, std::hash<RcString>()(e.item));
                 h = hashMix(h, hashPathParams(e.params));
                 h = hashMix(h, hashPathParams(e.implParams));
                 break;
@@ -1305,14 +1305,14 @@ namespace {
                 auto& e = path.data.as_UfcsKnown();
                 h = hashMix(h, hashTypeRef(e.type));
                 h = hashMix(h, hashGenericPath(e.trait));
-                h = hashMix(h, ::std::hash<RcString>()(e.item));
+                h = hashMix(h, std::hash<RcString>()(e.item));
                 h = hashMix(h, hashPathParams(e.params));
                 break;
             }
             case HIRPathData::TAG_UfcsUnknown: {
                 auto& e = path.data.as_UfcsUnknown();
                 h = hashMix(h, hashTypeRef(e.type));
-                h = hashMix(h, ::std::hash<RcString>()(e.item));
+                h = hashMix(h, std::hash<RcString>()(e.item));
                 h = hashMix(h, hashPathParams(e.params));
                 break;
             }
@@ -1391,7 +1391,7 @@ namespace {
                     h = hashMix(h, hashGenericPath(marker));
                 }
                 for (const auto& bound : e.trait.typeBounds) {
-                    h = hashMix(h, ::std::hash<RcString>()(bound.first));
+                    h = hashMix(h, std::hash<RcString>()(bound.first));
                     h = hashMix(h, hashGenericPath(bound.second.sourceTrait));
                     h = hashMix(h, hashPathParams(bound.second.atyParams));
                     h = hashMix(h, hashTypeRef(bound.second.type));
@@ -1496,7 +1496,7 @@ namespace {
             }
             case HIRTypeData::TAG_Function: {
                 auto& e = type.as_Function();
-                h = hashMix(h, ::std::hash<RcString>()(e.abi));
+                h = hashMix(h, std::hash<RcString>()(e.abi));
                 h = hashMix(h, e.lifetimeIdentity.rawId());
                 h = hashMix(h, e.lifetimeIdentityHasFree);
                 h = hashMix(h, e.isUnsafe);
@@ -1589,7 +1589,7 @@ HIRTypeRef HIRTypeInterner::pointer(HIRBorrowType bt, HIRTypeRef inner) {
     return intern(HIRTypeData::make_Pointer({bt, inner}));
 }
 
-HIRTypeRef HIRTypeInterner::tuple(::std::vector<HIRTypeRef> types) {
+HIRTypeRef HIRTypeInterner::tuple(std::vector<HIRTypeRef> types) {
     return intern(HIRTypeData::make_Tuple(mv$(types)));
 }
 
@@ -2585,7 +2585,7 @@ HIRTypeData HIRTypeData::cloneData() const {
         }
         case HIRTypeData::TAG_ErasedType: {
             auto& e = (*this).as_ErasedType();
-            ::std::vector<HIRTraitPath> traits;
+            std::vector<HIRTraitPath> traits;
             traits.reserve(e.traits.size());
             for (const auto& trait : e.traits) {
                 traits.push_back(trait.clone());
@@ -2625,7 +2625,7 @@ HIRTypeData HIRTypeData::cloneData() const {
         }
         case HIRTypeData::TAG_Tuple: {
             auto& e = (*this).as_Tuple();
-            ::std::vector<HIRTypeRef> types;
+            std::vector<HIRTypeRef> types;
             for (const auto& t : e) {
                 types.push_back(t);
             }
@@ -3081,14 +3081,14 @@ bool isFloat(const HIRCoreType& v) {
     }
 }
 
-TypeFmtStream::TypeFmtStream(::std::ostream& output)
-    : ::std::ostream(output.rdbuf())
+TypeFmtStream::TypeFmtStream(std::ostream& output)
+    : std::ostream(output.rdbuf())
 {
     copyfmt(output);
     clear(output.rdstate());
     pword(0) = this;
 }
 
-auto TypeFmtStream::from(::std::ostream& output) -> TypeFmtStream* {
+auto TypeFmtStream::from(std::ostream& output) -> TypeFmtStream* {
     return output.pword(0) == &output ? static_cast<TypeFmtStream*>(&output) : nullptr;
 }

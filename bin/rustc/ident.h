@@ -14,7 +14,7 @@ struct Ident {
     // TODO: Use AST::AbsolutePath instead
     struct ModPath {
         RcString crate;
-        ::std::vector<RcString> ents;
+        std::vector<RcString> ents;
         friend std::ostream& operator<<(std::ostream& os, const ModPath& x);
     };
 
@@ -23,10 +23,10 @@ struct Ident {
     class Hygiene {
     public:
         struct Inner {
-            ::std::vector<unsigned int> contexts;
+            std::vector<unsigned int> contexts;
 
-            ::std::vector<unsigned int> macroDefinitions;
-            ::std::shared_ptr<ModPath> searchModule;
+            std::vector<unsigned int> macroDefinitions;
+            std::shared_ptr<ModPath> searchModule;
         };
 
     private:
@@ -83,7 +83,7 @@ struct Ident {
             return ord(x) == OrdLess;
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const Hygiene& v);
+        friend std::ostream& operator<<(std::ostream& os, const Hygiene& v);
     };
 
     Hygiene hygiene;
@@ -103,7 +103,7 @@ struct Ident {
     Ident& operator=(const Ident& x) = default;
 
     RcString intoString() {
-        return ::std::move(name);
+        return std::move(name);
     }
 
     RcString hygienicName() const {
@@ -132,5 +132,5 @@ struct Ident {
 
     bool operator<(const Ident& x) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const Ident& x);
+    friend std::ostream& operator<<(std::ostream& os, const Ident& x);
 };

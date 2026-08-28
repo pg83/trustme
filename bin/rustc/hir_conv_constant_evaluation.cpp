@@ -3,7 +3,7 @@
 using namespace stl;
 
 namespace {
-    ::std::optional<U128> enumTagUnsignedMax(HIRCoreType ty) {
+    std::optional<U128> enumTagUnsignedMax(HIRCoreType ty) {
         switch (ty) {
             case HIRCoreType::U8:
                 return U128(0xFFu);
@@ -19,13 +19,13 @@ namespace {
     template <typename Variants, typename GetValue>
     void checkEnumDiscriminants(const Span& sp, HIRCoreType ty, const Variants& variants, GetValue getValue) {
         const auto max = enumTagUnsignedMax(ty);
-        ::std::map<U128, RcString> seen;
+        std::map<U128, RcString> seen;
         for (const auto& var : variants) {
             const auto value = getValue(var);
             if (max && value > *max) {
                 ERROR(sp, E0000, "discriminant value `" << value << "` for variant `" << var.name << "` is not in the range of the enum's tag type");
             }
-            auto inserted = seen.insert(::std::make_pair(value, var.name));
+            auto inserted = seen.insert(std::make_pair(value, var.name));
             if (!inserted.second) {
                 ERROR(sp, E0000, "discriminant value `" << value << "` assigned more than once - `" << inserted.first->second << "` and `" << var.name << "`");
             }
@@ -270,10 +270,10 @@ namespace {
     struct NewvalState: public HIREvaluator::Newval {
         const HIRModule& mod;
         const HIRItemPath& modPath;
-        ::std::string namePrefix;
+        std::string namePrefix;
         unsigned int nextItemIdx;
 
-        NewvalState(const HIRModule& mod, const HIRItemPath& modPath, ::std::string prefix);
+        NewvalState(const HIRModule& mod, const HIRItemPath& modPath, std::string prefix);
 
         HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override;
     };
@@ -325,7 +325,7 @@ struct MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
 
 struct IValue {
     virtual void fmtIdent(std::ostream& os) const = 0;
-    virtual void fmt(::std::ostream& os, size_t ofs, size_t len) const = 0;
+    virtual void fmt(std::ostream& os, size_t ofs, size_t len) const = 0;
 
     virtual size_t size() const = 0;
     virtual const u8* getBytes(size_t ofs, size_t len, bool checkMask) const = 0;
@@ -411,7 +411,7 @@ struct MIREvalConstant final: public IValue {
 
     void fmtIdent(std::ostream& os) const override;
 
-    void fmt(::std::ostream& os, size_t ofs, size_t len) const override;
+    void fmt(std::ostream& os, size_t ofs, size_t len) const override;
 
     size_t size() const override;
 
@@ -456,7 +456,7 @@ struct MIREvalAllocation final: public IValue {
 
     void fmtIdent(std::ostream& os) const override;
 
-    void fmt(::std::ostream& os, size_t ofs, size_t len) const override;
+    void fmt(std::ostream& os, size_t ofs, size_t len) const override;
 
     size_t size() const override;
 
@@ -509,7 +509,7 @@ struct MIREvalStaticRef final: public IValue {
 
     void fmtIdent(std::ostream& os) const override;
 
-    void fmt(::std::ostream& os, size_t ofs, size_t len) const override;
+    void fmt(std::ostream& os, size_t ofs, size_t len) const override;
 
     size_t size() const override;
 
@@ -842,7 +842,7 @@ struct MIREvalPathCallback final: public MIRPathCallback {
 
     explicit MIREvalPathCallback(const HIRItemPath& path);
 
-    void write(::std::ostream& os) const override;
+    void write(std::ostream& os) const override;
 };
 
 struct MIREvalCallStackEntry {
@@ -861,22 +861,22 @@ struct MIREvalCallStackEntry {
 
     MIREvalAllocationPtr retval;
 
-    ::std::vector<MIREvalAllocationPtr> args;
+    std::vector<MIREvalAllocationPtr> args;
 
-    ::std::vector<HIRTypeRef> localTypes;
-    ::std::vector<MIREvalAllocationPtr> locals;
-    ::std::vector<bool> dropFlags;
+    std::vector<HIRTypeRef> localTypes;
+    std::vector<MIREvalAllocationPtr> locals;
+    std::vector<bool> dropFlags;
 
     MIREvalCallStackEntry(const MIREvalCallStackEntry&) = delete;
     MIREvalCallStackEntry(MIREvalCallStackEntry&&) = delete;
 
-    MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameIndex, const Span& rootSpan, const StaticTraitResolve& resolve, const MIREvalPathCallback& printPath, HIRTypeRef expTy, std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs, const MIRFunction& fcn, MonomorphState ms, ::std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller);
+    MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameIndex, const Span& rootSpan, const StaticTraitResolve& resolve, const MIREvalPathCallback& printPath, HIRTypeRef expTy, std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs, const MIRFunction& fcn, MonomorphState ms, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller);
 
     HIRTypeRef monomorphExpand(const HIRTypeData* ty) const;
 
     unsigned readEnumVariant(const HIRTypeData* ty, MIREvalValueRef value) const;
 
-    static bool allocationReachableFrom(const MIREvalAllocation* allocation, const MIREvalAllocation* target, ::std::set<const MIREvalAllocation*>& visited);
+    static bool allocationReachableFrom(const MIREvalAllocation* allocation, const MIREvalAllocation* target, std::set<const MIREvalAllocation*>& visited);
 
     bool valueReachableFromReturn(MIREvalValueRef value) const;
 
@@ -914,7 +914,7 @@ struct MIREvalCallStackEntry {
 };
 
 namespace {
-    void resolveStaticPointer(MIREvalCallStackEntry& localState, ::std::pair<u64, MIREvalRelocPtr>& value) {
+    void resolveStaticPointer(MIREvalCallStackEntry& localState, std::pair<u64, MIREvalRelocPtr>& value) {
         if (const auto* staticRef = value.second.asStaticref()) {
             value.second = MIREvalRelocPtr(localState.getStaticref(staticRef->path().clone()));
         }
@@ -929,7 +929,7 @@ namespace {
         return leftStatic && rightStatic && leftStatic->path() == rightStatic->path();
     }
 
-    MIREvalValueRef pointerBytes(MIREvalCallStackEntry& localState, ::std::pair<u64, MIREvalRelocPtr> pointer, size_t length, const char* intrinsic) {
+    MIREvalValueRef pointerBytes(MIREvalCallStackEntry& localState, std::pair<u64, MIREvalRelocPtr> pointer, size_t length, const char* intrinsic) {
         const auto& state = localState.state;
         resolveStaticPointer(localState, pointer);
         MIR_ASSERT(state, pointer.second, "`" << intrinsic << "` cannot access an absolute pointer");
@@ -940,7 +940,7 @@ namespace {
         return MIREvalValueRef(pointer.second, offset).slice(0, length);
     }
 
-    u8 pointerGuaranteedCmp(const ::std::pair<u64, MIREvalRelocPtr>& left, const ::std::pair<u64, MIREvalRelocPtr>& right) {
+    u8 pointerGuaranteedCmp(const std::pair<u64, MIREvalRelocPtr>& left, const std::pair<u64, MIREvalRelocPtr>& right) {
         if (!left.second && !right.second) {
             return left.first == right.first ? 1 : 0;
         }
@@ -959,7 +959,7 @@ namespace {
         return offset <= relocated.second.asValue().size() ? 0 : 2;
     }
 
-    ::std::pair<MIREvalValueRef, MIREvalValueRef> getTupleTBool(const MIREvalCallStackEntry& localState, MIREvalValueRef& src, const HIRTypeData* t) {
+    std::pair<MIREvalValueRef, MIREvalValueRef> getTupleTBool(const MIREvalCallStackEntry& localState, MIREvalValueRef& src, const HIRTypeData* t) {
         auto tupleT = localState.rootResolve.crate.types.tuple({t, localState.rootResolve.crate.types.primitive(HIRCoreType::Bool)});
         auto* repr = TargetGetTypeRepr(localState.state.sp, localState.rootResolve, tupleT);
         MIR_ASSERT(localState.state, repr, "No repr for " << tupleT);
@@ -1347,7 +1347,7 @@ HIREvaluator::CsePtr::~CsePtr() {
     }
 }
 
-void HIREvaluator::pushStackEntry(HIRItemPath printPath, const MIRFunction& fcn, MonomorphState ms, HIRTypeRef exp, HIRFunction::argsT argDefs, ::std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller) {
+void HIREvaluator::pushStackEntry(HIRItemPath printPath, const MIRFunction& fcn, MonomorphState ms, HIRTypeRef exp, HIRFunction::argsT argDefs, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller) {
     MIREvalPathCallback pathCallback(printPath);
     this->callStack.push_back(new MIREvalCallStackEntry(this->valuePool.mutPtr(), this->numFrames, this->rootSpan, this->resolve, pathCallback, std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef, std::move(callerLocation), tracksCaller));
     this->numFrames += 1;
@@ -2015,7 +2015,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             auto& e = terminator.as_Call();
             const auto& ms = localState.ms;
             auto callPath = [&](HIRPath* fcnp, bool indirect) -> unsigned {
-                ::std::vector<MIREvalAllocationPtr> callArgs;
+                std::vector<MIREvalAllocationPtr> callArgs;
                 callArgs.reserve(e.args.size());
                 for (const auto& a : e.args) {
                     HIRTypeRef tmp;
@@ -2442,7 +2442,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         }
                     }
 
-                    ::std::vector<MIREvalAllocationPtr> callArgs;
+                    std::vector<MIREvalAllocationPtr> callArgs;
                     callArgs.reserve(repr->fields.size());
                     for (const auto& f : repr->fields) {
                         auto size = localState.sizeOfOrBug(f.ty);
@@ -2498,7 +2498,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     }
                     auto leftPtr = localState.readParamPtr(e.args.at(0));
                     auto rightPtr = localState.readParamPtr(e.args.at(1));
-                    auto isAligned = [&](const ::std::pair<u64, MIREvalRelocPtr>& pointer) {
+                    auto isAligned = [&](const std::pair<u64, MIREvalRelocPtr>& pointer) {
                         if (pointer.second && pointer.first < EncodedLiteral::PTR_BASE) {
                             return false;
                         }
@@ -2804,7 +2804,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
         case MIRTerminator::TAG_TailCall: {
             auto& e = terminator.as_TailCall();
             auto callPath = [&](HIRPath* fcnp, bool indirect) -> unsigned {
-                ::std::vector<MIREvalAllocationPtr> callArgs;
+                std::vector<MIREvalAllocationPtr> callArgs;
                 callArgs.reserve(e.args.size());
                 for (const auto& arg : e.args) {
                     HIRTypeRef tmp;
@@ -2842,7 +2842,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
     throw std::runtime_error("Unreachable?");
 }
 
-bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, HIRPath* fcnPath, ::std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect) {
+bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, HIRPath* fcnPath, std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect) {
     const auto& state = localState.state;
     resolve.revealOpaqueTypesPath(state.sp, *fcnPath);
     MonomorphState fcnMs(resolve.hirCrate().types);
@@ -2933,7 +2933,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         for (const auto& a : fcn.args) {
             auto argTy = this->resolve.monomorphExpand(this->rootSpan, a.second, fcnMs);
             this->resolve.revealOpaqueTypes(this->rootSpan, argTy);
-            argDefs.push_back(::std::make_pair(HIRPattern(), std::move(argTy)));
+            argDefs.push_back(std::make_pair(HIRPattern(), std::move(argTy)));
         }
         auto retTy = this->resolve.monomorphExpand(this->rootSpan, fcn.returnType, fcnMs);
         this->resolve.revealOpaqueTypes(this->rootSpan, retTy);
@@ -2950,7 +2950,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
             }
         }
 
-        pushStackEntry(HIRItemPath(*fcnPath), *mir, std::move(fcnMs), std::move(retTy), ::std::move(argDefs), std::move(callArgs), &fcn.params, implParamsDef, std::move(callerLocation), tracksCaller);
+        pushStackEntry(HIRItemPath(*fcnPath), *mir, std::move(fcnMs), std::move(retTy), std::move(argDefs), std::move(callArgs), &fcn.params, implParamsDef, std::move(callerLocation), tracksCaller);
         return true;
     } else if (rv.is_NotFound() && monomorphisePathNeeded(path)) {
         BUG(state.sp, "Unresolved generic path " << path << " during concrete evaluation");
@@ -2988,17 +2988,17 @@ void HIREvaluator::callConstDestructor(MIREvalCallStackEntry& localState, HIRTyp
     const auto& state = localState.state;
     auto& types = resolve.hirCrate().types;
 
-    ::std::vector<MIREvalAllocationPtr> callArgs;
+    std::vector<MIREvalAllocationPtr> callArgs;
     callArgs.push_back(MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, types.borrow(HIRBorrowType::Unique, ty)));
     localState.writeParam(MIREvalValueRef(callArgs.back()), MIRParam::make_Borrow({HIRBorrowType::Unique, slot.clone()}));
     auto* path = localState.valuePool->make<HIRPath>(ty, HIRGenericPath(resolve.langDrop()), RcString::newInterned("drop"), HIRPathParams{});
 
-    auto saved = ::std::move(this->callStack);
+    auto saved = std::move(this->callStack);
     this->callStack.clear();
     STD_DEFER {
-        this->callStack = ::std::move(saved);
+        this->callStack = std::move(saved);
     };
-    if (this->callFunction(localState, MIRLValue::newReturn(), path, ::std::move(callArgs), localState.callerLocation, false)) {
+    if (this->callFunction(localState, MIRLValue::newReturn(), path, std::move(callArgs), localState.callerLocation, false)) {
         this->runUntilStackEmpty();
     }
 }
@@ -3099,14 +3099,14 @@ EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MI
             } else {
                 auto size = innerAlloc->size();
                 auto ptr = innerAlloc->getBytes(0, size, true);
-                rv.relocations.push_back(Reloc::newBytes(r.offset, TargetGetPointerBits() / 8, ::std::string(ptr, ptr + size)));
+                rv.relocations.push_back(Reloc::newBytes(r.offset, TargetGetPointerBits() / 8, std::string(ptr, ptr + size)));
             }
         } else if (const auto* sr = r.ptr.asStaticref()) {
             rv.relocations.push_back(Reloc::newNamed(r.offset, TargetGetPointerBits() / 8, sr->path().clone()));
         } else if (const auto* c = r.ptr.asConstant()) {
             auto size = c->size();
             auto ptr = c->getBytes(0, size, true);
-            rv.relocations.push_back(Reloc::newBytes(r.offset, TargetGetPointerBits() / 8, ::std::string(ptr, ptr + size)));
+            rv.relocations.push_back(Reloc::newBytes(r.offset, TargetGetPointerBits() / 8, std::string(ptr, ptr + size)));
         } else {
             BUG(this->rootSpan, "");
         }
@@ -3639,7 +3639,7 @@ auto NewvalStateNop::newStatic(HIRTypeRef type, EncodedLiteral value, size_t ali
     TODO(this->sp, "new_static while evaluating a const generic");
 }
 
-NewvalState::NewvalState(const HIRModule& mod, const HIRItemPath& modPath, ::std::string prefix)
+NewvalState::NewvalState(const HIRModule& mod, const HIRItemPath& modPath, std::string prefix)
     : mod(mod)
     , modPath(modPath)
     , namePrefix(prefix)
@@ -3654,11 +3654,11 @@ auto NewvalState::newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignm
     auto rv = modPath.getSimplePath() + name.c_str();
     auto s = HIRStatic(HIRLinkage(), false, mv$(type), HIRExprPtr());
     s.explicitAlignment = alignment;
-    s.valueRes = ::std::move(value);
+    s.valueRes = std::move(value);
     s.valueGenerated = true;
     s.saveLiteral = true;
 
-    const_cast<HIRModule&>(mod).inlineStatics.push_back(::std::make_pair(mv$(name), box$(s)));
+    const_cast<HIRModule&>(mod).inlineStatics.push_back(std::make_pair(mv$(name), box$(s)));
     return rv;
 }
 
@@ -3765,7 +3765,7 @@ auto MIREvalConstant::fmtIdent(std::ostream& os) const -> void {
     os << "C:" << (const void*)this->data;
 }
 
-auto MIREvalConstant::fmt(::std::ostream& os, size_t ofs, size_t len) const -> void {
+auto MIREvalConstant::fmt(std::ostream& os, size_t ofs, size_t len) const -> void {
     assert(ofs <= length);
     assert(ofs + len <= length);
     for (size_t i = 0; i < len; i++) {
@@ -3837,7 +3837,7 @@ auto MIREvalAllocation::fmtIdent(std::ostream& os) const -> void {
     os << "A:" << this;
 }
 
-auto MIREvalAllocation::fmt(::std::ostream& os, size_t ofs, size_t len) const -> void {
+auto MIREvalAllocation::fmt(std::ostream& os, size_t ofs, size_t len) const -> void {
     assert(ofs <= length);
     assert(ofs + len <= length);
     for (size_t i = 0; i < len; i++) {
@@ -4037,7 +4037,7 @@ auto MIREvalStaticRef::fmtIdent(std::ostream& os) const -> void {
     os << this->path_;
 }
 
-auto MIREvalStaticRef::fmt(::std::ostream& os, size_t ofs, size_t len) const -> void {
+auto MIREvalStaticRef::fmt(std::ostream& os, size_t ofs, size_t len) const -> void {
     os << "[" << path_ << "]";
     if (encoded) {
         os << EncodedLiteralSlice(*encoded).slice(ofs, len);
@@ -4443,11 +4443,11 @@ MIREvalPathCallback::MIREvalPathCallback(const HIRItemPath& path)
 {
 }
 
-auto MIREvalPathCallback::write(::std::ostream& os) const -> void {
+auto MIREvalPathCallback::write(std::ostream& os) const -> void {
     os << path;
 }
 
-MIREvalCallStackEntry::MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameIndex, const Span& rootSpan, const StaticTraitResolve& resolve, const MIREvalPathCallback& printPath, HIRTypeRef expTy, std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs, const MIRFunction& fcn, MonomorphState ms, ::std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller)
+MIREvalCallStackEntry::MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameIndex, const Span& rootSpan, const StaticTraitResolve& resolve, const MIREvalPathCallback& printPath, HIRTypeRef expTy, std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs, const MIRFunction& fcn, MonomorphState ms, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller)
     : valuePool(valuePool)
     , frameIndex(frameIndex)
     , argDefs(std::move(argDefs))
@@ -4523,7 +4523,7 @@ auto MIREvalCallStackEntry::readEnumVariant(const HIRTypeData* ty, MIREvalValueR
     return variant;
 }
 
-auto MIREvalCallStackEntry::allocationReachableFrom(const MIREvalAllocation* allocation, const MIREvalAllocation* target, ::std::set<const MIREvalAllocation*>& visited) -> bool {
+auto MIREvalCallStackEntry::allocationReachableFrom(const MIREvalAllocation* allocation, const MIREvalAllocation* target, std::set<const MIREvalAllocation*>& visited) -> bool {
     if (allocation == target) {
         return true;
     }
@@ -4545,7 +4545,7 @@ auto MIREvalCallStackEntry::valueReachableFromReturn(MIREvalValueRef value) cons
     if (!target) {
         return false;
     }
-    ::std::set<const MIREvalAllocation*> visited;
+    std::set<const MIREvalAllocation*> visited;
     return allocationReachableFrom(retval.operator->(), target, visited);
 }
 
@@ -5339,9 +5339,9 @@ auto MIREvalCallStackEntry::readParamPtr(const MIRParam& p) const -> std::pair<u
             u64 rawAddress = 0;
             auto value = const_cast<MIREvalCallStackEntry*>(this)->getLval(e.val, &meta, &rawAddress);
             if (rawAddress) {
-                return ::std::make_pair(rawAddress, MIREvalRelocPtr());
+                return std::make_pair(rawAddress, MIREvalRelocPtr());
             }
-            return ::std::make_pair(EncodedLiteral::PTR_BASE + value.getOfs(), value.getStorage());
+            return std::make_pair(EncodedLiteral::PTR_BASE + value.getOfs(), value.getStorage());
         }
         case MIRParam::TAG_Constant: {
             auto& e = p.as_Constant();
@@ -5350,7 +5350,7 @@ auto MIREvalCallStackEntry::readParamPtr(const MIRParam& p) const -> std::pair<u
             }
             MIR_ASSERT(state, e.as_ItemAddr().offset.isU64(), "Item address offset is too large: " << e.as_ItemAddr().offset);
             // TODO: Look up the static
-            return ::std::make_pair(EncodedLiteral::PTR_BASE + e.as_ItemAddr().offset.truncateU64(), MIREvalRelocPtr(getStaticrefMono(*e.as_ItemAddr())));
+            return std::make_pair(EncodedLiteral::PTR_BASE + e.as_ItemAddr().offset.truncateU64(), MIREvalRelocPtr(getStaticrefMono(*e.as_ItemAddr())));
         }
     }
     abort();
@@ -6088,7 +6088,7 @@ auto ExpanderApply::visitModule(HIRItemPath p, HIRModule& mod) -> void {
     if (!mod.inlineStatics.empty()) {
         for (auto& v : mod.inlineStatics) {
             auto* iv = pool_.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), HIRValueItem::make_Static(pool_.make<HIRStatic>(mv$(*v.second)))});
-            mod.valueItems.insert(::std::make_pair(v.first, iv));
+            mod.valueItems.insert(std::make_pair(v.first, iv));
         }
         mod.inlineStatics.clear();
     }

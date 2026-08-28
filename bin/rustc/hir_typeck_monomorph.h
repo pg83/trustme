@@ -160,4 +160,4 @@ struct MonomorphState: public MonomorphiserPP {
     const HIRPathParams* getHrbParams() const override;
 };
 
-extern ::std::ostream& operator<<(::std::ostream& os, const MonomorphState& ms);
+extern std::ostream& operator<<(std::ostream& os, const MonomorphState& ms);

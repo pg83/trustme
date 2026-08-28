@@ -12,7 +12,7 @@ namespace stl {
 #include <cstddef>
 
 struct TargetArch {
-    ::std::string name;
+    std::string name;
     unsigned pointerBits;
     bool bigEndian;
 
@@ -41,16 +41,16 @@ struct TargetArch {
 
 struct BackendOptsC {
     bool emulatedI128;
-    ::std::string cCompiler;
-    ::std::vector<::std::string> compilerOpts;
-    ::std::vector<::std::string> linkerOptsPre;
-    ::std::vector<::std::string> linkerOptsPost;
+    std::string cCompiler;
+    std::vector<std::string> compilerOpts;
+    std::vector<std::string> linkerOptsPre;
+    std::vector<std::string> linkerOptsPost;
 };
 
 struct TargetSpec {
-    ::std::string family;
-    ::std::string osName;
-    ::std::string envName;
+    std::string family;
+    std::string osName;
+    std::string envName;
 
     BackendOptsC backendC;
     TargetArch arch;
@@ -63,7 +63,7 @@ struct TypeReprFieldPath {
 
     size_t index;
     size_t size;
-    ::std::vector<size_t> subFields;
+    std::vector<size_t> subFields;
 };
 
 struct TypeReprVariantLinear {
@@ -92,7 +92,7 @@ struct TypeReprVariantLinear {
 
 struct TypeReprVariantValues {
     TypeReprFieldPath field;
-    ::std::vector<U128> values;
+    std::vector<U128> values;
 
     bool isTag(unsigned varIdx) const {
         return varIdx == field.index;
@@ -117,7 +117,7 @@ struct TypeRepr {
         HIRTypeRef ty;
     };
 
-    ::std::vector<Field> fields;
+    std::vector<Field> fields;
 
     size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const FieldPath& path) const;
 
@@ -130,8 +130,8 @@ struct WireBoard;
 class TargetLayoutContext;
 extern TargetLayoutContext* TargetCreateLayoutContext(stl::ObjPool& pool);
 extern const TargetSpec& TargetGetCurSpec(const WireBoard& wb);
-extern void TargetSetCfg(WireBoard& wb, const ::std::string& targetName);
-extern void TargetExportCurSpec(const WireBoard& wb, const ::std::string& filename);
+extern void TargetSetCfg(WireBoard& wb, const std::string& targetName);
+extern void TargetExportCurSpec(const WireBoard& wb, const std::string& filename);
 
 static inline unsigned TargetGetPointerBits() {
     return 64;
@@ -149,4 +149,4 @@ extern const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolv
 
 extern bool TargetTypesAreTransmutable(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* src, const HIRTypeData* dst, bool assumeAlignment, bool assumeLifetimes, bool assumeSafety, bool assumeValidity);
 
-extern const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& subFields = {}, size_t ofs = 0);
+extern const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const std::vector<size_t>& subFields = {}, size_t ofs = 0);

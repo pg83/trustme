@@ -76,10 +76,10 @@ namespace {
     };
 }
 
-void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* cratePtr, TransList list, const ::std::string& hirFile) {
+void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* cratePtr, TransList list, const std::string& hirFile) {
     Span sp;
 
-    ::std::unique_ptr<CodeGenerator> codegen;
+    std::unique_ptr<CodeGenerator> codegen;
     if (opt.mode == "monomir") {
         codegen = TransCodegenGetGeneratorMonoMir(wb, *cratePtr, outfile);
     } else if (opt.mode == "c") {
@@ -265,7 +265,7 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
 CodeGenerator::~CodeGenerator() {
 }
 
-void CodeGenerator::finalise(const TransOptions& opt, CodegenOutput outTy, const ::std::string& hirFile) {
+void CodeGenerator::finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile) {
 }
 
 void CodeGenerator::emitTypeProto(const HIRTypeData*) {
@@ -447,9 +447,9 @@ auto FunctionOrder::visit(FunctionOrderNode& node) -> void {
         auto& target = *edge->target;
         if (target.index == ~0u) {
             visit(target);
-            node.lowLink = ::std::min(node.lowLink, target.lowLink);
+            node.lowLink = std::min(node.lowLink, target.lowLink);
         } else if (target.onStack) {
-            node.lowLink = ::std::min(node.lowLink, target.index);
+            node.lowLink = std::min(node.lowLink, target.index);
         }
     }
 

@@ -27,12 +27,12 @@ struct CapturedVal {
 
 #include "macro_rules_capture_tu.h"
 
-inline ::std::ostream& operator<<(::std::ostream& os, const CapturedVal& x) {
+inline std::ostream& operator<<(std::ostream& os, const CapturedVal& x) {
     os << x.frag;
     return os;
 }
 
-inline ::std::ostream& operator<<(::std::ostream& os, const CaptureLayer& x) {
+inline std::ostream& operator<<(std::ostream& os, const CaptureLayer& x) {
     switch (x.tag()) {
         case CaptureLayer::TAG_Vals: {
             auto& e = x.as_Vals();
@@ -52,7 +52,7 @@ struct ParameterMappings {
     struct CapturedVar {
         CaptureLayer topLayer;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const CapturedVar& x) {
+        friend std::ostream& operator<<(std::ostream& os, const CapturedVar& x) {
             os << "CapturedVar { " << x.topLayer << " }";
             return os;
         }
@@ -60,54 +60,54 @@ struct ParameterMappings {
 
     loopCountsT loopCounts;
 
-    ::std::vector<CapturedVar> mappings_;
+    std::vector<CapturedVar> mappings_;
     unsigned layerCount_;
 
     ParameterMappings();
 
     ParameterMappings(ParameterMappings&&) = default;
 
-    const ::std::vector<CapturedVar>& mappings() const;
+    const std::vector<CapturedVar>& mappings() const;
 
     size_t layerCount() const;
 
     void setLoopCounts(loopCountsT loopCounts);
 
-    void insert(unsigned int nameIndex, const ::std::vector<unsigned int>& iterations, InterpolatedFragment data);
+    void insert(unsigned int nameIndex, const std::vector<unsigned int>& iterations, InterpolatedFragment data);
 
-    InterpolatedFragment* get(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
+    InterpolatedFragment* get(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
 
-    unsigned int getLoopRepeats(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int loopIdx) const;
+    unsigned int getLoopRepeats(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int loopIdx) const;
 
-    unsigned int getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth = 0) const;
+    unsigned int getVariableCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth = 0) const;
 
-    void incCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
-    bool decCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
+    void incCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
+    bool decCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
 
-    CapturedVal& getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
+    CapturedVal& getCap(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
 };
 
 struct MacroPatternStream {
-    const ::std::vector<SimplePatEnt>& simpleEnts;
+    const std::vector<SimplePatEnt>& simpleEnts;
     SimplePatEnt endEnt;
     size_t curPos_;
 
     bool lastWasCond;
     bool conditionMet;
-    ::std::vector<bool> conditionHistory;
+    std::vector<bool> conditionHistory;
 
-    const ::std::vector<bool>* conditionReplay;
+    const std::vector<bool>* conditionReplay;
     size_t conditionReplayPos;
 
-    ::std::vector<unsigned int> currentLoops;
-    ::std::vector<unsigned int> loopIterations;
+    std::vector<unsigned int> currentLoops;
+    std::vector<unsigned int> loopIterations;
 
     loopCountsT loopCounts;
 
     bool peekCacheValid = false;
     const SimplePatEnt* peekCache;
 
-    MacroPatternStream(const ::std::vector<SimplePatEnt>& ents, const ::std::vector<bool>* conditionReplay = nullptr);
+    MacroPatternStream(const std::vector<SimplePatEnt>& ents, const std::vector<bool>* conditionReplay = nullptr);
 
     size_t curPos() const;
 
@@ -117,17 +117,17 @@ struct MacroPatternStream {
 
     void ifSucceeded();
 
-    const ::std::vector<unsigned int>& getLoopIters() const;
+    const std::vector<unsigned int>& getLoopIters() const;
 
-    ::std::vector<bool> takeHistory();
+    std::vector<bool> takeHistory();
 
     loopCountsT takeLoopCounts();
 };
 
 unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts);
-void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::vector<MacroExpansionEnt>& contents);
+void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents);
 
-void ParameterMappings::insert(unsigned int nameIndex, const ::std::vector<unsigned int>& iterations, InterpolatedFragment data) {
+void ParameterMappings::insert(unsigned int nameIndex, const std::vector<unsigned int>& iterations, InterpolatedFragment data) {
     if (nameIndex >= mappings_.size()) {
         mappings_.resize(nameIndex + 1);
     }
@@ -157,7 +157,7 @@ void ParameterMappings::insert(unsigned int nameIndex, const ::std::vector<unsig
     layer->as_Vals().push_back(CapturedVal{0, 0, mv$(data)});
 }
 
-CapturedVal& ParameterMappings::getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+CapturedVal& ParameterMappings::getCap(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx) {
     auto& e = mappings_.at(nameIdx);
     auto* layer = &e.topLayer;
 
@@ -189,11 +189,11 @@ CapturedVal& ParameterMappings::getCap(const Span& sp, const ::std::vector<unsig
     ERROR(sp, E0000, "Variable #" << nameIdx << " is still repeating at this level (" << iterations.size() << ")");
 }
 
-InterpolatedFragment* ParameterMappings::get(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+InterpolatedFragment* ParameterMappings::get(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx) {
     return &getCap(sp, iterations, nameIdx).frag;
 }
 
-unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int loopIdx) const {
+unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int loopIdx) const {
     const auto& list = loopCounts.at(loopIdx);
     for (const auto& e : list) {
         ASSERT_BUG(Span(), e.first.size() <= iterations.size(), "Loop " << loopIdx << " iteration path [" << e.first << "] larger than query path [" << iterations << "]");
@@ -211,7 +211,7 @@ namespace {
         if (const auto* nested = layer.opt_Nested()) {
             unsigned int deepest = 0;
             for (const auto& child : *nested) {
-                deepest = ::std::max(deepest, captureLayerDepth(child));
+                deepest = std::max(deepest, captureLayerDepth(child));
             }
             rv += deepest;
         }
@@ -235,7 +235,7 @@ namespace {
     }
 }
 
-unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth) const {
+unsigned int ParameterMappings::getVariableCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth) const {
     auto& e = mappings_.at(nameIdx);
     auto* layer = &e.topLayer;
 
@@ -270,13 +270,13 @@ unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::ve
     return captureLayerNodesAt(*layer, levels - depth);
 }
 
-void ParameterMappings::incCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+void ParameterMappings::incCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx) {
     auto& cap = getCap(sp, iterations, nameIdx);
     assert(cap.numUsed == 0);
     cap.numUses += 1;
 }
 
-bool ParameterMappings::decCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+bool ParameterMappings::decCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx) {
     auto& cap = getCap(sp, iterations, nameIdx);
     assert(cap.numUsed < cap.numUses);
     cap.numUsed += 1;
@@ -363,7 +363,7 @@ void MacroPatternStream::ifSucceeded() {
 }
 
 struct MacroExpandState {
-    const ::std::vector<MacroExpansionEnt>& rootContents;
+    const std::vector<MacroExpansionEnt>& rootContents;
     const ParameterMappings& mappings_;
 
     struct tOffset {
@@ -372,16 +372,16 @@ struct MacroExpandState {
         unsigned maxIndex;
     };
 
-    ::std::vector<tOffset> offsets;
-    ::std::vector<unsigned int> iterations_;
+    std::vector<tOffset> offsets;
+    std::vector<unsigned int> iterations_;
 
-    const ::std::vector<MacroExpansionEnt>* curEnts;
+    const std::vector<MacroExpansionEnt>* curEnts;
 
-    MacroExpandState(const ::std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings);
+    MacroExpandState(const std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings);
 
     const MacroExpansionEnt* nextEnt();
 
-    const ::std::vector<unsigned int> iterations() const;
+    const std::vector<unsigned int> iterations() const;
 
     unsigned int loopIndexAt(unsigned int depth) const;
 
@@ -390,7 +390,7 @@ struct MacroExpandState {
     unsigned int topPos() const;
 
     const MacroExpansionEnt& getCurLayerEnt() const;
-    const ::std::vector<MacroExpansionEnt>* getCurLayer() const;
+    const std::vector<MacroExpansionEnt>* getCurLayer() const;
 };
 
 struct MacroExpander: public TokenStream {
@@ -403,7 +403,7 @@ struct MacroExpander: public TokenStream {
     MacroExpandState state;
 
     Token nextToken;
-    ::std::unique_ptr<TTStreamO> ttstream;
+    std::unique_ptr<TTStreamO> ttstream;
     ASTEdition sourceEdition;
     bool isMacroItem;
     bool transparent;
@@ -414,7 +414,7 @@ struct MacroExpander: public TokenStream {
 
     MacroExpander(const MacroExpander& x) = delete;
 
-    MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition);
+    MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition);
 
     Position getPosition() const override;
 
@@ -534,7 +534,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
     UNREACHABLE();
 }
 
-::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, const WireBoard& wb, TokenTree input, const ASTCrate& crate, ASTModule& mod) {
+std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, const WireBoard& wb, TokenTree input, const ASTCrate& crate, ASTModule& mod) {
     ParameterMappings boundTts;
     unsigned int ruleIndex = MacroInvokeRulesMatchPattern(sp, wb, rules, mv$(input), crate, mod, boundTts);
 
@@ -544,13 +544,13 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
 
     TokenStream* retPtr = new MacroExpander(wb.id, *crate.hirPool, name, sp, crate.edition, rules.isMacroItem, rules.transparent, rules.definitionId, rules.hygiene, rule.contents, mv$(boundTts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
 
-    return ::std::unique_ptr<TokenStream>(retPtr);
+    return std::unique_ptr<TokenStream>(retPtr);
 }
 
 namespace {
     struct TokenStreamRO {
         const TokenTree& tt;
-        ::std::vector<size_t> offsets;
+        std::vector<size_t> offsets;
         size_t activeOffset;
 
         Token eofToken;
@@ -1960,16 +1960,16 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, c
 
     struct Match {
         size_t armIndex;
-        ::std::vector<bool> conditionHistory;
-        ::std::vector<bool> stmtIsItemHistory;
+        std::vector<bool> conditionHistory;
+        std::vector<bool> stmtIsItemHistory;
     };
 
-    ::std::vector<Match> matches;
-    ::std::vector<std::pair<size_t, eTokenType>> failPos;
+    std::vector<Match> matches;
+    std::vector<std::pair<size_t, eTokenType>> failPos;
     for (size_t i = 0; i < rules.rules.size(); i++) {
         auto lex = TokenStreamRO(input);
         auto armStream = MacroPatternStream(rules.rules[i].pattern);
-        ::std::vector<bool> stmtIsItemHistory;
+        std::vector<bool> stmtIsItemHistory;
 
         bool fail = false;
         for (;;) {
@@ -2049,12 +2049,12 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, c
 
         struct Capture {
             unsigned int bindingIdx;
-            ::std::vector<unsigned int> iterations;
+            std::vector<unsigned int> iterations;
             unsigned int capIdx;
         };
 
-        ::std::vector<InterpolatedFragment> captures;
-        ::std::vector<Capture> captureInfo;
+        std::vector<InterpolatedFragment> captures;
+        std::vector<Capture> captureInfo;
         size_t stmtCaptureIndex = 0;
 
         for (;;) {
@@ -2093,7 +2093,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, c
     }
 }
 
-void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::vector<MacroExpansionEnt>& contents) {
+void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents) {
     MacroExpandState state(contents, boundTts);
 
     while (const auto* entPtr = state.nextEnt()) {
@@ -2231,7 +2231,7 @@ Token MacroExpander::realGetToken() {
                                         return Token(TOK_RWORD_CRATE);
                                     }
                                 } else {
-                                    nextToken = Token(TOK_STRING, ::std::string(crateName.c_str()), {});
+                                    nextToken = Token(TOK_STRING, std::string(crateName.c_str()), {});
                                     return Token(TOK_DOUBLE_COLON);
                                 }
                                 break;
@@ -2405,7 +2405,7 @@ const MacroExpansionEnt& MacroExpandState::getCurLayerEnt() const {
     return (*ents)[offsets[offsets.size() - 2].readPos - 1];
 }
 
-const ::std::vector<MacroExpansionEnt>* MacroExpandState::getCurLayer() const {
+const std::vector<MacroExpansionEnt>* MacroExpandState::getCurLayer() const {
     assert(offsets.size() > 0);
     const auto* ents = &rootContents;
     for (unsigned int i = 0; i < offsets.size() - 1; i++) {
@@ -2581,7 +2581,7 @@ MacroRulesPtr::~MacroRulesPtr() {
     }
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MacroPatEnt& x) {
+std::ostream& operator<<(std::ostream& os, const MacroPatEnt& x) {
     switch (x.type) {
         case MacroPatEnt::PAT_TOKEN:
             os << "=" << x.tok;
@@ -2644,7 +2644,7 @@ MacroRulesPtr::~MacroRulesPtr() {
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MacroPatEnt::Type& x) {
+std::ostream& operator<<(std::ostream& os, const MacroPatEnt::Type& x) {
     switch (x) {
         case MacroPatEnt::PAT_TOKEN:
             os << "PAT_TOKEN";
@@ -2698,7 +2698,7 @@ MacroRulesPtr::~MacroRulesPtr() {
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const SimplePatEnt& x) {
+std::ostream& operator<<(std::ostream& os, const SimplePatEnt& x) {
     switch (x.tag()) {
         case SimplePatEnt::TAG_End: {
             os << "End";
@@ -2750,7 +2750,7 @@ MacroRulesPtr::~MacroRulesPtr() {
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const MacroExpansionEnt& x) {
+std::ostream& operator<<(std::ostream& os, const MacroExpansionEnt& x) {
     switch (x.tag()) {
         case MacroExpansionEnt::TAG_Token: {
             auto& e = x.as_Token();
@@ -2793,13 +2793,13 @@ MacroRulesArm::~MacroRulesArm() {
 MacroRulesPtr ParseMacroRules(TokenStream& lex);
 
 namespace {
-    ::std::vector<SimplePatEnt> macroPatternToSimple(const Span& sp, const ::std::vector<MacroPatEnt>& pattern);
+    std::vector<SimplePatEnt> macroPatternToSimple(const Span& sp, const std::vector<MacroPatEnt>& pattern);
 }
 
 struct MacroRule {
-    ::std::vector<MacroPatEnt> pattern;
+    std::vector<MacroPatEnt> pattern;
     Span patSpan;
-    ::std::vector<MacroExpansionEnt> contents;
+    std::vector<MacroExpansionEnt> contents;
 
     MacroRule();
 
@@ -2831,10 +2831,10 @@ struct RuleParseState {
     void closeLoop();
 };
 
-::std::vector<MacroPatEnt> ParseMacroRulesPat(TokenStream& lex, enum eTokenType open, enum eTokenType close, RuleParseState& state) {
+std::vector<MacroPatEnt> ParseMacroRulesPat(TokenStream& lex, enum eTokenType open, enum eTokenType close, RuleParseState& state) {
     Token tok;
 
-    ::std::vector<MacroPatEnt> ret;
+    std::vector<MacroPatEnt> ret;
 
     int depth = 0;
     auto ps = lex.startSpan();
@@ -2960,7 +2960,7 @@ struct RuleParseState {
                                 }
                         }
                         assert(sepFlag);
-                        ret.push_back(MacroPatEnt(sp, Token(joiner), sepFlag, loopIdx, ::std::move(subpat)));
+                        ret.push_back(MacroPatEnt(sp, Token(joiner), sepFlag, loopIdx, std::move(subpat)));
                         break;
                     }
                 }
@@ -2983,12 +2983,12 @@ struct ContentLoopVariableUse {
 
     ContentLoopVariableUse(std::vector<unsigned> loopStack);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ContentLoopVariableUse& x) {
+    friend std::ostream& operator<<(std::ostream& os, const ContentLoopVariableUse& x) {
         return os << "[" << x.loopStack << "] " << (x.isOptional ? "optional" : "required");
     }
 };
 
-void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpansionEnt>& contents) {
+void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansionEnt>& contents) {
     const auto isInterpolatedFragment = [](eTokenType type) {
         switch (type) {
             case TOK_INTERPOLATED_PATH:
@@ -3009,17 +3009,17 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
 
     struct Emitter {
         const WireBoard& wb;
-        ::std::vector<MacroExpansionEnt> out;
+        std::vector<MacroExpansionEnt> out;
 
-        void emitFromString(const ::std::string& s) {
-            ::std::istringstream iss{s};
+        void emitFromString(const std::string& s) {
+            std::istringstream iss{s};
             Lexer lex{wb.id, *wb.pool, iss, ASTEdition::Rust2021, {}};
             for (;;) {
                 auto tok = lex.getToken();
                 if (tok == TOK_EOF) {
                     break;
                 }
-                out.push_back(::std::move(tok));
+                out.push_back(std::move(tok));
             }
         }
 
@@ -3043,7 +3043,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                     return;
                 }
             }
-            ::std::stringstream ss;
+            std::stringstream ss;
             path.printPretty(ss, false);
             emitFromString(ss.str());
         }
@@ -3076,7 +3076,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                 emitTokenTree(tokens);
                 out.push_back(Token(e->isBraced ? TOK_BRACE_CLOSE : TOK_PAREN_CLOSE));
             } else {
-                throw ::std::runtime_error(FMT("Unknown node type: " << typeid(node).name()));
+                throw std::runtime_error(FMT("Unknown node type: " << typeid(node).name()));
             }
         }
 
@@ -3120,7 +3120,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                     emitAst(tok.fragNode());
                     break;
                 default:
-                    out.push_back(::std::move(tok));
+                    out.push_back(std::move(tok));
                     break;
             }
         }
@@ -3142,18 +3142,18 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
         emitter.emitToken(*tok);
         ASSERT_BUG(Span(), !emitter.out.empty(), "Interpolated macro fragment emitted no tokens");
         const auto replacementCount = emitter.out.size();
-        *it = ::std::move(emitter.out.front());
+        *it = std::move(emitter.out.front());
         ++it;
         if (replacementCount > 1) {
-            it = contents.insert(it, ::std::make_move_iterator(emitter.out.begin() + 1), ::std::make_move_iterator(emitter.out.end()));
+            it = contents.insert(it, std::make_move_iterator(emitter.out.begin() + 1), std::make_move_iterator(emitter.out.end()));
             it += replacementCount - 1;
         }
     }
 }
 
-::std::vector<MacroExpansionEnt> ParseMacroRulesCont(TokenStream& lex, enum eTokenType open, enum eTokenType close, const RuleParseState& state, unsigned loopDepth = 0, ::std::map<unsigned int, ContentLoopVariableUse>* varUsagePtr = nullptr) {
+std::vector<MacroExpansionEnt> ParseMacroRulesCont(TokenStream& lex, enum eTokenType open, enum eTokenType close, const RuleParseState& state, unsigned loopDepth = 0, std::map<unsigned int, ContentLoopVariableUse>* varUsagePtr = nullptr) {
     Token tok;
-    ::std::vector<MacroExpansionEnt> ret;
+    std::vector<MacroExpansionEnt> ret;
 
     int depth = 0;
     while (GET_TOK(tok, lex) != close || depth > 0) {
@@ -3183,7 +3183,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
             }
 
             if (tok.type() == TOK_PAREN_OPEN) {
-                ::std::map<unsigned int, ContentLoopVariableUse> varUsage;
+                std::map<unsigned int, ContentLoopVariableUse> varUsage;
                 auto content = ParseMacroRulesCont(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state, loopDepth + 1, &varUsage);
 
                 GET_TOK(tok, lex);
@@ -3255,7 +3255,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                     }
 
                     if (varUsagePtr) {
-                        varUsagePtr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
+                        varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
                     }
                     ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_IGNORE | ns->idx));
                 } else if (ident == "count") {
@@ -3278,7 +3278,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                     }
 
                     if (varUsagePtr) {
-                        varUsagePtr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
+                        varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
                     }
                     ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_COUNT | (countDepth << NAMEDVALUE_COUNT_DEPTHSHIFT) | ns->idx));
                 } else if (ident == "index" || ident == "len") {
@@ -3290,7 +3290,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                     }
                     ret.push_back(MacroExpansionEnt((ident == "index" ? NAMEDVALUE_MAGIC_INDEX_AT : NAMEDVALUE_MAGIC_LEN_AT) + loopDepthArg));
                 } else if (ident == "concat") {
-                    ::std::vector<MacroExpansionConcatEnt> ents;
+                    std::vector<MacroExpansionConcatEnt> ents;
                     lex.getTokenCheck(TOK_PAREN_OPEN);
                     while (true) {
                         if (lex.getTokenIf(TOK_DOLLAR)) {
@@ -3309,7 +3309,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                                     }
 
                                     if (varUsagePtr) {
-                                        varUsagePtr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
+                                        varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
                                     }
                                     ents.push_back(MacroExpansionConcatEnt(ns->idx));
                                 }
@@ -3349,7 +3349,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                     }
 
                     if (varUsagePtr) {
-                        varUsagePtr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
+                        varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
                     }
                     ret.push_back(MacroExpansionEnt(ns->idx));
                 }
@@ -3416,21 +3416,21 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
 }
 
 // TODO: Also count the number of times each variable is used?
-void enumerateNames(const ::std::vector<MacroPatEnt>& pats, ::std::vector<RcString>& names) {
+void enumerateNames(const std::vector<MacroPatEnt>& pats, std::vector<RcString>& names) {
     for (const auto& pat : pats) {
         if (pat.type == MacroPatEnt::PAT_LOOP) {
             enumerateNames(pat.subpats, names);
         } else if (pat.name != "") {
             auto b = names.begin();
             auto e = names.end();
-            if (::std::find(b, e, pat.name) == e) {
+            if (std::find(b, e, pat.name) == e) {
                 names.push_back(pat.name);
             }
         }
     }
 }
 
-MacroRulesArm ParseMacroRulesMakeArm(Span patSp, ::std::vector<MacroPatEnt> pattern, ::std::vector<MacroExpansionEnt> contents) {
+MacroRulesArm ParseMacroRulesMakeArm(Span patSp, std::vector<MacroPatEnt> pattern, std::vector<MacroExpansionEnt> contents) {
     MacroRulesCheckFollowSets(pattern.data(), pattern.size());
     auto ruleSequence = macroPatternToSimple(patSp, pattern);
     auto arm = MacroRulesArm(mv$(ruleSequence), mv$(contents));
@@ -3450,7 +3450,7 @@ namespace {
 MacroRulesPtr ParseMacroRules(TokenStream& lex) {
     Token tok;
 
-    ::std::vector<MacroRule> rules;
+    std::vector<MacroRule> rules;
     while (lex.lookahead(0) != TOK_EOF && lex.lookahead(0) != TOK_BRACE_CLOSE) {
         rules.push_back(ParseMacroRulesVar(lex));
         GET_TOK(tok, lex);
@@ -3488,7 +3488,7 @@ MacroRulesPtr ParseMacroRulesSingleArm(TokenStream& lex) {
     MacroRulesNormaliseFragments(*lex.parseState().wb, body);
 
     auto rv = makeMrPtr(lex);
-    rv->rules.push_back(ParseMacroRulesMakeArm(patSpan, ::std::move(armPat), ::std::move(body)));
+    rv->rules.push_back(ParseMacroRulesMakeArm(patSpan, std::move(armPat), std::move(body)));
     return rv;
 }
 
@@ -3507,7 +3507,7 @@ namespace {
         bool operator==(eTokenType tt) const;
     };
 
-    ::std::ostream& operator<<(::std::ostream& os, const ExpTok& t) {
+    std::ostream& operator<<(std::ostream& os, const ExpTok& t) {
         os << "ExpTok(" << t.ty << " " << t.tok << ")";
         return os;
     }
@@ -3518,7 +3518,7 @@ namespace {
         InvalidPath,
     };
 
-    PatternHeadRv macroPatternGetHeadSetInner(::std::vector<ExpTok>& rv, const ::std::vector<MacroPatEnt>& pattern, size_t directPos, const std::vector<ExpTok>& indirectPath, size_t indirectOfs) {
+    PatternHeadRv macroPatternGetHeadSetInner(std::vector<ExpTok>& rv, const std::vector<MacroPatEnt>& pattern, size_t directPos, const std::vector<ExpTok>& indirectPath, size_t indirectOfs) {
         for (size_t idx = directPos; idx < pattern.size(); idx++) {
             const auto& ent = pattern[idx];
             switch (ent.type) {
@@ -3580,10 +3580,10 @@ namespace {
         return PatternHeadRv::NotFound;
     }
 
-    ::std::vector<ExpTok> macroPatternGetHeadSet(const ::std::vector<MacroPatEnt>& pattern, size_t directPos, const std::vector<ExpTok>& indirectPath) {
-        ::std::vector<ExpTok> rv;
+    std::vector<ExpTok> macroPatternGetHeadSet(const std::vector<MacroPatEnt>& pattern, size_t directPos, const std::vector<ExpTok>& indirectPath) {
+        std::vector<ExpTok> rv;
         if (macroPatternGetHeadSetInner(rv, pattern, directPos, indirectPath, 0) != PatternHeadRv::Closed) {
-            if (!::std::any_of(rv.begin(), rv.end(), [](const ExpTok& e) {
+            if (!std::any_of(rv.begin(), rv.end(), [](const ExpTok& e) {
                 return e.ty == MacroPatEnt::PAT_TOKEN && e.tok == TOK_EOF;
             })) {
                 rv.push_back(ExpTok(MacroPatEnt::PAT_TOKEN, Token(TOK_EOF)));
@@ -3592,12 +3592,12 @@ namespace {
         return rv;
     }
 
-    void macroPatternToSimpleInner(const Span& sp, ::std::vector<SimplePatEnt>& rv, const ::std::vector<MacroPatEnt>& pattern) {
+    void macroPatternToSimpleInner(const Span& sp, std::vector<SimplePatEnt>& rv, const std::vector<MacroPatEnt>& pattern) {
         size_t levelStart = rv.size();
         auto push = [&rv](SimplePatEnt spe) {
-            rv.push_back(::std::move(spe));
+            rv.push_back(std::move(spe));
         };
-        auto pushIfv = [&push](bool isEqual, ::std::vector<SimplePatIfCheck> ents, size_t tgt) {
+        auto pushIfv = [&push](bool isEqual, std::vector<SimplePatIfCheck> ents, size_t tgt) {
             push(SimplePatEnt::make_If({isEqual, tgt, mv$(ents)}));
         };
         for (size_t idx = 0; idx < pattern.size(); idx++) {
@@ -3610,9 +3610,9 @@ namespace {
 
                     // TODO: If EOF is in both entry and skip, then remove from entry
                     bool bodySkippable = false;
-                    if (::std::find(entryPats1.begin(), entryPats1.end(), TOK_EOF) != entryPats1.end()) {
-                        if (::std::find(skipPats1.begin(), skipPats1.end(), TOK_EOF) != entryPats1.end()) {
-                            entryPats1.erase(::std::find(entryPats1.begin(), entryPats1.end(), TOK_EOF));
+                    if (std::find(entryPats1.begin(), entryPats1.end(), TOK_EOF) != entryPats1.end()) {
+                        if (std::find(skipPats1.begin(), skipPats1.end(), TOK_EOF) != entryPats1.end()) {
+                            entryPats1.erase(std::find(entryPats1.begin(), entryPats1.end(), TOK_EOF));
                             bodySkippable = true;
                         }
                     }
@@ -3632,7 +3632,7 @@ namespace {
                     for (size_t iterations = 0; iterations < MAX_CONDITION_ADD; iterations++) {
                         bool didExtend = false;
                         for (auto eIt = entryConds.begin(); eIt != entryConds.end(); ++eIt) {
-                            auto sIt = ::std::find(skipConds.begin(), skipConds.end(), *eIt);
+                            auto sIt = std::find(skipConds.begin(), skipConds.end(), *eIt);
                             if (sIt != skipConds.end()) {
                                 didExtend = true;
 
@@ -3647,8 +3647,8 @@ namespace {
                                 }
                                 auto entryPats2 = macroPatternGetHeadSet(ent.subpats, 0, path);
                                 assert(entryPats2.size() > 0);
-                                if (::std::find(entryPats2.begin(), entryPats2.end(), TOK_EOF) != entryPats2.end()) {
-                                    entryPats2.erase(::std::find(entryPats2.begin(), entryPats2.end(), TOK_EOF));
+                                if (std::find(entryPats2.begin(), entryPats2.end(), TOK_EOF) != entryPats2.end()) {
+                                    entryPats2.erase(std::find(entryPats2.begin(), entryPats2.end(), TOK_EOF));
                                     entryPats2.insert(entryPats2.end(), skipPats1.begin(), skipPats1.end());
                                 }
                                 auto skipPats2 = macroPatternGetHeadSet(pattern, idx + 1, path);
@@ -3678,7 +3678,7 @@ namespace {
                         }
                     }
                     for (auto eIt = entryConds.begin(); eIt != entryConds.end(); ++eIt) {
-                        auto sIt = ::std::find(skipConds.begin(), skipConds.end(), *eIt);
+                        auto sIt = std::find(skipConds.begin(), skipConds.end(), *eIt);
                         if (sIt != skipConds.end()) {
                             TODO(ent.sp, "Entry and skip patterns share an entry (max extend " << MAX_CONDITION_ADD << "), ambigious - " << *eIt);
                         }
@@ -3832,8 +3832,8 @@ namespace {
         }
     }
 
-    ::std::vector<SimplePatEnt> macroPatternToSimple(const Span& sp, const ::std::vector<MacroPatEnt>& pattern) {
-        ::std::vector<SimplePatEnt> rv;
+    std::vector<SimplePatEnt> macroPatternToSimple(const Span& sp, const std::vector<MacroPatEnt>& pattern) {
+        std::vector<SimplePatEnt> rv;
         macroPatternToSimpleInner(sp, rv, pattern);
         return rv;
     }
@@ -3861,7 +3861,7 @@ MacroPatEnt::MacroPatEnt(Span sp, RcString name, unsigned int nameIndex, Type ty
 {
 }
 
-MacroPatEnt::MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, ::std::vector<MacroPatEnt> ents)
+MacroPatEnt::MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, std::vector<MacroPatEnt> ents)
     : sp(mv$(sp))
     , name(op)
     , nameIndex(index)
@@ -3874,7 +3874,7 @@ MacroPatEnt::MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, ::s
 MacroRulesArm::MacroRulesArm() {
 }
 
-MacroRulesArm::MacroRulesArm(::std::vector<SimplePatEnt> pattern, ::std::vector<MacroExpansionEnt> contents)
+MacroRulesArm::MacroRulesArm(std::vector<SimplePatEnt> pattern, std::vector<MacroExpansionEnt> contents)
     : pattern(mv$(pattern))
     , contents(mv$(contents))
 {
@@ -3887,7 +3887,7 @@ MacroRules::MacroRules(u32& id, RcString sourceCrate, ASTEdition edition)
 {
 }
 
-::std::ostream& operator<<(::std::ostream& os, const SimplePatIfCheck& x) {
+std::ostream& operator<<(std::ostream& os, const SimplePatIfCheck& x) {
     os << x.ty;
     if (x.ty == MacroPatEnt::PAT_TOKEN) {
         os << ":" << x.tok;
@@ -3902,7 +3902,7 @@ ParameterMappings::ParameterMappings()
 {
 }
 
-auto ParameterMappings::mappings() const -> const ::std::vector<CapturedVar>& {
+auto ParameterMappings::mappings() const -> const std::vector<CapturedVar>& {
     return mappings_;
 }
 
@@ -3914,7 +3914,7 @@ auto ParameterMappings::setLoopCounts(loopCountsT loopCounts) -> void {
     this->loopCounts = std::move(loopCounts);
 }
 
-MacroPatternStream::MacroPatternStream(const ::std::vector<SimplePatEnt>& ents, const ::std::vector<bool>* conditionReplay)
+MacroPatternStream::MacroPatternStream(const std::vector<SimplePatEnt>& ents, const std::vector<bool>* conditionReplay)
     : simpleEnts(ents)
     , endEnt(SimplePatEnt::make_End({}))
     , curPos_(0)
@@ -3936,19 +3936,19 @@ auto MacroPatternStream::peek() -> const SimplePatEnt& {
     return *peekCache;
 }
 
-auto MacroPatternStream::getLoopIters() const -> const ::std::vector<unsigned int>& {
+auto MacroPatternStream::getLoopIters() const -> const std::vector<unsigned int>& {
     return loopIterations;
 }
 
-auto MacroPatternStream::takeHistory() -> ::std::vector<bool> {
-    return ::std::move(conditionHistory);
+auto MacroPatternStream::takeHistory() -> std::vector<bool> {
+    return std::move(conditionHistory);
 }
 
 auto MacroPatternStream::takeLoopCounts() -> loopCountsT {
-    return ::std::move(loopCounts);
+    return std::move(loopCounts);
 }
 
-MacroExpandState::MacroExpandState(const ::std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings)
+MacroExpandState::MacroExpandState(const std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings)
     : rootContents(contents)
     , mappings_(mappings)
     , offsets({{0, 0, 0}})
@@ -3956,7 +3956,7 @@ MacroExpandState::MacroExpandState(const ::std::vector<MacroExpansionEnt>& conte
 {
 }
 
-auto MacroExpandState::iterations() const -> const ::std::vector<unsigned int> {
+auto MacroExpandState::iterations() const -> const std::vector<unsigned int> {
     return iterations_;
 }
 
@@ -3981,7 +3981,7 @@ auto MacroExpandState::topPos() const -> unsigned int {
     return offsets[0].readPos;
 }
 
-MacroExpander::MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
+MacroExpander::MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
     : TokenStream(ParseState())
     , pool(pool)
     , thisSpan(sp, crateName, macroName)
@@ -4055,7 +4055,7 @@ auto TokenStreamRO::consume() -> void {
     }
 
     if (offsets.empty() && activeOffset == tt.size()) {
-        throw ::std::runtime_error("Attempting to consume EOS");
+        throw std::runtime_error("Attempting to consume EOS");
     }
     consumeCount++;
     for (;;) {

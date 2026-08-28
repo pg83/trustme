@@ -23,9 +23,9 @@ struct HIRTypeUidOrder {
     }
 };
 
-using HIRTypeRefSet = ::std::set<HIRTypeRef, HIRTypeUidOrder>;
+using HIRTypeRefSet = std::set<HIRTypeRef, HIRTypeUidOrder>;
 template <typename V>
-using HIRTypeRefMap = ::std::map<HIRTypeRef, V, HIRTypeUidOrder>;
+using HIRTypeRefMap = std::map<HIRTypeRef, V, HIRTypeUidOrder>;
 
 struct HIRGenericRef;
 struct HIRSimplePath;

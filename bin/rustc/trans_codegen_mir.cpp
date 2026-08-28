@@ -31,19 +31,19 @@ namespace {
         return Fmt<T>(wb, v);
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Fmt<HIRPath>& x) {
+    std::ostream& operator<<(std::ostream& os, const Fmt<HIRPath>& x) {
         return os << TransMangle(x.wb, x.e);
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Fmt<HIRGenericPath>& x) {
+    std::ostream& operator<<(std::ostream& os, const Fmt<HIRGenericPath>& x) {
         return os << TransMangle(x.wb, x.e);
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Fmt<HIRSimplePath>& x) {
+    std::ostream& operator<<(std::ostream& os, const Fmt<HIRSimplePath>& x) {
         return os << TransMangle(x.wb, x.e);
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Fmt<HIRTypeRef>& x) {
+    std::ostream& operator<<(std::ostream& os, const Fmt<HIRTypeRef>& x) {
         {
             auto& tuMatch = (*x.e);
             switch (tuMatch.tag()) {
@@ -163,7 +163,7 @@ namespace {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Fmt<MIRLValue>& x) {
+    std::ostream& operator<<(std::ostream& os, const Fmt<MIRLValue>& x) {
         for (const auto& w : ::reverse(x.e.wrappers)) {
             if (w.is_Deref()) {
                 os << "(*";
@@ -227,11 +227,11 @@ namespace {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Fmt<MIRConstant>& x) {
+    std::ostream& operator<<(std::ostream& os, const Fmt<MIRConstant>& x) {
         struct H {
             static u64 doubleToU64(double v) {
                 u64 rv;
-                ::std::memcpy(&rv, &v, sizeof(double));
+                std::memcpy(&rv, &v, sizeof(double));
                 return rv;
             }
         };
@@ -257,7 +257,7 @@ namespace {
                 bool sign = (vi & (1ull << 63)) != 0;
                 int exp = (vi >> 52) & 0x7FF;
                 u64 frac = vi & ((1ull << 52) - 1);
-                os << (sign ? "-" : "+") << "0x1." << ::std::setw(52 / 4) << ::std::setfill('0') << ::std::hex << frac << ::std::dec << "p" << (exp - 1023);
+                os << (sign ? "-" : "+") << "0x1." << std::setw(52 / 4) << std::setfill('0') << std::hex << frac << std::dec << "p" << (exp - 1023);
                 os << " " << v.t;
 
             } break;
@@ -282,7 +282,7 @@ namespace {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Fmt<MIRParam>& x) {
+    std::ostream& operator<<(std::ostream& os, const Fmt<MIRParam>& x) {
         switch (x.e.tag()) {
             break;
             case MIRParam::TAG_LValue: {
@@ -334,13 +334,13 @@ namespace {
         template <typename T>
         RcString TransMangle(const T& value) const;
 
-        ::std::string outfilePath;
-        ::std::ofstream of;
+        std::string outfilePath;
+        std::ofstream of;
         const MIRTypeResolve* mirRes;
 
-        CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile);
+        CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile);
 
-        void finalise(const TransOptions& opt, CodegenOutput outTy, const ::std::string& hirFile) override;
+        void finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile) override;
 
         void emitType(const HIRTypeData* ty) override;
 
@@ -372,8 +372,8 @@ namespace {
 
 }
 
-::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile) {
-    return ::std::unique_ptr<CodeGenerator>(new CodeGeneratorMonoMir(wb, crate, outfile));
+std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile) {
+    return std::unique_ptr<CodeGenerator>(new CodeGeneratorMonoMir(wb, crate, outfile));
 }
 
 template <typename T>
@@ -393,7 +393,7 @@ auto CodeGeneratorMonoMir::TransMangle(const T& value) const -> RcString {
     return ::TransMangle(wb_, value);
 }
 
-CodeGeneratorMonoMir::CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile)
+CodeGeneratorMonoMir::CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile)
     : crate(crate)
     , wb_(wb)
     , resolve_(wb, OpaqueReveal::All)
@@ -405,7 +405,7 @@ CodeGeneratorMonoMir::CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& 
     }
 }
 
-auto CodeGeneratorMonoMir::finalise(const TransOptions& opt, CodegenOutput outTy, const ::std::string& hirFile) -> void {
+auto CodeGeneratorMonoMir::finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile) -> void {
     if (outTy == CodegenOutput::Executable) {
         if (!crate.noMain) {
             of << "fn main#(isize, *const *const i8): isize {\n";
@@ -455,7 +455,7 @@ auto CodeGeneratorMonoMir::finalise(const TransOptions& opt, CodegenOutput outTy
     of.close();
 
     {
-        ::std::ofstream of(outfilePath);
+        std::ofstream of(outfilePath);
         if (!of.good()) {
             // TODO: Error?
         }
@@ -734,9 +734,9 @@ auto CodeGeneratorMonoMir::emitEnum(const Span& sp, const HIRGenericPath& p, con
         for (size_t i = 0; i < path.size; i++) {
             int val = ((v >> (i * 8)) & U128(0xFF)).truncateU64();
             if (val < 16) {
-                of << ::std::hex << "\\x0" << val << ::std::dec;
+                of << std::hex << "\\x0" << val << std::dec;
             } else {
-                of << ::std::hex << "\\x" << val << ::std::dec;
+                of << std::hex << "\\x" << val << std::dec;
             }
         }
         of << "\"";
@@ -815,9 +815,9 @@ auto CodeGeneratorMonoMir::emitStrByte(u8 b) -> void {
     } else if (' ' <= b && b <= 'z' && b != '\\') {
         of << b;
     } else if (b < 16) {
-        of << "\\x0" << ::std::hex << int(b) << ::std::dec;
+        of << "\\x0" << std::hex << int(b) << std::dec;
     } else {
-        of << "\\x" << ::std::hex << int(b) << ::std::dec;
+        of << "\\x" << std::hex << int(b) << std::dec;
     }
 }
 
@@ -881,7 +881,7 @@ auto CodeGeneratorMonoMir::emitFunctionExt(const HIRPath& p, const HIRFunction& 
 auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code, bool hasPrototype) -> void {
     MIRTypeResolve::argsT argTypes;
     for (const auto& ent : item.args) {
-        argTypes.push_back(::std::make_pair(HIRPattern{}, params.monomorph(resolve_, ent.second)));
+        argTypes.push_back(std::make_pair(HIRPattern{}, params.monomorph(resolve_, ent.second)));
     }
 
     HIRTypeRef retTypeTmp;

@@ -395,7 +395,7 @@ S128 S128::operator>>(unsigned bits) const {
     return S128(U128(inner.lo >> bits | (inner.hi << (64 - bits)), static_cast<u64>(static_cast<i64>(inner.hi) >> bits)));
 }
 
-void S128::fmt(::std::ostream& os) const {
+void S128::fmt(std::ostream& os) const {
     if (isI64()) {
         os << static_cast<i64>(inner.lo);
     } else {
@@ -418,7 +418,7 @@ int S128::cmp128s(U128 a, U128 b) {
     return 0;
 }
 
-std::ostream& operator<<(::std::ostream& os, const U128& x) {
+std::ostream& operator<<(std::ostream& os, const U128& x) {
     if (x.hi == 0) {
         os << x.lo;
     } else {
@@ -459,7 +459,7 @@ std::ostream& operator<<(::std::ostream& os, const U128& x) {
     return os;
 }
 
-std::ostream& operator<<(::std::ostream& os, const S128& x) {
+std::ostream& operator<<(std::ostream& os, const S128& x) {
     x.fmt(os);
     return os;
 }

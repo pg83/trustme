@@ -37,8 +37,8 @@ generate(
             ("FloatValue", "value"),
         ], doc="if the type is not a float type, it's unknown"),
         v("Boolean", "bool"),
-        v("String", "::std::string"),
-        v("CString", fields=[("::std::string", "v")]),
-        v("ByteString", "::std::vector<char>"),
+        v("String", "std::string"),
+        v("CString", fields=[("std::string", "v")]),
+        v("ByteString", "std::vector<char>"),
     ],
 )

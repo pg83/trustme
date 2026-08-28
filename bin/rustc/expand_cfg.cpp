@@ -28,9 +28,9 @@ namespace {}
 
 struct CfgState {
     ObjPool* pool;
-    ::std::multimap<::std::string, ::std::string> values;
-    ::std::map<::std::string, CfgValueCallback*> valueFcns;
-    ::std::set<::std::string> flags;
+    std::multimap<std::string, std::string> values;
+    std::map<std::string, CfgValueCallback*> valueFcns;
+    std::set<std::string> flags;
 
     explicit CfgState(ObjPool& pool);
 };
@@ -42,12 +42,12 @@ CfgState* CfgCreateState(ObjPool& pool) {
 namespace {
 
     struct CfgSpecParser {
-        const ::std::string& input;
+        const std::string& input;
         size_t pos = 0;
 
-        explicit CfgSpecParser(const ::std::string& input);
+        explicit CfgSpecParser(const std::string& input);
 
-        [[noreturn]] void fail(const ::std::string& message) const;
+        [[noreturn]] void fail(const std::string& message) const;
 
         void skipWs();
 
@@ -59,20 +59,20 @@ namespace {
 
         static bool isIdentContinue(unsigned char c);
 
-        ::std::string ident();
+        std::string ident();
 
         static unsigned hexDigit(char c);
 
-        ::std::string stringLiteral();
+        std::string stringLiteral();
 
         bool atEnd();
 
-        ::std::pair<::std::string, ::std::optional<::std::string>> parseCfgOption();
+        std::pair<std::string, std::optional<std::string>> parseCfgOption();
     };
 
 }
 
-void CfgDump(const Settings& settings, ::std::ostream& os) {
+void CfgDump(const Settings& settings, std::ostream& os) {
     const auto& cfg = *settings.cfg;
     for (const auto& v : cfg.values) {
         os << ">" << v.first << "=" << v.second << std::endl;
@@ -82,33 +82,33 @@ void CfgDump(const Settings& settings, ::std::ostream& os) {
     }
 }
 
-void CfgSetFlag(Settings& settings, ::std::string name) {
+void CfgSetFlag(Settings& settings, std::string name) {
     auto& cfg = *settings.cfg;
     cfg.flags.insert(mv$(name));
 }
 
-void CfgSetValue(Settings& settings, ::std::string name, ::std::string val) {
+void CfgSetValue(Settings& settings, std::string name, std::string val) {
     auto& cfg = *settings.cfg;
-    cfg.values.insert(::std::make_pair(mv$(name), mv$(val)));
+    cfg.values.insert(std::make_pair(mv$(name), mv$(val)));
 }
 
 void CfgSetValueCallback(Settings& settings, CfgString name, const CfgValueCallback& cb) {
     auto& cfg = *settings.cfg;
-    cfg.valueFcns.insert(::std::make_pair(mv$(name), cb.cloneIn(*cfg.pool)));
+    cfg.valueFcns.insert(std::make_pair(mv$(name), cb.cloneIn(*cfg.pool)));
 }
 
-void CfgParseOption(const ::std::string& spec, ::std::string& name, bool& hasValue, ::std::string& value) {
+void CfgParseOption(const std::string& spec, std::string& name, bool& hasValue, std::string& value) {
     auto parsed = CfgSpecParser(spec).parseCfgOption();
-    name = ::std::move(parsed.first);
+    name = std::move(parsed.first);
     hasValue = parsed.second.has_value();
-    value = parsed.second ? ::std::move(*parsed.second) : ::std::string();
+    value = parsed.second ? std::move(*parsed.second) : std::string();
 }
 
-bool CfgSetCheckSpec(Settings& settings, const ::std::string& spec, ::std::string& error) {
+bool CfgSetCheckSpec(Settings& settings, const std::string& spec, std::string& error) {
     return true;
 }
 
-void CfgSetLintLevel(Settings& settings, ::std::string name, CfgLintLevel level) {
+void CfgSetLintLevel(Settings& settings, std::string name, CfgLintLevel level) {
     auto it = settings.lintLevels.find(name);
     if (it != settings.lintLevels.end() && it->second == CfgLintLevel::Forbid) {
         return;
@@ -220,12 +220,12 @@ namespace {
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
                     struct H {
-                        static ::std::array<unsigned, 3> parse(const ::std::string& v) {
-                            ::std::array<unsigned, 3> rv = {0, 0, 0};
+                        static std::array<unsigned, 3> parse(const std::string& v) {
+                            std::array<unsigned, 3> rv = {0, 0, 0};
                             size_t pos = 0;
                             for (unsigned i = 0; i < 3 && pos < v.size(); i++) {
                                 unsigned val = 0;
-                                while (pos < v.size() && ::std::isdigit(static_cast<unsigned char>(v[pos]))) {
+                                while (pos < v.size() && std::isdigit(static_cast<unsigned char>(v[pos]))) {
                                     val = val * 10 + static_cast<unsigned>(v[pos] - '0');
                                     pos++;
                                 }
@@ -240,8 +240,8 @@ namespace {
                         }
                     };
 
-                    const char* override = ::std::getenv("RUSTC_OVERRIDE_VERSION_STRING");
-                    auto have = H::parse(override ? ::std::string(override) : ::std::string(RUSTC_TARGET_VERSION) + ".100");
+                    const char* override = std::getenv("RUSTC_OVERRIDE_VERSION_STRING");
+                    auto have = H::parse(override ? std::string(override) : std::string(RUSTC_TARGET_VERSION) + ".100");
                     auto want = H::parse(wanted);
                     return have >= want;
                 } else {
@@ -314,11 +314,11 @@ std::vector<ASTAttribute> checkCfgAttr(const Settings& settings, const ASTAttrib
 }
 
 struct CCfgExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
 struct CCfgSelectExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
 struct CCfgHandler: public ExpandDecorator {
@@ -356,13 +356,13 @@ CfgState::CfgState(ObjPool& pool)
 {
 }
 
-CfgSpecParser::CfgSpecParser(const ::std::string& input)
+CfgSpecParser::CfgSpecParser(const std::string& input)
     : input(input)
 {
 }
 
-[[noreturn]] auto CfgSpecParser::fail(const ::std::string& message) const -> void {
-    throw ::std::runtime_error("invalid `--cfg` argument `" + input + "`: " + message);
+[[noreturn]] auto CfgSpecParser::fail(const std::string& message) const -> void {
+    throw std::runtime_error("invalid `--cfg` argument `" + input + "`: " + message);
 }
 
 auto CfgSpecParser::skipWs() -> void {
@@ -398,7 +398,7 @@ auto CfgSpecParser::isIdentContinue(unsigned char c) -> bool {
     return isIdentStart(c) || ('0' <= c && c <= '9');
 }
 
-auto CfgSpecParser::ident() -> ::std::string {
+auto CfgSpecParser::ident() -> std::string {
     skipWs();
     const auto start = pos;
     if (pos >= input.size() || !isIdentStart(static_cast<unsigned char>(input[pos]))) {
@@ -424,13 +424,13 @@ auto CfgSpecParser::hexDigit(char c) -> unsigned {
     return 16;
 }
 
-auto CfgSpecParser::stringLiteral() -> ::std::string {
+auto CfgSpecParser::stringLiteral() -> std::string {
     skipWs();
     if (pos >= input.size() || input[pos] != '"') {
         fail("expected a string literal");
     }
     pos += 1;
-    ::std::string rv;
+    std::string rv;
     while (pos < input.size()) {
         auto c = input[pos++];
         if (c == '"') {
@@ -488,19 +488,19 @@ auto CfgSpecParser::atEnd() -> bool {
     return pos == input.size();
 }
 
-auto CfgSpecParser::parseCfgOption() -> ::std::pair<::std::string, ::std::optional<::std::string>> {
+auto CfgSpecParser::parseCfgOption() -> std::pair<std::string, std::optional<std::string>> {
     auto name = ident();
-    ::std::optional<::std::string> value;
+    std::optional<std::string> value;
     if (take('=')) {
         value = stringLiteral();
     }
     if (!atEnd()) {
         fail("expected `key` or `key=\"value\"`");
     }
-    return {::std::move(name), ::std::move(value)};
+    return {std::move(name), std::move(value)};
 }
 
-auto CCfgExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> ::std::unique_ptr<TokenStream> {
+auto CCfgExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
     auto lex = TTStream(sp, ParseState(), tt);
     const auto& cfg = *wb.settings->cfg;
     bool rv = checkCfgInner(cfg, lex);
@@ -509,7 +509,7 @@ auto CCfgExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
     return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, {}, rv ? TOK_RWORD_TRUE : TOK_RWORD_FALSE)));
 }
 
-auto CCfgSelectExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> ::std::unique_ptr<TokenStream> {
+auto CCfgSelectExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
     auto lex = TTStream(sp, ParseState(), tt);
     for (;;) {
         const auto& cfg = *wb.settings->cfg;

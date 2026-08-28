@@ -30,9 +30,9 @@ enum class ASTBoundConstness : u8 {
 
 class ASTHigherRankedBounds {
 public:
-    ::std::vector<ASTLifetimeParam> lifetimes;
+    std::vector<ASTLifetimeParam> lifetimes;
 
-    ::std::vector<RcString> types;
+    std::vector<RcString> types;
 
     ASTHigherRankedBounds();
     ~ASTHigherRankedBounds();
@@ -42,7 +42,7 @@ public:
 
     bool empty() const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTHigherRankedBounds& x);
+    friend std::ostream& operator<<(std::ostream& os, const ASTHigherRankedBounds& x);
 };
 
 class PrettyPrintType {
@@ -51,21 +51,21 @@ class PrettyPrintType {
 public:
     PrettyPrintType(const ASTType* ty);
 
-    void print(::std::ostream& os) const;
+    void print(std::ostream& os) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const PrettyPrintType& v);
+    friend std::ostream& operator<<(std::ostream& os, const PrettyPrintType& v);
 };
 
 struct TypeFunction {
     ASTHigherRankedBounds hrbs;
     bool isUnsafe;
-    ::std::string abi;
+    std::string abi;
     ASTType* rettype;
-    ::std::vector<ASTType*> argTypes;
+    std::vector<ASTType*> argTypes;
     bool isVariadic;
 
     TypeFunction();
-    TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ASTType* ret, ::std::vector<ASTType*> args, bool isVariadic);
+    TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, ASTType* ret, std::vector<ASTType*> args, bool isVariadic);
     ~TypeFunction();
     TypeFunction(TypeFunction&& other);
     TypeFunction(const TypeFunction& other);
@@ -75,7 +75,7 @@ struct TypeFunction {
 
 struct TypeTraitPath {
     ASTHigherRankedBounds hrbs;
-    ::std::unique_ptr<ASTPath> path;
+    std::unique_ptr<ASTPath> path;
     ASTBoundConstness constness = ASTBoundConstness::Never;
 
     bool isAsync = false;
@@ -90,10 +90,10 @@ struct TypeTraitPath {
 };
 
 struct TypeErasedType {
-    ::std::vector<TypeTraitPath> traits;
-    ::std::vector<TypeTraitPath> maybeTraits;
-    ::std::vector<ASTLifetimeRef> lifetimes;
-    ::std::unique_ptr<ASTPathParams> use;
+    std::vector<TypeTraitPath> traits;
+    std::vector<TypeTraitPath> maybeTraits;
+    std::vector<ASTLifetimeRef> lifetimes;
+    std::unique_ptr<ASTPathParams> use;
 
     bool isEdition2024OrLater;
 };
@@ -132,8 +132,8 @@ struct ASTType {
     stl::ObjPool* pool = nullptr;
 
     ASTType(Span sp, TypeData data, stl::ObjPool* pool)
-        : span_(::std::move(sp))
-        , data(::std::move(data))
+        : span_(std::move(sp))
+        , data(std::move(data))
         , pool(pool)
     {
     }
@@ -211,7 +211,7 @@ struct ASTType {
                 return e.inner;
             }
             default: {
-                throw ::std::runtime_error("Called inner_type on non-wrapper");
+                throw std::runtime_error("Called inner_type on non-wrapper");
             }
         }
     }
@@ -226,7 +226,7 @@ struct ASTType {
         return ord(x) != OrdEqual;
     }
 
-    void print(::std::ostream& os, bool isDebug = false) const;
+    void print(std::ostream& os, bool isDebug = false) const;
 
     PrettyPrintType printPretty() const {
         return PrettyPrintType(this);
@@ -240,21 +240,21 @@ extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Macro, ASTMacroInvocatio
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Unit, Span sp);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Primitive, Span sp, enum eCoreType type);
 extern ASTType* mkType(stl::ObjPool& pool, Span sp, enum eCoreType type);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, ::std::vector<ASTType*> innerTypes);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<ASTType*> args, bool isVariadic, ASTType* ret);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, std::vector<ASTType*> innerTypes);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, std::vector<ASTType*> args, bool isVariadic, ASTType* ret);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType, bool isPin = false);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTType* innerType);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, ::std::shared_ptr<ASTExprNode> size);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, std::shared_ptr<ASTExprNode> size);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::UnsizedArray, Span sp, ASTType* innerType);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Arg, Span sp, RcString name, unsigned int binding = ~0u);
 extern ASTType* mkType(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding = ~0u);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Path, Span sp, ASTPath path);
 extern ASTType* mkType(stl::ObjPool& pool, Span sp, ASTPath path);
-extern ASTType* mkType(stl::ObjPool& pool, Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes);
+extern ASTType* mkType(stl::ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, std::vector<ASTLifetimeRef> lifetimes);
 
-extern ::std::ostream& operator<<(::std::ostream& os, const ASTType& tr);
+extern std::ostream& operator<<(std::ostream& os, const ASTType& tr);
 
-inline ::std::ostream& operator<<(::std::ostream& os, const ASTType* tr) {
+inline std::ostream& operator<<(std::ostream& os, const ASTType* tr) {
     return tr ? (os << *tr) : (os << "(null-type)");
 }
 

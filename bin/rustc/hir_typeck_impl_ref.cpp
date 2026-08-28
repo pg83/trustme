@@ -304,7 +304,7 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
     return HIRTypeRef();
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ImplRef& x) {
+std::ostream& operator<<(std::ostream& os, const ImplRef& x) {
     switch (x.data.tag()) {
         case ImplRefData::TAG_TraitImpl: {
             auto& e = x.data.as_TraitImpl();

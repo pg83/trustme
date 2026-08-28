@@ -37,17 +37,17 @@ namespace {
     constexpr u32 HANGUL_S_COUNT = HANGUL_L_COUNT * HANGUL_N_COUNT;
 
     u8 combiningClass(u32 codepoint) {
-        const auto* found = ::std::lower_bound(::std::begin(COMBINING), ::std::end(COMBINING), codepoint, [](const UnicodeCombining& entry, u32 value) {
+        const auto* found = std::lower_bound(std::begin(COMBINING), std::end(COMBINING), codepoint, [](const UnicodeCombining& entry, u32 value) {
             return entry.codepoint < value;
         });
-        return found != ::std::end(COMBINING) && found->codepoint == codepoint ? found->cls : 0;
+        return found != std::end(COMBINING) && found->codepoint == codepoint ? found->cls : 0;
     }
 
     const UnicodeDecomposition* decompositionOf(u32 codepoint) {
-        const auto* found = ::std::lower_bound(::std::begin(DECOMPOSITIONS), ::std::end(DECOMPOSITIONS), codepoint, [](const UnicodeDecomposition& entry, u32 value) {
+        const auto* found = std::lower_bound(std::begin(DECOMPOSITIONS), std::end(DECOMPOSITIONS), codepoint, [](const UnicodeDecomposition& entry, u32 value) {
             return entry.codepoint < value;
         });
-        return found != ::std::end(DECOMPOSITIONS) && found->codepoint == codepoint ? found : nullptr;
+        return found != std::end(DECOMPOSITIONS) && found->codepoint == codepoint ? found : nullptr;
     }
 
     u32 composedPair(u32 first, u32 second) {
@@ -57,10 +57,10 @@ namespace {
         if (HANGUL_S_BASE <= first && first < HANGUL_S_BASE + HANGUL_S_COUNT && (first - HANGUL_S_BASE) % HANGUL_T_COUNT == 0 && HANGUL_T_BASE < second && second < HANGUL_T_BASE + HANGUL_T_COUNT) {
             return first + (second - HANGUL_T_BASE);
         }
-        const auto* found = ::std::lower_bound(::std::begin(COMPOSITIONS), ::std::end(COMPOSITIONS), first, [](const UnicodeComposition& entry, u32 value) {
+        const auto* found = std::lower_bound(std::begin(COMPOSITIONS), std::end(COMPOSITIONS), first, [](const UnicodeComposition& entry, u32 value) {
             return entry.first < value;
         });
-        for (; found != ::std::end(COMPOSITIONS) && found->first == first; ++found) {
+        for (; found != std::end(COMPOSITIONS) && found->first == first; ++found) {
             if (found->second == second) {
                 return found->composed;
             }
@@ -68,7 +68,7 @@ namespace {
         return 0;
     }
 
-    void decomposeInto(u32 codepoint, ::std::vector<u32>& out) {
+    void decomposeInto(u32 codepoint, std::vector<u32>& out) {
         if (HANGUL_S_BASE <= codepoint && codepoint < HANGUL_S_BASE + HANGUL_S_COUNT) {
             const u32 index = codepoint - HANGUL_S_BASE;
             out.push_back(HANGUL_L_BASE + index / HANGUL_N_COUNT);
@@ -88,7 +88,7 @@ namespace {
         out.push_back(codepoint);
     }
 
-    void orderCanonically(::std::vector<u32>& text) {
+    void orderCanonically(std::vector<u32>& text) {
         for (size_t i = 1; i < text.size(); i++) {
             const auto cls = combiningClass(text[i]);
             if (cls == 0) {
@@ -100,13 +100,13 @@ namespace {
                 if (previous == 0 || previous <= cls) {
                     break;
                 }
-                ::std::swap(text[j - 1], text[j]);
+                std::swap(text[j - 1], text[j]);
                 j--;
             }
         }
     }
 
-    void compose(::std::vector<u32>& text) {
+    void compose(std::vector<u32>& text) {
         if (text.empty()) {
             return;
         }
@@ -130,7 +130,7 @@ namespace {
         text.resize(out);
     }
 
-    void appendUtf8(::std::string& out, u32 codepoint) {
+    void appendUtf8(std::string& out, u32 codepoint) {
         if (codepoint < 0x80) {
             out += static_cast<char>(codepoint);
         } else if (codepoint < 0x800) {
@@ -148,8 +148,8 @@ namespace {
         }
     }
 
-    ::std::vector<u32> decodeUtf8(const ::std::string& text) {
-        ::std::vector<u32> out;
+    std::vector<u32> decodeUtf8(const std::string& text) {
+        std::vector<u32> out;
         out.reserve(text.size());
         for (size_t i = 0; i < text.size();) {
             const auto lead = static_cast<u8>(text[i]);
@@ -190,7 +190,7 @@ namespace {
         return out;
     }
 
-    bool isAscii(const ::std::string& text) {
+    bool isAscii(const std::string& text) {
         for (const char c : text) {
             if (static_cast<u8>(c) >= 0x80) {
                 return false;
@@ -200,13 +200,13 @@ namespace {
     }
 }
 
-::std::string unicodeNormaliseNfc(const ::std::string& text) {
+std::string unicodeNormaliseNfc(const std::string& text) {
     if (isAscii(text)) {
         return text;
     }
 
     auto codepoints = decodeUtf8(text);
-    ::std::vector<u32> decomposed;
+    std::vector<u32> decomposed;
     decomposed.reserve(codepoints.size() * 2);
     for (const auto codepoint : codepoints) {
         decomposeInto(codepoint, decomposed);
@@ -214,7 +214,7 @@ namespace {
     orderCanonically(decomposed);
     compose(decomposed);
 
-    ::std::string out;
+    std::string out;
     out.reserve(text.size());
     for (const auto codepoint : decomposed) {
         appendUtf8(out, codepoint);
@@ -222,6 +222,6 @@ namespace {
     return out;
 }
 
-bool unicodeIsNfc(const ::std::string& text) {
+bool unicodeIsNfc(const std::string& text) {
     return isAscii(text) || unicodeNormaliseNfc(text) == text;
 }

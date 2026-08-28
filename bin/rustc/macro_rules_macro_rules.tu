@@ -20,9 +20,9 @@ generate(
           doc="A 2:30 bitfield - with the high range indicating $crate"),
         v("Concat", "std::vector<MacroExpansionConcatEnt>", copy=False),
         v("Loop", fields=[
-            ("::std::vector<MacroExpansionEnt>", "entries"),
+            ("std::vector<MacroExpansionEnt>", "entries"),
             ("Token", "joiner"),
-            ("::std::set<unsigned int>", "controllingInputLoops"),
+            ("std::set<unsigned int>", "controllingInputLoops"),
         ], copy=False, doc="A repetition: contained entries, the joiner token, and the"
                " loop indexes that control the iteration"),
     ],
@@ -49,7 +49,7 @@ generate(
         v("If", fields=[
             ("bool", "isEqual"),
             ("size_t", "jumpTarget"),
-            ("::std::vector<SimplePatIfCheck>", "ents"),
+            ("std::vector<SimplePatIfCheck>", "ents"),
         ], doc="Compare the head of the input stream and poke the pattern"
                " stream"),
     ],

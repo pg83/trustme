@@ -12,9 +12,9 @@
 #include "macro_rules_macro_rules.h"
 
 struct CMacroRulesExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 
-    ::std::unique_ptr<TokenStream> expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) override;
+    std::unique_ptr<TokenStream> expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) override;
 };
 
 struct CMacroUseHandler: public ExpandDecorator {
@@ -68,7 +68,7 @@ namespace {
     }
 
     void exportMacroRules(const Span& sp, const WireBoard& wb, ASTCrate& crate, ASTModule& mod, const RcString& name, bool localInnerMacros) {
-        auto it = ::std::find_if(mod.macros().begin(), mod.macros().end(), [&](const auto& x) {
+        auto it = std::find_if(mod.macros().begin(), mod.macros().end(), [&](const auto& x) {
             return x.name == name;
         });
         ASSERT_BUG(sp, it != mod.macros().end(), "Macro '" << name << "' not defined in this module");
@@ -120,11 +120,11 @@ void RegisterSynextBuiltins(ExpandRegistry& registry) {
     registry.addDecorator<CBuiltinMacroHandler>("rustc_builtin_macro");
 }
 
-auto CMacroRulesExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> ::std::unique_ptr<TokenStream> {
+auto CMacroRulesExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
     ERROR(sp, E0000, "macro_rules! requires an identifier");
 }
 
-auto CMacroRulesExpander::expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) -> ::std::unique_ptr<TokenStream> {
+auto CMacroRulesExpander::expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
     ParseState parseState;
     parseState.wb = &wb;
     parseState.crate = &crate;
@@ -134,7 +134,7 @@ auto CMacroRulesExpander::expandIdent(const Span& sp, const WireBoard& wb, const
     mac->definitionSpan = sp;
     mod.addMacro(false, ident, mv$(mac));
 
-    return ::std::unique_ptr<TokenStream>(new TTStreamO(sp, ParseState(), TokenTree()));
+    return std::unique_ptr<TokenStream>(new TTStreamO(sp, ParseState(), TokenTree()));
 }
 
 auto CMacroUseHandler::stage() const -> AttrStage {
@@ -349,7 +349,7 @@ auto CMacroReexportHandler::handle(const Span& sp, const ASTAttribute& mi, const
     auto& extCrate = *crate.externCrates.at(crateName).hir;
 
     mi.parseParenIdentList([&](const Span& sp, RcString name) {
-        auto it = ::std::find(extCrate.exportedMacroNames.begin(), extCrate.exportedMacroNames.end(), name);
+        auto it = std::find(extCrate.exportedMacroNames.begin(), extCrate.exportedMacroNames.end(), name);
         if (it == extCrate.exportedMacroNames.end()) {
             ERROR(sp, E0000, "Could not find macro " << name << "! in crate " << crateName);
         }

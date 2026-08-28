@@ -147,7 +147,7 @@ namespace {
 
         HIRItemPath* fcnPath = nullptr;
         HIRFunction* fcnPtr = nullptr;
-        const ::std::vector<HIRSimplePath>* defineOpaque = nullptr;
+        const std::vector<HIRSimplePath>* defineOpaque = nullptr;
         unsigned int fcnErasedCount = 0;
 
         BindVisitor(const WireBoard& wb);
@@ -405,7 +405,7 @@ std::vector<HIRTraitPath> ConvertHIRExpandAliasesGetTraitExpansion(const Span& s
                     return false;
                 }
 
-                static HIRTraitPath& findEntry(const Span& sp, const HIRCrate& crate, const HIRGenericPath& desPath, ::std::vector<HIRTraitPath>& rv) {
+                static HIRTraitPath& findEntry(const Span& sp, const HIRCrate& crate, const HIRGenericPath& desPath, std::vector<HIRTraitPath>& rv) {
                     for (auto& p : rv) {
                         if (containsTrait(sp, crate, p.path, desPath)) {
                             return p;
@@ -461,7 +461,7 @@ struct Expander: public HIRVisitor {
 
     HIRTypeInterner& interner() const;
 
-    void expandTraitList(const Span& sp, ::std::vector<HIRTraitPath>& list);
+    void expandTraitList(const Span& sp, std::vector<HIRTraitPath>& list);
 
     [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
 
@@ -560,7 +560,7 @@ namespace {
         void validateModule(HIRModule& module);
 
         template <typename Impl, typename Callback>
-        void forEachImpl(HIRCrate::ImplGroup<::std::unique_ptr<Impl>>& group, Callback callback);
+        void forEachImpl(HIRCrate::ImplGroup<std::unique_ptr<Impl>>& group, Callback callback);
 
         ReceiverValidator(const WireBoard& wb, HIRCrate& crate);
 
@@ -577,7 +577,7 @@ void ConvertHIRExpandAliasesSelf(HIRCrate& crate) {
     exp.visitCrate(crate);
 }
 
-void ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRTypeData* implType, ::std::vector<::std::pair<HIRPattern, HIRTypeRef>>& args, HIRTypeRef& retTy, HIRExprPtr& expr) {
+void ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRTypeData* implType, std::vector<std::pair<HIRPattern, HIRTypeRef>>& args, HIRTypeRef& retTy, HIRExprPtr& expr) {
     ExpanderSelf exp{crate, implType};
     for (auto& arg : args) {
         exp.visitPattern(arg.first);
@@ -662,7 +662,7 @@ struct UfcsVisitor: public HIRVisitor {
     bool visitExprs_;
     bool runEat;
 
-    typedef ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitImports;
+    typedef std::vector<std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitImports;
     tTraitImports traits;
 
     StaticTraitResolve resolve_;
@@ -772,7 +772,7 @@ struct UfcsVisitor: public HIRVisitor {
 
 template <typename T, typename F>
 void sortImplGroup(HIRCrate::ImplGroup<std::unique_ptr<T>>& ig, F fmt) {
-    auto newEnd = ::std::remove_if(ig.generic.begin(), ig.generic.end(), [&ig, &fmt](::std::unique_ptr<T>& tyImpl) {
+    auto newEnd = std::remove_if(ig.generic.begin(), ig.generic.end(), [&ig, &fmt](std::unique_ptr<T>& tyImpl) {
         const auto& type = tyImpl->type;
         const HIRSimplePath* path = type->getSortPath();
 
@@ -789,7 +789,7 @@ void sortImplGroup(HIRCrate::ImplGroup<std::unique_ptr<T>>& ig, F fmt) {
 }
 
 template <typename T>
-void pushIndexImplGroupList(::std::vector<const T*>& dst, const ::std::vector<std::unique_ptr<T>>& src) {
+void pushIndexImplGroupList(std::vector<const T*>& dst, const std::vector<std::unique_ptr<T>>& src) {
     for (const auto& e : src) {
         dst.push_back(&*e);
     }
@@ -814,7 +814,7 @@ void pushIndexImpls(HIRCrate& dst, const HIRCrate& src) {
     }
 }
 
-void pushIndexInherentMethodsList(HIRInherentCache& icache, const HIRSimplePath& langBox, const ::std::vector<std::unique_ptr<HIRTypeImpl>>& src) {
+void pushIndexInherentMethodsList(HIRInherentCache& icache, const HIRSimplePath& langBox, const std::vector<std::unique_ptr<HIRTypeImpl>>& src) {
     Span sp;
     for (const auto& ti : src) {
         const auto& impl = *ti;
@@ -871,16 +871,16 @@ void ConvertHIRResolveUFCSExpr(const WireBoard& wb, const HIRCrate& crate, const
 }
 
 void ConvertHIRResolveUFCSSortImpls(WireBoard& wb, HIRCrate& crate) {
-    sortImplGroup<HIRTypeImpl>(crate.typeImpls, [](::std::ostream& os, const HIRTypeImpl& i) {
+    sortImplGroup<HIRTypeImpl>(crate.typeImpls, [](std::ostream& os, const HIRTypeImpl& i) {
         os << "impl" << i.params.fmtArgs() << " " << i.type;
     });
     for (auto& implGroup : crate.traitImpls) {
-        sortImplGroup<HIRTraitImpl>(implGroup.second, [&](::std::ostream& os, const HIRTraitImpl& i) {
+        sortImplGroup<HIRTraitImpl>(implGroup.second, [&](std::ostream& os, const HIRTraitImpl& i) {
             os << "impl" << i.params.fmtArgs() << " " << implGroup.first << i.traitArgs << " for " << i.type;
         });
     }
     for (auto& implGroup : crate.markerImpls) {
-        sortImplGroup<HIRMarkerImpl>(implGroup.second, [&](::std::ostream& os, const HIRMarkerImpl& i) {
+        sortImplGroup<HIRMarkerImpl>(implGroup.second, [&](std::ostream& os, const HIRMarkerImpl& i) {
             os << "impl" << i.params.fmtArgs() << " " << implGroup.first << i.traitArgs << " for " << i.type << " {}";
         });
     }
@@ -1393,7 +1393,7 @@ auto BindVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
         curModule.ptr = mod;
         curModule.path = &modIp;
     }
-    ms.traits.push_back(::std::make_pair(&traitPath, &this->ms.crate.getTraitByPath(Span(), traitPath)));
+    ms.traits.push_back(std::make_pair(&traitPath, &this->ms.crate.getTraitByPath(Span(), traitPath)));
     HIRVisitor::visitTraitImpl(traitPath, impl);
     ms.traits.pop_back();
     if (mod) {
@@ -1688,8 +1688,8 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
         HIRTypeInterner& types;
         const Span& sp;
         HIRTypeRef tySelf;
-        ::std::vector<HIRTraitPath> supertraits;
-        ::std::vector<const HIRTraitPath*> tpStack;
+        std::vector<HIRTraitPath> supertraits;
+        std::vector<const HIRTraitPath*> tpStack;
 
         Enumerate(HIRTypeInterner& types, const Span& sp, HIRTypeRef tySelf)
             : types(types)
@@ -1772,7 +1772,7 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
                     // TODO: What if there's multiple?
 
                     if (found) {
-                        outPath.typeBounds.insert(::std::make_pair(ty.first, HIRTraitPath::AtyEqual{outPath.path.clone(), {}, found}));
+                        outPath.typeBounds.insert(std::make_pair(ty.first, HIRTraitPath::AtyEqual{outPath.path.clone(), {}, found}));
                     }
                 }
 
@@ -1788,7 +1788,7 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
                         }
                     }
                     if (!traits.empty()) {
-                        outPath.traitBounds.insert(::std::make_pair(ty.first, HIRTraitPath::AtyBound{outPath.path.clone(), {}, mv$(traits)}));
+                        outPath.traitBounds.insert(std::make_pair(ty.first, HIRTraitPath::AtyBound{outPath.path.clone(), {}, mv$(traits)}));
                     }
                 }
             }
@@ -1821,7 +1821,7 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
         e.enumSupertraitsIn(*be.trait.traitPtr, be.trait.clone());
     }
 
-    ::std::sort(e.supertraits.begin(), e.supertraits.end());
+    std::sort(e.supertraits.begin(), e.supertraits.end());
     if (e.supertraits.size() > 0) {
         bool dedeupDone = false;
         auto prev = e.supertraits.begin();
@@ -1944,7 +1944,7 @@ auto VisitorPost::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
     if (mod) {
         ms.pushTraits(impl.srcModule, *mod);
     }
-    ms.traits.push_back(::std::make_pair(&traitPath, &this->ms.crate.getTraitByPath(Span(), traitPath)));
+    ms.traits.push_back(std::make_pair(&traitPath, &this->ms.crate.getTraitByPath(Span(), traitPath)));
     HIRVisitor::visitTraitImpl(traitPath, impl);
     ms.traits.pop_back();
     if (mod) {
@@ -2157,7 +2157,7 @@ Expander::Expander(const WireBoard& wb, const HIRCrate& crate)
 }
 
 auto Expander::hasBound(const GenericBounds& bounds, const HIRGenericBound& candidate) -> bool {
-    return ::std::any_of(bounds.begin(), bounds.end(), [&](const auto& bound) {
+    return std::any_of(bounds.begin(), bounds.end(), [&](const auto& bound) {
         return bound.ord(candidate) == OrdEqual;
     });
 }
@@ -2205,7 +2205,7 @@ auto Expander::interner() const -> HIRTypeInterner& {
     return crate.types;
 }
 
-auto Expander::expandTraitList(const Span& sp, ::std::vector<HIRTraitPath>& list) -> void {
+auto Expander::expandTraitList(const Span& sp, std::vector<HIRTraitPath>& list) -> void {
     for (auto it = list.begin(); it != list.end();) {
         if (!crate.getTypeitemByPath(sp, it->path.path).is_TraitAlias()) {
             ++it;
@@ -2841,7 +2841,7 @@ auto ReceiverValidator::validateFunction(HIRFunction& item) -> void {
 }
 
 auto ReceiverValidator::validateTrait(HIRTrait& trait) -> void {
-    const auto needsValidation = ::std::any_of(trait.values.begin(), trait.values.end(), [&](const auto& value) {
+    const auto needsValidation = std::any_of(trait.values.begin(), trait.values.end(), [&](const auto& value) {
         const auto* function = value.second.opt_Function();
         return function && needsProjectionValidation(*function);
     });
@@ -2870,7 +2870,7 @@ auto ReceiverValidator::validateModule(HIRModule& module) -> void {
 }
 
 template <typename Impl, typename Callback>
-auto ReceiverValidator::forEachImpl(HIRCrate::ImplGroup<::std::unique_ptr<Impl>>& group, Callback callback) -> void {
+auto ReceiverValidator::forEachImpl(HIRCrate::ImplGroup<std::unique_ptr<Impl>>& group, Callback callback) -> void {
     for (auto& named : group.named) {
         for (auto& impl : named.second) {
             callback(*impl);
@@ -2893,7 +2893,7 @@ ReceiverValidator::ReceiverValidator(const WireBoard& wb, HIRCrate& crate)
 auto ReceiverValidator::validate() -> void {
     validateModule(crate.rootModule);
     forEachImpl(crate.typeImpls, [&](HIRTypeImpl& impl) {
-        const auto needsValidation = ::std::any_of(impl.methods.begin(), impl.methods.end(), [&](const auto& method) {
+        const auto needsValidation = std::any_of(impl.methods.begin(), impl.methods.end(), [&](const auto& method) {
             return needsProjectionValidation(method.second.data);
         });
         if (!needsValidation) {
@@ -2909,7 +2909,7 @@ auto ReceiverValidator::validate() -> void {
     });
     for (auto& traitImpls : crate.traitImpls) {
         forEachImpl(traitImpls.second, [&](HIRTraitImpl& impl) {
-            const auto needsValidation = ::std::any_of(impl.methods.begin(), impl.methods.end(), [&](const auto& method) {
+            const auto needsValidation = std::any_of(impl.methods.begin(), impl.methods.end(), [&](const auto& method) {
                 return needsProjectionValidation(method.second.data);
             });
             if (!needsValidation) {
@@ -3264,7 +3264,7 @@ auto UfcsVisitor::pushModTraits(HIRSimplePath path, const HIRModule& mod) -> Mod
     Span sp;
     ModTraitsGuard rv{*this, mv$(this->traits)};
     for (const auto& traitPath : mod.traits) {
-        traits.push_back(::std::make_pair(&traitPath, &crate.getTraitByPath(sp, traitPath)));
+        traits.push_back(std::make_pair(&traitPath, &crate.getTraitByPath(sp, traitPath)));
     }
     curModPath = std::move(path);
     return rv;
@@ -3392,7 +3392,7 @@ auto UfcsVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl&
     currentTrait = &crate.getTraitByPath(Span(), traitPath);
     currentTraitPath_ = &p;
 
-    traits.push_back(::std::make_pair(&traitPath, currentTrait));
+    traits.push_back(std::make_pair(&traitPath, currentTrait));
 
     impl.type = this->visitType(impl.type);
     resolve_.updateImplSelfMetadata(impl.type);
@@ -3414,7 +3414,7 @@ auto UfcsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
     currentType_ = impl.type;
     currentTrait = &crate.getTraitByPath(Span(), traitPath);
     currentTraitPath_ = &p;
-    traits.push_back(::std::make_pair(&traitPath, currentTrait));
+    traits.push_back(std::make_pair(&traitPath, currentTrait));
 
     impl.type = this->visitType(impl.type);
     resolve_.updateImplSelfMetadata(impl.type);
@@ -3548,7 +3548,7 @@ auto UfcsVisitor::visitExpr(HIRExprPtr& expr) -> void {
             if (node.traits.size() == 0 && node.localMod.components().size() > 0) {
                 const auto& mod = upperVisitor.crate.getModByPath(node.span(), node.localMod);
                 for (const auto& traitPath : mod.traits) {
-                    node.traits.push_back(::std::make_pair(&traitPath, &upperVisitor.crate.getTraitByPath(node.span(), traitPath)));
+                    node.traits.push_back(std::make_pair(&traitPath, &upperVisitor.crate.getTraitByPath(node.span(), traitPath)));
                 }
             }
             for (const auto& traitRef : node.traits) {
@@ -3783,7 +3783,7 @@ auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathCo
     Span sp;
     auto& e = pd.as_UfcsUnknown();
     const bool collapseToSubtrait = crate.featureEnabled("supertrait_item_shadowing");
-    ::std::vector<::std::pair<HIRSimplePath, HIRPath::Data>> candidates;
+    std::vector<std::pair<HIRSimplePath, HIRPath::Data>> candidates;
     for (const auto& traitInfo : ::reverse(traits)) {
         if (traitInfo.first == nullptr) {
             break;
@@ -3828,12 +3828,12 @@ auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathCo
             e.params.clone(),
         });
         if (this->locateInTraitImplAndSet(sp, pc, mv$(traitPath), trait, candidateData)) {
-            candidates.push_back(::std::make_pair(*traitInfo.first, mv$(candidateData)));
+            candidates.push_back(std::make_pair(*traitInfo.first, mv$(candidateData)));
         }
     }
 
     if (collapseToSubtrait && !candidates.empty()) {
-        ::std::vector<HIRSimplePath> candidateTraits;
+        std::vector<HIRSimplePath> candidateTraits;
         candidateTraits.reserve(candidates.size());
         for (const auto& candidate : candidates) {
             candidateTraits.push_back(candidate.first);
@@ -3890,8 +3890,8 @@ auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathCo
             stack.push_back(ty);
         }
         while (resolve_.expandAssociatedTypesSingle(sp, ty)) {
-            if (::std::find(stack.begin(), stack.end(), ty) != stack.end()) {
-                ::std::sort(stack.begin(), stack.end());
+            if (std::find(stack.begin(), stack.end(), ty) != stack.end()) {
+                std::sort(stack.begin(), stack.end());
                 ty = std::move(stack[0]);
                 ty = HIRVisitor::visitType(ty);
                 break;

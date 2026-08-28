@@ -29,7 +29,7 @@ namespace {
                 return true;
             }
         }
-        return ::std::any_of(params.values.begin(), params.values.end(), [](const auto& value) {
+        return std::any_of(params.values.begin(), params.values.end(), [](const auto& value) {
             return value.is_Infer();
         });
     }
@@ -128,7 +128,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
             visitTyWith(r, [&](const HIRTypeData* t) -> bool {
                 if (t->is_Generic() && t->as_Generic().isPlaceholder()) {
                     unsigned implIdx = t->as_Generic().idx();
-                    maxImplIdxTy = ::std::max(maxImplIdxTy, implIdx);
+                    maxImplIdxTy = std::max(maxImplIdxTy, implIdx);
                 }
                 // TODO: Path param lifetimes, etc
                 return false;
@@ -137,8 +137,8 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
         baseImplPlaceholderIdx.ty = maxImplIdxTy + 1;
         baseImplPlaceholderIdx.val = maxImplIdxVal + 1;
 
-        size_t nPlaceholderTysNeeded = ::std::count(paramsSet.types.begin(), paramsSet.types.end(), false);
-        size_t nPlaceholderValsNeeded = ::std::count(paramsSet.values.begin(), paramsSet.values.end(), false);
+        size_t nPlaceholderTysNeeded = std::count(paramsSet.types.begin(), paramsSet.types.end(), false);
+        size_t nPlaceholderValsNeeded = std::count(paramsSet.values.begin(), paramsSet.values.end(), false);
         if (nPlaceholderTysNeeded > 0) {
             ASSERT_BUG(sp, baseImplPlaceholderIdx.ty + implParams.types.size() <= 256, "Out of impl placeholder types");
         }
@@ -1008,7 +1008,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
     }
     const auto& trait = crate.getTraitByPath(sp, projection.trait.path);
     ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &trait.params, projection.trait.params);
-    input = crate.types.intern(::std::move(data));
+    input = crate.types.intern(std::move(data));
 
     {
         const HIRTypeData* root = input;
@@ -1038,7 +1038,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
     HIRTypeRef output = nullptr;
     nextSolver->normalize(sp, implGenerics_, itemGenerics_, input, output);
     if (output != HIRTypeRef()) {
-        input = ::std::move(output);
+        input = std::move(output);
         if (recurse) {
             input = this->expandAssociatedTypesInner(sp, input);
         }
@@ -1047,13 +1047,13 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
 
     auto opaque = input->cloneData();
     opaque.as_Path().binding = HIRTypePathBinding::make_Opaque({});
-    input = crate.types.intern(::std::move(opaque));
+    input = crate.types.intern(std::move(opaque));
     return false;
 }
 
 bool StaticTraitResolve::replaceEqualities(HIRTypeRef& input) const {
     const Span sp;
-    auto a = ::std::find_if(typeEqualities.begin(), typeEqualities.end(), [&](const auto& entry) {
+    auto a = std::find_if(typeEqualities.begin(), typeEqualities.end(), [&](const auto& entry) {
         return entry.first == input || entry.first->equalsIgnoringRegions(input);
     });
     if (a != typeEqualities.end()) {
@@ -1166,7 +1166,7 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* type) con
         nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
     }
     const bool proven = nextSolver->typeIsCopy(sp, implGenerics_, itemGenerics_, type);
-    copyCache.insert(::std::make_pair(type, proven));
+    copyCache.insert(std::make_pair(type, proven));
     return proven;
 }
 
@@ -1181,7 +1181,7 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* type) co
         proven = certainty == SolverCertainty::Proven;
         return proven;
     });
-    cloneCache.insert(::std::make_pair(type, proven));
+    cloneCache.insert(std::make_pair(type, proven));
     return proven;
 }
 
@@ -1874,7 +1874,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
                 return true;
             });
             if (hasDirectDrop) {
-                dropCache.insert(::std::make_pair(ty, true));
+                dropCache.insert(std::make_pair(ty, true));
                 return true;
             }
 
@@ -1944,7 +1944,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
                     break;
                 }
             }
-            dropCache.insert(::std::make_pair(ty, needsDropGlue));
+            dropCache.insert(std::make_pair(ty, needsDropGlue));
             return needsDropGlue;
         }
         case HIRTypeData::TAG_Diverge: {
@@ -2174,7 +2174,7 @@ HIRTypeRef StaticTraitResolve::getFieldType(const Span& sp, const HIRTypeData* t
         }
         case HIRTypeData::TAG_Tuple: {
             auto& te = (*ty).as_Tuple();
-            ::std::stringstream ss{name.c_str()};
+            std::stringstream ss{name.c_str()};
             int idx = -1;
             ss >> idx;
             ASSERT_BUG(sp, idx >= 0, "Malformed tuple index field name - `" << name << "`");
@@ -2663,7 +2663,7 @@ auto StaticTraitResolve::NextSolverBridge::normalize(const Span& sp, const HIRGe
     resolve_.setGenericContext(implGenerics, itemGenerics);
     return resolve_.solveNormalizesTo(sp, NormalizesTo{projection}, [&](NormalizesToResponse response) {
         if (response.output != HIRTypeRef() && response.output != projection) {
-            output = ::std::move(response.output);
+            output = std::move(response.output);
         }
         return true;
     });

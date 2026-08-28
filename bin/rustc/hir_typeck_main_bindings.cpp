@@ -114,9 +114,9 @@ namespace {
         bool checkingFunctionSignature = false;
         bool checkingTypeDeclarationParams = false;
 
-        ::std::vector<const HIRTypeData*> selfTypes;
+        std::vector<const HIRTypeData*> selfTypes;
 
-        typedef ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitImports;
+        typedef std::vector<std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitImports;
         tTraitImports traits;
 
         Visitor(const WireBoard& wb, HIRCrate& crate);
@@ -210,7 +210,7 @@ auto Visitor::pushModTraits(const HIRModule& mod) -> ModTraitsGuard {
     Span sp;
     auto rv = ModTraitsGuard{this, mv$(this->traits)};
     for (const auto& traitPath : mod.traits) {
-        traits.push_back(::std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
+        traits.push_back(std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
     }
     return rv;
 }
@@ -871,8 +871,8 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
             }
 
             struct MCB: public HIRMatchGenerics {
-                ::std::map<RcString, const HIRTypeData*> mapping;
-                ::std::map<unsigned int, const HIRTypeData*> rpitMapping;
+                std::map<RcString, const HIRTypeData*> mapping;
+                std::map<unsigned int, const HIRTypeData*> rpitMapping;
 
                 MCB()
                     : HIRMatchGenerics(BorrowMatchedValues{})

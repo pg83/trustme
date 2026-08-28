@@ -4,7 +4,7 @@
 #include "parse_tokenstream.h"
 
 class TTStream: public TokenStream {
-    ::std::vector<::std::pair<unsigned int, const TokenTree*>> stack;
+    std::vector<std::pair<unsigned int, const TokenTree*>> stack;
     Span parentSpan;
     ASTEdition edition = ASTEdition::Rust2015;
     const Ident::Hygiene* hygienePtr = nullptr;
@@ -27,7 +27,7 @@ class TTStreamO: public TokenStream {
     Span parentSpan;
     Position lastPos;
     TokenTree inputTt;
-    ::std::vector<::std::pair<unsigned int, TokenTree*>> stack;
+    std::vector<std::pair<unsigned int, TokenTree*>> stack;
     ASTEdition edition = ASTEdition::Rust2015;
     const Ident::Hygiene* hygienePtr = nullptr;
 

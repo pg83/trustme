@@ -15,8 +15,8 @@ class HIRSerialiseReaderInner;
 
 class HIRSerialiseWriter {
     HIRSerialiseWriterInner* inner;
-    ::std::map<RcString, unsigned> istringCache;
-    ::std::map<const char*, unsigned> objnameCache;
+    std::map<RcString, unsigned> istringCache;
+    std::map<const char*, unsigned> objnameCache;
 
 public:
     HIRSerialiseWriter();
@@ -24,7 +24,7 @@ public:
     HIRSerialiseWriter(HIRSerialiseWriter&&) = delete;
     ~HIRSerialiseWriter();
 
-    void open(const ::std::string& filename);
+    void open(const std::string& filename);
     void write(const void* data, size_t count);
 
     void writeU8(u8 v) {
@@ -63,7 +63,7 @@ public:
 
     void writeString(size_t len, const char* s);
 
-    void writeString(const ::std::string& v) {
+    void writeString(const std::string& v) {
         writeString(v.size(), v.c_str());
     }
 
@@ -97,7 +97,7 @@ public:
 };
 
 class HIRSerialiseReadBuffer {
-    ::std::vector<u8> backing;
+    std::vector<u8> backing;
     unsigned int ofs;
 
 public:
@@ -115,12 +115,12 @@ class HIRSerialiseReader {
     HIRSerialiseReaderInner* inner;
     HIRSerialiseReadBuffer buffer;
     size_t pos;
-    ::std::vector<RcString> strings;
+    std::vector<RcString> strings;
 
-    ::std::vector<std::string> objnameCache;
+    std::vector<std::string> objnameCache;
 
 public:
-    HIRSerialiseReader(const ::std::string& path);
+    HIRSerialiseReader(const std::string& path);
     HIRSerialiseReader(const HIRSerialiseWriter&) = delete;
     HIRSerialiseReader(HIRSerialiseWriter&&) = delete;
     ~HIRSerialiseReader();
@@ -165,7 +165,7 @@ public:
 
     RcString readIstring();
 
-    ::std::string readString();
+    std::string readString();
 
     bool readBool();
 

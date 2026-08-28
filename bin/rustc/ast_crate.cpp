@@ -114,7 +114,7 @@ void ASTCrate::loadExterns(Settings& settings) {
         if (entry.target != "") {
             const auto* target = settings.findCrateOverride(entry.target);
             const auto path = target && target->metadataPath != "" ? target->metadataPath : entry.target;
-            if (!::std::ifstream(path.c_str()).good()) {
+            if (!std::ifstream(path.c_str()).good()) {
                 return;
             }
         }
@@ -128,8 +128,8 @@ void ASTCrate::loadExterns(Settings& settings) {
 
 // TODO: Handle disambiguating crates with the same name (e.g. libc in std and crates.io libc)
 
-RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& name, const ::std::string& basename /*=""*/) {
-    ::std::string path;
+RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& name, const std::string& basename /*=""*/) {
+    std::string path;
     auto* entry = settings.findCrateOverride(name);
     const CrateOverride* artifacts = nullptr;
     RcString expectedName;
@@ -138,7 +138,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         path = entry->metadataPath.c_str();
         artifacts = entry;
         expectedName = name;
-        if (!::std::ifstream(path).good()) {
+        if (!std::ifstream(path).good()) {
             ERROR(sp, E0000, "Unable to open crate '" << name << "' at path " << path);
         }
     } else if (entry && entry->target != "") {
@@ -150,7 +150,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         } else {
             path = entry->target.c_str();
         }
-        if (!::std::ifstream(path).good()) {
+        if (!std::ifstream(path).good()) {
             ERROR(sp, E0000, "Unable to open crate '" << name << "' at path " << path);
         }
     } else if (basename != "") {
@@ -164,18 +164,18 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         for (const auto& p : settings.crateLoadDirs) {
             path = p + "/" + basename;
 
-            if (::std::ifstream(path).good()) {
+            if (std::ifstream(path).good()) {
                 auto n = HIRDeserialiseJustName(path);
                 if (n == name) {
                     break;
                 }
             }
         }
-        if (!::std::ifstream(path).good()) {
+        if (!std::ifstream(path).good()) {
             ERROR(sp, E0000, "Unable to locate crate '" << name << "' with filename " << basename << " in search directories");
         }
     } else {
-        ::std::vector<::std::string> paths;
+        std::vector<std::string> paths;
 #define RLIB_SUFFIX ".rlib"
 #define RDYLIB_SUFFIX ".so"
 #define PLUGIN_SUFFIX "-plugin"
@@ -184,12 +184,12 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         auto namePrefix = FMT("lib" << name << "-");
         for (const auto& p : settings.crateLoadDirs) {
             path = p + "/" + directFilename;
-            if (::std::ifstream(path).good()) {
+            if (std::ifstream(path).good()) {
                 paths.push_back(path);
                 break;
             }
             path = p + "/" + directFilenameSo;
-            if (::std::ifstream(path).good()) {
+            if (std::ifstream(path).good()) {
                 paths.push_back(path);
                 break;
             }
@@ -208,14 +208,14 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
                     if (len > strlen(PLUGIN_SUFFIX RLIB_SUFFIX) && strcmp(fname + len - strlen(PLUGIN_SUFFIX RLIB_SUFFIX), PLUGIN_SUFFIX RLIB_SUFFIX) == 0) {
                         auto pluginPath = p + "/" + fname;
                         pluginPath.resize(pluginPath.size() - strlen(RLIB_SUFFIX));
-                        if (::std::ifstream(pluginPath).good()) {
+                        if (std::ifstream(pluginPath).good()) {
                             continue;
                         }
                     }
                     if (len > strlen(RDYLIB_SUFFIX RLIB_SUFFIX) && strcmp(fname + len - strlen(RDYLIB_SUFFIX RLIB_SUFFIX), RDYLIB_SUFFIX RLIB_SUFFIX) == 0) {
                         auto dylibPath = p + "/" + fname;
                         dylibPath.resize(dylibPath.size() - strlen(RLIB_SUFFIX));
-                        if (::std::ifstream(dylibPath).good()) {
+                        if (std::ifstream(dylibPath).good()) {
                             continue;
                         }
                     }
@@ -261,7 +261,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         ec.procMacroFilename = artifacts->procMacroPath;
         ec.isProcMacro = artifacts->procMacroPath != "";
     }
-    auto res = externCrates.insert(::std::make_pair(realName, mv$(ec)));
+    auto res = externCrates.insert(std::make_pair(realName, mv$(ec)));
     if (!res.second) {
         return realName;
     }
@@ -302,7 +302,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
     return realName;
 }
 
-ASTExternCrate::ASTExternCrate(u32& id, ObjPool* pool, HIRTypeInterner& types, const RcString& name, const ::std::string& path)
+ASTExternCrate::ASTExternCrate(u32& id, ObjPool* pool, HIRTypeInterner& types, const RcString& name, const std::string& path)
     : name(name)
     , shortName(name)
     , filename(path)

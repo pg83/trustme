@@ -13,7 +13,7 @@
 
 #include <span>
 
-::std::ostream& operator<<(::std::ostream& os, ResolveNamespace ns) {
+std::ostream& operator<<(std::ostream& os, ResolveNamespace ns) {
     switch (ns) {
         case ResolveNamespace::Namespace:
             return os << "Namespace";
@@ -551,7 +551,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
         TODO(sp, "Look up in index");
     }
 
-    auto guardEnt = ::std::make_pair(&mod, name);
+    auto guardEnt = std::make_pair(&mod, name);
     bool visitUse = true;
     if (std::count(antirecurseStack.begin(), antirecurseStack.end(), guardEnt) > 0) {
         visitUse = false;

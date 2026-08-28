@@ -136,7 +136,7 @@ class StaticTraitResolve: public TraitResolveCommon {
         HIRCompare result;
     };
 
-    mutable ::std::map<ImplCheckKey, ThinVector<ImplCheckEntry>> cachedImplChecks;
+    mutable std::map<ImplCheckKey, ThinVector<ImplCheckEntry>> cachedImplChecks;
     mutable bool normalizingBoundType = false;
 
     OpaqueReveal reveal_ = OpaqueReveal::UserFacing;

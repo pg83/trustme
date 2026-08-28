@@ -18,13 +18,13 @@ public:
 
     RcString(const char* s);
 
-    explicit RcString(const ::std::string& s);
+    explicit RcString(const std::string& s);
 
     static RcString newInterned(const char* s, size_t len) {
         return RcString(s, len);
     }
 
-    static RcString newInterned(const ::std::string& s) {
+    static RcString newInterned(const std::string& s) {
         return RcString(s);
     }
 
@@ -102,7 +102,7 @@ public:
         return this->ord(s) != OrdEqual;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const RcString& x);
+    friend std::ostream& operator<<(std::ostream& os, const RcString& x);
 
     friend bool operator==(const char* a, const RcString& b) {
         return b == a;

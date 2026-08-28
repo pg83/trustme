@@ -10,20 +10,20 @@
 namespace {
 
     struct MirDumper {
-        ::std::ostream& os;
+        std::ostream& os;
         unsigned int indentLevel;
 
-        MirDumper(::std::ostream& os, unsigned int il);
+        MirDumper(std::ostream& os, unsigned int il);
 
         void dumpMir(const MIRFunction& fcn);
 
-        void fmtVal(::std::ostream& os, const MIRLValue& lval);
+        void fmtVal(std::ostream& os, const MIRLValue& lval);
 
-        void fmtVal(::std::ostream& os, const MIRConstant& e);
+        void fmtVal(std::ostream& os, const MIRConstant& e);
 
-        void fmtVal(::std::ostream& os, const MIRParam& param);
+        void fmtVal(std::ostream& os, const MIRParam& param);
 
-        void fmtVal(::std::ostream& os, const MIRRValue& rval);
+        void fmtVal(std::ostream& os, const MIRRValue& rval);
 
         RepeatLitStr indent() const;
 
@@ -32,17 +32,17 @@ namespace {
         void decIndent();
     };
 
-    void dumpMir(::std::ostream& os, unsigned int il, const MIRFunction& fcn) {
+    void dumpMir(std::ostream& os, unsigned int il, const MIRFunction& fcn) {
         MirDumper md{os, il};
         md.dumpMir(fcn);
     }
 
     struct TreeVisitor: public HIRVisitor {
-        ::std::ostream& os;
+        std::ostream& os;
         unsigned int indentLevel;
         bool shortItemName = false;
 
-        TreeVisitor(HIRTypeInterner& types, ::std::ostream& os);
+        TreeVisitor(HIRTypeInterner& types, std::ostream& os);
 
         void visitTypeImpl(HIRTypeImpl& impl) override;
 
@@ -66,18 +66,18 @@ namespace {
     };
 }
 
-void MIRDump(::std::ostream& sink, const HIRCrate& crate) {
+void MIRDump(std::ostream& sink, const HIRCrate& crate) {
     TreeVisitor tv{crate.types, sink};
 
     tv.visitCrate(const_cast<HIRCrate&>(crate));
 }
 
-void MIRDumpFcn(::std::ostream& sink, const MIRFunction& fcn, unsigned int il) {
+void MIRDumpFcn(std::ostream& sink, const MIRFunction& fcn, unsigned int il) {
     MirDumper md{sink, il};
     md.dumpMir(fcn);
 }
 
-MirDumper::MirDumper(::std::ostream& os, unsigned int il)
+MirDumper::MirDumper(std::ostream& os, unsigned int il)
     : os(os)
     , indentLevel(il)
 {
@@ -428,15 +428,15 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
 #undef FMT
 }
 
-auto MirDumper::fmtVal(::std::ostream& os, const MIRLValue& lval) -> void {
+auto MirDumper::fmtVal(std::ostream& os, const MIRLValue& lval) -> void {
     os << lval;
 }
 
-auto MirDumper::fmtVal(::std::ostream& os, const MIRConstant& e) -> void {
+auto MirDumper::fmtVal(std::ostream& os, const MIRConstant& e) -> void {
     os << e;
 }
 
-auto MirDumper::fmtVal(::std::ostream& os, const MIRParam& param) -> void {
+auto MirDumper::fmtVal(std::ostream& os, const MIRParam& param) -> void {
     switch (param.tag()) {
         case MIRParam::TAG_LValue: {
             auto& e = param.as_LValue();
@@ -469,7 +469,7 @@ auto MirDumper::fmtVal(::std::ostream& os, const MIRParam& param) -> void {
     }
 }
 
-auto MirDumper::fmtVal(::std::ostream& os, const MIRRValue& rval) -> void {
+auto MirDumper::fmtVal(std::ostream& os, const MIRRValue& rval) -> void {
     switch (rval.tag()) {
         case MIRRValue::TAG_Use: {
             auto& e = rval.as_Use();
@@ -687,7 +687,7 @@ auto MirDumper::decIndent() -> void {
     indentLevel--;
 }
 
-TreeVisitor::TreeVisitor(HIRTypeInterner& types, ::std::ostream& os)
+TreeVisitor::TreeVisitor(HIRTypeInterner& types, std::ostream& os)
     : HIRVisitor(nullptr, types)
     , os(os)
     , indentLevel(0)

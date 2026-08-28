@@ -28,16 +28,16 @@ void memoryDump(unsigned& sequence, const char* phase) {
             int devMaj = 0;
             int devMin = 0;
             int inode = 0;
-            ::std::string name;
+            std::string name;
             u32 firstChunk;
         };
 
         size_t chunkSize = 1 << 20;
-        ::std::vector<RangeEnt> rangeEnts;
+        std::vector<RangeEnt> rangeEnts;
         size_t chunkCount = 0;
         {
             u64 lastVaddr = 0;
-            FILE* fp = ::std::fopen("/proc/self/maps", "r");
+            FILE* fp = std::fopen("/proc/self/maps", "r");
             while (!feof(fp)) {
                 RangeEnt e;
                 if (fscanf(fp, "%lx-%lx %4s %lx %d:%d %d", &e.vStart, &e.vEnd, e.flagsStr, &e.fileOfs, &e.devMaj, &e.devMin, &e.inode) != 7) {
@@ -124,8 +124,8 @@ void memoryDump(unsigned& sequence, const char* phase) {
             fwrite(&hdr, sizeof(hdr), 1, outFp);
             fwrite(r.name.c_str(), 1, r.name.size(), outFp);
         }
-        ::std::vector<unsigned char> zlibBuffer(16 * 1024);
-        ::std::vector<u8> buf(chunkSize);
+        std::vector<unsigned char> zlibBuffer(16 * 1024);
+        std::vector<u8> buf(chunkSize);
         size_t chunkCountFlushed = 0;
         auto flushChunk = [&](u64 chunkAddr) {
     #if DEBUG_MEM_DUMP
@@ -141,7 +141,7 @@ void memoryDump(unsigned& sequence, const char* phase) {
             const int COMPRESSION_LEVEL = Z_BEST_COMPRESSION;
             int ret = deflateInit(&zstream, COMPRESSION_LEVEL);
             if (ret != Z_OK)
-                throw ::std::runtime_error("zlib init failure");
+                throw std::runtime_error("zlib init failure");
 
             zstream.avail_out = zlibBuffer.size();
             zstream.next_out = zlibBuffer.data();
@@ -154,7 +154,7 @@ void memoryDump(unsigned& sequence, const char* phase) {
 
                 int ret = deflate(&zstream, Z_NO_FLUSH);
                 if (ret == Z_STREAM_ERROR)
-                    throw ::std::runtime_error("zlib deflate stream error");
+                    throw std::runtime_error("zlib deflate stream error");
 
                 if (zstream.avail_out < zlibBuffer.size()) {
                     size_t bytes = zlibBuffer.size() - zstream.avail_out;
@@ -168,7 +168,7 @@ void memoryDump(unsigned& sequence, const char* phase) {
             do {
                 ret = deflate(&zstream, Z_FINISH);
                 if (ret == Z_STREAM_ERROR) {
-                    ::std::cerr << "ERROR: zlib deflate stream error (cleanup)";
+                    std::cerr << "ERROR: zlib deflate stream error (cleanup)";
                     abort();
                 }
                 if (zstream.avail_out != zlibBuffer.size()) {
@@ -192,7 +192,7 @@ void memoryDump(unsigned& sequence, const char* phase) {
                 }
                 assert(chunkCountFlushed == r.firstChunk);
     #if DEBUG_MEM_DUMP
-                ::std::cout << chunkCountFlushed << "/" << chunkCount << ": " << std::hex << r.vStart << " -- " << r.vEnd << "(" << (r.vEnd - r.vStart) << ")" << std::dec << " " << r.flagsStr << " : " << r.name << "\n";
+                std::cout << chunkCountFlushed << "/" << chunkCount << ": " << std::hex << r.vStart << " -- " << r.vEnd << "(" << (r.vEnd - r.vStart) << ")" << std::dec << " " << r.flagsStr << " : " << r.name << "\n";
     #endif
                 if (r.vStart / chunkSize == (r.vEnd - 1) / chunkSize) {
                     memcpy(buf.data() + r.vStart % chunkSize, (const void*)r.vStart, r.vEnd - r.vStart);

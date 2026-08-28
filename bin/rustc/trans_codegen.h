@@ -18,7 +18,7 @@ class CodeGenerator {
 public:
     virtual ~CodeGenerator();
 
-    virtual void finalise(const TransOptions& opt, CodegenOutput outTy, const ::std::string& hirFile);
+    virtual void finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile);
 
     virtual void emitTypeProto(const HIRTypeData*);
 

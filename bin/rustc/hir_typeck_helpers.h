@@ -102,7 +102,7 @@ struct NextSolverCrateCache {
         auto* entry = pool.mutPtr()->make<Entry>();
         entry->hash = hash;
         entry->trait = trait;
-        entry->params = ::std::move(params);
+        entry->params = std::move(params);
         entry->type = type;
         entry->certainty = certainty;
         if (auto* head = index.find(hash)) {
@@ -123,7 +123,7 @@ public:
 
         FmtType(const HMTypeInferrence& ctxt, const HIRTypeData* ty);
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const FmtType& x);
+        friend std::ostream& operator<<(std::ostream& os, const FmtType& x);
     };
 
     struct FmtPP {
@@ -132,7 +132,7 @@ public:
 
         FmtPP(const HMTypeInferrence& ctxt, const HIRPathParams& pps);
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const FmtPP& x);
+        friend std::ostream& operator<<(std::ostream& os, const FmtPP& x);
     };
 
 public:
@@ -147,11 +147,11 @@ public:
         }
     };
 
-    ::std::vector<IVar> ivars;
+    std::vector<IVar> ivars;
 
     struct IVarValue {
         unsigned int alias;
-        ::std::unique_ptr<HIRConstGeneric> val;
+        std::unique_ptr<HIRConstGeneric> val;
 
         IVarValue();
 
@@ -160,13 +160,13 @@ public:
         }
     };
 
-    ::std::vector<IVarValue> values;
+    std::vector<IVarValue> values;
 
     HIRTypeInterner& types;
     bool hasChanged;
 
     u64 mutationGeneration = 0;
-    ::std::vector<HIRTypeRef> expandStack;
+    std::vector<HIRTypeRef> expandStack;
     stl::ObjPool::Ref aliasIvarPool;
     stl::IntMap<HIRTypeRef> aliasTypeIvars;
     stl::IntMap<HIRConstGeneric> aliasValueIvars;
@@ -185,9 +185,9 @@ public:
     void compactIvars();
     bool applyDefault(unsigned int index);
 
-    void printType(::std::ostream& os, const HIRTypeData* tr, LList<const HIRTypeData*> stack = {}) const;
-    void printGenericpath(::std::ostream& os, const HIRGenericPath& pps, LList<const HIRTypeData*> stack) const;
-    void printPathparams(::std::ostream& os, const HIRPathParams& pps, LList<const HIRTypeData*> stack = {}) const;
+    void printType(std::ostream& os, const HIRTypeData* tr, LList<const HIRTypeData*> stack = {}) const;
+    void printGenericpath(std::ostream& os, const HIRGenericPath& pps, LList<const HIRTypeData*> stack) const;
+    void printPathparams(std::ostream& os, const HIRPathParams& pps, LList<const HIRTypeData*> stack = {}) const;
 
     FmtType fmtType(const HIRTypeData* tr) const {
         return FmtType(*this, tr);
@@ -463,7 +463,7 @@ struct SolverResponseCb final: SolverResponseCallback {
     }
 
     bool visit(SolverResponse response) override {
-        return f(::std::move(response));
+        return f(std::move(response));
     }
 };
 
@@ -477,7 +477,7 @@ struct NormalizesToCb final: NormalizesToCallback {
     }
 
     bool visit(NormalizesToResponse response) override {
-        return f(::std::move(response));
+        return f(std::move(response));
     }
 };
 
@@ -548,8 +548,8 @@ private:
     mutable NextTraitGoalEvaluator* nonBuiltinSolver = nullptr;
 
     mutable u64 solverEnvGeneration = 0;
-    ::std::vector<HIRSimplePath> opaqueAliasScopes;
-    ::std::vector<HIRSimplePath> definingOpaqueAliases;
+    std::vector<HIRSimplePath> opaqueAliasScopes;
+    std::vector<HIRSimplePath> definingOpaqueAliases;
     stl::Vector<const HIRPath*> definingFcnOrigins;
 
 public:
@@ -712,18 +712,18 @@ public:
 
         PinShared,
     };
-    friend ::std::ostream& operator<<(::std::ostream& os, const AutoderefBorrow& x);
+    friend std::ostream& operator<<(std::ostream& os, const AutoderefBorrow& x);
 
     unsigned int autoderefFindMethod(
         const Span& sp,
         const tTraitList& traits,
-        const ::std::vector<unsigned>& ivars,
+        const std::vector<unsigned>& ivars,
         unsigned int typeIvarCount,
         const HIRTypeData* topTy,
         const RcString& methodName,
         const HIRTypeData* expectedResult,
         bool mustDecide,
-        /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities
+        /* Out -> */ std::vector<std::pair<AutoderefBorrow, HIRPath>>& possibilities
     ) const;
 
     unsigned int autoderefFindField(const Span& sp, const HIRTypeData* topTy, const RcString& name, /* Out -> */ HIRTypeRef& fieldType) const;
@@ -734,7 +734,7 @@ public:
         Ambiguous,
     };
 
-    AutoderefResult autoderefStep(const Span& sp, const HIRTypeData* ty, HIRTypeRef& target, ::std::optional<HIRTypeRef>* implType = nullptr) const;
+    AutoderefResult autoderefStep(const Span& sp, const HIRTypeData* ty, HIRTypeRef& target, std::optional<HIRTypeRef>* implType = nullptr) const;
 
     const HIRTypeData* autoderef(const Span& sp, const HIRTypeData* ty, HIRTypeRef& tmpType) const;
 
@@ -747,7 +747,7 @@ public:
     };
 
 private:
-    ::std::optional<HIRTypeRef> checkMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRTypeData* ty, TraitResolution::MethodAccess access) const;
+    std::optional<HIRTypeRef> checkMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRTypeData* ty, TraitResolution::MethodAccess access) const;
 
 public:
     enum class AllowedReceivers {
@@ -757,8 +757,8 @@ public:
         Value,
         Box,
     };
-    friend ::std::ostream& operator<<(::std::ostream& os, const AllowedReceivers& x);
-    bool findMethod(const Span& sp, const tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
+    friend std::ostream& operator<<(std::ostream& os, const AllowedReceivers& x);
+    bool findMethod(const Span& sp, const tTraitList& traits, const std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ std::vector<std::pair<AutoderefBorrow, HIRPath>>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
 
     const HIRFunction* traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const;
     bool traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const;

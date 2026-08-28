@@ -6,7 +6,7 @@
 [[noreturn]] void parseErrorBadChar(const TokenStream& lex, char character);
 [[noreturn]] void parseErrorUnexpected(const TokenStream& lex, const Token& tok);
 [[noreturn]] void parseErrorUnexpected(const TokenStream& lex, const Token& tok, Token exp);
-[[noreturn]] void parseErrorUnexpected(const TokenStream& lex, const Token& tok, ::std::vector<eTokenType> exp);
+[[noreturn]] void parseErrorUnexpected(const TokenStream& lex, const Token& tok, std::vector<eTokenType> exp);
 
 #define ASSERT(lex, cnd)                                                         \
     do {                                                                         \

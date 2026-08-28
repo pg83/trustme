@@ -27,9 +27,9 @@ using namespace stl;
 
 struct MirOperationsContext {
     const RcString vtableName = RcString::newInterned("vtable#");
-    ::std::vector<bool> visitedBlocks;
-    ::std::vector<MIRBasicBlockId> pendingBlocks;
-    ::std::vector<::std::vector<unsigned>> blockPredecessors;
+    std::vector<bool> visitedBlocks;
+    std::vector<MIRBasicBlockId> pendingBlocks;
+    std::vector<std::vector<unsigned>> blockPredecessors;
     bool visitingBlocks = false;
 };
 
@@ -113,7 +113,7 @@ struct MirMutator {
     MIRFunction& fcn;
     unsigned int curBlock;
     unsigned int curStmt;
-    mutable ::std::vector<MIRStatement> newStatements;
+    mutable std::vector<MIRStatement> newStatements;
 
     MirMutator(MIRFunction& fcn, unsigned int bb, unsigned int stmt);
 
@@ -223,7 +223,7 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
             auto* repr = TargetGetTypeRepr(state.sp, state.resolve, ty);
             MIR_ASSERT(state, repr, "No type repr, but encoded value available? " << ty);
 
-            ::std::vector<MIRParam> lvals;
+            std::vector<MIRParam> lvals;
             lvals.reserve(repr->fields.size());
 
             for (const auto& fld : repr->fields) {
@@ -261,7 +261,7 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
                 auto dataLval = mutator.inTemporary(te.inner, mv$(rval));
                 return MIRRValue::make_SizedArray({mv$(dataLval), static_cast<unsigned int>(count)});
             } else {
-                ::std::vector<MIRParam> lvals;
+                std::vector<MIRParam> lvals;
                 lvals.reserve(te.size.as_Known());
 
                 size_t ofs = 0;
@@ -281,7 +281,7 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
             MIR_ASSERT(state, repr, "No type repr, but encoded value available? " << ty);
 
             if (te.binding.is_Struct()) {
-                ::std::vector<MIRParam> lvals;
+                std::vector<MIRParam> lvals;
                 lvals.reserve(repr->fields.size());
 
                 for (const auto& fld : repr->fields) {
@@ -583,7 +583,7 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
                 auto e = dataReloc->bytes.end();
 
                 if (te.inner->is_Slice() && te.inner->as_Slice().inner == HIRCoreType::U8) {
-                    ::std::vector<u8> bytestr;
+                    std::vector<u8> bytestr;
                     for (auto it = s; it != e; ++it) {
                         bytestr.push_back(static_cast<u8>(*it));
                     }
@@ -591,7 +591,7 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
                     return MIRRValue::make_MakeDst({MIRConstant(mv$(bytestr)), std::move(size)});
                 } else if (te.inner->is_Array() && te.inner->as_Array().inner == HIRCoreType::U8) {
                     // TODO: How does this differ at codegen to the above?
-                    ::std::vector<u8> bytestr;
+                    std::vector<u8> bytestr;
                     for (auto it = s; it != e; ++it) {
                         bytestr.push_back(static_cast<u8>(*it));
                     }
@@ -599,12 +599,12 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
                 } else if (te.inner == HIRCoreType::Str) {
                     return MIRConstant::make_StaticString(std::string(s, e));
                 } else {
-                    ::std::vector<u8> bytestr;
+                    std::vector<u8> bytestr;
                     for (auto it = s; it != e; ++it) {
                         bytestr.push_back(static_cast<u8>(*it));
                     }
                     auto size = MIRConstant::make_Uint({U128(bytestr.size()), HIRCoreType::Usize});
-                    auto ptr1 = MIRRValue::make_MakeDst({MIRConstant(mv$(bytestr)), ::std::move(size)});
+                    auto ptr1 = MIRRValue::make_MakeDst({MIRConstant(mv$(bytestr)), std::move(size)});
                     auto lval = mutator.inTemporary(state.crate.types.pointer(HIRBorrowType::Shared, state.crate.types.slice(state.crate.types.primitive(HIRCoreType::U8))), mv$(ptr1));
                     auto rawPtrTy = state.crate.types.pointer(HIRBorrowType::Shared, te.inner);
                     auto lval2 = mutator.inTemporary(rawPtrTy, MIRRValue::make_Cast({mv$(lval), rawPtrTy}));
@@ -662,7 +662,7 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
                 auto monomorph = [&](const auto& t) {
                     return MonomorphStatePtr(state.crate.types, ty, &tyPath.params, nullptr).monomorphType(state.sp, t);
                 };
-                ::std::vector<MIRParam> vals;
+                std::vector<MIRParam> vals;
                 switch (str.data.tag()) {
                     case HIRStructData::TAG_Unit: {
                         break;
@@ -708,7 +708,7 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
     MIRLValue innerDynPtr;
 
     if (receiver->is_Path() && receiver->as_Path().binding.is_Struct() && receiver->as_Path().binding.as_Struct()->structMarkings.coerceUnsized != HIRStructMarkings::Coerce::None) {
-        receiverLvp = H::getUnitPtr(state, mutator, ::std::move(receiver), receiverLvp.clone(), innerDynPtr);
+        receiverLvp = H::getUnitPtr(state, mutator, std::move(receiver), receiverLvp.clone(), innerDynPtr);
     } else if (receiver->is_Borrow() || receiver->is_Pointer()) {
         innerDynPtr = receiverLvp.clone();
         auto ptrRval = MIRRValue::make_DstPtr({receiverLvp.clone()});
@@ -870,7 +870,7 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
         auto monomorphCbD = MonomorphStatePtr(state.crate.types, dstTy, &dte.path.data.as_Generic().params, nullptr);
         auto monomorphCbS = MonomorphStatePtr(state.crate.types, srcTy, &ste.path.data.as_Generic().params, nullptr);
 
-        ::std::vector<MIRParam> ents;
+        std::vector<MIRParam> ents;
         switch (str.data.tag()) {
             case HIRStructData::TAG_Unit: {
                 MIR_BUG(state, "Unit-like struct CoerceUnsized is impossible - " << srcTy);
@@ -1078,13 +1078,13 @@ void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam&
         if (litPtr) {
             auto newRval = MIRCleanupLiteralToRValue(state, mutator, *litPtr, cTy, params, mv$(*ce.p));
             if (auto* lv = newRval.opt_Use()) {
-                p = MIRParam::make_LValue(::std::move(*lv));
+                p = MIRParam::make_LValue(std::move(*lv));
             } else if (auto* c = newRval.opt_Constant()) {
                 MIRCleanupConstant(state, mutator, *c);
-                p = MIRParam::make_Constant(::std::move(*c));
+                p = MIRParam::make_Constant(std::move(*c));
             } else {
                 auto tmpLv = mutator.inTemporary(mv$(cTy), mv$(newRval));
-                p = MIRParam::make_LValue(::std::move(tmpLv));
+                p = MIRParam::make_LValue(std::move(tmpLv));
             }
         } else {
         }
@@ -2251,10 +2251,10 @@ namespace {
             cb.run(bb, block);
 
             struct QueueUnvisited final: public MIRTargetVisitor {
-                const ::std::vector<bool>& visited;
-                ::std::vector<MIRBasicBlockId>& toVisit;
+                const std::vector<bool>& visited;
+                std::vector<MIRBasicBlockId>& toVisit;
 
-                QueueUnvisited(const ::std::vector<bool>& visited, ::std::vector<MIRBasicBlockId>& toVisit)
+                QueueUnvisited(const std::vector<bool>& visited, std::vector<MIRBasicBlockId>& toVisit)
                     : visited(visited)
                     , toVisit(toVisit)
                 {
@@ -2371,7 +2371,7 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
                     for (auto v : src.slots) {
                         dst.slots.push_back(v);
                     }
-                    ::std::sort(dst.slots.begin(), dst.slots.end());
+                    std::sort(dst.slots.begin(), dst.slots.end());
                     it = block.statements.erase(it);
                     changed = true;
                 } else {
@@ -2382,9 +2382,9 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
     }
 
     {
-        ::std::vector<bool> visited(fcn.blocks.size());
-        ::std::vector<unsigned int> uses(fcn.blocks.size());
-        ::std::vector<MIRBasicBlockId> toVisit;
+        std::vector<bool> visited(fcn.blocks.size());
+        std::vector<unsigned int> uses(fcn.blocks.size());
+        std::vector<MIRBasicBlockId> toVisit;
         toVisit.push_back(0);
         uses[0]++;
         while (toVisit.size() > 0) {
@@ -2397,11 +2397,11 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
             const auto& block = fcn.blocks[bb];
 
             struct CountUses final: public MIRTargetVisitor {
-                const ::std::vector<bool>& visited;
-                ::std::vector<MIRBasicBlockId>& toVisit;
-                ::std::vector<unsigned>& uses;
+                const std::vector<bool>& visited;
+                std::vector<MIRBasicBlockId>& toVisit;
+                std::vector<unsigned>& uses;
 
-                CountUses(const ::std::vector<bool>& visited, ::std::vector<MIRBasicBlockId>& toVisit, ::std::vector<unsigned>& uses)
+                CountUses(const std::vector<bool>& visited, std::vector<MIRBasicBlockId>& toVisit, std::vector<unsigned>& uses)
                     : visited(visited)
                     , toVisit(toVisit)
                     , uses(uses)
@@ -2476,15 +2476,15 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
 
     struct InlineEvent {
         HIRPath path;
-        ::std::vector<size_t> bbList;
+        std::vector<size_t> bbList;
 
         InlineEvent(HIRPath p)
-            : path(::std::move(p))
+            : path(std::move(p))
         {
         }
 
         bool hasBb(size_t i) const {
-            return ::std::find(this->bbList.begin(), this->bbList.end(), i) != this->bbList.end();
+            return std::find(this->bbList.begin(), this->bbList.end(), i) != this->bbList.end();
         }
 
         void addRange(size_t start, size_t count) {
@@ -2494,7 +2494,7 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
         }
     };
 
-    ::std::vector<InlineEvent> inlinedFunctions;
+    std::vector<InlineEvent> inlinedFunctions;
 
     struct H {
         struct Source {
@@ -2692,14 +2692,14 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
     struct Cloner: public MIRCloner {
         const ::StaticTraitResolve& resolve_;
         const MIRTerminator::Data_Call& te;
-        ::std::vector<unsigned> copyArgs;
+        std::vector<unsigned> copyArgs;
         ParamsSet params;
         unsigned int bbBase = ~0u;
         unsigned int varBase = ~0u;
         unsigned int dfBase = ~0u;
 
         size_t tmpEnd = 0;
-        mutable ::std::vector<MIRParam> constAssignments;
+        mutable std::vector<MIRParam> constAssignments;
 
         MIRLValue retval;
 
@@ -2861,7 +2861,7 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
                 }
             }
 
-            ::std::vector<MIRBasicBlock> newBlocks;
+            std::vector<MIRBasicBlock> newBlocks;
             newBlocks.reserve(calledMir->blocks.size());
             for (const auto& bb : calledMir->blocks) {
                 newBlocks.push_back(cloner.cloneBb(bb, (&bb - calledMir->blocks.data()), fcn.blocks.size() + newBlocks.size()));
@@ -2911,7 +2911,7 @@ namespace {
         bool operator==(const OptimiseStmtRef& x) const;
     };
 
-    ::std::ostream& operator<<(::std::ostream& os, const OptimiseStmtRef& x) {
+    std::ostream& operator<<(std::ostream& os, const OptimiseStmtRef& x) {
         return os << "BB" << x.bbIdx << "/" << x.stmtIdx;
     }
 
@@ -2943,7 +2943,7 @@ namespace {
             assert(start.stmtIdx <= end.stmtIdx);
         }
 
-        auto vistedBbs = ::std::set<unsigned>();
+        auto vistedBbs = std::set<unsigned>();
         for (auto ref = start; ref.bbIdx != end.bbIdx || ref.stmtIdx < end.stmtIdx;) {
             const auto& bb = fcn.blocks.at(ref.bbIdx);
             if (ref.stmtIdx < bb.statements.size()) {
@@ -3027,7 +3027,7 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
         }
     };
 
-    ::std::vector<LocalUsage> usageInfo(fcn.locals.size());
+    std::vector<LocalUsage> usageInfo(fcn.locals.size());
 
     {
         struct CountUsage final: public LvalueVisitor {
@@ -3286,7 +3286,7 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
         unsigned nOtherRead;
         unsigned nDerefRead;
         OptimiseStmtRef setLoc;
-        ::std::vector<OptimiseStmtRef> dropLocs;
+        std::vector<OptimiseStmtRef> dropLocs;
 
         LocalUsage()
             : nWrite(0)
@@ -3296,7 +3296,7 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     };
 
-    ::std::vector<LocalUsage> usageInfo(fcn.locals.size());
+    std::vector<LocalUsage> usageInfo(fcn.locals.size());
     for (size_t i = 0; i < fcn.locals.size(); i++) {
         auto& u = usageInfo[i];
         u.nWrite = 0;
@@ -3502,7 +3502,7 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
         }
     };
 
-    ::std::vector<Poss> possible;
+    std::vector<Poss> possible;
     for (const auto& blk : fcn.blocks) {
         for (const auto& stmt : blk.statements) {
             state.setCurStmt(&blk - fcn.blocks.data(), &stmt - blk.statements.data());
@@ -3541,9 +3541,9 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
         std::vector<unsigned int> incomingEdges(fcn.blocks.size());
         for (const auto& block : fcn.blocks) {
             struct CountIncoming final: public MIRTargetVisitor {
-                ::std::vector<unsigned int>& incomingEdges;
+                std::vector<unsigned int>& incomingEdges;
 
-                explicit CountIncoming(::std::vector<unsigned int>& incomingEdges)
+                explicit CountIncoming(std::vector<unsigned int>& incomingEdges)
                     : incomingEdges(incomingEdges)
                 {
                 }
@@ -3564,10 +3564,10 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
         }
         for (size_t i = 0; i < acyclicBlocks.size(); i++) {
             struct PeelAcyclic final: public MIRTargetVisitor {
-                ::std::vector<unsigned int>& incomingEdges;
-                ::std::vector<unsigned int>& acyclicBlocks;
+                std::vector<unsigned int>& incomingEdges;
+                std::vector<unsigned int>& acyclicBlocks;
 
-                PeelAcyclic(::std::vector<unsigned int>& incomingEdges, ::std::vector<unsigned int>& acyclicBlocks)
+                PeelAcyclic(std::vector<unsigned int>& incomingEdges, std::vector<unsigned int>& acyclicBlocks)
                     : incomingEdges(incomingEdges)
                     , acyclicBlocks(acyclicBlocks)
                 {
@@ -3600,10 +3600,10 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
                     struct CollectSuccs final: public MIRTargetVisitor {
                         size_t nBlocks;
                         unsigned bbIdx;
-                        ::std::vector<::std::vector<unsigned>>& succs;
-                        ::std::vector<bool>& loops;
+                        std::vector<std::vector<unsigned>>& succs;
+                        std::vector<bool>& loops;
 
-                        CollectSuccs(size_t nBlocks, unsigned bbIdx, ::std::vector<::std::vector<unsigned>>& succs, ::std::vector<bool>& loops)
+                        CollectSuccs(size_t nBlocks, unsigned bbIdx, std::vector<std::vector<unsigned>>& succs, std::vector<bool>& loops)
                             : nBlocks(nBlocks)
                             , bbIdx(bbIdx)
                             , succs(succs)
@@ -3684,7 +3684,7 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
         }
     }
 
-    ::std::unordered_map<uintptr_t, ::std::vector<size_t>> possibleBySource;
+    std::unordered_map<uintptr_t, std::vector<size_t>> possibleBySource;
     for (size_t i = 0; i < possible.size(); i++) {
         possibleBySource[possible[i].slot.getInner()].push_back(i);
     }
@@ -3746,8 +3746,8 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
     if (possible.size() == 0) {
         return false;
     }
-    ::std::unordered_set<uintptr_t> sourceSlots;
-    ::std::unordered_map<uintptr_t, uintptr_t> replacements;
+    std::unordered_set<uintptr_t> sourceSlots;
+    std::unordered_map<uintptr_t, uintptr_t> replacements;
     for (auto it = possible.rbegin(); it != possible.rend(); ++it) {
         const auto source = it->slot.getInner();
         const auto destination = it->replace.getInner();
@@ -3809,9 +3809,9 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
 
     for (unsigned int bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
         auto& bb = fcn.blocks[bbIdx];
-        ::std::map<unsigned, unsigned> localAssignments;
+        std::map<unsigned, unsigned> localAssignments;
         // TODO: Keep track of what variables would invalidate a local (and compound on assignment)
-        ::std::vector<unsigned> statementsToRemove;
+        std::vector<unsigned> statementsToRemove;
 
         struct CheckInvalidate final: public LvalueVisitor {
             MIRTypeResolve& state;
@@ -3952,10 +3952,10 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
                     }
                 } sameRoot{dstLv};
 
-                if (!optVisitMirLvaluesInner(srcLv, MIRValUsage::Read, sameRoot) && !::std::any_of(srcLv.wrappers.begin(), srcLv.wrappers.end(), [](const auto& w) {
+                if (!optVisitMirLvaluesInner(srcLv, MIRValUsage::Read, sameRoot) && !std::any_of(srcLv.wrappers.begin(), srcLv.wrappers.end(), [](const auto& w) {
                     return w.is_Deref();
                 })) {
-                    localAssignments.insert(::std::make_pair(stmt.as_Assign().dst.as_Local(), stmtIdx));
+                    localAssignments.insert(std::make_pair(stmt.as_Assign().dst.as_Local(), stmtIdx));
                 }
             }
         }
@@ -3966,7 +3966,7 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
             optVisitMirLvaluesMut(bb.terminator, cbApplyReplacements);
         }
 
-        ::std::sort(statementsToRemove.begin(), statementsToRemove.end());
+        std::sort(statementsToRemove.begin(), statementsToRemove.end());
         while (!statementsToRemove.empty()) {
             // TODO: Handle partial moves here?
             // TODO: Is there some edge case I'm missing where the assignment shouldn't be removed?
@@ -3988,7 +3988,7 @@ bool MIROptimiseCommonStatements(MIRTypeResolve& state, MIRFunction& fcn) {
         state.setCurStmt(bbIdx, 0);
 
         bool skip = false;
-        ::std::vector<size_t> sources;
+        std::vector<size_t> sources;
         for (size_t bb2Idx = 0; bb2Idx < fcn.blocks.size() && !skip; bb2Idx++) {
             const auto& blk = fcn.blocks[bb2Idx];
             // TODO: Handle non-Goto branches? (e.g. calls)
@@ -4035,11 +4035,11 @@ bool MIROptimiseCommonStatements(MIRTypeResolve& state, MIRFunction& fcn) {
         if (!skip && sources.size() > 1) {
             // TODO: Should this search for any common statements?
 
-            auto stmt = ::std::move(fcn.blocks[sources.front()].statements.back());
+            auto stmt = std::move(fcn.blocks[sources.front()].statements.back());
             for (auto idx : sources) {
                 fcn.blocks[idx].statements.pop_back();
             }
-            fcn.blocks[bbIdx].statements.insert(fcn.blocks[bbIdx].statements.begin(), ::std::move(stmt));
+            fcn.blocks[bbIdx].statements.insert(fcn.blocks[bbIdx].statements.begin(), std::move(stmt));
         }
     }
     return changed;
@@ -4047,7 +4047,7 @@ bool MIROptimiseCommonStatements(MIRTypeResolve& state, MIRFunction& fcn) {
 
 bool MIROptimiseUnifyTemporaries(MIRTypeResolve& state, MIRFunction& fcn) {
     bool replacementNeeded = false;
-    ::std::vector<bool> replacable(fcn.locals.size());
+    std::vector<bool> replacable(fcn.locals.size());
     {
         unsigned int nFound = 0;
         for (unsigned int tmpidx = 0; tmpidx < fcn.locals.size(); tmpidx++) {
@@ -4072,10 +4072,10 @@ bool MIROptimiseUnifyTemporaries(MIRTypeResolve& state, MIRFunction& fcn) {
 
     // TODO: Only calculate lifetimes for replacable locals
     auto lifetimes = MIRHelperGetLifetimes(state, fcn, /*dump_debug=*/true, /*mask=*/&replacable);
-    ::std::vector<MIRValueLifetime> slotLifetimes = mv$(lifetimes.slots);
+    std::vector<MIRValueLifetime> slotLifetimes = mv$(lifetimes.slots);
 
-    ::std::map<unsigned int, unsigned int> replacements;
-    ::std::vector<bool> visited(fcn.locals.size());
+    std::map<unsigned int, unsigned int> replacements;
+    std::vector<bool> visited(fcn.locals.size());
     for (unsigned int localIdx = 0; localIdx < fcn.locals.size(); localIdx++) {
         if (!replacable[localIdx]) {
             continue;
@@ -4287,7 +4287,7 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     };
 
-    ::std::map<unsigned int, unsigned int> replacements;
+    std::map<unsigned int, unsigned int> replacements;
 
     struct HashedBlock {
         size_t hash;
@@ -4308,7 +4308,7 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
             }
             hashedBlocks.push_back(HashedBlock{H::blockHash(fcn.blocks[bbIdx]), bbIdx});
         }
-        ::std::sort(hashedBlocks.begin(), hashedBlocks.end(), [](const HashedBlock& a, const HashedBlock& b) {
+        std::sort(hashedBlocks.begin(), hashedBlocks.end(), [](const HashedBlock& a, const HashedBlock& b) {
             return a.hash != b.hash ? a.hash < b.hash : a.bbIdx < b.bbIdx;
         });
         for (size_t i = 0; i < hashedBlocks.size();) {
@@ -4380,11 +4380,11 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
 
 bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changeHappend = false;
-    ::std::vector<size_t> blockOrigins(fcn.blocks.size(), SIZE_MAX);
+    std::vector<size_t> blockOrigins(fcn.blocks.size(), SIZE_MAX);
     {
-        ::std::vector<unsigned int> blockUses(fcn.blocks.size());
-        ::std::vector<bool> visited(fcn.blocks.size());
-        ::std::vector<MIRBasicBlockId> toVisit;
+        std::vector<unsigned int> blockUses(fcn.blocks.size());
+        std::vector<bool> visited(fcn.blocks.size());
+        std::vector<MIRBasicBlockId> toVisit;
         toVisit.push_back(0);
         blockUses[0]++;
         while (toVisit.size() > 0) {
@@ -4397,13 +4397,13 @@ bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
             const auto& block = fcn.blocks[bb];
 
             struct RecordOrigins final: public MIRTargetVisitor {
-                const ::std::vector<bool>& visited;
-                ::std::vector<MIRBasicBlockId>& toVisit;
-                ::std::vector<unsigned int>& blockUses;
-                ::std::vector<size_t>& blockOrigins;
+                const std::vector<bool>& visited;
+                std::vector<MIRBasicBlockId>& toVisit;
+                std::vector<unsigned int>& blockUses;
+                std::vector<size_t>& blockOrigins;
                 MIRBasicBlockId bb;
 
-                RecordOrigins(const ::std::vector<bool>& visited, ::std::vector<MIRBasicBlockId>& toVisit, ::std::vector<unsigned int>& blockUses, ::std::vector<size_t>& blockOrigins, MIRBasicBlockId bb)
+                RecordOrigins(const std::vector<bool>& visited, std::vector<MIRBasicBlockId>& toVisit, std::vector<unsigned int>& blockUses, std::vector<size_t>& blockOrigins, MIRBasicBlockId bb)
                     : visited(visited)
                     , toVisit(toVisit)
                     , blockUses(blockUses)
@@ -4647,9 +4647,9 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
     for (auto& bb : fcn.blocks) {
         auto bbidx = &bb - &fcn.blocks.front();
 
-        ::std::map<MIRLValue, MIRConstant> knownValues;
-        ::std::map<MIRLValue, unsigned> knownValuesVar;
-        ::std::map<unsigned, bool> knownDropFlags;
+        std::map<MIRLValue, MIRConstant> knownValues;
+        std::map<MIRLValue, unsigned> knownValuesVar;
+        std::map<unsigned, bool> knownDropFlags;
 
         auto checkLv = [&](const MIRLValue& lv) -> MIRConstant {
             auto it = knownValues.find(lv);
@@ -5630,18 +5630,18 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
             if (const auto* e = stmt.opt_Assign()) {
                 if (e->dst.is_Local()) {
                     if (const auto* ce = e->src.opt_Constant()) {
-                        knownValues.insert(::std::make_pair(e->dst.clone(), ce->clone()));
+                        knownValues.insert(std::make_pair(e->dst.clone(), ce->clone()));
                     } else if (const auto* ce = e->src.opt_EnumVariant()) {
-                        knownValuesVar.insert(::std::make_pair(e->dst.clone(), ce->index));
+                        knownValuesVar.insert(std::make_pair(e->dst.clone(), ce->index));
                     } else if (const auto* ce = e->src.opt_Use()) {
                         if (ce->is_Local()) {
                             auto it1 = knownValues.find(*ce);
                             auto it2 = knownValuesVar.find(*ce);
                             assert(!(it1 != knownValues.end() && it2 != knownValuesVar.end()));
                             if (it1 != knownValues.end()) {
-                                knownValues.insert(::std::make_pair(e->dst.clone(), it1->second.clone()));
+                                knownValues.insert(std::make_pair(e->dst.clone(), it1->second.clone()));
                             } else if (it2 != knownValuesVar.end()) {
-                                knownValuesVar.insert(::std::make_pair(e->dst.clone(), it2->second));
+                                knownValuesVar.insert(std::make_pair(e->dst.clone(), it2->second));
                             } else {
                             }
                         }
@@ -5990,7 +5990,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
     };
 
     struct {
-        ::std::vector<ValUse> localUses;
+        std::vector<ValUse> localUses;
 
         void useLvalue(const MIRLValue& lv, MIRValUsage ut) {
             for (const auto& w : lv.wrappers) {
@@ -6014,7 +6014,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                 }
             }
         }
-    } valUses = {::std::vector<ValUse>(fcn.locals.size())};
+    } valUses = {std::vector<ValUse>(fcn.locals.size())};
 
     struct CollectValUses final: public LvalueVisitor {
         decltype(valUses)& valUses;
@@ -6033,9 +6033,9 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
     optVisitMirLvalues(state, fcn, collectValUses);
 
     {
-        ::std::vector<::std::pair<MIRLValue, MIRRValue>> replacements;
+        std::vector<std::pair<MIRLValue, MIRRValue>> replacements;
         auto replacementsFind = [&replacements](const MIRLValue::CRef& lv) {
-            return ::std::find_if(replacements.begin(), replacements.end(), [&](const auto& e) {
+            return std::find_if(replacements.begin(), replacements.end(), [&](const auto& e) {
                 return lv == e.first;
             });
         };
@@ -6065,7 +6065,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                 bool onlyOne = false;
                 if (e.src.is_Use()) {
                     const auto* srcp = &e.src.as_Use();
-                    if (::std::any_of(srcp->wrappers.begin(), srcp->wrappers.end(), [](auto& w) {
+                    if (std::any_of(srcp->wrappers.begin(), srcp->wrappers.end(), [](auto& w) {
                         return !w.is_Field() && !w.is_Downcast();
                     })) {
                         onlyOne = true;
@@ -6192,7 +6192,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     }
                 }
                 if (found) {
-                    replacements.push_back(::std::make_pair(e.dst.clone(), e.src.clone()));
+                    replacements.push_back(std::make_pair(e.dst.clone(), e.src.clone()));
                 }
             }
         }
@@ -6270,8 +6270,8 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                         if (it != replacements.end()) {
                             MIR_ASSERT(state, !it->second.isDead(), "Replacement of  " << lv << " fired twice");
                             MIR_ASSERT(state, it->second.is_Use(), "Replacing a lvalue with a rvalue - " << lv << " with " << it->second);
-                            auto rval = ::std::move(it->second);
-                            lv.replace(::std::move(rval.as_Use()));
+                            auto rval = std::move(it->second);
+                            lv.replace(std::move(rval.as_Use()));
                             replaced += 1;
                         }
                     }
@@ -6505,9 +6505,9 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
 
 bool MIROptimiseDeadDropFlags(MIRTypeResolve& state, MIRFunction& fcn) {
     bool removedStatement = false;
-    ::std::vector<bool> usedDropFlags(fcn.dropFlags.size());
+    std::vector<bool> usedDropFlags(fcn.dropFlags.size());
     {
-        ::std::vector<bool> readDropFlags(fcn.dropFlags.size());
+        std::vector<bool> readDropFlags(fcn.dropFlags.size());
         visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&readDropFlags, &usedDropFlags](auto, const MIRBasicBlock& block) {
             for (const auto& stmt : block.statements) {
                 if (const auto* e = stmt.opt_SetDropFlag()) {
@@ -6552,7 +6552,7 @@ bool MIROptimiseDeadDropFlags(MIRTypeResolve& state, MIRFunction& fcn) {
     }
 
     {
-        ::std::vector<bool> editedDropFlags(fcn.dropFlags.size());
+        std::vector<bool> editedDropFlags(fcn.dropFlags.size());
         visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&editedDropFlags, &fcn](auto, const MIRBasicBlock& block) {
             for (const auto& stmt : block.statements) {
                 if (const auto* e = stmt.opt_SetDropFlag()) {
@@ -6588,8 +6588,8 @@ bool MIROptimiseDeadDropFlags(MIRTypeResolve& state, MIRFunction& fcn) {
 bool MIROptimiseDeadAssignments(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
-    ::std::vector<bool> readLocals(fcn.locals.size());
-    ::std::vector<bool> droppedLocals(fcn.locals.size());
+    std::vector<bool> readLocals(fcn.locals.size());
+    std::vector<bool> droppedLocals(fcn.locals.size());
 
     struct RecordReads final: public LvalueVisitor {
         decltype(readLocals)& readLocals;
@@ -6775,10 +6775,10 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
         unsigned srcIdx = &srcBb - fcn.blocks.data();
 
         struct CollectPreds final: public MIRTargetVisitor {
-            ::std::vector<::std::vector<unsigned>>& blockPreds;
+            std::vector<std::vector<unsigned>>& blockPreds;
             unsigned srcIdx;
 
-            CollectPreds(::std::vector<::std::vector<unsigned>>& blockPreds, unsigned srcIdx)
+            CollectPreds(std::vector<std::vector<unsigned>>& blockPreds, unsigned srcIdx)
                 : blockPreds(blockPreds)
                 , srcIdx(srcIdx)
             {
@@ -6794,8 +6794,8 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
         visitTerminatorTarget(srcBb.terminator, collectPreds);
     }
 
-    ::std::vector<unsigned> localReads(fcn.locals.size(), 0);
-    ::std::vector<unsigned> localBorrows(fcn.locals.size(), 0);
+    std::vector<unsigned> localReads(fcn.locals.size(), 0);
+    std::vector<unsigned> localBorrows(fcn.locals.size(), 0);
 
     struct CountLocalUses final: public LvalueVisitor {
         decltype(localReads)& localReads;
@@ -6934,7 +6934,7 @@ bool MIROptimiseUselessReborrows(MIRTypeResolve& state, MIRFunction& fcn) {
 
 bool MIROptimiseGarbageCollectPartial(MIRTypeResolve& state, MIRFunction& fcn) {
     bool rv = false;
-    ::std::vector<bool> visited(fcn.blocks.size());
+    std::vector<bool> visited(fcn.blocks.size());
     visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&visited](auto bb, const auto& /*block*/) {
         assert(!visited[bb]);
         visited[bb] = true;
@@ -6951,9 +6951,9 @@ bool MIROptimiseGarbageCollectPartial(MIRTypeResolve& state, MIRFunction& fcn) {
 }
 
 bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
-    ::std::vector<bool> usedLocals(fcn.locals.size());
-    ::std::vector<bool> usedDfs(fcn.dropFlags.size());
-    ::std::vector<bool> visited(fcn.blocks.size());
+    std::vector<bool> usedLocals(fcn.locals.size());
+    std::vector<bool> usedDfs(fcn.dropFlags.size());
+    std::vector<bool> visited(fcn.blocks.size());
 
     visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&](auto bb, const auto& block) {
         visited[bb] = true;
@@ -7008,7 +7008,7 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     }));
 
-    ::std::vector<unsigned int> localRewriteTable;
+    std::vector<unsigned int> localRewriteTable;
     unsigned int nLocals = fcn.locals.size();
     for (unsigned int i = 0, j = 0; i < nLocals; i++) {
         if (!usedLocals[i]) {
@@ -7016,7 +7016,7 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
         }
         localRewriteTable.push_back(usedLocals[i] ? j++ : ~0u);
     }
-    ::std::vector<unsigned int> dfRewriteTable;
+    std::vector<unsigned int> dfRewriteTable;
     unsigned int nDf = fcn.dropFlags.size();
     for (unsigned int i = 0, j = 0; i < nDf; i++) {
         dfRewriteTable.push_back(usedDfs[i] ? j++ : ~0u);
@@ -7051,7 +7051,7 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
                 }
             } lvalueCb{state, localRewriteTable};
 
-            ::std::vector<bool> toRemoveStatements(it->statements.size());
+            std::vector<bool> toRemoveStatements(it->statements.size());
             for (auto& stmt : it->statements) {
                 auto stmtIdx = &stmt - &it->statements.front();
                 state.setCurStmt(i, stmtIdx);
@@ -7121,7 +7121,7 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
             }
 
             assert(it->statements.size() == toRemoveStatements.size());
-            auto newEnd = ::std::remove_if(it->statements.begin(), it->statements.end(), [&](const auto& s) {
+            auto newEnd = std::remove_if(it->statements.begin(), it->statements.end(), [&](const auto& s) {
                 size_t stmtIdx = (&s - &it->statements.front());
                 return toRemoveStatements[stmtIdx];
             });
@@ -7135,7 +7135,7 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
         visited[bb] = true;
     }));
 
-    ::std::vector<unsigned int> blockRewriteTable;
+    std::vector<unsigned int> blockRewriteTable;
     for (unsigned int i = 0, j = 0; i < fcn.blocks.size(); i++) {
         blockRewriteTable.push_back(visited[i] ? j++ : ~0u);
     }
@@ -7146,9 +7146,9 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
 
         struct ApplyRewriteTable final: public MIRTargetVisitorMut {
             const MIRTypeResolve& state;
-            const ::std::vector<unsigned int>& blockRewriteTable;
+            const std::vector<unsigned int>& blockRewriteTable;
 
-            ApplyRewriteTable(const MIRTypeResolve& state, const ::std::vector<unsigned int>& blockRewriteTable)
+            ApplyRewriteTable(const MIRTypeResolve& state, const std::vector<unsigned int>& blockRewriteTable)
                 : state(state)
                 , blockRewriteTable(blockRewriteTable)
             {
@@ -7164,7 +7164,7 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
         visitTerminatorTargetMut(fcn.blocks[i].terminator, applyRewriteTable);
     }
 
-    auto newBlocksEnd = ::std::remove_if(fcn.blocks.begin(), fcn.blocks.end(), [&](const auto& bb) {
+    auto newBlocksEnd = std::remove_if(fcn.blocks.begin(), fcn.blocks.end(), [&](const auto& bb) {
         size_t i = &bb - &fcn.blocks.front();
         return !visited[i];
     });
@@ -7183,8 +7183,8 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
 }
 
 void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn) {
-    ::std::vector<bool> visited(fcn.blocks.size());
-    ::std::vector<::std::pair<unsigned, unsigned>> depths(fcn.blocks.size());
+    std::vector<bool> visited(fcn.blocks.size());
+    std::vector<std::pair<unsigned, unsigned>> depths(fcn.blocks.size());
 
     struct Todo {
         size_t bbIdx;
@@ -7193,7 +7193,7 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
     };
 
     unsigned int branches = 0;
-    ::std::vector<Todo> todo;
+    std::vector<Todo> todo;
     todo.push_back(Todo{0, 0, 0});
 
     while (!todo.empty()) {
@@ -7204,7 +7204,7 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
         }
 
         visited[info.bbIdx] = true;
-        depths[info.bbIdx] = ::std::make_pair(info.branchCount, info.level);
+        depths[info.bbIdx] = std::make_pair(info.branchCount, info.level);
         const auto& bb = fcn.blocks[info.bbIdx];
 
         switch (bb.terminator.tag()) {
@@ -7288,12 +7288,12 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
         }
     }
 
-    ::std::vector<size_t> idxes;
+    std::vector<size_t> idxes;
     idxes.reserve(fcn.blocks.size());
     for (size_t i = 0; i < fcn.blocks.size(); i++) {
         idxes.push_back(i);
     }
-    ::std::sort(idxes.begin(), idxes.end(), [&](auto a, auto b) {
+    std::sort(idxes.begin(), idxes.end(), [&](auto a, auto b) {
         return depths.at(a) < depths.at(b);
     });
 
@@ -7301,7 +7301,7 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
     newBlockList.reserve(fcn.blocks.size());
     for (auto idx : idxes) {
         auto fixBbIdx = [&](auto idx) {
-            return ::std::find(idxes.begin(), idxes.end(), idx) - idxes.begin();
+            return std::find(idxes.begin(), idxes.end(), idx) - idxes.begin();
         };
         newBlockList.push_back(mv$(fcn.blocks[idx]));
         newBlockList.back().statements.shrink_to_fit();
@@ -7377,7 +7377,7 @@ void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransL
         return;
     }
 
-    const size_t maxIterations = optLevel >= 4 ? ::std::numeric_limits<size_t>::max() : 5;
+    const size_t maxIterations = optLevel >= 4 ? std::numeric_limits<size_t>::max() : 5;
     size_t numIterations = 0;
     bool didInlineOnPass;
     do {
@@ -7388,7 +7388,7 @@ void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransL
             auto& hirFcn = *const_cast<HIRFunction*>(fcnEnt.second->ptr);
             auto& monoFcn = fcnEnt.second->monomorphised;
 
-            ::std::string s = FMT(path);
+            std::string s = FMT(path);
             HIRItemPath ip(s);
 
             if (monoFcn.code) {
@@ -7504,7 +7504,7 @@ auto ParamsSet::getHrbParams() const -> const HIRPathParams* {
 
 auto ParamsSet::hasUnevaluatedValues() const -> bool {
     const auto check = [](const HIRPathParams& params) {
-        return ::std::any_of(params.values.begin(), params.values.end(), [](const auto& value) {
+        return std::any_of(params.values.begin(), params.values.end(), [](const auto& value) {
             return value.is_Unevaluated() || value.is_Infer();
         });
     };
@@ -7569,7 +7569,7 @@ auto IterPathCb<S, T>::visitTerminator(OptimiseStmtRef location, const MIRTermin
 CheckInvalidatesLvalue::CheckInvalidatesLvalue(const MIRLValue& val, bool isCopy, bool alsoRead)
     : val(val)
     , hasIndex(
-          ::std::any_of(
+          std::any_of(
               val.wrappers.begin(),
               val.wrappers.end(),
               [](const auto& w) {

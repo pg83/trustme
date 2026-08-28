@@ -22,13 +22,13 @@ FsPath::FsPath(const char* s)
             str_.push_back(SEP);
         }
     } else {
-        throw ::std::runtime_error("Empty path being constructed");
+        throw std::runtime_error("Empty path being constructed");
     }
 }
 
 FsPath FsPath::toAbsolute() const {
     if (!this->isValid()) {
-        throw ::std::runtime_error("Calling to_absolute() on an invalid path");
+        throw std::runtime_error("Calling to_absolute() on an invalid path");
     }
 
     if (this->str_[0] == SEP) {
@@ -37,7 +37,7 @@ FsPath FsPath::toAbsolute() const {
 
     char cwd[PATH_MAX];
     if (!getcwd(cwd, sizeof(cwd))) {
-        throw ::std::runtime_error("Calling getcwd() failed in path::to_absolute()");
+        throw std::runtime_error("Calling getcwd() failed in path::to_absolute()");
     }
     auto rv = FsPath(cwd);
     for (auto comp : *this) {
@@ -65,7 +65,7 @@ FsPath FsPath::normalise() const {
             } else {
                 rv.str_.pop_back();
                 auto pos = rv.str_.find_last_of(SEP);
-                if (pos == ::std::string::npos) {
+                if (pos == std::string::npos) {
                     rv.str_.resize(0);
                 } else if (pos == 0) {
                 } else {
@@ -87,7 +87,7 @@ void FsPath::ComponentsIter::operator++() {
     } else {
         pos = end + 1;
         end = p.str_.find(SEP, pos);
-        if (end == ::std::string::npos) {
+        if (end == std::string::npos) {
             end = p.str_.size();
         }
     }
@@ -96,14 +96,14 @@ void FsPath::ComponentsIter::operator++() {
 FsPath::FsPath() {
 }
 
-FsPath::FsPath(const ::std::string& s)
+FsPath::FsPath(const std::string& s)
     : FsPath(s.c_str())
 {
 }
 
 FsPath& FsPath::operator/=(const FsPath& p) {
     if (!p.isValid()) {
-        throw ::std::runtime_error("Appending from an invalid path");
+        throw std::runtime_error("Appending from an invalid path");
     }
 
     return *this /= p.str_.c_str();
@@ -111,22 +111,22 @@ FsPath& FsPath::operator/=(const FsPath& p) {
 
 FsPath& FsPath::operator/=(const char* o) {
     if (!this->isValid()) {
-        throw ::std::runtime_error("Appending to an invalid path");
+        throw std::runtime_error("Appending to an invalid path");
     }
     if (o[0] == '/') {
-        throw ::std::runtime_error("Appending an absolute path to another path");
+        throw std::runtime_error("Appending an absolute path to another path");
     }
     this->str_.push_back(SEP);
     this->str_.append(o);
     return *this;
 }
 
-FsPath& FsPath::operator/=(::std::string_view o) {
+FsPath& FsPath::operator/=(std::string_view o) {
     if (!this->isValid()) {
-        throw ::std::runtime_error("Appending to an invalid path");
+        throw std::runtime_error("Appending to an invalid path");
     }
     if (o[0] == '/') {
-        throw ::std::runtime_error("Appending an absolute path to another path");
+        throw std::runtime_error("Appending an absolute path to another path");
     }
     this->str_.push_back(SEP);
     this->str_.append(o);
@@ -147,10 +147,10 @@ FsPath FsPath::operator/(const char* o) const {
 
 FsPath FsPath::operator+(const char* o) const {
     if (!this->isValid()) {
-        throw ::std::runtime_error("Appending a string to an invalid path");
+        throw std::runtime_error("Appending a string to an invalid path");
     }
-    if (::std::strchr(o, SEP) != nullptr) {
-        throw ::std::runtime_error("Appending a string containing the path separator (with operator+)");
+    if (std::strchr(o, SEP) != nullptr) {
+        throw std::runtime_error("Appending a string containing the path separator (with operator+)");
     }
     auto rv = *this;
     rv.str_.append(o);
@@ -159,10 +159,10 @@ FsPath FsPath::operator+(const char* o) const {
 
 bool FsPath::popComponent() {
     if (!this->isValid()) {
-        throw ::std::runtime_error("Calling pop_component() on an invalid path");
+        throw std::runtime_error("Calling pop_component() on an invalid path");
     }
     auto pos = str_.find_last_of(SEP);
-    if (pos == ::std::string::npos || pos == 0) {
+    if (pos == std::string::npos || pos == 0) {
         return false;
     } else {
         this->str_.resize(pos);
@@ -172,10 +172,10 @@ bool FsPath::popComponent() {
 
 FsPath FsPath::parent() const {
     if (!this->isValid()) {
-        throw ::std::runtime_error("Calling parent() on an invalid path");
+        throw std::runtime_error("Calling parent() on an invalid path");
     }
     auto pos = str_.find_last_of(SEP);
-    if (pos == ::std::string::npos) {
+    if (pos == std::string::npos) {
         return FsPath();
     } else {
         FsPath rv;
@@ -184,13 +184,13 @@ FsPath FsPath::parent() const {
     }
 }
 
-::std::string FsPath::basename() const {
+std::string FsPath::basename() const {
     if (!this->isValid()) {
-        throw ::std::runtime_error("Calling basename() on an invalid path");
+        throw std::runtime_error("Calling basename() on an invalid path");
     }
 
     auto pos = str_.find_last_of(SEP);
-    if (pos == ::std::string::npos) {
+    if (pos == std::string::npos) {
         return str_;
     } else {
         return str_.substr(pos + 1);
@@ -202,7 +202,7 @@ FsPath::ComponentsIter::ComponentsIter(const FsPath& p, size_t i)
     , pos(i)
 {
     end = p.str_.find(SEP, pos);
-    if (end == ::std::string::npos) {
+    if (end == std::string::npos) {
         end = p.str_.size();
     }
 }

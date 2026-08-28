@@ -64,7 +64,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
         mainFn.setCode(mv$(callNode));
     }
 
-    ::std::vector<ASTExprNodeP> testNodes;
+    std::vector<ASTExprNodeP> testNodes;
 
     for (const auto& desc : crate.procMacros) {
         const char* typeName = "SingleStream";
@@ -84,7 +84,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     auto* testsArray = new ASTExprNodeArray(mv$(testNodes));
 
     size_t testCount = testsArray->values.size();
-    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), ::std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
 
     auto newmod = ASTModule{ASTAbsolutePath("", {"proc_macro#"})};
     // - TODO: These need to be loaded too.
@@ -132,11 +132,11 @@ struct ProcMacroInv: public TokenStream {
     Span thisSpan;
     const HIRProcMacro& procMacroDesc;
     ASTEdition edition;
-    ::std::ofstream dumpFileOut;
-    ::std::ofstream dumpFileRes;
+    std::ofstream dumpFileOut;
+    std::ofstream dumpFileRes;
 
-    ::std::unordered_map<const SpanInner*, size_t> knownSpans;
-    ::std::unordered_set<size_t> sentSpans;
+    std::unordered_map<const SpanInner*, size_t> knownSpans;
+    std::unordered_set<size_t> sentSpans;
     size_t nextSpanIndex = 2;
 
     struct Handles {
@@ -176,11 +176,11 @@ struct ProcMacroInv: public TokenStream {
 
     void sendLifetime(const char* val);
 
-    void sendString(const ::std::string& s);
+    void sendString(const std::string& s);
 
-    void sendRawLiteral(const ::std::string& s);
+    void sendRawLiteral(const std::string& s);
 
-    void sendBytestring(const ::std::string& s);
+    void sendBytestring(const std::string& s);
 
     void sendChar(u32 ch);
 
@@ -208,13 +208,13 @@ struct ProcMacroInv: public TokenStream {
     void sendV128u(U128 val);
 
     u8 recvU8();
-    ::std::string recvBytes();
+    std::string recvBytes();
     void recvBytesRaw(void* outVoid, size_t len);
     u64 recvV128u();
     U128 recvV128uU128();
 };
 
-ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath) {
+ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath) {
     const auto& crateName = macPath.front();
     ASSERT_BUG(sp, crate.externCrates.count(crateName), "Crate not loaded for macro: [" << macPath << "]");
     const auto& extCrate = crate.externCrates.at(crateName);
@@ -226,7 +226,7 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCr
         }
         const auto& pm = mi.second->ent.as_ProcMacro();
         bool good = true;
-        for (size_t i = 0; i < ::std::min(macPath.size() - 1, pm.path.components().size()); i++) {
+        for (size_t i = 0; i < std::min(macPath.size() - 1, pm.path.components().size()); i++) {
             if (macPath[1 + i] != pm.path.components()[i]) {
                 good = false;
                 break;
@@ -291,7 +291,7 @@ namespace {
 
         void visitNode(const ASTExprNode& e);
 
-        void parseString(const ::std::string& s);
+        void parseString(const std::string& s);
 
         void visitNodes(const ASTExpr& e);
 
@@ -328,10 +328,10 @@ namespace {
 }
 
 template <typename F>
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree* attrInput, F cb) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, const TokenTree* attrInput, F cb) {
     auto pmi = ProcMacroInvokeInt(sp, wb, crate, macPath);
     if (!pmi.checkGood()) {
-        return ::std::unique_ptr<TokenStream>();
+        return std::unique_ptr<TokenStream>();
     }
     if (attrInput) {
         // TODO: Assert that this is a `#[proc_macro_attribute]` macro
@@ -351,7 +351,7 @@ template <typename F>
     return box$(pmi);
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
@@ -359,7 +359,7 @@ template <typename F>
     });
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTEnum& i) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTEnum& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
@@ -367,7 +367,7 @@ template <typename F>
     });
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTUnion& i) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTUnion& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
@@ -375,7 +375,7 @@ template <typename F>
     });
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTItem& i) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, const TokenTree& tt, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTItem& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, &tt, [&](ProcMacroVisitor& v) {
         v.emitAllAttrs = true;
         v.visitTopAttrs(attrs);
@@ -383,7 +383,7 @@ template <typename F>
     });
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, const TokenTree& tt) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         v.visitTokentree(tt);
     });
@@ -400,8 +400,8 @@ ProcMacroInv::ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const ch
         // TODO: Dump both input and output, AND (optionally) dump each invocation
         std::string namePrefix;
         namePrefix = FMT(getenv("TRUSTME_DUMP_PROCMACRO") << "-" << ++id);
-        dumpFileOut.open(FMT(namePrefix << "-out.bin"), ::std::ios::out | ::std::ios::binary);
-        dumpFileRes.open(FMT(namePrefix << "-res.bin"), ::std::ios::out | ::std::ios::binary);
+        dumpFileOut.open(FMT(namePrefix << "-out.bin"), std::ios::out | std::ios::binary);
+        dumpFileRes.open(FMT(namePrefix << "-res.bin"), std::ios::out | std::ios::binary);
     }
     int stdinPipes[2];
     if (pipe(stdinPipes) != 0) {
@@ -510,10 +510,10 @@ u8 ProcMacroInv::recvU8() {
     return v;
 }
 
-::std::string ProcMacroInv::recvBytes() {
+std::string ProcMacroInv::recvBytes() {
     auto len = this->recvV128u();
     ASSERT_BUG(this->parentSpan, len < SIZE_MAX, "Oversized string from child process");
-    ::std::string val;
+    std::string val;
     val.resize(len);
 
     recvBytesRaw(&val[0], len);
@@ -725,7 +725,7 @@ Token ProcMacroInv::realGetToken_() {
         }
         case TokenClass::RawLiteral: {
             auto text = this->recvBytes();
-            ::std::istringstream input(text + " ");
+            std::istringstream input(text + " ");
             Lexer lexer(this->parseState().wb->id, this->typePool(), input, edition, this->parseState());
             auto token = lexer.getToken();
             ASSERT_BUG(this->parentSpan, token != TOK_EOF, "Empty raw literal from child process");
@@ -770,7 +770,7 @@ auto DecoratorProcMacroDerive::handle(const Span& sp, const ASTAttribute& attr, 
         TODO(sp, "Error for proc_macro_derive on non-Function");
     }
 
-    ::std::vector<::std::string> attributes;
+    std::vector<std::string> attributes;
     TTStream lex(sp, ParseState(), attr.data());
     lex.getTokenCheck(TOK_PAREN_OPEN);
     auto traitName = lex.getTokenCheck(TOK_IDENT).ident().name;
@@ -836,23 +836,23 @@ auto ProcMacroInv::sendDone() -> void {
 
 auto ProcMacroInv::sendSymbol(const char* val) -> void {
     this->sendU8(static_cast<u8>(TokenClass::Symbol));
-    this->sendBytes(val, ::std::strlen(val));
+    this->sendBytes(val, std::strlen(val));
 }
 
 auto ProcMacroInv::sendRword(const char* val) -> void {
     this->sendU8(static_cast<u8>(TokenClass::Ident));
-    this->sendBytes(val, ::std::strlen(val));
+    this->sendBytes(val, std::strlen(val));
 }
 
 auto ProcMacroInv::sendIdent(const char* val) -> void {
     this->sendU8(static_cast<u8>(TokenClass::Ident));
     if (LexFindReservedWord(val, edition) != TOK_NULL) {
-        auto size = ::std::strlen(val);
+        auto size = std::strlen(val);
         this->sendV128u(2 + size);
         this->sendBytesRaw("r#", 2);
         this->sendBytesRaw(val, size);
     } else {
-        this->sendBytes(val, ::std::strlen(val));
+        this->sendBytes(val, std::strlen(val));
     }
 }
 
@@ -862,20 +862,20 @@ auto ProcMacroInv::sendIdent(const Ident& val) -> void {
 
 auto ProcMacroInv::sendLifetime(const char* val) -> void {
     this->sendU8(static_cast<u8>(TokenClass::Lifetime));
-    this->sendBytes(val, ::std::strlen(val));
+    this->sendBytes(val, std::strlen(val));
 }
 
-auto ProcMacroInv::sendString(const ::std::string& s) -> void {
+auto ProcMacroInv::sendString(const std::string& s) -> void {
     this->sendU8(static_cast<u8>(TokenClass::String));
     this->sendBytes(s.data(), s.size());
 }
 
-auto ProcMacroInv::sendRawLiteral(const ::std::string& s) -> void {
+auto ProcMacroInv::sendRawLiteral(const std::string& s) -> void {
     this->sendU8(static_cast<u8>(TokenClass::RawLiteral));
     this->sendBytes(s.data(), s.size());
 }
 
-auto ProcMacroInv::sendBytestring(const ::std::string& s) -> void {
+auto ProcMacroInv::sendBytestring(const std::string& s) -> void {
     this->sendU8(static_cast<u8>(TokenClass::ByteString));
     this->sendBytes(s.data(), s.size());
 }
@@ -999,7 +999,7 @@ auto ProcMacroInv::attrIsUsed(const RcString& n) const -> bool {
     if (n == "repr") {
         return true;
     }
-    return ::std::find(procMacroDesc.attributes.begin(), procMacroDesc.attributes.end(), n) != procMacroDesc.attributes.end();
+    return std::find(procMacroDesc.attributes.begin(), procMacroDesc.attributes.end(), n) != procMacroDesc.attributes.end();
 }
 
 auto ProcMacroInv::realGetEdition() const -> ASTEdition {
@@ -1530,7 +1530,7 @@ auto ProcMacroVisitor::visitLifetime(const ASTLifetimeRef& x) -> void {
 }
 
 auto ProcMacroVisitor::visitTypeAsText(const ASTType* ty) -> void {
-    ::std::stringstream ss;
+    std::stringstream ss;
     ss << ty << " ";
     parseString(ss.str());
 }
@@ -1808,7 +1808,7 @@ auto ProcMacroVisitor::visitPathNode(const ASTPathNode& e, bool isExpr) -> void 
 }
 
 auto ProcMacroVisitor::visitPath(const ASTPath& path, bool isExpr) -> void {
-    const ::std::vector<ASTPathNode>* nodes = nullptr;
+    const std::vector<ASTPathNode>* nodes = nullptr;
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
             BUG(sp, "Invalid path");
@@ -2098,15 +2098,15 @@ auto ProcMacroVisitor::visitBounds(const ASTGenericParams& params) -> void {
 auto ProcMacroVisitor::visitNode(const ASTExprNode& e) -> void {
     // TODO: Dump to a string, then re-parse into a TT and then send that TT
 
-    ::std::stringstream ss;
+    std::stringstream ss;
     DumpASTNode(ss, e);
     ss << " ";
 
     parseString(ss.str());
 }
 
-auto ProcMacroVisitor::parseString(const ::std::string& s) -> void {
-    ::std::istringstream iss{s};
+auto ProcMacroVisitor::parseString(const std::string& s) -> void {
+    std::istringstream iss{s};
     Lexer l{wb.id, *wb.pool, iss, ASTEdition::Rust2021, {}};
     for (;;) {
         auto t = l.getToken();

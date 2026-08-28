@@ -28,13 +28,13 @@ void TraitResolveCommon::prepIndexes(const Span& sp) {
 
 void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, HIRTypeRef longTy, HIRTypeRef shortTy) {
     // TODO: Sort the two types by "complexity" (most of the time long >= short)
-    this->typeEqualities.insert(::std::make_pair(mv$(longTy), CachedEquality{mv$(shortTy)}));
+    this->typeEqualities.insert(std::make_pair(mv$(longTy), CachedEquality{mv$(shortTy)}));
 }
 
 void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, HIRTypeRef type, HIRTraitPath traitPath, bool addParents /*=true*/) {
     const auto boundConstness = traitPath.constness;
     auto getOrAddTraitBound = [&](const HIRGenericPath& genericPath) -> CachedBound& {
-        auto it = ::std::find_if(traitBounds.begin(), traitBounds.end(), [&](const auto& entry) {
+        auto it = std::find_if(traitBounds.begin(), traitBounds.end(), [&](const auto& entry) {
             const auto& boundType = entry.first.first;
             const auto& boundTrait = entry.first.second;
             return (boundType == type || boundType->equalsIgnoringRegions(type)) && boundTrait.equalsIgnoringRegions(genericPath);
@@ -130,7 +130,7 @@ const HIRTypeData* TraitResolveCommon::getConstParamType(const Span& sp, unsigne
     return p->values.at(slot).type;
 }
 
-::std::ostream& operator<<(::std::ostream& s, const TraitResolveCommon::CachedEquality& x) {
+std::ostream& operator<<(std::ostream& s, const TraitResolveCommon::CachedEquality& x) {
     s << x.ty;
     return s;
 }

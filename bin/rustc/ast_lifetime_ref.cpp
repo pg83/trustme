@@ -1,7 +1,7 @@
 #include "ast_lifetime_ref.h"
 
 ASTLifetimeRef::ASTLifetimeRef(Ident name, u32 binding)
-    : name_(::std::move(name))
+    : name_(std::move(name))
     , binding_(binding)
 {
 }
@@ -12,7 +12,7 @@ ASTLifetimeRef::ASTLifetimeRef()
 }
 
 ASTLifetimeRef::ASTLifetimeRef(Ident name)
-    : ASTLifetimeRef(::std::move(name), BINDING_UNBOUND)
+    : ASTLifetimeRef(std::move(name), BINDING_UNBOUND)
 {
 }
 

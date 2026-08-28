@@ -38,12 +38,12 @@ struct Codepoint {
     }
 };
 
-extern ::std::string& operator+=(::std::string& s, const Codepoint& cp);
-extern ::std::ostream& operator<<(::std::ostream& s, const Codepoint& cp);
+extern std::string& operator+=(std::string& s, const Codepoint& cp);
+extern std::ostream& operator<<(std::ostream& s, const Codepoint& cp);
 
 extern Token LexFindOperator(stl::StringView s);
-extern Token LexFindOperator(const ::std::string& s);
-extern Token LexFindReservedWord(const ::std::string& s, ASTEdition edition);
+extern Token LexFindOperator(const std::string& s);
+extern Token LexFindReservedWord(const std::string& s, ASTEdition edition);
 
 typedef Codepoint uchar;
 
@@ -53,23 +53,23 @@ class Lexer: public TokenStream {
     unsigned int line;
     unsigned int lineOfs;
 
-    ::std::unique_ptr<::std::ifstream> istreamFp;
-    ::std::istream& istream;
+    std::unique_ptr<std::ifstream> istreamFp;
+    std::istream& istream;
     bool lastCharValid;
     Codepoint lastChar;
     bool initialShebangChecked;
     bool initialFrontmatterAllowed;
     bool initialFrontmatterPrecededByWhitespace;
-    ::std::vector<Codepoint> replayChars;
+    std::vector<Codepoint> replayChars;
     size_t replayCharOffset;
-    ::std::vector<Token> nextTokens;
+    std::vector<Token> nextTokens;
 
     ASTEdition edition;
     Ident::Hygiene hygiene_;
 
 public:
-    Lexer(u32& id, stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, ParseState ps);
-    Lexer(u32& id, stl::ObjPool& pool, const ::std::string& filename, ASTEdition edition, ParseState ps);
+    Lexer(u32& id, stl::ObjPool& pool, std::istringstream& ss, ASTEdition edition, ParseState ps);
+    Lexer(u32& id, stl::ObjPool& pool, const std::string& filename, ASTEdition edition, ParseState ps);
 
     Position getPosition() const override;
     Ident::Hygiene realGetHygiene() const override;

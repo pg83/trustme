@@ -24,7 +24,7 @@ namespace {
 
     int Counted::liveCount = 0;
 
-    ::std::ostream& operator<<(::std::ostream& os, const Counted& c) {
+    std::ostream& operator<<(std::ostream& os, const Counted& c) {
         return os << c.value;
     }
 

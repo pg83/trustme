@@ -17,15 +17,15 @@ HIRTraitPath::HIRTraitPath()
 }
 
 HIRTraitPath::HIRTraitPath(HIRGenericPath path)
-    : path(::std::move(path))
+    : path(std::move(path))
     , traitPtr(nullptr)
 {
 }
 
-HIRTraitPath::HIRTraitPath(HIRGenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr, HIRBoundConstness constness)
-    : path(::std::move(path))
-    , typeBounds(::std::move(typeBounds))
-    , traitBounds(::std::move(traitBounds))
+HIRTraitPath::HIRTraitPath(HIRGenericPath path, assocListT typeBounds, std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr, HIRBoundConstness constness)
+    : path(std::move(path))
+    , typeBounds(std::move(typeBounds))
+    , traitBounds(std::move(traitBounds))
     , constness(constness)
     , traitPtr(traitPtr)
 {
@@ -35,7 +35,7 @@ HIRTraitPath::~HIRTraitPath() = default;
 HIRTraitPath::HIRTraitPath(HIRTraitPath&&) = default;
 HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
 
-::std::ostream& operator<<(::std::ostream& os, const HIRSimplePath& x) {
+std::ostream& operator<<(std::ostream& os, const HIRSimplePath& x) {
     if (x.crateName() != "") {
         os << "::\"" << x.crateName() << "\"";
     } else if (x.components().size() == 0) {
@@ -48,7 +48,7 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRPathParams& x) {
+std::ostream& operator<<(std::ostream& os, const HIRPathParams& x) {
     bool hasArgs = (x.types.size() > 0 || x.values.size() > 0);
 
     if (hasArgs) {
@@ -66,12 +66,12 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRGenericPath& x) {
+std::ostream& operator<<(std::ostream& os, const HIRGenericPath& x) {
     os << x.path << x.params;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRTraitPath& x) {
+std::ostream& operator<<(std::ostream& os, const HIRTraitPath& x) {
     if (x.constness == HIRBoundConstness::Always) {
         os << "const ";
     } else if (x.constness == HIRBoundConstness::Maybe) {
@@ -103,7 +103,7 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRPath& x) {
+std::ostream& operator<<(std::ostream& os, const HIRPath& x) {
     switch (x.data.tag()) {
         case HIRPath::Data::TAG_Generic: {
             auto& e = x.data.as_Generic();
@@ -403,10 +403,10 @@ HIRTraitPath HIRTraitPath::clone() const {
     HIRTraitPath rv{path.clone(), {}, {}, traitPtr, constness};
 
     for (const auto& assoc : typeBounds) {
-        rv.typeBounds.insert(::std::make_pair(assoc.first, assoc.second.clone()));
+        rv.typeBounds.insert(std::make_pair(assoc.first, assoc.second.clone()));
     }
     for (const auto& assoc : traitBounds) {
-        rv.traitBounds.insert(::std::make_pair(assoc.first, assoc.second.clone()));
+        rv.traitBounds.insert(std::make_pair(assoc.first, assoc.second.clone()));
     }
 
     return rv;
@@ -804,21 +804,21 @@ HIRSimplePath::HIRSimplePath()
 }
 
 HIRSimplePath::HIRSimplePath(RcString crate)
-    : HIRSimplePath(crate, ::std::span<const RcString>())
+    : HIRSimplePath(crate, std::span<const RcString>())
 {
 }
 
-HIRSimplePath::HIRSimplePath(RcString crate, ::std::vector<RcString> components)
-    : HIRSimplePath(crate, ::std::span<const RcString>(components))
+HIRSimplePath::HIRSimplePath(RcString crate, std::vector<RcString> components)
+    : HIRSimplePath(crate, std::span<const RcString>(components))
 {
 }
 
-HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<RcString> components)
-    : HIRSimplePath(crate, ::std::span<const RcString>(components.begin(), components.end()))
+HIRSimplePath::HIRSimplePath(RcString crate, std::span<RcString> components)
+    : HIRSimplePath(crate, std::span<const RcString>(components.begin(), components.end()))
 {
 }
 
-HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<const RcString> components) {
+HIRSimplePath::HIRSimplePath(RcString crate, std::span<const RcString> components) {
     if (crate.c_str()[0] == '\0' && components.empty()) {
         p = nullptr;
         return;
@@ -844,8 +844,8 @@ HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<const RcString> compone
     p = addPath(h1, h2, std::move(members));
 }
 
-HIRSimplePath::HIRSimplePath(RcString crate, ::std::initializer_list<RcString> components)
-    : HIRSimplePath(std::move(crate), ::std::span<const RcString>(components.begin(), components.end()))
+HIRSimplePath::HIRSimplePath(RcString crate, std::initializer_list<RcString> components)
+    : HIRSimplePath(std::move(crate), std::span<const RcString>(components.begin(), components.end()))
 {
 }
 
@@ -853,7 +853,7 @@ RcString HIRSimplePath::crateName() const {
     return p ? p->members.front() : RcString();
 }
 
-::std::vector<RcString> HIRSimplePath::componentsVec() const {
+std::vector<RcString> HIRSimplePath::componentsVec() const {
     const auto values = components();
     return {values.begin(), values.end()};
 }
@@ -888,7 +888,7 @@ HIRTraitPath::AtyBound HIRTraitPath::AtyBound::clone() const {
     for (const auto& t : traits) {
         newTraits.push_back(t.clone());
     }
-    return AtyBound{sourceTrait.clone(), atyParams.clone(), ::std::move(newTraits)};
+    return AtyBound{sourceTrait.clone(), atyParams.clone(), std::move(newTraits)};
 }
 
 HIRPath::HIRPath(Data data)
@@ -899,7 +899,7 @@ HIRPath::HIRPath(Data data)
 HIRConstGenericUnevaluated::HIRConstGenericUnevaluated() {
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRCompare& x) {
+std::ostream& operator<<(std::ostream& os, const HIRCompare& x) {
     switch (x) {
         case HIRCompare::Equal:
             os << "Equal";
@@ -925,7 +925,7 @@ HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y) {
     return x;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRTraitPath::AtyEqual& x) {
+std::ostream& operator<<(std::ostream& os, const HIRTraitPath::AtyEqual& x) {
     os << x.type;
     return os;
 }

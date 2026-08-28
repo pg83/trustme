@@ -66,7 +66,7 @@ struct HIRGenericRef {
         return this->ord(x) == OrdLess;
     }
 
-    void fmt(::std::ostream& os) const;
+    void fmt(std::ostream& os) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRGenericRef& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRGenericRef& x);
 };

@@ -262,9 +262,9 @@ namespace {
 
     struct ExprVisitorPrint: public HIRExprVisitor {
         const Context& context;
-        ::std::ostream& os;
+        std::ostream& os;
 
-        ExprVisitorPrint(const Context& context, ::std::ostream& os);
+        ExprVisitorPrint(const Context& context, std::ostream& os);
 
         void visit(HIRExprNodeBlock& node) override;
 
@@ -441,7 +441,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                 return sp;
             }
 
-            void fmt(::std::ostream& os) const override {
+            void fmt(std::ostream& os) const override {
                 os << "Deferred rigid projection self " << leftSelf << " = " << rightSelf;
             }
 
@@ -1175,8 +1175,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
             HIRPattern& pattern;
             HIRPatternBinding::Type outerMode;
 
-            mutable ::std::vector<HIRTypeRef> tempIvars;
-            mutable ::std::optional<HIRTypeRef> possibleType;
+            mutable std::vector<HIRTypeRef> tempIvars;
+            mutable std::optional<HIRTypeRef> possibleType;
             mutable const HIRPattern* possibleTypePattern = nullptr;
 
             MatchErgonomicsRevisit(Span sp, bool isIrrefutable, HIRTypeRef outer, HIRPattern& pat, HIRPatternBinding::Type bindingMode = HIRPatternBinding::Type::Move)
@@ -1192,7 +1192,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 return sp;
             }
 
-            void fmt(::std::ostream& os) const override {
+            void fmt(std::ostream& os) const override {
                 os << "MatchErgonomicsRevisit { " << pattern << " : " << outerTy << " }";
             }
 
@@ -1210,7 +1210,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 return true;
             }
 
-            ::std::optional<HIRTypeRef> getPossibleTypeVal(Context& context, HIRPattern::Value& pv) const {
+            std::optional<HIRTypeRef> getPossibleTypeVal(Context& context, HIRPattern::Value& pv) const {
                 switch (pv.tag()) {
                     case HIRPatternValue::TAG_Integer: {
                         auto& ve = pv.as_Integer();
@@ -1245,7 +1245,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         } else if (ve.path.data.is_Generic()) {
                             TODO(sp, "Look up pattern value: " << ve.path);
                         } else {
-                            return ::std::nullopt;
+                            return std::nullopt;
                         }
                         break;
                     }
@@ -1253,8 +1253,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 UNREACHABLE();
             }
 
-            ::std::optional<HIRTypeRef> getPossibleTypeInner(Context& context, HIRPattern& pattern) const {
-                ::std::optional<HIRTypeRef> possibleType;
+            std::optional<HIRTypeRef> getPossibleTypeInner(Context& context, HIRPattern& pattern) const {
+                std::optional<HIRTypeRef> possibleType;
                 switch (pattern.data.tag()) {
                     case HIRPatternData::TAG_Any: {
                         break;
@@ -1301,7 +1301,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         for (const auto& ty : tempIvars) {
                             tuple.push_back(ty);
                         }
-                        possibleType = context.crate.types.tuple(::std::move(tuple));
+                        possibleType = context.crate.types.tuple(std::move(tuple));
                         break;
                     }
                     case HIRPatternData::TAG_SplitTuple: {
@@ -1434,7 +1434,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 return possibleType;
             }
 
-            const ::std::optional<HIRTypeRef>& getPossibleType(Context& context, HIRPattern& pattern) const {
+            const std::optional<HIRTypeRef>& getPossibleType(Context& context, HIRPattern& pattern) const {
                 if (!possibleType || possibleTypePattern != &pattern) {
                     possibleType = getPossibleTypeInner(context, pattern);
                     possibleTypePattern = &pattern;
@@ -1715,7 +1715,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 HIRBorrowType bt = HIRBorrowType::Owned;
                 const auto* ty = context.revealOpaqueType(type);
                 while (const auto* te = ty->opt_Borrow()) {
-                    bt = ::std::min(bt, te->type);
+                    bt = std::min(bt, te->type);
                     ty = context.revealOpaqueType(te->inner);
                     nDeref++;
                 }
@@ -1790,7 +1790,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         derefKind = HIRPattern::DerefKind::Box;
                         target = inner;
                     } else {
-                        ::std::optional<HIRTypeRef> implType;
+                        std::optional<HIRTypeRef> implType;
                         const auto result = context.resolve.autoderefStep(sp, ty, target, &implType);
                         if (result == TraitResolution::AutoderefResult::Ambiguous) {
                             return false;
@@ -1808,7 +1808,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         derefKind = unique ? HIRPattern::DerefKind::Unique : HIRPattern::DerefKind::Shared;
                     }
 
-                    HIRPattern inner(::std::vector<HIRPatternBinding>{}, mv$(pattern.data));
+                    HIRPattern inner(std::vector<HIRPatternBinding>{}, mv$(pattern.data));
                     pattern.data = HIRPattern::Data::make_Deref({derefKind, target, box$(mv$(inner))});
                     auto& deref = pattern.data.as_Deref();
                     return this->revisitInner(context, *deref.sub, target, bindingMode);
@@ -1877,7 +1877,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         }
 
                         HIRTypeRef target;
-                        ::std::optional<HIRTypeRef> implType;
+                        std::optional<HIRTypeRef> implType;
                         const auto result = context.resolve.autoderefStep(sp, ty, target, &implType);
                         if (result == TraitResolution::AutoderefResult::Ambiguous) {
                             return false;
@@ -2078,7 +2078,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
 
                             rv = true;
                             for (auto& fieldPat : e.subPatterns) {
-                                unsigned int fIdx = ::std::find_if(sd.begin(), sd.end(), [&](const HIRStructField& x) {
+                                unsigned int fIdx = std::find_if(sd.begin(), sd.end(), [&](const HIRStructField& x) {
                                     return x.name == fieldPat.first;
                                 }) - sd.begin();
                                 if (fIdx == sd.size()) {
@@ -2429,7 +2429,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                 break;
             }
             HIRTypeRef target;
-            ::std::optional<HIRTypeRef> implType;
+            std::optional<HIRTypeRef> implType;
             const auto result = resolve.autoderefStep(sp, ty, target, &implType);
             if (result != TraitResolution::AutoderefResult::Match || !implType) {
                 ERROR(sp, E0000, "Type " << ty << " cannot be used in a deref pattern");
@@ -2470,7 +2470,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     this->handlePatternDirectInner(sp, e.subPatterns[i], te[i]);
                 }
             } else {
-                ::std::vector<HIRTypeRef> subTypes;
+                std::vector<HIRTypeRef> subTypes;
                 for (unsigned int i = 0; i < e.subPatterns.size(); i++) {
                     subTypes.push_back(this->ivars.newIvarTr());
                     this->handlePatternDirectInner(sp, e.subPatterns[i], subTypes[i]);
@@ -2503,13 +2503,13 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     ERROR(sp, E0000, "Tuple pattern on non-tuple");
                 }
 
-                ::std::vector<HIRTypeRef> leadingTys;
+                std::vector<HIRTypeRef> leadingTys;
                 leadingTys.reserve(e.leading.size());
                 for (auto& subpat : e.leading) {
                     leadingTys.push_back(this->ivars.newIvarTr());
                     this->handlePatternDirectInner(sp, subpat, leadingTys.back());
                 }
-                ::std::vector<HIRTypeRef> trailingTys;
+                std::vector<HIRTypeRef> trailingTys;
                 for (auto& subpat : e.trailing) {
                     trailingTys.push_back(this->ivars.newIvarTr());
                     this->handlePatternDirectInner(sp, subpat, trailingTys.back());
@@ -2518,11 +2518,11 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                 struct SplitTuplePatRevisit: public Revisitor {
                     Span sp;
                     HIRTypeRef outerTy;
-                    ::std::vector<HIRTypeRef> leadingTys;
-                    ::std::vector<HIRTypeRef> trailingTys;
+                    std::vector<HIRTypeRef> leadingTys;
+                    std::vector<HIRTypeRef> trailingTys;
                     unsigned int& patTotalSize;
 
-                    SplitTuplePatRevisit(Span sp, HIRTypeRef outer, ::std::vector<HIRTypeRef> leading, ::std::vector<HIRTypeRef> trailing, unsigned int& patTotalSize)
+                    SplitTuplePatRevisit(Span sp, HIRTypeRef outer, std::vector<HIRTypeRef> leading, std::vector<HIRTypeRef> trailing, unsigned int& patTotalSize)
                         : sp(mv$(sp))
                         , outerTy(mv$(outer))
                         , leadingTys(mv$(leading))
@@ -2535,7 +2535,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                         return sp;
                     }
 
-                    void fmt(::std::ostream& os) const override {
+                    void fmt(std::ostream& os) const override {
                         os << "SplitTuplePatRevisit { " << outerTy << " = (" << leadingTys << ", ..., " << trailingTys << ") }";
                     }
 
@@ -2611,7 +2611,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                             return sp;
                         }
 
-                        void fmt(::std::ostream& os) const override {
+                        void fmt(std::ostream& os) const override {
                             os << "SlicePatRevisit { " << inner << ", " << type << ", " << size;
                         }
 
@@ -2706,7 +2706,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                             return sp;
                         }
 
-                        void fmt(::std::ostream& os) const override {
+                        void fmt(std::ostream& os) const override {
                             os << "SplitSlice inner=" << inner << ", outer=" << type << ", binding=" << varTy << ", " << minSize;
                         }
 
@@ -2835,7 +2835,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
             auto ms = MonomorphStatePtr(crate.types, nullptr, &e.path.data.as_Generic().params, nullptr);
 
             for (auto& fieldPat : e.subPatterns) {
-                unsigned int fIdx = ::std::find_if(sd.begin(), sd.end(), [&](const auto& x) {
+                unsigned int fIdx = std::find_if(sd.begin(), sd.end(), [&](const auto& x) {
                     return x.name == fieldPat.first;
                 }) - sd.begin();
                 if (fIdx == sd.size()) {
@@ -3110,7 +3110,7 @@ void Context::addRevisit(HIRExprNode& node) {
     this->toVisit.push_back(&node);
 }
 
-void Context::addRevisitAdv(::std::unique_ptr<Revisitor> entPtr) {
+void Context::addRevisitAdv(std::unique_ptr<Revisitor> entPtr) {
     this->advRevisits.push_back(mv$(entPtr));
 }
 
@@ -3520,7 +3520,7 @@ namespace {
             HIRTypeRef tmpTy;
             const HIRTypeData* outTyP = src;
             unsigned int count = 0;
-            ::std::vector<HIRTypeRef> types;
+            std::vector<HIRTypeRef> types;
             while ((outTyP = context.resolve.autoderef(sp, outTyP, tmpTy))) {
                 const auto& outTy = context.ivars.getType(outTyP);
                 count += 1;
@@ -4393,7 +4393,7 @@ namespace {
             } else if (const auto* dep = dst->opt_Borrow()) {
                 if (dep->type == se.type && se.inner->is_Diverge() && contextMut && nodePtrPtr && *nodePtrPtr) {
                     HIRExprNodeP* borrowNodePtr = nodePtrPtr;
-                    ::std::vector<HIRExprNodeBlock*> blocks;
+                    std::vector<HIRExprNodeBlock*> blocks;
                     while (auto* block = cast<HIRExprNodeBlock>(borrowNodePtr->get())) {
                         if (!block->valueNode) {
                             break;
@@ -4495,14 +4495,14 @@ namespace {
         } else if (src->is_NodeType() && src->as_NodeType().is_Closure()) {
             const auto* nodeP = src->as_NodeType().as_Closure();
             if (dst->is_ErasedType()) {
-                ::std::vector<HIRTypeRef> closureArgs;
+                std::vector<HIRTypeRef> closureArgs;
                 closureArgs.reserve(nodeP->args.size());
                 for (const auto& arg : nodeP->args) {
                     closureArgs.push_back(arg.second);
                 }
                 HIRPathParams desiredParams{context.crate.types.tuple(mv$(closureArgs))};
 
-                ::std::vector<HIRTypeRef> expectedArgs;
+                std::vector<HIRTypeRef> expectedArgs;
                 HIRTypeRef expectedOutput;
                 const auto inspectExpectation = [&](ImplRef impl) {
                     auto params = impl.getTraitParams(context.crate.types);
@@ -4519,7 +4519,7 @@ namespace {
                     }
 
                     bool hasExpectation = false;
-                    ::std::vector<HIRTypeRef> concreteArgs;
+                    std::vector<HIRTypeRef> concreteArgs;
                     concreteArgs.reserve(args.size());
                     for (const auto& arg : args) {
                         if (typeContainsImplPlaceholder(context.crate.types, arg)) {
@@ -4694,7 +4694,7 @@ namespace {
         const auto& sp = nodePtr->span();
         const auto& tyDst = context.ivars.getType(v.leftTy);
         const auto& tySrc = context.ivars.getType(nodePtr->resType);
-        const bool hasPendingDerefTarget = ::std::any_of(context.linkAssoc.begin(), context.linkAssoc.end(), [&](const Context::Associated& rule) {
+        const bool hasPendingDerefTarget = std::any_of(context.linkAssoc.begin(), context.linkAssoc.end(), [&](const Context::Associated& rule) {
             return rule.operatorKind == TypeckPrimitiveOperator::Deref && context.ivars.typesEqual(rule.leftTy, tySrc);
         });
         if (hasPendingDerefTarget) {
@@ -4779,7 +4779,7 @@ namespace {
             }
         }
 
-        ::std::optional<HIRTypeRef> outputType;
+        std::optional<HIRTypeRef> outputType;
 
         struct H {
             static bool typeIsNum(const HIRTypeData* t) {
@@ -5006,7 +5006,7 @@ namespace {
         for (size_t typeIndex = 0; typeIndex < v.params.types.size(); typeIndex++) {
             appendCoercionGoals(v.params.types[typeIndex], static_cast<unsigned>(typeIndex), false);
         }
-        const bool hasSelfCoercionGoal = ::std::any_of(coercionGoals.begin(), coercionGoals.end(), [](const SolverCoercionConstraint& constraint) {
+        const bool hasSelfCoercionGoal = std::any_of(coercionGoals.begin(), coercionGoals.end(), [](const SolverCoercionConstraint& constraint) {
             return constraint.isSelf;
         });
         bool lateClosureOutput = false;
@@ -5028,7 +5028,7 @@ namespace {
             v.params,
             v.implTy,
             [&](SolverResponse value) {
-            response = ::std::move(value);
+            response = std::move(value);
             hasResponse = true;
             return true;
         },
@@ -5100,7 +5100,7 @@ namespace {
 
 void Context::registerSolverObligation(const Span& sp, HIRTypeRef type, HIRTraitPath trait) {
     if (trait.typeBounds.empty()) {
-        addTraitBound(sp, type, trait.path.path, ::std::move(trait.path.params));
+        addTraitBound(sp, type, trait.path.path, std::move(trait.path.params));
         return;
     }
     for (auto& associated : trait.typeBounds) {
@@ -5116,7 +5116,7 @@ void Context::registerClosureReturnObligation(const Span& sp, const HIRExprNodeC
         equateTypes(sp, obligation.expected, expected);
         return;
     }
-    closureReturnObligations.pushBack(ClosureReturnObligation{closure, ::std::move(expected)});
+    closureReturnObligations.pushBack(ClosureReturnObligation{closure, std::move(expected)});
     ivars.markChange();
 }
 
@@ -5155,7 +5155,7 @@ HIRTypeRef Context::expandAssociatedTypes(const Span& sp, HIRTypeRef input) cons
         context.applySolverResponse(sp, response);
         return false;
     });
-    return resolve.expandAssociatedTypes(sp, ::std::move(input), &effects);
+    return resolve.expandAssociatedTypes(sp, std::move(input), &effects);
 }
 
 const HIRTypeData* Context::expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp) const {
@@ -5186,16 +5186,16 @@ void Context::compactIvars() {
 
 namespace {
     bool pathParamsHaveUntrackedConst(const HIRPathParams& params) {
-        return ::std::any_of(params.values.begin(), params.values.end(), [](const auto& value) {
+        return std::any_of(params.values.begin(), params.values.end(), [](const auto& value) {
             return value.is_Infer() || value.is_Unevaluated();
         });
     }
 
     struct AssociatedStallCollector {
         Context& context;
-        ::std::vector<Context::Associated::StallDependency>& dependencies;
-        ::std::vector<HIRTypeRef> pending;
-        ::std::vector<HIRTypeRef> visited;
+        std::vector<Context::Associated::StallDependency>& dependencies;
+        std::vector<HIRTypeRef> pending;
+        std::vector<HIRTypeRef> visited;
         bool hasRawInfer = false;
 
         void addType(HIRTypeRef type);
@@ -5247,12 +5247,12 @@ namespace {
         if (rule.stalledOn.empty()) {
             return false;
         }
-        return ::std::all_of(rule.stalledOn.begin(), rule.stalledOn.end(), [&](const auto& dependency) {
+        return std::all_of(rule.stalledOn.begin(), rule.stalledOn.end(), [&](const auto& dependency) {
             return context.ivars.getType(dependency.index) == dependency.resolved;
         });
     }
 
-    void mergeAssociatedPossibilities(Context& context, const ::std::vector<Context::Associated::CapturedIvarPossible>& captured) {
+    void mergeAssociatedPossibilities(Context& context, const std::vector<Context::Associated::CapturedIvarPossible>& captured) {
         for (const auto& value : captured) {
             const auto resolved = context.ivars.getType(value.index);
             if (!resolved->is_Infer() || resolved->as_Infer().index != value.index) {
@@ -5267,12 +5267,12 @@ namespace {
 
     struct IvarDependencyIndex {
         Context& context;
-        ::std::vector<::std::vector<unsigned int>> associatedTargets;
-        ::std::vector<::std::vector<unsigned int>> possibilityTargets;
+        std::vector<std::vector<unsigned int>> associatedTargets;
+        std::vector<std::vector<unsigned int>> possibilityTargets;
 
-        static void collectDirectIvars(const HIRTypeData* type, ::std::vector<unsigned int>& out);
+        static void collectDirectIvars(const HIRTypeData* type, std::vector<unsigned int>& out);
 
-        static void deduplicate(::std::vector<unsigned int>& values);
+        static void deduplicate(std::vector<unsigned int>& values);
 
         IvarDependencyIndex(Context& context);
 
@@ -5280,17 +5280,17 @@ namespace {
     };
 
     struct IvarCoercionRefs {
-        ::std::vector<const Context::Coercion*> coercions;
+        std::vector<const Context::Coercion*> coercions;
     };
 
     struct IvarCoercionIndex {
         const Context& context;
-        ::std::vector<IvarCoercionRefs> refs;
+        std::vector<IvarCoercionRefs> refs;
 
-        void collectIvars(const HIRTypeData* root, ::std::vector<unsigned int>& out) const;
+        void collectIvars(const HIRTypeData* root, std::vector<unsigned int>& out) const;
 
         template <typename T>
-        void addRefs(const ::std::vector<unsigned int>& dependencies, ::std::vector<T> IvarCoercionRefs::* member, T value);
+        void addRefs(const std::vector<unsigned int>& dependencies, std::vector<T> IvarCoercionRefs::* member, T value);
 
         explicit IvarCoercionIndex(const Context& context);
 
@@ -5504,7 +5504,7 @@ namespace {
         FinalOption,
     };
 
-    ::std::ostream& operator<<(::std::ostream& os, IvarPossFallbackType t) {
+    std::ostream& operator<<(std::ostream& os, IvarPossFallbackType t) {
         switch (t) {
             case IvarPossFallbackType::None:
                 os << "";
@@ -5558,7 +5558,7 @@ namespace {
 
         bool operator==(const PossibleType& o) const;
 
-        ::std::ostream& fmt(::std::ostream& os) const;
+        std::ostream& fmt(std::ostream& os) const;
 
         bool isSource() const;
 
@@ -5650,7 +5650,7 @@ namespace {
         {
             bool allowUnsized = !(i < context.ivarsSized.size() ? context.ivarsSized.at(i) : false);
 
-            ::std::vector<PossibleType> possibleTys;
+            std::vector<PossibleType> possibleTys;
             bool addPlaceholders = (fallbackTy < IvarPossFallbackType::IgnoreWeakDisable);
             if (addPlaceholders && ivarEnt.forceNoFrom) {
                 possibleTys.push_back(PossibleType::barrier(PossibleType::UnsizeFrom));
@@ -5683,8 +5683,8 @@ namespace {
 
             // TODO: Rewrite ALL of the below (extract the helpers to somewhere useful)
 
-            if (fallbackTy != IvarPossFallbackType::None && ::std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1 && !ivarEnt.forceNoFrom) {
-                const auto& ent = *::std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS);
+            if (fallbackTy != IvarPossFallbackType::None && std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1 && !ivarEnt.forceNoFrom) {
+                const auto& ent = *std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS);
                 if (!context.ivars.typeContainsIvars(ent.ty) && !(ent.ty)->is_Diverge()) {
                     if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, ent.ty)) {
                         context.equateTypes(sp, tyL, ent.ty);
@@ -5700,9 +5700,9 @@ namespace {
                 }
             }
 
-            if (::std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS) == 1 && ::std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1 && !ivarEnt.forceNoFrom && !ivarEnt.forceNoTo) {
-                const auto& entS = *::std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS);
-                const auto& entD = *::std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS);
+            if (std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS) == 1 && std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1 && !ivarEnt.forceNoFrom && !ivarEnt.forceNoTo) {
+                const auto& entS = *std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS);
+                const auto& entD = *std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS);
 
                 // TODO: And this ivar isn't Sized bounded?
                 if (entS.isCoerce() && entD.isCoerce()) {
@@ -5771,7 +5771,7 @@ namespace {
 
             ASSERT_BUG(
                 sp,
-                ::std::all_of(
+                std::all_of(
                     possibleTys.begin(),
                     possibleTys.end(),
                     [](const PossibleType& ty) {
@@ -5789,7 +5789,7 @@ namespace {
             {
                 nSrcIvars = 0;
                 nDstIvars = 0;
-                auto newEnd = ::std::remove_if(possibleTys.begin(), possibleTys.end(), [&](const PossibleType& ent) {
+                auto newEnd = std::remove_if(possibleTys.begin(), possibleTys.end(), [&](const PossibleType& ent) {
                     // TODO: Should this remove Unbound associated types too?
                     if ((ent.ty)->is_Infer()) {
                         if (ent.isSource()) {
@@ -5816,7 +5816,7 @@ namespace {
             if (functionSourceCount >= 2 && (fallbackTy == IvarPossFallbackType::FinalOption || nSrcIvars == 0) && std::all_of(possibleTys.begin(), possibleTys.end(), [&](const auto& possible) {
                 return !possible.isSource() || isFunctionSource(possible);
             })) {
-                ::std::optional<HIRTypeDataFunctionPointer> target;
+                std::optional<HIRTypeDataFunctionPointer> target;
                 for (const auto& possible : possibleTys) {
                     if (!possible.isSource()) {
                         continue;
@@ -5849,7 +5849,7 @@ namespace {
             // TODO: Do the oposite for the destination types (least permissive pointer, pick any Sized type)
             if (nSrcIvars == 0 || fallbackTy == IvarPossFallbackType::Assume) {
                 const HIRTypeData* ptrTy = nullptr;
-                if (::std::any_of(possibleTys.begin(), possibleTys.end(), [&](const auto& ent) {
+                if (std::any_of(possibleTys.begin(), possibleTys.end(), [&](const auto& ent) {
                     return ent.cls == PossibleType::CoerceFrom;
                 })) {
                     for (const auto& ent : possibleTys) {
@@ -5890,7 +5890,7 @@ namespace {
                 }
             }
 
-            if (::std::all_of(possibleTys.begin(), possibleTys.end(), PossibleType::isCoerceS)) {
+            if (std::all_of(possibleTys.begin(), possibleTys.end(), PossibleType::isCoerceS)) {
                 size_t numDistinct = 0;
                 for (const auto& ent : possibleTys) {
                     if (!ent.isDest()) {
@@ -5948,7 +5948,7 @@ namespace {
                 }
             }
 
-            if (::std::all_of(possibleTys.begin(), possibleTys.end(), PossibleType::isCoerceS)) {
+            if (std::all_of(possibleTys.begin(), possibleTys.end(), PossibleType::isCoerceS)) {
                 size_t numDistinct = 0;
                 for (const auto& ent : possibleTys) {
                     if (!ent.isSource()) {
@@ -6037,7 +6037,7 @@ namespace {
                         }
                     }
                 }
-                auto newEnd = ::std::remove_if(possibleTys.begin(), possibleTys.end(), [](const auto& e) {
+                auto newEnd = std::remove_if(possibleTys.begin(), possibleTys.end(), [](const auto& e) {
                     return !e.isActive();
                 });
                 possibleTys.erase(newEnd, possibleTys.end());
@@ -6046,7 +6046,7 @@ namespace {
             // TODO: If in fallback mode, pick the most permissive option
 
             if (fallbackTy == IvarPossFallbackType::Assume) {
-                if (::std::all_of(possibleTys.begin(), possibleTys.end(), PossibleType::isCoerceS) && nIvars == 0) {
+                if (std::all_of(possibleTys.begin(), possibleTys.end(), PossibleType::isCoerceS) && nIvars == 0) {
                     const HIRTypeData* destType = nullptr;
                     bool anyIvarPresent = false;
                     bool isUnordered = false;
@@ -6233,14 +6233,14 @@ namespace {
                 }
             }
             if (!honourDisable) {
-                if (nSrcIvars == 0 && ::std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1) {
-                    auto it = ::std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS);
+                if (nSrcIvars == 0 && std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1) {
+                    auto it = std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS);
                     const auto* newTy = it->ty;
                     context.equateTypes(sp, tyL, newTy);
                     return true;
                 }
-                if (fallbackTy != IvarPossFallbackType::None && nDstIvars == 0 && ::std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS) == 1) {
-                    auto it = ::std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS);
+                if (fallbackTy != IvarPossFallbackType::None && nDstIvars == 0 && std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS) == 1) {
+                    auto it = std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS);
                     const auto* newTy = it->ty;
                     if (it->isCoerce()) {
                         context.equateTypes(sp, tyL, newTy);
@@ -6360,7 +6360,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                 }
                 rule.implTy = context.expandAssociatedTypes(rule.span, mv$(rule.implTy));
 
-                ::std::vector<Context::Associated::CapturedIvarPossible> capturedPossibilities;
+                std::vector<Context::Associated::CapturedIvarPossible> capturedPossibilities;
                 AssociatedCheckResult result;
                 {
                     auto* previousSink = context.possibleIvarSink;
@@ -6408,7 +6408,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                 }
             }
             {
-                ::std::vector<bool> advRevisitRemoveList;
+                std::vector<bool> advRevisitRemoveList;
                 size_t len = context.advRevisits.size();
                 for (size_t i = 0; i < len; i++) {
                     auto& ent = *context.advRevisits[i];
@@ -6422,14 +6422,14 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
             }
         }
 
-        ::std::unique_ptr<IvarCoercionIndex> ivarCoercionIndex;
+        std::unique_ptr<IvarCoercionIndex> ivarCoercionIndex;
         if (!context.ivars.peekChanged()) {
-            ivarCoercionIndex = ::std::make_unique<IvarCoercionIndex>(context);
+            ivarCoercionIndex = std::make_unique<IvarCoercionIndex>(context);
         }
 
         if (!context.ivars.peekChanged()) {
             // TODO: De-duplicate this with the block ~80 lines below
-            ::std::unique_ptr<IvarDependencyIndex> dependencyIndex;
+            std::unique_ptr<IvarDependencyIndex> dependencyIndex;
             for (unsigned int sourcePass = 0; sourcePass < 2; sourcePass++) {
                 for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
                     bool hasConcreteSource = false;
@@ -6444,7 +6444,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                     }
                     if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i])) {
                         if (!dependencyIndex) {
-                            dependencyIndex = ::std::make_unique<IvarDependencyIndex>(context);
+                            dependencyIndex = std::make_unique<IvarDependencyIndex>(context);
                         }
                         dependencyIndex->disableDependents(i);
                     }
@@ -6489,7 +6489,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                 }
             }
             {
-                ::std::vector<bool> advRevisitRemoveList;
+                std::vector<bool> advRevisitRemoveList;
                 size_t len = context.advRevisits.size();
                 for (size_t i = 0; i < len; i++) {
                     auto& ent = *context.advRevisits[i];
@@ -6670,7 +6670,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                     }
                 }
 
-                const bool hasUnevaluated = ::std::any_of(params->values.begin(), params->values.end(), [](const HIRConstGeneric& value) {
+                const bool hasUnevaluated = std::any_of(params->values.begin(), params->values.end(), [](const HIRConstGeneric& value) {
                     return value.is_Unevaluated();
                 });
                 if (!hasUnevaluated) {
@@ -6746,7 +6746,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                     }
                 }
 
-                const bool hasUnevaluated = ::std::any_of(paramsPtr->values.begin(), paramsPtr->values.end(), [](const HIRConstGeneric& value) {
+                const bool hasUnevaluated = std::any_of(paramsPtr->values.begin(), paramsPtr->values.end(), [](const HIRConstGeneric& value) {
                     return value.is_Unevaluated();
                 });
                 if (!hasUnevaluated) {
@@ -7237,7 +7237,7 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
         }
         fcnPtr = &it->second.data;
         implPtr = &impl;
-        implEqualities = ::std::move(candidateEqualities);
+        implEqualities = std::move(candidateEqualities);
         count++;
         return false;
     });
@@ -7309,9 +7309,9 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
 
 struct ExprVisitorTagStaleIvars: public HIRExprVisitorDef {
     struct Mapper final: public MonomorphiserNop {
-        mutable Vector<::std::pair<unsigned, unsigned>> valueIndexes_;
+        mutable Vector<std::pair<unsigned, unsigned>> valueIndexes_;
 
-        unsigned taggedIndex(Vector<::std::pair<unsigned, unsigned>>& indexes, unsigned original) const;
+        unsigned taggedIndex(Vector<std::pair<unsigned, unsigned>>& indexes, unsigned original) const;
 
         using MonomorphiserNop::MonomorphiserNop;
 
@@ -7366,11 +7366,11 @@ struct ExprVisitorEnum: public HIRExprVisitor {
         RetTarget(const HIRTypeData* retType, const HIRTypeData* resumeType, const HIRTypeData* yieldType);
     };
 
-    ::std::vector<RetTarget> closureRetTypes;
+    std::vector<RetTarget> closureRetTypes;
 
-    ::std::vector<bool> innerCoerceEnabledStack;
+    std::vector<bool> innerCoerceEnabledStack;
 
-    ::std::vector<HIRExprNodeLoop*> loopBlocks;
+    std::vector<HIRExprNodeLoop*> loopBlocks;
 
     tTraitList traits;
 
@@ -7638,7 +7638,7 @@ void Context::IVarPossible::mergeFrom(const IVarPossible& source) {
 
     auto mergeCoercions = [](auto& destination, const auto& values) {
         for (const auto& value : values) {
-            const auto found = ::std::find_if(destination.begin(), destination.end(), [&](const auto& existing) {
+            const auto found = std::find_if(destination.begin(), destination.end(), [&](const auto& existing) {
                 return existing.op == value.op && existing.ty == value.ty;
             });
             if (found == destination.end()) {
@@ -7684,8 +7684,8 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
 
 namespace {
     struct RpitOriginMonomorph: public HIRMatchGenerics, public Monomorphiser {
-        ::std::map<u32, HIRTypeRef> typeBindings;
-        ::std::map<u32, HIRConstGeneric> valueBindings;
+        std::map<u32, HIRTypeRef> typeBindings;
+        std::map<u32, HIRConstGeneric> valueBindings;
 
         explicit RpitOriginMonomorph(HIRTypeInterner& types);
 
@@ -7830,12 +7830,12 @@ const HIRTypeData* Context::coercionHint(const HIRExprNode& node) const {
     return it == coercionHints.end() ? nullptr : it->second;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Context::Coercion& v) {
+std::ostream& operator<<(std::ostream& os, const Context::Coercion& v) {
     os << "R" << v.ruleIdx << " " << v.leftTy << " := " << v.rightNodePtr << " " << &**v.rightNodePtr << " (" << (*v.rightNodePtr)->resType << ")";
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Context::Associated& v) {
+std::ostream& operator<<(std::ostream& os, const Context::Associated& v) {
     os << "R" << v.ruleIdx << " ";
     if (v.name == "") {
         os << "req ty " << v.implTy << " impl " << v.trait << v.params;
@@ -8283,7 +8283,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
     unsigned int derefCount = 0;
     HIRTypeRef tmpType;
     const auto* currentTy = node.value->resType;
-    ::std::vector<HIRTypeRef> derefResTypes;
+    std::vector<HIRTypeRef> derefResTypes;
 
     // TODO: (CHECK) rustc doesn't use the index value type when finding the indexable item, trustme does.
     HIRPathParams traitPp;
@@ -8515,7 +8515,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
 
     HIRPathParams traitPp;
     {
-        ::std::vector<HIRTypeRef> argTypes;
+        std::vector<HIRTypeRef> argTypes;
         for (const auto& argTy : node.argIvars) {
             argTypes.push_back(this->context.getType(argTy));
         }
@@ -8709,7 +8709,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
 
     // TODO: Obtain a list of avaliable methods at that level?
 
-    ::std::vector<::std::pair<TraitResolution::AutoderefBorrow, HIRPath>> possibleMethods;
+    std::vector<std::pair<TraitResolution::AutoderefBorrow, HIRPath>> possibleMethods;
     unsigned int derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.method, this->context.getType(node.resType), this->isFallback, possibleMethods);
     if ((derefCount == ~0u || possibleMethods.empty()) && node.method != node.fallbackMethod) {
         possibleMethods.clear();
@@ -8914,7 +8914,7 @@ tryAgain:
             while (derefCount--) {
                 auto span = nodePtr->span();
                 auto sourceTy = curTy;
-                ::std::optional<HIRTypeRef> implType;
+                std::optional<HIRTypeRef> implType;
                 auto result = this->context.resolve.autoderefStep(span, sourceTy, tmpTy, &implType);
                 ASSERT_BUG(span, result == TraitResolution::AutoderefResult::Match, "Selected autoderef step no longer has a unique response for " << sourceTy);
                 if (implType) {
@@ -8978,7 +8978,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeField& node) -> void {
     unsigned int derefCount = 0;
     HIRTypeRef tmpType;
     const auto* currentTy = node.value->resType;
-    ::std::vector<HIRTypeRef> derefResTypes;
+    std::vector<HIRTypeRef> derefResTypes;
 
     // TODO: autoderef_find_field?
     do {
@@ -9294,7 +9294,7 @@ auto ExprVisitorApply::visit(HIRExprNodeCallValue& node) -> void {
         } else {
             HIRPathParams traitPp;
             {
-                ::std::vector<HIRTypeRef> argTypes;
+                std::vector<HIRTypeRef> argTypes;
                 for (const auto& argTy : node.argIvars) {
                     argTypes.push_back(this->context.getType(argTy));
                 }
@@ -9639,7 +9639,7 @@ auto ExprVisitorApply::visit(HIRExprNodeArraySized& node) -> void {
     }
 }
 
-ExprVisitorPrint::ExprVisitorPrint(const Context& context, ::std::ostream& os)
+ExprVisitorPrint::ExprVisitorPrint(const Context& context, std::ostream& os)
     : context(context)
     , os(os)
 {
@@ -10163,7 +10163,7 @@ auto AssociatedStallCollector::collect() -> void {
     while (!pending.empty() && !hasRawInfer) {
         const auto type = pending.back();
         pending.pop_back();
-        if (::std::find(visited.begin(), visited.end(), type) != visited.end()) {
+        if (std::find(visited.begin(), visited.end(), type) != visited.end()) {
             continue;
         }
         visited.push_back(type);
@@ -10184,7 +10184,7 @@ auto AssociatedStallCollector::collect() -> void {
                     hasRawInfer = true;
                     return true;
                 }
-                const auto existing = ::std::find_if(dependencies.begin(), dependencies.end(), [&](const auto& dependency) {
+                const auto existing = std::find_if(dependencies.begin(), dependencies.end(), [&](const auto& dependency) {
                     return dependency.index == resolvedInfer->index;
                 });
                 if (existing == dependencies.end()) {
@@ -10198,7 +10198,7 @@ auto AssociatedStallCollector::collect() -> void {
     }
 }
 
-auto IvarDependencyIndex::collectDirectIvars(const HIRTypeData* type, ::std::vector<unsigned int>& out) -> void {
+auto IvarDependencyIndex::collectDirectIvars(const HIRTypeData* type, std::vector<unsigned int>& out) -> void {
     visitTyWith(type, [&](const HIRTypeData* inner) {
         if (const auto* infer = inner->opt_Infer()) {
             out.push_back(infer->index);
@@ -10207,9 +10207,9 @@ auto IvarDependencyIndex::collectDirectIvars(const HIRTypeData* type, ::std::vec
     });
 }
 
-auto IvarDependencyIndex::deduplicate(::std::vector<unsigned int>& values) -> void {
-    ::std::sort(values.begin(), values.end());
-    values.erase(::std::unique(values.begin(), values.end()), values.end());
+auto IvarDependencyIndex::deduplicate(std::vector<unsigned int>& values) -> void {
+    std::sort(values.begin(), values.end());
+    values.erase(std::unique(values.begin(), values.end()), values.end());
 }
 
 IvarDependencyIndex::IvarDependencyIndex(Context& context)
@@ -10218,8 +10218,8 @@ IvarDependencyIndex::IvarDependencyIndex(Context& context)
     , possibilityTargets(context.possibleIvarVals.size())
 {
     for (const auto& rule : context.linkAssoc) {
-        ::std::vector<unsigned int> sources;
-        ::std::vector<unsigned int> targets;
+        std::vector<unsigned int> sources;
+        std::vector<unsigned int> targets;
         collectDirectIvars(rule.implTy, sources);
         if (rule.name != "") {
             collectDirectIvars(rule.leftTy, sources);
@@ -10240,7 +10240,7 @@ IvarDependencyIndex::IvarDependencyIndex(Context& context)
 
     for (size_t target = 0; target < context.possibleIvarVals.size(); target++) {
         const auto& possible = context.possibleIvarVals[target];
-        ::std::vector<unsigned int> sources;
+        std::vector<unsigned int> sources;
         for (const auto& type : possible.typesCoerceFrom) {
             collectDirectIvars(type.ty, sources);
         }
@@ -10283,13 +10283,13 @@ auto IvarDependencyIndex::disableDependents(unsigned int source) -> void {
     }
 }
 
-auto IvarCoercionIndex::collectIvars(const HIRTypeData* root, ::std::vector<unsigned int>& out) const -> void {
-    ::std::vector<HIRTypeRef> pending{root};
-    ::std::vector<HIRTypeRef> visited;
+auto IvarCoercionIndex::collectIvars(const HIRTypeData* root, std::vector<unsigned int>& out) const -> void {
+    std::vector<HIRTypeRef> pending{root};
+    std::vector<HIRTypeRef> visited;
     while (!pending.empty()) {
         const auto type = pending.back();
         pending.pop_back();
-        if (::std::find(visited.begin(), visited.end(), type) != visited.end()) {
+        if (std::find(visited.begin(), visited.end(), type) != visited.end()) {
             continue;
         }
         visited.push_back(type);
@@ -10307,7 +10307,7 @@ auto IvarCoercionIndex::collectIvars(const HIRTypeData* root, ::std::vector<unsi
 }
 
 template <typename T>
-auto IvarCoercionIndex::addRefs(const ::std::vector<unsigned int>& dependencies, ::std::vector<T> IvarCoercionRefs::* member, T value) -> void {
+auto IvarCoercionIndex::addRefs(const std::vector<unsigned int>& dependencies, std::vector<T> IvarCoercionRefs::* member, T value) -> void {
     for (const auto index : dependencies) {
         if (index < refs.size()) {
             (refs[index].*member).push_back(value);
@@ -10319,7 +10319,7 @@ IvarCoercionIndex::IvarCoercionIndex(const Context& context)
     : context(context)
     , refs(context.possibleIvarVals.size())
 {
-    ::std::vector<unsigned int> dependencies;
+    std::vector<unsigned int> dependencies;
     for (const auto& bound : context.linkCoerce) {
         dependencies.clear();
         collectIvars(bound->leftTy, dependencies);
@@ -10375,7 +10375,7 @@ auto PossibleType::operator==(const PossibleType& o) const -> bool {
     return ord(o) == OrdEqual;
 }
 
-auto PossibleType::fmt(::std::ostream& os) const -> ::std::ostream& {
+auto PossibleType::fmt(std::ostream& os) const -> std::ostream& {
     switch (cls) {
         case Equal:
             os << "==";
@@ -10598,8 +10598,8 @@ auto TypeRestrictiveOrdering::getOrderingPtr(const Span& sp, const Context& cont
     };
     static const HIRTypeData::Tag* tagOrderingEnd = &tagOrdering[sizeof(tagOrdering) / sizeof(tagOrdering[0])];
     if (l->tag() != r->tag()) {
-        auto pL = ::std::find(tagOrdering, tagOrderingEnd, l->tag());
-        auto pR = ::std::find(tagOrdering, tagOrderingEnd, r->tag());
+        auto pL = std::find(tagOrdering, tagOrderingEnd, l->tag());
+        auto pR = std::find(tagOrdering, tagOrderingEnd, r->tag());
         if (pL == tagOrderingEnd) {
             TODO(sp, "Type " << l << " not in ordering list");
         }
@@ -10825,7 +10825,7 @@ auto ExprVisitorTagStaleIvars::visitPathParams(HIRPathParams& params) -> void {
     params = mapper_.monomorphPathParams(Span(), params, true);
 }
 
-auto ExprVisitorTagStaleIvars::Mapper::taggedIndex(Vector<::std::pair<unsigned, unsigned>>& indexes, unsigned original) const -> unsigned {
+auto ExprVisitorTagStaleIvars::Mapper::taggedIndex(Vector<std::pair<unsigned, unsigned>>& indexes, unsigned original) const -> unsigned {
     for (const auto& entry : indexes) {
         if (entry.first == original) {
             return entry.second;
@@ -11196,7 +11196,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeLoopControl& node) -> void {
     if (!node.isContinue) {
         HIRExprNodeLoop* loopNodePtr;
         if (node.label != "") {
-            auto it = ::std::find_if(this->loopBlocks.rbegin(), this->loopBlocks.rend(), [&](const auto& np) {
+            auto it = std::find_if(this->loopBlocks.rbegin(), this->loopBlocks.rend(), [&](const auto& np) {
                 return np->label == node.label;
             });
             if (it == this->loopBlocks.rend()) {
@@ -11289,7 +11289,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeMatch& node) -> void {
     }
 
     for (auto& arm : node.arms) {
-        const bool unconditionallySelected = &arm == &node.arms.front() && ::std::any_of(arm.patterns.begin(), arm.patterns.end(), [](const HIRPattern& pattern) {
+        const bool unconditionallySelected = &arm == &node.arms.front() && std::any_of(arm.patterns.begin(), arm.patterns.end(), [](const HIRPattern& pattern) {
             return pattern.data.is_Any();
         });
         for (auto& pat : arm.patterns) {
@@ -11320,7 +11320,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeMatch& node) -> void {
 
     if (node.arms.empty()) {
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
-    } else if (::std::all_of(node.arms.begin(), node.arms.end(), [&](const HIRExprNodeMatch::Arm& arm) {
+    } else if (std::all_of(node.arms.begin(), node.arms.end(), [&](const HIRExprNodeMatch::Arm& arm) {
         return this->nodeDiverges(*arm.code);
     })) {
         node.diverges = true;
@@ -11976,7 +11976,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
 
     for (auto& val : node.values) {
         const auto& name = val.first;
-        auto it = ::std::find_if(fields.begin(), fields.end(), [&](const HIRStructField& v) -> bool {
+        auto it = std::find_if(fields.begin(), fields.end(), [&](const HIRStructField& v) -> bool {
             return v.name == name;
         });
         ASSERT_BUG(node.span(), it != fields.end(), "Field '" << name << "' not found in struct " << tyPath);
@@ -12143,7 +12143,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallMethod& node) -> void {
         }
 
         if (push) {
-            if (::std::none_of(possibleTraits.begin(), possibleTraits.end(), [&](const auto& x) {
+            if (std::none_of(possibleTraits.begin(), possibleTraits.end(), [&](const auto& x) {
                 return x.second == &tr;
             })) {
                 possibleTraits.push_back(std::make_pair(&p, &tr));
@@ -12216,7 +12216,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeTuple& node) -> void {
                 ERROR(node.span(), E0000, "Tuple literal node count mismatches with return type");
             }
         } else if (ty->is_Infer()) {
-            ::std::vector<HIRTypeRef> tupleTys;
+            std::vector<HIRTypeRef> tupleTys;
             for (const auto& val : node.vals) {
                 tupleTys.push_back(this->context.ivars.newIvarTr());
             }
@@ -12231,7 +12231,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeTuple& node) -> void {
             this->context.equateTypesCoerce(node.span(), innerTys[i], node.vals[i]);
         }
     } else {
-        ::std::vector<HIRTypeRef> tupleTys;
+        std::vector<HIRTypeRef> tupleTys;
         for (const auto& val : node.vals) {
             tupleTys.push_back(val->resType);
         }
@@ -12563,7 +12563,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeClosure& node) -> void {
     this->context.addIvars(node.returnType);
     this->context.addIvars(node.code->resType);
 
-    ::std::vector<HIRTypeRef> argTypes;
+    std::vector<HIRTypeRef> argTypes;
     for (auto& arg : node.args) {
         argTypes.push_back(arg.second);
     }
@@ -12571,14 +12571,14 @@ auto ExprVisitorEnum::visit(HIRExprNodeClosure& node) -> void {
 
     this->context.equateTypesCoerce(node.span(), node.returnType, node.code);
 
-    auto savedLoops = ::std::move(this->loopBlocks);
+    auto savedLoops = std::move(this->loopBlocks);
 
     auto _ = this->pushInnerCoerceScoped(true);
     this->closureRetTypes.push_back(RetTarget(node.returnType));
     node.code->visit(*this);
     this->closureRetTypes.pop_back();
 
-    this->loopBlocks = ::std::move(savedLoops);
+    this->loopBlocks = std::move(savedLoops);
 }
 
 auto ExprVisitorEnum::visit(HIRExprNodeGenerator& node) -> void {

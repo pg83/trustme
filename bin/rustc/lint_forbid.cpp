@@ -47,7 +47,7 @@ namespace {
     }
 
     template <typename F>
-    void readLintAttrs(const ASTAttributeList& attrs, ::std::set<RcString>& forbidden, const F& lowered) {
+    void readLintAttrs(const ASTAttributeList& attrs, std::set<RcString>& forbidden, const F& lowered) {
         for (const auto& a : attrs.items) {
             const auto& name = a.name();
             if (name == "forbid") {
@@ -62,9 +62,9 @@ namespace {
         }
     }
 
-    void checkModule(ASTModule& mod, ::std::set<RcString> forbidden);
+    void checkModule(ASTModule& mod, std::set<RcString> forbidden);
 
-    void checkNamedItem(ASTNamed<ASTItem>& item, const ::std::set<RcString>& outerForbidden) {
+    void checkNamedItem(ASTNamed<ASTItem>& item, const std::set<RcString>& outerForbidden) {
         auto forbidden = outerForbidden;
         readLintAttrs(item.attrs, forbidden, [&](const Span& sp, const RcString& lint) {
             if (outerForbidden.count(lint)) {
@@ -76,7 +76,7 @@ namespace {
         }
     }
 
-    void checkModule(ASTModule& mod, ::std::set<RcString> forbidden) {
+    void checkModule(ASTModule& mod, std::set<RcString> forbidden) {
         for (auto& item : mod.items) {
             if (item) {
                 checkNamedItem(*item, forbidden);
@@ -91,7 +91,7 @@ namespace {
 }
 
 void LintCheckForbid(const WireBoard& wb, ASTCrate& crate) {
-    ::std::set<RcString> forbidden;
+    std::set<RcString> forbidden;
     readLintAttrs(crate.attrs, forbidden, [](const Span&, const RcString&) {});
     checkModule(crate.rootModule(), forbidden);
 }

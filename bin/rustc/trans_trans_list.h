@@ -90,8 +90,8 @@ struct TransListConst {
 class TransList {
     const WireBoard* wb_ = nullptr;
 
-    ::std::unordered_map<::std::string, HIRPath> functionSymbols;
-    ::std::unordered_map<::std::string, HIRPath> staticSymbols;
+    std::unordered_map<std::string, HIRPath> functionSymbols;
+    std::unordered_map<std::string, HIRPath> staticSymbols;
 
     struct TypeEmissionState {
         HIRTypeRef canonical;
@@ -99,7 +99,7 @@ class TransList {
         bool hasDefinition;
     };
 
-    ::std::unordered_map<::std::string, TypeEmissionState> typeSymbols;
+    std::unordered_map<std::string, TypeEmissionState> typeSymbols;
 
 public:
     TransList() = default;
@@ -114,19 +114,19 @@ public:
     TransList& operator=(TransList&&) = default;
     TransList& operator=(const TransList&) = delete;
 
-    ::std::vector<HIRPath> roots;
+    std::vector<HIRPath> roots;
 
-    ::std::map<HIRPath, ::std::unique_ptr<TransListFunction>> functions;
-    ::std::map<HIRPath, ::std::unique_ptr<TransListStatic>> statics;
+    std::map<HIRPath, std::unique_ptr<TransListFunction>> functions;
+    std::map<HIRPath, std::unique_ptr<TransListStatic>> statics;
 
-    ::std::map<HIRPath, ::std::unique_ptr<TransListConst>> constants;
-    ::std::map<HIRPath, TransParams> vtables;
+    std::map<HIRPath, std::unique_ptr<TransListConst>> constants;
+    std::map<HIRPath, TransParams> vtables;
 
     HIRTypeRefSet typeids;
 
     HIRTypeRefSet dropGlue;
 
-    ::std::set<HIRGenericPath> constructors;
+    std::set<HIRGenericPath> constructors;
 
     HIRTypeRefSet autoCloneImpls;
 
@@ -134,12 +134,12 @@ public:
 
     HIRTypeRefSet autoFnptrImpls;
 
-    ::std::set<HIRPath> traitObjectMethods;
+    std::set<HIRPath> traitObjectMethods;
 
-    ::std::vector<::std::unique_ptr<HIRStatic>> autoStatics;
-    ::std::vector<::std::unique_ptr<HIRFunction>> autoFunctions;
+    std::vector<std::unique_ptr<HIRStatic>> autoStatics;
+    std::vector<std::unique_ptr<HIRFunction>> autoFunctions;
 
-    ::std::vector<::std::pair<HIRTypeRef, bool>> types;
+    std::vector<std::pair<HIRTypeRef, bool>> types;
 
     TransListFunction* addFunction(HIRTypeInterner& types, HIRPath p);
     TransListStatic* addStatic(HIRTypeInterner& types, HIRPath p);
@@ -151,6 +151,6 @@ public:
     void clearTypes();
 
     bool addVtable(HIRPath p, TransParams pp) {
-        return vtables.insert(::std::make_pair(mv$(p), mv$(pp))).second;
+        return vtables.insert(std::make_pair(mv$(p), mv$(pp))).second;
     }
 };

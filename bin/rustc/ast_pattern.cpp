@@ -4,7 +4,7 @@
 #include "ast_ast.h"
 #include "ast_expr.h"
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPattern::Value& val) {
+std::ostream& operator<<(std::ostream& os, const ASTPattern::Value& val) {
     switch (val.tag()) {
         case ASTPattern::Value::TAG_Invalid: {
             os << "/*BAD PAT VAL*/";
@@ -62,7 +62,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPattern::TuplePat& val) {
+std::ostream& operator<<(std::ostream& os, const ASTPattern::TuplePat& val) {
     if (val.hasWildcard) {
         os << val.start;
         os << ".., ";
@@ -74,7 +74,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPatternBinding& pb) {
+std::ostream& operator<<(std::ostream& os, const ASTPatternBinding& pb) {
     if (pb.isMutable) {
         os << "mut ";
     }
@@ -92,7 +92,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPattern& pat) {
+std::ostream& operator<<(std::ostream& os, const ASTPattern& pat) {
     for (const auto& pb : pat.bindings_) {
         os << pb << " @ ";
     }
@@ -230,7 +230,7 @@ ASTPattern::~ASTPattern() {
 
 bool PatternContainsNever(const ASTPattern& pat) {
     struct H {
-        static bool any(const ::std::vector<ASTPattern>& list) {
+        static bool any(const std::vector<ASTPattern>& list) {
             for (const auto& p : list) {
                 if (PatternContainsNever(p)) {
                     return true;
@@ -299,9 +299,9 @@ bool PatternContainsNever(const ASTPattern& pat) {
     return false;
 }
 
-ASTPattern::ASTPattern(TagStruct, Span sp, ASTPath path, ::std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive)
+ASTPattern::ASTPattern(TagStruct, Span sp, ASTPath path, std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive)
     : span_(mv$(sp))
-    , data_(Data::make_Struct({::std::move(path), ::std::move(subPatterns), isExhaustive}))
+    , data_(Data::make_Struct({std::move(path), std::move(subPatterns), isExhaustive}))
 {
 }
 
@@ -313,12 +313,12 @@ ASTPattern ASTPattern::clone() const {
     }
 
     struct H {
-        static ::std::unique_ptr<ASTPattern> cloneSp(const ::std::unique_ptr<ASTPattern>& p) {
-            return ::std::make_unique<ASTPattern>(p->clone());
+        static std::unique_ptr<ASTPattern> cloneSp(const std::unique_ptr<ASTPattern>& p) {
+            return std::make_unique<ASTPattern>(p->clone());
         }
 
-        static ::std::vector<ASTPattern> cloneList(const ::std::vector<ASTPattern>& list) {
-            ::std::vector<ASTPattern> rv;
+        static std::vector<ASTPattern> cloneList(const std::vector<ASTPattern>& list) {
+            std::vector<ASTPattern> rv;
             rv.reserve(list.size());
             for (const auto& p : list) {
                 rv.push_back(p.clone());
@@ -379,7 +379,7 @@ ASTPattern ASTPattern::clone() const {
         }
         case ASTPatternData::TAG_Macro: {
             auto& e = data_.as_Macro();
-            rv.data_ = Data::make_Macro({::std::make_unique<ASTMacroInvocation>(e.inv->clone())});
+            rv.data_ = Data::make_Macro({std::make_unique<ASTMacroInvocation>(e.inv->clone())});
             break;
         }
         case ASTPatternData::TAG_Box: {
@@ -424,7 +424,7 @@ ASTPattern ASTPattern::clone() const {
         }
         case ASTPatternData::TAG_Struct: {
             auto& e = data_.as_Struct();
-            ::std::vector<ASTStructPatternEntry> sps;
+            std::vector<ASTStructPatternEntry> sps;
             for (const auto& sp : e.subPatterns) {
                 sps.push_back(ASTStructPatternEntry{sp.attrs.clone(), sp.name, sp.pat.clone()});
             }
@@ -460,7 +460,7 @@ ASTPatternBinding::ASTPatternBinding()
 }
 
 ASTPatternBinding::ASTPatternBinding(Ident name, Type ty, bool ismut)
-    : name(::std::move(name))
+    : name(std::move(name))
     , type(ty)
     , isMutable(ismut)
     , slot(~0u)
@@ -508,17 +508,17 @@ ASTPattern::ASTPattern(TagDeref, Span sp, ASTPattern sub)
 
 ASTPattern::ASTPattern(TagValue, Span sp, Value val, Value end)
     : span_(mv$(sp))
-    , data_(Data::make_Value({::std::move(val), ::std::move(end)}))
+    , data_(Data::make_Value({std::move(val), std::move(end)}))
 {
 }
 
 ASTPattern::ASTPattern(TagReference, Span sp, bool isMutable, ASTPattern subPattern)
     : span_(mv$(sp))
-    , data_(Data::make_Ref(/*Data::Data_Ref */ {isMutable, unique_ptr<ASTPattern>(new ASTPattern(::std::move(subPattern)))}))
+    , data_(Data::make_Ref(/*Data::Data_Ref */ {isMutable, unique_ptr<ASTPattern>(new ASTPattern(std::move(subPattern)))}))
 {
 }
 
-ASTPattern::ASTPattern(TagTuple, Span sp, ::std::vector<ASTPattern> pats)
+ASTPattern::ASTPattern(TagTuple, Span sp, std::vector<ASTPattern> pats)
     : span_(mv$(sp))
     , data_(Data::make_Tuple(TuplePat{mv$(pats), false, {}}))
 {
@@ -530,7 +530,7 @@ ASTPattern::ASTPattern(TagTuple, Span sp, TuplePat pat)
 {
 }
 
-ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, ::std::vector<ASTPattern> pats)
+ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, std::vector<ASTPattern> pats)
     : span_(mv$(sp))
     , data_(Data::make_StructTuple({mv$(path), TuplePat{mv$(pats), false, {}}}))
 {
@@ -538,7 +538,7 @@ ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, ::std::vector<ASTPa
 
 ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, TuplePat pat)
     : span_(mv$(sp))
-    , data_(Data::make_StructTuple({::std::move(path), ::std::move(pat)}))
+    , data_(Data::make_StructTuple({std::move(path), std::move(pat)}))
 {
 }
 

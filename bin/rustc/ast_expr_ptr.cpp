@@ -38,7 +38,7 @@ ASTExprNode& ASTExpr::node() {
     return *node_;
 }
 
-::std::shared_ptr<ASTExprNode> ASTExpr::takeNode() {
+std::shared_ptr<ASTExprNode> ASTExpr::takeNode() {
     assert(node_.get());
-    return ::std::move(node_);
+    return std::move(node_);
 }

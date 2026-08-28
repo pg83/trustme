@@ -6,7 +6,7 @@
 #include <iostream>
 
 #define GET_TOK(tok, lex) ((tok = lex.getToken()).type())
-#define PUTBACK(tok, lex) lex.putback(::std::move(tok))
+#define PUTBACK(tok, lex) lex.putback(std::move(tok))
 #define LOOK_AHEAD(lex) (lex.lookahead(0))
 #define GET_CHECK_TOK(tok, lex, exp)                    \
     do {                                                \
@@ -29,7 +29,7 @@ enum eParsePathGenericMode {
 
 extern ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode);
 extern ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMode);
-extern ::std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode genericMode);
+extern std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode genericMode);
 extern ASTPathParams ParsePathGenericList(TokenStream& lex);
 
 extern ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted = true);
@@ -60,7 +60,7 @@ extern ASTExprNodeP ParseExpr13(TokenStream& lex);
 extern ASTExprNodeP ParseExprVal(TokenStream& lex);
 extern ASTExprNodeP ParseExprBlockNode(TokenStream& lex);
 extern ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence);
-extern ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<ASTModule>& localMod, bool& addSilenceIfEnd);
+extern ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTModule>& localMod, bool& addSilenceIfEnd);
 extern ASTExprNodeP ParseStmt(TokenStream& lex);
 
 extern TokenTree ParseTT(TokenStream& lex, bool unwrapped);

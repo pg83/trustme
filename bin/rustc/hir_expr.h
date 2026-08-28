@@ -9,7 +9,7 @@
 
 #include <memory>
 
-typedef ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitList;
+typedef std::vector<std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitList;
 
 enum class HIRValueUsage {
     Unknown,
@@ -21,7 +21,7 @@ enum class HIRValueUsage {
     Move,
 };
 
-::std::ostream& operator<<(::std::ostream& os, const HIRValueUsage& x);
+std::ostream& operator<<(std::ostream& os, const HIRValueUsage& x);
 
 class HIRGenericParams;
 
@@ -51,7 +51,7 @@ public:
 
 struct HIRExprNodeBlock: public HIRExprNode {
     bool isUnsafe;
-    ::std::vector<HIRExprNodeP> nodes;
+    std::vector<HIRExprNodeP> nodes;
     HIRExprNodeP valueNode;
 
     HIRSimplePath localMod;
@@ -59,7 +59,7 @@ struct HIRExprNodeBlock: public HIRExprNode {
 
     HIRExprNodeBlock(Span sp);
 
-    HIRExprNodeBlock(Span sp, bool isUnsafe, ::std::vector<HIRExprNodeP> nodes, HIRExprNodeP valueNode);
+    HIRExprNodeBlock(Span sp, bool isUnsafe, std::vector<HIRExprNodeP> nodes, HIRExprNodeP valueNode);
 
     static constexpr unsigned int kind = 1;
     unsigned int nodeKind() const override;
@@ -78,17 +78,17 @@ struct HIRExprNodeConstBlock: public HIRExprNode {
 
 struct HIRExprNodeAsm: public HIRExprNode {
     struct ValRef {
-        ::std::string spec;
+        std::string spec;
         HIRExprNodeP value;
     };
 
-    ::std::string templateText;
-    ::std::vector<ValRef> outputs;
-    ::std::vector<ValRef> inputs;
-    ::std::vector<::std::string> clobbers;
-    ::std::vector<::std::string> flags;
+    std::string templateText;
+    std::vector<ValRef> outputs;
+    std::vector<ValRef> inputs;
+    std::vector<std::string> clobbers;
+    std::vector<std::string> flags;
 
-    HIRExprNodeAsm(Span sp, ::std::string tplStr, ::std::vector<ValRef> outputs, ::std::vector<ValRef> inputs, ::std::vector<::std::string> clobbers, ::std::vector<::std::string> flags)
+    HIRExprNodeAsm(Span sp, std::string tplStr, std::vector<ValRef> outputs, std::vector<ValRef> inputs, std::vector<std::string> clobbers, std::vector<std::string> flags)
         : HIRExprNode(mv$(sp))
         , templateText(mv$(tplStr))
         , outputs(mv$(outputs))
@@ -211,18 +211,18 @@ struct HIRExprNodeMatch: public HIRExprNode {
     };
 
     struct Arm {
-        ::std::vector<HIRPattern> patterns;
+        std::vector<HIRPattern> patterns;
 
-        ::std::vector<Guard> guards;
+        std::vector<Guard> guards;
 
         HIRExprNodeP code;
     };
 
     HIRExprNodeP value;
-    ::std::vector<Arm> arms;
+    std::vector<Arm> arms;
     bool isLetElse;
 
-    HIRExprNodeMatch(Span sp, HIRExprNodeP val, ::std::vector<Arm> arms, bool isLetElse = false);
+    HIRExprNodeMatch(Span sp, HIRExprNodeP val, std::vector<Arm> arms, bool isLetElse = false);
 
     static constexpr unsigned int kind = 11;
     unsigned int nodeKind() const override;
@@ -412,11 +412,11 @@ struct HIRExprNodeEmplace: public HIRExprNode {
 struct HIRExprNodeTupleVariant: public HIRExprNode {
     HIRGenericPath path;
     bool isStruct;
-    ::std::vector<HIRExprNodeP> args;
+    std::vector<HIRExprNodeP> args;
 
-    ::std::vector<HIRTypeRef> argTypes;
+    std::vector<HIRTypeRef> argTypes;
 
-    HIRExprNodeTupleVariant(Span sp, HIRGenericPath path, bool isStruct, ::std::vector<HIRExprNodeP> args);
+    HIRExprNodeTupleVariant(Span sp, HIRGenericPath path, bool isStruct, std::vector<HIRExprNodeP> args);
 
     static constexpr unsigned int kind = 22;
     unsigned int nodeKind() const override;
@@ -424,21 +424,21 @@ struct HIRExprNodeTupleVariant: public HIRExprNode {
 };
 
 struct HIRExprCallCache {
-    ::std::vector<HIRTypeRef> argTypes;
+    std::vector<HIRTypeRef> argTypes;
     const HIRGenericParams* fcnParams;
     const HIRGenericParams* topParams;
     const HIRFunction* fcn;
 
-    ::std::unique_ptr<Monomorphiser> monomorph;
+    std::unique_ptr<Monomorphiser> monomorph;
 };
 
 struct HIRExprNodeCallPath: public HIRExprNode {
     HIRPath path;
-    ::std::vector<HIRExprNodeP> args;
+    std::vector<HIRExprNodeP> args;
 
     HIRExprCallCache cache;
 
-    HIRExprNodeCallPath(Span sp, HIRPath path, ::std::vector<HIRExprNodeP> args);
+    HIRExprNodeCallPath(Span sp, HIRPath path, std::vector<HIRExprNodeP> args);
 
     static constexpr unsigned int kind = 23;
     unsigned int nodeKind() const override;
@@ -447,11 +447,11 @@ struct HIRExprNodeCallPath: public HIRExprNode {
 
 struct HIRExprNodeCallValue: public HIRExprNode {
     HIRExprNodeP value;
-    ::std::vector<HIRExprNodeP> args;
+    std::vector<HIRExprNodeP> args;
 
-    ::std::vector<HIRTypeRef> argIvars;
+    std::vector<HIRTypeRef> argIvars;
 
-    ::std::vector<HIRTypeRef> argTypes;
+    std::vector<HIRTypeRef> argTypes;
 
     enum class TraitUsed {
         Unknown,
@@ -465,7 +465,7 @@ struct HIRExprNodeCallValue: public HIRExprNode {
     };
     TraitUsed traitUsed = TraitUsed::Unknown;
 
-    HIRExprNodeCallValue(Span sp, HIRExprNodeP val, ::std::vector<HIRExprNodeP> args);
+    HIRExprNodeCallValue(Span sp, HIRExprNodeP val, std::vector<HIRExprNodeP> args);
 
     static constexpr unsigned int kind = 24;
     unsigned int nodeKind() const override;
@@ -482,7 +482,7 @@ struct HIRExprNodeCallMethod: public HIRExprNode {
 
     HIRPathParams params;
 
-    ::std::vector<HIRExprNodeP> args;
+    std::vector<HIRExprNodeP> args;
 
     HIRPath methodPath;
 
@@ -490,10 +490,10 @@ struct HIRExprNodeCallMethod: public HIRExprNode {
 
     tTraitList traits;
 
-    ::std::vector<unsigned int> traitParamIvars;
+    std::vector<unsigned int> traitParamIvars;
     unsigned int traitParamTypeIvars = 0;
 
-    HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString methodName, HIRPathParams params, ::std::vector<HIRExprNodeP> args, RcString fallbackMethod = {});
+    HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString methodName, HIRPathParams params, std::vector<HIRExprNodeP> args, RcString fallbackMethod = {});
 
     static constexpr unsigned int kind = 25;
     unsigned int nodeKind() const override;
@@ -577,7 +577,7 @@ struct HIRExprNodeConstParam: public HIRExprNode {
 };
 
 struct HIRExprNodeStructLiteral: public HIRExprNode {
-    typedef ::std::vector<::std::pair<RcString, HIRExprNodeP>> tValues;
+    typedef std::vector<std::pair<RcString, HIRExprNodeP>> tValues;
 
     HIRTypeRef type;
     bool isStruct;
@@ -589,7 +589,7 @@ struct HIRExprNodeStructLiteral: public HIRExprNode {
 
     HIRGenericPath realPath;
 
-    ::std::vector<HIRTypeRef> valueTypes;
+    std::vector<HIRTypeRef> valueTypes;
 
     HIRExprNodeStructLiteral(Span sp, HIRTypeRef ty, bool isStruct, HIRExprNodeP baseValue, tValues values);
 
@@ -601,9 +601,9 @@ struct HIRExprNodeStructLiteral: public HIRExprNode {
 };
 
 struct HIRExprNodeTuple: public HIRExprNode {
-    ::std::vector<HIRExprNodeP> vals;
+    std::vector<HIRExprNodeP> vals;
 
-    HIRExprNodeTuple(Span sp, ::std::vector<HIRExprNodeP> vals);
+    HIRExprNodeTuple(Span sp, std::vector<HIRExprNodeP> vals);
 
     static constexpr unsigned int kind = 33;
     unsigned int nodeKind() const override;
@@ -611,9 +611,9 @@ struct HIRExprNodeTuple: public HIRExprNode {
 };
 
 struct HIRExprNodeArrayList: public HIRExprNode {
-    ::std::vector<HIRExprNodeP> vals;
+    std::vector<HIRExprNodeP> vals;
 
-    HIRExprNodeArrayList(Span sp, ::std::vector<HIRExprNodeP> vals);
+    HIRExprNodeArrayList(Span sp, std::vector<HIRExprNodeP> vals);
 
     static constexpr unsigned int kind = 34;
     unsigned int nodeKind() const override;
@@ -634,7 +634,7 @@ struct HIRExprNodeArraySized: public HIRExprNode {
 };
 
 struct HIRExprNodeClosure: public HIRExprNode {
-    typedef ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> argsT;
+    typedef std::vector<std::pair<HIRPattern, HIRTypeRef>> argsT;
 
     argsT args;
     HIRTypeRef returnType;
@@ -653,7 +653,7 @@ struct HIRExprNodeClosure: public HIRExprNode {
     bool isCopy = true;
 
     struct AvuCache {
-        ::std::vector<unsigned int> localVars;
+        std::vector<unsigned int> localVars;
 
         struct Capture {
             unsigned int rootSlot;
@@ -662,13 +662,13 @@ struct HIRExprNodeClosure: public HIRExprNode {
             HIRValueUsage usage;
         };
 
-        ::std::vector<Capture> capturedVars;
+        std::vector<Capture> capturedVars;
     } avuCache;
 
     const HIRStruct* objPtr = nullptr;
     HIRGenericPath objPathBase;
     HIRGenericPath objPath;
-    ::std::vector<HIRExprNodeP> captures;
+    std::vector<HIRExprNodeP> captures;
 
     HIRExprNodeClosure(Span sp, argsT args, HIRTypeRef rv, HIRExprNodeP code, bool isMove, bool isUse);
 
@@ -677,7 +677,7 @@ struct HIRExprNodeClosure: public HIRExprNode {
     void visit(HIRExprVisitor& nv) override;
 };
 
-::std::ostream& operator<<(::std::ostream& os, const HIRExprNodeClosure::AvuCache::Capture& x);
+std::ostream& operator<<(std::ostream& os, const HIRExprNodeClosure::AvuCache::Capture& x);
 
 struct HIRExprNodeGenerator: public HIRExprNode {
     HIRTypeRef returnType;
@@ -693,15 +693,15 @@ struct HIRExprNodeGenerator: public HIRExprNode {
     bool isCoroutineClosureBody;
 
     struct AvuCache {
-        ::std::vector<unsigned int> localVars;
-        ::std::vector<::std::pair<unsigned int, HIRValueUsage>> capturedVars;
+        std::vector<unsigned int> localVars;
+        std::vector<std::pair<unsigned int, HIRValueUsage>> capturedVars;
     } avuCache;
 
     const HIRStruct* objPtr = nullptr;
     HIRGenericPath objPathBase;
     HIRGenericPath objPath;
 
-    ::std::vector<HIRExprNodeP> captures;
+    std::vector<HIRExprNodeP> captures;
 
     HIRTypeRef stateDataType;
 
@@ -728,7 +728,7 @@ struct HIRExprNodeGeneratorWrapper: public HIRExprNode {
 
     HIRFunction* dropFcnPtr = nullptr;
 
-    ::std::vector<HIRValueUsage> captureUsages;
+    std::vector<HIRValueUsage> captureUsages;
 
     HIRExprNodeGeneratorWrapper(Span sp, HIRTypeRef rv, HIRTypeRef yieldTy, HIRExprNodeP code, bool isFuture);
 
@@ -752,7 +752,7 @@ struct HIRExprNodeAsyncBlock: public HIRExprNode {
     HIRGenericPath objPathBase;
     HIRGenericPath objPath;
 
-    ::std::vector<HIRExprNodeP> captures;
+    std::vector<HIRExprNodeP> captures;
 
     HIRTypeRef stateDataType;
 
@@ -894,4 +894,4 @@ public:
     virtual void visitGenericPath(HIRVisitor::PathContext pc, HIRGenericPath& ty);
 };
 
-void HIRDumpExpr(::std::ostream& sink, const HIRExprPtr& expr);
+void HIRDumpExpr(std::ostream& sink, const HIRExprPtr& expr);

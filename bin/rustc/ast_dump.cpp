@@ -23,11 +23,11 @@
     } while (0)
 
 struct RustPrinter: public ASTNodeVisitor {
-    ::std::ostream& os;
+    std::ostream& os;
     int indentLevel;
     bool exprRoot;
 
-    RustPrinter(::std::ostream& os);
+    RustPrinter(std::ostream& os);
 
     void handleModule(const ASTModule& mod);
     void handleStruct(const ASTStruct& s);
@@ -351,7 +351,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
                     break;
                 }
                 default: {
-                    throw ::std::runtime_error(FMT("Unexpected item type in impl block - " << it.data->tagStr()));
+                    throw std::runtime_error(FMT("Unexpected item type in impl block - " << it.data->tagStr()));
                 }
             }
         }
@@ -907,12 +907,12 @@ void RustPrinter::decIndent() {
 }
 
 void DumpRust(const char* filename, const ASTCrate& crate) {
-    ::std::ofstream os(filename);
+    std::ofstream os(filename);
     RustPrinter printer(os);
     printer.handleModule(crate.rootModule());
 }
 
-void DumpASTNode(::std::ostream& os, const ASTExprNode& node) {
+void DumpASTNode(std::ostream& os, const ASTExprNode& node) {
     RustPrinter printer(os);
     const_cast<ASTExprNode&>(node).visit(printer);
 }
@@ -921,7 +921,7 @@ void DumpASTNode(::std::ostream& os, const ASTExprNode& node) {
 #undef WRAPIF_CMD
 #undef WRAPIF
 
-RustPrinter::RustPrinter(::std::ostream& os)
+RustPrinter::RustPrinter(std::ostream& os)
     : os(os)
     , indentLevel(0)
     , exprRoot(false)
@@ -1461,11 +1461,11 @@ auto RustPrinter::visit(ASTExprNodeInteger& n) -> void {
     exprRoot = false;
     switch (n.datatype) {
         case CORETYPE_INVAL:
-            os << "0x" << ::std::hex << n.value << ::std::dec << "_/*INVAL*/";
+            os << "0x" << std::hex << n.value << std::dec << "_/*INVAL*/";
             break;
         case CORETYPE_BOOL:
         case CORETYPE_STR:
-            os << "0x" << ::std::hex << n.value << ::std::dec << "_/*bool/str*/";
+            os << "0x" << std::hex << n.value << std::dec << "_/*bool/str*/";
             break;
         case CORETYPE_CHAR:
             if (n.value >= 0x20 && n.value < 128) {
@@ -1481,7 +1481,7 @@ auto RustPrinter::visit(ASTExprNodeInteger& n) -> void {
                         break;
                 }
             } else {
-                os << "'\\u{" << ::std::hex << n.value << ::std::dec << "}'";
+                os << "'\\u{" << std::hex << n.value << std::dec << "}'";
             }
             break;
         case CORETYPE_F16:
@@ -1496,7 +1496,7 @@ auto RustPrinter::visit(ASTExprNodeInteger& n) -> void {
         case CORETYPE_U128:
         case CORETYPE_UINT:
         case CORETYPE_ANY:
-            os << "0x" << ::std::hex << n.value << ::std::dec;
+            os << "0x" << std::hex << n.value << std::dec;
             os << "_" << coretypeName(n.datatype);
             break;
         case CORETYPE_I8:
@@ -1515,22 +1515,22 @@ auto RustPrinter::visit(ASTExprNodeFloat& n) -> void {
     exprRoot = false;
     switch (n.datatype) {
         case CORETYPE_ANY:
-            os.precision(::std::numeric_limits<double>::max_digits10 + 1);
+            os.precision(std::numeric_limits<double>::max_digits10 + 1);
             os << n.value;
             break;
         case CORETYPE_F16:
         case CORETYPE_F32:
-            os.precision(::std::numeric_limits<float>::max_digits10 + 1);
+            os.precision(std::numeric_limits<float>::max_digits10 + 1);
             os << n.value;
             os << "_" << coretypeName(n.datatype);
             break;
         case CORETYPE_F64:
-            os.precision(::std::numeric_limits<double>::max_digits10 + 1);
+            os.precision(std::numeric_limits<double>::max_digits10 + 1);
             os << n.value;
             os << "_" << coretypeName(n.datatype);
             break;
         case CORETYPE_F128:
-            os.precision(::std::numeric_limits<double>::max_digits10 + 1);
+            os.precision(std::numeric_limits<double>::max_digits10 + 1);
             os << n.value;
             os << "_" << coretypeName(n.datatype);
             break;

@@ -11,7 +11,7 @@ class TokenTree {
     ASTEdition edition = (ASTEdition)0;
     Ident::Hygiene hygiene_;
     Token tok_;
-    ::std::vector<TokenTree> subtrees;
+    std::vector<TokenTree> subtrees;
 
 public:
     virtual ~TokenTree();
@@ -29,7 +29,7 @@ public:
 
     TokenTree(ASTEdition edition, Ident::Hygiene hygiene, Token tok);
 
-    TokenTree(ASTEdition edition, Ident::Hygiene hygiene, ::std::vector<TokenTree> subtrees);
+    TokenTree(ASTEdition edition, Ident::Hygiene hygiene, std::vector<TokenTree> subtrees);
 
     TokenTree clone() const;
 
@@ -61,5 +61,5 @@ public:
         return edition;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const TokenTree& tt);
+    friend std::ostream& operator<<(std::ostream& os, const TokenTree& tt);
 };

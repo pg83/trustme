@@ -15,8 +15,8 @@ generate(
             ("enum eCoreType", "type"),
             ("FloatValue", "value"),
         ]),
-        v("String", "::std::string"),
-        v("ByteString", fields=[("::std::string", "v")]),
+        v("String", "std::string"),
+        v("ByteString", fields=[("std::string", "v")]),
         v("Named", "ASTPath"),
     ],
 )
@@ -61,16 +61,16 @@ generate(
         ], copy=False),
         v("Struct", fields=[
             ("ASTPath", "path"),
-            ("::std::vector<ASTStructPatternEntry>", "subPatterns"),
+            ("std::vector<ASTStructPatternEntry>", "subPatterns"),
             ("bool", "isExhaustive"),
         ], copy=False),
         v("Slice", fields=[
-            ("::std::vector<ASTPattern>", "subPats"),
+            ("std::vector<ASTPattern>", "subPats"),
         ], copy=False),
         v("SplitSlice", fields=[
-            ("::std::vector<ASTPattern>", "leading"),
+            ("std::vector<ASTPattern>", "leading"),
             ("ASTPatternBinding", "extraBind"),
-            ("::std::vector<ASTPattern>", "trailing"),
+            ("std::vector<ASTPattern>", "trailing"),
             ("bool", "extraRest", "false"),
         ], copy=False, doc="extraRest records a second `..`, which parses but"
                            " means nothing. Only code that is kept has to be"

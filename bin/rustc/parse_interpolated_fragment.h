@@ -57,5 +57,5 @@ public:
 
     const TokenTree& asTt() const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const InterpolatedFragment& x);
+    friend std::ostream& operator<<(std::ostream& os, const InterpolatedFragment& x);
 };

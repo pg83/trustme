@@ -20,32 +20,32 @@ struct TomlToken;
 class TomlLexer {
     friend class TomlFile;
 
-    ::std::ifstream input;
+    std::ifstream input;
 
-    ::std::string filename;
+    std::string filename;
     unsigned line;
 
 protected:
-    TomlLexer(const ::std::string& filename);
+    TomlLexer(const std::string& filename);
     TomlToken getToken();
 
 public:
-    friend ::std::ostream& operator<<(::std::ostream& os, const TomlLexer& x);
+    friend std::ostream& operator<<(std::ostream& os, const TomlLexer& x);
 };
 
 class TomlFile {
     TomlLexer lexer_;
 
-    ::std::vector<::std::string> currentBlock;
+    std::vector<std::string> currentBlock;
 
-    ::std::vector<std::vector<std::string>> currentComposite;
+    std::vector<std::vector<std::string>> currentComposite;
 
     unsigned int nextArrayIndex;
 
-    ::std::unordered_map<::std::string, unsigned> arrayCounts;
+    std::unordered_map<std::string, unsigned> arrayCounts;
 
 public:
-    TomlFile(const ::std::string& filename);
+    TomlFile(const std::string& filename);
 
     TomlFileIter begin();
     TomlFileIter end();
@@ -73,9 +73,9 @@ struct TomlValue {
         List,
     };
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const Type& e);
+    friend std::ostream& operator<<(std::ostream& os, const Type& e);
 
-    struct TypeError: public ::std::exception {
+    struct TypeError: public std::exception {
         Type have;
         Type exp;
 
@@ -85,35 +85,35 @@ struct TomlValue {
 
         const char* what() const noexcept override;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const TypeError& e);
+        friend std::ostream& operator<<(std::ostream& os, const TypeError& e);
     };
 
     Type type;
     u64 intValue;
-    ::std::string strValue;
-    ::std::vector<TomlValue> subValues;
+    std::string strValue;
+    std::vector<TomlValue> subValues;
 
     TomlValue();
 
-    TomlValue(::std::string s);
+    TomlValue(std::string s);
 
     TomlValue(i64 v);
 
     TomlValue(bool v);
 
-    const ::std::string& asString() const;
+    const std::string& asString() const;
 
     bool asBool() const;
 
     u64 asInt() const;
 
-    const ::std::vector<TomlValue>& asList() const;
+    const std::vector<TomlValue>& asList() const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const TomlValue& x);
+    friend std::ostream& operator<<(std::ostream& os, const TomlValue& x);
 };
 
 struct TomlKeyValue {
-    typedef ::std::vector<::std::string> Path;
+    typedef std::vector<std::string> Path;
 
     // TODO: How are things like `[[bin]]` handled?
     Path path;

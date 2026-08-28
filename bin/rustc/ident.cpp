@@ -48,7 +48,7 @@ RcString Ident::Hygiene::applyToItemName(const RcString& name) const {
         return name;
     }
 
-    ::std::ostringstream os;
+    std::ostringstream os;
     os << name << "#h";
     for (size_t i = 0; i < h.contexts.size(); i++) {
         if ((h.macroDefinitions[i] & ITEM_OPAQUE) != 0) {
@@ -58,12 +58,12 @@ RcString Ident::Hygiene::applyToItemName(const RcString& name) const {
     return RcString::newInterned(os.str());
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Ident& x) {
+std::ostream& operator<<(std::ostream& os, const Ident& x) {
     os << x.name << x.hygiene;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Ident::Hygiene& x) {
+std::ostream& operator<<(std::ostream& os, const Ident::Hygiene& x) {
     os << "/*[";
     if (x.inner) {
         for (size_t i = 0; i < x.inner->contexts.size(); i++) {
@@ -100,14 +100,14 @@ Ident::Hygiene::Inner Ident::Hygiene::clone() const {
 }
 
 const Ident::Hygiene::Inner* Ident::Hygiene::store(ObjPool& pool, Inner v) {
-    return pool.make<Inner>(::std::move(v));
+    return pool.make<Inner>(std::move(v));
 }
 
 Ident::Hygiene Ident::Hygiene::newScope(u32& id, ObjPool& pool) {
     Inner v;
     v.contexts.push_back(++id);
     v.macroDefinitions.push_back(0);
-    return Hygiene(store(pool, ::std::move(v)));
+    return Hygiene(store(pool, std::move(v)));
 }
 
 Ident::Hygiene Ident::Hygiene::newScopeChained(u32& id, ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition, bool itemOpaque) {
@@ -122,7 +122,7 @@ Ident::Hygiene Ident::Hygiene::newScopeChained(u32& id, ObjPool& pool, const Hyg
     v.contexts.push_back(++id);
     assert((macroDefinition & ITEM_OPAQUE) == 0);
     v.macroDefinitions.push_back(macroDefinition | (itemOpaque ? ITEM_OPAQUE : 0));
-    return Hygiene(store(pool, ::std::move(v)));
+    return Hygiene(store(pool, std::move(v)));
 }
 
 Ident::Hygiene Ident::Hygiene::withTailScope(ObjPool& pool, const Hygiene& scope, bool inheritModPath) const {
@@ -136,7 +136,7 @@ Ident::Hygiene Ident::Hygiene::withTailScope(ObjPool& pool, const Hygiene& scope
     if (inheritModPath && s.searchModule) {
         v.searchModule = s.searchModule;
     }
-    return Hygiene(store(pool, ::std::move(v)));
+    return Hygiene(store(pool, std::move(v)));
 }
 
 Ident::Hygiene Ident::Hygiene::getParent(ObjPool& pool) const {
@@ -145,7 +145,7 @@ Ident::Hygiene Ident::Hygiene::getParent(ObjPool& pool) const {
     Inner v;
     v.contexts.insert(v.contexts.begin(), c.contexts.begin(), c.contexts.end() - 1);
     v.macroDefinitions.insert(v.macroDefinitions.begin(), c.macroDefinitions.begin(), c.macroDefinitions.end() - 1);
-    return Hygiene(store(pool, ::std::move(v)));
+    return Hygiene(store(pool, std::move(v)));
 }
 
 bool Ident::Hygiene::leaveMacroDefinition(ObjPool& pool, unsigned int definition, const Hygiene& tokenContext, const Hygiene& definitionContext) {
@@ -160,7 +160,7 @@ bool Ident::Hygiene::leaveMacroDefinition(ObjPool& pool, unsigned int definition
     Inner v = clone();
     v.contexts.pop_back();
     v.macroDefinitions.pop_back();
-    *this = Hygiene(store(pool, ::std::move(v)));
+    *this = Hygiene(store(pool, std::move(v)));
     if (*this == tokenContext) {
         *this = definitionContext;
     }
@@ -169,8 +169,8 @@ bool Ident::Hygiene::leaveMacroDefinition(ObjPool& pool, unsigned int definition
 
 void Ident::Hygiene::setModPath(ObjPool& pool, ModPath p) {
     Inner v = clone();
-    v.searchModule = ::std::make_shared<ModPath>(::std::move(p));
-    *this = Hygiene(store(pool, ::std::move(v)));
+    v.searchModule = std::make_shared<ModPath>(std::move(p));
+    *this = Hygiene(store(pool, std::move(v)));
 }
 
 const Ident::ModPath& Ident::Hygiene::modPath() const {
@@ -203,13 +203,13 @@ Ident::Ident(const char* name)
 
 Ident::Ident(RcString name)
     : hygiene()
-    , name(::std::move(name))
+    , name(std::move(name))
 {
 }
 
 Ident::Ident(Hygiene hygiene, RcString name)
-    : hygiene(::std::move(hygiene))
-    , name(::std::move(name))
+    : hygiene(std::move(hygiene))
+    , name(std::move(name))
 {
 }
 

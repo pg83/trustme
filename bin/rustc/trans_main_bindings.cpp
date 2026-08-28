@@ -29,7 +29,7 @@ namespace {
         HIRCrate& crate;
         StaticTraitResolve resolve;
         const TransList& transList;
-        ::std::deque<HIRTypeRef> todoList;
+        std::deque<HIRTypeRef> todoList;
         HIRTypeRefSet doneList;
 
         HIRSimplePath langClone;
@@ -47,8 +47,8 @@ namespace {
     }
 
     struct CloneCleanupState {
-        ::std::vector<MIRBasicBlockId> calls;
-        ::std::vector<::std::pair<MIRLValue, unsigned>> values;
+        std::vector<MIRBasicBlockId> calls;
+        std::vector<std::pair<MIRLValue, unsigned>> values;
     };
 
     MIRBasicBlock& cloneOpenBlock(MIRFunction& mirFcn) {
@@ -60,7 +60,7 @@ namespace {
 
     MIRParam cloneField(const State& state, const Span& sp, MIRFunction& mirFcn, CloneCleanupState& cleanup, const HIRTypeData* subty, MIRLValue fldLvalue) {
         if (state.resolve.typeIsCopy(sp, subty)) {
-            return ::std::move(fldLvalue);
+            return std::move(fldLvalue);
         } else {
             const auto& langClone = state.resolve.hirCrate().getLangItemPath(sp, "clone");
             auto borrowLv = MIRLValue::newLocal(mirFcn.locals.size());
@@ -75,14 +75,14 @@ namespace {
             HIRPathParams pp;
             const auto callBlock = static_cast<MIRBasicBlockId>(mirFcn.blocks.size() - 1);
             const auto retBlock = static_cast<MIRBasicBlockId>(mirFcn.blocks.size());
-            bb.terminator = MIRTerminator::make_Call({retBlock, MIRUnwindAction::make_Continue({}), resLv.clone(), MIRCallTarget(HIRPath(subty, langClone, "clone", std::move(pp))), ::makeVec1<MIRParam>(::std::move(borrowLv))});
+            bb.terminator = MIRTerminator::make_Call({retBlock, MIRUnwindAction::make_Continue({}), resLv.clone(), MIRCallTarget(HIRPath(subty, langClone, "clone", std::move(pp))), ::makeVec1<MIRParam>(std::move(borrowLv))});
             cleanup.calls.push_back(callBlock);
-            cleanup.values.push_back(::std::make_pair(resLv.clone(), dropFlag));
+            cleanup.values.push_back(std::make_pair(resLv.clone(), dropFlag));
 
             mirFcn.blocks.push_back(MIRBasicBlock());
             mirFcn.blocks.back().statements.push_back(MIRStatement::make_SetDropFlag({dropFlag, true, ~0u}));
 
-            return ::std::move(resLv);
+            return std::move(resLv);
         }
     }
 
@@ -126,7 +126,7 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
         MIRBasicBlock bb;
         bb.statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), MIRRValue::make_Use(MIRLValue::newDeref(MIRLValue::newArgument(0)))}));
         bb.terminator = MIRTerminator::make_Return({});
-        mirFcn.blocks.push_back(::std::move(bb));
+        mirFcn.blocks.push_back(std::move(bb));
     } else {
         switch ((*ty).tag()) {
             default:
@@ -138,7 +138,7 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
                     const auto& str = state.resolve.hirCrate().getStructByPath(sp, gp.path);
                     auto p = TransParams::newImpl(state.crate.types, sp, ty, gp.params.clone());
                     CloneCleanupState cleanup;
-                    ::std::vector<MIRParam> values;
+                    std::vector<MIRParam> values;
                     values.reserve(str.data.as_Tuple().size());
                     for (const auto& fld : str.data.as_Tuple()) {
                         HIRTypeRef tmp;
@@ -159,7 +159,7 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
                 auto& te = (*ty).as_Array();
                 ASSERT_BUG(sp, te.size.as_Known() < 256, "TODO: Is more than 256 elements sane for auto-generated non-Copy Clone impl? " << ty);
                 CloneCleanupState cleanup;
-                ::std::vector<MIRParam> values;
+                std::vector<MIRParam> values;
                 values.reserve(te.size.as_Known());
                 for (size_t i = 0; i < te.size.as_Known(); i++) {
                     auto fldLvalue = MIRLValue::newField(MIRLValue::newDeref(MIRLValue::newArgument(0)), static_cast<unsigned>(values.size()));
@@ -176,7 +176,7 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
                 assert(te.size() > 0);
 
                 CloneCleanupState cleanup;
-                ::std::vector<MIRParam> values;
+                std::vector<MIRParam> values;
                 values.reserve(te.size());
                 for (const auto& subty : te) {
                     auto fldLvalue = MIRLValue::newField(MIRLValue::newDeref(MIRLValue::newArgument(0)), static_cast<unsigned>(values.size()));
@@ -195,7 +195,7 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
     HIRFunction fcn{
         HIRFunction::Receiver::BorrowShared,
         HIRGenericParams{},
-        /*m_args=*/::makeVec1(::std::make_pair(HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, "self", 0), HIRPattern::Data::make_Any({})), state.crate.types.borrow(HIRBorrowType::Shared, ty))),
+        /*m_args=*/::makeVec1(std::make_pair(HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, "self", 0), HIRPattern::Data::make_Any({})), state.crate.types.borrow(HIRBorrowType::Shared, ty))),
         /*m_return=*/ty,
         HIRExprPtr{}
     };
@@ -203,7 +203,7 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
 
     HIRTraitImpl impl;
     impl.type = ty;
-    impl.methods.insert(::std::make_pair(RcString("clone"), HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fcn)}));
+    impl.methods.insert(std::make_pair(RcString("clone"), HIRTraitImpl::ImplEnt<HIRFunction>{false, std::move(fcn)}));
 
     if (state.transList.autoCloneFromImpls.count(ty)) {
         MIRFunction fromMir;
@@ -238,8 +238,8 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
             fromMir.blocks.push_back(mv$(store));
         }
 
-        auto fromArgs = ::makeVec1(::std::make_pair(HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, "self", 0), HIRPattern::Data::make_Any({})), state.crate.types.borrow(HIRBorrowType::Unique, ty)));
-        fromArgs.push_back(::std::make_pair(HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, "source", 1), HIRPattern::Data::make_Any({})), state.crate.types.borrow(HIRBorrowType::Shared, ty)));
+        auto fromArgs = ::makeVec1(std::make_pair(HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, "self", 0), HIRPattern::Data::make_Any({})), state.crate.types.borrow(HIRBorrowType::Unique, ty)));
+        fromArgs.push_back(std::make_pair(HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, "source", 1), HIRPattern::Data::make_Any({})), state.crate.types.borrow(HIRBorrowType::Shared, ty)));
         HIRFunction fromFcn{
             HIRFunction::Receiver::BorrowUnique,
             HIRGenericParams{},
@@ -248,7 +248,7 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
             HIRExprPtr{}
         };
         fromFcn.code.mir = generatedBody(mv$(fromMir));
-        impl.methods.insert(::std::make_pair(RcString("clone_from"), HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fromFcn)}));
+        impl.methods.insert(std::make_pair(RcString("clone_from"), HIRTraitImpl::ImplEnt<HIRFunction>{false, std::move(fromFcn)}));
     }
 
     auto& list = state.crate.traitImpls[state.langClone].getListForTypeMut(impl.type);
@@ -277,7 +277,7 @@ namespace {
 
         MIRBasicBlockId pushStmtDrop(MIRLValue lv);
 
-        void pushDropSequence(::std::vector<MIRLValue> values, MIRBasicBlockId customDropCall = ~0u);
+        void pushDropSequence(std::vector<MIRLValue> values, MIRBasicBlockId customDropCall = ~0u);
 
         void terminateBlock(MIRTerminator term);
 
@@ -302,7 +302,7 @@ namespace {
             auto monomorph = [&](const auto& t) {
                 return MonomorphStatePtr(mutator.state.crate.types, ty, &tyPath.params, nullptr).monomorphType(sp, t);
             };
-            ::std::vector<MIRParam> vals;
+            std::vector<MIRParam> vals;
             switch (str.data.tag()) {
                 case HIRStructData::TAG_Unit: {
                     break;
@@ -354,7 +354,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
         }
 
         while (!state.todoList.empty()) {
-            auto ty = ::std::move(state.todoList.front());
+            auto ty = std::move(state.todoList.front());
             state.todoList.pop_back();
 
             TransAutoImplClone(state, mv$(ty));
@@ -367,7 +367,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
             const auto* implList = implListIt->second.getListForType(ty);
             ASSERT_BUG(Span(), implList, "No impl list of Clone for " << ty);
-            auto& impl = **::std::find_if(implList->begin(), implList->end(), [&](const auto& i) {
+            auto& impl = **std::find_if(implList->begin(), implList->end(), [&](const auto& i) {
                 return i->type == ty;
             });
 
@@ -399,12 +399,12 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             MIRBasicBlock bb;
             bb.statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), MIRRValue::make_Cast({MIRLValue::newArgument(0), outTy})}));
             bb.terminator = MIRTerminator::make_Return({});
-            mirFcn.blocks.push_back(::std::move(bb));
+            mirFcn.blocks.push_back(std::move(bb));
 
             HIRFunction fcn{
                 HIRFunction::Receiver::Value,
                 HIRGenericParams{},
-                /*m_args=*/::makeVec1(::std::make_pair(HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, "self", 0), HIRPattern::Data::make_Any({})), ty)),
+                /*m_args=*/::makeVec1(std::make_pair(HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, "self", 0), HIRPattern::Data::make_Any({})), ty)),
                 /*m_return=*/std::move(outTy),
                 HIRExprPtr{}
             };
@@ -412,7 +412,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
             HIRTraitImpl impl;
             impl.type = ty;
-            impl.methods.insert(::std::make_pair(RcString::newInterned("addr"), HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fcn)}));
+            impl.methods.insert(std::make_pair(RcString::newInterned("addr"), HIRTraitImpl::ImplEnt<HIRFunction>{false, std::move(fcn)}));
 
             auto& list = state.crate.traitImpls[langFnPtr].getListForTypeMut(impl.type);
             list.push_back(box$(impl));
@@ -420,7 +420,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
             {
                 auto p = HIRPath(ty, HIRGenericPath(langFnPtr), "addr");
-                auto e = transList.addFunction(crate.types, ::std::move(p));
+                auto e = transList.addFunction(crate.types, std::move(p));
 
                 auto& impl = *list.back();
                 assert(impl.methods.size() == 1);
@@ -565,7 +565,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     if (e) {
                         auto ft = te->decay(crate.types, sp);
 
-                        ::std::vector<HIRTypeRef> argTys;
+                        std::vector<HIRTypeRef> argTys;
                         for (auto& ty : ft.argTypes) {
                             argTys.push_back(ty);
                         }
@@ -607,7 +607,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
                     auto* e = transList.addFunction(crate.types, mv$(fcnP));
                     if (e) {
-                        ::std::vector<HIRTypeRef> argTys;
+                        std::vector<HIRTypeRef> argTys;
                         for (const auto& ty : te->argTypes) {
                             argTys.push_back(ty);
                         }
@@ -646,7 +646,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 continue;
             }
 
-            ::std::vector<HIRTypeRef> tupleTys;
+            std::vector<HIRTypeRef> tupleTys;
             tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize));
             tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize));
             tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize));
@@ -657,7 +657,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
             HIRLinkage linkage;
             linkage.type = HIRLinkage::Type::Weak;
-            HIRStatic vtableStatic(::std::move(linkage), /*is_mut*/ false, mv$(vtableTy), {});
+            HIRStatic vtableStatic(std::move(linkage), /*is_mut*/ false, mv$(vtableTy), {});
             auto& vtableData = vtableStatic.valueRes;
             const auto ptrBytes = TargetGetPointerBits() / 8;
             vtableData.bytes.resize(repr->size);
@@ -720,7 +720,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
             HIRLinkage linkage;
             linkage.type = HIRLinkage::Type::Weak;
-            HIRStatic vtableStatic(::std::move(linkage), /*is_mut*/ false, mv$(vtableTy), {});
+            HIRStatic vtableStatic(std::move(linkage), /*is_mut*/ false, mv$(vtableTy), {});
             auto& vtableData = vtableStatic.valueRes;
             const auto ptrBytes = TargetGetPointerBits() / 8;
             vtableData.bytes.resize(repr->size);
@@ -783,7 +783,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 });
                                 MIRTypeResolve localMirRes{sp, state.resolve, pathCallback, newFcn.returnType, newFcn.args, *newFcn.code.mir};
                                 Builder builder(state, *newFcn.code.mir);
-                                ::std::vector<MIRParam> callArgs;
+                                std::vector<MIRParam> callArgs;
                                 callArgs.push_back(MIRLValue::newDeref(MIRLValue::newArgument(0)));
                                 for (size_t i = 1; i < tplFcn.args.size(); i++) {
                                     callArgs.push_back(MIRLValue::newArgument(i));
@@ -925,7 +925,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         auto& te = (*ty).as_Tuple();
                         auto self = MIRLValue::newDeref(builder.self.clone());
                         auto fldLv = MIRLValue::newField(mv$(self), 0);
-                        ::std::vector<MIRLValue> fields;
+                        std::vector<MIRLValue> fields;
                         for (size_t i = 0; i < te.size(); i++) {
                             if (state.resolve.typeNeedsDropGlue(sp, te[i])) {
                                 fields.push_back(fldLv.clone());
@@ -976,7 +976,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
                                     auto self = MIRLValue::newDeref(builder.self.clone());
                                     auto fldLv = MIRLValue::newField(mv$(self), 0);
-                                    ::std::vector<MIRLValue> fields;
+                                    std::vector<MIRLValue> fields;
                                     for (size_t i = 0; i < repr->fields.size(); i++) {
                                         if (state.resolve.typeNeedsDropGlue(sp, repr->fields[i].ty)) {
                                             fields.push_back(fldLv.clone());
@@ -1016,7 +1016,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                         const auto switchBlock = builder.mir.blocks.size() - 1;
                                         builder.terminateBlock(MIRTerminator::make_Switch(mv$(sw)));
 
-                                        ::std::vector<MIRBasicBlockId> targets;
+                                        std::vector<MIRBasicBlockId> targets;
                                         targets.reserve(variants.size());
                                         auto fldLv = MIRLValue::newDowncast(mv$(self), 0);
                                         for (size_t idx = 0; idx < variants.size(); idx++) {
@@ -1043,7 +1043,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                             builder.mir.blocks.push_back(mv$(switchCleanupBlock));
 
                                             const auto resume = static_cast<MIRBasicBlockId>(builder.mir.blocks.size() + variants.size());
-                                            ::std::vector<MIRBasicBlockId> cleanupTargets;
+                                            std::vector<MIRBasicBlockId> cleanupTargets;
                                             cleanupTargets.reserve(variants.size());
                                             auto cleanupField = MIRLValue::newDowncast(MIRLValue::newDeref(builder.self.clone()), 0);
                                             for (size_t idx = 0; idx < variants.size(); idx++) {
@@ -1174,13 +1174,13 @@ namespace {
         TransList rv;
         const TransList* origList;
 
-        ::std::deque<TransListFunction*> fcnQueue;
-        ::std::vector<TransListFunction*> fcnsToTypeVisit;
+        std::deque<TransListFunction*> fcnQueue;
+        std::vector<TransListFunction*> fcnsToTypeVisit;
 
-        ::std::set<std::string> emittedFunctions;
-        ::std::set<HIRPath> activePaths;
+        std::set<std::string> emittedFunctions;
+        std::set<HIRPath> activePaths;
 
-        ::std::unordered_map<std::string, std::pair<HIRSimplePath, const HIRFunction*>> linkFunctions;
+        std::unordered_map<std::string, std::pair<HIRSimplePath, const HIRFunction*>> linkFunctions;
 
         EnumState(const WireBoard& wb);
 
@@ -1536,7 +1536,7 @@ namespace {
         for (auto& vi : mod.valueItems) {
             bool emit = isVisible && vi.second->publicity.isGlobal();
             auto p = modPath + vi.first;
-            if (::std::any_of(state.crate.langItems.begin(), state.crate.langItems.end(), [&](const auto& e) {
+            if (std::any_of(state.crate.langItems.begin(), state.crate.langItems.end(), [&](const auto& e) {
                 return e.second == p;
             })) {
                 emit = true;
@@ -1765,7 +1765,7 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
 namespace {
     template <typename T>
     void removeMissing(const WireBoard& wb, std::map<HIRPath, T>& target, const std::map<HIRPath, T>& tpl) {
-        ::std::unordered_map<::std::string, const HIRPath*> requiredSymbols;
+        std::unordered_map<std::string, const HIRPath*> requiredSymbols;
         for (const auto& entry : tpl) {
             auto symbol = FMT(TransMangleValue(wb, entry.first));
             auto inserted = requiredSymbols.emplace(mv$(symbol), &entry.first);
@@ -2034,7 +2034,7 @@ namespace {
     }
 }
 
-void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const ::std::vector<HIRPath>& paths) {
+void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const std::vector<HIRPath>& paths) {
     if (paths.empty()) {
         return;
     }
@@ -2187,7 +2187,7 @@ void TransEnumerateTypes(EnumState& state) {
             const auto& ty = ent.first.data.as_UfcsKnown().type;
             const auto& gpath = ent.first.data.as_UfcsKnown().trait;
             if (gpath.path == HIRSimplePath()) {
-                ::std::vector<HIRTypeRef> tupleTys;
+                std::vector<HIRTypeRef> tupleTys;
                 tupleTys.push_back(state.crate.types.primitive(HIRCoreType::Usize));
                 tupleTys.push_back(state.crate.types.primitive(HIRCoreType::Usize));
                 tupleTys.push_back(state.crate.types.primitive(HIRCoreType::Usize));
@@ -2642,7 +2642,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 case HIRConstant::ValueState::Generic:
                     if (auto* slot = state.rv.addConst(state.crate.types, mv$(pathMono))) {
                         slot->ptr = e;
-                        slot->pp = ::std::move(subPp);
+                        slot->pp = std::move(subPp);
                     }
                     break;
                 case HIRConstant::ValueState::Known:
@@ -3165,7 +3165,7 @@ auto Builder::pushStmtDrop(MIRLValue lv) -> MIRBasicBlockId {
     return dropBlock;
 }
 
-auto Builder::pushDropSequence(::std::vector<MIRLValue> values, MIRBasicBlockId customDropCall) -> void {
+auto Builder::pushDropSequence(std::vector<MIRLValue> values, MIRBasicBlockId customDropCall) -> void {
     if (values.empty()) {
         return;
     }
@@ -3775,7 +3775,7 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                 }
 
                 bool visitLvalue(const MIRLValue& lv, MIRValUsage /*vu*/) override {
-                    if (::std::none_of(lv.wrappers.begin(), lv.wrappers.end(), [](const auto& w) {
+                    if (std::none_of(lv.wrappers.begin(), lv.wrappers.end(), [](const auto& w) {
                         return w.is_Deref();
                     })) {
                         return false;

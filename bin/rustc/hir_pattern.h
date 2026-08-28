@@ -35,7 +35,7 @@ struct HIRPatternBinding {
 
     HIRPatternBinding(bool mut, Type type, RcString name, unsigned int slot);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRPatternBinding& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRPatternBinding& x);
 };
 
 enum class HIRPatternBindingOrder {
@@ -55,13 +55,13 @@ struct HIRPattern;
 
 #include "hir_pattern_value_tu.h"
 
-::std::ostream& operator<<(::std::ostream& os, const HIRPatternValue& x);
+std::ostream& operator<<(std::ostream& os, const HIRPatternValue& x);
 
 struct HIRPatternPathNamedData {
     HIRPath path;
     HIRPatternPathBinding binding;
 
-    ::std::vector<::std::pair<RcString, HIRPattern>> subPatterns;
+    std::vector<std::pair<RcString, HIRPattern>> subPatterns;
     bool isExhaustive;
 
     bool isWildcard() const;
@@ -98,7 +98,7 @@ struct HIRPattern {
 
     HIRPattern clone() const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRPattern& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRPattern& x);
 };
 
 inline bool HIRPatternPathNamedData::isWildcard() const {

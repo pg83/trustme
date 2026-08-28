@@ -34,16 +34,16 @@ enum class HIRGenericParamKind : u8 {
 class HIRGenericParams;
 
 #include "hir_generic_params_tu.h"
-extern ::std::ostream& operator<<(::std::ostream& os, const HIRGenericBound& x);
+extern std::ostream& operator<<(std::ostream& os, const HIRGenericBound& x);
 
 class HIRGenericParams {
 public:
-    ::std::vector<HIRTypeParamDef> types;
-    ::std::vector<HIRValueParamDef> values;
+    std::vector<HIRTypeParamDef> types;
+    std::vector<HIRValueParamDef> values;
 
     stl::Vector<HIRGenericParamKind> paramKinds;
 
-    ::std::vector<HIRGenericBound> bounds;
+    std::vector<HIRGenericBound> bounds;
 
     HIRGenericParams clone() const;
 
@@ -73,7 +73,7 @@ public:
 
         PrintArgs(const HIRGenericParams& gp);
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const PrintArgs& x);
+        friend std::ostream& operator<<(std::ostream& os, const PrintArgs& x);
     };
 
     PrintArgs fmtArgs() const {
@@ -85,7 +85,7 @@ public:
 
         PrintBounds(const HIRGenericParams& gp);
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const PrintBounds& x);
+        friend std::ostream& operator<<(std::ostream& os, const PrintBounds& x);
     };
 
     PrintBounds fmtBounds() const {

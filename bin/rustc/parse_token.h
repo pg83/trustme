@@ -29,7 +29,7 @@ public:
     Position(RcString filename, unsigned int line, unsigned int ofs);
 };
 
-extern ::std::ostream& operator<<(::std::ostream& os, const Position& p);
+extern std::ostream& operator<<(std::ostream& os, const Position& p);
 
 struct ASTType;
 class TokenTree;
@@ -76,7 +76,7 @@ public:
     Token clone() const;
 
     Token(enum eTokenType type);
-    Token(enum eTokenType type, ::std::string str, Ident::Hygiene h);
+    Token(enum eTokenType type, std::string str, Ident::Hygiene h);
     Token(enum eTokenType type, Ident i);
     Token(U128 val, enum eCoreType datatype);
     static Token makeFloat(FloatValue val, enum eCoreType datatype);
@@ -98,11 +98,11 @@ public:
         return data_.as_Ident();
     }
 
-    ::std::string& str() {
+    std::string& str() {
         return data_.as_String();
     }
 
-    const ::std::string& str() const {
+    const std::string& str() const {
         return data_.as_String();
     }
 
@@ -147,7 +147,7 @@ public:
 
     ASTExprNode& fragNode();
 
-    ::std::unique_ptr<ASTExprNode> takeFragNode();
+    std::unique_ptr<ASTExprNode> takeFragNode();
     ASTNamed<ASTItem> takeFragItem();
     ASTNamed<ASTItem> takeFragStmtItem();
     ASTVisibility takeFragVis();
@@ -166,7 +166,7 @@ public:
         return !(*this == r);
     }
 
-    ::std::string toStr() const;
+    std::string toStr() const;
 
     void setPos(Position pos) {
         this->pos = pos;
@@ -189,13 +189,13 @@ public:
     }
 
     static const char* typestr(enum eTokenType type);
-    static eTokenType typefromstr(const ::std::string& s);
+    static eTokenType typefromstr(const std::string& s);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const Token& tok);
+    friend std::ostream& operator<<(std::ostream& os, const Token& tok);
 };
 
-extern ::std::ostream& operator<<(::std::ostream& os, const Token& tok);
+extern std::ostream& operator<<(std::ostream& os, const Token& tok);
 
-extern void printEscapedLiteral(::std::ostream& os, eTokenType type, const u8* value, size_t size);
+extern void printEscapedLiteral(std::ostream& os, eTokenType type, const u8* value, size_t size);
 
 extern bool tokensNeedSpace(eTokenType prev, eTokenType cur);

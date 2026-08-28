@@ -16,7 +16,7 @@ namespace stl {
 class HIRTypeInterner;
 class ExpandRegistry;
 
-extern ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, ::std::string mainfile, ASTEdition edition);
+extern ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, std::string mainfile, ASTEdition edition);
 
 extern void ExpandInit(ExpandRegistry& registry);
 extern void Expand(const WireBoard& wb, ASTCrate& crate);

@@ -15,7 +15,7 @@ generate(
         v("Known", "HIRTypeRef"),
         v("Alias", fields=[
             ("HIRPathParams", "params"),
-            ("::std::shared_ptr<HIRTypeDataErasedTypeAliasInner>", "inner"),
+            ("std::shared_ptr<HIRTypeDataErasedTypeAliasInner>", "inner"),
         ], copy=False),
     ],
 )
@@ -54,6 +54,6 @@ generate(
         }
         Ordering ord(const HIRTypeDataNodeType& x) const;
         HIRTypeDataNodeType clone() const;
-        void fmt(::std::ostream& os) const;
+        void fmt(std::ostream& os) const;
     """,
 )

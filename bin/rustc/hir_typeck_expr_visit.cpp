@@ -32,7 +32,7 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
             ms.traits.clear();
             for (const auto& tp : mod.traits) {
                 const auto& trait = ms.crate.getTraitByPath(sp, tp);
-                ms.traits.push_back(::std::make_pair(&tp, &trait));
+                ms.traits.push_back(std::make_pair(&tp, &trait));
             }
         }
     };
@@ -170,9 +170,9 @@ TypeckModuleState::NullOnDrop<const HIRGenericParams> TypeckModuleState::setItem
 void TypeckModuleState::pushTraits(HIRItemPath p, const HIRModule& mod) {
     auto sp = Span();
     modPaths.push_back(p.getSimplePath());
-    traits.push_back(::std::make_pair(nullptr, nullptr));
+    traits.push_back(std::make_pair(nullptr, nullptr));
     for (const auto& traitPath : mod.traits) {
-        traits.push_back(::std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
+        traits.push_back(std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
     }
 }
 
@@ -234,7 +234,7 @@ auto OuterVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& 
 
     const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
     ms.pushTraits(impl.srcModule, mod);
-    ms.traits.push_back(::std::make_pair(&traitPath, &this->ms.crate.getTraitByPath(Span(), traitPath)));
+    ms.traits.push_back(std::make_pair(&traitPath, &this->ms.crate.getTraitByPath(Span(), traitPath)));
     HIRVisitor::visitTraitImpl(traitPath, impl);
     ms.traits.pop_back();
     ms.popTraits(mod);

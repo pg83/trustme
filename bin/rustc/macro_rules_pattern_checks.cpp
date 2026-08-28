@@ -166,7 +166,7 @@ namespace {
         const Ent& e;
     };
 
-    ::std::ostream& operator<<(::std::ostream& os, const Described& x) {
+    std::ostream& operator<<(std::ostream& os, const Described& x) {
         if (isFragment(x.e)) {
             return os << "`$" << x.e.name << ":" << fragmentName(x.e.type) << "`";
         }

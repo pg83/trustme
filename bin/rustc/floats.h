@@ -22,7 +22,7 @@ FloatValue floatValueRemainder(FloatValue lhs, FloatValue rhs);
 FloatValue floatValueMinimumNumber(FloatValue lhs, FloatValue rhs);
 FloatValue floatValueMaximumNumber(FloatValue lhs, FloatValue rhs);
 FloatValue positiveNanFloatValue();
-::std::string formatFloatValueForToken(FloatValue value);
+std::string formatFloatValueForToken(FloatValue value);
 
 std::ostringstream&& operator<<(std::ostringstream&& os, const FloatValue& value);
 

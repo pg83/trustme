@@ -229,7 +229,7 @@ auto Mangler::fmtName(const char* const s) -> void {
         needsByteEncoding |= !canEmitRaw;
     }
 
-    ::std::string encoded;
+    std::string encoded;
     if (needsByteEncoding) {
         static constexpr char HEX[] = "0123456789abcdef";
         encoded = "U";

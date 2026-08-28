@@ -109,7 +109,7 @@ InterpolatedFragment::InterpolatedFragment(ASTVisibility v)
 {
 }
 
-::std::ostream& operator<<(::std::ostream& os, InterpolatedFragment const& x) {
+std::ostream& operator<<(std::ostream& os, InterpolatedFragment const& x) {
     switch (x.type) {
         case InterpolatedFragment::TT:
             os << "tt[" << x.asTt() << "]";

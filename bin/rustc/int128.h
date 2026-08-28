@@ -207,7 +207,7 @@ public:
 
     bool bit(unsigned idx) const;
 
-    friend std::ostream& operator<<(::std::ostream& os, const U128& x);
+    friend std::ostream& operator<<(std::ostream& os, const U128& x);
 
 private:
     // TODO: All of these are functionally identical to code in `codegen_c.cpp` - could it be shared?
@@ -366,9 +366,9 @@ public:
 
     S128 operator>>(unsigned bits) const;
 
-    void fmt(::std::ostream& os) const;
+    void fmt(std::ostream& os) const;
 
-    friend std::ostream& operator<<(::std::ostream& os, const S128& x);
+    friend std::ostream& operator<<(std::ostream& os, const S128& x);
 
 private:
     static int cmp128s(U128 a, U128 b);

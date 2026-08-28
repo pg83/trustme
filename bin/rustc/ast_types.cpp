@@ -47,7 +47,7 @@ bool ASTHigherRankedBounds::empty() const {
 
 TypeFunction::TypeFunction() = default;
 
-TypeFunction::TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ASTType* ret, ::std::vector<ASTType*> args, bool isVariadic)
+TypeFunction::TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, ASTType* ret, std::vector<ASTType*> args, bool isVariadic)
     : hrbs(mv$(hrbs))
     , isUnsafe(isUnsafe)
     , abi(mv$(abi))
@@ -149,8 +149,8 @@ Ordering TypeFunction::ord(const TypeFunction& x) const {
 
 ASTType* ASTType::clone() const {
     struct H {
-        static ::std::vector<::ASTType*> cloneTyVec(const ::std::vector<ASTType*>& x) {
-            ::std::vector<ASTType*> rv;
+        static std::vector<::ASTType*> cloneTyVec(const std::vector<ASTType*>& x) {
+            std::vector<ASTType*> rv;
             rv.reserve(x.size());
             for (const auto& t : x) {
                 rv.push_back(t->clone());
@@ -186,7 +186,7 @@ ASTType* ASTType::clone() const {
         _COPY(Generic)
         _CLONE(Path, p.make<ASTPath>(*old))
         _COPY(TraitObject)
-        _CLONE(ErasedType, p.make<TypeErasedType>(TypeErasedType{old->traits, old->maybeTraits, old->lifetimes, old->use ? box$(*old->use) : ::std::unique_ptr<ASTPathParams>(), old->isEdition2024OrLater}))
+        _CLONE(ErasedType, p.make<TypeErasedType>(TypeErasedType{old->traits, old->maybeTraits, old->lifetimes, old->use ? box$(*old->use) : std::unique_ptr<ASTPathParams>(), old->isEdition2024OrLater}))
 #undef _COPY
 #undef _CLONE
     }
@@ -295,7 +295,7 @@ Ordering ASTType::ord(const ASTType& x) const {
                 return rv;
             }
             if (ent.size.get()) {
-                throw ::std::runtime_error("TODO: Sized array comparisons");
+                throw std::runtime_error("TODO: Sized array comparisons");
             }
             return OrdEqual;
             break;
@@ -345,10 +345,10 @@ Ordering ASTType::ord(const ASTType& x) const {
             break;
         }
     }
-    throw ::std::runtime_error(FMT("BUGCHECK - Unhandled ASTType* class '" << data.tag() << "'"));
+    throw std::runtime_error(FMT("BUGCHECK - Unhandled ASTType* class '" << data.tag() << "'"));
 }
 
-::std::ostream& operator<<(::std::ostream& os, const eCoreType ct) {
+std::ostream& operator<<(std::ostream& os, const eCoreType ct) {
     return os << coretypeName(ct);
 }
 
@@ -356,7 +356,7 @@ Ordering ord(ASTType* a, ASTType* b) {
     return a->ord(*b);
 }
 
-void ASTType::print(::std::ostream& os, bool isDebug /*=false*/) const {
+void ASTType::print(std::ostream& os, bool isDebug /*=false*/) const {
 #define _(VAR, ...)                              \
     case TypeData::TAG_##VAR: {                  \
         const auto& ent = this->data.as_##VAR(); \
@@ -468,17 +468,17 @@ void ASTType::print(::std::ostream& os, bool isDebug /*=false*/) const {
 #undef _2
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTType& tr) {
+std::ostream& operator<<(std::ostream& os, const ASTType& tr) {
     tr.print(os, true);
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const PrettyPrintType& x) {
+std::ostream& operator<<(std::ostream& os, const PrettyPrintType& x) {
     x.type_->print(os, false);
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTLifetimeRef& x) {
+std::ostream& operator<<(std::ostream& os, const ASTLifetimeRef& x) {
     if (x.binding_ == ASTLifetimeRef::BINDING_STATIC) {
         os << "'static";
     } else if (x.binding_ == ASTLifetimeRef::BINDING_INFER) {
@@ -528,11 +528,11 @@ ASTType* mkType(ObjPool& pool, Span sp, enum eCoreType type) {
     return mkType(pool, sp, TypeData::make_Primitive({type}));
 }
 
-ASTType* mkType(ObjPool& pool, ASTTypeTags::Tuple, Span sp, ::std::vector<ASTType*> innerTypes) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Tuple, Span sp, std::vector<ASTType*> innerTypes) {
     return mkType(pool, sp, TypeData::make_Tuple({mv$(innerTypes)}));
 }
 
-ASTType* mkType(ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<ASTType*> args, bool isVariadic, ASTType* ret) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, std::vector<ASTType*> args, bool isVariadic, ASTType* ret) {
     return mkType(pool, sp, TypeData::make_Function({TypeFunction(mv$(hrbs), isUnsafe, abi, ret, mv$(args), isVariadic)}));
 }
 
@@ -544,7 +544,7 @@ ASTType* mkType(ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTTyp
     return mkType(pool, sp, TypeData::make_Pointer({isMut, innerType}));
 }
 
-ASTType* mkType(ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, ::std::shared_ptr<ASTExprNode> size) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, std::shared_ptr<ASTExprNode> size) {
     return mkType(pool, sp, TypeData::make_Array({innerType, mv$(size)}));
 }
 
@@ -568,6 +568,6 @@ ASTType* mkType(ObjPool& pool, Span sp, ASTPath path) {
     return mkType(pool, ASTTypeTags::Path(), sp, mv$(path));
 }
 
-ASTType* mkType(ObjPool& pool, Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes) {
+ASTType* mkType(ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, std::vector<ASTLifetimeRef> lifetimes) {
     return mkType(pool, sp, TypeData::make_TraitObject({mv$(traits), mv$(lifetimes)}));
 }

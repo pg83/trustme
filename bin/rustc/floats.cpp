@@ -54,17 +54,17 @@ FloatValue positiveNanFloatValue() {
     return Float128::quietNan();
 }
 
-::std::string formatFloatValueForToken(FloatValue value) {
-    ::std::string rv;
+std::string formatFloatValueForToken(FloatValue value) {
+    std::string rv;
     for (int precision = 1; precision <= 36; precision++) {
-        ::std::ostringstream os;
-        os << ::std::setprecision(precision) << value;
+        std::ostringstream os;
+        os << std::setprecision(precision) << value;
         rv = os.str();
         if (parseFloatValue(rv.c_str()) == value) {
             break;
         }
     }
-    if (rv.find_first_of(".eEni") == ::std::string::npos) {
+    if (rv.find_first_of(".eEni") == std::string::npos) {
         rv += ".0";
     }
     return rv;

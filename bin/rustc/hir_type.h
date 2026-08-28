@@ -52,7 +52,7 @@ enum class HIRCoreType {
     Char,
     Str,
 };
-extern ::std::ostream& operator<<(::std::ostream& os, const HIRCoreType& ct);
+extern std::ostream& operator<<(std::ostream& os, const HIRCoreType& ct);
 
 bool isInteger(const HIRCoreType& v);
 
@@ -63,11 +63,11 @@ enum class HIRBorrowType {
     Unique,
     Owned,
 };
-extern ::std::ostream& operator<<(::std::ostream& os, const HIRBorrowType& bt);
+extern std::ostream& operator<<(std::ostream& os, const HIRBorrowType& bt);
 
 #include "hir_type_binding_tu.h"
 
-extern ::std::ostream& operator<<(::std::ostream& os, const HIRArraySize& x);
+extern std::ostream& operator<<(std::ostream& os, const HIRArraySize& x);
 
 struct HIRTypeDataPath {
     HIRPath path;
@@ -88,7 +88,7 @@ struct HIRTypeDataPath {
 
 struct HIRTypeDataTraitObject {
     HIRTraitPath trait;
-    ::std::vector<HIRGenericPath> markers;
+    std::vector<HIRGenericPath> markers;
 
     RcString lifetimeIdentity;
 
@@ -118,7 +118,7 @@ static inline bool operator!=(const TypeDataErasedTypeInner& a, const TypeDataEr
 
 struct HIRTypeDataErasedType {
     bool isSized;
-    ::std::vector<HIRTraitPath> traits;
+    std::vector<HIRTraitPath> traits;
     TypeDataErasedTypeInner inner;
 
     HIRPathParams use;
@@ -137,7 +137,7 @@ struct HIRTypeDataFunctionPointer {
     bool isVariadic;
     RcString abi;
     HIRTypeRef rettype;
-    ::std::vector<HIRTypeRef> argTypes;
+    std::vector<HIRTypeRef> argTypes;
 
     bool trackCaller = false;
 
@@ -154,15 +154,15 @@ struct HIRTypePatternRange {
 
     HIRTypePatternRange clone() const;
     Ordering ord(const HIRTypePatternRange& x) const;
-    void fmt(::std::ostream& os) const;
+    void fmt(std::ostream& os) const;
 };
 
 struct HIRTypePattern {
-    ::std::vector<HIRTypePatternRange> alternatives;
+    std::vector<HIRTypePatternRange> alternatives;
 
     HIRTypePattern clone() const;
     Ordering ord(const HIRTypePattern& x) const;
-    void fmt(::std::ostream& os) const;
+    void fmt(std::ostream& os) const;
 };
 
 struct HIRTypeDataInfer {
@@ -197,7 +197,7 @@ struct HIRTypeDataNamedFunction {
 class HIRTypeInterner {
     stl::ObjPool& pool;
     u32& id;
-    ::std::unordered_multimap<size_t, HIRTypeRef> nodes;
+    std::unordered_multimap<size_t, HIRTypeRef> nodes;
 
 public:
     HIRTypeInterner(stl::ObjPool& pool, u32& id);
@@ -217,7 +217,7 @@ public:
     HIRTypeRef diverge();
     HIRTypeRef borrow(HIRBorrowType bt, HIRTypeRef inner);
     HIRTypeRef pointer(HIRBorrowType bt, HIRTypeRef inner);
-    HIRTypeRef tuple(::std::vector<HIRTypeRef> types);
+    HIRTypeRef tuple(std::vector<HIRTypeRef> types);
     HIRTypeRef slice(HIRTypeRef inner);
     HIRTypeRef array(HIRTypeRef inner, HIRArraySize size);
     HIRTypeRef array(HIRTypeRef inner, u64 size);
@@ -237,4 +237,4 @@ inline bool operator!=(HIRTypeRef ty, HIRCoreType ct) {
     return !(ty == ct);
 }
 
-extern ::std::ostream& operator<<(::std::ostream& os, const HIRTypeData* ty);
+extern std::ostream& operator<<(std::ostream& os, const HIRTypeData* ty);

@@ -9,14 +9,14 @@
 #include <algorithm>
 
 struct HIRSerialiseWriterInner {
-    ::std::ofstream backing;
+    std::ofstream backing;
     z_stream zstream;
-    ::std::vector<unsigned char> buffer;
+    std::vector<unsigned char> buffer;
 
     unsigned int byteOutCount = 0;
     unsigned int byteInCount = 0;
 
-    HIRSerialiseWriterInner(const ::std::string& filename);
+    HIRSerialiseWriterInner(const std::string& filename);
     ~HIRSerialiseWriterInner();
     void write(const void* buf, size_t len);
 };
@@ -30,13 +30,13 @@ HIRSerialiseWriter::~HIRSerialiseWriter() {
     delete inner, inner = nullptr;
 }
 
-void HIRSerialiseWriter::open(const ::std::string& filename) {
-    ::std::vector<::std::pair<RcString, unsigned>> sorted;
+void HIRSerialiseWriter::open(const std::string& filename) {
+    std::vector<std::pair<RcString, unsigned>> sorted;
     sorted.reserve(istringCache.size());
     for (const auto& e : istringCache) {
         sorted.push_back(e);
     }
-    ::std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
+    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
         return a.second > b.second;
     });
 
@@ -65,12 +65,12 @@ void HIRSerialiseWriter::writeString(const RcString& v) {
     if (inner) {
         this->writeCount(istringCache.at(v));
     } else {
-        istringCache.insert(::std::make_pair(v, 0)).first->second += 1;
+        istringCache.insert(std::make_pair(v, 0)).first->second += 1;
     }
 }
 
-HIRSerialiseWriterInner::HIRSerialiseWriterInner(const ::std::string& filename)
-    : backing(filename, ::std::ios_base::out | ::std::ios_base::binary)
+HIRSerialiseWriterInner::HIRSerialiseWriterInner(const std::string& filename)
+    : backing(filename, std::ios_base::out | std::ios_base::binary)
     , zstream()
     , buffer(16 * 1024)
 {
@@ -81,7 +81,7 @@ HIRSerialiseWriterInner::HIRSerialiseWriterInner(const ::std::string& filename)
     const int COMPRESSION_LEVEL = Z_BEST_COMPRESSION;
     int ret = deflateInit(&zstream, COMPRESSION_LEVEL);
     if (ret != Z_OK) {
-        throw ::std::runtime_error("zlib init failure");
+        throw std::runtime_error("zlib init failure");
     }
 
     zstream.avail_out = buffer.size();
@@ -95,7 +95,7 @@ HIRSerialiseWriterInner::~HIRSerialiseWriterInner() {
     do {
         ret = deflate(&zstream, Z_FINISH);
         if (ret == Z_STREAM_ERROR) {
-            ::std::cerr << "ERROR: zlib deflate stream error (cleanup)";
+            std::cerr << "ERROR: zlib deflate stream error (cleanup)";
             abort();
         }
         if (zstream.avail_out != buffer.size()) {
@@ -121,7 +121,7 @@ void HIRSerialiseWriterInner::write(const void* buf, size_t len) {
 
         int ret = deflate(&zstream, Z_NO_FLUSH);
         if (ret == Z_STREAM_ERROR) {
-            throw ::std::runtime_error("zlib deflate stream error");
+            throw std::runtime_error("zlib deflate stream error");
         }
 
         size_t usedThisTime = lastAvailIn - zstream.avail_in;
@@ -148,20 +148,20 @@ void HIRSerialiseWriterInner::write(const void* buf, size_t len) {
 
         int ret = deflate(&zstream, Z_NO_FLUSH);
         if (ret == Z_STREAM_ERROR) {
-            throw ::std::runtime_error("zlib deflate stream error");
+            throw std::runtime_error("zlib deflate stream error");
         }
     }
 }
 
 struct HIRSerialiseReaderInner {
-    ::std::ifstream backing;
+    std::ifstream backing;
     z_stream zstream;
-    ::std::vector<unsigned char> buffer;
+    std::vector<unsigned char> buffer;
 
     unsigned int byteOutCount = 0;
     unsigned int byteInCount = 0;
 
-    HIRSerialiseReaderInner(const ::std::string& filename);
+    HIRSerialiseReaderInner(const std::string& filename);
     ~HIRSerialiseReaderInner();
     size_t read(void* buf, size_t len);
 };
@@ -192,7 +192,7 @@ void HIRSerialiseReadBuffer::populate(HIRSerialiseReaderInner& is) {
     ofs = 0;
 }
 
-HIRSerialiseReader::HIRSerialiseReader(const ::std::string& filename)
+HIRSerialiseReader::HIRSerialiseReader(const std::string& filename)
     : inner(new HIRSerialiseReaderInner(filename))
     , buffer(1024)
     , pos(0)
@@ -224,20 +224,20 @@ void HIRSerialiseReader::read(void* buf, size_t len) {
         buffer.populate(*inner);
         used = buffer.read(buf, len);
         if (used != len) {
-            throw ::std::runtime_error(FMT("Reader::read - Requested " << len << " bytes from buffer, got " << used));
+            throw std::runtime_error(FMT("Reader::read - Requested " << len << " bytes from buffer, got " << used));
         }
     }
 
     pos += len;
 }
 
-HIRSerialiseReaderInner::HIRSerialiseReaderInner(const ::std::string& filename)
-    : backing(filename, ::std::ios_base::in | ::std::ios_base::binary)
+HIRSerialiseReaderInner::HIRSerialiseReaderInner(const std::string& filename)
+    : backing(filename, std::ios_base::in | std::ios_base::binary)
     , zstream()
     , buffer(16 * 1024)
 {
     if (!backing.is_open()) {
-        throw ::std::runtime_error("Unable to open " + filename);
+        throw std::runtime_error("Unable to open " + filename);
     }
 
     zstream.zalloc = Z_NULL;
@@ -246,7 +246,7 @@ HIRSerialiseReaderInner::HIRSerialiseReaderInner(const ::std::string& filename)
 
     int ret = inflateInit(&zstream);
     if (ret != Z_OK) {
-        throw ::std::runtime_error("zlib init failure");
+        throw std::runtime_error("zlib init failure");
     }
 
     zstream.avail_in = 0;
@@ -274,14 +274,14 @@ size_t HIRSerialiseReaderInner::read(void* buf, size_t len) {
 
         int ret = inflate(&zstream, Z_NO_FLUSH);
         if (ret == Z_STREAM_ERROR) {
-            throw ::std::runtime_error("zlib inflate stream error");
+            throw std::runtime_error("zlib inflate stream error");
         }
         switch (ret) {
             case Z_NEED_DICT:
                 ret = Z_DATA_ERROR;
             case Z_DATA_ERROR:
             case Z_MEM_ERROR:
-                throw ::std::runtime_error("zlib inflate error");
+                throw std::runtime_error("zlib inflate error");
             default:
                 break;
         }
@@ -542,14 +542,14 @@ RcString HIRSerialiseReader::readIstring() {
     return strings.at(idx);
 }
 
-::std::string HIRSerialiseReader::readString() {
+std::string HIRSerialiseReader::readString() {
     size_t len = readU8();
     if (len < 128) {
     } else {
         len = (len & 0x7F) << 16;
         len |= readU16();
     }
-    ::std::string rv(len, '\0');
+    std::string rv(len, '\0');
     read(const_cast<char*>(rv.data()), len);
     return rv;
 }
@@ -562,7 +562,7 @@ bool HIRSerialiseReader::readBool() {
         case 255:
             return true;
         default:
-            std::cerr << "Expected false(0)/true(255), got " << unsigned(v) << "u8" << ::std::endl;
+            std::cerr << "Expected false(0)/true(255), got " << unsigned(v) << "u8" << std::endl;
             abort();
     }
 }
@@ -585,14 +585,14 @@ u64 HIRSerialiseReader::rawReadUint() {
 size_t HIRSerialiseReader::rawReadLen() {
     auto v = readU8();
     if (v < 0xC0) {
-        std::cerr << "Expected length, got literal integer " << unsigned(v) << ::std::endl;
+        std::cerr << "Expected length, got literal integer " << unsigned(v) << std::endl;
         abort();
     } else if (v < 0xFC) {
         return v - 0xC0;
     } else if (v == 0xFC) {
         return rawReadUint();
     } else {
-        std::cerr << "Expected length, got tag " << unsigned(v) << ::std::endl;
+        std::cerr << "Expected length, got tag " << unsigned(v) << std::endl;
         abort();
     }
 }
@@ -625,7 +625,7 @@ HIRSerialiseReader::CloseOnDrop::~CloseOnDrop() {
 HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openObject(const char* name) {
     auto v = readU8();
     if (v != 0xFD) {
-        std::cerr << "Expected OpenNamed(" << name << "), got " << unsigned(v) << "u8" << ::std::endl;
+        std::cerr << "Expected OpenNamed(" << name << "), got " << unsigned(v) << "u8" << std::endl;
         abort();
     }
     auto key = rawReadUint();
@@ -643,7 +643,7 @@ HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openObject(const char* name)
 HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openAnonObject() {
     auto v = readU8();
     if (v != 0xFE) {
-        std::cerr << "Expected OpenAnon, got " << unsigned(v) << ::std::endl;
+        std::cerr << "Expected OpenAnon, got " << unsigned(v) << std::endl;
         abort();
     }
     return CloseOnDrop(*this);
@@ -652,7 +652,7 @@ HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openAnonObject() {
 void HIRSerialiseReader::closeObject() {
     auto v = readU8();
     if (v != 0xFF) {
-        std::cerr << "Expected CloseObject(0xFF), got " << unsigned(v) << ::std::endl;
+        std::cerr << "Expected CloseObject(0xFF), got " << unsigned(v) << std::endl;
         abort();
     }
 }

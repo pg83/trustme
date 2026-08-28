@@ -5,7 +5,7 @@ HIRItemPath::HIRItemPath(const char* crate)
 {
 }
 
-HIRItemPath::HIRItemPath(const ::std::string& crate)
+HIRItemPath::HIRItemPath(const std::string& crate)
     : crateName(crate.c_str())
 {
 }
@@ -107,7 +107,7 @@ bool HIRItemPath::operator==(const HIRSimplePath& sp) const {
     return true;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRItemPath& x) {
+std::ostream& operator<<(std::ostream& os, const HIRItemPath& x) {
     if (x.wrapped) {
         return os << *x.wrapped;
     }

@@ -1,13 +1,13 @@
 #include "hir_generic_ref.h"
 
 HIRGenericRef::HIRGenericRef(RcString name, u32 binding)
-    : name(::std::move(name))
+    : name(std::move(name))
     , binding(binding)
 {
 }
 
 HIRGenericRef::HIRGenericRef(RcString name, HIRGenericGroup group, u16 idx)
-    : name(::std::move(name))
+    : name(std::move(name))
     , binding(group * 256 + idx)
 {
     assert(idx < 256);
@@ -35,7 +35,7 @@ Ordering HIRGenericRef::ord(const HIRGenericRef& x) const {
     return rv;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRGenericRef& x) {
+std::ostream& operator<<(std::ostream& os, const HIRGenericRef& x) {
     x.fmt(os);
     return os;
 }

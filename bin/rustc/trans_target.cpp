@@ -78,12 +78,12 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
 struct TargetLayoutContext {
     struct CachedTypeRepr {
         HIRTypeRef canonical;
-        ::std::unique_ptr<TypeRepr> repr;
+        std::unique_ptr<TypeRepr> repr;
     };
 
-    ::std::unordered_map<::std::string, CachedTypeRepr> encoded;
-    ::std::unordered_map<HIRTypeRef, ::std::unique_ptr<TypeRepr>> unencoded;
-    ::std::unordered_map<HIRTypeRef, const TypeRepr*> exact;
+    std::unordered_map<std::string, CachedTypeRepr> encoded;
+    std::unordered_map<HIRTypeRef, std::unique_ptr<TypeRepr>> unencoded;
+    std::unordered_map<HIRTypeRef, const TypeRepr*> exact;
 };
 
 TargetLayoutContext* TargetCreateLayoutContext(ObjPool& pool) {
@@ -91,7 +91,7 @@ TargetLayoutContext* TargetCreateLayoutContext(ObjPool& pool) {
 }
 
 namespace {
-    TargetSpec loadSpecFromFile(const ::std::string& filename) {
+    TargetSpec loadSpecFromFile(const std::string& filename) {
         TargetSpec rv;
 
         TomlFile tomlFile(filename);
@@ -101,16 +101,16 @@ namespace {
             auto checkPathLength = [&](const TomlKeyValue& kv, unsigned len) {
                 if (kv.path.size() != len) {
                     if (kv.path.size() > len) {
-                        ::std::cerr << "ERROR: Unexpected sub-node to  " << kv.path << " in " << filename << ::std::endl;
+                        std::cerr << "ERROR: Unexpected sub-node to  " << kv.path << " in " << filename << std::endl;
                     } else {
-                        ::std::cerr << "ERROR: Expected sub-nodes in  " << kv.path << " in " << filename << ::std::endl;
+                        std::cerr << "ERROR: Expected sub-nodes in  " << kv.path << " in " << filename << std::endl;
                     }
                     exit(1);
                 }
             };
             auto checkPathLengthMin = [&](const TomlKeyValue& kv, unsigned len) {
                 if (kv.path.size() < len) {
-                    ::std::cerr << "ERROR: Expected sub-nodes in " << kv.path << " in " << filename << ::std::endl;
+                    std::cerr << "ERROR: Expected sub-nodes in " << kv.path << " in " << filename << std::endl;
                 }
             };
 
@@ -147,11 +147,11 @@ namespace {
                         } else if (keyVal.value.asString() == archRiscv64().name) {
                             rv.arch = archRiscv64();
                         } else {
-                            ::std::cerr << "ERROR: Unknown architecture name '" << keyVal.value.asString() << "' in " << filename << ::std::endl;
+                            std::cerr << "ERROR: Unknown architecture name '" << keyVal.value.asString() << "' in " << filename << std::endl;
                             exit(1);
                         }
                     } else {
-                        ::std::cerr << "Warning: Unknown configuration item " << keyVal.path[0] << "." << keyVal.path[1] << " in " << filename << ::std::endl;
+                        std::cerr << "Warning: Unknown configuration item " << keyVal.path[0] << "." << keyVal.path[1] << " in " << filename << std::endl;
                     }
                 } else if (keyVal.path[0] == "backend") {
                     checkPathLengthMin(keyVal, 2);
@@ -161,7 +161,7 @@ namespace {
                         if (keyVal.path[2] == "variant") {
                             checkPathLength(keyVal, 3);
                             if (keyVal.value.asString() != "gnu") {
-                                ::std::cerr << "ERROR: Unknown C variant name '" << keyVal.value.asString() << "' in " << filename << ::std::endl;
+                                std::cerr << "ERROR: Unknown C variant name '" << keyVal.value.asString() << "' in " << filename << std::endl;
                                 exit(1);
                             }
                         } else if (keyVal.path[2] == "target") {
@@ -186,17 +186,17 @@ namespace {
                                 rv.backendC.linkerOptsPost.push_back(v.asString());
                             }
                         } else {
-                            ::std::cerr << "WARNING: Unknown field backend.c." << keyVal.path[2] << " in " << filename << ::std::endl;
+                            std::cerr << "WARNING: Unknown field backend.c." << keyVal.path[2] << " in " << filename << std::endl;
                         }
                     } else {
-                        ::std::cerr << "WARNING: Unknown configuration item backend." << keyVal.path[1] << " in " << filename << ::std::endl;
+                        std::cerr << "WARNING: Unknown configuration item backend." << keyVal.path[1] << " in " << filename << std::endl;
                     }
                 } else if (keyVal.path[0] == "arch") {
                     checkPathLengthMin(keyVal, 2);
                     if (keyVal.path[1] == "name") {
                         checkPathLength(keyVal, 2);
                         if (rv.arch.name != "") {
-                            ::std::cerr << "ERROR: Architecture already specified to be '" << rv.arch.name << "'" << ::std::endl;
+                            std::cerr << "ERROR: Architecture already specified to be '" << rv.arch.name << "'" << std::endl;
                             exit(1);
                         }
                         rv.arch.name = keyVal.value.asString();
@@ -238,33 +238,33 @@ namespace {
                         } else if (keyVal.path[2] == "ptr") {
                             rv.arch.alignments.ptr = keyVal.value.asInt();
                         } else {
-                            ::std::cerr << "WARNING: Unknown field arch.alignments." << keyVal.path[1] << " in " << filename << ::std::endl;
+                            std::cerr << "WARNING: Unknown field arch.alignments." << keyVal.path[1] << " in " << filename << std::endl;
                         }
                     } else {
-                        ::std::cerr << "WARNING: Unknown field arch." << keyVal.path[1] << " in " << filename << ::std::endl;
+                        std::cerr << "WARNING: Unknown field arch." << keyVal.path[1] << " in " << filename << std::endl;
                     }
                 } else {
-                    ::std::cerr << "WARNING: Unknown configuration item " << keyVal.path[0] << " in " << filename << ::std::endl;
+                    std::cerr << "WARNING: Unknown configuration item " << keyVal.path[0] << " in " << filename << std::endl;
                 }
             }
         }
 
         // TODO: Ensure that everything is set
         if (rv.arch.name == "") {
-            ::std::cerr << "ERROR: Architecture not specified in " << filename << ::std::endl;
+            std::cerr << "ERROR: Architecture not specified in " << filename << std::endl;
             exit(1);
         }
         if (rv.family == "windows" || rv.osName == "windows") {
-            ::std::cerr << "ERROR: Windows targets are not supported in " << filename << ::std::endl;
+            std::cerr << "ERROR: Windows targets are not supported in " << filename << std::endl;
             exit(1);
         }
 
         return rv;
     }
 
-    void saveSpecToFile(const ::std::string& filename, const TargetSpec& spec) {
+    void saveSpecToFile(const std::string& filename, const TargetSpec& spec) {
         // TODO: Have a round-trip unit test
-        ::std::ofstream of(filename);
+        std::ofstream of(filename);
 
         struct H {
             static const char* tfstr(bool v) {
@@ -316,9 +316,9 @@ namespace {
            << "\n";
     }
 
-    TargetSpec initFromSpecName(const ::std::string& targetName) {
+    TargetSpec initFromSpecName(const std::string& targetName) {
 #define BACKEND_C_OPTS_GNU {"-ffunction-sections", "-pthread"}, {"-Wl,--start-group"}, {"-Wl,--end-group", "-Wl,--gc-sections", "-l", "atomic"}
-        if (targetName.find('/') != ::std::string::npos) {
+        if (targetName.find('/') != std::string::npos) {
             return loadSpecFromFile(targetName);
         } else if (targetName == "i586-linux-gnu" || targetName == "i586-unknown-linux-gnu") {
             return TargetSpec{"unix", "linux", "gnu", {true, "i586-linux-gnu", BACKEND_C_OPTS_GNU}, archX86()};
@@ -377,7 +377,7 @@ namespace {
         } else if (targetName == "x86_64-unknown-haiku") {
             return TargetSpec{"unix", "haiku", "gnu", {false, "x86_64-unknown-haiku", {}, {}}, archX86_64()};
         } else {
-            ::std::cerr << "Unknown target name '" << targetName << "'" << ::std::endl;
+            std::cerr << "Unknown target name '" << targetName << "'" << std::endl;
             abort();
         }
         UNREACHABLE();
@@ -388,16 +388,16 @@ const TargetSpec& TargetGetCurSpec(const WireBoard& wb) {
     return *wb.target;
 }
 
-void TargetExportCurSpec(const WireBoard& wb, const ::std::string& filename) {
+void TargetExportCurSpec(const WireBoard& wb, const std::string& filename) {
     saveSpecToFile(filename, *wb.target);
 }
 
-void TargetSetCfg(WireBoard& wb, const ::std::string& targetName) {
+void TargetSetCfg(WireBoard& wb, const std::string& targetName) {
     auto& settings = *wb.settings;
     auto* spec = wb.pool->make<TargetSpec>(initFromSpecName(targetName));
     wb.target = spec;
     if (spec->arch.pointerBits != 64 || spec->arch.bigEndian) {
-        ::std::cerr << "error: unsupported target `" << targetName << "`: only 64-bit little-endian targets are supported" << ::std::endl;
+        std::cerr << "error: unsupported target `" << targetName << "`: only 64-bit little-endian targets are supported" << std::endl;
         abort();
     }
     const TargetSpec& tgt = *spec;
@@ -481,7 +481,7 @@ void TargetSetCfg(WireBoard& wb, const ::std::string& targetName) {
     if (tgt.arch.atomics.ptr) {
         CfgSetValue(settings, "target_has_atomic", "cas");
     }
-    CfgSetValueCb(settings, "target_feature", [](const ::std::string& s) {
+    CfgSetValueCb(settings, "target_feature", [](const std::string& s) {
         return false;
     });
 }
@@ -496,8 +496,8 @@ namespace {
         }
 
         struct CaptureVisitor: HIRExprVisitorDef {
-            ::std::vector<unsigned int> definitions;
-            ::std::vector<unsigned int> uses;
+            std::vector<unsigned int> definitions;
+            std::vector<unsigned int> uses;
 
             explicit CaptureVisitor(HIRTypeInterner& types)
                 : HIRExprVisitorDef(types)
@@ -520,10 +520,10 @@ namespace {
         } visitor(resolve.hirCrate().types);
 
         const_cast<HIRExprNodeClosure&>(closure).visit(visitor);
-        ::std::sort(visitor.definitions.begin(), visitor.definitions.end());
-        visitor.definitions.erase(::std::unique(visitor.definitions.begin(), visitor.definitions.end()), visitor.definitions.end());
-        return ::std::all_of(visitor.uses.begin(), visitor.uses.end(), [&](unsigned int slot) {
-            return ::std::binary_search(visitor.definitions.begin(), visitor.definitions.end(), slot);
+        std::sort(visitor.definitions.begin(), visitor.definitions.end());
+        visitor.definitions.erase(std::unique(visitor.definitions.begin(), visitor.definitions.end()), visitor.definitions.end());
+        return std::all_of(visitor.uses.begin(), visitor.uses.end(), [&](unsigned int slot) {
+            return std::binary_search(visitor.definitions.begin(), visitor.definitions.end(), slot);
         });
     }
 }
@@ -751,7 +751,7 @@ bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const H
 }
 
 namespace {
-    void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, ::std::unique_ptr<TypeRepr> repr);
+    void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, std::unique_ptr<TypeRepr> repr);
 
     struct Ent {
         unsigned int field;
@@ -761,7 +761,7 @@ namespace {
         bool userAlign = false;
     };
 
-    ::std::ostream& operator<<(std::ostream& os, const Ent& e) {
+    std::ostream& operator<<(std::ostream& os, const Ent& e) {
         os << "Ent { #" << e.field << ": s=" << e.size << " a=" << e.align << (e.userAlign ? "!" : "") << " : " << e.ty << " }";
         return os;
     }
@@ -777,7 +777,7 @@ namespace {
         return true;
     }
 
-    bool structEnumerateFields(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, ::std::vector<Ent>& ents) {
+    bool structEnumerateFields(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, std::vector<Ent>& ents) {
         const auto& te = ty->as_Path();
         const auto& str = *te.binding.as_Struct();
         auto monomorphCb = MonomorphStatePtr(resolve.hirCrate().types, ty, &te.path.data.as_Generic().params, nullptr);
@@ -979,14 +979,14 @@ namespace {
         for (const auto& future : fields.futures) {
             offset = alignTo(offset, future.align);
             offset += future.size;
-            align = ::std::max(align, future.align);
-            slotSize = ::std::max(slotSize, future.size);
-            slotAlign = ::std::max(slotAlign, future.align);
+            align = std::max(align, future.align);
+            slotSize = std::max(slotSize, future.size);
+            slotAlign = std::max(slotAlign, future.align);
         }
         if (hasDropline) {
             offset = alignTo(offset, slotAlign);
             offset += alignTo(slotSize, slotAlign);
-            align = ::std::max(align, slotAlign);
+            align = std::max(align, slotAlign);
         }
         return offset;
     }
@@ -1023,7 +1023,7 @@ namespace {
                 const size_t pointerSize = TargetGetPointerBits() / 8;
                 offset = alignTo(offset, pointerSize);
                 offset += pointerSize * 3;
-                align = ::std::max(align, pointerSize);
+                align = std::max(align, pointerSize);
                 offset = appendAsyncDropFields(offset, align, element, true);
             }
         } else if (const auto* path = dropeeTy->opt_Path(); path && path->binding.is_Enum() && path->path.data.is_Generic()) {
@@ -1048,7 +1048,7 @@ namespace {
                     if (hasDropline) {
                         const size_t pointerSize = TargetGetPointerBits() / 8;
                         variantOffset = alignTo(variantOffset, pointerSize) + pointerSize;
-                        variantAlign = ::std::max(variantAlign, pointerSize);
+                        variantAlign = std::max(variantAlign, pointerSize);
                     }
                     variantOffset = appendAsyncDropFields(variantOffset, variantAlign, fields, hasDropline);
                     if (alignTo(variantOffset, variantAlign) > alignTo(largestOffset, largestAlign)) {
@@ -1072,7 +1072,7 @@ namespace {
                 if (hasDropline) {
                     const size_t pointerSize = TargetGetPointerBits() / 8;
                     offset = alignTo(offset, pointerSize) + pointerSize;
-                    align = ::std::max(align, pointerSize);
+                    align = std::max(align, pointerSize);
                 }
                 offset = appendAsyncDropFields(offset, align, fields, hasDropline);
             }
@@ -1084,7 +1084,7 @@ namespace {
         if (hasCustom) {
             offset = alignTo(offset, customAlign);
             offset += customSize;
-            align = ::std::max(align, customAlign);
+            align = std::max(align, customAlign);
         }
         const size_t outerSize = alignTo(offset, align);
         const size_t storageOffset = alignTo(repr.size, align);
@@ -1098,10 +1098,10 @@ namespace {
 
     size_t structFieldAlignmentGroup(const Ent& e, unsigned maxAlignment) {
         if (maxAlignment > 0) {
-            return ::std::min<size_t>(e.align, maxAlignment);
+            return std::min<size_t>(e.align, maxAlignment);
         }
 
-        const size_t sizeAsAlign = ::std::max(e.size, e.align);
+        const size_t sizeAsAlign = std::max(e.size, e.align);
         return sizeAsAlign & (~sizeAsAlign + 1);
     }
 
@@ -1109,10 +1109,10 @@ namespace {
         return a.align != b.align ? a.align < b.align : a.size < b.size;
     }
 
-    ::std::unique_ptr<TypeRepr> makeTypeReprStructInner(const Span& sp, const HIRTypeData* ty, ::std::vector<Ent>& ents, StructSorting sorting, unsigned forcedAlignment, unsigned maxAlignment) {
+    std::unique_ptr<TypeRepr> makeTypeReprStructInner(const Span& sp, const HIRTypeData* ty, std::vector<Ent>& ents, StructSorting sorting, unsigned forcedAlignment, unsigned maxAlignment) {
         if (ents.size() > 0) {
             auto sortFields = [&](auto first, auto last) {
-                ::std::stable_sort(first, last, [&](const Ent& a, const Ent& b) {
+                std::stable_sort(first, last, [&](const Ent& a, const Ent& b) {
                     return structFieldAlignmentGroup(a, maxAlignment) > structFieldAlignmentGroup(b, maxAlignment);
                 });
             };
@@ -1134,7 +1134,7 @@ namespace {
                 maxField = std::max(maxField, e.field);
             }
         }
-        ::std::vector<TypeRepr::Field> fields(ents.size() > 0 ? maxField + 1 : 0);
+        std::vector<TypeRepr::Field> fields(ents.size() > 0 ? maxField + 1 : 0);
 
         TypeRepr rv;
         size_t curOfs = 0;
@@ -1161,7 +1161,7 @@ namespace {
                     curOfs++;
                 }
             }
-            maxAlign = ::std::max(maxAlign, align);
+            maxAlign = std::max(maxAlign, align);
 
             if (e.field != ~0u) {
                 ASSERT_BUG(sp, e.field < fields.size(), "Field index out of range");
@@ -1190,12 +1190,12 @@ namespace {
         }
         rv.align = maxAlign;
         rv.size = curOfs;
-        rv.fields = ::std::move(fields);
+        rv.fields = std::move(fields);
         return box$(rv);
     }
 
-    ::std::unique_ptr<TypeRepr> makeTypeReprStruct(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
-        ::std::vector<Ent> ents;
+    std::unique_ptr<TypeRepr> makeTypeReprStruct(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+        std::vector<Ent> ents;
         StructSorting sorting;
         unsigned forcedAlignment = 0;
         unsigned maxAlignment = 0;
@@ -1284,7 +1284,7 @@ namespace {
         return false;
     }
 
-    bool getPatternValidRanges(const HIRTypeData::Data_Pattern& pattern, size_t& scalarSize, ::std::vector<::std::pair<size_t, size_t>>& ranges) {
+    bool getPatternValidRanges(const HIRTypeData::Data_Pattern& pattern, size_t& scalarSize, std::vector<std::pair<size_t, size_t>>& ranges) {
         const auto* primitive = pattern.inner->opt_Primitive();
         if (!primitive) {
             return false;
@@ -1372,11 +1372,11 @@ namespace {
             return false;
         }
 
-        ::std::sort(ranges.begin(), ranges.end());
+        std::sort(ranges.begin(), ranges.end());
         size_t out = 0;
         for (const auto& range : ranges) {
             if (out != 0 && range.first <= ranges[out - 1].second + (ranges[out - 1].second != SIZE_MAX)) {
-                ranges[out - 1].second = ::std::max(ranges[out - 1].second, range.second);
+                ranges[out - 1].second = std::max(ranges[out - 1].second, range.second);
             } else {
                 ranges[out++] = range;
             }
@@ -1476,7 +1476,7 @@ namespace {
                 break;
             case HIRTypeData::TAG_Pattern: {
                 auto& te = (*ty).as_Pattern();
-                ::std::vector<::std::pair<size_t, size_t>> ranges;
+                std::vector<std::pair<size_t, size_t>> ranges;
                 if (getPatternValidRanges(te, outPath.size, ranges) && ranges.front().first != 0) {
                     return true;
                 }
@@ -1635,7 +1635,7 @@ namespace {
                                         size_t candidateStart = 0;
                                         if (getVariantNichePath(sp, resolve, field.ty, field.offset < minOffset ? minOffset - field.offset : 0, maxOffset - field.offset, requiredCount + occupiedCount, candidate, candidateStart)) {
                                             auto candidateSubFields = candidate.subFields;
-                                            ::std::reverse(candidateSubFields.begin(), candidateSubFields.end());
+                                            std::reverse(candidateSubFields.begin(), candidateSubFields.end());
                                             const bool sameScalar = candidate.size == ve.field.size && candidateSubFields == ve.field.subFields;
                                             if (!sameScalar) {
                                                 return false;
@@ -1645,7 +1645,7 @@ namespace {
                                             const size_t occupiedEnd = occupiedStart + occupiedCount - 1;
                                             if (!(candidateEnd < occupiedStart || occupiedEnd < candidateStart)) {
                                                 const size_t beforeCount = occupiedStart > candidateStart ? occupiedStart - candidateStart : 0;
-                                                const size_t afterStart = occupiedEnd == SIZE_MAX ? SIZE_MAX : ::std::max(candidateStart, occupiedEnd + 1);
+                                                const size_t afterStart = occupiedEnd == SIZE_MAX ? SIZE_MAX : std::max(candidateStart, occupiedEnd + 1);
                                                 const size_t afterCount = occupiedEnd == SIZE_MAX || candidateEnd < afterStart ? 0 : candidateEnd - afterStart + 1;
                                                 if (requiredCount <= beforeCount) {
                                                 } else if (requiredCount <= afterCount) {
@@ -1655,7 +1655,7 @@ namespace {
                                                 }
                                             }
                                             candidate.subFields.push_back(ve.field.index);
-                                            outPath = ::std::move(candidate);
+                                            outPath = std::move(candidate);
                                             nicheStart = candidateStart;
                                             return true;
                                         }
@@ -1750,7 +1750,7 @@ namespace {
             case HIRTypeData::TAG_Pattern: {
                 auto& te = (*ty).as_Pattern();
                 size_t scalarSize;
-                ::std::vector<::std::pair<size_t, size_t>> ranges;
+                std::vector<std::pair<size_t, size_t>> ranges;
                 if (minOffset != 0 || !getPatternValidRanges(te, scalarSize, ranges) || scalarSize > maxOffset) {
                     return false;
                 }
@@ -1799,7 +1799,7 @@ namespace {
         return false;
     }
 
-    ::std::unique_ptr<TypeRepr> makeTypeReprEnum(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+    std::unique_ptr<TypeRepr> makeTypeReprEnum(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         const auto& te = ty->as_Path();
         const auto& enm = *te.binding.as_Enum();
 
@@ -1830,8 +1830,8 @@ namespace {
                         if (size == SIZE_MAX) {
                             BUG(sp, "Unsized type in enum - " << t);
                         }
-                        maxSize = ::std::max(maxSize, size);
-                        maxAlign = ::std::max(maxAlign, align);
+                        maxSize = std::max(maxSize, size);
+                        maxAlign = std::max(maxAlign, align);
                         rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
 
                         ASSERT_BUG(sp, !var.discriminantExpr, "TODO: Handle explicit discriminants with repr(C) data");
@@ -1873,7 +1873,7 @@ namespace {
                 } else {
                     struct Variant {
                         HIRTypeRef type;
-                        ::std::vector<Ent> ents;
+                        std::vector<Ent> ents;
                         unsigned forcedAlignment;
                     };
 
@@ -1905,8 +1905,8 @@ namespace {
                                     sizes[i] += ent.size;
                                 }
                             }
-                            auto minSize = ::std::min(sizes[0], sizes[1]);
-                            auto maxSize = ::std::max(sizes[0], sizes[1]);
+                            auto minSize = std::min(sizes[0], sizes[1]);
+                            auto maxSize = std::max(sizes[0], sizes[1]);
                             if (minSize == 0 && maxSize > 0) {
                                 unsigned nzVar = (sizes[0] == 0 ? 1 : 0);
                                 for (size_t i = 0; i < variants[nzVar].ents.size(); i++) {
@@ -1914,7 +1914,7 @@ namespace {
                                     if (getNonzeroPath(sp, resolve, variants[nzVar].ents[i].ty, nzPath)) {
                                         nzPath.subFields.push_back(i);
                                         nzPath.index = nzVar;
-                                        ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                        std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
                                         size_t size0, size1;
                                         size_t align0, align1;
@@ -1968,13 +1968,13 @@ namespace {
                                     size_t nicheStart = 0;
                                     if (getVariantNichePath(sp, resolve, fld.ty, (minOffset > fld.offset ? minOffset - fld.offset : 0), maxVarSize - fld.offset, requiredNicheCount, nzPath, nicheStart)) {
                                         nzPath.index = i;
-                                        ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                        std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
                                         nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
-                                        ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                        std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
                                         nzPath.subFields.push_back(i);
                                         nzPath.index = biggestVar;
-                                        ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                        std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
                                         assert(rv.variants.is_None());
                                         rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nzPath), nicheStart, e.size()});
@@ -1986,16 +1986,16 @@ namespace {
                                         size_t nicheStart = 0;
                                         if (getVariantNichePath(sp, resolve, fld.ty, 0, maxVarSize - minOffset, requiredNicheCount, nzPath, nicheStart)) {
                                             nzPath.index = i;
-                                            ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                            std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
                                             nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
                                             if (nicheOffset != 0) {
                                                 continue;
                                             }
-                                            ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                            std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
                                             nzPath.subFields.push_back(i);
                                             nzPath.index = biggestVar;
-                                            ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                            std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
                                             nicheBeforeData = true;
                                             nonNicheOffset = nzPath.size;
@@ -2149,7 +2149,7 @@ namespace {
                             auto& varTy = variants[varI].type;
                             if (e[varI].type != resolve.hirCrate().types.unit()) {
                                 if (enm.tagRepr == HIREnum::Repr::Auto) {
-                                    ::std::sort(ents.begin(), ents.end(), sortfnEnumVariantFields);
+                                    std::sort(ents.begin(), ents.end(), sortfnEnumVariantFields);
                                 }
                                 ents.insert(ents.begin(), Ent());
                                 ents[0].align = tagAlign;
@@ -2174,11 +2174,11 @@ namespace {
                         rv.align = maxAlign;
 
                         if (hasExplcitValue) {
-                            ::std::vector<U128> vals;
+                            std::vector<U128> vals;
                             for (const auto& v : e) {
                                 vals.push_back(v.discriminantValue);
                             }
-                            rv.variants = TypeRepr::VariantMode::make_Values({{e.size(), tagSize, {}}, ::std::move(vals)});
+                            rv.variants = TypeRepr::VariantMode::make_Values({{e.size(), tagSize, {}}, std::move(vals)});
                         } else {
                             rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
                         }
@@ -2235,11 +2235,11 @@ namespace {
                 if (rv.fields.size() > 0) {
                     TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, rv.size, rv.align);
 
-                    ::std::vector<U128> vals;
+                    std::vector<U128> vals;
                     for (const auto& v : e.variants) {
                         vals.push_back(v.val);
                     }
-                    rv.variants = TypeRepr::VariantMode::make_Values({{0, static_cast<u8>(rv.size), {}}, ::std::move(vals)});
+                    rv.variants = TypeRepr::VariantMode::make_Values({{0, static_cast<u8>(rv.size), {}}, std::move(vals)});
                 }
 
             } break;
@@ -2280,7 +2280,7 @@ namespace {
         return box$(rv);
     }
 
-    ::std::unique_ptr<TypeRepr> makeTypeReprUnion(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+    std::unique_ptr<TypeRepr> makeTypeReprUnion(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         const auto& te = ty->as_Path();
         const auto& unn = *te.binding.as_Union();
 
@@ -2300,17 +2300,17 @@ namespace {
             if (size == SIZE_MAX) {
                 BUG(sp, "Unsized type in union");
             }
-            rv.size = ::std::max(rv.size, size);
-            rv.align = ::std::max(rv.align, align);
+            rv.size = std::max(rv.size, size);
+            rv.align = std::max(rv.align, align);
             if (TargetTypeHasUserAlignment(sp, resolve, rv.fields.back().ty)) {
                 rv.userAlign = true;
             }
         }
         if (unn.maxFieldAlignment > 0) {
-            rv.align = ::std::min(rv.align, static_cast<size_t>(unn.maxFieldAlignment));
+            rv.align = std::min(rv.align, static_cast<size_t>(unn.maxFieldAlignment));
         }
         if (unn.forcedAlignment > 0) {
-            rv.align = ::std::max(rv.align, static_cast<size_t>(unn.forcedAlignment));
+            rv.align = std::max(rv.align, static_cast<size_t>(unn.forcedAlignment));
         }
         if (rv.size % rv.align != 0) {
             rv.size += rv.align - rv.size % rv.align;
@@ -2318,7 +2318,7 @@ namespace {
         return box$(rv);
     }
 
-    ::std::unique_ptr<TypeRepr> make_type_repr_(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+    std::unique_ptr<TypeRepr> make_type_repr_(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         switch (ty->tag()) {
             case HIRTypeData::TAG_Tuple:
                 return makeTypeReprStruct(sp, resolve, ty);
@@ -2356,8 +2356,8 @@ namespace {
         }
     }
 
-    ::std::unique_ptr<TypeRepr> makeTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
-        ::std::unique_ptr<TypeRepr> rv;
+    std::unique_ptr<TypeRepr> makeTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+        std::unique_ptr<TypeRepr> rv;
         rv = make_type_repr_(sp, resolve, ty);
         return rv;
     }
@@ -2366,7 +2366,7 @@ namespace {
         return !monomorphiseTypeNeeded(ty) && !ty->is_Infer() && !ty->is_ErasedType() && !ty->is_NodeType();
     }
 
-    void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, ::std::unique_ptr<TypeRepr> repr) {
+    void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, std::unique_ptr<TypeRepr> repr) {
         auto& cache = *resolve.board().targetLayouts;
         if (!hasAbiIdentity(ty)) {
             const auto* reprPtr = repr.get();
@@ -2448,7 +2448,7 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     return rv;
 }
 
-const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& subFields, size_t ofs) {
+const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const std::vector<size_t>& subFields, size_t ofs) {
     const auto* ty = &repr.fields.at(idx).ty;
     while (ofs < subFields.size()) {
         const auto field = subFields[ofs++];
@@ -2573,7 +2573,7 @@ namespace {
     constexpr size_t TRANSMUTE_BYTE_VALUES = 257;
     constexpr size_t TRANSMUTE_UNINITIALISED = 256;
 
-    using TransmuteByteSet = ::std::bitset<TRANSMUTE_BYTE_VALUES>;
+    using TransmuteByteSet = std::bitset<TRANSMUTE_BYTE_VALUES>;
 
     struct TransmuteReference {
         bool isMutable;
@@ -2594,9 +2594,9 @@ namespace {
         };
 
         struct State {
-            ::std::vector<unsigned> epsilon;
-            ::std::vector<ByteEdge> bytes;
-            ::std::vector<ReferenceEdge> references;
+            std::vector<unsigned> epsilon;
+            std::vector<ByteEdge> bytes;
+            std::vector<ReferenceEdge> references;
         };
 
         struct Fragment {
@@ -2604,7 +2604,7 @@ namespace {
             unsigned accept;
         };
 
-        ::std::vector<State> states;
+        std::vector<State> states;
 
         unsigned addState();
 
@@ -2618,15 +2618,15 @@ namespace {
 
         Fragment then(Fragment left, Fragment right);
 
-        Fragment alternative(::std::vector<Fragment> alternatives);
+        Fragment alternative(std::vector<Fragment> alternatives);
     };
 
     struct TransmuteDfa {
-        using Transitions = ::std::array<int, TRANSMUTE_BYTE_VALUES>;
+        using Transitions = std::array<int, TRANSMUTE_BYTE_VALUES>;
 
-        ::std::vector<Transitions> transitions;
-        ::std::vector<::std::vector<::std::pair<TransmuteReference, unsigned>>> references;
-        ::std::vector<bool> accepting;
+        std::vector<Transitions> transitions;
+        std::vector<std::vector<std::pair<TransmuteReference, unsigned>>> references;
+        std::vector<bool> accepting;
 
         bool inhabited() const;
     };
@@ -2660,11 +2660,11 @@ namespace {
 
         Built character();
 
-        Built combine(::std::vector<Segment> segments, size_t totalSize);
+        Built combine(std::vector<Segment> segments, size_t totalSize);
 
         Built aggregate(const TypeRepr& repr, int skipField = -1);
 
-        void addVariantPayload(::std::vector<Segment>& segments, const TypeRepr& outerRepr, unsigned variant, bool skipSyntheticTag, size_t tagOffset, size_t tagSize);
+        void addVariantPayload(std::vector<Segment>& segments, const TypeRepr& outerRepr, unsigned variant, bool skipSyntheticTag, size_t tagOffset, size_t tagSize);
 
         Built taggedVariant(const TypeRepr& repr, unsigned variant, size_t tagOffset, size_t tagSize, U128 tag, bool skipSyntheticTag);
 
@@ -2672,7 +2672,7 @@ namespace {
 
         Built build(const HIRTypeData* ty);
 
-        ::std::vector<unsigned> epsilonClosure(::std::vector<unsigned> states) const;
+        std::vector<unsigned> epsilonClosure(std::vector<unsigned> states) const;
 
         TransmuteNfa nfa;
 
@@ -2689,7 +2689,7 @@ namespace {
         bool assumeAlignment;
         bool assumeSafety;
         bool assumeValidity;
-        ::std::map<::std::pair<const HIRTypeData*, const HIRTypeData*>, int> cache;
+        std::map<std::pair<const HIRTypeData*, const HIRTypeData*>, int> cache;
 
         TransmuteTypeChecker(const Span& sp, const StaticTraitResolve& resolve, bool assumeAlignment, bool assumeSafety, bool assumeValidity);
 
@@ -2705,7 +2705,7 @@ namespace {
         const TransmuteDfa& destination;
         TransmuteTypeChecker& typeChecker;
         bool assumeValidity;
-        ::std::map<::std::pair<unsigned, unsigned>, int> cache;
+        std::map<std::pair<unsigned, unsigned>, int> cache;
 
         bool check(unsigned sourceState, unsigned destinationState);
 
@@ -2715,7 +2715,7 @@ namespace {
     };
 
     bool TransmuteTypeChecker::check(const HIRTypeData* sourceType, const HIRTypeData* destinationType) {
-        const auto key = ::std::make_pair(sourceType, destinationType);
+        const auto key = std::make_pair(sourceType, destinationType);
         auto existing = cache.find(key);
         if (existing != cache.end()) {
             return existing->second >= 0;
@@ -2815,7 +2815,7 @@ auto TransmuteNfa::then(Fragment left, Fragment right) -> Fragment {
     return {left.start, right.accept};
 }
 
-auto TransmuteNfa::alternative(::std::vector<Fragment> alternatives) -> Fragment {
+auto TransmuteNfa::alternative(std::vector<Fragment> alternatives) -> Fragment {
     if (alternatives.empty()) {
         return uninhabited();
     }
@@ -2832,7 +2832,7 @@ auto TransmuteNfa::alternative(::std::vector<Fragment> alternatives) -> Fragment
 }
 
 auto TransmuteDfa::inhabited() const -> bool {
-    return ::std::find(accepting.begin(), accepting.end(), true) != accepting.end();
+    return std::find(accepting.begin(), accepting.end(), true) != accepting.end();
 }
 
 auto TransmuteLayoutBuilder::byteRange(unsigned first, unsigned last) -> TransmuteByteSet {
@@ -2880,22 +2880,22 @@ auto TransmuteLayoutBuilder::exact(U128 value, size_t count) -> Built {
 auto TransmuteLayoutBuilder::character() -> Built {
     const auto any = byteRange(0, 255);
     const auto zero = byteRange(0, 0);
-    auto make = [&](const ::std::array<TransmuteByteSet, 4>& values) {
+    auto make = [&](const std::array<TransmuteByteSet, 4>& values) {
         auto rv = nfa.empty();
         for (const auto& value : values) {
             rv = nfa.then(rv, nfa.byte(value));
         }
         return rv;
     };
-    ::std::vector<TransmuteNfa::Fragment> alternatives;
+    std::vector<TransmuteNfa::Fragment> alternatives;
     alternatives.push_back(make({any, byteRange(0x00, 0xD7), zero, zero}));
     alternatives.push_back(make({any, byteRange(0xE0, 0xFF), zero, zero}));
     alternatives.push_back(make({any, any, byteRange(0x01, 0x10), zero}));
-    return {nfa.alternative(::std::move(alternatives)), 4};
+    return {nfa.alternative(std::move(alternatives)), 4};
 }
 
-auto TransmuteLayoutBuilder::combine(::std::vector<Segment> segments, size_t totalSize) -> Built {
-    ::std::stable_sort(segments.begin(), segments.end(), [](const Segment& left, const Segment& right) {
+auto TransmuteLayoutBuilder::combine(std::vector<Segment> segments, size_t totalSize) -> Built {
+    std::stable_sort(segments.begin(), segments.end(), [](const Segment& left, const Segment& right) {
         return left.offset < right.offset;
     });
 
@@ -2910,14 +2910,14 @@ auto TransmuteLayoutBuilder::combine(::std::vector<Segment> segments, size_t tot
             rv = nfa.then(rv, padding(segment.offset - offset).fragment);
         }
         rv = nfa.then(rv, segment.value.fragment);
-        offset = ::std::max(offset, segment.offset + segment.value.size);
+        offset = std::max(offset, segment.offset + segment.value.size);
     }
     rv = nfa.then(rv, padding(totalSize - offset).fragment);
     return {rv, totalSize};
 }
 
 auto TransmuteLayoutBuilder::aggregate(const TypeRepr& repr, int skipField) -> Built {
-    ::std::vector<Segment> fields;
+    std::vector<Segment> fields;
     for (size_t i = 0; i < repr.fields.size(); i++) {
         if (static_cast<int>(i) == skipField) {
             continue;
@@ -2925,10 +2925,10 @@ auto TransmuteLayoutBuilder::aggregate(const TypeRepr& repr, int skipField) -> B
         auto field = build(repr.fields[i].ty);
         fields.push_back({repr.fields[i].offset, field});
     }
-    return combine(::std::move(fields), repr.size);
+    return combine(std::move(fields), repr.size);
 }
 
-auto TransmuteLayoutBuilder::addVariantPayload(::std::vector<Segment>& segments, const TypeRepr& outerRepr, unsigned variant, bool skipSyntheticTag, size_t tagOffset, size_t tagSize) -> void {
+auto TransmuteLayoutBuilder::addVariantPayload(std::vector<Segment>& segments, const TypeRepr& outerRepr, unsigned variant, bool skipSyntheticTag, size_t tagOffset, size_t tagSize) -> void {
     ASSERT_BUG(sp, variant < outerRepr.fields.size(), "Enum variant field is missing");
     const auto& outerField = outerRepr.fields[variant];
     const auto* payloadRepr = TargetGetTypeRepr(sp, resolve, outerField.ty);
@@ -2965,10 +2965,10 @@ auto TransmuteLayoutBuilder::addVariantPayload(::std::vector<Segment>& segments,
 }
 
 auto TransmuteLayoutBuilder::taggedVariant(const TypeRepr& repr, unsigned variant, size_t tagOffset, size_t tagSize, U128 tag, bool skipSyntheticTag) -> Built {
-    ::std::vector<Segment> segments;
+    std::vector<Segment> segments;
     addVariantPayload(segments, repr, variant, skipSyntheticTag, tagOffset, tagSize);
     segments.push_back({tagOffset, exact(tag, tagSize)});
-    return combine(::std::move(segments), repr.size);
+    return combine(std::move(segments), repr.size);
 }
 
 auto TransmuteLayoutBuilder::enumLayout(const HIRTypeData* ty, const TypeRepr& repr, const HIREnum& enm) -> Built {
@@ -2983,7 +2983,7 @@ auto TransmuteLayoutBuilder::enumLayout(const HIRTypeData* ty, const TypeRepr& r
         return combine({Segment{repr.fields[0].offset, build(repr.fields[0].ty)}}, repr.size);
     }
 
-    ::std::vector<TransmuteNfa::Fragment> alternatives;
+    std::vector<TransmuteNfa::Fragment> alternatives;
     if (const auto* linear = repr.variants.opt_Linear()) {
         const auto tagOffset = repr.getOffset(sp, resolve, linear->field);
         for (unsigned variant = 0; variant < linear->numVariants; variant++) {
@@ -3018,7 +3018,7 @@ auto TransmuteLayoutBuilder::enumLayout(const HIRTypeData* ty, const TypeRepr& r
     } else {
         BUG(sp, "Unhandled enum representation for " << ty);
     }
-    return {nfa.alternative(::std::move(alternatives)), repr.size};
+    return {nfa.alternative(std::move(alternatives)), repr.size};
 }
 
 auto TransmuteLayoutBuilder::build(const HIRTypeData* ty) -> Built {
@@ -3103,11 +3103,11 @@ auto TransmuteLayoutBuilder::build(const HIRTypeData* ty) -> Built {
             return aggregate(*repr);
         }
         if (path->binding.is_Union()) {
-            ::std::vector<TransmuteNfa::Fragment> alternatives;
+            std::vector<TransmuteNfa::Fragment> alternatives;
             for (const auto& field : repr->fields) {
                 alternatives.push_back(combine({Segment{0, build(field.ty)}}, repr->size).fragment);
             }
-            return {nfa.alternative(::std::move(alternatives)), repr->size};
+            return {nfa.alternative(std::move(alternatives)), repr->size};
         }
         if (path->binding.is_Enum()) {
             return enumLayout(ty, *repr, *path->binding.as_Enum());
@@ -3119,8 +3119,8 @@ auto TransmuteLayoutBuilder::build(const HIRTypeData* ty) -> Built {
     return {nfa.uninhabited(), 0};
 }
 
-auto TransmuteLayoutBuilder::epsilonClosure(::std::vector<unsigned> states) const -> ::std::vector<unsigned> {
-    ::std::vector<bool> seen(nfa.states.size(), false);
+auto TransmuteLayoutBuilder::epsilonClosure(std::vector<unsigned> states) const -> std::vector<unsigned> {
+    std::vector<bool> seen(nfa.states.size(), false);
     for (auto state : states) {
         seen.at(state) = true;
     }
@@ -3132,7 +3132,7 @@ auto TransmuteLayoutBuilder::epsilonClosure(::std::vector<unsigned> states) cons
             }
         }
     }
-    ::std::sort(states.begin(), states.end());
+    std::sort(states.begin(), states.end());
     return states;
 }
 
@@ -3150,12 +3150,12 @@ auto TransmuteLayoutBuilder::makeDfa(const HIRTypeData* ty, TransmuteDfa& out) -
         return false;
     }
 
-    ::std::map<::std::vector<unsigned>, unsigned> indexes;
-    ::std::vector<::std::vector<unsigned>> states;
-    auto intern = [&](::std::vector<unsigned> state) {
+    std::map<std::vector<unsigned>, unsigned> indexes;
+    std::vector<std::vector<unsigned>> states;
+    auto intern = [&](std::vector<unsigned> state) {
         auto result = indexes.emplace(state, indexes.size());
         if (result.second) {
-            states.push_back(::std::move(state));
+            states.push_back(std::move(state));
             TransmuteDfa::Transitions transitions;
             transitions.fill(-1);
             out.transitions.push_back(transitions);
@@ -3168,9 +3168,9 @@ auto TransmuteLayoutBuilder::makeDfa(const HIRTypeData* ty, TransmuteDfa& out) -
     intern(epsilonClosure({root.fragment.start}));
     for (size_t stateIndex = 0; stateIndex < states.size(); stateIndex++) {
         const auto state = states[stateIndex];
-        out.accepting[stateIndex] = ::std::binary_search(state.begin(), state.end(), root.fragment.accept);
+        out.accepting[stateIndex] = std::binary_search(state.begin(), state.end(), root.fragment.accept);
 
-        ::std::array<::std::vector<unsigned>, TRANSMUTE_BYTE_VALUES> destinations;
+        std::array<std::vector<unsigned>, TRANSMUTE_BYTE_VALUES> destinations;
         for (auto nfaState : state) {
             for (const auto& edge : nfa.states[nfaState].bytes) {
                 for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES; value++) {
@@ -3185,9 +3185,9 @@ auto TransmuteLayoutBuilder::makeDfa(const HIRTypeData* ty, TransmuteDfa& out) -
             if (destination.empty()) {
                 continue;
             }
-            ::std::sort(destination.begin(), destination.end());
-            destination.erase(::std::unique(destination.begin(), destination.end()), destination.end());
-            out.transitions[stateIndex][value] = intern(epsilonClosure(::std::move(destination)));
+            std::sort(destination.begin(), destination.end());
+            destination.erase(std::unique(destination.begin(), destination.end()), destination.end());
+            out.transitions[stateIndex][value] = intern(epsilonClosure(std::move(destination)));
         }
         for (auto nfaState : state) {
             for (const auto& edge : nfa.states[nfaState].references) {
@@ -3232,7 +3232,7 @@ auto TransmuteTypeChecker::validityIsAssumed() const -> bool {
 }
 
 auto TransmuteRelation::check(unsigned sourceState, unsigned destinationState) -> bool {
-    const auto key = ::std::make_pair(sourceState, destinationState);
+    const auto key = std::make_pair(sourceState, destinationState);
     auto existing = cache.find(key);
     if (existing != cache.end()) {
         return existing->second > 0;

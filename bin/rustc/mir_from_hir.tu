@@ -9,14 +9,14 @@ generate(
     variants=[
         v("Invalid", "InvalidType", doc="Currently invalid"),
         v("Partial", fields=[
-            ("::std::vector<VarState>", "innerStates"),
+            ("std::vector<VarState>", "innerStates"),
             ("unsigned int", "outerFlag"),
         ], copy=False, doc="Partially valid (map of field states). An"
                            " outerFlag of ~0u means the outer discriminant"
                            " is always valid"),
         v("PartialArray", fields=[
-            ("::std::unique_ptr<VarState>", "fillState"),
-            ("::std::map<unsigned, VarState>", "otherStates"),
+            ("std::unique_ptr<VarState>", "fillState"),
+            ("std::map<unsigned, VarState>", "otherStates"),
             ("size_t", "count"),
         ], copy=False, doc="Partially valid large array: a shared state for"
                            " untouched elements plus per-index exceptions."
@@ -24,7 +24,7 @@ generate(
                            " (fatal for e.g."
                            " `let [a, ..] = [String::new(); 64_000_000]`)"),
         v("MovedOut", fields=[
-            ("::std::unique_ptr<VarState>", "innerState"),
+            ("std::unique_ptr<VarState>", "innerState"),
             ("unsigned int", "outerFlag"),
         ], copy=False, doc="An outerFlag of ~0u means the outer is always"
                            " valid; otherwise the outer may have been moved"

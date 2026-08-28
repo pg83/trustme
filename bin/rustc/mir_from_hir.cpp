@@ -35,7 +35,7 @@ namespace {
     struct ExprVisitorConv: public MirConverter, public MIRDropEmitter {
         MirBuilder& builder;
 
-        const ::std::vector<HIRTypeRef>& variableTypes;
+        const std::vector<HIRTypeRef>& variableTypes;
 
         bool isGenerator;
 
@@ -48,7 +48,7 @@ namespace {
             MIRLValue resValue;
         };
 
-        ::std::vector<LoopDesc> loopStack;
+        std::vector<LoopDesc> loopStack;
 
         const ScopeHandle* blockTmpScope = nullptr;
         const ScopeHandle* blockVarScope = nullptr;
@@ -82,7 +82,7 @@ namespace {
             bool isAsyncGen = false;
         } generatorState;
 
-        ExprVisitorConv(MirBuilder& builder, const ::std::vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator);
+        ExprVisitorConv(MirBuilder& builder, const std::vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator);
 
         bool findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path, HIRTypeRef& futureTy) const;
 
@@ -122,7 +122,7 @@ namespace {
 
         std::set<unsigned> generatorFinalise(const Span& sp, HIREnum& stateEnm);
 
-        void generatorMakeDrop(const Span& sp, MirBuilder& outBuilder, size_t nCaptures, const ::std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, unsigned dropStateFieldIdx, const std::map<unsigned, unsigned>& dropFlagMapping) const;
+        void generatorMakeDrop(const Span& sp, MirBuilder& outBuilder, size_t nCaptures, const std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, unsigned dropStateFieldIdx, const std::map<unsigned, unsigned>& dropFlagMapping) const;
 
         void schedulePatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) override;
 
@@ -132,7 +132,7 @@ namespace {
 
         MIRLValue getValueForBindingPath(const Span& sp, const HIRTypeData* outerTy, const MIRLValue& outerLval, const PatternBinding& b) override;
 
-        void destructureFromList(const Span& sp, const HIRTypeData* outerTy, MIRLValue outerLval, const ::std::vector<PatternBinding>& bindings, bool updateStates /*=true*/) override;
+        void destructureFromList(const Span& sp, const HIRTypeData* outerTy, MIRLValue outerLval, const std::vector<PatternBinding>& bindings, bool updateStates /*=true*/) override;
 
         const HIRTypeData* getBindingType(const Span& sp, unsigned index) const override;
 
@@ -155,7 +155,7 @@ namespace {
 
         AsyncGenReturn asyncGenReturnType(const Span& sp);
 
-        void asyncGenPollReady(const Span& sp, const char* variant, ::std::vector<MIRParam> values);
+        void asyncGenPollReady(const Span& sp, const char* variant, std::vector<MIRParam> values);
 
         void coroutineReturn(const Span& sp, const HIRTypeData* valueTy);
 
@@ -227,7 +227,7 @@ namespace {
 
         void visit(HIRExprNodeTupleVariant& node) override;
 
-        ::std::vector<MIRParam> getArgs(/*const*/ ::std::vector<HIRExprNodeP>& args);
+        std::vector<MIRParam> getArgs(/*const*/ std::vector<HIRExprNodeP>& args);
 
         void visit(HIRExprNodeCallPath& node) override;
 
@@ -259,7 +259,7 @@ namespace {
 
         void visit(HIRExprNodeClosure& node) override;
 
-        void visitCommonCr(const Span& sp, const HIRGenericPath& objPath, const HIRTypeData* stateType, ::std::vector<HIRExprNodeP>& captures);
+        void visitCommonCr(const Span& sp, const HIRGenericPath& objPath, const HIRTypeData* stateType, std::vector<HIRExprNodeP>& captures);
 
         void visit(HIRExprNodeGenerator& node) override;
 
@@ -342,7 +342,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
         }
 
         if (auto* genNode = cast<HIRExprNodeGeneratorWrapper>(&rootNode)) {
-            ::std::map<unsigned, std::vector<MIRLValue::Wrapper>> mappings;
+            std::map<unsigned, std::vector<MIRLValue::Wrapper>> mappings;
             for (size_t i = 0; i < genNode->captureUsages.size(); i++) {
                 unsigned idx = args.size() + i;
                 builder.scheduleVariableDrop(idx);
@@ -429,7 +429,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
                 storageTy.variants.push_back(HIRStructField{RcString(), HIRPublicity::newNone(), fcn.locals.at(idx), {}});
                 mappings.insert(std::make_pair(idx, std::vector<MIRLValue::Wrapper>{MIRLValue::Wrapper::newField(0), MIRLValue::Wrapper::newDowncast(valueVarIdx), MIRLValue::Wrapper::newField(0), MIRLValue::Wrapper::newField(1 + storageSlot), MIRLValue::Wrapper::newDowncast(storageVariant)}));
             }
-            ::std::map<unsigned, unsigned> dropFlagMapping;
+            std::map<unsigned, unsigned> dropFlagMapping;
             for (auto idx : ev.generatorDropFlags()) {
                 dropFlagMapping[idx] = dropFlagMapping.size();
             }
@@ -437,15 +437,15 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
             fields.push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), resolve.hirCrate().types.array(resolve.hirCrate().types.primitive(HIRCoreType::U8), (dropFlagMapping.size() + 7) / 8)});
 
             struct Rewriter: public MIRVisitorMut {
-                const ::std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings_;
-                const ::std::map<unsigned, unsigned>& dropFlagMapping;
+                const std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings_;
+                const std::map<unsigned, unsigned>& dropFlagMapping;
                 unsigned dropFlagsField;
 
-                ::std::vector<MIRStatement> newStatements;
+                std::vector<MIRStatement> newStatements;
                 unsigned bbIdx = 0;
                 unsigned stmtIdx = 0;
 
-                Rewriter(const ::std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, const ::std::map<unsigned, unsigned>& dropFlagMapping, unsigned dropFlagsField)
+                Rewriter(const std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, const std::map<unsigned, unsigned>& dropFlagMapping, unsigned dropFlagsField)
                     : mappings_(mappings)
                     , dropFlagMapping(dropFlagMapping)
                     , dropFlagsField(dropFlagsField)
@@ -629,7 +629,7 @@ void MIRLowerHIRGetTypeValueForPath(
 }
 
 #include "mir_from_hir_pattern_tu.h"
-::std::ostream& operator<<(::std::ostream& os, const PatternRule& x);
+std::ostream& operator<<(std::ostream& os, const PatternRule& x);
 
 struct PatternRuleset {
     struct Deref {
@@ -645,9 +645,9 @@ struct PatternRuleset {
     unsigned int armIdx;
     unsigned int armRuleIdx;
 
-    ::std::vector<PatternRule> rules;
-    ::std::vector<PatternBinding> bindings;
-    ::std::vector<Deref> derefs;
+    std::vector<PatternRule> rules;
+    std::vector<PatternBinding> bindings;
+    std::vector<Deref> derefs;
 
     static ::Ordering ruleIsBefore(const PatternRule& l, const PatternRule& r);
 
@@ -657,11 +657,11 @@ struct PatternRuleset {
 struct PatternDump {
     const StaticTraitResolve& resolve;
     const HIRTypeData* ty;
-    const ::std::vector<PatternRule>& rules;
+    const std::vector<PatternRule>& rules;
 
-    PatternDump(const StaticTraitResolve& resolve, const HIRTypeData* ty, const ::std::vector<PatternRule>& rules);
+    PatternDump(const StaticTraitResolve& resolve, const HIRTypeData* ty, const std::vector<PatternRule>& rules);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const PatternDump& x) {
+    friend std::ostream& operator<<(std::ostream& os, const PatternDump& x) {
         os << "[" << x.rules << "]";
         return os;
     }
@@ -678,17 +678,17 @@ struct ArmCode {
     std::vector<Pattern> rules;
 };
 
-typedef ::std::vector<PatternRuleset> tArmRules;
+typedef std::vector<PatternRuleset> tArmRules;
 
 void allocatePatternDerefLocals(MirBuilder& builder, PatternRuleset& ruleset);
 void materializePatternDerefs(MirBuilder& builder, const Span& sp, const PatternRuleset& ruleset, const HIRTypeData* topTy, const MIRLValue& topVal);
 MIRLValue getPatternBindingValue(MirConverter& conv, const Span& sp, const PatternRuleset& ruleset, const HIRTypeData* topTy, const MIRLValue& topVal, const PatternBinding& binding);
 void destructurePatternRuleset(MirConverter& conv, const Span& sp, const PatternRuleset& ruleset, const HIRTypeData* topTy, const MIRLValue& topVal, bool updateStates = true);
 
-void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armCode, MIRBasicBlockId firstCmpBlock);
+void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, std::vector<ArmCode> armCode, MIRBasicBlockId firstCmpBlock);
 int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, const PatternRuleset* ruleset, const PatternRule* rules, unsigned int numRules, const HIRTypeData* topTy, const MIRLValue& topVal, unsigned int fieldPathOfs, MIRBasicBlockId failBb);
-void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRTypeData* matchTy, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock);
-void MIRLowerHIRMatchDecisionTree(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armCode, MIRBasicBlockId firstCmpBlock);
+void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRTypeData* matchTy, MIRLValue matchVal, tArmRules armRules, std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock);
+void MIRLowerHIRMatchDecisionTree(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, std::vector<ArmCode> armCode, MIRBasicBlockId firstCmpBlock);
 
 struct PatternSubsetCallback {
     virtual void visitSubset(size_t index) = 0;
@@ -729,10 +729,10 @@ struct PatternRulesetBuilder {
 
     struct Ruleset {
         bool isImpossible;
-        ::std::vector<PatternRule> rules;
-        ::std::vector<PatternBinding> bindings;
-        ::std::vector<PatternRuleset::Deref> derefs;
-        ::std::vector<unsigned> orPath;
+        std::vector<PatternRule> rules;
+        std::vector<PatternBinding> bindings;
+        std::vector<PatternRuleset::Deref> derefs;
+        std::vector<unsigned> orPath;
 
         Ruleset();
 
@@ -766,12 +766,12 @@ struct PatternRulesetBuilder {
 };
 
 struct RulesetRef {
-    ::std::vector<PatternRuleset>* rulesVec = nullptr;
+    std::vector<PatternRuleset>* rulesVec = nullptr;
     RulesetRef* parent = nullptr;
     size_t parentOfs = 0;
     size_t parentLen = 0;
 
-    RulesetRef(::std::vector<PatternRuleset>& rules);
+    RulesetRef(std::vector<PatternRuleset>& rules);
 
     RulesetRef(RulesetRef& parent, size_t start, size_t n);
 
@@ -781,7 +781,7 @@ struct RulesetRef {
 
     RulesetRef slice(size_t s, size_t n);
 
-    const ::std::vector<PatternRule>& operator[](size_t i) const;
+    const std::vector<PatternRule>& operator[](size_t i) const;
 
     void swap(size_t a, size_t b);
 };
@@ -826,7 +826,7 @@ void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, con
         TODO(sp, "Handle let-else");
     }
 
-    if (::std::any_of(armRules.begin(), armRules.end(), [](const auto& ruleset) {
+    if (std::any_of(armRules.begin(), armRules.end(), [](const auto& ruleset) {
         return !ruleset.derefs.empty();
     })) {
         builder.setCurBlock(firstCmpBlock);
@@ -863,7 +863,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 
     auto firstCmpBlock = builder.pauseCurBlock();
 
-    ::std::vector<ArmCode> armCode;
+    std::vector<ArmCode> armCode;
     tArmRules armRules;
 
     for (unsigned int armIdx = 0; armIdx < node.arms.size(); armIdx++) {
@@ -880,7 +880,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
             for (auto& sr : patBuilder.rulesets) {
                 size_t i = &sr - &patBuilder.rulesets.front();
                 if (!sr.isImpossible) {
-                    ::std::sort(sr.bindings.begin(), sr.bindings.end(), [](const PatternBinding& a, const PatternBinding& b) {
+                    std::sort(sr.bindings.begin(), sr.bindings.end(), [](const PatternBinding& a, const PatternBinding& b) {
                         return a.binding->slot < b.binding->slot;
                     });
                     if (firstRule < armRules.size()) {
@@ -977,7 +977,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 
                     auto patBuilder = PatternRulesetBuilder{builder.resolve()};
                     patBuilder.appendFrom(node.span(), c.pat, c.val->resType);
-                    ::std::vector<PatternRuleset> conditionRulesets;
+                    std::vector<PatternRuleset> conditionRulesets;
                     conditionRulesets.reserve(patBuilder.rulesets.size());
                     for (auto& ruleset : patBuilder.rulesets) {
                         if (!ruleset.isImpossible) {
@@ -988,7 +988,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 
                     auto localFalse = builder.newBbUnlinked();
                     bool localFalseUsed = false;
-                    ::std::vector<std::pair<MIRBasicBlockId, const PatternRuleset*>> ends;
+                    std::vector<std::pair<MIRBasicBlockId, const PatternRuleset*>> ends;
                     for (auto& sr : conditionRulesets) {
                         if (localFalseUsed) {
                             localFalse = builder.newBbUnlinked();
@@ -1221,7 +1221,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 
     if (!fallBackOnSimple && armRules[0].rules.size() > 1) {
         // TODO: Should columns be sorted within equal sub-arms too?
-        ::std::vector<unsigned> columnWeights(armRules[0].rules.size());
+        std::vector<unsigned> columnWeights(armRules[0].rules.size());
         for (const auto& armRule : armRules) {
             ASSERT_BUG(node.span(), columnWeights.size() == armRule.rules.size(), "Arm " << (&armRule - &armRules.front()) << " size doesn't match first (" << armRule.rules.size() << " != " << columnWeights.size() << ")");
             for (unsigned int i = 0; i < armRule.rules.size(); i++) {
@@ -1231,14 +1231,14 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
             }
         }
 
-        ::std::vector<unsigned> columnsSorted(columnWeights.size());
-        ::std::iota(columnsSorted.begin(), columnsSorted.end(), 0);
-        ::std::sort(columnsSorted.begin(), columnsSorted.end(), [&](auto a, auto b) {
+        std::vector<unsigned> columnsSorted(columnWeights.size());
+        std::iota(columnsSorted.begin(), columnsSorted.end(), 0);
+        std::sort(columnsSorted.begin(), columnsSorted.end(), [&](auto a, auto b) {
             return columnWeights[a] > columnWeights[b];
         });
         for (auto& armRule : armRules) {
             assert(columnsSorted.size() == armRule.rules.size());
-            ::std::vector<PatternRule> sorted;
+            std::vector<PatternRule> sorted;
             sorted.reserve(columnsSorted.size());
             for (auto idx : columnsSorted) {
                 sorted.push_back(mv$(armRule.rules[idx]));
@@ -1283,7 +1283,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
     builder.terminateScope(node.span(), mv$(matchScope));
 }
 
-::std::ostream& operator<<(::std::ostream& os, const PatternRule& x) {
+std::ostream& operator<<(std::ostream& os, const PatternRule& x) {
     os << "{root" << x.rootIndex << ":" << x.fieldPath << "}=";
     switch (x.tag()) {
         case PatternRule::TAG_Any: {
@@ -1325,8 +1325,8 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 }
 
 namespace {
-    ::Ordering ordSubRules(const ::std::vector<PatternRule>& a, const ::std::vector<PatternRule>& b) {
-        const size_t n = ::std::min(a.size(), b.size());
+    ::Ordering ordSubRules(const std::vector<PatternRule>& a, const std::vector<PatternRule>& b) {
+        const size_t n = std::min(a.size(), b.size());
         for (size_t i = 0; i < n; i++) {
             auto cmp = a[i].ord(b[i]);
             if (cmp != ::OrdEqual) {
@@ -1609,7 +1609,7 @@ void PatternRulesetBuilder::multiplyRulesetsWith(size_t n, PatternSubsetCallback
         this->subsetStart = this->subsetEnd;
     }
     this->subsetStart = savedStart;
-    ::std::stable_sort(rulesets.begin() + this->subsetStart, rulesets.begin() + this->subsetEnd, [](const Ruleset& a, const Ruleset& b) {
+    std::stable_sort(rulesets.begin() + this->subsetStart, rulesets.begin() + this->subsetEnd, [](const Ruleset& a, const Ruleset& b) {
         return a.orPath < b.orPath;
     });
 }
@@ -2333,7 +2333,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     for (const auto& fld : sd) {
                         const auto& styMono = maybeMonomorph.map(fld.ty);
 
-                        auto it = ::std::find_if(pe.subPatterns.begin(), pe.subPatterns.end(), [&](const auto& x) {
+                        auto it = std::find_if(pe.subPatterns.begin(), pe.subPatterns.end(), [&](const auto& x) {
                             return x.first == fld.name;
                         });
                         if (it == pe.subPatterns.end()) {
@@ -2504,7 +2504,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                             ASSERT_BUG(sp, pe.subPatterns.size() == 1, "Union pattern must select exactly one field");
 
                             const auto& fieldPattern = pe.subPatterns.front();
-                            auto fieldIt = ::std::find_if(pbe->variants.begin(), pbe->variants.end(), [&](const auto& field) {
+                            auto fieldIt = std::find_if(pbe->variants.begin(), pbe->variants.end(), [&](const auto& field) {
                                 return field.name == fieldPattern.first;
                             });
                             ASSERT_BUG(sp, fieldIt != pbe->variants.end(), "Unable to find union field " << fieldPattern.first);
@@ -2748,7 +2748,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 case HIRPatternData::TAG_Value: {
                     auto& pe = pat.data.as_Value();
                     ASSERT_BUG(sp, pe.val.is_ByteString() && e.inner == HIRCoreType::U8, "Matching slice with non-byte-string value pattern - " << pat);
-                    ::std::vector<u8> data;
+                    std::vector<u8> data;
                     data.reserve(pe.val.as_ByteString().v.size());
                     for (auto byte : pe.val.as_ByteString().v) {
                         data.push_back(static_cast<u8>(byte));
@@ -2868,7 +2868,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                             }
                             fieldPath.pop_back();
                         } else {
-                            ::std::vector<u8> data;
+                            std::vector<u8> data;
                             data.reserve(s.size());
                             for (auto c : s) {
                                 data.push_back(c);
@@ -3341,7 +3341,7 @@ namespace {
             rootVal = topVal.clone();
             return;
         }
-        const auto derefIt = ::std::find_if(ruleset.derefs.begin(), ruleset.derefs.end(), [&](const auto& deref) {
+        const auto derefIt = std::find_if(ruleset.derefs.begin(), ruleset.derefs.end(), [&](const auto& deref) {
             return deref.rootIndex == rootIndex;
         });
         ASSERT_BUG(sp, derefIt != ruleset.derefs.end(), "Invalid pattern root " << rootIndex);
@@ -3414,11 +3414,11 @@ void destructurePatternRuleset(MirConverter& conv, const Span& sp, const Pattern
         HIRTypeRef rootTy;
         MIRLValue rootVal;
         getPatternRoot(sp, ruleset, binding.rootIndex, topTy, topVal, rootTy, rootVal);
-        conv.destructureFromList(sp, rootTy, mv$(rootVal), ::std::vector<PatternBinding>{binding}, updateStates);
+        conv.destructureFromList(sp, rootTy, mv$(rootVal), std::vector<PatternBinding>{binding}, updateStates);
     }
 }
 
-void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock) {
+void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock) {
     builder.setCurBlock(firstCmpBlock);
     auto nextArmBb = builder.newBbUnlinked();
     size_t prevArmIdx = !armRules.empty() ? armRules[0].armIdx : 0;
@@ -3755,7 +3755,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                         auto nextBb = builder.newBbUnlinked();
                         auto varCount = pbe->numVariants();
 
-                        ::std::vector<MIRBasicBlockId> arms(varCount, failBb);
+                        std::vector<MIRBasicBlockId> arms(varCount, failBb);
                         arms[varIdx] = nextBb;
                         builder.endBlock(MIRTerminator::make_Switch({val.clone(), mv$(arms)}));
 
@@ -3870,11 +3870,11 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
 }
 
 struct tRulesSubset {
-    ::std::vector<const ::std::vector<PatternRule>*> ruleSets;
+    std::vector<const std::vector<PatternRule>*> ruleSets;
     bool isArmIndexes;
-    ::std::vector<size_t> armIdxes;
+    std::vector<size_t> armIdxes;
 
-    static ::std::pair<size_t, size_t> decodeArmIdx(size_t v);
+    static std::pair<size_t, size_t> decodeArmIdx(size_t v);
 
     static size_t encodeArmIdx(size_t armIdx, size_t patIdx);
 
@@ -3882,7 +3882,7 @@ struct tRulesSubset {
 
     size_t size() const;
 
-    const ::std::vector<PatternRule>& operator[](size_t n) const;
+    const std::vector<PatternRule>& operator[](size_t n) const;
 
     bool isArm() const;
 
@@ -3899,11 +3899,11 @@ struct tRulesSubset {
 
     tRulesSubset subSlice(size_t ofs, size_t n);
 
-    void pushArm(const ::std::vector<PatternRule>& x, size_t armIdx, size_t patIdx);
+    void pushArm(const std::vector<PatternRule>& x, size_t armIdx, size_t patIdx);
 
-    void pushBb(const ::std::vector<PatternRule>& x, MIRBasicBlockId bb);
+    void pushBb(const std::vector<PatternRule>& x, MIRBasicBlockId bb);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const tRulesSubset& x) {
+    friend std::ostream& operator<<(std::ostream& os, const tRulesSubset& x) {
         os << "t_rules_subset{";
         for (size_t i = 0; i < x.ruleSets.size(); i++) {
             if (i != 0) {
@@ -3929,17 +3929,17 @@ struct MatchGenGrouped {
     MirBuilder& builder;
     const HIRTypeData* topTy;
     const MIRLValue& topVal;
-    const ::std::vector<ArmCode>& armsCode;
+    const std::vector<ArmCode>& armsCode;
 
     size_t fieldPathOfs;
 
-    MatchGenGrouped(MirBuilder& builder, const Span& sp, const HIRTypeData* topTy, const MIRLValue& topVal, const ::std::vector<ArmCode>& armsCode, size_t fieldPathOfs);
+    MatchGenGrouped(MirBuilder& builder, const Span& sp, const HIRTypeData* topTy, const MIRLValue& topVal, const std::vector<ArmCode>& armsCode, size_t fieldPathOfs);
 
     void genForSlice(tRulesSubset rules, size_t ofs, MIRBasicBlockId defaultArm);
-    void genDispatch(const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-    void genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-    void genDispatchEnum(HIRTypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-    void genDispatchSlice(HIRTypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+    void genDispatch(const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+    void genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+    void genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+    void genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
 
     void genDispatchRange(const fieldPathT& fieldPath, const MIRConstant& first, const MIRConstant& last, bool isInclusive, MIRBasicBlockId defBlk);
     void genDispatchSplitslice(const fieldPathT& fieldPath, const PatternRule::Data_SplitSlice& e, MIRBasicBlockId defBlk);
@@ -3948,7 +3948,7 @@ struct MatchGenGrouped {
 };
 
 namespace {
-    void appendRuleColumns(::std::vector<PatternRule>& outRules, PatternRule rule) {
+    void appendRuleColumns(std::vector<PatternRule>& outRules, PatternRule rule) {
         switch (rule.tag()) {
             case PatternRule::TAG_Variant: {
                 auto& e = rule.as_Variant();
@@ -4005,7 +4005,7 @@ namespace {
         tArmRules rv;
         rv.reserve(rules.size());
         for (auto& ruleset : rules) {
-            ::std::vector<PatternRule> patternRules;
+            std::vector<PatternRule> patternRules;
             for (auto& r : ruleset.rules) {
                 appendRuleColumns(patternRules, mv$(r));
             }
@@ -4015,7 +4015,7 @@ namespace {
     }
 }
 
-void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRTypeData* matchTy, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock) {
+void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRTypeData* matchTy, MIRLValue matchVal, tArmRules armRules, std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock) {
     armRules = linearizeRuleColumns(mv$(armRules));
 
     tRulesSubset rules{armRules.size(), /*is_arm_indexes=*/true};
@@ -4116,7 +4116,7 @@ void MatchGenGrouped::genForSlice(tRulesSubset armRules, size_t ofs, MIRBasicBlo
             // TODO: Is this a valid operation?
             armRules.subSort(ofs, start, firstAny - start);
 
-            ::std::vector<tRulesSubset> slices;
+            std::vector<tRulesSubset> slices;
             auto curTest = start;
             for (auto i = start; i < firstAny; i++) {
                 if (!ruleCompatible(armRules[i][ofs], armRules[curTest][ofs])) {
@@ -4125,11 +4125,11 @@ void MatchGenGrouped::genForSlice(tRulesSubset armRules, size_t ofs, MIRBasicBlo
                 }
             }
             slices.push_back(armRules.subSlice(curTest, firstAny - curTest));
-            ::std::vector<MIRBasicBlockId> armBlocks;
+            std::vector<MIRBasicBlockId> armBlocks;
             armBlocks.reserve(slices.size());
 
             auto curBlk = builder.pauseCurBlock();
-            ::std::sort(slices.begin(), slices.end(), [&](const auto& a, const auto& b) {
+            std::sort(slices.begin(), slices.end(), [&](const auto& a, const auto& b) {
                 return a[0][ofs] < b[0][ofs];
             });
             // TODO: Should this do a stable sort of inner patterns too?
@@ -4191,7 +4191,7 @@ void MatchGenGrouped::genForSlice(tRulesSubset armRules, size_t ofs, MIRBasicBlo
     ASSERT_BUG(sp, !builder.blockActive(), "Block left active after match group");
 }
 
-void MatchGenGrouped::genDispatch(const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     const auto& fieldPath = rules[0][0][ofs].fieldPath;
 
     {
@@ -4290,8 +4290,8 @@ void MatchGenGrouped::genDispatch(const ::std::vector<tRulesSubset>& rules, size
             ASSERT_BUG(sp, !val.wrappers.empty() && val.wrappers.back().is_Deref(), "&[T; N] match on non-Deref lvalue - " << val);
             val.wrappers.pop_back();
 
-            ::std::vector<MIRBasicBlockId> targets;
-            ::std::vector<::std::vector<u8>> values;
+            std::vector<MIRBasicBlockId> targets;
+            std::vector<std::vector<u8>> values;
             size_t tgtOfs = 0;
             for (size_t i = 0; i < rules.size(); i++) {
                 for (size_t j = 1; j < rules[i].size(); j++) {
@@ -4354,7 +4354,7 @@ namespace {
     }
 }
 
-void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     auto te = ty->as_Primitive();
     switch (te) {
         case HIRCoreType::Bool: {
@@ -4384,9 +4384,9 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const :
             } else {
                 // TODO: If there are Constant::Const values in the list, they need to come first! (with equality checks)
 
-                ::std::vector<::std::pair<MIRConstant, MIRBasicBlockId>> largeValues;
-                ::std::vector<u64> values;
-                ::std::vector<MIRBasicBlockId> targets;
+                std::vector<std::pair<MIRConstant, MIRBasicBlockId>> largeValues;
+                std::vector<u64> values;
+                std::vector<MIRBasicBlockId> targets;
                 size_t tgtOfs = 0;
                 for (size_t i = 0; i < rules.size(); i++) {
                     for (size_t j = 1; j < rules[i].size(); j++) {
@@ -4439,8 +4439,8 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const :
             } else {
                 // TODO: If there are Constant::Const values in the list, they need to come first! (with equality checks)
 
-                ::std::vector<i64> values;
-                ::std::vector<MIRBasicBlockId> targets;
+                std::vector<i64> values;
+                std::vector<MIRBasicBlockId> targets;
                 size_t tgtOfs = 0;
                 for (size_t i = 0; i < rules.size(); i++) {
                     for (size_t j = 1; j < rules[i].size(); j++) {
@@ -4506,8 +4506,8 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const :
             ASSERT_BUG(sp, !val.wrappers.empty() && val.wrappers.back().is_Deref(), "&str match on non-Deref lvalue - " << val);
             val.wrappers.pop_back();
 
-            ::std::vector<MIRBasicBlockId> targets;
-            ::std::vector<::std::string> values;
+            std::vector<MIRBasicBlockId> targets;
+            std::vector<std::string> values;
             size_t tgtOfs = 0;
             for (size_t i = 0; i < rules.size(); i++) {
                 for (size_t j = 1; j < rules[i].size(); j++) {
@@ -4531,14 +4531,14 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const :
     }
 }
 
-void MatchGenGrouped::genDispatchEnum(HIRTypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     auto& te = ty->as_Path();
     const auto& pbe = te.binding.as_Enum();
 
     auto decisonArm = builder.pauseCurBlock();
 
     auto varCount = pbe->numVariants();
-    ::std::vector<MIRBasicBlockId> arms(varCount, defBlk);
+    std::vector<MIRBasicBlockId> arms(varCount, defBlk);
     size_t armIdx = 0;
     for (size_t i = 0; i < rules.size(); i++) {
         ASSERT_BUG(sp, rules[i][0][ofs].is_Variant(), "Rule for enum isn't Any or Variant - " << rules[i][0][ofs].tagStr());
@@ -4558,7 +4558,7 @@ void MatchGenGrouped::genDispatchEnum(HIRTypeRef ty, MIRLValue val, const ::std:
     builder.endBlock(MIRTerminator::make_Switch({mv$(val), mv$(arms)}));
 }
 
-void MatchGenGrouped::genDispatchSlice(HIRTypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     auto valLen = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, val)}));
 
     // TODO: Re-sort the rules list to interleve Constant::Bytes and Slice
@@ -4858,7 +4858,7 @@ void MirBuilder::registerVariableState(unsigned int idx) {
             case ScopeType::TAG_Owning: {
                 auto& e = scopeDef.data.as_Owning();
                 if (!e.isTemporary) {
-                    auto it = ::std::find(e.slots.begin(), e.slots.end(), idx);
+                    auto it = std::find(e.slots.begin(), e.slots.end(), idx);
                     assert(it == e.slots.end());
                     e.slots.push_back(idx);
                     return;
@@ -4884,9 +4884,9 @@ void MirBuilder::scheduleRegisteredVariableDrop(unsigned int idx) {
             case ScopeType::TAG_Owning: {
                 auto& e = scopeDef.data.as_Owning();
                 if (!e.isTemporary) {
-                    auto stateIt = ::std::find(e.slots.begin(), e.slots.end(), idx);
+                    auto stateIt = std::find(e.slots.begin(), e.slots.end(), idx);
                     assert(stateIt != e.slots.end());
-                    auto dropIt = ::std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
+                    auto dropIt = std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
                         return !slot.isArgument && slot.index == idx;
                     });
                     assert(dropIt == e.dropSlots.end());
@@ -4914,7 +4914,7 @@ void MirBuilder::scheduleArgumentDrop(unsigned int idx) {
             case ScopeType::TAG_Owning: {
                 auto& e = scopeDef.data.as_Owning();
                 if (!e.isTemporary) {
-                    auto it = ::std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
+                    auto it = std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
                         return slot.isArgument && slot.index == idx;
                     });
                     assert(it == e.dropSlots.end());
@@ -4949,13 +4949,13 @@ void MirBuilder::moveTemporaryDropToVariableScope(const Span& sp, const MIRLValu
     ASSERT_BUG(sp, sourceScope.data.is_Owning() && sourceScope.data.as_Owning().isTemporary, "Drop source is not a temporary scope: " << source);
     auto& sourceOwning = sourceScope.data.as_Owning();
     auto& sourceDrops = sourceOwning.dropSlots;
-    auto sourceIt = ::std::find_if(sourceDrops.begin(), sourceDrops.end(), [&](const ScopeDropSlot& slot) {
+    auto sourceIt = std::find_if(sourceDrops.begin(), sourceDrops.end(), [&](const ScopeDropSlot& slot) {
         return !slot.isArgument && slot.index == idx;
     });
     if (sourceIt == sourceDrops.end()) {
         return;
     }
-    auto sourceStateIt = ::std::find(sourceOwning.slots.begin(), sourceOwning.slots.end(), idx);
+    auto sourceStateIt = std::find(sourceOwning.slots.begin(), sourceOwning.slots.end(), idx);
     ASSERT_BUG(sp, sourceStateIt != sourceOwning.slots.end(), "Missing state owner for " << value);
 
     bool sourceSeen = false;
@@ -4970,7 +4970,7 @@ void MirBuilder::moveTemporaryDropToVariableScope(const Span& sp, const MIRLValu
         auto& scope = scopes.at(scopeIdx);
         if (auto* owning = scope.data.opt_Owning()) {
             if (!owning->isTemporary) {
-                auto targetStateIt = ::std::find(owning->slots.begin(), owning->slots.end(), idx);
+                auto targetStateIt = std::find(owning->slots.begin(), owning->slots.end(), idx);
                 ASSERT_BUG(sp, targetStateIt == owning->slots.end(), "Duplicate state owner for " << value);
                 sourceOwning.slots.erase(sourceStateIt);
                 sourceDrops.erase(sourceIt);
@@ -4994,7 +4994,7 @@ void MirBuilder::moveVariableToScope(const Span& sp, unsigned int idx, const Sco
         if (!owning) {
             continue;
         }
-        auto stateIt = ::std::find(owning->slots.begin(), owning->slots.end(), idx);
+        auto stateIt = std::find(owning->slots.begin(), owning->slots.end(), idx);
         if (stateIt != owning->slots.end()) {
             if (scopeIdx == target.idx) {
                 return;
@@ -5007,14 +5007,14 @@ void MirBuilder::moveVariableToScope(const Span& sp, unsigned int idx, const Sco
     }
     ASSERT_BUG(sp, source, "`super let` binding _" << idx << " has no lexical scope");
 
-    auto dropIt = ::std::find_if(source->dropSlots.begin(), source->dropSlots.end(), [&](const ScopeDropSlot& slot) {
+    auto dropIt = std::find_if(source->dropSlots.begin(), source->dropSlots.end(), [&](const ScopeDropSlot& slot) {
         return !slot.isArgument && slot.index == idx;
     });
     ASSERT_BUG(sp, dropIt != source->dropSlots.end(), "`super let` binding _" << idx << " has no scheduled drop");
     source->dropSlots.erase(dropIt);
 
     auto& targetOwning = targetScope.data.as_Owning();
-    ASSERT_BUG(sp, ::std::find(targetOwning.slots.begin(), targetOwning.slots.end(), idx) == targetOwning.slots.end(), "Duplicate `super let` state owner for _" << idx);
+    ASSERT_BUG(sp, std::find(targetOwning.slots.begin(), targetOwning.slots.end(), idx) == targetOwning.slots.end(), "Duplicate `super let` state owner for _" << idx);
     targetOwning.slots.push_back(idx);
     targetOwning.dropSlots.push_back(ScopeDropSlot{false, idx});
 }
@@ -5375,10 +5375,10 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRLValue& val, const Sc
         if (scopeDef.data.is_Owning()) {
             auto& e = scopeDef.data.as_Owning();
             if (e.isTemporary == isTemp) {
-                auto tmpIt = ::std::find(e.slots.begin(), e.slots.end(), idx);
+                auto tmpIt = std::find(e.slots.begin(), e.slots.end(), idx);
                 if (tmpIt != e.slots.end()) {
                     e.slots.erase(tmpIt);
-                    auto dropIt = ::std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
+                    auto dropIt = std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
                         return !slot.isArgument && slot.index == idx;
                     });
                     ASSERT_BUG(sp, dropIt != e.dropSlots.end(), "Missing drop schedule for " << val);
@@ -5433,7 +5433,7 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRLValue& val, const Sc
             case ScopeType::TAG_Loop: {
                 auto& sdLoop = scopeDef.data.as_Loop();
                 if (sdLoop.exitStateValid) {
-                    auto v = sdLoop.exitState.states.insert(::std::make_pair(idx, VarState(InvalidType::Uninit)));
+                    auto v = sdLoop.exitState.states.insert(std::make_pair(idx, VarState(InvalidType::Uninit)));
                     ASSERT_BUG(sp, v.second, "Raising " << val << " which already had a state entry");
                 }
                 break;
@@ -5441,13 +5441,13 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRLValue& val, const Sc
             case ScopeType::TAG_Split: {
                 auto& sdSplit = scopeDef.data.as_Split();
                 if (sdSplit.endStateValid) {
-                    auto v = sdSplit.endState.states.insert(::std::make_pair(idx, VarState(InvalidType::Uninit)));
+                    auto v = sdSplit.endState.states.insert(std::make_pair(idx, VarState(InvalidType::Uninit)));
                     ASSERT_BUG(sp, v.second, "Raising " << val << " which already had a state entry");
                 }
 
                 // TODO: This should update the outer state to unset.
                 auto& arm = sdSplit.arms.back();
-                arm.states.insert(::std::make_pair(idx, getSlotState(sp, idx, SlotType::Local).clone()));
+                arm.states.insert(std::make_pair(idx, getSlotState(sp, idx, SlotType::Local).clone()));
                 slotStates.at(idx) = VarState(InvalidType::Uninit);
                 break;
             }
@@ -5737,7 +5737,7 @@ ScopeHandle MirBuilder::newScopeFreeze(const Span& sp) {
 
 void MirBuilder::terminateScope(const Span& sp, ScopeHandle scope, bool emitCleanup /*=true*/) {
     if (scopeStack.empty() || scopeStack.back() != scope.idx) {
-        auto it = ::std::find(scopeStack.begin(), scopeStack.end(), scope.idx);
+        auto it = std::find(scopeStack.begin(), scopeStack.end(), scope.idx);
         if (it == scopeStack.end()) {
             BUG(sp, "Terminating scope not on the stack - scope " << scope.idx);
         }
@@ -5757,7 +5757,7 @@ void MirBuilder::terminateScope(const Span& sp, ScopeHandle scope, bool emitClea
 
 void MirBuilder::raiseAll(const Span& sp, ScopeHandle source, const ScopeHandle& target) {
     if (scopeStack.empty() || scopeStack.back() != source.idx) {
-        auto it = ::std::find(scopeStack.begin(), scopeStack.end(), source.idx);
+        auto it = std::find(scopeStack.begin(), scopeStack.end(), source.idx);
         if (it == scopeStack.end()) {
             BUG(sp, "Terminating scope not on the stack - scope " << source.idx);
         }
@@ -5779,20 +5779,20 @@ void MirBuilder::raiseAll(const Span& sp, ScopeHandle source, const ScopeHandle&
         if (auto* sdLoop = scopeDef.data.opt_Loop()) {
             if (sdLoop->exitStateValid) {
                 for (auto idx : srcList) {
-                    auto v = sdLoop->exitState.states.insert(::std::make_pair(idx, VarState(InvalidType::Uninit)));
+                    auto v = sdLoop->exitState.states.insert(std::make_pair(idx, VarState(InvalidType::Uninit)));
                     ASSERT_BUG(sp, v.second, "");
                 }
             } else {
             }
 
             for (auto idx : srcList) {
-                auto v2 = sdLoop->changedSlots.insert(::std::make_pair(idx, VarState(InvalidType::Uninit)));
+                auto v2 = sdLoop->changedSlots.insert(std::make_pair(idx, VarState(InvalidType::Uninit)));
                 ASSERT_BUG(sp, v2.second, "");
             }
         } else if (auto* sdSplit = scopeDef.data.opt_Split()) {
             if (sdSplit->endStateValid) {
                 for (auto idx : srcList) {
-                    auto v = sdSplit->endState.states.insert(::std::make_pair(idx, VarState(InvalidType::Uninit)));
+                    auto v = sdSplit->endState.states.insert(std::make_pair(idx, VarState(InvalidType::Uninit)));
                     ASSERT_BUG(sp, v.second, "");
                 }
             } else {
@@ -5802,7 +5802,7 @@ void MirBuilder::raiseAll(const Span& sp, ScopeHandle source, const ScopeHandle&
             assert(!sdSplit->arms.empty());
             auto& arm = sdSplit->arms.back();
             for (auto idx : srcList) {
-                arm.states.insert(::std::make_pair(idx, mv$(slotStates.at(idx))));
+                arm.states.insert(std::make_pair(idx, mv$(slotStates.at(idx))));
                 slotStates.at(idx) = VarState(InvalidType::Uninit);
             }
         }
@@ -5825,7 +5825,7 @@ void MirBuilder::raiseAll(const Span& sp, ScopeHandle source, const ScopeHandle&
 }
 
 void MirBuilder::terminateScopeEarly(const Span& sp, const ScopeHandle& scope, bool loopExit /*=false*/) {
-    auto it = ::std::find(scopeStack.begin(), scopeStack.end(), scope.idx);
+    auto it = std::find(scopeStack.begin(), scopeStack.end(), scope.idx);
     if (it == scopeStack.end()) {
         BUG(sp, "Early-terminating scope not on the stack");
     }
@@ -5968,7 +5968,7 @@ namespace {
                         const auto outerFlag = is_enum ? mergeInvalidWithPartialOuter(sp, builder, nse.outerFlag) : ~0u;
 
                         {
-                            ::std::vector<VarState> inner;
+                            std::vector<VarState> inner;
                             inner.reserve(nse.innerStates.size());
                             for (size_t i = 0; i < nse.innerStates.size(); i++) {
                                 inner.push_back(oldState.clone());
@@ -5990,9 +5990,9 @@ namespace {
                     case VarState::TAG_PartialArray: {
                         const auto& nse = newState.as_PartialArray();
                         {
-                            ::std::map<unsigned, VarState> other;
+                            std::map<unsigned, VarState> other;
                             for (const auto& kv : nse.otherStates) {
-                                other.insert(::std::make_pair(kv.first, oldState.clone()));
+                                other.insert(std::make_pair(kv.first, oldState.clone()));
                             }
                             oldState = VarState::make_PartialArray({box$(oldState.clone()), mv$(other), nse.count});
                         }
@@ -6056,7 +6056,7 @@ namespace {
                         }
 
                         {
-                            ::std::vector<VarState> inner;
+                            std::vector<VarState> inner;
                             inner.reserve(nse.innerStates.size());
                             for (size_t i = 0; i < nse.innerStates.size(); i++) {
                                 inner.push_back(VarState::make_Valid({}));
@@ -6082,9 +6082,9 @@ namespace {
                     case VarState::TAG_PartialArray: {
                         const auto& nse = newState.as_PartialArray();
                         {
-                            ::std::map<unsigned, VarState> other;
+                            std::map<unsigned, VarState> other;
                             for (const auto& kv : nse.otherStates) {
-                                other.insert(::std::make_pair(kv.first, VarState::make_Valid({})));
+                                other.insert(std::make_pair(kv.first, VarState::make_Valid({})));
                             }
                             oldState = VarState::make_PartialArray({box$(VarState::make_Valid({})), mv$(other), nse.count});
                         }
@@ -6137,7 +6137,7 @@ namespace {
                         // TODO: This can lead to contradictions when one field is moved and another not.
 
                         {
-                            ::std::vector<VarState> inner;
+                            std::vector<VarState> inner;
                             inner.reserve(nse.innerStates.size());
                             for (size_t i = 0; i < nse.innerStates.size(); i++) {
                                 auto newFlag = builder.newDropFlag(builder.getDropFlagDefault(sp, oldState.as_Optional()));
@@ -6174,9 +6174,9 @@ namespace {
                             return flag;
                         };
                         {
-                            ::std::map<unsigned, VarState> other;
+                            std::map<unsigned, VarState> other;
                             for (const auto& kv : nse.otherStates) {
-                                other.insert(::std::make_pair(kv.first, VarState::make_Optional(newAliasFlag())));
+                                other.insert(std::make_pair(kv.first, VarState::make_Optional(newAliasFlag())));
                             }
                             oldState = VarState::make_PartialArray({box$(VarState::make_Optional(newAliasFlag())), mv$(other), nse.count});
                         }
@@ -6315,7 +6315,7 @@ namespace {
                         ASSERT_BUG(sp, ose.count == nse.count, "PartialArray size mismatch - " << oldState << " <= " << newState);
                         for (const auto& kv : nse.otherStates) {
                             if (ose.otherStates.find(kv.first) == ose.otherStates.end()) {
-                                ose.otherStates.insert(::std::make_pair(kv.first, ose.fillState->clone()));
+                                ose.otherStates.insert(std::make_pair(kv.first, ose.fillState->clone()));
                             }
                         }
                         mergeState(sp, builder, MIRLValue::newField(lv.clone(), 0), *ose.fillState, *nse.fillState);
@@ -6340,7 +6340,7 @@ void MirBuilder::terminateLoopEarly(const Span& sp, ScopeType::Data_Loop& sdLoop
                 auto idx = ent.first;
                 auto it = exitStates.find(idx);
                 if (it == exitStates.end()) {
-                    it = exitStates.insert(::std::make_pair(idx, ent.second.clone())).first;
+                    it = exitStates.insert(std::make_pair(idx, ent.second.clone())).first;
                 }
                 auto& oldState = it->second;
                 mergeState(sp, *this, valCb(idx), oldState, getSlotState(sp, idx, type));
@@ -6354,7 +6354,7 @@ void MirBuilder::terminateLoopEarly(const Span& sp, ScopeType::Data_Loop& sdLoop
         auto initList = [sp, this](const auto& changed, auto& exitStates, auto type) {
             for (const auto& ent : changed) {
                 auto idx = ent.first;
-                exitStates.insert(::std::make_pair(idx, getSlotState(sp, idx, type).clone()));
+                exitStates.insert(std::make_pair(idx, getSlotState(sp, idx, type).clone()));
             }
         };
         initList(sdLoop.changedSlots, sdLoop.exitState.states, SlotType::Local);
@@ -6363,11 +6363,11 @@ void MirBuilder::terminateLoopEarly(const Span& sp, ScopeType::Data_Loop& sdLoop
     }
 }
 
-void MirBuilder::mergeSplitLists(const Span& sp, const ScopeHandle& handle, const ::std::map<unsigned int, VarState>& states, ::std::map<unsigned int, VarState>& endStates, MirBuilder::SlotType type) {
+void MirBuilder::mergeSplitLists(const Span& sp, const ScopeHandle& handle, const std::map<unsigned int, VarState>& states, std::map<unsigned int, VarState>& endStates, MirBuilder::SlotType type) {
     for (const auto& ent : states) {
         if (endStates.count(ent.first) == 0) {
             auto s = this->getSlotState(sp, ent.first, type, &handle).clone();
-            endStates.insert(::std::make_pair(ent.first, std::move(s)));
+            endStates.insert(std::make_pair(ent.first, std::move(s)));
         }
     }
     for (auto& ent : endStates) {
@@ -6420,10 +6420,10 @@ void MirBuilder::endSplitArm(const Span& sp, const ScopeHandle& handle, bool rea
     } else {
         if (reachable) {
             for (auto& ent : thisArmState.states) {
-                sdSplit.endState.states.insert(::std::make_pair(ent.first, ent.second.clone()));
+                sdSplit.endState.states.insert(std::make_pair(ent.first, ent.second.clone()));
             }
             for (auto& ent : thisArmState.argStates) {
-                sdSplit.endState.argStates.insert(::std::make_pair(ent.first, ent.second.clone()));
+                sdSplit.endState.argStates.insert(std::make_pair(ent.first, ent.second.clone()));
             }
             sdSplit.endStateValid = true;
         } else {
@@ -6436,10 +6436,10 @@ void MirBuilder::endSplitArm(const Span& sp, const ScopeHandle& handle, bool rea
     if (!early) {
         SplitArm arm;
         for (auto& ent : sdSplit.condState.states) {
-            arm.states.insert(::std::make_pair(ent.first, ent.second.clone()));
+            arm.states.insert(std::make_pair(ent.first, ent.second.clone()));
         }
         for (auto& ent : sdSplit.condState.argStates) {
-            arm.argStates.insert(::std::make_pair(ent.first, ent.second.clone()));
+            arm.argStates.insert(std::make_pair(ent.first, ent.second.clone()));
         }
         sdSplit.arms.push_back(mv$(arm));
     }
@@ -6499,13 +6499,13 @@ void MirBuilder::completeScope(ScopeDef& sd) {
             for (auto& ent : endState.states) {
                 auto& vs = builder.getSlotStateMut(sp, ent.first, SlotType::Local);
                 if (vs != ent.second) {
-                    vs = ::std::move(ent.second);
+                    vs = std::move(ent.second);
                 }
             }
             for (auto& ent : endState.argStates) {
                 auto& vs = builder.getSlotStateMut(sp, ent.first, SlotType::Argument);
                 if (vs != ent.second) {
-                    vs = ::std::move(ent.second);
+                    vs = std::move(ent.second);
                 }
             }
         }
@@ -6774,7 +6774,7 @@ const VarState& MirBuilder::getSlotState(const Span& sp, unsigned int idx, SlotT
             case ScopeType::TAG_Owning: {
                 auto& e = scopeDef.data.as_Owning();
                 if (type == SlotType::Local) {
-                    auto it = ::std::find(e.slots.begin(), e.slots.end(), idx);
+                    auto it = std::find(e.slots.begin(), e.slots.end(), idx);
                     if (it != e.slots.end()) {
                         goto outOfLoop;
                     }
@@ -6819,7 +6819,7 @@ VarState& MirBuilder::getSlotStateMut(const Span& sp, unsigned int idx, SlotType
         auto& states = type == SlotType::Local ? frozenExitSlotStates : frozenExitArgStates;
         auto it = states.find(idx);
         if (it == states.end()) {
-            it = states.insert(::std::make_pair(idx, getSlotState(sp, idx, type).clone())).first;
+            it = states.insert(std::make_pair(idx, getSlotState(sp, idx, type).clone())).first;
         }
         return it->second;
     }
@@ -6831,7 +6831,7 @@ VarState& MirBuilder::getSlotStateMut(const Span& sp, unsigned int idx, SlotType
             case ScopeType::TAG_Owning: {
                 auto& e = scopeDef.data.as_Owning();
                 if (type == SlotType::Local) {
-                    auto it = ::std::find(e.slots.begin(), e.slots.end(), idx);
+                    auto it = std::find(e.slots.begin(), e.slots.end(), idx);
                     if (it != e.slots.end()) {
                         goto outOfLoop;
                     }
@@ -6847,7 +6847,7 @@ VarState& MirBuilder::getSlotStateMut(const Span& sp, unsigned int idx, SlotType
                         auto& states = (type == SlotType::Local ? curArm.states : curArm.argStates);
                         auto it = states.find(idx);
                         if (it == states.end()) {
-                            it = states.insert(::std::make_pair(idx, getSlotState(sp, idx, type).clone())).first;
+                            it = states.insert(std::make_pair(idx, getSlotState(sp, idx, type).clone())).first;
                         } else {
                         }
                         ret = &it->second;
@@ -6862,7 +6862,7 @@ VarState& MirBuilder::getSlotStateMut(const Span& sp, unsigned int idx, SlotType
                     auto& states = (type == SlotType::Local ? e.changedSlots : e.changedArgs);
                     if (states.count(idx) == 0) {
                         auto state = e.exitStateValid ? getSlotState(sp, idx, type).clone() : VarState::make_Valid({});
-                        states.insert(::std::make_pair(idx, mv$(state)));
+                        states.insert(std::make_pair(idx, mv$(state)));
                     }
                 }
                 break;
@@ -6983,7 +6983,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                     if (isArray && nFlds >= PARTIAL_ARRAY_MIN) {
                         ivs = VarState::make_PartialArray({box$(tpl.clone()), {}, nFlds});
                     } else {
-                        ::std::vector<VarState> innerVs;
+                        std::vector<VarState> innerVs;
                         innerVs.reserve(nFlds);
                         for (size_t i = 0; i < nFlds; i++) {
                             innerVs.push_back(tpl.clone());
@@ -6996,7 +6996,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                     ASSERT_BUG(sp, fieldIndex < pa.count, "Array field index out of range - " << lv);
                     auto it = pa.otherStates.find(fieldIndex);
                     if (it == pa.otherStates.end()) {
-                        it = pa.otherStates.insert(::std::make_pair(fieldIndex, pa.fillState->clone())).first;
+                        it = pa.otherStates.insert(std::make_pair(fieldIndex, pa.fillState->clone())).first;
                     }
                     vs = &it->second;
                 } else {
@@ -7013,7 +7013,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
 
                 if (isBox) {
                     if (!ivs.is_MovedOut()) {
-                        ::std::vector<VarState> inner;
+                        std::vector<VarState> inner;
                         inner.push_back(VarState::make_Valid({}));
                         unsigned int dropFlag = (ivs.is_Optional() ? ivs.as_Optional() : ~0u);
                         ivs = VarState::make_MovedOut({box$(VarState::make_Valid({})), dropFlag});
@@ -7051,7 +7051,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                     }
 
                     const auto outerFlag = ivs.is_Optional() ? ivs.as_Optional() : ~0u;
-                    ::std::vector<VarState> inner;
+                    std::vector<VarState> inner;
                     for (size_t i = 0; i < varCount; i++) {
                         inner.push_back(VarState::make_Invalid(InvalidType::Uninit));
                     }
@@ -7149,8 +7149,8 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
                 }
 
                 const auto nextBb = newBbUnlinked();
-                ::std::vector<MIRBasicBlockId> arms;
-                ::std::vector<MIRBasicBlockId> cleanupBlocks;
+                std::vector<MIRBasicBlockId> arms;
+                std::vector<MIRBasicBlockId> cleanupBlocks;
                 arms.reserve(partial.innerStates.size());
                 cleanupBlocks.reserve(partial.innerStates.size());
                 for (const auto& state : partial.innerStates) {
@@ -7371,7 +7371,7 @@ VarState VarState::clone() const {
         }
         case VarState::TAG_Partial: {
             auto& e = (*this).as_Partial();
-            ::std::vector<VarState> n;
+            std::vector<VarState> n;
             n.reserve(e.innerStates.size());
             for (const auto& a : e.innerStates) {
                 n.push_back(a.clone());
@@ -7381,9 +7381,9 @@ VarState VarState::clone() const {
         }
         case VarState::TAG_PartialArray: {
             auto& e = (*this).as_PartialArray();
-            ::std::map<unsigned, VarState> n;
+            std::map<unsigned, VarState> n;
             for (const auto& kv : e.otherStates) {
-                n.insert(::std::make_pair(kv.first, kv.second.clone()));
+                n.insert(std::make_pair(kv.first, kv.second.clone()));
             }
             return VarState::make_PartialArray({box$(e.fillState->clone()), mv$(n), e.count});
             break;
@@ -7451,7 +7451,7 @@ bool VarState::operator==(const VarState& x) const {
     UNREACHABLE();
 }
 
-::std::ostream& operator<<(::std::ostream& os, const VarState& x) {
+std::ostream& operator<<(std::ostream& os, const VarState& x) {
     switch (x.tag()) {
         case VarState::TAG_Invalid: {
             auto& e = x.as_Invalid();
@@ -7648,12 +7648,12 @@ MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
 {
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ScopeHandle& x) {
+std::ostream& operator<<(std::ostream& os, const ScopeHandle& x) {
     os << x.idx;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const fieldPathT& x) {
+std::ostream& operator<<(std::ostream& os, const fieldPathT& x) {
     for (auto idx : x.data) {
         os << ".";
         if (idx == FIELD_DEREF) {
@@ -7669,7 +7669,7 @@ MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x) {
+std::ostream& operator<<(std::ostream& os, const PatternBinding& x) {
     os << *x.binding << x.field;
     if (x.isSplitSlice()) {
         os << "[" << x.splitSlice.first << "..-" << x.splitSlice.second << "]";
@@ -7679,7 +7679,7 @@ MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
 
 #include "mir_from_hir_pattern_tu.cpp"
 
-ExprVisitorConv::ExprVisitorConv(MirBuilder& builder, const ::std::vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator)
+ExprVisitorConv::ExprVisitorConv(MirBuilder& builder, const std::vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator)
     : builder(builder)
     , variableTypes(varTypes)
     , isGenerator(isGenerator != nullptr)
@@ -7906,7 +7906,7 @@ auto ExprVisitorConv::emitAsyncDrop(const Span& sp, MIRLValue value, unsigned in
         builder.pushStmtAssign(sp, condition.clone(), MIRRValue::make_EnumVariant({conditionTy->as_Path().path.data.as_Generic().clone(), 1, {}}));
         auto dropBb = builder.newBbUnlinked();
         auto nextBb = builder.newBbUnlinked();
-        builder.endBlock(MIRTerminator::make_Switch({std::move(condition), ::std::vector<MIRBasicBlockId>{dropBb, dropBb}, flag, nextBb}));
+        builder.endBlock(MIRTerminator::make_Switch({std::move(condition), std::vector<MIRBasicBlockId>{dropBb, dropBb}, flag, nextBb}));
         builder.setCurBlock(dropBb);
         const bool emitted = emitAsyncDrop(sp, value.clone(), ~0u);
         ASSERT_BUG(sp, emitted, "conditional async drop stopped being async for " << ty);
@@ -7982,7 +7982,7 @@ auto ExprVisitorConv::emitAsyncBoxShallowDrop(const Span& sp, MIRLValue value, u
         builder.pushStmtAssign(sp, condition.clone(), MIRRValue::make_EnumVariant({conditionTy->as_Path().path.data.as_Generic().clone(), 1, {}}));
         auto dropBb = builder.newBbUnlinked();
         auto nextBb = builder.newBbUnlinked();
-        builder.endBlock(MIRTerminator::make_Switch({std::move(condition), ::std::vector<MIRBasicBlockId>{dropBb, dropBb}, flag, nextBb}));
+        builder.endBlock(MIRTerminator::make_Switch({std::move(condition), std::vector<MIRBasicBlockId>{dropBb, dropBb}, flag, nextBb}));
         builder.setCurBlock(dropBb);
         const bool emitted = emitAsyncBoxShallowDrop(sp, value.clone(), ~0u);
         ASSERT_BUG(sp, emitted, "conditional shallow Box drop stopped being async for " << ty);
@@ -8189,7 +8189,7 @@ auto ExprVisitorConv::generatorFinalise(const Span& sp, HIREnum& stateEnm) -> st
     std::set<unsigned> usedVars;
     std::vector<MIRBasicBlockId> armTargets;
     armTargets.reserve(generatorState.states.size() + 2);
-    ::std::vector<HIREnum::ValueVariant> enumVariants;
+    std::vector<HIREnum::ValueVariant> enumVariants;
     enumVariants.reserve(generatorState.states.size() + 2);
 
     auto addStateArm = [&](const GeneratorState::State& state, RcString name) {
@@ -8232,7 +8232,7 @@ auto ExprVisitorConv::generatorFinalise(const Span& sp, HIREnum& stateEnm) -> st
     return usedVars;
 }
 
-auto ExprVisitorConv::generatorMakeDrop(const Span& sp, MirBuilder& outBuilder, size_t nCaptures, const ::std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, unsigned dropStateFieldIdx, const std::map<unsigned, unsigned>& dropFlagMapping) const -> void {
+auto ExprVisitorConv::generatorMakeDrop(const Span& sp, MirBuilder& outBuilder, size_t nCaptures, const std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, unsigned dropStateFieldIdx, const std::map<unsigned, unsigned>& dropFlagMapping) const -> void {
     MIRLValue self = MIRLValue::newDeref(MIRLValue::newArgument(0));
 
     assert(generatorState.states.size() > 0);
@@ -8391,7 +8391,7 @@ auto ExprVisitorConv::getValueForBindingPath(const Span& sp, const HIRTypeData* 
     return lval;
 }
 
-auto ExprVisitorConv::destructureFromList(const Span& sp, const HIRTypeData* outerTy, MIRLValue outerLval, const ::std::vector<PatternBinding>& bindings, bool updateStates /*=true*/) -> void {
+auto ExprVisitorConv::destructureFromList(const Span& sp, const HIRTypeData* outerTy, MIRLValue outerLval, const std::vector<PatternBinding>& bindings, bool updateStates /*=true*/) -> void {
     for (size_t i = bindings.size(); i--;) {
         const auto& b = bindings[i];
         auto lval = getValueForBindingPath(sp, outerTy, outerLval, b);
@@ -8520,14 +8520,14 @@ auto ExprVisitorConv::visit(HIRExprNodeConstBlock& node) -> void {
 }
 
 auto ExprVisitorConv::visit(HIRExprNodeAsm& node) -> void {
-    ::std::vector<::std::pair<::std::string, MIRLValue>> inputs;
+    std::vector<std::pair<std::string, MIRLValue>> inputs;
     for (auto& v : node.inputs) {
         this->visitNodePtr(v.value);
         auto lv = builder.getResultInLvalue(v.value->span(), v.value->resType);
-        inputs.push_back(::std::make_pair(v.spec, mv$(lv)));
+        inputs.push_back(std::make_pair(v.spec, mv$(lv)));
     }
 
-    ::std::vector<::std::pair<::std::string, MIRLValue>> outputs;
+    std::vector<std::pair<std::string, MIRLValue>> outputs;
     for (auto& v : node.outputs) {
         this->visitNodePtr(v.value);
         if (v.spec[0] != '=' && v.spec[0] != '+') { // TODO: what does '+' mean?
@@ -8539,7 +8539,7 @@ auto ExprVisitorConv::visit(HIRExprNodeAsm& node) -> void {
         } else {
             lv = builder.getResultUnwrapLvalue(v.value->span());
         }
-        outputs.push_back(::std::make_pair(v.spec, mv$(lv)));
+        outputs.push_back(std::make_pair(v.spec, mv$(lv)));
     }
 
     builder.pushStmtAsm(node.span(), {node.templateText, mv$(outputs), mv$(inputs), node.clobbers, node.flags});
@@ -8717,7 +8717,7 @@ auto ExprVisitorConv::asyncGenReturnType(const Span& sp) -> AsyncGenReturn {
     return rv;
 }
 
-auto ExprVisitorConv::asyncGenPollReady(const Span& sp, const char* variant, ::std::vector<MIRParam> values) -> void {
+auto ExprVisitorConv::asyncGenPollReady(const Span& sp, const char* variant, std::vector<MIRParam> values) -> void {
     auto ret = asyncGenReturnType(sp);
     const auto& optionEnum = *ret.optionTy->as_Path().binding.as_Enum();
     const auto variantIdx = optionEnum.findVariant(variant);
@@ -8742,7 +8742,7 @@ auto ExprVisitorConv::coroutineReturn(const Span& sp, const HIRTypeData* valueTy
     ASSERT_BUG(sp, enmPath.path != HIRSimplePath(), "Failed to get path from return type?");
     ASSERT_BUG(sp, variantIndex != SIZE_MAX, "Unable to find variant " << variantName << " in " << enmPath << " for coroutine return");
 
-    ::std::vector<MIRParam> values;
+    std::vector<MIRParam> values;
     values.push_back(builder.getResultInParam(sp, valueTy));
     auto res = MIRRValue::make_EnumVariant({std::move(enmPath), static_cast<unsigned>(variantIndex), std::move(values)});
     builder.pushStmtAssign(sp, MIRLValue::newReturn(), std::move(res));
@@ -8752,7 +8752,7 @@ auto ExprVisitorConv::coroutineReturn(const Span& sp, const HIRTypeData* valueTy
 auto ExprVisitorConv::visit(HIRExprNodeReturn& node) -> void {
     if (node.isTailCall) {
         MIRCallTarget target;
-        ::std::vector<MIRParam> args;
+        std::vector<MIRParam> args;
 
         if (auto* call = cast<HIRExprNodeCallPath>(node.value.get())) {
             args = getArgs(call->args);
@@ -8830,7 +8830,7 @@ auto ExprVisitorConv::visit(HIRExprNodeYield& node) -> void {
         ASSERT_BUG(node.span(), te.binding.as_Enum()->findVariant("Yielded") == 0, "");
 
         this->visitNodePtr(node.value);
-        ::std::vector<MIRParam> values;
+        std::vector<MIRParam> values;
         values.push_back(builder.getResultInParam(node.span(), node.value->resType));
         auto res = MIRRValue::make_EnumVariant({mv$(enmPath), 0, mv$(values)});
         builder.pushStmtAssign(node.span(), MIRLValue::newReturn(), mv$(res));
@@ -8953,7 +8953,7 @@ auto ExprVisitorConv::visit(HIRExprNodeLoop& node) -> void {
 
 auto ExprVisitorConv::findLoop(const Span& sp, const RcString& targetLabel) const -> const LoopDesc& {
     if (targetLabel != "") {
-        auto it = ::std::find_if(loopStack.rbegin(), loopStack.rend(), [&](const auto& x) {
+        auto it = std::find_if(loopStack.rbegin(), loopStack.rend(), [&](const auto& x) {
             return x.label == targetLabel;
         });
         if (it == loopStack.rend()) {
@@ -8961,7 +8961,7 @@ auto ExprVisitorConv::findLoop(const Span& sp, const RcString& targetLabel) cons
         }
         return *it;
     } else {
-        auto it = ::std::find_if(loopStack.rbegin(), loopStack.rend(), [](const auto& x) {
+        auto it = std::find_if(loopStack.rbegin(), loopStack.rend(), [](const auto& x) {
             return !x.requireLabel;
         });
         if (it == loopStack.rend()) {
@@ -9057,7 +9057,7 @@ auto ExprVisitorConv::emitIf(/*const*/ HIRExprNodeP& cond, MIRBasicBlockId trueB
         }
 
         if (reverse) {
-            ::std::swap(trueBranch, falseBranch);
+            std::swap(trueBranch, falseBranch);
         }
     }
 
@@ -10040,7 +10040,7 @@ auto ExprVisitorConv::visitIndexOperator(HIRExprNodeIndex& node, const HIRTypeDa
     HIRPathParams ppMethod;
     auto methodPath = HIRPath(tyVal, std::move(trait), RcString::newInterned(method), std::move(ppMethod));
 
-    ::std::vector<MIRParam> args;
+    std::vector<MIRParam> args;
     args.push_back(builder.lvalueOrTemp(sp, builder.resolve().crate.types.borrow(bt, node.value->resType), MIRRValue::make_Borrow({bt, false, std::move(value)})));
     args.push_back(std::move(index));
     builder.movedLvalue(node.span(), args[0].as_LValue());
@@ -10197,7 +10197,7 @@ auto ExprVisitorConv::visit(HIRExprNodeDeref& node) -> void {
 
         auto methodPath = HIRPath(tyVal, HIRGenericPath(builder.resolve().crate.getLangItemPath(node.span(), langitem), {}), method, HIRPathParams());
 
-        ::std::vector<MIRParam> args;
+        std::vector<MIRParam> args;
         args.push_back(builder.lvalueOrTemp(sp, builder.resolve().crate.types.borrow(bt, node.value->resType), MIRRValue::make_Borrow({bt, false, mv$(val)})));
         builder.movedLvalue(node.span(), args[0].as_LValue());
         val = builder.newTemporary(builder.resolve().crate.types.borrow(bt, node.resType));
@@ -10251,8 +10251,8 @@ auto ExprVisitorConv::boxNew(HIRExprNode& node, const HIRTypeData* dataTy, MIRRV
         emitUnwind(node.span());
         builder.setCurBlock(alignOk);
 
-        sizeParam = ::std::move(sizeSlot);
-        alignParam = ::std::move(alignSlot);
+        sizeParam = std::move(sizeSlot);
+        alignParam = std::move(alignSlot);
     }
 
     auto placeRawType = types.pointer(HIRBorrowType::Unique, types.primitive(HIRCoreType::U8));
@@ -10260,7 +10260,7 @@ auto ExprVisitorConv::boxNew(HIRExprNode& node, const HIRTypeData* dataTy, MIRRV
 
     auto placePanic = builder.newBbUnlinked();
     auto placeOk = builder.newBbUnlinked();
-    builder.endBlock(MIRTerminator::make_Call({placeOk, MIRUnwindAction::make_Cleanup(placePanic), placeRaw.clone(), HIRPath(langExchangeMalloc), makeVec2<MIRParam>(::std::move(sizeParam), ::std::move(alignParam))}));
+    builder.endBlock(MIRTerminator::make_Call({placeOk, MIRUnwindAction::make_Cleanup(placePanic), placeRaw.clone(), HIRPath(langExchangeMalloc), makeVec2<MIRParam>(std::move(sizeParam), std::move(alignParam))}));
     builder.setCurBlock(placePanic);
     emitUnwind(node.span());
     builder.setCurBlock(placeOk);
@@ -10286,7 +10286,7 @@ auto ExprVisitorConv::boxNew(HIRExprNode& node, const HIRTypeData* dataTy, MIRRV
 
 auto ExprVisitorConv::visit(HIRExprNodeTupleVariant& node) -> void {
     const Span& sp = node.span();
-    ::std::vector<MIRParam> values;
+    std::vector<MIRParam> values;
     values.reserve(node.args.size());
     for (auto& arg : node.args) {
         this->visitNodePtr(arg);
@@ -10313,8 +10313,8 @@ auto ExprVisitorConv::visit(HIRExprNodeTupleVariant& node) -> void {
     }
 }
 
-auto ExprVisitorConv::getArgs(/*const*/ ::std::vector<HIRExprNodeP>& args) -> ::std::vector<MIRParam> {
-    ::std::vector<MIRParam> values;
+auto ExprVisitorConv::getArgs(/*const*/ std::vector<HIRExprNodeP>& args) -> std::vector<MIRParam> {
+    std::vector<MIRParam> values;
     values.reserve(args.size());
     for (auto& arg : args) {
         this->visitNodePtr(arg);
@@ -10344,7 +10344,7 @@ auto ExprVisitorConv::getArgs(/*const*/ ::std::vector<HIRExprNodeP>& args) -> ::
 
 auto ExprVisitorConv::visit(HIRExprNodeCallPath& node) -> void {
     // TODO: if this is a `<foo as Index[Mut]>::index[_mut]` call then allow the borrow raise to go through to the receiver
-    ::std::vector<MIRParam> values;
+    std::vector<MIRParam> values;
     bool isOperator = false;
     if (const auto* pe = node.path.data.opt_UfcsKnown()) {
         if (pe->trait.path == builder.resolve().crate.getLangItemPathOpt("index")) {
@@ -10579,20 +10579,20 @@ auto ExprVisitorConv::visit(HIRExprNodeField& node) -> void {
     const auto& valTy = node.value->resType;
 
     unsigned int idx;
-    if (::std::isdigit(node.field.c_str()[0])) {
-        ::std::stringstream(node.field.c_str()) >> idx;
+    if (std::isdigit(node.field.c_str()[0])) {
+        std::stringstream(node.field.c_str()) >> idx;
         builder.setResult(node.span(), MIRLValue::newField(mv$(val), idx));
     } else if (const auto* bep = valTy->as_Path().binding.opt_Struct()) {
         const auto& str = **bep;
         const auto& fields = str.data.as_Named();
-        idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
+        idx = std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
             return x.name == node.field;
         }) - fields.begin();
         builder.setResult(node.span(), MIRLValue::newField(mv$(val), idx));
     } else if (const auto* bep = valTy->as_Path().binding.opt_Union()) {
         const auto& unm = **bep;
         const auto& fields = unm.variants;
-        idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
+        idx = std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
             return x.name == node.field;
         }) - fields.begin();
 
@@ -10680,7 +10680,7 @@ auto ExprVisitorConv::visit(HIRExprNodeLiteral& node) -> void {
         }
         case HIRExprLiteral::TAG_ByteString: {
             auto& e = node.data.as_ByteString();
-            ::std::vector<u8> v(e.begin(), e.end());
+            std::vector<u8> v(e.begin(), e.end());
             builder.setResult(node.span(), MIRRValue::make_Constant(MIRConstant(mv$(v))));
             break;
         }
@@ -10837,14 +10837,14 @@ auto ExprVisitorConv::visitSlInner(HIRExprNodeStructLiteral& node, const HIRStru
     ASSERT_BUG(sp, str.data.is_Named(), "");
     const tStructFields& fields = str.data.as_Named();
 
-    ::std::vector<bool> valuesSet;
-    ::std::vector<MIRParam> values;
+    std::vector<bool> valuesSet;
+    std::vector<MIRParam> values;
     values.resize(fields.size());
     valuesSet.resize(fields.size());
 
     for (auto& ent : node.values) {
         auto& valnode = ent.second;
-        auto idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
+        auto idx = std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
             return x.name == ent.first;
         }) - fields.begin();
         assert(!valuesSet[idx]);
@@ -10879,7 +10879,7 @@ auto ExprVisitorConv::visitSlInner(HIRExprNodeStructLiteral& node, const HIRStru
             } else if (fields[i].defaultValue) {
                 const auto& v = *fields[i].defaultValue;
                 auto ms = MonomorphStatePtr(builder.resolve().crate.types, nullptr, &path.params, nullptr);
-                values[i] = builder.lvalueOrTemp(sp, ms.monomorphType(sp, fields[i].ty), MIRConstant::make_Const({::std::make_unique<HIRPath>(ms.monomorphGenericpath(sp, v))}));
+                values[i] = builder.lvalueOrTemp(sp, ms.monomorphType(sp, fields[i].ty), MIRConstant::make_Const({std::make_unique<HIRPath>(ms.monomorphGenericpath(sp, v))}));
             } else {
                 ERROR(node.span(), E0000, "Field '" << fields[i].name << "' not specified");
             }
@@ -10937,7 +10937,7 @@ auto ExprVisitorConv::visit(HIRExprNodeStructLiteral& node) -> void {
                 auto val = builder.getResultInLvalue(valueNode->span(), valueNode->resType);
 
                 const auto& unm = *e;
-                auto it = ::std::find_if(unm.variants.begin(), unm.variants.end(), [&](const HIRStructField& v) -> auto {
+                auto it = std::find_if(unm.variants.begin(), unm.variants.end(), [&](const HIRStructField& v) -> auto {
                     return v.name == variantName;
                 });
                 assert(it != unm.variants.end());
@@ -10963,7 +10963,7 @@ auto ExprVisitorConv::visit(HIRExprNodeStructLiteral& node) -> void {
                     std::vector<MIRParam> values;
                     values.resize(fields.size());
                     for (auto& val : node.values) {
-                        const auto idx = static_cast<unsigned>(::std::atoi(val.first.c_str()));
+                        const auto idx = static_cast<unsigned>(std::atoi(val.first.c_str()));
                         ASSERT_BUG(node.span(), idx < fields.size(), "Tuple field index " << idx << " out of range");
                         ASSERT_BUG(node.span(), !valuesSet[idx], "Tuple field " << idx << " specified twice");
                         this->visitNodePtr(val.second);
@@ -11032,7 +11032,7 @@ auto ExprVisitorConv::visit(HIRExprNodeArraySized& node) -> void {
 auto ExprVisitorConv::visit(HIRExprNodeClosure& node) -> void {
     auto _ = saveAndEdit(borrowRaiseTarget, nullptr);
 
-    ::std::vector<MIRParam> vals;
+    std::vector<MIRParam> vals;
     vals.reserve(node.captures.size());
     for (auto& arg : node.captures) {
         this->visitNodePtr(arg);
@@ -11042,10 +11042,10 @@ auto ExprVisitorConv::visit(HIRExprNodeClosure& node) -> void {
     builder.setResult(node.span(), MIRRValue::make_Struct({node.objPath.clone(), mv$(vals)}));
 }
 
-auto ExprVisitorConv::visitCommonCr(const Span& sp, const HIRGenericPath& objPath, const HIRTypeData* stateType, ::std::vector<HIRExprNodeP>& captures) -> void {
+auto ExprVisitorConv::visitCommonCr(const Span& sp, const HIRGenericPath& objPath, const HIRTypeData* stateType, std::vector<HIRExprNodeP>& captures) -> void {
     auto _ = saveAndEdit(borrowRaiseTarget, nullptr);
 
-    ::std::vector<MIRParam> vals;
+    std::vector<MIRParam> vals;
     vals.reserve(1 + captures.size());
 
     {
@@ -11093,7 +11093,7 @@ ExprVisitorConv::GeneratorState::State::State(MIRBasicBlockId entry)
 {
 }
 
-PatternDump::PatternDump(const StaticTraitResolve& resolve, const HIRTypeData* ty, const ::std::vector<PatternRule>& rules)
+PatternDump::PatternDump(const StaticTraitResolve& resolve, const HIRTypeData* ty, const std::vector<PatternRule>& rules)
     : resolve(resolve)
     , ty(ty)
     , rules(rules)
@@ -11158,7 +11158,7 @@ auto PatternRulesetBuilder::Ruleset::clone() const -> Ruleset {
     return rv;
 }
 
-RulesetRef::RulesetRef(::std::vector<PatternRuleset>& rules)
+RulesetRef::RulesetRef(std::vector<PatternRuleset>& rules)
     : rulesVec(&rules)
 {
 }
@@ -11190,7 +11190,7 @@ auto RulesetRef::slice(size_t s, size_t n) -> RulesetRef {
     return RulesetRef(*this, s, n);
 }
 
-auto RulesetRef::operator[](size_t i) const -> const ::std::vector<PatternRule>& {
+auto RulesetRef::operator[](size_t i) const -> const std::vector<PatternRule>& {
     if (rulesVec) {
         return (*rulesVec)[i].rules;
     } else if (parentLen) {
@@ -11207,7 +11207,7 @@ auto RulesetRef::operator[](size_t i) const -> const ::std::vector<PatternRule>&
 
 auto RulesetRef::swap(size_t a, size_t b) -> void {
     if (rulesVec) {
-        ::std::swap((*rulesVec)[a], (*rulesVec)[b]);
+        std::swap((*rulesVec)[a], (*rulesVec)[b]);
     } else {
         assert(parent);
         if (parentLen) {
@@ -11218,8 +11218,8 @@ auto RulesetRef::swap(size_t a, size_t b) -> void {
     }
 }
 
-auto tRulesSubset::decodeArmIdx(size_t v) -> ::std::pair<size_t, size_t> {
-    return ::std::make_pair(v & 0x3FFF, v >> 14);
+auto tRulesSubset::decodeArmIdx(size_t v) -> std::pair<size_t, size_t> {
+    return std::make_pair(v & 0x3FFF, v >> 14);
 }
 
 auto tRulesSubset::encodeArmIdx(size_t armIdx, size_t patIdx) -> size_t {
@@ -11239,7 +11239,7 @@ auto tRulesSubset::size() const -> size_t {
     return ruleSets.size();
 }
 
-auto tRulesSubset::operator[](size_t n) const -> const ::std::vector<PatternRule>& {
+auto tRulesSubset::operator[](size_t n) const -> const std::vector<PatternRule>& {
     return *ruleSets[n];
 }
 
@@ -11259,11 +11259,11 @@ auto tRulesSubset::bbIdx(size_t n) const -> MIRBasicBlockId {
 }
 
 auto tRulesSubset::subSort(size_t ofs, size_t start, size_t n) -> void {
-    ::std::vector<size_t> v;
+    std::vector<size_t> v;
     for (size_t i = 0; i < n; i++) {
         v.push_back(start + i);
     }
-    ::std::stable_sort(v.begin(), v.end(), [&](auto a, auto b) {
+    std::stable_sort(v.begin(), v.end(), [&](auto a, auto b) {
         return ordRuleCompatible((*ruleSets[a])[ofs], (*ruleSets[b])[ofs]) == OrdLess;
     });
 
@@ -11272,14 +11272,14 @@ auto tRulesSubset::subSort(size_t ofs, size_t start, size_t n) -> void {
         for (auto i : v) {
             tmp.push_back(ruleSets[i]);
         }
-        ::std::copy(tmp.begin(), tmp.end(), ruleSets.begin() + start);
+        std::copy(tmp.begin(), tmp.end(), ruleSets.begin() + start);
     }
     {
         decltype(this->armIdxes) tmp;
         for (auto i : v) {
             tmp.push_back(armIdxes[i]);
         }
-        ::std::copy(tmp.begin(), tmp.end(), armIdxes.begin() + start);
+        std::copy(tmp.begin(), tmp.end(), armIdxes.begin() + start);
     }
 }
 
@@ -11293,19 +11293,19 @@ auto tRulesSubset::subSlice(size_t ofs, size_t n) -> tRulesSubset {
     return rv;
 }
 
-auto tRulesSubset::pushArm(const ::std::vector<PatternRule>& x, size_t armIdx, size_t patIdx) -> void {
+auto tRulesSubset::pushArm(const std::vector<PatternRule>& x, size_t armIdx, size_t patIdx) -> void {
     assert(isArmIndexes);
     ruleSets.push_back(&x);
     armIdxes.push_back(encodeArmIdx(armIdx, patIdx));
 }
 
-auto tRulesSubset::pushBb(const ::std::vector<PatternRule>& x, MIRBasicBlockId bb) -> void {
+auto tRulesSubset::pushBb(const std::vector<PatternRule>& x, MIRBasicBlockId bb) -> void {
     assert(!isArmIndexes);
     ruleSets.push_back(&x);
     armIdxes.push_back(bb);
 }
 
-MatchGenGrouped::MatchGenGrouped(MirBuilder& builder, const Span& sp, const HIRTypeData* topTy, const MIRLValue& topVal, const ::std::vector<ArmCode>& armsCode, size_t fieldPathOfs)
+MatchGenGrouped::MatchGenGrouped(MirBuilder& builder, const Span& sp, const HIRTypeData* topTy, const MIRLValue& topVal, const std::vector<ArmCode>& armsCode, size_t fieldPathOfs)
     : sp(sp)
     , builder(builder)
     , topTy(topTy)

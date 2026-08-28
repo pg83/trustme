@@ -2,7 +2,7 @@
 
 HIRExprState::HIRExprState(HIRTypeInterner& types, const HIRModule& modPtr, HIRSimplePath modPath)
     : types(types)
-    , modPath(::std::move(modPath))
+    , modPath(std::move(modPath))
     , module(modPtr)
     , implGenerics(nullptr)
     , itemGenerics(nullptr)

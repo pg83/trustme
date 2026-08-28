@@ -37,12 +37,12 @@ struct HIRInferData {
 };
 
 #include "hir_path_tu.h"
-::std::ostream& operator<<(::std::ostream& os, const HIRConstGeneric& x);
+std::ostream& operator<<(std::ostream& os, const HIRConstGeneric& x);
 
 class HIRTrait;
 class HIRGenericParams;
 
-::std::ostream& operator<<(::std::ostream& os, const HIRCompare& x);
+std::ostream& operator<<(std::ostream& os, const HIRCompare& x);
 
 HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y);
 
@@ -71,13 +71,13 @@ public:
 
     HIRSimplePath(RcString crate);
 
-    HIRSimplePath(RcString crate, ::std::vector<RcString> components);
+    HIRSimplePath(RcString crate, std::vector<RcString> components);
 
-    HIRSimplePath(RcString crate, ::std::span<RcString> components);
+    HIRSimplePath(RcString crate, std::span<RcString> components);
 
-    HIRSimplePath(RcString crate, ::std::span<const RcString> components);
+    HIRSimplePath(RcString crate, std::span<const RcString> components);
 
-    HIRSimplePath(RcString crate, ::std::initializer_list<RcString> components);
+    HIRSimplePath(RcString crate, std::initializer_list<RcString> components);
 
     HIRSimplePath clone() const {
         return *this;
@@ -91,7 +91,7 @@ public:
 
     RcString crateName() const;
 
-    ::std::span<const RcString> components() const {
+    std::span<const RcString> components() const {
         if (!p) {
             return {};
         }
@@ -99,7 +99,7 @@ public:
         return m.empty() ? std::span<const RcString>() : std::span<const RcString>(m.begin() + 1, m.end());
     }
 
-    ::std::vector<RcString> componentsVec() const;
+    std::vector<RcString> componentsVec() const;
 
     HIRSimplePath operator+(const RcString& s) const;
 
@@ -135,7 +135,7 @@ public:
     }
 
     bool startsWith(const HIRSimplePath& x, bool skipLast = false) const;
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRSimplePath& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRSimplePath& x);
 };
 
 struct HIRPathParams {
@@ -172,7 +172,7 @@ struct HIRPathParams {
 
     Ordering ord(const HIRPathParams& x) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRPathParams& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRPathParams& x);
 };
 
 class HIRGenericPath {
@@ -202,7 +202,7 @@ public:
 
     Ordering ord(const HIRGenericPath& x) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRGenericPath& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRGenericPath& x);
 };
 
 class HIRTraitPath {
@@ -219,7 +219,7 @@ public:
             return AtyEqual{sourceTrait.clone(), atyParams.clone(), type};
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const AtyEqual& x);
+        friend std::ostream& operator<<(std::ostream& os, const AtyEqual& x);
     };
 
     struct AtyBound {
@@ -232,17 +232,17 @@ public:
         AtyBound clone() const;
     };
 
-    typedef ::std::map<RcString, AtyEqual> assocListT;
+    typedef std::map<RcString, AtyEqual> assocListT;
 
     HIRGenericPath path;
     assocListT typeBounds;
-    ::std::map<RcString, AtyBound> traitBounds;
+    std::map<RcString, AtyBound> traitBounds;
     HIRBoundConstness constness = HIRBoundConstness::Never;
     const HIRTrait* traitPtr;
 
     HIRTraitPath();
     explicit HIRTraitPath(HIRGenericPath path);
-    HIRTraitPath(HIRGenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr = nullptr, HIRBoundConstness constness = HIRBoundConstness::Never);
+    HIRTraitPath(HIRGenericPath path, assocListT typeBounds, std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr = nullptr, HIRBoundConstness constness = HIRBoundConstness::Never);
     ~HIRTraitPath();
     HIRTraitPath(HIRTraitPath&&);
     HIRTraitPath& operator=(HIRTraitPath&&);
@@ -265,7 +265,7 @@ public:
 
     Ordering ord(const HIRTraitPath& x) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRTraitPath& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRTraitPath& x);
 };
 
 #include "hir_path_data_tu.h"
@@ -300,7 +300,7 @@ public:
         return ord(x) == OrdLess;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRPath& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRPath& x);
 };
 
 struct HIRConstGenericUnevaluated {
@@ -316,7 +316,7 @@ struct HIRConstGenericUnevaluated {
     HIRConstGenericUnevaluated monomorph(const Span& sp, const Monomorphiser& ms, bool allowInfer = true) const;
     bool equivalent(const HIRConstGenericUnevaluated& x) const;
     Ordering ord(const HIRConstGenericUnevaluated& x) const;
-    void fmt(::std::ostream& os) const;
+    void fmt(std::ostream& os) const;
 
 private:
     HIRConstGenericUnevaluated();

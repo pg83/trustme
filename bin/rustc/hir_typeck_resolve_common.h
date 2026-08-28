@@ -247,4 +247,4 @@ protected:
     }
 };
 
-extern ::std::ostream& operator<<(::std::ostream& s, const TraitResolveCommon::CachedEquality& x);
+extern std::ostream& operator<<(std::ostream& s, const TraitResolveCommon::CachedEquality& x);

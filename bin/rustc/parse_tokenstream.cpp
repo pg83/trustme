@@ -127,7 +127,7 @@ Span TokenStream::endSpan(ProtoSpan ps) const {
         assert(this->outerSpan());
         return this->outerSpan();
     }
-    return Span(this->outerSpan(), ::std::move(ps.filename), ps.startLine, ps.startOfs, p.line, p.ofs);
+    return Span(this->outerSpan(), std::move(ps.filename), ps.startLine, ps.startOfs, p.line, p.ofs);
 }
 
 Span TokenStream::pointSpan() const {
@@ -190,7 +190,7 @@ SavedParseState::~SavedParseState() {
     lex.parseState() = state;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ParseState& ps) {
+std::ostream& operator<<(std::ostream& os, const ParseState& ps) {
     os << "ParseState {";
     if (ps.disallowStructLiteral) {
         os << " disallow_struct_literal";

@@ -9,9 +9,9 @@ generate(
     doc="In-place storage: every payload type is complete at the include.",
     variants=[
         v("Empty"),
-        v("Name", "::std::string"),
+        v("Name", "std::string"),
         v("Point", fields=[("int", "x"), ("int", "y", "7")]),
-        v("Owner", "::std::unique_ptr<int>", copy=False,
+        v("Owner", "std::unique_ptr<int>", copy=False,
           doc="Move-only payload: the copy constructor pair is not emitted."),
         v("Counted", "SampleCounted",
           doc="Instance-counting payload from the context header."),

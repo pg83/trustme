@@ -9,7 +9,7 @@ TTStream::TTStream(Span parent, ParseState ps, const TokenTree& inputTt)
     for (auto s = parentSpan; s; s = s->parentSpan) {
     }
     edition = inputTt.getEdition();
-    stack.push_back(::std::make_pair(0, &inputTt));
+    stack.push_back(std::make_pair(0, &inputTt));
 }
 
 TTStream::~TTStream() {
@@ -34,7 +34,7 @@ Token TTStream::realGetToken() {
                 hygienePtr = &subtree.hygiene();
                 return subtree.tok().clone();
             } else {
-                stack.push_back(::std::make_pair(0, &subtree));
+                stack.push_back(std::make_pair(0, &subtree));
                 edition = subtree.getEdition();
             }
         } else {
@@ -69,7 +69,7 @@ TTStreamO::TTStreamO(Span parent, ParseState ps, TokenTree inputTt)
     , inputTt(mv$(inputTt))
 {
     assert(parentSpan);
-    stack.push_back(::std::make_pair(0, nullptr));
+    stack.push_back(std::make_pair(0, nullptr));
 }
 
 TTStreamO::~TTStreamO() {
@@ -97,7 +97,7 @@ Token TTStreamO::realGetToken() {
                 hygienePtr = &subtree.hygiene();
                 return mv$(subtree.tok());
             } else {
-                stack.push_back(::std::make_pair(0, &subtree));
+                stack.push_back(std::make_pair(0, &subtree));
             }
         } else {
             stack.pop_back();
