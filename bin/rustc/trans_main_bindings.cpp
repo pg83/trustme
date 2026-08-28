@@ -51,6 +51,144 @@ namespace {
         std::vector<std::pair<MIRLValue, unsigned>> values;
     };
 
+    struct Builder {
+        const State& state;
+        MIRFunction& mir;
+        const MIRLValue self;
+
+        Builder(const State& state, MIRFunction& mir);
+
+        MIRLValue addLocal(HIRTypeRef ty);
+
+        MIRLValue inTemporary(HIRTypeRef ty, MIRRValue val);
+
+        void ensureOpen();
+
+        void pushStmt(MIRStatement s);
+
+        void pushStmtAssign(MIRLValue lv, MIRRValue rv);
+
+        MIRBasicBlockId pushStmtDrop(MIRLValue lv);
+
+        void pushDropSequence(std::vector<MIRLValue> values, MIRBasicBlockId customDropCall = ~0u);
+
+        void terminateBlock(MIRTerminator term);
+
+        void terminateCall(MIRLValue rv, MIRCallTarget tgt, std::vector<MIRParam> args, MIRBasicBlockId bbRet, MIRBasicBlockId bbPanic, bool tracksCaller = false);
+
+        MIRBasicBlockId pushCallDrop(const HIRTypeData* ty);
+    };
+
+    struct BindTranslationNominals final: public HIRVisitor {
+        const HIRCrate& crate;
+
+        explicit BindTranslationNominals(const HIRCrate& crate);
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+    };
+
+    struct EnumState {
+        const HIRCrate& crate;
+        StaticTraitResolve resolve;
+        TransList rv;
+        const TransList* origList;
+
+        std::deque<TransListFunction*> fcnQueue;
+        std::vector<TransListFunction*> fcnsToTypeVisit;
+
+        std::set<std::string> emittedFunctions;
+        std::set<HIRPath> activePaths;
+
+        std::unordered_map<std::string, std::pair<HIRSimplePath, const HIRFunction*>> linkFunctions;
+
+        EnumState(const WireBoard& wb);
+
+        void enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp);
+
+        void enumerateLinkFunctions();
+
+        void enumerateLinkFunctionsIn(const HIRModule& mod, HIRItemPath modPath);
+    };
+
+    struct GlobalAsmOperandEvaluator: public HIRVisitor {
+        const WireBoard& wb;
+        const HIRCrate& crate;
+        const Span* span = nullptr;
+
+        explicit GlobalAsmOperandEvaluator(const WireBoard& wb);
+
+        void evaluate(HIRGlobalAssembly& item);
+
+        void visitConstgeneric(HIRConstGeneric& value) override;
+    };
+
+    struct TransPathCallback {
+        virtual HIRSimplePath get() = 0;
+    };
+
+    template <typename F>
+    struct TransPathCb final: TransPathCallback {
+        F f;
+
+        explicit TransPathCb(F f);
+
+        HIRSimplePath get() override;
+    };
+
+    struct PtrComp {
+        template <typename T>
+        bool operator()(const T* lhs, const T* rhs) const;
+    };
+
+    struct TypeVisitor {
+        const HIRCrate& crate;
+        ::StaticTraitResolve resolve;
+        TransList& out;
+        const TransList* prevList;
+
+        HIRTypeRefSet activeSet;
+
+        TypeVisitor(const WireBoard& wb, TransList& out, const TransList* prevList);
+
+        ~TypeVisitor();
+
+        void visitStruct(const HIRTypeData* selfType, const HIRGenericPath& path, const HIRStruct& item);
+
+        void visitUnion(const HIRTypeData* selfType, const HIRGenericPath& path, const HIRUnion& item);
+
+        void visitEnum(const HIRTypeData* selfType, const HIRGenericPath& path, const HIREnum& item);
+
+        enum class Mode {
+            Shallow,
+            Normal,
+            Deep,
+        };
+
+        void visitType(const HIRTypeData* ty, Mode mode = Mode::Normal);
+
+        void __attribute__((noinline)) visitFunction(const HIRPath& path, const HIRFunction& fcn, const TransParams& pp);
+    };
+
+}
+
+struct MIREnumCache {
+    Vector<const HIRPath*> paths;
+    Vector<const HIRTypeData*> typeids;
+    Vector<const HIRTypeData*> destructorTypes;
+
+    MIREnumCache();
+
+    void insertPath(const HIRPath& newPath);
+
+    void insertTypeid(const HIRTypeData* newTy);
+
+    void insertDestructorType(const HIRTypeData* newTy);
+
+    void apply(EnumState& state, const TransParams& pp) const;
+};
+
+namespace {
+
     MIRBasicBlock& cloneOpenBlock(MIRFunction& mirFcn) {
         if (mirFcn.blocks.empty() || !mirFcn.blocks.back().terminator.is_Incomplete()) {
             mirFcn.blocks.push_back(MIRBasicBlock());
@@ -257,34 +395,6 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
 }
 
 namespace {
-
-    struct Builder {
-        const State& state;
-        MIRFunction& mir;
-        const MIRLValue self;
-
-        Builder(const State& state, MIRFunction& mir);
-
-        MIRLValue addLocal(HIRTypeRef ty);
-
-        MIRLValue inTemporary(HIRTypeRef ty, MIRRValue val);
-
-        void ensureOpen();
-
-        void pushStmt(MIRStatement s);
-
-        void pushStmtAssign(MIRLValue lv, MIRRValue rv);
-
-        MIRBasicBlockId pushStmtDrop(MIRLValue lv);
-
-        void pushDropSequence(std::vector<MIRLValue> values, MIRBasicBlockId customDropCall = ~0u);
-
-        void terminateBlock(MIRTerminator term);
-
-        void terminateCall(MIRLValue rv, MIRCallTarget tgt, std::vector<MIRParam> args, MIRBasicBlockId bbRet, MIRBasicBlockId bbPanic, bool tracksCaller = false);
-
-        MIRBasicBlockId pushCallDrop(const HIRTypeData* ty);
-    };
 
     MIRLValue derefBox(MIRLValue box) {
         auto innerPtr = MIRLValue::newField(MIRLValue::newField(mv$(box), 0), 0);
@@ -1155,41 +1265,11 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 }
 
 namespace {
-    struct BindTranslationNominals final: public HIRVisitor {
-        const HIRCrate& crate;
-
-        explicit BindTranslationNominals(const HIRCrate& crate);
-
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
-    };
 
     void bindTranslationNominals(const HIRCrate& crate, HIRPath& path) {
         BindTranslationNominals visitor(crate);
         visitor.visitPath(path, HIRVisitor::PathContext::VALUE);
     }
-
-    struct EnumState {
-        const HIRCrate& crate;
-        StaticTraitResolve resolve;
-        TransList rv;
-        const TransList* origList;
-
-        std::deque<TransListFunction*> fcnQueue;
-        std::vector<TransListFunction*> fcnsToTypeVisit;
-
-        std::set<std::string> emittedFunctions;
-        std::set<HIRPath> activePaths;
-
-        std::unordered_map<std::string, std::pair<HIRSimplePath, const HIRFunction*>> linkFunctions;
-
-        EnumState(const WireBoard& wb);
-
-        void enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp);
-
-        void enumerateLinkFunctions();
-
-        void enumerateLinkFunctionsIn(const HIRModule& mod, HIRItemPath modPath);
-    };
 
 }
 
@@ -1209,17 +1289,6 @@ void TransEnumerateFillFromLiteral(EnumState& state, const EncodedLiteral& lit, 
 void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code);
 
 namespace {
-    struct GlobalAsmOperandEvaluator: public HIRVisitor {
-        const WireBoard& wb;
-        const HIRCrate& crate;
-        const Span* span = nullptr;
-
-        explicit GlobalAsmOperandEvaluator(const WireBoard& wb);
-
-        void evaluate(HIRGlobalAssembly& item);
-
-        void visitConstgeneric(HIRConstGeneric& value) override;
-    };
 
     void TransEnumerateGlobalAsm(EnumState& state, HIRModule& mod) {
         GlobalAsmOperandEvaluator evaluator{state.resolve.board()};
@@ -1300,22 +1369,6 @@ namespace {
     }
 }
 
-struct MIREnumCache {
-    Vector<const HIRPath*> paths;
-    Vector<const HIRTypeData*> typeids;
-    Vector<const HIRTypeData*> destructorTypes;
-
-    MIREnumCache();
-
-    void insertPath(const HIRPath& newPath);
-
-    void insertTypeid(const HIRTypeData* newTy);
-
-    void insertDestructorType(const HIRTypeData* newTy);
-
-    void apply(EnumState& state, const TransParams& pp) const;
-};
-
 MIREnumCachePtr::~MIREnumCachePtr() {
     delete this->p;
     this->p = nullptr;
@@ -1395,19 +1448,6 @@ namespace {
             }
         }
     }
-
-    struct TransPathCallback {
-        virtual HIRSimplePath get() = 0;
-    };
-
-    template <typename F>
-    struct TransPathCb final: TransPathCallback {
-        F f;
-
-        explicit TransPathCb(F f);
-
-        HIRSimplePath get() override;
-    };
 
     void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool isVisible, TransPathCallback& getPath) {
         const Span sp;
@@ -2104,42 +2144,6 @@ bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const Vect
         }
     }
     return mergeEnumeratedItems(state.crate.types, list, TransEnumerateCommonPost(state));
-}
-
-namespace {
-    struct PtrComp {
-        template <typename T>
-        bool operator()(const T* lhs, const T* rhs) const;
-    };
-
-    struct TypeVisitor {
-        const HIRCrate& crate;
-        ::StaticTraitResolve resolve;
-        TransList& out;
-        const TransList* prevList;
-
-        HIRTypeRefSet activeSet;
-
-        TypeVisitor(const WireBoard& wb, TransList& out, const TransList* prevList);
-
-        ~TypeVisitor();
-
-        void visitStruct(const HIRTypeData* selfType, const HIRGenericPath& path, const HIRStruct& item);
-
-        void visitUnion(const HIRTypeData* selfType, const HIRGenericPath& path, const HIRUnion& item);
-
-        void visitEnum(const HIRTypeData* selfType, const HIRGenericPath& path, const HIREnum& item);
-
-        enum class Mode {
-            Shallow,
-            Normal,
-            Deep,
-        };
-
-        void visitType(const HIRTypeData* ty, Mode mode = Mode::Normal);
-
-        void __attribute__((noinline)) visitFunction(const HIRPath& path, const HIRFunction& fcn, const TransParams& pp);
-    };
 }
 
 void TransEnumerateTypes(EnumState& state) {

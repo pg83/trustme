@@ -23,6 +23,56 @@
 
 using namespace stl;
 
+namespace {
+    struct ImplMatcher: public HIRMatchGenerics {
+        Vector<HIRTypeRef>& implTypes;
+
+        ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics);
+
+        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override;
+
+        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
+
+        HIRTypeRef mappedType(unsigned binding) const;
+    };
+
+    struct TypeOrdContext {
+        bool mixed = false;
+    };
+
+    struct ImplHeadMonomorphiser: public Monomorphiser {
+        const ImplMatcher& matcher;
+        mutable bool complete_ = true;
+
+        ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplMatcher& matcher);
+
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
+
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
+
+        bool complete() const;
+    };
+
+    struct ImplTyMatcher: public HIRMatchGenerics, public Monomorphiser {
+        std::vector<std::optional<HIRTypeRef>> implTys;
+        std::vector<std::optional<HIRConstGeneric>> implVals;
+
+        explicit ImplTyMatcher(HIRTypeInterner& types);
+
+        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override;
+
+        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
+
+        HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override;
+
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
+
+        void reinit(const HIRGenericParams& params);
+
+        void fmt(std::ostream& os) const;
+    };
+}
+
 std::ostream& operator<<(std::ostream& os, const HIRPublicity& x) {
     switch (x.kind) {
         case HIRPublicity::Kind::Global:
@@ -170,6 +220,7 @@ HIRConstGenericUnevaluated HIRConstGenericUnevaluated::monomorph(const Span& sp,
 }
 
 namespace {
+
     const HIRConstGeneric* getUnevaluatedParam(const HIRConstGenericUnevaluated& value, unsigned int binding) {
         const HIRPathParams* params = nullptr;
         switch (binding >> 8) {
@@ -822,18 +873,6 @@ namespace {
         }
     }
 
-    struct ImplMatcher: public HIRMatchGenerics {
-        Vector<HIRTypeRef>& implTypes;
-
-        ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics);
-
-        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override;
-
-        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
-
-        HIRTypeRef mappedType(unsigned binding) const;
-    };
-
     bool matchesTypeRoot(const HIRGenericParams& params, const HIRTypeData* implTy, const HIRTypeData* matchType, tCbResolveType tyRes, HIRImplMatcherScratch& scratch) {
         const auto* matchPath = matchType->opt_Path();
         if (isUnboundedInfer(matchType) || (matchPath && matchPath->binding.is_Unbound() && !matchPath->path.data.is_Generic())) {
@@ -883,10 +922,6 @@ bool HIRMarkerImpl::matchesType(const HIRTypeData* type, tCbResolveType tyRes) c
 }
 
 namespace {
-
-    struct TypeOrdContext {
-        bool mixed = false;
-    };
 
     ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ThinVector<HIRTypeRef>& left, const ThinVector<HIRTypeRef>& right);
     ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const std::vector<HIRTypeRef>& left, const std::vector<HIRTypeRef>& right);
@@ -1161,19 +1196,6 @@ namespace {
         return pattern.traitArgs.matchTestGenericsFuzz(sp, value.traitArgs, resolve, matcher) != HIRCompare::Unequal;
     }
 
-    struct ImplHeadMonomorphiser: public Monomorphiser {
-        const ImplMatcher& matcher;
-        mutable bool complete_ = true;
-
-        ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplMatcher& matcher);
-
-        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
-
-        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
-
-        bool complete() const;
-    };
-
     bool mappedBoundsImplied(const Span& sp, HIRTypeInterner& types, const HIRTraitImpl& child, const HIRTraitImpl& parent, const ImplMatcher& parentMatcher) {
         const auto childBounds = flattenBounds(types, child.params.bounds);
         const auto parentBounds = flattenBounds(types, parent.params.bounds);
@@ -1315,28 +1337,6 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     } else {
         return !isEqual;
     }
-}
-
-namespace {
-
-    struct ImplTyMatcher: public HIRMatchGenerics, public Monomorphiser {
-        std::vector<std::optional<HIRTypeRef>> implTys;
-        std::vector<std::optional<HIRConstGeneric>> implVals;
-
-        explicit ImplTyMatcher(HIRTypeInterner& types);
-
-        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override;
-
-        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
-
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override;
-
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
-
-        void reinit(const HIRGenericParams& params);
-
-        void fmt(std::ostream& os) const;
-    };
 }
 
 bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other) const {

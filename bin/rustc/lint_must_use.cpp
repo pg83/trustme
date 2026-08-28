@@ -10,6 +10,37 @@
 namespace {
     const char* const LINT_NAME = "unused_must_use";
 
+    struct MustUseVisitor: public HIRExprVisitorDef {
+        const HIRCrate& crate_;
+        CfgLintLevel level_;
+
+        MustUseVisitor(const HIRCrate& crate, CfgLintLevel level);
+
+        void visit(HIRExprNodeBlock& node) override;
+
+        void checkDiscarded(const HIRExprNode& statement);
+
+        void report(const Span& sp, const char* what);
+    };
+
+    struct MustUseOuterVisitor: public HIRVisitor {
+        const HIRCrate& crate_;
+        const Settings& settings_;
+        CfgLintLevel level_;
+
+        MustUseOuterVisitor(const WireBoard& wb, CfgLintLevel level);
+
+        void visitModule(HIRItemPath p, HIRModule& module) override;
+
+        void visitTypeImpl(HIRTypeImpl& impl) override;
+
+        void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
+
+        void visitFunction(HIRItemPath p, HIRFunction& item) override;
+
+        void visitExpr(HIRExprPtr& exp) override;
+    };
+
     const HIRExprNode* peelBlocks(const HIRExprNode* node) {
         while (const auto* block = cast<const HIRExprNodeBlock>(node)) {
             if (!block->valueNode || !block->nodes.empty()) {
@@ -58,37 +89,6 @@ namespace {
         }
         return false;
     }
-
-    struct MustUseVisitor: public HIRExprVisitorDef {
-        const HIRCrate& crate_;
-        CfgLintLevel level_;
-
-        MustUseVisitor(const HIRCrate& crate, CfgLintLevel level);
-
-        void visit(HIRExprNodeBlock& node) override;
-
-        void checkDiscarded(const HIRExprNode& statement);
-
-        void report(const Span& sp, const char* what);
-    };
-
-    struct MustUseOuterVisitor: public HIRVisitor {
-        const HIRCrate& crate_;
-        const Settings& settings_;
-        CfgLintLevel level_;
-
-        MustUseOuterVisitor(const WireBoard& wb, CfgLintLevel level);
-
-        void visitModule(HIRItemPath p, HIRModule& module) override;
-
-        void visitTypeImpl(HIRTypeImpl& impl) override;
-
-        void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
-
-        void visitFunction(HIRItemPath p, HIRFunction& item) override;
-
-        void visitExpr(HIRExprPtr& exp) override;
-    };
 }
 
 CfgLintLevel LintUnusedMustUseLevel(const Settings& settings) {

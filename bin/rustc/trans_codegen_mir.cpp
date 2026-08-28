@@ -26,6 +26,61 @@ namespace {
         Fmt(const WireBoard& wb, const T& e);
     };
 
+    struct CodeGeneratorMonoMir: public CodeGenerator {
+        enum class MetadataType {
+            None,
+            Slice,
+            TraitObject,
+        };
+
+        Span sp;
+
+        const HIRCrate& crate;
+        const WireBoard& wb_;
+        ::StaticTraitResolve resolve_;
+
+        template <typename T>
+        Fmt<T> fmt(const T& value) const;
+
+        template <typename T>
+        RcString TransMangle(const T& value) const;
+
+        std::string outfilePath;
+        std::ofstream of;
+        const MIRTypeResolve* mirRes;
+
+        CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile);
+
+        void finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile) override;
+
+        void emitType(const HIRTypeData* ty) override;
+
+        // TODO: Move this to a more common location
+        MetadataType metadataType(const HIRTypeData* ty) const;
+
+        void emitStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override;
+
+        void emitConstructorEnum(const Span& sp, const HIRGenericPath& varPath, const HIREnum& item, size_t varIdx) override;
+
+        void emitConstructorStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override;
+
+        void emitUnion(const Span& sp, const HIRGenericPath& p, const HIRUnion& item) override;
+
+        void emitEnum(const Span& sp, const HIRGenericPath& p, const HIREnum& item) override;
+
+        void emitStrByte(u8 b);
+
+        void emitStaticLocal(const HIRPath& p, const HIRStatic& item, const TransParams& params, const EncodedLiteral& encoded) override;
+
+        void emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) override;
+
+        void emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code, bool hasPrototype) override;
+
+        void emitGlobalAsm(const HIRGlobalAssembly&) override;
+
+        const HIRTypeData* monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunction& item, const TransParams& params);
+    };
+
     template <typename T>
     Fmt<T> fmt(const WireBoard& wb, const T& v) {
         return Fmt<T>(wb, v);
@@ -314,61 +369,6 @@ namespace {
         }
         return os;
     }
-
-    struct CodeGeneratorMonoMir: public CodeGenerator {
-        enum class MetadataType {
-            None,
-            Slice,
-            TraitObject,
-        };
-
-        Span sp;
-
-        const HIRCrate& crate;
-        const WireBoard& wb_;
-        ::StaticTraitResolve resolve_;
-
-        template <typename T>
-        Fmt<T> fmt(const T& value) const;
-
-        template <typename T>
-        RcString TransMangle(const T& value) const;
-
-        std::string outfilePath;
-        std::ofstream of;
-        const MIRTypeResolve* mirRes;
-
-        CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile);
-
-        void finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile) override;
-
-        void emitType(const HIRTypeData* ty) override;
-
-        // TODO: Move this to a more common location
-        MetadataType metadataType(const HIRTypeData* ty) const;
-
-        void emitStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override;
-
-        void emitConstructorEnum(const Span& sp, const HIRGenericPath& varPath, const HIREnum& item, size_t varIdx) override;
-
-        void emitConstructorStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override;
-
-        void emitUnion(const Span& sp, const HIRGenericPath& p, const HIRUnion& item) override;
-
-        void emitEnum(const Span& sp, const HIRGenericPath& p, const HIREnum& item) override;
-
-        void emitStrByte(u8 b);
-
-        void emitStaticLocal(const HIRPath& p, const HIRStatic& item, const TransParams& params, const EncodedLiteral& encoded) override;
-
-        void emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) override;
-
-        void emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code, bool hasPrototype) override;
-
-        void emitGlobalAsm(const HIRGlobalAssembly&) override;
-
-        const HIRTypeData* monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunction& item, const TransParams& params);
-    };
 
 }
 

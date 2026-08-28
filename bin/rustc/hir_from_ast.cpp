@@ -106,6 +106,289 @@ namespace {
     template <typename Cb>
     void collectPathLifetimes(const ASTPath& path, const Cb& cb);
 
+    struct LifetimeIdentity {
+        enum class Phase : u8 {
+            Other,
+            Input,
+            Output,
+        };
+
+        struct SeenLifetime {
+            RcString name;
+            size_t canonical;
+        };
+
+        struct Binder {
+            Binder* parent;
+            const ASTHigherRankedBounds& bounds;
+            Vector<SeenLifetime> seen;
+            Vector<size_t> inputLifetimes;
+            size_t nextCanonical = 0;
+            Phase phase = Phase::Other;
+        };
+
+        StringBuilder text;
+        Binder* binder = nullptr;
+        bool hasLifetime = false;
+        bool hasFreeLifetime = false;
+
+        void append(char value);
+
+        void appendNumber(size_t value);
+
+        void rememberInput(Binder& owner, size_t canonical);
+
+        size_t canonical(Binder& owner, const RcString& name);
+
+        void appendBound(Binder& owner, size_t canonical);
+
+        void appendImplicitLifetime();
+
+        void lifetime(const ASTLifetimeRef& value);
+
+        void pathParams(const ASTPathParams& params);
+
+        template <typename Nodes>
+        void pathNodes(const Nodes& nodes);
+
+        void path(const ASTPath& value);
+
+        void traitPath(const TypeTraitPath& value);
+
+        void type(const ASTType& value);
+
+        RcString make(const ASTType& value);
+
+        bool hasFree() const;
+    };
+
+    struct TraitObjectLowering {
+        AST2HIR& ctx_;
+        const Span& span_;
+        HIRTypeData::Data_TraitObject& out;
+        std::unordered_set<const void*> activeAliases;
+
+        bool hasPrincipal() const;
+
+        void addTrait(HIRTraitPath trait, bool isMarker);
+
+        void applyAliasBounds(HIRTraitPath& aliasPath, bool hadPrincipal);
+
+        struct ActiveAlias {
+            std::unordered_set<const void*>& aliases;
+            const void* key;
+
+            ~ActiveAlias();
+        };
+
+        ActiveAlias enterAlias(const void* key, const HIRGenericPath& path);
+
+        void addAstPath(HIRTraitPath path, const ASTPathBindingType& binding);
+
+        void addHirPath(HIRTraitPath path);
+
+        void expandAstAlias(HIRTraitPath aliasPath, const ASTPathBindingType::Data_TraitAlias& binding);
+
+        void expandHirAliasContents(const HIRTraitPath& aliasPath, const HIRTraitAlias& alias);
+
+        void expandHirAlias(HIRTraitPath aliasPath, const HIRTraitAlias& alias);
+
+        TraitObjectLowering(AST2HIR& ctx, const Span& span, HIRTypeData::Data_TraitObject& out);
+
+        void add(const ::TypeTraitPath& bound);
+    };
+
+    struct DefaultFieldParamRebase final: public MonomorphiserNop {
+        const HIRPathParams& itemArgs;
+
+        DefaultFieldParamRebase(HIRTypeInterner& types, const HIRPathParams& itemArgs);
+
+        HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override;
+
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
+    };
+
+    struct RebaseDefaultFieldParams final: public HIRVisitor {
+        const Monomorphiser& monomorph;
+
+        explicit RebaseDefaultFieldParams(const Monomorphiser& monomorph);
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
+
+        void visitPathParams(HIRPathParams& params) override;
+
+        void visitConstgeneric(HIRConstGeneric& value) override;
+    };
+
+    struct RebaseDefaultFieldExpr final: public HIRExprVisitorDef {
+        const Monomorphiser& monomorph;
+
+        explicit RebaseDefaultFieldExpr(const Monomorphiser& monomorph);
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
+
+        void visitPathParams(HIRPathParams& params) override;
+
+        void visit(HIRExprNodeConstParam& node) override;
+
+        void visit(HIRExprNodeArraySized& node) override;
+    };
+
+    template <typename F>
+    struct RpititTypeCollector: public HIRVisitor {
+        F callback;
+
+        RpititTypeCollector(HIRTypeInterner& types, F callback);
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+    };
+
+    template <typename F>
+    struct RpititNestedRewrite: public HIRVisitor {
+        const HIRTypeRefMap<size_t>& indices;
+        F projection;
+
+        RpititNestedRewrite(HIRTypeInterner& types, const HIRTypeRefMap<size_t>& indices, F projection);
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+    };
+
+}
+
+struct IndexVisitor: public HIRVisitor {
+    const HIRCrate& crate;
+    Span nullSpan;
+
+    IndexVisitor(const HIRCrate& crate);
+
+    void visitParams(HIRGenericParams& params) override;
+};
+
+struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
+    AST2HIR& ctx;
+
+    explicit LowerHIRExprNodeVisitor(AST2HIR& ctx);
+
+    HIRExprNodeP rv;
+
+    struct LoopLabel {
+        Ident source;
+        RcString lowered;
+        size_t macroDefinitionDepth;
+    };
+
+    struct MacroDefinition {
+        unsigned int definitionId;
+        Ident::Hygiene tokenHygiene;
+        Ident::Hygiene definitionHygiene;
+    };
+
+    std::vector<LoopLabel> loopLabels;
+    std::vector<MacroDefinition> macroDefinitions;
+    unsigned nextLoopLabel = 0;
+
+    bool hasYield = false;
+
+    RcString enterLoopLabel(const Ident& source);
+
+    void leaveLoopLabel(const RcString& lowered);
+
+    RcString resolveLoopLabel(const Span& sp, const Ident& target) const;
+
+    HIRExprNodeP lower(ASTExprNodeP& ep);
+
+    HIRExprNodeP lowerOpt(ASTExprNodeP& ep);
+
+    HIRExprNodeP lowerIsolated(ASTExprNodeP& ep);
+
+    virtual void visit(ASTExprNodeBlock& v) override;
+
+    virtual void visit(ASTExprNodeAsyncBlock& v) override;
+
+    virtual void visit(ASTExprNodeGeneratorBlock& v) override;
+
+    virtual void visit(ASTExprNodeTry& v) override;
+
+    virtual void visit(ASTExprNodeMacro& v) override;
+
+    virtual void visit(ASTExprNodeMacroDefinition& v) override;
+
+    virtual void visit(ASTExprNodeAsm& v) override;
+
+    virtual void visit(ASTExprNodeAsm2& v) override;
+
+    virtual void visit(ASTExprNodeFlow& v) override;
+
+    virtual void visit(ASTExprNodeLetBinding& v) override;
+
+    virtual void visit(ASTExprNodeAssign& v) override;
+
+    virtual void visit(ASTExprNodeBinOp& v) override;
+
+    virtual void visit(ASTExprNodeUniOp& v) override;
+
+    virtual void visit(ASTExprNodeCast& v) override;
+
+    virtual void visit(ASTExprNodeTypeAnnotation& v) override;
+
+    virtual void visit(ASTExprNodeCallPath& v) override;
+
+    virtual void visit(ASTExprNodeCallMethod& v) override;
+
+    virtual void visit(ASTExprNodeCallObject& v) override;
+
+    virtual void visit(ASTExprNodeLoop& v) override;
+
+    void visit(ASTExprNodeFor& v) override;
+
+    std::vector<HIRExprNodeMatch::Guard> ifletToGuards(std::vector<ASTIfLetCondition>& guards);
+
+    template <typename T, typename... Args>
+    HIRExprNodeP mkNode(Args&&... args);
+
+    virtual void visit(ASTExprNodeWhile& v) override;
+
+    virtual void visit(ASTExprNodeMatch& v) override;
+
+    virtual void visit(ASTExprNodeIf& v) override;
+
+    virtual void visit(ASTExprNodeWildcardPattern& v) override;
+
+    virtual void visit(ASTExprNodeInteger& v) override;
+
+    virtual void visit(ASTExprNodeFloat& v) override;
+
+    virtual void visit(ASTExprNodeBool& v) override;
+
+    virtual void visit(ASTExprNodeString& v) override;
+
+    virtual void visit(ASTExprNodeByteString& v) override;
+
+    virtual void visit(ASTExprNodeCString& v) override;
+
+    virtual void visit(ASTExprNodeSuffixedLiteral& v) override;
+
+    virtual void visit(ASTExprNodeClosure& v) override;
+
+    virtual void visit(ASTExprNodeStructLiteral& v) override;
+
+    virtual void visit(ASTExprNodeStructLiteralPattern& v) override;
+
+    virtual void visit(ASTExprNodeArray& v) override;
+
+    virtual void visit(ASTExprNodeTuple& v) override;
+
+    virtual void visit(ASTExprNodeNamedValue& v) override;
+
+    virtual void visit(ASTExprNodeField& v) override;
+
+    virtual void visit(ASTExprNodeIndex& v) override;
+
+    virtual void visit(ASTExprNodeDeref& v) override;
+};
+
+namespace {
+
     HIRBoundConstness LowerHIRBoundConstness(ASTBoundConstness v) {
         switch (v) {
             case ASTBoundConstness::Never:
@@ -1103,100 +1386,6 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
     UNREACHABLE();
 }
 
-namespace {
-    struct LifetimeIdentity {
-        enum class Phase : u8 {
-            Other,
-            Input,
-            Output,
-        };
-
-        struct SeenLifetime {
-            RcString name;
-            size_t canonical;
-        };
-
-        struct Binder {
-            Binder* parent;
-            const ASTHigherRankedBounds& bounds;
-            Vector<SeenLifetime> seen;
-            Vector<size_t> inputLifetimes;
-            size_t nextCanonical = 0;
-            Phase phase = Phase::Other;
-        };
-
-        StringBuilder text;
-        Binder* binder = nullptr;
-        bool hasLifetime = false;
-        bool hasFreeLifetime = false;
-
-        void append(char value);
-
-        void appendNumber(size_t value);
-
-        void rememberInput(Binder& owner, size_t canonical);
-
-        size_t canonical(Binder& owner, const RcString& name);
-
-        void appendBound(Binder& owner, size_t canonical);
-
-        void appendImplicitLifetime();
-
-        void lifetime(const ASTLifetimeRef& value);
-
-        void pathParams(const ASTPathParams& params);
-
-        template <typename Nodes>
-        void pathNodes(const Nodes& nodes);
-
-        void path(const ASTPath& value);
-
-        void traitPath(const TypeTraitPath& value);
-
-        void type(const ASTType& value);
-
-        RcString make(const ASTType& value);
-
-        bool hasFree() const;
-    };
-
-    struct TraitObjectLowering {
-        AST2HIR& ctx_;
-        const Span& span_;
-        HIRTypeData::Data_TraitObject& out;
-        std::unordered_set<const void*> activeAliases;
-
-        bool hasPrincipal() const;
-
-        void addTrait(HIRTraitPath trait, bool isMarker);
-
-        void applyAliasBounds(HIRTraitPath& aliasPath, bool hadPrincipal);
-
-        struct ActiveAlias {
-            std::unordered_set<const void*>& aliases;
-            const void* key;
-
-            ~ActiveAlias();
-        };
-
-        ActiveAlias enterAlias(const void* key, const HIRGenericPath& path);
-
-        void addAstPath(HIRTraitPath path, const ASTPathBindingType& binding);
-
-        void addHirPath(HIRTraitPath path);
-
-        void expandAstAlias(HIRTraitPath aliasPath, const ASTPathBindingType::Data_TraitAlias& binding);
-
-        void expandHirAliasContents(const HIRTraitPath& aliasPath, const HIRTraitAlias& alias);
-
-        void expandHirAlias(HIRTraitPath aliasPath, const HIRTraitAlias& alias);
-
-        TraitObjectLowering(AST2HIR& ctx, const Span& span, HIRTypeData::Data_TraitObject& out);
-
-        void add(const ::TypeTraitPath& bound);
-    };
-}
-
 HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
     switch (ty->data.tag()) {
         case TypeData::TAG_None: {
@@ -1541,42 +1730,6 @@ namespace {
         }
         return parentIp->getSimplePath();
     }
-
-    struct DefaultFieldParamRebase final: public MonomorphiserNop {
-        const HIRPathParams& itemArgs;
-
-        DefaultFieldParamRebase(HIRTypeInterner& types, const HIRPathParams& itemArgs);
-
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override;
-
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
-    };
-
-    struct RebaseDefaultFieldParams final: public HIRVisitor {
-        const Monomorphiser& monomorph;
-
-        explicit RebaseDefaultFieldParams(const Monomorphiser& monomorph);
-
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
-
-        void visitPathParams(HIRPathParams& params) override;
-
-        void visitConstgeneric(HIRConstGeneric& value) override;
-    };
-
-    struct RebaseDefaultFieldExpr final: public HIRExprVisitorDef {
-        const Monomorphiser& monomorph;
-
-        explicit RebaseDefaultFieldExpr(const Monomorphiser& monomorph);
-
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
-
-        void visitPathParams(HIRPathParams& params) override;
-
-        void visit(HIRExprNodeConstParam& node) override;
-
-        void visit(HIRExprNodeArraySized& node) override;
-    };
 }
 
 tStructFields AST2HIR::LowerHIRStructFields(HIRItemPath path, const HIRGenericParams& params, const std::vector<ASTStructItem>& inFields, HIRModule& outMod) {
@@ -2000,27 +2153,6 @@ HIRUnion AST2HIR::LowerHIRUnion(HIRItemPath path, const ASTUnion& f, const ASTAt
     rv.maxFieldAlignment = f.markings.maxFieldAlign;
     rv.mustUse = attrs.has("must_use");
     return rv;
-}
-
-namespace {
-    template <typename F>
-    struct RpititTypeCollector: public HIRVisitor {
-        F callback;
-
-        RpititTypeCollector(HIRTypeInterner& types, F callback);
-
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
-    };
-
-    template <typename F>
-    struct RpititNestedRewrite: public HIRVisitor {
-        const HIRTypeRefMap<size_t>& indices;
-        F projection;
-
-        RpititNestedRewrite(HIRTypeInterner& types, const HIRTypeRefMap<size_t>& indices, F projection);
-
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
-    };
 }
 
 HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttributeList& attrs) {
@@ -3346,15 +3478,6 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
     }
 }
 
-struct IndexVisitor: public HIRVisitor {
-    const HIRCrate& crate;
-    Span nullSpan;
-
-    IndexVisitor(const HIRCrate& crate);
-
-    void visitParams(HIRGenericParams& params) override;
-};
-
 HIRCrate* LowerHIRFromAST(const WireBoard& wb, ObjPool* pool, ASTCrate& crate) {
     AST2HIR self;
     return self.lowerCrate(wb, pool, crate);
@@ -3573,129 +3696,6 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
     this->crate = nullptr;
     return &rv;
 }
-
-struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
-    AST2HIR& ctx;
-
-    explicit LowerHIRExprNodeVisitor(AST2HIR& ctx);
-
-    HIRExprNodeP rv;
-
-    struct LoopLabel {
-        Ident source;
-        RcString lowered;
-        size_t macroDefinitionDepth;
-    };
-
-    struct MacroDefinition {
-        unsigned int definitionId;
-        Ident::Hygiene tokenHygiene;
-        Ident::Hygiene definitionHygiene;
-    };
-
-    std::vector<LoopLabel> loopLabels;
-    std::vector<MacroDefinition> macroDefinitions;
-    unsigned nextLoopLabel = 0;
-
-    bool hasYield = false;
-
-    RcString enterLoopLabel(const Ident& source);
-
-    void leaveLoopLabel(const RcString& lowered);
-
-    RcString resolveLoopLabel(const Span& sp, const Ident& target) const;
-
-    HIRExprNodeP lower(ASTExprNodeP& ep);
-
-    HIRExprNodeP lowerOpt(ASTExprNodeP& ep);
-
-    HIRExprNodeP lowerIsolated(ASTExprNodeP& ep);
-
-    virtual void visit(ASTExprNodeBlock& v) override;
-
-    virtual void visit(ASTExprNodeAsyncBlock& v) override;
-
-    virtual void visit(ASTExprNodeGeneratorBlock& v) override;
-
-    virtual void visit(ASTExprNodeTry& v) override;
-
-    virtual void visit(ASTExprNodeMacro& v) override;
-
-    virtual void visit(ASTExprNodeMacroDefinition& v) override;
-
-    virtual void visit(ASTExprNodeAsm& v) override;
-
-    virtual void visit(ASTExprNodeAsm2& v) override;
-
-    virtual void visit(ASTExprNodeFlow& v) override;
-
-    virtual void visit(ASTExprNodeLetBinding& v) override;
-
-    virtual void visit(ASTExprNodeAssign& v) override;
-
-    virtual void visit(ASTExprNodeBinOp& v) override;
-
-    virtual void visit(ASTExprNodeUniOp& v) override;
-
-    virtual void visit(ASTExprNodeCast& v) override;
-
-    virtual void visit(ASTExprNodeTypeAnnotation& v) override;
-
-    virtual void visit(ASTExprNodeCallPath& v) override;
-
-    virtual void visit(ASTExprNodeCallMethod& v) override;
-
-    virtual void visit(ASTExprNodeCallObject& v) override;
-
-    virtual void visit(ASTExprNodeLoop& v) override;
-
-    void visit(ASTExprNodeFor& v) override;
-
-    std::vector<HIRExprNodeMatch::Guard> ifletToGuards(std::vector<ASTIfLetCondition>& guards);
-
-    template <typename T, typename... Args>
-    HIRExprNodeP mkNode(Args&&... args);
-
-    virtual void visit(ASTExprNodeWhile& v) override;
-
-    virtual void visit(ASTExprNodeMatch& v) override;
-
-    virtual void visit(ASTExprNodeIf& v) override;
-
-    virtual void visit(ASTExprNodeWildcardPattern& v) override;
-
-    virtual void visit(ASTExprNodeInteger& v) override;
-
-    virtual void visit(ASTExprNodeFloat& v) override;
-
-    virtual void visit(ASTExprNodeBool& v) override;
-
-    virtual void visit(ASTExprNodeString& v) override;
-
-    virtual void visit(ASTExprNodeByteString& v) override;
-
-    virtual void visit(ASTExprNodeCString& v) override;
-
-    virtual void visit(ASTExprNodeSuffixedLiteral& v) override;
-
-    virtual void visit(ASTExprNodeClosure& v) override;
-
-    virtual void visit(ASTExprNodeStructLiteral& v) override;
-
-    virtual void visit(ASTExprNodeStructLiteralPattern& v) override;
-
-    virtual void visit(ASTExprNodeArray& v) override;
-
-    virtual void visit(ASTExprNodeTuple& v) override;
-
-    virtual void visit(ASTExprNodeNamedValue& v) override;
-
-    virtual void visit(ASTExprNodeField& v) override;
-
-    virtual void visit(ASTExprNodeIndex& v) override;
-
-    virtual void visit(ASTExprNodeDeref& v) override;
-};
 
 HIRExprPtr AST2HIR::LowerHIRExprNode(const ASTExprNode& e) {
     LowerHIRExprNodeVisitor v(*this);

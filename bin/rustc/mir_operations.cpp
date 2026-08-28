@@ -33,11 +33,144 @@ struct MirOperationsContext {
     bool visitingBlocks = false;
 };
 
+struct MirMutator {
+    MIRFunction& fcn;
+    unsigned int curBlock;
+    unsigned int curStmt;
+    mutable std::vector<MIRStatement> newStatements;
+
+    MirMutator(MIRFunction& fcn, unsigned int bb, unsigned int stmt);
+
+    void updateState(MIRTypeResolve& state);
+
+    MIRLValue newTemporary(HIRTypeRef ty);
+
+    void pushStatement(MIRStatement stmt);
+
+    MIRLValue inTemporary(HIRTypeRef ty, MIRRValue val);
+
+    decltype(newStatements.begin()) flushStmt();
+
+    void flushBlock();
+
+    decltype(newStatements.begin()) flush();
+};
+
+namespace {
+    struct LvalueVisitor {
+        virtual bool visitLvalue(const MIRLValue& lv, MIRValUsage u) = 0;
+    };
+
+    struct LvalueVisitorMut {
+        virtual bool visitLvalue(MIRLValue& lv, MIRValUsage u) = 0;
+    };
+
+    struct LvalueRefVisitorMut {
+        virtual bool visitLvalue(MIRLValue::MRef& lv, MIRValUsage u) = 0;
+    };
+
+    struct LvalueConstAdapter final: public LvalueVisitorMut {
+        LvalueVisitor& inner;
+
+        explicit LvalueConstAdapter(LvalueVisitor& inner);
+
+        bool visitLvalue(MIRLValue& lv, MIRValUsage u) override;
+    };
+
+    struct ParamsSet: public MonomorphiserPP {
+        HIRPathParams implParams;
+        const HIRPathParams* fcnParams;
+        const HIRTypeData* selfTy;
+        const HIRGenericParams* implParamsDef;
+        const HIRGenericParams* fcnParamsDef;
+
+        HIRPathParams fcnParamsTmp;
+
+        explicit ParamsSet(HIRTypeInterner& types);
+
+        const HIRTypeData* getSelfType() const override;
+
+        const HIRPathParams* getImplParams() const override;
+
+        const HIRPathParams* getMethodParams() const override;
+
+        const HIRPathParams* getHrbParams() const override;
+
+        bool hasUnevaluatedValues() const;
+    };
+
+    struct MIRBlockCallback {
+        virtual void run(MIRBasicBlockId bb, MIRBasicBlock& block) const = 0;
+    };
+
+    template <typename F>
+    struct MIRBlockCb final: MIRBlockCallback {
+        F f;
+
+        explicit MIRBlockCb(F f);
+
+        void run(MIRBasicBlockId bb, MIRBasicBlock& block) const override;
+    };
+
+    struct MIRBlockConstCallback {
+        virtual void run(MIRBasicBlockId bb, const MIRBasicBlock& block) const = 0;
+    };
+
+    template <typename F>
+    struct MIRBlockConstCb final: MIRBlockConstCallback {
+        F f;
+
+        explicit MIRBlockConstCb(F f);
+
+        void run(MIRBasicBlockId bb, const MIRBasicBlock& block) const override;
+    };
+
+    struct OptimiseStmtRef {
+        unsigned bbIdx;
+        unsigned stmtIdx;
+
+        OptimiseStmtRef();
+
+        OptimiseStmtRef(unsigned b, unsigned s);
+
+        bool operator==(const OptimiseStmtRef& x) const;
+    };
+
+    struct IterPathCallback {
+        virtual bool visitStatement(OptimiseStmtRef location, const MIRStatement& statement) = 0;
+        virtual bool visitTerminator(OptimiseStmtRef location, const MIRTerminator& terminator) = 0;
+    };
+
+    template <typename S, typename T>
+    struct IterPathCb final: IterPathCallback {
+        S statement;
+        T terminator;
+
+        IterPathCb(S statement, T terminator);
+
+        bool visitStatement(OptimiseStmtRef location, const MIRStatement& value) override;
+
+        bool visitTerminator(OptimiseStmtRef location, const MIRTerminator& value) override;
+    };
+
+    struct CheckInvalidatesLvalue final: public LvalueVisitor {
+        const MIRLValue& val;
+        bool hasIndex;
+        bool isCopy;
+        bool alsoRead;
+
+        CheckInvalidatesLvalue(const MIRLValue& val, bool isCopy, bool alsoRead = false);
+
+        bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override;
+    };
+}
+
 MirOperationsContext* MIRCreateOperationsContext(ObjPool& pool) {
     return pool.make<MirOperationsContext>();
 }
 
 namespace {
+
     MirOperationsContext& operationsContext(const MIRTypeResolve& state) {
         return *state.resolve.board().mirOperations;
     }
@@ -108,29 +241,6 @@ namespace {
         }
     }
 }
-
-struct MirMutator {
-    MIRFunction& fcn;
-    unsigned int curBlock;
-    unsigned int curStmt;
-    mutable std::vector<MIRStatement> newStatements;
-
-    MirMutator(MIRFunction& fcn, unsigned int bb, unsigned int stmt);
-
-    void updateState(MIRTypeResolve& state);
-
-    MIRLValue newTemporary(HIRTypeRef ty);
-
-    void pushStatement(MIRStatement stmt);
-
-    MIRLValue inTemporary(HIRTypeRef ty, MIRRValue val);
-
-    decltype(newStatements.begin()) flushStmt();
-
-    void flushBlock();
-
-    decltype(newStatements.begin()) flush();
-};
 
 void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& lval);
 
@@ -1754,25 +1864,6 @@ void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIR
 }
 
 namespace {
-    struct LvalueVisitor {
-        virtual bool visitLvalue(const MIRLValue& lv, MIRValUsage u) = 0;
-    };
-
-    struct LvalueVisitorMut {
-        virtual bool visitLvalue(MIRLValue& lv, MIRValUsage u) = 0;
-    };
-
-    struct LvalueRefVisitorMut {
-        virtual bool visitLvalue(MIRLValue::MRef& lv, MIRValUsage u) = 0;
-    };
-
-    struct LvalueConstAdapter final: public LvalueVisitorMut {
-        LvalueVisitor& inner;
-
-        explicit LvalueConstAdapter(LvalueVisitor& inner);
-
-        bool visitLvalue(MIRLValue& lv, MIRValUsage u) override;
-    };
 
     bool optVisitMirLvaluesInner(const MIRLValue& lv, MIRValUsage u, LvalueVisitor& cb) {
         for (const auto& w : lv.wrappers) {
@@ -2100,28 +2191,6 @@ namespace {
         optVisitMirLvaluesMut(state, const_cast<MIRFunction&>(fcn), adapter);
     }
 
-    struct ParamsSet: public MonomorphiserPP {
-        HIRPathParams implParams;
-        const HIRPathParams* fcnParams;
-        const HIRTypeData* selfTy;
-        const HIRGenericParams* implParamsDef;
-        const HIRGenericParams* fcnParamsDef;
-
-        HIRPathParams fcnParamsTmp;
-
-        explicit ParamsSet(HIRTypeInterner& types);
-
-        const HIRTypeData* getSelfType() const override;
-
-        const HIRPathParams* getImplParams() const override;
-
-        const HIRPathParams* getMethodParams() const override;
-
-        const HIRPathParams* getHrbParams() const override;
-
-        bool hasUnevaluatedValues() const;
-    };
-
     const MIRFunction* getCalledMir(const MIRTypeResolve& state, const TransList* list, const HIRPath& path, ParamsSet& params) {
         MonomorphState outParams(state.resolve.hirCrate().types);
         StaticTraitResolve::ResolvedTraitImplPath traitImplPath;
@@ -2200,32 +2269,6 @@ namespace {
         }
         return nullptr;
     }
-
-    struct MIRBlockCallback {
-        virtual void run(MIRBasicBlockId bb, MIRBasicBlock& block) const = 0;
-    };
-
-    template <typename F>
-    struct MIRBlockCb final: MIRBlockCallback {
-        F f;
-
-        explicit MIRBlockCb(F f);
-
-        void run(MIRBasicBlockId bb, MIRBasicBlock& block) const override;
-    };
-
-    struct MIRBlockConstCallback {
-        virtual void run(MIRBasicBlockId bb, const MIRBasicBlock& block) const = 0;
-    };
-
-    template <typename F>
-    struct MIRBlockConstCb final: MIRBlockConstCallback {
-        F f;
-
-        explicit MIRBlockConstCb(F f);
-
-        void run(MIRBasicBlockId bb, const MIRBasicBlock& block) const override;
-    };
 
     void visitBlocksMut(MIRTypeResolve& state, MIRFunction& fcn, const MIRBlockCallback& cb) {
         auto& context = operationsContext(state);
@@ -2900,16 +2943,6 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
 }
 
 namespace {
-    struct OptimiseStmtRef {
-        unsigned bbIdx;
-        unsigned stmtIdx;
-
-        OptimiseStmtRef();
-
-        OptimiseStmtRef(unsigned b, unsigned s);
-
-        bool operator==(const OptimiseStmtRef& x) const;
-    };
 
     std::ostream& operator<<(std::ostream& os, const OptimiseStmtRef& x) {
         return os << "BB" << x.bbIdx << "/" << x.stmtIdx;
@@ -2919,23 +2952,6 @@ namespace {
         Abort,
         EarlyTrue,
         Complete,
-    };
-
-    struct IterPathCallback {
-        virtual bool visitStatement(OptimiseStmtRef location, const MIRStatement& statement) = 0;
-        virtual bool visitTerminator(OptimiseStmtRef location, const MIRTerminator& terminator) = 0;
-    };
-
-    template <typename S, typename T>
-    struct IterPathCb final: IterPathCallback {
-        S statement;
-        T terminator;
-
-        IterPathCb(S statement, T terminator);
-
-        bool visitStatement(OptimiseStmtRef location, const MIRStatement& value) override;
-
-        bool visitTerminator(OptimiseStmtRef location, const MIRTerminator& value) override;
     };
 
     IterPathRes iterPathWith(const MIRFunction& fcn, const OptimiseStmtRef& start, const OptimiseStmtRef& end, IterPathCallback& cb) {
@@ -2986,17 +3002,6 @@ namespace {
         IterPathCb<S, T> cb(statement, terminator);
         return iterPathWith(fcn, start, end, cb);
     }
-
-    struct CheckInvalidatesLvalue final: public LvalueVisitor {
-        const MIRLValue& val;
-        bool hasIndex;
-        bool isCopy;
-        bool alsoRead;
-
-        CheckInvalidatesLvalue(const MIRLValue& val, bool isCopy, bool alsoRead = false);
-
-        bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override;
-    };
 
     bool checkInvalidatesLvalue(const MIRStatement& stmt, const MIRLValue& val, bool isCopy, bool alsoRead = false) {
         CheckInvalidatesLvalue cb{val, isCopy, alsoRead};

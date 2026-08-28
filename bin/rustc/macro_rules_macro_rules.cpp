@@ -27,26 +27,8 @@ struct CapturedVal {
 
 #include "macro_rules_capture_tu.h"
 
-inline std::ostream& operator<<(std::ostream& os, const CapturedVal& x) {
-    os << x.frag;
-    return os;
-}
-
-inline std::ostream& operator<<(std::ostream& os, const CaptureLayer& x) {
-    switch (x.tag()) {
-        case CaptureLayer::TAG_Vals: {
-            auto& e = x.as_Vals();
-            os << "[" << e << "]";
-            break;
-        }
-        case CaptureLayer::TAG_Nested: {
-            auto& e = x.as_Nested();
-            os << "{" << e << "}";
-            break;
-        }
-    }
-    return os;
-}
+inline std::ostream& operator<<(std::ostream& os, const CapturedVal& x);
+inline std::ostream& operator<<(std::ostream& os, const CaptureLayer& x);
 
 struct ParameterMappings {
     struct CapturedVar {
@@ -123,6 +105,177 @@ struct MacroPatternStream {
 
     loopCountsT takeLoopCounts();
 };
+
+struct MacroExpandState {
+    const std::vector<MacroExpansionEnt>& rootContents;
+    const ParameterMappings& mappings_;
+
+    struct tOffset {
+        unsigned readPos;
+        unsigned loopIndex;
+        unsigned maxIndex;
+    };
+
+    std::vector<tOffset> offsets;
+    std::vector<unsigned int> iterations_;
+
+    const std::vector<MacroExpansionEnt>* curEnts;
+
+    MacroExpandState(const std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings);
+
+    const MacroExpansionEnt* nextEnt();
+
+    const std::vector<unsigned int> iterations() const;
+
+    unsigned int loopIndexAt(unsigned int depth) const;
+
+    unsigned int loopLengthAt(unsigned int depth) const;
+
+    unsigned int topPos() const;
+
+    const MacroExpansionEnt& getCurLayerEnt() const;
+    const std::vector<MacroExpansionEnt>* getCurLayer() const;
+};
+
+struct MacroExpander: public TokenStream {
+    Span thisSpan;
+    const RcString crateName;
+    Span invocationSpan;
+    ASTEdition invocationEdition;
+
+    ParameterMappings mappings_;
+    MacroExpandState state;
+
+    Token nextToken;
+    std::unique_ptr<TTStreamO> ttstream;
+    ASTEdition sourceEdition;
+    bool isMacroItem;
+    bool transparent;
+    Ident::Hygiene hygiene_;
+    Ident::Hygiene lastHygiene;
+
+    ObjPool& pool;
+
+    MacroExpander(const MacroExpander& x) = delete;
+
+    MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition);
+
+    Position getPosition() const override;
+
+    Span outerSpan() const override;
+
+    Ident::Hygiene realGetHygiene() const override;
+    ASTEdition realGetEdition() const override;
+    Token realGetToken() override;
+};
+
+struct MacroRule {
+    std::vector<MacroPatEnt> pattern;
+    Span patSpan;
+    std::vector<MacroExpansionEnt> contents;
+
+    MacroRule();
+
+    MacroRule(MacroRule&&) = default;
+    MacroRule(const MacroRule&) = delete;
+};
+
+struct RuleParseState {
+    struct NameState {
+        unsigned idx;
+        std::vector<unsigned> loops;
+        Ident::Hygiene hygiene;
+    };
+
+    std::map<RcString, std::vector<NameState>> names;
+    unsigned nextNameIndex;
+
+    unsigned nextLoopIndex;
+    std::vector<unsigned> loopStack;
+
+    RuleParseState();
+
+    unsigned addName(const Ident& ident);
+
+    const NameState* findName(const Ident& ident) const;
+
+    unsigned openLoop();
+
+    void closeLoop();
+};
+
+struct ContentLoopVariableUse {
+    std::vector<unsigned> loopStack;
+    bool isOptional;
+
+    ContentLoopVariableUse(std::vector<unsigned> loopStack);
+
+    friend std::ostream& operator<<(std::ostream& os, const ContentLoopVariableUse& x) {
+        return os << "[" << x.loopStack << "] " << (x.isOptional ? "optional" : "required");
+    }
+};
+
+namespace {
+    struct TokenStreamRO {
+        const TokenTree& tt;
+        std::vector<size_t> offsets;
+        size_t activeOffset;
+
+        Token eofToken;
+        Token fakedNext;
+        size_t consumeCount;
+
+        TokenStreamRO(const TokenTree& tt);
+
+        TokenStreamRO clone() const;
+
+        enum eTokenType next() const;
+
+        const Token& nextTok() const;
+
+        void consume();
+
+        void consumeAndPush(eTokenType ty);
+
+        bool consumeIf(eTokenType ty);
+
+        size_t position() const;
+    };
+
+    struct ExpTok {
+        MacroPatEnt::Type ty;
+        Token tok;
+
+        ExpTok(MacroPatEnt::Type ty, const Token& tok);
+
+        bool operator==(const ExpTok& t) const;
+
+        bool operator!=(const ExpTok& t) const;
+
+        bool operator==(eTokenType tt) const;
+    };
+}
+
+inline std::ostream& operator<<(std::ostream& os, const CapturedVal& x) {
+    os << x.frag;
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const CaptureLayer& x) {
+    switch (x.tag()) {
+        case CaptureLayer::TAG_Vals: {
+            auto& e = x.as_Vals();
+            os << "[" << e << "]";
+            break;
+        }
+        case CaptureLayer::TAG_Nested: {
+            auto& e = x.as_Nested();
+            os << "{" << e << "}";
+            break;
+        }
+    }
+    return os;
+}
 
 unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts);
 void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents);
@@ -205,6 +358,7 @@ unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const std::vector
 }
 
 namespace {
+
     template <typename Layer>
     unsigned int captureLayerDepth(const Layer& layer) {
         unsigned int rv = 1;
@@ -362,69 +516,6 @@ void MacroPatternStream::ifSucceeded() {
     conditionMet = true;
 }
 
-struct MacroExpandState {
-    const std::vector<MacroExpansionEnt>& rootContents;
-    const ParameterMappings& mappings_;
-
-    struct tOffset {
-        unsigned readPos;
-        unsigned loopIndex;
-        unsigned maxIndex;
-    };
-
-    std::vector<tOffset> offsets;
-    std::vector<unsigned int> iterations_;
-
-    const std::vector<MacroExpansionEnt>* curEnts;
-
-    MacroExpandState(const std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings);
-
-    const MacroExpansionEnt* nextEnt();
-
-    const std::vector<unsigned int> iterations() const;
-
-    unsigned int loopIndexAt(unsigned int depth) const;
-
-    unsigned int loopLengthAt(unsigned int depth) const;
-
-    unsigned int topPos() const;
-
-    const MacroExpansionEnt& getCurLayerEnt() const;
-    const std::vector<MacroExpansionEnt>* getCurLayer() const;
-};
-
-struct MacroExpander: public TokenStream {
-    Span thisSpan;
-    const RcString crateName;
-    Span invocationSpan;
-    ASTEdition invocationEdition;
-
-    ParameterMappings mappings_;
-    MacroExpandState state;
-
-    Token nextToken;
-    std::unique_ptr<TTStreamO> ttstream;
-    ASTEdition sourceEdition;
-    bool isMacroItem;
-    bool transparent;
-    Ident::Hygiene hygiene_;
-    Ident::Hygiene lastHygiene;
-
-    ObjPool& pool;
-
-    MacroExpander(const MacroExpander& x) = delete;
-
-    MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition);
-
-    Position getPosition() const override;
-
-    Span outerSpan() const override;
-
-    Ident::Hygiene realGetHygiene() const override;
-    ASTEdition realGetEdition() const override;
-    Token realGetToken() override;
-};
-
 void MacroInitDefaults() {
 }
 
@@ -548,31 +639,6 @@ std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroR
 }
 
 namespace {
-    struct TokenStreamRO {
-        const TokenTree& tt;
-        std::vector<size_t> offsets;
-        size_t activeOffset;
-
-        Token eofToken;
-        Token fakedNext;
-        size_t consumeCount;
-
-        TokenStreamRO(const TokenTree& tt);
-
-        TokenStreamRO clone() const;
-
-        enum eTokenType next() const;
-
-        const Token& nextTok() const;
-
-        void consume();
-
-        void consumeAndPush(eTokenType ty);
-
-        bool consumeIf(eTokenType ty);
-
-        size_t position() const;
-    };
 
     bool consumeType(TokenStreamRO& lex);
     enum class ItemConsumeMode {
@@ -2796,41 +2862,6 @@ namespace {
     std::vector<SimplePatEnt> macroPatternToSimple(const Span& sp, const std::vector<MacroPatEnt>& pattern);
 }
 
-struct MacroRule {
-    std::vector<MacroPatEnt> pattern;
-    Span patSpan;
-    std::vector<MacroExpansionEnt> contents;
-
-    MacroRule();
-
-    MacroRule(MacroRule&&) = default;
-    MacroRule(const MacroRule&) = delete;
-};
-
-struct RuleParseState {
-    struct NameState {
-        unsigned idx;
-        std::vector<unsigned> loops;
-        Ident::Hygiene hygiene;
-    };
-
-    std::map<RcString, std::vector<NameState>> names;
-    unsigned nextNameIndex;
-
-    unsigned nextLoopIndex;
-    std::vector<unsigned> loopStack;
-
-    RuleParseState();
-
-    unsigned addName(const Ident& ident);
-
-    const NameState* findName(const Ident& ident) const;
-
-    unsigned openLoop();
-
-    void closeLoop();
-};
-
 std::vector<MacroPatEnt> ParseMacroRulesPat(TokenStream& lex, enum eTokenType open, enum eTokenType close, RuleParseState& state) {
     Token tok;
 
@@ -2976,17 +3007,6 @@ std::vector<MacroPatEnt> ParseMacroRulesPat(TokenStream& lex, enum eTokenType op
 
     return ret;
 }
-
-struct ContentLoopVariableUse {
-    std::vector<unsigned> loopStack;
-    bool isOptional;
-
-    ContentLoopVariableUse(std::vector<unsigned> loopStack);
-
-    friend std::ostream& operator<<(std::ostream& os, const ContentLoopVariableUse& x) {
-        return os << "[" << x.loopStack << "] " << (x.isOptional ? "optional" : "required");
-    }
-};
 
 void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansionEnt>& contents) {
     const auto isInterpolatedFragment = [](eTokenType type) {
@@ -3493,19 +3513,6 @@ MacroRulesPtr ParseMacroRulesSingleArm(TokenStream& lex) {
 }
 
 namespace {
-
-    struct ExpTok {
-        MacroPatEnt::Type ty;
-        Token tok;
-
-        ExpTok(MacroPatEnt::Type ty, const Token& tok);
-
-        bool operator==(const ExpTok& t) const;
-
-        bool operator!=(const ExpTok& t) const;
-
-        bool operator==(eTokenType tt) const;
-    };
 
     std::ostream& operator<<(std::ostream& os, const ExpTok& t) {
         os << "ExpTok(" << t.ty << " " << t.tok << ")";

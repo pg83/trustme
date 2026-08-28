@@ -44,20 +44,25 @@ struct TyVisitorCbConst: TyVisitor<WConst> {
     bool visitType(const HIRTypeData* ty) override;
 };
 
-bool visitTyWithCb(const HIRTypeData* ty, HIRTypeVisitorCallback& callback) {
-    TyVisitorCbConst v(callback);
-    return v.visitType(ty);
-}
+struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
+    const HIRTypeData& getTyData(const HIRTypeData* ty) const override;
 
-bool visitTraitPathTysWithCb(const HIRTraitPath& path, HIRTypeVisitorCallback& callback) {
-    TyVisitorCbConst v(callback);
-    return v.visitTraitPath(path);
-}
+    bool visitPathParams(const HIRPathParams& pp) override;
 
-bool visitPathTysWithCb(const HIRPath& path, HIRTypeVisitorCallback& callback) {
-    TyVisitorCbConst v(callback);
-    return v.visitPath(path);
-}
+    bool visitType(const HIRTypeData* ty) override;
+};
+
+struct CloneTyWithMonomorph: Monomorphiser {
+    HIRTypeCloneCallback& callback;
+
+    CloneTyWithMonomorph(HIRTypeInterner& types, HIRTypeCloneCallback& callback);
+
+    HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override;
+
+    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
+
+    HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
+};
 
 namespace {
     struct TyVisitorGenericGroup final: TyVisitor<WConst> {
@@ -71,19 +76,7 @@ namespace {
 
         bool visitType(const HIRTypeData* ty) override;
     };
-}
 
-bool typeContainsGenericGroup(const HIRTypeData* type, HIRGenericGroup group) {
-    TyVisitorGenericGroup visitor(group);
-    return visitor.visitType(type);
-}
-
-bool pathParamsContainGenericGroup(const HIRPathParams& params, HIRGenericGroup group) {
-    TyVisitorGenericGroup visitor(group);
-    return visitor.visitPathParams(params);
-}
-
-namespace {
     struct TyRewriter {
         HIRTypeInterner& types;
         HIRTypeRewriteCallback& callback;
@@ -99,6 +92,31 @@ namespace {
     };
 }
 
+bool visitTyWithCb(const HIRTypeData* ty, HIRTypeVisitorCallback& callback) {
+    TyVisitorCbConst v(callback);
+    return v.visitType(ty);
+}
+
+bool visitTraitPathTysWithCb(const HIRTraitPath& path, HIRTypeVisitorCallback& callback) {
+    TyVisitorCbConst v(callback);
+    return v.visitTraitPath(path);
+}
+
+bool visitPathTysWithCb(const HIRPath& path, HIRTypeVisitorCallback& callback) {
+    TyVisitorCbConst v(callback);
+    return v.visitPath(path);
+}
+
+bool typeContainsGenericGroup(const HIRTypeData* type, HIRGenericGroup group) {
+    TyVisitorGenericGroup visitor(group);
+    return visitor.visitType(type);
+}
+
+bool pathParamsContainGenericGroup(const HIRPathParams& params, HIRGenericGroup group) {
+    TyVisitorGenericGroup visitor(group);
+    return visitor.visitPathParams(params);
+}
+
 bool rewriteTyWithCb(HIRTypeInterner& types, HIRTypeRef& ty, HIRTypeRewriteCallback& callback) {
     TyRewriter rewriter{types, callback, {}};
     return rewriter.rewriteType(ty);
@@ -108,14 +126,6 @@ bool rewritePathTysWithCb(HIRTypeInterner& types, HIRPath& path, HIRTypeRewriteC
     TyRewriter rewriter{types, callback, {}};
     return rewriter.rewritePath(path);
 }
-
-struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
-    const HIRTypeData& getTyData(const HIRTypeData* ty) const override;
-
-    bool visitPathParams(const HIRPathParams& pp) override;
-
-    bool visitType(const HIRTypeData* ty) override;
-};
 
 bool monomorphisePathparamsNeeded(const HIRPathParams& tpl) {
     TyVisitorMonomorphNeeded v{};
@@ -369,18 +379,6 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
         return tpl.clone();
     }
 }
-
-struct CloneTyWithMonomorph: Monomorphiser {
-    HIRTypeCloneCallback& callback;
-
-    CloneTyWithMonomorph(HIRTypeInterner& types, HIRTypeCloneCallback& callback);
-
-    HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override;
-
-    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
-
-    HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
-};
 
 HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, HIRTypeCloneCallback& callback) {
     HIRPathParams rv;

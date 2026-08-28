@@ -44,6 +44,96 @@ using namespace stl;
 
 #define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
 
+struct ProgramParams {
+    enum eLastStage {
+        STAGE_PARSE,
+        STAGE_EXPAND,
+        STAGE_RESOLVE,
+        STAGE_TYPECK,
+        STAGE_BORROWCK,
+        STAGE_HIR,
+        STAGE_MIR,
+        STAGE_ALL,
+    } lastStage = STAGE_ALL;
+
+    bool emitMetadataOnly = false;
+
+    std::string infile;
+    std::string outfile;
+    std::string outputDir = "";
+    std::string target = DEFAULT_TARGET_NAME;
+    RcString crateNameQuery;
+
+    std::string emitDepfile;
+
+    ASTEdition edition = ASTEdition::Rust2015;
+    ASTCrate::Type crateType = ASTCrate::Type::Unknown;
+    std::string crateName;
+    std::string crateNameSuffix;
+
+    OptimizationLevel optLevel = OptimizationLevel::None;
+    bool debugAssertions = false;
+    bool debugAssertionsExplicit = false;
+    bool ubChecks = false;
+    bool ubChecksExplicit = false;
+    Settings::FmtDebug fmtDebug = Settings::FmtDebug::Full;
+    bool overflowChecks = false;
+    bool overflowChecksExplicit = false;
+    unsigned mirOptLevel = 0;
+    bool mirOptLevelExplicit = false;
+    DebugInfoLevel debugInfo = DebugInfoLevel::None;
+
+    bool testHarness = false;
+
+    std::string targetSaveback;
+    bool printCfgs = false;
+
+    std::vector<std::string> crateSearchDirs;
+    std::vector<std::string> nativeLibSearchDirs;
+    std::vector<std::string> frameworkSearchDirs;
+    std::vector<const char*> libraries;
+    std::set<std::string> features;
+
+    struct {
+        bool pause = false;
+
+        bool dumpAst = false;
+        bool dumpHir = false;
+        bool dumpMir = false;
+    } debug;
+
+    struct {
+        std::string codegenType;
+        std::string emitBuildCommand;
+        RcString emitLinkManifest;
+        bool emitCppOnly = false;
+        std::string panicType;
+        std::vector<std::string> linkerArgs;
+    } codegen;
+
+    ProgramParams(Settings& settings, int argc, char* argv[]);
+
+    unsigned effectiveMirOptLevel() const;
+
+    bool enableMirInlining() const;
+
+    bool debugAssertionsEnabled() const;
+
+    bool ubChecksEnabled() const;
+
+    bool overflowChecksEnabled() const;
+
+    void showHelp() const;
+};
+
+namespace {
+    struct CompileArgs {
+        int argc;
+        char** argv;
+        int result;
+    };
+}
+
 void ExpandTestHarness(ASTCrate& crate) {
     ASSERT_BUG(Span(), crate.extCratenameTest != "", "Crate `test` not loaded");
     ASSERT_BUG(Span(), crate.extCratenameStd != "", "Crate `std` not loaded");
@@ -140,89 +230,8 @@ void ExpandTestHarness(ASTCrate& crate) {
     #define TRUSTME_SANITIZER_BUILD 0
 #endif
 
-struct ProgramParams {
-    enum eLastStage {
-        STAGE_PARSE,
-        STAGE_EXPAND,
-        STAGE_RESOLVE,
-        STAGE_TYPECK,
-        STAGE_BORROWCK,
-        STAGE_HIR,
-        STAGE_MIR,
-        STAGE_ALL,
-    } lastStage = STAGE_ALL;
-
-    bool emitMetadataOnly = false;
-
-    std::string infile;
-    std::string outfile;
-    std::string outputDir = "";
-    std::string target = DEFAULT_TARGET_NAME;
-    RcString crateNameQuery;
-
-    std::string emitDepfile;
-
-    ASTEdition edition = ASTEdition::Rust2015;
-    ASTCrate::Type crateType = ASTCrate::Type::Unknown;
-    std::string crateName;
-    std::string crateNameSuffix;
-
-    OptimizationLevel optLevel = OptimizationLevel::None;
-    bool debugAssertions = false;
-    bool debugAssertionsExplicit = false;
-    bool ubChecks = false;
-    bool ubChecksExplicit = false;
-    Settings::FmtDebug fmtDebug = Settings::FmtDebug::Full;
-    bool overflowChecks = false;
-    bool overflowChecksExplicit = false;
-    unsigned mirOptLevel = 0;
-    bool mirOptLevelExplicit = false;
-    DebugInfoLevel debugInfo = DebugInfoLevel::None;
-
-    bool testHarness = false;
-
-    std::string targetSaveback;
-    bool printCfgs = false;
-
-    std::vector<std::string> crateSearchDirs;
-    std::vector<std::string> nativeLibSearchDirs;
-    std::vector<std::string> frameworkSearchDirs;
-    std::vector<const char*> libraries;
-    std::set<std::string> features;
-
-    struct {
-        bool pause = false;
-
-        bool dumpAst = false;
-        bool dumpHir = false;
-        bool dumpMir = false;
-    } debug;
-
-    struct {
-        std::string codegenType;
-        std::string emitBuildCommand;
-        RcString emitLinkManifest;
-        bool emitCppOnly = false;
-        std::string panicType;
-        std::vector<std::string> linkerArgs;
-    } codegen;
-
-    ProgramParams(Settings& settings, int argc, char* argv[]);
-
-    unsigned effectiveMirOptLevel() const;
-
-    bool enableMirInlining() const;
-
-    bool debugAssertionsEnabled() const;
-
-    bool ubChecksEnabled() const;
-
-    bool overflowChecksEnabled() const;
-
-    void showHelp() const;
-};
-
 namespace {
+
     std::string CrateNameFromFile(const std::string& infile) {
         auto s = infile.find_last_of('/');
         s = (s == std::string::npos ? 0 : s + 1);
@@ -834,11 +843,6 @@ static int compile(int argc, char* argv[]) {
 }
 
 namespace {
-    struct CompileArgs {
-        int argc;
-        char** argv;
-        int result;
-    };
 
     void* compileOnThread(void* raw) {
         auto& args = *static_cast<CompileArgs*>(raw);

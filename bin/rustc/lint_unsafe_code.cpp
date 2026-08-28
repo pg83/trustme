@@ -10,32 +10,6 @@
 namespace {
     const char* const LINT_NAME = "unsafe_code";
 
-    bool spanIsNotUserCode(const Span& sp, const RcString& crateName) {
-        for (Span frame = sp; frame; frame = frame->parentSpan) {
-            if (const auto* macro = cast<const SpanInnerMacro>(frame.get())) {
-                if (macro->crate != crateName) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    void report(CfgLintLevel level, const Span& sp, const char* what) {
-        switch (level) {
-            case CfgLintLevel::Allow:
-                break;
-            case CfgLintLevel::Warn:
-            case CfgLintLevel::ForceWarn:
-                WARNING(sp, W0000, "usage of " << what);
-                break;
-            case CfgLintLevel::Deny:
-            case CfgLintLevel::Forbid:
-                ERROR(sp, E0000, "usage of " << what);
-                break;
-        }
-    }
-
     struct UnsafeBlockVisitor: public HIRExprVisitorDef {
         CfgLintLevel level_;
         const RcString& crateName_;
@@ -63,6 +37,32 @@ namespace {
 
         void visitExpr(HIRExprPtr& exp) override;
     };
+
+    bool spanIsNotUserCode(const Span& sp, const RcString& crateName) {
+        for (Span frame = sp; frame; frame = frame->parentSpan) {
+            if (const auto* macro = cast<const SpanInnerMacro>(frame.get())) {
+                if (macro->crate != crateName) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    void report(CfgLintLevel level, const Span& sp, const char* what) {
+        switch (level) {
+            case CfgLintLevel::Allow:
+                break;
+            case CfgLintLevel::Warn:
+            case CfgLintLevel::ForceWarn:
+                WARNING(sp, W0000, "usage of " << what);
+                break;
+            case CfgLintLevel::Deny:
+            case CfgLintLevel::Forbid:
+                ERROR(sp, E0000, "usage of " << what);
+                break;
+        }
+    }
 }
 
 void LintUnsafeCode(const WireBoard& wb, HIRCrate& crate) {

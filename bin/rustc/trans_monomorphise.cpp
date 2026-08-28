@@ -85,18 +85,6 @@ namespace {
         MIRFunctionPointer build();
     };
 
-    const MIRCallTarget::Data_Intrinsic* asyncDropPollMarker(const MIRFunctionPointer& tpl) {
-        if (!tpl || tpl->blocks.empty()) {
-            return nullptr;
-        }
-        const auto* call = tpl->blocks.front().terminator.opt_Call();
-        if (!call) {
-            return nullptr;
-        }
-        const auto* intrinsic = call->fcn.opt_Intrinsic();
-        return intrinsic && intrinsic->name == "async_drop_glue_poll" ? intrinsic : nullptr;
-    }
-
     struct Cloner: public MIRCloner {
         const ::StaticTraitResolve& resolve_;
         const TransParams& params;
@@ -109,6 +97,18 @@ namespace {
 
         const StaticTraitResolve* resolve() const override;
     };
+
+    const MIRCallTarget::Data_Intrinsic* asyncDropPollMarker(const MIRFunctionPointer& tpl) {
+        if (!tpl || tpl->blocks.empty()) {
+            return nullptr;
+        }
+        const auto* call = tpl->blocks.front().terminator.opt_Call();
+        if (!call) {
+            return nullptr;
+        }
+        const auto* intrinsic = call->fcn.opt_Intrinsic();
+        return intrinsic && intrinsic->name == "async_drop_glue_poll" ? intrinsic : nullptr;
+    }
 }
 
 MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const TransParams& params, const MIRFunctionPointer& tpl) {

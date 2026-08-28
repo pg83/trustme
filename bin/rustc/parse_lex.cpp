@@ -18,58 +18,6 @@
 
 using namespace stl;
 
-Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edition, ParseState ps)
-    : TokenStream(ps)
-    , id(id)
-    , path_(filename.c_str())
-    , line(1)
-    , lineOfs(0)
-    , istreamFp(filename != "-" ? new std::ifstream(filename.c_str()) : nullptr)
-    , istream(filename != "-" ? *istreamFp : std::cin)
-    , lastCharValid(false)
-    , initialShebangChecked(false)
-    , initialFrontmatterAllowed(true)
-    , initialFrontmatterPrecededByWhitespace(false)
-    , replayCharOffset(0)
-    , edition(edition)
-    , hygiene_(Ident::Hygiene::newScope(id, pool))
-{
-    if (istreamFp) {
-        if (!istreamFp->is_open()) {
-            throw std::runtime_error("Unable to open file '" + filename + "'");
-        }
-        if (this->getcByte() == '\xef') {
-            if (this->getcByte() != '\xbb') {
-                throw std::runtime_error("Incomplete BOM - missing \\xBB in second position");
-            }
-            if (this->getcByte() != '\xbf') {
-                throw std::runtime_error("Incomplete BOM - missing \\xBF in third position");
-            }
-            lineOfs = 0;
-        } else {
-            istream.unget();
-        }
-    }
-}
-
-Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition, ParseState ps)
-    : TokenStream(ps)
-    , id(id)
-    , path_("-")
-    , line(1)
-    , lineOfs(0)
-    , istreamFp(nullptr)
-    , istream(ss)
-    , lastCharValid(false)
-    , initialShebangChecked(false)
-    , initialFrontmatterAllowed(true)
-    , initialFrontmatterPrecededByWhitespace(false)
-    , replayCharOffset(0)
-    , edition(edition)
-    , hygiene_(Ident::Hygiene::newScope(id, pool))
-{
-}
-
 #define LINECOMMENT -1
 #define BLOCKCOMMENT -2
 #define SINGLEQUOTE -3
@@ -77,6 +25,8 @@ Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition,
 #define SHEBANG -5
 
 #define TOKENT(str, sym) {sizeof(str) - 1, str, sym}
+
+#define LEN(arr) (sizeof(arr) / sizeof(arr[0]))
 
 static const struct {
     unsigned char len;
@@ -144,13 +94,63 @@ static const struct {
     TOKENT("~", TOK_TILDE),
 };
 
-#define LEN(arr) (sizeof(arr) / sizeof(arr[0]))
-
 struct sRWORD {
     unsigned char len;
     const char* chars;
     signed int type;
 };
+
+Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edition, ParseState ps)
+    : TokenStream(ps)
+    , id(id)
+    , path_(filename.c_str())
+    , line(1)
+    , lineOfs(0)
+    , istreamFp(filename != "-" ? new std::ifstream(filename.c_str()) : nullptr)
+    , istream(filename != "-" ? *istreamFp : std::cin)
+    , lastCharValid(false)
+    , initialShebangChecked(false)
+    , initialFrontmatterAllowed(true)
+    , initialFrontmatterPrecededByWhitespace(false)
+    , replayCharOffset(0)
+    , edition(edition)
+    , hygiene_(Ident::Hygiene::newScope(id, pool))
+{
+    if (istreamFp) {
+        if (!istreamFp->is_open()) {
+            throw std::runtime_error("Unable to open file '" + filename + "'");
+        }
+        if (this->getcByte() == '\xef') {
+            if (this->getcByte() != '\xbb') {
+                throw std::runtime_error("Incomplete BOM - missing \\xBB in second position");
+            }
+            if (this->getcByte() != '\xbf') {
+                throw std::runtime_error("Incomplete BOM - missing \\xBF in third position");
+            }
+            lineOfs = 0;
+        } else {
+            istream.unget();
+        }
+    }
+}
+
+Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition, ParseState ps)
+    : TokenStream(ps)
+    , id(id)
+    , path_("-")
+    , line(1)
+    , lineOfs(0)
+    , istreamFp(nullptr)
+    , istream(ss)
+    , lastCharValid(false)
+    , initialShebangChecked(false)
+    , initialFrontmatterAllowed(true)
+    , initialFrontmatterPrecededByWhitespace(false)
+    , replayCharOffset(0)
+    , edition(edition)
+    , hygiene_(Ident::Hygiene::newScope(id, pool))
+{
+}
 
 static const sRWORD RWORDS_2015[] = {
     TOKENT("_", TOK_UNDERSCORE),

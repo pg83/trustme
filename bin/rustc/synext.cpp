@@ -25,7 +25,28 @@ struct CMacroUseHandler: public ExpandDecorator {
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
+struct CMacroExportHandler: public ExpandDecorator {
+    AttrStage stage() const override;
+
+    bool runDuringIter() const override;
+
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+};
+
+struct CMacroReexportHandler: public ExpandDecorator {
+    AttrStage stage() const override;
+
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+};
+
+struct CBuiltinMacroHandler: public ExpandDecorator {
+    AttrStage stage() const override;
+
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& /*mod*/, size_t /*mod_idx*/, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+};
+
 namespace {
+
     template <typename Contents>
     void localiseInnerMacroPaths(const WireBoard& wb, Contents& contents) {
         for (size_t i = 0; i < contents.size(); i++) {
@@ -91,26 +112,6 @@ namespace {
 void ExpandExportMacroRules(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, ASTModule& mod, const RcString& name) {
     exportMacroRules(sp, wb, crate, mod, name, macroExportUsesLocalInnerMacros(attr));
 }
-
-struct CMacroExportHandler: public ExpandDecorator {
-    AttrStage stage() const override;
-
-    bool runDuringIter() const override;
-
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
-
-struct CMacroReexportHandler: public ExpandDecorator {
-    AttrStage stage() const override;
-
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
-
-struct CBuiltinMacroHandler: public ExpandDecorator {
-    AttrStage stage() const override;
-
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& /*mod*/, size_t /*mod_idx*/, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
 
 void RegisterSynextBuiltins(ExpandRegistry& registry) {
     registry.addMacro<CMacroRulesExpander>("macro_rules");

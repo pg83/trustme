@@ -21,6 +21,19 @@ struct HIRSerialiseWriterInner {
     void write(const void* buf, size_t len);
 };
 
+struct HIRSerialiseReaderInner {
+    std::ifstream backing;
+    z_stream zstream;
+    std::vector<unsigned char> buffer;
+
+    unsigned int byteOutCount = 0;
+    unsigned int byteInCount = 0;
+
+    HIRSerialiseReaderInner(const std::string& filename);
+    ~HIRSerialiseReaderInner();
+    size_t read(void* buf, size_t len);
+};
+
 HIRSerialiseWriter::HIRSerialiseWriter()
     : inner(nullptr)
 {
@@ -152,19 +165,6 @@ void HIRSerialiseWriterInner::write(const void* buf, size_t len) {
         }
     }
 }
-
-struct HIRSerialiseReaderInner {
-    std::ifstream backing;
-    z_stream zstream;
-    std::vector<unsigned char> buffer;
-
-    unsigned int byteOutCount = 0;
-    unsigned int byteInCount = 0;
-
-    HIRSerialiseReaderInner(const std::string& filename);
-    ~HIRSerialiseReaderInner();
-    size_t read(void* buf, size_t len);
-};
 
 HIRSerialiseReadBuffer::HIRSerialiseReadBuffer(size_t cap)
     : ofs(0)

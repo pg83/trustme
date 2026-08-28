@@ -28,107 +28,6 @@ namespace {
         EnumVariant,
     };
 
-    const void* getTypePointer(const Span& sp, const HIRCrate& crate, const HIRSimplePath& path, Target t) {
-        if (t == Target::EnumVariant) {
-            return &crate.getTypeitemByPath(sp, path, /*ignore_crate_name=*/false, /*ignore_last_node=*/true).as_Enum();
-        } else {
-            const auto& ti = crate.getTypeitemByPath(sp, path);
-            switch (t) {
-                case Target::TypeItem:
-                    return &ti;
-                case Target::EnumVariant:
-                    UNREACHABLE();
-
-                case Target::Struct:
-                    if (ti.is_Struct()) {
-                        auto& e2 = ti.as_Struct();
-                        return &e2;
-                    } else {
-                        ERROR(sp, E0000, "Expected a struct at " << path << ", got a " << ti.tagStr());
-                    }
-                    break;
-                case Target::Enum:
-                    if (ti.is_Enum()) {
-                        auto& e2 = ti.as_Enum();
-                        return &e2;
-                    } else {
-                        ERROR(sp, E0000, "Expected a enum at " << path << ", got a " << ti.tagStr());
-                    }
-                    break;
-            }
-            UNREACHABLE();
-        }
-    }
-
-    void fixTypeParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, HIRPathParams& params) {
-        if (params.types.size() == 0) {
-            while (params.types.size() < paramsDef.types.size()) {
-                params.types.push_back(types.infer());
-            }
-            // TODO: Optionally fill in the defaults?
-        }
-        if (params.types.size() != paramsDef.types.size()) {
-            ERROR(sp, E0000, "Incorrect parameter count, expected " << paramsDef.types.size() << ", got " << params.types.size());
-        }
-
-        if (params.values.size() == 0) {
-            params.values.resize(paramsDef.values.size());
-        }
-        if (params.values.size() != paramsDef.values.size()) {
-            ERROR(sp, E0000, "Incorrect value parameter count, expected " << paramsDef.values.size() << ", got " << params.values.size());
-        }
-    }
-
-    void fixParamCount(HIRTypeInterner& types, const Span& sp, const HIRGenericPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params, bool fillInfer = true, const HIRTypeData* selfTy = nullptr) {
-        if (params.types.size() != paramDefs.types.size()) {
-            if (params.types.size() == 0 && fillInfer) {
-                while (params.types.size() < paramDefs.types.size()) {
-                    params.types.push_back(types.infer());
-                }
-            } else if (params.types.size() > paramDefs.types.size()) {
-                while (params.types.size() > paramDefs.types.size() && params.values.size() < paramDefs.values.size() && params.types.back()->is_Infer()) {
-                    params.types.pop_back();
-                    params.values.push_back(HIRConstGeneric::make_Infer({}));
-                }
-                if (params.types.size() > paramDefs.types.size()) {
-                    ERROR(sp, E0000, "Too many type parameters passed to " << path);
-                }
-            }
-            if (params.types.size() < paramDefs.types.size()) {
-                while (params.types.size() < paramDefs.types.size()) {
-                    const auto& typ = paramDefs.types[params.types.size()];
-                    if (typ.defaultValue->is_Infer()) {
-                        ERROR(sp, E0000, "Omitted type parameter with no default in " << path);
-                    } else {
-                        // TODO: Does expanding defaults need a custom monomorphiser that can handle later defaults?
-                        MonomorphStatePtr ms(types, selfTy, &params, nullptr);
-                        auto ty = ms.monomorphType(sp, typ.defaultValue);
-                        params.types.push_back(mv$(ty));
-                    }
-                }
-            }
-        }
-        if (params.values.size() != paramDefs.values.size()) {
-            if (params.values.size() == 0 && fillInfer) {
-                params.values.resize(paramDefs.values.size());
-            } else if (params.values.size() > paramDefs.values.size()) {
-                ERROR(sp, E0000, "Too many value parameters passed to " << path);
-            } else {
-                while (params.values.size() < paramDefs.values.size()) {
-                    const auto& val = paramDefs.values[params.values.size()];
-                    if (val.defaultValue.is_Infer()) {
-                        ERROR(sp, E0000, "Omitted value parameter with no default in " << path);
-                    } else if (val.defaultValue.is_Unevaluated()) {
-                        params.values.push_back(val.defaultValue.clone());
-                    } else {
-                        MonomorphStatePtr ms(types, selfTy, &params, nullptr);
-                        params.values.push_back(ms.monomorphConstgeneric(sp, val.defaultValue, false));
-                    }
-                }
-            }
-        }
-    }
-
     struct BindVisitor: public HIRVisitor {
         const HIRCrate& crate;
 
@@ -254,6 +153,388 @@ namespace {
 
         void visitExpr(HIRExprPtr& expr) override;
     };
+
+    struct ReceiverValidator {
+        HIRCrate& crate;
+        StaticTraitResolve resolve;
+        const HIRTypeData* implType = nullptr;
+
+        bool replaceImplTypeWithSelf(HIRTypeRef& ty);
+
+        bool needsProjectionValidation(const HIRFunction& item) const;
+
+        void validateFunction(HIRFunction& item);
+
+        void validateTrait(HIRTrait& trait);
+
+        void validateModule(HIRModule& module);
+
+        template <typename Impl, typename Callback>
+        void forEachImpl(HIRCrate::ImplGroup<std::unique_ptr<Impl>>& group, Callback callback);
+
+        ReceiverValidator(const WireBoard& wb, HIRCrate& crate);
+
+        void validate();
+    };
+
+    struct MarkingsVisitor: public HIRVisitor {
+        const HIRCrate& crate;
+        StaticTraitResolve resolve_;
+        const HIRSimplePath& langUnsize_;
+        const HIRSimplePath& langCoerceUnsized_;
+        const HIRSimplePath& langCopy_;
+        const HIRSimplePath& langDeref_;
+        const HIRSimplePath& langDrop_;
+
+        MarkingsVisitor(const WireBoard& wb);
+
+        void visitStruct(HIRItemPath ip, HIRStruct& str) override;
+
+        HIRStructMarkings::DstType getFieldDstType(const HIRTypeData* ty, const HIRGenericParams& innerDef, const HIRGenericParams& paramsDef, const HIRPathParams* params);
+
+        HIRStructMarkings::DstType getStructDstType(const HIRStruct& str, const HIRGenericParams& def, const HIRPathParams* params);
+
+        void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
+    };
+
+    struct Visitor2: public HIRVisitor {
+        StaticTraitResolve resolve_;
+
+        explicit Visitor2(const WireBoard& wb);
+
+        size_t getUnsizeParamIdx(const Span& sp, const HIRTypeData* pointee) const;
+
+        HIRStructMarkings::Coerce getCoerceType(const Span& sp, HIRItemPath ip, const HIRStruct& str, size_t& outParamIdx) const;
+
+        void visitStruct(HIRItemPath ip, HIRStruct& str) override;
+    };
+
+}
+
+struct Expander: public HIRVisitor {
+    const WireBoard& wb;
+    const HIRCrate& crate;
+    bool inExpr = false;
+    const HIRTypeData* implType = nullptr;
+
+    struct ActiveTypeAlias {
+        const HIRTypeAlias* alias;
+        HIRTypeRef recursiveReference;
+        const ActiveTypeAlias* parent;
+    };
+
+    const ActiveTypeAlias* activeTypeAliases = nullptr;
+
+    const HIRTypeAlias* typeAlias(const Span& sp, const HIRTypeData* type) const;
+
+    const ActiveTypeAlias* activeTypeAlias(const HIRTypeAlias* alias) const;
+
+    Expander(const WireBoard& wb, const HIRCrate& crate);
+
+    using GenericBounds = decltype(HIRGenericParams::bounds);
+
+    struct ActiveTraitAlias {
+        const HIRTraitAlias* alias;
+        const ActiveTraitAlias* parent;
+    };
+
+    static bool hasBound(const GenericBounds& bounds, const HIRGenericBound& candidate);
+
+    void collectTraitAliasBounds(const Span& sp, const HIRTraitPath& aliasPath, HIRTypeRef selfType, GenericBounds& out, const ActiveTraitAlias* active = nullptr);
+
+    HIRTypeInterner& interner() const;
+
+    void expandTraitList(const Span& sp, std::vector<HIRTraitPath>& list);
+
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+
+    void visitTraitPath(HIRTraitPath& tp) override;
+
+    HIRPath expandAliasPath(const Span& sp, const HIRPath& path);
+
+    HIRPattern::PathBinding visitPatternPathBinding(const Span& sp, HIRPath& path);
+
+    void visitPattern(HIRPattern& pat) override;
+
+    void visitParams(HIRGenericParams& params) override;
+
+    void visitExpr(HIRExprPtr& expr) override;
+
+    void visitFunction(HIRItemPath p, HIRFunction& item) override;
+
+    void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override;
+
+    void visitTrait(HIRItemPath p, HIRTrait& item) override;
+
+    void visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) override;
+
+    void visitTypeImpl(HIRTypeImpl& impl) override;
+
+    void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
+};
+
+struct ExpanderSelf: public HIRVisitor {
+    const HIRCrate& crate;
+    const HIRTypeData* implType = nullptr;
+    bool inExpr = false;
+
+    ExpanderSelf(const HIRCrate& crate, const HIRTypeData* implType = nullptr);
+
+    HIRTypeInterner& interner() const;
+
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+
+    void visitExpr(HIRExprPtr& expr) override;
+
+    void visitEnum(HIRItemPath p, HIREnum& enm) override;
+
+    void visitStruct(HIRItemPath p, HIRStruct& str) override;
+
+    void visitUnion(HIRItemPath p, HIRUnion& unn) override;
+
+    void visitTypeImpl(HIRTypeImpl& impl) override;
+
+    void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
+};
+
+struct AliasConstGenericParamBinder: public HIRVisitor {
+    const HIRGenericParams* implParams = nullptr;
+
+    struct Guard {
+        AliasConstGenericParamBinder& binder;
+        const HIRGenericParams* old;
+
+        Guard(AliasConstGenericParamBinder& binder, const HIRGenericParams& value);
+
+        ~Guard();
+    };
+
+    explicit AliasConstGenericParamBinder(HIRTypeInterner& types);
+
+    void visitConstgeneric(HIRConstGeneric& value) override;
+
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+
+    void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override;
+
+    void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override;
+};
+
+struct UfcsVisitor: public HIRVisitor {
+    const HIRCrate& crate;
+    bool visitExprs_;
+    bool runEat;
+
+    typedef std::vector<std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitImports;
+    tTraitImports traits;
+
+    StaticTraitResolve resolve_;
+    bool inTraitDef_ = false;
+    const HIRTypeData* currentType_ = nullptr;
+    const HIRTrait* currentTrait = nullptr;
+    const HIRItemPath* currentTraitPath_ = nullptr;
+    const HIRSimplePath* definingOpaqueAliases_ = nullptr;
+    size_t definingOpaqueAliasCount_ = 0;
+    bool preserveDeclaredProjections_ = false;
+    bool inExpr = false;
+    HIRSimplePath curModPath;
+
+    UfcsVisitor(const WireBoard& wb, bool visitExprs);
+
+    void restoreExprContext(const HIRExprState& state, const HIRItemPath* traitPath);
+
+    struct DeclaredTypeGuard {
+        UfcsVisitor& visitor;
+        bool saved;
+
+        explicit DeclaredTypeGuard(UfcsVisitor& visitor);
+
+        ~DeclaredTypeGuard();
+    };
+
+    struct ModTraitsGuard {
+        UfcsVisitor* v;
+        tTraitImports oldImports;
+        HIRSimplePath oldModPath;
+
+        ModTraitsGuard(UfcsVisitor& v, tTraitImports oldImports);
+
+        ModTraitsGuard(ModTraitsGuard&& x);
+
+        ModTraitsGuard& operator=(ModTraitsGuard&&) = delete;
+
+        ~ModTraitsGuard();
+    };
+
+    ModTraitsGuard pushModTraits(HIRSimplePath path, const HIRModule& mod);
+
+    void visitModule(HIRItemPath p, HIRModule& mod) override;
+
+    void visitParams(HIRGenericParams& params) override;
+
+    void visitUnion(HIRItemPath p, HIRUnion& item) override;
+
+    void visitStruct(HIRItemPath p, HIRStruct& item) override;
+
+    void visitEnum(HIRItemPath p, HIREnum& item) override;
+
+    void visitFunction(HIRItemPath p, HIRFunction& item) override;
+
+    void visitConstant(HIRItemPath p, HIRConstant& item) override;
+
+    void visitStatic(HIRItemPath p, HIRStatic& item) override;
+
+    void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override;
+
+    void visitTrait(HIRItemPath p, HIRTrait& trait) override;
+
+    void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override;
+
+    void visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) override;
+
+    void visitTypeImpl(HIRTypeImpl& impl) override;
+
+    void visitInherentType(HIRItemPath p, HIRTypeAlias& item) override;
+
+    void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override;
+
+    void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
+
+    void visitExpr(HIRExprPtr& expr) override;
+
+    bool locateTraitItemInBounds(HIRVisitor::PathContext pc, const HIRTypeData* tr, const HIRGenericParams& params, HIRPath::Data& pd);
+
+    HIRPath::Data getUfcsKnown(HIRVisitor::PathContext pc, HIRPath::Data::Data_UfcsUnknown e, HIRGenericPath traitPathReal, const HIRTrait& trait) const;
+
+    static bool locateItemInTrait(HIRVisitor::PathContext pc, const HIRTrait& trait, HIRPath::Data& pd);
+
+    // TODO: This code may end up generating paths without the type information they should contain
+
+    bool locateInTraitAndSet(HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
+
+    bool setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
+
+    bool locateInTraitImplAndSet(const Span& sp, HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
+
+    bool resolve_UfcsUnknown_inherent(const HIRSimplePath& visPath, const HIRPath& p, HIRVisitor::PathContext pc, HIRPath::Data& pd);
+
+    bool resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathContext pc, HIRPath::Data& pd);
+
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+
+    void visitConstgeneric(HIRConstGeneric& val) override;
+
+    void visitPath(HIRPath& p, HIRVisitor::PathContext pc) override;
+
+    void visitPattern(HIRPattern& pat) override;
+
+    void resolvePatternBinding(const Span& sp, HIRPath& path, HIRPattern::PathBinding& binding);
+
+    void visitPatternValue(const Span& sp, const HIRPattern& pat, HIRPattern::Value& val);
+};
+
+namespace {
+
+    const void* getTypePointer(const Span& sp, const HIRCrate& crate, const HIRSimplePath& path, Target t) {
+        if (t == Target::EnumVariant) {
+            return &crate.getTypeitemByPath(sp, path, /*ignore_crate_name=*/false, /*ignore_last_node=*/true).as_Enum();
+        } else {
+            const auto& ti = crate.getTypeitemByPath(sp, path);
+            switch (t) {
+                case Target::TypeItem:
+                    return &ti;
+                case Target::EnumVariant:
+                    UNREACHABLE();
+
+                case Target::Struct:
+                    if (ti.is_Struct()) {
+                        auto& e2 = ti.as_Struct();
+                        return &e2;
+                    } else {
+                        ERROR(sp, E0000, "Expected a struct at " << path << ", got a " << ti.tagStr());
+                    }
+                    break;
+                case Target::Enum:
+                    if (ti.is_Enum()) {
+                        auto& e2 = ti.as_Enum();
+                        return &e2;
+                    } else {
+                        ERROR(sp, E0000, "Expected a enum at " << path << ", got a " << ti.tagStr());
+                    }
+                    break;
+            }
+            UNREACHABLE();
+        }
+    }
+
+    void fixTypeParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, HIRPathParams& params) {
+        if (params.types.size() == 0) {
+            while (params.types.size() < paramsDef.types.size()) {
+                params.types.push_back(types.infer());
+            }
+            // TODO: Optionally fill in the defaults?
+        }
+        if (params.types.size() != paramsDef.types.size()) {
+            ERROR(sp, E0000, "Incorrect parameter count, expected " << paramsDef.types.size() << ", got " << params.types.size());
+        }
+
+        if (params.values.size() == 0) {
+            params.values.resize(paramsDef.values.size());
+        }
+        if (params.values.size() != paramsDef.values.size()) {
+            ERROR(sp, E0000, "Incorrect value parameter count, expected " << paramsDef.values.size() << ", got " << params.values.size());
+        }
+    }
+
+    void fixParamCount(HIRTypeInterner& types, const Span& sp, const HIRGenericPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params, bool fillInfer = true, const HIRTypeData* selfTy = nullptr) {
+        if (params.types.size() != paramDefs.types.size()) {
+            if (params.types.size() == 0 && fillInfer) {
+                while (params.types.size() < paramDefs.types.size()) {
+                    params.types.push_back(types.infer());
+                }
+            } else if (params.types.size() > paramDefs.types.size()) {
+                while (params.types.size() > paramDefs.types.size() && params.values.size() < paramDefs.values.size() && params.types.back()->is_Infer()) {
+                    params.types.pop_back();
+                    params.values.push_back(HIRConstGeneric::make_Infer({}));
+                }
+                if (params.types.size() > paramDefs.types.size()) {
+                    ERROR(sp, E0000, "Too many type parameters passed to " << path);
+                }
+            }
+            if (params.types.size() < paramDefs.types.size()) {
+                while (params.types.size() < paramDefs.types.size()) {
+                    const auto& typ = paramDefs.types[params.types.size()];
+                    if (typ.defaultValue->is_Infer()) {
+                        ERROR(sp, E0000, "Omitted type parameter with no default in " << path);
+                    } else {
+                        // TODO: Does expanding defaults need a custom monomorphiser that can handle later defaults?
+                        MonomorphStatePtr ms(types, selfTy, &params, nullptr);
+                        auto ty = ms.monomorphType(sp, typ.defaultValue);
+                        params.types.push_back(mv$(ty));
+                    }
+                }
+            }
+        }
+        if (params.values.size() != paramDefs.values.size()) {
+            if (params.values.size() == 0 && fillInfer) {
+                params.values.resize(paramDefs.values.size());
+            } else if (params.values.size() > paramDefs.values.size()) {
+                ERROR(sp, E0000, "Too many value parameters passed to " << path);
+            } else {
+                while (params.values.size() < paramDefs.values.size()) {
+                    const auto& val = paramDefs.values[params.values.size()];
+                    if (val.defaultValue.is_Infer()) {
+                        ERROR(sp, E0000, "Omitted value parameter with no default in " << path);
+                    } else if (val.defaultValue.is_Unevaluated()) {
+                        params.values.push_back(val.defaultValue.clone());
+                    } else {
+                        MonomorphStatePtr ms(types, selfTy, &params, nullptr);
+                        params.values.push_back(ms.monomorphConstgeneric(sp, val.defaultValue, false));
+                    }
+                }
+            }
+        }
+    }
 }
 
 void ConvertHIRBind(const WireBoard& wb, HIRCrate& crate) {
@@ -428,144 +709,10 @@ std::vector<HIRTraitPath> ConvertHIRExpandAliasesGetTraitExpansion(const Span& s
     return rv;
 }
 
-struct Expander: public HIRVisitor {
-    const WireBoard& wb;
-    const HIRCrate& crate;
-    bool inExpr = false;
-    const HIRTypeData* implType = nullptr;
-
-    struct ActiveTypeAlias {
-        const HIRTypeAlias* alias;
-        HIRTypeRef recursiveReference;
-        const ActiveTypeAlias* parent;
-    };
-
-    const ActiveTypeAlias* activeTypeAliases = nullptr;
-
-    const HIRTypeAlias* typeAlias(const Span& sp, const HIRTypeData* type) const;
-
-    const ActiveTypeAlias* activeTypeAlias(const HIRTypeAlias* alias) const;
-
-    Expander(const WireBoard& wb, const HIRCrate& crate);
-
-    using GenericBounds = decltype(HIRGenericParams::bounds);
-
-    struct ActiveTraitAlias {
-        const HIRTraitAlias* alias;
-        const ActiveTraitAlias* parent;
-    };
-
-    static bool hasBound(const GenericBounds& bounds, const HIRGenericBound& candidate);
-
-    void collectTraitAliasBounds(const Span& sp, const HIRTraitPath& aliasPath, HIRTypeRef selfType, GenericBounds& out, const ActiveTraitAlias* active = nullptr);
-
-    HIRTypeInterner& interner() const;
-
-    void expandTraitList(const Span& sp, std::vector<HIRTraitPath>& list);
-
-    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
-
-    void visitTraitPath(HIRTraitPath& tp) override;
-
-    HIRPath expandAliasPath(const Span& sp, const HIRPath& path);
-
-    HIRPattern::PathBinding visitPatternPathBinding(const Span& sp, HIRPath& path);
-
-    void visitPattern(HIRPattern& pat) override;
-
-    void visitParams(HIRGenericParams& params) override;
-
-    void visitExpr(HIRExprPtr& expr) override;
-
-    void visitFunction(HIRItemPath p, HIRFunction& item) override;
-
-    void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override;
-
-    void visitTrait(HIRItemPath p, HIRTrait& item) override;
-
-    void visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) override;
-
-    void visitTypeImpl(HIRTypeImpl& impl) override;
-
-    void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
-};
-
-struct ExpanderSelf: public HIRVisitor {
-    const HIRCrate& crate;
-    const HIRTypeData* implType = nullptr;
-    bool inExpr = false;
-
-    ExpanderSelf(const HIRCrate& crate, const HIRTypeData* implType = nullptr);
-
-    HIRTypeInterner& interner() const;
-
-    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
-
-    void visitExpr(HIRExprPtr& expr) override;
-
-    void visitEnum(HIRItemPath p, HIREnum& enm) override;
-
-    void visitStruct(HIRItemPath p, HIRStruct& str) override;
-
-    void visitUnion(HIRItemPath p, HIRUnion& unn) override;
-
-    void visitTypeImpl(HIRTypeImpl& impl) override;
-
-    void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
-};
-
-struct AliasConstGenericParamBinder: public HIRVisitor {
-    const HIRGenericParams* implParams = nullptr;
-
-    struct Guard {
-        AliasConstGenericParamBinder& binder;
-        const HIRGenericParams* old;
-
-        Guard(AliasConstGenericParamBinder& binder, const HIRGenericParams& value);
-
-        ~Guard();
-    };
-
-    explicit AliasConstGenericParamBinder(HIRTypeInterner& types);
-
-    void visitConstgeneric(HIRConstGeneric& value) override;
-
-    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
-
-    void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override;
-
-    void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override;
-};
-
 void ConvertHIRExpandAliases(const WireBoard& wb, HIRCrate& crate) {
     AliasConstGenericParamBinder(crate.types).visitCrate(crate);
     Expander exp{wb, crate};
     exp.visitCrate(crate);
-}
-
-namespace {
-    struct ReceiverValidator {
-        HIRCrate& crate;
-        StaticTraitResolve resolve;
-        const HIRTypeData* implType = nullptr;
-
-        bool replaceImplTypeWithSelf(HIRTypeRef& ty);
-
-        bool needsProjectionValidation(const HIRFunction& item) const;
-
-        void validateFunction(HIRFunction& item);
-
-        void validateTrait(HIRTrait& trait);
-
-        void validateModule(HIRModule& module);
-
-        template <typename Impl, typename Callback>
-        void forEachImpl(HIRCrate::ImplGroup<std::unique_ptr<Impl>>& group, Callback callback);
-
-        ReceiverValidator(const WireBoard& wb, HIRCrate& crate);
-
-        void validate();
-    };
 }
 
 void ConvertHIRValidateReceivers(const WireBoard& wb, HIRCrate& crate) {
@@ -585,42 +732,6 @@ void ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRTypeData* i
     }
     retTy = exp.visitType(retTy);
     exp.visitExpr(expr);
-}
-
-namespace {
-
-    struct MarkingsVisitor: public HIRVisitor {
-        const HIRCrate& crate;
-        StaticTraitResolve resolve_;
-        const HIRSimplePath& langUnsize_;
-        const HIRSimplePath& langCoerceUnsized_;
-        const HIRSimplePath& langCopy_;
-        const HIRSimplePath& langDeref_;
-        const HIRSimplePath& langDrop_;
-
-        MarkingsVisitor(const WireBoard& wb);
-
-        void visitStruct(HIRItemPath ip, HIRStruct& str) override;
-
-        HIRStructMarkings::DstType getFieldDstType(const HIRTypeData* ty, const HIRGenericParams& innerDef, const HIRGenericParams& paramsDef, const HIRPathParams* params);
-
-        HIRStructMarkings::DstType getStructDstType(const HIRStruct& str, const HIRGenericParams& def, const HIRPathParams* params);
-
-        void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
-    };
-
-    struct Visitor2: public HIRVisitor {
-        StaticTraitResolve resolve_;
-
-        explicit Visitor2(const WireBoard& wb);
-
-        size_t getUnsizeParamIdx(const Span& sp, const HIRTypeData* pointee) const;
-
-        HIRStructMarkings::Coerce getCoerceType(const Span& sp, HIRItemPath ip, const HIRStruct& str, size_t& outParamIdx) const;
-
-        void visitStruct(HIRItemPath ip, HIRStruct& str) override;
-    };
-
 }
 
 void ConvertHIRMarkings(const WireBoard& wb, HIRCrate& crate) {
@@ -656,119 +767,6 @@ void expandTraitImplDefaults(const HIRCrate& crate, const HIRSimplePath& traitPa
         impl.traitArgs.values.push_back(mv$(value));
     }
 }
-
-struct UfcsVisitor: public HIRVisitor {
-    const HIRCrate& crate;
-    bool visitExprs_;
-    bool runEat;
-
-    typedef std::vector<std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitImports;
-    tTraitImports traits;
-
-    StaticTraitResolve resolve_;
-    bool inTraitDef_ = false;
-    const HIRTypeData* currentType_ = nullptr;
-    const HIRTrait* currentTrait = nullptr;
-    const HIRItemPath* currentTraitPath_ = nullptr;
-    const HIRSimplePath* definingOpaqueAliases_ = nullptr;
-    size_t definingOpaqueAliasCount_ = 0;
-    bool preserveDeclaredProjections_ = false;
-    bool inExpr = false;
-    HIRSimplePath curModPath;
-
-    UfcsVisitor(const WireBoard& wb, bool visitExprs);
-
-    void restoreExprContext(const HIRExprState& state, const HIRItemPath* traitPath);
-
-    struct DeclaredTypeGuard {
-        UfcsVisitor& visitor;
-        bool saved;
-
-        explicit DeclaredTypeGuard(UfcsVisitor& visitor);
-
-        ~DeclaredTypeGuard();
-    };
-
-    struct ModTraitsGuard {
-        UfcsVisitor* v;
-        tTraitImports oldImports;
-        HIRSimplePath oldModPath;
-
-        ModTraitsGuard(UfcsVisitor& v, tTraitImports oldImports);
-
-        ModTraitsGuard(ModTraitsGuard&& x);
-
-        ModTraitsGuard& operator=(ModTraitsGuard&&) = delete;
-
-        ~ModTraitsGuard();
-    };
-
-    ModTraitsGuard pushModTraits(HIRSimplePath path, const HIRModule& mod);
-
-    void visitModule(HIRItemPath p, HIRModule& mod) override;
-
-    void visitParams(HIRGenericParams& params) override;
-
-    void visitUnion(HIRItemPath p, HIRUnion& item) override;
-
-    void visitStruct(HIRItemPath p, HIRStruct& item) override;
-
-    void visitEnum(HIRItemPath p, HIREnum& item) override;
-
-    void visitFunction(HIRItemPath p, HIRFunction& item) override;
-
-    void visitConstant(HIRItemPath p, HIRConstant& item) override;
-
-    void visitStatic(HIRItemPath p, HIRStatic& item) override;
-
-    void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override;
-
-    void visitTrait(HIRItemPath p, HIRTrait& trait) override;
-
-    void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override;
-
-    void visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) override;
-
-    void visitTypeImpl(HIRTypeImpl& impl) override;
-
-    void visitInherentType(HIRItemPath p, HIRTypeAlias& item) override;
-
-    void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override;
-
-    void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
-
-    void visitExpr(HIRExprPtr& expr) override;
-
-    bool locateTraitItemInBounds(HIRVisitor::PathContext pc, const HIRTypeData* tr, const HIRGenericParams& params, HIRPath::Data& pd);
-
-    HIRPath::Data getUfcsKnown(HIRVisitor::PathContext pc, HIRPath::Data::Data_UfcsUnknown e, HIRGenericPath traitPathReal, const HIRTrait& trait) const;
-
-    static bool locateItemInTrait(HIRVisitor::PathContext pc, const HIRTrait& trait, HIRPath::Data& pd);
-
-    // TODO: This code may end up generating paths without the type information they should contain
-
-    bool locateInTraitAndSet(HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
-
-    bool setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
-
-    bool locateInTraitImplAndSet(const Span& sp, HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
-
-    bool resolve_UfcsUnknown_inherent(const HIRSimplePath& visPath, const HIRPath& p, HIRVisitor::PathContext pc, HIRPath::Data& pd);
-
-    bool resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathContext pc, HIRPath::Data& pd);
-
-    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
-
-    void visitConstgeneric(HIRConstGeneric& val) override;
-
-    void visitPath(HIRPath& p, HIRVisitor::PathContext pc) override;
-
-    void visitPattern(HIRPattern& pat) override;
-
-    void resolvePatternBinding(const Span& sp, HIRPath& path, HIRPattern::PathBinding& binding);
-
-    void visitPatternValue(const Span& sp, const HIRPattern& pat, HIRPattern::Value& val);
-};
 
 template <typename T, typename F>
 void sortImplGroup(HIRCrate::ImplGroup<std::unique_ptr<T>>& ig, F fmt) {

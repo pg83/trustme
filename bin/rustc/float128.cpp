@@ -17,6 +17,46 @@ namespace {
     const u128 implicitBit = u128(1) << significandBits;
     const u128 fractionMask = implicitBit - 1;
 
+    enum class Kind {
+        Zero,
+        Finite,
+        Infinity,
+        NotANumber,
+    };
+
+    struct Unpacked {
+        Kind kind;
+        bool negative;
+        i32 exponent;
+        u128 significand;
+    };
+
+    struct BigUint {
+        std::vector<u64> limbs_; // escape: existing storage type exposed by declaration reordering
+
+        void trim();
+
+        BigUint() = default;
+
+        static BigUint fromU128(u128 v);
+
+        bool isZero() const;
+
+        void multiplyAddSmall(u64 factor, u64 addend);
+
+        u64 divideSmall(u64 divisor);
+
+        void shiftLeft(size_t bits);
+
+        void shiftRightSticky(size_t bits, bool& sticky);
+
+        size_t bitLength() const;
+
+        u128 topBits(size_t bits, bool& sticky) const;
+
+        std::string toDecimal() const; // escape: existing return type exposed by declaration reordering
+    };
+
     static int clz128(u128 v) {
         assert(v != 0);
         u64 hi = static_cast<u64>(v >> 64);
@@ -32,20 +72,6 @@ namespace {
         }
         return 128 - clz128(v);
     }
-
-    enum class Kind {
-        Zero,
-        Finite,
-        Infinity,
-        NotANumber,
-    };
-
-    struct Unpacked {
-        Kind kind;
-        bool negative;
-        i32 exponent;
-        u128 significand;
-    };
 
     static Unpacked unpack(u64 hi, u64 lo) {
         Unpacked r;
@@ -158,32 +184,6 @@ namespace {
         out[2] = static_cast<u64>(high);
         out[3] = static_cast<u64>(high >> 64);
     }
-
-    struct BigUint {
-        std::vector<u64> limbs_;
-
-        void trim();
-
-        BigUint() = default;
-
-        static BigUint fromU128(u128 v);
-
-        bool isZero() const;
-
-        void multiplyAddSmall(u64 factor, u64 addend);
-
-        u64 divideSmall(u64 divisor);
-
-        void shiftLeft(size_t bits);
-
-        void shiftRightSticky(size_t bits, bool& sticky);
-
-        size_t bitLength() const;
-
-        u128 topBits(size_t bits, bool& sticky) const;
-
-        std::string toDecimal() const;
-    };
 
     constexpr u64 fivePow27 = 7'450'580'596'923'828'125ull;
 

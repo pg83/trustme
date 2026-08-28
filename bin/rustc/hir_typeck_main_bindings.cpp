@@ -11,93 +11,6 @@
 
 namespace {
 
-    const HIRGenericParams& getParamsForItem(const Span& sp, const HIRCrate& crate, const HIRSimplePath& path, HIRVisitor::PathContext pc, const HIRGenericParams& emptyParams) {
-        if (path.components().size() > 1) {
-            const auto& pitem = crate.getTypeitemByPath(sp, path, false, true);
-            if (pitem.is_Enum()) {
-                return pitem.as_Enum().params;
-            }
-        }
-
-        switch (pc) {
-            case HIRVisitor::PathContext::VALUE: {
-                const auto& item = crate.getValitemByPath(sp, path);
-
-                switch (item.tag()) {
-                    case HIRValueItem::TAG_Import: {
-                        auto& e = item.as_Import();
-                        BUG(sp, "Value path pointed to import - " << path << " = " << e.path);
-                        break;
-                    }
-                    case HIRValueItem::TAG_Function: {
-                        return item.as_Function()->params;
-                    }
-                    case HIRValueItem::TAG_Constant: {
-                        return item.as_Constant()->params;
-                    }
-                    case HIRValueItem::TAG_Static: {
-                        // TODO: Return an empty set?
-                        BUG(sp, "Attepted to get parameters for static " << path);
-                        break;
-                    }
-                    case HIRValueItem::TAG_StructConstructor: {
-                        auto& e = item.as_StructConstructor();
-                        return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE, emptyParams);
-                    }
-                    case HIRValueItem::TAG_StructConstant: {
-                        auto& e = item.as_StructConstant();
-                        return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE, emptyParams);
-                    }
-                }
-            } break;
-            case HIRVisitor::PathContext::TRAIT:
-                // TODO: treat PathContext::TRAIT differently
-            case HIRVisitor::PathContext::TYPE: {
-                const auto& item = crate.getTypeitemByPath(sp, path);
-
-                switch (item.tag()) {
-                    case HIRTypeItem::TAG_Import: {
-                        BUG(sp, "Type path pointed to import - " << path);
-                        break;
-                    }
-                    case HIRTypeItem::TAG_TypeAlias: {
-                        BUG(sp, "Type path pointed to type alias - " << path);
-                        break;
-                    }
-                    case HIRTypeItem::TAG_TraitAlias: {
-                        BUG(sp, "Type path pointed to trait alias - " << path);
-                        break;
-                    }
-                    case HIRTypeItem::TAG_ExternType: {
-                        return emptyParams;
-                        break;
-                    }
-                    case HIRTypeItem::TAG_Module: {
-                        BUG(sp, "Type path pointed to module - " << path);
-                        break;
-                    }
-                    case HIRTypeItem::TAG_Struct: {
-                        auto& e = item.as_Struct();
-                        return e.params;
-                    }
-                    case HIRTypeItem::TAG_Enum: {
-                        auto& e = item.as_Enum();
-                        return e.params;
-                    }
-                    case HIRTypeItem::TAG_Union: {
-                        auto& e = item.as_Union();
-                        return e.params;
-                    }
-                    case HIRTypeItem::TAG_Trait: {
-                        auto& e = item.as_Trait();
-                        return e.params;
-                    }
-                }
-            } break;
-        }
-        UNREACHABLE();
-    }
-
     struct Visitor: public HIRVisitor {
         HIRCrate& crate;
         StaticTraitResolve resolve_;
@@ -192,6 +105,93 @@ namespace {
 
         void visitFunction(HIRItemPath p, HIRFunction& item) override;
     };
+
+    const HIRGenericParams& getParamsForItem(const Span& sp, const HIRCrate& crate, const HIRSimplePath& path, HIRVisitor::PathContext pc, const HIRGenericParams& emptyParams) {
+        if (path.components().size() > 1) {
+            const auto& pitem = crate.getTypeitemByPath(sp, path, false, true);
+            if (pitem.is_Enum()) {
+                return pitem.as_Enum().params;
+            }
+        }
+
+        switch (pc) {
+            case HIRVisitor::PathContext::VALUE: {
+                const auto& item = crate.getValitemByPath(sp, path);
+
+                switch (item.tag()) {
+                    case HIRValueItem::TAG_Import: {
+                        auto& e = item.as_Import();
+                        BUG(sp, "Value path pointed to import - " << path << " = " << e.path);
+                        break;
+                    }
+                    case HIRValueItem::TAG_Function: {
+                        return item.as_Function()->params;
+                    }
+                    case HIRValueItem::TAG_Constant: {
+                        return item.as_Constant()->params;
+                    }
+                    case HIRValueItem::TAG_Static: {
+                        // TODO: Return an empty set?
+                        BUG(sp, "Attepted to get parameters for static " << path);
+                        break;
+                    }
+                    case HIRValueItem::TAG_StructConstructor: {
+                        auto& e = item.as_StructConstructor();
+                        return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE, emptyParams);
+                    }
+                    case HIRValueItem::TAG_StructConstant: {
+                        auto& e = item.as_StructConstant();
+                        return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE, emptyParams);
+                    }
+                }
+            } break;
+            case HIRVisitor::PathContext::TRAIT:
+                // TODO: treat PathContext::TRAIT differently
+            case HIRVisitor::PathContext::TYPE: {
+                const auto& item = crate.getTypeitemByPath(sp, path);
+
+                switch (item.tag()) {
+                    case HIRTypeItem::TAG_Import: {
+                        BUG(sp, "Type path pointed to import - " << path);
+                        break;
+                    }
+                    case HIRTypeItem::TAG_TypeAlias: {
+                        BUG(sp, "Type path pointed to type alias - " << path);
+                        break;
+                    }
+                    case HIRTypeItem::TAG_TraitAlias: {
+                        BUG(sp, "Type path pointed to trait alias - " << path);
+                        break;
+                    }
+                    case HIRTypeItem::TAG_ExternType: {
+                        return emptyParams;
+                        break;
+                    }
+                    case HIRTypeItem::TAG_Module: {
+                        BUG(sp, "Type path pointed to module - " << path);
+                        break;
+                    }
+                    case HIRTypeItem::TAG_Struct: {
+                        auto& e = item.as_Struct();
+                        return e.params;
+                    }
+                    case HIRTypeItem::TAG_Enum: {
+                        auto& e = item.as_Enum();
+                        return e.params;
+                    }
+                    case HIRTypeItem::TAG_Union: {
+                        auto& e = item.as_Union();
+                        return e.params;
+                    }
+                    case HIRTypeItem::TAG_Trait: {
+                        auto& e = item.as_Trait();
+                        return e.params;
+                    }
+                }
+            } break;
+        }
+        UNREACHABLE();
+    }
 }
 
 void TypecheckModuleLevel(const WireBoard& wb, HIRCrate& crate) {

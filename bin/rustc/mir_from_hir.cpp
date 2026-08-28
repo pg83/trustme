@@ -31,6 +31,8 @@ static const size_t PARTIAL_ARRAY_MIN = 32;
 #include <std/alg/defer.h>
 #include <std/sym/i_map.h>
 
+#include "mir_from_hir_pattern_tu.h"
+
 namespace {
     struct ExprVisitorConv: public MirConverter, public MIRDropEmitter {
         MirBuilder& builder;
@@ -269,7 +271,229 @@ namespace {
     };
 }
 
+struct PatternRuleset {
+    struct Deref {
+        unsigned rootIndex;
+        unsigned parentRoot;
+        fieldPathT field;
+        const HIRTypeData* sourceType;
+        const HIRTypeData* targetType;
+        HIRPattern::DerefKind kind;
+        unsigned resultLocal = ~0u;
+    };
+
+    unsigned int armIdx;
+    unsigned int armRuleIdx;
+
+    std::vector<PatternRule> rules;
+    std::vector<PatternBinding> bindings;
+    std::vector<Deref> derefs;
+
+    static ::Ordering ruleIsBefore(const PatternRule& l, const PatternRule& r);
+
+    bool isBefore(const PatternRuleset& other) const;
+};
+
+struct PatternDump {
+    const StaticTraitResolve& resolve;
+    const HIRTypeData* ty;
+    const std::vector<PatternRule>& rules;
+
+    PatternDump(const StaticTraitResolve& resolve, const HIRTypeData* ty, const std::vector<PatternRule>& rules);
+
+    friend std::ostream& operator<<(std::ostream& os, const PatternDump& x) {
+        os << "[" << x.rules << "]";
+        return os;
+    }
+};
+
+struct ArmCode {
+    bool hasCondition = false;
+
+    struct Pattern {
+        MIRBasicBlockId entry = 0;
+        MIRBasicBlockId condFalse = ~0u;
+    };
+
+    std::vector<Pattern> rules;
+};
+
+struct PatternSubsetCallback {
+    virtual void visitSubset(size_t index) = 0;
+};
+
+template <typename F>
+struct PatternSubsetCb final: PatternSubsetCallback {
+    F f;
+
+    explicit PatternSubsetCb(F f);
+
+    void visitSubset(size_t index) override;
+};
+
+struct PatternTypeCallback {
+    virtual const HIRTypeData* map(const HIRTypeData* type) = 0;
+};
+
+template <typename F>
+struct PatternTypeCb final: PatternTypeCallback {
+    F f;
+
+    explicit PatternTypeCb(F f);
+
+    const HIRTypeData* map(const HIRTypeData* type) override;
+};
+
+struct PatternRulesetBuilder {
+    const StaticTraitResolve& resolve;
+    const HIRSimplePath* langBox = nullptr;
+
+    struct WildcardType {
+        const HIRTypeData* type;
+        WildcardType* parent;
+    };
+
+    WildcardType* wildcardTypes;
+
+    struct Ruleset {
+        bool isImpossible;
+        std::vector<PatternRule> rules;
+        std::vector<PatternBinding> bindings;
+        std::vector<PatternRuleset::Deref> derefs;
+        std::vector<unsigned> orPath;
+
+        Ruleset();
+
+        Ruleset clone() const;
+    };
+
+    std::vector<Ruleset> rulesets;
+    size_t subsetStart, subsetEnd;
+
+    fieldPathT fieldPath;
+    unsigned rootIndex = 0;
+    unsigned nextRootStorage = 1;
+    unsigned* nextRootIndex;
+    HIRPattern emptyPattern;
+
+    PatternRulesetBuilder(const StaticTraitResolve& resolve, unsigned* sharedNextRootIndex = nullptr, WildcardType* parentWildcardTypes = nullptr);
+
+    void appendFromLit(const Span& sp, EncodedLiteralSlice lit, const HIRTypeData* ty);
+    void appendFrom(const Span& sp, const HIRPattern& pat, const HIRTypeData* ty);
+
+    void pushRule(PatternRule r);
+    void pushBinding(PatternBinding b);
+    void pushBindings(std::vector<PatternBinding> b);
+    void pushDerefs(std::vector<PatternRuleset::Deref> derefs);
+    void setImpossible();
+
+    void multiplyRulesetsWith(size_t n, PatternSubsetCallback& cb);
+
+    template <typename F>
+    void multiplyRulesets(size_t n, F f);
+};
+
+struct RulesetRef {
+    std::vector<PatternRuleset>* rulesVec = nullptr;
+    RulesetRef* parent = nullptr;
+    size_t parentOfs = 0;
+    size_t parentLen = 0;
+
+    RulesetRef(std::vector<PatternRuleset>& rules);
+
+    RulesetRef(RulesetRef& parent, size_t start, size_t n);
+
+    RulesetRef(RulesetRef& parent, size_t idx);
+
+    size_t size() const;
+
+    RulesetRef slice(size_t s, size_t n);
+
+    const std::vector<PatternRule>& operator[](size_t i) const;
+
+    void swap(size_t a, size_t b);
+};
+
+struct tRulesSubset {
+    std::vector<const std::vector<PatternRule>*> ruleSets;
+    bool isArmIndexes;
+    std::vector<size_t> armIdxes;
+
+    static std::pair<size_t, size_t> decodeArmIdx(size_t v);
+
+    static size_t encodeArmIdx(size_t armIdx, size_t patIdx);
+
+    tRulesSubset(size_t exp, bool isArmIndexes);
+
+    size_t size() const;
+
+    const std::vector<PatternRule>& operator[](size_t n) const;
+
+    bool isArm() const;
+
+    struct ArmIdxes {
+        size_t arm;
+        size_t armRule;
+    };
+
+    ArmIdxes armIdx(size_t n) const;
+
+    MIRBasicBlockId bbIdx(size_t n) const;
+
+    void subSort(size_t ofs, size_t start, size_t n);
+
+    tRulesSubset subSlice(size_t ofs, size_t n);
+
+    void pushArm(const std::vector<PatternRule>& x, size_t armIdx, size_t patIdx);
+
+    void pushBb(const std::vector<PatternRule>& x, MIRBasicBlockId bb);
+
+    friend std::ostream& operator<<(std::ostream& os, const tRulesSubset& x) {
+        os << "t_rules_subset{";
+        for (size_t i = 0; i < x.ruleSets.size(); i++) {
+            if (i != 0) {
+                os << ", ";
+            }
+            os << "[";
+            if (x.isArmIndexes) {
+                auto v = decodeArmIdx(x.armIdxes[i]);
+                os << v.first << "," << v.second;
+            } else {
+                os << "bb" << x.armIdxes[i];
+            }
+            os << "]";
+            os << ": [" << *x.ruleSets[i] << "]";
+        }
+        os << "}";
+        return os;
+    }
+};
+
+struct MatchGenGrouped {
+    const Span& sp;
+    MirBuilder& builder;
+    const HIRTypeData* topTy;
+    const MIRLValue& topVal;
+    const std::vector<ArmCode>& armsCode;
+
+    size_t fieldPathOfs;
+
+    MatchGenGrouped(MirBuilder& builder, const Span& sp, const HIRTypeData* topTy, const MIRLValue& topVal, const std::vector<ArmCode>& armsCode, size_t fieldPathOfs);
+
+    void genForSlice(tRulesSubset rules, size_t ofs, MIRBasicBlockId defaultArm);
+    void genDispatch(const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+    void genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+    void genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+    void genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+
+    void genDispatchRange(const fieldPathT& fieldPath, const MIRConstant& first, const MIRConstant& last, bool isInclusive, MIRBasicBlockId defBlk);
+    void genDispatchSplitslice(const fieldPathT& fieldPath, const PatternRule::Data_SplitSlice& e, MIRBasicBlockId defBlk);
+
+    MIRLValue pushCompare(MIRLValue left, MIRBinOp op, MIRParam right);
+};
+
 namespace {
+
     MIRFunctionPointer lowerAsyncDropGluePoll(const StaticTraitResolve& resolve, const HIRItemPath& path, HIRExprNodeGeneratorWrapper& node, const HIRTypeData* retTy) {
         const Span& sp = node.span();
         ASSERT_BUG(sp, node.objPtr, "async-drop glue future without its generated type");
@@ -628,55 +852,7 @@ void MIRLowerHIRGetTypeValueForPath(
     getTyAndVal(sp, builder, topTy, topVal, fieldPath, 0, outTy, outVal);
 }
 
-#include "mir_from_hir_pattern_tu.h"
 std::ostream& operator<<(std::ostream& os, const PatternRule& x);
-
-struct PatternRuleset {
-    struct Deref {
-        unsigned rootIndex;
-        unsigned parentRoot;
-        fieldPathT field;
-        const HIRTypeData* sourceType;
-        const HIRTypeData* targetType;
-        HIRPattern::DerefKind kind;
-        unsigned resultLocal = ~0u;
-    };
-
-    unsigned int armIdx;
-    unsigned int armRuleIdx;
-
-    std::vector<PatternRule> rules;
-    std::vector<PatternBinding> bindings;
-    std::vector<Deref> derefs;
-
-    static ::Ordering ruleIsBefore(const PatternRule& l, const PatternRule& r);
-
-    bool isBefore(const PatternRuleset& other) const;
-};
-
-struct PatternDump {
-    const StaticTraitResolve& resolve;
-    const HIRTypeData* ty;
-    const std::vector<PatternRule>& rules;
-
-    PatternDump(const StaticTraitResolve& resolve, const HIRTypeData* ty, const std::vector<PatternRule>& rules);
-
-    friend std::ostream& operator<<(std::ostream& os, const PatternDump& x) {
-        os << "[" << x.rules << "]";
-        return os;
-    }
-};
-
-struct ArmCode {
-    bool hasCondition = false;
-
-    struct Pattern {
-        MIRBasicBlockId entry = 0;
-        MIRBasicBlockId condFalse = ~0u;
-    };
-
-    std::vector<Pattern> rules;
-};
 
 typedef std::vector<PatternRuleset> tArmRules;
 
@@ -689,102 +865,6 @@ void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, HIRExprNode
 int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, const PatternRuleset* ruleset, const PatternRule* rules, unsigned int numRules, const HIRTypeData* topTy, const MIRLValue& topVal, unsigned int fieldPathOfs, MIRBasicBlockId failBb);
 void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRTypeData* matchTy, MIRLValue matchVal, tArmRules armRules, std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock);
 void MIRLowerHIRMatchDecisionTree(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, std::vector<ArmCode> armCode, MIRBasicBlockId firstCmpBlock);
-
-struct PatternSubsetCallback {
-    virtual void visitSubset(size_t index) = 0;
-};
-
-template <typename F>
-struct PatternSubsetCb final: PatternSubsetCallback {
-    F f;
-
-    explicit PatternSubsetCb(F f);
-
-    void visitSubset(size_t index) override;
-};
-
-struct PatternTypeCallback {
-    virtual const HIRTypeData* map(const HIRTypeData* type) = 0;
-};
-
-template <typename F>
-struct PatternTypeCb final: PatternTypeCallback {
-    F f;
-
-    explicit PatternTypeCb(F f);
-
-    const HIRTypeData* map(const HIRTypeData* type) override;
-};
-
-struct PatternRulesetBuilder {
-    const StaticTraitResolve& resolve;
-    const HIRSimplePath* langBox = nullptr;
-
-    struct WildcardType {
-        const HIRTypeData* type;
-        WildcardType* parent;
-    };
-
-    WildcardType* wildcardTypes;
-
-    struct Ruleset {
-        bool isImpossible;
-        std::vector<PatternRule> rules;
-        std::vector<PatternBinding> bindings;
-        std::vector<PatternRuleset::Deref> derefs;
-        std::vector<unsigned> orPath;
-
-        Ruleset();
-
-        Ruleset clone() const;
-    };
-
-    std::vector<Ruleset> rulesets;
-    size_t subsetStart, subsetEnd;
-
-    fieldPathT fieldPath;
-    unsigned rootIndex = 0;
-    unsigned nextRootStorage = 1;
-    unsigned* nextRootIndex;
-    HIRPattern emptyPattern;
-
-    PatternRulesetBuilder(const StaticTraitResolve& resolve, unsigned* sharedNextRootIndex = nullptr, WildcardType* parentWildcardTypes = nullptr);
-
-    void appendFromLit(const Span& sp, EncodedLiteralSlice lit, const HIRTypeData* ty);
-    void appendFrom(const Span& sp, const HIRPattern& pat, const HIRTypeData* ty);
-
-    void pushRule(PatternRule r);
-    void pushBinding(PatternBinding b);
-    void pushBindings(std::vector<PatternBinding> b);
-    void pushDerefs(std::vector<PatternRuleset::Deref> derefs);
-    void setImpossible();
-
-    void multiplyRulesetsWith(size_t n, PatternSubsetCallback& cb);
-
-    template <typename F>
-    void multiplyRulesets(size_t n, F f);
-};
-
-struct RulesetRef {
-    std::vector<PatternRuleset>* rulesVec = nullptr;
-    RulesetRef* parent = nullptr;
-    size_t parentOfs = 0;
-    size_t parentLen = 0;
-
-    RulesetRef(std::vector<PatternRuleset>& rules);
-
-    RulesetRef(RulesetRef& parent, size_t start, size_t n);
-
-    RulesetRef(RulesetRef& parent, size_t idx);
-
-    size_t size() const;
-
-    RulesetRef slice(size_t s, size_t n);
-
-    const std::vector<PatternRule>& operator[](size_t i) const;
-
-    void swap(size_t a, size_t b);
-};
 
 void sortRulesets(RulesetRef rulesets, size_t idx = 0);
 void sortRulesetsInner(RulesetRef rulesets, size_t idx);
@@ -3868,84 +3948,6 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
     }
     return 0;
 }
-
-struct tRulesSubset {
-    std::vector<const std::vector<PatternRule>*> ruleSets;
-    bool isArmIndexes;
-    std::vector<size_t> armIdxes;
-
-    static std::pair<size_t, size_t> decodeArmIdx(size_t v);
-
-    static size_t encodeArmIdx(size_t armIdx, size_t patIdx);
-
-    tRulesSubset(size_t exp, bool isArmIndexes);
-
-    size_t size() const;
-
-    const std::vector<PatternRule>& operator[](size_t n) const;
-
-    bool isArm() const;
-
-    struct ArmIdxes {
-        size_t arm;
-        size_t armRule;
-    };
-
-    ArmIdxes armIdx(size_t n) const;
-
-    MIRBasicBlockId bbIdx(size_t n) const;
-
-    void subSort(size_t ofs, size_t start, size_t n);
-
-    tRulesSubset subSlice(size_t ofs, size_t n);
-
-    void pushArm(const std::vector<PatternRule>& x, size_t armIdx, size_t patIdx);
-
-    void pushBb(const std::vector<PatternRule>& x, MIRBasicBlockId bb);
-
-    friend std::ostream& operator<<(std::ostream& os, const tRulesSubset& x) {
-        os << "t_rules_subset{";
-        for (size_t i = 0; i < x.ruleSets.size(); i++) {
-            if (i != 0) {
-                os << ", ";
-            }
-            os << "[";
-            if (x.isArmIndexes) {
-                auto v = decodeArmIdx(x.armIdxes[i]);
-                os << v.first << "," << v.second;
-            } else {
-                os << "bb" << x.armIdxes[i];
-            }
-            os << "]";
-            os << ": [" << *x.ruleSets[i] << "]";
-        }
-        os << "}";
-        return os;
-    }
-};
-
-struct MatchGenGrouped {
-    const Span& sp;
-    MirBuilder& builder;
-    const HIRTypeData* topTy;
-    const MIRLValue& topVal;
-    const std::vector<ArmCode>& armsCode;
-
-    size_t fieldPathOfs;
-
-    MatchGenGrouped(MirBuilder& builder, const Span& sp, const HIRTypeData* topTy, const MIRLValue& topVal, const std::vector<ArmCode>& armsCode, size_t fieldPathOfs);
-
-    void genForSlice(tRulesSubset rules, size_t ofs, MIRBasicBlockId defaultArm);
-    void genDispatch(const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-    void genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-    void genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-    void genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-
-    void genDispatchRange(const fieldPathT& fieldPath, const MIRConstant& first, const MIRConstant& last, bool isInclusive, MIRBasicBlockId defBlk);
-    void genDispatchSplitslice(const fieldPathT& fieldPath, const PatternRule::Data_SplitSlice& e, MIRBasicBlockId defBlk);
-
-    MIRLValue pushCompare(MIRLValue left, MIRBinOp op, MIRParam right);
-};
 
 namespace {
     void appendRuleColumns(std::vector<PatternRule>& outRules, PatternRule rule) {

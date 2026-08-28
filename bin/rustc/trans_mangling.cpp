@@ -30,30 +30,6 @@ struct ManglingContext {
     explicit ManglingContext(ObjPool& pool);
 };
 
-ManglingContext* TransCreateManglingContext(ObjPool& pool) {
-    return pool.make<ManglingContext>(pool);
-}
-
-namespace {
-
-    StringBuilder& operator<<(StringBuilder& sb, char c) {
-        sb.append(&c, 1);
-        return sb;
-    }
-
-    StringBuilder& operator<<(StringBuilder& sb, const char* s) {
-        sb.append(s, strlen(s));
-        return sb;
-    }
-
-    template <typename T>
-    requires(std::is_integral_v<T> && sizeof(T) >= 2) StringBuilder& operator<<(StringBuilder& sb, T v) {
-        char buf[20];
-        sb.append(buf, static_cast<char*>(formatU64Base10(static_cast<u64>(v), buf)) - buf);
-        return sb;
-    }
-}
-
 enum class LifetimeIdentityMode {
     Erased,
     Closed,
@@ -90,6 +66,30 @@ struct Mangler {
 
     void fmtType(const HIRTypeData* ty);
 };
+
+ManglingContext* TransCreateManglingContext(ObjPool& pool) {
+    return pool.make<ManglingContext>(pool);
+}
+
+namespace {
+
+    StringBuilder& operator<<(StringBuilder& sb, char c) {
+        sb.append(&c, 1);
+        return sb;
+    }
+
+    StringBuilder& operator<<(StringBuilder& sb, const char* s) {
+        sb.append(s, strlen(s));
+        return sb;
+    }
+
+    template <typename T>
+    requires(std::is_integral_v<T> && sizeof(T) >= 2) StringBuilder& operator<<(StringBuilder& sb, T v) {
+        char buf[20];
+        sb.append(buf, static_cast<char*>(formatU64Base10(static_cast<u64>(v), buf)) - buf);
+        return sb;
+    }
+}
 
 namespace {
     StringBuilder& mangleBegin(ManglingContext& context) {

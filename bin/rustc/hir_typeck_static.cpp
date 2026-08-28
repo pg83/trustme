@@ -16,6 +16,43 @@
 using namespace stl;
 
 namespace {
+    struct GetParams: public HIRMatchGenerics {
+        struct ParamsSet {
+            Vector<u8> types;
+            Vector<u8> values;
+        };
+
+        Span sp;
+        HIRPathParams& implParams;
+        ParamsSet& paramsSet;
+
+        GetParams(Span sp, ObjPool& valuePool, const HIRGenericParams& implParamsDef, HIRPathParams& implParams, ParamsSet& paramsSet);
+
+        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override;
+
+        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& value) override;
+    };
+
+}
+
+struct StaticTraitResolve::NextSolverBridge {
+    HMTypeInferrence ivars;
+    HIRSimplePath visibility;
+    TraitResolution resolve_;
+
+    explicit NextSolverBridge(const WireBoard& wb);
+
+    bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, StaticImplCallback& callback);
+
+    bool findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const char* valueName, StaticImplCallback& callback);
+
+    bool normalize(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* projection, HIRTypeRef& output);
+
+    bool typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* type);
+};
+
+namespace {
+
     bool specializationLookupNeedsResolution(const HIRTypeData* type, const HIRPathParams& params) {
         auto typeNeedsResolution = [](const HIRTypeData* inner) {
             return inner->hasTypeInfer() || inner->needsMonomorphisation() || inner->mayHaveAssociatedType();
@@ -35,22 +72,6 @@ namespace {
     }
 }
 
-struct StaticTraitResolve::NextSolverBridge {
-    HMTypeInferrence ivars;
-    HIRSimplePath visibility;
-    TraitResolution resolve_;
-
-    explicit NextSolverBridge(const WireBoard& wb);
-
-    bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, StaticImplCallback& callback);
-
-    bool findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const char* valueName, StaticImplCallback& callback);
-
-    bool normalize(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* projection, HIRTypeRef& output);
-
-    bool typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* type);
-};
-
 bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb) const {
     if (traitPath.components().empty()) {
         return false;
@@ -68,25 +89,6 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
         nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
     }
     return nextSolver->findImpl(sp, implGenerics_, itemGenerics_, traitPath, traitParams, type, foundCb);
-}
-
-namespace {
-    struct GetParams: public HIRMatchGenerics {
-        struct ParamsSet {
-            Vector<u8> types;
-            Vector<u8> values;
-        };
-
-        Span sp;
-        HIRPathParams& implParams;
-        ParamsSet& paramsSet;
-
-        GetParams(Span sp, ObjPool& valuePool, const HIRGenericParams& implParamsDef, HIRPathParams& implParams, ParamsSet& paramsSet);
-
-        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override;
-
-        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& value) override;
-    };
 }
 
 bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimplePath& desTraitPath, const HIRPathParams* desTraitParams, const HIRTypeData* desType, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitParams, const HIRTypeData* implType, StaticImplMatchCallback& foundCb) const {

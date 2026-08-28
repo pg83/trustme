@@ -61,6 +61,115 @@ void ExpandExpr(const ExpandState& es, std::shared_ptr<ASTExprNode>& node);
 void ExpandPath(const ExpandState& es, ASTModule& mod, ASTPath& p);
 void ExpandPathParams(const ExpandState& es, ASTModule& mod, ASTPathParams& params);
 
+struct CExpandExpr: public ASTNodeVisitor {
+    ASTCrate& crate;
+    const ExpandState& parentExpandState;
+    ExpandState expandState;
+    ASTExprNodeP replacement;
+
+    std::vector<RcString> tryStack;
+    unsigned tryIndex = 0;
+
+    ASTExprNodeBlock* currentBlock = nullptr;
+    bool inAssignLhs = false;
+
+    CExpandExpr(const ExpandState& es);
+
+    ~CExpandExpr();
+
+    ASTModule& curMod();
+
+    void visit(ASTExprNodeP& cnode);
+
+    void visitNodelete(const ASTExprNode& parent, ASTExprNodeP& cnode);
+
+    void visitVector(std::vector<ASTExprNodeP>& cnodes);
+
+    ASTExprNodeP visitMacro(ASTExprNodeMacro& node, std::vector<ASTExprNodeBlock::Line>* nodesOut);
+
+    void visit(ASTExprNodeMacro& node) override;
+
+    void visit(ASTExprNodeBlock& node) override;
+
+    void visit(ASTExprNodeAsyncBlock& node) override;
+
+    void visit(ASTExprNodeGeneratorBlock& node) override;
+
+    void visit(ASTExprNodeTry& node) override;
+
+    void visit(ASTExprNodeAsm& node) override;
+
+    void visit(ASTExprNodeAsm2& node) override;
+
+    void visit(ASTExprNodeFlow& node) override;
+
+    void visit(ASTExprNodeLetBinding& node) override;
+
+    void visit(ASTExprNodeAssign& node) override;
+
+    void visit(ASTExprNodeCallPath& node) override;
+
+    void visit(ASTExprNodeCallMethod& node) override;
+
+    void visit(ASTExprNodeCallObject& node) override;
+
+    void visit(ASTExprNodeLoop& node) override;
+
+    void visit(ASTExprNodeFor& node) override;
+
+    void visit(ASTExprNodeWhile& node) override;
+
+    static void liftGuardPatterns(ASTPattern& pat, std::vector<ASTIfLetCondition>& out);
+
+    void visit(ASTExprNodeMatch& node) override;
+
+    void visit(ASTExprNodeIf& node) override;
+
+    void visit(ASTExprNodeWildcardPattern& node) override;
+
+    void visit(ASTExprNodeInteger& node) override;
+
+    void visit(ASTExprNodeFloat& node) override;
+
+    void visit(ASTExprNodeBool& node) override;
+
+    void visit(ASTExprNodeString& node) override;
+
+    void visit(ASTExprNodeByteString& node) override;
+
+    void visit(ASTExprNodeCString& node) override;
+
+    void visit(ASTExprNodeSuffixedLiteral& node) override;
+
+    void visit(ASTExprNodeClosure& node) override;
+
+    void visit(ASTExprNodeStructLiteral& node) override;
+
+    void visit(ASTExprNodeStructLiteralPattern& node) override;
+
+    void visit(ASTExprNodeArray& node) override;
+
+    void visit(ASTExprNodeTuple& node) override;
+
+    void visit(ASTExprNodeNamedValue& node) override;
+
+    void visit(ASTExprNodeField& node) override;
+
+    void visit(ASTExprNodeIndex& node) override;
+
+    void visit(ASTExprNodeDeref& node) override;
+
+    void visit(ASTExprNodeCast& node) override;
+
+    void visit(ASTExprNodeTypeAnnotation& node) override;
+
+    void visit(ASTExprNodeBinOp& node) override;
+
+    void visit(ASTExprNodeUniOp& node) override;
+
+    void visit(ASTExprNodeMacroDefinition&) override;
+};
+
 void ExpandRegistry::addDecorator(const char* name, ExpandDecorator* handler) {
     decorators = pool->make<DecoratorEntry>(DecoratorEntry{name, handler, decorators});
 }
@@ -894,115 +1003,6 @@ namespace {
         return ASTAbsolutePath(coreCrate, {RcString::newInterned(c1), RcString::newInterned(c2), RcString::newInterned(c3)});
     }
 }
-
-struct CExpandExpr: public ASTNodeVisitor {
-    ASTCrate& crate;
-    const ExpandState& parentExpandState;
-    ExpandState expandState;
-    ASTExprNodeP replacement;
-
-    std::vector<RcString> tryStack;
-    unsigned tryIndex = 0;
-
-    ASTExprNodeBlock* currentBlock = nullptr;
-    bool inAssignLhs = false;
-
-    CExpandExpr(const ExpandState& es);
-
-    ~CExpandExpr();
-
-    ASTModule& curMod();
-
-    void visit(ASTExprNodeP& cnode);
-
-    void visitNodelete(const ASTExprNode& parent, ASTExprNodeP& cnode);
-
-    void visitVector(std::vector<ASTExprNodeP>& cnodes);
-
-    ASTExprNodeP visitMacro(ASTExprNodeMacro& node, std::vector<ASTExprNodeBlock::Line>* nodesOut);
-
-    void visit(ASTExprNodeMacro& node) override;
-
-    void visit(ASTExprNodeBlock& node) override;
-
-    void visit(ASTExprNodeAsyncBlock& node) override;
-
-    void visit(ASTExprNodeGeneratorBlock& node) override;
-
-    void visit(ASTExprNodeTry& node) override;
-
-    void visit(ASTExprNodeAsm& node) override;
-
-    void visit(ASTExprNodeAsm2& node) override;
-
-    void visit(ASTExprNodeFlow& node) override;
-
-    void visit(ASTExprNodeLetBinding& node) override;
-
-    void visit(ASTExprNodeAssign& node) override;
-
-    void visit(ASTExprNodeCallPath& node) override;
-
-    void visit(ASTExprNodeCallMethod& node) override;
-
-    void visit(ASTExprNodeCallObject& node) override;
-
-    void visit(ASTExprNodeLoop& node) override;
-
-    void visit(ASTExprNodeFor& node) override;
-
-    void visit(ASTExprNodeWhile& node) override;
-
-    static void liftGuardPatterns(ASTPattern& pat, std::vector<ASTIfLetCondition>& out);
-
-    void visit(ASTExprNodeMatch& node) override;
-
-    void visit(ASTExprNodeIf& node) override;
-
-    void visit(ASTExprNodeWildcardPattern& node) override;
-
-    void visit(ASTExprNodeInteger& node) override;
-
-    void visit(ASTExprNodeFloat& node) override;
-
-    void visit(ASTExprNodeBool& node) override;
-
-    void visit(ASTExprNodeString& node) override;
-
-    void visit(ASTExprNodeByteString& node) override;
-
-    void visit(ASTExprNodeCString& node) override;
-
-    void visit(ASTExprNodeSuffixedLiteral& node) override;
-
-    void visit(ASTExprNodeClosure& node) override;
-
-    void visit(ASTExprNodeStructLiteral& node) override;
-
-    void visit(ASTExprNodeStructLiteralPattern& node) override;
-
-    void visit(ASTExprNodeArray& node) override;
-
-    void visit(ASTExprNodeTuple& node) override;
-
-    void visit(ASTExprNodeNamedValue& node) override;
-
-    void visit(ASTExprNodeField& node) override;
-
-    void visit(ASTExprNodeIndex& node) override;
-
-    void visit(ASTExprNodeDeref& node) override;
-
-    void visit(ASTExprNodeCast& node) override;
-
-    void visit(ASTExprNodeTypeAnnotation& node) override;
-
-    void visit(ASTExprNodeBinOp& node) override;
-
-    void visit(ASTExprNodeUniOp& node) override;
-
-    void visit(ASTExprNodeMacroDefinition&) override;
-};
 
 void ExpandExpr(const ExpandState& es, ASTExprNodeP& node) {
     CExpandExpr visitor{es};

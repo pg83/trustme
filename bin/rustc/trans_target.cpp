@@ -25,6 +25,182 @@
 using namespace stl;
 
 namespace {
+    constexpr size_t TRANSMUTE_BYTE_VALUES = 257;
+    constexpr size_t TRANSMUTE_UNINITIALISED = 256;
+
+    using TransmuteByteSet = std::bitset<TRANSMUTE_BYTE_VALUES>;
+
+    struct Ent {
+        unsigned int field;
+        size_t size;
+        size_t align;
+        HIRTypeRef ty;
+        bool userAlign = false;
+    };
+
+    struct AsyncDropFieldLayout {
+        struct Future {
+            size_t size;
+            size_t align;
+        };
+
+        Vector<Future> futures;
+
+        bool empty() const;
+    };
+
+    struct TransmuteReference {
+        bool isMutable;
+        const HIRTypeData* referent;
+        size_t referentSize;
+        size_t referentAlign;
+    };
+
+    struct TransmuteNfa {
+        struct ByteEdge {
+            TransmuteByteSet values;
+            unsigned destination;
+        };
+
+        struct ReferenceEdge {
+            TransmuteReference reference;
+            unsigned destination;
+        };
+
+        struct State {
+            std::vector<unsigned> epsilon;
+            std::vector<ByteEdge> bytes;
+            std::vector<ReferenceEdge> references;
+        };
+
+        struct Fragment {
+            unsigned start;
+            unsigned accept;
+        };
+
+        std::vector<State> states;
+
+        unsigned addState();
+
+        Fragment empty();
+
+        Fragment uninhabited();
+
+        Fragment byte(const TransmuteByteSet& values);
+
+        Fragment reference(TransmuteReference reference);
+
+        Fragment then(Fragment left, Fragment right);
+
+        Fragment alternative(std::vector<Fragment> alternatives);
+    };
+
+    struct TransmuteDfa {
+        using Transitions = std::array<int, TRANSMUTE_BYTE_VALUES>;
+
+        std::vector<Transitions> transitions;
+        std::vector<std::vector<std::pair<TransmuteReference, unsigned>>> references;
+        std::vector<bool> accepting;
+
+        bool inhabited() const;
+    };
+
+    struct TransmuteLayoutBuilder {
+        struct Built {
+            TransmuteNfa::Fragment fragment;
+            size_t size;
+        };
+
+        struct Segment {
+            size_t offset;
+            Built value;
+        };
+
+        const Span& sp;
+        const StaticTraitResolve& resolve;
+        bool destination;
+        bool assumeSafety;
+        bool supported = true;
+
+        static TransmuteByteSet byteRange(unsigned first, unsigned last);
+
+        Built bytes(size_t count, const TransmuteByteSet& values);
+
+        Built padding(size_t count);
+
+        Built number(size_t count);
+
+        Built exact(U128 value, size_t count);
+
+        Built character();
+
+        Built combine(std::vector<Segment> segments, size_t totalSize);
+
+        Built aggregate(const TypeRepr& repr, int skipField = -1);
+
+        void addVariantPayload(std::vector<Segment>& segments, const TypeRepr& outerRepr, unsigned variant, bool skipSyntheticTag, size_t tagOffset, size_t tagSize);
+
+        Built taggedVariant(const TypeRepr& repr, unsigned variant, size_t tagOffset, size_t tagSize, U128 tag, bool skipSyntheticTag);
+
+        Built enumLayout(const HIRTypeData* ty, const TypeRepr& repr, const HIREnum& enm);
+
+        Built build(const HIRTypeData* ty);
+
+        std::vector<unsigned> epsilonClosure(std::vector<unsigned> states) const;
+
+        TransmuteNfa nfa;
+
+        TransmuteLayoutBuilder(const Span& sp, const StaticTraitResolve& resolve, bool destination, bool assumeSafety);
+
+        bool makeDfa(const HIRTypeData* ty, TransmuteDfa& out);
+    };
+
+    struct TransmuteTypeChecker {
+        const Span& sp;
+        const StaticTraitResolve& resolve;
+        bool assumeAlignment;
+        bool assumeSafety;
+        bool assumeValidity;
+        std::map<std::pair<const HIRTypeData*, const HIRTypeData*>, int> cache;
+
+        TransmuteTypeChecker(const Span& sp, const StaticTraitResolve& resolve, bool assumeAlignment, bool assumeSafety, bool assumeValidity);
+
+        bool check(const HIRTypeData* sourceType, const HIRTypeData* destinationType);
+
+        bool referencesCompatible(const TransmuteReference& source, const TransmuteReference& destination);
+
+        bool validityIsAssumed() const;
+    };
+
+    struct TransmuteRelation {
+        const TransmuteDfa& source;
+        const TransmuteDfa& destination;
+        TransmuteTypeChecker& typeChecker;
+        bool assumeValidity;
+        std::map<std::pair<unsigned, unsigned>, int> cache;
+
+        bool check(unsigned sourceState, unsigned destinationState);
+
+        TransmuteRelation(const TransmuteDfa& source, const TransmuteDfa& destination, TransmuteTypeChecker& typeChecker);
+
+        bool check();
+    };
+
+}
+
+struct TargetLayoutContext {
+    struct CachedTypeRepr {
+        HIRTypeRef canonical;
+        std::unique_ptr<TypeRepr> repr;
+    };
+
+    std::unordered_map<std::string, CachedTypeRepr> encoded;
+    std::unordered_map<HIRTypeRef, std::unique_ptr<TypeRepr>> unencoded;
+    std::unordered_map<HIRTypeRef, const TypeRepr*> exact;
+};
+
+namespace {
+
     TargetArch archX86_64() {
         return {
             "x86_64",
@@ -74,17 +250,6 @@ namespace {
 }
 
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
-
-struct TargetLayoutContext {
-    struct CachedTypeRepr {
-        HIRTypeRef canonical;
-        std::unique_ptr<TypeRepr> repr;
-    };
-
-    std::unordered_map<std::string, CachedTypeRepr> encoded;
-    std::unordered_map<HIRTypeRef, std::unique_ptr<TypeRepr>> unencoded;
-    std::unordered_map<HIRTypeRef, const TypeRepr*> exact;
-};
 
 TargetLayoutContext* TargetCreateLayoutContext(ObjPool& pool) {
     return pool.make<TargetLayoutContext>();
@@ -753,14 +918,6 @@ bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const H
 namespace {
     void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, std::unique_ptr<TypeRepr> repr);
 
-    struct Ent {
-        unsigned int field;
-        size_t size;
-        size_t align;
-        HIRTypeRef ty;
-        bool userAlign = false;
-    };
-
     std::ostream& operator<<(std::ostream& os, const Ent& e) {
         os << "Ent { #" << e.field << ": s=" << e.size << " a=" << e.align << (e.userAlign ? "!" : "") << " : " << e.ty << " }";
         return os;
@@ -822,17 +979,6 @@ namespace {
         None,
         AllButFinal,
         All,
-    };
-
-    struct AsyncDropFieldLayout {
-        struct Future {
-            size_t size;
-            size_t align;
-        };
-
-        Vector<Future> futures;
-
-        bool empty() const;
     };
 
     size_t alignTo(size_t offset, size_t align) {
@@ -2570,150 +2716,6 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
 }
 
 namespace {
-    constexpr size_t TRANSMUTE_BYTE_VALUES = 257;
-    constexpr size_t TRANSMUTE_UNINITIALISED = 256;
-
-    using TransmuteByteSet = std::bitset<TRANSMUTE_BYTE_VALUES>;
-
-    struct TransmuteReference {
-        bool isMutable;
-        const HIRTypeData* referent;
-        size_t referentSize;
-        size_t referentAlign;
-    };
-
-    struct TransmuteNfa {
-        struct ByteEdge {
-            TransmuteByteSet values;
-            unsigned destination;
-        };
-
-        struct ReferenceEdge {
-            TransmuteReference reference;
-            unsigned destination;
-        };
-
-        struct State {
-            std::vector<unsigned> epsilon;
-            std::vector<ByteEdge> bytes;
-            std::vector<ReferenceEdge> references;
-        };
-
-        struct Fragment {
-            unsigned start;
-            unsigned accept;
-        };
-
-        std::vector<State> states;
-
-        unsigned addState();
-
-        Fragment empty();
-
-        Fragment uninhabited();
-
-        Fragment byte(const TransmuteByteSet& values);
-
-        Fragment reference(TransmuteReference reference);
-
-        Fragment then(Fragment left, Fragment right);
-
-        Fragment alternative(std::vector<Fragment> alternatives);
-    };
-
-    struct TransmuteDfa {
-        using Transitions = std::array<int, TRANSMUTE_BYTE_VALUES>;
-
-        std::vector<Transitions> transitions;
-        std::vector<std::vector<std::pair<TransmuteReference, unsigned>>> references;
-        std::vector<bool> accepting;
-
-        bool inhabited() const;
-    };
-
-    struct TransmuteLayoutBuilder {
-        struct Built {
-            TransmuteNfa::Fragment fragment;
-            size_t size;
-        };
-
-        struct Segment {
-            size_t offset;
-            Built value;
-        };
-
-        const Span& sp;
-        const StaticTraitResolve& resolve;
-        bool destination;
-        bool assumeSafety;
-        bool supported = true;
-
-        static TransmuteByteSet byteRange(unsigned first, unsigned last);
-
-        Built bytes(size_t count, const TransmuteByteSet& values);
-
-        Built padding(size_t count);
-
-        Built number(size_t count);
-
-        Built exact(U128 value, size_t count);
-
-        Built character();
-
-        Built combine(std::vector<Segment> segments, size_t totalSize);
-
-        Built aggregate(const TypeRepr& repr, int skipField = -1);
-
-        void addVariantPayload(std::vector<Segment>& segments, const TypeRepr& outerRepr, unsigned variant, bool skipSyntheticTag, size_t tagOffset, size_t tagSize);
-
-        Built taggedVariant(const TypeRepr& repr, unsigned variant, size_t tagOffset, size_t tagSize, U128 tag, bool skipSyntheticTag);
-
-        Built enumLayout(const HIRTypeData* ty, const TypeRepr& repr, const HIREnum& enm);
-
-        Built build(const HIRTypeData* ty);
-
-        std::vector<unsigned> epsilonClosure(std::vector<unsigned> states) const;
-
-        TransmuteNfa nfa;
-
-        TransmuteLayoutBuilder(const Span& sp, const StaticTraitResolve& resolve, bool destination, bool assumeSafety);
-
-        bool makeDfa(const HIRTypeData* ty, TransmuteDfa& out);
-    };
-
-    struct TransmuteRelation;
-
-    struct TransmuteTypeChecker {
-        const Span& sp;
-        const StaticTraitResolve& resolve;
-        bool assumeAlignment;
-        bool assumeSafety;
-        bool assumeValidity;
-        std::map<std::pair<const HIRTypeData*, const HIRTypeData*>, int> cache;
-
-        TransmuteTypeChecker(const Span& sp, const StaticTraitResolve& resolve, bool assumeAlignment, bool assumeSafety, bool assumeValidity);
-
-        bool check(const HIRTypeData* sourceType, const HIRTypeData* destinationType);
-
-        bool referencesCompatible(const TransmuteReference& source, const TransmuteReference& destination);
-
-        bool validityIsAssumed() const;
-    };
-
-    struct TransmuteRelation {
-        const TransmuteDfa& source;
-        const TransmuteDfa& destination;
-        TransmuteTypeChecker& typeChecker;
-        bool assumeValidity;
-        std::map<std::pair<unsigned, unsigned>, int> cache;
-
-        bool check(unsigned sourceState, unsigned destinationState);
-
-        TransmuteRelation(const TransmuteDfa& source, const TransmuteDfa& destination, TransmuteTypeChecker& typeChecker);
-
-        bool check();
-    };
-
     bool TransmuteTypeChecker::check(const HIRTypeData* sourceType, const HIRTypeData* destinationType) {
         const auto key = std::make_pair(sourceType, destinationType);
         auto existing = cache.find(key);

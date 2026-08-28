@@ -11,6 +11,10 @@ namespace {
     using Ent = MacroPatEnt;
     using Ents = Vector<const Ent*>;
 
+    struct Described {
+        const Ent& e;
+    };
+
     bool isFragment(const Ent& e) {
         return e.type != Ent::PAT_TOKEN && e.type != Ent::PAT_LOOP;
     }
@@ -161,10 +165,6 @@ namespace {
                 return "";
         }
     }
-
-    struct Described {
-        const Ent& e;
-    };
 
     std::ostream& operator<<(std::ostream& os, const Described& x) {
         if (isFragment(x.e)) {

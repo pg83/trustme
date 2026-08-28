@@ -11,6 +11,20 @@
 
 using namespace stl;
 
+namespace {
+    struct PathNode: public HIRSimplePathData {
+        PathNode* next;
+
+        PathNode(u64 h1, u64 h2, ThinVector<RcString> m, PathNode* next);
+    };
+
+    struct PathInterner {
+        ObjPool::Ref poolRef = ObjPool::fromMemory();
+        ObjPool* pool = poolRef.mutPtr();
+        IntMap<PathNode*> table{pool};
+    };
+}
+
 HIRTraitPath::HIRTraitPath()
     : traitPtr(nullptr)
 {
@@ -129,6 +143,7 @@ std::ostream& operator<<(std::ostream& os, const HIRPath& x) {
 }
 
 namespace {
+
     u64 contentHash(const RcString& s) {
         return s.contentHash();
     }
@@ -142,18 +157,6 @@ namespace {
     u64 key2(u64 ch, size_t i) {
         return splitMix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
     }
-
-    struct PathNode: public HIRSimplePathData {
-        PathNode* next;
-
-        PathNode(u64 h1, u64 h2, ThinVector<RcString> m, PathNode* next);
-    };
-
-    struct PathInterner {
-        ObjPool::Ref poolRef = ObjPool::fromMemory();
-        ObjPool* pool = poolRef.mutPtr();
-        IntMap<PathNode*> table{pool};
-    };
 
     PathInterner& interner() {
         static PathInterner in;

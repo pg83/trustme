@@ -6,6 +6,38 @@
 #include "hir_visitor.h"
 #include "hir_expr_state.h"
 
+namespace {
+    struct OuterVisitor: public HIRVisitor {
+        TypeckModuleState ms;
+
+        OuterVisitor(const WireBoard& wb, HIRCrate& crate);
+
+        void visitModule(HIRItemPath p, HIRModule& mod) override;
+
+        void visitExpr(HIRExprPtr& exp) override;
+
+        void visitTrait(HIRItemPath p, HIRTrait& item) override;
+
+        void visitTypeImpl(HIRTypeImpl& impl) override;
+
+        void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
+
+        void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override;
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+
+        void visitGlobalAssembly(HIRGlobalAssembly& item) override;
+
+        void visitFunction(HIRItemPath p, HIRFunction& item) override;
+
+        void visitStatic(HIRItemPath p, HIRStatic& item) override;
+
+        void visitConstant(HIRItemPath p, HIRConstant& item) override;
+
+        void visitEnum(HIRItemPath p, HIREnum& item) override;
+    };
+}
+
 void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr) {
     if (expr.state->stage < HIRExprState::Stage::Typecheck) {
         TypecheckCodeCS(ms, args, resultType, expr);
@@ -93,39 +125,6 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
             }
         }
     }
-}
-
-namespace {
-
-    struct OuterVisitor: public HIRVisitor {
-        TypeckModuleState ms;
-
-        OuterVisitor(const WireBoard& wb, HIRCrate& crate);
-
-        void visitModule(HIRItemPath p, HIRModule& mod) override;
-
-        void visitExpr(HIRExprPtr& exp) override;
-
-        void visitTrait(HIRItemPath p, HIRTrait& item) override;
-
-        void visitTypeImpl(HIRTypeImpl& impl) override;
-
-        void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
-
-        void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override;
-
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
-
-        void visitGlobalAssembly(HIRGlobalAssembly& item) override;
-
-        void visitFunction(HIRItemPath p, HIRFunction& item) override;
-
-        void visitStatic(HIRItemPath p, HIRStatic& item) override;
-
-        void visitConstant(HIRItemPath p, HIRConstant& item) override;
-
-        void visitEnum(HIRItemPath p, HIREnum& item) override;
-    };
 }
 
 void TypecheckExpressions(const WireBoard& wb, HIRCrate& crate) {

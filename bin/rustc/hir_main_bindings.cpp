@@ -15,31 +15,6 @@
 
 using namespace stl;
 
-namespace {
-    bool isMetadataFile(const auto& filename) {
-        std::ifstream direct(filename, std::ios_base::in | std::ios_base::binary);
-        unsigned char header[2] = {};
-        if (direct.read(reinterpret_cast<char*>(header), sizeof(header))) {
-            const unsigned word = static_cast<unsigned>(header[0]) * 256 + header[1];
-            if ((header[0] & 0x0f) == 8 && word % 31 == 0) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    auto metadataFilename(const auto& filename) {
-        if (isMetadataFile(filename)) {
-            return filename;
-        }
-        auto rlib = filename + ".rlib";
-        if (isMetadataFile(rlib)) {
-            return rlib;
-        }
-        return filename + ".hir";
-    }
-}
-
 template <typename T>
 struct D {};
 
@@ -339,6 +314,403 @@ template <typename T>
 DEF_D(HIRCrate::ImplGroup<std::unique_ptr<T>>, HIRCrate::ImplGroup<std::unique_ptr<T>> rv; rv.named = d.deserialisePathmap<std::vector<std::unique_ptr<T>>>(); rv.nonNamed = d.deserialiseVec<std::unique_ptr<T>>(); rv.generic = d.deserialiseVec<std::unique_ptr<T>>(); return rv;)
 template <>
 DEF_D(HIRExternLibrary, return d.deserialiseExtlib();)
+
+namespace {
+    struct TreeVisitor: public HIRVisitor, public HIRExprVisitor {
+        std::ostream& os;
+        unsigned int indentLevel;
+
+        TreeVisitor(HIRTypeInterner& types, std::ostream& os);
+
+        void visitModule(HIRItemPath p, HIRModule& mod) override;
+
+        void visitTypeImpl(HIRTypeImpl& impl) override;
+
+        virtual void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
+
+        void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override;
+
+        void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override;
+
+        void visitInherentType(HIRItemPath p, HIRTypeAlias& item) override;
+
+        void visitTrait(HIRItemPath p, HIRTrait& item) override;
+
+        void visitStruct(HIRItemPath p, HIRStruct& item) override;
+
+        void visitEnum(HIRItemPath p, HIREnum& item) override;
+
+        void visitFunction(HIRItemPath p, HIRFunction& item) override;
+
+        void visitStatic(HIRItemPath p, HIRStatic& item) override;
+
+        void visitConstant(HIRItemPath p, HIRConstant& item) override;
+
+        bool nodeIsLeaf(const HIRExprNode& node);
+
+        void visitNodePtr(HIRExprNodeP& nodePtr) override;
+
+        void visit(HIRExprNodeBlock& node) override;
+
+        void visit(HIRExprNodeConstBlock& node) override;
+
+        void visit(HIRExprNodeAsm& node) override;
+
+        void visit(HIRExprNodeAsm2& node) override;
+
+        void visit(HIRExprNodeReturn& node) override;
+
+        void visit(HIRExprNodeYield& node) override;
+
+        void visit(HIRExprNodeAWait& node) override;
+
+        void visit(HIRExprNodeUse& node) override;
+
+        void visit(HIRExprNodeLet& node) override;
+
+        void visit(HIRExprNodeLoop& node) override;
+
+        void visit(HIRExprNodeLoopControl& node) override;
+
+        void visit(HIRExprNodeMatch& node) override;
+
+        void visit(HIRExprNodeAssign& node) override;
+
+        void visit(HIRExprNodeBinOp& node) override;
+
+        void visit(HIRExprNodeUniOp& node) override;
+
+        void visit(HIRExprNodeBorrow& node) override;
+
+        void visit(HIRExprNodeRawBorrow& node) override;
+
+        void visit(HIRExprNodeCast& node) override;
+
+        void visit(HIRExprNodeUnsize& node) override;
+
+        void visit(HIRExprNodeIndex& node) override;
+
+        void visit(HIRExprNodeDeref& node) override;
+
+        void visit(HIRExprNodeEmplace& node) override;
+
+        void visit(HIRExprNodeTupleVariant& node) override;
+
+        void visit(HIRExprNodeCallPath& node) override;
+
+        void visit(HIRExprNodeCallValue& node) override;
+
+        void visit(HIRExprNodeCallMethod& node) override;
+
+        void visit(HIRExprNodeField& node) override;
+
+        void visit(HIRExprNodeLiteral& node) override;
+
+        void visit(HIRExprNodeUnitVariant& node) override;
+
+        void visit(HIRExprNodePathValue& node) override;
+
+        void visit(HIRExprNodeVariable& node) override;
+
+        void visit(HIRExprNodeConstParam& node) override;
+
+        void visit(HIRExprNodeStructLiteral& node) override;
+
+        void visit(HIRExprNodeTuple& node) override;
+
+        void visit(HIRExprNodeArrayList& node) override;
+
+        void visit(HIRExprNodeArraySized& node) override;
+
+        void visit(HIRExprNodeClosure& node) override;
+
+        void visit(HIRExprNodeGenerator& node) override;
+
+        void visit(HIRExprNodeGeneratorWrapper& node) override;
+
+        void visit(HIRExprNodeAsyncBlock& node) override;
+
+        RepeatLitStr indent() const;
+
+        void incIndent();
+
+        void decIndent();
+    };
+}
+
+struct HirSerialiser {
+    std::map<std::string, size_t> types;
+    HIRSerialiseWriter& out;
+    HIRTypeInterner& typeInterner;
+
+    HirSerialiser(HIRSerialiseWriter& out, HIRTypeInterner& typeInterner);
+
+    void clear();
+
+    template <typename V>
+    void serialiseStrmap(const std::map<RcString, V>& map);
+
+    template <typename V>
+    void serialiseStrmap(const std::map<std::string, V>& map);
+
+    template <typename V>
+    void serialisePathmap(const std::map<HIRSimplePath, V>& map);
+
+    template <typename V>
+    void serialiseStrmap(const std::unordered_map<RcString, V>& map);
+
+    template <typename V>
+    void serialiseStrmap(const std::unordered_map<std::string, V>& map);
+
+    template <typename V>
+    void serialiseStrmap(const std::unordered_multimap<RcString, V>& map);
+
+    template <typename V>
+    void serialiseStrmap(const std::unordered_multimap<std::string, V>& map);
+
+    template <typename T>
+    void serialiseVec(const ThinVector<T>& vec);
+
+    template <typename T>
+    void serialiseVec(const std::vector<T>& vec);
+
+    template <typename T>
+    void serialise(const std::vector<T>& vec);
+
+    template <typename T>
+    void serialise(const std::set<T>& s);
+
+    void serialise(const HIRPublicity& pub);
+
+    template <typename T>
+    void serialise(const HIRVisEnt<T>& e);
+
+    template <typename T>
+    void serialise(const HIRVisEnt<T>* e);
+
+    template <typename T>
+    void serialise(const std::unique_ptr<T>& e);
+
+    template <typename T>
+    void serialise(const std::pair<std::string, T>& e);
+
+    template <typename T>
+    void serialise(const std::pair<RcString, T>& e);
+
+    template <typename T>
+    void serialise(const std::pair<unsigned int, T>& e);
+
+    void serialise(bool v);
+    ;
+
+    void serialise(unsigned int v);
+    ;
+
+    void serialise(u8 v);
+    ;
+
+    void serialise(u64 v);
+    ;
+
+    void serialise(i64 v);
+    ;
+
+    void serialise(const HIRGenericRef& ge);
+
+    void serialiseArraysize(const HIRArraySize& as);
+
+    void serialiseType(const HIRTypeData* ty);
+
+    void serialiseSimplepath(const HIRSimplePath& path);
+
+    void serialisePathparams(const HIRPathParams& pp);
+
+    void serialiseGenericpath(const HIRGenericPath& path);
+
+    void serialise(const HIRGenericPath& path);
+
+    void serialiseTraitpath(const HIRTraitPath& path);
+
+    void serialise(const HIRTraitPath::AtyEqual& e);
+
+    void serialise(const HIRTraitPath::AtyBound& e);
+
+    void serialisePath(const HIRPath& path);
+
+    void serialiseGenerics(const HIRGenericParams& params);
+
+    void serialise(const HIRTypeParamDef& pd);
+
+    void serialise(const HIRValueParamDef& pd);
+
+    void serialise(const HIRGenericBound& b);
+
+    void serialise(const HIRProcMacro& pm);
+
+    template <typename T>
+    void serialise(const HIRCrate::ImplGroup<T>& ig);
+
+    void serialiseCrate(const HIRCrate& crate);
+
+    void serialise(const HIRExternLibrary& lib);
+
+    void serialiseModule(const HIRModule& mod);
+
+    void serialiseTypeimpl(const HIRTypeImpl& impl);
+
+    void serialise(const HIRTypeImpl& impl);
+
+    void serialiseTraitimpl(const HIRTraitImpl& impl);
+
+    void serialise(const HIRTraitImpl& impl);
+
+    void serialiseMarkerimpl(const HIRMarkerImpl& impl);
+
+    void serialise(const HIRMarkerImpl& impl);
+
+    void serialise(const HIRTypeData* ty);
+
+    void serialise(const HIRSimplePath& p);
+
+    void serialise(const HIRTraitPath& p);
+
+    void serialise(const std::string& v);
+
+    void serialise(const RcString& v);
+
+    void serialise(const Ident::Hygiene& h);
+
+    void serialise(const ::MacroRulesPtr& mac);
+
+    void serialise(const ::MacroRules& mac);
+
+    void serialise(const ::MacroPatEnt& pe);
+
+    void serialise(const ::SimplePatIfCheck& e);
+
+    void serialise(const ::SimplePatEnt& pe);
+
+    void serialise(const ::MacroRulesArm& arm);
+
+    void serialise(const ::MacroExpansionEnt& ent);
+
+    void serialise(const ::MacroExpansionConcatEnt& e);
+
+    void serialise(const ::Token& tok);
+
+    void serialise(const ::Token::Data& td);
+
+    void serialise(const EncodedLiteral& lit);
+
+    void serialise(const HIRConstGenericUnevaluated& v);
+
+    void serialise(const HIRConstGeneric& v);
+
+    void serialise(const HIRExprPtr& exp, bool saveMir = true);
+
+    void serialise(const MIRFunction& mir);
+
+    void serialise(const MIRBasicBlock& block);
+
+    void serialise(const AsmLineFragment& l);
+
+    void serialise(const AsmLine& l);
+
+    void serialise(const AsmRegisterSpec& r);
+
+    void serialise(const MIRAsmParam& p);
+
+    void serialise(const AsmOptions& o);
+
+    void serialise(const MIRStatement& stmt);
+
+    void serialise(const MIRTerminator& term);
+
+    void serialise(const MIRSwitchValues& sv);
+
+    void serialise(const MIRCallTarget& ct);
+
+    void serialise(const MIRParam& p);
+
+    void serialise(const MIRLValue& lv);
+
+    void serialise(const MIRLValue::Wrapper& w);
+
+    void serialise(const MIRRValue& val);
+
+    void serialise(const MIRConstant& v);
+
+    void serialise(const HIRTypeItem& item);
+
+    void serialise(const HIRMacroItem& item);
+
+    void serialise(const HIRValueItem& item);
+
+    void serialise(const HIRLinkage& linkage);
+
+    void serialise(const HIRFunction& fcn);
+
+    void serialise(const HIRFunction::Markings& m);
+
+    void serialise(const HIRConstant& item);
+
+    void serialise(const HIRStatic& item);
+
+    void serialise(const HIRTypeAlias& ta);
+
+    void serialise(const HIRTraitAlias& ta);
+
+    void serialise(const HIREnum& item);
+
+    void serialise(const HIREnum::Class& v);
+
+    void serialise(const HIREnum::ValueVariant& v);
+
+    void serialise(const HIREnum::DataVariant& v);
+
+    void serialise(const HIRTraitMarkings& m);
+
+    void serialise(const HIRStructMarkings& m);
+
+    void serialise(const HIRStruct& item);
+
+    void serialise(const HIRStructField& fld);
+
+    void serialise(const HIRUnion& item);
+
+    void serialise(const HIRExternType& item);
+
+    void serialise(const HIRTrait& item);
+
+    void serialise(const HIRTraitValueItem& tvi);
+
+    void serialise(const HIRAssociatedType& at);
+};
+
+namespace {
+    bool isMetadataFile(const auto& filename) {
+        std::ifstream direct(filename, std::ios_base::in | std::ios_base::binary);
+        unsigned char header[2] = {};
+        if (direct.read(reinterpret_cast<char*>(header), sizeof(header))) {
+            const unsigned word = static_cast<unsigned>(header[0]) * 256 + header[1];
+            if ((header[0] & 0x0f) == 8 && word % 31 == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    auto metadataFilename(const auto& filename) {
+        if (isMetadataFile(filename)) {
+            return filename;
+        }
+        auto rlib = filename + ".rlib";
+        if (isMetadataFile(rlib)) {
+            return rlib;
+        }
+        return filename + ".hir";
+    }
+}
 
 HIRGenericRef HirDeserialiser::deserialiseGenericref() {
     return HIRGenericRef{in.readIstring(), in.readU16()};
@@ -950,130 +1322,6 @@ RcString HIRDeserialiseJustName(const std::string& filename) {
 
 #define NODE_IS(valptr, tysuf) (cast<const HIRExprNode##tysuf>(&*valptr) != nullptr)
 
-namespace {
-
-    struct TreeVisitor: public HIRVisitor, public HIRExprVisitor {
-        std::ostream& os;
-        unsigned int indentLevel;
-
-        TreeVisitor(HIRTypeInterner& types, std::ostream& os);
-
-        void visitModule(HIRItemPath p, HIRModule& mod) override;
-
-        void visitTypeImpl(HIRTypeImpl& impl) override;
-
-        virtual void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
-
-        void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override;
-
-        void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override;
-
-        void visitInherentType(HIRItemPath p, HIRTypeAlias& item) override;
-
-        void visitTrait(HIRItemPath p, HIRTrait& item) override;
-
-        void visitStruct(HIRItemPath p, HIRStruct& item) override;
-
-        void visitEnum(HIRItemPath p, HIREnum& item) override;
-
-        void visitFunction(HIRItemPath p, HIRFunction& item) override;
-
-        void visitStatic(HIRItemPath p, HIRStatic& item) override;
-
-        void visitConstant(HIRItemPath p, HIRConstant& item) override;
-
-        bool nodeIsLeaf(const HIRExprNode& node);
-
-        void visitNodePtr(HIRExprNodeP& nodePtr) override;
-
-        void visit(HIRExprNodeBlock& node) override;
-
-        void visit(HIRExprNodeConstBlock& node) override;
-
-        void visit(HIRExprNodeAsm& node) override;
-
-        void visit(HIRExprNodeAsm2& node) override;
-
-        void visit(HIRExprNodeReturn& node) override;
-
-        void visit(HIRExprNodeYield& node) override;
-
-        void visit(HIRExprNodeAWait& node) override;
-
-        void visit(HIRExprNodeUse& node) override;
-
-        void visit(HIRExprNodeLet& node) override;
-
-        void visit(HIRExprNodeLoop& node) override;
-
-        void visit(HIRExprNodeLoopControl& node) override;
-
-        void visit(HIRExprNodeMatch& node) override;
-
-        void visit(HIRExprNodeAssign& node) override;
-
-        void visit(HIRExprNodeBinOp& node) override;
-
-        void visit(HIRExprNodeUniOp& node) override;
-
-        void visit(HIRExprNodeBorrow& node) override;
-
-        void visit(HIRExprNodeRawBorrow& node) override;
-
-        void visit(HIRExprNodeCast& node) override;
-
-        void visit(HIRExprNodeUnsize& node) override;
-
-        void visit(HIRExprNodeIndex& node) override;
-
-        void visit(HIRExprNodeDeref& node) override;
-
-        void visit(HIRExprNodeEmplace& node) override;
-
-        void visit(HIRExprNodeTupleVariant& node) override;
-
-        void visit(HIRExprNodeCallPath& node) override;
-
-        void visit(HIRExprNodeCallValue& node) override;
-
-        void visit(HIRExprNodeCallMethod& node) override;
-
-        void visit(HIRExprNodeField& node) override;
-
-        void visit(HIRExprNodeLiteral& node) override;
-
-        void visit(HIRExprNodeUnitVariant& node) override;
-
-        void visit(HIRExprNodePathValue& node) override;
-
-        void visit(HIRExprNodeVariable& node) override;
-
-        void visit(HIRExprNodeConstParam& node) override;
-
-        void visit(HIRExprNodeStructLiteral& node) override;
-
-        void visit(HIRExprNodeTuple& node) override;
-
-        void visit(HIRExprNodeArrayList& node) override;
-
-        void visit(HIRExprNodeArraySized& node) override;
-
-        void visit(HIRExprNodeClosure& node) override;
-
-        void visit(HIRExprNodeGenerator& node) override;
-
-        void visit(HIRExprNodeGeneratorWrapper& node) override;
-
-        void visit(HIRExprNodeAsyncBlock& node) override;
-
-        RepeatLitStr indent() const;
-
-        void incIndent();
-
-        void decIndent();
-    };
-}
-
 void HIRDump(std::ostream& sink, const HIRCrate& crate) {
     TreeVisitor tv{crate.types, sink};
 
@@ -1093,255 +1341,6 @@ void HIRDumpExpr(std::ostream& sink, const HIRExprPtr& expr) {
 }
 
 #undef NODE_IS
-
-struct HirSerialiser {
-    std::map<std::string, size_t> types;
-    HIRSerialiseWriter& out;
-    HIRTypeInterner& typeInterner;
-
-    HirSerialiser(HIRSerialiseWriter& out, HIRTypeInterner& typeInterner);
-
-    void clear();
-
-    template <typename V>
-    void serialiseStrmap(const std::map<RcString, V>& map);
-
-    template <typename V>
-    void serialiseStrmap(const std::map<std::string, V>& map);
-
-    template <typename V>
-    void serialisePathmap(const std::map<HIRSimplePath, V>& map);
-
-    template <typename V>
-    void serialiseStrmap(const std::unordered_map<RcString, V>& map);
-
-    template <typename V>
-    void serialiseStrmap(const std::unordered_map<std::string, V>& map);
-
-    template <typename V>
-    void serialiseStrmap(const std::unordered_multimap<RcString, V>& map);
-
-    template <typename V>
-    void serialiseStrmap(const std::unordered_multimap<std::string, V>& map);
-
-    template <typename T>
-    void serialiseVec(const ThinVector<T>& vec);
-
-    template <typename T>
-    void serialiseVec(const std::vector<T>& vec);
-
-    template <typename T>
-    void serialise(const std::vector<T>& vec);
-
-    template <typename T>
-    void serialise(const std::set<T>& s);
-
-    void serialise(const HIRPublicity& pub);
-
-    template <typename T>
-    void serialise(const HIRVisEnt<T>& e);
-
-    template <typename T>
-    void serialise(const HIRVisEnt<T>* e);
-
-    template <typename T>
-    void serialise(const std::unique_ptr<T>& e);
-
-    template <typename T>
-    void serialise(const std::pair<std::string, T>& e);
-
-    template <typename T>
-    void serialise(const std::pair<RcString, T>& e);
-
-    template <typename T>
-    void serialise(const std::pair<unsigned int, T>& e);
-
-    void serialise(bool v);
-    ;
-
-    void serialise(unsigned int v);
-    ;
-
-    void serialise(u8 v);
-    ;
-
-    void serialise(u64 v);
-    ;
-
-    void serialise(i64 v);
-    ;
-
-    void serialise(const HIRGenericRef& ge);
-
-    void serialiseArraysize(const HIRArraySize& as);
-
-    void serialiseType(const HIRTypeData* ty);
-
-    void serialiseSimplepath(const HIRSimplePath& path);
-
-    void serialisePathparams(const HIRPathParams& pp);
-
-    void serialiseGenericpath(const HIRGenericPath& path);
-
-    void serialise(const HIRGenericPath& path);
-
-    void serialiseTraitpath(const HIRTraitPath& path);
-
-    void serialise(const HIRTraitPath::AtyEqual& e);
-
-    void serialise(const HIRTraitPath::AtyBound& e);
-
-    void serialisePath(const HIRPath& path);
-
-    void serialiseGenerics(const HIRGenericParams& params);
-
-    void serialise(const HIRTypeParamDef& pd);
-
-    void serialise(const HIRValueParamDef& pd);
-
-    void serialise(const HIRGenericBound& b);
-
-    void serialise(const HIRProcMacro& pm);
-
-    template <typename T>
-    void serialise(const HIRCrate::ImplGroup<T>& ig);
-
-    void serialiseCrate(const HIRCrate& crate);
-
-    void serialise(const HIRExternLibrary& lib);
-
-    void serialiseModule(const HIRModule& mod);
-
-    void serialiseTypeimpl(const HIRTypeImpl& impl);
-
-    void serialise(const HIRTypeImpl& impl);
-
-    void serialiseTraitimpl(const HIRTraitImpl& impl);
-
-    void serialise(const HIRTraitImpl& impl);
-
-    void serialiseMarkerimpl(const HIRMarkerImpl& impl);
-
-    void serialise(const HIRMarkerImpl& impl);
-
-    void serialise(const HIRTypeData* ty);
-
-    void serialise(const HIRSimplePath& p);
-
-    void serialise(const HIRTraitPath& p);
-
-    void serialise(const std::string& v);
-
-    void serialise(const RcString& v);
-
-    void serialise(const Ident::Hygiene& h);
-
-    void serialise(const ::MacroRulesPtr& mac);
-
-    void serialise(const ::MacroRules& mac);
-
-    void serialise(const ::MacroPatEnt& pe);
-
-    void serialise(const ::SimplePatIfCheck& e);
-
-    void serialise(const ::SimplePatEnt& pe);
-
-    void serialise(const ::MacroRulesArm& arm);
-
-    void serialise(const ::MacroExpansionEnt& ent);
-
-    void serialise(const ::MacroExpansionConcatEnt& e);
-
-    void serialise(const ::Token& tok);
-
-    void serialise(const ::Token::Data& td);
-
-    void serialise(const EncodedLiteral& lit);
-
-    void serialise(const HIRConstGenericUnevaluated& v);
-
-    void serialise(const HIRConstGeneric& v);
-
-    void serialise(const HIRExprPtr& exp, bool saveMir = true);
-
-    void serialise(const MIRFunction& mir);
-
-    void serialise(const MIRBasicBlock& block);
-
-    void serialise(const AsmLineFragment& l);
-
-    void serialise(const AsmLine& l);
-
-    void serialise(const AsmRegisterSpec& r);
-
-    void serialise(const MIRAsmParam& p);
-
-    void serialise(const AsmOptions& o);
-
-    void serialise(const MIRStatement& stmt);
-
-    void serialise(const MIRTerminator& term);
-
-    void serialise(const MIRSwitchValues& sv);
-
-    void serialise(const MIRCallTarget& ct);
-
-    void serialise(const MIRParam& p);
-
-    void serialise(const MIRLValue& lv);
-
-    void serialise(const MIRLValue::Wrapper& w);
-
-    void serialise(const MIRRValue& val);
-
-    void serialise(const MIRConstant& v);
-
-    void serialise(const HIRTypeItem& item);
-
-    void serialise(const HIRMacroItem& item);
-
-    void serialise(const HIRValueItem& item);
-
-    void serialise(const HIRLinkage& linkage);
-
-    void serialise(const HIRFunction& fcn);
-
-    void serialise(const HIRFunction::Markings& m);
-
-    void serialise(const HIRConstant& item);
-
-    void serialise(const HIRStatic& item);
-
-    void serialise(const HIRTypeAlias& ta);
-
-    void serialise(const HIRTraitAlias& ta);
-
-    void serialise(const HIREnum& item);
-
-    void serialise(const HIREnum::Class& v);
-
-    void serialise(const HIREnum::ValueVariant& v);
-
-    void serialise(const HIREnum::DataVariant& v);
-
-    void serialise(const HIRTraitMarkings& m);
-
-    void serialise(const HIRStructMarkings& m);
-
-    void serialise(const HIRStruct& item);
-
-    void serialise(const HIRStructField& fld);
-
-    void serialise(const HIRUnion& item);
-
-    void serialise(const HIRExternType& item);
-
-    void serialise(const HIRTrait& item);
-
-    void serialise(const HIRTraitValueItem& tvi);
-
-    void serialise(const HIRAssociatedType& at);
-};
 
 void HIRSerialise(const std::string& filename, const HIRCrate& crate) {
     HIRSerialiseWriter out;

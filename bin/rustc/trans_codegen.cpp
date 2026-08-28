@@ -42,14 +42,6 @@ namespace {
         bool needsPrototype;
     };
 
-    bool functionHasDefinition(const TransListFunction& function) {
-        return function.ptr && function.ptr->code.mir && !function.forcePrototype;
-    }
-
-    const MIRFunctionPointer& functionCode(const TransListFunction& function) {
-        return function.monomorphised.code ? function.monomorphised.code : function.ptr->code.mir;
-    }
-
     struct FunctionOrder {
         TransList& list;
         const Span& sp;
@@ -74,6 +66,14 @@ namespace {
 
         FunctionOrder(const WireBoard& wb, TransList& list, const Span& sp);
     };
+
+    bool functionHasDefinition(const TransListFunction& function) {
+        return function.ptr && function.ptr->code.mir && !function.forcePrototype;
+    }
+
+    const MIRFunctionPointer& functionCode(const TransListFunction& function) {
+        return function.monomorphised.code ? function.monomorphised.code : function.ptr->code.mir;
+    }
 }
 
 void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* cratePtr, TransList list, const std::string& hirFile) {

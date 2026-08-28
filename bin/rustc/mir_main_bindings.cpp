@@ -32,11 +32,6 @@ namespace {
         void decIndent();
     };
 
-    void dumpMir(std::ostream& os, unsigned int il, const MIRFunction& fcn) {
-        MirDumper md{os, il};
-        md.dumpMir(fcn);
-    }
-
     struct TreeVisitor: public HIRVisitor {
         std::ostream& os;
         unsigned int indentLevel;
@@ -64,6 +59,11 @@ namespace {
 
         void decIndent();
     };
+
+    void dumpMir(std::ostream& os, unsigned int il, const MIRFunction& fcn) {
+        MirDumper md{os, il};
+        md.dumpMir(fcn);
+    }
 }
 
 void MIRDump(std::ostream& sink, const HIRCrate& crate) {

@@ -8,6 +8,26 @@
 
 #include <algorithm>
 
+struct LValueCbVisitor: public MIRVisitor {
+    const MIRLvalueCallback& cb;
+
+    explicit LValueCbVisitor(const MIRLvalueCallback& cb);
+
+    bool visitLvalue(const MIRLValue& lv, MIRValUsage u) override;
+};
+
+namespace {
+    struct ValueLifetime {
+        std::vector<bool> stmtBitmap;
+
+        ValueLifetime(size_t stmtCount);
+
+        void fill(const std::vector<size_t>& blockOffsets, size_t bb, size_t firstStmt, size_t lastStmt);
+
+        void dumpDebug(const char* suffix, unsigned i, const std::vector<size_t>& blockOffsets);
+    };
+}
+
 void MIRTypeResolve::fmtPos(std::ostream& os, bool includePath /*=false*/) const {
     if (includePath) {
         this->path_.write(os);
@@ -731,14 +751,6 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTy
     return FMT(ty);
 }
 
-struct LValueCbVisitor: public MIRVisitor {
-    const MIRLvalueCallback& cb;
-
-    explicit LValueCbVisitor(const MIRLvalueCallback& cb);
-
-    bool visitLvalue(const MIRLValue& lv, MIRValUsage u) override;
-};
-
 bool visitMirLvalueWith(const MIRLValue& lv, MIRValUsage u, const MIRLvalueCallback& cb) {
     LValueCbVisitor v{cb};
     return v.visitLvalue(lv, u);
@@ -797,18 +809,6 @@ void visitTerminatorTarget(const MIRTerminator& term, MIRTargetVisitor& cb) {
     } adapter{cb};
 
     visitTerminatorTargetMut(const_cast<MIRTerminator&>(term), adapter);
-}
-
-namespace {
-    struct ValueLifetime {
-        std::vector<bool> stmtBitmap;
-
-        ValueLifetime(size_t stmtCount);
-
-        void fill(const std::vector<size_t>& blockOffsets, size_t bb, size_t firstStmt, size_t lastStmt);
-
-        void dumpDebug(const char* suffix, unsigned i, const std::vector<size_t>& blockOffsets);
-    };
 }
 
 #if 1

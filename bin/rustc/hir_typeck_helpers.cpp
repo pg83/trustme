@@ -20,54 +20,333 @@
 
 using namespace stl;
 
-SolverImpl SolverImpl::fromLegacy(ImplRef impl) {
-    SolverImpl result;
-    result.ambiguousIdentity = impl.isAmbiguousIdentity();
-    if (auto* traitImpl = impl.data.opt_TraitImpl()) {
-        ASSERT_BUG(Span(), traitImpl->traitPtr && traitImpl->impl, "invalid trait impl solver response");
-        result.implParams = std::move(traitImpl->implParams);
-        result.trait = traitImpl->traitPtr;
-        ASSERT_BUG(Span(), traitImpl->traitPath, "trait impl solver response has no trait path");
-        result.traitPath = *traitImpl->traitPath;
-        result.traitImpl = traitImpl->impl;
-    } else if (const auto* bounded = impl.data.opt_BoundedPtr()) {
-        result.type = bounded->type;
-        if (bounded->traitArgs) {
-            result.traitArgs = bounded->traitArgs->clone();
-        }
-        if (bounded->assoc) {
-            for (const auto& entry : *bounded->assoc) {
-                result.associated.insert({entry.first, entry.second.clone()});
-            }
-        }
-        result.constness = bounded->constness;
-    } else {
-        auto& owned = impl.data.as_Bounded();
-        result.type = std::move(owned.type);
-        result.traitArgs = std::move(owned.traitArgs);
-        result.associated = std::move(owned.assoc);
-        result.constness = owned.constness;
-    }
-    return result;
+namespace {
+    struct CanonicalizeTraitGoal;
 }
 
-ImplRef SolverImpl::legacy() const {
-    ImplRef result;
-    if (traitImpl) {
-        ASSERT_BUG(Span(), trait, "trait impl solver response has no trait declaration");
-        result = ImplRef(implParams.clone(), *trait, traitPath, *traitImpl);
-    } else {
-        HIRTraitPath::assocListT assoc;
-        for (const auto& entry : associated) {
-            assoc.insert({entry.first, entry.second.clone()});
-        }
-        result = ImplRef(type, traitArgs.clone(), std::move(assoc), constness);
-    }
-    if (ambiguousIdentity) {
-        result.markAmbiguousIdentity();
-    }
-    return result;
-}
+struct NextTraitGoalEvaluator {
+    using Certainty = SolverCertainty;
+
+    enum class CandidateSource {
+        Builtin,
+        ParamEnv,
+        AliasBound,
+        Other,
+        TraitImpl,
+    };
+
+    enum class OrphanPerspective {
+        Local,
+        Remote,
+    };
+
+    enum class OrphanVisit {
+        NonLocal,
+        LocalKey,
+        Uncovered,
+    };
+
+    struct Candidate {
+        ImplRef impl;
+        bool headExact;
+        Certainty headRelation;
+        Certainty certainty;
+        const HIRMarkerImpl* markerImpl;
+        HIRPathParams markerImplParams;
+        bool autoBuiltin;
+        CandidateSource source;
+        bool headNormalizationAmbiguity;
+        bool ambiguityBeyondHead = false;
+        bool nestedAmbiguity = false;
+        bool coercionsProven = true;
+        ThinVector<SolverTypeEquality> headEqualities;
+        ThinVector<SolverValueEquality> headValueEqualities;
+        ThinVector<SolverTypeEquality> coercionEqualities;
+        ThinVector<SolverObligation> headObligations;
+        ThinVector<SolverTypeEquality> relationEqualities;
+        ThinVector<SolverValueEquality> relationValueEqualities;
+        ThinVector<SolverObligation> relationObligations;
+        Vector<const HIRGenericBound*> normalizationNestedGoals;
+        bool discarded = false;
+        Certainty traitCertainty = Certainty::Ambiguous;
+        const Candidate* specializationItemSource = nullptr;
+
+        Candidate(ImplRef impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {});
+
+        bool isNegative() const;
+
+        bool isPositiveMarkerImpl() const;
+    };
+
+    struct CandidateFrame {
+        std::vector<Candidate*> candidates;
+        std::vector<Candidate*> viable;
+        size_t availableDepth = 0;
+        bool encounteredOverflow = false;
+
+        CandidateFrame();
+
+        void clear(ObjList<Candidate>& nodes);
+    };
+
+    static constexpr size_t ROOT_DEPTH = 128;
+    static constexpr size_t OVERFLOW_DEPTH_DIVISOR = 4;
+
+    struct GoalKey {
+        size_t hash;
+        HIRSimplePath trait;
+        HIRPathParams params;
+        HIRTypeRef type;
+        HIRTraitPath::assocListT associated;
+
+        GoalKey(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated);
+    };
+
+    struct CachedGoal {
+        GoalKey goal;
+        Certainty certainty;
+        const SolverResponse* response = nullptr;
+        bool hasResponse = false;
+        bool persistent = false;
+
+        CachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, Certainty certainty);
+    };
+
+    const TraitResolution& resolve_;
+    const HIRCrate& crate;
+    const Span* span_ = nullptr;
+    bool coherenceMode = false;
+    mutable u64 cycleHits_ = 0;
+    mutable u64 envGeneration_ = ~0ull;
+    mutable u64 ivarGenerationSeen_ = ~0ull;
+    mutable u64 solverEnvGenerationSeen_ = ~0ull;
+
+    struct ImplExistentials {
+        const HIRGenericParams* definition;
+        HIRPathParams params;
+    };
+
+    IntMap<ThinVector<ImplExistentials>> implExistentials_;
+
+    ObjList<Candidate> candidateNodes;
+    std::vector<CandidateFrame*> frames;
+    size_t frameDepth = 0;
+    ObjList<GoalKey> activeGoalNodes;
+    ObjList<CachedGoal> cachedGoalNodes;
+    std::vector<GoalKey*> goalStack;
+    std::vector<CachedGoal*> goalCache;
+    std::unordered_multimap<size_t, GoalKey*> activeGoalIndex;
+    std::unordered_multimap<size_t, CachedGoal*> goalCacheIndex;
+
+    struct CanonicalGoal {
+        HIRPathParams params;
+        HIRTypeRef type;
+        HIRTraitPath::assocListT associated;
+
+        CanonicalGoal(HIRPathParams params, HIRTypeRef type);
+    };
+
+    const Span& span() const;
+
+    const HIRPathParams& implExistentials(const HIRGenericParams& definition);
+
+    bool goalIsConcrete(const HIRSimplePath& trait, const CanonicalGoal& canonical) const;
+
+    bool crateCacheUsable() const;
+
+    NextSolverCrateCache& crateCache() const;
+
+    CanonicalGoal canonicalizeGoal(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, CanonicalizeTraitGoal& canonicalizer) const;
+
+    std::optional<size_t> availableDepthForNested();
+
+    static bool isEnvironmentOrBuiltin(const ImplRef& impl);
+
+    bool paramsHaveUnknownTypes(const HIRPathParams& params) const;
+
+    bool pathHasUnknownTypes(const HIRPath& path) const;
+
+    bool traitPathHasUnknownTypes(const HIRTraitPath& trait) const;
+
+    bool valueHasUnassignedInfer(const HIRConstGeneric& value) const;
+
+    bool paramsHaveUnassignedInfer(const HIRPathParams& params) const;
+
+    bool pathHasUnassignedInfer(const HIRPath& path) const;
+
+    bool traitPathHasUnassignedInfer(const HIRTraitPath& trait) const;
+
+    bool typeHasUnassignedInfer(const HIRTypeData* input) const;
+
+    bool goalHasUnassignedInfer(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) const;
+
+    bool selfIsUnresolvedProjectionOverIvar(const HIRTypeData* type) const;
+
+    HIRTypeRef normalizeGoalInput(HIRTypeRef input) const;
+
+    bool typeHasUnknown(const HIRTypeData* input) const;
+
+    static bool typeHasCandidatePlaceholder(const HIRTypeData* type);
+
+    static bool typeHasUfcsUnknown(const HIRTypeData* type);
+
+    static bool paramsNeedResponseConstraints(const HIRPathParams& params);
+
+    bool candidateNeedsResponseConstraints(const Candidate& candidate) const;
+
+    OrphanVisit orphanVisitResolvedType(const HIRTypeData* type, OrphanPerspective perspective) const;
+
+    OrphanVisit orphanVisitType(const HIRTypeData* input, OrphanPerspective perspective) const;
+
+    bool orphanCheckTraitRef(const HIRPathParams& params, const HIRTypeData* type, OrphanPerspective perspective) const;
+
+    bool traitRefIsKnowable(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) const;
+
+    static size_t hashMix(size_t state, size_t value);
+
+    static size_t hashSimplePath(const HIRSimplePath& path);
+
+    static size_t hashType(const HIRTypeData* type);
+
+    static size_t goalHash(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated);
+
+    static HIRTraitPath::assocListT cloneAssociated(const HIRTraitPath::assocListT* associated);
+
+    ImplRef monomorphImplRef(const ImplRef& source, const Monomorphiser& monomorph) const;
+
+    const SolverImpl* ownSolverImpl(ImplRef source) const;
+
+    const SolverImpl* monomorphSolverImpl(const SolverImpl& source, const Monomorphiser& monomorph) const;
+
+    const SolverImpl* correlateSolverImplForRead(const SolverImpl& source, const SolverSlotValues& slots, const HIRTypeData* type, const HIRPathParams& params) const;
+
+    ImplRef monomorphSolverImplForLegacy(const SolverImpl& source, const Monomorphiser& monomorph) const;
+
+    SolverResponse monomorphSolverResponse(const SolverResponse& source, const Monomorphiser& monomorph, bool includeObligations = true) const;
+
+    SolverSlotValues extractSlotValues(const CanonicalGoal& goal, const ImplRef& response, const CanonicalizeTraitGoal& canonicalizer, Certainty certainty) const;
+
+    static bool goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated);
+
+    CachedGoal* findCachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) const;
+
+    GoalKey* findActiveGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) const;
+
+    GoalKey* pushActiveGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated);
+
+    void popActiveGoal(GoalKey* goal);
+
+    Certainty cacheGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, Certainty certainty, bool persistent = false);
+
+    CachedGoal* cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, const SolverResponse* response);
+
+    void clearGoalCache();
+
+    static bool canonicalGoalIsRigid(const CanonicalGoal& canonical);
+
+    static const HIRTraitPath::assocListT* boundedAssociated(const ImplRef& impl);
+
+    static bool associatedResponsesEqual(const HIRTraitPath::assocListT* left, const HIRTraitPath::assocListT* right);
+
+    bool isSameImpl(const ImplRef& left, const ImplRef& right) const;
+
+    bool paramEnvCandidateIsNonGlobal(const Candidate& candidate) const;
+
+    void pushCandidate(size_t frameIndex, ImplRef impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl = nullptr, HIRPathParams markerImplParams = {}, bool autoBuiltin = false, CandidateSource source = CandidateSource::Other, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {});
+
+    Certainty relateAssembledHead(const HIRPathParams& goalParams, const HIRTypeData* goalType, ImplRef& impl, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities) const;
+
+    bool assembledHeadIsExact(const HIRPathParams& goalParams, const HIRTypeData* goalType, const ImplRef& impl) const;
+
+    Certainty unifyImplHead(const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitArgs, const HIRTypeData* implType, const HIRPathParams& goalParams, const HIRTypeData* goalType, HIRPathParams& outputParams, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities);
+
+    void assembleAliasBoundCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type);
+
+    void assembleCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, bool includeMagicCandidates = true);
+
+    HIRTypeRef makeAssociatedProjection(const HIRTypeData* type, const HIRGenericPath& sourceTrait, const RcString& name, const HIRPathParams& associatedParams) const;
+
+    HIRTypeRef makeAssociatedProjection(const ImplRef& impl, const HIRGenericPath& sourceTrait, const RcString& name, const HIRPathParams& associatedParams) const;
+
+    struct CandidateTypeBinding {
+        HIRTypeRef stable;
+        HIRTypeRef probe;
+    };
+
+    struct CandidateValueBinding {
+        RcString name;
+        unsigned stableIndex;
+        unsigned probeIndex;
+        bool isGeneric;
+    };
+
+    enum class CandidateBindingResult {
+        Mismatch,
+        Unchanged,
+        Changed,
+    };
+
+    template <typename Relate>
+    CandidateBindingResult unifyCandidateParams(HIRPathParams& params, Relate relate);
+
+    CandidateBindingResult bindCandidatePlaceholders(Candidate& candidate, const HIRTypeData* nestedType, const HIRTraitPath::assocListT& associated, bool useCandidateResponse = false);
+
+    CandidateBindingResult bindCandidateResponse(Candidate& candidate, const HIRTypeData* nestedType, const HIRPathParams& nestedParams, const HIRTraitPath::assocListT& nestedAssociated, const ImplRef& response);
+
+    Certainty unifyProbe(const HIRTypeData* left, const HIRTypeData* right);
+
+    Certainty unifyValueProbe(const HIRConstGeneric& left, const HIRConstGeneric& right);
+
+    void appendRelationEffects(Candidate& candidate, SolverResponse response);
+
+    Certainty relateTypes(Candidate& candidate, const HIRTypeData* left, const HIRTypeData* right);
+
+    Certainty evaluateHeadEquality(Candidate& candidate, const SolverTypeEquality& equality);
+
+    Certainty matchAssociatedTypes(const HIRSimplePath& trait, Candidate& candidate, const HIRTraitPath::assocListT* associated);
+
+    Certainty evaluateAutoBuiltin(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type);
+
+    Certainty evaluateCandidate(size_t frameIndex, size_t candidateIndex, const HIRSimplePath& trait, const HIRTraitPath::assocListT* associated);
+
+    Certainty solveGoal(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated);
+
+    bool literalClassCanMatch(const HIRSimplePath& trait, const HIRPathParams& params, HIRInferClass tyClass) const;
+
+    bool containsDefiningOpaque(const HIRTypeData* ty) const;
+
+    Certainty matchRootAssociated(const HIRSimplePath& trait, Candidate& candidate, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams);
+
+    ImplRef materializeRootAssociated(ImplRef impl, const HIRSimplePath& trait, const char* assocName, const HIRPathParams* assocParams) const;
+
+    void appendResponseObligations(ThinVector<SolverObligation>& obligations, const Candidate* candidate, const Monomorphiser& canonicalizer) const;
+
+    static bool implDefinesValue(const ImplRef& impl, const char* valueName);
+
+    static const Candidate* specializationValueSource(const Candidate* selected, const char* valueName);
+
+    bool responsesEqual(const ImplRef& left, const ImplRef& right, const char* assocName, const HIRPathParams* assocParams, const char* valueName) const;
+
+    NextTraitGoalEvaluator(const TraitResolution& resolve, const HIRCrate& crate);
+
+    HIRCompare evaluateCertainty(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type);
+
+    bool evaluateOverlap(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right);
+
+    struct OverlapEntry {
+        const HIRTraitImpl* left;
+        const HIRTraitImpl* right;
+        bool overlaps;
+    };
+
+    IntMap<ThinVector<OverlapEntry>> overlapCache;
+
+    bool evaluateOverlapUncached(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right);
+
+    bool evaluateTyped(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, SolverResponseCallback& callback, const TraitGoalQuery& query, bool callerBoundary = false, bool includeRootMagicCandidates = true);
+
+    bool evaluateNormalizesTo(const Span& callSpan, const NormalizesTo& goal, NormalizesToCallback& callback, bool callerBoundary = false);
+};
 
 namespace {
     struct CanonicalizeTraitGoal final: public Monomorphiser {
@@ -139,10 +418,6 @@ namespace {
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
     };
 
-    HIRTypeRef InstantiateCanonicalTraitResponse::getType(const Span&, const HIRGenericRef& generic) const {
-        return generic.isPlaceholder() && !generic.isSolverExistential() ? types.generic(instantiatePlaceholderName(generic.name), generic.binding) : types.generic(generic);
-    }
-
     struct InstantiateTraitResponseForCaller final: public Monomorphiser {
         HMTypeInferrence& ivars;
         const std::vector<std::pair<RcString, RcString>>& goalNames;
@@ -199,6 +474,62 @@ namespace {
 
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
     };
+}
+
+SolverImpl SolverImpl::fromLegacy(ImplRef impl) {
+    SolverImpl result;
+    result.ambiguousIdentity = impl.isAmbiguousIdentity();
+    if (auto* traitImpl = impl.data.opt_TraitImpl()) {
+        ASSERT_BUG(Span(), traitImpl->traitPtr && traitImpl->impl, "invalid trait impl solver response");
+        result.implParams = std::move(traitImpl->implParams);
+        result.trait = traitImpl->traitPtr;
+        ASSERT_BUG(Span(), traitImpl->traitPath, "trait impl solver response has no trait path");
+        result.traitPath = *traitImpl->traitPath;
+        result.traitImpl = traitImpl->impl;
+    } else if (const auto* bounded = impl.data.opt_BoundedPtr()) {
+        result.type = bounded->type;
+        if (bounded->traitArgs) {
+            result.traitArgs = bounded->traitArgs->clone();
+        }
+        if (bounded->assoc) {
+            for (const auto& entry : *bounded->assoc) {
+                result.associated.insert({entry.first, entry.second.clone()});
+            }
+        }
+        result.constness = bounded->constness;
+    } else {
+        auto& owned = impl.data.as_Bounded();
+        result.type = std::move(owned.type);
+        result.traitArgs = std::move(owned.traitArgs);
+        result.associated = std::move(owned.assoc);
+        result.constness = owned.constness;
+    }
+    return result;
+}
+
+ImplRef SolverImpl::legacy() const {
+    ImplRef result;
+    if (traitImpl) {
+        ASSERT_BUG(Span(), trait, "trait impl solver response has no trait declaration");
+        result = ImplRef(implParams.clone(), *trait, traitPath, *traitImpl);
+    } else {
+        HIRTraitPath::assocListT assoc;
+        for (const auto& entry : associated) {
+            assoc.insert({entry.first, entry.second.clone()});
+        }
+        result = ImplRef(type, traitArgs.clone(), std::move(assoc), constness);
+    }
+    if (ambiguousIdentity) {
+        result.markAmbiguousIdentity();
+    }
+    return result;
+}
+
+namespace {
+
+    HIRTypeRef InstantiateCanonicalTraitResponse::getType(const Span&, const HIRGenericRef& generic) const {
+        return generic.isPlaceholder() && !generic.isSolverExistential() ? types.generic(instantiatePlaceholderName(generic.name), generic.binding) : types.generic(generic);
+    }
 
 }
 
@@ -3024,330 +3355,6 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
 
     return false;
 }
-
-struct NextTraitGoalEvaluator {
-    using Certainty = SolverCertainty;
-
-    enum class CandidateSource {
-        Builtin,
-        ParamEnv,
-        AliasBound,
-        Other,
-        TraitImpl,
-    };
-
-    enum class OrphanPerspective {
-        Local,
-        Remote,
-    };
-
-    enum class OrphanVisit {
-        NonLocal,
-        LocalKey,
-        Uncovered,
-    };
-
-    struct Candidate {
-        ImplRef impl;
-        bool headExact;
-        Certainty headRelation;
-        Certainty certainty;
-        const HIRMarkerImpl* markerImpl;
-        HIRPathParams markerImplParams;
-        bool autoBuiltin;
-        CandidateSource source;
-        bool headNormalizationAmbiguity;
-        bool ambiguityBeyondHead = false;
-        bool nestedAmbiguity = false;
-        bool coercionsProven = true;
-        ThinVector<SolverTypeEquality> headEqualities;
-        ThinVector<SolverValueEquality> headValueEqualities;
-        ThinVector<SolverTypeEquality> coercionEqualities;
-        ThinVector<SolverObligation> headObligations;
-        ThinVector<SolverTypeEquality> relationEqualities;
-        ThinVector<SolverValueEquality> relationValueEqualities;
-        ThinVector<SolverObligation> relationObligations;
-        Vector<const HIRGenericBound*> normalizationNestedGoals;
-        bool discarded = false;
-        Certainty traitCertainty = Certainty::Ambiguous;
-        const Candidate* specializationItemSource = nullptr;
-
-        Candidate(ImplRef impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {});
-
-        bool isNegative() const;
-
-        bool isPositiveMarkerImpl() const;
-    };
-
-    struct CandidateFrame {
-        std::vector<Candidate*> candidates;
-        std::vector<Candidate*> viable;
-        size_t availableDepth = 0;
-        bool encounteredOverflow = false;
-
-        CandidateFrame();
-
-        void clear(ObjList<Candidate>& nodes);
-    };
-
-    static constexpr size_t ROOT_DEPTH = 128;
-    static constexpr size_t OVERFLOW_DEPTH_DIVISOR = 4;
-
-    struct GoalKey {
-        size_t hash;
-        HIRSimplePath trait;
-        HIRPathParams params;
-        HIRTypeRef type;
-        HIRTraitPath::assocListT associated;
-
-        GoalKey(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated);
-    };
-
-    struct CachedGoal {
-        GoalKey goal;
-        Certainty certainty;
-        const SolverResponse* response = nullptr;
-        bool hasResponse = false;
-        bool persistent = false;
-
-        CachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, Certainty certainty);
-    };
-
-    const TraitResolution& resolve_;
-    const HIRCrate& crate;
-    const Span* span_ = nullptr;
-    bool coherenceMode = false;
-    mutable u64 cycleHits_ = 0;
-    mutable u64 envGeneration_ = ~0ull;
-    mutable u64 ivarGenerationSeen_ = ~0ull;
-    mutable u64 solverEnvGenerationSeen_ = ~0ull;
-
-    struct ImplExistentials {
-        const HIRGenericParams* definition;
-        HIRPathParams params;
-    };
-
-    IntMap<ThinVector<ImplExistentials>> implExistentials_;
-
-    ObjList<Candidate> candidateNodes;
-    std::vector<CandidateFrame*> frames;
-    size_t frameDepth = 0;
-    ObjList<GoalKey> activeGoalNodes;
-    ObjList<CachedGoal> cachedGoalNodes;
-    std::vector<GoalKey*> goalStack;
-    std::vector<CachedGoal*> goalCache;
-    std::unordered_multimap<size_t, GoalKey*> activeGoalIndex;
-    std::unordered_multimap<size_t, CachedGoal*> goalCacheIndex;
-
-    struct CanonicalGoal {
-        HIRPathParams params;
-        HIRTypeRef type;
-        HIRTraitPath::assocListT associated;
-
-        CanonicalGoal(HIRPathParams params, HIRTypeRef type);
-    };
-
-    const Span& span() const;
-
-    const HIRPathParams& implExistentials(const HIRGenericParams& definition);
-
-    bool goalIsConcrete(const HIRSimplePath& trait, const CanonicalGoal& canonical) const;
-
-    bool crateCacheUsable() const;
-
-    NextSolverCrateCache& crateCache() const;
-
-    CanonicalGoal canonicalizeGoal(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, CanonicalizeTraitGoal& canonicalizer) const;
-
-    std::optional<size_t> availableDepthForNested();
-
-    static bool isEnvironmentOrBuiltin(const ImplRef& impl);
-
-    bool paramsHaveUnknownTypes(const HIRPathParams& params) const;
-
-    bool pathHasUnknownTypes(const HIRPath& path) const;
-
-    bool traitPathHasUnknownTypes(const HIRTraitPath& trait) const;
-
-    bool valueHasUnassignedInfer(const HIRConstGeneric& value) const;
-
-    bool paramsHaveUnassignedInfer(const HIRPathParams& params) const;
-
-    bool pathHasUnassignedInfer(const HIRPath& path) const;
-
-    bool traitPathHasUnassignedInfer(const HIRTraitPath& trait) const;
-
-    bool typeHasUnassignedInfer(const HIRTypeData* input) const;
-
-    bool goalHasUnassignedInfer(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) const;
-
-    bool selfIsUnresolvedProjectionOverIvar(const HIRTypeData* type) const;
-
-    HIRTypeRef normalizeGoalInput(HIRTypeRef input) const;
-
-    bool typeHasUnknown(const HIRTypeData* input) const;
-
-    static bool typeHasCandidatePlaceholder(const HIRTypeData* type);
-
-    static bool typeHasUfcsUnknown(const HIRTypeData* type);
-
-    static bool paramsNeedResponseConstraints(const HIRPathParams& params);
-
-    bool candidateNeedsResponseConstraints(const Candidate& candidate) const;
-
-    OrphanVisit orphanVisitResolvedType(const HIRTypeData* type, OrphanPerspective perspective) const;
-
-    OrphanVisit orphanVisitType(const HIRTypeData* input, OrphanPerspective perspective) const;
-
-    bool orphanCheckTraitRef(const HIRPathParams& params, const HIRTypeData* type, OrphanPerspective perspective) const;
-
-    bool traitRefIsKnowable(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) const;
-
-    static size_t hashMix(size_t state, size_t value);
-
-    static size_t hashSimplePath(const HIRSimplePath& path);
-
-    static size_t hashType(const HIRTypeData* type);
-
-    static size_t goalHash(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated);
-
-    static HIRTraitPath::assocListT cloneAssociated(const HIRTraitPath::assocListT* associated);
-
-    ImplRef monomorphImplRef(const ImplRef& source, const Monomorphiser& monomorph) const;
-
-    const SolverImpl* ownSolverImpl(ImplRef source) const;
-
-    const SolverImpl* monomorphSolverImpl(const SolverImpl& source, const Monomorphiser& monomorph) const;
-
-    const SolverImpl* correlateSolverImplForRead(const SolverImpl& source, const SolverSlotValues& slots, const HIRTypeData* type, const HIRPathParams& params) const;
-
-    ImplRef monomorphSolverImplForLegacy(const SolverImpl& source, const Monomorphiser& monomorph) const;
-
-    SolverResponse monomorphSolverResponse(const SolverResponse& source, const Monomorphiser& monomorph, bool includeObligations = true) const;
-
-    SolverSlotValues extractSlotValues(const CanonicalGoal& goal, const ImplRef& response, const CanonicalizeTraitGoal& canonicalizer, Certainty certainty) const;
-
-    static bool goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated);
-
-    CachedGoal* findCachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) const;
-
-    GoalKey* findActiveGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) const;
-
-    GoalKey* pushActiveGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated);
-
-    void popActiveGoal(GoalKey* goal);
-
-    Certainty cacheGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, Certainty certainty, bool persistent = false);
-
-    CachedGoal* cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, const SolverResponse* response);
-
-    void clearGoalCache();
-
-    static bool canonicalGoalIsRigid(const CanonicalGoal& canonical);
-
-    static const HIRTraitPath::assocListT* boundedAssociated(const ImplRef& impl);
-
-    static bool associatedResponsesEqual(const HIRTraitPath::assocListT* left, const HIRTraitPath::assocListT* right);
-
-    bool isSameImpl(const ImplRef& left, const ImplRef& right) const;
-
-    bool paramEnvCandidateIsNonGlobal(const Candidate& candidate) const;
-
-    void pushCandidate(size_t frameIndex, ImplRef impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl = nullptr, HIRPathParams markerImplParams = {}, bool autoBuiltin = false, CandidateSource source = CandidateSource::Other, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {});
-
-    Certainty relateAssembledHead(const HIRPathParams& goalParams, const HIRTypeData* goalType, ImplRef& impl, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities) const;
-
-    bool assembledHeadIsExact(const HIRPathParams& goalParams, const HIRTypeData* goalType, const ImplRef& impl) const;
-
-    Certainty unifyImplHead(const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitArgs, const HIRTypeData* implType, const HIRPathParams& goalParams, const HIRTypeData* goalType, HIRPathParams& outputParams, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities);
-
-    void assembleAliasBoundCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type);
-
-    void assembleCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, bool includeMagicCandidates = true);
-
-    HIRTypeRef makeAssociatedProjection(const HIRTypeData* type, const HIRGenericPath& sourceTrait, const RcString& name, const HIRPathParams& associatedParams) const;
-
-    HIRTypeRef makeAssociatedProjection(const ImplRef& impl, const HIRGenericPath& sourceTrait, const RcString& name, const HIRPathParams& associatedParams) const;
-
-    struct CandidateTypeBinding {
-        HIRTypeRef stable;
-        HIRTypeRef probe;
-    };
-
-    struct CandidateValueBinding {
-        RcString name;
-        unsigned stableIndex;
-        unsigned probeIndex;
-        bool isGeneric;
-    };
-
-    enum class CandidateBindingResult {
-        Mismatch,
-        Unchanged,
-        Changed,
-    };
-
-    template <typename Relate>
-    CandidateBindingResult unifyCandidateParams(HIRPathParams& params, Relate relate);
-
-    CandidateBindingResult bindCandidatePlaceholders(Candidate& candidate, const HIRTypeData* nestedType, const HIRTraitPath::assocListT& associated, bool useCandidateResponse = false);
-
-    CandidateBindingResult bindCandidateResponse(Candidate& candidate, const HIRTypeData* nestedType, const HIRPathParams& nestedParams, const HIRTraitPath::assocListT& nestedAssociated, const ImplRef& response);
-
-    Certainty unifyProbe(const HIRTypeData* left, const HIRTypeData* right);
-
-    Certainty unifyValueProbe(const HIRConstGeneric& left, const HIRConstGeneric& right);
-
-    void appendRelationEffects(Candidate& candidate, SolverResponse response);
-
-    Certainty relateTypes(Candidate& candidate, const HIRTypeData* left, const HIRTypeData* right);
-
-    Certainty evaluateHeadEquality(Candidate& candidate, const SolverTypeEquality& equality);
-
-    Certainty matchAssociatedTypes(const HIRSimplePath& trait, Candidate& candidate, const HIRTraitPath::assocListT* associated);
-
-    Certainty evaluateAutoBuiltin(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type);
-
-    Certainty evaluateCandidate(size_t frameIndex, size_t candidateIndex, const HIRSimplePath& trait, const HIRTraitPath::assocListT* associated);
-
-    Certainty solveGoal(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated);
-
-    bool literalClassCanMatch(const HIRSimplePath& trait, const HIRPathParams& params, HIRInferClass tyClass) const;
-
-    bool containsDefiningOpaque(const HIRTypeData* ty) const;
-
-    Certainty matchRootAssociated(const HIRSimplePath& trait, Candidate& candidate, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams);
-
-    ImplRef materializeRootAssociated(ImplRef impl, const HIRSimplePath& trait, const char* assocName, const HIRPathParams* assocParams) const;
-
-    void appendResponseObligations(ThinVector<SolverObligation>& obligations, const Candidate* candidate, const Monomorphiser& canonicalizer) const;
-
-    static bool implDefinesValue(const ImplRef& impl, const char* valueName);
-
-    static const Candidate* specializationValueSource(const Candidate* selected, const char* valueName);
-
-    bool responsesEqual(const ImplRef& left, const ImplRef& right, const char* assocName, const HIRPathParams* assocParams, const char* valueName) const;
-
-    NextTraitGoalEvaluator(const TraitResolution& resolve, const HIRCrate& crate);
-
-    HIRCompare evaluateCertainty(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type);
-
-    bool evaluateOverlap(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right);
-
-    struct OverlapEntry {
-        const HIRTraitImpl* left;
-        const HIRTraitImpl* right;
-        bool overlaps;
-    };
-
-    IntMap<ThinVector<OverlapEntry>> overlapCache;
-
-    bool evaluateOverlapUncached(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right);
-
-    bool evaluateTyped(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, SolverResponseCallback& callback, const TraitGoalQuery& query, bool callerBoundary = false, bool includeRootMagicCandidates = true);
-
-    bool evaluateNormalizesTo(const Span& callSpan, const NormalizesTo& goal, NormalizesToCallback& callback, bool callerBoundary = false);
-};
 
 TraitResolution::TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait)
     : TraitResolveCommon(wb)

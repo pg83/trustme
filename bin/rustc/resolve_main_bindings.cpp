@@ -17,23 +17,6 @@ using namespace stl;
 #define FLAG_CONST_GENERIC (1u << 31)
 
 namespace {
-    RcString selfName() {
-        return RcString::newInterned("Self");
-    }
-
-    ASTAbsolutePath spToAp(const HIRSimplePath& sp) {
-        return ASTAbsolutePath(sp.crateName(), sp.componentsVec());
-    }
-
-    template <typename Map>
-    auto findHygienicItem(const Map& items, const RcString& name, const RcString& hygienicName) {
-        auto it = items.find(hygienicName);
-        if (it == items.end() && hygienicName != name) {
-            it = items.find(name);
-        }
-        return it;
-    }
-
     struct GenericSlot {
         enum class Level {
             Top,
@@ -158,6 +141,56 @@ namespace {
 
         Context cloneMod() const;
     };
+
+    struct ActiveUseResolution;
+
+    struct UseResolutionContext {
+        const ActiveUseResolution* activeUse = nullptr;
+        std::vector<std::pair<const ASTModule*, const char*>> moduleLookups;
+        std::vector<const ASTUseItem*> wildcardUses;
+        std::vector<std::pair<const ASTModule*, RcString>> wildcardModules;
+    };
+
+    struct ActiveUseResolution {
+        UseResolutionContext& context;
+        const ASTPath* path;
+        const ActiveUseResolution* parent;
+
+        ActiveUseResolution(UseResolutionContext& context, const ASTPath& path);
+
+        ~ActiveUseResolution();
+    };
+
+}
+
+struct DelegationSignatureSource {
+    const ASTFunction* ast = nullptr;
+    const HIRFunction* hir = nullptr;
+};
+
+struct WildcardRecursionNode {
+    const ASTModule* module;
+    const WildcardRecursionNode* next;
+};
+
+namespace {
+
+    RcString selfName() {
+        return RcString::newInterned("Self");
+    }
+
+    ASTAbsolutePath spToAp(const HIRSimplePath& sp) {
+        return ASTAbsolutePath(sp.crateName(), sp.componentsVec());
+    }
+
+    template <typename Map>
+    auto findHygienicItem(const Map& items, const RcString& name, const RcString& hygienicName) {
+        auto it = items.find(hygienicName);
+        if (it == items.end() && hygienicName != name) {
+            it = items.find(name);
+        }
+        return it;
+    }
 }
 
 std::ostream& operator<<(std::ostream& os, const Context::LookupMode& v) {
@@ -193,11 +226,6 @@ void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node);
 void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& pat);
 void ResolveAbsoluteMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod);
 void ResolveAbsoluteMod(Context itemContext, ASTModule& mod);
-
-struct DelegationSignatureSource {
-    const ASTFunction* ast = nullptr;
-    const HIRFunction* hir = nullptr;
-};
 
 void ResolveAbsoluteFunction(Context& itemContext, ASTFunction& fcn, DelegationSignatureSource signatureSource = {}, bool hasParentSelf = false, bool isTraitImpl = false);
 void ResolveAbsoluteStatic(Context& itemContext, ASTStatic& e);
@@ -3268,11 +3296,6 @@ enum class IndexName {
     Macro,
 };
 
-struct WildcardRecursionNode {
-    const ASTModule* module;
-    const WildcardRecursionNode* next;
-};
-
 bool WildcardRecursionContains(const WildcardRecursionNode* node, const ASTModule& module) {
     for (; node; node = node->next) {
         if (node->module == &module) {
@@ -4275,25 +4298,6 @@ namespace {
     RcString crateBuiltinsName() {
         return RcString::newInterned(CRATE_BUILTINS);
     }
-
-    struct ActiveUseResolution;
-
-    struct UseResolutionContext {
-        const ActiveUseResolution* activeUse = nullptr;
-        std::vector<std::pair<const ASTModule*, const char*>> moduleLookups;
-        std::vector<const ASTUseItem*> wildcardUses;
-        std::vector<std::pair<const ASTModule*, RcString>> wildcardModules;
-    };
-
-    struct ActiveUseResolution {
-        UseResolutionContext& context;
-        const ASTPath* path;
-        const ActiveUseResolution* parent;
-
-        ActiveUseResolution(UseResolutionContext& context, const ASTPath& path);
-
-        ~ActiveUseResolution();
-    };
 
     bool isUseResolutionActive(const UseResolutionContext& context, const ASTPath& path) {
         for (auto* active = context.activeUse; active; active = active->parent) {

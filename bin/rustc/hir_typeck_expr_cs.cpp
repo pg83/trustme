@@ -22,59 +22,6 @@
 using namespace stl;
 
 namespace {
-    inline HIRExprNodeP mkExprnodep(HIRExprNode* en, HIRTypeRef ty) {
-        en->resType = mv$(ty);
-        return HIRExprNodeP(en);
-    }
-
-    inline HIRSimplePath getParentPath(const HIRSimplePath& sp) {
-        return sp.parent();
-    }
-
-    inline HIRGenericPath getParentPath(const HIRGenericPath& gp) {
-        return HIRGenericPath(getParentPath(gp.path), gp.params.clone());
-    }
-
-    bool typeContainsImplPlaceholder(HIRTypeInterner& types, const HIRTypeData* t) {
-        struct V: public HIRVisitor {
-            bool found = false;
-
-            explicit V(HIRTypeInterner& types)
-                : HIRVisitor(nullptr, types)
-            {
-            }
-
-            void visitConstgeneric(const HIRConstGeneric& v) {
-                if (v.is_Generic() && v.as_Generic().isPlaceholder()) {
-                    found = true;
-                }
-            }
-
-            void visitPathParams(HIRPathParams& pp) override {
-                for (const auto& v : pp.values) {
-                    visitConstgeneric(v);
-                }
-                HIRVisitor::visitPathParams(pp);
-            }
-
-            [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
-                if (ty->is_Generic() && ty->as_Generic().isPlaceholder()) {
-                    found = true;
-                }
-                if (const auto* e = ty->opt_Array()) {
-                    if (const auto* ase = e->size.opt_Unevaluated()) {
-                        visitConstgeneric(*ase);
-                    }
-                }
-                return visitTypeDefaultViaHooks(ty);
-            }
-        } v(types);
-
-        auto _discard = v.visitType(t);
-        (void)_discard;
-        return v.found;
-    }
-
     struct MonomorphEraseHrls: public Monomorphiser {
         explicit MonomorphEraseHrls(HIRTypeInterner& types);
 
@@ -82,15 +29,7 @@ namespace {
 
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
     };
-}
 
-#define NEWNODE(TY, SP, CLASS, ...) mkExprnodep(context.crate.pool->make<HIRExprNode##CLASS>(SP, ##__VA_ARGS__), TY)
-
-void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams& paramsDef, const Monomorphiser& ms, bool isImplLevel);
-
-namespace {
-
-    // TODO: Convert these to `Revisitor` instances
     struct ExprVisitorRevisit: public HIRExprVisitor {
         Context& context;
         bool completed;
@@ -350,6 +289,450 @@ namespace {
 
         void noRevisit(HIRExprNode& n);
     };
+
+    struct ConstExprEquate {
+        Context& context;
+        const Span& sp;
+
+        const HIRConstGeneric* getParam(const HIRConstGenericUnevaluated& value, unsigned int binding) const;
+
+        const HIRConstGeneric* identity(const HIRConstGeneric& value) const;
+
+        bool equateIdentity(const HIRConstGeneric& value, const HIRConstGeneric& other) const;
+
+        bool equateLiteral(const HIRExprNodeLiteral& left, const HIRExprNodeLiteral& right) const;
+
+        const EncodedLiteral* evaluatedPath(const HIRConstGenericUnevaluated& value, const HIRExprNodePathValue& node) const;
+
+        bool equateLiteralEvaluated(const HIRExprNodeLiteral& literal, const EncodedLiteral& evaluated) const;
+
+        bool equateLiteralPath(const HIRExprNodeLiteral& literal, const HIRConstGenericUnevaluated& pathValue, const HIRExprNodePathValue& path) const;
+
+        bool equateEvaluated(const HIRConstGenericUnevaluated& value, const EncodedLiteral& evaluated) const;
+
+        bool equatePath(const HIRConstGenericUnevaluated& leftValue, const HIRPath& left, const HIRConstGenericUnevaluated& rightValue, const HIRPath& right) const;
+
+        bool equateNode(const HIRConstGenericUnevaluated& leftValue, const HIRExprNode& left, const HIRConstGenericUnevaluated& rightValue, const HIRExprNode& right) const;
+
+        bool equate(const HIRConstGenericUnevaluated& left, const HIRConstGenericUnevaluated& right) const;
+    };
+
+    struct AssociatedStallCollector {
+        Context& context;
+        std::vector<Context::Associated::StallDependency>& dependencies;
+        std::vector<HIRTypeRef> pending;
+        std::vector<HIRTypeRef> visited;
+        bool hasRawInfer = false;
+
+        void addType(HIRTypeRef type);
+
+        void collect();
+    };
+
+    struct IvarDependencyIndex {
+        Context& context;
+        std::vector<std::vector<unsigned int>> associatedTargets;
+        std::vector<std::vector<unsigned int>> possibilityTargets;
+
+        static void collectDirectIvars(const HIRTypeData* type, std::vector<unsigned int>& out);
+
+        static void deduplicate(std::vector<unsigned int>& values);
+
+        IvarDependencyIndex(Context& context);
+
+        void disableDependents(unsigned int source);
+    };
+
+    struct IvarCoercionRefs {
+        std::vector<const Context::Coercion*> coercions;
+    };
+
+    struct IvarCoercionIndex {
+        const Context& context;
+        std::vector<IvarCoercionRefs> refs;
+
+        void collectIvars(const HIRTypeData* root, std::vector<unsigned int>& out) const;
+
+        template <typename T>
+        void addRefs(const std::vector<unsigned int>& dependencies, std::vector<T> IvarCoercionRefs::* member, T value);
+
+        explicit IvarCoercionIndex(const Context& context);
+
+        const IvarCoercionRefs& operator[](unsigned int index) const;
+    };
+
+    struct ActiveOperatorOutput {
+        unsigned int index;
+        const ActiveOperatorOutput* parent;
+    };
+
+    struct PossibleType {
+        enum {
+            Equal,
+            CoerceTo,
+            CoerceFrom,
+            UnsizeTo,
+            UnsizeFrom,
+        } cls;
+
+        enum class State {
+            Concrete,
+            Barrier,
+            Removed,
+        } state;
+
+        const HIRTypeData* ty;
+
+        static PossibleType concrete(decltype(cls) cls, const HIRTypeData* ty);
+
+        static PossibleType barrier(decltype(cls) cls);
+
+        bool isActive() const;
+
+        bool hasType() const;
+
+        void remove();
+
+        Ordering ord(const PossibleType& o) const;
+
+        bool operator<(const PossibleType& o) const;
+
+        bool operator==(const PossibleType& o) const;
+
+        std::ostream& fmt(std::ostream& os) const;
+
+        bool isSource() const;
+
+        bool isDest() const;
+
+        static bool isSourceS(const PossibleType& self);
+
+        static bool isDestS(const PossibleType& self);
+
+        bool isCoerce() const;
+
+        bool isUnsize() const;
+
+        static bool isCoerceS(const PossibleType& self);
+
+        static bool isUnsizeS(const PossibleType& self);
+    };
+
+    struct TypeRestrictiveOrdering {
+        static const HIRTypeData* matchAndExtractPtrTy(const HIRTypeData* ptrTpl, const HIRTypeData* ty);
+
+        static Ordering getOrderingInfer(const Span& sp, const HIRTypeData* r);
+
+        static Ordering getOrderingTy(const Span& sp, const Context& context, const HIRTypeData* l, const HIRTypeData* r, bool& outUnordered);
+
+        static Ordering getOrderingPtr(const Span& sp, const Context& context, const HIRTypeData* l, const HIRTypeData* r, bool& outUnordered, bool deep = true);
+    };
+
+    struct InfoOrdering {
+        enum eInfoOrdering {
+            Incompatible,
+            Less,
+            Same,
+            More,
+        };
+
+        static bool isInfer(const HIRTypeData* ty);
+
+        static bool compareScore(int& score, const HIRTypeData* tyL, const HIRTypeData* tyR);
+
+        static eInfoOrdering compare(const HIRTypeData* tyL, const HIRTypeData* tyR);
+
+        static eInfoOrdering compareTop(const Context& context, const HIRTypeData* tyL, const HIRTypeData* tyR, bool shouldDeref);
+    };
+
+    struct RpitOriginMonomorph: public HIRMatchGenerics, public Monomorphiser {
+        std::map<u32, HIRTypeRef> typeBindings;
+        std::map<u32, HIRConstGeneric> valueBindings;
+
+        explicit RpitOriginMonomorph(HIRTypeInterner& types);
+
+        HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override;
+
+        HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override;
+
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
+
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
+    };
+
+}
+
+struct OwnedImplMatcher: public HIRMatchGenerics {
+    HIRPathParams& implParams;
+
+    OwnedImplMatcher(HIRTypeInterner& types, HIRPathParams& implParams);
+
+    HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override;
+
+    HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
+};
+
+struct ExprVisitorTagStaleIvars: public HIRExprVisitorDef {
+    struct Mapper final: public MonomorphiserNop {
+        mutable Vector<std::pair<unsigned, unsigned>> valueIndexes_;
+
+        unsigned taggedIndex(Vector<std::pair<unsigned, unsigned>>& indexes, unsigned original) const;
+
+        using MonomorphiserNop::MonomorphiserNop;
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override;
+    } mapper_;
+
+    explicit ExprVisitorTagStaleIvars(HIRTypeInterner& types);
+
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
+
+    void visitPathParams(HIRPathParams& params) override;
+};
+
+struct ExprVisitorAddIvars: public HIRExprVisitorDef {
+    Context& context;
+
+    struct LocalImplTraitLowering: Monomorphiser {
+        Context& context;
+        mutable const HIRTypeData* curSelf = nullptr;
+
+        explicit LocalImplTraitLowering(Context& context);
+
+        HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override;
+
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
+
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override;
+    };
+
+    ExprVisitorAddIvars(Context& context);
+
+    void innerVisitType(HIRTypeRef& ty);
+
+    void visitPathParams(HIRPathParams& pp) override;
+
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+
+    void visit(HIRExprNodeLet& node) override;
+};
+
+struct ExprVisitorEnum: public HIRExprVisitor {
+    Context& context;
+    const HIRTypeData* retType;
+
+    struct RetTarget {
+        const HIRTypeData* retType;
+        const HIRTypeData* resumeType;
+        const HIRTypeData* yieldType;
+
+        RetTarget(const HIRTypeData* retType);
+
+        RetTarget(const HIRTypeData* retType, const HIRTypeData* resumeType, const HIRTypeData* yieldType);
+    };
+
+    std::vector<RetTarget> closureRetTypes;
+
+    std::vector<bool> innerCoerceEnabledStack;
+
+    std::vector<HIRExprNodeLoop*> loopBlocks;
+
+    tTraitList traits;
+
+    struct RevisitDefaultUnit: public Context::Revisitor {
+        HIRExprNode* node;
+
+        RevisitDefaultUnit(HIRExprNode* node);
+
+        const Span& span(void) const;
+
+        void fmt(std::ostream& os) const;
+
+        bool revisit(Context& context, bool isFallback);
+    };
+
+    ExprVisitorEnum(Context& context, tTraitList baseTraits, const HIRTypeData* retType);
+
+    void visit(HIRExprNodeBlock& node) override;
+
+    void visit(HIRExprNodeConstBlock& node) override;
+
+    void visit(HIRExprNodeAsm& node) override;
+
+    void visit(HIRExprNodeAsm2& node) override;
+
+    void visit(HIRExprNodeReturn& node) override;
+
+    void visit(HIRExprNodeYield& node) override;
+
+    void visit(HIRExprNodeAWait& node) override;
+
+    void visit(HIRExprNodeUse& node) override;
+
+    void visit(HIRExprNodeLoop& node) override;
+
+    void visit(HIRExprNodeLoopControl& node) override;
+
+    void visit(HIRExprNodeLet& node) override;
+
+    void visit(HIRExprNodeMatch& node) override;
+
+    void visit(HIRExprNodeAssign& node) override;
+
+    void visit(HIRExprNodeBinOp& node) override;
+
+    void visit(HIRExprNodeUniOp& node) override;
+
+    void visit(HIRExprNodeBorrow& node) override;
+
+    void visit(HIRExprNodeRawBorrow& node) override;
+
+    void visit(HIRExprNodeCast& node) override;
+
+    void visit(HIRExprNodeUnsize& node) override;
+
+    void visit(HIRExprNodeIndex& node) override;
+
+    void visit(HIRExprNodeDeref& node) override;
+
+    void visit(HIRExprNodeEmplace& node) override;
+
+    void addIvarsGenericPath(const Span& sp, HIRGenericPath& gp);
+
+    void addIvarsPath(const Span& sp, HIRPath& path);
+
+    HIRTypeRef getStructenumTy(const Span& sp, bool isStruct, HIRGenericPath& gp);
+
+    void visit(HIRExprNodeTupleVariant& node) override;
+
+    void visit(HIRExprNodeStructLiteral& node) override;
+
+    void visit(HIRExprNodeUnitVariant& node) override;
+
+    void visit(HIRExprNodeCallPath& node) override;
+
+    void visit(HIRExprNodeCallValue& node) override;
+
+    void visit(HIRExprNodeCallMethod& node) override;
+
+    void visit(HIRExprNodeField& node) override;
+
+    void visit(HIRExprNodeTuple& node) override;
+
+    void visit(HIRExprNodeArrayList& node) override;
+
+    void visit(HIRExprNodeArraySized& node) override;
+
+    void visit(HIRExprNodeLiteral& node) override;
+
+    void visit(HIRExprNodePathValue& node) override;
+
+    void visit(HIRExprNodeVariable& node) override;
+
+    void visit(HIRExprNodeConstParam& node) override;
+
+    void visit(HIRExprNodeClosure& node) override;
+
+    void visit(HIRExprNodeGenerator& node) override;
+
+    void visit(HIRExprNodeGeneratorWrapper& node) override;
+
+    void visit(HIRExprNodeAsyncBlock& node) override;
+
+    bool nodeDiverges(const HIRExprNode& node) const;
+
+    void inheritDivergence(HIRExprNode& node, const HIRExprNode& child) const;
+
+    void pushTraits(const tTraitList& list);
+
+    void popTraits(const tTraitList& list);
+
+    void visitGenericPath(const Span& sp, HIRGenericPath& gp);
+
+    void visitPath(const Span& sp, HIRPath& path);
+
+    struct InnerCoerceGuard {
+        ExprVisitorEnum& t;
+
+        InnerCoerceGuard(ExprVisitorEnum& t);
+
+        ~InnerCoerceGuard();
+    };
+
+    InnerCoerceGuard pushInnerCoerceScoped(bool val);
+
+    void pushInnerCoerce(bool val);
+
+    void popInnerCoerce();
+
+    bool canCoerceInnerResult() const;
+
+    void equateTypesInnerCoerce(const Span& sp, const HIRTypeData* target, HIRExprNodeP& node);
+};
+
+namespace {
+
+    inline HIRExprNodeP mkExprnodep(HIRExprNode* en, HIRTypeRef ty) {
+        en->resType = mv$(ty);
+        return HIRExprNodeP(en);
+    }
+
+    inline HIRSimplePath getParentPath(const HIRSimplePath& sp) {
+        return sp.parent();
+    }
+
+    inline HIRGenericPath getParentPath(const HIRGenericPath& gp) {
+        return HIRGenericPath(getParentPath(gp.path), gp.params.clone());
+    }
+
+    bool typeContainsImplPlaceholder(HIRTypeInterner& types, const HIRTypeData* t) {
+        struct V: public HIRVisitor {
+            bool found = false;
+
+            explicit V(HIRTypeInterner& types)
+                : HIRVisitor(nullptr, types)
+            {
+            }
+
+            void visitConstgeneric(const HIRConstGeneric& v) {
+                if (v.is_Generic() && v.as_Generic().isPlaceholder()) {
+                    found = true;
+                }
+            }
+
+            void visitPathParams(HIRPathParams& pp) override {
+                for (const auto& v : pp.values) {
+                    visitConstgeneric(v);
+                }
+                HIRVisitor::visitPathParams(pp);
+            }
+
+            [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+                if (ty->is_Generic() && ty->as_Generic().isPlaceholder()) {
+                    found = true;
+                }
+                if (const auto* e = ty->opt_Array()) {
+                    if (const auto* ase = e->size.opt_Unevaluated()) {
+                        visitConstgeneric(*ase);
+                    }
+                }
+                return visitTypeDefaultViaHooks(ty);
+            }
+        } v(types);
+
+        auto _discard = v.visitType(t);
+        (void)_discard;
+        return v.found;
+    }
+}
+
+#define NEWNODE(TY, SP, CLASS, ...) mkExprnodep(context.crate.pool->make<HIRExprNode##CLASS>(SP, ##__VA_ARGS__), TY)
+
+void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams& paramsDef, const Monomorphiser& ms, bool isImplLevel);
+
+namespace {
+
+    // TODO: Convert these to `Revisitor` instances
 }
 
 void Context::equateTypes(const Span& sp, const HIRTypeData* li, const HIRTypeData* ri) {
@@ -924,35 +1307,6 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
             }
         }
     }
-}
-
-namespace {
-    struct ConstExprEquate {
-        Context& context;
-        const Span& sp;
-
-        const HIRConstGeneric* getParam(const HIRConstGenericUnevaluated& value, unsigned int binding) const;
-
-        const HIRConstGeneric* identity(const HIRConstGeneric& value) const;
-
-        bool equateIdentity(const HIRConstGeneric& value, const HIRConstGeneric& other) const;
-
-        bool equateLiteral(const HIRExprNodeLiteral& left, const HIRExprNodeLiteral& right) const;
-
-        const EncodedLiteral* evaluatedPath(const HIRConstGenericUnevaluated& value, const HIRExprNodePathValue& node) const;
-
-        bool equateLiteralEvaluated(const HIRExprNodeLiteral& literal, const EncodedLiteral& evaluated) const;
-
-        bool equateLiteralPath(const HIRExprNodeLiteral& literal, const HIRConstGenericUnevaluated& pathValue, const HIRExprNodePathValue& path) const;
-
-        bool equateEvaluated(const HIRConstGenericUnevaluated& value, const EncodedLiteral& evaluated) const;
-
-        bool equatePath(const HIRConstGenericUnevaluated& leftValue, const HIRPath& left, const HIRConstGenericUnevaluated& rightValue, const HIRPath& right) const;
-
-        bool equateNode(const HIRConstGenericUnevaluated& leftValue, const HIRExprNode& left, const HIRConstGenericUnevaluated& rightValue, const HIRExprNode& right) const;
-
-        bool equate(const HIRConstGenericUnevaluated& left, const HIRConstGenericUnevaluated& right) const;
-    };
 }
 
 void Context::equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRConstGeneric& rr) {
@@ -5191,18 +5545,6 @@ namespace {
         });
     }
 
-    struct AssociatedStallCollector {
-        Context& context;
-        std::vector<Context::Associated::StallDependency>& dependencies;
-        std::vector<HIRTypeRef> pending;
-        std::vector<HIRTypeRef> visited;
-        bool hasRawInfer = false;
-
-        void addType(HIRTypeRef type);
-
-        void collect();
-    };
-
     bool setAssociatedStall(Context& context, Context::Associated& rule) {
         rule.stalledOn.clear();
 
@@ -5264,43 +5606,6 @@ namespace {
             context.possibleIvarVals[value.index].mergeFrom(value.possibilities);
         }
     }
-
-    struct IvarDependencyIndex {
-        Context& context;
-        std::vector<std::vector<unsigned int>> associatedTargets;
-        std::vector<std::vector<unsigned int>> possibilityTargets;
-
-        static void collectDirectIvars(const HIRTypeData* type, std::vector<unsigned int>& out);
-
-        static void deduplicate(std::vector<unsigned int>& values);
-
-        IvarDependencyIndex(Context& context);
-
-        void disableDependents(unsigned int source);
-    };
-
-    struct IvarCoercionRefs {
-        std::vector<const Context::Coercion*> coercions;
-    };
-
-    struct IvarCoercionIndex {
-        const Context& context;
-        std::vector<IvarCoercionRefs> refs;
-
-        void collectIvars(const HIRTypeData* root, std::vector<unsigned int>& out) const;
-
-        template <typename T>
-        void addRefs(const std::vector<unsigned int>& dependencies, std::vector<T> IvarCoercionRefs::* member, T value);
-
-        explicit IvarCoercionIndex(const Context& context);
-
-        const IvarCoercionRefs& operator[](unsigned int index) const;
-    };
-
-    struct ActiveOperatorOutput {
-        unsigned int index;
-        const ActiveOperatorOutput* parent;
-    };
 
     bool typeHasIndependentUnresolvedIvar(const Context& context, const HIRTypeData* type, unsigned int exceptIndex, const ActiveOperatorOutput* active = nullptr);
 
@@ -5524,85 +5829,6 @@ namespace {
         }
         return os;
     }
-
-    struct PossibleType {
-        enum {
-            Equal,
-            CoerceTo,
-            CoerceFrom,
-            UnsizeTo,
-            UnsizeFrom,
-        } cls;
-
-        enum class State {
-            Concrete,
-            Barrier,
-            Removed,
-        } state;
-
-        const HIRTypeData* ty;
-
-        static PossibleType concrete(decltype(cls) cls, const HIRTypeData* ty);
-
-        static PossibleType barrier(decltype(cls) cls);
-
-        bool isActive() const;
-
-        bool hasType() const;
-
-        void remove();
-
-        Ordering ord(const PossibleType& o) const;
-
-        bool operator<(const PossibleType& o) const;
-
-        bool operator==(const PossibleType& o) const;
-
-        std::ostream& fmt(std::ostream& os) const;
-
-        bool isSource() const;
-
-        bool isDest() const;
-
-        static bool isSourceS(const PossibleType& self);
-
-        static bool isDestS(const PossibleType& self);
-
-        bool isCoerce() const;
-
-        bool isUnsize() const;
-
-        static bool isCoerceS(const PossibleType& self);
-
-        static bool isUnsizeS(const PossibleType& self);
-    };
-
-    struct TypeRestrictiveOrdering {
-        static const HIRTypeData* matchAndExtractPtrTy(const HIRTypeData* ptrTpl, const HIRTypeData* ty);
-
-        static Ordering getOrderingInfer(const Span& sp, const HIRTypeData* r);
-
-        static Ordering getOrderingTy(const Span& sp, const Context& context, const HIRTypeData* l, const HIRTypeData* r, bool& outUnordered);
-
-        static Ordering getOrderingPtr(const Span& sp, const Context& context, const HIRTypeData* l, const HIRTypeData* r, bool& outUnordered, bool deep = true);
-    };
-
-    struct InfoOrdering {
-        enum eInfoOrdering {
-            Incompatible,
-            Less,
-            Same,
-            More,
-        };
-
-        static bool isInfer(const HIRTypeData* ty);
-
-        static bool compareScore(int& score, const HIRTypeData* tyL, const HIRTypeData* tyR);
-
-        static eInfoOrdering compare(const HIRTypeData* tyL, const HIRTypeData* tyR);
-
-        static eInfoOrdering compareTop(const Context& context, const HIRTypeData* tyL, const HIRTypeData* tyR, bool shouldDeref);
-    };
 
     // TODO: Split the below into a common portion, and a "run" portion (which uses the fallback)
 
@@ -6819,16 +7045,6 @@ namespace {
 bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) __attribute__((warn_unused_result));
 bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr);
 
-struct OwnedImplMatcher: public HIRMatchGenerics {
-    HIRPathParams& implParams;
-
-    OwnedImplMatcher(HIRTypeInterner& types, HIRPathParams& implParams);
-
-    HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override;
-
-    HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
-};
-
 bool inherentImplMatchesReceiver(Context& context, const Span& sp, const HIRTypeImpl& impl, const HIRTypeData* receiver, ThinVector<SolverTypeEquality>* equalities = nullptr) {
     HIRPathParams implParams;
     while (implParams.types.size() < impl.params.types.size()) {
@@ -7307,204 +7523,6 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
     return true;
 }
 
-struct ExprVisitorTagStaleIvars: public HIRExprVisitorDef {
-    struct Mapper final: public MonomorphiserNop {
-        mutable Vector<std::pair<unsigned, unsigned>> valueIndexes_;
-
-        unsigned taggedIndex(Vector<std::pair<unsigned, unsigned>>& indexes, unsigned original) const;
-
-        using MonomorphiserNop::MonomorphiserNop;
-
-        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override;
-    } mapper_;
-
-    explicit ExprVisitorTagStaleIvars(HIRTypeInterner& types);
-
-    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
-
-    void visitPathParams(HIRPathParams& params) override;
-};
-
-struct ExprVisitorAddIvars: public HIRExprVisitorDef {
-    Context& context;
-
-    struct LocalImplTraitLowering: Monomorphiser {
-        Context& context;
-        mutable const HIRTypeData* curSelf = nullptr;
-
-        explicit LocalImplTraitLowering(Context& context);
-
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override;
-
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
-
-        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override;
-    };
-
-    ExprVisitorAddIvars(Context& context);
-
-    void innerVisitType(HIRTypeRef& ty);
-
-    void visitPathParams(HIRPathParams& pp) override;
-
-    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
-
-    void visit(HIRExprNodeLet& node) override;
-};
-
-struct ExprVisitorEnum: public HIRExprVisitor {
-    Context& context;
-    const HIRTypeData* retType;
-
-    struct RetTarget {
-        const HIRTypeData* retType;
-        const HIRTypeData* resumeType;
-        const HIRTypeData* yieldType;
-
-        RetTarget(const HIRTypeData* retType);
-
-        RetTarget(const HIRTypeData* retType, const HIRTypeData* resumeType, const HIRTypeData* yieldType);
-    };
-
-    std::vector<RetTarget> closureRetTypes;
-
-    std::vector<bool> innerCoerceEnabledStack;
-
-    std::vector<HIRExprNodeLoop*> loopBlocks;
-
-    tTraitList traits;
-
-    struct RevisitDefaultUnit: public Context::Revisitor {
-        HIRExprNode* node;
-
-        RevisitDefaultUnit(HIRExprNode* node);
-
-        const Span& span(void) const;
-
-        void fmt(std::ostream& os) const;
-
-        bool revisit(Context& context, bool isFallback);
-    };
-
-    ExprVisitorEnum(Context& context, tTraitList baseTraits, const HIRTypeData* retType);
-
-    void visit(HIRExprNodeBlock& node) override;
-
-    void visit(HIRExprNodeConstBlock& node) override;
-
-    void visit(HIRExprNodeAsm& node) override;
-
-    void visit(HIRExprNodeAsm2& node) override;
-
-    void visit(HIRExprNodeReturn& node) override;
-
-    void visit(HIRExprNodeYield& node) override;
-
-    void visit(HIRExprNodeAWait& node) override;
-
-    void visit(HIRExprNodeUse& node) override;
-
-    void visit(HIRExprNodeLoop& node) override;
-
-    void visit(HIRExprNodeLoopControl& node) override;
-
-    void visit(HIRExprNodeLet& node) override;
-
-    void visit(HIRExprNodeMatch& node) override;
-
-    void visit(HIRExprNodeAssign& node) override;
-
-    void visit(HIRExprNodeBinOp& node) override;
-
-    void visit(HIRExprNodeUniOp& node) override;
-
-    void visit(HIRExprNodeBorrow& node) override;
-
-    void visit(HIRExprNodeRawBorrow& node) override;
-
-    void visit(HIRExprNodeCast& node) override;
-
-    void visit(HIRExprNodeUnsize& node) override;
-
-    void visit(HIRExprNodeIndex& node) override;
-
-    void visit(HIRExprNodeDeref& node) override;
-
-    void visit(HIRExprNodeEmplace& node) override;
-
-    void addIvarsGenericPath(const Span& sp, HIRGenericPath& gp);
-
-    void addIvarsPath(const Span& sp, HIRPath& path);
-
-    HIRTypeRef getStructenumTy(const Span& sp, bool isStruct, HIRGenericPath& gp);
-
-    void visit(HIRExprNodeTupleVariant& node) override;
-
-    void visit(HIRExprNodeStructLiteral& node) override;
-
-    void visit(HIRExprNodeUnitVariant& node) override;
-
-    void visit(HIRExprNodeCallPath& node) override;
-
-    void visit(HIRExprNodeCallValue& node) override;
-
-    void visit(HIRExprNodeCallMethod& node) override;
-
-    void visit(HIRExprNodeField& node) override;
-
-    void visit(HIRExprNodeTuple& node) override;
-
-    void visit(HIRExprNodeArrayList& node) override;
-
-    void visit(HIRExprNodeArraySized& node) override;
-
-    void visit(HIRExprNodeLiteral& node) override;
-
-    void visit(HIRExprNodePathValue& node) override;
-
-    void visit(HIRExprNodeVariable& node) override;
-
-    void visit(HIRExprNodeConstParam& node) override;
-
-    void visit(HIRExprNodeClosure& node) override;
-
-    void visit(HIRExprNodeGenerator& node) override;
-
-    void visit(HIRExprNodeGeneratorWrapper& node) override;
-
-    void visit(HIRExprNodeAsyncBlock& node) override;
-
-    bool nodeDiverges(const HIRExprNode& node) const;
-
-    void inheritDivergence(HIRExprNode& node, const HIRExprNode& child) const;
-
-    void pushTraits(const tTraitList& list);
-
-    void popTraits(const tTraitList& list);
-
-    void visitGenericPath(const Span& sp, HIRGenericPath& gp);
-
-    void visitPath(const Span& sp, HIRPath& path);
-
-    struct InnerCoerceGuard {
-        ExprVisitorEnum& t;
-
-        InnerCoerceGuard(ExprVisitorEnum& t);
-
-        ~InnerCoerceGuard();
-    };
-
-    InnerCoerceGuard pushInnerCoerceScoped(bool val);
-
-    void pushInnerCoerce(bool val);
-
-    void popInnerCoerce();
-
-    bool canCoerceInnerResult() const;
-
-    void equateTypesInnerCoerce(const Span& sp, const HIRTypeData* target, HIRExprNodeP& node);
-};
-
 void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr, HIRExprNodeP& rootPtr) {
     const Span& sp = rootPtr->span();
 
@@ -7680,23 +7698,6 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
             });
         }
     }
-}
-
-namespace {
-    struct RpitOriginMonomorph: public HIRMatchGenerics, public Monomorphiser {
-        std::map<u32, HIRTypeRef> typeBindings;
-        std::map<u32, HIRConstGeneric> valueBindings;
-
-        explicit RpitOriginMonomorph(HIRTypeInterner& types);
-
-        HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override;
-
-        HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override;
-
-        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
-
-        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
-    };
 }
 
 const HIRTypeData* Context::revealOpaqueType(const HIRTypeData* type) const {

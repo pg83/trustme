@@ -116,71 +116,7 @@ namespace {
     };
 }
 
-std::ostream& operator<<(std::ostream& os, const FmtShell& x) {
-    for (char c : x.s) {
-        switch (c) {
-            case '\\':
-            case '\"':
-            case ' ':
-                os << "\\";
-            default:
-                os << c;
-        }
-    }
-    return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const FmtGccAsm& x) {
-    bool inComment = false;
-    for (const char& ch : x.s) {
-        if (ch == '/' && (&ch)[1] == '/') {
-            if (!inComment) {
-                os << "\" ";
-            }
-            inComment = true;
-        } else {
-            inComment = false;
-        }
-        switch (ch) {
-            case '\n':
-                os << "\\n\"\n\"";
-                break;
-            case '\"':
-                os << "\\\"";
-                break;
-            case '%':
-                if (x.escapePercent) {
-                    os << "%%";
-                } else {
-                    os << "%";
-                }
-                break;
-            case '{':
-                os << "%{";
-                break;
-            case '}':
-                os << "%}";
-                break;
-            case '|':
-                os << "%|";
-                break;
-            default:
-                os << ch;
-                break;
-        }
-    }
-    return os;
-}
-
 namespace {
-    enum class AtomicOp {
-        Add,
-        Sub,
-        And,
-        Or,
-        Xor
-    };
-
     struct CodeGeneratorC: public CodeGenerator {
         Span sp;
 
@@ -592,42 +528,106 @@ namespace {
 
         bool isDst(const HIRTypeData* ty) const;
     };
+}
+
+std::ostream& operator<<(std::ostream& os, const FmtShell& x) {
+    for (char c : x.s) {
+        switch (c) {
+            case '\\':
+            case '\"':
+            case ' ':
+                os << "\\";
+            default:
+                os << c;
+        }
+    }
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const FmtGccAsm& x) {
+    bool inComment = false;
+    for (const char& ch : x.s) {
+        if (ch == '/' && (&ch)[1] == '/') {
+            if (!inComment) {
+                os << "\" ";
+            }
+            inComment = true;
+        } else {
+            inComment = false;
+        }
+        switch (ch) {
+            case '\n':
+                os << "\\n\"\n\"";
+                break;
+            case '\"':
+                os << "\\\"";
+                break;
+            case '%':
+                if (x.escapePercent) {
+                    os << "%%";
+                } else {
+                    os << "%";
+                }
+                break;
+            case '{':
+                os << "%{";
+                break;
+            case '}':
+                os << "%}";
+                break;
+            case '|':
+                os << "%|";
+                break;
+            default:
+                os << ch;
+                break;
+        }
+    }
+    return os;
+}
+
+namespace {
+    enum class AtomicOp {
+        Add,
+        Sub,
+        And,
+        Or,
+        Xor
+    };
 
 }
 
-std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile) {
+std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile) { // escape: existing factory interface exposed by declaration reordering
     return std::unique_ptr<CodeGenerator>(new CodeGeneratorC(wb, crate, outfile));
 }
 
-FmtShell::FmtShell(const std::string& s)
-    : s(s)
-{
+FmtShell::FmtShell(const std::string& s) // escape: existing formatting interface exposed by declaration reordering
+    : s(s) {
 }
 
-FmtGccAsm::FmtGccAsm(const std::string& s, bool escapePercent)
+FmtGccAsm::FmtGccAsm(const std::string& s, bool escapePercent) // escape: existing formatting interface exposed by declaration reordering
     : s(s)
-    , escapePercent(escapePercent)
-{
+    , escapePercent(escapePercent) {
 }
 
 StringList::StringList() {
 }
 
-auto StringList::getVec() const -> const std::vector<const char*>& {
+auto StringList::getVec() const -> const std::vector<const char*>& { // escape: existing container interface exposed by declaration reordering
     return strings;
 }
 
-auto StringList::begin() const -> std::vector<const char*>::const_iterator {
+auto StringList::begin() const -> std::vector<const char*>::const_iterator { // escape: existing container interface exposed by declaration reordering
     return strings.begin();
 }
 
-auto StringList::end() const -> std::vector<const char*>::const_iterator {
+auto StringList::end() const -> std::vector<const char*>::const_iterator { // escape: existing container interface exposed by declaration reordering
     return strings.end();
 }
 
-auto StringList::push_back(std::string s) -> void {
+auto StringList::push_back(std::string s) -> void { // escape: existing container interface exposed by declaration reordering
     if (cached.capacity() == cached.size()) {
-        std::vector<bool> b;
+        std::vector<bool> b; // escape: existing temporary exposed by declaration reordering
         b.reserve(strings.size());
         size_t j = 0;
         for (const auto* s : strings) {
@@ -779,15 +779,14 @@ auto CodeGeneratorC::closeLiteralBlob() -> void {
     }
 }
 
-CodeGeneratorC::CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile)
+CodeGeneratorC::CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile) // escape: existing constructor interface exposed by declaration reordering
     : wb_(wb)
     , crate(crate)
     , resolve_(wb, OpaqueReveal::All)
     , outfilePath(outfile)
     , outfilePathC(outfile + ".cpp")
     , of(outfilePathC)
-    , promotedValues(crate.pool)
-{
+    , promotedValues(crate.pool) {
     ASSERT_BUG(Span(), of.is_open(), "Failed to open `" << outfilePathC << "` for writing");
     options.emulatedI128 = TargetGetCurSpec(wb_).backendC.emulatedI128;
     if (TargetGetPointerBits() < 64 && !options.emulatedI128) {
