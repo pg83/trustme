@@ -25,10 +25,3 @@ methods, `lowerCamelCase_` private data members, unprefixed public fields,
 `snake_case` filenames. No `m` prefix survives. New code follows
 [STYLE.md](STYLE.md) as written; there is no "match the surrounding spelling"
 exemption.
-
-One deviation is left, and it is the vocabulary: `std::` containers, strings
-and streams are still dominant in most translation units. libstd (`stl::`) is
-linked in and is the preferred choice — use it wherever it does not force
-conversions at the boundary. Reach for `std::` only where the surrounding code
-is already `std::`-heavy and `stl::` would mean converting values back and
-forth on every call.
