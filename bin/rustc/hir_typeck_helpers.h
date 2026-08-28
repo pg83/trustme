@@ -341,9 +341,11 @@ class TraitResolution;
 class Unifier {
 public:
     enum class Outcome : u8 {
-        /// Equal under the recorded bindings, provided every pending
-        /// equality collected on the session also holds.
-        Unified,
+        /// Equal under the recorded bindings, with no deferred relation.
+        Proven,
+        /// Structurally compatible, but at least one type/value relation is
+        /// deferred.  The pending lists are the proof obligations.
+        Ambiguous,
         /// The types can never be equal; bindings made by the failed call
         /// were rolled back and the pending lists are unchanged.
         Mismatch,

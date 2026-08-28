@@ -185,8 +185,8 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
         // ?a := (i32, ?b), then ?b := u8: both propagate through the table.
         const auto pairTy = types.tuple({types.primitive(HIRCoreType::I32), types.infer(b)});
-        STD_INSIST(unifier.unify(types.infer(a), pairTy) == Unifier::Outcome::Unified);
-        STD_INSIST(unifier.unify(types.infer(b), types.primitive(HIRCoreType::U8)) == Unifier::Outcome::Unified);
+        STD_INSIST(unifier.unify(types.infer(a), pairTy) == Unifier::Outcome::Proven);
+        STD_INSIST(unifier.unify(types.infer(b), types.primitive(HIRCoreType::U8)) == Unifier::Outcome::Proven);
         STD_INSIST(table.getType(b)->is_Primitive());
         STD_INSIST(unifier.pending().length() == 0);
     }
@@ -237,7 +237,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
         STD_INSIST(unifier.unify(types.infer(lit), types.primitive(HIRCoreType::F64)) == Unifier::Outcome::Mismatch);
         STD_INSIST(unifier.unify(types.infer(lit), types.infer(fl)) == Unifier::Outcome::Mismatch);
-        STD_INSIST(unifier.unify(types.infer(lit), types.primitive(HIRCoreType::U32)) == Unifier::Outcome::Unified);
+        STD_INSIST(unifier.unify(types.infer(lit), types.primitive(HIRCoreType::U32)) == Unifier::Outcome::Proven);
         STD_INSIST(table.getType(lit)->is_Primitive());
     }
 
@@ -253,13 +253,13 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         // A match placeholder is a rigid unknown: the equality is neither
         // proven nor refuted, it is collected as data.
         const auto placeholder = types.generic(RcString::newInterned("impl_?_test"), GENERICPlaceholder << 8);
-        STD_INSIST(unifier.unify(placeholder, types.primitive(HIRCoreType::I32)) == Unifier::Outcome::Unified);
+        STD_INSIST(unifier.unify(placeholder, types.primitive(HIRCoreType::I32)) == Unifier::Outcome::Ambiguous);
         STD_INSIST(unifier.pending().length() == 1);
         STD_INSIST(unifier.pending()[0].right->is_Primitive() || unifier.pending()[0].left->is_Primitive());
 
         // A solver-canonical variable stays rigid too.
         const auto canonical = types.infer(HIR_INFER_SOLVER_CANONICAL_MIN);
-        STD_INSIST(unifier.unify(canonical, types.primitive(HIRCoreType::U8)) == Unifier::Outcome::Unified);
+        STD_INSIST(unifier.unify(canonical, types.primitive(HIRCoreType::U8)) == Unifier::Outcome::Ambiguous);
         STD_INSIST(unifier.pending().length() == 2);
 
         // Distinct rigid generics can never be equal.
@@ -280,7 +280,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto canonical = types.infer(HIR_INFER_SOLVER_CANONICAL_MIN);
         Unifier unifier(sp, table);
 
-        STD_INSIST(unifier.unify(types.infer(existential), canonical) == Unifier::Outcome::Unified);
+        STD_INSIST(unifier.unify(types.infer(existential), canonical) == Unifier::Outcome::Proven);
         STD_INSIST(table.getType(types.infer(existential)) == canonical);
         STD_INSIST(unifier.pending().length() == 0);
     }
@@ -299,7 +299,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(unifier.pending().length() == 0);
         STD_INSIST(unifier.unify(canonicalInteger, types.diverge()) == Unifier::Outcome::Mismatch);
         STD_INSIST(unifier.pending().length() == 0);
-        STD_INSIST(unifier.unify(canonicalInteger, types.primitive(HIRCoreType::Usize)) == Unifier::Outcome::Unified);
+        STD_INSIST(unifier.unify(canonicalInteger, types.primitive(HIRCoreType::Usize)) == Unifier::Outcome::Ambiguous);
         STD_INSIST(unifier.pending().length() == 1);
     }
 
@@ -316,7 +316,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto knownArray = types.array(element, 2);
         Unifier unifier(sp, table);
 
-        STD_INSIST(unifier.unify(genericArray, knownArray) == Unifier::Outcome::Unified);
+        STD_INSIST(unifier.unify(genericArray, knownArray) == Unifier::Outcome::Proven);
         const auto& resolved = table.getValue(HIRConstGeneric::make_Infer({length}));
         STD_INSIST(resolved.is_Evaluated());
         STD_INSIST(resolved.as_Evaluated()->readUsize(0) == 2);
@@ -335,12 +335,12 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto placeholder = HIRConstGeneric(HIRGenericRef(RcString::newInterned("const_?_test"), GENERICPlaceholder << 8));
 
         Unifier ordinary(sp, table);
-        STD_INSIST(ordinary.unifyValues(placeholder, HIRConstGeneric::make_Infer({ordinarySlot})) == Unifier::Outcome::Unified);
+        STD_INSIST(ordinary.unifyValues(placeholder, HIRConstGeneric::make_Infer({ordinarySlot})) == Unifier::Outcome::Ambiguous);
         STD_INSIST(ordinary.pendingValues().size() == 1);
         STD_INSIST(table.getValue(ordinarySlot).is_Infer());
 
         Unifier candidate(sp, table, nullptr, true);
-        STD_INSIST(candidate.unifyValues(placeholder, HIRConstGeneric::make_Infer({candidateSlot})) == Unifier::Outcome::Unified);
+        STD_INSIST(candidate.unifyValues(placeholder, HIRConstGeneric::make_Infer({candidateSlot})) == Unifier::Outcome::Proven);
         STD_INSIST(candidate.pendingValues().empty());
         STD_INSIST(table.getValue(candidateSlot) == placeholder);
     }

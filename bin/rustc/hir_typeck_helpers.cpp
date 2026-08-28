@@ -2235,7 +2235,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
 
         Unifier::Outcome Unifier::defer(const HIRTypeData* left, const HIRTypeData* right) {
             pending_.pushBack(PendingEquality{left, right});
-            return Outcome::Unified;
+            return Outcome::Ambiguous;
         }
 
         Unifier::Outcome Unifier::unify(const HIRTypeData* left, const HIRTypeData* right) {
@@ -2254,7 +2254,9 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             } else {
                 table_.commit(snapshot);
             }
-            return outcome;
+            return outcome == Outcome::Mismatch
+                ? Outcome::Mismatch
+                : pending_.empty() && pendingValues_.empty() ? Outcome::Proven : Outcome::Ambiguous;
         }
 
         Unifier::Outcome Unifier::unifyValues(const HIRConstGeneric& left, const HIRConstGeneric& right) {
@@ -2269,20 +2271,22 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             } else {
                 table_.commit(snapshot);
             }
-            return outcome;
+            return outcome == Outcome::Mismatch
+                ? Outcome::Mismatch
+                : pending_.empty() && pendingValues_.empty() ? Outcome::Proven : Outcome::Ambiguous;
         }
 
         Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTypeData* rightRaw) {
             const auto* left = table_.getType(leftRaw);
             const auto* right = table_.getType(rightRaw);
             if (left == right) {
-                return Outcome::Unified;
+                return Outcome::Proven;
             }
             // Canonicalization can rebuild the same rigid projection with a
             // different interned node. It is still an exact equality; only a
             // genuinely different rigid alias must remain deferred.
             if (left->equalsIgnoringRegions(right)) {
-                return Outcome::Unified;
+                return Outcome::Proven;
             }
 
             const bool leftLive = inferIsLive(left);
@@ -2294,7 +2298,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return Outcome::Mismatch;
                 }
                 table_.ivarUnify(table_.rootIvarIndex(left->as_Infer().index), table_.rootIvarIndex(right->as_Infer().index));
-                return Outcome::Unified;
+                return Outcome::Proven;
             }
             if (leftLive || rightLive) {
                 const auto* infer = leftLive ? left : right;
@@ -2312,7 +2316,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return Outcome::Mismatch;
                 }
                 table_.setIvarTo(rootIndex, other);
-                return Outcome::Unified;
+                return Outcome::Proven;
             }
             if (left->is_Infer() || right->is_Infer()) {
                 // Rigid unknowns: canonical variables, alias inputs, or a
@@ -2445,7 +2449,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                             return Outcome::Mismatch;
                         }
                     }
-                    return Outcome::Unified;
+                    return Outcome::Proven;
                 }
                 case HIRTypeData::TAG_Function: {
                     const auto& le = left->as_Function();
@@ -2509,7 +2513,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                             if (li.index != ri.index) {
                                 return Outcome::Mismatch;
                             }
-                            return li.origin.equalsIgnoringRegions(ri.origin) ? Outcome::Unified : this->defer(left, right);
+                            return li.origin.equalsIgnoringRegions(ri.origin) ? Outcome::Proven : this->defer(left, right);
                         }
                     }
                     UNREACHABLE();
@@ -2532,7 +2536,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return Outcome::Mismatch;
                 }
             }
-            return Outcome::Unified;
+            return Outcome::Proven;
         }
 
         bool Unifier::paramsContainLiveValueIvar(const HIRPathParams& params, unsigned rootIndex) const {
@@ -2673,7 +2677,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             const auto& left = table_.getValue(leftRaw);
             const auto& right = table_.getValue(rightRaw);
             if (left == right) {
-                return Outcome::Unified;
+                return Outcome::Proven;
             }
 
             const auto liveIndex = [&](const HIRConstGeneric& value) -> ::std::optional<unsigned> {
@@ -2685,14 +2689,14 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             };
             const auto deferValue = [&]() {
                 pendingValues_.push_back(PendingValueEquality{left.clone(), right.clone()});
-                return Outcome::Unified;
+                return Outcome::Ambiguous;
             };
 
             const auto leftLive = liveIndex(left);
             const auto rightLive = liveIndex(right);
             if (leftLive && rightLive) {
                 table_.ivarValUnify(*leftLive, *rightLive);
-                return Outcome::Unified;
+                return Outcome::Proven;
             }
             if (leftLive || rightLive) {
                 const auto& other = leftLive ? right : left;
@@ -2703,7 +2707,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     || (rigidInfer && rigidInfer->index != ~0u && isAliasInputInfer(rigidInfer->index))
                     || (other.is_Unevaluated() && !this->valueContainsLiveIvar(other, leftLive ? *leftLive : *rightLive))) {
                     table_.setIvarValTo(leftLive ? *leftLive : *rightLive, other.clone());
-                    return Outcome::Unified;
+                    return Outcome::Proven;
                 }
                 // Placeholders, unevaluated expressions and rigid unknowns.
                 return deferValue();
@@ -3728,7 +3732,12 @@ default:
 
             struct Candidate {
                 ImplRef impl;
+                // Exactness is only a ranking fact: an environment head that
+                // names the goal verbatim outranks one which constrains an
+                // input.  Whether the relation is actually proved is carried
+                // separately by headRelation and never inferred from this.
                 HIRCompare headMatch;
+                Certainty headRelation;
                 Certainty certainty;
                 const HIRMarkerImpl* markerImpl;
                 HIRPathParams markerImplParams;
@@ -3774,9 +3783,10 @@ default:
                 // the value from this chain (rustc's specialization graph).
                 const Candidate* specializationItemSource = nullptr;
 
-                Candidate(ImplRef impl, HIRCompare headMatch, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {})
+                Candidate(ImplRef impl, HIRCompare headMatch, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {})
                     : impl(::std::move(impl))
                     , headMatch(headMatch)
+                    , headRelation(headRelation)
                     , certainty(Certainty::Ambiguous)
                     , markerImpl(markerImpl)
                     , markerImplParams(::std::move(markerImplParams))
@@ -4321,32 +4331,6 @@ default:
                     const auto* path = inner->opt_Path();
                     return path && path->path.data.is_UfcsUnknown();
                 });
-            }
-
-            static bool paramsHaveCandidatePlaceholders(const HIRPathParams& params) {
-                for (const auto& type : params.types) {
-                    if (typeHasCandidatePlaceholder(type)) {
-                        return true;
-                    }
-                }
-                for (const auto& value : params.values) {
-                    if (value.is_Generic() && value.as_Generic().group() == GENERICPlaceholder) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-
-            bool candidateHasPlaceholders(const Candidate& candidate) const {
-                if (typeHasCandidatePlaceholder(candidate.impl.getImplType(crate.types)) || paramsHaveCandidatePlaceholders(candidate.impl.getTraitParams(crate.types))) {
-                    return true;
-                }
-                if (const auto* traitImpl = candidate.impl.data.opt_TraitImpl()) {
-                    if (paramsHaveCandidatePlaceholders(traitImpl->implParams)) {
-                        return true;
-                    }
-                }
-                return paramsHaveCandidatePlaceholders(candidate.markerImplParams);
             }
 
             static bool paramsNeedResponseConstraints(const HIRPathParams& params) {
@@ -5298,7 +5282,7 @@ default:
                 return false;
             }
 
-            void pushCandidate(size_t frameIndex, ImplRef impl, HIRCompare match, const HIRMarkerImpl* markerImpl = nullptr, HIRPathParams markerImplParams = {}, bool autoBuiltin = false, CandidateSource source = CandidateSource::Other, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {}) {
+            void pushCandidate(size_t frameIndex, ImplRef impl, HIRCompare match, Certainty headRelation, const HIRMarkerImpl* markerImpl = nullptr, HIRPathParams markerImplParams = {}, bool autoBuiltin = false, CandidateSource source = CandidateSource::Other, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {}) {
                 if (match == HIRCompare::Unequal) {
                     return;
                 }
@@ -5308,6 +5292,9 @@ default:
                     const bool same = markerImpl ? sameSource && candidates[i]->markerImplParams == markerImplParams : sameSource && isSameImpl(candidates[i]->impl, impl);
                     if (same) {
                         candidates[i]->headMatch &= match;
+                        if (headRelation != Certainty::Proven) {
+                            candidates[i]->headRelation = Certainty::Ambiguous;
+                        }
                         candidates[i]->headNormalizationAmbiguity |= headNormalizationAmbiguity;
                         for (auto& equality : headEqualities) {
                             candidates[i]->headEqualities.push_back(::std::move(equality));
@@ -5318,10 +5305,70 @@ default:
                         return;
                     }
                 }
-                candidates.push_back(candidateNodes.make(::std::move(impl), match, markerImpl, ::std::move(markerImplParams), autoBuiltin, source, headNormalizationAmbiguity, ::std::move(headEqualities), ::std::move(headValueEqualities)));
+                candidates.push_back(candidateNodes.make(::std::move(impl), match, headRelation, markerImpl, ::std::move(markerImplParams), autoBuiltin, source, headNormalizationAmbiguity, ::std::move(headEqualities), ::std::move(headValueEqualities)));
             }
 
-            HIRCompare unifyImplHead(
+            Certainty relateAssembledHead(
+                const HIRPathParams& goalParams,
+                const HIRTypeData* goalType,
+                const ImplRef& impl,
+                bool& headNormalizationAmbiguity,
+                ThinVector<SolverTypeEquality>& headEqualities,
+                ThinVector<SolverValueEquality>& headValueEqualities
+            ) {
+                const auto candidateType = impl.getImplType(crate.types);
+                const auto candidateParams = impl.getTraitParams(crate.types);
+                if (candidateParams.types.size() != goalParams.types.size() || candidateParams.values.size() != goalParams.values.size()) {
+                    return Certainty::NoSolution;
+                }
+
+                const auto snapshot = resolve_.ivars.snapshot();
+                STD_DEFER {
+                    resolve_.ivars.rollbackTo(snapshot);
+                };
+
+                Unifier unifier(span(), resolve_.ivars, &resolve_);
+                auto relation = unifier.unify(goalType, candidateType);
+                if (relation == Unifier::Outcome::Mismatch) {
+                    return Certainty::NoSolution;
+                }
+                for (size_t i = 0; i < candidateParams.types.size(); i++) {
+                    relation = unifier.unify(goalParams.types[i], candidateParams.types[i]);
+                    if (relation == Unifier::Outcome::Mismatch) {
+                        return Certainty::NoSolution;
+                    }
+                }
+                for (size_t i = 0; i < candidateParams.values.size(); i++) {
+                    relation = unifier.unifyValues(goalParams.values[i], candidateParams.values[i]);
+                    if (relation == Unifier::Outcome::Mismatch) {
+                        return Certainty::NoSolution;
+                    }
+                }
+
+                // These are the selected head's inference effects.  Record
+                // the relation inputs themselves rather than reconstructing
+                // them later from a fuzzy callback result.
+                if (goalType != candidateType) {
+                    headEqualities.push_back(SolverTypeEquality{goalType, candidateType});
+                }
+                for (size_t i = 0; i < candidateParams.types.size(); i++) {
+                    if (goalParams.types[i] != candidateParams.types[i]) {
+                        headEqualities.push_back(SolverTypeEquality{goalParams.types[i], candidateParams.types[i]});
+                    }
+                }
+                for (size_t i = 0; i < candidateParams.values.size(); i++) {
+                    if (goalParams.values[i] != candidateParams.values[i]) {
+                        headValueEqualities.push_back(SolverValueEquality{goalParams.values[i].clone(), candidateParams.values[i].clone()});
+                    }
+                }
+                headNormalizationAmbiguity = !unifier.pendingValues().empty();
+                for (const auto& equality : unifier.pending()) {
+                    headNormalizationAmbiguity |= resolve_.hasAssociatedType(equality.left) || resolve_.hasAssociatedType(equality.right);
+                }
+                return relation == Unifier::Outcome::Proven ? Certainty::Proven : Certainty::Ambiguous;
+            }
+
+            Certainty unifyImplHead(
                 const HIRGenericParams& implParamsDef,
                 const HIRPathParams& implTraitArgs,
                 const HIRTypeData* implType,
@@ -5347,8 +5394,9 @@ default:
                 // coherence probe can materialize the temporary candidate
                 // parameters in terms of the first impl's variables before
                 // rolling its own snapshot back.
-                if (unifier.unify(goalType, candidateType) == Unifier::Outcome::Mismatch) {
-                    return HIRCompare::Unequal;
+                auto relation = unifier.unify(goalType, candidateType);
+                if (relation == Unifier::Outcome::Mismatch) {
+                    return Certainty::NoSolution;
                 }
                 // Self commonly fixes every impl const parameter.  Rebuild
                 // the trait arguments only after those bindings exist so a
@@ -5368,16 +5416,18 @@ default:
                 resolvedMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
                 const auto candidateParams = resolvedMonomorph.monomorphPathParams(span(), implTraitArgs, true);
                 if (candidateParams.types.size() != goalParams.types.size() || candidateParams.values.size() != goalParams.values.size()) {
-                    return HIRCompare::Unequal;
+                    return Certainty::NoSolution;
                 }
                 for (size_t i = 0; i < candidateParams.types.size(); i++) {
-                    if (unifier.unify(goalParams.types[i], candidateParams.types[i]) == Unifier::Outcome::Mismatch) {
-                        return HIRCompare::Unequal;
+                    relation = unifier.unify(goalParams.types[i], candidateParams.types[i]);
+                    if (relation == Unifier::Outcome::Mismatch) {
+                        return Certainty::NoSolution;
                     }
                 }
                 for (size_t i = 0; i < candidateParams.values.size(); i++) {
-                    if (unifier.unifyValues(goalParams.values[i], candidateParams.values[i]) == Unifier::Outcome::Mismatch) {
-                        return HIRCompare::Unequal;
+                    relation = unifier.unifyValues(goalParams.values[i], candidateParams.values[i]);
+                    if (relation == Unifier::Outcome::Mismatch) {
+                        return Certainty::NoSolution;
                     }
                 }
 
@@ -5453,7 +5503,7 @@ default:
                         materialize.monomorphConstgeneric(span(), equality.right, true),
                     });
                 }
-                return unifier.pending().length() == 0 && unifier.pendingValues().empty() ? HIRCompare::Equal : HIRCompare::Fuzzy;
+                return relation == Unifier::Outcome::Proven ? Certainty::Proven : Certainty::Ambiguous;
             }
 
             void assembleAliasBoundCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) {
@@ -5473,14 +5523,26 @@ default:
                 auto emit = [&](HIRTraitPath response) {
                     auto match = response.path.params.compareWithPlaceholders(span(), params, resolve_.ivars.callbackResolveInfer());
                     if (match != HIRCompare::Unequal) {
+                        auto impl = ImplRef(type, ::std::move(response.path.params), ::std::move(response.typeBounds), response.constness);
+                        bool headNormalizationAmbiguity = false;
+                        ThinVector<SolverTypeEquality> headEqualities;
+                        ThinVector<SolverValueEquality> headValueEqualities;
+                        const auto relation = relateAssembledHead(params, type, impl, headNormalizationAmbiguity, headEqualities, headValueEqualities);
+                        if (relation == Certainty::NoSolution) {
+                            return;
+                        }
                         pushCandidate(
                             frameIndex,
-                            ImplRef(type, ::std::move(response.path.params), ::std::move(response.typeBounds), response.constness),
+                            ::std::move(impl),
                             match,
+                            relation,
                             nullptr,
                             {},
                             false,
-                            CandidateSource::AliasBound
+                            CandidateSource::AliasBound,
+                            headNormalizationAmbiguity,
+                            ::std::move(headEqualities),
+                            ::std::move(headValueEqualities)
                         );
                     }
                 };
@@ -5532,35 +5594,17 @@ default:
                         if (source == CandidateSource::Other && selfIsRigidProjection && !impl.data.is_TraitImpl()) {
                             effectiveSource = CandidateSource::ParamEnv;
                         }
-                        // These collectors describe a matched head but do not
-                        // run unifyImplHead.  Preserve the head relation as
-                        // explicit response effects: builtin callable heads,
-                        // for example, carry closure argument ivars inside the
-                        // node and those variables are not canonical Self
-                        // slots.  The old consumer re-equated ImplRef inputs by
-                        // hand; the typed solver answer must carry that work.
+                        // Legacy assembly only discovers the shape and source.
+                        // The same Unifier relation used for impl heads decides
+                        // compatibility and produces the typed response effects.
+                        bool headNormalizationAmbiguity = false;
                         ThinVector<SolverTypeEquality> headEqualities;
                         ThinVector<SolverValueEquality> headValueEqualities;
-                        const auto implType = impl.getImplType(crate.types);
-                        if (implType != type) {
-                            headEqualities.push_back(SolverTypeEquality{type, implType});
+                        const auto relation = relateAssembledHead(params, type, impl, headNormalizationAmbiguity, headEqualities, headValueEqualities);
+                        if (relation == Certainty::NoSolution) {
+                            return false;
                         }
-                        const auto implParams = impl.getTraitParams(crate.types);
-                        if (implParams.types.size() == params.types.size()) {
-                            for (size_t i = 0; i < params.types.size(); i++) {
-                                if (params.types[i] != implParams.types[i]) {
-                                    headEqualities.push_back(SolverTypeEquality{params.types[i], implParams.types[i]});
-                                }
-                            }
-                        }
-                        if (implParams.values.size() == params.values.size()) {
-                            for (size_t i = 0; i < params.values.size(); i++) {
-                                if (params.values[i] != implParams.values[i]) {
-                                    headValueEqualities.push_back(SolverValueEquality{params.values[i].clone(), implParams.values[i].clone()});
-                                }
-                            }
-                        }
-                        pushCandidate(frameIndex, ::std::move(impl), match, nullptr, {}, false, effectiveSource, false, ::std::move(headEqualities), ::std::move(headValueEqualities));
+                        pushCandidate(frameIndex, ::std::move(impl), match, relation, nullptr, {}, false, effectiveSource, headNormalizationAmbiguity, ::std::move(headEqualities), ::std::move(headValueEqualities));
                         return false;
                     };
                 };
@@ -5592,9 +5636,9 @@ default:
                         bool headNormalizationAmbiguity = false;
                         ThinVector<SolverTypeEquality> headEqualities;
                         ThinVector<SolverValueEquality> headValueEqualities;
-                        const auto match = this->unifyImplHead(impl.params, impl.traitArgs, impl.type, params, resolvedType, implParams, headNormalizationAmbiguity, headEqualities, headValueEqualities);
-                        if (match != HIRCompare::Unequal) {
-                            pushCandidate(frameIndex, ImplRef(::std::move(implParams), traitDef, trait, impl), match, nullptr, {}, false, CandidateSource::TraitImpl, headNormalizationAmbiguity, ::std::move(headEqualities), ::std::move(headValueEqualities));
+                        const auto relation = this->unifyImplHead(impl.params, impl.traitArgs, impl.type, params, resolvedType, implParams, headNormalizationAmbiguity, headEqualities, headValueEqualities);
+                        if (relation != Certainty::NoSolution) {
+                            pushCandidate(frameIndex, ImplRef(::std::move(implParams), traitDef, trait, impl), relation == Certainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy, relation, nullptr, {}, false, CandidateSource::TraitImpl, headNormalizationAmbiguity, ::std::move(headEqualities), ::std::move(headValueEqualities));
                         }
                         return false;
                     });
@@ -5607,12 +5651,12 @@ default:
                         bool headNormalizationAmbiguity = false;
                         ThinVector<SolverTypeEquality> headEqualities;
                         ThinVector<SolverValueEquality> headValueEqualities;
-                        const auto match = this->unifyImplHead(impl.params, impl.traitArgs, impl.type, params, resolvedType, implParams, headNormalizationAmbiguity, headEqualities, headValueEqualities);
-                        if (match != HIRCompare::Unequal) {
+                        const auto relation = this->unifyImplHead(impl.params, impl.traitArgs, impl.type, params, resolvedType, implParams, headNormalizationAmbiguity, headEqualities, headValueEqualities);
+                        if (relation != Certainty::NoSolution) {
                             auto monomorph = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr);
                             auto responseType = monomorph.monomorphType(span(), impl.type, false);
                             auto responseParams = monomorph.monomorphPathParams(span(), impl.traitArgs, false);
-                            pushCandidate(frameIndex, ImplRef(::std::move(responseType), ::std::move(responseParams), HIRTraitPath::assocListT()), match, &impl, ::std::move(implParams), false, CandidateSource::TraitImpl, headNormalizationAmbiguity, ::std::move(headEqualities), ::std::move(headValueEqualities));
+                            pushCandidate(frameIndex, ImplRef(::std::move(responseType), ::std::move(responseParams), HIRTraitPath::assocListT()), relation == Certainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy, relation, &impl, ::std::move(implParams), false, CandidateSource::TraitImpl, headNormalizationAmbiguity, ::std::move(headEqualities), ::std::move(headValueEqualities));
                         }
                         return false;
                     });
@@ -5623,7 +5667,8 @@ default:
                     // and ParamEnv candidates; re-adding this candidate there
                     // makes typeIsCopy/typeIsClone ask themselves recursively.
                     if (includeMagicCandidates) {
-                        pushCandidate(frameIndex, ImplRef(resolvedType, params.clone(), HIRTraitPath::assocListT()), resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(params) ? HIRCompare::Fuzzy : HIRCompare::Equal, nullptr, {}, true, CandidateSource::Builtin);
+                        const auto structuralRelation = resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(params) ? Certainty::Ambiguous : Certainty::Proven;
+                        pushCandidate(frameIndex, ImplRef(resolvedType, params.clone(), HIRTraitPath::assocListT()), structuralRelation == Certainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy, structuralRelation, nullptr, {}, true, CandidateSource::Builtin);
                     }
                 }
             }
@@ -6000,7 +6045,7 @@ default:
                 if (outcome == Unifier::Outcome::Mismatch) {
                     return Certainty::NoSolution;
                 }
-                if (boundInference || unifier.pending().length() != 0 || !unifier.pendingValues().empty()) {
+                if (boundInference || outcome == Unifier::Outcome::Ambiguous) {
                     return Certainty::Ambiguous;
                 }
                 return Certainty::Proven;
@@ -6018,7 +6063,7 @@ default:
                 if (outcome == Unifier::Outcome::Mismatch) {
                     return Certainty::NoSolution;
                 }
-                if (boundInference || unifier.pending().length() != 0 || !unifier.pendingValues().empty()) {
+                if (boundInference || outcome == Unifier::Outcome::Ambiguous) {
                     return Certainty::Ambiguous;
                 }
                 return Certainty::Proven;
@@ -6271,12 +6316,13 @@ default:
                         return Certainty::NoSolution;
                     }
                 }
-                // An ambiguous-identity response is by definition a
-                // non-committal answer (e.g. Copy on a union whose params
-                // still carry inference variables); it can never be promoted
-                // to a proven response constraint.
-                const bool environmentResponseConstraint = candidate->headMatch == HIRCompare::Fuzzy && isEnvironmentOrBuiltin(candidate->impl) && !candidate->impl.isAmbiguousIdentity() && !candidateHasPlaceholders(*candidate);
-                auto result = candidate->headMatch == HIRCompare::Equal || environmentResponseConstraint ? Certainty::Proven : Certainty::Ambiguous;
+                // Assembly exactness is a ranking fact, not proof.  Only the
+                // unifier relation decides whether the head is proven.  An
+                // ambiguous-identity builtin is explicitly non-committal even
+                // when its response happens to repeat the goal verbatim.
+                auto result = candidate->impl.isAmbiguousIdentity()
+                    ? Certainty::Ambiguous
+                    : candidate->headRelation;
 
                 for (const auto& equality : candidate->headEqualities) {
                     const auto equalityResult = evaluateHeadEquality(*candidate, equality);
@@ -7141,7 +7187,7 @@ default:
                 bool rightHeadNormalizationAmbiguity = false;
                 ThinVector<SolverTypeEquality> rightHeadEqualities;
                 ThinVector<SolverValueEquality> rightHeadValueEqualities;
-                const auto rightMatch = this->unifyImplHead(
+                const auto rightRelation = this->unifyImplHead(
                     right.params,
                     right.traitArgs,
                     right.type,
@@ -7152,7 +7198,7 @@ default:
                     rightHeadEqualities,
                     rightHeadValueEqualities
                 );
-                if (rightMatch == HIRCompare::Unequal) {
+                if (rightRelation == Certainty::NoSolution) {
                     return false;
                 }
 
@@ -7174,8 +7220,8 @@ default:
                 };
 
                 const auto& traitDef = crate.getTraitByPath(callSpan, trait);
-                pushCandidate(frameIndex, ImplRef(::std::move(leftParams), traitDef, trait, left), HIRCompare::Equal, nullptr, {}, false, CandidateSource::TraitImpl);
-                pushCandidate(frameIndex, ImplRef(::std::move(rightParams), traitDef, trait, right), rightMatch, nullptr, {}, false, CandidateSource::TraitImpl, rightHeadNormalizationAmbiguity, ::std::move(rightHeadEqualities), ::std::move(rightHeadValueEqualities));
+                pushCandidate(frameIndex, ImplRef(::std::move(leftParams), traitDef, trait, left), HIRCompare::Equal, Certainty::Proven, nullptr, {}, false, CandidateSource::TraitImpl);
+                pushCandidate(frameIndex, ImplRef(::std::move(rightParams), traitDef, trait, right), rightRelation == Certainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy, rightRelation, nullptr, {}, false, CandidateSource::TraitImpl, rightHeadNormalizationAmbiguity, ::std::move(rightHeadEqualities), ::std::move(rightHeadValueEqualities));
 
                 const auto& candidates = frames[frameIndex]->candidates;
                 ASSERT_BUG(callSpan, candidates.size() == 2, "coherence probe lost an impl candidate");
