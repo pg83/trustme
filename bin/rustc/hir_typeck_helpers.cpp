@@ -11293,13 +11293,13 @@ default: {
 
                     // Auto-ref
                     auto borrowTy = crate.types.borrow(HIRBorrowType::Shared, ty);
-                    if (this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Shared, possibilities, &undecided)) {
+                    if (possibilities.empty() && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Shared, possibilities, &undecided)) {
                     }
                     borrowTy = crate.types.borrow(HIRBorrowType::Unique, ty);
-                    if (curAccess >= MethodAccess::Unique && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Unique, possibilities, &undecided)) {
+                    if (possibilities.empty() && curAccess >= MethodAccess::Unique && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Unique, possibilities, &undecided)) {
                     }
                     borrowTy = crate.types.borrow(HIRBorrowType::Owned, ty);
-                    if (curAccess >= MethodAccess::Move && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Owned, possibilities, &undecided)) {
+                    if (possibilities.empty() && curAccess >= MethodAccess::Move && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Owned, possibilities, &undecided)) {
                     }
                     if (!possibilities.empty()) {
                         collapseToMostSpecificSubtrait();

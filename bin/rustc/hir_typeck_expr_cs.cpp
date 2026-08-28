@@ -1075,12 +1075,6 @@ default: {
                     //   > De-duplicate same traits?
                     // So: To be able to prune the list, we need to check the type parameters for the trait/type/impl
 
-                    // Remove anything except for the highest autoref level
-                    for (auto it1 = possibleMethods.begin(); it1 != possibleMethods.end(); ++it1) {
-                        if (it1->first != possibleMethods.front().first) {
-                            it1 = possibleMethods.erase(it1) - 1;
-                        }
-                    }
                     // De-duplcate traits in this list.
                     // - If the self type and the trait name are the same, replace with an entry using placeholder
                     //   ivars (node.m_trait_param_ivars)
