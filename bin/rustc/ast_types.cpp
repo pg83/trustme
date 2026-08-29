@@ -458,6 +458,21 @@ ASTType* mkType(ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, std::
     return mkType(pool, sp, TypeData::make_TraitObject({mv$(traits), mv$(lifetimes)}));
 }
 
+template <>
+void stl::output<ZeroCopyOutput, ASTBoundConstness>(ZeroCopyOutput& out, ASTBoundConstness value) {
+    switch (value) {
+        case ASTBoundConstness::Never:
+            out << StringView("Never");
+            return;
+        case ASTBoundConstness::Always:
+            out << StringView("Always");
+            return;
+        case ASTBoundConstness::Maybe:
+            out << StringView("Maybe");
+            return;
+    }
+}
+
 namespace stl {
     template <>
     void output<ZeroCopyOutput, ASTType*>(ZeroCopyOutput& out, ASTType* type) {

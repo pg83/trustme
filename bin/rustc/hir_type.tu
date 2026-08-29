@@ -7,6 +7,7 @@ generate(
     name="HIRTypeData",
     default="Diverge",
     clone=False,
+    output=True,
     variants=[
         v("Infer", "HIRTypeDataInfer"),
         v("Diverge"),

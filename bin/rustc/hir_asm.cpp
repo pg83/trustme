@@ -154,6 +154,21 @@ const char* to_string(const AsmRegisterClass& c) {
     UNREACHABLE();
 }
 
+template <>
+void stl::output<ZeroCopyOutput, AsmRegisterClass>(ZeroCopyOutput& out, AsmRegisterClass value) {
+    out << StringView(to_string(value));
+}
+
+template <>
+void stl::output<ZeroCopyOutput, AsmOptions>(ZeroCopyOutput& out, AsmOptions value) {
+    value.fmt(out);
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::vector<AsmLine>>(ZeroCopyOutput& out, const std::vector<AsmLine>& values) {
+    outCont(out, values);
+}
+
 namespace stl {
     template <>
     void output<ZeroCopyOutput, AsmLine>(ZeroCopyOutput& os, const AsmLine& line) {
@@ -178,23 +193,6 @@ namespace stl {
             case AsmDirection::InLateOut:
                 os << StringView("inlateout");
                 return;
-        }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, AsmRegisterSpec>(ZeroCopyOutput& os, const AsmRegisterSpec& s) {
-        switch (s.tag()) {
-            case AsmRegisterSpec::TAG_Class: {
-                auto& c = s.as_Class();
-                os << to_string(c);
-                break;
-            }
-            case AsmRegisterSpec::TAG_Explicit: {
-                auto& e = s.as_Explicit();
-                os << StringView("\"") << e << StringView("\"");
-                break;
-            }
         }
         return;
     }

@@ -1,9 +1,8 @@
 #include "span.h"
-#include "output.h"
 
 #include "common.h"
+#include "output.h"
 #include "parse_lex.h"
-
 
 using namespace stl;
 
@@ -156,8 +155,6 @@ void SpanInnerMacro::fmt(ZeroCopyOutput& os) const {
     return rv;
 }
 
-
-
 Span::Span()
     : ptr(nullptr)
 {
@@ -201,24 +198,29 @@ RcString SpanInnerMacro::crateName() const {
     return crate;
 }
 
+template <>
+void stl::output<ZeroCopyOutput, SourceLocation>(ZeroCopyOutput& out, SourceLocation value) {
+    out << StringView("SourceLocation(filename = ") << value.filename << StringView(", line = ") << value.line << StringView(", column = ") << value.column << StringView(")");
+}
+
 namespace stl {
 template <>
 void output<ZeroCopyOutput, ErrorType>(ZeroCopyOutput& os, ErrorType value) {
-    os << static_cast<unsigned>(value);
-}
-
-template <>
-void output<ZeroCopyOutput, WarningType>(ZeroCopyOutput& os, WarningType value) {
-    os << static_cast<unsigned>(value);
-}
-
-template <>
-void output<ZeroCopyOutput, Span>(ZeroCopyOutput& os, const Span& sp) {
-    if (sp.get()) {
-        sp.get()->fmt(os);
-    } else {
-        os << StringView("<null>");
+        os << static_cast<unsigned>(value);
     }
-    return;
-}
+
+    template <>
+    void output<ZeroCopyOutput, WarningType>(ZeroCopyOutput& os, WarningType value) {
+        os << static_cast<unsigned>(value);
+    }
+
+    template <>
+    void output<ZeroCopyOutput, Span>(ZeroCopyOutput& os, const Span& sp) {
+        if (sp.get()) {
+            sp.get()->fmt(os);
+        } else {
+            os << StringView("<null>");
+        }
+        return;
+    }
 }

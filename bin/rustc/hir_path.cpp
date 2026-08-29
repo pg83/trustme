@@ -1064,6 +1064,31 @@ PathNode::PathNode(u64 h1, u64 h2, ThinVector<RcString> m, PathNode* next)
 {
 }
 
+template <>
+void stl::output<ZeroCopyOutput, HIRBoundConstness>(ZeroCopyOutput& out, HIRBoundConstness value) {
+    switch (value) {
+        case HIRBoundConstness::Never:
+            out << StringView("Never");
+            return;
+        case HIRBoundConstness::Always:
+            out << StringView("Always");
+            return;
+        case HIRBoundConstness::Maybe:
+            out << StringView("Maybe");
+            return;
+    }
+}
+
+template <>
+void stl::output<ZeroCopyOutput, HIRInferData>(ZeroCopyOutput& out, HIRInferData value) {
+    out << StringView("HIRInferData(index = ") << value.index << StringView(")");
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::vector<HIRGenericPath>>(ZeroCopyOutput& out, const std::vector<HIRGenericPath>& values) {
+    outCont(out, values);
+}
+
 namespace stl {
     template <>
     void output<ZeroCopyOutput, HIRSimplePath>(ZeroCopyOutput& os, HIRSimplePath x) {
@@ -1164,31 +1189,6 @@ namespace stl {
             }
         }
         return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, HIRConstGeneric>(ZeroCopyOutput& out, const HIRConstGeneric& value) {
-        switch (value.tag()) {
-            case HIRConstGeneric::TAG_Infer: {
-                const auto& inner = value.as_Infer();
-                out << StringView("Infer");
-                if (inner.index != ~0u) {
-                    out << StringView("(") << inner.index << StringView(")");
-                }
-                break;
-            }
-            case HIRConstGeneric::TAG_Unevaluated:
-                out << StringView("Unevaluated(");
-                value.as_Unevaluated()->fmt(out);
-                out << StringView(")");
-                break;
-            case HIRConstGeneric::TAG_Generic:
-                out << StringView("Generic(") << value.as_Generic() << StringView(")");
-                break;
-            case HIRConstGeneric::TAG_Evaluated:
-                out << StringView("Evaluated(") << *value.as_Evaluated() << StringView(")");
-                break;
-        }
     }
 
     template <>

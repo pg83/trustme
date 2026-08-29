@@ -5,6 +5,7 @@ generate(
     name="HIRConstGeneric",
     default="Infer",
     clone=False,
+    output=True,
     variants=[
         v("Infer", "HIRInferData", doc="To be inferred"),
         v("Unevaluated", "std::unique_ptr<HIRConstGenericUnevaluated>",

@@ -7,6 +7,7 @@ context("ast_path.h")
 generate(
     name="ASTPathBindingValue",
     default="Unbound",
+    output=True,
     variants=[
         v("Unbound"),
         v("Struct", fields=[
@@ -31,6 +32,7 @@ generate(
 generate(
     name="ASTPathBindingType",
     default="Unbound",
+    output=True,
     variants=[
         v("Unbound"),
         v("Primitive", "eCoreType"),
@@ -72,6 +74,7 @@ generate(
 generate(
     name="ASTPathBindingMacro",
     default="Unbound",
+    output=True,
     variants=[
         v("Unbound"),
         v("ProcMacroDerive", fields=[

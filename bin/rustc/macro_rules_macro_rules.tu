@@ -5,6 +5,7 @@
 generate(
     name="MacroExpansionConcatEnt",
     default="Named",
+    output=True,
     variants=[
         v("Named", "unsigned int"),
         v("Ident", "Ident"),
@@ -14,6 +15,7 @@ generate(
 generate(
     name="MacroExpansionEnt",
     default="Token",
+    output=True,
     variants=[
         v("Token", "Token"),
         v("NamedValue", "unsigned int",
@@ -31,6 +33,7 @@ generate(
 generate(
     name="SimplePatEnt",
     default="End",
+    output=True,
     variants=[
         v("End", doc="End of the pattern stream (expects EOF, and terminates"
                      " the match process)"),

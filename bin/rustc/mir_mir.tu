@@ -7,6 +7,7 @@ generate(
     name="MIRConstant",
     default="Int",
     clone=False,
+    output=True,
     doc="Compile-time known values",
     variants=[
         v("Int", fields=[("S128", "v"), ("HIRCoreType", "t")]),
@@ -57,6 +58,7 @@ generate(
     name="MIRParam",
     default="Constant",
     clone=False,
+    output=True,
     doc="""
         Parameter - A value used when a rvalue just reads (doesn't require
         a lvalue).  Can be either a lvalue (memory address), or a constant.
@@ -82,6 +84,7 @@ generate(
     name="MIRRValue",
     default="Tuple",
     clone=False,
+    output=True,
     variants=[
         v("Use", "MIRLValue", copy=False),
         v("Borrow", fields=[
@@ -149,6 +152,7 @@ generate(
     name="MIRCallTarget",
     default="Intrinsic",
     clone=False,
+    output=True,
     variants=[
         v("Value", "MIRLValue", copy=False),
         v("Path", "HIRPath", copy=False),
@@ -163,6 +167,7 @@ generate(
     name="MIRSwitchValues",
     default="Unsigned",
     clone=False,
+    output=True,
     variants=[
         v("Unsigned", "std::vector<u64>"),
         v("Signed", "std::vector<i64>"),
@@ -182,6 +187,7 @@ generate(
     name="MIRUnwindAction",
     default="Continue",
     clone=False,
+    output=True,
     variants=[
         v("Continue"),
         v("Cleanup", "MIRBasicBlockId"),
@@ -194,6 +200,7 @@ generate(
     name="MIRAsmParam",
     default="Const",
     clone=False,
+    output=True,
     variants=[
         v("Const", "MIRConstant", copy=False),
         v("Sym", "HIRPath", copy=False),
@@ -211,6 +218,7 @@ generate(
     name="MIRTerminator",
     default="Incomplete",
     clone=False,
+    output=True,
     variants=[
         v("Incomplete", doc="Block isn't complete (ERROR in output)"),
         v("Return", doc="Return cleanly to caller"),
@@ -272,6 +280,7 @@ generate(
     name="MIRStatement",
     default="Asm",
     clone=False,
+    output=True,
     variants=[
         v("Assign", fields=[
             ("MIRLValue", "dst"),

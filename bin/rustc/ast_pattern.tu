@@ -5,6 +5,7 @@ generate(
     name="ASTPatternValue",
     default="Invalid",
     clone=False,
+    output=True,
     variants=[
         v("Invalid"),
         v("Integer", fields=[

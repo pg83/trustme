@@ -7,6 +7,7 @@ generate(
     name="HIRArraySize",
     default="Unevaluated",
     clone=False,
+    output=True,
     doc="Array size used for types AND array literals",
     variants=[
         v("Unevaluated", "HIRConstGeneric", copy=False, doc="Un-evaluated size"),
@@ -28,6 +29,7 @@ generate(
     name="HIRTypePathBinding",
     default="Unbound",
     clone=False,
+    output=True,
     variants=[
         v("Unbound", doc="Not yet bound, either during lowering OR during"
                          " resolution (when associated and still being resolved)"),

@@ -12,6 +12,21 @@ const HIRConstGeneric& HIRResolvePlaceholdersNop::getVal(const Span&, const HIRC
     return v;
 }
 
+template <>
+void stl::output<ZeroCopyOutput, HIRInferClass>(ZeroCopyOutput& out, HIRInferClass value) {
+    switch (value) {
+        case HIRInferClass::None:
+            out << StringView("None");
+            break;
+        case HIRInferClass::Integer:
+            out << StringView("Integer");
+            break;
+        case HIRInferClass::Float:
+            out << StringView("Float");
+            break;
+    }
+}
+
 namespace stl {
     template <>
     void output<ZeroCopyOutput, HIRCompare>(ZeroCopyOutput& os, HIRCompare x) {

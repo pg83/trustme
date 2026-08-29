@@ -6,6 +6,7 @@ context("hir_pattern.h")
 generate(
     name="HIRPatternValue",
     default="String",
+    output=True,
     variants=[
         v("Integer", fields=[
             ("HIRCoreType", "type"),

@@ -3889,14 +3889,14 @@ auto ExpTok::operator==(eTokenType tt) const -> bool {
     return this->ty == MacroPatEnt::PAT_TOKEN && this->tok == tt;
 }
 
+template <>
+void stl::output<ZeroCopyOutput, std::vector<MacroExpansionConcatEnt>>(ZeroCopyOutput& out, const std::vector<MacroExpansionConcatEnt>& values) {
+    outCont(out, values);
+}
+
 namespace stl {
     template <>
     void output<ZeroCopyOutput, CapturedVal>(ZeroCopyOutput& out, const CapturedVal& value) {
-        operator<<(out, value);
-    }
-
-    template <>
-    void output<ZeroCopyOutput, CaptureLayer>(ZeroCopyOutput& out, const CaptureLayer& value) {
         operator<<(out, value);
     }
 
@@ -4031,94 +4031,6 @@ namespace stl {
             case MacroPatEnt::PAT_LITERAL:
                 os << StringView("PAT_LITERAL");
                 break;
-        }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, SimplePatEnt>(ZeroCopyOutput& os, const SimplePatEnt& x) {
-        switch (x.tag()) {
-            case SimplePatEnt::TAG_End: {
-                os << StringView("End");
-                break;
-            }
-            case SimplePatEnt::TAG_LoopStart: {
-                auto& e = x.as_LoopStart();
-                os << StringView("LoopStart(") << e.index << StringView(")");
-                break;
-            }
-            case SimplePatEnt::TAG_LoopNext: {
-                os << StringView("LoopNext");
-                break;
-            }
-            case SimplePatEnt::TAG_LoopEnd: {
-                os << StringView("LoopEnd");
-                break;
-            }
-            case SimplePatEnt::TAG_Jump: {
-                auto& e = x.as_Jump();
-                os << StringView("Jump(->") << e.jumpTarget << StringView(")");
-                break;
-            }
-            case SimplePatEnt::TAG_ExpectTok: {
-                auto& e = x.as_ExpectTok();
-                os << StringView("Expect(") << e << StringView(")");
-                break;
-            }
-            case SimplePatEnt::TAG_ExpectPat: {
-                auto& e = x.as_ExpectPat();
-                os << StringView("Expect($") << e.idx << StringView(" = ") << e.type << StringView(")");
-                break;
-            }
-            case SimplePatEnt::TAG_If: {
-                auto& e = x.as_If();
-                os << StringView("If(") << (e.isEqual ? "=" : "!=") << StringView("[");
-                for (const auto& p : e.ents) {
-                    if (p.ty == MacroPatEnt::PAT_TOKEN) {
-                        os << p.tok;
-                    } else {
-                        os << p.ty;
-                    }
-                    os << StringView(", ");
-                }
-                os << StringView("] ->") << e.jumpTarget << StringView(")");
-                break;
-            }
-        }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, MacroExpansionEnt>(ZeroCopyOutput& os, const MacroExpansionEnt& x) {
-        switch (x.tag()) {
-            case MacroExpansionEnt::TAG_Token: {
-                auto& e = x.as_Token();
-                os << StringView("=") << e;
-                break;
-            }
-            case MacroExpansionEnt::TAG_NamedValue: {
-                auto& e = x.as_NamedValue();
-                switch (e & ~NAMEDVALUE_VALMASK) {
-                    case 0:
-                        os << StringView("$") << e;
-                        break;
-                    case NAMEDVALUE_TY_COUNT:
-                        os << StringView("${count(...)}");
-                        break;
-                    default:
-                        os << StringView("$?") << e;
-                }
-                break;
-            }
-            case MacroExpansionEnt::TAG_Concat: {
-                os << StringView("${concat(...)}");
-                break;
-            }
-            case MacroExpansionEnt::TAG_Loop: {
-                auto& e = x.as_Loop();
-                os << StringView("${") << e.controllingInputLoops << StringView("}(") << e.entries << StringView(") ") << e.joiner;
-                break;
-            }
         }
         return;
     }

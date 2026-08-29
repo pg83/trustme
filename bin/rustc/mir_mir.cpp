@@ -1773,94 +1773,123 @@ const StaticTraitResolve* MIRCloner::resolve() const {
     return nullptr;
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, MIRConstant>(ZeroCopyOutput& os, const MIRConstant& v) {
-        switch (v.tag()) {
-            case MIRConstant::TAG_Int: {
-                auto& e = v.as_Int();
-                os << StringView(e.v < 0 ? "-" : "+");
-                os << (e.v < 0 ? -e.v : e.v);
-                os << StringView(" ") << e.t;
-                break;
-            }
-            case MIRConstant::TAG_Uint: {
-                auto& e = v.as_Uint();
-                os << StringView("0x") << formatHex(e.v);
-                os << StringView(" ") << e.t;
-                break;
-            }
-            case MIRConstant::TAG_Float: {
-                auto& e = v.as_Float();
-                os << formatFloatValueForToken(e.v);
-                os << StringView(" ") << e.t;
-                break;
-            }
-            case MIRConstant::TAG_Bool: {
-                auto& e = v.as_Bool();
-                os << StringView(e.v ? "true" : "false");
-                break;
-            }
-            case MIRConstant::TAG_Bytes: {
-                auto& e = v.as_Bytes();
-                os << StringView("b\"");
-                for (auto v : e) {
-                    if (v == '\\' || v == '"') {
-                        os << StringView("\\") << v;
-                    } else if (' ' <= v && v < 0x7F) {
-                        os << v;
-                    } else if (v < 16) {
-                        os << StringView("\\x0") << formatHex(v);
-                    } else {
-                        os << StringView("\\x") << formatHex(v);
-                    }
-                }
-                os << StringView("\"");
-                break;
-            }
-            case MIRConstant::TAG_StaticString: {
-                auto& e = v.as_StaticString();
-                os << StringView("\"") << FmtEscaped(e) << StringView("\"");
-                break;
-            }
-            case MIRConstant::TAG_Encoded: {
-                auto& e = v.as_Encoded();
-                os << StringView("encoded(") << e.type << StringView(": ") << e.value << StringView(")");
-                break;
-            }
-            case MIRConstant::TAG_Const: {
-                auto& e = v.as_Const();
-                BUG_ASSERT(e.p);
-                os << *e.p;
-                break;
-            }
-            case MIRConstant::TAG_Generic: {
-                auto& e = v.as_Generic();
-                os << e;
-                break;
-            }
-            case MIRConstant::TAG_Function: {
-                auto& e = v.as_Function();
-                BUG_ASSERT(e.p);
-                os << StringView("fn ") << *e.p;
-                break;
-            }
-            case MIRConstant::TAG_ItemAddr: {
-                auto& e = v.as_ItemAddr();
-                if (e) {
-                    os << StringView("&") << *e;
-                    if (e.offset != U128(0)) {
-                        os << StringView("+0x") << formatHex(e.offset);
-                    }
-                } else {
-                    os << StringView("#UNSIZE_PLACEHOLDER");
-                }
-                break;
-            }
-        }
-        return;
+template <>
+void stl::output<ZeroCopyOutput, ItemAddress>(ZeroCopyOutput& out, const ItemAddress& value) {
+    out << StringView("ItemAddress(p = ");
+    if (value.p) {
+        out << *value.p;
+    } else {
+        out << static_cast<const void*>(value.p.get());
     }
+    out << StringView(", offset = ") << value.offset << StringView(")");
+}
 
+template <>
+void stl::output<ZeroCopyOutput, MIRBinOp>(ZeroCopyOutput& out, MIRBinOp value) {
+    switch (value) {
+        case MIRBinOp::ADD:
+            out << StringView("ADD");
+            return;
+        case MIRBinOp::ADD_OV:
+            out << StringView("ADD_OV");
+            return;
+        case MIRBinOp::SUB:
+            out << StringView("SUB");
+            return;
+        case MIRBinOp::SUB_OV:
+            out << StringView("SUB_OV");
+            return;
+        case MIRBinOp::MUL:
+            out << StringView("MUL");
+            return;
+        case MIRBinOp::MUL_OV:
+            out << StringView("MUL_OV");
+            return;
+        case MIRBinOp::DIV:
+            out << StringView("DIV");
+            return;
+        case MIRBinOp::DIV_OV:
+            out << StringView("DIV_OV");
+            return;
+        case MIRBinOp::MOD:
+            out << StringView("MOD");
+            return;
+        case MIRBinOp::BIT_OR:
+            out << StringView("BIT_OR");
+            return;
+        case MIRBinOp::BIT_AND:
+            out << StringView("BIT_AND");
+            return;
+        case MIRBinOp::BIT_XOR:
+            out << StringView("BIT_XOR");
+            return;
+        case MIRBinOp::BIT_SHR:
+            out << StringView("BIT_SHR");
+            return;
+        case MIRBinOp::BIT_SHL:
+            out << StringView("BIT_SHL");
+            return;
+        case MIRBinOp::EQ:
+            out << StringView("EQ");
+            return;
+        case MIRBinOp::NE:
+            out << StringView("NE");
+            return;
+        case MIRBinOp::GT:
+            out << StringView("GT");
+            return;
+        case MIRBinOp::GE:
+            out << StringView("GE");
+            return;
+        case MIRBinOp::LT:
+            out << StringView("LT");
+            return;
+        case MIRBinOp::LE:
+            out << StringView("LE");
+            return;
+    }
+}
+
+template <>
+void stl::output<ZeroCopyOutput, MIRUniOp>(ZeroCopyOutput& out, MIRUniOp value) {
+    switch (value) {
+        case MIRUniOp::INV:
+            out << StringView("INV");
+            return;
+        case MIRUniOp::NEG:
+            out << StringView("NEG");
+            return;
+    }
+}
+
+template <>
+void stl::output<ZeroCopyOutput, MIRDropKind>(ZeroCopyOutput& out, MIRDropKind value) {
+    switch (value) {
+        case MIRDropKind::SHALLOW:
+            out << StringView("SHALLOW");
+            return;
+        case MIRDropKind::DEEP:
+            out << StringView("DEEP");
+            return;
+    }
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::vector<i64>>(ZeroCopyOutput& out, const std::vector<i64>& values) {
+    outCont(out, values);
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::vector<std::vector<u8>>>(ZeroCopyOutput& out, const std::vector<std::vector<u8>>& values) {
+    outCont(out, values);
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::vector<MIRAsmParam>>(ZeroCopyOutput& out, const std::vector<MIRAsmParam>& values) {
+    outCont(out, values);
+}
+
+namespace stl {
     template <>
     void output<ZeroCopyOutput, MIRLValue>(ZeroCopyOutput& os, const MIRLValue& x) {
         MIRLValue::CRef(x).fmt(os);
@@ -1913,478 +1942,6 @@ namespace stl {
             case MIRLValue::Wrapper::TAG_Downcast: {
                 decltype(w.as_Downcast()) e = w.as_Downcast();
                 os << StringView("#") << e;
-                break;
-            }
-        }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, MIRParam>(ZeroCopyOutput& os, const MIRParam& x) {
-        switch (x.tag()) {
-            case MIRParam::TAG_LValue: {
-                auto& e = x.as_LValue();
-                os << e;
-                break;
-            }
-            case MIRParam::TAG_Borrow: {
-                auto& e = x.as_Borrow();
-                os << StringView("Borrow(") << e.type << StringView(", ") << e.val << StringView(")");
-                break;
-            }
-            case MIRParam::TAG_Constant: {
-                auto& e = x.as_Constant();
-                os << e;
-                break;
-            }
-        }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, MIRRValue>(ZeroCopyOutput& os, const MIRRValue& x) {
-        switch (x.tag()) {
-            case MIRRValue::TAG_Use: {
-                auto& e = x.as_Use();
-                os << StringView("Use(") << e << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_Constant: {
-                auto& e = x.as_Constant();
-                os << StringView("Constant(") << e << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_SizedArray: {
-                auto& e = x.as_SizedArray();
-                os << StringView("SizedArray(") << e.val << StringView("; ") << e.count << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_Borrow: {
-                auto& e = x.as_Borrow();
-                os << StringView("Borrow(") << e.type << StringView(", ") << e.val << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_Cast: {
-                auto& e = x.as_Cast();
-                os << StringView("Cast(") << e.val << StringView(" as ") << e.type << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_BinOp: {
-                auto& e = x.as_BinOp();
-                os << StringView("BinOp(") << e.valL << StringView(" ");
-                switch (e.op) {
-                    case MIRBinOp::ADD:
-                        os << StringView("ADD");
-                        break;
-                    case MIRBinOp::SUB:
-                        os << StringView("SUB");
-                        break;
-                    case MIRBinOp::MUL:
-                        os << StringView("MUL");
-                        break;
-                    case MIRBinOp::DIV:
-                        os << StringView("DIV");
-                        break;
-                    case MIRBinOp::MOD:
-                        os << StringView("MOD");
-                        break;
-                    case MIRBinOp::ADD_OV:
-                        os << StringView("ADD_OV");
-                        break;
-                    case MIRBinOp::SUB_OV:
-                        os << StringView("SUB_OV");
-                        break;
-                    case MIRBinOp::MUL_OV:
-                        os << StringView("MUL_OV");
-                        break;
-                    case MIRBinOp::DIV_OV:
-                        os << StringView("DIV_OV");
-                        break;
-
-                    case MIRBinOp::BIT_OR:
-                        os << StringView("BIT_OR");
-                        break;
-                    case MIRBinOp::BIT_AND:
-                        os << StringView("BIT_AND");
-                        break;
-                    case MIRBinOp::BIT_XOR:
-                        os << StringView("BIT_XOR");
-                        break;
-                    case MIRBinOp::BIT_SHL:
-                        os << StringView("BIT_SHL");
-                        break;
-                    case MIRBinOp::BIT_SHR:
-                        os << StringView("BIT_SHR");
-                        break;
-
-                    case MIRBinOp::EQ:
-                        os << StringView("EQ");
-                        break;
-                    case MIRBinOp::NE:
-                        os << StringView("NE");
-                        break;
-                    case MIRBinOp::GT:
-                        os << StringView("GT");
-                        break;
-                    case MIRBinOp::GE:
-                        os << StringView("GE");
-                        break;
-                    case MIRBinOp::LT:
-                        os << StringView("LT");
-                        break;
-                    case MIRBinOp::LE:
-                        os << StringView("LE");
-                        break;
-                }
-                os << StringView(" ") << e.valR << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_UniOp: {
-                auto& e = x.as_UniOp();
-                os << StringView("UniOp(") << e.val << StringView(" ");
-                switch (e.op) {
-                    case MIRUniOp::INV:
-                        os << StringView("INV");
-                        break;
-                    case MIRUniOp::NEG:
-                        os << StringView("NEG");
-                        break;
-                }
-                os << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_DstMeta: {
-                auto& e = x.as_DstMeta();
-                os << StringView("DstMeta(") << e.val << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_DstPtr: {
-                auto& e = x.as_DstPtr();
-                os << StringView("DstPtr(") << e.val << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_MakeDst: {
-                auto& e = x.as_MakeDst();
-                os << StringView("MakeDst(") << e.ptrVal << StringView(", ") << e.metaVal << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_Tuple: {
-                auto& e = x.as_Tuple();
-                os << StringView("Tuple(") << e.vals << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_Array: {
-                auto& e = x.as_Array();
-                os << StringView("Array(") << e.vals << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_UnionVariant: {
-                auto& e = x.as_UnionVariant();
-                os << StringView("UnionVariant(") << e.path << StringView(" #") << e.index << StringView(", ") << e.val << StringView(")");
-                break;
-            }
-            case MIRRValue::TAG_EnumVariant: {
-                auto& e = x.as_EnumVariant();
-                os << StringView("Variant(") << e.path << StringView(" #") << e.index << StringView(", {") << e.vals << StringView("})");
-                break;
-            }
-            case MIRRValue::TAG_Struct: {
-                auto& e = x.as_Struct();
-                os << StringView("Struct(") << e.path << StringView(", {") << e.vals << StringView("})");
-                break;
-            }
-        }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, MIRTerminator>(ZeroCopyOutput& os, const MIRTerminator& x) {
-        auto fmtUnwind = [&os](const MIRUnwindAction& action) {
-            switch (action.tag()) {
-                case MIRUnwindAction::TAG_Continue: {
-                    os << StringView("continue");
-                    break;
-                }
-                case MIRUnwindAction::TAG_Cleanup: {
-                    auto& ue = action.as_Cleanup();
-                    os << StringView("cleanup bb") << ue;
-                    break;
-                }
-                case MIRUnwindAction::TAG_Terminate: {
-                    os << StringView("terminate");
-                    break;
-                }
-                case MIRUnwindAction::TAG_Unreachable: {
-                    os << StringView("unreachable");
-                    break;
-                }
-            }
-        };
-        switch (x.tag()) {
-            case MIRTerminator::TAG_Incomplete: {
-                os << StringView("Invalid");
-                break;
-            }
-            case MIRTerminator::TAG_Return: {
-                os << StringView("Return");
-                break;
-            }
-            case MIRTerminator::TAG_UnwindResume: {
-                os << StringView("UnwindResume");
-                break;
-            }
-            case MIRTerminator::TAG_UnwindTerminate: {
-                os << StringView("UnwindTerminate");
-                break;
-            }
-            case MIRTerminator::TAG_Unreachable: {
-                os << StringView("Unreachable");
-                break;
-            }
-            case MIRTerminator::TAG_Goto: {
-                auto& e = x.as_Goto();
-                os << StringView("Goto(") << e << StringView(")");
-                break;
-            }
-            case MIRTerminator::TAG_If: {
-                auto& e = x.as_If();
-                os << StringView("If( ") << e.cond << StringView(" : ") << e.bbTrue << StringView(", ") << e.bbFalse << StringView(")");
-                break;
-            }
-            case MIRTerminator::TAG_Switch: {
-                auto& e = x.as_Switch();
-                os << StringView("Switch( ");
-                if (e.validFlag != ~0u) {
-                    os << StringView("IF df$") << e.validFlag << StringView(" ELSE bb") << e.invalidTarget << StringView(", ");
-                }
-                os << e.val << StringView(" : ");
-                for (unsigned int j = 0; j < e.targets.size(); j++) {
-                    os << j << StringView(" => bb") << e.targets[j] << StringView(", ");
-                }
-                os << StringView(")");
-                break;
-            }
-            case MIRTerminator::TAG_SwitchValue: {
-                auto& e = x.as_SwitchValue();
-                os << StringView("SwitchValue( ") << e.val << StringView(" : ");
-                switch (e.values.tag()) {
-                    case MIRSwitchValues::TAG_Unsigned: {
-                        auto& ve = e.values.as_Unsigned();
-                        for (unsigned int j = 0; j < e.targets.size(); j++) {
-                            os << ve[j] << StringView(" => bb") << e.targets[j] << StringView(", ");
-                        }
-                        break;
-                    }
-                    case MIRSwitchValues::TAG_Signed: {
-                        auto& ve = e.values.as_Signed();
-                        for (unsigned int j = 0; j < e.targets.size(); j++) {
-                            os << (ve[j] >= 0 ? "+" : "") << ve[j] << StringView(" => bb") << e.targets[j] << StringView(", ");
-                        }
-                        break;
-                    }
-                    case MIRSwitchValues::TAG_String: {
-                        auto& ve = e.values.as_String();
-                        for (unsigned int j = 0; j < e.targets.size(); j++) {
-                            os << StringView("\"") << ve[j] << StringView("\" => bb") << e.targets[j] << StringView(", ");
-                        }
-                        break;
-                    }
-                    case MIRSwitchValues::TAG_ByteString: {
-                        auto& ve = e.values.as_ByteString();
-                        for (unsigned int j = 0; j < e.targets.size(); j++) {
-                            os << StringView("b\"") << ve[j] << StringView("\" => bb") << e.targets[j] << StringView(", ");
-                        }
-                        break;
-                    }
-                }
-                os << StringView("else bb") << e.defTarget << StringView(")");
-                break;
-            }
-            case MIRTerminator::TAG_Drop: {
-                auto& e = x.as_Drop();
-                os << StringView("Drop(") << e.slot;
-                if (e.kind == MIRDropKind::SHALLOW) {
-                    os << StringView(" SHALLOW");
-                }
-                if (e.flagIdx != ~0u) {
-                    os << StringView(" IF df$") << e.flagIdx;
-                }
-                os << StringView(") -> bb") << e.target << StringView(" unwind ");
-                fmtUnwind(e.unwind);
-                break;
-            }
-            case MIRTerminator::TAG_Call: {
-                auto& e = x.as_Call();
-                os << StringView("Call( ") << e.retVal << StringView(" = ");
-                switch (e.fcn.tag()) {
-                    case MIRCallTarget::TAG_Value: {
-                        auto& e2 = e.fcn.as_Value();
-                        os << StringView("(") << e2 << StringView(")");
-                        break;
-                    }
-                    case MIRCallTarget::TAG_Path: {
-                        auto& e2 = e.fcn.as_Path();
-                        os << e2;
-                        break;
-                    }
-                    case MIRCallTarget::TAG_Intrinsic: {
-                        auto& e2 = e.fcn.as_Intrinsic();
-                        os << StringView("\"") << e2.name << StringView("\"::") << e2.params;
-                        break;
-                    }
-                }
-                os << StringView("( ");
-                for (const auto& arg : e.args) {
-                    os << arg << StringView(", ");
-                }
-                os << StringView("), bb") << e.retBlock << StringView(", ");
-                fmtUnwind(e.unwind);
-                os << StringView(")");
-                break;
-            }
-            case MIRTerminator::TAG_TailCall: {
-                auto& e = x.as_TailCall();
-                os << StringView("TailCall( ");
-                switch (e.fcn.tag()) {
-                    case MIRCallTarget::TAG_Value: {
-                        auto& e2 = e.fcn.as_Value();
-                        os << StringView("(") << e2 << StringView(")");
-                        break;
-                    }
-                    case MIRCallTarget::TAG_Path: {
-                        auto& e2 = e.fcn.as_Path();
-                        os << e2;
-                        break;
-                    }
-                    case MIRCallTarget::TAG_Intrinsic: {
-                        auto& e2 = e.fcn.as_Intrinsic();
-                        os << StringView("\"") << e2.name << StringView("\"::") << e2.params;
-                        break;
-                    }
-                }
-                os << StringView("( ");
-                for (const auto& arg : e.args) {
-                    os << arg << StringView(", ");
-                }
-                os << StringView(") )");
-                break;
-            }
-            case MIRTerminator::TAG_Asm2: {
-                auto& e = x.as_Asm2();
-                os << StringView("asm!(...) -> ");
-                if (e.retBlock != ~0u) {
-                    os << StringView("bb") << e.retBlock << StringView(", ");
-                }
-                for (const auto& p : e.params) {
-                    if (const auto* bb = p.opt_Label()) {
-                        os << StringView("label bb") << *bb << StringView(", ");
-                    }
-                }
-                break;
-            }
-        }
-
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, MIRStatement>(ZeroCopyOutput& os, const MIRStatement& x) {
-        switch (x.tag()) {
-            case MIRStatement::TAG_Assign: {
-                auto& e = x.as_Assign();
-                os << e.dst << StringView(" = ") << e.src;
-                break;
-            }
-            case MIRStatement::TAG_Asm: {
-                auto& e = x.as_Asm();
-                os << StringView("(");
-                for (const auto& spec : e.outputs) {
-                    os << StringView("\"") << spec.first << StringView("\" : ") << spec.second << StringView(", ");
-                }
-                os << StringView(") = llvm_asm!(\"") << FmtEscaped(e.tpl) << StringView("\", input=( ");
-                for (const auto& spec : e.inputs) {
-                    os << StringView("\"") << spec.first << StringView("\" : ") << spec.second << StringView(", ");
-                }
-                os << StringView("), clobbers=[") << e.clobbers << StringView("], flags=[") << e.flags << StringView("])");
-                break;
-            }
-            case MIRStatement::TAG_Asm2: {
-                auto& e = x.as_Asm2();
-                os << StringView("asm!(");
-                for (const auto& l : e.lines) {
-                    if (&l != &e.lines.front()) {
-                        os << StringView(" ");
-                    }
-                    l.fmt(os);
-                }
-                for (const auto& p : e.params) {
-                    os << StringView(", ");
-                    switch (p.tag()) {
-                        case MIRAsmParam::TAG_Const: {
-                            auto& v = p.as_Const();
-                            os << StringView("const ") << v;
-                            break;
-                        }
-                        case MIRAsmParam::TAG_Sym: {
-                            auto& v = p.as_Sym();
-                            os << StringView("sym ") << v;
-                            break;
-                        }
-                        case MIRAsmParam::TAG_Reg: {
-                            auto& v = p.as_Reg();
-                            os << StringView("reg ") << v.dir << StringView(" ") << v.spec << StringView(" ");
-                            if (v.input) {
-                                os << *v.input;
-                            } else {
-                                os << StringView("_");
-                            }
-                            os << StringView(" => ");
-                            if (v.output) {
-                                os << *v.output;
-                            } else {
-                                os << StringView("_");
-                            }
-                            break;
-                        }
-                        case MIRAsmParam::TAG_Label: {
-                            auto& v = p.as_Label();
-                            os << StringView("label bb") << v;
-                            break;
-                        }
-                    }
-                }
-                if (e.options.any()) {
-                    os << StringView(", ");
-                    e.options.fmt(os);
-                }
-                os << StringView(")");
-                break;
-            }
-            case MIRStatement::TAG_SetDropFlag: {
-                auto& e = x.as_SetDropFlag();
-                os << StringView("df$") << e.idx << StringView(" = ");
-                if (e.other == ~0u) {
-                    os << e.newVal;
-                } else {
-                    os << (e.newVal ? "!" : "") << StringView("df$") << e.other;
-                }
-                break;
-            }
-            case MIRStatement::TAG_SaveDropFlag: {
-                os << StringView("SaveDropFlag()");
-                break;
-            }
-            case MIRStatement::TAG_LoadDropFlag: {
-                os << StringView("LoadDropFlag()");
-                break;
-            }
-            case MIRStatement::TAG_ScopeEnd: {
-                auto& e = x.as_ScopeEnd();
-                os << StringView("ScopeEnd(");
-                for (auto idx : e.slots) {
-                    os << StringView("_$") << idx << StringView(",");
-                }
-                os << StringView(")");
                 break;
             }
         }

@@ -6,6 +6,7 @@ generate(
     name="VarState",
     default="Invalid",
     clone=False,
+    output=True,
     variants=[
         v("Invalid", "InvalidType", doc="Currently invalid"),
         v("Partial", fields=[

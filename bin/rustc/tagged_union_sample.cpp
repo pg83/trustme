@@ -1,5 +1,9 @@
 #include "tagged_union_sample.h"
 
+#include "output.h"
+
+using namespace stl;
+
 int SampleCounted::liveCount = 0;
 
 int SampleValue::extraProbe() const {
@@ -12,4 +16,9 @@ SampleTreeNode SampleTreeNode::clone() const {
     out.left = left.clone();
     out.right = right.clone();
     return out;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, SampleCounted>(ZeroCopyOutput& out, const SampleCounted& value) {
+    out << StringView("SampleCounted(value = ") << value.value << StringView(")");
 }

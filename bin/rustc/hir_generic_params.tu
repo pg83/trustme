@@ -5,6 +5,7 @@ generate(
     name="HIRGenericBound",
     default="TypeEquality",
     clone=False,
+    output=True,
     variants=[
         v("TraitBound", fields=[
             ("HIRTypeRef", "type"),

@@ -1,6 +1,8 @@
+#include "output.h"
 #include "tagged_union_sample.h"
 
 #include <std/tst/ut.h>
+#include <std/ios/out_mem.h>
 
 #include <cstring>
 #include <utility>
@@ -114,6 +116,13 @@ STD_TEST_SUITE(TaggedUnionValue) {
         v = SampleValue::make_Name("replacement");
         STD_INSIST(SampleCounted::liveCount == 0);
         STD_INSIST(v.is_Name());
+    }
+
+    STD_TEST(generatedStructuralOutput) {
+        char buffer[128] = {};
+        MemoryOutput out(buffer);
+        out << SampleValue::make_Point({.x = 3});
+        STD_INSIST(std::strcmp(buffer, "Point(flags = 0, x = 3, y = 7)") == 0);
     }
 }
 

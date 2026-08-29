@@ -11379,114 +11379,35 @@ auto MatchGenGrouped::pushCompare(MIRLValue left, MIRBinOp op, MIRParam right) -
     return builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({mv$(left), op, mv$(right)}));
 }
 
+template <>
+void stl::output<ZeroCopyOutput, InvalidType>(ZeroCopyOutput& out, InvalidType value) {
+    switch (value) {
+        case InvalidType::Uninit:
+            out << StringView("Uninit");
+            return;
+        case InvalidType::Moved:
+            out << StringView("Moved");
+            return;
+        case InvalidType::Descoped:
+            out << StringView("Descoped");
+            return;
+    }
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::pair<const unsigned int, VarState>>(ZeroCopyOutput& out, const std::pair<const unsigned int, VarState>& value) {
+    out << value.first << StringView(": ") << value.second;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::map<unsigned int, VarState>>(ZeroCopyOutput& out, const std::map<unsigned int, VarState>& values) {
+    outCont(out, values);
+}
+
 namespace stl {
     template <>
     void output<ZeroCopyOutput, tRulesSubset>(ZeroCopyOutput& out, const tRulesSubset& value) {
         operator<<(out, value);
-    }
-
-    template <>
-    void output<ZeroCopyOutput, PatternRule>(ZeroCopyOutput& os, const PatternRule& x) {
-        os << StringView("{root") << x.rootIndex << StringView(":") << x.fieldPath << StringView("}=");
-        switch (x.tag()) {
-            case PatternRule::TAG_Any: {
-                os << StringView("_");
-                break;
-            }
-            case PatternRule::TAG_Variant: {
-                auto& e = x.as_Variant();
-                os << e.idx << StringView(" [") << e.subRules << StringView("]");
-                break;
-            }
-            case PatternRule::TAG_Slice: {
-                auto& e = x.as_Slice();
-                os << StringView("len=") << e.len << StringView(" [") << e.subRules << StringView("]");
-                break;
-            }
-            case PatternRule::TAG_SplitSlice: {
-                auto& e = x.as_SplitSlice();
-                os << StringView("len>=") << e.minLen << StringView(" [") << e.leading << StringView(", ..., ") << e.trailing << StringView("]");
-                break;
-            }
-            case PatternRule::TAG_Bool: {
-                auto& e = x.as_Bool();
-                os << StringView(e ? "true" : "false");
-                break;
-            }
-            case PatternRule::TAG_Value: {
-                auto& e = x.as_Value();
-                os << e;
-                break;
-            }
-            case PatternRule::TAG_ValueRange: {
-                auto& e = x.as_ValueRange();
-                os << e.first << StringView(" ..") << StringView(e.isInclusive ? "=" : "") << StringView(" ") << e.last;
-                break;
-            }
-        }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, VarState>(ZeroCopyOutput& os, const VarState& x) {
-        switch (x.tag()) {
-            case VarState::TAG_Invalid: {
-                auto& e = x.as_Invalid();
-                switch (e) {
-                    case InvalidType::Uninit:
-                        os << StringView("Uninit");
-                        break;
-                    case InvalidType::Moved:
-                        os << StringView("Moved");
-                        break;
-                    case InvalidType::Descoped:
-                        os << StringView("Descoped");
-                        break;
-                }
-                break;
-            }
-            case VarState::TAG_Valid: {
-                os << StringView("Valid");
-                break;
-            }
-            case VarState::TAG_Optional: {
-                auto& e = x.as_Optional();
-                os << StringView("Optional(df") << e << StringView(")");
-                break;
-            }
-            case VarState::TAG_MovedOut: {
-                auto& e = x.as_MovedOut();
-                os << StringView("MovedOut(");
-                if (e.outerFlag == ~0u) {
-                    os << StringView("-");
-                } else {
-                    os << StringView("df") << e.outerFlag;
-                }
-                os << StringView(" ") << *e.innerState << StringView(")");
-                break;
-            }
-            case VarState::TAG_Partial: {
-                auto& e = x.as_Partial();
-                os << StringView("Partial(");
-                if (e.outerFlag == ~0u) {
-                    os << StringView("-");
-                } else {
-                    os << StringView("df") << e.outerFlag;
-                }
-                os << StringView(", [") << e.innerStates << StringView("])");
-                break;
-            }
-            case VarState::TAG_PartialArray: {
-                auto& e = x.as_PartialArray();
-                os << StringView("PartialArray(") << e.count << StringView(", fill=") << *e.fillState << StringView(", {");
-                for (const auto& kv : e.otherStates) {
-                    os << kv.first << StringView(": ") << kv.second << StringView(",");
-                }
-                os << StringView("})");
-                break;
-            }
-        }
-        return;
     }
 
     template <>

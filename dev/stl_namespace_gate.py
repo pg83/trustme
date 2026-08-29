@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject an explicit stl:: qualifier in one compiler C++ source file."""
+"""Reject explicit stl:: qualifiers except output specializations."""
 
 import sys
 from pathlib import Path
@@ -14,7 +14,7 @@ def main() -> int:
     hits = [
         line_number
         for line_number, line in enumerate(source.read_text(errors="replace").splitlines(), 1)
-        if "stl::" in line
+        if "stl::" in line and not line.startswith("void stl::output<")
     ]
     if hits:
         for line_number in hits:

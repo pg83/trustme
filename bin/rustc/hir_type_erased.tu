@@ -7,6 +7,7 @@ generate(
     name="TypeDataErasedTypeInner",
     default="Alias",
     clone=False,
+    output=True,
     variants=[
         v("Fcn", fields=[
             ("HIRPath", "origin"),
@@ -24,6 +25,7 @@ generate(
     name="HIRTypeDataNamedFunctionTy",
     default="Function",
     clone=False,
+    output=True,
     variants=[
         v("Function", "const HIRFunction*"),
         v("EnumConstructor", fields=[
@@ -41,6 +43,7 @@ generate(
     name="HIRTypeDataNodeType",
     default="Closure",
     clone=False,
+    output=True,
     doc='"magic structs": any type generated from a node',
     variants=[
         v("Closure", "const HIRExprNodeClosure*"),

@@ -7,6 +7,7 @@ generate(
     name="CaptureLayer",
     default="Vals",
     clone=False,
+    output=True,
     variants=[
         v("Vals", "std::vector<CapturedVal>", copy=False),
         v("Nested", "std::vector<CaptureLayer>", copy=False),

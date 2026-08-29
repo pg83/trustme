@@ -7,6 +7,7 @@ generate(
     name="PatternRule",
     default="Any",
     clone=False,
+    output=True,
     variants=[
         v("Variant", fields=[
             ("unsigned int", "idx"),

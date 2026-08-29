@@ -6,6 +6,7 @@ generate(
     name="SampleValue",
     default="Empty",
     clone=False,  # the Owner payload cannot be cloned
+    output=True,
     doc="In-place storage: every payload type is complete at the include.",
     variants=[
         v("Empty"),

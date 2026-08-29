@@ -2940,12 +2940,57 @@ bool isFloat(const HIRCoreType& v) {
     }
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, HIRTypeData>(ZeroCopyOutput& os, const HIRTypeData& type) {
-        type.fmt(os);
-    }
+template <>
+void stl::output<ZeroCopyOutput, HIRTypeDataPath>(ZeroCopyOutput& out, const HIRTypeDataPath& value) {
+    out << StringView("HIRTypeDataPath(path = ") << value.path << StringView(", binding = ") << value.binding << StringView(")");
+}
 
+template <>
+void stl::output<ZeroCopyOutput, HIRTypeDataTraitObject>(ZeroCopyOutput& out, const HIRTypeDataTraitObject& value) {
+    out << StringView("HIRTypeDataTraitObject(trait = ") << value.trait << StringView(", markers = ") << value.markers << StringView(", lifetimeIdentity = ") << value.lifetimeIdentity << StringView(", lifetimeIdentityHasFree = ") << value.lifetimeIdentityHasFree << StringView(")");
+}
+
+template <>
+void stl::output<ZeroCopyOutput, HIRTypeDataErasedType::Use>(ZeroCopyOutput& out, HIRTypeDataErasedType::Use value) {
+    switch (value) {
+        case HIRTypeDataErasedType::Use::OmittedOld:
+            out << StringView("OmittedOld");
+            return;
+        case HIRTypeDataErasedType::Use::Omitted2024:
+            out << StringView("Omitted2024");
+            return;
+        case HIRTypeDataErasedType::Use::Present:
+            out << StringView("Present");
+            return;
+    }
+}
+
+template <>
+void stl::output<ZeroCopyOutput, HIRTypeDataErasedType>(ZeroCopyOutput& out, const HIRTypeDataErasedType& value) {
+    out << StringView("HIRTypeDataErasedType(isSized = ") << value.isSized << StringView(", traits = ") << value.traits << StringView(", inner = ") << value.inner << StringView(", use = ") << value.use << StringView(", usePresent = ") << value.usePresent << StringView(")");
+}
+
+template <>
+void stl::output<ZeroCopyOutput, HIRTypeDataFunctionPointer>(ZeroCopyOutput& out, const HIRTypeDataFunctionPointer& value) {
+    out << StringView("HIRTypeDataFunctionPointer(isUnsafe = ") << value.isUnsafe << StringView(", isVariadic = ") << value.isVariadic << StringView(", abi = ") << value.abi << StringView(", rettype = ") << value.rettype << StringView(", argTypes = ") << value.argTypes << StringView(", trackCaller = ") << value.trackCaller << StringView(", lifetimeIdentity = ") << value.lifetimeIdentity << StringView(", lifetimeIdentityHasFree = ") << value.lifetimeIdentityHasFree << StringView(")");
+}
+
+template <>
+void stl::output<ZeroCopyOutput, HIRTypePattern>(ZeroCopyOutput& out, const HIRTypePattern& value) {
+    value.fmt(out);
+}
+
+template <>
+void stl::output<ZeroCopyOutput, HIRTypeDataInfer>(ZeroCopyOutput& out, HIRTypeDataInfer value) {
+    out << StringView("HIRTypeDataInfer(index = ") << value.index << StringView(", tyClass = ") << value.tyClass << StringView(")");
+}
+
+template <>
+void stl::output<ZeroCopyOutput, HIRTypeDataNamedFunction>(ZeroCopyOutput& out, const HIRTypeDataNamedFunction& value) {
+    out << StringView("HIRTypeDataNamedFunction(path = ") << value.path << StringView(", def = ") << value.def << StringView(")");
+}
+
+namespace stl {
     template <>
     void output<ZeroCopyOutput, const HIRTypeData*>(ZeroCopyOutput& os, const HIRTypeData* ty) {
         if (ty) {
@@ -3035,23 +3080,6 @@ namespace stl {
             case HIRBorrowType::Shared:
                 os << StringView("Shared");
                 return;
-        }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, HIRArraySize>(ZeroCopyOutput& os, const HIRArraySize& x) {
-        switch (x.tag()) {
-            case HIRArraySize::TAG_Unevaluated: {
-                auto& se = x.as_Unevaluated();
-                os << se;
-                break;
-            }
-            case HIRArraySize::TAG_Known: {
-                auto& se = x.as_Known();
-                os << se;
-                break;
-            }
         }
         return;
     }

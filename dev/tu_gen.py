@@ -13,6 +13,7 @@ A `xxx.tu` file is Python executed with two names in scope:
         extra_fields=[("uint8_t", "flags", "0")],
         extra="HIRArraySize clone() const;",
         allow_incomplete=False,
+        output=True,
     )
 
 Each generate() call emits one class into the output pair:
@@ -88,7 +89,7 @@ class Variant:
 
 class Union:
     def __init__(self, *, name, default, variants, extra="", extra_fields=(),
-                 allow_incomplete=False, clone=True, doc=None):
+                 allow_incomplete=False, clone=True, output=False, doc=None):
         if not IDENT.match(name):
             raise TuError(f"union name {name!r} is not an identifier")
         if not variants:
@@ -109,6 +110,7 @@ class Union:
         self.extra_fields = list(extra_fields)
         self.allow_incomplete = allow_incomplete
         self.clone = clone
+        self.output = output
         self.doc = doc
 
 
@@ -558,6 +560,59 @@ def emit_cpp_union(out, union):
         out.close()
 
 
+def output_expression(type_, value):
+    compact = "".join(type_.split())
+    if compact in ("u8", "uint8_t", "std::uint8_t", "::std::uint8_t",
+                   "unsignedchar"):
+        return f"static_cast<unsigned int>({value})"
+    if compact in ("i8", "int8_t", "std::int8_t", "::std::int8_t",
+                   "signedchar"):
+        return f"static_cast<int>({value})"
+    if compact.endswith("*"):
+        return f"static_cast<const void*>({value})"
+    if compact.startswith("std::unique_ptr<") or compact.startswith("::std::unique_ptr<"):
+        return f"static_cast<const void*>({value}.get())"
+    if compact.startswith("std::shared_ptr<") or compact.startswith("::std::shared_ptr<"):
+        return f"static_cast<const void*>({value}.get())"
+    return value
+
+
+def emit_output_field(out, first, name, type_, value):
+    if not first:
+        out.line('out << StringView(", ");')
+    out.line(f'out << StringView("{name} = ") << '
+             f'{output_expression(type_, value)};')
+
+
+def emit_output(out, union):
+    name = union.name
+    out.line("template <>")
+    out.open(f"void stl::output<ZeroCopyOutput, {name}>(ZeroCopyOutput& out,"
+             f" const {name}& value) {{")
+    out.open("switch (value.tag()) {")
+    for variant in union.variants:
+        out.open(f"case {name}::TAG_{variant.tag}: {{")
+        out.line(f'out << StringView("{variant.tag}(");')
+        first = True
+        for type_, field_name, *rest in union.extra_fields:
+            emit_output_field(out, first, field_name, type_,
+                              f"value.{field_name}")
+            first = False
+        if variant.type is not None:
+            emit_output_field(out, first, "value", variant.type,
+                              f"value.as_{variant.tag}()")
+        else:
+            for type_, field_name, *rest in (variant.fields or []):
+                emit_output_field(out, first, field_name, type_,
+                                  f"value.as_{variant.tag}().{field_name}")
+                first = False
+        out.line('out << StringView(")");')
+        out.line("break;")
+        out.close()
+    out.close()
+    out.close()
+
+
 def main():
     if len(sys.argv) != 4:
         raise SystemExit("usage: tu_gen.py INPUT.tu OUTPUT_tu.h OUTPUT_tu.cpp")
@@ -584,6 +639,8 @@ def main():
     cpp.line(banner)
     if not local_mode:
         cpp.line(f'#include "{context_header}"')
+    if any(union.output for union in unions):
+        cpp.line('#include "output.h"')
     cpp.line()
     cpp.line("#include <cassert>")
     cpp.line("#include <new>")
@@ -591,11 +648,18 @@ def main():
     if any(union.clone for union in unions):
         cpp.line("#include <concepts>")
         cpp.line("#include <vector>")
+    cpp.line()
+    if any(union.output for union in unions):
+        cpp.line("using namespace stl;")
         cpp.line()
+    if any(union.clone for union in unions):
         emit_clone_helper(cpp)
     for union in unions:
         cpp.line()
         emit_cpp_union(cpp, union)
+        if union.output:
+            cpp.line()
+            emit_output(cpp, union)
 
     header_path.parent.mkdir(parents=True, exist_ok=True)
     header_path.write_text(header.text(), encoding="utf-8")
