@@ -529,27 +529,6 @@ struct AssembledImplCb final: AssembledImplCallback {
     }
 };
 
-struct UnsizeTypeCallback {
-    virtual void visit(HIRTypeRef newDst) = 0;
-};
-
-template <typename F>
-struct UnsizeTypeCb final: UnsizeTypeCallback {
-    F f;
-
-    explicit UnsizeTypeCb(F f)
-        : f(f) {
-    }
-
-    void visit(HIRTypeRef newDst) override {
-        f(newDst);
-    }
-};
-
-struct UnsizeInferCallback {
-    virtual void visit(const HIRTypeData* dst, const HIRTypeData* src) = 0;
-};
-
 class TraitResolution: public TraitResolveCommon {
 public:
     struct NextTraitGoalEvaluator;
@@ -808,14 +787,6 @@ public:
     HIRCompare typeIsSized(const Span& sp, const HIRTypeData* ty) const;
     HIRCompare typeIsCopy(const Span& sp, const HIRTypeData* ty) const;
     HIRCompare typeIsClone(const Span& sp, const HIRTypeData* ty) const;
-
-    template <typename F>
-    HIRCompare canUnsize(const Span& sp, const HIRTypeData* dstTy, const HIRTypeData* srcTy, F f) const {
-        UnsizeTypeCb<F> cb(f);
-        return canUnsizeCb(sp, dstTy, srcTy, &cb);
-    }
-
-    HIRCompare canUnsizeCb(const Span& sp, const HIRTypeData* dstTy, const HIRTypeData* srcTy, UnsizeTypeCallback* newTypeCallback, UnsizeInferCallback* inferCallback = nullptr) const;
 
     const HIRTypeData* typeIsOwnedBox(const Span& sp, const HIRTypeData* ty) const;
 
