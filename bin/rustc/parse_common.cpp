@@ -23,7 +23,7 @@
 
 using namespace stl;
 
-#define NEWNODE(type, ...) mkExprnodep(lex, new type(__VA_ARGS__))
+#define NEWNODE(type, ...) mkExprnodep(lex, makeAstExprNode<type>(lex.typePool() __VA_OPT__(,) __VA_ARGS__))
 
 #define LEFTASSOC(cur, _next, cases)                                                      \
     ASTExprNodeP _next(TokenStream& lex);                                                 \
@@ -49,9 +49,9 @@ using namespace stl;
 
 namespace {
     // TODO: Use a ProtoSpan instead of a point span?
-    static inline ASTExprNodeP mkExprnodep(const TokenStream& lex, ASTExprNode* en) {
+    static inline ASTExprNodeP mkExprnodep(const TokenStream& lex, ASTExprNodeP en) {
         en->setSpan(lex.pointSpan());
-        return ASTExprNodeP(en);
+        return en;
     }
 
     ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty, Ident label = Ident(""));
@@ -136,9 +136,9 @@ namespace {
         if (lex.parseState().module != origModule) {
             lex.parseState().module = origModule;
         }
-        auto* rvBlk = new ASTExprNodeBlock(ty, mv$(lines), mv$(localMod));
+        auto rv = makeAstExprNode<ASTExprNodeBlock>(lex.typePool(), ty, mv$(lines), mv$(localMod));
+        auto* rvBlk = static_cast<ASTExprNodeBlock*>(rv.get());
         rvBlk->label = label;
-        auto rv = ASTExprNodeP(rvBlk);
         rv->setSpan(lex.endSpan(ps));
         rv->setAttrs(mv$(attrs));
         return rv;
@@ -942,7 +942,7 @@ namespace {
                                         std::vector<ASTExprNodeP> exprArgs;
                                         for (;;) {
                                             if (const auto* n = cast<const ASTExprNodeNamedValue>(expr)) {
-                                                exprArgs.push_back(NEWNODE(ASTExprNodeString, n->path.asTrivial().c_str(), {}));
+                                                exprArgs.push_back(NEWNODE(ASTExprNodeString, n->path.asTrivial().c_str(), Ident::Hygiene()));
                                                 break;
                                             } else if (const auto* n = cast<const ASTExprNodeInteger>(expr)) {
                                                 exprArgs.push_back(NEWNODE(ASTExprNodeInteger, n->value, n->datatype));
@@ -979,7 +979,7 @@ namespace {
                                                 exprArgs.push_back(NEWNODE(ASTExprNodeInteger, U128(static_cast<u64>(whole)), CORETYPE_ANY));
                                                 break;
                                             } else if (const auto* n = cast<const ASTExprNodeField>(expr)) {
-                                                exprArgs.push_back(NEWNODE(ASTExprNodeString, n->name.c_str(), {}));
+                                                exprArgs.push_back(NEWNODE(ASTExprNodeString, n->name.c_str(), Ident::Hygiene()));
                                                 expr = &*n->obj;
                                             } else {
                                                 TODO(lex.pointSpan(), "offset_of - " << *expr);
@@ -1142,8 +1142,6 @@ namespace {
         rv->setSpan(mv$(pathSpan));
         return rv;
     }
-
-    typedef std::unique_ptr<ASTExprNode> PatternExprNodeP;
 
     ASTPattern ParsePattern1(TokenStream& lex, AllowOrPattern allowOr);
 
@@ -4297,8 +4295,6 @@ ASTPathParams ParsePathGenericList(TokenStream& lex) {
     return rv;
 }
 
-#define NEWNODE(type, ...) PatternExprNodeP(new type(__VA_ARGS__))
-
 ASTPattern ParsePattern(TokenStream& lex, AllowOrPattern allowOr) {
     auto ps = lex.startSpan();
     if (allowOr == AllowOrPattern::Yes) {
@@ -4329,8 +4325,6 @@ ASTPattern ParsePattern(TokenStream& lex, AllowOrPattern allowOr) {
         return rv;
     }
 }
-
-#undef NEWNODE
 
 #define LOOKAHEAD2(lex, tok1, tok2) ((lex).lookahead(0) == (tok1) && (lex).lookahead(1) == (tok2))
 

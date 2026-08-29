@@ -23,7 +23,6 @@ InterpolatedFragment::~InterpolatedFragment() {
             case InterpolatedFragment::EXPR:
             case InterpolatedFragment::STMT:
             case InterpolatedFragment::BLOCK:
-                delete reinterpret_cast<ASTExprNode*>(ptr);
                 break;
             case InterpolatedFragment::META:
                 delete reinterpret_cast<ASTAttribute*>(ptr);

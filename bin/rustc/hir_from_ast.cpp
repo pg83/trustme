@@ -74,7 +74,7 @@ namespace {
         HIRGenericParams LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsSized);
         HIRPath LowerHIRPatternPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
         HIRPattern LowerHIRPattern(const ASTPattern& pat);
-        HIRExprPtr LowerHIRExpr(const std::shared_ptr<ASTExprNode>& e);
+        HIRExprPtr LowerHIRExpr(const ASTExprNode* e);
         HIRExprPtr LowerHIRExpr(const ASTExpr& e);
         HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric = false);
         HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs = {});
@@ -1154,8 +1154,8 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
     UNREACHABLE();
 }
 
-HIRExprPtr AST2HIR::LowerHIRExpr(const std::shared_ptr<ASTExprNode>& e) {
-    if (e.get()) {
+HIRExprPtr AST2HIR::LowerHIRExpr(const ASTExprNode* e) {
+    if (e) {
         return LowerHIRExprNode(*e);
     } else {
         return HIRExprPtr();
@@ -1713,15 +1713,15 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
                 switch (value.tag()) {
                     case ASTPatternValue::TAG_Integer: {
                         auto& v = value.as_Integer();
-                        ASTExprNodeInteger node(v.value, v.type);
-                        node.setSpan(sp);
-                        return LowerHIRConstGeneric(node);
+                        auto node = makeAstExprNode<ASTExprNodeInteger>(*astCrate->pool, v.value, v.type);
+                        node->setSpan(sp);
+                        return LowerHIRConstGeneric(*node);
                     }
                     case ASTPatternValue::TAG_Named: {
                         auto& v = value.as_Named();
-                        ASTExprNodeNamedValue node(v);
-                        node.setSpan(sp);
-                        return LowerHIRConstGeneric(node);
+                        auto node = makeAstExprNode<ASTExprNodeNamedValue>(*astCrate->pool, ASTPath(v));
+                        node->setSpan(sp);
+                        return LowerHIRConstGeneric(*node);
                     }
                     case ASTPatternValue::TAG_Invalid: {
                         BUG(sp, "invalid pattern endpoint");

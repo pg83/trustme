@@ -7,8 +7,6 @@
 #include "coretypes.h"
 #include "rc_string.h"
 
-#include <memory>
-
 enum eTokenType {
 #define _(t) t,
 #include "parse_eTokenType.enum.inc"
@@ -38,6 +36,7 @@ class ASTVisibility;
 class ASTPattern;
 class ASTPath;
 class ASTExprNode;
+class ASTExprNodeP;
 class ASTAttribute;
 class ASTItem;
 
@@ -148,7 +147,7 @@ public:
 
     ASTExprNode& fragNode();
 
-    std::unique_ptr<ASTExprNode> takeFragNode();
+    ASTExprNodeP takeFragNode();
     ASTNamed<ASTItem> takeFragItem();
     ASTNamed<ASTItem> takeFragStmtItem();
     ASTVisibility takeFragVis();

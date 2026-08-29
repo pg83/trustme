@@ -296,7 +296,7 @@ Ordering ASTType::ord(const ASTType& x) const {
             if (rv != OrdEqual) {
                 return rv;
             }
-            if (ent.size.get()) {
+            if (ent.size) {
                 TODO(Span(), "Sized array comparisons");
             }
             return OrdEqual;
@@ -411,7 +411,7 @@ void ASTType::print(std::ostream& os, bool isDebug /*=false*/) const {
             ent.inner->print(os, isDebug);
         } break;
             _(Pointer, os << "*" << (ent.isMut ? "mut " : "const "); ent.inner->print(os, isDebug);)
-            _(Array, os << "["; ent.inner->print(os, isDebug); os << "; "; if (ent.size.get()) { os << *ent.size; } else { os << "_"; } os << "]";)
+            _(Array, os << "["; ent.inner->print(os, isDebug); os << "; "; if (ent.size) { os << *ent.size; } else { os << "_"; } os << "]";)
             _(Slice, os << "["; ent.inner->print(os, isDebug); os << "]";)
             _(Pattern, ent.inner->print(os, isDebug); os << " is " << *ent.pattern;)
             _(Generic, if (isDebug) os << "/* arg */ "; os << ent.name; if (isDebug) os << "/*" << ent.index << "*/";)
@@ -544,8 +544,8 @@ ASTType* mkType(ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTTyp
     return mkType(pool, sp, TypeData::make_Pointer({isMut, innerType}));
 }
 
-ASTType* mkType(ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, std::shared_ptr<ASTExprNode> size) {
-    return mkType(pool, sp, TypeData::make_Array({innerType, mv$(size)}));
+ASTType* mkType(ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, ASTExprNode* size) {
+    return mkType(pool, sp, TypeData::make_Array({innerType, size}));
 }
 
 ASTType* mkType(ObjPool& pool, ASTTypeTags::UnsizedArray, Span sp, ASTType* innerType) {

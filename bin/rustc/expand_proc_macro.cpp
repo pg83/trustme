@@ -28,7 +28,7 @@ using namespace stl;
 extern char** environ;
 #endif
 
-#define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
+#define NEWNODE(ty, ...) makeAstExprNode<ASTExprNode##ty>(*crate.pool __VA_OPT__(,) __VA_ARGS__)
 
 namespace {
     enum class TokenClass {
@@ -334,10 +334,10 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
 
         testNodes.push_back(NEWNODE(StructLiteral, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")}), nullptr, mv$(descVals)));
     }
-    auto* testsArray = new ASTExprNodeArray(mv$(testNodes));
+    auto testsArray = makeAstExprNode<ASTExprNodeArray>(*crate.pool, mv$(testNodes));
 
-    size_t testCount = testsArray->values.size();
-    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
+    size_t testCount = static_cast<ASTExprNodeArray&>(*testsArray).values.size();
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), makeAstExprNode<ASTExprNodeInteger>(*crate.pool, U128(testCount), CORETYPE_UINT).release()), ASTExpr(mv$(testsArray))};
 
     auto newmod = ASTModule{ASTAbsolutePath("", {"proc_macro#"})};
     // - TODO: These need to be loaded too.

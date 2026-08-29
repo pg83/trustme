@@ -7,9 +7,12 @@
 #include "ast_expr_ptr.h"
 #include "parse_tokentree.h"
 
+#include <std/mem/obj_pool.h>
+
 #include <memory>
 #include <vector>
 #include <ostream>
+#include <utility>
 
 class ASTPattern;
 class ASTNodeVisitor;
@@ -17,6 +20,7 @@ class ASTNodeVisitor;
 class ASTExprNode {
     ASTAttributeList attrs_;
     Span span_;
+    stl::ObjPool* pool_ = nullptr;
 
 public:
     virtual ~ASTExprNode() = 0;
@@ -25,6 +29,14 @@ public:
     virtual void print(std::ostream& os) const = 0;
     virtual ASTExprNodeP clone() const = 0;
     virtual unsigned int nodeKind() const = 0;
+
+    void setPool(stl::ObjPool& pool) {
+        pool_ = &pool;
+    }
+
+    stl::ObjPool& pool() const {
+        return *pool_;
+    }
 
     void setSpan(Span s) {
         span_ = std::move(s);
@@ -40,6 +52,13 @@ public:
         return attrs_;
     }
 };
+
+template <typename T, typename... Args>
+ASTExprNodeP makeAstExprNode(stl::ObjPool& pool, Args&&... args) {
+    auto* node = pool.make<T>(std::forward<Args>(args)...);
+    node->setPool(pool);
+    return ASTExprNodeP(node);
+}
 
 struct ASTExprNodeBlock: public ASTExprNode {
     enum class Type {

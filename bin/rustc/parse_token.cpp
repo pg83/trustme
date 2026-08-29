@@ -155,17 +155,13 @@ Token::~Token() {
             delete reinterpret_cast<ASTPath*>(data_.as_Fragment());
             break;
         case TOK_INTERPOLATED_EXPR:
-            delete reinterpret_cast<ASTExprNode*>(data_.as_Fragment());
-            break;
         case TOK_INTERPOLATED_STMT:
-            delete reinterpret_cast<ASTExprNode*>(data_.as_Fragment());
             break;
         case TOK_INTERPOLATED_STMT_ITEM:
         case TOK_INTERPOLATED_ITEM:
             delete reinterpret_cast<ASTNamed<ASTItem>*>(data_.as_Fragment());
             break;
         case TOK_INTERPOLATED_BLOCK:
-            delete reinterpret_cast<ASTExprNode*>(data_.as_Fragment());
             break;
         case TOK_INTERPOLATED_META:
             delete reinterpret_cast<ASTAttribute*>(data_.as_Fragment());
@@ -448,11 +444,11 @@ ASTExprNode& Token::fragNode() {
     return *reinterpret_cast<ASTExprNode*>(ptr);
 }
 
-std::unique_ptr<ASTExprNode> Token::takeFragNode() {
+ASTExprNodeP Token::takeFragNode() {
     BUG_ASSERT(type_ == TOK_INTERPOLATED_EXPR || type_ == TOK_INTERPOLATED_STMT || type_ == TOK_INTERPOLATED_BLOCK);
     auto ptr = data_.as_Fragment();
     data_.as_Fragment() = nullptr;
-    return std::unique_ptr<ASTExprNode>(reinterpret_cast<ASTExprNode*>(ptr));
+    return ASTExprNodeP(reinterpret_cast<ASTExprNode*>(ptr));
 }
 
 ASTNamed<ASTItem> Token::takeFragItem() {

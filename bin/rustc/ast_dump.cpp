@@ -1630,7 +1630,7 @@ auto RustPrinter::visit(ASTExprNodeStructLiteralPattern& n) -> void {
 auto RustPrinter::visit(ASTExprNodeArray& n) -> void {
     exprRoot = false;
     os << "[";
-    if (n.size.get()) {
+    if (n.size) {
         ASTNodeVisitor::visit(n.values[0]);
         os << "; ";
         ASTNodeVisitor::visit(n.size);

@@ -13,7 +13,6 @@ ASTExprNodeP::ASTExprNodeP(ASTExprNode* node)
 }
 
 ASTExprNodeP& ASTExprNodeP::operator=(ASTExprNodeP&& x) {
-    this->~ASTExprNodeP();
     this->ptr = x.ptr;
     x.ptr = nullptr;
     return *this;
@@ -26,21 +25,22 @@ ASTExprNode* ASTExprNodeP::release() {
 }
 
 void ASTExprNodeP::reset(ASTExprNode* n) {
-    this->~ASTExprNodeP();
     ptr = n;
 }
 
 const ASTExprNode& ASTExpr::node() const {
-    BUG_ASSERT(node_.get());
+    BUG_ASSERT(node_);
     return *node_;
 }
 
 ASTExprNode& ASTExpr::node() {
-    BUG_ASSERT(node_.get());
+    BUG_ASSERT(node_);
     return *node_;
 }
 
-std::shared_ptr<ASTExprNode> ASTExpr::takeNode() {
-    BUG_ASSERT(node_.get());
-    return std::move(node_);
+ASTExprNode* ASTExpr::takeNode() {
+    BUG_ASSERT(node_);
+    auto* node = node_;
+    node_ = nullptr;
+    return node;
 }
