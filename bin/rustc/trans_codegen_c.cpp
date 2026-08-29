@@ -4011,7 +4011,7 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                         of << StringView(".DATA[2] = ");
                         emitParam(ve.val);
                     } else {
-                        of << StringView("for(unsigned int i = 0; i < ") << ve.count << StringView("; i ++)\n");
+                        of << StringView("for(unsigned int i = 0; i < ") << ve.count.as_Known() << StringView("; i ++)\n");
                         of << indent << StringView("\t");
                         emitLvalue(e.dst);
                         of << StringView(".DATA[i] = ");
@@ -6351,54 +6351,60 @@ auto CodeGeneratorC::emitFunctionHeader(const HIRPath& p, const HIRFunction& ite
     if (item.markings.alignment != 0) {
         of << StringView("__attribute__((aligned(") << item.markings.alignment << StringView("))) ");
     }
-    auto cb = FMT_CB(ss, ss << StringView(" ") << compilerAbiAttribute(item.abi) << TransMangleValue(p) << nameSuffix << StringView("("); if (passedCount == 0 && !hasCallerLocation && !item.variadic) { ss << StringView("void)"); } else {
-        unsigned int emitted = 0;
-        for (unsigned int i = 0; i < item.fixedArgCount(); i++) {
-            auto ty = params.monomorph(resolve_, item.args[i].second);
-            if (!argumentIsPassed(item.abi, ty)) {
-                continue;
-            }
-            if (compact) {
-                if (emitted != 0) {
-                    ss << StringView(", ");
+    auto cb = [&](ZeroCopyOutput& ss) {
+        ss << StringView(" ") << compilerAbiAttribute(item.abi) << TransMangleValue(p) << nameSuffix << StringView("(");
+        if (passedCount == 0 && !hasCallerLocation && !item.variadic) {
+            ss << StringView("void)");
+        } else {
+            unsigned int emitted = 0;
+            for (unsigned int i = 0; i < item.fixedArgCount(); i++) {
+                auto ty = params.monomorph(resolve_, item.args[i].second);
+                if (!argumentIsPassed(item.abi, ty)) {
+                    continue;
                 }
-            } else {
-                ss << StringView("\n\t\t");
-            }
-            this->emitFunctionArgument(ty, FMT_CB(os, os << StringView("arg") << i;));
-            emitted++;
-            if (!compact && (item.variadic || emitted < passedCount || hasCallerLocation)) {
-                of << StringView(",");
-            }
-        }
-
-        if (item.variadic) {
-            if (compact) {
-                of << (emitted != 0 ? ", ..." : "...");
-            } else {
-                of << StringView("\n\t\t...");
-            }
-            emitted++;
-        }
-
-        if (hasCallerLocation) {
-            MIR_ASSERT(*mirRes, !item.variadic, StringView("#[track_caller] on a variadic function"));
-            if (compact) {
-                if (emitted != 0) {
-                    of << StringView(", ");
+                if (compact) {
+                    if (emitted != 0) {
+                        ss << StringView(", ");
+                    }
+                } else {
+                    ss << StringView("\n\t\t");
                 }
-            } else {
-                of << StringView("\n\t\t");
+                this->emitFunctionArgument(ty, FMT_CB(os, os << StringView("arg") << i;));
+                emitted++;
+                if (!compact && (item.variadic || emitted < passedCount || hasCallerLocation)) {
+                    ss << StringView(",");
+                }
             }
-            of << StringView("const trustme_caller_location* trustme_caller");
-        }
 
-        ss << (compact ? ")" : "\n\t\t)");
-    });
+            if (item.variadic) {
+                if (compact) {
+                    ss << StringView(emitted != 0 ? ", ..." : "...");
+                } else {
+                    ss << StringView("\n\t\t...");
+                }
+                emitted++;
+            }
+
+            if (hasCallerLocation) {
+                MIR_ASSERT(*mirRes, !item.variadic, StringView("#[track_caller] on a variadic function"));
+                if (compact) {
+                    if (emitted != 0) {
+                        ss << StringView(", ");
+                    }
+                } else {
+                    ss << StringView("\n\t\t");
+                }
+                ss << StringView("const trustme_caller_location* trustme_caller");
+            }
+
+            ss << StringView(compact ? ")" : "\n\t\t)");
+        }
+    };
     if (retTy != crate.types.unit()) {
         emitCtype(retTy, cb);
     } else {
-        of << StringView("void ") << cb;
+        of << StringView("void ");
+        cb(of);
     }
 }
 
