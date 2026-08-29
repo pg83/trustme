@@ -23,7 +23,7 @@
 
 using namespace stl;
 
-#define NEWNODE(type, ...) mkExprnodep(lex, makeAstExprNode<type>(lex.typePool() __VA_OPT__(,) __VA_ARGS__))
+#define NEWNODE(type, ...) mkExprnodep(lex, makeAstExprNode<type>(lex.typePool() __VA_OPT__(, ) __VA_ARGS__))
 
 #define LEFTASSOC(cur, _next, cases)                                                      \
     ASTExprNodeP _next(TokenStream& lex);                                                 \
@@ -93,6 +93,7 @@ namespace {
     std::vector<std::pair<RcString, ASTFunction>> SplitDelegationFunction(const ASTFunction& fcn);
 
     ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty /*=Bare*/, Ident label /*=RcString()*/) {
+        TRACE_FUNCTION;
         CLEAR_PARSE_FLAGS_EXPR(lex);
         Token tok;
 
@@ -134,6 +135,7 @@ namespace {
         GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
 
         if (lex.parseState().module != origModule) {
+            DEBUG("Restore module from " << lex.parseState().module->path() << " to " << origModule->path());
             lex.parseState().module = origModule;
         }
         auto rv = makeAstExprNode<ASTExprNodeBlock>(lex.typePool(), ty, mv$(lines), mv$(localMod));
@@ -271,6 +273,7 @@ namespace {
     }
 
     ASTExprNodeP ParseIfStmt(TokenStream& lex) {
+        TRACE_FUNCTION;
         Token tok;
         std::vector<ASTExprNodeIf::Arm> arms;
         ASTExprNodeP elseBlock;
@@ -299,6 +302,7 @@ namespace {
     }
 
     ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee) {
+        TRACE_FUNCTION;
         Token tok;
         ASTAttributeList nodeAttrs;
 
@@ -366,6 +370,7 @@ namespace {
     }
 
     ASTExprNodeP ParseExprTry(TokenStream& lex) {
+        TRACE_FUNCTION;
         auto inner = ParseExprBlockNode(lex);
         //TODO(lex.point_span(), "do catch");
         return NEWNODE(ASTExprNodeTry, std::move(inner));
@@ -425,6 +430,7 @@ namespace {
     }
 
     std::vector<ASTExprNodeP> ParseParenList(TokenStream& lex) {
+        TRACE_FUNCTION;
         Token tok;
 
         CLEAR_PARSE_FLAGS_EXPR(lex);
@@ -634,6 +640,7 @@ namespace {
     }
 
     ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
+        TRACE_FUNCTION;
         Token tok;
 
         if (LOOK_AHEAD(lex) == TOK_INTEGER) {
@@ -733,6 +740,7 @@ namespace {
     }
 
     ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs) {
+        TRACE_FUNCTION;
         Token tok;
 
         GET_TOK(tok, lex);
@@ -802,6 +810,7 @@ namespace {
     }
 
     ASTExprNodeP ParseExprValInner(TokenStream& lex) {
+        TRACE_FUNCTION;
         Token tok;
         ASTPath path;
 
@@ -908,6 +917,7 @@ namespace {
                 PUTBACK(tok, lex);
                 path = ParsePath(lex, PATH_GENERIC_EXPR);
 
+                DEBUG("path = " << path << ", lookahead=" << Token::typestr(lex.lookahead(0)));
                 switch (GET_TOK(tok, lex)) {
                     case TOK_EXCLAM:
                         return ParseExprMacro(lex, mv$(path), mv$(pathSpan));
@@ -922,6 +932,7 @@ namespace {
                         if (!CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
                             return ParseExprValStructLiteral(lex, std::move(path));
                         } else {
+                            DEBUG("Not parsing struct literal");
                         }
                         PUTBACK(tok, lex);
                         return NEWNODE(ASTExprNodeNamedValue, std::move(path));
@@ -1058,6 +1069,7 @@ namespace {
                 return NEWNODE(ASTExprNodeBool, false);
             case TOK_PAREN_OPEN:
                 if (lex.getTokenIf(TOK_PAREN_CLOSE)) {
+                    DEBUG("Unit");
                     return NEWNODE(ASTExprNodeTuple, std::vector<ASTExprNodeP>());
                 } else {
                     CLEAR_PARSE_FLAGS_EXPR(lex);
@@ -1138,6 +1150,7 @@ namespace {
             lex.popHygine();
         }
 
+        DEBUG("name=" << path << ", ident=" << ident << ", tt=" << tt);
         auto rv = NEWNODE(ASTExprNodeMacro, mv$(path), mv$(ident), mv$(tt), isBraced, mv$(definitionHygiene));
         rv->setSpan(mv$(pathSpan));
         return rv;
@@ -1160,6 +1173,7 @@ namespace {
     ASTPattern ParsePatternReal1(TokenStream& lex, AllowOrPattern allowOr);
 
     ASTPattern ParsePattern1(TokenStream& lex, AllowOrPattern allowOr) {
+        TRACE_FUNCTION;
         auto ps = lex.startSpan();
 
         Token tok;
@@ -1300,6 +1314,7 @@ namespace {
     }
 
     ASTPattern::Value ParsePatternValue(TokenStream& lex) {
+        TRACE_FUNCTION;
         Token tok;
         switch (GET_TOK(tok, lex)) {
             case TOK_RWORD_CRATE:
@@ -1369,6 +1384,7 @@ namespace {
     }
 
     ASTPattern ParsePatternReal1(TokenStream& lex, AllowOrPattern allowOr) {
+        TRACE_FUNCTION;
         auto ps = lex.startSpan();
 
         Token tok;
@@ -1384,6 +1400,7 @@ namespace {
             case TOK_DOUBLE_AMP:
                 lex.putback(TOK_AMP);
             case TOK_AMP: {
+                DEBUG("Ref");
                 bool isMut = false;
                 if (GET_TOK(tok, lex) == TOK_RWORD_MUT) {
                     isMut = true;
@@ -1521,6 +1538,7 @@ namespace {
     }
 
     ASTPattern::TuplePat ParsePatternTuple(TokenStream& lex, bool* justParen) {
+        TRACE_FUNCTION;
         auto sp = lex.startSpan();
         Token tok;
         if (justParen) {
@@ -1580,6 +1598,7 @@ namespace {
     }
 
     ASTPattern ParsePatternStruct(TokenStream& lex, ProtoSpan ps, ASTPath path) {
+        TRACE_FUNCTION;
         Token tok;
 
         if (LOOK_AHEAD(lex) == TOK_INTEGER) {
@@ -1647,6 +1666,7 @@ namespace {
 
             GET_TOK(tok, lex);
 
+            DEBUG("tok = " << tok);
             auto innerPs = lex.startSpan();
             bool isShortBind = false;
             bool isBox = false;
@@ -1749,6 +1769,7 @@ namespace {
     }
 
     void ParseTypeBound(TokenStream& lex, ASTGenericParams& ret, ASTType* checkedType, ASTHigherRankedBounds outerHrbs = {}, bool retainBareType = false) {
+        TRACE_FUNCTION;
         Token tok;
 
         if (lex.lookahead(0) == TOK_COMMA || lex.lookahead(0) == TOK_BRACE_OPEN || lex.lookahead(0) == TOK_SEMICOLON) {
@@ -1827,6 +1848,7 @@ namespace {
     }
 
     ASTGenericParams ParseGenericParams(TokenStream& lex) {
+        TRACE_FUNCTION;
         ASTGenericParams ret;
         Token tok;
         do {
@@ -1916,6 +1938,7 @@ namespace {
     }
 
     void ParseWhereClause(TokenStream& lex, ASTGenericParams& params) {
+        TRACE_FUNCTION;
         Token tok;
 
         do {
@@ -1974,6 +1997,7 @@ namespace {
     }
 
     ASTFunction::Arg ParseFunctionArg(TokenStream& lex, bool expectNamed, ASTAttributeList attrs) {
+        TRACE_FUNCTION_F("expect_named = " << expectNamed);
         Token tok;
 
         ASTPattern pat;
@@ -1988,6 +2012,7 @@ namespace {
     }
 
     ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSelf, bool canBePrototype, std::string abi, ASTFunction::Flags flags) {
+        TRACE_FUNCTION;
         const RcString rcstringSelfLower = RcString::newInterned("self");
         const RcString rcstringSelf = RcString::newInterned("Self");
         ProtoSpan ps = lex.startSpan();
@@ -2162,6 +2187,7 @@ namespace {
     }
 
     ASTTypeAlias ParseTypeAlias(TokenStream& lex) {
+        TRACE_FUNCTION;
         Token tok;
 
         ASTGenericParams params = ParseGenericParamsOpt(lex);
@@ -2190,6 +2216,7 @@ namespace {
     }
 
     ASTStruct ParseStruct(TokenStream& lex, const ASTAttributeList& metaItems) {
+        TRACE_FUNCTION;
         Token tok;
 
         tok = lex.getToken();
@@ -2304,6 +2331,7 @@ namespace {
     }
 
     ASTTrait ParseTraitDef(TokenStream& lex, const ASTAttributeList& metaItems, ASTGenericParams params) {
+        TRACE_FUNCTION;
         Token tok;
 
         GET_TOK(tok, lex);
@@ -2363,6 +2391,7 @@ namespace {
     }
 
     ASTEnum ParseEnumDef(TokenStream& lex, const ASTAttributeList& metaItems) {
+        TRACE_FUNCTION;
         Token tok;
 
         tok = lex.getToken();
@@ -2443,6 +2472,7 @@ namespace {
     ASTUnion ParseUnion(TokenStream& lex, ASTAttributeList& metaItems) {
         Token tok;
 
+        TRACE_FUNCTION;
         ASTGenericParams params;
         if (GET_TOK(tok, lex) == TOK_LT) {
             params = ParseGenericParams(lex);
@@ -2493,6 +2523,7 @@ namespace {
     }
 
     ASTItem ParseImpl(TokenStream& lex, ASTAttributeList& attrs, bool isUnsafe = false, bool isDefault = false) {
+        TRACE_FUNCTION;
         Token tok;
         auto ps = lex.startSpan();
 
@@ -2588,6 +2619,7 @@ namespace {
     }
 
     ASTExternBlock ParseExternBlock(TokenStream& lex, std::string abi, ASTAttributeList& blockAttrs) {
+        TRACE_FUNCTION;
         Token tok;
 
         ParseParentAttrs(lex, blockAttrs);
@@ -2624,6 +2656,7 @@ namespace {
     }
 
     void ParseUseInner(TokenStream& lex, std::vector<ASTUseItem::Ent>& entries, ASTPath& path, bool explicitAbsolute = false) {
+        TRACE_FUNCTION_FR(path, entries);
         Token tok;
 
         while (lex.getTokenIf(TOK_RWORD_SUPER)) {
@@ -2815,6 +2848,7 @@ namespace {
     }
 
     ASTUseItem ParseUse(TokenStream& lex) {
+        TRACE_FUNCTION;
         Token tok;
         ProtoSpan spanStart = lex.startSpan();
 
@@ -2960,6 +2994,7 @@ namespace {
     }
 
     void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs) {
+        TRACE_FUNCTION;
         auto prevMod = lex.parseState().module;
         lex.parseState().module = &mod;
         ParseParentAttrs(lex, modAttrs);
@@ -3114,6 +3149,7 @@ namespace {
             }
 
             case TOK_PAREN_OPEN: {
+                DEBUG("Tuple");
                 if (GET_TOK(tok, lex) == TOK_PAREN_CLOSE) {
                     return mkType(lex.typePool(), ASTTypeTags::Tuple(), lex.endSpan(ps), {});
                 }
@@ -3146,6 +3182,7 @@ namespace {
 
     ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs) {
         auto ps = lex.startSpan();
+        TRACE_FUNCTION;
         Token tok;
 
         std::string abi = "";
@@ -3408,6 +3445,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
     if (tok.type() == TOK_INTERPOLATED_STMT_ITEM) {
         if (!localMod) {
             localMod = lex.parseState().getCurrentMod().addAnon();
+            DEBUG("Set module from " << lex.parseState().module->path() << " to " << localMod->path());
             lex.parseState().module = localMod.get();
         }
         auto item = tok.takeFragStmtItem();
@@ -3422,6 +3460,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
         PUTBACK(tok, lex);
         if (!localMod) {
             localMod = lex.parseState().getCurrentMod().addAnon();
+            DEBUG("Set module from " << lex.parseState().module->path() << " to " << localMod->path());
             lex.parseState().module = localMod.get();
         }
         ParseModItem(lex, *localMod, mv$(itemAttrs));
@@ -3441,6 +3480,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
     if (tok.type() == TOK_IDENT && tok.ident().name == "macro_rules" && lex.lookahead(0) == TOK_EXCLAM) {
         if (!localMod) {
             localMod = lex.parseState().getCurrentMod().addAnon();
+            DEBUG("Set module from " << lex.parseState().module->path() << " to " << localMod->path());
             lex.parseState().module = localMod.get();
         }
     }
@@ -3473,6 +3513,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
             PUTBACK(tok, lex);
             if (!localMod) {
                 localMod = lex.parseState().getCurrentMod().addAnon();
+                DEBUG("Set module from " << lex.parseState().module->path() << " to " << localMod->path());
                 lex.parseState().module = localMod.get();
             }
             ParseModItem(lex, *localMod, mv$(itemAttrs));
@@ -3482,6 +3523,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
                 PUTBACK(tok, lex);
                 if (!localMod) {
                     localMod = lex.parseState().getCurrentMod().addAnon();
+                    DEBUG("Set module from " << lex.parseState().module->path() << " to " << localMod->path());
                     lex.parseState().module = localMod.get();
                 }
                 ParseModItem(lex, *localMod, mv$(itemAttrs));
@@ -3493,6 +3535,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
                 PUTBACK(tok, lex);
                 if (!localMod) {
                     localMod = lex.parseState().getCurrentMod().addAnon();
+                    DEBUG("Set module from " << lex.parseState().module->path() << " to " << localMod->path());
                     lex.parseState().module = localMod.get();
                 }
                 ParseModItem(lex, *localMod, mv$(itemAttrs));
@@ -3505,6 +3548,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
                 PUTBACK(tok, lex);
                 if (!localMod) {
                     localMod = lex.parseState().getCurrentMod().addAnon();
+                    DEBUG("Set module from " << lex.parseState().module->path() << " to " << localMod->path());
                     lex.parseState().module = localMod.get();
                 }
                 ParseModItem(lex, *localMod, mv$(itemAttrs));
@@ -3516,6 +3560,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
                 PUTBACK(tok, lex);
                 if (!localMod) {
                     localMod = lex.parseState().getCurrentMod().addAnon();
+                    DEBUG("Set module from " << lex.parseState().module->path() << " to " << localMod->path());
                     lex.parseState().module = localMod.get();
                 }
                 ParseModItem(lex, *localMod, mv$(itemAttrs));
@@ -3537,6 +3582,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
 }
 
 ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
+    TRACE_FUNCTION;
     Token tok;
     ASTExprNodeP ret;
     const bool isBlockLine = addSilence != nullptr;
@@ -3709,6 +3755,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
 }
 
 ASTExprNodeP ParseStmt(TokenStream& lex) {
+    TRACE_FUNCTION;
     Token tok;
 
     switch (GET_TOK(tok, lex)) {
@@ -3955,6 +4002,7 @@ ASTExprNodeP ParseExprVal(TokenStream& lex) {
 TokenTree ParseTT(TokenStream& lex, bool unwrapped) {
     TokenTree rv;
 
+    TRACE_FUNCTION_FR("", rv);
     auto edition = lex.getEdition();
     Token tok = lex.getToken();
     eTokenType closer = TOK_PAREN_CLOSE;
@@ -3977,6 +4025,7 @@ TokenTree ParseTT(TokenStream& lex, bool unwrapped) {
             parseErrorUnexpected(lex, tok);
         default:
             rv = TokenTree(edition, lex.getHygiene(), mv$(tok));
+            DEBUG(rv);
             return rv;
     }
 
@@ -3994,6 +4043,7 @@ TokenTree ParseTT(TokenStream& lex, bool unwrapped) {
         items.push_back(TokenTree(lex.getEdition(), lex.getHygiene(), mv$(tok)));
     }
     rv = TokenTree(edition, lex.getHygiene(), mv$(items));
+    DEBUG(rv);
     return rv;
 }
 
@@ -4007,6 +4057,7 @@ ASTPathParams ParsePathGenericList(TokenStream& lex);
 ASTHigherRankedBounds ParseHRBOpt(TokenStream& lex);
 
 ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode) {
+    TRACE_FUNCTION_F("generic_mode=" << genericMode);
     Token tok;
     switch (GET_TOK(tok, lex)) {
         case TOK_INTERPOLATED_PATH:
@@ -4098,12 +4149,14 @@ ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMod
     } else {
         GET_CHECK_TOK(tok, lex, TOK_IDENT);
         auto hygine = tok.ident().hygiene;
+        DEBUG("hygine = " << hygine);
         PUTBACK(tok, lex);
         return ASTPath::newRelative(mv$(hygine), ParsePathNodes(lex, genericMode));
     }
 }
 
 std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode genericMode) {
+    TRACE_FUNCTION_F("generic_mode=" << genericMode);
     Token tok;
     std::vector<ASTPathNode> ret;
 
@@ -4141,7 +4194,9 @@ std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode 
                     GET_CHECK_TOK(tok, lex, TOK_DOUBLE_DOT);
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     params.isRtn = true;
+                    DEBUG("return-type notation (..)");
                 } else {
+                    DEBUG("Fn() parenthesized arguments");
                     std::vector<ASTType*> args;
                     do {
                         if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
@@ -4158,6 +4213,7 @@ std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode 
                         retType = ParseType(lex, false);
                     }
 
+                    DEBUG("- Fn(" << args << ")->" << retType << "");
                     params = ASTPathParams();
                     params.isParen = true;
                     params.entries.push_back(mkType(lex.typePool(), ASTTypeTags::Tuple(), lex.endSpan(ps), mv$(args)));
@@ -4189,10 +4245,12 @@ std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode 
         }
         ret.push_back(ASTPathNode(component.hygiene, component.name, mv$(params)));
     }
+    DEBUG("ret = " << ret);
     return ret;
 }
 
 ASTPathParams ParsePathGenericList(TokenStream& lex) {
+    TRACE_FUNCTION;
     Token tok;
 
     ASTPathParams rv;
@@ -4439,6 +4497,7 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
 }
 
 ASTHigherRankedBounds ParseHRB(TokenStream& lex) {
+    TRACE_FUNCTION;
     Token tok;
 
     ASTHigherRankedBounds rv;
@@ -4671,6 +4730,7 @@ void ParseParentAttrs(TokenStream& lex, ASTAttributeList& out) {
 }
 
 ASTAttribute ParseMetaItem(TokenStream& lex) {
+    TRACE_FUNCTION;
     Token tok;
 
     if (lex.lookahead(0) == TOK_INTERPOLATED_META) {
@@ -4689,6 +4749,7 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
             name.elems.push_back(getTokIdentRword(lex));
         } while (GET_TOK(tok, lex) == TOK_DOUBLE_COLON);
     }
+    DEBUG("name = " << name);
     TokenTree attrData;
     switch (tok.type()) {
         case TOK_EQUAL: {
@@ -4713,6 +4774,7 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
 }
 
 void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
+    TRACE_FUNCTION;
     Token tok;
 
     auto itemAttrs = ParseItemAttrs(lex);
@@ -4836,6 +4898,7 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
     GET_CHECK_TOK(tok, lex, TOK_IDENT);
     auto sourceName = tok.ident().name;
     auto name = tok.ident().hygienicName();
+    DEBUG("Function " << name);
     auto fcn = ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/true, std::move(abi), fnFlags);
     impl.addFunction(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, mv$(name), mv$(fcn), mv$(sourceName));
 }
@@ -4947,10 +5010,12 @@ ASTMacroInvocation ParseMacroInvocation(ProtoSpan spanStart, ASTPath name, Token
     if (isMacro) {
         lex.popHygine();
     }
+    DEBUG("name=" << name << ", ident=" << ident << ", tt=" << tt);
     return ASTMacroInvocation(lex.endSpan(spanStart), mv$(name), mv$(ident), mv$(tt));
 }
 
 ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& modFileinfo, const ASTAbsolutePath& modPath, ASTAttributeList metaItems) {
+    TRACE_FUNCTION_F("mod_path=" << modPath << ", meta_items=" << metaItems);
     Token tok;
 
     while (LOOKAHEAD2(lex, TOK_HASH, TOK_SQUARE_OPEN)) {
@@ -5347,6 +5412,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
         case TOK_RWORD_MACRO: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             auto name = tok.ident().hygienicName();
+            DEBUG("name = " << name);
             MacroRulesPtr mrp;
             if (lex.lookahead(0) == TOK_BRACE_OPEN) {
                 GET_TOK(tok, lex);
@@ -5373,6 +5439,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
         case TOK_RWORD_MOD: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             auto name = tok.ident().hygienicName();
+            DEBUG("Sub module '" << name << "'");
             ASTModule submod(modPath + name);
 
             struct H {
@@ -5388,10 +5455,12 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
 
             std::string pathAttr;
             for (const auto& a : metaItems.items) {
+                DEBUG("[mod path_attr] " << a);
                 if (a.name() == "path") {
                     pathAttr = a.parseEqualsString(*lex.parseState().wb, *lex.parseState().crate, *lex.parseState().module);
                 } else if (a.name() == "cfg_attr") {
                     for (const auto& a2 : checkCfgAttr(*lex.parseState().wb->settings, a)) {
+                        DEBUG("[mod path_attr cfg_attr] " << a2);
                         if (a2.name() == "path") {
                             pathAttr = a2.parseEqualsString(*lex.parseState().wb, *lex.parseState().crate, *lex.parseState().module);
                         }
@@ -5400,6 +5469,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 }
             }
 
+            DEBUG("path_attr = \"" << pathAttr << "\"");
             FsPath subPath;
             bool subFileControlsDir = true;
             if (modFileinfo.path == "-") {
@@ -5421,6 +5491,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 subFileControlsDir = false;
             }
 
+            DEBUG("Mod '" << name << "', sub_path = " << subPath);
             submod.fileInfo.path = subPath;
             submod.fileInfo.controlsDir = subFileControlsDir;
 
@@ -5459,6 +5530,9 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         std::string newpathFileDirect = dirname(modFileinfo.path) / modPath.nodes.back().c_str() / name.c_str() + ".rs";
                         std::string newpathFileMod = dirname(modFileinfo.path) / modPath.nodes.back().c_str() / name.c_str() / "mod.rs";
 
+                        DEBUG(modFileinfo.path << " " << modPath);
+                        DEBUG("newpath_file_direct = '" << newpathFileDirect << "'");
+                        DEBUG("newpath_file_mod = '" << newpathFileMod << "'");
                         std::ifstream ifsFile(newpathFileDirect);
                         std::ifstream ifsDir(newpathFileMod);
 
@@ -5479,6 +5553,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     } else {
                         std::string newpathDir = subPath.str() + "/";
                         std::string newpathFile = pathAttr.size() > 0 ? subPath : subPath + ".rs";
+                        DEBUG("newpath_dir = '" << newpathDir << "', newpath_file = '" << newpathFile << "'");
                         std::ifstream ifsDir(newpathDir + "mod.rs");
                         std::ifstream ifsFile(newpathFile);
                         if (ifsDir.is_open() && ifsFile.is_open()) {
@@ -5546,6 +5621,7 @@ void ParseModRootItems(TokenStream& lex, ASTModule& mod) {
 
         auto metaItems = ParseItemAttrs(lex);
 
+        DEBUG("meta_items = " << metaItems);
         ParseModItem(lex, mod, mv$(metaItems));
     }
 }

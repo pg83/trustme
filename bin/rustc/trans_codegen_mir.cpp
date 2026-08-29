@@ -556,6 +556,7 @@ auto CodeGeneratorMonoMir::emitStruct(const Span& sp, const HIRGenericPath& p, c
 
     auto dropGluePath = HIRPath(crate.types.path(p.clone(), &item), "#drop_glue");
 
+    TRACE_FUNCTION_F(p);
     HIRTypeRef ty = crate.types.path(p.clone(), &item);
 
     struct H {
@@ -605,6 +606,7 @@ auto CodeGeneratorMonoMir::emitStruct(const Span& sp, const HIRGenericPath& p, c
 }
 
 auto CodeGeneratorMonoMir::emitConstructorEnum(const Span& sp, const HIRGenericPath& varPath, const HIREnum& item, size_t varIdx) -> void {
+    TRACE_FUNCTION_F(varPath);
     HIRTypeRef tmp;
     MonomorphStatePtr ms(crate.types, nullptr, &varPath.params, nullptr);
     auto monomorph = [&](const auto& x) {
@@ -640,6 +642,7 @@ auto CodeGeneratorMonoMir::emitConstructorEnum(const Span& sp, const HIRGenericP
 }
 
 auto CodeGeneratorMonoMir::emitConstructorStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) -> void {
+    TRACE_FUNCTION_F(p);
     HIRTypeRef tmp;
     MonomorphStatePtr ms(crate.types, nullptr, &p.params, nullptr);
     auto monomorph = [&](const auto& x) {
@@ -677,6 +680,7 @@ auto CodeGeneratorMonoMir::emitUnion(const Span& sp, const HIRGenericPath& p, co
     MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
     mirRes = &topMirRes;
 
+    TRACE_FUNCTION_F(p);
     HIRTypeRef ty = crate.types.path(p.clone(), &item);
 
     bool hasDropGlue = resolve_.typeNeedsDropGlue(sp, ty);
@@ -817,6 +821,7 @@ auto CodeGeneratorMonoMir::emitStaticLocal(const HIRPath& p, const HIRStatic& it
     MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
     mirRes = &topMirRes;
 
+    TRACE_FUNCTION_F(p);
     auto type = params.monomorph(resolve_, item.type);
 
     of << "static " << fmt(p) << ": " << fmt(type) << " = \"";
@@ -867,6 +872,7 @@ auto CodeGeneratorMonoMir::emitFunctionExt(const HIRPath& p, const HIRFunction& 
 }
 
 auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code, bool hasPrototype) -> void {
+    TRACE_FUNCTION_F(p);
     MIRTypeResolve::argsT argTypes;
     for (const auto& ent : item.args) {
         argTypes.push_back(std::make_pair(HIRPattern{}, params.monomorph(resolve_, ent.second)));
@@ -895,6 +901,7 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
     }
     of << " {\n";
     for (unsigned int i = 0; i < code->locals.size(); i++) {
+        DEBUG("var" << i << " : " << code->locals[i]);
         of << "\tlet var" << i << ": " << fmt(code->locals[i]) << ";\n";
     }
     for (unsigned int i = 0; i < code->dropFlags.size(); i++) {
@@ -902,11 +909,13 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
     }
 
     for (unsigned int i = 0; i < code->blocks.size(); i++) {
+        TRACE_FUNCTION_F(p << " bb" << i);
         of << "\t" << i << ": {\n";
 
         for (const auto& stmt : code->blocks[i].statements) {
             of << "\t\t";
             localMirRes.setCurStmt(i, (&stmt - &code->blocks[i].statements.front()));
+            DEBUG(stmt);
             switch (stmt.tag()) {
                 break;
                 case MIRStatement::TAG_Assign: {
@@ -1184,6 +1193,7 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
 
         localMirRes.setCurStmtTerm(i);
         const auto& term = code->blocks[i].terminator;
+        DEBUG("- " << term);
         of << "\t\t";
         switch (term.tag()) {
             break;

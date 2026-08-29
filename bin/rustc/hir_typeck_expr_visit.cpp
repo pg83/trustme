@@ -169,13 +169,16 @@ TypeckModuleState::NullOnDrop<const HIRGenericParams> TypeckModuleState::setItem
 void TypeckModuleState::pushTraits(HIRItemPath p, const HIRModule& mod) {
     auto sp = Span();
     modPaths.push_back(p.getSimplePath());
+    DEBUG("Module has " << mod.traits.size() << " in-scope traits");
     traits.push_back(std::make_pair(nullptr, nullptr));
     for (const auto& traitPath : mod.traits) {
+        DEBUG("Push " << traitPath);
         traits.push_back(std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
     }
 }
 
 void TypeckModuleState::popTraits(const HIRModule& mod) {
+    DEBUG("Module has " << mod.traits.size() << " in-scope traits");
     for (unsigned int i = 0; i < mod.traits.size(); i++) {
         traits.pop_back();
     }
@@ -217,6 +220,7 @@ auto OuterVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
 }
 
 auto OuterVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
+    TRACE_FUNCTION_F("impl " << impl.type);
     auto _ = this->ms.setImplGenerics(impl.params);
 
     const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
@@ -226,6 +230,7 @@ auto OuterVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
 }
 
 auto OuterVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
+    TRACE_FUNCTION_F("impl " << traitPath << impl.traitArgs << " for " << impl.type);
     auto traitGpath = HIRGenericPath(traitPath, impl.traitArgs.clone());
     auto _0 = this->ms.setCurrentTraitImpl(impl);
     auto _1 = this->ms.setCurrentTrait(traitGpath);
@@ -240,6 +245,7 @@ auto OuterVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& 
 }
 
 auto OuterVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) -> void {
+    TRACE_FUNCTION_F("impl " << traitPath << " for " << impl.type << " { }");
     auto _ = this->ms.setImplGenerics(impl.params);
 
     const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
@@ -253,6 +259,7 @@ auto OuterVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl
         auto data = ty->cloneData();
         auto& e = data.as_Array();
         e.inner = this->visitType(e.inner);
+        DEBUG("Array size " << ty);
         tArgs tmp;
         if (auto* se = e.size.opt_Unevaluated()) {
             if (se->is_Unevaluated()) {
@@ -282,8 +289,10 @@ auto OuterVisitor::visitGlobalAssembly(HIRGlobalAssembly& item) -> void {
 auto OuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     auto _ = this->ms.setItemGenerics(item.params);
     if (item.code) {
+        DEBUG("Function code " << p);
         TypecheckCode(ms, item.args, item.traitReturnType.value_or(item.returnType), item.code);
     } else {
+        DEBUG("Function code " << p << " (none)");
     }
 }
 
@@ -297,6 +306,7 @@ auto OuterVisitor::visitStatic(HIRItemPath p, HIRStatic& item) -> void {
 auto OuterVisitor::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
     auto _ = this->ms.setItemGenerics(item.params);
     if (item.value) {
+        DEBUG("Const value " << p);
         tArgs tmp;
         TypecheckCode(ms, tmp, item.type, item.value);
     }
@@ -309,6 +319,7 @@ auto OuterVisitor::visitEnum(HIRItemPath p, HIREnum& item) -> void {
         auto enumType = HIREnum::getReprType(item.tagRepr);
 
         for (auto& var : e->variants) {
+            DEBUG("Enum value " << p << " - " << var.name);
             if (var.expr) {
                 tArgs tmp;
                 TypecheckCode(ms, tmp, ms.crate.types.primitive(enumType), var.expr);

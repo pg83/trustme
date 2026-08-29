@@ -60,6 +60,7 @@ void HIRSerialiseWriter::open(const std::string& filename) {
     for (size_t i = 0; i < sorted.size(); i++) {
         const auto& s = sorted[i].first;
         this->writeString(s.size(), s.c_str());
+        DEBUG(i << " = " << istringCache[s] << " '" << s << "'");
         istringCache[s] = i;
     }
     for (const auto& e : istringCache) {
@@ -69,6 +70,7 @@ void HIRSerialiseWriter::open(const std::string& filename) {
 
 void HIRSerialiseWriter::write(const void* buf, size_t len) {
     if (inner) {
+        DEBUG("write(" << FMT_CB(ss, for (size_t i = 0; i < len; i++) ss << setw(2) << setfill('0') << hex << unsigned(((const u8*)buf)[i])) << ")");
         inner->write(buf, len);
     } else {
     }
@@ -199,6 +201,7 @@ HIRSerialiseReader::HIRSerialiseReader(const std::string& filename)
 {
     size_t nStrings = readCount();
     strings.reserve(nStrings);
+    DEBUG("n_strings = " << nStrings);
     for (size_t i = 0; i < nStrings; i++) {
         auto s = readString();
         strings.push_back(RcString::newInterned(s));
@@ -350,6 +353,7 @@ void HIRSerialiseWriter::writeTag(unsigned int t) {
 }
 
 void HIRSerialiseWriter::writeCount(size_t c) {
+    DEBUG(c);
     if (c < 0xFD) {
         writeU8(static_cast<u8>(c));
     } else if (c == ~0u) {
@@ -365,6 +369,7 @@ void HIRSerialiseWriter::writeCount(size_t c) {
 }
 
 void HIRSerialiseWriter::writeString(size_t len, const char* s) {
+    TRACE_FUNCTION;
     if (len < 128) {
         writeU8(static_cast<u8>(len));
     } else {
@@ -376,6 +381,7 @@ void HIRSerialiseWriter::writeString(size_t len, const char* s) {
 }
 
 void HIRSerialiseWriter::writeBool(bool v) {
+    TRACE_FUNCTION_F(v);
     writeU8(v ? 0xFF : 0x00);
 }
 
@@ -533,6 +539,7 @@ size_t HIRSerialiseReader::readCount() {
     } else /*if( v == 0xFF )*/ {
         rv = ~0u;
     }
+    DEBUG(rv);
     return rv;
 }
 

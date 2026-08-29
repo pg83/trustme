@@ -15,6 +15,7 @@ TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
     auto rv = functions.insert(std::make_pair(mv$(p), nullptr));
     if (rv.second) {
         functionSymbols.emplace(mv$(symbol), rv.first->first.clone());
+        DEBUG("Function " << rv.first->first);
         BUG_ASSERT(!rv.first->second);
         rv.first->second.reset(new TransListFunction(types, rv.first->first));
         return &*rv.first->second;
@@ -92,6 +93,7 @@ TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
     auto rv = statics.insert(std::make_pair(mv$(p), nullptr));
     if (rv.second) {
         staticSymbols.emplace(mv$(symbol), rv.first->first.clone());
+        DEBUG("Static " << rv.first->first);
         BUG_ASSERT(!rv.first->second);
         rv.first->second.reset(new TransListStatic(types));
         return &*rv.first->second;
@@ -103,6 +105,7 @@ TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
 TransListConst* TransList::addConst(HIRTypeInterner& types, HIRPath p) {
     auto rv = constants.insert(std::make_pair(mv$(p), nullptr));
     if (rv.second) {
+        DEBUG("Const " << rv.first->first);
         BUG_ASSERT(!rv.first->second);
         rv.first->second.reset(new TransListConst(types));
         return &*rv.first->second;
@@ -112,6 +115,7 @@ TransListConst* TransList::addConst(HIRTypeInterner& types, HIRPath p) {
 }
 
 HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPath& p) const {
+    TRACE_FUNCTION_F(p);
     auto rv = this->monomorphPath(sp, p, false);
 
     switch (rv.data.tag()) {

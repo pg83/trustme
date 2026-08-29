@@ -2027,6 +2027,7 @@ HIRCompare HIRMatchGenerics::cmpPath(const Span& sp, const HIRPath& pathL, const
             }
         }
     }
+    DEBUG("rv = " << rv);
     return rv;
 }
 
@@ -2036,6 +2037,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
     }
     const auto& v = (tyL->is_Infer() ? resolvePlaceholder.getType(sp, tyL) : tyL);
     const auto& x = (tyR->is_Infer() || tyR->is_Generic() ? resolvePlaceholder.getType(sp, tyR) : tyR);
+    TRACE_FUNCTION_F(tyL << ", " << tyR << " -- " << v << ", " << x);
     if (const auto* e = v->opt_Generic()) {
         return this->matchTy(*e, x, resolvePlaceholder);
     }
@@ -2146,6 +2148,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         return vAlias->params.matchTestGenericsFuzz(sp, xAlias->params, resolvePlaceholder, *this);
     }
     if (vAlias || xAlias) {
+        DEBUG("- Fuzzy match due to opaque alias - " << v << " = " << x);
         return HIRCompare::Fuzzy;
     }
 
@@ -2153,19 +2156,24 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         // HACK: If the path is Opaque, return a fuzzy match.
         // - This works around an impl selection bug.
         if (v->is_Path() && v->as_Path().binding.is_Opaque()) {
+            DEBUG("- Fuzzy match due to opaque - " << v << " = " << x);
             return HIRCompare::Fuzzy;
         }
         // HACK: If RHS is unbound, fuzz it
         if (x->is_Path() && x->as_Path().binding.is_Unbound()) {
+            DEBUG("- Fuzzy match due to unbound - " << v << " = " << x);
             return HIRCompare::Fuzzy;
         }
         if (v->is_Path() && v->as_Path().binding.is_Unbound()) {
+            DEBUG("- Fuzzy match due to unbound - " << v << " = " << x);
             return HIRCompare::Fuzzy;
         }
         // HACK: If the RHS is a placeholder generic, allow it.
         if (x->is_Generic() && (x->as_Generic().binding >> 8) == 2) {
+            DEBUG("- Fuzzy match due to placeholder - " << v << " = " << x);
             return HIRCompare::Fuzzy;
         }
+        DEBUG("- Tag mismatch " << v << " and " << x);
         return HIRCompare::Unequal;
     }
     switch ((*v).tag()) {
@@ -2209,6 +2217,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                     rv = HIRCompare::Fuzzy;
                 }
                 if (te.binding.is_Opaque()) {
+                    DEBUG("- Fuzzy match due to opaque");
                     return HIRCompare::Fuzzy;
                 }
             }

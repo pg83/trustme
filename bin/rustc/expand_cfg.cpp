@@ -100,6 +100,7 @@ namespace {
     bool checkCfgInner1(const CfgState& cfg, const RcString& name, TokenStream& lex);
 
     bool checkCfgInner(const CfgState& cfg, TokenStream& lex) {
+        TRACE_FUNCTION;
         if (lex.lookahead(0) == TOK_INTERPOLATED_META) {
             auto meta = std::move(lex.getTokenCheck(TOK_INTERPOLATED_META).fragMeta());
             auto ilex = TTStream(meta.span(), ParseState(), meta.data());
@@ -133,6 +134,7 @@ namespace {
                 }
                 auto its = cfg.values.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
+                    DEBUG(name << ": '" << it->second << "' == '" << val << "'");
                     if (it->second == val) {
                         return true;
                     }
@@ -143,6 +145,7 @@ namespace {
 
                 auto it2 = cfg.valueFcns.find(name.c_str());
                 if (it2 != cfg.valueFcns.end()) {
+                    DEBUG(name << ": ('" << val << "')?");
                     return it2->second->matches(val);
                 }
 
@@ -497,6 +500,7 @@ auto CfgSpecParser::parseCfgOption() -> std::pair<std::string, std::optional<std
 }
 
 auto CCfgExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    DEBUG("cfg!() - " << tt);
     auto lex = TTStream(sp, ParseState(), tt);
     const auto& cfg = *wb.settings->cfg;
     bool rv = checkCfgInner(cfg, lex);
@@ -506,6 +510,7 @@ auto CCfgExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
 }
 
 auto CCfgSelectExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    DEBUG("cfg_select!() - " << tt);
     auto lex = TTStream(sp, ParseState(), tt);
     for (;;) {
         const auto& cfg = *wb.settings->cfg;
@@ -550,36 +555,42 @@ auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
+    DEBUG("#[cfg] expr - " << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
         expr.reset();
     }
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const -> void {
+    DEBUG("#[cfg] struct item - " << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
         si.name = RcString();
     }
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& i) const -> void {
+    DEBUG("#[cfg] tuple item - " << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
         i.type = ::mkType(*crate.pool, sp);
     }
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& i) const -> void {
+    DEBUG("#[cfg] enum variant - " << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
         i.name = RcString();
     }
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& i) const -> void {
+    DEBUG("#[cfg] match arm - " << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
         i.patterns.clear();
     }
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& i) const -> void {
+    DEBUG("#[cfg] struct lit - " << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
         i.value.reset();
     }

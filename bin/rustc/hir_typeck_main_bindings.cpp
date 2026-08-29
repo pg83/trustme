@@ -207,8 +207,10 @@ Visitor::Visitor(const WireBoard& wb, HIRCrate& crate)
 
 auto Visitor::pushModTraits(const HIRModule& mod) -> ModTraitsGuard {
     Span sp;
+    DEBUG("");
     auto rv = ModTraitsGuard{this, mv$(this->traits)};
     for (const auto& traitPath : mod.traits) {
+        DEBUG("- " << traitPath);
         traits.push_back(std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
     }
     return rv;
@@ -240,6 +242,7 @@ auto Visitor::checkParameters(const Span& sp, const HIRSimplePath& usedPath, Pat
         }
 
         paramVals.types.push_back(ms.monomorphType(sp, tyDef.defaultValue));
+        DEBUG("Add missing param (using default): " << paramVals.types.back());
     }
 
     if (paramVals.types.size() != paramDef.types.size()) {
@@ -252,6 +255,7 @@ auto Visitor::checkParameters(const Span& sp, const HIRSimplePath& usedPath, Pat
 
             // TODO: Monomorphise?
             paramVals.types[i] = ms.monomorphType(sp, paramDef.types[i].defaultValue);
+            DEBUG("Update `_` param (using default): " << paramDef.types[i].defaultValue << " -> " << paramVals.types[i]);
         }
     }
 
@@ -285,6 +289,7 @@ auto Visitor::checkParameters(const Span& sp, const HIRSimplePath& usedPath, Pat
             case HIRGenericBound::TAG_TypeEquality: {
                 auto& e = bound.as_TypeEquality();
                 // TODO: Check that two types are equal in this case
+                DEBUG("TODO: Check equality bound " << e.type << " == " << e.otherType);
                 break;
             }
         }
@@ -450,10 +455,12 @@ auto Visitor::visitPathParams(HIRPathParams& pp) -> void {
                 break;
             }
             case HIRPath::Data::TAG_UfcsInherent: {
+                TRACE_FUNCTION_FR("UfcsInherent - " << ty, ty);
                 resolve_.expandAssociatedTypes(sp, ty);
                 break;
             }
             case HIRPath::Data::TAG_UfcsKnown: {
+                TRACE_FUNCTION_FR("UfcsKnown - " << ty, ty);
                 resolve_.expandAssociatedTypes(sp, ty);
                 break;
             }
@@ -463,11 +470,13 @@ auto Visitor::visitPathParams(HIRPathParams& pp) -> void {
 
 auto Visitor::visitGenericPath(HIRGenericPath& p, PathContext pc) -> void {
     Span sp;
+    TRACE_FUNCTION_F("p = " << p);
     const auto& params = getParamsForItem(sp, crate, p.path, pc, emptyParams);
     auto& args = p.params;
 
     checkParameters(sp, p.path, pc, params, args);
 
+    DEBUG("p = " << p);
     HIRVisitor::visitGenericPath(p, pc);
 }
 
@@ -475,7 +484,9 @@ auto Visitor::locateTraitItemInBounds(const Span& sp, HIRVisitor::PathContext pc
     for (const auto& b : params.bounds) {
         if (b.is_TraitBound()) {
             auto& e = b.as_TraitBound();
+            DEBUG("- " << e.type << " : " << e.trait.path);
             if (e.type == tr) {
+                DEBUG(" - Match");
                 if (locateInTraitAndSet(sp, pc, e.trait.path, this->crate.getTraitByPath(sp, e.trait.path.path), pd)) {
                     return true;
                 }
@@ -528,6 +539,7 @@ auto Visitor::setFromImpl(const HIRGenericPath& traitPath, const HIRTrait& trait
     const auto& type = e.type;
     return resolve_.findImpl(Span(), traitPath.path, traitPath.params, type, [&](SolverResponse response) {
         if (response.certainty != SolverCertainty::Proven) {
+            DEBUG("- TODO: Bound " << bound);
             return false;
         }
         pd = getUfcsKnown(mv$(e), makeGenericPath(traitPath.path, trait), trait);
@@ -539,6 +551,7 @@ auto Visitor::locateInTraitImplAndSet(HIRVisitor::PathContext pc, const HIRGener
     auto& e = pd.as_UfcsUnknown();
     if (this->locateItemInTrait(pc, trait, pd)) {
         return this->setFromImpl(traitPath, trait, pd);
+        DEBUG("- Item " << e.item << " not in trait " << traitPath.path);
     }
 
     for (const auto& pt : trait.allParentTraits) {
@@ -570,6 +583,7 @@ auto Visitor::getCurrentTraitGp() const -> HIRGenericPath {
 }
 
 auto Visitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathContext pc) -> void {
+    TRACE_FUNCTION_FR("UfcsUnknown - p=" << p, p);
     auto& e = p.data.as_UfcsUnknown();
 
     e.type = this->visitType(e.type);
@@ -594,6 +608,7 @@ auto Visitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathC
         return;
     } else {
         if (this->crate.findTypeImpls(e.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
+            DEBUG("- matched inherent impl " << e.type);
             switch (pc) {
                 case HIRVisitor::PathContext::VALUE:
                     if (impl.methods.find(e.item) == impl.methods.end()) {
@@ -613,6 +628,7 @@ auto Visitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathC
         })) {
             auto newData = HIRPath::Data::make_UfcsInherent({mv$(e.type), mv$(e.item), mv$(e.params)});
             p.data = mv$(newData);
+            DEBUG("- Resolved, replace with " << p);
             return;
         }
         for (const auto& traitInfo : traits) {
@@ -632,6 +648,7 @@ auto Visitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathC
                     break;
             }
 
+            DEBUG("- Trying trait " << *traitInfo.first);
             auto traitPath = HIRGenericPath(*traitInfo.first);
             for (unsigned int i = 0; i < trait.params.types.size(); i++) {
                 traitPath.params.types.push_back(crate.types.infer());
@@ -682,6 +699,7 @@ auto Visitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
 }
 
 auto Visitor::visitParams(HIRGenericParams& params) -> void {
+    TRACE_FUNCTION_F(params.fmtArgs());
     for (auto& tps : params.types) {
         tps.defaultValue = this->visitType(tps.defaultValue);
     }
@@ -802,6 +820,7 @@ auto Visitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
 
 auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
     Span sp;
+    TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.type);
     auto _ = resolve_.setImplGenerics(impl.type, impl.params);
     selfTypes.push_back(impl.type);
 
@@ -977,6 +996,7 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
             // HACK: Replace all types (which should be functionally identical) so lifetimes match
 
             // HACK: Clone the expected type, so the lifetimes match.
+            DEBUG("Updating < " << impl.type << " as " << traitPath << impl.traitArgs << " >::" << e.first);
             if (!matchCb.rpitMapping.empty()) {
                 implFcn.traitReturnType = expRetTy1;
                 for (const auto& mapping : matchCb.rpitMapping) {
@@ -986,8 +1006,18 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
             }
             implFcn.returnType = expRetTy;
             for (size_t i = 0; i < std::min(implFcn.args.size(), traitFcn.args.size()); i++) {
+                DEBUG("ARG" << i << "> " << traitFcn.args[i].second);
                 implFcn.args[i].second = resolve_.monomorphExpand(sp, traitFcn.args[i].second, ms);
             }
+            DEBUG("Updated < " << impl.type << " as " << traitPath << impl.traitArgs << " >::" << e.first);
+            DEBUG(FMT_CB(os, {
+                os << "fn " << e.first << implFcn.params.fmtArgs() << "(";
+                for (const auto& a : implFcn.args) {
+                    os << a.first << ": " << a.second << ", ";
+                }
+                os << ")";
+                os << implFcn.params.fmtBounds();
+            }));
         }
         for (const auto& e : impl.constants) {
             const auto& vi = trait.values.at(e.first);
@@ -1031,6 +1061,7 @@ auto Visitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& imp
 }
 
 auto Visitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
+    TRACE_FUNCTION_F(p);
     if (resolve_.hirCrate().getLangItemPathOpt("sized").components().empty()) {
         ERROR(Span(), E0000, "requires `sized` lang_item");
     }
@@ -1044,6 +1075,7 @@ auto Visitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     curParams = &item.params;
     curParamsLevel = 1;
     for (auto& arg : item.args) {
+        TRACE_FUNCTION_F("ARG " << arg);
         arg.second = visitType(arg.second);
     }
     curParams = nullptr;
@@ -1051,6 +1083,7 @@ auto Visitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     fcnPath = &p;
     fcnErasedCount = 0;
     {
+        TRACE_FUNCTION_F("RET " << item.returnType);
         item.returnType = visitType(item.returnType);
     }
     fcnPath = nullptr;

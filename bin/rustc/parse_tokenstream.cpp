@@ -64,6 +64,7 @@ Token TokenStream::getTokenCheck(eTokenType exp) {
 
 void TokenStream::putback(Token tok) {
     if (cacheValid) {
+        DEBUG("" << getPosition() << " - Double putback: " << tok << " but " << cache);
         compileErrorBugCheck("Double putback");
     } else {
         cacheValid = true;
@@ -86,11 +87,13 @@ eTokenType TokenStream::lookahead(unsigned int i) {
     }
 
     while (i >= lookahead_.size()) {
+        DEBUG("lookahead - read #" << lookahead_.size());
         auto tok = this->innerGetToken();
         auto hygiene = this->realGetHygiene();
         lookahead_.push_back({mv$(tok), this->realGetEdition(), mv$(hygiene)});
     }
 
+    DEBUG("lookahead(" << i << ") = " << lookahead_[i].tok);
     return lookahead_[i].tok.type();
 }
 
@@ -187,6 +190,7 @@ SavedParseState::SavedParseState(TokenStream& lex, ParseState state)
 }
 
 SavedParseState::~SavedParseState() {
+    DEBUG("Restoring " << state);
     lex.parseState() = state;
 }
 

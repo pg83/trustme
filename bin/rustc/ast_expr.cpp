@@ -282,7 +282,7 @@ namespace {
         }
     }
 
-#define NEWNODE(type, ...) mkExprnodep(span(), makeAstExprNode<type>(pool() __VA_OPT__(,) __VA_ARGS__))
+#define NEWNODE(type, ...) mkExprnodep(span(), makeAstExprNode<type>(pool() __VA_OPT__(, ) __VA_ARGS__))
 
     void printFmtString(std::ostream& os, const std::string& s) {
         static const char* hex = "0123456789ABCDEF";
@@ -1535,6 +1535,7 @@ void ASTNodeVisitor::visit(ASTExprNodeP& cnode) {
 
 void ASTNodeVisitorDef::visit(ASTExprNodeP& cnode) {
     if (cnode.isValid()) {
+        TRACE_FUNCTION_F(cnode.typeName());
         cnode->visit(*this);
     }
 }

@@ -730,10 +730,13 @@ HIRArraySize HirDeserialiser::deserialiseArraysize() {
 HIRTypeRef HirDeserialiser::deserialiseType() {
     HIRTypeRef rv;
 
+    TRACE_FUNCTION_FR("", rv);
     auto idx = in.readCount();
     if (idx != ~0u) {
+        DEBUG("#" << idx << "");
         rv = types.at(idx);
         return rv;
+        DEBUG("Fresh (=" << types.size() << ")");
     }
     auto _ = in.openObject("HIR::TypeData");
 
@@ -787,6 +790,7 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
 }
 
 HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
+    TRACE_FUNCTION;
     auto members = deserialiseThinvec<RcString>();
     auto rv = members.empty() ? HIRSimplePath() : HIRSimplePath(members[0], std::span<RcString>(members.begin() + 1, members.end()));
     // HACK! If the read crate name is empty, replace it with the name we're loaded with
@@ -799,6 +803,7 @@ HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
 
 HIRPathParams HirDeserialiser::deserialisePathparams() {
     HIRPathParams rv;
+    TRACE_FUNCTION_FR("", rv);
     rv.types = deserialiseThinvec<HIRTypeRef>();
     rv.values = deserialiseThinvec<HIRConstGeneric>();
     return rv;
@@ -806,6 +811,7 @@ HIRPathParams HirDeserialiser::deserialisePathparams() {
 
 HIRGenericPath HirDeserialiser::deserialiseGenericpath() {
     HIRGenericPath rv;
+    TRACE_FUNCTION_FR("", rv);
     rv.path = deserialiseSimplepath();
     rv.params = deserialisePathparams();
     return rv;
@@ -821,12 +827,16 @@ HIRTraitPath HirDeserialiser::deserialiseTraitpath() {
 }
 
 HIRPath HirDeserialiser::deserialisePath() {
+    TRACE_FUNCTION;
     switch (auto tag = in.readTag()) {
         case 0:
+            DEBUG("Generic");
             return HIRPath(deserialiseGenericpath());
         case 1:
+            DEBUG("Inherent");
             return HIRPath(HIRPath::Data::Data_UfcsInherent{deserialiseType(), in.readIstring(), deserialisePathparams(), deserialisePathparams()});
         case 2: {
+            DEBUG("Known");
             return HIRPath(HIRPath::Data::Data_UfcsKnown{deserialiseType(), deserialiseGenericpath(), in.readIstring(), deserialisePathparams()});
         }
         default:
@@ -835,6 +845,7 @@ HIRPath HirDeserialiser::deserialisePath() {
 }
 
 HIRGenericParams HirDeserialiser::deserialiseGenericparams() {
+    TRACE_FUNCTION;
     HIRGenericParams params;
     auto paramKindCount = in.readCount();
     params.paramKinds.grow(paramKindCount);
@@ -846,17 +857,20 @@ HIRGenericParams HirDeserialiser::deserialiseGenericparams() {
     params.types = deserialiseVec<HIRTypeParamDef>();
     params.values = deserialiseVec<HIRValueParamDef>();
     params.bounds = deserialiseVec<HIRGenericBound>();
+    DEBUG("params = " << params.fmtArgs() << ", " << params.fmtBounds());
     return params;
 }
 
 HIRTypeParamDef HirDeserialiser::deserialiseTyparamdef() {
     auto rv = HIRTypeParamDef{in.readIstring(), deserialiseType(), in.readBool()};
+    DEBUG("::HIR::TypeParamDef { " << rv.name << ", " << rv.defaultValue << ", " << rv.isSized << "}");
     return rv;
 }
 
 HIRValueParamDef HirDeserialiser::deserialiseValueparamdef() {
     auto rv = HIRValueParamDef{in.readIstring(), deserialiseType()};
     rv.defaultValue = deserialiseConstgeneric();
+    DEBUG("::HIR::ValueParamDef { " << rv.name << ": " << rv.type << " = " << rv.defaultValue << "}");
     return rv;
 }
 
@@ -877,6 +891,7 @@ HIRGenericBound HirDeserialiser::deserialiseGenericbound() {
 }
 
 HIREnum HirDeserialiser::deserialiseEnum() {
+    TRACE_FUNCTION;
     auto _ = in.openObject("HIR::Enum");
 
     struct H {
@@ -907,15 +922,18 @@ HIREnum HirDeserialiser::deserialiseEnum() {
 
 HIREnum::DataVariant HirDeserialiser::deserialiseEnumdatavariant() {
     auto name = in.readIstring();
+    DEBUG("Enum::DataVariant " << name);
     return HIREnum::DataVariant{mv$(name), in.readBool(), deserialiseType(), HIRExprPtr{}, U128(in.readU64())};
 }
 
 HIREnum::ValueVariant HirDeserialiser::deserialiseEnumvaluevariant() {
     auto name = in.readIstring();
+    DEBUG("Enum::ValueVariant " << name);
     return HIREnum::ValueVariant{mv$(name), HIRExprPtr{}, U128(in.readU64())};
 }
 
 HIRUnion HirDeserialiser::deserialiseUnion() {
+    TRACE_FUNCTION;
     auto params = deserialiseGenericparams();
     auto repr = static_cast<HIRUnion::Repr>(in.readTag());
     auto variants = deserialiseVec<HIRStructField>();
@@ -932,19 +950,24 @@ HIRUnion HirDeserialiser::deserialiseUnion() {
 }
 
 HIRStruct HirDeserialiser::deserialiseStruct() {
+    TRACE_FUNCTION_FR("", in.getPos());
     auto _ = in.openObject("HIR::Struct");
     auto params = deserialiseGenericparams();
+    DEBUG("params = " << params.fmtArgs() << params.fmtBounds());
     auto repr = static_cast<HIRStruct::Repr>(in.readTag());
 
     HIRStruct::Data data;
     switch (auto tag = in.readTag()) {
         case HIRStruct::Data::TAG_Unit:
+            DEBUG("Unit");
             data = HIRStruct::Data::make_Unit({});
             break;
         case HIRStruct::Data::TAG_Tuple:
+            DEBUG("Tuple");
             data = HIRStruct::Data(deserialiseVec<HIRVisEnt<HIRTypeRef>>());
             break;
         case HIRStruct::Data::TAG_Named:
+            DEBUG("Named");
             data = HIRStruct::Data(deserialiseVec<HIRStructField>());
             break;
         default:
@@ -952,6 +975,7 @@ HIRStruct HirDeserialiser::deserialiseStruct() {
     }
     unsigned forcedAlignment = in.readCount();
     unsigned maxFieldAlignment = in.readCount();
+    DEBUG("align = " << forcedAlignment);
     const bool mustUse = in.readBool();
     auto markings = deserialiseMarkings();
     auto strMarkings = deserialiseStrMarkings();
@@ -967,6 +991,7 @@ HIRStructField HirDeserialiser::deserialiseStructField() {
 }
 
 HIRTrait HirDeserialiser::deserialiseTrait() {
+    TRACE_FUNCTION;
     auto _ = in.openObject("HIR::Trait");
 
     HIRTrait rv{deserialiseGenericparams(), {}};
@@ -1039,6 +1064,7 @@ EncodedLiteral HirDeserialiser::deserialiseEncodedliteral() {
 }
 
 MIRFunctionPointer HirDeserialiser::deserialiseMir() {
+    TRACE_FUNCTION;
     MIRFunction rv;
 
     rv.locals = deserialiseVec<HIRTypeRef>();
@@ -1049,6 +1075,7 @@ MIRFunctionPointer HirDeserialiser::deserialiseMir() {
 }
 
 MIRBasicBlock HirDeserialiser::deserialiseMirBasicblock() {
+    TRACE_FUNCTION;
     auto statements = deserialiseVec<MIRStatement>();
     auto terminator = deserialiseMirTerminator();
     const auto isCleanup = in.readBool();
@@ -1116,6 +1143,7 @@ MIRAsmParam HirDeserialiser::deserialiseAsmParam() {
 
 MIRStatement HirDeserialiser::deserialiseMirStatement() {
     MIRStatement rv;
+    TRACE_FUNCTION_FR("", rv);
     auto _ = in.openObject("MIR::Statement");
 
     switch (auto tag = in.readTag()) {
@@ -1154,6 +1182,7 @@ MIRStatement HirDeserialiser::deserialiseMirStatement() {
 
 MIRTerminator HirDeserialiser::deserialiseMirTerminator() {
     MIRTerminator rv;
+    TRACE_FUNCTION_FR("", rv);
     rv = this->deserialise_mir_terminator_();
     return rv;
 }
@@ -1210,6 +1239,7 @@ MIRUnwindAction HirDeserialiser::deserialiseMirUnwindAction() {
 }
 
 MIRSwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
+    TRACE_FUNCTION;
     switch (auto tag = in.readTag()) {
 #define _(x, ...)                  \
     case MIRSwitchValues::TAG_##x: \
@@ -1243,6 +1273,7 @@ MIRCallTarget HirDeserialiser::deserialiseMirCalltarget() {
 }
 
 HIRModule HirDeserialiser::deserialiseModule() {
+    TRACE_FUNCTION;
     auto _ = in.openObject("HIR::Module");
 
     HIRModule rv;
@@ -1380,6 +1411,7 @@ auto HirDeserialiser::deserialiseCount() -> size_t {
 
 template <typename V>
 auto HirDeserialiser::deserialiseStrmap() -> std::map<std::string, V> {
+    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
     size_t n = in.readCount();
     std::map<std::string, V> rv;
     for (size_t i = 0; i < n; i++) {
@@ -1391,10 +1423,12 @@ auto HirDeserialiser::deserialiseStrmap() -> std::map<std::string, V> {
 
 template <typename V>
 auto HirDeserialiser::deserialiseStrumap() -> std::unordered_map<std::string, V> {
+    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
     size_t n = in.readCount();
     std::unordered_map<std::string, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readString();
+        DEBUG("- " << s);
         rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
@@ -1402,10 +1436,12 @@ auto HirDeserialiser::deserialiseStrumap() -> std::unordered_map<std::string, V>
 
 template <typename V>
 auto HirDeserialiser::deserialiseStrummap() -> std::unordered_multimap<std::string, V> {
+    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
     size_t n = in.readCount();
     std::unordered_multimap<std::string, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readString();
+        DEBUG("- " << s);
         rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
@@ -1413,6 +1449,7 @@ auto HirDeserialiser::deserialiseStrummap() -> std::unordered_multimap<std::stri
 
 template <typename V>
 auto HirDeserialiser::deserialiseIstrmap() -> std::map<RcString, V> {
+    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
     size_t n = in.readCount();
     std::map<RcString, V> rv;
     for (size_t i = 0; i < n; i++) {
@@ -1435,10 +1472,12 @@ auto HirDeserialiser::deserialiseIstrumapPooled() -> std::unordered_map<RcString
 
 template <typename V>
 auto HirDeserialiser::deserialiseIstrumap() -> std::unordered_map<RcString, V> {
+    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
     size_t n = in.readCount();
     std::unordered_map<RcString, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readIstring();
+        DEBUG("- " << s);
         rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
@@ -1446,10 +1485,12 @@ auto HirDeserialiser::deserialiseIstrumap() -> std::unordered_map<RcString, V> {
 
 template <typename V>
 auto HirDeserialiser::deserialiseIstrummap() -> std::unordered_multimap<RcString, V> {
+    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
     size_t n = in.readCount();
     std::unordered_multimap<RcString, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readIstring();
+        DEBUG("- " << s);
         rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
@@ -1457,6 +1498,7 @@ auto HirDeserialiser::deserialiseIstrummap() -> std::unordered_multimap<RcString
 
 template <typename V>
 auto HirDeserialiser::deserialisePathmap() -> std::map<HIRSimplePath, V> {
+    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
     size_t n = in.readCount();
     std::map<HIRSimplePath, V> rv;
     for (size_t i = 0; i < n; i++) {
@@ -1468,8 +1510,10 @@ auto HirDeserialiser::deserialisePathmap() -> std::map<HIRSimplePath, V> {
 
 template <typename T, typename F>
 auto HirDeserialiser::deserialiseVecC(F cb) -> std::vector<T> {
+    TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.getPos());
     auto _ = in.openObject(typeid(std::vector<T>).name());
     size_t n = in.readCount();
+    DEBUG("n = " << n);
     std::vector<T> rv;
     rv.reserve(n);
     for (size_t i = 0; i < n; i++) {
@@ -1487,8 +1531,10 @@ auto HirDeserialiser::deserialiseVec() -> std::vector<T> {
 
 template <typename T, typename F>
 auto HirDeserialiser::deserialiseThinvecC(F cb) -> ThinVector<T> {
+    TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.getPos());
     auto _ = in.openObject(typeid(ThinVector<T>).name());
     size_t n = in.readCount();
+    DEBUG("n = " << n);
     ThinVector<T> rv;
     rv.reserveInit(n);
     for (size_t i = 0; i < n; i++) {
@@ -1506,8 +1552,10 @@ auto HirDeserialiser::deserialiseThinvec() -> ThinVector<T> {
 
 template <typename T>
 auto HirDeserialiser::deserialiseSet() -> std::set<T> {
+    TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.getPos());
     auto _ = in.openObject(typeid(std::set<T>).name());
     size_t n = in.readCount();
+    DEBUG("n = " << n);
     std::set<T> rv;
     for (size_t i = 0; i < n; i++) {
         rv.insert(D<T>::des(*this));
@@ -1531,6 +1579,7 @@ auto HirDeserialiser::deserialisePtr() -> std::unique_ptr<T> {
 
 auto HirDeserialiser::deserialiseProcmacro() -> HIRProcMacro {
     HIRProcMacro pm;
+    TRACE_FUNCTION_FR("", "ProcMacro { " << pm.name << ", " << pm.path << ", [" << pm.attributes << "]}");
     switch (in.readTag()) {
         case 0:
             pm.ty = HIRProcMacro::Ty::Function;
@@ -1545,12 +1594,14 @@ auto HirDeserialiser::deserialiseProcmacro() -> HIRProcMacro {
     pm.name = in.readIstring();
     pm.path = deserialiseSimplepath();
     pm.attributes = deserialiseVec<std::string>();
+    DEBUG("pm = ProcMacro { " << pm.name << ", " << pm.path << ", [" << pm.attributes << "]}");
     return pm;
 }
 
 auto HirDeserialiser::deserialiseTypeimpl() -> HIRTypeImpl {
     HIRTypeImpl rv;
 
+    TRACE_FUNCTION_FR("", "impl" << rv.params.fmtArgs() << " " << rv.type);
     rv.params = deserialiseGenericparams();
     rv.type = deserialiseType();
 
@@ -1575,34 +1626,40 @@ auto HirDeserialiser::deserialiseTypeimpl() -> HIRTypeImpl {
 auto HirDeserialiser::deserialiseTraitimpl() -> HIRTraitImpl {
     HIRTraitImpl rv;
 
+    TRACE_FUNCTION_FR("", "impl" << rv.params.fmtArgs() << " ?" << rv.traitArgs << " for " << rv.type);
     rv.params = deserialiseGenericparams();
     rv.traitArgs = deserialisePathparams();
     rv.type = deserialiseType();
     rv.isConst = in.readBool();
     rv.isReservation = in.readBool();
 
+    DEBUG("impl" << rv.params.fmtArgs() << " ?" << rv.traitArgs << " for " << rv.type);
     size_t methodCount = in.readCount();
     for (size_t i = 0; i < methodCount; i++) {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
+        DEBUG((isSpec ? "default " : "") << "fn " << name);
         rv.methods.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRFunction>{isSpec, deserialiseFunction()}));
     }
     size_t constCount = in.readCount();
     for (size_t i = 0; i < constCount; i++) {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
+        DEBUG((isSpec ? "default " : "") << "const " << name);
         rv.constants.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRConstant>{isSpec, deserialiseConstant()}));
     }
     size_t staticCount = in.readCount();
     for (size_t i = 0; i < staticCount; i++) {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
+        DEBUG((isSpec ? "default " : "") << "static " << name);
         rv.statics.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRStatic>{isSpec, deserialiseStatic()}));
     }
     size_t typeCount = in.readCount();
     for (size_t i = 0; i < typeCount; i++) {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
+        DEBUG((isSpec ? "default " : "") << "type " << name);
         rv.types.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRTypeRef>{isSpec, deserialiseType()}));
     }
 
@@ -1826,6 +1883,7 @@ auto HirDeserialiser::deserialiseMirParam() -> MIRParam {
 
 auto HirDeserialiser::deserialiseMirLvalue() -> MIRLValue {
     MIRLValue rv;
+    TRACE_FUNCTION_FR("", rv);
     rv = deserialise_mir_lvalue_();
     return rv;
 }
@@ -1841,6 +1899,7 @@ auto HirDeserialiser::deserialise_mir_lvalue_() -> MIRLValue {
 }
 
 auto HirDeserialiser::deserialiseMirRvalue() -> MIRRValue {
+    TRACE_FUNCTION;
     switch (auto tag = in.readTag()) {
 #define _(x, ...)            \
     case MIRRValue::TAG_##x: \
@@ -1867,6 +1926,7 @@ auto HirDeserialiser::deserialiseMirRvalue() -> MIRRValue {
 }
 
 auto HirDeserialiser::deserialiseMirConstant() -> MIRConstant {
+    TRACE_FUNCTION;
     switch (auto tag = in.readTag()) {
 #define _(x, ...)              \
     case MIRConstant::TAG_##x: \
@@ -1974,6 +2034,7 @@ auto HirDeserialiser::deserialiseLinkage() -> HIRLinkage {
 }
 
 auto HirDeserialiser::deserialiseFunction() -> HIRFunction {
+    TRACE_FUNCTION;
     auto _ = in.openObject("HIR::Function");
 
     HIRFunction rv;
@@ -2020,10 +2081,12 @@ auto HirDeserialiser::deserialiseFcnargs() -> std::vector<std::pair<HIRPattern, 
     for (size_t i = 0; i < n; i++) {
         rv.push_back(std::make_pair(HIRPattern{}, deserialiseType()));
     }
+    DEBUG("rv = " << rv);
     return rv;
 }
 
 auto HirDeserialiser::deserialiseConstant() -> HIRConstant {
+    TRACE_FUNCTION;
     HIRConstant rv;
     rv.params = deserialiseGenericparams();
     rv.type = deserialiseType();
@@ -2038,6 +2101,7 @@ auto HirDeserialiser::deserialiseConstant() -> HIRConstant {
 }
 
 auto HirDeserialiser::deserialiseStatic() -> HIRStatic {
+    TRACE_FUNCTION;
     auto linkage = deserialiseLinkage();
     auto params = deserialiseGenericparams();
     u8 bitflag1 = in.readU8();
@@ -3009,6 +3073,7 @@ template <typename V>
 auto HirSerialiser::serialisePathmap(const std::map<HIRSimplePath, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
+        DEBUG("- " << v.first);
         serialise(v.first);
         serialise(v.second);
     }
@@ -3045,6 +3110,7 @@ template <typename V>
 auto HirSerialiser::serialiseStrmap(const std::unordered_multimap<std::string, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
+        DEBUG("- " << v.first);
         out.writeString(v.first);
         serialise(v.second);
     }
@@ -3052,6 +3118,7 @@ auto HirSerialiser::serialiseStrmap(const std::unordered_multimap<std::string, V
 
 template <typename T>
 auto HirSerialiser::serialiseVec(const ThinVector<T>& vec) -> void {
+    TRACE_FUNCTION_F("<" << typeid(T).name() << "> size=" << vec.size());
     auto _ = out.openObject(typeid(ThinVector<T>).name());
     out.writeCount(vec.size());
     for (const auto& i : vec) {
@@ -3061,6 +3128,7 @@ auto HirSerialiser::serialiseVec(const ThinVector<T>& vec) -> void {
 
 template <typename T>
 auto HirSerialiser::serialiseVec(const std::vector<T>& vec) -> void {
+    TRACE_FUNCTION_F("<" << typeid(T).name() << "> size=" << vec.size());
     auto _ = out.openObject(typeid(std::vector<T>).name());
     out.writeCount(vec.size());
     for (const auto& i : vec) {
@@ -3075,6 +3143,7 @@ auto HirSerialiser::serialise(const std::vector<T>& vec) -> void {
 
 template <typename T>
 auto HirSerialiser::serialise(const std::set<T>& s) -> void {
+    TRACE_FUNCTION_F("size=" << s.size());
     auto _ = out.openObject(typeid(std::set<T>).name());
     out.writeCount(s.size());
     for (const auto& i : s) {
@@ -3172,11 +3241,13 @@ auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
 
     auto it = types.find(tyStr);
     if (it != types.end()) {
+        DEBUG("Cached " << it->second);
         out.writeCount(it->second);
         return;
     }
     out.writeCount(~0u);
 
+    DEBUG("Fresh " << types.size());
     auto _ = out.openObject("HIR::TypeData");
     out.writeTag(ty->tag());
     switch ((*ty).tag()) {
@@ -3295,6 +3366,7 @@ auto HirSerialiser::serialiseSimplepath(const HIRSimplePath& path) -> void {
         out.writeCount(0);
         return;
     }
+    TRACE_FUNCTION_F(path);
     serialiseVec(data->members);
 }
 
@@ -3304,6 +3376,7 @@ auto HirSerialiser::serialisePathparams(const HIRPathParams& pp) -> void {
 }
 
 auto HirSerialiser::serialiseGenericpath(const HIRGenericPath& path) -> void {
+    TRACE_FUNCTION_F(path);
     serialiseSimplepath(path.path);
     serialisePathparams(path.params);
 }
@@ -3333,6 +3406,7 @@ auto HirSerialiser::serialise(const HIRTraitPath::AtyBound& e) -> void {
 }
 
 auto HirSerialiser::serialisePath(const HIRPath& path) -> void {
+    TRACE_FUNCTION_F("path=" << path);
     switch (path.data.tag()) {
         case HIRPathData::TAG_Generic: {
             auto& e = path.data.as_Generic();
@@ -3359,6 +3433,7 @@ auto HirSerialiser::serialisePath(const HIRPath& path) -> void {
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
+            DEBUG("-- UfcsUnknown - " << path);
             BUG_ASSERT(!"Unexpected UfcsUnknown");
             break;
         }
@@ -3389,6 +3464,7 @@ auto HirSerialiser::serialise(const HIRValueParamDef& pd) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRGenericBound& b) -> void {
+    TRACE_FUNCTION_F(b);
     switch (b.tag()) {
         case HIRGenericBound::TAG_TraitBound: {
             auto& e = b.as_TraitBound();
@@ -3410,6 +3486,7 @@ auto HirSerialiser::serialise(const HIRGenericBound& b) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRProcMacro& pm) -> void {
+    TRACE_FUNCTION_F("pm = ProcMacro { " << pm.name << ", " << pm.path << ", [" << pm.attributes << "] }");
     switch (pm.ty) {
         case HIRProcMacro::Ty::Function:
             out.writeTag(0);
@@ -3478,6 +3555,7 @@ auto HirSerialiser::serialise(const HIRExternLibrary& lib) -> void {
 }
 
 auto HirSerialiser::serialiseModule(const HIRModule& mod) -> void {
+    TRACE_FUNCTION;
     auto _ = out.openObject("HIR::Module");
 
     serialiseStrmap(mod.valueItems);
@@ -3486,6 +3564,7 @@ auto HirSerialiser::serialiseModule(const HIRModule& mod) -> void {
 }
 
 auto HirSerialiser::serialiseTypeimpl(const HIRTypeImpl& impl) -> void {
+    TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " " << impl.type);
     serialiseGenerics(impl.params);
     serialiseType(impl.type);
 
@@ -3517,6 +3596,7 @@ auto HirSerialiser::serialise(const HIRTypeImpl& impl) -> void {
 }
 
 auto HirSerialiser::serialiseTraitimpl(const HIRTraitImpl& impl) -> void {
+    TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " ?" << impl.traitArgs << " for " << impl.type);
     serialiseGenerics(impl.params);
     serialisePathparams(impl.traitArgs);
     serialiseType(impl.type);
@@ -3525,24 +3605,28 @@ auto HirSerialiser::serialiseTraitimpl(const HIRTraitImpl& impl) -> void {
 
     out.writeCount(impl.methods.size());
     for (const auto& v : impl.methods) {
+        DEBUG("fn " << v.first);
         out.writeString(v.first);
         out.writeBool(v.second.isSpecialisable);
         serialise(v.second.data);
     }
     out.writeCount(impl.constants.size());
     for (const auto& v : impl.constants) {
+        DEBUG("const " << v.first);
         out.writeString(v.first);
         out.writeBool(v.second.isSpecialisable);
         serialise(v.second.data);
     }
     out.writeCount(impl.statics.size());
     for (const auto& v : impl.statics) {
+        DEBUG("static " << v.first);
         out.writeString(v.first);
         out.writeBool(v.second.isSpecialisable);
         serialise(v.second.data);
     }
     out.writeCount(impl.types.size());
     for (const auto& v : impl.types) {
+        DEBUG("type " << v.first);
         out.writeString(v.first);
         out.writeBool(v.second.isSpecialisable);
         serialise(v.second.data);
@@ -4123,6 +4207,7 @@ auto HirSerialiser::serialise(const MIRCallTarget& ct) -> void {
 }
 
 auto HirSerialiser::serialise(const MIRParam& p) -> void {
+    TRACE_FUNCTION_F("Param = " << p);
     out.writeTag(static_cast<int>(p.tag()));
     switch (p.tag()) {
         case MIRParam::TAG_LValue: {
@@ -4145,6 +4230,7 @@ auto HirSerialiser::serialise(const MIRParam& p) -> void {
 }
 
 auto HirSerialiser::serialise(const MIRLValue& lv) -> void {
+    TRACE_FUNCTION_F("LValue = " << lv);
     if (lv.root.is_Static()) {
         out.writeCount(3);
         serialisePath(lv.root.as_Static());
@@ -4159,6 +4245,7 @@ auto HirSerialiser::serialise(const MIRLValue::Wrapper& w) -> void {
 }
 
 auto HirSerialiser::serialise(const MIRRValue& val) -> void {
+    TRACE_FUNCTION_F("RValue = " << val);
     out.writeTag(val.tag());
     switch (val.tag()) {
         case MIRRValue::TAG_Use: {
@@ -4455,6 +4542,7 @@ auto HirSerialiser::serialise(const HIRLinkage& linkage) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRFunction& fcn) -> void {
+    TRACE_FUNCTION_F("_function:");
     BUG_ASSERT(!fcn.traitReturnType);
     auto _ = out.openObject("HIR::Function");
 
@@ -4472,6 +4560,7 @@ auto HirSerialiser::serialise(const HIRFunction& fcn) -> void {
     for (const auto& a : fcn.args) {
         serialise(a.second);
     }
+    DEBUG("m_args = " << fcn.args);
     out.writeBool(fcn.variadic);
     out.writeBool(fcn.hasNamedVariadic);
     serialise(fcn.returnType);
@@ -4494,6 +4583,7 @@ auto HirSerialiser::serialise(const HIRFunction::Markings& m) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRConstant& item) -> void {
+    TRACE_FUNCTION_F("_constant:");
     serialiseGenerics(item.params);
     serialise(item.type);
     serialise(item.value);
@@ -4505,6 +4595,7 @@ auto HirSerialiser::serialise(const HIRConstant& item) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRStatic& item) -> void {
+    TRACE_FUNCTION_F("_static:");
     serialise(item.linkage);
     serialiseGenerics(item.params);
 
@@ -4623,6 +4714,7 @@ auto HirSerialiser::serialise(const HIRStructMarkings& m) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRStruct& item) -> void {
+    TRACE_FUNCTION_F("Struct");
     auto _ = out.openObject("HIR::Struct");
 
     serialiseGenerics(item.params);
@@ -4663,6 +4755,7 @@ auto HirSerialiser::serialise(const HIRStructField& fld) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRUnion& item) -> void {
+    TRACE_FUNCTION_F("Union");
     serialiseGenerics(item.params);
     out.writeTag(static_cast<int>(item.repr));
 
@@ -4679,6 +4772,7 @@ auto HirSerialiser::serialise(const HIRExternType& item) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRTrait& item) -> void {
+    TRACE_FUNCTION_F("_trait:");
     auto _ = out.openObject("HIR::Trait");
 
     serialiseGenerics(item.params);
@@ -4697,16 +4791,19 @@ auto HirSerialiser::serialise(const HIRTraitValueItem& tvi) -> void {
     switch (tvi.tag()) {
         case HIRTraitValueItem::TAG_Constant: {
             auto& e = tvi.as_Constant();
+            DEBUG("Constant");
             serialise(e);
             break;
         }
         case HIRTraitValueItem::TAG_Static: {
             auto& e = tvi.as_Static();
+            DEBUG("Static");
             serialise(e);
             break;
         }
         case HIRTraitValueItem::TAG_Function: {
             auto& e = tvi.as_Function();
+            DEBUG("Function");
             serialise(e);
             break;
         }

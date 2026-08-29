@@ -270,6 +270,7 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
                 return HIRTypeRef();
             }
             const HIRTypeData* tplTy = it->second.data;
+            DEBUG("name=" << name << " tpl_ty=" << tplTy << " " << *this);
             return this->getCbMonomorphTraitimpl(types, sp, params).monomorphType(sp, tplTy);
         }
         case ImplRefData::TAG_BoundedPtr: {

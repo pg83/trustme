@@ -916,6 +916,7 @@ HIRPath AST2HIR::LowerHIRPatternPath(const Span& sp, const ASTPath& path, FromAS
 }
 
 HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
+    TRACE_FUNCTION_F("@" << pat.span() << " pat = " << pat);
     std::vector<HIRPatternBinding> bindings;
     for (const auto& pb : pat.bindings()) {
         bindings.push_back(HIRPatternBinding(pb.isMutable, convertBindingType(pb.type), pb.name.name, pb.slot));
@@ -1316,9 +1317,11 @@ HIRGenericPath AST2HIR::LowerHIRGenericPath(const Span& sp, const ASTPath& path,
         auto paramDefs = getPathGenericParams(sp, *crate, simpepath, path, pc);
         HIRPathParams params = LowerHIRPathParams(sp, e->nodes.back().args(), allowAssoc, paramDefs);
         auto rv = HIRGenericPath(mv$(simpepath), mv$(params));
+        DEBUG(path << " => " << rv);
         return rv;
     } else {
         if (const auto* e = path.cls.opt_UFCS()) {
+            DEBUG(path);
             if (!e->type) {
             } else if (!e->nodes.empty()) {
             } else if (!e->type->data.is_Path()) {
@@ -1334,6 +1337,7 @@ HIRGenericPath AST2HIR::LowerHIRGenericPath(const Span& sp, const ASTPath& path,
 }
 
 HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds /*=false*/, ASTBoundConstness constness /*=Never*/) {
+    DEBUG(hrbs << " " << path);
     HIRTraitPath rv{LowerHIRGenericPath(sp, path, FromASTPathClass::Type, /*allow_assoc=*/true), {}, {}, nullptr, LowerHIRBoundConstness(constness)};
 
     struct H {
@@ -1402,6 +1406,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
         }
 
         HIRGenericPath findSourceTrait(const Span& sp, const HIRGenericPath& path, const ASTPathBindingType& pb, const RcString& name, Namespace ns, const Monomorphiser& ms) {
+            TRACE_FUNCTION_F(path);
             if (pb.is_Trait()) {
                 const auto& pbe = pb.as_Trait();
                 if (pbe.hir) {
@@ -1475,6 +1480,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                 }
                 auto nameArgs = H(*this).getAtyNode(sp, assoc.first);
                 auto srcTrait = H(*this).findSourceTrait(sp, rv.path, path.bindings.type.binding, nameArgs.first, H::Namespace::Type, MonomorphiserNop(crate->types));
+                DEBUG("src_trait = " << srcTrait << " for " << assoc.first);
                 rv.typeBounds.insert(std::make_pair(nameArgs.first, HIRTraitPath::AtyEqual{std::move(srcTrait), std::move(nameArgs.second), LowerHIRType(assoc.second)}));
                 break;
             }
@@ -1493,6 +1499,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                     if (assoc.first.args().isRtn) {
                         nameArgs.first = RcString::newInterned(FMT(ATY_PREFIX_ERASED << sourceName << "_0"));
                     }
+                    DEBUG("src_trait = " << srcTrait << " for " << assoc.first);
                     auto it = rv.traitBounds.insert(std::make_pair(nameArgs.first, HIRTraitPath::AtyBound{std::move(srcTrait), std::move(nameArgs.second), {}}));
                     for (const auto& trait : assoc.second) {
                         it.first->second.traits.push_back(LowerHIRTraitPath(sp, *trait.path, trait.hrbs, /*ignore_bounds*/ true, trait.constness));
@@ -1812,6 +1819,7 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
             v.lifetimeIdentityHasFree = identity.hasFree();
             TraitObjectLowering lowering(*this, ty->span(), v);
             for (const auto& t : e.traits) {
+                DEBUG("t = " << *t.path);
                 lowering.add(t);
             }
             std::sort(v.markers.begin(), v.markers.end());
@@ -1825,6 +1833,7 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
 
             std::vector<HIRTraitPath> traits;
             for (const auto& t : e->traits) {
+                DEBUG("t = " << *t.path);
                 // TODO: Handle ATY bounds
                 traits.push_back(LowerHIRTraitPath(ty->span(), *t.path, t.hrbs, /*allow_aty_trait_bounds=*/true, t.constness));
             }
@@ -1917,6 +1926,7 @@ tStructFields AST2HIR::LowerHIRStructFields(HIRItemPath path, const HIRGenericPa
 }
 
 HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStruct& ent, const ASTAttributeList& attrs, HIRModule& outMod) {
+    TRACE_FUNCTION_F(path);
     HIRStruct::Data data;
 
     auto modPath = getParentModule(path);
@@ -2256,6 +2266,7 @@ HIRUnion AST2HIR::LowerHIRUnion(HIRItemPath path, const ASTUnion& f, const ASTAt
 }
 
 HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttributeList& attrs) {
+    TRACE_FUNCTION_F(traitPath);
     traitPath.updateCrateName(crateName);
 
     bool traitReqiresSized = false;
@@ -2264,6 +2275,7 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
     std::vector<HIRTraitPath> supertraits;
     for (const auto& st : f.supertraits()) {
         supertraits.push_back(LowerHIRTraitPath(st.sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness));
+        DEBUG("Supertrait " << supertraits.back());
     }
     HIRTrait rv{mv$(params), mv$(supertraits)};
     rv.isConst = attrs.has("const_trait");
@@ -2479,6 +2491,7 @@ std::vector<HIRSimplePath> AST2HIR::LowerHIRDefineOpaque(HIRItemPath p, const HI
 HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRTypeData* realSelfType) {
     Span sp;
 
+    TRACE_FUNCTION_F(p);
     auto defineOpaque = LowerHIRDefineOpaque(p, sourceModule, attrs);
 
     std::vector<std::pair<HIRPattern, HIRTypeRef>> args;
@@ -2875,6 +2888,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
 }
 
 HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attrs, const ASTStatic& e, const Span& sp, const RcString& name) {
+    TRACE_FUNCTION_F(p);
     auto params = LowerHIRGenericParams(e.params(), nullptr);
     auto value = LowerHIRExpr(e.value());
     value.defineOpaque = LowerHIRDefineOpaque(p, p.parent->getSimplePath(), attrs);
@@ -2909,6 +2923,7 @@ HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attr
 }
 
 HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std::vector<HIRSimplePath> traits) {
+    TRACE_FUNCTION_F("path = " << path);
     HIRModule mod{};
 
     mod.lintLevels = astMod.lintLevels;
@@ -2993,6 +3008,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
         const auto& item = *ip;
         const auto& sp = item.span;
         auto itemPath = HIRItemPath(path, item.name.c_str());
+        DEBUG(itemPath << " " << item.data.tagStr());
         switch (item.data.tag()) {
             case ASTItem::TAG_None: {
                 break;
@@ -3136,8 +3152,10 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
             BUG_ASSERT(hirPath.components().empty() || hirPath.components().back() != "");
             HIRTypeItem ti;
             if (const auto* pb = ie.second.path.bindings.type.binding.opt_EnumVar()) {
+                DEBUG("Import NS " << ie.first << " = " << hirPath << " (Enum Variant)");
                 ti = HIRTypeItem::make_Import({mv$(hirPath), true, pb->idx});
             } else {
+                DEBUG("Import NS " << ie.first << " = " << hirPath);
                 ti = HIRTypeItem::make_Import({mv$(hirPath), false, 0});
             }
             _add_mod_ns_item(*crate->pool, mod, ie.first, getVis(ie.second.vis), mv$(ti));
@@ -3151,6 +3169,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
         // TODO: See code for `m_namespace_items` above
         if (ie.second.isImport) {
             if (!ie.second.path.cls.is_Absolute()) {
+                DEBUG("Import VAL " << ie.first << " = " << ie.second.path << " (not a simple path)");
                 continue;
             }
             auto hirPath = LowerHIRSimplePath(sp, ie.second.path, FromASTPathClass::Value);
@@ -3160,10 +3179,12 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
 
             switch (ie.second.path.bindings.value.binding.tag()) {
                 default:
+                    DEBUG("Import VAL " << ie.first << " = " << hirPath);
                     vi = HIRValueItem::make_Import({mv$(hirPath), false, 0});
                     break;
                 case ASTPathBindingValue::TAG_EnumVar: {
                     auto& pb = ie.second.path.bindings.value.binding.as_EnumVar();
+                    DEBUG("Import VAL " << ie.first << " = " << hirPath << " (Enum Variant)");
                     vi = HIRValueItem::make_Import({mv$(hirPath), true, pb.idx});
                     break;
                 }
@@ -3182,8 +3203,10 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
             BUG_ASSERT(!hirPath.components().empty());
             BUG_ASSERT(hirPath.components().back() != "");
 
+            DEBUG("Import MACRO " << ie.first << " = " << hirPath);
             auto mi = HIRMacroItem::make_Import({mv$(hirPath)});
             _add_mod_mac_item(*crate->pool, mod, ie.first, getVis(ie.second.vis), mv$(mi));
+            DEBUG("Defined MACRO " << ie.first << " = " << hirPath);
         }
     }
 
@@ -3191,6 +3214,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
 }
 
 void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
+    TRACE_FUNCTION_F(astMod.path());
     HIRSimplePath modPath(crateName, astMod.path().nodes);
 
     for (const auto& item : astMod.items) {
@@ -3275,6 +3299,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
         }
         auto params = LowerHIRGenericParams(impl.def().params(), nullptr);
 
+        TRACE_FUNCTION_F("IMPL " << impl.def());
         if (impl.def().trait().ent.isValid()) {
             const auto& pb = impl.def().trait().ent.bindings.type.binding;
             ASSERT_BUG(Span(), pb.is_Trait(), "Binding for trait path in impl isn't a Trait - " << impl.def().trait().ent);
@@ -3289,6 +3314,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
 
                 HIRItemPath path(type, traitName, traitArgs);
 
+                DEBUG("path = " << path);
                 std::map<RcString, HIRTraitImpl::ImplEnt<HIRFunction>> methods;
                 std::map<RcString, HIRTraitImpl::ImplEnt<HIRConstant>> constants;
                 std::map<RcString, HIRTraitImpl::ImplEnt<HIRTypeRef>> types;
@@ -3317,6 +3343,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                         }
                         case ASTItem::TAG_Type: {
                             auto& e = (*item.data).as_Type();
+                            DEBUG("- type " << item.name);
                             auto atyParams = LowerHIRGenericParams(e.params(), nullptr);
                             //ASSERT_BUG(Span(), aty_params.is_empty(), "TODO: GATs");
 
@@ -3333,6 +3360,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                         }
                         case ASTItem::TAG_Function: {
                             auto& e = (*item.data).as_Function();
+                            DEBUG("- method " << item.name);
                             auto fcn = LowerHIRFunction(itemPath, modPath, item.attrs, e, type);
                             if (impl.def().isConst()) {
                                 fcn.isConst = true;
@@ -3460,6 +3488,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
     auto macros = std::map<RcString, HIRMacroItem>();
 
     {
+        TRACE_FUNCTION_FR("macros", "macros");
         std::vector<ASTModule*> mods;
         mods.push_back(&crate.rootModule_);
         do {
@@ -3482,6 +3511,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
                     if (macros.count(mac.name) == 0) {
                         auto res = macros.insert(std::make_pair(mac.name, mv$(mi)));
                         if (res.second) {
+                            DEBUG("- Define " << mac.name << "!");
                             rv.exportedMacroNames.push_back(mac.name);
                         }
                         if (res.first->second.is_MacroRules()) {
@@ -3494,6 +3524,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
                             ASSERT_BUG(Span(), !e.second.as_MacroRules()->rules.empty(), "Empty macro? - " << e.first);
                         }
                     }
+                    DEBUG("- Non-exported " << mac.name << "!");
                 }
             }
 
@@ -3509,6 +3540,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
                 auto path = HIRSimplePath(mac.path.crate == "" ? crateName : mac.path.crate, mac.path.nodes);
                 auto res = macros.insert(std::make_pair(mac.name, HIRMacroItem::make_Import({path})));
                 if (res.second) {
+                    DEBUG("Re-export " << mac.name << "! = " << path);
                     rv.exportedMacroNames.push_back(mac.name);
                 }
             }
@@ -3539,6 +3571,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
             HIRProcMacro::Ty ty = H::cvtMacroTy(ent.ty);
             macros.insert(std::make_pair(ent.name, HIRProcMacro{ty, ent.name, HIRSimplePath(RcString(""), {ent.name}), ent.attributes}));
             rv.exportedMacroNames.push_back(ent.name);
+            DEBUG("Export proc_macro " << ent.name);
         }
     } else if (!crate.testHarness) {
         ASSERT_BUG(Span(), crate.procMacros.size() == 0, "Procedural macros defined in non proc-macro crate");
@@ -3548,6 +3581,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
     for (const auto& langItemPath : crate.langItems) {
         BUG_ASSERT(langItemPath.second.crate == "");
         rv.langItems.insert(std::make_pair(langItemPath.first, HIRSimplePath(crateName, langItemPath.second.nodes)));
+        DEBUG("Defined language item '" << langItemPath.first << "' at " << langItemPath.second);
     }
     rv.extCratesOrdered = crate.externCratesOrd;
     for (auto& extCrate : crate.externCrates) {
@@ -3555,6 +3589,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
             const auto& name = lang.first;
             const auto& path = lang.second;
             auto irv = rv.langItems.insert(std::make_pair(name, path));
+            DEBUG("Load language item '" << lang.first << "' at " << lang.second << " from " << extCrate.first);
             if (irv.second == true) {
             } else if (irv.first->second == path) {
                 // Equal definitions, also good (TODO: How can this happen?)
@@ -3605,6 +3640,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
             }
 
             void fixMacrosInMod(HIRItemPath path, HIRModule& mod) {
+                TRACE_FUNCTION_F(path);
                 for (auto& mi : mod.modItems) {
                     if (auto* submodP = mi.second->ent.opt_Module()) {
                         fixMacrosInMod(path + mi.first, *submodP);
@@ -3621,6 +3657,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
                         }
                     }
                     if (const auto* i = mi.second->ent.opt_Import()) {
+                        DEBUG(path << ": Import " << mi.first << " = " << i->path);
                         if (i->path.crateName() != CRATE_BUILTINS) {
                             if (const auto* i2 = ctx.crate->getMacroitemByPath(Span(), i->path).opt_Import()) {
                                 BUG(Span(), "Attempted recusive import - " << i->path << " points at " << i2->path);
@@ -4476,6 +4513,8 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeLetBinding& v) -> void {
         auto base = v.letelseSlots.first;
         auto count = v.letelseSlots.second;
 
+        DEBUG(pat);
+
         struct V: public HIRVisitor {
             unsigned base;
             unsigned count;
@@ -4971,6 +5010,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeInteger& v) -> void {
     };
 
     if (v.datatype == CORETYPE_F16 || v.datatype == CORETYPE_F32 || v.datatype == CORETYPE_F64 || v.datatype == CORETYPE_F128) {
+        DEBUG("Integer annotated as float, create float node");
         HIRCoreType type;
         switch (v.datatype) {
             case CORETYPE_F16:

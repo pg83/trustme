@@ -643,6 +643,7 @@ void HMTypeInferrence::checkForLoops() {
     unsigned int i = 0;
     for (const auto& v : ivars) {
         if (!v.isAlias() && !v.type->is_Infer()) {
+            DEBUG("- " << i << " " << v.type);
             indexes.clear();
             indexes.pushBack(i);
             (LoopChecker{indexes}).checkTy(*this, v.type);
@@ -660,6 +661,7 @@ void HMTypeInferrence::compactIvars() {
         if (!v.isAlias()) {
             auto old = v.type;
             this->expandIvars(v.type);
+            DEBUG("- " << i << " " << old << " -> " << v.type);
         } else {
             auto index = v.alias;
             unsigned int count = 0;
@@ -691,10 +693,12 @@ bool HMTypeInferrence::applyDefault(unsigned int index) {
         case HIRInferClass::None:
             return false;
         case HIRInferClass::Integer:
+            DEBUG("- IVar " << e->index << " = i32");
             this->journalMutation(JournalEntry::Kind::TypeSet, index, v.type);
             v.type = types.primitive(HIRCoreType::I32);
             return true;
         case HIRInferClass::Float:
+            DEBUG("- IVar " << e->index << " = f64");
             this->journalMutation(JournalEntry::Kind::TypeSet, index, v.type);
             v.type = types.primitive(HIRCoreType::F64);
             return true;
@@ -1165,6 +1169,7 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
         if (infer->index == ~0u) {
             type = newIvarTr(infer->tyClass);
             this->markChange();
+            DEBUG("New ivar " << type);
             return;
         }
         if (isAliasInputInfer(infer->index)) {
@@ -1312,6 +1317,7 @@ void HMTypeInferrence::addIvars(HIRConstGeneric& val) {
         if (val.as_Infer().index == ~0u) {
             val.as_Infer().index = newIvarVal();
             this->markChange();
+            DEBUG("New ivar " << val);
         } else if (isAliasInputInfer(val.as_Infer().index)) {
             auto* mapped = aliasValueIvars.find(val.as_Infer().index);
             if (!mapped) {
@@ -1375,6 +1381,7 @@ unsigned int HMTypeInferrence::newIvar(HIRInferClass ic /* = HIR::InferClass::No
     auto rv = ivars.size();
     ivars.emplace_back(types.infer(rv, ic));
     mutationGeneration = ++generationCounter;
+    DEBUG("New type IVar " << rv);
     return rv;
 }
 
@@ -1394,6 +1401,7 @@ void HMTypeInferrence::setIvarValTo(unsigned int slot, HIRConstGeneric val) {
     ASSERT_BUG(Span(), !values[slot].isAlias(), "slot " << slot);
     if (*values[slot].val == val) {
     } else {
+        DEBUG("Set ValIVar " << slot << " = " << val);
         ASSERT_BUG(Span(), values[slot].val->is_Infer(), "slot " << slot << " - " << *values[slot].val);
         ASSERT_BUG(Span(), values[slot].val->as_Infer().index == slot, "slot " << slot << " - " << *values[slot].val);
         this->journalMutation(JournalEntry::Kind::ValSet, slot, nullptr);
@@ -1414,6 +1422,7 @@ void HMTypeInferrence::ivarValUnify(unsigned int leftSlot, unsigned int rightSlo
     }
 
     if (/*const auto* re =*/values[rightSlot].val->opt_Infer()) {
+        DEBUG("Set ValIVar " << rightSlot << " = @" << leftSlot);
         values[rightSlot].alias = leftSlot;
         if (snapshotDepth != 0) {
             this->journalMutation(JournalEntry::Kind::ValAlias, rightSlot, nullptr);
@@ -1487,6 +1496,7 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
     const auto rootIndex = this->rootIvarIndex(slot);
     auto& rootIvar = ivars.at(rootIndex);
 
+    DEBUG("set_ivar_to(" << slot << " { " << rootIvar.type << " }, " << type << ")");
     if (const auto* lE = type->opt_Infer(); lE && !isAliasInputInfer(lE->index)) {
         BUG_ASSERT(lE->index != slot);
         if (lE->tyClass != HIRInferClass::None) {
@@ -1519,6 +1529,7 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
             }
         }
 
+        DEBUG("Set IVar " << lE->index << " = @" << slot);
         const auto rightIndex = this->rootIvarIndex(lE->index);
         auto& rIvar = ivars.at(rightIndex);
         this->journalMutation(JournalEntry::Kind::TypeAlias, rightIndex, rIvar.type);
@@ -1545,6 +1556,7 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
 
         type = MonomorphAddLifetimes(types).monomorphType(sp, type, true);
 
+        DEBUG("Set IVar " << slot << " = " << type);
         if (const auto* e = rootIvar.type->opt_Infer()) {
             switch (e->tyClass) {
                 case HIRInferClass::None:
@@ -1587,6 +1599,7 @@ void HMTypeInferrence::ivarUnify(unsigned int leftSlot, unsigned int rightSlot) 
         auto& rootIvar = ivars.at(rightIndex);
 
         if (const auto* re = rootIvar.type->opt_Infer()) {
+            DEBUG("Class unify " << leftIvar.type << " <- " << rootIvar.type);
             if (re->tyClass != HIRInferClass::None) {
                 if (const auto* le = leftIvar.type->opt_Infer()) {
                     if (le->tyClass != HIRInferClass::None && le->tyClass != re->tyClass) {
@@ -1613,6 +1626,7 @@ void HMTypeInferrence::ivarUnify(unsigned int leftSlot, unsigned int rightSlot) 
             BUG(sp, "Unifying over a concrete type - " << rootIvar.type);
         }
 
+        DEBUG("IVar " << rootIvar.type->as_Infer().index << " = @" << leftSlot);
         this->journalMutation(JournalEntry::Kind::TypeAlias, rightIndex, rootIvar.type);
         rootIvar.alias = leftSlot;
         rootIvar.type = nullptr;
@@ -1678,6 +1692,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
     if (!ty->hasTypeInfer()) {
         return false;
     }
+    TRACE_FUNCTION_F("ty = " << ty);
     auto pathContainsIvars = [this](const HIRPath& path, bool onlyUnbound) {
         switch (path.data.tag()) {
             case HIRPath::Data::TAG_Generic: {
@@ -2601,9 +2616,11 @@ bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, TraitBoundCallback& 
 
 bool TraitResolution::iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, TraitPathCallback& cb) const {
     HIRGenericPath traitPath;
+    DEBUG("Checking ATY bounds on " << pe.trait << " :: " << pe.item);
     if (!this->traitContainsType(sp, pe.trait, this->crate.getTraitByPath(sp, pe.trait.path), pe.item.c_str(), traitPath)) {
         BUG(sp, "Cannot find associated type " << pe.item << " anywhere in trait " << pe.trait);
     }
+    DEBUG("trait_path=" << traitPath);
     const auto& traitRef = crate.getTraitByPath(sp, traitPath.path);
     const auto& atyDef = traitRef.types.find(pe.item)->second;
 
@@ -2655,6 +2672,7 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
 
     const auto& type = this->ivars.getType(ty);
 
+    TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
     if (trait == langSized()) {
         auto cmp = typeIsSizedBuiltin(sp, type);
         if (cmp != HIRCompare::Unequal) {
@@ -2824,6 +2842,7 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
             metaTy = crate.types.unit();
             hasMetaTy = true;
         }
+        DEBUG("<" << type << " as Pointee>::Metadata = " << metaTy);
         HIRTraitPath::assocListT assocList;
         if (hasMetaTy) {
             assocList.insert(std::make_pair(RcString::newInterned("Metadata"), HIRTraitPath::AtyEqual{trait, {}, mv$(metaTy)}));
@@ -2979,6 +2998,7 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                         }
                         return findAsyncCallable(inputs, nodeP->returnType, supportsShared, supportsMutable);
                     }
+                    DEBUG("Closure, " << trait << " ?= Fn*");
                     if (trait == langFn() || trait == langFnMut() || trait == langFnOnce()) {
                         const HIRTypeData* wanted = params.types.size() == 1 && params.types[0]->is_Tuple() ? params.types[0] : nullptr;
 
@@ -2994,10 +3014,12 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                                 continue;
                             }
                             const auto& argsDes = wanted->as_Tuple();
+                            DEBUG(at << " ?= " << argsDes[i]);
                             auto argCmp = at->compareWithPlaceholders(sp, argsDes[i], this->ivars.callbackResolveInfer());
                             if (argCmp == HIRCompare::Unequal) {
                                 if (const auto* er = argsDes[i]->opt_ErasedType()) {
                                     if (const auto* alias = er->inner.opt_Alias(); alias && isOpaqueAliasDefiningScope(*alias->inner)) {
+                                        DEBUG("- " << argsDes[i] << " is an opaque this body defines");
                                         argCmp = HIRCompare::Fuzzy;
                                     }
                                 }
@@ -3005,12 +3027,14 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                             cmp &= argCmp;
                         }
                         if (cmp != HIRCompare::Unequal) {
+                            DEBUG("Closure Fn* impl - cmp = " << cmp);
                             HIRPathParams pp;
                             pp.types.push_back(crate.types.tuple(mv$(args)));
                             HIRTraitPath::assocListT types;
                             types.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, nodeP->returnType}));
                             return callback.visit(ImplRef(type, mv$(pp), mv$(types)));
                         } else {
+                            DEBUG("Closure Fn* impl - cmp = Compare::Unequal");
                             return false;
                         }
                     }
@@ -3095,9 +3119,11 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                 }
 
                 if (e.abi != ABI_RUST || e.isUnsafe) {
+                    DEBUG("- No magic impl, wrong ABI or unsafe in " << type);
                     return false;
                 }
 
+                DEBUG("- Magic impl of Fn* for " << type);
                 std::vector<HIRTypeRef> args;
                 for (unsigned int i = 0; i < e.argTypes.size(); i++) {
                     const auto& at = e.argTypes[i];
@@ -3129,19 +3155,24 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                     BUG(sp, "Fn* traits require a single tuple argument");
                 }
 
+                DEBUG("- Magic impl of Fn* for " << type);
                 auto e = realE.decay(crate.types, sp);
+                DEBUG("> " << e.rettype << " - " << e.argTypes);
                 const auto& argsDes = params.types[0]->as_Tuple();
                 if (argsDes.size() != e.argTypes.size()) {
                     return false;
                 }
 
                 if (e.abi != ABI_RUST) {
+                    DEBUG("- No magic impl, wrong ABI (`" << e.abi << "`): " << type);
                     return false;
                 }
                 if (e.isUnsafe) {
+                    DEBUG("- No magic impl, unsafe function: " << type);
                     return false;
                 }
 
+                DEBUG("- Magic impl of Fn* for " << type);
                 std::vector<HIRTypeRef> args;
                 for (unsigned int i = 0; i < e.argTypes.size(); i++) {
                     const auto& at = e.argTypes[i];
@@ -3166,6 +3197,7 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
 bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* ty, AssembledImplCallback& callback) const {
     const auto& type = this->ivars.getType(ty);
 
+    TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
     if (assembleTypeCandidatesCb(sp, trait, params, ty, callback)) {
         return true;
     }
@@ -3180,6 +3212,7 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
             if (trait == e.trait.path.path) {
                 auto cmp = comparePp(sp, e.trait.path.params, params);
                 if (cmp != HIRCompare::Unequal) {
+                    DEBUG("TraitObject impl params" << e.trait.path.params);
                     return callback.visit(ImplRef(type, &e.trait.path.params, &e.trait.typeBounds, e.trait.constness));
                 }
             }
@@ -3210,6 +3243,7 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                             }
                         }
                         auto ir = ImplRef(type, iTp.path.params.clone(), mv$(assocClone));
+                        DEBUG("TraitObject: - ir = " << ir);
                         isSupertrait = true;
                         rv = callback.visit(mv$(ir));
                         return cmp == HIRCompare::Equal;
@@ -3228,6 +3262,7 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                 if (trait == traitPath.path.path) {
                     auto cmp = comparePp(sp, traitPath.path.params, params);
                     if (cmp != HIRCompare::Unequal) {
+                        DEBUG("TraitObject impl params" << traitPath.path.params);
                         return callback.visit(ImplRef(type, &traitPath.path.params, &traitPath.typeBounds, traitPath.constness));
                     }
                 }
@@ -3249,6 +3284,7 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                             }
                         }
                         auto ir = ImplRef(type, iTp.path.params.clone(), mv$(assocClone));
+                        DEBUG("ErasedType: - ir = " << ir);
                         isSupertrait = true;
                         rv = callback.visit(mv$(ir));
                         return cmp == HIRCompare::Equal;
@@ -3265,6 +3301,7 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
             auto& e = (*type).as_Generic();
             if ((e.binding >> 8) == 2) {
                 // TODO: This is probably going to break something in the future.
+                DEBUG("- Magic impl for placeholder type");
                 return callback.visit(ImplRef(type, nullptr, nullptr));
             }
             break;
@@ -3275,10 +3312,12 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                 ASSERT_BUG(sp, e.path.data.is_UfcsKnown(), "Opaque bound type wasn't UfcsKnown - " << type);
                 const auto& pe = e.path.data.as_UfcsKnown();
 
+                DEBUG("Checking bounds on definition of " << pe.item << " in " << pe.trait);
                 // TODO: Should Self here be `type` or `pe.type`
 
                 auto monomorphCb = MonomorphStatePtr(crate.types, pe.type, &pe.trait.params, &pe.params);
                 auto rv = this->iterateAtyBounds(sp, pe, [&](const HIRTraitPath& bound) {
+                    DEBUG("Bound on ATY: " << bound);
                     auto ppHrb = HIRPathParams();
                     monomorphCb.ppHrb = &ppHrb;
                     const auto& bParams = bound.path.params;
@@ -3333,6 +3372,7 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                     bool ret = false;
                     this->findNamedTraitInTrait(sp, trait, params, *bound.traitPtr, bound.path.path, *bParamsMono, type, [&](const HIRTraitPath& iTp) {
                         auto cmp = this->comparePp(sp, iTp.path.params, params);
+                        DEBUG("Opaque Path: cmp=" << cmp << ", impl " << iTp.path << " for " << type << " -- desired " << trait << params);
                         HIRTraitPath::assocListT assocClone;
                         for (const auto& aty : iTp.typeBounds) {
                             assocClone.insert(std::make_pair(aty.first, aty.second.clone()));
@@ -3785,11 +3825,13 @@ void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& i
                             if (input != cached->type) {
                                 this->expandAssociatedTypesInplace(sp, cached->type, effects);
                             }
+                            DEBUG("CACHED: " << input << " -> " << cached->type);
                             input = cached->type;
                         } else {
                             this->expandAssociatedTypesInplaceUfcsKnown(sp, input, effects);
                             if (input->is_Path() && (input->as_Path().binding.is_Unbound() || input->as_Path().binding.is_Opaque())) {
                             } else if (!ivars.probing()) {
+                                DEBUG("CACHE+: " << cacheKey << " = " << input);
                                 eatCache.insert(cacheKey, EatCacheEntry{eatCacheGeneration, ivars.mutationGeneration, input});
                             }
                         }
@@ -3907,6 +3949,7 @@ void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& i
 }
 
 bool TraitResolution::expandAssociatedTypesInplaceUfcsInherent(const Span& sp, HIRTypeRef& input, SolverResponseCallback* effects) const {
+    TRACE_FUNCTION_FR(input, input);
     ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsInherent(), input);
 
     const auto& pe = input->as_Path().path.data.as_UfcsInherent();
@@ -3936,6 +3979,7 @@ bool TraitResolution::expandAssociatedTypesInplaceUfcsInherent(const Span& sp, H
     });
 
     if (!alias) {
+        DEBUG("No inherent associated type candidate for " << input);
         return false;
     }
 
@@ -3982,14 +4026,17 @@ void TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span& sp, HIRT
         auto data = input->cloneData();
         data.as_Path().binding = HIRTypePathBinding::make_Opaque({});
         input = crate.types.intern(std::move(data));
+        DEBUG("Couldn't resolve associated type for " << input << " (will try again later)");
     }
 }
 
 bool TraitResolution::findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& desParams, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* targetType, TraitPathCallback& callback) const {
+    TRACE_FUNCTION_F(des << desParams << " in " << traitPath << pp);
     if (pp.types.size() != traitPtr.params.types.size()) {
         BUG(sp, "Incorrect number of parameters for trait " << traitPath);
     }
 
+    DEBUG(traitPtr.allParentTraits);
     auto monomorphCb = MonomorphStatePtr(crate.types, targetType, &pp, nullptr);
     for (const auto& pt : traitPtr.allParentTraits) {
         auto ptMono = monomorphCb.monomorphTraitpath(sp, pt, false);
@@ -4001,6 +4048,7 @@ bool TraitResolution::findNamedTraitInTraitCb(const Span& sp, const HIRSimplePat
         }
 
         if (pt.path.path == des) {
+            DEBUG("Found potential " << ptMono);
             if (callback.visit(ptMono)) {
                 return true;
             }
@@ -4011,6 +4059,7 @@ bool TraitResolution::findNamedTraitInTraitCb(const Span& sp, const HIRSimplePat
 }
 
 bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, AssembledImplCallback& callback) const {
+    TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
     const HIRPath::Data::Data_UfcsKnown* assocInfo = nullptr;
     if (const auto* e = type->opt_Path()) {
         assocInfo = e->path.data.opt_UfcsKnown();
@@ -4043,6 +4092,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
                 if (relation == HIRCompare::Unequal) {
                     return false;
                 }
+                DEBUG("[find_trait_impls_bound] - Fuzzy match");
             }
             return callback.visit(ImplRef(boundTy, &boundTrait.params, &boundInfo.assoc, boundInfo.constness));
         });
@@ -4057,6 +4107,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
             if (ord != HIRCompare::Unequal) {
                 ord &= this->comparePp(sp, declaredTrait.path.params, params);
                 if (ord != HIRCompare::Unequal) {
+                    DEBUG("[find_trait_impls_bound] Implied declaration bound " << subject << " : " << declaredTrait);
                     auto response = declaredTrait.clone();
                     if (callback.visit(ImplRef(subject, mv$(response.path.params), mv$(response.typeBounds), response.constness))) {
                         return true;
@@ -4166,6 +4217,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
                 if (bound.path.path == trait) {
                     auto monomorphCb = MonomorphStatePtr(crate.types, assocInfo->type, &assocInfo->trait.params, &assocInfo->params);
 
+                    DEBUG("- Found an associated type bound for this trait via another bound");
                     HIRCompare ord = outerOrd;
                     if (monomorphisePathparamsNeeded(bound.path.params)) {
                         // TODO: Use a compare+callback method instead
@@ -4176,16 +4228,22 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
                         ord &= this->comparePp(sp, bound.path.params, params);
                     }
                     if (ord == HIRCompare::Unequal) {
+                        DEBUG("[find_trait_impls_bound] - Mismatch");
+                        DEBUG("[find_trait_impls_bound] - Mismatch");
                         return false;
                     }
                     if (ord == HIRCompare::Fuzzy) {
+                        DEBUG("Fuzzy match");
+                        DEBUG("[find_trait_impls_bound] - Fuzzy match");
                     }
 
+                    DEBUG("[find_trait_impls_bound] Match " << boundTy << " : " << boundTrait);
                     auto tpMono = monomorphCb.monomorphTraitpath(sp, bound, false);
                     this->expandAssociatedTypesParams(sp, tpMono.path.params);
                     for (auto& ty : tpMono.typeBounds) {
                         ty.second.type = this->expandAssociatedTypes(sp, mv$(ty.second.type));
                     }
+                    DEBUG("- tp_mono = " << tpMono);
                     // TODO: Instead of using `type` here, build the real type
                     if (callback.visit(ImplRef(type, mv$(tpMono.path.params), mv$(tpMono.typeBounds), tpMono.constness))) {
                         return true;
@@ -4568,8 +4626,10 @@ HIRCompare TraitResolution::fticCheckParams(
                             }
                             switch (cmpI) {
                                 case HIRCompare::Equal:
+                                    DEBUG("Equal");
                                     break;
                                 case HIRCompare::Unequal:
+                                    DEBUG("Assoc `" << assocBound.first << "` didn't match - " << ty << " != " << assocBound.second.type);
                                     cmp = HIRCompare::Unequal;
                                     break;
                                 case HIRCompare::Fuzzy:
@@ -4678,6 +4738,7 @@ HIRCompare TraitResolution::fticCheckParams(
 }
 
 const HIRFunction* TraitResolution::traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const {
+    TRACE_FUNCTION_FR("trait_path=" << traitPath << ",name=" << name, outPath);
     const HIRFunction* rv = nullptr;
 
     if (traitContainsMethodInner(traitPtr, name, rv)) {
@@ -4699,8 +4760,10 @@ const HIRFunction* TraitResolution::traitContainsMethod(const Span& sp, const HI
 }
 
 bool TraitResolution::traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const {
+    TRACE_FUNCTION_FR(traitPath << " has " << name, outPath);
     auto it = traitPtr.types.find(name);
     if (it != traitPtr.types.end()) {
+        DEBUG("- Found in cur");
         outPath = traitPath.clone();
         return true;
     }
@@ -4708,6 +4771,7 @@ bool TraitResolution::traitContainsType(const Span& sp, const HIRGenericPath& tr
     auto monomorphCb = MonomorphStatePtr(crate.types, nullptr, &traitPath.params, nullptr);
     for (const auto& st : traitPtr.allParentTraits) {
         if (st.traitPtr->types.count(name)) {
+            DEBUG("- Found in " << st);
             outPath.path = st.path.path;
             outPath.params = monomorphCb.monomorphPathParams(sp, st.path.params, false);
             return true;
@@ -4932,6 +4996,7 @@ HIRCompare TraitResolution::typeIsCopyBuiltin(const Span& sp, const HIRTypeData*
 }
 
 HIRCompare TraitResolution::typeIsClone(const Span& sp, const HIRTypeData* ty) const {
+    TRACE_FUNCTION_F(ty);
     const auto& type = this->ivars.getType(ty);
     switch ((*type).tag()) {
         default: {
@@ -5017,6 +5082,7 @@ HIRCompare TraitResolution::typeIsClone(const Span& sp, const HIRTypeData* ty) c
 }
 
 HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy, const HIRTypeData* srcTy, UnsizeTypeCallback* newTypeCallback, UnsizeInferCallback* inferCallback) const {
+    TRACE_FUNCTION_F(dstTy << " <- " << srcTy);
     {
         auto cmp = dstTy->compareWithPlaceholders(sp, srcTy, ivars.callbackResolveInfer());
         if (cmp == HIRCompare::Equal) {
@@ -5068,6 +5134,7 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
             }
 
             if (cmp != HIRCompare::Equal) {
+                DEBUG("[can_unsize] > Found bound (fuzzy) " << dstTy << "=" << beDst << " <- " << srcTy);
                 rv = HIRCompare::Fuzzy;
             }
             return true;
@@ -5081,13 +5148,16 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
         bool dstIsUnsizable = dstTy->as_Path().binding.is_Struct() && dstTy->as_Path().binding.as_Struct()->structMarkings.canUnsize;
         bool srcIsUnsizable = srcTy->as_Path().binding.is_Struct() && srcTy->as_Path().binding.as_Struct()->structMarkings.canUnsize;
         if (dstIsUnsizable && srcIsUnsizable) {
+            DEBUG("Struct unsize? " << dstTy << " <- " << srcTy);
             const auto& str = *dstTy->as_Path().binding.as_Struct();
             const auto& dstGp = dstTy->as_Path().path.data.as_Generic();
             const auto& srcGp = srcTy->as_Path().path.data.as_Generic();
 
             if (dstGp == srcGp) {
+                DEBUG("Can't Unsize, destination and source are identical");
                 return HIRCompare::Unequal;
             } else if (dstGp.path == srcGp.path) {
+                DEBUG("Checking for Unsize " << dstGp << " <- " << srcGp);
                 if (str.structMarkings.dstType == HIRStructMarkings::DstType::Possible) {
                     const auto& dstInner = ivars.getType(dstGp.params.types.at(str.structMarkings.unsizedParam));
                     const auto& srcInner = ivars.getType(srcGp.params.types.at(str.structMarkings.unsizedParam));
@@ -5152,6 +5222,7 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                 }
                 return rv;
             } else {
+                DEBUG("Can't Unsize, destination and source are different structs");
                 return HIRCompare::Unequal;
             }
         }
@@ -5326,6 +5397,7 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
 
     if (const auto* de = dstTy->opt_Slice()) {
         if (const auto* se = srcTy->opt_Array()) {
+            DEBUG("Array unsize? " << de->inner << " <- " << se->inner);
             auto cmp = de->inner->compareWithPlaceholders(sp, se->inner, ivars.callbackResolveInfer());
             // TODO: Indicate to caller that for this to be true, these two must be the same.
 
@@ -5336,6 +5408,7 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
         }
     }
 
+    DEBUG("Can't unsize, no rules matched");
     return HIRCompare::Unequal;
 }
 
@@ -5622,9 +5695,11 @@ TraitResolution::AutoderefResult TraitResolution::autoderefStep(const Span& sp, 
         return AutoderefResult::Ambiguous;
     }
     if (const auto* e = ty->opt_Borrow()) {
+        DEBUG("Deref " << ty << " into " << e->inner);
         target = this->ivars.getType(e->inner);
         return AutoderefResult::Match;
     } else if (const auto* e = ty->opt_Array()) {
+        DEBUG("Deref " << ty << " into [" << e->inner << "]");
         target = crate.types.slice(e->inner);
         return AutoderefResult::Match;
     } else if (ty->is_Slice() || ty->is_Primitive() || ty->is_Tuple() || ty->is_Array()) {
@@ -5659,6 +5734,7 @@ TraitResolution::AutoderefResult TraitResolution::autoderefStep(const Span& sp, 
         }, {.assocName = ""});
 
         if (ambiguous) {
+            DEBUG("Ambiguous Deref impl for " << ty);
             return AutoderefResult::Ambiguous;
         }
 
@@ -5673,6 +5749,7 @@ TraitResolution::AutoderefResult TraitResolution::autoderefStep(const Span& sp, 
         if (implType) {
             *implType = *candidateImplType;
         }
+        DEBUG("Deref " << ty << " into " << target);
         return AutoderefResult::Match;
     }
 }
@@ -5693,6 +5770,7 @@ unsigned int TraitResolution::autoderefFindMethod(
     /* Out -> */ std::vector<std::pair<AutoderefBorrow, HIRPath>>& possibilities
 ) const {
     {
+        TRACE_FUNCTION_F("{" << topTy << "}." << methodName);
         unsigned int derefCount = 0;
         HIRTypeRef tmpType;
         const auto& topTyR = this->ivars.getType(topTy);
@@ -5725,9 +5803,11 @@ unsigned int TraitResolution::autoderefFindMethod(
             const auto* ty = this->ivars.getType(currentTy);
             auto shouldPause = [](const auto& ty) -> bool {
                 if (typeIsUnboundedInfer(ty)) {
+                    DEBUG("- Ivar" << ty << ", pausing");
                     return true;
                 }
                 if (ty->is_Path() && ty->as_Path().binding.is_Unbound()) {
+                    DEBUG("- Unbound type path " << ty << ", pausing");
                     return true;
                 }
                 return false;
@@ -5740,9 +5820,11 @@ unsigned int TraitResolution::autoderefFindMethod(
             }
             // TODO: Pause on Box<_>?
 
+            DEBUG(derefCount << ": " << ty);
             bool undecided = false;
 
             if (this->findMethod(sp, traits, ivars, typeIvarCount, ty, methodName, expectedResult, curAccess, AutoderefBorrow::None, possibilities, &undecided)) {
+                DEBUG("FOUND *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
             }
 
             if (possibilities.empty()) {
@@ -5774,19 +5856,24 @@ unsigned int TraitResolution::autoderefFindMethod(
 
             auto borrowTy = crate.types.borrow(HIRBorrowType::Shared, ty);
             if (this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Shared, possibilities, &undecided)) {
+                DEBUG("FOUND & *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
             }
             borrowTy = crate.types.borrow(HIRBorrowType::Unique, ty);
             if (curAccess >= MethodAccess::Unique && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Unique, possibilities, &undecided)) {
+                DEBUG("FOUND &mut *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
             }
             borrowTy = crate.types.borrow(HIRBorrowType::Owned, ty);
             if (curAccess >= MethodAccess::Move && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Owned, possibilities, &undecided)) {
+                DEBUG("FOUND &move *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
             }
             if (!possibilities.empty()) {
                 collapseToMostSpecificSubtrait();
                 if (undecided && !mustDecide) {
+                    DEBUG("- " << possibilities.size() << " options and the receiver is not known, pausing");
                     possibilities.clear();
                     return ~0u;
                 }
+                DEBUG("FOUND " << possibilities.size() << " options: " << possibilities);
                 return derefCount;
             }
 
@@ -5809,6 +5896,7 @@ unsigned int TraitResolution::autoderefFindMethod(
         } while (currentTy);
 
         if (this->typeContainsIvars(topTy)) {
+            DEBUG("No method on a partially inferred receiver, pausing");
             return ~0u;
         }
 
@@ -5977,6 +6065,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
     bool rv = false;
     auto cbInfer = this->ivars.callbackResolveInfer();
 
+    TRACE_FUNCTION_FR("ty=" << ty << ", name=" << methodName << ", access=" << access, rv << " " << possibilities);
     auto getIvaredParams = [&](const HIRGenericParams& tpl) -> HIRPathParams {
         unsigned int nParams = tpl.types.size();
         ASSERT_BUG(sp, typeIvarCount <= ivars.size(), "Invalid method ivar split: " << typeIvarCount << " type ivars in a pool of " << ivars.size());
@@ -5998,6 +6087,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
     // TODO: Have a cache of name+receiver_type to a list of types and impls
 
+    DEBUG("> Inherent methods");
     const auto* inherentReceiver = ty;
     while (const auto* borrow = inherentReceiver->opt_Borrow()) {
         inherentReceiver = this->ivars.getType(borrow->inner);
@@ -6063,6 +6153,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                     }
                 }
                 possibilities.push_back(std::make_pair(borrowType, HIRPath(selfTy, methodName, {})));
+                DEBUG("++ " << possibilities.back());
                 rv = true;
             }
         });
@@ -6070,6 +6161,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
     // TODO: Handle custom recievers by finding the bottom of a deref chain (or take the top-level reciever as an argument here?)
 
+    DEBUG("> Bounds");
     bool foundBound = false;
     bool foundNonGlobalBound = false;
     auto typeIsNonGlobalAfterNormalization = [&](const HIRTypeData* type) {
@@ -6099,9 +6191,11 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
         HIRGenericPath finalTraitPath;
         const HIRFunction* fcnPtr;
         if (!(fcnPtr = this->traitContainsMethod(sp, eTraitGp, *eTraitInfo.traitPtr, eType, methodName, finalTraitPath))) {
+            DEBUG("- Method '" << methodName << "' missing");
             continue;
         }
 
+        DEBUG("- Found trait " << finalTraitPath << " (bound)");
         if (auto selfTy = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
             struct MonomorphEraseHrls: public Monomorphiser {
                 using Monomorphiser::Monomorphiser;
@@ -6137,10 +6231,14 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 recordBoundGlobalness(eType, eTraitGp, eTraitInfo);
             } else if (cmp == HIRCompare::Fuzzy) {
                 possibilities.push_back(std::make_pair(borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
+                DEBUG("++ " << possibilities.back());
+                DEBUG("++ " << possibilities.back());
                 rv = true;
                 foundBound = true;
                 recordBoundGlobalness(eType, eTraitGp, eTraitInfo);
             } else {
+                DEBUG("> Type mismatch - " << *selfTy << " != " << eType);
+                DEBUG("> Receiver mismatch");
             }
         } else {
         }
@@ -6153,6 +6251,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
         HIRGenericPath finalTraitPath;
         const HIRFunction* fcnPtr;
         if ((fcnPtr = this->traitContainsMethod(sp, *currentTraitPath_, *currentTraitPtr, ty, methodName, finalTraitPath))) {
+            DEBUG("- Found trait " << finalTraitPath << " (current)");
             if (auto selfTy = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
                 if (((**selfTy).is_Infer() && ((**selfTy).as_Infer().isLit() == false))) {
                     return false;
@@ -6166,7 +6265,9 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                         return response.hasImpl && response.certainty == SolverCertainty::Proven;
                     }, {.assocName = ""});
                     if (crateImplFound) {
+                        DEBUG("Found trait impl " << currentTraitPath_->path << traitParams << " for " << *selfTy << " (" << this->ivars.fmtType(*selfTy) << ")");
                         possibilities.push_back(std::make_pair(borrowType, HIRPath(*selfTy, HIRGenericPath(finalTraitPath.path, mv$(traitParams)), methodName, {})));
+                        DEBUG("++ " << possibilities.back());
                         return true;
                     } else {
                     }
@@ -6195,6 +6296,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
         }
     };
 
+    DEBUG("> Special cases");
     if (const auto* ityp = getInnerType(ty, [](const auto& t) {
         return t->is_TraitObject();
     })) {
@@ -6203,8 +6305,10 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
         bool foundTraitObject = false;
         auto addTraitObjectMethod = [&](const HIRFunction& fcn, HIRGenericPath finalTraitPath) {
+            DEBUG("- Found trait " << finalTraitPath << " (trait object)");
             if (auto selfTyP = checkMethodReceiver(sp, fcn, ty, access)) {
                 possibilities.push_back(std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
+                DEBUG("++ " << possibilities.back());
                 rv = true;
                 foundTraitObject = true;
             }
@@ -6242,6 +6346,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
             HIRGenericPath finalTraitPath;
             if (const auto* fcnPtr = this->traitContainsMethod(sp, traitPath.path, trait, crate.types.self(), methodName, finalTraitPath)) {
+                DEBUG("- Found trait " << finalTraitPath << " (erased type)");
                 if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
                     possibilities.push_back(std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
                     rv = true;
@@ -6256,6 +6361,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
     })) {
         const auto& e = ityp->as_Path().path.data.as_UfcsKnown();
 
+        DEBUG("UfcsKnown - Search associated type bounds in trait - " << e.trait);
         auto monomorphCb = MonomorphStatePtr(crate.types, e.type, &e.trait.params, &e.params);
 
         const auto& trait = this->crate.getTraitByPath(sp, e.trait.path);
@@ -6266,12 +6372,14 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
             auto tySelf = crate.types.path(HIRPath(crate.types.self(), bound.path.clone(), e.item), HIRTypePathBinding::make_Opaque({}));
             if (const auto* fcnPtr = this->traitContainsMethod(sp, bound.path, *bound.traitPtr, tySelf, methodName, finalTraitPath)) {
+                DEBUG("- Found trait " << finalTraitPath << " (UFCS Known, aty bounds)");
                 if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
                     if (*selfTyP == ityp) {
                         auto ppHrb = HIRPathParams();
                         monomorphCb.ppHrb = &ppHrb;
                         finalTraitPath = monomorphCb.monomorphGenericpath(sp, finalTraitPath, false);
 
+                        DEBUG("- Monomorph to " << finalTraitPath);
                         possibilities.push_back(std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
                         rv = true;
                     }
@@ -6305,10 +6413,12 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
             HIRGenericPath finalTraitPath;
             if (const auto* fcnPtr = this->traitContainsMethod(sp, be.trait.path, *be.trait.traitPtr, crate.types.self(), methodName, finalTraitPath)) {
+                DEBUG("- Found trait " << finalTraitPath << " (UFCS Known, trait bounds)");
                 if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
                     if (*selfTyP == ityp) {
                         if (monomorphisePathparamsNeeded(finalTraitPath.params)) {
                             finalTraitPath.params = monomorphCb.monomorphPathParams(sp, finalTraitPath.params, false);
+                            DEBUG("- Monomorph to " << finalTraitPath);
                         }
 
                         possibilities.push_back(std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
@@ -6320,6 +6430,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
     } else {
     }
 
+    DEBUG("> Trait methods");
     for (const auto& traitRef : ::reverse(traits)) {
         if (traitRef.first == nullptr) {
             break;
@@ -6341,9 +6452,11 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
             continue;
         }
 
+        DEBUG("- Found trait " << finalTraitPath << " (in scope)");
         if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
             const auto& selfTy = *selfTyP;
 
+            DEBUG("Search for impl of " << *traitRef.first << " for " << selfTy);
             HIRPathParams traitParams = getIvaredParams(traitRef.second->params);
 
             // TODO: Re-monomorphise the trait path!
@@ -6383,18 +6496,22 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 }
                 implFound = true;
                 if (receiverIsOpen && response.certainty != SolverCertainty::Proven) {
+                    DEBUG("[find_method] impl only matches while the receiver is unknown");
                     undecided = true;
                 }
                 return true;
             }, methodQuery);
             if (implFound) {
+                DEBUG("Found trait impl " << *traitRef.first << traitParams << " for " << selfTy << " (" << this->ivars.fmtType(selfTy) << ")");
                 possibilities.push_back(std::make_pair(borrowType, HIRPath(selfTy, HIRGenericPath(*traitRef.first, mv$(traitParams)), methodName, {})));
+                DEBUG("++ " << possibilities.back());
                 rv = true;
             }
             if (undecided && outUndecided) {
                 *outUndecided = true;
             }
         } else {
+            DEBUG("> Incorrect receiver");
         }
     }
 
@@ -6460,6 +6577,7 @@ bool TraitResolution::findField(const Span& sp, const HIRTypeData* ty, const RcS
                     case HIRStructData::TAG_Tuple: {
                         auto& se = str.data.as_Tuple();
                         for (unsigned int i = 0; i < se.size(); i++) {
+                            DEBUG(i << ": " << se[i].publicity << ", " << this->visPath << " : " << se[i].ent);
                             if (se[i].publicity.isVisible(this->visPath) && FMT(i) == name) {
                                 fieldTy = monomorph.monomorphType(sp, se[i].ent);
                                 return true;
@@ -6470,6 +6588,8 @@ bool TraitResolution::findField(const Span& sp, const HIRTypeData* ty, const RcS
                     case HIRStructData::TAG_Named: {
                         auto& se = str.data.as_Named();
                         for (const auto& fld : se) {
+                            DEBUG(fld.name << ": " << fld.vis << ", " << this->visPath << " : " << fld.ty);
+                            DEBUG(type << " FIELD '" << fld.name << "' " << fld.ty);
                             if (fld.vis.isVisible(this->visPath) && fld.name == name) {
                                 fieldTy = monomorph.monomorphType(sp, fld.ty);
                                 return true;
@@ -6555,6 +6675,7 @@ bool HMTypeInferrence::takeChanged() {
 void HMTypeInferrence::markChange() {
     mutationGeneration = ++generationCounter;
     if (!hasChanged) {
+        DEBUG("- CHANGE");
         hasChanged = true;
     }
 }
@@ -9045,6 +9166,7 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
     const auto& traitDef = crate.getTraitByPath(span(), trait);
     if (!traitDef.isMarker) {
         crate.findTraitImpls(trait, resolvedType, resolve_.ivars.callbackResolveInfer(), [&](const HIRTraitImpl& impl) {
+            DEBUG("[find_trait_impls_crate] Found impl" << impl.params.fmtArgs() << " " << trait << impl.traitArgs << " for " << impl.type << " " << impl.params.fmtBounds());
             if (impl.isReservation) {
                 return false;
             }
@@ -9619,6 +9741,7 @@ auto NextTraitGoalEvaluator::matchAssociatedTypes(const HIRSimplePath& trait, Ca
                 HIRTraitPath::assocListT sourceAssociated;
                 sourceAssociated.insert({requirement.first, requirement.second.clone()});
                 const auto sourceResult = solveGoal(aty.sourceTrait.path, aty.sourceTrait.params, impl.getImplType(crate.types), &sourceAssociated);
+                DEBUG("declaring-trait redirect " << aty.sourceTrait << " => " << static_cast<unsigned>(sourceResult));
                 if (sourceResult == Certainty::NoSolution) {
                     return Certainty::NoSolution;
                 }
@@ -9815,6 +9938,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         return Certainty::NoSolution;
     }
     if (assocResult == Certainty::Ambiguous) {
+        DEBUG("candidate downgrade: assoc");
         candidate->ambiguityBeyondHead = true;
         result = Certainty::Ambiguous;
     }
@@ -9843,6 +9967,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                 return Certainty::NoSolution;
             }
             if (sized == HIRCompare::Fuzzy) {
+                DEBUG("candidate downgrade: implicit sized");
                 candidate->ambiguityBeyondHead = true;
                 candidate->nestedAmbiguity = true;
                 result = Certainty::Ambiguous;
@@ -9924,6 +10049,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                 nested = responseCertainty;
             }
             if (nested == Certainty::Ambiguous) {
+                DEBUG("candidate downgrade: nested bound");
                 candidate->ambiguityBeyondHead = true;
                 candidate->nestedAmbiguity = true;
                 candidate->normalizationNestedGoals.pushBack(&bound);
@@ -10025,6 +10151,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     const auto cycleHitsBefore = cycleHits_;
     const bool rigidKey = canonicalGoalIsRigid(canonical);
     auto cacheResult = [&](Certainty certainty) {
+        DEBUG("solveGoal " << trait << " for " << type << " => " << static_cast<unsigned>(certainty));
         if (crateCacheable && rigidKey && cycleHits_ == cycleHitsBefore) {
             crateCache().insert(hash, trait, canonical.params.clone(), canonical.type, certainty);
         }
@@ -10987,6 +11114,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     if (findActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr)) {
         const bool coinductive = crate.getTraitByPath(span(), trait).isCoinductive;
         cycleHits_++;
+        DEBUG("evaluate exit: active-goal cycle");
         return emitResponse(ImplRef(resolvedType, &goalParams, nullptr), coinductive ? Certainty::Proven : Certainty::Ambiguous);
     }
     auto* rootGoal = pushActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr);
@@ -11016,6 +11144,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     auto& frame = *frames[frameIndex];
     const size_t candidateCount = frame.candidates.size();
 
+    DEBUG("next-solver assembled " << candidateCount << " candidate(s) for " << type << ": " << trait << params);
     bool suppressAutoBuiltin = false;
     bool negativeProven = false;
     bool negativeAmbiguous = false;
@@ -11058,6 +11187,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
         }
         candidate->certainty = certainty;
+        DEBUG("next-solver candidate " << candidate->impl << " => " << static_cast<unsigned>(certainty));
         if (candidate->isNegative()) {
             negativeProven |= certainty == Certainty::Proven;
             negativeAmbiguous |= certainty == Certainty::Ambiguous;
@@ -11152,6 +11282,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     }
 
     if (frame.viable.empty()) {
+        DEBUG("next-solver: no viable response");
         const auto* noViableSelfPath = resolvedType->opt_Path();
         const bool noViableSelfIsAlias = noViableSelfPath && (noViableSelfPath->binding.is_Opaque() || noViableSelfPath->binding.is_Unbound());
         const auto* noViableSelfErased = resolvedType->opt_ErasedType();
@@ -11331,6 +11462,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
         }
         const auto certainty = selected->certainty;
+        DEBUG("next-solver: applying merged response " << selected->impl << " certainty=" << static_cast<unsigned>(certainty));
         if (assocName && assocName[0] && selected->impl.data.is_TraitImpl() && selected->traitCertainty == Certainty::Proven) {
             const HIRPathParams noParams;
             const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noParams;

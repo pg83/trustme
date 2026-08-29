@@ -156,12 +156,14 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
                 continue;
             }
             const auto& function = *node->function;
+            DEBUG("FUNCTION PROTO " << *function.path);
             const auto& fcn = *function.ptr;
             const bool isExtern = !static_cast<bool>(fcn.code);
             codegen->emitFunctionProto(*function.path, fcn, function.pp, isExtern);
         }
     } else {
         for (const auto& ent : list.functions) {
+            DEBUG("FUNCTION " << ent.first);
             BUG_ASSERT(ent.second->ptr);
             const auto& fcn = *ent.second->ptr;
             bool isExtern = !static_cast<bool>(fcn.code);
@@ -188,6 +190,10 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
         BUG_ASSERT(ent.second->ptr);
         const auto& stat = *ent.second->ptr;
 
+        DEBUG(
+            "STATIC proto " << ent.first << ": "
+                            << "(m_value_generated=" << stat.valueGenerated << " && !m_no_emit_value=" << stat.noEmitValue << ") || is_generic=" << stat.params.isGeneric()
+        );
         if ((stat.valueGenerated && !stat.noEmitValue) || stat.params.isGeneric()) {
             codegen->emitStaticProto(ent.first, stat, ent.second->pp);
         } else {
@@ -196,6 +202,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
     }
     auto emitStaticDefinitions = [&]() {
         for (const auto& ent : list.statics) {
+            DEBUG("STATIC " << ent.first);
             BUG_ASSERT(ent.second->ptr);
             const auto& stat = *ent.second->ptr;
 
@@ -214,6 +221,8 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
         const auto& path = *function.path;
         const auto& fcn = *function.ptr;
         const auto& pp = function.pp;
+        TRACE_FUNCTION_F(path);
+        DEBUG("FUNCTION CODE " << path);
         bool isExtern = !static_cast<bool>(fcn.code);
         bool isMethod = (fcn.args.size() > 0 && visitTyWith(fcn.args[0].second, [&](const auto& x) {
             return x == cratePtr->types.self();

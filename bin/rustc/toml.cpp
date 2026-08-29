@@ -147,6 +147,7 @@ TomlKeyValue TomlFile::getNextValue() {
                 if (t.type != TomlToken::Type::Newline) {
                     throw std::runtime_error(FMT(lexer_ << ": Unexpected token after block block - " << t));
                 }
+                DEBUG("Start block " << currentBlock);
                 return getNextValue();
             }
             default:
@@ -247,6 +248,7 @@ TomlKeyValue TomlFile::getNextValue() {
         }
         case TomlToken::Type::BraceOpen:
             currentComposite.push_back(std::move(keyName));
+            DEBUG("Enter composite block " << currentBlock << ", " << currentComposite);
             return getNextValue();
         case TomlToken::Type::Integer:
             rv.path = this->getPath(std::move(keyName));
@@ -270,6 +272,7 @@ TomlKeyValue TomlFile::getNextValue() {
 
     t = lexer_.getToken();
     while (!currentComposite.empty() && t.type == TomlToken::Type::BraceClose) {
+        DEBUG("Leave composite block " << currentBlock << ", " << currentComposite);
         currentComposite.pop_back();
         t = lexer_.getToken();
     }

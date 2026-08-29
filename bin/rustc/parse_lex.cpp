@@ -1111,6 +1111,7 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
     auto terminator = ch;
     std::string val;
 
+    DEBUG("terminator = '" << terminator << "', hashes = " << hashes);
     unsigned terminatingHashes = 0;
     for (;;) {
         try {
@@ -1360,6 +1361,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
         }
         this->ungetc();
 
+        DEBUG("buf = " << sbuf << ", ch = '" << ch << "'");
         return parseFloatValue(sbuf.c_str());
     }
 }
@@ -1695,9 +1697,11 @@ Codepoint::Codepoint(u32 v)
 
 void Lexer::pushHygine() {
     hygiene_ = Ident::Hygiene::newScopeChained(id, typePool(), hygiene_);
+    DEBUG(">> " << hygiene_);
 }
 
 void Lexer::popHygine() {
+    DEBUG("<< " << hygiene_ << " -> " << hygiene_.getParent(typePool()));
     hygiene_ = hygiene_.getParent(typePool());
 }
 

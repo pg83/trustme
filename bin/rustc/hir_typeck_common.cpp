@@ -356,6 +356,7 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
         HIRArraySize sz;
         if (se->is_Generic()) {
             sz = this->getValue(sp, se->as_Generic());
+            DEBUG(tpl << " -> " << sz);
         } else if (se->is_Unevaluated()) {
             sz = HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(se->as_Unevaluated()->monomorph(sp, *this, true)));
         } else {
@@ -368,6 +369,7 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
             if (this->constevalWb) {
                 ConvertHIRConstantEvaluateConstGeneric(sp, *this->constevalWb, *this->constevalWb->crate, types.primitive(HIRCoreType::Usize), sz.as_Unevaluated());
             } else {
+                DEBUG("TODO: Evaluate unevaluated generic for array size - " << *se);
             }
         }
 

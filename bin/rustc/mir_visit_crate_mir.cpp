@@ -12,6 +12,7 @@ HIRTypeRef MIROuterVisitor::visitType(HIRTypeRef ty) {
         auto data = ty->cloneData();
         auto* e = data.opt_Array();
         e->inner = this->visitType(e->inner);
+        DEBUG("Array size " << ty);
         if (auto* se1 = e->size.opt_Unevaluated()) {
             if (auto* se = se1->opt_Unevaluated()) {
                 cb.visit(resolve_, HIRItemPath(""), *(*se)->expr, {}, resolve_.hirCrate().types.primitive(HIRCoreType::Usize));
@@ -32,6 +33,7 @@ void MIROuterVisitor::visitConstgeneric(HIRConstGeneric& value) {
 void MIROuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
     auto _ = this->resolve_.setItemGenerics(item.params);
     if (item.code || item.code.mir) {
+        DEBUG("Function code " << p);
         HIRTypeRef tmp;
         const auto& sp = item.code ? item.code->span() : Span();
         const auto& retTy = resolve_.fixTraitDefaultReturn(sp, p, item.returnType, tmp);
@@ -42,6 +44,7 @@ void MIROuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
 void MIROuterVisitor::visitStatic(HIRItemPath p, HIRStatic& item) {
     auto _ = this->resolve_.setItemGenerics(item.params);
     if (item.value) {
+        DEBUG("`static` value " << p);
         cb.visit(resolve_, p, item.value, {}, item.type);
     }
 }
@@ -49,6 +52,7 @@ void MIROuterVisitor::visitStatic(HIRItemPath p, HIRStatic& item) {
 void MIROuterVisitor::visitConstant(HIRItemPath p, HIRConstant& item) {
     auto _ = this->resolve_.setItemGenerics(item.params);
     if (item.value) {
+        DEBUG("`const` value " << p);
         cb.visit(resolve_, p, item.value, {}, item.type);
     }
 }

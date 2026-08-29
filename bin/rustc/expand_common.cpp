@@ -191,8 +191,10 @@ namespace {
         if (a.isInert()) {
             return;
         }
+        DEBUG(a);
         auto runDecorator = [&](const RcString& name, const ExpandDecorator& d) {
             if (d.stage() != stage) {
+                DEBUG("#[" << name << "] Ignore: Wrong stage " << (int)d.stage() << " != " << (int)stage);
                 return;
             }
             if (!d.runDuringIter()) {
@@ -200,16 +202,19 @@ namespace {
                     case ExpandMode::FirstPass:
                     case ExpandMode::Iterate:
                         if (stage != AttrStage::Pre) {
+                            DEBUG("#[" << name << "] m=" << (int)es.mode);
                             return;
                         }
                         break;
                     case ExpandMode::Final:
                         if (stage != AttrStage::Post) {
+                            DEBUG("#[" << name << "] m=" << (int)es.mode);
                             return;
                         }
                         break;
                 }
             }
+            DEBUG("#[" << name << "]");
             f.run(sp, d, a);
             a.markInert();
         };
@@ -224,6 +229,7 @@ namespace {
             if (const auto* d = ExpandFindDecorator(es.wb, *builtinName)) {
                 found = true;
                 if (d->stage() == stage && (d->runDuringIter() || (es.mode != ExpandMode::Final && stage == AttrStage::Pre) || (es.mode == ExpandMode::Final && stage == AttrStage::Post))) {
+                    DEBUG("#[" << *builtinName << "]");
                     f.run(sp, *d, a);
                     a.markInert();
                 }
@@ -268,6 +274,7 @@ namespace {
         }
         if (!found) {
             auto m = ExpandLookupMacro(sp, es.wb, es.crate, es.modstack, a.name());
+            DEBUG(a.name() << " : " << m.tagStr());
             if (m.is_None()) {
             } else if (const auto* procMacP = m.opt_ExternalProcMacro()) {
                 const auto* procMac = *procMacP;
@@ -442,6 +449,7 @@ namespace {
     std::unique_ptr<TokenStream> ExpandMacroInner(const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, ASTModule& mod, Span miSpan, const ASTPath& path, const RcString& inputIdent, TokenTree& inputTt) {
         ASSERT_BUG(miSpan, path.isValid(), "Macro invocation with invalid path");
 
+        TRACE_FUNCTION_F("Searching for macro " << path);
         MacroRef mac;
         if (inputIdent != "" && path.isTrivial() && path.asTrivial() == "macro_rules") {
             if (auto* pm = ExpandFindProcMacro(wb, path.asTrivial())) {
@@ -458,6 +466,7 @@ namespace {
         std::unique_ptr<TokenStream> rv;
         switch (mac.tag()) {
             case MacroRef::TAG_None: {
+                DEBUG("Unknown macro " << path);
                 return std::unique_ptr<TokenStream>();
             }
             case MacroRef::TAG_ExternalProcMacro: {
@@ -480,6 +489,7 @@ namespace {
                     ERROR(miSpan, E0000, "macro_rules! macros can't take an ident");
                 }
 
+                DEBUG("Invoking macro_rules " << path << " " << mrPtr);
                 rv = MacroInvokeRules(path.isTrivial() ? path.asTrivial() : RcString::newInterned(FMT(path).c_str()), *mrPtr, miSpan, wb, mv$(inputTt), crate, mod);
                 inputTt = TokenTree();
                 break;
@@ -493,6 +503,7 @@ namespace {
         auto rv = ExpandMacroInner(es.wb, es.crate, es.modstack, mod, miSpan, path, inputIdent, inputTt);
         if (rv) {
             es.change = true;
+            DEBUG("Change flagged");
             rv->parseState().crate = &es.crate;
             rv->parseState().wb = &es.wb;
             rv->parseState().module = &mod;
@@ -501,6 +512,7 @@ namespace {
             if (es.mode == ExpandMode::Final) {
                 ERROR(miSpan, E0000, "Unknown macro " << path);
             }
+            DEBUG("Missing, waiting until another pass (set es.has_missing=true)");
             es.hasMissing = true;
         }
         return rv;
@@ -881,11 +893,13 @@ namespace {
     }
 
     void ExpandExpr(const ExpandState& es, ASTExprNodeP& node) {
+        TRACE_FUNCTION_F("unique_ptr");
         CExpandExpr visitor{es};
         visitor.visit(node);
     }
 
     void ExpandExpr(const ExpandState& es, ASTExprNode*& node) {
+        TRACE_FUNCTION_F("shared_ptr");
         CExpandExpr visitor{es};
         node->visit(visitor);
         if (visitor.replacement) {
@@ -894,6 +908,7 @@ namespace {
     }
 
     void ExpandExpr(const ExpandState& es, ASTExpr& node) {
+        TRACE_FUNCTION_F("AST::Expr");
         CExpandExpr visitor{es};
         node.visitNodes(visitor);
         if (visitor.replacement) {
@@ -991,14 +1006,17 @@ namespace {
     }
 
     void Expand_Impl(const ExpandState& es, ASTPath modpath, ASTModule& mod, ASTImpl& impl) {
+        TRACE_FUNCTION_F(impl.def());
         ExpandGenericParams(es, mod, impl.def().params());
 
         ExpandType(es, mod, impl.def().type());
         ExpandPath(es, mod, impl.def().trait().ent);
 
+        DEBUG("> Items");
         for (unsigned int idx = 0; idx < impl.items().size(); idx++) {
             auto i = std::move(impl.items()[idx]);
 
+            DEBUG("  - " << i.name << " :: " << i.attrs);
             // TODO: Make a path from the impl definition? Requires having the impl def resolved to be correct
 
             // TODO: UFCS path, or different method
@@ -1017,6 +1035,7 @@ namespace {
                 case ASTItem::TAG_MacroInv: {
                     auto& e = (*i.data).as_MacroInv();
                     if (e.path().isValid()) {
+                        TRACE_FUNCTION_F("Macro invoke " << e.path());
                         auto miOwned = mv$(e);
 
                         auto ttl = ExpandMacro(es, mod, miOwned);
@@ -1036,11 +1055,13 @@ namespace {
                 }
                 case ASTItem::TAG_Function: {
                     auto& e = (*i.data).as_Function();
+                    TRACE_FUNCTION_F("fn " << i.name);
                     ExpandFunction(es, mod, e);
                     break;
                 }
                 case ASTItem::TAG_Static: {
                     auto& e = (*i.data).as_Static();
+                    TRACE_FUNCTION_F("static " << i.name);
                     ExpandGenericParams(es, mod, e.params());
                     ExpandExpr(es, e.value());
                     ExpandType(es, mod, e.type());
@@ -1048,6 +1069,7 @@ namespace {
                 }
                 case ASTItem::TAG_Type: {
                     auto& e = (*i.data).as_Type();
+                    TRACE_FUNCTION_F("type " << i.name);
                     ExpandType(es, mod, e.type());
                     break;
                 }
@@ -1072,9 +1094,11 @@ namespace {
     }
 
     void Expand_ExternBlock(const ExpandState& es, ASTModule& mod, ASTExternBlock& block) {
+        TRACE_FUNCTION_F("ABI=" << block.abi());
         for (size_t idx = 0; idx < block.items().size(); idx++) {
             auto& i = block.items()[idx];
 
+            DEBUG(i.data.tagStr() << " " << mod.path() << "::" << i.name);
             auto path = mod.path() + i.name;
 
             auto attrs = mv$(i.attrs);
@@ -1111,6 +1135,7 @@ namespace {
                     if (!miOwned.isExpanded()) {
                         BUG_ASSERT(miOwned.span());
 
+                        TRACE_FUNCTION_F("Macro invoke " << miOwned.path());
                         auto ttl = ExpandMacro(es, mod, miOwned);
                         if (ttl) {
                             // TODO: What if this attribute adds new items? Or if it changes the type?
@@ -1118,6 +1143,7 @@ namespace {
                             ExpandAttrs(es, attrs, AttrStage::Post, path, mod, idx, vis, dat);
 
                             // TODO: All new items should be placed just after this?
+                            DEBUG("-- Parsing as extern block items");
                             auto ipos = block.items().begin() + idx;
                             while (!ttl->getTokenIf(TOK_EOF)) {
                                 ipos = block.items().insert(ipos + 1, ParseExternBlockItem(*ttl, block.abi()));
@@ -1141,6 +1167,7 @@ namespace {
     }
 
     void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, unsigned int firstItem) {
+        TRACE_FUNCTION_F("modpath = " << modpath << ", first_item=" << firstItem);
         ExpandModExternCrates(es.wb, es.crate, modpath, mod, firstItem);
 
         // TODO: Pre-parse all macro_rules invocations into items?
@@ -1150,34 +1177,42 @@ namespace {
                 if (es.modstack.prev) {
                     for (const auto& mac : es.modstack.prev->item->macroImports) {
                         mod.macroImports.push_back(mac.clone());
+                        DEBUG(mod.path() << " + Import import " << mac.name << " = '" << mod.macroImports.back().path << "'");
                     }
                     for (const auto& mac : es.modstack.prev->item->macros()) {
                         mod.macroImports.push_back(ASTModule::MacroImport{false, mac.name, es.modstack.prev->item->path() + mac.name, &*mac.data});
+                        DEBUG(mod.path() << " + Import defined '" << mod.macroImports.back().path << "'");
                     }
                 }
             }
 
             if (es.crate.preludePath != ASTPath()) {
                 if (mod.insertPrelude && !mod.isAnon()) {
+                    DEBUG("> Adding custom prelude " << es.crate.preludePath);
                     mod.addItem(Span(), ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, mod.path()), "", ASTUseItem{Span(), true, ::makeVec1(ASTUseItem::Ent{Span(), es.crate.preludePath, ""})}, {});
+                    DEBUG("> Not inserting custom prelude (anon or disabled)");
                 }
             }
         }
 
         std::vector<const ASTNamed<ASTItem>*> macroRecursionStack;
 
+        DEBUG("Items");
         for (unsigned int idx = firstItem; idx < mod.items.size(); idx++) {
             auto& i = *mod.items[idx];
 
             while (!macroRecursionStack.empty() && macroRecursionStack.back() == &i) {
                 macroRecursionStack.pop_back();
+                DEBUG("End macro recursion guard");
             }
 
+            DEBUG("- " << modpath << "::" << i.name << " (" << ASTItem::tagToStr(i.data.tag()) << ") :: " << i.attrs);
             auto path = modpath + i.name;
 
             if (const auto* mi = i.data.opt_MacroInv()) {
                 if (mi->path().isTrivial() && mi->path().asTrivial() == "macro_rules") {
                     i.vis = ASTVisibility::makeGlobal();
+                    DEBUG("macro_rules made pub");
                 }
             }
 
@@ -1187,6 +1222,7 @@ namespace {
                         auto newEnd = std::remove_if(lst.begin(), lst.end(), [&](const ASTStructItem& v) {
                             return !checkCfgAttrs(settings, v.attrs);
                         });
+                        DEBUG(lst.size() << " -> " << newEnd - lst.begin());
                         lst.erase(newEnd, lst.end());
                     }
 
@@ -1194,10 +1230,12 @@ namespace {
                         auto newEnd = std::remove_if(lst.begin(), lst.end(), [&](const ASTTupleItem& v) {
                             return !checkCfgAttrs(settings, v.attrs);
                         });
+                        DEBUG(lst.size() << " -> " << newEnd - lst.begin());
                         lst.erase(newEnd, lst.end());
                     }
                 };
 
+                DEBUG(i.data.tagStr() << " " << mod.path() << "::" << i.name);
                 switch (i.data.tag()) {
                     case ASTItem::TAG_Struct: {
                         auto& str = i.data.as_Struct();
@@ -1257,6 +1295,8 @@ namespace {
 
             auto attrs = mv$(i.attrs);
             auto vis = i.vis;
+            TRACE_FUNCTION_F("#" << idx << " - " << path);
+            DEBUG("attrs = " << attrs);
             ExpandAttrsCfgAttr(*es.wb.settings, attrs);
             ExpandAttrs(es, attrs, AttrStage::Pre, path, mod, idx, vis, i.data);
 
@@ -1307,8 +1347,10 @@ namespace {
                     if (!miOwned.isExpanded()) {
                         BUG_ASSERT(miOwned.span());
 
+                        TRACE_FUNCTION_F("Macro invoke " << miOwned.path());
                         auto ttl = ExpandMacro(es, mod, miOwned);
                         if (ttl) {
+                            DEBUG("-- Parsing as mod items");
                             size_t oldLen = mod.items.size();
                             ParseModRootItemsInto(mod, idx, *ttl);
                             ExpandModExternCrates(es.wb, es.crate, modpath, mod, idx + 1);
@@ -1318,6 +1360,8 @@ namespace {
 
                             miOwned.setExpanded();
                         } else {
+                            DEBUG("Deferred macro");
+                            DEBUG("Deferred macro");
                         }
                     }
                     dat.as_MacroInv() = mv$(miOwned);
@@ -1334,6 +1378,7 @@ namespace {
                     auto& e = dat.as_Use();
                     for (const auto& ue : e.entries) {
                         if (ue.name != "" && ue.path.nodes().size() >= 1) {
+                            DEBUG("Use " << ue.path);
                             ASTAbsolutePath refPath;
                             auto m = ResolveLookupMacro(ue.sp, *es.wb.settings, es.crate, mod.path(), ue.path, /*out_path=*/&refPath);
                             MacroRef ref;
@@ -1356,6 +1401,7 @@ namespace {
                                 }
                             }
                             if (!ref.is_None()) {
+                                DEBUG(mod.path() << " + Macro Import: " << refPath);
                                 mod.macroImports.push_back(ASTModule::MacroImport{false, ue.name, std::move(refPath), std::move(ref)});
                             }
                         }
@@ -1551,6 +1597,7 @@ namespace {
                     auto& traitItems = e.items();
                     for (size_t idx = 0; idx < traitItems.size(); idx++) {
                         auto& ti = traitItems[idx];
+                        DEBUG(" - " << ti.name << " " << ti.data.tagStr());
                         auto attrs = mv$(ti.attrs);
                         auto tiPath = path + ti.name;
                         ExpandAttrsCfgAttr(*es.wb.settings, attrs);
@@ -1565,6 +1612,7 @@ namespace {
                             case ASTItem::TAG_MacroInv: {
                                 auto& e = ti.data.as_MacroInv();
                                 if (e.path().isValid()) {
+                                    TRACE_FUNCTION_F("Macro invoke " << e.path());
                                     auto miOwned = mv$(e);
 
                                     auto ttl = ExpandMacro(es, mod, miOwned);
@@ -1654,7 +1702,9 @@ namespace {
     }
 
     void ExpandModIndexAnon(ASTCrate& crate, ASTModule& mod) {
+        TRACE_FUNCTION_F("mod=" << mod.path());
         for (auto& i : mod.items) {
+            DEBUG("- " << i->data.tagStr() << " '" << i->name << "'");
             if (auto* e = i->data.opt_Module()) {
                 ExpandModIndexAnon(crate, *e);
 
@@ -1664,6 +1714,7 @@ namespace {
 
         for (auto& mp : mod.anonMods()) {
             if (mp.use_count() == 1) {
+                DEBUG("- " << mp->path() << " dropped due to node destruction");
                 mp.reset();
             } else {
                 ExpandModIndexAnon(crate, *mp);
@@ -1672,10 +1723,12 @@ namespace {
     }
 
     void Expand_Mod_Early(const WireBoard& wb, ASTCrate& crate, ASTModule& mod, std::vector<std::unique_ptr<ASTNamed<ASTItem>>>& newRootItems) {
+        TRACE_FUNCTION_F(mod.path());
         for (auto& i : mod.items) {
             if (const auto* mi = i->data.opt_MacroInv()) {
                 if (mi->path().isTrivial() && mi->path().asTrivial() == "macro_rules") {
                     i->vis = ASTVisibility::makeGlobal();
+                    DEBUG("macro_rules made pub");
                 }
             }
 
@@ -1701,11 +1754,13 @@ namespace {
             } else if (isMacroExport) {
                 if (i->data.is_MacroInv() && i->data.as_MacroInv().path().isTrivial() && i->data.as_MacroInv().path().asTrivial() == "macro_rules") {
                     const auto& macInv = i->data.as_MacroInv();
+                    DEBUG("macro_rules marked with #[macro_export] moved to the crate root - " << macInv.inputIdent());
                     newRootItems.push_back(box$(*i));
                     i->data = ASTItem();
                 } else if (i->data.is_Macro()) {
                     // TODO: `#[macro_export] macro foo { ... }` DOESN'T move the item to the root
 
+                    DEBUG("macro item export: " << i->name);
                     i->data.as_Macro()->exported = true;
                 } else {
                     ERROR(i->span, E0000, "#[macro_export] on non-macro_rules - " << i->data.tagStr());
@@ -1715,6 +1770,7 @@ namespace {
             }
         }
 
+        DEBUG("Items");
         for (unsigned int idx = 0; idx < mod.items.size(); idx++) {
             auto& i = *mod.items[idx];
             if (auto* mi = i.data.opt_MacroInv()) {
@@ -1728,6 +1784,7 @@ namespace {
                     }
                     auto miOwned = mv$(*mi);
 
+                    TRACE_FUNCTION_F("Macro invoke " << miOwned.path());
                     ExpandState es{wb, crate, {}, ExpandMode::Iterate, &mod};
                     auto ttl = ExpandMacro(es, mod, miOwned);
                     ASSERT_BUG(miOwned.span(), ttl, "BUG: macro_rules not expanded");
@@ -1735,6 +1792,7 @@ namespace {
 
                     if (ttl.get()) {
                         BUG_ASSERT(ttl.get());
+                        DEBUG("-- Parsing as mod items");
                         ParseModRootItemsInto(mod, idx, *ttl);
                     } else {
                     }
@@ -1808,18 +1866,22 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
 
         for (const auto* ll = &modstack; ll; ll = ll->prev) {
             if (!ll->item) {
+                DEBUG("null module in stack");
                 break;
             }
             const auto& macMod = *ll->item;
+            DEBUG("Searching in " << macMod.path());
             for (const auto& mr : reverse(macMod.macros())) {
                 if (mr.name == name) {
                     if (!mr.data->exported && mr.data->definitionSpan && miSpan) {
                         const auto& definition = mr.data->definitionSpan.getTopFileSpan();
                         const auto& invocation = miSpan.getTopFileSpan();
                         if (definition.filename == invocation.filename && (definition.startLine > invocation.startLine || (definition.startLine == invocation.startLine && definition.startOfs > invocation.startOfs))) {
+                            DEBUG(macMod.path() << "::" << mr.name << " - Defined later, skipping");
                             continue;
                         }
                     }
+                    DEBUG(macMod.path() << "::" << mr.name << " - Defined");
                     return MacroRef(&*mr.data);
                 }
             }
@@ -1827,6 +1889,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
             MacroRef rv;
             for (const auto& mri : macMod.macroImports) {
                 if (mri.name == name) {
+                    DEBUG("?::" << mri.name << " - Imported");
                     rv = mri.ref.clone();
                 }
             }
@@ -1835,9 +1898,11 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
             }
         }
         if (auto* pm = ExpandFindProcMacro(wb, name)) {
+            DEBUG("Found builtin");
             return MacroRef(pm);
         }
         if (path.cls.is_Local()) {
+            DEBUG("Local path not resolved?");
             return MacroRef();
         }
     }
@@ -1942,12 +2007,14 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
     }
 
     ExpandMod(es, ASTAbsolutePath(), crate.rootModule_);
+    DEBUG("(first) es.change = " << es.change << ", es.has_missing=" << es.hasMissing << " (" << &es << ")");
     if (es.hasMissing) {
         for (size_t nIters = 0; nIters < 5 && es.change && es.hasMissing; nIters++) {
             es.mode = ExpandMode::Iterate;
             es.change = false;
             es.hasMissing = false;
             ExpandMod(es, ASTAbsolutePath(), crate.rootModule_);
+            DEBUG("?(Iter) es.change = " << es.change << ", es.has_missing=" << es.hasMissing);
         }
         es.hasMissing = false;
     }
@@ -1969,6 +2036,7 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
             for (/*const*/ auto& mac : mod.macros()) {
                 if (mac.data->exported) {
                     exportedMacros.insert(std::make_pair(mac.name, &*mac.data));
+                    DEBUG("- Non-exported " << mac.name << "!");
                 }
             }
 
@@ -1989,8 +2057,10 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
                 auto it = exportedMacros.find(mac.name);
                 if (it == exportedMacros.end()) {
                     exportedMacros.insert(mv$(v));
+                    DEBUG("- Import " << mac.name << "! (from \"" << res.first->second->sourceCrate << "\")");
                 } else if (v.second->rules.empty()) {
                 } else {
+                    DEBUG("- Replace " << mac.name << "! (from \"" << it->second->sourceCrate << "\") with one from \"" << v.second->sourceCrate << "\"");
                     it->second = mv$(v.second);
                 }
             }
@@ -2007,6 +2077,7 @@ ExpandState::ExpandState(const WireBoard& wb, ASTCrate& crate, LList<const ASTMo
     , change(false)
     , hasMissing(false)
 {
+    DEBUG("" << this);
 }
 
 template <typename F>
@@ -2098,6 +2169,7 @@ auto CExpandExpr::visitVector(std::vector<ASTExprNodeP>& cnodes) -> void {
 }
 
 auto CExpandExpr::visitMacro(ASTExprNodeMacro& node, std::vector<ASTExprNodeBlock::Line>* nodesOut) -> ASTExprNodeP {
+    TRACE_FUNCTION_F(node.path << "!");
     if (!node.path.isValid()) {
         return ASTExprNodeP();
     }
@@ -2118,6 +2190,7 @@ auto CExpandExpr::visitMacro(ASTExprNodeMacro& node, std::vector<ASTExprNodeBloc
     auto& mod = this->curMod();
     auto ttl = ExpandMacro(expandState, mod, node.span(), node.path, node.ident, node.tokens);
     if (!ttl.get()) {
+        DEBUG("Deferred");
     } else {
         if (definesMacro) {
             auto it = std::find_if(mod.macros().rbegin(), mod.macros().rend(), [&](const auto& macro) {
@@ -2134,6 +2207,7 @@ auto CExpandExpr::visitMacro(ASTExprNodeMacro& node, std::vector<ASTExprNodeBloc
         if (!nodesOut) {
             if (ttl->lookahead(0) != TOK_EOF) {
                 SET_MODULE((*ttl), mod);
+                DEBUG("-- Parsing as expression");
                 rv = ParseExpr0(*ttl);
                 if (ttl->lookahead(0) == TOK_SEMICOLON && ttl->lookahead(1) == TOK_EOF) {
                     ttl->getToken();
@@ -2152,6 +2226,7 @@ auto CExpandExpr::visitMacro(ASTExprNodeMacro& node, std::vector<ASTExprNodeBloc
                 bool addSilenceIfEnd = false;
                 std::shared_ptr<ASTModule> tmpLocalMod;
                 auto& localModPtr = (this->currentBlock ? this->currentBlock->localMod : tmpLocalMod);
+                DEBUG("-- Parsing as statement line");
                 auto newexpr = ParseExprBlockLineWithItems(*ttl, localModPtr, addSilenceIfEnd);
 
                 if (tmpLocalMod) {
@@ -2175,6 +2250,7 @@ auto CExpandExpr::visitMacro(ASTExprNodeMacro& node, std::vector<ASTExprNodeBloc
 }
 
 auto CExpandExpr::visit(ASTExprNodeMacro& node) -> void {
+    TRACE_FUNCTION_F("ExprNode_Macro - name = " << node.path);
     if (!node.path.isValid()) {
         return;
     }
@@ -2182,6 +2258,7 @@ auto CExpandExpr::visit(ASTExprNodeMacro& node) -> void {
     replacement = this->visitMacro(node, nullptr);
 
     if (this->replacement) {
+        DEBUG("--- Visiting new node");
         auto n = mv$(this->replacement);
         this->visit(n);
         if (n) {
@@ -2247,8 +2324,10 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
                         attr.markInert();
                     }
                 }
+                DEBUG("++ " << *n.node << (n.hasSemicolon ? " ;" : ""));
             }
             if (nodeMac->path.isValid()) {
+                DEBUG("Deferred macro");
                 ++it;
             } else {
                 if (it->hasSemicolon && !newNodes.empty()) {

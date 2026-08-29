@@ -16,6 +16,7 @@
 #define box$(...) ::makeUniquePtr(std::move(__VA_ARGS__))
 #define rcNew$(...) ::makeSharedPtr(std::move(__VA_ARGS__))
 
+#include "trace.h"
 #include "compile_error.h"
 
 struct RepeatLitStr {
@@ -498,6 +499,7 @@ public:
     }
 
     ~NullOnDrop() {
+        DEBUG("NULL " << &ptr);
         ptr = nullptr;
     }
 };

@@ -567,6 +567,7 @@ namespace {
                 }
             }
             if (type->is_Infer() && !type->as_Infer().isLit()) {
+                DEBUG("Search all lists");
                 for (const auto& list : it->second.named) {
                     if (findImplsList(list.second, type, tyRes, crate.implMatcherScratch, callback)) {
                         return true;
@@ -881,6 +882,7 @@ HIRConstGeneric HIRConstGeneric::clone() const {
 }
 
 bool HIRPublicity::isVisible(const HIRSimplePath& p) const {
+    DEBUG(*this << " " << p);
     switch (kind) {
         case Kind::Global:
             return true;
@@ -1298,6 +1300,7 @@ bool HIRMarkerImpl::matchesType(const HIRTypeData* type, tCbResolveType tyRes) c
 bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& other) const {
     const Span _sp;
     const Span& sp = _sp;
+    TRACE_FUNCTION;
     TypeOrdContext ordContext;
 
     {
@@ -1306,6 +1309,7 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
             return false;
         }
         if (ord != ::OrdEqual) {
+            DEBUG("- Trait arguments " << (ord == ::OrdLess ? "less" : "more") << " specific");
             return ord == ::OrdGreater;
         }
 
@@ -1314,6 +1318,7 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
             return false;
         }
         if (ord != ::OrdEqual) {
+            DEBUG("- Type " << this->type << " " << (ord == ::OrdLess ? "less" : "more") << " specific than " << other.type);
             return ord == ::OrdGreater;
         }
     }
@@ -1339,7 +1344,10 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     auto boundsT = flattenBounds(types, params.bounds);
     auto boundsO = flattenBounds(types, other.params.bounds);
 
+    DEBUG("bounds_t = " << boundsT);
+    DEBUG("bounds_o = " << boundsO);
     if (boundsT.size() < boundsO.size()) {
+        DEBUG("Bound count");
         return false;
     }
 
@@ -1382,14 +1390,17 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
             isEqual = false;
             ++itT;
         } else {
+            DEBUG(*itT << " ?= " << *itO << " : " << cmp);
             return false;
         }
     }
     if (itT != boundsT.end()) {
+        DEBUG("Remaining local bounds - " << *itT);
         return true;
     } else if (isEqual && stricterImplicitSized) {
         return true;
     } else {
+        DEBUG("Out of local bounds, equal or less specific");
         return !isEqual;
     }
 }
@@ -1622,6 +1633,7 @@ bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRTypeData* t
                 }
             }
             if (type->is_Infer() && !type->as_Infer().isLit()) {
+                DEBUG("Search all lists");
                 for (const auto& list : it->second.named) {
                     if (findImplsList(list.second, type, tyRes, implMatcherScratch, callback)) {
                         return true;
@@ -1711,6 +1723,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
         return &*ep.mir;
     } else {
         if (!ep.mir) {
+            TRACE_FUNCTION_F(ip);
             ASSERT_BUG(Span(), ep.state, "No ExprState for " << ip);
 
             auto& epMut = const_cast<HIRExprPtr&>(ep);
@@ -1808,6 +1821,7 @@ HIRTypeRef HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, const 
 unsigned HIRTrait::getVtableValueIndex(const HIRGenericPath& traitPath, const RcString& name) const {
     auto its = this->valueIndexes.equal_range(name);
     for (auto it = its.first; it != its.second; ++it) {
+        DEBUG(traitPath << " :: " << name << " - " << it->second.second);
         if (it->second.second.path == traitPath.path) {
             // TODO: Match generics using match_test_generics comparing to the trait args
             BUG_ASSERT(it->second.first > 0);
@@ -1951,6 +1965,7 @@ U128 EncodedLiteralSlice::readUint(size_t size /*=0*/) const {
             v |= U128(base.bytes[ofs + i]) << bit;
         }
     }
+    DEBUG("(" << size << ") = " << v);
     return v;
 }
 
@@ -1962,6 +1977,7 @@ S128 EncodedLiteralSlice::readSint(size_t size /*=0*/) const {
     if (size < 128 / 8 && ((v >> (8 * size - 1)) != 0)) {
         v |= U128(UINT64_MAX, UINT64_MAX) << (8 * size);
     }
+    DEBUG("(" << size << ") = " << v);
     return S128(v);
 }
 

@@ -6,8 +6,12 @@ TTStream::TTStream(Span parent, ParseState ps, const TokenTree& inputTt)
     : TokenStream(ps)
     , parentSpan(mv$(parent))
 {
+    DEBUG("parent " << parentSpan);
     for (auto s = parentSpan; s; s = s->parentSpan) {
+        DEBUG("parent " << s->parentSpan);
     }
+    DEBUG("input_tt = [" << inputTt << "]");
+    DEBUG("Set edition " << inputTt.getEdition());
     edition = inputTt.getEdition();
     stack.push_back(std::make_pair(0, &inputTt));
 }
@@ -24,6 +28,7 @@ Token TTStream::realGetToken() {
         if (idx == 0 && tree.isToken()) {
             idx++;
             hygienePtr = &tree.hygiene();
+            DEBUG(tree.tok());
             return tree.tok();
         }
 
@@ -32,14 +37,17 @@ Token TTStream::realGetToken() {
             idx++;
             if (subtree.size() == 0) {
                 hygienePtr = &subtree.hygiene();
+                DEBUG(subtree.tok());
                 return subtree.tok().clone();
             } else {
                 stack.push_back(std::make_pair(0, &subtree));
+                DEBUG("Set edition " << edition << " -> " << subtree.getEdition());
                 edition = subtree.getEdition();
             }
         } else {
             stack.pop_back();
             if (!stack.empty()) {
+                DEBUG("Restore edition " << edition << " -> " << stack.back().second->getEdition());
                 edition = stack.back().second->getEdition();
             }
         }

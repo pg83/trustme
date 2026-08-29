@@ -974,6 +974,7 @@ namespace {
                 GET_TOK(tok, lex);
                 auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
 
+                DEBUG("Named `" << name << "`");
                 GET_CHECK_TOK(tok, lex, TOK_EQUAL);
 
                 auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
@@ -984,6 +985,7 @@ namespace {
                 }
                 namedArgs.push_back(mv$(exprTt));
             } else {
+                DEBUG("Free");
                 auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
                 freeArgs.push_back(mv$(exprTt));
             }
@@ -1015,9 +1017,11 @@ namespace {
         bool isSimple = true;
         for (unsigned int i = 0; i < fragments.size(); i++) {
             if (fragments[i].argIndex != i) {
+                DEBUG(i << "Ordering mismach");
                 isSimple = false;
             }
             if (fragments[i].args != FmtArgs{}) {
+                DEBUG(i << " Args changed - " << fragments[i].args << " != " << FmtArgs{});
                 isSimple = false;
             }
         }
@@ -1268,6 +1272,7 @@ namespace {
     }
 
     std::string getPathRelativeTo(const std::string& basePath, std::string path) {
+        DEBUG(basePath << ", " << path);
         if (path[0] == '/') {
             return path;
         }
@@ -1280,6 +1285,7 @@ namespace {
             if (slash == std::string::npos) {
                 return path;
             } else {
+                DEBUG("> slash = " << slash);
                 slash += 1;
                 std::string rv;
                 rv.reserve(slash + path.size());
@@ -2158,10 +2164,7 @@ auto GenericAssertCaptureVisitor::visit(ASTExprNodeTuple& node) -> void {
 }
 
 auto GenericAssertCaptureVisitor::makeTryCapture(RcString captureName, RcString localBindName, const Span& sp) const -> ASTExprNodeP {
-    auto wrapper = makeAstExprNode<ASTExprNodeCallPath>(
-        pool,
-        ASTPath(ASTAbsolutePath(coreCrate, {RcString::newInterned("asserting"), RcString::newInterned("Wrapper")})),
-        makeVec1(makeGeneratedValue(localBindName, sp)));
+    auto wrapper = makeAstExprNode<ASTExprNodeCallPath>(pool, ASTPath(ASTAbsolutePath(coreCrate, {RcString::newInterned("asserting"), RcString::newInterned("Wrapper")})), makeVec1(makeGeneratedValue(localBindName, sp)));
     wrapper->setSpan(sp);
 
     auto wrapperRef = makeAstExprNode<ASTExprNodeUniOp>(pool, ASTExprNodeUniOp::REF, std::move(wrapper));
@@ -2358,7 +2361,9 @@ auto CConcatExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate
         }
 
         auto v = ParseExpr0(lex);
+        DEBUG("concat - v=" << *v);
         ExpandBareExpr(wb, crate, mod, v);
+        DEBUG("concat[pe] - v=" << *v);
         // TODO: Visitor instead
         if (auto* vp = cast<ASTExprNodeString>(v.get())) {
             rv += vp->value;
@@ -2611,6 +2616,7 @@ auto CIncludeExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrat
 
     ParseState ps;
     ps.module = &mod;
+    DEBUG("Edition = " << crate.edition);
     return box$(Lexer(wb.id, *crate.hirPool, filePath, crate.edition, ps));
 }
 
@@ -2784,6 +2790,7 @@ auto CExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crat
         if (!rv.empty() && tokensNeedSpace(prev, tok.type())) {
             rv += " ";
         }
+        DEBUG(" += " << tok);
         rv += tok.toStr();
         prev = tok.type();
     }

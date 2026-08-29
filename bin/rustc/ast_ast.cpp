@@ -503,6 +503,7 @@ ASTModule& ASTModule::operator=(ASTModule&&) = default;
 
 std::shared_ptr<ASTModule> ASTModule::addAnon() {
     auto rv = std::shared_ptr<ASTModule>(new ASTModule(myPath + RcString::newInterned(FMT("#" << anonModules.size()))));
+    DEBUG("New anon " << rv->myPath);
     rv->fileInfo = fileInfo;
 
     anonModules.push_back(rv);

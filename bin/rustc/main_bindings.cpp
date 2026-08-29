@@ -42,7 +42,7 @@
 
 using namespace stl;
 
-#define NEWNODE(ty, ...) makeAstExprNode<ASTExprNode##ty>(*crate.pool __VA_OPT__(,) __VA_ARGS__)
+#define NEWNODE(ty, ...) makeAstExprNode<ASTExprNode##ty>(*crate.pool __VA_OPT__(, ) __VA_ARGS__)
 
 namespace {
     struct ProgramParams {
@@ -323,6 +323,7 @@ namespace {
                         params.outfile = FMT(params.outputDir << crate.crateNameSet << ".o");
                         break;
                 }
+                DEBUG("params.outfile = " << params.outfile);
             }
 
             if (params.debug.dumpAst) {
@@ -344,6 +345,7 @@ namespace {
                     RcString panicCrateName;
                     bool panicRuntimeNeeded = false;
                     for (const auto& ec : crate.externCrates) {
+                        DEBUG("Looking at lang items from " << ec.first << " : " << ss.str());
                         if (ec.second.hir->langItems.count("trustme-allocator")) {
                             if (allocatorCrateLoaded) {
                                 ERROR(Span(), E0000, "Multiple allocator crates loaded - " << allocCrateName << " and " << ec.first);
@@ -642,6 +644,7 @@ namespace {
                     crateForSer.crateName = hirCrate->crateName;
                     crateForSer.edition = hirCrate->edition;
                     for (const auto& i : hirCrate->rootModule.macroItems) {
+                        DEBUG(i.first << ": " << i.second->ent.tagStr());
                         if (const auto* e = i.second->ent.opt_ProcMacro()) {
                             crateForSer.rootModule.macroItems.insert(std::make_pair(i.first, crateForSer.pool->make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{i.second->publicity, *e})));
                         }

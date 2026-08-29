@@ -850,7 +850,7 @@ namespace {
         return ASTExprNodeP(en);
     }
 
-#define NEWNODE(nodeType, ...) makeAstExprNode<ASTExprNode##nodeType>(*type->pool __VA_OPT__(,) __VA_ARGS__)
+#define NEWNODE(nodeType, ...) makeAstExprNode<ASTExprNode##nodeType>(*type->pool __VA_OPT__(, ) __VA_ARGS__)
 
     template <typename F>
     static void makeRefpatA(const Span& sp, ASTExprNodeBlock& block, std::vector<ASTPattern>& patsA, const std::vector<ASTTupleItem>& subTypes, F cb) {
@@ -1310,6 +1310,7 @@ namespace {
                             break;
                         case MacroRef::TAG_ExternalProcMacro: {
                             auto& pm = macImport.ref.as_ExternalProcMacro();
+                            DEBUG("proc_macro " << pm->path);
                             macPath.push_back(pm->path.crateName());
                             macPath.insert(macPath.end(), pm->path.components().begin(), pm->path.components().end());
                             break;
@@ -1355,6 +1356,7 @@ namespace {
         }
         const bool isConstDerive = attr.name() == "derive_const";
 
+        DEBUG("path = " << path);
         auto type = makeType(*crate.pool, sp, path, item.params());
 
         DeriveOpts opts = {crate.extCratenameCore};
@@ -1372,6 +1374,7 @@ namespace {
 
         std::vector<ASTPath> missingHandlers;
         for (const auto& traitPath : deriveItems) {
+            DEBUG("- " << traitPath);
             if (isCoercePointee(traitPath)) {
                 deriveCoercePointee(sp, opts, mod, item.params(), type, item);
                 continue;
@@ -1405,6 +1408,7 @@ namespace {
                 continue;
             }
 
+            DEBUG("> No handler for " << traitPath);
             missingHandlers.push_back(traitPath);
         }
 
@@ -1422,6 +1426,7 @@ namespace {
                 ERROR(sp, E0000, "Duplicate definition of language item '" << name << "' - " << otherPath << " and " << path);
             }
         } else {
+            DEBUG("Bind '" << name << "' to " << path);
         }
     }
 
@@ -2152,6 +2157,7 @@ auto CHandlerRustcLayoutScalarValidRangeStart::handle(const Span& sp, const ASTA
 
         s->markings.scalarValidStartSet = true;
         s->markings.scalarValidStart = np->value;
+        DEBUG(path << " #[rustc_layout_scalar_valid_range_start]: " << hex << s->markings.scalarValidStart);
     } else {
         TODO(sp, "#[rustc_layout_scalar_valid_range_start] on " << i.tagStr());
     }
@@ -2174,6 +2180,7 @@ auto CHandlerRustcLayoutScalarValidRangeEnd::handle(const Span& sp, const ASTAtt
         lex.getTokenCheck(TOK_EOF);
         s->markings.scalarValidEndSet = true;
         s->markings.scalarValidEnd = np->value;
+        DEBUG(path << " #[rustc_layout_scalar_valid_range_end]: " << hex << s->markings.scalarValidEnd);
     } else {
         TODO(sp, "#[rustc_layout_scalar_valid_range_end] on " << i.tagStr());
     }
@@ -2399,6 +2406,7 @@ auto CHandlerUnsafe::handleItem(const Span& sp, const ASTAttribute& mi, const Wi
         auto ident = lex.getTokenCheck(TOK_IDENT).ident().name;
 
         if (ident == "no_mangle") {
+            DEBUG("#[unsafe(no_mangle)] " << name);
             if (auto* e = i.opt_Function()) {
                 e->markings.linkName = name.c_str();
             } else if (auto* e = i.opt_Static()) {
@@ -2410,6 +2418,7 @@ auto CHandlerUnsafe::handleItem(const Span& sp, const ASTAttribute& mi, const Wi
             lex.getTokenCheck(TOK_EQUAL);
             auto s = lex.getTokenCheck(TOK_STRING).str();
 
+            DEBUG("#[unsafe(export_name)] " << name << " as `" << s << "`");
             if (auto* e = i.opt_Function()) {
                 e->markings.linkName = s;
             } else if (auto* e = i.opt_Static()) {
@@ -2421,6 +2430,7 @@ auto CHandlerUnsafe::handleItem(const Span& sp, const ASTAttribute& mi, const Wi
             lex.getTokenCheck(TOK_EQUAL);
             auto s = lex.getTokenCheck(TOK_STRING).str();
 
+            DEBUG("#[unsafe(link_section)] " << name << " in `" << s);
             if (auto* e = i.opt_Function()) {
                 e->markings.linkSection = s;
             } else if (auto* e = i.opt_Static()) {
