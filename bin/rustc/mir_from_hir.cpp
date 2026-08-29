@@ -7693,8 +7693,8 @@ auto ExprVisitorConv::hasDropImpl(const Span& sp, const HIRTypeData* ty) const -
     if (trait.components().empty()) {
         return false;
     }
-    return builder.resolve().findImpl(sp, trait, HIRPathParams{}, ty, [](ImplRef impl, SolverCertainty certainty) {
-        return certainty == SolverCertainty::Proven && impl.data.is_TraitImpl();
+    return builder.resolve().findImpl(sp, trait, HIRPathParams{}, ty, [](SolverResponse response) {
+        return response.certainty == SolverCertainty::Proven && response.impl->traitImpl;
     });
 }
 
@@ -9935,7 +9935,7 @@ auto ExprVisitorConv::visit(HIRExprNodeUnsize& node) -> void {
         switch ((*tyOut).tag()) {
             default: {
                 const auto& langUnsize = builder.crate().getLangItemPath(node.span(), "unsize");
-                if (builder.resolve().findImpl(node.span(), langUnsize, HIRPathParams(tyOut), tyIn, [](auto, SolverCertainty) {
+                if (builder.resolve().findImpl(node.span(), langUnsize, HIRPathParams(tyOut), tyIn, [](SolverResponse) {
                     return true;
                 })) {
                     // - HACK: Emit a cast operation on the pointers. Leave it up to monomorph to 'fix' it

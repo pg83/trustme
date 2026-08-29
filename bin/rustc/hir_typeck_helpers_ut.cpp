@@ -358,7 +358,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testImplHeaderRelationMatchesProjectionInputs) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);

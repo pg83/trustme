@@ -2999,23 +2999,21 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         if (const auto* e = path.data.opt_UfcsKnown()) {
             const auto& trait = resolve.hirCrate().getTraitByPath(state.sp, e->trait.path);
             if (trait.isConst) {
-                ImplRef bestImpl;
+                const HIRTraitImpl* selectedImpl = nullptr;
                 bool hasConstBound = false;
-                resolve.findImpl(state.sp, e->trait.path, e->trait.params, e->type, [&](ImplRef impl, SolverCertainty certainty) {
-                    if (certainty != SolverCertainty::Proven) {
+                resolve.findImpl(state.sp, e->trait.path, e->trait.params, e->type, [&](SolverResponse response) {
+                    if (response.certainty != SolverCertainty::Proven) {
                         return false;
                     }
-                    if (!impl.data.is_TraitImpl()) {
-                        hasConstBound |= impl.boundConstness() != HIRBoundConstness::Never;
+                    if (!response.impl->traitImpl) {
+                        hasConstBound |= response.impl->constness != HIRBoundConstness::Never;
                         return false;
                     }
-                    if (!bestImpl.isValid() || impl.moreSpecificThan(resolve.hirCrate().types, bestImpl)) {
-                        bestImpl = mv$(impl);
-                    }
+                    selectedImpl = response.impl->traitImpl;
                     return false;
                 });
-                MIR_ASSERT(state, hasConstBound || bestImpl.isValid(), "const trait call did not resolve to an impl: " << path);
-                MIR_ASSERT(state, hasConstBound || bestImpl.data.as_TraitImpl().impl->isConst, "const trait call requires a const impl: " << path);
+                MIR_ASSERT(state, hasConstBound || selectedImpl, "const trait call did not resolve to an impl: " << path);
+                MIR_ASSERT(state, hasConstBound || (selectedImpl && selectedImpl->isConst), "const trait call requires a const impl: " << path);
             }
         }
     }

@@ -81,10 +81,7 @@ bool ImplRef::overlapsWith(const HIRCrate& crate, const ImplRef& other) const {
         case Data::TAG_TraitImpl: {
             auto& te = this->data.as_TraitImpl();
             auto& oe = other.data.as_TraitImpl();
-            if (te.impl != nullptr && oe.impl != nullptr) {
-                return te.impl->overlapsWith(crate, *oe.impl);
-            }
-            break;
+            return te.impl == oe.impl;
         }
         case Data::TAG_BoundedPtr: {
             auto& te = this->data.as_BoundedPtr();

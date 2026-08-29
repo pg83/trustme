@@ -168,6 +168,10 @@ def main():
     ):
         print(f"  {location}: static={ordinary}, thread_local={per_thread}, "
               f"writable_bytes={byte_count}")
+        for _, name, kind, size in sorted(
+            symbol for symbol in static + thread if symbol[0] == location
+        ):
+            print(f"    {kind} {size}: {name}")
 
     for location, name, kind in sorted(missing_allowed):
         print(f"static_storage_gate: stale immutable exception: "

@@ -3676,7 +3676,8 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
 
     // TODO: This is VERY arbitary and possibly nowhere near what rustc does.
 
-    this->resolve_.findImpl(sp, traitPath.path, nullptr, type, [&](const auto& impl, SolverCertainty) -> bool {
+    this->resolve_.findImpl(sp, traitPath.path, nullptr, type, [&](SolverResponse response) -> bool {
+        const auto impl = response.impl->legacy();
         auto pp = impl.getTraitParams(crate.types);
         struct KillPlaceholders: public Monomorphiser {
             explicit KillPlaceholders(HIRTypeInterner& types)

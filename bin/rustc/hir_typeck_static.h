@@ -3,7 +3,7 @@
 #include "hir_hir.h"
 #include "range_vec_map.h"
 #include "hir_typeck_common.h"
-#include "hir_typeck_impl_ref.h"
+#include "hir_typeck_helpers.h"
 #include "hir_typeck_resolve_common.h"
 
 enum class MetadataType {
@@ -15,24 +15,6 @@ enum class MetadataType {
 };
 
 std::ostream& operator<<(std::ostream& os, const MetadataType& x);
-
-struct StaticImplCallback {
-    virtual bool visit(ImplRef impl, SolverCertainty certainty) = 0;
-};
-
-template <typename F>
-struct StaticImplCb final: StaticImplCallback {
-    F f;
-
-    explicit StaticImplCb(F f)
-        : f(f)
-    {
-    }
-
-    bool visit(ImplRef impl, SolverCertainty certainty) override {
-        return f(mv$(impl), certainty);
-    }
-};
 
 struct StaticNamedTraitCallback {
     virtual bool visit(const HIRPathParams& params, HIRTraitPath::assocListT assoc) = 0;
@@ -158,33 +140,25 @@ public:
         TraitResolveCommon::prepIndexes(sp);
     }
 
-    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRTypeData* type, StaticImplCallback& foundCb) const {
+    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRTypeData* type, SolverResponseCallback& foundCb) const {
         return this->findImplCb(sp, traitPath, &traitParams, type, foundCb);
     }
 
-    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb) const;
+    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, SolverResponseCallback& foundCb) const;
 
     template <typename F>
     bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRTypeData* type, F f) const {
-        StaticImplCb<F> cb(f);
+        SolverResponseCb<F> cb(f);
         return findImplCb(sp, traitPath, traitParams, type, cb);
     }
 
     template <typename F>
     bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, F f) const {
-        StaticImplCb<F> cb(f);
+        SolverResponseCb<F> cb(f);
         return findImplCb(sp, traitPath, traitParams, type, cb);
     }
 
 private:
-    bool findImplCheckCrateRawCb(const Span& sp, const HIRSimplePath& desTraitPath, const HIRPathParams* desTraitParams, const HIRTypeData* desType, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitParams, const HIRTypeData* implType, StaticImplMatchCallback& foundCb) const;
-
-    template <typename F>
-    bool findImplCheckCrateRaw(const Span& sp, const HIRSimplePath& desTraitPath, const HIRPathParams* desTraitParams, const HIRTypeData* desType, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitParams, const HIRTypeData* implType, F f) const {
-        StaticImplMatchCb<F> cb(f);
-        return findImplCheckCrateRawCb(sp, desTraitPath, desTraitParams, desType, implParamsDef, implTraitParams, implType, cb);
-    }
-
     bool typeNeedsAsyncDropInner(const Span& sp, const HIRTypeData* ty, HIRTypeRefSet& stack) const;
 
 public:

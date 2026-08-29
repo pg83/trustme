@@ -1,3 +1,124 @@
+Короткий вердикт: солвер ещё не закончен. Старый отдельный solver действительно удалён, транзакции/канонизация/typed response/
+  NormalizesTo работают. Но утверждение из dev/SOLVER.md:3, что Fuzzy остался только безобидным внутренним фильтром, сейчас неверно.
+
+  ### Критические недоделки
+
+  1. Defining opaque местами считается доказанным без relation.
+
+  - В matchAssociatedTypes проверка equality просто пропускается, если встретился defining opaque: bin/rustc/
+    hir_typeck_helpers.cpp:9637.
+
+  - В root associated equality тот же случай немедленно возвращает Proven: bin/rustc/hir_typeck_helpers.cpp:10169.
+
+  Это optimistic bypass. Если hidden-type equality не гарантируется другим контуром, это потенциальная soundness-дыра.
+
+  2. Есть потребители, где Ambiguous + hasImpl принимается за факт.
+
+  - Unsize выбирается и response применяется без требования Proven: bin/rustc/hir_typeck_expr_cs.cpp:1288.
+  - Cast переписывается в Unsize только по hasImpl: bin/rustc/hir_typeck_expr_cs.cpp:8061.
+  - Выбор Fn/FnMut делается по hasImpl, certainty игнорируется: bin/rustc/hir_typeck_expr_cs.cpp:9082.
+
+  Есть и нормальные speculative probes, где Ambiguous означает «может подойти». Но сейчас API никак не отличает may-apply от must-
+  prove, поэтому такие места легко перепутать.
+
+  3. ParamEnv и associated bounds с GAT реально недоделаны.
+
+  В bin/rustc/hir_typeck_helpers.cpp:4433:
+
+  - цель с обычным unresolved inference Self вообще пропускается;
+  - associated definitions с generic/GAT parameters пропускаются целиком: строка 4520;
+  - fuzzy associated-bound match оставлен с TODO: строка 4551;
+  - пустая ветка для ord == Fuzzy: строка 4576;
+  - кандидат строится с заведомо не тем subject type — комментарий это прямо признаёт: строка 4584.
+
+  4. Не все ограничения доказательства экспортируются.
+
+  - TypeEquality в bounds проверяется через unifyProbe, но pending equality не попадает в response: bin/rustc/
+    hir_typeck_helpers.cpp:9933.
+
+  - При нескольких разных viable candidates солвер пересекает только slot values: bin/rustc/hir_typeck_helpers.cpp:10927. Общие
+    equalities и obligations не пересекаются.
+
+  Именно такие потери inference-эффектов затем приходится компенсировать fallback-логикой снаружи.
+
+  ### Главный легаси-контур
+
+  Внутреннее представление солвера всё ещё ImplRef.
+
+  - Candidate хранит ImplRef: bin/rustc/hir_typeck_helpers.cpp:264.
+  - Candidate assembly публично отдаёт ImplRef: bin/rustc/hir_typeck_helpers.h:462.
+  - SolverImpl имеет двусторонний мост fromLegacy()/legacy(): bin/rustc/hir_typeck_helpers.h:15.
+  - В коде осталось 19 реальных вызовов legacy(), из них семь вне helpers. Например, WF повторно вручную связывает Self и параметры
+    после применения response: bin/rustc/hir_typeck_expr_cs.cpp:6301.
+
+  То есть typed response пока является оболочкой вокруг legacy candidate, а не нативным результатом решения.
+
+  Дополнительно существует скрытый протокол .assocName = "": 14 мест. Только ненулевой assocName разрешает создать ambiguous identity
+  response: bin/rustc/hir_typeck_helpers.cpp:10569. Вместе с certainty, hasImpl и ambiguousIdentity это четыре состояния, которые
+  потребители трактуют вручную.
+
+  ### Параллельные fuzzy-решатели
+
+  Coercion/unsize фактически реализован несколько раз:
+
+  - checkUnsizeTys: bin/rustc/hir_typeck_expr_cs.cpp:882;
+  - checkCoerceTys: строка 1447;
+  - legacy canUnsizeCb, возвращающий HIRCompare: bin/rustc/hir_typeck_helpers.cpp:4944;
+  - evaluateCoercionGoal, который вызывает canUnsizeCb и переводит Fuzzy в Ambiguous: bin/rustc/hir_typeck_helpers.cpp:5267.
+
+  Method lookup тоже остаётся отдельным selector’ом с ручным ranking, remonomorphisation TODO и незавершёнными custom receivers: bin/
+  rustc/hir_typeck_helpers.cpp:5923.
+
+  А expression inference сохраняет пять режимов одного эвристического алгоритма:
+
+  None → Backwards → Assume → IgnoreWeakDisable → FinalOption
+
+  Они определены в bin/rustc/hir_typeck_expr_cs.cpp:2805 и последовательно запускаются при стагнации на строках 6901–6969. Это не
+  trait solver, но это настоящий legacy fallback, компенсирующий недостающие solver constraints.
+
+  ### Что действительно является безобидным structural Fuzz
+
+  Только candidate prefilter вроде findTraitImpls → matchesTypeRoot → matchTestGenericsFuzz: bin/rustc/hir_hir.cpp:202. После него
+  impl head всё равно проверяется Unifier в bin/rustc/hir_typeck_helpers.cpp:9050.
+
+  Там false positive безобиден — добавится кандидат и затем отсеется. False negative уже не безобиден. А Fuzzy, используемый в
+  canUnsizeCb, ParamEnv или method selection для принятия решения, structural prefilter’ом не является.
+
+  ### Явные feature gaps
+
+  - MetaSized падает в TODO: bin/rustc/hir_typeck_helpers.cpp:2940.
+  - Trait-object candidate не проверяет object safety: строка 3227.
+  - GAT associated bounds пропускаются.
+  - Custom receiver methods не реализованы полностью.
+  - Specialization/ranking использует старый ImplRef::moreSpecificThan и ручные правила приоритета ParamEnv/builtin: bin/rustc/
+    hir_typeck_helpers.cpp:11199.
+
+  - Static resolver содержит мёртвые ImplCheckKey, cachedImplChecks, normalizingBoundType: bin/rustc/hir_typeck_static.h:70.
+
+  ### Gates и документация
+
+  Текущий C++ API gate фиксирует только число полей структур и единственный overload applySolverResponse: bin/rustc/
+  hir_typeck_helpers_ut.cpp:10. Он не запрещает ImplRef, legacy(), HIRCompare или ambiguous-as-success.
+
+  -Znext-solver, =globally, =coherence теперь no-op: bin/rustc/main_bindings.cpp:1222. Поэтому имена и комментарии нескольких
+  test_next_solver_*legacy* уже просто врут о реально исполняемом пути.
+
+  Итого, разумный порядок добивания:
+
+  1. Закрыть opaque bypass и ambiguous-as-proof.
+  2. Доделать ParamEnv/GAT и экспорт всех equality/obligation effects.
+  3. Уничтожить .assocName="", hasImpl и ambiguousIdentity в пользу нормального variant-result.
+  4. Перевести Candidate с ImplRef на нативные solver data и удалить legacy().
+  5. Свести coercion/unsize к одной relation.
+  6. После этого выжигать method selector и пятиступенчатый checkIvarPoss.
+
+  SOLVER.md и финальная часть SOLVER_EX.md сейчас объявляют готовым то, что код ещё не подтверждает.
+
+─ Worked for 8m 43s ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ 
+› Run /review on my current changes
+
 Ощущение верное. Прочитав всё целиком, я вижу: легаси нельзя выпилить не потому, что «потребители не переведены», а потому что солверу не хватает четырёх базовых примитивов. Каждый fuzzy-костыль — компенсация одного из них. Сначала диагноз с уликами, потом план.
 
 ## Диагноз: четыре корневых дефекта
@@ -28,7 +149,7 @@
 
 **Прогресс кэш-блока SOLVER.md-1 (2026-08-27, коммиты 855b59b2a..1792a400e):** биндеры дедуплицированы (`BindCandidateParams`); const-ивары канонизируются в value-слоты (виртуальный `monomorphConstgeneric`, слоты в резервном диапазоне, обратные мапы во всех декан-мономорфайзерах) — `keyHoldsValues` удалён; ответы больше не one-shot (реплей легален: ключ = полный канонический вход); `slotsBefore` заменён freeze-механизмом (чужие ивары проходят сырыми и явно детектируются; такие ответы не кэшируются — эмпирика: кэширование их в non-persistent slice ломает `const_memory_intrinsics`, таблица мутирует внутри одной outermost-эвалюации). Граница: unit зелёный, корпус на уровне известного хвоста (nested-hkl, simd/array-type, exercism-timeout, 297ac), новый регресс const-param-in-async пойман корпусом и закрыт (гардированный `getValue`, редукция в unit). Перф: rustsmith_0007 29.5s (было 41-44s). Примечание: perf-узел rustsmith_0007 сломан по построению (bin без crate-type, требует argv) — падает в рантайме независимо от кампании.
 
-**П1. Один примитив унификации.** `unify(sp, a, b) -> Proven / Ambiguous(nested AliasRelate-цели) / Fail`, работающий на настоящей таблице под snapshot. Им переписывается проверка кандидата в `evaluateCandidate`/`matchAssociatedTypes`; Match-биндеры схлопываются на него по одному. `HIRCompare::Fuzzy` перестаёт быть носителем потерянных ограничений — внутри солвера сравнение больше не «трёхзначный бит», а унификация с откатом. *Критерий: `BindPlaceholders`/`BindResponse` удалены; строковые плейсхолдеры остаются только в legacy-путях.*
+**~~П1. Один примитив унификации.~~ СДЕЛАНО.** `Unifier` работает на настоящей inference table под snapshot и возвращает `Proven`, `Ambiguous` или `Mismatch`; pending type/value relations экспортируются typed equalities либо nested alias goals. Имплементации, ParamEnv, builtin, trait-object, opaque и projection candidates проходят общую финальную relation. `BindPlaceholders`/`BindResponse` и адресные имена плейсхолдеров удалены; `HIRCompare::Fuzzy` может использоваться только как внутренний предварительный структурный фильтр, но не переносит ограничения через границу солвера.
 
 **Прогресс П5-частично (2026-08-27, 2ee0e8fd1..):** identity-retry, specialisable-repeat и операторный probe в checkAssociated переведены на один solver-вызов (`TraitGoalQuery{.exportAmbiguousCandidates}`): при ambiguity солвер сам отдаёт viable-кандидатов из своей assembly. ВАЖНО (требование пользователя): это транзитный мост — `HIRCompare::Fuzzy` должен исчезнуть с границы ЦЕЛИКОМ, вместе с протоколом `TraitImplCallback`, а не остаться под новым именем. Конечная форма — П2: `SolverResponse { certainty; слоты; obligations; кандидаты при ambiguity }`; экспорт кандидатов пере-выражается как поле ответа.
 
@@ -47,7 +168,11 @@
 Порядок П0→П5 завершён. Исходные костыли удалялись только после появления соответствующих примитивов: транзакций инференса, типизированного canonical response, obligations/equalities и единой `NormalizesTo`.
 
 
-## Вердикт
+## Аудит преждевременного «готово»
+
+Ниже сохранён аудит состояния после первого объявления П0→П5 завершёнными. Он
+стал входным списком для фактической доделки; актуальное закрытие каждого пункта
+находится после списка.
 
   Миграция солвера не закончена. Основной evaluator, транзакции, typed response и NormalizesTo уже есть, но поверх них оставлены
   мосты, воспроизводящие старую fuzzy-семантику.
@@ -189,4 +314,38 @@
 
   Коротко: фундамент нового солвера есть, но граница, ParamEnv/builtins, coercion и весь inherent/method слой ещё не мигрированы.
   Текущее «finish next solver migration» — преждевременное.
-  
+
+## Закрытие реального порядка
+
+1. `exportAmbiguousCandidates` и `SolverCandidateResponse` удалены. Ambiguous
+   response не раскрывает impl heads; операторный потребитель получает только
+   агрегат `SolverOperatorSummary`.
+2. `SolverCoercionEvaluator` удалён. Coercion/unsize constraints являются
+   данными `TraitGoalQuery`; relation, endpoint ordering и candidate ranking
+   выполняются внутри solver evaluator. Context callback и post-solver retry
+   отсутствуют.
+3. `Unifier::Outcome` имеет `Proven`, `Ambiguous`, `Mismatch`. Candidate heads
+   всех источников проходят транзакционную relation, а alias relations и
+   equalities больше не восстанавливаются потребителем из fuzzy результата.
+4. Solver-level `TraitImplCallback`, `HrtbBoundMatcher`, `GetParams`/`Matcher`,
+   `BindPlaceholders`, `BindResponse` и адресные placeholder names удалены.
+   Оставшийся `HIRTraitImplCallback` принадлежит низкоуровневому HIR index: он
+   только перечисляет declarations, не несёт `HIRCompare` и не является solver
+   boundary.
+5. `fticCheckParams`, `OwnedImplMatcher`, raw static inherent matcher и
+   consumer method fallback удалены. Inherent headers унифицируются под
+   snapshot, bounds проверяются typed solver goals, method selection возвращает
+   уже выбранную identity.
+6. Static bridge и его потребители работают с полным `SolverResponse`.
+   Static `canUnsize` ставит цель `Unsize<dst>` для `src` и принимает только
+   `Proven`; отдельной ручной static реализации больше нет.
+7. `SOLVER.md` описывает текущую границу. Compile-time C++ gate фиксирует
+   точную форму `SolverResponse`/`TraitGoalQuery` и единственный overload
+   `Context::applySolverResponse`; это проверка компилируемого API, а не Python
+   parsing исходников. Семантические Rust-регрессии остаются проверкой
+   поведения.
+
+После merge с trunk `0a3608378` полный Nix `unit` зелёный: 1011/1011. Миграция
+по перечисленным семи пунктам закрыта. Общие feature gaps компилятора, например
+ещё не реализованный builtin `MetaSized`, являются отдельными задачами и не
+поддерживаются legacy/fuzzy fallback-контуром.

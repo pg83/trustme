@@ -303,10 +303,6 @@ public:
     struct Options {
         bool bindRigidValues = false;
         bool relateProjectionInputs = false;
-        // Ordinary HIR parameters in a ParamEnv are universal rigid
-        // constants, not candidate existentials.  Once pointer/structural
-        // equality above has failed, a relation involving one is impossible.
-        // Solver existentials remain placeholders and are still deferred.
         bool rigidGenericsAreDistinct = false;
     };
 
@@ -359,9 +355,6 @@ private:
     const TraitResolution* resolve_;
 
     bool bindRigidValues_;
-    // In an impl head an associated projection is a declared rigid
-    // constructor. Matching two occurrences of that constructor relates its
-    // Self and generic inputs instead of treating the whole alias as opaque.
     bool relateProjectionInputs_;
     bool rigidGenericsAreDistinct_;
     stl::Vector<PendingEquality> pending_;
@@ -408,6 +401,18 @@ struct TraitGoalQuery {
 
     const ThinVector<SolverCoercionConstraint>* coercions = nullptr;
     const SolverOperatorGoal* operatorGoal = nullptr;
+};
+
+enum class InherentItemKind : u8 {
+    Type,
+    Method,
+    Value,
+};
+
+struct InherentImplSelection {
+    SolverCertainty certainty = SolverCertainty::NoSolution;
+    const HIRTypeImpl* impl = nullptr;
+    HIRPathParams implParams;
 };
 
 struct NormalizesTo {
@@ -668,6 +673,35 @@ public:
 
     bool implsOverlap(const Span& sp, const ImplRef& left, const ImplRef& right) const;
 
+    const HIRPathParams& solverExistentials(const Span& sp, const HIRGenericParams& definition) const;
+
+    Unifier::Outcome relateInherentImplHeader(
+        const Span& sp,
+        const HIRTypeImpl& impl,
+        const HIRTypeData* receiver,
+        HIRPathParams& implParams
+    ) const;
+    SolverCertainty evaluateInherentImpl(
+        const Span& sp,
+        const HIRTypeImpl& impl,
+        const HIRTypeData* receiver,
+        HIRPathParams& implParams
+    ) const;
+    SolverCertainty probeInherentImplHeader(
+        const Span& sp,
+        const HIRTypeImpl& impl,
+        const HIRTypeData* receiver,
+        HIRPathParams& implParams
+    ) const;
+
+    InherentImplSelection selectInherentImpl(
+        const Span& sp,
+        const HIRTypeData* receiver,
+        const RcString& item,
+        InherentItemKind kind,
+        const HIRPathParams* initialParams = nullptr
+    ) const;
+
     bool findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, TraitPathCallback& callback) const;
 
     template <typename F>
@@ -701,7 +735,13 @@ private:
     }
 
     HIRPathParams makeFreshImplParams(const HIRGenericParams& params) const;
-    HIRPathParams materializeImplParams(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& inferenceParams) const;
+    HIRPathParams materializeImplParams(
+        const Span& sp,
+        const HIRGenericParams& definition,
+        const HIRPathParams& inferenceParams,
+        size_t externalTypeIvars,
+        size_t externalValueIvars
+    ) const;
     SolverCertainty solveNonBuiltinTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRTypeData* type) const;
     HIRCompare typeIsSizedBuiltin(const Span& sp, const HIRTypeData* type) const;
     HIRCompare typeIsCopyBuiltin(const Span& sp, const HIRTypeData* type) const;
@@ -727,6 +767,11 @@ public:
 
         PinShared,
     };
+    struct MethodCandidate {
+        AutoderefBorrow borrow;
+        HIRPath path;
+        const HIRTypeImpl* inherentImpl;
+    };
     friend std::ostream& operator<<(std::ostream& os, const AutoderefBorrow& x);
 
     unsigned int autoderefFindMethod(
@@ -738,7 +783,7 @@ public:
         const RcString& methodName,
         const HIRTypeData* expectedResult,
         bool mustDecide,
-        /* Out -> */ std::vector<std::pair<AutoderefBorrow, HIRPath>>& possibilities
+        /* Out -> */ std::vector<MethodCandidate>& possibilities
     ) const;
 
     unsigned int autoderefFindField(const Span& sp, const HIRTypeData* topTy, const RcString& name, /* Out -> */ HIRTypeRef& fieldType) const;
@@ -773,7 +818,7 @@ public:
         Box,
     };
     friend std::ostream& operator<<(std::ostream& os, const AllowedReceivers& x);
-    bool findMethod(const Span& sp, const tTraitList& traits, const std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ std::vector<std::pair<AutoderefBorrow, HIRPath>>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
+    bool findMethod(const Span& sp, const tTraitList& traits, const std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ std::vector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
 
     const HIRFunction* traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const;
     bool traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const;

@@ -215,8 +215,8 @@ auto Visitor::pushModTraits(const HIRModule& mod) -> ModTraitsGuard {
 }
 
 auto Visitor::traitBoundSatisfied(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* type, const HIRTraitPath& trait) -> bool {
-    return resolve.findImpl(sp, trait.path.path, &trait.path.params, type, [](const auto&, SolverCertainty certainty) {
-        return certainty == SolverCertainty::Proven;
+    return resolve.findImpl(sp, trait.path.path, &trait.path.params, type, [](SolverResponse response) {
+        return response.certainty == SolverCertainty::Proven;
     });
 }
 
@@ -526,8 +526,8 @@ auto Visitor::locateInTraitAndSet(const Span& sp, HIRVisitor::PathContext pc, co
 auto Visitor::setFromImpl(const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd) -> bool {
     auto& e = pd.as_UfcsUnknown();
     const auto& type = e.type;
-    return resolve_.findImpl(Span(), traitPath.path, traitPath.params, type, [&](ImplRef, SolverCertainty certainty) {
-        if (certainty != SolverCertainty::Proven) {
+    return resolve_.findImpl(Span(), traitPath.path, traitPath.params, type, [&](SolverResponse response) {
+        if (response.certainty != SolverCertainty::Proven) {
             return false;
         }
         pd = getUfcsKnown(mv$(e), makeGenericPath(traitPath.path, trait), trait);
