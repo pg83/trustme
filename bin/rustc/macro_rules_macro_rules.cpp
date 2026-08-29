@@ -1,8 +1,8 @@
 #include "macro_rules_macro_rules.h"
-#include "output.h"
 #include "macro_rules_macro_rules.h"
 
 #include "common.h"
+#include "output.h"
 #include "hir_hir.h"
 #include "ast_expr.h"
 #include "ast_crate.h"
@@ -14,8 +14,8 @@
 #include "macro_rules_pattern_checks.h"
 #include "parse_interpolated_fragment.h"
 
-#include <limits.h>
 #include <sstream>
+#include <limits.h>
 
 using namespace stl;
 
@@ -2472,8 +2472,6 @@ namespace {
         return rv;
     }
 
-
-
     enum class PatternHeadRv {
         Closed,
         NotFound,
@@ -3342,179 +3340,6 @@ const std::vector<MacroExpansionEnt>* MacroExpandState::getCurLayer() const {
     return ents;
 }
 
-bool isTokenPath(eTokenType tt) {
-    switch (tt) {
-        case TOK_IDENT:
-        case TOK_DOUBLE_COLON:
-        case TOK_LT:
-        case TOK_DOUBLE_LT:
-        case TOK_RWORD_SELF:
-        case TOK_RWORD_SUPER:
-        case TOK_INTERPOLATED_PATH:
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool isTokenPat(eTokenType tt) {
-    if (isTokenPath(tt)) {
-        return true;
-    }
-    switch (tt) {
-        case TOK_PAREN_OPEN:
-        case TOK_SQUARE_OPEN:
-
-        case TOK_UNDERSCORE:
-        case TOK_AMP:
-        case TOK_RWORD_BOX:
-        case TOK_RWORD_REF:
-        case TOK_RWORD_MUT:
-        case TOK_STRING:
-        case TOK_INTEGER:
-        case TOK_CHAR:
-        case TOK_INTERPOLATED_PATTERN:
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool isTokenType(eTokenType tt) {
-    if (isTokenPath(tt)) {
-        return true;
-    }
-    switch (tt) {
-        case TOK_PAREN_OPEN:
-        case TOK_SQUARE_OPEN:
-        case TOK_STAR:
-        case TOK_AMP:
-        case TOK_RWORD_EXTERN:
-        case TOK_RWORD_UNSAFE:
-        case TOK_RWORD_FN:
-        case TOK_INTERPOLATED_TYPE:
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool isTokenExpr(eTokenType tt) {
-    if (isTokenPath(tt)) {
-        return true;
-    }
-    switch (tt) {
-        case TOK_AMP:
-        case TOK_STAR:
-        case TOK_DASH:
-        case TOK_EXCLAM:
-        case TOK_RWORD_BOX:
-        case TOK_PAREN_OPEN:
-        case TOK_SQUARE_OPEN:
-
-        case TOK_RWORD_RETURN:
-        case TOK_RWORD_BREAK:
-        case TOK_RWORD_CONTINUE:
-
-        case TOK_BRACE_OPEN:
-        case TOK_RWORD_MATCH:
-        case TOK_RWORD_IF:
-        case TOK_RWORD_FOR:
-        case TOK_RWORD_WHILE:
-        case TOK_RWORD_LOOP:
-        case TOK_RWORD_UNSAFE:
-        case TOK_RWORD_TRY:
-        case TOK_LIFETIME:
-
-        case TOK_RWORD_MOVE:
-        case TOK_PIPE:
-        case TOK_DOUBLE_PIPE:
-
-        case TOK_INTEGER:
-        case TOK_FLOAT:
-        case TOK_STRING:
-        case TOK_BYTESTRING:
-        case TOK_RWORD_TRUE:
-        case TOK_RWORD_FALSE:
-
-        case TOK_INTERPOLATED_EXPR:
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool isTokenStmt(eTokenType tt) {
-    if (isTokenExpr(tt)) {
-        return true;
-    }
-    switch (tt) {
-        case TOK_BRACE_OPEN:
-        case TOK_RWORD_LET:
-        case TOK_INTERPOLATED_STMT:
-        case TOK_INTERPOLATED_STMT_ITEM:
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool isTokenItem(eTokenType tt) {
-    switch (tt) {
-        case TOK_HASH:
-
-        case TOK_RWORD_PUB:
-        case TOK_RWORD_UNSAFE:
-        case TOK_RWORD_TYPE:
-        case TOK_RWORD_CONST:
-        case TOK_RWORD_STATIC:
-        case TOK_RWORD_FN:
-        case TOK_RWORD_STRUCT:
-        case TOK_RWORD_ENUM:
-        case TOK_RWORD_TRAIT:
-        case TOK_RWORD_MOD:
-        case TOK_RWORD_USE:
-        case TOK_RWORD_EXTERN:
-        case TOK_RWORD_IMPL:
-        // TODO: more?
-        case TOK_INTERPOLATED_ITEM:
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool isTokenVis(eTokenType tt) {
-    switch (tt) {
-        case TOK_RWORD_PUB:
-        case TOK_RWORD_CRATE:
-        case TOK_INTERPOLATED_VIS:
-            return true;
-        default:
-            return true; // TODO: Is this true? it can capture just nothing
-    }
-}
-
-MacroRulesPtr::MacroRulesPtr(MacroRules* p)
-    : ptr(p)
-{
-}
-
-MacroRulesPtr::~MacroRulesPtr() {
-    if (ptr) {
-        delete ptr;
-        ptr = nullptr;
-    }
-}
-
-
-
-
-
-
-
-
-
 MacroRules::~MacroRules() {
 }
 
@@ -3783,8 +3608,6 @@ MacroRules::MacroRules(u32& id, RcString sourceCrate, ASTEdition edition)
     , edition(edition)
 {
 }
-
-
 
 #include "macro_rules_capture_tu.cpp"
 
@@ -4067,295 +3890,295 @@ auto ExpTok::operator==(eTokenType tt) const -> bool {
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, CapturedVal>(ZeroCopyOutput& out, const CapturedVal& value) {
-    operator<<(out, value);
-}
+    template <>
+    void output<ZeroCopyOutput, CapturedVal>(ZeroCopyOutput& out, const CapturedVal& value) {
+        operator<<(out, value);
+    }
 
-template <>
-void output<ZeroCopyOutput, CaptureLayer>(ZeroCopyOutput& out, const CaptureLayer& value) {
-    operator<<(out, value);
-}
+    template <>
+    void output<ZeroCopyOutput, CaptureLayer>(ZeroCopyOutput& out, const CaptureLayer& value) {
+        operator<<(out, value);
+    }
 
-template <>
-void output<ZeroCopyOutput, ParameterMappings::CapturedVar>(ZeroCopyOutput& out, const ParameterMappings::CapturedVar& value) {
-    operator<<(out, value);
-}
+    template <>
+    void output<ZeroCopyOutput, ParameterMappings::CapturedVar>(ZeroCopyOutput& out, const ParameterMappings::CapturedVar& value) {
+        operator<<(out, value);
+    }
 
-template <>
-void output<ZeroCopyOutput, ContentLoopVariableUse>(ZeroCopyOutput& out, const ContentLoopVariableUse& value) {
-    operator<<(out, value);
-}
+    template <>
+    void output<ZeroCopyOutput, ContentLoopVariableUse>(ZeroCopyOutput& out, const ContentLoopVariableUse& value) {
+        operator<<(out, value);
+    }
 
-template <>
-void output<ZeroCopyOutput, ExpTok>(ZeroCopyOutput& os, const ExpTok& t) {
+    template <>
+    void output<ZeroCopyOutput, ExpTok>(ZeroCopyOutput& os, const ExpTok& t) {
         os << StringView("ExpTok(") << t.ty << StringView(" ") << t.tok << StringView(")");
         return;
     }
 
-template <>
-void output<ZeroCopyOutput, MacroPatEnt>(ZeroCopyOutput& os, const MacroPatEnt& x) {
-    switch (x.type) {
-        case MacroPatEnt::PAT_TOKEN:
-            os << StringView("=") << x.tok;
-            break;
-        case MacroPatEnt::PAT_LOOP:
-            os << StringView("loop #") << x.nameIndex << x.name << StringView(" w/ ") << x.tok << StringView(" [") << x.subpats << StringView("]");
-            break;
-        default:
-            os << StringView("$") << x.name << StringView(":");
-            switch (x.type) {
-                case MacroPatEnt::PAT_TOKEN:
-                    UNREACHABLE();
-                case MacroPatEnt::PAT_LOOP:
-                    UNREACHABLE();
-                case MacroPatEnt::PAT_TT:
-                    os << StringView("tt");
-                    break;
-                case MacroPatEnt::PAT_PAT:
-                    os << StringView("pat");
-                    break;
-                case MacroPatEnt::PAT_PAT_PARAM:
-                    os << StringView("pat_param");
-                    break;
-                case MacroPatEnt::PAT_IDENT:
-                    os << StringView("ident");
-                    break;
-                case MacroPatEnt::PAT_PATH:
-                    os << StringView("path");
-                    break;
-                case MacroPatEnt::PAT_TYPE:
-                    os << StringView("type");
-                    break;
-                case MacroPatEnt::PAT_EXPR:
-                    os << StringView("expr");
-                    break;
-                case MacroPatEnt::PAT_STMT:
-                    os << StringView("stmt");
-                    break;
-                case MacroPatEnt::PAT_BLOCK:
-                    os << StringView("block");
-                    break;
-                case MacroPatEnt::PAT_META:
-                    os << StringView("meta");
-                    break;
-                case MacroPatEnt::PAT_ITEM:
-                    os << StringView("item");
-                    break;
-                case MacroPatEnt::PAT_VIS:
-                    os << StringView("vis");
-                    break;
-                case MacroPatEnt::PAT_LIFETIME:
-                    os << StringView("lifetime");
-                    break;
-                case MacroPatEnt::PAT_LITERAL:
-                    os << StringView("literal");
-                    break;
-            }
-            break;
-    }
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, MacroPatEnt::Type>(ZeroCopyOutput& os, MacroPatEnt::Type x) {
-    switch (x) {
-        case MacroPatEnt::PAT_TOKEN:
-            os << StringView("PAT_TOKEN");
-            break;
-        case MacroPatEnt::PAT_LOOP:
-            os << StringView("PAT_LOOP");
-            break;
-        case MacroPatEnt::PAT_TT:
-            os << StringView("PAT_TT");
-            break;
-        case MacroPatEnt::PAT_PAT:
-            os << StringView("PAT_PAT");
-            break;
-        case MacroPatEnt::PAT_PAT_PARAM:
-            os << StringView("PAT_PAT_PARAM");
-            break;
-        case MacroPatEnt::PAT_IDENT:
-            os << StringView("PAT_IDENT");
-            break;
-        case MacroPatEnt::PAT_PATH:
-            os << StringView("PAT_PATH");
-            break;
-        case MacroPatEnt::PAT_TYPE:
-            os << StringView("PAT_TYPE");
-            break;
-        case MacroPatEnt::PAT_EXPR:
-            os << StringView("PAT_EXPR");
-            break;
-        case MacroPatEnt::PAT_STMT:
-            os << StringView("PAT_STMT");
-            break;
-        case MacroPatEnt::PAT_BLOCK:
-            os << StringView("PAT_BLOCK");
-            break;
-        case MacroPatEnt::PAT_META:
-            os << StringView("PAT_META");
-            break;
-        case MacroPatEnt::PAT_ITEM:
-            os << StringView("PAT_ITEM");
-            break;
-        case MacroPatEnt::PAT_VIS:
-            os << StringView("PAT_VIS");
-            break;
-        case MacroPatEnt::PAT_LIFETIME:
-            os << StringView("PAT_LIFETIME");
-            break;
-        case MacroPatEnt::PAT_LITERAL:
-            os << StringView("PAT_LITERAL");
-            break;
-    }
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, SimplePatEnt>(ZeroCopyOutput& os, const SimplePatEnt& x) {
-    switch (x.tag()) {
-        case SimplePatEnt::TAG_End: {
-            os << StringView("End");
-            break;
-        }
-        case SimplePatEnt::TAG_LoopStart: {
-            auto& e = x.as_LoopStart();
-            os << StringView("LoopStart(") << e.index << StringView(")");
-            break;
-        }
-        case SimplePatEnt::TAG_LoopNext: {
-            os << StringView("LoopNext");
-            break;
-        }
-        case SimplePatEnt::TAG_LoopEnd: {
-            os << StringView("LoopEnd");
-            break;
-        }
-        case SimplePatEnt::TAG_Jump: {
-            auto& e = x.as_Jump();
-            os << StringView("Jump(->") << e.jumpTarget << StringView(")");
-            break;
-        }
-        case SimplePatEnt::TAG_ExpectTok: {
-            auto& e = x.as_ExpectTok();
-            os << StringView("Expect(") << e << StringView(")");
-            break;
-        }
-        case SimplePatEnt::TAG_ExpectPat: {
-            auto& e = x.as_ExpectPat();
-            os << StringView("Expect($") << e.idx << StringView(" = ") << e.type << StringView(")");
-            break;
-        }
-        case SimplePatEnt::TAG_If: {
-            auto& e = x.as_If();
-            os << StringView("If(") << (e.isEqual ? "=" : "!=") << StringView("[");
-            for (const auto& p : e.ents) {
-                if (p.ty == MacroPatEnt::PAT_TOKEN) {
-                    os << p.tok;
-                } else {
-                    os << p.ty;
+    template <>
+    void output<ZeroCopyOutput, MacroPatEnt>(ZeroCopyOutput& os, const MacroPatEnt& x) {
+        switch (x.type) {
+            case MacroPatEnt::PAT_TOKEN:
+                os << StringView("=") << x.tok;
+                break;
+            case MacroPatEnt::PAT_LOOP:
+                os << StringView("loop #") << x.nameIndex << x.name << StringView(" w/ ") << x.tok << StringView(" [") << x.subpats << StringView("]");
+                break;
+            default:
+                os << StringView("$") << x.name << StringView(":");
+                switch (x.type) {
+                    case MacroPatEnt::PAT_TOKEN:
+                        UNREACHABLE();
+                    case MacroPatEnt::PAT_LOOP:
+                        UNREACHABLE();
+                    case MacroPatEnt::PAT_TT:
+                        os << StringView("tt");
+                        break;
+                    case MacroPatEnt::PAT_PAT:
+                        os << StringView("pat");
+                        break;
+                    case MacroPatEnt::PAT_PAT_PARAM:
+                        os << StringView("pat_param");
+                        break;
+                    case MacroPatEnt::PAT_IDENT:
+                        os << StringView("ident");
+                        break;
+                    case MacroPatEnt::PAT_PATH:
+                        os << StringView("path");
+                        break;
+                    case MacroPatEnt::PAT_TYPE:
+                        os << StringView("type");
+                        break;
+                    case MacroPatEnt::PAT_EXPR:
+                        os << StringView("expr");
+                        break;
+                    case MacroPatEnt::PAT_STMT:
+                        os << StringView("stmt");
+                        break;
+                    case MacroPatEnt::PAT_BLOCK:
+                        os << StringView("block");
+                        break;
+                    case MacroPatEnt::PAT_META:
+                        os << StringView("meta");
+                        break;
+                    case MacroPatEnt::PAT_ITEM:
+                        os << StringView("item");
+                        break;
+                    case MacroPatEnt::PAT_VIS:
+                        os << StringView("vis");
+                        break;
+                    case MacroPatEnt::PAT_LIFETIME:
+                        os << StringView("lifetime");
+                        break;
+                    case MacroPatEnt::PAT_LITERAL:
+                        os << StringView("literal");
+                        break;
                 }
-                os << StringView(", ");
+                break;
+        }
+        return;
+    }
+
+    template <>
+    void output<ZeroCopyOutput, MacroPatEnt::Type>(ZeroCopyOutput& os, MacroPatEnt::Type x) {
+        switch (x) {
+            case MacroPatEnt::PAT_TOKEN:
+                os << StringView("PAT_TOKEN");
+                break;
+            case MacroPatEnt::PAT_LOOP:
+                os << StringView("PAT_LOOP");
+                break;
+            case MacroPatEnt::PAT_TT:
+                os << StringView("PAT_TT");
+                break;
+            case MacroPatEnt::PAT_PAT:
+                os << StringView("PAT_PAT");
+                break;
+            case MacroPatEnt::PAT_PAT_PARAM:
+                os << StringView("PAT_PAT_PARAM");
+                break;
+            case MacroPatEnt::PAT_IDENT:
+                os << StringView("PAT_IDENT");
+                break;
+            case MacroPatEnt::PAT_PATH:
+                os << StringView("PAT_PATH");
+                break;
+            case MacroPatEnt::PAT_TYPE:
+                os << StringView("PAT_TYPE");
+                break;
+            case MacroPatEnt::PAT_EXPR:
+                os << StringView("PAT_EXPR");
+                break;
+            case MacroPatEnt::PAT_STMT:
+                os << StringView("PAT_STMT");
+                break;
+            case MacroPatEnt::PAT_BLOCK:
+                os << StringView("PAT_BLOCK");
+                break;
+            case MacroPatEnt::PAT_META:
+                os << StringView("PAT_META");
+                break;
+            case MacroPatEnt::PAT_ITEM:
+                os << StringView("PAT_ITEM");
+                break;
+            case MacroPatEnt::PAT_VIS:
+                os << StringView("PAT_VIS");
+                break;
+            case MacroPatEnt::PAT_LIFETIME:
+                os << StringView("PAT_LIFETIME");
+                break;
+            case MacroPatEnt::PAT_LITERAL:
+                os << StringView("PAT_LITERAL");
+                break;
+        }
+        return;
+    }
+
+    template <>
+    void output<ZeroCopyOutput, SimplePatEnt>(ZeroCopyOutput& os, const SimplePatEnt& x) {
+        switch (x.tag()) {
+            case SimplePatEnt::TAG_End: {
+                os << StringView("End");
+                break;
             }
-            os << StringView("] ->") << e.jumpTarget << StringView(")");
-            break;
-        }
-    }
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, MacroExpansionEnt>(ZeroCopyOutput& os, const MacroExpansionEnt& x) {
-    switch (x.tag()) {
-        case MacroExpansionEnt::TAG_Token: {
-            auto& e = x.as_Token();
-            os << StringView("=") << e;
-            break;
-        }
-        case MacroExpansionEnt::TAG_NamedValue: {
-            auto& e = x.as_NamedValue();
-            switch (e & ~NAMEDVALUE_VALMASK) {
-                case 0:
-                    os << StringView("$") << e;
-                    break;
-                case NAMEDVALUE_TY_COUNT:
-                    os << StringView("${count(...)}");
-                    break;
-                default:
-                    os << StringView("$?") << e;
+            case SimplePatEnt::TAG_LoopStart: {
+                auto& e = x.as_LoopStart();
+                os << StringView("LoopStart(") << e.index << StringView(")");
+                break;
             }
-            break;
+            case SimplePatEnt::TAG_LoopNext: {
+                os << StringView("LoopNext");
+                break;
+            }
+            case SimplePatEnt::TAG_LoopEnd: {
+                os << StringView("LoopEnd");
+                break;
+            }
+            case SimplePatEnt::TAG_Jump: {
+                auto& e = x.as_Jump();
+                os << StringView("Jump(->") << e.jumpTarget << StringView(")");
+                break;
+            }
+            case SimplePatEnt::TAG_ExpectTok: {
+                auto& e = x.as_ExpectTok();
+                os << StringView("Expect(") << e << StringView(")");
+                break;
+            }
+            case SimplePatEnt::TAG_ExpectPat: {
+                auto& e = x.as_ExpectPat();
+                os << StringView("Expect($") << e.idx << StringView(" = ") << e.type << StringView(")");
+                break;
+            }
+            case SimplePatEnt::TAG_If: {
+                auto& e = x.as_If();
+                os << StringView("If(") << (e.isEqual ? "=" : "!=") << StringView("[");
+                for (const auto& p : e.ents) {
+                    if (p.ty == MacroPatEnt::PAT_TOKEN) {
+                        os << p.tok;
+                    } else {
+                        os << p.ty;
+                    }
+                    os << StringView(", ");
+                }
+                os << StringView("] ->") << e.jumpTarget << StringView(")");
+                break;
+            }
         }
-        case MacroExpansionEnt::TAG_Concat: {
-            os << StringView("${concat(...)}");
-            break;
-        }
-        case MacroExpansionEnt::TAG_Loop: {
-            auto& e = x.as_Loop();
-            os << StringView("${") << e.controllingInputLoops << StringView("}(") << e.entries << StringView(") ") << e.joiner;
-            break;
-        }
+        return;
     }
-    return;
-}
 
-template <>
-void output<ZeroCopyOutput, SimplePatIfCheck>(ZeroCopyOutput& os, const SimplePatIfCheck& x) {
-    os << x.ty;
-    if (x.ty == MacroPatEnt::PAT_TOKEN) {
-        os << StringView(":") << x.tok;
+    template <>
+    void output<ZeroCopyOutput, MacroExpansionEnt>(ZeroCopyOutput& os, const MacroExpansionEnt& x) {
+        switch (x.tag()) {
+            case MacroExpansionEnt::TAG_Token: {
+                auto& e = x.as_Token();
+                os << StringView("=") << e;
+                break;
+            }
+            case MacroExpansionEnt::TAG_NamedValue: {
+                auto& e = x.as_NamedValue();
+                switch (e & ~NAMEDVALUE_VALMASK) {
+                    case 0:
+                        os << StringView("$") << e;
+                        break;
+                    case NAMEDVALUE_TY_COUNT:
+                        os << StringView("${count(...)}");
+                        break;
+                    default:
+                        os << StringView("$?") << e;
+                }
+                break;
+            }
+            case MacroExpansionEnt::TAG_Concat: {
+                os << StringView("${concat(...)}");
+                break;
+            }
+            case MacroExpansionEnt::TAG_Loop: {
+                auto& e = x.as_Loop();
+                os << StringView("${") << e.controllingInputLoops << StringView("}(") << e.entries << StringView(") ") << e.joiner;
+                break;
+            }
+        }
+        return;
     }
-    return;
-}
 
-template <>
-void output<ZeroCopyOutput, std::vector<MacroPatEnt>>(ZeroCopyOutput& out, const std::vector<MacroPatEnt>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, SimplePatIfCheck>(ZeroCopyOutput& os, const SimplePatIfCheck& x) {
+        os << x.ty;
+        if (x.ty == MacroPatEnt::PAT_TOKEN) {
+            os << StringView(":") << x.tok;
+        }
+        return;
+    }
 
-template <>
-void output<ZeroCopyOutput, std::vector<SimplePatIfCheck>>(ZeroCopyOutput& out, const std::vector<SimplePatIfCheck>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, std::vector<MacroPatEnt>>(ZeroCopyOutput& out, const std::vector<MacroPatEnt>& values) {
+        outCont(out, values);
+    }
 
-template <>
-void output<ZeroCopyOutput, std::vector<MacroExpansionEnt>>(ZeroCopyOutput& out, const std::vector<MacroExpansionEnt>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, std::vector<SimplePatIfCheck>>(ZeroCopyOutput& out, const std::vector<SimplePatIfCheck>& values) {
+        outCont(out, values);
+    }
 
-template <>
-void output<ZeroCopyOutput, std::vector<SimplePatEnt>>(ZeroCopyOutput& out, const std::vector<SimplePatEnt>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, std::vector<MacroExpansionEnt>>(ZeroCopyOutput& out, const std::vector<MacroExpansionEnt>& values) {
+        outCont(out, values);
+    }
 
-template <>
-void output<ZeroCopyOutput, std::vector<CapturedVal>>(ZeroCopyOutput& out, const std::vector<CapturedVal>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, std::vector<SimplePatEnt>>(ZeroCopyOutput& out, const std::vector<SimplePatEnt>& values) {
+        outCont(out, values);
+    }
 
-template <>
-void output<ZeroCopyOutput, std::vector<CaptureLayer>>(ZeroCopyOutput& out, const std::vector<CaptureLayer>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, std::vector<CapturedVal>>(ZeroCopyOutput& out, const std::vector<CapturedVal>& values) {
+        outCont(out, values);
+    }
 
-template <>
-void output<ZeroCopyOutput, std::vector<ParameterMappings::CapturedVar>>(ZeroCopyOutput& out, const std::vector<ParameterMappings::CapturedVar>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, std::vector<CaptureLayer>>(ZeroCopyOutput& out, const std::vector<CaptureLayer>& values) {
+        outCont(out, values);
+    }
 
-template <>
-void output<ZeroCopyOutput, std::pair<const unsigned int, ContentLoopVariableUse>>(ZeroCopyOutput& out, const std::pair<const unsigned int, ContentLoopVariableUse>& value) {
-    out << value.first << StringView(": ") << value.second;
-}
+    template <>
+    void output<ZeroCopyOutput, std::vector<ParameterMappings::CapturedVar>>(ZeroCopyOutput& out, const std::vector<ParameterMappings::CapturedVar>& values) {
+        outCont(out, values);
+    }
 
-template <>
-void output<ZeroCopyOutput, std::map<unsigned int, ContentLoopVariableUse>>(ZeroCopyOutput& out, const std::map<unsigned int, ContentLoopVariableUse>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, std::pair<const unsigned int, ContentLoopVariableUse>>(ZeroCopyOutput& out, const std::pair<const unsigned int, ContentLoopVariableUse>& value) {
+        out << value.first << StringView(": ") << value.second;
+    }
 
-template <>
-void output<ZeroCopyOutput, std::vector<ExpTok>>(ZeroCopyOutput& out, const std::vector<ExpTok>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, std::map<unsigned int, ContentLoopVariableUse>>(ZeroCopyOutput& out, const std::map<unsigned int, ContentLoopVariableUse>& values) {
+        outCont(out, values);
+    }
+
+    template <>
+    void output<ZeroCopyOutput, std::vector<ExpTok>>(ZeroCopyOutput& out, const std::vector<ExpTok>& values) {
+        outCont(out, values);
+    }
 }

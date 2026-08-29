@@ -1,5 +1,7 @@
 #pragma once
 
+struct MonomorphState;
+
 #include "hir_hir.h"
 #include "range_vec_map.h"
 #include "hir_typeck_common.h"
@@ -23,7 +25,8 @@ struct StaticNamedTraitCb final: StaticNamedTraitCallback {
     F f;
 
     explicit StaticNamedTraitCb(F f)
-        : f(f) {
+        : f(f)
+    {
     }
 
     bool visit(const HIRPathParams& params, HIRTraitPath::assocListT assoc) override {
@@ -40,7 +43,8 @@ struct StaticTraitPathCb final: StaticTraitPathCallback {
     F f;
 
     explicit StaticTraitPathCb(F f)
-        : f(f) {
+        : f(f)
+    {
     }
 
     bool visit(const HIRTraitPath& trait) override {

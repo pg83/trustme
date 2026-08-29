@@ -1,8 +1,9 @@
 #include "hir_type.h"
-#include "output.h"
 
 #include "span.h"
+#include "output.h"
 #include "hir_expr.h"
+#include "hir_typeck_monomorph.h"
 
 #include <std/mem/obj_pool.h>
 
@@ -954,14 +955,6 @@ Ordering ord(const HIRTypeData* l, const HIRTypeData* r) {
     return l->uid < r->uid ? OrdLess : OrdGreater;
 }
 
-
-
-
-
-
-
-
-
 HIRTypePatternRange HIRTypePatternRange::clone() const {
     return {hasStart, start.clone(), hasEnd, end.clone(), endInclusive};
 }
@@ -1016,34 +1009,6 @@ void HIRTypePattern::fmt(ZeroCopyOutput& os) const {
         }
         alternatives[i].fmt(os);
     }
-}
-
-void HIRGenericRef::fmt(ZeroCopyOutput& os) const {
-    os << this->name << StringView("/*");
-    if (this->isSolverExistential()) {
-        os << StringView("E:") << this->solverScope << StringView(":") << this->idx();
-    } else if (this->binding == GENERICSelf) {
-        os << StringView("");
-    } else {
-        switch (this->group()) {
-            case 0:
-                os << StringView("I:") << this->idx();
-                break;
-            case 1:
-                os << StringView("M:") << this->idx();
-                break;
-            case 2:
-                os << StringView("P:") << this->idx();
-                break;
-            case 3:
-                os << StringView("H:") << this->idx();
-                break;
-            default:
-                os << this->binding;
-                break;
-        }
-    }
-    os << StringView("*/");
 }
 
 Ordering HIRArraySize::ord(const HIRArraySize& x) const {
@@ -2976,124 +2941,123 @@ bool isFloat(const HIRCoreType& v) {
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, HIRTypeData>(ZeroCopyOutput& os, const HIRTypeData& type) {
-    type.fmt(os);
-}
-
-template <>
-void output<ZeroCopyOutput, const HIRTypeData*>(ZeroCopyOutput& os, const HIRTypeData* ty) {
-    if (ty) {
-        ty->fmt(os);
-    } else {
-        os << StringView("NULL");
+    template <>
+    void output<ZeroCopyOutput, HIRTypeData>(ZeroCopyOutput& os, const HIRTypeData& type) {
+        type.fmt(os);
     }
-    return;
-}
 
-template <>
-void output<ZeroCopyOutput, HIRCoreType>(ZeroCopyOutput& os, HIRCoreType ct) {
-    switch (ct) {
-        case HIRCoreType::Usize:
-            os << StringView("usize");
-    return;
-        case HIRCoreType::Isize:
-            os << StringView("isize");
-    return;
-        case HIRCoreType::U8:
-            os << StringView("u8");
-    return;
-        case HIRCoreType::I8:
-            os << StringView("i8");
-    return;
-        case HIRCoreType::U16:
-            os << StringView("u16");
-    return;
-        case HIRCoreType::I16:
-            os << StringView("i16");
-    return;
-        case HIRCoreType::U32:
-            os << StringView("u32");
-    return;
-        case HIRCoreType::I32:
-            os << StringView("i32");
-    return;
-        case HIRCoreType::U64:
-            os << StringView("u64");
-    return;
-        case HIRCoreType::I64:
-            os << StringView("i64");
-    return;
-        case HIRCoreType::U128:
-            os << StringView("u128");
-    return;
-        case HIRCoreType::I128:
-            os << StringView("i128");
-    return;
-
-        case HIRCoreType::F16:
-            os << StringView("f16");
-    return;
-        case HIRCoreType::F32:
-            os << StringView("f32");
-    return;
-        case HIRCoreType::F64:
-            os << StringView("f64");
-    return;
-        case HIRCoreType::F128:
-            os << StringView("f128");
-    return;
-
-        case HIRCoreType::Bool:
-            os << StringView("bool");
-    return;
-        case HIRCoreType::Char:
-            os << StringView("char");
-    return;
-        case HIRCoreType::Str:
-            os << StringView("str");
-    return;
-    }
-    BUG_ASSERT(!"Bad CoreType value");
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, HIRBorrowType>(ZeroCopyOutput& os, HIRBorrowType bt) {
-    switch (bt) {
-        case HIRBorrowType::Owned:
-            os << StringView("Owned");
-    return;
-        case HIRBorrowType::Unique:
-            os << StringView("Unique");
-    return;
-        case HIRBorrowType::Shared:
-            os << StringView("Shared");
-    return;
-    }
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, HIRArraySize>(ZeroCopyOutput& os, const HIRArraySize& x) {
-    switch (x.tag()) {
-        case HIRArraySize::TAG_Unevaluated: {
-            auto& se = x.as_Unevaluated();
-            os << se;
-            break;
+    template <>
+    void output<ZeroCopyOutput, const HIRTypeData*>(ZeroCopyOutput& os, const HIRTypeData* ty) {
+        if (ty) {
+            ty->fmt(os);
+        } else {
+            os << StringView("NULL");
         }
-        case HIRArraySize::TAG_Known: {
-            auto& se = x.as_Known();
-            os << se;
-            break;
-        }
+        return;
     }
-    return;
-}
 
-template <>
-void output<ZeroCopyOutput, std::vector<HIRTypeRef>>(ZeroCopyOutput& out, const std::vector<HIRTypeRef>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, HIRCoreType>(ZeroCopyOutput& os, HIRCoreType ct) {
+        switch (ct) {
+            case HIRCoreType::Usize:
+                os << StringView("usize");
+                return;
+            case HIRCoreType::Isize:
+                os << StringView("isize");
+                return;
+            case HIRCoreType::U8:
+                os << StringView("u8");
+                return;
+            case HIRCoreType::I8:
+                os << StringView("i8");
+                return;
+            case HIRCoreType::U16:
+                os << StringView("u16");
+                return;
+            case HIRCoreType::I16:
+                os << StringView("i16");
+                return;
+            case HIRCoreType::U32:
+                os << StringView("u32");
+                return;
+            case HIRCoreType::I32:
+                os << StringView("i32");
+                return;
+            case HIRCoreType::U64:
+                os << StringView("u64");
+                return;
+            case HIRCoreType::I64:
+                os << StringView("i64");
+                return;
+            case HIRCoreType::U128:
+                os << StringView("u128");
+                return;
+            case HIRCoreType::I128:
+                os << StringView("i128");
+                return;
 
+            case HIRCoreType::F16:
+                os << StringView("f16");
+                return;
+            case HIRCoreType::F32:
+                os << StringView("f32");
+                return;
+            case HIRCoreType::F64:
+                os << StringView("f64");
+                return;
+            case HIRCoreType::F128:
+                os << StringView("f128");
+                return;
+
+            case HIRCoreType::Bool:
+                os << StringView("bool");
+                return;
+            case HIRCoreType::Char:
+                os << StringView("char");
+                return;
+            case HIRCoreType::Str:
+                os << StringView("str");
+                return;
+        }
+        BUG_ASSERT(!"Bad CoreType value");
+        return;
+    }
+
+    template <>
+    void output<ZeroCopyOutput, HIRBorrowType>(ZeroCopyOutput& os, HIRBorrowType bt) {
+        switch (bt) {
+            case HIRBorrowType::Owned:
+                os << StringView("Owned");
+                return;
+            case HIRBorrowType::Unique:
+                os << StringView("Unique");
+                return;
+            case HIRBorrowType::Shared:
+                os << StringView("Shared");
+                return;
+        }
+        return;
+    }
+
+    template <>
+    void output<ZeroCopyOutput, HIRArraySize>(ZeroCopyOutput& os, const HIRArraySize& x) {
+        switch (x.tag()) {
+            case HIRArraySize::TAG_Unevaluated: {
+                auto& se = x.as_Unevaluated();
+                os << se;
+                break;
+            }
+            case HIRArraySize::TAG_Known: {
+                auto& se = x.as_Known();
+                os << se;
+                break;
+            }
+        }
+        return;
+    }
+
+    template <>
+    void output<ZeroCopyOutput, std::vector<HIRTypeRef>>(ZeroCopyOutput& out, const std::vector<HIRTypeRef>& values) {
+        outCont(out, values);
+    }
 }

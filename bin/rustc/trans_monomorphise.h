@@ -6,3 +6,4 @@
 class HIRCrate;
 
 MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& crate, const TransParams& params, const MIRFunctionPointer& tpl);
+void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list, unsigned mirOptLevel);

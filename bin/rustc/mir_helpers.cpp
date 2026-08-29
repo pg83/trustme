@@ -1,11 +1,12 @@
 #include "mir_helpers.h"
-#include "output.h"
 
+#include "output.h"
 #include "hir_hir.h"
 #include "mir_mir.h"
 #include "hir_type.h"
 #include "trans_target.h"
 #include "hir_encoded_literal.h"
+#include "hir_typeck_monomorph.h"
 
 #include <algorithm>
 
@@ -1941,8 +1942,6 @@ bool MIRVisitorMut::visitLvalue(MIRLValue& lv, MIRValUsage u) {
     return false;
 }
 
-
-
 LValueCbVisitor::LValueCbVisitor(const MIRLvalueCallback& cb)
     : cb(cb)
 {
@@ -1984,9 +1983,9 @@ auto ValueLifetime::dumpDebug(const char* suffix, unsigned i, const std::vector<
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, MIRTypeResolve>(ZeroCopyOutput& os, const MIRTypeResolve& x) {
-    x.fmtPos(os);
-    return;
-}
+    template <>
+    void output<ZeroCopyOutput, MIRTypeResolve>(ZeroCopyOutput& os, const MIRTypeResolve& x) {
+        x.fmtPos(os);
+        return;
+    }
 }

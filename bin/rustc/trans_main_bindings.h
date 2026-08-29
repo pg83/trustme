@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mir_mir.h"
 #include "trans_trans_list.h"
 
 class HIRCrate;
@@ -47,6 +48,7 @@ enum class CodegenOutput {
 };
 
 TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate);
+void TransDeleteMIREnumCache(const MIRFunction::MIREnumCache* cache);
 
 TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate);
 
@@ -57,6 +59,3 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList);
 void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const std::vector<HIRPath>& paths);
 bool TransEnumerateGeneratedLiteral(const WireBoard& wb, TransList& list, const EncodedLiteral& literal);
 bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const stl::Vector<const TransListFunction*>& functions);
-void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list, unsigned mirOptLevel);
-
-void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* crate, TransList list, const std::string& hirFile);

@@ -7,6 +7,7 @@ struct ASTType;
 struct Span;
 
 class ASTExprNode;
+class ASTCrate;
 class ASTPath;
 struct ASTPathParams;
 class ASTPattern;
@@ -18,6 +19,10 @@ class HIRPath;
 struct HIRPathParams;
 struct HIRPattern;
 struct HIRSimplePath;
+
+namespace stl {
+    class ObjPool;
+}
 
 enum class FromASTPathClass {
     Type,
@@ -32,3 +37,4 @@ HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPat
 HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc);
 HIRTypeRef LowerHIRType(::ASTType* ty);
 HIRPattern LowerHIRPattern(const ASTPattern& pat);
+HIRCrate* LowerHIRFromAST(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& crate);

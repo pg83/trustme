@@ -1,4 +1,5 @@
 #include "ast_macro.h"
+
 #include "output.h"
 
 using namespace stl;
@@ -20,9 +21,13 @@ void ASTMacroInvocation::clear() {
     input = TokenTree();
 }
 
-namespace stl {
-template <>
-void output<ZeroCopyOutput, ASTMacroInvocation>(ZeroCopyOutput& os, const ASTMacroInvocation& x) {
-    os << x.path() << StringView("! ") << x.inputIdent() << x.inputTt();
+ASTMacroInvocation ASTMacroInvocation::clone() const {
+    return ASTMacroInvocation(span_, ASTPath(macroPath), ident, input.clone());
 }
+
+namespace stl {
+    template <>
+    void output<ZeroCopyOutput, ASTMacroInvocation>(ZeroCopyOutput& os, const ASTMacroInvocation& x) {
+        os << x.path() << StringView("! ") << x.inputIdent() << x.inputTt();
+    }
 }

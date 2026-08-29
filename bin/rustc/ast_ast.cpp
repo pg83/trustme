@@ -1,7 +1,7 @@
 #include "ast_ast.h"
-#include "output.h"
 
 #include "common.h"
+#include "output.h"
 #include "synext.h"
 #include "ast_expr.h"
 #include "ast_crate.h"
@@ -42,180 +42,6 @@ ASTImpl::ASTImpl(ASTImplDef def)
 ASTImpl::~ASTImpl() = default;
 ASTImpl::ASTImpl(ASTImpl&&) = default;
 ASTImpl& ASTImpl::operator=(ASTImpl&&) = default;
-
-namespace {
-    std::vector<ASTAttribute> cloneMivec(const std::vector<ASTAttribute>& v) {
-        std::vector<ASTAttribute> ri;
-        ri.reserve(v.size());
-        for (const auto& i : v) {
-            ri.push_back(i.clone());
-        }
-        return ri;
-    }
-}
-
-ASTAttributeList ASTAttributeList::clone() const {
-    return ASTAttributeList(cloneMivec(items));
-}
-
-void ASTAttributeList::push_back(ASTAttribute i) {
-    items.push_back(std::move(i));
-}
-
-const ASTAttribute* ASTAttributeList::get(const char* name) const {
-    for (auto& i : items) {
-        if (i.name() == name) {
-            return &i;
-        }
-    }
-    return nullptr;
-}
-
-
-
-
-
-ASTAttribute::ASTAttribute(const ASTAttribute& x)
-    : span_(x.span_)
-    , name_(x.name_)
-    , data_(x.data_.clone())
-    , isInert_(x.isInert_)
-{
-}
-
-ASTAttribute ASTAttribute::clone() const {
-    return ASTAttribute(*this);
-}
-
-void ASTAttribute::fmt(ZeroCopyOutput& os) const {
-    os << name_;
-    os << data_;
-}
-
-std::string ASTAttribute::parseEqualsString(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod) const {
-    TTStream lex(this->span_, ParseState(), this->data());
-    lex.parseState().wb = &wb;
-    lex.getTokenCheck(TOK_EQUAL);
-    auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
-
-    std::string rv;
-    if (auto* v = cast<ASTExprNodeString>(&*n)) {
-        rv = v->value;
-    } else {
-        parseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
-    }
-    lex.getTokenCheck(TOK_EOF);
-    return rv;
-}
-
-std::string ASTAttribute::parseParenString() const {
-    TTStream lex(this->span_, ParseState(), this->data());
-    lex.getTokenCheck(TOK_PAREN_OPEN);
-    auto rv = lex.getTokenCheck(TOK_STRING).str();
-    lex.getTokenCheck(TOK_PAREN_CLOSE);
-    return rv;
-}
-
-void ASTAttribute::parseParenIdentListCb(ASTAttributeIdentCallback& itemCb) const {
-    TTStream lex(this->span_, ParseState(), this->data());
-    lex.getTokenCheck(TOK_PAREN_OPEN);
-    while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-        itemCb.visit(lex.pointSpan(), lex.getTokenCheck(TOK_IDENT).ident().name);
-        if (lex.lookahead(0) != TOK_COMMA) {
-            break;
-        }
-        lex.getTokenCheck(TOK_COMMA);
-    }
-    lex.getTokenCheck(TOK_PAREN_CLOSE);
-}
-
-ASTVisibility ASTVisibility::makeGlobal() {
-    return ASTVisibility();
-}
-
-ASTVisibility ASTVisibility::makeRestricted(Ty ty, ASTAbsolutePath p) {
-    ASTVisibility rv;
-    rv.ty_ = ty;
-    rv.visPath_ = std::make_shared<ASTAbsolutePath>(std::move(p));
-    return rv;
-}
-
-ASTVisibility ASTVisibility::makeRestricted(ASTAbsolutePath p, ASTPath inPath) {
-    ASTVisibility rv;
-    rv.ty_ = Ty::PubIn;
-    rv.visPath_ = std::make_shared<ASTAbsolutePath>(std::move(p));
-    rv.inPath_ = std::make_shared<ASTPath>(std::move(inPath));
-    return rv;
-}
-
-void ASTVisibility::fmt(ZeroCopyOutput& os) const {
-    switch (ty_) {
-        case Ty::Private:
-            break;
-        case Ty::Pub:
-            os << StringView("pub ");
-            break;
-        case Ty::Crate:
-            os << StringView("crate ");
-            break;
-        case Ty::PubCrate:
-            os << StringView("pub(crate) ");
-            break;
-        case Ty::PubSuper:
-            os << StringView("pub(super) ");
-            break;
-        case Ty::PubSelf:
-            os << StringView("pub(self) ");
-            break;
-        case Ty::PubIn:
-            os << StringView("pub(in ");
-            if (inPath_) {
-                os << *inPath_;
-            } else {
-                os << StringView("???");
-            }
-            os << StringView(")");
-            break;
-    }
-}
-
-
-
-bool ASTVisibility::isVisible(const ASTAbsolutePath& fromMod) const {
-    if (visPath_) {
-        if (visPath_->crate != fromMod.crate) {
-            return false;
-        }
-        if (visPath_->nodes.size() > fromMod.nodes.size()) {
-            return false;
-        }
-        for (size_t i = 0; i < visPath_->nodes.size(); i++) {
-            if (visPath_->nodes[i] != fromMod.nodes[i]) {
-                return false;
-            }
-        }
-        return true;
-    } else {
-        return true;
-    }
-}
-
-bool ASTVisibility::contains(const ASTVisibility& x) const {
-    if (visPath_) {
-        return x.isVisible(*visPath_);
-    } else {
-        return true;
-    }
-}
-
-void ASTVisibility::inplaceUnion(const ASTVisibility& x) {
-    if (this->contains(x)) {
-    } else if (x.contains(*this)) {
-        visPath_ = x.visPath_;
-    } else {
-        TODO(Span(), StringView("Union with incompatible visbility"));
-    }
-}
 
 ASTStructItem ASTStructItem::clone() const {
     return ASTStructItem(attrs.clone(), vis, name, type->clone(), defaultValue.clone());
@@ -376,8 +202,6 @@ ASTUnion ASTUnion::clone() const {
     return ASTUnion(params_.clone(), mv$(newVars));
 }
 
-
-
 void ASTImpl::addFunction(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTFunction fcn, RcString sourceName) {
     if (sourceName == "") {
         sourceName = name;
@@ -410,14 +234,6 @@ bool ASTImpl::hasNamedItem(const RcString& name) const {
         }
     }
     return false;
-}
-
-
-
-
-
-ASTMacroInvocation ASTMacroInvocation::clone() const {
-    return ASTMacroInvocation(span_, ASTPath(macroPath), ident, input.clone());
 }
 
 ASTUseItem ASTUseItem::clone() const {
@@ -595,32 +411,6 @@ ASTItem ASTItem::clone() const {
     UNREACHABLE();
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-ASTAttributeList::ASTAttributeList() = default;
-
-ASTAttributeList::ASTAttributeList(std::vector<ASTAttribute> items)
-    : items(mv$(items))
-{
-}
-
-ASTAttributeList::~ASTAttributeList() = default;
-ASTAttributeList::ASTAttributeList(ASTAttributeList&&) = default;
-ASTAttributeList& ASTAttributeList::operator=(ASTAttributeList&&) = default;
-ASTAttributeList::ASTAttributeList(const ASTAttributeList&) = default;
-
 ASTStructItem::ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExpr defaultValue)
     : attrs(mv$(attrs))
     , vis(mv$(vis))
@@ -784,215 +574,71 @@ ASTImplDef::ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, ASTT
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, ASTStructItem>(ZeroCopyOutput& out, const ASTStructItem& item) {
-    out << item.vis << item.name << StringView(": ") << item.type;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTTupleItem>(ZeroCopyOutput& out, const ASTTupleItem& item) {
-    out << item.vis << item.type;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTAttributeList>(ZeroCopyOutput& os, const ASTAttributeList& x) {
-    for (const auto& i : x.items) {
-        os << StringView("#[") << i << StringView("]");
+    template <>
+    void output<ZeroCopyOutput, ASTStructItem>(ZeroCopyOutput& out, const ASTStructItem& item) {
+        out << item.vis << item.name << StringView(": ") << item.type;
     }
-    return;
-}
 
-template <>
-void output<ZeroCopyOutput, ASTAttributeName>(ZeroCopyOutput& os, const ASTAttributeName& x) {
-    if (x.elems.empty()) {
-        os << StringView("<empty>");
-    } else {
-        for (const auto& i : x.elems) {
-            if (&i != &x.elems.front()) {
-                os << StringView("::");
+    template <>
+    void output<ZeroCopyOutput, ASTTupleItem>(ZeroCopyOutput& out, const ASTTupleItem& item) {
+        out << item.vis << item.type;
+    }
+
+    template <>
+    void output<ZeroCopyOutput, ASTImplDef>(ZeroCopyOutput& os, const ASTImplDef& impl) {
+        os << StringView("impl ") << StringView(impl.isConst() ? "const " : "") << StringView("<") << impl.params() << StringView("> ") << impl.trait().ent << StringView(" for ") << impl.type();
+        return;
+    }
+
+    template <>
+    void output<ZeroCopyOutput, ASTImpl>(ZeroCopyOutput& os, const ASTImpl& impl) {
+        os << impl.def();
+        return;
+    }
+
+    template <>
+    void output<ZeroCopyOutput, ASTUseItem::Ent>(ZeroCopyOutput& os, const ASTUseItem::Ent& x) {
+        os << x.name << StringView("=") << x.path;
+        return;
+    }
+
+    template <>
+    void output<ZeroCopyOutput, ASTEnumVariant>(ZeroCopyOutput& os, const ASTEnumVariant& x) {
+        os << StringView("EnumVariant(") << x.name;
+        switch (x.data.tag()) {
+            case ASTEnumVariantData::TAG_Unit: {
+                break;
             }
-            os << i;
-        }
-    }
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTVisibility>(ZeroCopyOutput& os, const ASTVisibility& x) {
-    x.fmt(os);
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTImplDef>(ZeroCopyOutput& os, const ASTImplDef& impl) {
-    os << StringView("impl ") << StringView(impl.isConst() ? "const " : "") << StringView("<") << impl.params() << StringView("> ") << impl.trait().ent << StringView(" for ") << impl.type();
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTImpl>(ZeroCopyOutput& os, const ASTImpl& impl) {
-    os << impl.def();
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTUseItem::Ent>(ZeroCopyOutput& os, const ASTUseItem::Ent& x) {
-    os << x.name << StringView("=") << x.path;
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTTypeParam>(ZeroCopyOutput& os, const ASTTypeParam& tp) {
-    os << tp.name();
-    os << StringView(" = ");
-    os << tp.getDefault();
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTLifetimeParam>(ZeroCopyOutput& os, const ASTLifetimeParam& p) {
-    os << StringView("'") << p.name();
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTValueParam>(ZeroCopyOutput& os, const ASTValueParam& p) {
-    os << StringView("const ") << p.name() << StringView(": ") << p.type();
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTHigherRankedBounds>(ZeroCopyOutput& os, const ASTHigherRankedBounds& x) {
-    if (!x.empty()) {
-        os << StringView("for<");
-        for (const auto& l : x.lifetimes) {
-            os << l << StringView(",");
-        }
-        for (const auto& t : x.types) {
-            os << t << StringView(",");
-        }
-        os << StringView("> ");
-    }
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, GenericParam>(ZeroCopyOutput& os, const GenericParam& x) {
-    switch (x.tag()) {
-        case GenericParam::TAG_None: {
-            os << StringView("/*-*/");
-            break;
-        }
-        case GenericParam::TAG_Lifetime: {
-            auto& e = x.as_Lifetime();
-            os << e;
-            break;
-        }
-        case GenericParam::TAG_Type: {
-            auto& e = x.as_Type();
-            os << e;
-            break;
-        }
-        case GenericParam::TAG_Value: {
-            auto& e = x.as_Value();
-            os << e;
-            break;
-        }
-    }
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTGenericBound>(ZeroCopyOutput& os, const ASTGenericBound& x) {
-    switch (x.tag()) {
-        case ASTGenericBound::TAG_None: {
-            os << StringView("/*-*/");
-            break;
-        }
-        case ASTGenericBound::TAG_Lifetime: {
-            auto& ent = x.as_Lifetime();
-            os << ent.test << StringView(": ") << ent.bound;
-            break;
-        }
-        case ASTGenericBound::TAG_TypeLifetime: {
-            auto& ent = x.as_TypeLifetime();
-            os << ent.type << StringView(": ") << ent.bound;
-            break;
-        }
-        case ASTGenericBound::TAG_IsTrait: {
-            auto& ent = x.as_IsTrait();
-            os << ent.outerHrbs << ent.type << StringView(": ");
-            if (ent.constness == ASTBoundConstness::Always) {
-                os << StringView("const ");
-            } else if (ent.constness == ASTBoundConstness::Maybe) {
-                os << StringView("[const] ");
+            case ASTEnumVariantData::TAG_Tuple: {
+                auto& e = x.data.as_Tuple();
+                os << StringView("(") << e.items << StringView(")");
+                break;
             }
-            os << ent.innerHrbs << ent.trait;
-            break;
+            case ASTEnumVariantData::TAG_Struct: {
+                auto& e = x.data.as_Struct();
+                os << StringView(" { ") << e.fields << StringView(" }");
+                break;
+            }
         }
-        case ASTGenericBound::TAG_MaybeTrait: {
-            auto& ent = x.as_MaybeTrait();
-            os << ent.type << StringView(": ?") << ent.trait;
-            break;
+        if (x.discriminantValue) {
+            os << StringView(" = ") << x.discriminantValue;
         }
-        case ASTGenericBound::TAG_NotTrait: {
-            auto& ent = x.as_NotTrait();
-            os << ent.type << StringView(": !") << ent.trait;
-            break;
-        }
-        case ASTGenericBound::TAG_Equality: {
-            auto& ent = x.as_Equality();
-            os << ent.type << StringView(" = ") << ent.replacement;
-            break;
-        }
+        os << StringView(")");
+        return;
     }
-    return;
-}
 
-template <>
-void output<ZeroCopyOutput, ASTGenericParams>(ZeroCopyOutput& os, const ASTGenericParams& tps) {
-    os << StringView("<") << tps.params << StringView("> where {") << tps.bounds << StringView("}");
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTEnumVariant>(ZeroCopyOutput& os, const ASTEnumVariant& x) {
-    os << StringView("EnumVariant(") << x.name;
-    switch (x.data.tag()) {
-        case ASTEnumVariantData::TAG_Unit: {
-            break;
-        }
-        case ASTEnumVariantData::TAG_Tuple: {
-            auto& e = x.data.as_Tuple();
-            os << StringView("(") << e.items << StringView(")");
-            break;
-        }
-        case ASTEnumVariantData::TAG_Struct: {
-            auto& e = x.data.as_Struct();
-            os << StringView(" { ") << e.fields << StringView(" }");
-            break;
-        }
+    template <>
+    void output<ZeroCopyOutput, std::vector<ASTStructItem>>(ZeroCopyOutput& out, const std::vector<ASTStructItem>& values) {
+        outCont(out, values);
     }
-    if (x.discriminantValue) {
-        os << StringView(" = ") << x.discriminantValue;
+
+    template <>
+    void output<ZeroCopyOutput, std::vector<ASTTupleItem>>(ZeroCopyOutput& out, const std::vector<ASTTupleItem>& values) {
+        outCont(out, values);
     }
-    os << StringView(")");
-    return;
-}
 
-template <>
-void output<ZeroCopyOutput, std::vector<ASTStructItem>>(ZeroCopyOutput& out, const std::vector<ASTStructItem>& values) {
-    outCont(out, values);
-}
-
-template <>
-void output<ZeroCopyOutput, std::vector<ASTTupleItem>>(ZeroCopyOutput& out, const std::vector<ASTTupleItem>& values) {
-    outCont(out, values);
-}
-
-template <>
-void output<ZeroCopyOutput, std::vector<ASTUseItem::Ent>>(ZeroCopyOutput& out, const std::vector<ASTUseItem::Ent>& values) {
-    outCont(out, values);
-}
-
+    template <>
+    void output<ZeroCopyOutput, std::vector<ASTUseItem::Ent>>(ZeroCopyOutput& out, const std::vector<ASTUseItem::Ent>& values) {
+        outCont(out, values);
+    }
 }

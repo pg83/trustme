@@ -9,6 +9,9 @@
 
 class MirBuilder;
 
+void HIRGenerateMIR(const WireBoard& wb, HIRCrate& crate);
+void HIRGenerateMIRExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, const HIRFunction::argsT& args, const HIRTypeData* resTy);
+
 struct MIRDropEmitter {
     virtual bool emitDeepDrop(const Span& sp, const MIRLValue& value, unsigned int flag) = 0;
     virtual bool emitShallowDrop(const Span& sp, const MIRLValue& value, unsigned int flag) = 0;
@@ -34,7 +37,6 @@ public:
     ScopeHandle& operator=(const ScopeHandle& x) = delete;
     ScopeHandle& operator=(ScopeHandle&& x) = delete;
     ~ScopeHandle();
-
 };
 
 enum class InvalidType {
@@ -44,6 +46,7 @@ enum class InvalidType {
 };
 
 #include "mir_from_hir_tu.h"
+
 struct SplitArm {
     bool hasEarlyTerminated = false;
     bool alwaysEarlyTerminated = false;
@@ -93,7 +96,6 @@ struct fieldPathT {
     Ordering ord(const fieldPathT& x) const {
         return ::ord(data, x.data);
     }
-
 };
 
 struct PatternBinding {
@@ -111,7 +113,6 @@ struct PatternBinding {
     bool operator==(const PatternBinding& x) const {
         return rootIndex == x.rootIndex && field == x.field && binding == x.binding && splitSlice == x.splitSlice;
     }
-
 };
 
 class MirBuilder {

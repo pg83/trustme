@@ -2,67 +2,12 @@
 
 #include "hir_type.h"
 #include "hir_item_path.h"
+#include "hir_typeck_common.h"
 #include "hir_generic_params.h"
-
-bool monomorphisePathparamsNeeded(const HIRPathParams& tpl);
 
 static inline bool monomorphiseGenericpathNeeded(const HIRGenericPath& tpl) {
     return monomorphisePathparamsNeeded(tpl.params);
 }
-
-bool monomorphisePathNeeded(const HIRPath& tpl);
-struct WireBoard;
-
-bool monomorphiseTraitpathNeeded(const HIRTraitPath& tpl);
-bool monomorphiseTypeNeeded(const HIRTypeData* tpl);
-
-class Monomorphiser {
-protected:
-    HIRTypeInterner& types;
-
-private:
-    const WireBoard* constevalWb;
-    HIRItemPath constevalPath;
-
-public:
-    explicit Monomorphiser(HIRTypeInterner& types);
-
-    virtual ~Monomorphiser() = default;
-
-    HIRTypeInterner& typeInterner() const {
-        return types;
-    }
-
-    void setConstevalState(const WireBoard& wb, HIRItemPath ip);
-
-    virtual HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const = 0;
-    virtual HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const = 0;
-
-    virtual HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const;
-    HIRPath monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer = true) const;
-    HIRTraitPath monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer) const;
-    HIRTraitPath::AtyEqual monomorphTpAtyEqual(const Span& sp, const HIRTraitPath::AtyEqual& tpl, bool allowInfer) const;
-    HIRPathParams monomorphPathParams(const Span& sp, const HIRPathParams& tpl, bool allowInfer) const;
-    virtual HIRGenericPath monomorphGenericpath(const Span& sp, const HIRGenericPath& tpl, bool allowInfer = true) const;
-
-    virtual HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const;
-    HIRArraySize monomorphArraysize(const Span& sp, const HIRArraySize& tpl) const;
-
-    const HIRTypeData* maybeMonomorphType(const Span& sp, HIRTypeRef& tmp, const HIRTypeData* ty, bool allowInfer = true) const;
-};
-
-class MonomorphiserPP: public Monomorphiser {
-public:
-    explicit MonomorphiserPP(HIRTypeInterner& types);
-
-    virtual const HIRTypeData* getSelfType() const = 0;
-    virtual const HIRPathParams* getImplParams() const = 0;
-    virtual const HIRPathParams* getMethodParams() const = 0;
-    virtual const HIRPathParams* getHrbParams() const = 0;
-
-    HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override;
-    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
-};
 
 class MonomorphiserNop: public Monomorphiser {
 public:
@@ -129,6 +74,7 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 
     const HIRPathParams* getHrbParams() const override;
 };
+
 struct MonomorphState: public MonomorphiserPP {
     HIRTypeRef selfTy;
     const HIRPathParams* ppImpl;

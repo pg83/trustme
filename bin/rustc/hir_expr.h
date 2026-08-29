@@ -1,8 +1,7 @@
 #pragma once
 
-#include "output.h"
-
 #include "span.h"
+#include "output.h"
 #include "hir_asm.h"
 #include "hir_type.h"
 #include "hir_pattern.h"
@@ -891,5 +890,3 @@ public:
     virtual void visitPath(HIRVisitor::PathContext pc, HIRPath& ty);
     virtual void visitGenericPath(HIRVisitor::PathContext pc, HIRGenericPath& ty);
 };
-
-void HIRDumpExpr(stl::ZeroCopyOutput& sink, const HIRExprPtr& expr);

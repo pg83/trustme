@@ -47,3 +47,5 @@ public:
 
     virtual void emitGlobalAsm(const HIRGlobalAssembly&) = 0;
 };
+
+void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* crate, TransList list, const std::string& hirFile);

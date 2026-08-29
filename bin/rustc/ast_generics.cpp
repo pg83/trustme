@@ -1,5 +1,7 @@
 #include "ast_generics.h"
 
+#include "output.h"
+
 using namespace stl;
 
 ASTTypeParam::ASTTypeParam(const ASTTypeParam& x)
@@ -75,13 +77,96 @@ void ASTGenericParams::addParam(GenericParam gp, size_t boundsStart, size_t boun
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, std::vector<ASTGenericBound>>(ZeroCopyOutput& out, const std::vector<ASTGenericBound>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, ASTTypeParam>(ZeroCopyOutput& out, const ASTTypeParam& value) {
+        out << value.name() << StringView(" = ") << value.getDefault();
+    }
 
-template <>
-void output<ZeroCopyOutput, std::vector<GenericParam>>(ZeroCopyOutput& out, const std::vector<GenericParam>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, ASTLifetimeParam>(ZeroCopyOutput& out, const ASTLifetimeParam& value) {
+        out << StringView("'") << value.name();
+    }
+
+    template <>
+    void output<ZeroCopyOutput, ASTValueParam>(ZeroCopyOutput& out, const ASTValueParam& value) {
+        out << StringView("const ") << value.name() << StringView(": ") << value.type();
+    }
+
+    template <>
+    void output<ZeroCopyOutput, GenericParam>(ZeroCopyOutput& out, const GenericParam& value) {
+        switch (value.tag()) {
+            case GenericParam::TAG_None:
+                out << StringView("/*-*/");
+                break;
+            case GenericParam::TAG_Lifetime:
+                out << value.as_Lifetime();
+                break;
+            case GenericParam::TAG_Type:
+                out << value.as_Type();
+                break;
+            case GenericParam::TAG_Value:
+                out << value.as_Value();
+                break;
+        }
+    }
+
+    template <>
+    void output<ZeroCopyOutput, ASTGenericBound>(ZeroCopyOutput& out, const ASTGenericBound& value) {
+        switch (value.tag()) {
+            case ASTGenericBound::TAG_None:
+                out << StringView("/*-*/");
+                break;
+            case ASTGenericBound::TAG_Lifetime: {
+                const auto& inner = value.as_Lifetime();
+                out << inner.test << StringView(": ") << inner.bound;
+                break;
+            }
+            case ASTGenericBound::TAG_TypeLifetime: {
+                const auto& inner = value.as_TypeLifetime();
+                out << inner.type << StringView(": ") << inner.bound;
+                break;
+            }
+            case ASTGenericBound::TAG_IsTrait: {
+                const auto& inner = value.as_IsTrait();
+                out << inner.outerHrbs << inner.type << StringView(": ");
+                if (inner.constness == ASTBoundConstness::Always) {
+                    out << StringView("const ");
+                } else if (inner.constness == ASTBoundConstness::Maybe) {
+                    out << StringView("[const] ");
+                }
+                out << inner.innerHrbs << inner.trait;
+                break;
+            }
+            case ASTGenericBound::TAG_MaybeTrait: {
+                const auto& inner = value.as_MaybeTrait();
+                out << inner.type << StringView(": ?") << inner.trait;
+                break;
+            }
+            case ASTGenericBound::TAG_NotTrait: {
+                const auto& inner = value.as_NotTrait();
+                out << inner.type << StringView(": !") << inner.trait;
+                break;
+            }
+            case ASTGenericBound::TAG_Equality: {
+                const auto& inner = value.as_Equality();
+                out << inner.type << StringView(" = ") << inner.replacement;
+                break;
+            }
+        }
+    }
+
+    template <>
+    void output<ZeroCopyOutput, ASTGenericParams>(ZeroCopyOutput& out, const ASTGenericParams& value) {
+        out << StringView("<") << value.params << StringView("> where {") << value.bounds << StringView("}");
+    }
+
+    template <>
+    void output<ZeroCopyOutput, std::vector<ASTGenericBound>>(ZeroCopyOutput& out, const std::vector<ASTGenericBound>& values) {
+        outCont(out, values);
+    }
+
+    template <>
+    void output<ZeroCopyOutput, std::vector<GenericParam>>(ZeroCopyOutput& out, const std::vector<GenericParam>& values) {
+        outCont(out, values);
+    }
 }

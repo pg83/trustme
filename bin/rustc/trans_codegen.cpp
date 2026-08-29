@@ -14,6 +14,7 @@
 #include "trans_codegen_mir.h"
 #include "trans_monomorphise.h"
 #include "trans_main_bindings.h"
+#include "hir_typeck_monomorph.h"
 
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
@@ -189,10 +190,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
         BUG_ASSERT(ent.second->ptr);
         const auto& stat = *ent.second->ptr;
 
-        DEBUG(
-            StringView("STATIC proto ") << ent.first << StringView(": ")
-                            << StringView("(m_value_generated=") << stat.valueGenerated << StringView(" && !m_no_emit_value=") << stat.noEmitValue << StringView(") || is_generic=") << stat.params.isGeneric()
-        );
+        DEBUG(StringView("STATIC proto ") << ent.first << StringView(": ") << StringView("(m_value_generated=") << stat.valueGenerated << StringView(" && !m_no_emit_value=") << stat.noEmitValue << StringView(") || is_generic=") << stat.params.isGeneric());
         if ((stat.valueGenerated && !stat.noEmitValue) || stat.params.isGeneric()) {
             codegen->emitStaticProto(ent.first, stat, ent.second->pp);
         } else {

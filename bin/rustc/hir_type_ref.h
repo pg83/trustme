@@ -12,6 +12,7 @@
 class HIRTypeData;
 using HIRTypeRef = const HIRTypeData*;
 class HIRTypeInterner;
+class HIRMatchGenerics;
 
 namespace stl {
     class ObjPool;
@@ -57,31 +58,6 @@ class HIRResolvePlaceholdersNop: public HIRResolvePlaceholders {
 };
 
 using tCbResolveType = const HIRResolvePlaceholders&;
-
-class HIRMatchGenerics {
-protected:
-    struct BorrowMatchedValues {};
-
-    explicit HIRMatchGenerics(BorrowMatchedValues)
-        : retainedValuePool(nullptr)
-    {
-    }
-
-    explicit HIRMatchGenerics(stl::ObjPool& retainedValuePool)
-        : retainedValuePool(&retainedValuePool)
-    {
-    }
-
-public:
-    HIRCompare cmpPath(const Span& sp, const HIRPath& tyL, const HIRPath& tyR, tCbResolveType resolveCb);
-    virtual HIRCompare cmpType(const Span& sp, const HIRTypeData* tyL, const HIRTypeData* tyR, tCbResolveType resolveCb);
-
-    virtual HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) = 0;
-    virtual HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) = 0;
-
-private:
-    stl::ObjPool* retainedValuePool;
-};
 
 enum class HIRInferClass {
     None,

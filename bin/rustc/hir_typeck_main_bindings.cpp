@@ -6,6 +6,7 @@
 #include "wire_board.h"
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"
+#include "hir_typeck_monomorph.h"
 
 #include <algorithm>
 
@@ -203,7 +204,8 @@ void TypecheckModuleLevel(const WireBoard& wb, HIRCrate& crate) {
 TypecheckVisitor::TypecheckVisitor(const WireBoard& wb, HIRCrate& crate)
     : HIRVisitor(nullptr, crate.types)
     , crate(crate)
-    , resolve_(wb) {
+    , resolve_(wb)
+{
 }
 
 auto TypecheckVisitor::pushModTraits(const HIRModule& mod) -> ModTraitsGuard {
@@ -893,7 +895,8 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
                 std::map<unsigned int, const HIRTypeData*> rpitMapping;
 
                 MCB()
-                    : HIRMatchGenerics(BorrowMatchedValues{}) {
+                    : HIRMatchGenerics(BorrowMatchedValues{})
+                {
                 }
 
                 HIRCompare cmpType(const Span& sp, const HIRTypeData* tyL, const HIRTypeData* tyR, tCbResolveType resolveCb) override {
@@ -929,11 +932,7 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
             auto implRetTy = implFcn.returnType;
             resolve_.expandAssociatedTypes(sp, implRetTy);
             if (!expRetTy1->matchTestGenerics(sp, implRetTy, HIRResolvePlaceholdersNop(), matchCb)) {
-                failures.push_back(
-                    FMT(StringView("Mismatched return type:\n")
-                        << StringView("  Expected ") << expRetTy1 << StringView("\n")
-                        << StringView("  Found    ") << implRetTy)
-                );
+                failures.push_back(FMT(StringView("Mismatched return type:\n") << StringView("  Expected ") << expRetTy1 << StringView("\n") << StringView("  Found    ") << implRetTy));
             }
             HIRTypeRef expRetTyReal;
             const auto& expRetTy = matchCb.mapping.empty() && matchCb.rpitMapping.empty() ? expRetTy1 : (expRetTyReal = cloneTyWith(crate.types, sp, expRetTy1, [&](const HIRTypeData* ref, HIRTypeRef& out) -> bool {
@@ -960,36 +959,33 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
                 ERROR(
                     sp,
                     E0000,
-                    StringView("Method ") << e.first << StringView(" doesn't match trait:\n")
-                              << FMT_CB(os, for (const auto& f : failures) os << StringView("- ") << f << StringView("\n")) << StringView("Trait:\n")
-                              << FMT_CB(
-                                     os,
-                                     {
-                                         os << StringView("    fn ") << e.first << traitFcn.params.fmtArgs() << StringView("(");
-                                         for (const auto& a : traitFcn.args) {
-                                             os << a.first << StringView(": ") << maybeMonomorph(a.second) << StringView(", ");
-                                         }
-                                         os << StringView(")\n");
-                                         os << StringView("    -> ") << maybeMonomorph(traitFcn.returnType) << StringView("\n");
-                                         os << StringView("    ") << traitFcn.params.fmtBounds();
-                                     }
-                                 )
-                              << StringView("\n")
-                              << StringView("Impl :\n")
-                              << FMT_CB(
-                                     os,
-                                     {
-                                         os << StringView("    fn ") << e.first << implFcn.params.fmtArgs() << StringView("(");
-                                         for (const auto& a : implFcn.args) {
-                                             os << a.first << StringView(": ") << a.second << StringView(", ");
-                                         }
-                                         os << StringView(")\n");
-                                         os << StringView("    -> ") << implFcn.returnType << StringView("\n");
-                                         os << StringView("    ") << implFcn.params.fmtBounds();
-                                     }
-                                 )
-                              << StringView("\n")
-                              << StringView("in impl") << impl.params.fmtArgs() << StringView(" ") << traitPath << impl.traitArgs << StringView(" for ") << impl.type
+                    StringView("Method ") << e.first << StringView(" doesn't match trait:\n") << FMT_CB(os, for (const auto& f : failures) os << StringView("- ") << f << StringView("\n")) << StringView("Trait:\n")
+                                          << FMT_CB(
+                                                 os,
+                                                 {
+                                                     os << StringView("    fn ") << e.first << traitFcn.params.fmtArgs() << StringView("(");
+                                                     for (const auto& a : traitFcn.args) {
+                                                         os << a.first << StringView(": ") << maybeMonomorph(a.second) << StringView(", ");
+                                                     }
+                                                     os << StringView(")\n");
+                                                     os << StringView("    -> ") << maybeMonomorph(traitFcn.returnType) << StringView("\n");
+                                                     os << StringView("    ") << traitFcn.params.fmtBounds();
+                                                 }
+                                             )
+                                          << StringView("\n") << StringView("Impl :\n")
+                                          << FMT_CB(
+                                                 os,
+                                                 {
+                                                     os << StringView("    fn ") << e.first << implFcn.params.fmtArgs() << StringView("(");
+                                                     for (const auto& a : implFcn.args) {
+                                                         os << a.first << StringView(": ") << a.second << StringView(", ");
+                                                     }
+                                                     os << StringView(")\n");
+                                                     os << StringView("    -> ") << implFcn.returnType << StringView("\n");
+                                                     os << StringView("    ") << implFcn.params.fmtBounds();
+                                                 }
+                                             )
+                                          << StringView("\n") << StringView("in impl") << impl.params.fmtArgs() << StringView(" ") << traitPath << impl.traitArgs << StringView(" for ") << impl.type
                 );
             }
             // HACK: Replace all types (which should be functionally identical) so lifetimes match

@@ -2,31 +2,6 @@
 
 using namespace stl;
 
-Monomorphiser::Monomorphiser(HIRTypeInterner& types)
-    : types(types)
-    , constevalWb(nullptr)
-    , constevalPath("")
-{
-}
-
-void Monomorphiser::setConstevalState(const WireBoard& wb, HIRItemPath ip) {
-    this->constevalWb = &wb;
-    this->constevalPath = ip;
-}
-
-const HIRTypeData* Monomorphiser::maybeMonomorphType(const Span& sp, HIRTypeRef& tmp, const HIRTypeData* ty, bool allowInfer) const {
-    if (monomorphiseTypeNeeded(ty)) {
-        return tmp = monomorphType(sp, ty, allowInfer);
-    } else {
-        return ty;
-    }
-}
-
-MonomorphiserPP::MonomorphiserPP(HIRTypeInterner& types)
-    : Monomorphiser(types)
-{
-}
-
 MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types)
     : MonomorphiserPP(types)
     , selfTy(nullptr)
@@ -166,4 +141,21 @@ const HIRPathParams* MonomorphState::getMethodParams() const {
 
 const HIRPathParams* MonomorphState::getHrbParams() const {
     return nullptr;
+}
+
+namespace stl {
+    template <>
+    void output<ZeroCopyOutput, MonomorphState>(ZeroCopyOutput& os, const MonomorphState& ms) {
+        os << StringView("MonomorphState {");
+        if (ms.selfTy != HIRTypeRef()) {
+            os << StringView(" self=") << ms.selfTy;
+        }
+        if (ms.ppImpl) {
+            os << StringView(" I=") << *ms.ppImpl;
+        }
+        if (ms.ppMethod) {
+            os << StringView(" M=") << *ms.ppMethod;
+        }
+        os << StringView(" }");
+    }
 }

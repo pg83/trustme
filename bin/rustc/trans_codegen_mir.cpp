@@ -1,11 +1,11 @@
 #include "trans_codegen_mir.h"
-#include "output.h"
-#include "output_file.h"
 
+#include "output.h"
 #include "hir_hir.h"
 #include "mir_mir.h"
 #include "wire_board.h"
 #include "mir_helpers.h"
+#include "output_file.h"
 #include "trans_target.h"
 #include "trans_codegen.h"
 #include "mir_operations.h"
@@ -13,6 +13,7 @@
 #include "trans_trans_list.h"
 #include "hir_typeck_static.h"
 #include "trans_main_bindings.h"
+#include "hir_typeck_monomorph.h"
 
 #include <fstream>
 #include <algorithm>
@@ -87,20 +88,6 @@ namespace {
     Fmt<T> fmt(const WireBoard& wb, const T& v) {
         return Fmt<T>(wb, v);
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }
 
 std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile) {
@@ -1186,26 +1173,26 @@ auto CodeGeneratorMonoMir::monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunct
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, Fmt<HIRPath>>(ZeroCopyOutput& os, Fmt<HIRPath> x) {
+    template <>
+    void output<ZeroCopyOutput, Fmt<HIRPath>>(ZeroCopyOutput& os, Fmt<HIRPath> x) {
         os << TransMangle(x.wb, x.e);
-    return;
+        return;
     }
 
-template <>
-void output<ZeroCopyOutput, Fmt<HIRGenericPath>>(ZeroCopyOutput& os, Fmt<HIRGenericPath> x) {
+    template <>
+    void output<ZeroCopyOutput, Fmt<HIRGenericPath>>(ZeroCopyOutput& os, Fmt<HIRGenericPath> x) {
         os << TransMangle(x.wb, x.e);
-    return;
+        return;
     }
 
-template <>
-void output<ZeroCopyOutput, Fmt<HIRSimplePath>>(ZeroCopyOutput& os, Fmt<HIRSimplePath> x) {
+    template <>
+    void output<ZeroCopyOutput, Fmt<HIRSimplePath>>(ZeroCopyOutput& os, Fmt<HIRSimplePath> x) {
         os << TransMangle(x.wb, x.e);
-    return;
+        return;
     }
 
-template <>
-void output<ZeroCopyOutput, Fmt<HIRTypeRef>>(ZeroCopyOutput& os, Fmt<HIRTypeRef> x) {
+    template <>
+    void output<ZeroCopyOutput, Fmt<HIRTypeRef>>(ZeroCopyOutput& os, Fmt<HIRTypeRef> x) {
         {
             auto& tuMatch = (*x.e);
             switch (tuMatch.tag()) {
@@ -1325,8 +1312,8 @@ void output<ZeroCopyOutput, Fmt<HIRTypeRef>>(ZeroCopyOutput& os, Fmt<HIRTypeRef>
         return;
     }
 
-template <>
-void output<ZeroCopyOutput, Fmt<MIRLValue>>(ZeroCopyOutput& os, Fmt<MIRLValue> x) {
+    template <>
+    void output<ZeroCopyOutput, Fmt<MIRLValue>>(ZeroCopyOutput& os, Fmt<MIRLValue> x) {
         for (const auto& w : ::reverse(x.e.wrappers)) {
             if (w.is_Deref()) {
                 os << StringView("(*");
@@ -1387,8 +1374,8 @@ void output<ZeroCopyOutput, Fmt<MIRLValue>>(ZeroCopyOutput& os, Fmt<MIRLValue> x
         return;
     }
 
-template <>
-void output<ZeroCopyOutput, Fmt<MIRConstant>>(ZeroCopyOutput& os, Fmt<MIRConstant> x) {
+    template <>
+    void output<ZeroCopyOutput, Fmt<MIRConstant>>(ZeroCopyOutput& os, Fmt<MIRConstant> x) {
         struct H {
             static u64 doubleToU64(double v) {
                 u64 rv;
@@ -1439,8 +1426,8 @@ void output<ZeroCopyOutput, Fmt<MIRConstant>>(ZeroCopyOutput& os, Fmt<MIRConstan
         return;
     }
 
-template <>
-void output<ZeroCopyOutput, Fmt<MIRParam>>(ZeroCopyOutput& os, Fmt<MIRParam> x) {
+    template <>
+    void output<ZeroCopyOutput, Fmt<MIRParam>>(ZeroCopyOutput& os, Fmt<MIRParam> x) {
         switch (x.e.tag()) {
             break;
             case MIRParam::TAG_LValue: {

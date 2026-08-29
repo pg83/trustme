@@ -1,17 +1,18 @@
 #include "trans_target.h"
-#include "output.h"
-#include "output_file.h"
 
 #include "toml.h"
+#include "output.h"
 #include "hir_hir.h"
 #include "settings.h"
 #include "expand_cfg.h"
 #include "wire_board.h"
+#include "output_file.h"
 #include "trans_mangling.h"
 #include "hir_typeck_common.h"
 #include "hir_typeck_helpers.h"
 #include "hir_typeck_monomorph.h"
 #include "hir_conv_main_bindings.h"
+#include "hir_conv_constant_evaluation.h"
 
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
@@ -421,48 +422,19 @@ namespace {
             }
         };
 
-        of << StringView("[target]\n")
-           << StringView("family = \"") << spec.family << StringView("\"\n")
-           << StringView("os-name = \"") << spec.osName << StringView("\"\n")
-           << StringView("env-name = \"") << spec.envName << StringView("\"\n")
-           << StringView("\n")
-           << StringView("[backend.c]\n")
-           << StringView("variant = \"gnu\"\n")
-           << StringView("target = \"") << spec.backendC.cCompiler << StringView("\"\n")
-           << StringView("compiler-opts = [");
+        of << StringView("[target]\n") << StringView("family = \"") << spec.family << StringView("\"\n") << StringView("os-name = \"") << spec.osName << StringView("\"\n") << StringView("env-name = \"") << spec.envName << StringView("\"\n") << StringView("\n") << StringView("[backend.c]\n") << StringView("variant = \"gnu\"\n") << StringView("target = \"") << spec.backendC.cCompiler << StringView("\"\n") << StringView("compiler-opts = [");
         for (const auto& s : spec.backendC.compilerOpts) {
             of << StringView("\"") << s << StringView("\",");
         }
-        of << StringView("]\n")
-           << StringView("linker-opts-pre = [");
+        of << StringView("]\n") << StringView("linker-opts-pre = [");
         for (const auto& s : spec.backendC.linkerOptsPre) {
             of << StringView("\"") << s << StringView("\",");
         }
-        of << StringView("]\n")
-           << StringView("linker-opts-post = [");
+        of << StringView("]\n") << StringView("linker-opts-post = [");
         for (const auto& s : spec.backendC.linkerOptsPost) {
             of << StringView("\"") << s << StringView("\",");
         }
-        of << StringView("]\n")
-           << StringView("\n")
-           << StringView("[arch]\n")
-           << StringView("name = \"") << spec.arch.name << StringView("\"\n")
-           << StringView("pointer-bits = ") << spec.arch.pointerBits << StringView("\n")
-           << StringView("is-big-endian = ") << H::tfstr(spec.arch.bigEndian) << StringView("\n")
-           << StringView("has-atomic-u8 = ") << H::tfstr(spec.arch.atomics.u8) << StringView("\n")
-           << StringView("has-atomic-u16 = ") << H::tfstr(spec.arch.atomics.u16) << StringView("\n")
-           << StringView("has-atomic-u32 = ") << H::tfstr(spec.arch.atomics.u32) << StringView("\n")
-           << StringView("has-atomic-u64 = ") << H::tfstr(spec.arch.atomics.u64) << StringView("\n")
-           << StringView("has-atomic-ptr = ") << H::tfstr(spec.arch.atomics.ptr) << StringView("\n")
-           << StringView("alignments = {")
-           << StringView(" u16 = ") << static_cast<int>(spec.arch.alignments.u16) << StringView(",")
-           << StringView(" u32 = ") << static_cast<int>(spec.arch.alignments.u32) << StringView(",")
-           << StringView(" u64 = ") << static_cast<int>(spec.arch.alignments.u64) << StringView(",")
-           << StringView(" u128 = ") << static_cast<int>(spec.arch.alignments.u128) << StringView(",")
-           << StringView(" f32 = ") << static_cast<int>(spec.arch.alignments.f32) << StringView(",")
-           << StringView(" f64 = ") << static_cast<int>(spec.arch.alignments.f64) << StringView(",")
-           << StringView(" ptr = ") << static_cast<int>(spec.arch.alignments.ptr) << StringView(" }\n")
-           << StringView("\n");
+        of << StringView("]\n") << StringView("\n") << StringView("[arch]\n") << StringView("name = \"") << spec.arch.name << StringView("\"\n") << StringView("pointer-bits = ") << spec.arch.pointerBits << StringView("\n") << StringView("is-big-endian = ") << H::tfstr(spec.arch.bigEndian) << StringView("\n") << StringView("has-atomic-u8 = ") << H::tfstr(spec.arch.atomics.u8) << StringView("\n") << StringView("has-atomic-u16 = ") << H::tfstr(spec.arch.atomics.u16) << StringView("\n") << StringView("has-atomic-u32 = ") << H::tfstr(spec.arch.atomics.u32) << StringView("\n") << StringView("has-atomic-u64 = ") << H::tfstr(spec.arch.atomics.u64) << StringView("\n") << StringView("has-atomic-ptr = ") << H::tfstr(spec.arch.atomics.ptr) << StringView("\n") << StringView("alignments = {") << StringView(" u16 = ") << static_cast<int>(spec.arch.alignments.u16) << StringView(",") << StringView(" u32 = ") << static_cast<int>(spec.arch.alignments.u32) << StringView(",") << StringView(" u64 = ") << static_cast<int>(spec.arch.alignments.u64) << StringView(",") << StringView(" u128 = ") << static_cast<int>(spec.arch.alignments.u128) << StringView(",") << StringView(" f32 = ") << static_cast<int>(spec.arch.alignments.f32) << StringView(",") << StringView(" f64 = ") << static_cast<int>(spec.arch.alignments.f64) << StringView(",") << StringView(" ptr = ") << static_cast<int>(spec.arch.alignments.ptr) << StringView(" }\n") << StringView("\n");
     }
 
     TargetSpec initFromSpecName(const std::string& targetName) {
@@ -571,8 +543,6 @@ namespace {
             return std::binary_search(visitor.definitions.begin(), visitor.definitions.end(), slot);
         });
     }
-
-
 
     bool makeFieldEnt(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, HIRTypeRef ty, Ent& out) {
         size_t size, align;
@@ -2798,8 +2768,6 @@ TargetArch::Alignments::Alignments(u8 u16, u8 u32, u8 u64, u8 u128, u8 f32, u8 f
 {
 }
 
-
-
 auto AsyncDropFieldLayout::empty() const -> bool {
     return futures.empty();
 }
@@ -3335,27 +3303,27 @@ auto TransmuteRelation::check() -> bool {
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, Ent>(ZeroCopyOutput& os, const Ent& e) {
+    template <>
+    void output<ZeroCopyOutput, Ent>(ZeroCopyOutput& os, const Ent& e) {
         os << StringView("Ent { #") << e.field << StringView(": s=") << e.size << StringView(" a=") << e.align << (e.userAlign ? "!" : "") << StringView(" : ") << e.ty << StringView(" }");
         return;
     }
 
-template <>
-void output<ZeroCopyOutput, std::vector<Ent>>(ZeroCopyOutput& out, const std::vector<Ent>& values) {
-    outCont(out, values);
-}
-
-template <>
-void output<ZeroCopyOutput, TypeRepr::FieldPath>(ZeroCopyOutput& os, const TypeRepr::FieldPath& x) {
-    os << x.size << StringView("@") << x.index;
-    for (auto idx : x.subFields) {
-        if (idx == TypeRepr::FieldPath::ARRAY_ELEMENT) {
-            os << StringView("[0]");
-        } else {
-            os << StringView(".") << idx;
-        }
+    template <>
+    void output<ZeroCopyOutput, std::vector<Ent>>(ZeroCopyOutput& out, const std::vector<Ent>& values) {
+        outCont(out, values);
     }
-    return;
-}
+
+    template <>
+    void output<ZeroCopyOutput, TypeRepr::FieldPath>(ZeroCopyOutput& os, const TypeRepr::FieldPath& x) {
+        os << x.size << StringView("@") << x.index;
+        for (auto idx : x.subFields) {
+            if (idx == TypeRepr::FieldPath::ARRAY_ELEMENT) {
+                os << StringView("[0]");
+            } else {
+                os << StringView(".") << idx;
+            }
+        }
+        return;
+    }
 }

@@ -6,7 +6,9 @@
 #include "thin_vector.h"
 #include "trans_target.h"
 #include "hir_inherent_cache.h"
+#include "hir_typeck_monomorph.h"
 #include "hir_conv_main_bindings.h"
+#include "hir_conv_constant_evaluation.h"
 
 #include <std/alg/defer.h>
 #include <std/sym/i_map.h>

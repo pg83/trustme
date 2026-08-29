@@ -1,8 +1,7 @@
 #pragma once
 
-#include "output.h"
-
 #include "span.h"
+#include "output.h"
 #include "hir_path.h"
 #include "hir_expr_ptr.h"
 #include "hir_type_ref.h"
@@ -189,6 +188,31 @@ struct HIRTypeDataNamedFunction {
 };
 
 #include "hir_type_tu.h"
+
+class HIRMatchGenerics {
+protected:
+    struct BorrowMatchedValues {};
+
+    explicit HIRMatchGenerics(BorrowMatchedValues)
+        : retainedValuePool(nullptr)
+    {
+    }
+
+    explicit HIRMatchGenerics(stl::ObjPool& retainedValuePool)
+        : retainedValuePool(&retainedValuePool)
+    {
+    }
+
+public:
+    HIRCompare cmpPath(const Span& sp, const HIRPath& tyL, const HIRPath& tyR, tCbResolveType resolveCb);
+    virtual HIRCompare cmpType(const Span& sp, const HIRTypeData* tyL, const HIRTypeData* tyR, tCbResolveType resolveCb);
+
+    virtual HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) = 0;
+    virtual HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) = 0;
+
+private:
+    stl::ObjPool* retainedValuePool;
+};
 
 class HIRTypeInterner {
     stl::ObjPool& pool;

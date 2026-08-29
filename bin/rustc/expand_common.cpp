@@ -1855,10 +1855,6 @@ void ExpandInit(ExpandRegistry& registry) {
     RegisterProcMacroBuiltins(registry);
 }
 
-void ExpandDecorator::unexpected(const Span& sp, const ASTAttribute& mi, const char* locStr) const {
-    WARNING(sp, W0000, StringView("Unexpected attribute ") << mi.name() << StringView(" on ") << locStr);
-}
-
 ExpandProcMacro* ExpandFindProcMacro(const WireBoard& wb, const RcString& name) {
     return wb.expandRegistry->findMacro(name);
 }

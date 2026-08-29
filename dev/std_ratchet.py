@@ -4,8 +4,8 @@
     std_ratchet.py --baseline PATH [--stamp PATH] FILE...
 
 Counts banned constructs (heap ownership and std:: containers - see
-PATTERNS) per given source file and compares them with the checked-in
-baseline. Any increase fails the gate: new code must use the libstd idiom
+PATTERNS) across all given source files and compares their total with the
+checked-in baseline. Any increase fails the gate: new code must use the libstd idiom
 (ObjPool ownership, interned immutable data, pool node lists) regardless
 of the style of the surrounding legacy code. Any decrease rewrites the
 baseline in place, so improvements lock in immediately.
@@ -18,7 +18,6 @@ the same line or an adjacent line exempts that line's hits from the
 count. The reason is mandatory.
 """
 
-import os
 import re
 import sys
 
@@ -85,8 +84,9 @@ ESCAPE = re.compile(r"//\s*escape:\s*\S")
 RATCHET_HINT = """\
 ## The ratchet
 
-`dev/std_ratchet.py` (run by the `unit` gate) counts banned `std::`
-constructs per file against `dev/std_ratchet.baseline`. Counts may only
+`dev/std_ratchet.py` (run by the `style` gate) counts banned `std::`
+constructs across `bin/rustc` against the single total in
+`dev/std_ratchet.baseline`. The total may only
 go down: any increase fails the gate; any decrease rewrites the baseline
 automatically, locking the improvement in. Never edit the baseline
 upward by hand.
@@ -111,15 +111,8 @@ def escaped_lines(text):
     return out
 
 
-def baseline_key(path):
-    """Stable key independent of where the build ran from."""
-    norm = path.replace(os.sep, "/")
-    i = norm.rfind("bin/rustc/")
-    return norm[i:] if i >= 0 else os.path.basename(norm)
-
-
 def scan(files):
-    counts = {}
+    total = 0
     escaped = 0
     for path in files:
         with open(path, errors="replace") as fh:
@@ -134,33 +127,31 @@ def scan(files):
                     escaped += n
                 else:
                     hits += n
-            if hits:
-                counts[(baseline_key(path), label)] = hits
-    return counts, escaped
+            total += hits
+    return total, escaped
 
 
 def load_baseline(path):
-    counts = {}
-    if not os.path.exists(path):
+    try:
+        fh = open(path)
+    except FileNotFoundError:
         return None
-    with open(path) as fh:
+    with fh:
         for line in fh:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            count, label, rel = line.split("\t")
-            counts[(rel, label)] = int(count)
-    return counts
+            return int(line)
+    raise ValueError(f"empty baseline: {path}")
 
 
-def save_baseline(path, counts):
+def save_baseline(path, total):
     with open(path, "w") as fh:
         fh.write("# Managed by dev/std_ratchet.py; regenerated whenever the"
-                 " counts shrink.\n")
+                 " total shrinks.\n")
         fh.write("# Never edit upward: new code uses the libstd idiom"
                  " (see CLAUDE.md).\n")
-        for (rel, label), count in sorted(counts.items()):
-            fh.write(f"{count}\t{label}\t{rel}\n")
+        fh.write(f"{total}\n")
 
 
 def main():
@@ -184,25 +175,17 @@ def main():
 
     if baseline is None:
         save_baseline(baseline_path, current)
-        print(f"std_ratchet: baseline created with {sum(current.values())}"
-              f" hits in {len(current)} entries{suffix}")
+        print(f"std_ratchet: baseline created with {current} hits{suffix}")
     else:
-        worse = [(k, baseline.get(k, 0), v) for k, v in sorted(current.items())
-                 if v > baseline.get(k, 0)]
-        if worse:
+        if current > baseline:
             print(RATCHET_HINT, file=sys.stderr, end="")
-            print("Increased entries:", file=sys.stderr)
-            for (rel, label), base, cur in worse:
-                print(f"  {rel}: {label} {base} -> {cur}", file=sys.stderr)
+            print(f"Total increased: {baseline} -> {current}", file=sys.stderr)
             return 1
-        if current != baseline:
+        if current < baseline:
             save_baseline(baseline_path, current)
-            print(f"std_ratchet: tightened"
-                  f" {sum(baseline.values())} -> {sum(current.values())} hits,"
-                  f" {len(baseline)} -> {len(current)} entries{suffix}")
+            print(f"std_ratchet: tightened {baseline} -> {current} hits{suffix}")
         else:
-            print(f"std_ratchet: OK ({sum(current.values())} hits in"
-                  f" {len(current)} entries{suffix})")
+            print(f"std_ratchet: OK ({current} hits{suffix})")
 
     if stamp:
         with open(stamp, "w"):

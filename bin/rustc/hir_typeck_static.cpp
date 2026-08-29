@@ -7,7 +7,8 @@
 #include "hir_visitor.h"
 #include "hir_item_path.h"
 #include "hir_typeck_helpers.h"
-#include "hir_conv_main_bindings.h"
+#include "hir_typeck_monomorph.h"
+#include "hir_conv_constant_evaluation.h"
 
 #include <std/alg/defer.h>
 #include <std/mem/obj_pool.h>

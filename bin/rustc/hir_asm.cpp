@@ -1,14 +1,49 @@
 #include "hir_asm.h"
-#include "output.h"
 
 #include "span.h"
+#include "output.h"
+
+#include <cctype>
 
 using namespace stl;
+
+namespace {
+    void printFmtString(ZeroCopyOutput& out, const std::string& value) {
+        static const char* hex = "0123456789ABCDEF";
+        for (auto c : value) {
+            if (c == '{') {
+                out << StringView("{{");
+            } else if (c == '\\') {
+                out << StringView("\\\\");
+            } else if (c == '"') {
+                out << StringView("\\\"");
+            } else if (std::isprint(c)) {
+                out << c;
+            } else {
+                out << StringView("\\x") << hex[c >> 4] << hex[c & 15];
+            }
+        }
+    }
+}
 
 AsmLineFragment::AsmLineFragment()
     : index(UINT_MAX)
     , modifier('\0')
 {
+}
+
+void AsmLine::fmt(ZeroCopyOutput& out) const {
+    out << StringView("\"");
+    for (const auto& fragment : frags) {
+        printFmtString(out, fragment.before);
+        out << StringView("{") << fragment.index;
+        if (fragment.modifier) {
+            out << StringView(":") << fragment.modifier;
+        }
+        out << StringView("}");
+    }
+    printFmtString(out, trailing);
+    out << StringView("\"");
 }
 
 AsmOptions::AsmOptions()
@@ -76,8 +111,6 @@ bool AsmOptions::operator==(const AsmOptions& x) const {
     return true;
 }
 
-
-
 bool operator==(const AsmRegisterSpec& a, const AsmRegisterSpec& b) {
     if (a.tag() != b.tag()) {
         return false;
@@ -122,47 +155,47 @@ const char* to_string(const AsmRegisterClass& c) {
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, AsmLine>(ZeroCopyOutput& os, const AsmLine& line) {
-    line.fmt(os);
-}
-
-template <>
-void output<ZeroCopyOutput, AsmDirection>(ZeroCopyOutput& os, AsmDirection d) {
-    switch (d) {
-        case AsmDirection::In:
-            os << StringView("in");
-    return;
-        case AsmDirection::Out:
-            os << StringView("out");
-    return;
-        case AsmDirection::LateOut:
-            os << StringView("lateout");
-    return;
-        case AsmDirection::InOut:
-            os << StringView("inout");
-    return;
-        case AsmDirection::InLateOut:
-            os << StringView("inlateout");
-    return;
+    template <>
+    void output<ZeroCopyOutput, AsmLine>(ZeroCopyOutput& os, const AsmLine& line) {
+        line.fmt(os);
     }
-    return;
-}
 
-template <>
-void output<ZeroCopyOutput, AsmRegisterSpec>(ZeroCopyOutput& os, const AsmRegisterSpec& s) {
-    switch (s.tag()) {
-        case AsmRegisterSpec::TAG_Class: {
-            auto& c = s.as_Class();
-            os << to_string(c);
-            break;
+    template <>
+    void output<ZeroCopyOutput, AsmDirection>(ZeroCopyOutput& os, AsmDirection d) {
+        switch (d) {
+            case AsmDirection::In:
+                os << StringView("in");
+                return;
+            case AsmDirection::Out:
+                os << StringView("out");
+                return;
+            case AsmDirection::LateOut:
+                os << StringView("lateout");
+                return;
+            case AsmDirection::InOut:
+                os << StringView("inout");
+                return;
+            case AsmDirection::InLateOut:
+                os << StringView("inlateout");
+                return;
         }
-        case AsmRegisterSpec::TAG_Explicit: {
-            auto& e = s.as_Explicit();
-            os << StringView("\"") << e << StringView("\"");
-            break;
-        }
+        return;
     }
-    return;
-}
+
+    template <>
+    void output<ZeroCopyOutput, AsmRegisterSpec>(ZeroCopyOutput& os, const AsmRegisterSpec& s) {
+        switch (s.tag()) {
+            case AsmRegisterSpec::TAG_Class: {
+                auto& c = s.as_Class();
+                os << to_string(c);
+                break;
+            }
+            case AsmRegisterSpec::TAG_Explicit: {
+                auto& e = s.as_Explicit();
+                os << StringView("\"") << e << StringView("\"");
+                break;
+            }
+        }
+        return;
+    }
 }

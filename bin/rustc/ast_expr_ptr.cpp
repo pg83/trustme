@@ -1,6 +1,14 @@
 #include "ast_expr_ptr.h"
 
+#include "output.h"
+#include "ast_expr.h"
 #include "compile_error.h"
+
+using namespace stl;
+
+const char* ASTExprNodeP::typeName() const {
+    return typeid(*ptr).name();
+}
 
 ASTExprNodeP::ASTExprNodeP()
     : ptr(nullptr)
@@ -28,6 +36,38 @@ void ASTExprNodeP::reset(ASTExprNode* n) {
     ptr = n;
 }
 
+ASTExpr::ASTExpr(ASTExprNodeP node)
+    : node_(node.release())
+{
+}
+
+ASTExpr::ASTExpr(ASTExprNode* node)
+    : node_(node)
+{
+}
+
+ASTExpr::ASTExpr()
+    : node_(nullptr)
+{
+}
+
+void ASTExpr::visitNodes(ASTNodeVisitor& visitor) {
+    if (node_) {
+        node_->visit(visitor);
+    }
+}
+
+void ASTExpr::visitNodes(ASTNodeVisitor& visitor) const {
+    if (node_) {
+        BUG_ASSERT(visitor.isConst());
+        node_->visit(visitor);
+    }
+}
+
+ASTExpr ASTExpr::clone() const {
+    return node_ ? ASTExpr(node_->clone()) : ASTExpr();
+}
+
 const ASTExprNode& ASTExpr::node() const {
     BUG_ASSERT(node_);
     return *node_;
@@ -43,4 +83,15 @@ ASTExprNode* ASTExpr::takeNode() {
     auto* node = node_;
     node_ = nullptr;
     return node;
+}
+
+namespace stl {
+    template <>
+    void output<ZeroCopyOutput, ASTExpr>(ZeroCopyOutput& out, ASTExpr value) {
+        if (value) {
+            out << value.node();
+        } else {
+            out << StringView("/* null */");
+        }
+    }
 }

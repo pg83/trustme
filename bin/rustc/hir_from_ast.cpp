@@ -16,6 +16,7 @@
 #include "parse_ttstream.h"
 #include "hir_main_bindings.h"
 #include "hir_typeck_helpers.h"
+#include "hir_typeck_monomorph.h"
 #include "hir_conv_main_bindings.h"
 #include "macro_rules_macro_rules.h"
 

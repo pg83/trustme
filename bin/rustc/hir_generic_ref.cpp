@@ -1,4 +1,5 @@
 #include "hir_generic_ref.h"
+
 #include "output.h"
 
 using namespace stl;
@@ -38,10 +39,38 @@ Ordering HIRGenericRef::ord(const HIRGenericRef& x) const {
     return rv;
 }
 
-namespace stl {
-template <>
-void output<ZeroCopyOutput, HIRGenericRef>(ZeroCopyOutput& os, HIRGenericRef x) {
-    x.fmt(os);
-    return;
+void HIRGenericRef::fmt(ZeroCopyOutput& os) const {
+    os << this->name << StringView("/*");
+    if (this->isSolverExistential()) {
+        os << StringView("E:") << this->solverScope << StringView(":") << this->idx();
+    } else if (this->binding == GENERICSelf) {
+        os << StringView("");
+    } else {
+        switch (this->group()) {
+            case 0:
+                os << StringView("I:") << this->idx();
+                break;
+            case 1:
+                os << StringView("M:") << this->idx();
+                break;
+            case 2:
+                os << StringView("P:") << this->idx();
+                break;
+            case 3:
+                os << StringView("H:") << this->idx();
+                break;
+            default:
+                os << this->binding;
+                break;
+        }
+    }
+    os << StringView("*/");
 }
+
+namespace stl {
+    template <>
+    void output<ZeroCopyOutput, HIRGenericRef>(ZeroCopyOutput& os, HIRGenericRef x) {
+        x.fmt(os);
+        return;
+    }
 }

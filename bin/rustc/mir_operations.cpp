@@ -1,7 +1,7 @@
 #include "mir_operations.h"
-#include "output.h"
 #include "mir_operations.h"
 
+#include "output.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
 #include "wire_board.h"
@@ -12,6 +12,7 @@
 #include "hir_typeck_static.h"
 #include "mir_main_bindings.h"
 #include "mir_visit_crate_mir.h"
+#include "hir_typeck_monomorph.h"
 #include "hir_conv_main_bindings.h"
 #include "hir_conv_constant_evaluation.h"
 
@@ -2351,8 +2352,6 @@ namespace {
         }
         return inlineHappened;
     }
-
-
 
     enum class IterPathRes {
         Abort,
@@ -7837,14 +7836,14 @@ auto CheckInvalidatesLvalue::visitLvalue(const MIRLValue& lv, MIRValUsage vu) ->
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, OptimiseStmtRef>(ZeroCopyOutput& os, OptimiseStmtRef x) {
+    template <>
+    void output<ZeroCopyOutput, OptimiseStmtRef>(ZeroCopyOutput& os, OptimiseStmtRef x) {
         os << StringView("BB") << x.bbIdx << StringView("/") << x.stmtIdx;
-    return;
+        return;
     }
 
-template <>
-void output<ZeroCopyOutput, std::vector<OptimiseStmtRef>>(ZeroCopyOutput& out, const std::vector<OptimiseStmtRef>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, std::vector<OptimiseStmtRef>>(ZeroCopyOutput& out, const std::vector<OptimiseStmtRef>& values) {
+        outCont(out, values);
+    }
 }

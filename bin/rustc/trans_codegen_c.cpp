@@ -1,17 +1,18 @@
 #include "trans_codegen_c.h"
-#include "output.h"
-#include "output_file.h"
 
+#include "output.h"
 #include "hir_hir.h"
 #include "mir_mir.h"
 #include "wire_board.h"
 #include "mir_helpers.h"
+#include "output_file.h"
 #include "trans_target.h"
 #include "trans_codegen.h"
 #include "target_version.h"
 #include "trans_mangling.h"
 #include "trans_allocator.h"
 #include "hir_typeck_static.h"
+#include "hir_typeck_monomorph.h"
 
 #include <std/sym/i_map.h>
 #include <std/lib/vector.h>
@@ -528,10 +529,6 @@ namespace {
         bool isDst(const HIRTypeData* ty) const;
     };
 
-
-
-
-
     enum class AtomicOp {
         Add,
         Sub,
@@ -738,14 +735,8 @@ CodeGeneratorC::CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const
     options.disallowEmptyStructs = true;
 
     const auto& targetSpec = TargetGetCurSpec(wb_);
-    of << StringView("#define TRUSTME_CODEGEN_DISALLOW_EMPTY_STRUCTS ") << options.disallowEmptyStructs << StringView("\n")
-       << StringView("#define TRUSTME_TARGET_EMULATED_I128 ") << options.emulatedI128 << StringView("\n")
-       << StringView("#define TRUSTME_TARGET_U128_ALIGN ") << static_cast<unsigned>(targetSpec.arch.alignments.u128) << StringView("\n")
-       << StringView("#define TRUSTME_TARGET_HAS_NATIVE_F128 ") << usesIntelCompilerAsmDialect() << StringView("\n")
-       << StringView(CODEGEN_C_PRELUDE);
-    of << StringView("}\nnamespace {\n")
-       << StringView("extern const trustme_caller_location trustme_caller_locations[];\n")
-       << StringView("}\nextern \"C\" {\n");
+    of << StringView("#define TRUSTME_CODEGEN_DISALLOW_EMPTY_STRUCTS ") << options.disallowEmptyStructs << StringView("\n") << StringView("#define TRUSTME_TARGET_EMULATED_I128 ") << options.emulatedI128 << StringView("\n") << StringView("#define TRUSTME_TARGET_U128_ALIGN ") << static_cast<unsigned>(targetSpec.arch.alignments.u128) << StringView("\n") << StringView("#define TRUSTME_TARGET_HAS_NATIVE_F128 ") << usesIntelCompilerAsmDialect() << StringView("\n") << StringView(CODEGEN_C_PRELUDE);
+    of << StringView("}\nnamespace {\n") << StringView("extern const trustme_caller_location trustme_caller_locations[];\n") << StringView("}\nextern \"C\" {\n");
 }
 
 CodeGeneratorC::~CodeGeneratorC() {
@@ -926,10 +917,7 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                 auto layoutPath = HIRSimplePath("core", {"alloc", "Layout"});
                 if (oomMethod != HIRSimplePath()) {
                     of << StringView("struct s_") << TransMangle(layoutPath) << StringView("_A { uintptr_t a, b; };\n");
-                    of << StringView("void oom_impl(s_") << TransMangle(layoutPath) << StringView("_A l) {")
-                       << StringView(" extern void ") << TransMangleValue(oomMethod) << StringView("(s_") << TransMangle(layoutPath) << StringView("_A l);")
-                       << StringView(" ") << TransMangleValue(oomMethod) << StringView("(l);")
-                       << StringView(" }\n");
+                    of << StringView("void oom_impl(s_") << TransMangle(layoutPath) << StringView("_A l) {") << StringView(" extern void ") << TransMangleValue(oomMethod) << StringView("(s_") << TransMangle(layoutPath) << StringView("_A l);") << StringView(" ") << TransMangleValue(oomMethod) << StringView("(l);") << StringView(" }\n");
                 }
 
                 of << StringView("u8 __rust_alloc_error_handler_should_panic_v2() { return 0; }");
@@ -2497,74 +2485,24 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
         of << StringView(" rv;\n");
 
         if (item.linkage.name == "llvm.prefetch") {
-            of << StringView("\tif(arg1) {\n")
-               << StringView("\t\tswitch(arg2) {\n")
-               << StringView("\t\tcase 0: __builtin_prefetch(arg0, 1, 0); break;\n")
-               << StringView("\t\tcase 1: __builtin_prefetch(arg0, 1, 1); break;\n")
-               << StringView("\t\tcase 2: __builtin_prefetch(arg0, 1, 2); break;\n")
-               << StringView("\t\tdefault: __builtin_prefetch(arg0, 1, 3); break;\n")
-               << StringView("\t\t}\n")
-               << StringView("\t} else {\n")
-               << StringView("\t\tswitch(arg2) {\n")
-               << StringView("\t\tcase 0: __builtin_prefetch(arg0, 0, 0); break;\n")
-               << StringView("\t\tcase 1: __builtin_prefetch(arg0, 0, 1); break;\n")
-               << StringView("\t\tcase 2: __builtin_prefetch(arg0, 0, 2); break;\n")
-               << StringView("\t\tdefault: __builtin_prefetch(arg0, 0, 3); break;\n")
-               << StringView("\t\t}\n")
-               << StringView("\t}\n")
-               << StringView("\treturn;\n");
+            of << StringView("\tif(arg1) {\n") << StringView("\t\tswitch(arg2) {\n") << StringView("\t\tcase 0: __builtin_prefetch(arg0, 1, 0); break;\n") << StringView("\t\tcase 1: __builtin_prefetch(arg0, 1, 1); break;\n") << StringView("\t\tcase 2: __builtin_prefetch(arg0, 1, 2); break;\n") << StringView("\t\tdefault: __builtin_prefetch(arg0, 1, 3); break;\n") << StringView("\t\t}\n") << StringView("\t} else {\n") << StringView("\t\tswitch(arg2) {\n") << StringView("\t\tcase 0: __builtin_prefetch(arg0, 0, 0); break;\n") << StringView("\t\tcase 1: __builtin_prefetch(arg0, 0, 1); break;\n") << StringView("\t\tcase 2: __builtin_prefetch(arg0, 0, 2); break;\n") << StringView("\t\tdefault: __builtin_prefetch(arg0, 0, 3); break;\n") << StringView("\t\t}\n") << StringView("\t}\n") << StringView("\treturn;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.pshuf.b.128") {
-            of << StringView("\tconst u8* src = (const u8*)&arg0;\n")
-               << StringView("\tconst u8* mask = (const u8*)&arg1;\n")
-               << StringView("\tu8* dst = (u8*)&rv;\n")
-               << StringView("\tfor(int i = 0; i < ") << 128 / 8 << StringView("; i ++) dst[i] = (mask[i] < 0x80 ? src[mask[i] & 0xF] : 0);\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tconst u8* src = (const u8*)&arg0;\n") << StringView("\tconst u8* mask = (const u8*)&arg1;\n") << StringView("\tu8* dst = (u8*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << 128 / 8 << StringView("; i ++) dst[i] = (mask[i] < 0x80 ? src[mask[i] & 0xF] : 0);\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.avx2.pshuf.b") {
-            of << StringView("\tconst u8* src = (const u8*)&arg0;\n")
-               << StringView("\tconst u8* mask = (const u8*)&arg1;\n")
-               << StringView("\tu8* dst = (u8*)&rv;\n")
-               << StringView("\tfor(int i = 0; i < ") << 256 / 8 << StringView("; i ++) dst[i] = (mask[i] < 0x80 ? src[(i & 16) | (mask[i] & 0xF)] : 0);\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tconst u8* src = (const u8*)&arg0;\n") << StringView("\tconst u8* mask = (const u8*)&arg1;\n") << StringView("\tu8* dst = (u8*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << 256 / 8 << StringView("; i ++) dst[i] = (mask[i] < 0x80 ? src[(i & 16) | (mask[i] & 0xF)] : 0);\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.pmadd.ub.sw.128" || item.linkage.name == "llvm.x86.avx2.pmadd.ub.sw") {
             int n = (item.linkage.name == "llvm.x86.avx2.pmadd.ub.sw" ? 32 : 16);
-            of << StringView("\tconst u8* a = (const u8*)&arg0;\n")
-               << StringView("\tconst i8* b = (const i8*)&arg1;\n")
-               << StringView("\ti16* dst = (i16*)&rv;\n")
-               << StringView("\tfor(int i = 0; i < ") << n / 2 << StringView("; i ++) {\n")
-               << StringView("\t\ti32 v = (i32)a[2*i]*b[2*i] + (i32)a[2*i+1]*b[2*i+1];\n")
-               << StringView("\t\tdst[i] = (i16)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));\n")
-               << StringView("\t}\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tconst u8* a = (const u8*)&arg0;\n") << StringView("\tconst i8* b = (const i8*)&arg1;\n") << StringView("\ti16* dst = (i16*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << n / 2 << StringView("; i ++) {\n") << StringView("\t\ti32 v = (i32)a[2*i]*b[2*i] + (i32)a[2*i+1]*b[2*i+1];\n") << StringView("\t\tdst[i] = (i16)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));\n") << StringView("\t}\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.pmadd.wd" || item.linkage.name == "llvm.x86.avx2.pmadd.wd") {
             int n = (item.linkage.name == "llvm.x86.avx2.pmadd.wd" ? 16 : 8);
-            of << StringView("\tconst i16* a = (const i16*)&arg0;\n")
-               << StringView("\tconst i16* b = (const i16*)&arg1;\n")
-               << StringView("\ti32* dst = (i32*)&rv;\n")
-               << StringView("\tfor(int i = 0; i < ") << n / 2 << StringView("; i ++) dst[i] = (i32)a[2*i]*b[2*i] + (i32)a[2*i+1]*b[2*i+1];\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tconst i16* a = (const i16*)&arg0;\n") << StringView("\tconst i16* b = (const i16*)&arg1;\n") << StringView("\ti32* dst = (i32*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << n / 2 << StringView("; i ++) dst[i] = (i32)a[2*i]*b[2*i] + (i32)a[2*i+1]*b[2*i+1];\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.psad.bw" || item.linkage.name == "llvm.x86.avx2.psad.bw") {
             int n = (item.linkage.name == "llvm.x86.avx2.psad.bw" ? 32 : 16);
-            of << StringView("\tconst u8* a = (const u8*)&arg0;\n")
-               << StringView("\tconst u8* b = (const u8*)&arg1;\n")
-               << StringView("\tu64* dst = (u64*)&rv;\n")
-               << StringView("\tfor(int k = 0; k < ") << n / 8 << StringView("; k ++) {\n")
-               << StringView("\t\tu64 sum = 0;\n")
-               << StringView("\t\tfor(int j = 0; j < 8; j ++) { int d = (int)a[k*8+j] - (int)b[k*8+j]; sum += (d < 0 ? -d : d); }\n")
-               << StringView("\t\tdst[k] = sum;\n")
-               << StringView("\t}\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tconst u8* a = (const u8*)&arg0;\n") << StringView("\tconst u8* b = (const u8*)&arg1;\n") << StringView("\tu64* dst = (u64*)&rv;\n") << StringView("\tfor(int k = 0; k < ") << n / 8 << StringView("; k ++) {\n") << StringView("\t\tu64 sum = 0;\n") << StringView("\t\tfor(int j = 0; j < 8; j ++) { int d = (int)a[k*8+j] - (int)b[k*8+j]; sum += (d < 0 ? -d : d); }\n") << StringView("\t\tdst[k] = sum;\n") << StringView("\t}\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse.cmp.ps") {
-            of << StringView("\tfloat lhs[4], rhs[4]; u32 result[4];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 4; i++) result[i] = trustme_x86_cmp_f32(lhs[i], rhs[i], arg2) ? UINT32_MAX : 0;\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tfloat lhs[4], rhs[4]; u32 result[4];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 4; i++) result[i] = trustme_x86_cmp_f32(lhs[i], rhs[i], arg2) ? UINT32_MAX : 0;\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse.cmp.ss") {
-            of << StringView("\tfloat lhs[4], rhs[4]; u32 result[4];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n")
-               << StringView("\tresult[0] = trustme_x86_cmp_f32(lhs[0], rhs[0], arg2) ? UINT32_MAX : 0;\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tfloat lhs[4], rhs[4]; u32 result[4];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n") << StringView("\tresult[0] = trustme_x86_cmp_f32(lhs[0], rhs[0], arg2) ? UINT32_MAX : 0;\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse.comieq.ss" || item.linkage.name == "llvm.x86.sse.comige.ss" || item.linkage.name == "llvm.x86.sse.comile.ss" || item.linkage.name == "llvm.x86.sse.comilt.ss" || item.linkage.name == "llvm.x86.sse.comineq.ss" || item.linkage.name == "llvm.x86.sse.ucomieq.ss" || item.linkage.name == "llvm.x86.sse.ucomige.ss" || item.linkage.name == "llvm.x86.sse.ucomigt.ss" || item.linkage.name == "llvm.x86.sse.ucomile.ss" || item.linkage.name == "llvm.x86.sse.ucomilt.ss" || item.linkage.name == "llvm.x86.sse.ucomineq.ss") {
             const char* op = nullptr;
             if (item.linkage.name == "llvm.x86.sse.comieq.ss" || item.linkage.name == "llvm.x86.sse.ucomieq.ss") {
@@ -2580,32 +2518,21 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             } else {
                 op = "!=";
             }
-            of << StringView("\tfloat lhs[4], rhs[4];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\treturn lhs[0] ") << op << StringView(" rhs[0];\n");
+            of << StringView("\tfloat lhs[4], rhs[4];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\treturn lhs[0] ") << op << StringView(" rhs[0];\n");
         } else if (item.linkage.name == "llvm.x86.sse.cvtsi2ss" || item.linkage.name == "llvm.x86.sse.cvtsi642ss") {
-            of << StringView("\tfloat result[4];\n")
-               << StringView("\tmemcpy(result, &arg0, sizeof(result)); result[0] = (float)arg1;\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tfloat result[4];\n") << StringView("\tmemcpy(result, &arg0, sizeof(result)); result[0] = (float)arg1;\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse.cvtss2si" || item.linkage.name == "llvm.x86.sse.cvttss2si" || item.linkage.name == "llvm.x86.sse.cvtss2si64" || item.linkage.name == "llvm.x86.sse.cvttss2si64") {
             const bool truncate = item.linkage.name == "llvm.x86.sse.cvttss2si" || item.linkage.name == "llvm.x86.sse.cvttss2si64";
             const bool is64 = item.linkage.name == "llvm.x86.sse.cvtss2si64" || item.linkage.name == "llvm.x86.sse.cvttss2si64";
-            of << StringView("\tfloat input[4]; memcpy(input, &arg0, sizeof(input));\n")
-               << StringView("\treturn trustme_x86_f32_to_i") << (is64 ? 64 : 32) << StringView("(input[0], ") << truncate << StringView(");\n");
+            of << StringView("\tfloat input[4]; memcpy(input, &arg0, sizeof(input));\n") << StringView("\treturn trustme_x86_f32_to_i") << (is64 ? 64 : 32) << StringView("(input[0], ") << truncate << StringView(");\n");
         } else if (item.linkage.name == "llvm.x86.sse.min.ps" || item.linkage.name == "llvm.x86.sse.min.ss" || item.linkage.name == "llvm.x86.sse.max.ps" || item.linkage.name == "llvm.x86.sse.max.ss") {
             const bool isMin = item.linkage.name == "llvm.x86.sse.min.ps" || item.linkage.name == "llvm.x86.sse.min.ss";
             const bool scalar = item.linkage.name == "llvm.x86.sse.min.ss" || item.linkage.name == "llvm.x86.sse.max.ss";
-            of << StringView("\tfloat lhs[4], rhs[4], result[4];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n")
-               << StringView("\tfor(unsigned i = 0; i < ") << (scalar ? 1 : 4) << StringView("; i++) result[i] = lhs[i] ") << StringView(isMin ? "<" : ">") << StringView(" rhs[i] ? lhs[i] : rhs[i];\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tfloat lhs[4], rhs[4], result[4];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n") << StringView("\tfor(unsigned i = 0; i < ") << (scalar ? 1 : 4) << StringView("; i++) result[i] = lhs[i] ") << StringView(isMin ? "<" : ">") << StringView(" rhs[i] ? lhs[i] : rhs[i];\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse.rcp.ps" || item.linkage.name == "llvm.x86.sse.rcp.ss" || item.linkage.name == "llvm.x86.sse.rsqrt.ps" || item.linkage.name == "llvm.x86.sse.rsqrt.ss") {
             const bool reciprocalSqrt = item.linkage.name == "llvm.x86.sse.rsqrt.ps" || item.linkage.name == "llvm.x86.sse.rsqrt.ss";
             const bool scalar = item.linkage.name == "llvm.x86.sse.rcp.ss" || item.linkage.name == "llvm.x86.sse.rsqrt.ss";
-            of << StringView("\tfloat result[4]; memcpy(result, &arg0, sizeof(result));\n")
-               << StringView("\tfor(unsigned i = 0; i < ") << (scalar ? 1 : 4) << StringView("; i++) result[i] = 1.0f / ");
+            of << StringView("\tfloat result[4]; memcpy(result, &arg0, sizeof(result));\n") << StringView("\tfor(unsigned i = 0; i < ") << (scalar ? 1 : 4) << StringView("; i++) result[i] = 1.0f / ");
             if (reciprocalSqrt) {
                 of << StringView("__builtin_sqrtf(result[i])");
             } else {
@@ -2613,17 +2540,9 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             }
             of << StringView(";\n\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.cmp.pd") {
-            of << StringView("\tdouble lhs[2], rhs[2]; u64 result[2];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 2; i++) result[i] = trustme_x86_cmp_f64(lhs[i], rhs[i], arg2) ? UINT64_MAX : 0;\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tdouble lhs[2], rhs[2]; u64 result[2];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 2; i++) result[i] = trustme_x86_cmp_f64(lhs[i], rhs[i], arg2) ? UINT64_MAX : 0;\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.cmp.sd") {
-            of << StringView("\tdouble lhs[2], rhs[2]; u64 result[2];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n")
-               << StringView("\tresult[0] = trustme_x86_cmp_f64(lhs[0], rhs[0], arg2) ? UINT64_MAX : 0;\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tdouble lhs[2], rhs[2]; u64 result[2];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n") << StringView("\tresult[0] = trustme_x86_cmp_f64(lhs[0], rhs[0], arg2) ? UINT64_MAX : 0;\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.comieq.sd" || item.linkage.name == "llvm.x86.sse2.comige.sd" || item.linkage.name == "llvm.x86.sse2.comigt.sd" || item.linkage.name == "llvm.x86.sse2.comile.sd" || item.linkage.name == "llvm.x86.sse2.comilt.sd" || item.linkage.name == "llvm.x86.sse2.comineq.sd" || item.linkage.name == "llvm.x86.sse2.ucomieq.sd" || item.linkage.name == "llvm.x86.sse2.ucomige.sd" || item.linkage.name == "llvm.x86.sse2.ucomigt.sd" || item.linkage.name == "llvm.x86.sse2.ucomile.sd" || item.linkage.name == "llvm.x86.sse2.ucomilt.sd" || item.linkage.name == "llvm.x86.sse2.ucomineq.sd") {
             const char* op = nullptr;
             if (item.linkage.name == "llvm.x86.sse2.comieq.sd" || item.linkage.name == "llvm.x86.sse2.ucomieq.sd") {
@@ -2639,50 +2558,33 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             } else {
                 op = "!=";
             }
-            of << StringView("\tdouble lhs[2], rhs[2];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\treturn lhs[0] ") << op << StringView(" rhs[0];\n");
+            of << StringView("\tdouble lhs[2], rhs[2];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\treturn lhs[0] ") << op << StringView(" rhs[0];\n");
         } else if (item.linkage.name == "llvm.x86.sse2.cvtpd2dq" || item.linkage.name == "llvm.x86.sse2.cvttpd2dq" || item.linkage.name == "llvm.x86.sse2.cvtps2dq" || item.linkage.name == "llvm.x86.sse2.cvttps2dq") {
             const bool inputIsDouble = item.linkage.name == "llvm.x86.sse2.cvtpd2dq" || item.linkage.name == "llvm.x86.sse2.cvttpd2dq";
             const bool truncate = item.linkage.name == "llvm.x86.sse2.cvttpd2dq" || item.linkage.name == "llvm.x86.sse2.cvttps2dq";
             if (inputIsDouble) {
-                of << StringView("\tdouble input[2]; i32 result[4] = {0, 0, 0, 0}; memcpy(input, &arg0, sizeof(input));\n")
-                   << StringView("\tfor(unsigned i = 0; i < 2; i++) result[i] = trustme_x86_f64_to_i32(input[i], ") << truncate << StringView(");\n");
+                of << StringView("\tdouble input[2]; i32 result[4] = {0, 0, 0, 0}; memcpy(input, &arg0, sizeof(input));\n") << StringView("\tfor(unsigned i = 0; i < 2; i++) result[i] = trustme_x86_f64_to_i32(input[i], ") << truncate << StringView(");\n");
             } else {
-                of << StringView("\tfloat input[4]; i32 result[4]; memcpy(input, &arg0, sizeof(input));\n")
-                   << StringView("\tfor(unsigned i = 0; i < 4; i++) result[i] = trustme_x86_f32_to_i32(input[i], ") << truncate << StringView(");\n");
+                of << StringView("\tfloat input[4]; i32 result[4]; memcpy(input, &arg0, sizeof(input));\n") << StringView("\tfor(unsigned i = 0; i < 4; i++) result[i] = trustme_x86_f32_to_i32(input[i], ") << truncate << StringView(");\n");
             }
             of << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.cvtsd2si" || item.linkage.name == "llvm.x86.sse2.cvttsd2si" || item.linkage.name == "llvm.x86.sse2.cvtsd2si64" || item.linkage.name == "llvm.x86.sse2.cvttsd2si64") {
             const bool truncate = item.linkage.name == "llvm.x86.sse2.cvttsd2si" || item.linkage.name == "llvm.x86.sse2.cvttsd2si64";
             const bool is64 = item.linkage.name == "llvm.x86.sse2.cvtsd2si64" || item.linkage.name == "llvm.x86.sse2.cvttsd2si64";
-            of << StringView("\tdouble input[2]; memcpy(input, &arg0, sizeof(input));\n")
-               << StringView("\treturn trustme_x86_f64_to_i") << (is64 ? 64 : 32) << StringView("(input[0], ") << truncate << StringView(");\n");
+            of << StringView("\tdouble input[2]; memcpy(input, &arg0, sizeof(input));\n") << StringView("\treturn trustme_x86_f64_to_i") << (is64 ? 64 : 32) << StringView("(input[0], ") << truncate << StringView(");\n");
         } else if (item.linkage.name == "llvm.x86.sse2.cvtsd2ss") {
-            of << StringView("\tfloat result[4]; double input[2];\n")
-               << StringView("\tmemcpy(result, &arg0, sizeof(result)); memcpy(input, &arg1, sizeof(input)); result[0] = (float)input[0];\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+            of << StringView("\tfloat result[4]; double input[2];\n") << StringView("\tmemcpy(result, &arg0, sizeof(result)); memcpy(input, &arg1, sizeof(input)); result[0] = (float)input[0];\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.cvtss2sd") {
-            of << StringView("\tdouble result[2]; float input[4];\n")
-               << StringView("\tmemcpy(result, &arg0, sizeof(result)); memcpy(input, &arg1, sizeof(input)); result[0] = (double)input[0];\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+            of << StringView("\tdouble result[2]; float input[4];\n") << StringView("\tmemcpy(result, &arg0, sizeof(result)); memcpy(input, &arg1, sizeof(input)); result[0] = (double)input[0];\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.min.pd" || item.linkage.name == "llvm.x86.sse2.min.sd" || item.linkage.name == "llvm.x86.sse2.max.pd" || item.linkage.name == "llvm.x86.sse2.max.sd") {
             const bool isMin = item.linkage.name == "llvm.x86.sse2.min.pd" || item.linkage.name == "llvm.x86.sse2.min.sd";
             const bool scalar = item.linkage.name == "llvm.x86.sse2.min.sd" || item.linkage.name == "llvm.x86.sse2.max.sd";
-            of << StringView("\tdouble lhs[2], rhs[2], result[2];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n")
-               << StringView("\tfor(unsigned i = 0; i < ") << (scalar ? 1 : 2) << StringView("; i++) result[i] = lhs[i] ") << StringView(isMin ? "<" : ">") << StringView(" rhs[i] ? lhs[i] : rhs[i];\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+            of << StringView("\tdouble lhs[2], rhs[2], result[2];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n") << StringView("\tfor(unsigned i = 0; i < ") << (scalar ? 1 : 2) << StringView("; i++) result[i] = lhs[i] ") << StringView(isMin ? "<" : ">") << StringView(" rhs[i] ? lhs[i] : rhs[i];\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.packssdw.128") {
-            of << StringView("\ti32 lhs[4], rhs[4]; i16 result[8];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 8; i++) { i32 value = i < 4 ? lhs[i] : rhs[i - 4]; result[i] = value > INT16_MAX ? INT16_MAX : (value < INT16_MIN ? INT16_MIN : (i16)value); }\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+            of << StringView("\ti32 lhs[4], rhs[4]; i16 result[8];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 8; i++) { i32 value = i < 4 ? lhs[i] : rhs[i - 4]; result[i] = value > INT16_MAX ? INT16_MAX : (value < INT16_MIN ? INT16_MIN : (i16)value); }\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.packsswb.128" || item.linkage.name == "llvm.x86.sse2.packuswb.128") {
             const bool unsignedResult = item.linkage.name == "llvm.x86.sse2.packuswb.128";
-            of << StringView("\ti16 lhs[8], rhs[8]; ") << StringView(unsignedResult ? "u8" : "i8") << StringView(" result[16];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 16; i++) { i16 value = i < 8 ? lhs[i] : rhs[i - 8]; ");
+            of << StringView("\ti16 lhs[8], rhs[8]; ") << StringView(unsignedResult ? "u8" : "i8") << StringView(" result[16];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 16; i++) { i16 value = i < 8 ? lhs[i] : rhs[i - 8]; ");
             if (unsignedResult) {
                 of << StringView("result[i] = value > UINT8_MAX ? UINT8_MAX : (value < 0 ? 0 : (u8)value);");
             } else {
@@ -2693,59 +2595,27 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             const bool left = item.linkage.name.compare(14, 4, "psll") == 0;
             const bool arithmetic = item.linkage.name.compare(14, 4, "psra") == 0;
             const unsigned bits = item.linkage.name.back() == 'w' ? 16 : (item.linkage.name.back() == 'd' ? 32 : 64);
-            of << StringView("\tu64 count_words[2]; memcpy(count_words, &arg1, sizeof(count_words)); u64 count = count_words[0];\n")
-               << StringView("\tu") << bits << StringView(" input[") << 128 / bits << StringView("], result[") << 128 / bits << StringView("]; memcpy(input, &arg0, sizeof(input));\n")
-               << StringView("\tfor(unsigned i = 0; i < ") << 128 / bits << StringView("; i++) {\n");
+            of << StringView("\tu64 count_words[2]; memcpy(count_words, &arg1, sizeof(count_words)); u64 count = count_words[0];\n") << StringView("\tu") << bits << StringView(" input[") << 128 / bits << StringView("], result[") << 128 / bits << StringView("]; memcpy(input, &arg0, sizeof(input));\n") << StringView("\tfor(unsigned i = 0; i < ") << 128 / bits << StringView("; i++) {\n");
             if (arithmetic) {
-                of << StringView("\t\tif(count >= ") << bits << StringView(") result[i] = input[i] >> ") << bits - 1 << StringView(" ? UINT") << bits << StringView("_MAX : 0;\n")
-                   << StringView("\t\telse if(count == 0) result[i] = input[i];\n")
-                   << StringView("\t\telse { result[i] = input[i] >> count; if(input[i] >> ") << bits - 1 << StringView(") result[i] |= UINT") << bits << StringView("_MAX << (") << bits << StringView(" - count); }\n");
+                of << StringView("\t\tif(count >= ") << bits << StringView(") result[i] = input[i] >> ") << bits - 1 << StringView(" ? UINT") << bits << StringView("_MAX : 0;\n") << StringView("\t\telse if(count == 0) result[i] = input[i];\n") << StringView("\t\telse { result[i] = input[i] >> count; if(input[i] >> ") << bits - 1 << StringView(") result[i] |= UINT") << bits << StringView("_MAX << (") << bits << StringView(" - count); }\n");
             } else {
                 of << StringView("\t\tresult[i] = count >= ") << bits << StringView(" ? 0 : input[i] ") << StringView(left ? "<<" : ">>") << StringView(" count;\n");
             }
             of << StringView("\t}\n\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse41.dpps") {
-            of << StringView("\tfloat lhs[4], rhs[4], product[4] = {0, 0, 0, 0}, result[4];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 4; i++) if(arg2 & (1 << (i + 4))) product[i] = lhs[i] * rhs[i];\n")
-               << StringView("\tfloat sum = (product[0] + product[1]) + (product[2] + product[3]);\n")
-               << StringView("\tfor(unsigned i = 0; i < 4; i++) result[i] = arg2 & (1 << i) ? sum : 0.0f;\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+            of << StringView("\tfloat lhs[4], rhs[4], product[4] = {0, 0, 0, 0}, result[4];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 4; i++) if(arg2 & (1 << (i + 4))) product[i] = lhs[i] * rhs[i];\n") << StringView("\tfloat sum = (product[0] + product[1]) + (product[2] + product[3]);\n") << StringView("\tfor(unsigned i = 0; i < 4; i++) result[i] = arg2 & (1 << i) ? sum : 0.0f;\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse41.dppd") {
-            of << StringView("\tdouble lhs[2], rhs[2], product[2] = {0, 0}, result[2];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 2; i++) if(arg2 & (1 << (i + 4))) product[i] = lhs[i] * rhs[i];\n")
-               << StringView("\tdouble sum = product[0] + product[1];\n")
-               << StringView("\tfor(unsigned i = 0; i < 2; i++) result[i] = arg2 & (1 << i) ? sum : 0.0;\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+            of << StringView("\tdouble lhs[2], rhs[2], product[2] = {0, 0}, result[2];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 2; i++) if(arg2 & (1 << (i + 4))) product[i] = lhs[i] * rhs[i];\n") << StringView("\tdouble sum = product[0] + product[1];\n") << StringView("\tfor(unsigned i = 0; i < 2; i++) result[i] = arg2 & (1 << i) ? sum : 0.0;\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse41.insertps") {
-            of << StringView("\tu32 lhs[4], rhs[4], result[4];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, lhs, sizeof(result));\n")
-               << StringView("\tresult[(arg2 >> 4) & 3] = rhs[(arg2 >> 6) & 3];\n")
-               << StringView("\tfor(unsigned i = 0; i < 4; i++) if(arg2 & (1 << i)) result[i] = 0;\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+            of << StringView("\tu32 lhs[4], rhs[4], result[4];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, lhs, sizeof(result));\n") << StringView("\tresult[(arg2 >> 4) & 3] = rhs[(arg2 >> 6) & 3];\n") << StringView("\tfor(unsigned i = 0; i < 4; i++) if(arg2 & (1 << i)) result[i] = 0;\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse41.mpsadbw") {
-            of << StringView("\tu8 lhs[16], rhs[16]; u16 result[8];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tunsigned lhs_start = arg2 & 4 ? 4 : 0; unsigned rhs_start = (arg2 & 3) * 4;\n")
-               << StringView("\tfor(unsigned i = 0; i < 8; i++) {\n")
-               << StringView("\t\tresult[i] = 0;\n")
-               << StringView("\t\tfor(unsigned j = 0; j < 4; j++) { int d = (int)lhs[lhs_start + i + j] - (int)rhs[rhs_start + j]; result[i] += d < 0 ? -d : d; }\n")
-               << StringView("\t}\n\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+            of << StringView("\tu8 lhs[16], rhs[16]; u16 result[8];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tunsigned lhs_start = arg2 & 4 ? 4 : 0; unsigned rhs_start = (arg2 & 3) * 4;\n") << StringView("\tfor(unsigned i = 0; i < 8; i++) {\n") << StringView("\t\tresult[i] = 0;\n") << StringView("\t\tfor(unsigned j = 0; j < 4; j++) { int d = (int)lhs[lhs_start + i + j] - (int)rhs[rhs_start + j]; result[i] += d < 0 ? -d : d; }\n") << StringView("\t}\n\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse41.packusdw") {
-            of << StringView("\ti32 lhs[4], rhs[4]; u16 result[8];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 8; i++) { i32 value = i < 4 ? lhs[i] : rhs[i - 4]; result[i] = value > UINT16_MAX ? UINT16_MAX : (value < 0 ? 0 : (u16)value); }\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+            of << StringView("\ti32 lhs[4], rhs[4]; u16 result[8];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 8; i++) { i32 value = i < 4 ? lhs[i] : rhs[i - 4]; result[i] = value > UINT16_MAX ? UINT16_MAX : (value < 0 ? 0 : (u16)value); }\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse41.phminposuw") {
-            of << StringView("\tu16 input[8], result[8] = {0, 0, 0, 0, 0, 0, 0, 0}; memcpy(input, &arg0, sizeof(input));\n")
-               << StringView("\tresult[0] = input[0];\n")
-               << StringView("\tfor(unsigned i = 1; i < 8; i++) if(input[i] < result[0]) { result[0] = input[i]; result[1] = i; }\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+            of << StringView("\tu16 input[8], result[8] = {0, 0, 0, 0, 0, 0, 0, 0}; memcpy(input, &arg0, sizeof(input));\n") << StringView("\tresult[0] = input[0];\n") << StringView("\tfor(unsigned i = 1; i < 8; i++) if(input[i] < result[0]) { result[0] = input[i]; result[1] = i; }\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse41.ptestz" || item.linkage.name == "llvm.x86.sse41.ptestc" || item.linkage.name == "llvm.x86.sse41.ptestnzc") {
-            of << StringView("\tu64 lhs[2], rhs[2]; memcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tbool intersection = (lhs[0] & rhs[0]) != 0 || (lhs[1] & rhs[1]) != 0;\n")
-               << StringView("\tbool outside = (~lhs[0] & rhs[0]) != 0 || (~lhs[1] & rhs[1]) != 0;\n");
+            of << StringView("\tu64 lhs[2], rhs[2]; memcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tbool intersection = (lhs[0] & rhs[0]) != 0 || (lhs[1] & rhs[1]) != 0;\n") << StringView("\tbool outside = (~lhs[0] & rhs[0]) != 0 || (~lhs[1] & rhs[1]) != 0;\n");
             if (item.linkage.name == "llvm.x86.sse41.ptestz") {
                 of << StringView("\treturn !intersection;\n");
             } else if (item.linkage.name == "llvm.x86.sse41.ptestc") {
@@ -2755,14 +2625,10 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             }
         } else if (item.linkage.name == "llvm.x86.sse41.round.ps" || item.linkage.name == "llvm.x86.sse41.round.ss") {
             const bool scalar = item.linkage.name == "llvm.x86.sse41.round.ss";
-            of << StringView("\tfloat input[4], result[4]; memcpy(input, &arg") << (scalar ? 1 : 0) << StringView(", sizeof(input)); memcpy(result, &arg0, sizeof(result));\n")
-               << StringView("\tfor(unsigned i = 0; i < ") << (scalar ? 1 : 4) << StringView("; i++) result[i] = trustme_x86_round_f32(input[i], arg") << (scalar ? 2 : 1) << StringView(");\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+            of << StringView("\tfloat input[4], result[4]; memcpy(input, &arg") << (scalar ? 1 : 0) << StringView(", sizeof(input)); memcpy(result, &arg0, sizeof(result));\n") << StringView("\tfor(unsigned i = 0; i < ") << (scalar ? 1 : 4) << StringView("; i++) result[i] = trustme_x86_round_f32(input[i], arg") << (scalar ? 2 : 1) << StringView(");\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse41.round.pd" || item.linkage.name == "llvm.x86.sse41.round.sd") {
             const bool scalar = item.linkage.name == "llvm.x86.sse41.round.sd";
-            of << StringView("\tdouble input[2], result[2]; memcpy(input, &arg") << (scalar ? 1 : 0) << StringView(", sizeof(input)); memcpy(result, &arg0, sizeof(result));\n")
-               << StringView("\tfor(unsigned i = 0; i < ") << (scalar ? 1 : 2) << StringView("; i++) result[i] = trustme_x86_round_f64(input[i], arg") << (scalar ? 2 : 1) << StringView(");\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+            of << StringView("\tdouble input[2], result[2]; memcpy(input, &arg") << (scalar ? 1 : 0) << StringView(", sizeof(input)); memcpy(result, &arg0, sizeof(result));\n") << StringView("\tfor(unsigned i = 0; i < ") << (scalar ? 1 : 2) << StringView("; i++) result[i] = trustme_x86_round_f64(input[i], arg") << (scalar ? 2 : 1) << StringView(");\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse42.crc32.32.8" || item.linkage.name == "llvm.x86.sse42.crc32.32.16" || item.linkage.name == "llvm.x86.sse42.crc32.32.32" || item.linkage.name == "llvm.x86.sse42.crc32.64.64") {
             const unsigned bits = item.linkage.name == "llvm.x86.sse42.crc32.32.8" ? 8 : (item.linkage.name == "llvm.x86.sse42.crc32.32.16" ? 16 : (item.linkage.name == "llvm.x86.sse42.crc32.32.32" ? 32 : 64));
             of << StringView("\treturn trustme_x86_crc32c((u32)arg0, arg1, ") << bits << StringView(");\n");
@@ -2793,197 +2659,61 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             }
         } else if (item.linkage.name == "llvm.x86.sse3.hadd.ps" || item.linkage.name == "llvm.x86.sse3.hsub.ps") {
             const char op = item.linkage.name == "llvm.x86.sse3.hadd.ps" ? '+' : '-';
-            of << StringView("\tfloat lhs[4], rhs[4], result[4];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 2; i++) { result[i] = lhs[2*i] ") << op << StringView(" lhs[2*i+1]; result[i+2] = rhs[2*i] ") << op << StringView(" rhs[2*i+1]; }\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tfloat lhs[4], rhs[4], result[4];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 2; i++) { result[i] = lhs[2*i] ") << op << StringView(" lhs[2*i+1]; result[i+2] = rhs[2*i] ") << op << StringView(" rhs[2*i+1]; }\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse3.hadd.pd" || item.linkage.name == "llvm.x86.sse3.hsub.pd") {
             const char op = item.linkage.name == "llvm.x86.sse3.hadd.pd" ? '+' : '-';
-            of << StringView("\tdouble lhs[2], rhs[2], result[2];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tresult[0] = lhs[0] ") << op << StringView(" lhs[1]; result[1] = rhs[0] ") << op << StringView(" rhs[1];\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tdouble lhs[2], rhs[2], result[2];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tresult[0] = lhs[0] ") << op << StringView(" lhs[1]; result[1] = rhs[0] ") << op << StringView(" rhs[1];\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse3.ldu.dq") {
-            of << StringView("\tmemcpy(&rv, arg0, sizeof(rv));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tmemcpy(&rv, arg0, sizeof(rv));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.phadd.d.128" || item.linkage.name == "llvm.x86.ssse3.phsub.d.128") {
             const char op = item.linkage.name == "llvm.x86.ssse3.phadd.d.128" ? '+' : '-';
-            of << StringView("\tu32 lhs[4], rhs[4], result[4];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 2; i++) { result[i] = lhs[2*i] ") << op << StringView(" lhs[2*i+1]; result[i+2] = rhs[2*i] ") << op << StringView(" rhs[2*i+1]; }\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tu32 lhs[4], rhs[4], result[4];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 2; i++) { result[i] = lhs[2*i] ") << op << StringView(" lhs[2*i+1]; result[i+2] = rhs[2*i] ") << op << StringView(" rhs[2*i+1]; }\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.phadd.w.128" || item.linkage.name == "llvm.x86.ssse3.phsub.w.128") {
             const char op = item.linkage.name == "llvm.x86.ssse3.phadd.w.128" ? '+' : '-';
-            of << StringView("\tu16 lhs[8], rhs[8], result[8];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 4; i++) { result[i] = lhs[2*i] ") << op << StringView(" lhs[2*i+1]; result[i+4] = rhs[2*i] ") << op << StringView(" rhs[2*i+1]; }\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tu16 lhs[8], rhs[8], result[8];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 4; i++) { result[i] = lhs[2*i] ") << op << StringView(" lhs[2*i+1]; result[i+4] = rhs[2*i] ") << op << StringView(" rhs[2*i+1]; }\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.phadd.sw.128" || item.linkage.name == "llvm.x86.ssse3.phsub.sw.128") {
             const char op = item.linkage.name == "llvm.x86.ssse3.phadd.sw.128" ? '+' : '-';
-            of << StringView("\ti16 lhs[8], rhs[8], result[8];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 4; i++) {\n")
-               << StringView("\t\ti32 a = (i32)lhs[2*i] ") << op << StringView(" lhs[2*i+1]; i32 b = (i32)rhs[2*i] ") << op << StringView(" rhs[2*i+1];\n")
-               << StringView("\t\tresult[i] = (i16)(a > INT16_MAX ? INT16_MAX : (a < INT16_MIN ? INT16_MIN : a));\n")
-               << StringView("\t\tresult[i+4] = (i16)(b > INT16_MAX ? INT16_MAX : (b < INT16_MIN ? INT16_MIN : b));\n")
-               << StringView("\t}\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\ti16 lhs[8], rhs[8], result[8];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 4; i++) {\n") << StringView("\t\ti32 a = (i32)lhs[2*i] ") << op << StringView(" lhs[2*i+1]; i32 b = (i32)rhs[2*i] ") << op << StringView(" rhs[2*i+1];\n") << StringView("\t\tresult[i] = (i16)(a > INT16_MAX ? INT16_MAX : (a < INT16_MIN ? INT16_MIN : a));\n") << StringView("\t\tresult[i+4] = (i16)(b > INT16_MAX ? INT16_MAX : (b < INT16_MIN ? INT16_MIN : b));\n") << StringView("\t}\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.pmul.hr.sw.128") {
-            of << StringView("\ti16 lhs[8], rhs[8], result[8];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 8; i++) {\n")
-               << StringView("\t\ti32 value = ((i32)lhs[i] * rhs[i] + 0x4000) >> 15;\n")
-               << StringView("\t\tresult[i] = (i16)value;\n")
-               << StringView("\t}\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\ti16 lhs[8], rhs[8], result[8];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 8; i++) {\n") << StringView("\t\ti32 value = ((i32)lhs[i] * rhs[i] + 0x4000) >> 15;\n") << StringView("\t\tresult[i] = (i16)value;\n") << StringView("\t}\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.psign.b.128") {
-            of << StringView("\tu8 lhs[16], result[16]; i8 signs[16];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 16; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tu8 lhs[16], result[16]; i8 signs[16];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n") << StringView("\tfor(unsigned i = 0; i < 16; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.psign.w.128") {
-            of << StringView("\tu16 lhs[8], result[8]; i16 signs[8];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 8; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tu16 lhs[8], result[8]; i16 signs[8];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n") << StringView("\tfor(unsigned i = 0; i < 8; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.psign.d.128") {
-            of << StringView("\tu32 lhs[4], result[4]; i32 signs[4];\n")
-               << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n")
-               << StringView("\tfor(unsigned i = 0; i < 4; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tu32 lhs[4], result[4]; i32 signs[4];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n") << StringView("\tfor(unsigned i = 0; i < 4; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.psrli.d") {
-            of << StringView("\tconst u32* src = (const u32*)&arg0;\n")
-               << StringView("\tu32* dst = (u32*)&rv;\n")
-               << StringView("\tfor(int i = 0; i < ") << 128 / 32 << StringView("; i ++) dst[i] = src[i] >> arg1;\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tconst u32* src = (const u32*)&arg0;\n") << StringView("\tu32* dst = (u32*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << 128 / 32 << StringView("; i ++) dst[i] = src[i] >> arg1;\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.pslli.d") {
-            of << StringView("\tconst u32* src = (const u32*)&arg0;\n")
-               << StringView("\tu32* dst = (u32*)&rv;\n")
-               << StringView("\tfor(int i = 0; i < ") << 128 / 32 << StringView("; i ++) dst[i] = src[i] << arg1;\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tconst u32* src = (const u32*)&arg0;\n") << StringView("\tu32* dst = (u32*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << 128 / 32 << StringView("; i ++) dst[i] = src[i] << arg1;\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.pmovmskb.128") {
-            of << StringView("\tconst u8* src = (const u8*)&arg0;\n")
-               << StringView("\tu8* dst = (u8*)&rv; *dst = 0;\n")
-               << StringView("\tfor(int i = 0; i < ") << 128 / 8 << StringView("; i ++) *dst |= (src[i] >> 7) << i;\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tconst u8* src = (const u8*)&arg0;\n") << StringView("\tu8* dst = (u8*)&rv; *dst = 0;\n") << StringView("\tfor(int i = 0; i < ") << 128 / 8 << StringView("; i ++) *dst |= (src[i] >> 7) << i;\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.storeu.dq") {
             of << StringView("\tmemcpy(arg0, &arg1, sizeof(arg1));\n");
         } else if (item.linkage.name == "llvm.x86.sha256rnds2") {
-            of << StringView("\tconst u32* st_cdgh = (const u32*)&arg0;\n")
-               << StringView("\tconst u32* st_abef = (const u32*)&arg1;\n")
-               << StringView("\tconst u32* wk = (const u32*)&arg2;\n")
-               << StringView("\tu32* dst = (u32*)&rv;\n")
-               << StringView("\tu32 a = st_abef[3], b = st_abef[2], e = st_abef[1], f = st_abef[0];\n")
-               << StringView("\tu32 c = st_cdgh[3], d = st_cdgh[2], g = st_cdgh[1], h = st_cdgh[0];\n")
-               << StringView("\tfor(int i = 0; i < 2; i ++) {\n")
-               << StringView("\t\tu32 ch = (e & f) ^ (~e & g);\n")
-               << StringView("\t\tu32 maj = (a & b) ^ (a & c) ^ (b & c);\n")
-               << StringView("\t\tu32 s0 = (a >> 2 | a << 30) ^ (a >> 13 | a << 19) ^ (a >> 22 | a << 10);\n")
-               << StringView("\t\tu32 s1 = (e >> 6 | e << 26) ^ (e >> 11 | e << 21) ^ (e >> 25 | e << 7);\n")
-               << StringView("\t\tu32 t = ch + s1 + wk[i] + h;\n")
-               << StringView("\t\th = g; g = f; f = e; e = t + d; d = c; c = b; b = a; a = t + maj + s0;\n")
-               << StringView("\t}\n")
-               << StringView("\tdst[3] = a; dst[2] = b; dst[1] = e; dst[0] = f;\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tconst u32* st_cdgh = (const u32*)&arg0;\n") << StringView("\tconst u32* st_abef = (const u32*)&arg1;\n") << StringView("\tconst u32* wk = (const u32*)&arg2;\n") << StringView("\tu32* dst = (u32*)&rv;\n") << StringView("\tu32 a = st_abef[3], b = st_abef[2], e = st_abef[1], f = st_abef[0];\n") << StringView("\tu32 c = st_cdgh[3], d = st_cdgh[2], g = st_cdgh[1], h = st_cdgh[0];\n") << StringView("\tfor(int i = 0; i < 2; i ++) {\n") << StringView("\t\tu32 ch = (e & f) ^ (~e & g);\n") << StringView("\t\tu32 maj = (a & b) ^ (a & c) ^ (b & c);\n") << StringView("\t\tu32 s0 = (a >> 2 | a << 30) ^ (a >> 13 | a << 19) ^ (a >> 22 | a << 10);\n") << StringView("\t\tu32 s1 = (e >> 6 | e << 26) ^ (e >> 11 | e << 21) ^ (e >> 25 | e << 7);\n") << StringView("\t\tu32 t = ch + s1 + wk[i] + h;\n") << StringView("\t\th = g; g = f; f = e; e = t + d; d = c; c = b; b = a; a = t + maj + s0;\n") << StringView("\t}\n") << StringView("\tdst[3] = a; dst[2] = b; dst[1] = e; dst[0] = f;\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sha256msg1") {
-            of << StringView("\tconst u32* w = (const u32*)&arg0;\n")
-               << StringView("\tconst u32* w2 = (const u32*)&arg1;\n")
-               << StringView("\tu32* dst = (u32*)&rv;\n")
-               << StringView("\tfor(int i = 0; i < 4; i ++) {\n")
-               << StringView("\t\tu32 x = (i < 3 ? w[i+1] : w2[0]);\n")
-               << StringView("\t\tdst[i] = w[i] + ((x >> 7 | x << 25) ^ (x >> 18 | x << 14) ^ (x >> 3));\n")
-               << StringView("\t}\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tconst u32* w = (const u32*)&arg0;\n") << StringView("\tconst u32* w2 = (const u32*)&arg1;\n") << StringView("\tu32* dst = (u32*)&rv;\n") << StringView("\tfor(int i = 0; i < 4; i ++) {\n") << StringView("\t\tu32 x = (i < 3 ? w[i+1] : w2[0]);\n") << StringView("\t\tdst[i] = w[i] + ((x >> 7 | x << 25) ^ (x >> 18 | x << 14) ^ (x >> 3));\n") << StringView("\t}\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sha256msg2") {
-            of << StringView("\tconst u32* w = (const u32*)&arg0;\n")
-               << StringView("\tconst u32* prev = (const u32*)&arg1;\n")
-               << StringView("\tu32* dst = (u32*)&rv;\n")
-               << StringView("\tu32 w14 = prev[2], w15 = prev[3];\n")
-               << StringView("\tu32 w16 = w[0] + ((w14 >> 17 | w14 << 15) ^ (w14 >> 19 | w14 << 13) ^ (w14 >> 10));\n")
-               << StringView("\tu32 w17 = w[1] + ((w15 >> 17 | w15 << 15) ^ (w15 >> 19 | w15 << 13) ^ (w15 >> 10));\n")
-               << StringView("\tu32 w18 = w[2] + ((w16 >> 17 | w16 << 15) ^ (w16 >> 19 | w16 << 13) ^ (w16 >> 10));\n")
-               << StringView("\tu32 w19 = w[3] + ((w17 >> 17 | w17 << 15) ^ (w17 >> 19 | w17 << 13) ^ (w17 >> 10));\n")
-               << StringView("\tdst[0] = w16; dst[1] = w17; dst[2] = w18; dst[3] = w19;\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tconst u32* w = (const u32*)&arg0;\n") << StringView("\tconst u32* prev = (const u32*)&arg1;\n") << StringView("\tu32* dst = (u32*)&rv;\n") << StringView("\tu32 w14 = prev[2], w15 = prev[3];\n") << StringView("\tu32 w16 = w[0] + ((w14 >> 17 | w14 << 15) ^ (w14 >> 19 | w14 << 13) ^ (w14 >> 10));\n") << StringView("\tu32 w17 = w[1] + ((w15 >> 17 | w15 << 15) ^ (w15 >> 19 | w15 << 13) ^ (w15 >> 10));\n") << StringView("\tu32 w18 = w[2] + ((w16 >> 17 | w16 << 15) ^ (w16 >> 19 | w16 << 13) ^ (w16 >> 10));\n") << StringView("\tu32 w19 = w[3] + ((w17 >> 17 | w17 << 15) ^ (w17 >> 19 | w17 << 13) ^ (w17 >> 10));\n") << StringView("\tdst[0] = w16; dst[1] = w17; dst[2] = w18; dst[3] = w19;\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.bmi.bextr.32") {
-            of << StringView("\tu32 start = arg1 & 0xff;\n")
-               << StringView("\tu32 length = (arg1 >> 8) & 0xff;\n")
-               << StringView("\tif(start >= 32 || length == 0) return 0;\n")
-               << StringView("\tif(length > 32 - start) length = 32 - start;\n")
-               << StringView("\treturn (arg0 >> start) & (UINT32_MAX >> (32 - length));\n");
+            of << StringView("\tu32 start = arg1 & 0xff;\n") << StringView("\tu32 length = (arg1 >> 8) & 0xff;\n") << StringView("\tif(start >= 32 || length == 0) return 0;\n") << StringView("\tif(length > 32 - start) length = 32 - start;\n") << StringView("\treturn (arg0 >> start) & (UINT32_MAX >> (32 - length));\n");
         } else if (item.linkage.name == "llvm.x86.bmi.bextr.64") {
-            of << StringView("\tu64 start = arg1 & 0xff;\n")
-               << StringView("\tu64 length = (arg1 >> 8) & 0xff;\n")
-               << StringView("\tif(start >= 64 || length == 0) return 0;\n")
-               << StringView("\tif(length > 64 - start) length = 64 - start;\n")
-               << StringView("\treturn (arg0 >> start) & (UINT64_MAX >> (64 - length));\n");
+            of << StringView("\tu64 start = arg1 & 0xff;\n") << StringView("\tu64 length = (arg1 >> 8) & 0xff;\n") << StringView("\tif(start >= 64 || length == 0) return 0;\n") << StringView("\tif(length > 64 - start) length = 64 - start;\n") << StringView("\treturn (arg0 >> start) & (UINT64_MAX >> (64 - length));\n");
         } else if (item.linkage.name == "llvm.x86.bmi.bzhi.32") {
-            of << StringView("\tu32 index = arg1 & 0xff;\n")
-               << StringView("\tif(index >= 32) return arg0;\n")
-               << StringView("\treturn index == 0 ? 0 : arg0 & (UINT32_MAX >> (32 - index));\n");
+            of << StringView("\tu32 index = arg1 & 0xff;\n") << StringView("\tif(index >= 32) return arg0;\n") << StringView("\treturn index == 0 ? 0 : arg0 & (UINT32_MAX >> (32 - index));\n");
         } else if (item.linkage.name == "llvm.x86.bmi.bzhi.64") {
-            of << StringView("\tu64 index = arg1 & 0xff;\n")
-               << StringView("\tif(index >= 64) return arg0;\n")
-               << StringView("\treturn index == 0 ? 0 : arg0 & (UINT64_MAX >> (64 - index));\n");
+            of << StringView("\tu64 index = arg1 & 0xff;\n") << StringView("\tif(index >= 64) return arg0;\n") << StringView("\treturn index == 0 ? 0 : arg0 & (UINT64_MAX >> (64 - index));\n");
         } else if (item.linkage.name == "llvm.x86.bmi.pext.32") {
-            of << StringView("\trv = 0;\n")
-               << StringView("\tu32 output_bit = 1;\n")
-               << StringView("\twhile(arg1) {\n")
-               << StringView("\t\tu32 mask_bit = arg1 & -arg1;\n")
-               << StringView("\t\tif(arg0 & mask_bit) rv |= output_bit;\n")
-               << StringView("\t\targ1 &= arg1 - 1; output_bit <<= 1;\n")
-               << StringView("\t}\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\trv = 0;\n") << StringView("\tu32 output_bit = 1;\n") << StringView("\twhile(arg1) {\n") << StringView("\t\tu32 mask_bit = arg1 & -arg1;\n") << StringView("\t\tif(arg0 & mask_bit) rv |= output_bit;\n") << StringView("\t\targ1 &= arg1 - 1; output_bit <<= 1;\n") << StringView("\t}\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.bmi.pext.64") {
-            of << StringView("\trv = 0;\n")
-               << StringView("\tu64 output_bit = 1;\n")
-               << StringView("\twhile(arg1) {\n")
-               << StringView("\t\tu64 mask_bit = arg1 & -arg1;\n")
-               << StringView("\t\tif(arg0 & mask_bit) rv |= output_bit;\n")
-               << StringView("\t\targ1 &= arg1 - 1; output_bit <<= 1;\n")
-               << StringView("\t}\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\trv = 0;\n") << StringView("\tu64 output_bit = 1;\n") << StringView("\twhile(arg1) {\n") << StringView("\t\tu64 mask_bit = arg1 & -arg1;\n") << StringView("\t\tif(arg0 & mask_bit) rv |= output_bit;\n") << StringView("\t\targ1 &= arg1 - 1; output_bit <<= 1;\n") << StringView("\t}\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.bmi.pdep.32") {
-            of << StringView("\trv = 0;\n")
-               << StringView("\tu32 input_bit = 1;\n")
-               << StringView("\twhile(arg1) {\n")
-               << StringView("\t\tu32 mask_bit = arg1 & -arg1;\n")
-               << StringView("\t\tif(arg0 & input_bit) rv |= mask_bit;\n")
-               << StringView("\t\targ1 &= arg1 - 1; input_bit <<= 1;\n")
-               << StringView("\t}\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\trv = 0;\n") << StringView("\tu32 input_bit = 1;\n") << StringView("\twhile(arg1) {\n") << StringView("\t\tu32 mask_bit = arg1 & -arg1;\n") << StringView("\t\tif(arg0 & input_bit) rv |= mask_bit;\n") << StringView("\t\targ1 &= arg1 - 1; input_bit <<= 1;\n") << StringView("\t}\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.bmi.pdep.64") {
-            of << StringView("\trv = 0;\n")
-               << StringView("\tu64 input_bit = 1;\n")
-               << StringView("\twhile(arg1) {\n")
-               << StringView("\t\tu64 mask_bit = arg1 & -arg1;\n")
-               << StringView("\t\tif(arg0 & input_bit) rv |= mask_bit;\n")
-               << StringView("\t\targ1 &= arg1 - 1; input_bit <<= 1;\n")
-               << StringView("\t}\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\trv = 0;\n") << StringView("\tu64 input_bit = 1;\n") << StringView("\twhile(arg1) {\n") << StringView("\t\tu64 mask_bit = arg1 & -arg1;\n") << StringView("\t\tif(arg0 & input_bit) rv |= mask_bit;\n") << StringView("\t\targ1 &= arg1 - 1; input_bit <<= 1;\n") << StringView("\t}\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.pclmulqdq") {
-            of << StringView("\tu64 a_words[2], b_words[2], result[2] = {0, 0};\n")
-               << StringView("\tmemcpy(a_words, &arg0, sizeof(a_words));\n")
-               << StringView("\tmemcpy(b_words, &arg1, sizeof(b_words));\n")
-               << StringView("\tu64 a = a_words[arg2 & 1];\n")
-               << StringView("\tu64 b = b_words[(arg2 >> 4) & 1];\n")
-               << StringView("\tfor(unsigned i = 0; i < 64; i++) {\n")
-               << StringView("\t\tif((b >> i) & 1) {\n")
-               << StringView("\t\t\tresult[0] ^= a << i;\n")
-               << StringView("\t\t\tif(i != 0) result[1] ^= a >> (64 - i);\n")
-               << StringView("\t\t}\n")
-               << StringView("\t}\n")
-               << StringView("\tmemcpy(&rv, result, sizeof(result));\n")
-               << StringView("\treturn rv;\n");
+            of << StringView("\tu64 a_words[2], b_words[2], result[2] = {0, 0};\n") << StringView("\tmemcpy(a_words, &arg0, sizeof(a_words));\n") << StringView("\tmemcpy(b_words, &arg1, sizeof(b_words));\n") << StringView("\tu64 a = a_words[arg2 & 1];\n") << StringView("\tu64 b = b_words[(arg2 >> 4) & 1];\n") << StringView("\tfor(unsigned i = 0; i < 64; i++) {\n") << StringView("\t\tif((b >> i) & 1) {\n") << StringView("\t\t\tresult[0] ^= a << i;\n") << StringView("\t\t\tif(i != 0) result[1] ^= a >> (64 - i);\n") << StringView("\t\t}\n") << StringView("\t}\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.addcarry.32") {
             of << StringView("\trv._0 = __builtin_add_overflow(arg1, arg2, &rv._1);\n");
             of << StringView("\tif(arg0) rv._0 |= __builtin_add_overflow(rv._1, 1, &rv._1);\n");
@@ -6517,8 +6247,7 @@ auto CodeGeneratorC::emitCallerLocationPointer(const SourceLocation& source) -> 
 }
 
 auto CodeGeneratorC::emitCallerLocationDefinitions() -> void {
-    of << StringView("namespace {\n")
-       << StringView("const trustme_caller_location trustme_caller_locations[] = {\n");
+    of << StringView("namespace {\n") << StringView("const trustme_caller_location trustme_caller_locations[] = {\n");
     if (!firstCallerLocation) {
         of << StringView("\t{},\n");
     } else {
@@ -7683,17 +7412,21 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                 case HIRCoreType::I64:
                     of << StringView("(");
                     emitParam(e.args.at(0));
-                    of << StringView(" < 0 ? (-0x7FFFFFFF"
-                          "FFFFFFFFll - 1) : 0x7FFFFFFF"
-                          "FFFFFFFFll)");
+                    of << StringView(
+                        " < 0 ? (-0x7FFFFFFF"
+                        "FFFFFFFFll - 1) : 0x7FFFFFFF"
+                        "FFFFFFFFll)"
+                    );
                     break;
                 case HIRCoreType::I128:
                     if (options.emulatedI128) {
                         of << StringView("( (i64)(");
                         emitParam(e.args.at(0));
-                        of << StringView(".hi) < 0 ? make128s_raw(-0x7FFFFFFF"
-                              "FFFFFFFFll - 1, 0) : make128s_raw(0x7FFFFFFF"
-                              "FFFFFFFFll, -1))");
+                        of << StringView(
+                            ".hi) < 0 ? make128s_raw(-0x7FFFFFFF"
+                            "FFFFFFFFll - 1, 0) : make128s_raw(0x7FFFFFFF"
+                            "FFFFFFFFll, -1))"
+                        );
                     } else {
                         of << StringView("(");
                         emitParam(e.args.at(0));
@@ -7775,17 +7508,21 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                 case HIRCoreType::I64:
                     of << StringView("(");
                     emitParam(e.args.at(0));
-                    of << StringView(" < 0 ? (-0x7FFFFFFF"
-                          "FFFFFFFFll - 1) : 0x7FFFFFFF"
-                          "FFFFFFFFll)");
+                    of << StringView(
+                        " < 0 ? (-0x7FFFFFFF"
+                        "FFFFFFFFll - 1) : 0x7FFFFFFF"
+                        "FFFFFFFFll)"
+                    );
                     break;
                 case HIRCoreType::I128:
                     if (options.emulatedI128) {
                         of << StringView("( (i64)(");
                         emitParam(e.args.at(0));
-                        of << StringView(".hi) < 0 ? make128s_raw(-0x7FFFFFFF"
-                              "FFFFFFFFll - 1, 0) : make128s_raw(0x7FFFFFFF"
-                              "FFFFFFFFll, -1))");
+                        of << StringView(
+                            ".hi) < 0 ? make128s_raw(-0x7FFFFFFF"
+                            "FFFFFFFFll - 1, 0) : make128s_raw(0x7FFFFFFF"
+                            "FFFFFFFFll, -1))"
+                        );
                     } else {
                         of << StringView("(");
                         emitParam(e.args.at(0));
@@ -10606,13 +10343,13 @@ auto CodeGeneratorC::EmptyCTypeCb::empty() const -> bool {
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, CodeGeneratorC::CTypeCallback>(ZeroCopyOutput& os, const CodeGeneratorC::CTypeCallback& callback) {
-    callback.write(os);
-}
+    template <>
+    void output<ZeroCopyOutput, CodeGeneratorC::CTypeCallback>(ZeroCopyOutput& os, const CodeGeneratorC::CTypeCallback& callback) {
+        callback.write(os);
+    }
 
-template <>
-void output<ZeroCopyOutput, FmtShell>(ZeroCopyOutput& os, FmtShell x) {
+    template <>
+    void output<ZeroCopyOutput, FmtShell>(ZeroCopyOutput& os, FmtShell x) {
         for (char c : x.s) {
             switch (c) {
                 case '\\':
@@ -10626,8 +10363,8 @@ void output<ZeroCopyOutput, FmtShell>(ZeroCopyOutput& os, FmtShell x) {
         return;
     }
 
-template <>
-void output<ZeroCopyOutput, FmtGccAsm>(ZeroCopyOutput& os, FmtGccAsm x) {
+    template <>
+    void output<ZeroCopyOutput, FmtGccAsm>(ZeroCopyOutput& os, FmtGccAsm x) {
         bool inComment = false;
         for (const char& ch : x.s) {
             if (ch == '/' && (&ch)[1] == '/') {

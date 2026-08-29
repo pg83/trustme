@@ -1,8 +1,7 @@
 #pragma once
 
-#include "output.h"
-
 #include "span.h"
+#include "output.h"
 #include "hir_expr.h"
 #include "hir_expr_ptr.h"
 #include "hir_type_ref.h"
@@ -32,7 +31,6 @@ struct Context {
         unsigned ruleIdx;
         HIRTypeRef leftTy;
         HIRExprNodeP* rightNodePtr;
-
     };
 
     struct IVarPossible {
@@ -94,7 +92,6 @@ struct Context {
 
         std::vector<StallDependency> stalledOn;
         std::vector<CapturedIvarPossible> stalledPossibilities;
-
     };
 
     const HIRCrate& crate;
@@ -259,4 +256,5 @@ private:
 
 bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) __attribute__((warn_unused_result));
 
+void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);
 void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr, HIRExprNodeP& rootPtr);

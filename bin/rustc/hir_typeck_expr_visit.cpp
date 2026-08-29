@@ -5,6 +5,7 @@
 #include "wire_board.h"
 #include "hir_visitor.h"
 #include "hir_expr_state.h"
+#include "hir_typeck_expr_cs.h"
 
 using namespace stl;
 

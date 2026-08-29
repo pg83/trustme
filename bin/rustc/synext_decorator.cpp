@@ -21,6 +21,10 @@
 
 using namespace stl;
 
+void ExpandDecorator::unexpected(const Span& sp, const ASTAttribute& mi, const char* locStr) const {
+    WARNING(sp, W0000, StringView("Unexpected attribute ") << mi.name() << StringView(" on ") << locStr);
+}
+
 namespace {
     enum eItemType {
         ITEM_TRAIT,

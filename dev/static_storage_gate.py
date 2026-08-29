@@ -32,7 +32,7 @@ ALLOWED_IMMUTABLE = frozenset((
     # Embedded source emitted by the C backend.
     ("trans_codegen_c.cpp.o", "_ZL17CODEGEN_C_PRELUDE", "r"),
     # Parser and core-type lookup tables.
-    ("ast_types.cpp.o", "_ZN12_GLOBAL__N_19CORETYPESE", "d"),
+    ("coretypes.cpp.o", "_ZN12_GLOBAL__N_19CORETYPESE", "d"),
     ("parse_lex.cpp.o", "_ZN12_GLOBAL__N_18TOKENMAPE", "d"),
     ("parse_lex.cpp.o", "_ZN12_GLOBAL__N_111RWORDS_2015E", "d"),
     ("parse_lex.cpp.o", "_ZN12_GLOBAL__N_111RWORDS_2018E", "d"),

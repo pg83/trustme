@@ -54,5 +54,5 @@ struct TypeckModuleState {
 typedef std::vector<std::pair<HIRPattern, HIRTypeRef>> tArgs;
 
 void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);
-void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);
 void TypecheckCodeSimple(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);
+void TypecheckExpressions(const WireBoard& wb, HIRCrate& crate);

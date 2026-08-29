@@ -11,6 +11,7 @@
 #include "hir_typeck_common.h"
 #include "hir_typeck_static.h"
 #include "hir_inherent_cache.h"
+#include "hir_typeck_monomorph.h"
 #include "hir_typeck_expr_visit.h"
 
 #include <std/mem/obj_pool.h>
@@ -913,7 +914,8 @@ BindVisitor::BindVisitor(const WireBoard& wb)
     : HIRVisitor(nullptr, wb.crate->types)
     , crate(*wb.crate)
     , ms(wb)
-    , inExpr(0) {
+    , inExpr(0)
+{
     curModule.ptr = &crate.rootModule;
     curModule.path = &rootPath;
 }
@@ -1250,7 +1252,8 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
 
                         M(HIRTypeInterner& types, const HIRTypeData* ty)
                             : MonomorphiserNop(types)
-                            , newTy(ty) {
+                            , newTy(ty)
+                        {
                         }
 
                         HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override {
@@ -1519,7 +1522,8 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
 
         ExprVisitor(BindVisitor& uv)
             : HIRExprVisitorDef(uv.interner())
-            , upperVisitor(uv) {
+            , upperVisitor(uv)
+        {
         }
 
         void visitGenericPath(HIRVisitor::PathContext pc, HIRGenericPath& p) override {
@@ -1659,7 +1663,8 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
             BindVisitor& upperVisitor;
 
             MirVisitor(BindVisitor& upperVisitor)
-                : upperVisitor(upperVisitor) {
+                : upperVisitor(upperVisitor)
+            {
             }
 
             void visitType(HIRTypeRef& t) override {
@@ -1691,7 +1696,8 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
 
 VisitorEnumSuperTraits::VisitorEnumSuperTraits(const HIRCrate& crate)
     : HIRVisitor(nullptr, crate.types)
-    , crate(crate) {
+    , crate(crate)
+{
 }
 
 auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
@@ -1709,7 +1715,8 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
         Enumerate(HIRTypeInterner& types, const Span& sp, HIRTypeRef tySelf)
             : types(types)
             , sp(sp)
-            , tySelf(tySelf) {
+            , tySelf(tySelf)
+        {
         }
 
         void enumSupertraitsIn(const HIRTrait& tr, HIRTraitPath path) {
@@ -1886,7 +1893,8 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
 VisitorPost::VisitorPost(const WireBoard& wb)
     : HIRVisitor(nullptr, wb.crate->types)
     , crate(*wb.crate)
-    , ms(wb) {
+    , ms(wb)
+{
 }
 
 auto VisitorPost::interner() const -> HIRTypeInterner& {
@@ -2034,7 +2042,8 @@ auto VisitorPost::visitExpr(HIRExprPtr& expr) -> void {
 
         ExprVisitor(VisitorPost& uv)
             : HIRExprVisitorDef(uv.interner())
-            , upperVisitor(uv) {
+            , upperVisitor(uv)
+        {
         }
 
         void visitGenericPath(HIRVisitor::PathContext pc, HIRGenericPath& p) override {
@@ -2124,7 +2133,8 @@ auto VisitorPost::visitExpr(HIRExprPtr& expr) -> void {
             VisitorPost& upperVisitor;
 
             MirVisitor(VisitorPost& upperVisitor)
-                : upperVisitor(upperVisitor) {
+                : upperVisitor(upperVisitor)
+            {
             }
 
             void visitType(HIRTypeRef& t) override {
@@ -2174,7 +2184,8 @@ auto Expander::activeTypeAlias(const HIRTypeAlias* alias) const -> const ActiveT
 Expander::Expander(const WireBoard& wb, const HIRCrate& crate)
     : HIRVisitor(nullptr, crate.types)
     , wb(wb)
-    , crate(crate) {
+    , crate(crate)
+{
 }
 
 auto Expander::hasBound(const GenericBounds& bounds, const HIRGenericBound& candidate) -> bool {
@@ -2554,7 +2565,8 @@ auto Expander::visitExpr(HIRExprPtr& expr) -> void {
 
         Visitor(Expander& uv)
             : HIRExprVisitorDef(uv.interner())
-            , upperVisitor(uv) {
+            , upperVisitor(uv)
+        {
         }
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
@@ -2644,7 +2656,8 @@ auto Expander::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl
 ExpanderSelf::ExpanderSelf(const HIRCrate& crate, const HIRTypeData* implType)
     : HIRVisitor(nullptr, crate.types)
     , crate(crate)
-    , implType(implType) {
+    , implType(implType)
+{
 }
 
 auto ExpanderSelf::interner() const -> HIRTypeInterner& {
@@ -2673,7 +2686,8 @@ auto ExpanderSelf::visitExpr(HIRExprPtr& expr) -> void {
 
         Visitor(ExpanderSelf& uv)
             : HIRExprVisitorDef(uv.interner())
-            , upperVisitor(uv) {
+            , upperVisitor(uv)
+        {
         }
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
@@ -2751,7 +2765,8 @@ auto ExpanderSelf::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& 
 }
 
 AliasConstGenericParamBinder::AliasConstGenericParamBinder(HIRTypeInterner& types)
-    : HIRVisitor(nullptr, types) {
+    : HIRVisitor(nullptr, types)
+{
 }
 
 auto AliasConstGenericParamBinder::visitConstgeneric(HIRConstGeneric& value) -> void {
@@ -2779,7 +2794,8 @@ auto AliasConstGenericParamBinder::visitTraitAlias(HIRItemPath p, HIRTraitAlias&
 
 AliasConstGenericParamBinder::Guard::Guard(AliasConstGenericParamBinder& binder, const HIRGenericParams& value)
     : binder(binder)
-    , old(binder.implParams) {
+    , old(binder.implParams)
+{
     binder.implParams = &value;
 }
 
@@ -2908,7 +2924,8 @@ auto ReceiverValidator::forEachImpl(HIRCrate::ImplGroup<std::unique_ptr<Impl>>& 
 
 ReceiverValidator::ReceiverValidator(const WireBoard& wb, HIRCrate& crate)
     : crate(crate)
-    , resolve(wb) {
+    , resolve(wb)
+{
 }
 
 auto ReceiverValidator::validate() -> void {
@@ -2955,7 +2972,8 @@ MarkingsVisitor::MarkingsVisitor(const WireBoard& wb)
     , langCoerceUnsized_(crate.getLangItemPathOpt("coerce_unsized"))
     , langCopy_(crate.getLangItemPathOpt("copy"))
     , langDeref_(crate.getLangItemPathOpt("deref"))
-    , langDrop_(crate.getLangItemPathOpt("drop")) {
+    , langDrop_(crate.getLangItemPathOpt("drop"))
+{
 }
 
 auto MarkingsVisitor::visitStruct(HIRItemPath ip, HIRStruct& str) -> void {
@@ -3165,7 +3183,8 @@ auto MarkingsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImp
 
 Visitor2::Visitor2(const WireBoard& wb)
     : HIRVisitor(nullptr, wb.crate->types)
-    , resolve_(wb) {
+    , resolve_(wb)
+{
 }
 
 auto Visitor2::getUnsizeParamIdx(const Span& sp, const HIRTypeData* pointee) const -> size_t {
@@ -3269,7 +3288,8 @@ UfcsVisitor::UfcsVisitor(const WireBoard& wb, bool visitExprs)
     , crate(*wb.crate)
     , visitExprs_(visitExprs)
     , runEat(visitExprs)
-    , resolve_(wb) {
+    , resolve_(wb)
+{
 }
 
 auto UfcsVisitor::restoreExprContext(const HIRExprState& state, const HIRItemPath* traitPath) -> void {
@@ -3467,7 +3487,8 @@ auto UfcsVisitor::visitExpr(HIRExprPtr& expr) -> void {
 
         ExprVisitor(UfcsVisitor& uv)
             : HIRExprVisitorDef(uv.crate.types)
-            , upperVisitor(uv) {
+            , upperVisitor(uv)
+        {
         }
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
@@ -3729,7 +3750,8 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
         auto pp = response.impl ? response.impl->getTraitParams(crate.types) : traitPath.params.clone();
         struct KillPlaceholders: public Monomorphiser {
             explicit KillPlaceholders(HIRTypeInterner& types)
-                : Monomorphiser(types) {
+                : Monomorphiser(types)
+            {
             }
 
             HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override {
@@ -4257,7 +4279,8 @@ auto UfcsVisitor::visitPatternValue(const Span& sp, const HIRPattern& pat, HIRPa
 
 UfcsVisitor::DeclaredTypeGuard::DeclaredTypeGuard(UfcsVisitor& visitor)
     : visitor(visitor)
-    , saved(visitor.preserveDeclaredProjections_) {
+    , saved(visitor.preserveDeclaredProjections_)
+{
     visitor.preserveDeclaredProjections_ = true;
 }
 
@@ -4268,13 +4291,15 @@ UfcsVisitor::DeclaredTypeGuard::~DeclaredTypeGuard() {
 UfcsVisitor::ModTraitsGuard::ModTraitsGuard(UfcsVisitor& v, tTraitImports oldImports)
     : v(&v)
     , oldImports(mv$(oldImports))
-    , oldModPath(v.curModPath) {
+    , oldModPath(v.curModPath)
+{
 }
 
 UfcsVisitor::ModTraitsGuard::ModTraitsGuard(ModTraitsGuard&& x)
     : v(x.v)
     , oldImports(mv$(x.oldImports))
-    , oldModPath(x.oldModPath) {
+    , oldModPath(x.oldModPath)
+{
     x.v = nullptr;
 }
 

@@ -1,6 +1,6 @@
 #include "ast_types.h"
-#include "output.h"
 
+#include "output.h"
 #include "ast_ast.h"
 #include "ast_expr.h"
 #include "ast_crate.h"
@@ -9,34 +9,6 @@
 #include <std/mem/obj_pool.h>
 
 using namespace stl;
-
-namespace {
-    static const struct {
-        const char* name;
-        enum eCoreType type;
-    } CORETYPES[] = {
-        {"_", CORETYPE_ANY},
-        {"bool", CORETYPE_BOOL},
-        {"char", CORETYPE_CHAR},
-        {"f128", CORETYPE_F128},
-        {"f16", CORETYPE_F16},
-        {"f32", CORETYPE_F32},
-        {"f64", CORETYPE_F64},
-        {"i128", CORETYPE_I128},
-        {"i16", CORETYPE_I16},
-        {"i32", CORETYPE_I32},
-        {"i64", CORETYPE_I64},
-        {"i8", CORETYPE_I8},
-        {"isize", CORETYPE_INT},
-        {"str", CORETYPE_STR},
-        {"u128", CORETYPE_U128},
-        {"u16", CORETYPE_U16},
-        {"u32", CORETYPE_U32},
-        {"u64", CORETYPE_U64},
-        {"u8", CORETYPE_U8},
-        {"usize", CORETYPE_UINT},
-    };
-}
 
 ASTHigherRankedBounds::ASTHigherRankedBounds() = default;
 ASTHigherRankedBounds::~ASTHigherRankedBounds() = default;
@@ -62,68 +34,6 @@ TypeFunction::TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, std::strin
 
 TypeFunction::~TypeFunction() = default;
 TypeFunction::TypeFunction(TypeFunction&&) = default;
-
-enum eCoreType coretypeFromstring(const char* name) {
-    for (unsigned int i = 0; i < sizeof(CORETYPES) / sizeof(CORETYPES[0]); i++) {
-        int cmp = strcmp(name, CORETYPES[i].name);
-        if (cmp < 0) {
-            break;
-        }
-        if (cmp == 0) {
-            return CORETYPES[i].type;
-        }
-    }
-    return CORETYPE_INVAL;
-}
-
-const char* coretypeName(const eCoreType ct) {
-    switch (ct) {
-        case CORETYPE_INVAL:
-            return "INVAL";
-        case CORETYPE_ANY:
-            return "_/*CORETYPE_ANY*/";
-        case CORETYPE_CHAR:
-            return "char";
-        case CORETYPE_STR:
-            return "str";
-        case CORETYPE_BOOL:
-            return "bool";
-        case CORETYPE_UINT:
-            return "usize";
-        case CORETYPE_INT:
-            return "isize";
-        case CORETYPE_U8:
-            return "u8";
-        case CORETYPE_I8:
-            return "i8";
-        case CORETYPE_U16:
-            return "u16";
-        case CORETYPE_I16:
-            return "i16";
-        case CORETYPE_U32:
-            return "u32";
-        case CORETYPE_I32:
-            return "i32";
-        case CORETYPE_U64:
-            return "u64";
-        case CORETYPE_I64:
-            return "i64";
-        case CORETYPE_U128:
-            return "u128";
-        case CORETYPE_I128:
-            return "i128";
-        case CORETYPE_F16:
-            return "f16";
-        case CORETYPE_F32:
-            return "f32";
-        case CORETYPE_F64:
-            return "f64";
-        case CORETYPE_F128:
-            return "f128";
-    }
-    DEBUG(StringView("Unknown core type?! ") << ct);
-    return "NFI";
-}
 
 TypeFunction::TypeFunction(const TypeFunction& other)
     : hrbs(other.hrbs)
@@ -352,8 +262,6 @@ Ordering ASTType::ord(const ASTType& x) const {
     BUG(Span(), StringView("Unhandled ASTType* class '") << data.tag() << StringView("'"));
 }
 
-
-
 Ordering ord(ASTType* a, ASTType* b) {
     return a->ord(*b);
 }
@@ -468,12 +376,6 @@ void ASTType::print(ZeroCopyOutput& os, bool isDebug /*=false*/) const {
 #undef _2
 }
 
-
-
-
-
-
-
 PrettyPrintType::PrettyPrintType(const ASTType* ty)
     : type_(ty)
 {
@@ -557,67 +459,58 @@ ASTType* mkType(ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, std::
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, ASTType*>(ZeroCopyOutput& out, ASTType* type) {
-    if (type) {
-        out << *type;
-    } else {
-        out << StringView("(null-type)");
-    }
-}
-
-template <>
-void output<ZeroCopyOutput, const ASTType*>(ZeroCopyOutput& out, const ASTType* type) {
-    if (type) {
-        out << *type;
-    } else {
-        out << StringView("(null-type)");
-    }
-}
-
-template <>
-void output<ZeroCopyOutput, TypeData::Tag>(ZeroCopyOutput& out, TypeData::Tag value) {
-    out << static_cast<unsigned>(value);
-}
-
-template <>
-void output<ZeroCopyOutput, eCoreType>(ZeroCopyOutput& os, const eCoreType ct) {
-    os << coretypeName(ct);
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTType>(ZeroCopyOutput& os, const ASTType& tr) {
-    tr.print(os, true);
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, PrettyPrintType>(ZeroCopyOutput& os, PrettyPrintType x) {
-    x.print(os);
-    return;
-}
-
-template <>
-void output<ZeroCopyOutput, ASTLifetimeRef>(ZeroCopyOutput& os, ASTLifetimeRef x) {
-    if (x.binding() == ASTLifetimeRef::BINDING_STATIC) {
-        os << StringView("'static");
-    } else if (x.binding() == ASTLifetimeRef::BINDING_INFER) {
-        os << StringView("'_");
-    } else if (x.binding() == ASTLifetimeRef::BINDING_UNSPECIFIED) {
-        os << StringView("/*'UNSPEC*/");
-    } else {
-        os << StringView("'") << x.name().name;
-        if (x.binding() != ASTLifetimeRef::BINDING_UNBOUND) {
-            os << StringView("/*") << x.binding() << StringView("*/");
+    template <>
+    void output<ZeroCopyOutput, ASTType*>(ZeroCopyOutput& out, ASTType* type) {
+        if (type) {
+            out << *type;
+        } else {
+            out << StringView("(null-type)");
         }
     }
-    return;
-}
 
-template <>
-void output<ZeroCopyOutput, std::vector<ASTType*>>(ZeroCopyOutput& out, const std::vector<ASTType*>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, const ASTType*>(ZeroCopyOutput& out, const ASTType* type) {
+        if (type) {
+            out << *type;
+        } else {
+            out << StringView("(null-type)");
+        }
+    }
 
+    template <>
+    void output<ZeroCopyOutput, TypeData::Tag>(ZeroCopyOutput& out, TypeData::Tag value) {
+        out << static_cast<unsigned>(value);
+    }
+
+    template <>
+    void output<ZeroCopyOutput, ASTType>(ZeroCopyOutput& os, const ASTType& tr) {
+        tr.print(os, true);
+        return;
+    }
+
+    template <>
+    void output<ZeroCopyOutput, PrettyPrintType>(ZeroCopyOutput& os, PrettyPrintType x) {
+        x.print(os);
+        return;
+    }
+
+    template <>
+    void output<ZeroCopyOutput, ASTHigherRankedBounds>(ZeroCopyOutput& out, const ASTHigherRankedBounds& value) {
+        if (value.empty()) {
+            return;
+        }
+        out << StringView("for<");
+        for (const auto& lifetime : value.lifetimes) {
+            out << lifetime << StringView(",");
+        }
+        for (const auto& type : value.types) {
+            out << type << StringView(",");
+        }
+        out << StringView("> ");
+    }
+
+    template <>
+    void output<ZeroCopyOutput, std::vector<ASTType*>>(ZeroCopyOutput& out, const std::vector<ASTType*>& values) {
+        outCont(out, values);
+    }
 }

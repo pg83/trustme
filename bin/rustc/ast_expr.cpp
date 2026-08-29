@@ -1,55 +1,11 @@
 #include "ast_expr.h"
-#include "output.h"
 
+#include "output.h"
 #include "ast_ast.h"
 
 #include <cctype>
 
 using namespace stl;
-
-const char* ASTExprNodeP::typeName() const {
-    return typeid(*ptr).name();
-}
-
-ASTExpr::ASTExpr(ASTExprNodeP node)
-    : node_(node.release())
-{
-}
-
-ASTExpr::ASTExpr(ASTExprNode* node)
-    : node_(node)
-{
-}
-
-ASTExpr::ASTExpr()
-    : node_(nullptr)
-{
-}
-
-void ASTExpr::visitNodes(ASTNodeVisitor& v) {
-    if (node_) {
-        node_->visit(v);
-    }
-}
-
-void ASTExpr::visitNodes(ASTNodeVisitor& v) const {
-    if (node_) {
-        BUG_ASSERT(v.isConst());
-        node_->visit(v);
-    }
-}
-
-ASTExpr ASTExpr::clone() const {
-    if (node_) {
-        return ASTExpr(node_->clone());
-    } else {
-        return ASTExpr();
-    }
-}
-
-
-
-
 
 ASTExprNode::~ASTExprNode() {
 }
@@ -277,23 +233,6 @@ namespace {
 
 #define NEWNODE(type, ...) mkExprnodep(span(), makeAstExprNode<type>(pool() __VA_OPT__(, ) __VA_ARGS__))
 
-    void printFmtString(ZeroCopyOutput& os, const std::string& s) {
-        static const char* hex = "0123456789ABCDEF";
-        for (auto c : s) {
-            if (c == '{') {
-                os << StringView("{{");
-            } else if (c == '\\') {
-                os << StringView("\\\\");
-            } else if (c == '"') {
-                os << StringView("\\\"");
-            } else if (std::isprint(c)) {
-                os << c;
-            } else {
-                os << StringView("\\x") << hex[c >> 4] << hex[c & 15];
-            }
-        }
-    }
-
     void fmtIfletConditions(ZeroCopyOutput& os, const std::vector<ASTIfLetCondition>& conditions) {
         for (const auto& cond : conditions) {
             if (&cond != &conditions.front()) {
@@ -407,20 +346,6 @@ NODE(
         return NEWNODE(ASTExprNodeAsm, text, mv$(outputs), mv$(inputs), clobbers, flags);
     }
 )
-
-void AsmLine::fmt(ZeroCopyOutput& os) const {
-    os << StringView("\"");
-    for (const auto& f : this->frags) {
-        printFmtString(os, f.before);
-        os << StringView("{") << f.index;
-        if (f.modifier) {
-            os << StringView(":") << f.modifier;
-        }
-        os << StringView("}");
-    }
-    printFmtString(os, this->trailing);
-    os << StringView("\"");
-}
 
 NODE(
     ASTExprNodeAsm2,
@@ -1538,24 +1463,15 @@ bool ASTNodeVisitor::isConst() const {
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, ASTExprNodeMacro>(ZeroCopyOutput& os, const ASTExprNodeMacro& node) {
-    node.print(os);
-}
-
-template <>
-void output<ZeroCopyOutput, ASTExpr>(ZeroCopyOutput& os, ASTExpr pat) {
-    if (pat) {
-        os << pat.node();
-    } else {
-        os << StringView("/* null */");
+    template <>
+    void output<ZeroCopyOutput, ASTExprNodeMacro>(ZeroCopyOutput& os, const ASTExprNodeMacro& node) {
+        node.print(os);
     }
-}
 
-template <>
-void output<ZeroCopyOutput, ASTExprNode>(ZeroCopyOutput& os, const ASTExprNode& node) {
-    BUG_ASSERT(static_cast<const void*>(&node) != nullptr);
-    node.print(os);
-    return;
-}
+    template <>
+    void output<ZeroCopyOutput, ASTExprNode>(ZeroCopyOutput& os, const ASTExprNode& node) {
+        BUG_ASSERT(static_cast<const void*>(&node) != nullptr);
+        node.print(os);
+        return;
+    }
 }

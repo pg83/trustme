@@ -3,7 +3,6 @@
 #include "ast_ast.h"
 #include "parse_tokenstream.h"
 
-
 #define GET_TOK(tok, lex) ((tok = lex.getToken()).type())
 #define PUTBACK(tok, lex) lex.putback(std::move(tok))
 #define LOOK_AHEAD(lex) (lex.lookahead(0))
@@ -19,6 +18,10 @@
             parseErrorUnexpected(lex, tok, Token(exp)); \
         }                                               \
     } while (0)
+
+struct WireBoard;
+
+ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, std::string mainfile, ASTEdition edition);
 
 enum eParsePathGenericMode {
     PATH_GENERIC_NONE,

@@ -1,5 +1,4 @@
 #include "main_bindings.h"
-#include "output_file.h"
 
 #include "ast_ast.h"
 #include "hir_hir.h"
@@ -14,20 +13,30 @@
 #include "wire_board.h"
 #include "lint_forbid.h"
 #include "memory_dump.h"
+#include "output_file.h"
+#include "hir_from_ast.h"
+#include "mir_from_hir.h"
 #include "parse_common.h"
 #include "trans_target.h"
+#include "expand_common.h"
 #include "lint_must_use.h"
 #include "target_detect.h"
+#include "trans_codegen.h"
+#include "mir_operations.h"
 #include "lint_unsafe_code.h"
 #include "parse_parseerror.h"
+#include "expand_proc_macro.h"
 #include "hir_main_bindings.h"
 #include "mir_main_bindings.h"
 #include "hir_inherent_cache.h"
+#include "trans_monomorphise.h"
 #include "trans_main_bindings.h"
+#include "hir_typeck_expr_visit.h"
 #include "resolve_main_bindings.h"
 #include "hir_conv_main_bindings.h"
 #include "hir_expand_main_bindings.h"
 #include "hir_typeck_main_bindings.h"
+#include "hir_conv_constant_evaluation.h"
 
 #include <std/mem/obj_pool.h>
 
@@ -36,8 +45,8 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <pthread.h>
 
 using namespace stl;
@@ -1527,35 +1536,37 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
 }
 
 void ProgramParams::showHelp() const {
-    sysO << StringView("USAGE: rustc <sourcefile>\n"
-                 "\n"
-                 "OPTIONS:\n"
-                 "-L [kind=]<dir>    : Search for crates or native libraries in this directory\n"
-                 "-o <filename>      : Write compiler output (library or executable) to this file\n"
-                 "-O                 : Enable optimisation\n"
-                 "-g                 : Emit debugging information\n"
-                 "--out-dir <dir>    : Specify the output directory (alternative to `-o`)\n"
-                 "--crate <unique>=<rlib>\n"
-                 "                   : Make an exact crate metadata artifact available\n"
-                 "--crate-name-of <rlib>\n"
-                 "                   : Print the exact crate name stored in metadata\n"
-                 "--crate-alias <source>=<unique>\n"
-                 "                   : Resolve a source name through the crate table\n"
-                 "--crate-object <unique>=<object>\n"
-                 "                   : Supply the exact object used by standalone linking\n"
-                 "--proc-macro <unique>=<executable>\n"
-                 "                   : Supply the exact proc-macro host executable\n"
-                 "--extern <alias>=<unique>\n"
-                 "                   : Bind a source crate name to an available unique crate\n"
-                 "--crate-tag <str>  : Specify a suffix for symbols and output files\n"
-                 "--crate-name <str> : Override/set the crate name\n"
-                 "--crate-type <ty>  : Override/set the crate type (rlib, dylib, cdylib, bin, proc-macro)\n"
-                 "--cfg flag         : Set a boolean #[cfg]/cfg! flag\n"
-                 "--cfg flag=\"val\"   : Set a string #[cfg]/cfg! flag\n"
-                 "--target <name>    : Compile code for the given target\n"
-                 "--test             : Generate a unit test executable\n"
-                 "-C <option>        : Code-generation options\n"
-                 "-Z <option>        : Debugging/experimental options\n");
+    sysO << StringView(
+        "USAGE: rustc <sourcefile>\n"
+        "\n"
+        "OPTIONS:\n"
+        "-L [kind=]<dir>    : Search for crates or native libraries in this directory\n"
+        "-o <filename>      : Write compiler output (library or executable) to this file\n"
+        "-O                 : Enable optimisation\n"
+        "-g                 : Emit debugging information\n"
+        "--out-dir <dir>    : Specify the output directory (alternative to `-o`)\n"
+        "--crate <unique>=<rlib>\n"
+        "                   : Make an exact crate metadata artifact available\n"
+        "--crate-name-of <rlib>\n"
+        "                   : Print the exact crate name stored in metadata\n"
+        "--crate-alias <source>=<unique>\n"
+        "                   : Resolve a source name through the crate table\n"
+        "--crate-object <unique>=<object>\n"
+        "                   : Supply the exact object used by standalone linking\n"
+        "--proc-macro <unique>=<executable>\n"
+        "                   : Supply the exact proc-macro host executable\n"
+        "--extern <alias>=<unique>\n"
+        "                   : Bind a source crate name to an available unique crate\n"
+        "--crate-tag <str>  : Specify a suffix for symbols and output files\n"
+        "--crate-name <str> : Override/set the crate name\n"
+        "--crate-type <ty>  : Override/set the crate type (rlib, dylib, cdylib, bin, proc-macro)\n"
+        "--cfg flag         : Set a boolean #[cfg]/cfg! flag\n"
+        "--cfg flag=\"val\"   : Set a string #[cfg]/cfg! flag\n"
+        "--target <name>    : Compile code for the given target\n"
+        "--test             : Generate a unit test executable\n"
+        "-C <option>        : Code-generation options\n"
+        "-Z <option>        : Debugging/experimental options\n"
+    );
 }
 
 auto ProgramParams::effectiveMirOptLevel() const -> unsigned {

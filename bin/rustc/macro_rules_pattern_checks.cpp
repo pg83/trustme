@@ -1,12 +1,158 @@
 #include "macro_rules_pattern_checks.h"
-#include "output.h"
 
 #include "common.h"
+#include "output.h"
 #include "macro_rules_macro_rules.h"
 
 #include <std/lib/vector.h>
 
 using namespace stl;
+
+bool isTokenPath(eTokenType tt) {
+    switch (tt) {
+        case TOK_IDENT:
+        case TOK_DOUBLE_COLON:
+        case TOK_LT:
+        case TOK_DOUBLE_LT:
+        case TOK_RWORD_SELF:
+        case TOK_RWORD_SUPER:
+        case TOK_INTERPOLATED_PATH:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isTokenPat(eTokenType tt) {
+    if (isTokenPath(tt)) {
+        return true;
+    }
+    switch (tt) {
+        case TOK_PAREN_OPEN:
+        case TOK_SQUARE_OPEN:
+        case TOK_UNDERSCORE:
+        case TOK_AMP:
+        case TOK_RWORD_BOX:
+        case TOK_RWORD_REF:
+        case TOK_RWORD_MUT:
+        case TOK_STRING:
+        case TOK_INTEGER:
+        case TOK_CHAR:
+        case TOK_INTERPOLATED_PATTERN:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isTokenType(eTokenType tt) {
+    if (isTokenPath(tt)) {
+        return true;
+    }
+    switch (tt) {
+        case TOK_PAREN_OPEN:
+        case TOK_SQUARE_OPEN:
+        case TOK_STAR:
+        case TOK_AMP:
+        case TOK_RWORD_EXTERN:
+        case TOK_RWORD_UNSAFE:
+        case TOK_RWORD_FN:
+        case TOK_INTERPOLATED_TYPE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isTokenExpr(eTokenType tt) {
+    if (isTokenPath(tt)) {
+        return true;
+    }
+    switch (tt) {
+        case TOK_AMP:
+        case TOK_STAR:
+        case TOK_DASH:
+        case TOK_EXCLAM:
+        case TOK_RWORD_BOX:
+        case TOK_PAREN_OPEN:
+        case TOK_SQUARE_OPEN:
+        case TOK_RWORD_RETURN:
+        case TOK_RWORD_BREAK:
+        case TOK_RWORD_CONTINUE:
+        case TOK_BRACE_OPEN:
+        case TOK_RWORD_MATCH:
+        case TOK_RWORD_IF:
+        case TOK_RWORD_FOR:
+        case TOK_RWORD_WHILE:
+        case TOK_RWORD_LOOP:
+        case TOK_RWORD_UNSAFE:
+        case TOK_RWORD_TRY:
+        case TOK_LIFETIME:
+        case TOK_RWORD_MOVE:
+        case TOK_PIPE:
+        case TOK_DOUBLE_PIPE:
+        case TOK_INTEGER:
+        case TOK_FLOAT:
+        case TOK_STRING:
+        case TOK_BYTESTRING:
+        case TOK_RWORD_TRUE:
+        case TOK_RWORD_FALSE:
+        case TOK_INTERPOLATED_EXPR:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isTokenStmt(eTokenType tt) {
+    if (isTokenExpr(tt)) {
+        return true;
+    }
+    switch (tt) {
+        case TOK_BRACE_OPEN:
+        case TOK_RWORD_LET:
+        case TOK_INTERPOLATED_STMT:
+        case TOK_INTERPOLATED_STMT_ITEM:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isTokenItem(eTokenType tt) {
+    switch (tt) {
+        case TOK_HASH:
+        case TOK_RWORD_PUB:
+        case TOK_RWORD_UNSAFE:
+        case TOK_RWORD_TYPE:
+        case TOK_RWORD_CONST:
+        case TOK_RWORD_STATIC:
+        case TOK_RWORD_FN:
+        case TOK_RWORD_STRUCT:
+        case TOK_RWORD_ENUM:
+        case TOK_RWORD_TRAIT:
+        case TOK_RWORD_MOD:
+        case TOK_RWORD_USE:
+        case TOK_RWORD_EXTERN:
+        case TOK_RWORD_IMPL:
+        // TODO: more?
+        case TOK_INTERPOLATED_ITEM:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isTokenVis(eTokenType tt) {
+    switch (tt) {
+        case TOK_RWORD_PUB:
+        case TOK_RWORD_CRATE:
+        case TOK_INTERPOLATED_VIS:
+            return true;
+        default:
+            return true; // TODO: Is this true? it can capture just nothing
+    }
+}
 
 namespace {
     using Ent = MacroPatEnt;
@@ -167,8 +313,6 @@ namespace {
         }
     }
 
-
-
     void checkRun(const Ent* ents, size_t count, const Ents& outer) {
         for (size_t i = 0; i < count; i++) {
             const auto& e = ents[i];
@@ -204,13 +348,13 @@ void MacroRulesCheckFollowSets(const MacroPatEnt* ents, size_t count) {
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, Described>(ZeroCopyOutput& os, Described x) {
+    template <>
+    void output<ZeroCopyOutput, Described>(ZeroCopyOutput& os, Described x) {
         if (isFragment(x.e)) {
             os << StringView("`$") << x.e.name << StringView(":") << fragmentName(x.e.type) << StringView("`");
-    return;
+            return;
         }
         os << StringView("`") << x.e.tok << StringView("`");
-    return;
+        return;
     }
 }

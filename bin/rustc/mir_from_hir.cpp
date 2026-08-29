@@ -1,6 +1,6 @@
 #include "mir_from_hir.h"
-#include "output.h"
 
+#include "output.h"
 #include "hir_hir.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
@@ -15,6 +15,7 @@
 #include "hir_typeck_common.h"
 #include "mir_main_bindings.h"
 #include "mir_visit_crate_mir.h"
+#include "hir_typeck_monomorph.h"
 #include "hir_conv_main_bindings.h"
 #include "hir_conv_constant_evaluation.h"
 
@@ -25,9 +26,9 @@
 #include <cctype>
 #include <limits>
 #include <numeric>
+#include <sstream>
 #include <algorithm>
 #include <type_traits>
-#include <sstream>
 
 using namespace stl;
 
@@ -674,7 +675,8 @@ namespace {
                     Rewriter(const std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, const std::map<unsigned, unsigned>& dropFlagMapping, unsigned dropFlagsField)
                         : mappings_(mappings)
                         , dropFlagMapping(dropFlagMapping)
-                        , dropFlagsField(dropFlagsField) {
+                        , dropFlagsField(dropFlagsField)
+                    {
                     }
 
                     bool visitLvalue(MIRLValue& lv, MIRValUsage u) override {
@@ -841,8 +843,6 @@ namespace {
     void sortRulesets(RulesetRef rulesets, size_t idx = 0);
 
     void sortRulesetsInner(RulesetRef rulesets, size_t idx);
-
-
 
     ::Ordering ordSubRules(const std::vector<PatternRule>& a, const std::vector<PatternRule>& b) {
         const size_t n = std::min(a.size(), b.size());
@@ -2674,7 +2674,8 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                         MIRBasicBlockId block0;
 
                         DivergingGuardMapper(MIRBasicBlockId block0)
-                            : block0(block0) {
+                            : block0(block0)
+                        {
                         }
 
                         MIRBasicBlockId updateBbRef(MIRBasicBlockId bbIdx) override {
@@ -2744,7 +2745,8 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                         , condFalse(condFalse)
                         , condTrue(condTrue)
                         , newCondFalse(builder.newBbUnlinked())
-                        , newCondTrue(builder.newBbUnlinked()) {
+                        , newCondTrue(builder.newBbUnlinked())
+                    {
                         DEBUG(StringView("new_cond_false=") << newCondFalse << StringView(", new_cond_true=") << newCondTrue);
                     }
 
@@ -2758,9 +2760,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                         if (bbIdx == condTrue) {
                             return newCondTrue;
                         }
-                        BUG(Span(),
-                            StringView("update_bb_ref: Unknown BB ") << bbIdx << StringView(" ")
-                                                         << StringView(": block0=") << block0 << StringView(", cond_false=") << condFalse << StringView(", cond_true=") << condTrue);
+                        BUG(Span(), StringView("update_bb_ref: Unknown BB ") << bbIdx << StringView(" ") << StringView(": block0=") << block0 << StringView(", cond_false=") << condFalse << StringView(", cond_true=") << condTrue);
                     }
                 } mapper(builder, block0, condFalseBlockPat0, guardEndBlock);
 
@@ -5195,7 +5195,8 @@ MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const 
     , langBox_(nullptr)
     , blockActive_(false)
     , resultValid(false)
-    , fcnScope_(*this, 0) {
+    , fcnScope_(*this, 0)
+{
     if (resolve.hirCrate().langItems.count("owned_box") > 0) {
         langBox_ = &resolve.hirCrate().langItems.at("owned_box");
     }
@@ -6070,7 +6071,8 @@ void MirBuilder::insertCloned(const Span& sp, const SavedCode& c, CloneMapper& m
 
             Cloner(const Span& sp, CloneMapper& mapper, HIRTypeInterner& types)
                 : MIRCloner(sp, types)
-                , mapper(mapper) {
+                , mapper(mapper)
+            {
             }
 
             MIRBasicBlockId mapBbIdx(MIRBasicBlockId idx) const override {
@@ -7546,8 +7548,6 @@ bool VarState::operator==(const VarState& x) const {
     UNREACHABLE();
 }
 
-
-
 bool VarState::getUsedDropFlags(std::set<unsigned>* out) const {
     bool rv = false;
     switch ((*this).tag()) {
@@ -7603,12 +7603,14 @@ bool VarState::getUsedDropFlags(std::set<unsigned>* out) const {
 
 ScopeHandle::ScopeHandle(const MirBuilder& builder, unsigned int idx)
     : builder(builder)
-    , idx(idx) {
+    , idx(idx)
+{
 }
 
 ScopeHandle::ScopeHandle(ScopeHandle&& x)
     : builder(x.builder)
-    , idx(x.idx) {
+    , idx(x.idx)
+{
     x.idx = ~0;
 }
 
@@ -7616,16 +7618,19 @@ PatternBinding::PatternBinding(fieldPathT field, const HIRPatternBinding& bindin
     : field(std::move(field))
     , rootIndex(rootIndex)
     , binding(&binding)
-    , splitSlice(SIZE_MAX, SIZE_MAX) {
+    , splitSlice(SIZE_MAX, SIZE_MAX)
+{
 }
 
 MirBuilder::ScopeDef::ScopeDef(const Span& span)
-    : span(span) {
+    : span(span)
+{
 }
 
 MirBuilder::ScopeDef::ScopeDef(const Span& span, ScopeType data)
     : span(span)
-    , data(mv$(data)) {
+    , data(mv$(data))
+{
 }
 
 MirBuilder::SavedAliases MirBuilder::saveAliases() const {
@@ -7676,21 +7681,17 @@ MIRLValue MirBuilder::getRvalInIfCond(const Span& sp, MIRRValue val) {
 }
 
 MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
-    : state(mv$(vs)) {
+    : state(mv$(vs))
+{
 }
-
-
-
-
-
-
 
 #include "mir_from_hir_pattern_tu.cpp"
 
 ExprVisitorConv::ExprVisitorConv(MirBuilder& builder, const std::vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator)
     : builder(builder)
     , variableTypes(varTypes)
-    , isGenerator(isGenerator != nullptr) {
+    , isGenerator(isGenerator != nullptr)
+{
     if (isGenerator) {
         generatorState.isFuture = isGenerator->isFuture;
         generatorState.isAsyncGen = isGenerator->isAsyncGen;
@@ -8154,7 +8155,8 @@ auto ExprVisitorConv::generatorPruneInactiveLocals(const Span& sp, const StaticT
                 ThinVector<MIRBasicBlockId>& targets;
 
                 explicit TargetCollector(ThinVector<MIRBasicBlockId>& targets)
-                    : targets(targets) {
+                    : targets(targets)
+                {
                 }
 
                 void visitTarget(const MIRBasicBlockId& target) override {
@@ -11146,18 +11148,21 @@ auto ExprVisitorConv::visit(HIRExprNodeAsyncBlock& node) -> void {
 }
 
 ExprVisitorConv::GeneratorState::State::State(MIRBasicBlockId entry)
-    : entrypoint(entry) {
+    : entrypoint(entry)
+{
 }
 
 PatternDump::PatternDump(const StaticTraitResolve& resolve, const HIRTypeData* ty, const std::vector<PatternRule>& rules)
     : resolve(resolve)
     , ty(ty)
-    , rules(rules) {
+    , rules(rules)
+{
 }
 
 template <typename F>
 PatternSubsetCb<F>::PatternSubsetCb(F f)
-    : f(f) {
+    : f(f)
+{
 }
 
 template <typename F>
@@ -11167,7 +11172,8 @@ auto PatternSubsetCb<F>::visitSubset(size_t index) -> void {
 
 template <typename F>
 PatternTypeCb<F>::PatternTypeCb(F f)
-    : f(f) {
+    : f(f)
+{
 }
 
 template <typename F>
@@ -11181,7 +11187,8 @@ PatternRulesetBuilder::PatternRulesetBuilder(const StaticTraitResolve& resolve, 
     , rulesets(1)
     , subsetStart(0)
     , subsetEnd(1)
-    , nextRootIndex(sharedNextRootIndex ? sharedNextRootIndex : &nextRootStorage) {
+    , nextRootIndex(sharedNextRootIndex ? sharedNextRootIndex : &nextRootStorage)
+{
     if (resolve.hirCrate().langItems.count("owned_box") > 0) {
         langBox = &resolve.hirCrate().langItems.at("owned_box");
     }
@@ -11194,7 +11201,8 @@ auto PatternRulesetBuilder::multiplyRulesets(size_t n, F f) -> void {
 }
 
 PatternRulesetBuilder::Ruleset::Ruleset()
-    : isImpossible(false) {
+    : isImpossible(false)
+{
 }
 
 auto PatternRulesetBuilder::Ruleset::clone() const -> Ruleset {
@@ -11210,18 +11218,21 @@ auto PatternRulesetBuilder::Ruleset::clone() const -> Ruleset {
 }
 
 RulesetRef::RulesetRef(std::vector<PatternRuleset>& rules)
-    : rulesVec(&rules) {
+    : rulesVec(&rules)
+{
 }
 
 RulesetRef::RulesetRef(RulesetRef& parent, size_t start, size_t n)
     : parent(&parent)
     , parentOfs(start)
-    , parentLen(n) {
+    , parentLen(n)
+{
 }
 
 RulesetRef::RulesetRef(RulesetRef& parent, size_t idx)
     : parent(&parent)
-    , parentOfs(idx) {
+    , parentOfs(idx)
+{
 }
 
 auto RulesetRef::size() const -> size_t {
@@ -11278,7 +11289,8 @@ auto tRulesSubset::encodeArmIdx(size_t armIdx, size_t patIdx) -> size_t {
 }
 
 tRulesSubset::tRulesSubset(size_t exp, bool isArmIndexes)
-    : isArmIndexes(isArmIndexes) {
+    : isArmIndexes(isArmIndexes)
+{
     ruleSets.reserve(exp);
     armIdxes.reserve(exp);
 }
@@ -11359,7 +11371,8 @@ MatchGenGrouped::MatchGenGrouped(MirBuilder& builder, const Span& sp, const HIRT
     , topTy(topTy)
     , topVal(topVal)
     , armsCode(armsCode)
-    , fieldPathOfs(fieldPathOfs) {
+    , fieldPathOfs(fieldPathOfs)
+{
 }
 
 auto MatchGenGrouped::pushCompare(MIRLValue left, MIRBinOp op, MIRParam right) -> MIRLValue {
@@ -11367,13 +11380,13 @@ auto MatchGenGrouped::pushCompare(MIRLValue left, MIRBinOp op, MIRParam right) -
 }
 
 namespace stl {
-template <>
-void output<ZeroCopyOutput, tRulesSubset>(ZeroCopyOutput& out, const tRulesSubset& value) {
-    operator<<(out, value);
-}
+    template <>
+    void output<ZeroCopyOutput, tRulesSubset>(ZeroCopyOutput& out, const tRulesSubset& value) {
+        operator<<(out, value);
+    }
 
-template <>
-void output<ZeroCopyOutput, PatternRule>(ZeroCopyOutput& os, const PatternRule& x) {
+    template <>
+    void output<ZeroCopyOutput, PatternRule>(ZeroCopyOutput& os, const PatternRule& x) {
         os << StringView("{root") << x.rootIndex << StringView(":") << x.fieldPath << StringView("}=");
         switch (x.tag()) {
             case PatternRule::TAG_Any: {
@@ -11414,117 +11427,116 @@ void output<ZeroCopyOutput, PatternRule>(ZeroCopyOutput& os, const PatternRule& 
         return;
     }
 
-template <>
-void output<ZeroCopyOutput, VarState>(ZeroCopyOutput& os, const VarState& x) {
-    switch (x.tag()) {
-        case VarState::TAG_Invalid: {
-            auto& e = x.as_Invalid();
-            switch (e) {
-                case InvalidType::Uninit:
-                    os << StringView("Uninit");
-                    break;
-                case InvalidType::Moved:
-                    os << StringView("Moved");
-                    break;
-                case InvalidType::Descoped:
-                    os << StringView("Descoped");
-                    break;
+    template <>
+    void output<ZeroCopyOutput, VarState>(ZeroCopyOutput& os, const VarState& x) {
+        switch (x.tag()) {
+            case VarState::TAG_Invalid: {
+                auto& e = x.as_Invalid();
+                switch (e) {
+                    case InvalidType::Uninit:
+                        os << StringView("Uninit");
+                        break;
+                    case InvalidType::Moved:
+                        os << StringView("Moved");
+                        break;
+                    case InvalidType::Descoped:
+                        os << StringView("Descoped");
+                        break;
+                }
+                break;
             }
-            break;
+            case VarState::TAG_Valid: {
+                os << StringView("Valid");
+                break;
+            }
+            case VarState::TAG_Optional: {
+                auto& e = x.as_Optional();
+                os << StringView("Optional(df") << e << StringView(")");
+                break;
+            }
+            case VarState::TAG_MovedOut: {
+                auto& e = x.as_MovedOut();
+                os << StringView("MovedOut(");
+                if (e.outerFlag == ~0u) {
+                    os << StringView("-");
+                } else {
+                    os << StringView("df") << e.outerFlag;
+                }
+                os << StringView(" ") << *e.innerState << StringView(")");
+                break;
+            }
+            case VarState::TAG_Partial: {
+                auto& e = x.as_Partial();
+                os << StringView("Partial(");
+                if (e.outerFlag == ~0u) {
+                    os << StringView("-");
+                } else {
+                    os << StringView("df") << e.outerFlag;
+                }
+                os << StringView(", [") << e.innerStates << StringView("])");
+                break;
+            }
+            case VarState::TAG_PartialArray: {
+                auto& e = x.as_PartialArray();
+                os << StringView("PartialArray(") << e.count << StringView(", fill=") << *e.fillState << StringView(", {");
+                for (const auto& kv : e.otherStates) {
+                    os << kv.first << StringView(": ") << kv.second << StringView(",");
+                }
+                os << StringView("})");
+                break;
+            }
         }
-        case VarState::TAG_Valid: {
-            os << StringView("Valid");
-            break;
-        }
-        case VarState::TAG_Optional: {
-            auto& e = x.as_Optional();
-            os << StringView("Optional(df") << e << StringView(")");
-            break;
-        }
-        case VarState::TAG_MovedOut: {
-            auto& e = x.as_MovedOut();
-            os << StringView("MovedOut(");
-            if (e.outerFlag == ~0u) {
-                os << StringView("-");
+        return;
+    }
+
+    template <>
+    void output<ZeroCopyOutput, ScopeHandle>(ZeroCopyOutput& os, const ScopeHandle& x) {
+        os << x.index();
+    }
+
+    template <>
+    void output<ZeroCopyOutput, fieldPathT>(ZeroCopyOutput& os, const fieldPathT& x) {
+        for (auto idx : x.data) {
+            os << StringView(".");
+            if (idx == FIELD_DEREF) {
+                os << StringView("*");
+            } else if (idx > FIELD_INDEX_MAX) {
+                idx -= FIELD_INDEX_MAX;
+                idx = FIELD_INDEX_MAX - idx;
+                os << StringView("-") << static_cast<unsigned int>(idx);
             } else {
-                os << StringView("df") << e.outerFlag;
+                os << static_cast<unsigned int>(idx);
             }
-            os << StringView(" ") << *e.innerState << StringView(")");
-            break;
         }
-        case VarState::TAG_Partial: {
-            auto& e = x.as_Partial();
-            os << StringView("Partial(");
-            if (e.outerFlag == ~0u) {
-                os << StringView("-");
-            } else {
-                os << StringView("df") << e.outerFlag;
-            }
-            os << StringView(", [") << e.innerStates << StringView("])");
-            break;
-        }
-        case VarState::TAG_PartialArray: {
-            auto& e = x.as_PartialArray();
-            os << StringView("PartialArray(") << e.count << StringView(", fill=") << *e.fillState << StringView(", {");
-            for (const auto& kv : e.otherStates) {
-                os << kv.first << StringView(": ") << kv.second << StringView(",");
-            }
-            os << StringView("})");
-            break;
-        }
+        return;
     }
-    return;
-}
 
-template <>
-void output<ZeroCopyOutput, ScopeHandle>(ZeroCopyOutput& os, const ScopeHandle& x) {
-    os << x.index();
-}
-
-template <>
-void output<ZeroCopyOutput, fieldPathT>(ZeroCopyOutput& os, const fieldPathT& x) {
-    for (auto idx : x.data) {
-        os << StringView(".");
-        if (idx == FIELD_DEREF) {
-            os << StringView("*");
-        } else if (idx > FIELD_INDEX_MAX) {
-            idx -= FIELD_INDEX_MAX;
-            idx = FIELD_INDEX_MAX - idx;
-            os << StringView("-") << static_cast<unsigned int>(idx);
-        } else {
-            os << static_cast<unsigned int>(idx);
+    template <>
+    void output<ZeroCopyOutput, PatternBinding>(ZeroCopyOutput& os, const PatternBinding& x) {
+        os << *x.binding << x.field;
+        if (x.isSplitSlice()) {
+            os << StringView("[") << x.splitSlice.first << StringView("..-") << x.splitSlice.second << StringView("]");
         }
+        return;
     }
-    return;
-}
 
-template <>
-void output<ZeroCopyOutput, PatternBinding>(ZeroCopyOutput& os, const PatternBinding& x) {
-    os << *x.binding << x.field;
-    if (x.isSplitSlice()) {
-        os << StringView("[") << x.splitSlice.first << StringView("..-") << x.splitSlice.second << StringView("]");
+    template <>
+    void output<ZeroCopyOutput, std::vector<tRulesSubset>>(ZeroCopyOutput& out, const std::vector<tRulesSubset>& values) {
+        outCont(out, values);
     }
-    return;
-}
 
-template <>
-void output<ZeroCopyOutput, std::vector<tRulesSubset>>(ZeroCopyOutput& out, const std::vector<tRulesSubset>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, std::vector<PatternRule>>(ZeroCopyOutput& out, const std::vector<PatternRule>& values) {
+        outCont(out, values);
+    }
 
-template <>
-void output<ZeroCopyOutput, std::vector<PatternRule>>(ZeroCopyOutput& out, const std::vector<PatternRule>& values) {
-    outCont(out, values);
-}
+    template <>
+    void output<ZeroCopyOutput, std::vector<VarState>>(ZeroCopyOutput& out, const std::vector<VarState>& values) {
+        outCont(out, values);
+    }
 
-template <>
-void output<ZeroCopyOutput, std::vector<VarState>>(ZeroCopyOutput& out, const std::vector<VarState>& values) {
-    outCont(out, values);
-}
-
-template <>
-void output<ZeroCopyOutput, std::vector<PatternBinding>>(ZeroCopyOutput& out, const std::vector<PatternBinding>& values) {
-    outCont(out, values);
-}
-
+    template <>
+    void output<ZeroCopyOutput, std::vector<PatternBinding>>(ZeroCopyOutput& out, const std::vector<PatternBinding>& values) {
+        outCont(out, values);
+    }
 }

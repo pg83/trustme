@@ -12,6 +12,7 @@ class ASTCrate;
 struct WireBoard;
 
 class HIRCrate;
+class HIRExprPtr;
 class HIRTypeInterner;
 
 namespace stl {
@@ -19,7 +20,7 @@ namespace stl {
 }
 
 void HIRDump(stl::ZeroCopyOutput& sink, const HIRCrate& crate);
-HIRCrate* LowerHIRFromAST(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& crate);
+void HIRDumpExpr(stl::ZeroCopyOutput& sink, const HIRExprPtr& expr);
 void HIRSerialise(const std::string& filename, const HIRCrate& crate);
 
 HIRCrate* HIRDeserialise(u32& id, stl::ObjPool* pool, HIRTypeInterner& types, const std::string& filename);
