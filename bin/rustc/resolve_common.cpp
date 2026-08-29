@@ -212,7 +212,7 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                 if (crate.edition >= ASTEdition::Rust2018) {
                     const auto& name = e.nodes.back().name();
                     DEBUG("Trying implicit externs for " << name);
-                    DEBUG(FmtLambda([&](ostream& os) {
+                    DEBUG(FmtLambda([&](std::ostream& os) {
                         for (const auto& v : settings.implicitCrates) {
                             os << " " << v.first;
                         }
@@ -298,7 +298,7 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
 
             if (crate.edition >= ASTEdition::Rust2018 || name == "core" || name == "std") {
                 DEBUG("Trying implicit externs for " << name);
-                DEBUG(FmtLambda([&](ostream& os) {
+                DEBUG(FmtLambda([&](std::ostream& os) {
                     for (const auto& v : settings.implicitCrates) {
                         os << " " << v.first;
                     }

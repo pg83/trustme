@@ -2056,8 +2056,8 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
 
                 auto it = exportedMacros.find(mac.name);
                 if (it == exportedMacros.end()) {
+                    DEBUG("- Import " << mac.name << "! (from \"" << v.second->sourceCrate << "\")");
                     exportedMacros.insert(mv$(v));
-                    DEBUG("- Import " << mac.name << "! (from \"" << res.first->second->sourceCrate << "\")");
                 } else if (v.second->rules.empty()) {
                 } else {
                     DEBUG("- Replace " << mac.name << "! (from \"" << it->second->sourceCrate << "\") with one from \"" << v.second->sourceCrate << "\"");
@@ -2324,7 +2324,9 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
                         attr.markInert();
                     }
                 }
-                DEBUG("++ " << *n.node << (n.hasSemicolon ? " ;" : ""));
+                for (const auto& n : newNodes) {
+                    DEBUG("++ " << *n.node << (n.hasSemicolon ? " ;" : ""));
+                }
             }
             if (nodeMac->path.isValid()) {
                 DEBUG("Deferred macro");

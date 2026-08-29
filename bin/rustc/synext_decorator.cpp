@@ -2157,7 +2157,7 @@ auto CHandlerRustcLayoutScalarValidRangeStart::handle(const Span& sp, const ASTA
 
         s->markings.scalarValidStartSet = true;
         s->markings.scalarValidStart = np->value;
-        DEBUG(path << " #[rustc_layout_scalar_valid_range_start]: " << hex << s->markings.scalarValidStart);
+        DEBUG(path << " #[rustc_layout_scalar_valid_range_start]: " << std::hex << s->markings.scalarValidStart);
     } else {
         TODO(sp, "#[rustc_layout_scalar_valid_range_start] on " << i.tagStr());
     }
@@ -2180,7 +2180,7 @@ auto CHandlerRustcLayoutScalarValidRangeEnd::handle(const Span& sp, const ASTAtt
         lex.getTokenCheck(TOK_EOF);
         s->markings.scalarValidEndSet = true;
         s->markings.scalarValidEnd = np->value;
-        DEBUG(path << " #[rustc_layout_scalar_valid_range_end]: " << hex << s->markings.scalarValidEnd);
+        DEBUG(path << " #[rustc_layout_scalar_valid_range_end]: " << std::hex << s->markings.scalarValidEnd);
     } else {
         TODO(sp, "#[rustc_layout_scalar_valid_range_end] on " << i.tagStr());
     }

@@ -650,7 +650,7 @@ namespace {
                     auto storageVariant = static_cast<unsigned>(storageTy.variants.size());
                     storageTy.variants.push_back(HIRStructField{RcString(), HIRPublicity::newNone(), fcn.locals.at(idx), {}});
                     mappings.insert(std::make_pair(idx, std::vector<MIRLValue::Wrapper>{MIRLValue::Wrapper::newField(0), MIRLValue::Wrapper::newDowncast(valueVarIdx), MIRLValue::Wrapper::newField(0), MIRLValue::Wrapper::newField(1 + storageSlot), MIRLValue::Wrapper::newDowncast(storageVariant)}));
-                    DEBUG("Mapping _" << m.first << " = " << m.second);
+                    DEBUG("Mapping _" << idx << " = " << mappings.at(idx));
                 }
                 std::map<unsigned, unsigned> dropFlagMapping;
                 for (auto idx : ev.generatorDropFlags()) {
@@ -2917,7 +2917,9 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
             }
             armRule.rules = mv$(sorted);
         }
-        DEBUG("> (" << armRule.armIdx << ", " << armRule.armRuleIdx << ") - " << armRule.rules << (armCode[armRule.armIdx].hasCondition ? " (cond)" : ""));
+        for (const auto& armRule : armRules) {
+            DEBUG("> (" << armRule.armIdx << ", " << armRule.armRuleIdx << ") - " << armRule.rules << (armCode[armRule.armIdx].hasCondition ? " (cond)" : ""));
+        }
     }
 
     // TODO: Remove columns that are all `_`?
@@ -3218,6 +3220,8 @@ void PatternRulesetBuilder::multiplyRulesetsWith(size_t n, PatternSubsetCallback
             ASSERT_BUG(Span(), a.rules == exp.rules, "BUG: {" << a.rules << "} != {" << exp.rules << "}");
             ASSERT_BUG(Span(), a.bindings == exp.bindings, "BUG: {" << a.bindings << "} != {" << exp.bindings << "}");
         }
+    }
+    for (size_t i = this->subsetStart; i < newSubsetEnd; i++) {
         DEBUG("#" << i << " rules=[" << rulesets[i].rules << "], bindings=[" << rulesets[i].bindings << "]");
     }
     size_t savedStart = this->subsetStart;
@@ -10997,7 +11001,6 @@ auto ExprVisitorConv::visit(HIRExprNodeVariable& node) -> void {
                 break;
             case HIRPatternBinding::Type::MutRef:
                 builder.setResult(node.span(), MIRRValue::make_Borrow({HIRBorrowType::Unique, false, a->second.clone()}));
-                DEBUG("- Keep as unbound: " << input);
                 break;
         }
         return;

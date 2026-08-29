@@ -572,7 +572,6 @@ HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathPar
         if (const auto* ge = valT.opt_Generic()) {
             rv &= match.matchVal(*ge, valX);
             if (rv == HIRCompare::Unequal) {
-                DEBUG("- Sized bound failed for " << outImplParams.types[i]);
                 return HIRCompare::Unequal;
             }
         } else {

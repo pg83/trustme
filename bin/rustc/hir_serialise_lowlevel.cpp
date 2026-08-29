@@ -70,7 +70,7 @@ void HIRSerialiseWriter::open(const std::string& filename) {
 
 void HIRSerialiseWriter::write(const void* buf, size_t len) {
     if (inner) {
-        DEBUG("write(" << FMT_CB(ss, for (size_t i = 0; i < len; i++) ss << setw(2) << setfill('0') << hex << unsigned(((const u8*)buf)[i])) << ")");
+        DEBUG("write(" << FMT_CB(ss, for (size_t i = 0; i < len; i++) ss << std::setw(2) << std::setfill('0') << std::hex << unsigned(((const u8*)buf)[i])) << ")");
         inner->write(buf, len);
     } else {
     }

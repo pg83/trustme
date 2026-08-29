@@ -4968,6 +4968,10 @@ auto StaticBorrowExprVisitorMark::visitNodePtr(HIRExprPtr& root) -> void {
 
 auto StaticBorrowExprVisitorMark::visitNodePtr(HIRExprNodeP& node) -> void {
     BUG_ASSERT(node);
+#if defined(TRUSTME_DEBUG)
+    const auto& nodeRef = *node;
+    const char* nodeTy = typeid(nodeRef).name();
+#endif
     isConstant = false;
     {
         TRACE_FUNCTION_FR(&*node << " " << nodeTy << " : " << node->resType, nodeTy << " " << isConstant << " A=" << allConstant_);

@@ -1618,7 +1618,7 @@ MIREvalAllocationPtr HIREvaluator::runUntilStackEmpty() {
 void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStatement& stmt) {
     const auto& state = localState.state;
 
-    DEBUG("E" << this->evalIndex << " F" << localState.frameIndex << " " << state << stmt);
+    DEBUG("F" << localState.frameIndex << " " << state << stmt);
     switch (stmt.tag()) {
         case MIRStatement::TAG_Assign: {
             break;
@@ -2040,13 +2040,13 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
             break;
         }
     }
-    DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << sa.dst << " := " << dst);
+    DEBUG("> F" << localState.frameIndex << " " << sa.dst << " := " << dst);
 }
 
 unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MIRTerminator& terminator) {
     const auto& state = localState.state;
 
-    DEBUG("E" << this->evalIndex << " F" << localState.frameIndex << " " << state << terminator);
+    DEBUG("F" << localState.frameIndex << " " << state << terminator);
     switch (terminator.tag()) {
         default:
             MIR_BUG(state, "Unexpected terminator - " << terminator);
@@ -2154,7 +2154,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 if (this->callFunction(localState, e.retVal, fcnp, std::move(callArgs), e.source, indirect)) {
                     return TERM_RET_PUSHED;
                 }
-                DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.retVal << " := " << localState.getLval(e.retVal));
+                DEBUG("> F" << localState.frameIndex << " " << e.retVal << " := " << localState.getLval(e.retVal));
                 return e.retBlock;
             };
 
@@ -2843,7 +2843,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 } else {
                     MIR_TODO(state, "Call intrinsic \"" << te->name << "\" - " << terminator);
                 }
-                DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.retVal << " := " << dst);
+                DEBUG("> F" << localState.frameIndex << " " << e.retVal << " := " << dst);
                 return e.retBlock;
             } else if (const auto* te = e.fcn.opt_Path()) {
                 const auto& fcnpRaw = *te;
@@ -2857,7 +2857,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto right = localState.readParamPtr(e.args.at(1));
                     auto dst = localState.getLval(e.retVal);
                     dst.writeUint(state, 8, pointerGuaranteedCmp(left, right));
-                    DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.retVal << " := " << dst);
+                    DEBUG("> F" << localState.frameIndex << " " << e.retVal << " := " << dst);
                     return e.retBlock;
                 }
 
@@ -2913,7 +2913,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         allocation->makeGlobal();
                         dst.writePtr(state, pointer.first, pointer.second);
                     }
-                    DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.retVal << " := " << dst);
+                    DEBUG("> F" << localState.frameIndex << " " << e.retVal << " := " << dst);
                     return e.retBlock;
                 }
 
@@ -5049,7 +5049,6 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) cons
             auto insertRes = item.monomorphCache.insert(std::make_pair(p.clone(), std::move(val)));
             it = insertRes.first;
             DEBUG("Cached generic " << p);
-            DEBUG("New type ivar for placeholder " << g << " = " << it->second);
         }
 
         return it->second;

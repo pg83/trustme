@@ -6625,7 +6625,6 @@ bool TraitResolution::findField(const Span& sp, const HIRTypeData* ty, const RcS
                         auto& se = str.data.as_Named();
                         for (const auto& fld : se) {
                             DEBUG(fld.name << ": " << fld.vis << ", " << this->visPath << " : " << fld.ty);
-                            DEBUG(type << " FIELD '" << fld.name << "' " << fld.ty);
                             if (fld.vis.isVisible(this->visPath) && fld.name == name) {
                                 fieldTy = monomorph.monomorphType(sp, fld.ty);
                                 return true;

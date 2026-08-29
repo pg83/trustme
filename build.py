@@ -221,6 +221,16 @@ else:
         ldflags=["-lz", "-flto=thin"],
     )
 
+    rustc_debug = program(
+        srcs=[*[compiler_source(source) for source in SRC], *tu_compiler_srcs],
+        name="rustc.debug",
+        output="$(B)/bin/rustc.debug",
+        deps=[platform_libstd_lto, codegen_c_prelude, unicode_nfc_tables],
+        cppflags=["-DTRUSTME_DEBUG=1"],
+        cxxflags=["-flto=thin"],
+        ldflags=["-lz", "-flto=thin"],
+    )
+
     # The production compiler uses ThinLTO, which can hide static storage by
     # internalising or deleting symbols.  Build the same translation units as
     # a plain archive so the zero-storage unit gate can inspect every object.

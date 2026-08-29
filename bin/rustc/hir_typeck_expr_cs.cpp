@@ -1575,7 +1575,6 @@ namespace {
                     return CoerceResult::Unsize;
                 }
                 if (certainty == SolverCertainty::Ambiguous) {
-                    DEBUG("- best_impl = " << bestImpl);
                     return CoerceResult::Unknown;
                 }
                 DEBUG("- No CoerceUnsized impl found");
@@ -2807,7 +2806,6 @@ namespace {
             if (!usedTy) {
                 continue;
             }
-            DEBUG("Check <" << t << ">::" << node.method);
             tL = context.expandAssociatedTypes(sp, mv$(tL));
             tR = context.expandAssociatedTypes(sp, mv$(tR));
 
@@ -2969,7 +2967,6 @@ namespace {
             }
 
             DEBUG(i << ": possible_tys = " << possibleTys);
-            DEBUG(i << ": bounds = " << (ivarEnt.hasBounded ? "" : "? ") << (ivarEnt.boundsIncludeSelf ? "+, " : "") << ivarEnt.bounded);
             // TODO: This [ideally] shouldn't happen?
             {
                 for (size_t i = 0; i < possibleTys.size(); i++) {
@@ -3405,7 +3402,6 @@ namespace {
             }
 
             DEBUG("possible_tys = " << possibleTys);
-            DEBUG("- Bounded [" << ivarEnt.bounded << "]");
             DEBUG("possible_tys = " << possibleTys);
             for (auto it = possibleTys.begin(); it != possibleTys.end();) {
                 bool removeOption = false;
@@ -3948,8 +3944,6 @@ namespace {
 
         return true;
     }
-
-    DEBUG("---");
 }
 
 void Context::equateTypes(const Span& sp, const HIRTypeData* li, const HIRTypeData* ri) {
@@ -5531,8 +5525,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
 
                         if (e.subPatterns.empty()) {
                             // TODO: Check the field count?
-                            DEBUG("- Placeholder param " << bTyMono << ", magic success");
-                            DEBUG("- Placeholder param " << bTyMono << ", magic success");
                             rv = true;
                         } else {
                             const auto& sd = patternGetNamed(sp, e.path, e.binding);

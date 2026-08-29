@@ -2391,7 +2391,7 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
     } else {
         of << "{ .raw = {";
         if (isPacked) {
-            DEBUG("encoded.bytes = `" << FMT_CB(ss, for (auto& b : encoded.bytes) ss << setw(2) << setfill('0') << hex << unsigned(b) << (int(&b - encoded.bytes.data()) % 8 == 7 ? " " : "");) << "`");
+            DEBUG("encoded.bytes = `" << FMT_CB(ss, for (auto& b : encoded.bytes) ss << std::setw(2) << std::setfill('0') << std::hex << unsigned(b) << (int(&b - encoded.bytes.data()) % 8 == 7 ? " " : "");) << "`");
             DEBUG("encoded.relocations = " << encoded.relocations);
             auto relocIt = encoded.relocations.begin();
             auto ptrSize = TargetGetPointerBits() / 8;

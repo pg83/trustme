@@ -2659,6 +2659,11 @@ namespace {
                         if (sIt != skipConds.end()) {
                             TODO(ent.sp, "Entry and skip patterns share an entry (max extend " << MAX_CONDITION_ADD << "), ambigious - " << *eIt);
                         }
+                    }
+                    for (const auto& e : entryConds) {
+                        DEBUG("Entry += [" << e << "]");
+                    }
+                    for (const auto& e : skipConds) {
                         DEBUG("Skip += [" << e << "]");
                     }
                     if (ent.tok != TOK_NULL) {
@@ -2675,9 +2680,11 @@ namespace {
                                 repeatConds.push_back(mv$(v));
                             }
                         }
-                        DEBUG(" [" << e << "]");
                     }
                     DEBUG("Repeat = [");
+                    for (const auto& e : repeatConds) {
+                        DEBUG(" [" << e << "]");
+                    }
                     DEBUG("]");
                     // TODO: Combine the two cases below into one?
 
@@ -3074,12 +3081,12 @@ Ident::Hygiene MacroExpander::realGetHygiene() const {
 Token MacroExpander::realGetToken() {
     lastHygiene = hygiene_;
     if (nextToken.type() != TOK_NULL) {
-        DEBUG("[" << logIndex << "] m_next_token = " << nextToken);
+        DEBUG("m_next_token = " << nextToken);
         return mv$(nextToken);
     }
     if (ttstream.get()) {
         Token rv = ttstream->getToken();
-        DEBUG("[" << logIndex << "] TTStream present: " << rv);
+        DEBUG("TTStream present: " << rv);
         if (rv.type() != TOK_EOF) {
             return rv;
         }
@@ -3100,7 +3107,7 @@ Token MacroExpander::realGetToken() {
                         }
                         lastHygiene = ident.hygiene;
                         auto rv = Token(e.type(), std::move(ident));
-                        DEBUG("[" << logIndex << "] Updated hygine: " << rv);
+                        DEBUG("Updated hygine: " << rv);
                         return rv;
                         break;
                     }
@@ -3110,11 +3117,11 @@ Token MacroExpander::realGetToken() {
                         h = h.withTailScope(pool, hygiene_, isMacroItem);
                         lastHygiene = h;
                         auto rv = Token(e.type(), e.str(), std::move(h));
-                        DEBUG("[" << logIndex << "] Updated hygine: " << rv);
+                        DEBUG("Updated hygine: " << rv);
                         return rv;
                     }
                     default:
-                        DEBUG("[" << logIndex << "] Raw token: " << e);
+                        DEBUG("Raw token: " << e);
                         return e.clone();
                 }
                 break;
@@ -3136,7 +3143,7 @@ Token MacroExpander::realGetToken() {
                     case NAMEDVALUE_TY_MAGIC:
                         switch (e) {
                             case NAMEDVALUE_MAGIC_CRATE:
-                                DEBUG("[" << logIndex << "] Crate name hack");
+                                DEBUG("Crate name hack");
                                 if (crateName == "") {
                                     if (sourceEdition >= ASTEdition::Rust2018) {
                                         return Token(TOK_RWORD_CRATE);
@@ -3171,7 +3178,7 @@ Token MacroExpander::realGetToken() {
                         ASSERT_BUG(this->pointSpan(), frag, "Cannot find '" << e << "' for " << state.iterations());
 
                         bool canSteal = (mappings_.decCount(this->pointSpan(), state.iterations(), e) == false);
-                        DEBUG("[" << logIndex << "] Insert replacement #" << e << " = " << *frag);
+                        DEBUG("Insert replacement #" << e << " = " << *frag);
                         if (frag->type == InterpolatedFragment::TT) {
                             auto resTt = canSteal ? mv$(frag->asTt()) : frag->asTt().clone();
                             ttstream.reset(new TTStreamO(this->outerSpan(), ParseState(), mv$(resTt)));
@@ -3226,7 +3233,7 @@ Token MacroExpander::realGetToken() {
             }
             case MacroExpansionEnt::TAG_Loop: {
                 auto& e = ent.as_Loop();
-                DEBUG("[" << logIndex << "] Loop joiner " << e.joiner);
+                DEBUG("Loop joiner " << e.joiner);
                 return e.joiner;
             }
         }

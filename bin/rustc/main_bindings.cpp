@@ -345,7 +345,7 @@ namespace {
                     RcString panicCrateName;
                     bool panicRuntimeNeeded = false;
                     for (const auto& ec : crate.externCrates) {
-                        DEBUG("Looking at lang items from " << ec.first << " : " << ss.str());
+                        DEBUG("Looking at lang items from " << ec.first << " : " << FMT_CB(ss, for (const auto& item : ec.second.hir->langItems) ss << item << ',';));
                         if (ec.second.hir->langItems.count("trustme-allocator")) {
                             if (allocatorCrateLoaded) {
                                 ERROR(Span(), E0000, "Multiple allocator crates loaded - " << allocCrateName << " and " << ec.first);

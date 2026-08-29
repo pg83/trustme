@@ -806,8 +806,6 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
                         }
                     }
                     if (!rv) {
-                        DEBUG("> Fail (assoc " << atyName << ") - " << bTyMono << " : " << atySrcTrait);
-                        DEBUG("> Fail - " << bTyMono << ": " << bTpMono);
                         continue;
                     }
                     DEBUG("Params = " << fcn.params.fmtArgs());

@@ -539,7 +539,6 @@ auto Visitor::setFromImpl(const HIRGenericPath& traitPath, const HIRTrait& trait
     const auto& type = e.type;
     return resolve_.findImpl(Span(), traitPath.path, traitPath.params, type, [&](SolverResponse response) {
         if (response.certainty != SolverCertainty::Proven) {
-            DEBUG("- TODO: Bound " << bound);
             return false;
         }
         pd = getUfcsKnown(mv$(e), makeGenericPath(traitPath.path, trait), trait);

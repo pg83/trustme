@@ -7585,7 +7585,7 @@ void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransL
                     }
                 }
             }
-            DEBUG("FCN: " << fcn.first);
+            DEBUG("FCN: " << fcnEnt.first);
         }
     }
 
