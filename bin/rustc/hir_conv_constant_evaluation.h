@@ -1,13 +1,11 @@
-struct WireBoard;
 #pragma once
-
-/*
- */
 
 #include "hir_hir.h"
 #include "hir_typeck_static.h"
+
 #include <std/mem/obj_pool.h>
 
+struct WireBoard;
 class MIRLValue;
 class MIRStatement;
 class MIRTerminator;

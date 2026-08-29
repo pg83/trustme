@@ -1,10 +1,10 @@
 #include "ast_dump.h"
-#include "output_file.h"
 
 #include "ast_ast.h"
 #include "hir_hir.h" // ABI_RUST - TODO: Move elsewhere?
 #include "ast_expr.h"
 #include "ast_crate.h"
+#include "output_file.h"
 
 #include <limits>
 #include <fstream>
@@ -12,43 +12,12 @@
 
 using namespace stl;
 
-#define CC_EXP(...) __VA_ARGS__
-
-#define CC_CALL_A(__fcn, __args) __fcn __args
-#define CC_CALL_A1(f, a, _1) CC_CALL_A(f, (CC_EXP a, _1))
-#define CC_CALL_A2(f, a, _1, _2) CC_CALL_A(f, (CC_EXP a, _1)) CC_CALL_A(f, (CC_EXP a, _2))
-#define CC_CALL_A3(f, a, _1, _2, _3) CC_CALL_A(f, (CC_EXP a, _1)) CC_CALL_A(f, (CC_EXP a, _2)) CC_CALL_A(f, (CC_EXP a, _3))
-
-#define CC_CALL_A4(fn, a, a1, a2, b1, b2) CC_CALL_A2(fn, a, a1, a2) CC_CALL_A2(fn, a, b1, b2)
-#define CC_CALL_A5(fn, a, a1, a2, a3, b1, b2) CC_CALL_A3(fn, a, a1, a2, a3) CC_CALL_A2(fn, a, b1, b2)
-#define CC_CALL_A6(fn, a, a1, a2, a3, b1, b2, b3) CC_CALL_A3(fn, a, a1, a2, a3) CC_CALL_A3(fn, a, b1, b2, b3)
-#define CC_CALL_A7(fn, a, a1, a2, a3, b1, b2, c1, c2) CC_CALL_A3(fn, a, a1, a2, a3) CC_CALL_A2(fn, a, b1, b2) CC_CALL_A2(fn, a, c1, c2)
-#define CC_CALL_A8(fn, a, a1, a2, a3, b1, b2, b3, c1, c2) CC_CALL_A3(fn, a, a1, a2, a3) CC_CALL_A3(fn, a, b1, b2, b3) CC_CALL_A2(fn, a, c1, c2)
-#define CC_CALL_A9(fn, a, a1, a2, a3, b1, b2, b3, c1, c2, c3) CC_CALL_A3(fn, a, a1, a2, a3) CC_CALL_A3(fn, a, b1, b2, b3) CC_CALL_A3(fn, a, c1, c2, c3)
-#define CC_CALL_A10(f, a, a1, a2, a3, b1, b2, b3, c1, c2, c3, d1) CC_CALL_A3(f, a, a1, a2, a3) CC_CALL_A3(f, a, b1, b2, b3) CC_CALL_A3(f, a, c1, c2, c3) CC_CALL_A(f, (CC_EXP a, CC_EXP d1))
-#define CC_CALL_A11(f, a, a1, a2, a3, b1, b2, b3, c1, c2, c3, d1, d2) CC_CALL_A3(f, a, a1, a2, a3) CC_CALL_A3(f, a, b1, b2, b3) CC_CALL_A3(f, a, c1, c2, c3) CC_CALL_A2(f, a, d1, d2)
-#define CC_CALL_A12(f, a, a1, a2, a3, b1, b2, b3, c1, c2, c3, d1, d2, d3) CC_CALL_A3(f, a, a1, a2, a3) CC_CALL_A3(f, a, b1, b2, b3) CC_CALL_A3(f, a, c1, c2, c3) CC_CALL_A3(f, a, d1, d2, d3)
-#define CC_CALL_A13(f, a, a1, a2, a3, a4, b1, b2, b3, c1, c2, c3, d1, d2, d3) CC_CALL_A4(f, a, a1, a2, a3, a4) CC_CALL_A3(f, a, b1, b2, b3) CC_CALL_A3(f, a, c1, c2, c3) CC_CALL_A3(f, a, d1, d2, d3)
-#define CC_CALL_A14(f, a, a1, a2, a3, a4, b1, b2, b3, b4, c1, c2, c3, d1, d2, d3) CC_CALL_A4(f, a, a1, a2, a3, a4) CC_CALL_A4(f, a, b1, b2, b3, b4) CC_CALL_A3(f, a, c1, c2, c3) CC_CALL_A3(f, a, d1, d2, d3)
-
-#define CC_GM_I(SUF, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, COUNT, ...) SUF##COUNT
-#define CC_GM(SUF, ...) CC_EXP(CC_GM_I(SUF, __VA_ARGS__, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1))
-
-#define CC_ITERATE(fcn, args, ...) CC_EXP(CC_GM(CC_CALL_A, __VA_ARGS__)(fcn, args, __VA_ARGS__))
-
-#define IS(v, c) (cast<c>(&v) != 0)
-#define WRAPIF_CMD(v, t) || IS(v, t)
-#define WRAPIF(uniqPtr, class1, ...)                                    \
-    do {                                                                \
-        auto& _v = *(uniqPtr);                                          \
-        if (IS(_v, class1) CC_ITERATE(WRAPIF_CMD, (_v), __VA_ARGS__)) { \
-            parenWrap(uniqPtr);                                         \
-        } else {                                                        \
-            ASTNodeVisitor::visit(uniqPtr);                             \
-        }                                                               \
-    } while (0)
-
 namespace {
+    template <typename... T>
+    bool isAny(ASTExprNode& node) {
+        return (... || (cast<T>(&node) != nullptr));
+    }
+
     struct RustPrinter: public ASTNodeVisitor {
         ZeroCopyOutput& os;
         int indentLevel;
@@ -153,6 +122,9 @@ namespace {
         virtual void visit(ASTExprNodeMacroDefinition& n) override;
 
         void parenWrap(ASTExprNodeP& node);
+
+        template <typename... T>
+        void visitWithParensIf(ASTExprNodeP& node);
 
         void printAttrs(const ASTAttributeList& attrs);
         void printParams(const ASTGenericParams& params);
@@ -945,15 +917,20 @@ void DumpASTNode(ZeroCopyOutput& os, const ASTExprNode& node) {
     const_cast<ASTExprNode&>(node).visit(printer);
 }
 
-#undef IS
-#undef WRAPIF_CMD
-#undef WRAPIF
-
 RustPrinter::RustPrinter(ZeroCopyOutput& os)
     : os(os)
     , indentLevel(0)
     , exprRoot(false)
 {
+}
+
+template <typename... T>
+void RustPrinter::visitWithParensIf(ASTExprNodeP& node) {
+    if (isAny<T...>(*node)) {
+        parenWrap(node);
+    } else {
+        ASTNodeVisitor::visit(node);
+    }
 }
 
 auto RustPrinter::isConst() const -> bool {
@@ -1233,30 +1210,9 @@ auto RustPrinter::visit(ASTExprNodeCallPath& n) -> void {
     os << StringView(")");
 }
 
-#ifdef IS
-    #undef IS
-#endif
-#define IS(v, c) (cast<c>(&v) != 0)
-#ifdef WRAPIF_CMD
-    #undef WRAPIF_CMD
-#endif
-#define WRAPIF_CMD(v, t) || IS(v, t)
-#ifdef WRAPIF
-    #undef WRAPIF
-#endif
-#define WRAPIF(uniqPtr, class1, ...)                                    \
-    do {                                                                \
-        auto& _v = *(uniqPtr);                                          \
-        if (IS(_v, class1) CC_ITERATE(WRAPIF_CMD, (_v), __VA_ARGS__)) { \
-            parenWrap(uniqPtr);                                         \
-        } else {                                                        \
-            ASTNodeVisitor::visit(uniqPtr);                             \
-        }                                                               \
-    } while (0)
-
 auto RustPrinter::visit(ASTExprNodeCallMethod& n) -> void {
     exprRoot = false;
-    WRAPIF(n.val, ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf, ASTExprNodeMatch);
+    visitWithParensIf<ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf>(n.val);
     os << StringView(".") << n.method;
     os << StringView("(");
     bool isFirst = true;
@@ -1270,10 +1226,6 @@ auto RustPrinter::visit(ASTExprNodeCallMethod& n) -> void {
     }
     os << StringView(")");
 }
-
-#undef WRAPIF
-#undef WRAPIF_CMD
-#undef IS
 
 auto RustPrinter::visit(ASTExprNodeCallObject& n) -> void {
     exprRoot = false;
@@ -1657,69 +1609,19 @@ auto RustPrinter::visit(ASTExprNodeNamedValue& n) -> void {
     os << n.path;
 }
 
-#ifdef IS
-    #undef IS
-#endif
-#define IS(v, c) (cast<c>(&v) != 0)
-#ifdef WRAPIF_CMD
-    #undef WRAPIF_CMD
-#endif
-#define WRAPIF_CMD(v, t) || IS(v, t)
-#ifdef WRAPIF
-    #undef WRAPIF
-#endif
-#define WRAPIF(uniqPtr, class1, ...)                                    \
-    do {                                                                \
-        auto& _v = *(uniqPtr);                                          \
-        if (IS(_v, class1) CC_ITERATE(WRAPIF_CMD, (_v), __VA_ARGS__)) { \
-            parenWrap(uniqPtr);                                         \
-        } else {                                                        \
-            ASTNodeVisitor::visit(uniqPtr);                             \
-        }                                                               \
-    } while (0)
-
 auto RustPrinter::visit(ASTExprNodeField& n) -> void {
     exprRoot = false;
-    WRAPIF(n.obj, ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf, ASTExprNodeMatch);
+    visitWithParensIf<ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf>(n.obj);
     os << StringView(".") << n.name;
 }
 
-#undef WRAPIF
-#undef WRAPIF_CMD
-#undef IS
-
-#ifdef IS
-    #undef IS
-#endif
-#define IS(v, c) (cast<c>(&v) != 0)
-#ifdef WRAPIF_CMD
-    #undef WRAPIF_CMD
-#endif
-#define WRAPIF_CMD(v, t) || IS(v, t)
-#ifdef WRAPIF
-    #undef WRAPIF
-#endif
-#define WRAPIF(uniqPtr, class1, ...)                                    \
-    do {                                                                \
-        auto& _v = *(uniqPtr);                                          \
-        if (IS(_v, class1) CC_ITERATE(WRAPIF_CMD, (_v), __VA_ARGS__)) { \
-            parenWrap(uniqPtr);                                         \
-        } else {                                                        \
-            ASTNodeVisitor::visit(uniqPtr);                             \
-        }                                                               \
-    } while (0)
-
 auto RustPrinter::visit(ASTExprNodeIndex& n) -> void {
     exprRoot = false;
-    WRAPIF(n.obj, ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf, ASTExprNodeMatch);
+    visitWithParensIf<ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf>(n.obj);
     os << StringView("[");
     ASTNodeVisitor::visit(n.idx);
     os << StringView("]");
 }
-
-#undef WRAPIF
-#undef WRAPIF_CMD
-#undef IS
 
 auto RustPrinter::visit(ASTExprNodeDeref& n) -> void {
     exprRoot = false;
@@ -1742,27 +1644,6 @@ auto RustPrinter::visit(ASTExprNodeTypeAnnotation& n) -> void {
     os << StringView(") : ") << n.type;
 }
 
-#ifdef IS
-    #undef IS
-#endif
-#define IS(v, c) (cast<c>(&v) != 0)
-#ifdef WRAPIF_CMD
-    #undef WRAPIF_CMD
-#endif
-#define WRAPIF_CMD(v, t) || IS(v, t)
-#ifdef WRAPIF
-    #undef WRAPIF
-#endif
-#define WRAPIF(uniqPtr, class1, ...)                                    \
-    do {                                                                \
-        auto& _v = *(uniqPtr);                                          \
-        if (IS(_v, class1) CC_ITERATE(WRAPIF_CMD, (_v), __VA_ARGS__)) { \
-            parenWrap(uniqPtr);                                         \
-        } else {                                                        \
-            ASTNodeVisitor::visit(uniqPtr);                             \
-        }                                                               \
-    } while (0)
-
 auto RustPrinter::visit(ASTExprNodeBinOp& n) -> void {
     exprRoot = false;
     auto* leftBinop = cast<ASTExprNodeBinOp>(n.left.get());
@@ -1771,7 +1652,7 @@ auto RustPrinter::visit(ASTExprNodeBinOp& n) -> void {
     } else if (leftBinop && leftBinop->type == n.type) {
         ASTNodeVisitor::visit(n.left);
     } else {
-        WRAPIF(n.left, ASTExprNodeCast, ASTExprNodeBinOp);
+        visitWithParensIf<ASTExprNodeCast, ASTExprNodeBinOp>(n.left);
     }
     os << StringView(" ");
     switch (n.type) {
@@ -1850,15 +1731,6 @@ auto RustPrinter::visit(ASTExprNodeBinOp& n) -> void {
     }
 }
 
-#undef WRAPIF
-#undef WRAPIF_CMD
-#undef IS
-
-#ifdef IS
-    #undef IS
-#endif
-#define IS(v, c) (cast<c>(&v) != 0)
-
 auto RustPrinter::visit(ASTExprNodeUniOp& n) -> void {
     exprRoot = false;
     switch (n.type) {
@@ -1897,7 +1769,7 @@ auto RustPrinter::visit(ASTExprNodeUniOp& n) -> void {
             break;
     }
 
-    bool wrap = IS(*n.value, ASTExprNodeBinOp) || IS(*n.value, ASTExprNodeCast);
+    bool wrap = isAny<ASTExprNodeBinOp, ASTExprNodeCast>(*n.value);
     if (wrap) {
         os << StringView("(");
     }
@@ -1922,8 +1794,6 @@ auto RustPrinter::visit(ASTExprNodeUniOp& n) -> void {
             break;
     }
 }
-
-#undef IS
 
 auto RustPrinter::visit(ASTExprNodeMacroDefinition& n) -> void {
     os << StringView("/* macro definition #") << n.definitionId << StringView(" */");

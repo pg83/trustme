@@ -2,8 +2,6 @@
 
 #include "output.h"
 
-/*
- */
 #include <climits>
 #include <string>
 #include <vector>

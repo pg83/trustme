@@ -1,8 +1,5 @@
 #pragma once
 
-/*
- */
-
 enum class ASTEdition {
     Rust2015,
     Rust2018,
