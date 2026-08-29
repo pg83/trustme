@@ -1,11 +1,11 @@
 #include "ast_edition.h"
+
 #include "output.h"
 
 using namespace stl;
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, ASTEdition>(ZeroCopyOutput& os, ASTEdition e) {
+void stl::output<ZeroCopyOutput, ASTEdition>(ZeroCopyOutput& os, ASTEdition e) {
     switch (e) {
         case ASTEdition::Rust2015:
             os << StringView("Rust2015");
@@ -21,5 +21,4 @@ void output<ZeroCopyOutput, ASTEdition>(ZeroCopyOutput& os, ASTEdition e) {
             break;
     }
     return;
-}
 }

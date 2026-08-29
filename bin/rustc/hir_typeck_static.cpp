@@ -2156,26 +2156,24 @@ auto StaticTraitResolve::NextSolverBridge::selectInherentImpl(const Span& sp, co
     return resolve_.selectInherentImpl(sp, receiver, item, kind, initialParams);
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, MetadataType>(ZeroCopyOutput& out, MetadataType value) {
-        switch (value) {
-            case MetadataType::Unknown:
-                out << StringView("Unknown");
-                return;
-            case MetadataType::None:
-                out << StringView("None");
-                return;
-            case MetadataType::Zero:
-                out << StringView("Zero");
-                return;
-            case MetadataType::Slice:
-                out << StringView("Slice");
-                return;
-            case MetadataType::TraitObject:
-                out << StringView("TraitObject");
-                return;
-        }
-        out << StringView("?");
+template <>
+void stl::output<ZeroCopyOutput, MetadataType>(ZeroCopyOutput& out, MetadataType value) {
+    switch (value) {
+        case MetadataType::Unknown:
+            out << StringView("Unknown");
+            return;
+        case MetadataType::None:
+            out << StringView("None");
+            return;
+        case MetadataType::Zero:
+            out << StringView("Zero");
+            return;
+        case MetadataType::Slice:
+            out << StringView("Slice");
+            return;
+        case MetadataType::TraitObject:
+            out << StringView("TraitObject");
+            return;
     }
+    out << StringView("?");
 }

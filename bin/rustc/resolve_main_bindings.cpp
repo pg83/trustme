@@ -1,6 +1,6 @@
 #include "resolve_main_bindings.h"
-#include "output.h"
 
+#include "output.h"
 #include "ast_ast.h"
 #include "hir_hir.h"
 #include "ast_expr.h"
@@ -203,8 +203,6 @@ namespace {
         }
         return it;
     }
-
-
 
     void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::LookupMode& mode, ASTPath& path);
     void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::LookupMode mode, ASTPath& path);
@@ -3353,8 +3351,6 @@ namespace {
     }
 
     void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const ASTUseItem::Ent& iData, const ASTVisibility& vis, bool fromPrelude, const WildcardRecursionNode* recursionStack, bool nested = false);
-
-
 
     std::unordered_map<RcString, ASTModule::IndexEnt>& getModIndex(ASTModule& mod, IndexName location) {
         switch (location) {
@@ -6630,48 +6626,46 @@ ActiveUseResolution::~ActiveUseResolution() {
     context.activeUse = parent;
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, Context::LookupMode>(ZeroCopyOutput& os, Context::LookupMode v) {
-        switch (v) {
-            case Context::LookupMode::Namespace:
-                os << StringView("Namespace");
-                break;
-            case Context::LookupMode::Type:
-                os << StringView("Type");
-                break;
-            case Context::LookupMode::PatternValue:
-                os << StringView("PatternValue");
-                break;
-            case Context::LookupMode::PatternType:
-                os << StringView("PatternType");
-                break;
-            case Context::LookupMode::Constant:
-                os << StringView("Constant");
-                break;
-            case Context::LookupMode::Variable:
-                os << StringView("Variable");
-                break;
-        }
-        return;
+void stl::output<ZeroCopyOutput, Context::LookupMode>(ZeroCopyOutput& os, Context::LookupMode v) {
+    switch (v) {
+        case Context::LookupMode::Namespace:
+            os << StringView("Namespace");
+            break;
+        case Context::LookupMode::Type:
+            os << StringView("Type");
+            break;
+        case Context::LookupMode::PatternValue:
+            os << StringView("PatternValue");
+            break;
+        case Context::LookupMode::PatternType:
+            os << StringView("PatternType");
+            break;
+        case Context::LookupMode::Constant:
+            os << StringView("Constant");
+            break;
+        case Context::LookupMode::Variable:
+            os << StringView("Variable");
+            break;
     }
+    return;
+}
 
 template <>
-void output<ZeroCopyOutput, IndexName>(ZeroCopyOutput& os, IndexName loc) {
-        switch (loc) {
-            case IndexName::Namespace:
-                os << StringView("namespace");
-    return;
-            case IndexName::Type:
-                os << StringView("type");
-    return;
-            case IndexName::Value:
-                os << StringView("value");
-    return;
-            case IndexName::Macro:
-                os << StringView("macro");
-    return;
-        }
-        UNREACHABLE();
+void stl::output<ZeroCopyOutput, IndexName>(ZeroCopyOutput& os, IndexName loc) {
+    switch (loc) {
+        case IndexName::Namespace:
+            os << StringView("namespace");
+            return;
+        case IndexName::Type:
+            os << StringView("type");
+            return;
+        case IndexName::Value:
+            os << StringView("value");
+            return;
+        case IndexName::Macro:
+            os << StringView("macro");
+            return;
     }
+    UNREACHABLE();
 }

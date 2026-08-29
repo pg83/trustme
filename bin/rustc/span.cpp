@@ -203,24 +203,22 @@ void stl::output<ZeroCopyOutput, SourceLocation>(ZeroCopyOutput& out, SourceLoca
     out << StringView("SourceLocation(filename = ") << value.filename << StringView(", line = ") << value.line << StringView(", column = ") << value.column << StringView(")");
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, ErrorType>(ZeroCopyOutput& os, ErrorType value) {
-        os << static_cast<unsigned>(value);
-    }
+void stl::output<ZeroCopyOutput, ErrorType>(ZeroCopyOutput& os, ErrorType value) {
+    os << static_cast<unsigned>(value);
+}
 
-    template <>
-    void output<ZeroCopyOutput, WarningType>(ZeroCopyOutput& os, WarningType value) {
-        os << static_cast<unsigned>(value);
-    }
+template <>
+void stl::output<ZeroCopyOutput, WarningType>(ZeroCopyOutput& os, WarningType value) {
+    os << static_cast<unsigned>(value);
+}
 
-    template <>
-    void output<ZeroCopyOutput, Span>(ZeroCopyOutput& os, const Span& sp) {
-        if (sp.get()) {
-            sp.get()->fmt(os);
-        } else {
-            os << StringView("<null>");
-        }
-        return;
+template <>
+void stl::output<ZeroCopyOutput, Span>(ZeroCopyOutput& os, const Span& sp) {
+    if (sp.get()) {
+        sp.get()->fmt(os);
+    } else {
+        os << StringView("<null>");
     }
+    return;
 }

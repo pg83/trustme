@@ -85,13 +85,11 @@ ASTExprNode* ASTExpr::takeNode() {
     return node;
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, ASTExpr>(ZeroCopyOutput& out, ASTExpr value) {
-        if (value) {
-            out << value.node();
-        } else {
-            out << StringView("/* null */");
-        }
+template <>
+void stl::output<ZeroCopyOutput, ASTExpr>(ZeroCopyOutput& out, ASTExpr value) {
+    if (value) {
+        out << value.node();
+    } else {
+        out << StringView("/* null */");
     }
 }

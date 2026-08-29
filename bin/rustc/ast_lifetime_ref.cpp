@@ -25,20 +25,18 @@ void ASTLifetimeRef::setBinding(u16 b) {
     binding_ = b;
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, ASTLifetimeRef>(ZeroCopyOutput& out, ASTLifetimeRef value) {
-        if (value.binding() == ASTLifetimeRef::BINDING_STATIC) {
-            out << StringView("'static");
-        } else if (value.binding() == ASTLifetimeRef::BINDING_INFER) {
-            out << StringView("'_");
-        } else if (value.binding() == ASTLifetimeRef::BINDING_UNSPECIFIED) {
-            out << StringView("/*'UNSPEC*/");
-        } else {
-            out << StringView("'") << value.name().name;
-            if (value.binding() != ASTLifetimeRef::BINDING_UNBOUND) {
-                out << StringView("/*") << value.binding() << StringView("*/");
-            }
+template <>
+void stl::output<ZeroCopyOutput, ASTLifetimeRef>(ZeroCopyOutput& out, ASTLifetimeRef value) {
+    if (value.binding() == ASTLifetimeRef::BINDING_STATIC) {
+        out << StringView("'static");
+    } else if (value.binding() == ASTLifetimeRef::BINDING_INFER) {
+        out << StringView("'_");
+    } else if (value.binding() == ASTLifetimeRef::BINDING_UNSPECIFIED) {
+        out << StringView("/*'UNSPEC*/");
+    } else {
+        out << StringView("'") << value.name().name;
+        if (value.binding() != ASTLifetimeRef::BINDING_UNBOUND) {
+            out << StringView("/*") << value.binding() << StringView("*/");
         }
     }
 }

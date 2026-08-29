@@ -1,7 +1,7 @@
 #include "parse_tokenstream.h"
-#include "output.h"
 
 #include "common.h"
+#include "output.h"
 #include "ast_crate.h"
 #include "wire_board.h"
 #include "parse_parseerror.h"
@@ -195,8 +195,6 @@ SavedParseState::~SavedParseState() {
     lex.parseState() = state;
 }
 
-
-
 void TokenStream::pushHygine() {
 }
 
@@ -207,9 +205,8 @@ Span TokenStream::outerSpan() const {
     return Span();
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, ParseState>(ZeroCopyOutput& os, const ParseState& ps) {
+void stl::output<ZeroCopyOutput, ParseState>(ZeroCopyOutput& os, const ParseState& ps) {
     os << StringView("ParseState {");
     if (ps.disallowStructLiteral) {
         os << StringView(" disallow_struct_literal");
@@ -219,5 +216,4 @@ void output<ZeroCopyOutput, ParseState>(ZeroCopyOutput& os, const ParseState& ps
     }
     os << StringView(" }");
     return;
-}
 }

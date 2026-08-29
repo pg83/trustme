@@ -1,6 +1,6 @@
 #include "float128.h"
-#include "output.h"
 
+#include "output.h"
 #include "compile_error.h"
 
 #include <string>
@@ -1019,8 +1019,6 @@ Float128 Float128::parseDecimal(const char* text) {
     return roundPack(false, static_cast<i32>(exponent2), significand, sticky);
 }
 
-
-
 auto BigUint::trim() -> void {
     while (!limbs_.empty() && limbs_.back() == 0) {
         limbs_.pop_back();
@@ -1190,14 +1188,12 @@ static void outputFloat128(ZeroCopyOutput& os, Float128 value, FloatFormat forma
     os << text;
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, Float128>(ZeroCopyOutput& os, Float128 value) {
+void stl::output<ZeroCopyOutput, Float128>(ZeroCopyOutput& os, Float128 value) {
     outputFloat128(os, value, FloatFormat::Default, 6);
 }
 
 template <>
-void output<ZeroCopyOutput, FormattedFloat128>(ZeroCopyOutput& os, FormattedFloat128 value) {
+void stl::output<ZeroCopyOutput, FormattedFloat128>(ZeroCopyOutput& os, FormattedFloat128 value) {
     outputFloat128(os, value.value, value.format, value.precision);
-}
 }

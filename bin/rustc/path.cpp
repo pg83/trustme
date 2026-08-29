@@ -211,9 +211,7 @@ FsPath::ComponentsIter::ComponentsIter(const FsPath& p, size_t i)
     }
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, FsPath>(ZeroCopyOutput& out, const FsPath& path) {
+void stl::output<ZeroCopyOutput, FsPath>(ZeroCopyOutput& out, const FsPath& path) {
     out << path.str();
-}
 }

@@ -1,4 +1,5 @@
 #include "hir_expr.h"
+
 #include "output.h"
 
 using namespace stl;
@@ -464,8 +465,6 @@ DEF_VISIT_H(HIRExprNodeClosure, node) {
         visitNodePtr(node.code);
     }
 }
-
-
 
 DEF_VISIT_H(HIRExprNodeGenerator, node) {
     TRACE_FUNCTION_F(StringView("_Generator"));
@@ -1213,9 +1212,8 @@ HIRExprVisitorDef::HIRExprVisitorDef(HIRTypeInterner& types)
 {
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, HIRExprNodeClosure::AvuCache::Capture>(ZeroCopyOutput& os, const HIRExprNodeClosure::AvuCache::Capture& x) {
+void stl::output<ZeroCopyOutput, HIRExprNodeClosure::AvuCache::Capture>(ZeroCopyOutput& os, const HIRExprNodeClosure::AvuCache::Capture& x) {
     os << StringView("#") << x.rootSlot;
     for (const auto& n : x.fields) {
         if (n == RcString()) {
@@ -1229,7 +1227,7 @@ void output<ZeroCopyOutput, HIRExprNodeClosure::AvuCache::Capture>(ZeroCopyOutpu
 }
 
 template <>
-void output<ZeroCopyOutput, HIRValueUsage>(ZeroCopyOutput& os, HIRValueUsage x) {
+void stl::output<ZeroCopyOutput, HIRValueUsage>(ZeroCopyOutput& os, HIRValueUsage x) {
     switch (x) {
         case HIRValueUsage::Unknown:
             os << StringView("Unknown");
@@ -1245,5 +1243,4 @@ void output<ZeroCopyOutput, HIRValueUsage>(ZeroCopyOutput& os, HIRValueUsage x) 
             break;
     }
     return;
-}
 }

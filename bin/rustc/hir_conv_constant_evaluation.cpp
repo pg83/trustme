@@ -6166,16 +6166,14 @@ auto EnumValueExpander::visitEnum(HIRItemPath p, HIREnum& item) -> void {
     Expander::visitEnumInner(wb, crate, p, *mod, *modPath, p.getName(), item);
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, MIREvalValueRef>(ZeroCopyOutput& os, MIREvalValueRef vr) {
-        if (!vr.storage) {
-            os << StringView("ValueRef(null)");
-        } else {
-            os << StringView("ValueRef({") << vr.ofs << StringView("+") << vr.len << StringView("}");
-            vr.storage.asValue().fmt(os, vr.ofs, vr.len);
-            os << StringView(")");
-        }
-        return;
+template <>
+void stl::output<ZeroCopyOutput, MIREvalValueRef>(ZeroCopyOutput& os, MIREvalValueRef vr) {
+    if (!vr.storage) {
+        os << StringView("ValueRef(null)");
+    } else {
+        os << StringView("ValueRef({") << vr.ofs << StringView("+") << vr.len << StringView("}");
+        vr.storage.asValue().fmt(os, vr.ofs, vr.len);
+        os << StringView(")");
     }
+    return;
 }

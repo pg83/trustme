@@ -11404,60 +11404,58 @@ void stl::output<ZeroCopyOutput, std::map<unsigned int, VarState>>(ZeroCopyOutpu
     outCont(out, values);
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, tRulesSubset>(ZeroCopyOutput& out, const tRulesSubset& value) {
-        operator<<(out, value);
-    }
+template <>
+void stl::output<ZeroCopyOutput, tRulesSubset>(ZeroCopyOutput& out, const tRulesSubset& value) {
+    operator<<(out, value);
+}
 
-    template <>
-    void output<ZeroCopyOutput, ScopeHandle>(ZeroCopyOutput& os, const ScopeHandle& x) {
-        os << x.index();
-    }
+template <>
+void stl::output<ZeroCopyOutput, ScopeHandle>(ZeroCopyOutput& os, const ScopeHandle& x) {
+    os << x.index();
+}
 
-    template <>
-    void output<ZeroCopyOutput, fieldPathT>(ZeroCopyOutput& os, const fieldPathT& x) {
-        for (auto idx : x.data) {
-            os << StringView(".");
-            if (idx == FIELD_DEREF) {
-                os << StringView("*");
-            } else if (idx > FIELD_INDEX_MAX) {
-                idx -= FIELD_INDEX_MAX;
-                idx = FIELD_INDEX_MAX - idx;
-                os << StringView("-") << static_cast<unsigned int>(idx);
-            } else {
-                os << static_cast<unsigned int>(idx);
-            }
+template <>
+void stl::output<ZeroCopyOutput, fieldPathT>(ZeroCopyOutput& os, const fieldPathT& x) {
+    for (auto idx : x.data) {
+        os << StringView(".");
+        if (idx == FIELD_DEREF) {
+            os << StringView("*");
+        } else if (idx > FIELD_INDEX_MAX) {
+            idx -= FIELD_INDEX_MAX;
+            idx = FIELD_INDEX_MAX - idx;
+            os << StringView("-") << static_cast<unsigned int>(idx);
+        } else {
+            os << static_cast<unsigned int>(idx);
         }
-        return;
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, PatternBinding>(ZeroCopyOutput& os, const PatternBinding& x) {
-        os << *x.binding << x.field;
-        if (x.isSplitSlice()) {
-            os << StringView("[") << x.splitSlice.first << StringView("..-") << x.splitSlice.second << StringView("]");
-        }
-        return;
+template <>
+void stl::output<ZeroCopyOutput, PatternBinding>(ZeroCopyOutput& os, const PatternBinding& x) {
+    os << *x.binding << x.field;
+    if (x.isSplitSlice()) {
+        os << StringView("[") << x.splitSlice.first << StringView("..-") << x.splitSlice.second << StringView("]");
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<tRulesSubset>>(ZeroCopyOutput& out, const std::vector<tRulesSubset>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<tRulesSubset>>(ZeroCopyOutput& out, const std::vector<tRulesSubset>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<PatternRule>>(ZeroCopyOutput& out, const std::vector<PatternRule>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<PatternRule>>(ZeroCopyOutput& out, const std::vector<PatternRule>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<VarState>>(ZeroCopyOutput& out, const std::vector<VarState>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<VarState>>(ZeroCopyOutput& out, const std::vector<VarState>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<PatternBinding>>(ZeroCopyOutput& out, const std::vector<PatternBinding>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<PatternBinding>>(ZeroCopyOutput& out, const std::vector<PatternBinding>& values) {
+    outCont(out, values);
 }

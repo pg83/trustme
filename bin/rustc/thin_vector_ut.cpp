@@ -1,17 +1,16 @@
-#include "thin_vector.h"
 #include "output.h"
+#include "thin_vector.h"
 
-#include <std/str/builder.h>
 #include <std/tst/ut.h>
+#include <std/str/builder.h>
 
 #include <string>
 #include <vector>
 
 using namespace stl;
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, ThinVector<int>>(ZeroCopyOutput& out, const ThinVector<int>& value) {
+void stl::output<ZeroCopyOutput, ThinVector<int>>(ZeroCopyOutput& out, const ThinVector<int>& value) {
     bool first = true;
     for (auto item : value) {
         if (!first) {
@@ -20,7 +19,6 @@ void output<ZeroCopyOutput, ThinVector<int>>(ZeroCopyOutput& out, const ThinVect
         first = false;
         out << item;
     }
-}
 }
 
 namespace {
@@ -38,8 +36,6 @@ namespace {
     };
 
     int Counted::liveCount = 0;
-
-
 
     Ordering ord(const Counted& a, const Counted& b) {
         return ::ord(a.value, b.value);
@@ -281,10 +277,8 @@ Counted::~Counted() {
     liveCount--;
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, Counted>(ZeroCopyOutput& os, const Counted& c) {
-        os << c.value;
+void stl::output<ZeroCopyOutput, Counted>(ZeroCopyOutput& os, const Counted& c) {
+    os << c.value;
     return;
-    }
 }

@@ -9,9 +9,8 @@ FormattedHex formatHex(u64 value, unsigned width, bool uppercase) {
     return {value, width, uppercase};
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, FormattedHex>(ZeroCopyOutput& out, FormattedHex value) {
+void stl::output<ZeroCopyOutput, FormattedHex>(ZeroCopyOutput& out, FormattedHex value) {
     char buf[16];
     char* begin = buf + sizeof(buf);
     auto number = value.value;
@@ -28,47 +27,46 @@ void output<ZeroCopyOutput, FormattedHex>(ZeroCopyOutput& out, FormattedHex valu
 }
 
 template <>
-void output<ZeroCopyOutput, bool>(ZeroCopyOutput& out, bool value) {
+void stl::output<ZeroCopyOutput, bool>(ZeroCopyOutput& out, bool value) {
     out << StringView(value ? u8"1" : u8"0");
 }
 
 template <>
-void output<ZeroCopyOutput, char>(ZeroCopyOutput& out, char value) {
+void stl::output<ZeroCopyOutput, char>(ZeroCopyOutput& out, char value) {
     out.write(&value, 1);
 }
 
 template <>
-void output<ZeroCopyOutput, char8_t>(ZeroCopyOutput& out, char8_t value) {
+void stl::output<ZeroCopyOutput, char8_t>(ZeroCopyOutput& out, char8_t value) {
     out.write(&value, 1);
 }
 
 template <>
-void output<ZeroCopyOutput, std::string>(ZeroCopyOutput& out, const std::string& value) {
+void stl::output<ZeroCopyOutput, std::string>(ZeroCopyOutput& out, const std::string& value) {
     out.write(value.data(), value.size());
 }
 
 template <>
-void output<ZeroCopyOutput, std::string_view>(ZeroCopyOutput& out, std::string_view value) {
+void stl::output<ZeroCopyOutput, std::string_view>(ZeroCopyOutput& out, std::string_view value) {
     out.write(value.data(), value.size());
 }
 
 template <>
-void output<ZeroCopyOutput, char*>(ZeroCopyOutput& out, char* value) {
+void stl::output<ZeroCopyOutput, char*>(ZeroCopyOutput& out, char* value) {
     out << StringView(value);
 }
 
 template <>
-void output<ZeroCopyOutput, const void*>(ZeroCopyOutput& out, const void* value) {
+void stl::output<ZeroCopyOutput, const void*>(ZeroCopyOutput& out, const void* value) {
     out << StringView("0x") << formatHex(reinterpret_cast<uintptr_t>(value));
 }
 
 template <>
-void output<ZeroCopyOutput, std::vector<bool>::const_reference>(ZeroCopyOutput& out, std::vector<bool>::const_reference value) {
+void stl::output<ZeroCopyOutput, std::vector<bool>::const_reference>(ZeroCopyOutput& out, std::vector<bool>::const_reference value) {
     out << static_cast<bool>(value);
 }
 
 template <>
-void output<ZeroCopyOutput, std::vector<char8_t>>(ZeroCopyOutput& out, const std::vector<char8_t>& values) {
+void stl::output<ZeroCopyOutput, std::vector<char8_t>>(ZeroCopyOutput& out, const std::vector<char8_t>& values) {
     outCont(out, values);
-}
 }

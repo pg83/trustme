@@ -1,7 +1,7 @@
 #include "parse_lex.h"
-#include "output.h"
 
 #include "common.h"
+#include "output.h"
 #include "wire_board.h"
 #include "unicode_nfc.h"
 #include "parse_tokentree.h"
@@ -12,8 +12,8 @@
 #include <cctype>
 #include <limits>
 #include <cstdlib>
-#include <iostream>
 #include <sstream>
+#include <iostream>
 #include <typeinfo>
 #include <algorithm>
 
@@ -1612,8 +1612,6 @@ std::string& operator+=(std::string& s, const Codepoint& cp) {
     return s;
 }
 
-
-
 Token LexFindOperator(StringView s) {
     const StringView underscore(reinterpret_cast<const u8*>("_"), 1);
     if (s == underscore) {
@@ -1692,9 +1690,8 @@ ASTEdition Lexer::realGetEdition() const {
     return edition;
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, Codepoint>(ZeroCopyOutput& os, Codepoint cp) {
+void stl::output<ZeroCopyOutput, Codepoint>(ZeroCopyOutput& os, Codepoint cp) {
     if (cp.v < 0x80) {
         os << (char)cp.v;
     } else if (cp.v < (0x1F + 1) << (1 * 6)) {
@@ -1713,5 +1710,4 @@ void output<ZeroCopyOutput, Codepoint>(ZeroCopyOutput& os, Codepoint cp) {
         BUG(Span(), StringView("Bad unicode codepoint encountered"));
     }
     return;
-}
 }

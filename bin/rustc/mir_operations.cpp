@@ -7835,15 +7835,13 @@ auto CheckInvalidatesLvalue::visitLvalue(const MIRLValue& lv, MIRValUsage vu) ->
     return false;
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, OptimiseStmtRef>(ZeroCopyOutput& os, OptimiseStmtRef x) {
-        os << StringView("BB") << x.bbIdx << StringView("/") << x.stmtIdx;
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, OptimiseStmtRef>(ZeroCopyOutput& os, OptimiseStmtRef x) {
+    os << StringView("BB") << x.bbIdx << StringView("/") << x.stmtIdx;
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<OptimiseStmtRef>>(ZeroCopyOutput& out, const std::vector<OptimiseStmtRef>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<OptimiseStmtRef>>(ZeroCopyOutput& out, const std::vector<OptimiseStmtRef>& values) {
+    outCont(out, values);
 }

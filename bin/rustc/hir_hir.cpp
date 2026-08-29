@@ -1631,29 +1631,27 @@ auto ImplHeadMonomorphiser::complete() const -> bool {
     return complete_;
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, HIRPublicity>(ZeroCopyOutput& out, const HIRPublicity& value) {
-        value.fmt(out);
-    }
+template <>
+void stl::output<ZeroCopyOutput, HIRPublicity>(ZeroCopyOutput& out, const HIRPublicity& value) {
+    value.fmt(out);
+}
 
-    template <>
-    void output<ZeroCopyOutput, HIRStruct::Repr>(ZeroCopyOutput& out, HIRStruct::Repr value) {
-        out << StringView("repr(");
-        switch (value) {
-            case HIRStruct::Repr::Rust:
-                out << StringView("Rust");
-                break;
-            case HIRStruct::Repr::C:
-                out << StringView("C");
-                break;
-            case HIRStruct::Repr::Simd:
-                out << StringView("simd");
-                break;
-            case HIRStruct::Repr::Transparent:
-                out << StringView("transparent");
-                break;
-        }
-        out << StringView(")");
+template <>
+void stl::output<ZeroCopyOutput, HIRStruct::Repr>(ZeroCopyOutput& out, HIRStruct::Repr value) {
+    out << StringView("repr(");
+    switch (value) {
+        case HIRStruct::Repr::Rust:
+            out << StringView("Rust");
+            break;
+        case HIRStruct::Repr::C:
+            out << StringView("C");
+            break;
+        case HIRStruct::Repr::Simd:
+            out << StringView("simd");
+            break;
+        case HIRStruct::Repr::Transparent:
+            out << StringView("transparent");
+            break;
     }
+    out << StringView(")");
 }

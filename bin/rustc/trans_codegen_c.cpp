@@ -10342,67 +10342,65 @@ auto CodeGeneratorC::EmptyCTypeCb::empty() const -> bool {
     return true;
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, CodeGeneratorC::CTypeCallback>(ZeroCopyOutput& os, const CodeGeneratorC::CTypeCallback& callback) {
-        callback.write(os);
-    }
+template <>
+void stl::output<ZeroCopyOutput, CodeGeneratorC::CTypeCallback>(ZeroCopyOutput& os, const CodeGeneratorC::CTypeCallback& callback) {
+    callback.write(os);
+}
 
-    template <>
-    void output<ZeroCopyOutput, FmtShell>(ZeroCopyOutput& os, FmtShell x) {
-        for (char c : x.s) {
-            switch (c) {
-                case '\\':
-                case '\"':
-                case ' ':
-                    os << StringView("\\");
-                default:
-                    os << c;
-            }
+template <>
+void stl::output<ZeroCopyOutput, FmtShell>(ZeroCopyOutput& os, FmtShell x) {
+    for (char c : x.s) {
+        switch (c) {
+            case '\\':
+            case '\"':
+            case ' ':
+                os << StringView("\\");
+            default:
+                os << c;
         }
-        return;
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, FmtGccAsm>(ZeroCopyOutput& os, FmtGccAsm x) {
-        bool inComment = false;
-        for (const char& ch : x.s) {
-            if (ch == '/' && (&ch)[1] == '/') {
-                if (!inComment) {
-                    os << StringView("\" ");
+template <>
+void stl::output<ZeroCopyOutput, FmtGccAsm>(ZeroCopyOutput& os, FmtGccAsm x) {
+    bool inComment = false;
+    for (const char& ch : x.s) {
+        if (ch == '/' && (&ch)[1] == '/') {
+            if (!inComment) {
+                os << StringView("\" ");
+            }
+            inComment = true;
+        } else {
+            inComment = false;
+        }
+        switch (ch) {
+            case '\n':
+                os << StringView("\\n\"\n\"");
+                break;
+            case '\"':
+                os << StringView("\\\"");
+                break;
+            case '%':
+                if (x.escapePercent) {
+                    os << StringView("%%");
+                } else {
+                    os << StringView("%");
                 }
-                inComment = true;
-            } else {
-                inComment = false;
-            }
-            switch (ch) {
-                case '\n':
-                    os << StringView("\\n\"\n\"");
-                    break;
-                case '\"':
-                    os << StringView("\\\"");
-                    break;
-                case '%':
-                    if (x.escapePercent) {
-                        os << StringView("%%");
-                    } else {
-                        os << StringView("%");
-                    }
-                    break;
-                case '{':
-                    os << StringView("%{");
-                    break;
-                case '}':
-                    os << StringView("%}");
-                    break;
-                case '|':
-                    os << StringView("%|");
-                    break;
-                default:
-                    os << ch;
-                    break;
-            }
+                break;
+            case '{':
+                os << StringView("%{");
+                break;
+            case '}':
+                os << StringView("%}");
+                break;
+            case '|':
+                os << StringView("%|");
+                break;
+            default:
+                os << ch;
+                break;
         }
-        return;
     }
+    return;
 }

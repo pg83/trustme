@@ -25,9 +25,7 @@ ASTMacroInvocation ASTMacroInvocation::clone() const {
     return ASTMacroInvocation(span_, ASTPath(macroPath), ident, input.clone());
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, ASTMacroInvocation>(ZeroCopyOutput& os, const ASTMacroInvocation& x) {
-        os << x.path() << StringView("! ") << x.inputIdent() << x.inputTt();
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTMacroInvocation>(ZeroCopyOutput& os, const ASTMacroInvocation& x) {
+    os << x.path() << StringView("! ") << x.inputIdent() << x.inputTt();
 }

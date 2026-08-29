@@ -106,9 +106,7 @@ void ASTVisibility::inplaceUnion(const ASTVisibility& value) {
     TODO(Span(), StringView("Union with incompatible visbility"));
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, ASTVisibility>(ZeroCopyOutput& out, const ASTVisibility& value) {
-        value.fmt(out);
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTVisibility>(ZeroCopyOutput& out, const ASTVisibility& value) {
+    value.fmt(out);
 }

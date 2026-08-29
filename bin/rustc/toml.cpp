@@ -340,8 +340,6 @@ TomlLexer::TomlToken TomlLexer::getToken() {
     return rv;
 }
 
-
-
 TomlLexer::TomlToken TomlLexer::TomlToken::lexFrom(std::ifstream& is, unsigned& line) {
     auto rv = TomlToken::lexFromInner(is, line);
     return rv;
@@ -678,10 +676,6 @@ TomlFileIter::TomlFileIter(TomlFile& tf)
 {
 }
 
-
-
-
-
 TomlValue::TypeError::TypeError(TomlValue::Type h, TomlValue::Type e)
     : have(h)
     , exp(e)
@@ -691,8 +685,6 @@ TomlValue::TypeError::TypeError(TomlValue::Type h, TomlValue::Type e)
     const std::string rendered(static_cast<const char*>(ss.data()), ss.length());
     snprintf(message, sizeof(message), "%s", rendered.c_str());
 }
-
-
 
 const char* TomlValue::TypeError::what() const noexcept {
     return message;
@@ -720,19 +712,18 @@ auto TomlLexer::TomlToken::asString() const -> const std::string& {
     return data;
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, TomlLexer::TomlToken>(ZeroCopyOutput& os, const TomlLexer::TomlToken& value) {
+void stl::output<ZeroCopyOutput, TomlLexer::TomlToken>(ZeroCopyOutput& os, const TomlLexer::TomlToken& value) {
     operator<<(os, value);
 }
 
 template <>
-void output<ZeroCopyOutput, TomlLexer>(ZeroCopyOutput& os, const TomlLexer& x) {
+void stl::output<ZeroCopyOutput, TomlLexer>(ZeroCopyOutput& os, const TomlLexer& x) {
     os << x.getFilename() << StringView(":") << x.getLine();
 }
 
 template <>
-void output<ZeroCopyOutput, TomlValue::Type>(ZeroCopyOutput& os, TomlValue::Type e) {
+void stl::output<ZeroCopyOutput, TomlValue::Type>(ZeroCopyOutput& os, TomlValue::Type e) {
     switch (e) {
         case TomlValue::Type::Boolean:
             os << StringView("boolean");
@@ -751,7 +742,7 @@ void output<ZeroCopyOutput, TomlValue::Type>(ZeroCopyOutput& os, TomlValue::Type
 }
 
 template <>
-void output<ZeroCopyOutput, TomlValue>(ZeroCopyOutput& os, const TomlValue& x) {
+void stl::output<ZeroCopyOutput, TomlValue>(ZeroCopyOutput& os, const TomlValue& x) {
     switch (x.type) {
         case TomlValue::Type::Boolean:
             os << (x.intValue != 0 ? "true" : "false");
@@ -795,8 +786,7 @@ void output<ZeroCopyOutput, TomlValue>(ZeroCopyOutput& os, const TomlValue& x) {
 }
 
 template <>
-void output<ZeroCopyOutput, TomlValue::TypeError>(ZeroCopyOutput& os, const TomlValue::TypeError& e) {
+void stl::output<ZeroCopyOutput, TomlValue::TypeError>(ZeroCopyOutput& os, const TomlValue::TypeError& e) {
     os << StringView("expected ") << e.exp << StringView(", got ") << e.have;
     return;
-}
 }

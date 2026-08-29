@@ -96,9 +96,7 @@ const char* coretypeName(const eCoreType ct) {
     return "NFI";
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, eCoreType>(ZeroCopyOutput& os, const eCoreType ct) {
-        os << coretypeName(ct);
-    }
+template <>
+void stl::output<ZeroCopyOutput, eCoreType>(ZeroCopyOutput& os, const eCoreType ct) {
+    os << coretypeName(ct);
 }

@@ -1462,16 +1462,14 @@ bool ASTNodeVisitor::isConst() const {
     return false;
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, ASTExprNodeMacro>(ZeroCopyOutput& os, const ASTExprNodeMacro& node) {
-        node.print(os);
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTExprNodeMacro>(ZeroCopyOutput& os, const ASTExprNodeMacro& node) {
+    node.print(os);
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTExprNode>(ZeroCopyOutput& os, const ASTExprNode& node) {
-        BUG_ASSERT(static_cast<const void*>(&node) != nullptr);
-        node.print(os);
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTExprNode>(ZeroCopyOutput& os, const ASTExprNode& node) {
+    BUG_ASSERT(static_cast<const void*>(&node) != nullptr);
+    node.print(os);
+    return;
 }

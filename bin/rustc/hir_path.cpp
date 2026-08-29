@@ -1089,136 +1089,134 @@ void stl::output<ZeroCopyOutput, std::vector<HIRGenericPath>>(ZeroCopyOutput& ou
     outCont(out, values);
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, HIRSimplePath>(ZeroCopyOutput& os, HIRSimplePath x) {
-        if (x.crateName() != "") {
-            os << StringView("::\"") << x.crateName() << StringView("\"");
-        } else if (x.components().size() == 0) {
-            os << StringView("::");
-        } else {
-        }
-        for (const auto& n : x.components()) {
-            os << StringView("::") << n;
-        }
-        return;
+template <>
+void stl::output<ZeroCopyOutput, HIRSimplePath>(ZeroCopyOutput& os, HIRSimplePath x) {
+    if (x.crateName() != "") {
+        os << StringView("::\"") << x.crateName() << StringView("\"");
+    } else if (x.components().size() == 0) {
+        os << StringView("::");
+    } else {
     }
-
-    template <>
-    void output<ZeroCopyOutput, HIRPathParams>(ZeroCopyOutput& os, const HIRPathParams& x) {
-        bool hasArgs = (x.types.size() > 0 || x.values.size() > 0);
-
-        if (hasArgs) {
-            os << StringView("<");
-        }
-        for (const auto& ty : x.types) {
-            os << ty << StringView(",");
-        }
-        for (const auto& v : x.values) {
-            os << StringView("{") << v << StringView("},");
-        }
-        if (hasArgs) {
-            os << StringView(">");
-        }
-        return;
+    for (const auto& n : x.components()) {
+        os << StringView("::") << n;
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, HIRGenericPath>(ZeroCopyOutput& os, const HIRGenericPath& x) {
-        os << x.path << x.params;
-        return;
+template <>
+void stl::output<ZeroCopyOutput, HIRPathParams>(ZeroCopyOutput& os, const HIRPathParams& x) {
+    bool hasArgs = (x.types.size() > 0 || x.values.size() > 0);
+
+    if (hasArgs) {
+        os << StringView("<");
     }
+    for (const auto& ty : x.types) {
+        os << ty << StringView(",");
+    }
+    for (const auto& v : x.values) {
+        os << StringView("{") << v << StringView("},");
+    }
+    if (hasArgs) {
+        os << StringView(">");
+    }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, HIRTraitPath>(ZeroCopyOutput& os, const HIRTraitPath& x) {
-        if (x.constness == HIRBoundConstness::Always) {
-            os << StringView("const ");
-        } else if (x.constness == HIRBoundConstness::Maybe) {
-            os << StringView("[const] ");
+template <>
+void stl::output<ZeroCopyOutput, HIRGenericPath>(ZeroCopyOutput& os, const HIRGenericPath& x) {
+    os << x.path << x.params;
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, HIRTraitPath>(ZeroCopyOutput& os, const HIRTraitPath& x) {
+    if (x.constness == HIRBoundConstness::Always) {
+        os << StringView("const ");
+    } else if (x.constness == HIRBoundConstness::Maybe) {
+        os << StringView("[const] ");
+    }
+    os << x.path.path;
+    bool hasArgs = (x.path.params.types.size() > 0 || x.typeBounds.size() > 0 || x.traitBounds.size() > 0);
+
+    if (hasArgs) {
+        os << StringView("<");
+    }
+    for (const auto& ty : x.path.params.types) {
+        os << ty << StringView(",");
+    }
+    for (const auto& v : x.path.params.values) {
+        os << v << StringView(",");
+    }
+    for (const auto& assoc : x.typeBounds) {
+        os << assoc.first << StringView("{") << assoc.second.sourceTrait << StringView("}=") << assoc.second << StringView(",");
+    }
+    for (const auto& assoc : x.traitBounds) {
+        for (const auto& trait : assoc.second.traits) {
+            os << assoc.first << StringView("{") << assoc.second.sourceTrait << StringView("}: ") << trait << StringView(",");
         }
-        os << x.path.path;
-        bool hasArgs = (x.path.params.types.size() > 0 || x.typeBounds.size() > 0 || x.traitBounds.size() > 0);
+    }
+    if (hasArgs) {
+        os << StringView(">");
+    }
+    return;
+}
 
-        if (hasArgs) {
-            os << StringView("<");
+template <>
+void stl::output<ZeroCopyOutput, HIRPath>(ZeroCopyOutput& os, const HIRPath& x) {
+    switch (x.data.tag()) {
+        case HIRPath::Data::TAG_Generic: {
+            auto& e = x.data.as_Generic();
+            os << e;
+            return;
         }
-        for (const auto& ty : x.path.params.types) {
-            os << ty << StringView(",");
+        case HIRPath::Data::TAG_UfcsInherent: {
+            auto& e = x.data.as_UfcsInherent();
+            os << StringView("<") << e.type << StringView(" /*- ") << e.implParams << StringView("*/>::") << e.item << e.params;
+            return;
         }
-        for (const auto& v : x.path.params.values) {
-            os << v << StringView(",");
+        case HIRPath::Data::TAG_UfcsKnown: {
+            auto& e = x.data.as_UfcsKnown();
+            os << StringView("<") << e.type << StringView(" as ");
+            os << e.trait << StringView(">::") << e.item << e.params;
+            return;
+            break;
         }
-        for (const auto& assoc : x.typeBounds) {
-            os << assoc.first << StringView("{") << assoc.second.sourceTrait << StringView("}=") << assoc.second << StringView(",");
+        case HIRPath::Data::TAG_UfcsUnknown: {
+            auto& e = x.data.as_UfcsUnknown();
+            os << StringView("<") << e.type << StringView(" as _>::") << e.item << e.params;
+            return;
         }
-        for (const auto& assoc : x.traitBounds) {
-            for (const auto& trait : assoc.second.traits) {
-                os << assoc.first << StringView("{") << assoc.second.sourceTrait << StringView("}: ") << trait << StringView(",");
-            }
-        }
-        if (hasArgs) {
-            os << StringView(">");
-        }
-        return;
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, HIRPath>(ZeroCopyOutput& os, const HIRPath& x) {
-        switch (x.data.tag()) {
-            case HIRPath::Data::TAG_Generic: {
-                auto& e = x.data.as_Generic();
-                os << e;
-                return;
-            }
-            case HIRPath::Data::TAG_UfcsInherent: {
-                auto& e = x.data.as_UfcsInherent();
-                os << StringView("<") << e.type << StringView(" /*- ") << e.implParams << StringView("*/>::") << e.item << e.params;
-                return;
-            }
-            case HIRPath::Data::TAG_UfcsKnown: {
-                auto& e = x.data.as_UfcsKnown();
-                os << StringView("<") << e.type << StringView(" as ");
-                os << e.trait << StringView(">::") << e.item << e.params;
-                return;
-                break;
-            }
-            case HIRPath::Data::TAG_UfcsUnknown: {
-                auto& e = x.data.as_UfcsUnknown();
-                os << StringView("<") << e.type << StringView(" as _>::") << e.item << e.params;
-                return;
-            }
-        }
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, HIRConstGenericUnevaluated>(ZeroCopyOutput& out, const HIRConstGenericUnevaluated& value) {
+    value.fmt(out);
+}
 
-    template <>
-    void output<ZeroCopyOutput, HIRConstGenericUnevaluated>(ZeroCopyOutput& out, const HIRConstGenericUnevaluated& value) {
-        value.fmt(out);
-    }
+template <>
+void stl::output<ZeroCopyOutput, HIRTraitPath::AtyEqual>(ZeroCopyOutput& os, const HIRTraitPath::AtyEqual& x) {
+    os << x.type;
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, HIRTraitPath::AtyEqual>(ZeroCopyOutput& os, const HIRTraitPath::AtyEqual& x) {
-        os << x.type;
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::pair<const RcString, HIRTraitPath::AtyEqual>>(ZeroCopyOutput& out, const std::pair<const RcString, HIRTraitPath::AtyEqual>& value) {
+    out << value.first << StringView(": ") << value.second;
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::pair<const RcString, HIRTraitPath::AtyEqual>>(ZeroCopyOutput& out, const std::pair<const RcString, HIRTraitPath::AtyEqual>& value) {
-        out << value.first << StringView(": ") << value.second;
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::map<RcString, HIRTraitPath::AtyEqual>>(ZeroCopyOutput& out, const std::map<RcString, HIRTraitPath::AtyEqual>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::map<RcString, HIRTraitPath::AtyEqual>>(ZeroCopyOutput& out, const std::map<RcString, HIRTraitPath::AtyEqual>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<HIRTraitPath>>(ZeroCopyOutput& out, const std::vector<HIRTraitPath>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<HIRTraitPath>>(ZeroCopyOutput& out, const std::vector<HIRTraitPath>& values) {
-        outCont(out, values);
-    }
-
-    template <>
-    void output<ZeroCopyOutput, std::pair<const std::string, HIRSimplePath>>(ZeroCopyOutput& out, const std::pair<const std::string, HIRSimplePath>& value) {
-        out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::pair<const std::string, HIRSimplePath>>(ZeroCopyOutput& out, const std::pair<const std::string, HIRSimplePath>& value) {
+    out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
 }

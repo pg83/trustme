@@ -1172,290 +1172,288 @@ auto CodeGeneratorMonoMir::monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunct
     }
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, Fmt<HIRPath>>(ZeroCopyOutput& os, Fmt<HIRPath> x) {
-        os << TransMangle(x.wb, x.e);
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, Fmt<HIRPath>>(ZeroCopyOutput& os, Fmt<HIRPath> x) {
+    os << TransMangle(x.wb, x.e);
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, Fmt<HIRGenericPath>>(ZeroCopyOutput& os, Fmt<HIRGenericPath> x) {
-        os << TransMangle(x.wb, x.e);
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, Fmt<HIRGenericPath>>(ZeroCopyOutput& os, Fmt<HIRGenericPath> x) {
+    os << TransMangle(x.wb, x.e);
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, Fmt<HIRSimplePath>>(ZeroCopyOutput& os, Fmt<HIRSimplePath> x) {
-        os << TransMangle(x.wb, x.e);
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, Fmt<HIRSimplePath>>(ZeroCopyOutput& os, Fmt<HIRSimplePath> x) {
+    os << TransMangle(x.wb, x.e);
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, Fmt<HIRTypeRef>>(ZeroCopyOutput& os, Fmt<HIRTypeRef> x) {
-        {
-            auto& tuMatch = (*x.e);
-            switch (tuMatch.tag()) {
-                case HIRTypeData::TAG_Infer: {
-                    BUG(Span(), StringView("") << x.e);
-                    break;
-                }
-                case HIRTypeData::TAG_Diverge: {
-                    os << StringView("!");
-                    break;
-                }
-                case HIRTypeData::TAG_Primitive: {
-                    auto& te = tuMatch.as_Primitive();
-                    os << te;
-                    break;
-                }
-                case HIRTypeData::TAG_Path: {
-                    auto& te = tuMatch.as_Path();
-                    os << TransMangle(x.wb, te.path);
-                    break;
-                }
-                case HIRTypeData::TAG_Generic: {
-                    BUG(Span(), StringView("") << x.e);
-                    break;
-                }
-                case HIRTypeData::TAG_TraitObject: {
-                    auto& te = tuMatch.as_TraitObject();
-                    auto path = te.trait.path.clone();
-                    os << StringView("dyn ") << TransMangle(x.wb, path);
-                    break;
-                }
-                case HIRTypeData::TAG_ErasedType: {
-                    BUG(Span(), StringView("") << x.e);
-                    break;
-                }
-                case HIRTypeData::TAG_Array: {
-                    auto& te = tuMatch.as_Array();
-                    os << StringView("[") << fmt(x.wb, te.inner) << StringView("; ") << te.size << StringView("]");
-                    break;
-                }
-                case HIRTypeData::TAG_Slice: {
-                    auto& te = tuMatch.as_Slice();
-                    os << StringView("[") << fmt(x.wb, te.inner) << StringView("]");
-                    break;
-                }
-                case HIRTypeData::TAG_Pattern: {
-                    auto& te = tuMatch.as_Pattern();
-                    os << fmt(x.wb, te.inner);
-                    break;
-                }
-                case HIRTypeData::TAG_Tuple: {
-                    auto& te = tuMatch.as_Tuple();
-                    if (te.empty()) {
-                        os << StringView("()");
-                    } else {
-                        os << TransMangle(x.wb, x.e);
-                    }
-                    break;
-                }
-                case HIRTypeData::TAG_Borrow: {
-                    auto& te = tuMatch.as_Borrow();
-                    switch (te.type) {
-                        case HIRBorrowType::Shared:
-                            os << StringView("&");
-                            break;
-                        case HIRBorrowType::Unique:
-                            os << StringView("&mut ");
-                            break;
-                        case HIRBorrowType::Owned:
-                            os << StringView("&move ");
-                            break;
-                    }
-                    os << fmt(x.wb, te.inner);
-                    break;
-                }
-                case HIRTypeData::TAG_Pointer: {
-                    auto& te = tuMatch.as_Pointer();
-                    switch (te.type) {
-                        case HIRBorrowType::Shared:
-                            os << StringView("*const ");
-                            break;
-                        case HIRBorrowType::Unique:
-                            os << StringView("*mut ");
-                            break;
-                        case HIRBorrowType::Owned:
-                            os << StringView("*move ");
-                            break;
-                    }
-                    os << fmt(x.wb, te.inner);
-                    break;
-                }
-                case HIRTypeData::TAG_NamedFunction: {
-                    auto& te = tuMatch.as_NamedFunction();
-                    os << StringView("fn ") << TransMangle(x.wb, te.path);
-                    break;
-                }
-                case HIRTypeData::TAG_Function: {
-                    auto& e = tuMatch.as_Function();
-                    if (e.isUnsafe) {
-                        os << StringView("unsafe ");
-                    }
-                    if (e.abi != "") {
-                        os << StringView("extern \"") << e.abi << StringView("\" ");
-                    }
-                    os << StringView("fn(");
-                    for (const auto& t : e.argTypes) {
-                        os << fmt(x.wb, t) << StringView(", ");
-                    }
-                    os << StringView(") -> ") << fmt(x.wb, e.rettype);
-                    break;
-                } break;
-                case HIRTypeData::TAG_NodeType:
-                    BUG(Span(), StringView("Unexpected type in trans: ") << x.e);
-                    break;
-            }
-        }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, Fmt<MIRLValue>>(ZeroCopyOutput& os, Fmt<MIRLValue> x) {
-        for (const auto& w : ::reverse(x.e.wrappers)) {
-            if (w.is_Deref()) {
-                os << StringView("(*");
-            }
-        }
-        switch (x.e.root.tag()) {
-            case MIRLValue::Storage::TAG_Return: {
-                os << StringView("RETURN");
+template <>
+void stl::output<ZeroCopyOutput, Fmt<HIRTypeRef>>(ZeroCopyOutput& os, Fmt<HIRTypeRef> x) {
+    {
+        auto& tuMatch = (*x.e);
+        switch (tuMatch.tag()) {
+            case HIRTypeData::TAG_Infer: {
+                BUG(Span(), StringView("") << x.e);
                 break;
             }
-            case MIRLValue::Storage::TAG_Local: {
-                decltype(x.e.root.as_Local()) e = x.e.root.as_Local();
-                os << StringView("var") << e;
+            case HIRTypeData::TAG_Diverge: {
+                os << StringView("!");
                 break;
             }
-            case MIRLValue::Storage::TAG_Argument: {
-                decltype(x.e.root.as_Argument()) e = x.e.root.as_Argument();
-                os << StringView("arg") << e;
+            case HIRTypeData::TAG_Primitive: {
+                auto& te = tuMatch.as_Primitive();
+                os << te;
                 break;
             }
-            case MIRLValue::Storage::TAG_Static: {
-                decltype(x.e.root.as_Static()) e = x.e.root.as_Static();
-                os << fmt(x.wb, e);
+            case HIRTypeData::TAG_Path: {
+                auto& te = tuMatch.as_Path();
+                os << TransMangle(x.wb, te.path);
                 break;
             }
-        }
-        bool wasNum = false;
-        for (const auto& w : x.e.wrappers) {
-            bool prevWasNum = wasNum;
-            wasNum = false;
-            switch (w.tag()) {
+            case HIRTypeData::TAG_Generic: {
+                BUG(Span(), StringView("") << x.e);
                 break;
-                case MIRLValue::Wrapper::TAG_Deref: {
-                    os << StringView(")");
-                } break;
-                    break;
-                case MIRLValue::Wrapper::TAG_Field: {
-                    decltype(w.as_Field()) fieldIndex = w.as_Field();
-                    if (prevWasNum) {
-                        os << StringView(" ");
-                    }
-                    os << StringView(".") << fieldIndex;
-                    wasNum = true;
-                } break;
-                    break;
-                case MIRLValue::Wrapper::TAG_Index: {
-                    decltype(w.as_Index()) e = w.as_Index();
-                    os << StringView("[") << fmt(x.wb, MIRLValue::newLocal(e)) << StringView("]");
-                } break;
-                    break;
-                case MIRLValue::Wrapper::TAG_Downcast: {
-                    decltype(w.as_Downcast()) variantIndex = w.as_Downcast();
-                    os << StringView("@") << variantIndex;
-                    wasNum = true;
-                } break;
             }
-        }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, Fmt<MIRConstant>>(ZeroCopyOutput& os, Fmt<MIRConstant> x) {
-        struct H {
-            static u64 doubleToU64(double v) {
-                u64 rv;
-                std::memcpy(&rv, &v, sizeof(double));
-                return rv;
+            case HIRTypeData::TAG_TraitObject: {
+                auto& te = tuMatch.as_TraitObject();
+                auto path = te.trait.path.clone();
+                os << StringView("dyn ") << TransMangle(x.wb, path);
+                break;
             }
-        };
-
-        const auto& e = x.e;
-        switch (e.tag()) {
-            break;
-            case MIRConstant::TAG_Int: {
-                auto& v = e.as_Int();
-                os << (v.v < 0 ? "" : "+") << v.v << StringView(" ") << v.t;
-            } break;
+            case HIRTypeData::TAG_ErasedType: {
+                BUG(Span(), StringView("") << x.e);
                 break;
-            case MIRConstant::TAG_Uint: {
-                auto& v = e.as_Uint();
-                os << v.v << StringView(" ") << v.t;
-            } break;
+            }
+            case HIRTypeData::TAG_Array: {
+                auto& te = tuMatch.as_Array();
+                os << StringView("[") << fmt(x.wb, te.inner) << StringView("; ") << te.size << StringView("]");
                 break;
-            case MIRConstant::TAG_Float: {
-                auto& v = e.as_Float();
-                // TODO: Infinity/nan/...
-                auto vi = H::doubleToU64(static_cast<double>(v.v));
-                bool sign = (vi & (1ull << 63)) != 0;
-                int exp = (vi >> 52) & 0x7FF;
-                u64 frac = vi & ((1ull << 52) - 1);
-                os << StringView(sign ? "-" : "+") << StringView("0x1.") << formatHex(frac, 52 / 4) << StringView("p") << (exp - 1023);
-                os << StringView(" ") << v.t;
-            } break;
+            }
+            case HIRTypeData::TAG_Slice: {
+                auto& te = tuMatch.as_Slice();
+                os << StringView("[") << fmt(x.wb, te.inner) << StringView("]");
                 break;
-            case MIRConstant::TAG_ItemAddr: {
-                auto& v = e.as_ItemAddr();
-                os << StringView("ADDROF ") << fmt(x.wb, *v);
-                if (v.offset != U128(0)) {
-                    os << StringView(" + ") << v.offset;
+            }
+            case HIRTypeData::TAG_Pattern: {
+                auto& te = tuMatch.as_Pattern();
+                os << fmt(x.wb, te.inner);
+                break;
+            }
+            case HIRTypeData::TAG_Tuple: {
+                auto& te = tuMatch.as_Tuple();
+                if (te.empty()) {
+                    os << StringView("()");
+                } else {
+                    os << TransMangle(x.wb, x.e);
                 }
-            } break;
                 break;
-            case MIRConstant::TAG_Const: {
-                BUG(Span(), StringView("Stray named constant in MIR after cleanup - ") << e);
-            } break;
-            default:
-                os << e;
-                break;
-        }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, Fmt<MIRParam>>(ZeroCopyOutput& os, Fmt<MIRParam> x) {
-        switch (x.e.tag()) {
-            break;
-            case MIRParam::TAG_LValue: {
-                auto& e = x.e.as_LValue();
-                os << fmt(x.wb, e);
-            } break;
-                break;
-            case MIRParam::TAG_Borrow: {
-                auto& e = x.e.as_Borrow();
-                os << StringView("&");
-                switch (e.type) {
+            }
+            case HIRTypeData::TAG_Borrow: {
+                auto& te = tuMatch.as_Borrow();
+                switch (te.type) {
                     case HIRBorrowType::Shared:
+                        os << StringView("&");
                         break;
                     case HIRBorrowType::Unique:
-                        os << StringView("mut ");
+                        os << StringView("&mut ");
                         break;
                     case HIRBorrowType::Owned:
-                        os << StringView("move ");
+                        os << StringView("&move ");
                         break;
                 }
-                os << fmt(x.wb, e.val);
+                os << fmt(x.wb, te.inner);
+                break;
+            }
+            case HIRTypeData::TAG_Pointer: {
+                auto& te = tuMatch.as_Pointer();
+                switch (te.type) {
+                    case HIRBorrowType::Shared:
+                        os << StringView("*const ");
+                        break;
+                    case HIRBorrowType::Unique:
+                        os << StringView("*mut ");
+                        break;
+                    case HIRBorrowType::Owned:
+                        os << StringView("*move ");
+                        break;
+                }
+                os << fmt(x.wb, te.inner);
+                break;
+            }
+            case HIRTypeData::TAG_NamedFunction: {
+                auto& te = tuMatch.as_NamedFunction();
+                os << StringView("fn ") << TransMangle(x.wb, te.path);
+                break;
+            }
+            case HIRTypeData::TAG_Function: {
+                auto& e = tuMatch.as_Function();
+                if (e.isUnsafe) {
+                    os << StringView("unsafe ");
+                }
+                if (e.abi != "") {
+                    os << StringView("extern \"") << e.abi << StringView("\" ");
+                }
+                os << StringView("fn(");
+                for (const auto& t : e.argTypes) {
+                    os << fmt(x.wb, t) << StringView(", ");
+                }
+                os << StringView(") -> ") << fmt(x.wb, e.rettype);
+                break;
+            } break;
+            case HIRTypeData::TAG_NodeType:
+                BUG(Span(), StringView("Unexpected type in trans: ") << x.e);
+                break;
+        }
+    }
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, Fmt<MIRLValue>>(ZeroCopyOutput& os, Fmt<MIRLValue> x) {
+    for (const auto& w : ::reverse(x.e.wrappers)) {
+        if (w.is_Deref()) {
+            os << StringView("(*");
+        }
+    }
+    switch (x.e.root.tag()) {
+        case MIRLValue::Storage::TAG_Return: {
+            os << StringView("RETURN");
+            break;
+        }
+        case MIRLValue::Storage::TAG_Local: {
+            decltype(x.e.root.as_Local()) e = x.e.root.as_Local();
+            os << StringView("var") << e;
+            break;
+        }
+        case MIRLValue::Storage::TAG_Argument: {
+            decltype(x.e.root.as_Argument()) e = x.e.root.as_Argument();
+            os << StringView("arg") << e;
+            break;
+        }
+        case MIRLValue::Storage::TAG_Static: {
+            decltype(x.e.root.as_Static()) e = x.e.root.as_Static();
+            os << fmt(x.wb, e);
+            break;
+        }
+    }
+    bool wasNum = false;
+    for (const auto& w : x.e.wrappers) {
+        bool prevWasNum = wasNum;
+        wasNum = false;
+        switch (w.tag()) {
+            break;
+            case MIRLValue::Wrapper::TAG_Deref: {
+                os << StringView(")");
             } break;
                 break;
-            case MIRParam::TAG_Constant: {
-                auto& e = x.e.as_Constant();
-                os << fmt(x.wb, e);
+            case MIRLValue::Wrapper::TAG_Field: {
+                decltype(w.as_Field()) fieldIndex = w.as_Field();
+                if (prevWasNum) {
+                    os << StringView(" ");
+                }
+                os << StringView(".") << fieldIndex;
+                wasNum = true;
+            } break;
+                break;
+            case MIRLValue::Wrapper::TAG_Index: {
+                decltype(w.as_Index()) e = w.as_Index();
+                os << StringView("[") << fmt(x.wb, MIRLValue::newLocal(e)) << StringView("]");
+            } break;
+                break;
+            case MIRLValue::Wrapper::TAG_Downcast: {
+                decltype(w.as_Downcast()) variantIndex = w.as_Downcast();
+                os << StringView("@") << variantIndex;
+                wasNum = true;
             } break;
         }
-        return;
     }
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, Fmt<MIRConstant>>(ZeroCopyOutput& os, Fmt<MIRConstant> x) {
+    struct H {
+        static u64 doubleToU64(double v) {
+            u64 rv;
+            std::memcpy(&rv, &v, sizeof(double));
+            return rv;
+        }
+    };
+
+    const auto& e = x.e;
+    switch (e.tag()) {
+        break;
+        case MIRConstant::TAG_Int: {
+            auto& v = e.as_Int();
+            os << (v.v < 0 ? "" : "+") << v.v << StringView(" ") << v.t;
+        } break;
+            break;
+        case MIRConstant::TAG_Uint: {
+            auto& v = e.as_Uint();
+            os << v.v << StringView(" ") << v.t;
+        } break;
+            break;
+        case MIRConstant::TAG_Float: {
+            auto& v = e.as_Float();
+            // TODO: Infinity/nan/...
+            auto vi = H::doubleToU64(static_cast<double>(v.v));
+            bool sign = (vi & (1ull << 63)) != 0;
+            int exp = (vi >> 52) & 0x7FF;
+            u64 frac = vi & ((1ull << 52) - 1);
+            os << StringView(sign ? "-" : "+") << StringView("0x1.") << formatHex(frac, 52 / 4) << StringView("p") << (exp - 1023);
+            os << StringView(" ") << v.t;
+        } break;
+            break;
+        case MIRConstant::TAG_ItemAddr: {
+            auto& v = e.as_ItemAddr();
+            os << StringView("ADDROF ") << fmt(x.wb, *v);
+            if (v.offset != U128(0)) {
+                os << StringView(" + ") << v.offset;
+            }
+        } break;
+            break;
+        case MIRConstant::TAG_Const: {
+            BUG(Span(), StringView("Stray named constant in MIR after cleanup - ") << e);
+        } break;
+        default:
+            os << e;
+            break;
+    }
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, Fmt<MIRParam>>(ZeroCopyOutput& os, Fmt<MIRParam> x) {
+    switch (x.e.tag()) {
+        break;
+        case MIRParam::TAG_LValue: {
+            auto& e = x.e.as_LValue();
+            os << fmt(x.wb, e);
+        } break;
+            break;
+        case MIRParam::TAG_Borrow: {
+            auto& e = x.e.as_Borrow();
+            os << StringView("&");
+            switch (e.type) {
+                case HIRBorrowType::Shared:
+                    break;
+                case HIRBorrowType::Unique:
+                    os << StringView("mut ");
+                    break;
+                case HIRBorrowType::Owned:
+                    os << StringView("move ");
+                    break;
+            }
+            os << fmt(x.wb, e.val);
+        } break;
+            break;
+        case MIRParam::TAG_Constant: {
+            auto& e = x.e.as_Constant();
+            os << fmt(x.wb, e);
+        } break;
+    }
+    return;
 }

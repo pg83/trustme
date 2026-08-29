@@ -1,6 +1,6 @@
 #include "resolve_common.h"
-#include "output.h"
 
+#include "output.h"
 #include "ast_ast.h"
 #include "hir_hir.h"
 #include "ast_expr.h"
@@ -55,8 +55,6 @@ namespace {
         return std::move(ir.as_Namespace());
     }
 }
-
-
 
 // TODO: Function that turns a relative path into a canonical absolute path to the containing module
 
@@ -205,11 +203,7 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                 if (crate.edition >= ASTEdition::Rust2018) {
                     const auto& name = e.nodes.back().name();
                     DEBUG(StringView("Trying implicit externs for ") << name);
-                    DEBUG(FMT_CB(os,
-                        for (const auto& v : settings.implicitCrates) {
-                            os << StringView(" ") << v.first;
-                        }
-                    ));
+                    DEBUG(FMT_CB(os, for (const auto& v : settings.implicitCrates) { os << StringView(" ") << v.first; }));
                     auto ecIt = settings.implicitCrates.find(name);
                     if (ecIt != settings.implicitCrates.end()) {
                         return ResolveModuleRef::make_ImplicitPrelude({});
@@ -291,11 +285,7 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
 
             if (crate.edition >= ASTEdition::Rust2018 || name == "core" || name == "std") {
                 DEBUG(StringView("Trying implicit externs for ") << name);
-                DEBUG(FMT_CB(os,
-                    for (const auto& v : settings.implicitCrates) {
-                        os << StringView(" ") << v.first;
-                    }
-                ));
+                DEBUG(FMT_CB(os, for (const auto& v : settings.implicitCrates) { os << StringView(" ") << v.first; }));
                 auto ecIt = settings.implicitCrates.find(name);
                 if (ecIt != settings.implicitCrates.end()) {
                     if (ecIt->second == "") {
@@ -959,21 +949,19 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
     return ResolveItemRef::make_None({});
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, ResolveNamespace>(ZeroCopyOutput& os, ResolveNamespace ns) {
+void stl::output<ZeroCopyOutput, ResolveNamespace>(ZeroCopyOutput& os, ResolveNamespace ns) {
     switch (ns) {
         case ResolveNamespace::Namespace:
             os << StringView("Namespace");
-    return;
+            return;
         case ResolveNamespace::Value:
             os << StringView("Value");
-    return;
+            return;
         case ResolveNamespace::Macro:
             os << StringView("Macro");
-    return;
+            return;
     }
     os << StringView("?");
     return;
-}
 }

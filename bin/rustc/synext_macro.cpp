@@ -20,8 +20,8 @@
 #include "parse_interpolated_fragment.h"
 
 #include <cctype>
-#include <string_view>
 #include <sstream>
+#include <string_view>
 
 using namespace stl;
 
@@ -2800,9 +2800,7 @@ auto CExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crat
     return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(rv), {}))));
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, FmtArgs>(ZeroCopyOutput& out, const FmtArgs& value) {
+void stl::output<ZeroCopyOutput, FmtArgs>(ZeroCopyOutput& out, const FmtArgs& value) {
     operator<<(out, value);
-}
 }

@@ -1,54 +1,52 @@
 #include "common.h"
+
 #include "output.h"
 
 using namespace stl;
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, Ordering>(ZeroCopyOutput& out, Ordering value) {
+void stl::output<ZeroCopyOutput, Ordering>(ZeroCopyOutput& out, Ordering value) {
     out << static_cast<int>(value);
 }
 
 template <>
-void output<ZeroCopyOutput, std::vector<std::string>>(ZeroCopyOutput& out, const std::vector<std::string>& values) {
+void stl::output<ZeroCopyOutput, std::vector<std::string>>(ZeroCopyOutput& out, const std::vector<std::string>& values) {
     outCont(out, values);
 }
 
 template <>
-void output<ZeroCopyOutput, std::vector<size_t>>(ZeroCopyOutput& out, const std::vector<size_t>& values) {
+void stl::output<ZeroCopyOutput, std::vector<size_t>>(ZeroCopyOutput& out, const std::vector<size_t>& values) {
     outCont(out, values);
 }
 
 template <>
-void output<ZeroCopyOutput, std::pair<size_t, size_t>>(ZeroCopyOutput& out, const std::pair<size_t, size_t>& value) {
+void stl::output<ZeroCopyOutput, std::pair<size_t, size_t>>(ZeroCopyOutput& out, const std::pair<size_t, size_t>& value) {
     out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
 }
 
 template <>
-void output<ZeroCopyOutput, std::vector<unsigned>>(ZeroCopyOutput& out, const std::vector<unsigned>& values) {
+void stl::output<ZeroCopyOutput, std::vector<unsigned>>(ZeroCopyOutput& out, const std::vector<unsigned>& values) {
     outCont(out, values);
 }
 
 template <>
-void output<ZeroCopyOutput, std::vector<std::vector<std::string>>>(ZeroCopyOutput& out, const std::vector<std::vector<std::string>>& values) {
+void stl::output<ZeroCopyOutput, std::vector<std::vector<std::string>>>(ZeroCopyOutput& out, const std::vector<std::vector<std::string>>& values) {
     outCont(out, values);
 }
 
 template <>
-void output<ZeroCopyOutput, std::pair<const unsigned, unsigned>>(ZeroCopyOutput& out, std::pair<const unsigned, unsigned> value) {
+void stl::output<ZeroCopyOutput, std::pair<const unsigned, unsigned>>(ZeroCopyOutput& out, std::pair<const unsigned, unsigned> value) {
     out << value.first << StringView(": ") << value.second;
 }
 
 template <>
-void output<ZeroCopyOutput, std::map<unsigned, unsigned>>(ZeroCopyOutput& out, const std::map<unsigned, unsigned>& values) {
+void stl::output<ZeroCopyOutput, std::map<unsigned, unsigned>>(ZeroCopyOutput& out, const std::map<unsigned, unsigned>& values) {
     outCont(out, values);
 }
 
 template <>
-void output<ZeroCopyOutput, std::set<unsigned>>(ZeroCopyOutput& out, const std::set<unsigned>& values) {
+void stl::output<ZeroCopyOutput, std::set<unsigned>>(ZeroCopyOutput& out, const std::set<unsigned>& values) {
     outCont(out, values);
-}
-
 }
 
 FmtEscaped::FmtEscaped(const std::string& s)
@@ -56,8 +54,6 @@ FmtEscaped::FmtEscaped(const std::string& s)
     , e(s.c_str() + s.size())
 {
 }
-
-
 
 Ordering ord(bool l, bool r) {
     if (l == r) {
@@ -79,9 +75,8 @@ Ordering ord(const std::string& l, const std::string& r) {
     }
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, FmtEscaped>(ZeroCopyOutput& os, FmtEscaped x) {
+void stl::output<ZeroCopyOutput, FmtEscaped>(ZeroCopyOutput& os, FmtEscaped x) {
     for (auto s = x.begin(); s != x.end(); s++) {
         switch (*s) {
             case '\0':
@@ -166,9 +161,8 @@ void output<ZeroCopyOutput, FmtEscaped>(ZeroCopyOutput& os, FmtEscaped x) {
 }
 
 template <>
-void output<ZeroCopyOutput, RepeatLitStr>(ZeroCopyOutput& os, RepeatLitStr value) {
+void stl::output<ZeroCopyOutput, RepeatLitStr>(ZeroCopyOutput& os, RepeatLitStr value) {
     for (int i = 0; i < value.n; ++i) {
         os << value.s;
     }
-}
 }

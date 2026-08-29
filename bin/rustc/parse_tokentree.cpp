@@ -1,7 +1,7 @@
 #include "parse_tokentree.h"
-#include "output.h"
 
 #include "common.h"
+#include "output.h"
 #include "ast_edition.h"
 
 using namespace stl;
@@ -18,8 +18,6 @@ TokenTree TokenTree::clone() const {
         return TokenTree(edition, hygiene_, mv$(ents));
     }
 }
-
-
 
 TokenTree::~TokenTree() {
 }
@@ -96,9 +94,7 @@ void TokenTree::fmt(ZeroCopyOutput& os) const {
     }
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, TokenTree>(ZeroCopyOutput& os, const TokenTree& tree) {
+void stl::output<ZeroCopyOutput, TokenTree>(ZeroCopyOutput& os, const TokenTree& tree) {
     tree.fmt(os);
-}
 }

@@ -1,4 +1,5 @@
 #include "int128.h"
+
 #include "output.h"
 
 using namespace stl;
@@ -462,25 +463,22 @@ FormattedU128Hex formatHex(U128 value, unsigned width, bool uppercase) {
     return {value, width, uppercase};
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, U128>(ZeroCopyOutput& os, U128 x) {
+void stl::output<ZeroCopyOutput, U128>(ZeroCopyOutput& os, U128 x) {
     x.fmt(os);
 }
 
 template <>
-void output<ZeroCopyOutput, S128>(ZeroCopyOutput& os, S128 x) {
+void stl::output<ZeroCopyOutput, S128>(ZeroCopyOutput& os, S128 x) {
     x.fmt(os);
 }
 
 template <>
-void output<ZeroCopyOutput, FormattedU128Hex>(ZeroCopyOutput& os, FormattedU128Hex value) {
+void stl::output<ZeroCopyOutput, FormattedU128Hex>(ZeroCopyOutput& os, FormattedU128Hex value) {
     value.value.fmtHex(os, value.width, value.uppercase);
 }
 
 template <>
-void output<ZeroCopyOutput, std::vector<U128>>(ZeroCopyOutput& out, const std::vector<U128>& values) {
+void stl::output<ZeroCopyOutput, std::vector<U128>>(ZeroCopyOutput& out, const std::vector<U128>& values) {
     outCont(out, values);
-}
-
 }

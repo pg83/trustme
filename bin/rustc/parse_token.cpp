@@ -1,7 +1,7 @@
 #include "parse_token.h"
-#include "output.h"
 
 #include "common.h"
+#include "output.h"
 #include "ast_ast.h"
 #include "ast_expr.h"
 #include "ast_types.h"
@@ -891,10 +891,6 @@ std::string Token::toStr() const {
     compileErrorBugCheck("Reached end of Token::to_str");
 }
 
-
-
-
-
 Position::Position()
     : filename("")
     , line(0)
@@ -1038,19 +1034,18 @@ EscapedByteString::EscapedByteString(StringView s)
 {
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, EscapedString>(ZeroCopyOutput& os, EscapedString value) {
+void stl::output<ZeroCopyOutput, EscapedString>(ZeroCopyOutput& os, EscapedString value) {
     operator<<(os, value);
 }
 
 template <>
-void output<ZeroCopyOutput, EscapedByteString>(ZeroCopyOutput& os, EscapedByteString value) {
+void stl::output<ZeroCopyOutput, EscapedByteString>(ZeroCopyOutput& os, EscapedByteString value) {
     operator<<(os, value);
 }
 
 template <>
-void output<ZeroCopyOutput, Token>(ZeroCopyOutput& os, const Token& tok) {
+void stl::output<ZeroCopyOutput, Token>(ZeroCopyOutput& os, const Token& tok) {
     const auto& data = tok.rawData();
     os << Token::typestr(tok.type());
     switch (tok.type()) {
@@ -1117,24 +1112,22 @@ void output<ZeroCopyOutput, Token>(ZeroCopyOutput& os, const Token& tok) {
 }
 
 template <>
-void output<ZeroCopyOutput, Position>(ZeroCopyOutput& os, const Position& p) {
+void stl::output<ZeroCopyOutput, Position>(ZeroCopyOutput& os, const Position& p) {
     os << p.filename << StringView(":") << p.line;
     return;
 }
 
 template <>
-void output<ZeroCopyOutput, eTokenType>(ZeroCopyOutput& out, eTokenType value) {
+void stl::output<ZeroCopyOutput, eTokenType>(ZeroCopyOutput& out, eTokenType value) {
     out << static_cast<unsigned>(value);
 }
 
 template <>
-void output<ZeroCopyOutput, std::pair<size_t, eTokenType>>(ZeroCopyOutput& out, const std::pair<size_t, eTokenType>& value) {
+void stl::output<ZeroCopyOutput, std::pair<size_t, eTokenType>>(ZeroCopyOutput& out, const std::pair<size_t, eTokenType>& value) {
     out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
 }
 
 template <>
-void output<ZeroCopyOutput, std::vector<std::pair<size_t, eTokenType>>>(ZeroCopyOutput& out, const std::vector<std::pair<size_t, eTokenType>>& values) {
+void stl::output<ZeroCopyOutput, std::vector<std::pair<size_t, eTokenType>>>(ZeroCopyOutput& out, const std::vector<std::pair<size_t, eTokenType>>& values) {
     outCont(out, values);
-}
-
 }

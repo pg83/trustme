@@ -67,10 +67,8 @@ void HIRGenericRef::fmt(ZeroCopyOutput& os) const {
     os << StringView("*/");
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, HIRGenericRef>(ZeroCopyOutput& os, HIRGenericRef x) {
-        x.fmt(os);
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, HIRGenericRef>(ZeroCopyOutput& os, HIRGenericRef x) {
+    x.fmt(os);
+    return;
 }

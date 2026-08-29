@@ -1982,10 +1982,8 @@ auto ValueLifetime::dumpDebug(const char* suffix, unsigned i, const std::vector<
           }));
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, MIRTypeResolve>(ZeroCopyOutput& os, const MIRTypeResolve& x) {
-        x.fmtPos(os);
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, MIRTypeResolve>(ZeroCopyOutput& os, const MIRTypeResolve& x) {
+    x.fmtPos(os);
+    return;
 }

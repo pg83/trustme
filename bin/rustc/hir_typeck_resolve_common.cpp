@@ -1,6 +1,6 @@
 #include "hir_typeck_resolve_common.h"
-#include "output.h"
 
+#include "output.h"
 #include "wire_board.h"
 #include "hir_typeck_monomorph.h"
 
@@ -145,8 +145,6 @@ const HIRTypeData* TraitResolveCommon::getConstParamType(const Span& sp, unsigne
     return p->values.at(slot).type;
 }
 
-
-
 Ordering TraitResolveCommon::CachedBoundCmp::ord(const keyT& a, const refT& b) const {
     ORD(a.first, b.first);
     ORD(a.second, b.second);
@@ -190,20 +188,18 @@ bool TraitResolveCommon::iterateBoundsCb(HIRGenericBoundCallback& cb) const {
     return false;
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, TraitResolveCommon::CachedEquality>(ZeroCopyOutput& s, TraitResolveCommon::CachedEquality x) {
+void stl::output<ZeroCopyOutput, TraitResolveCommon::CachedEquality>(ZeroCopyOutput& s, TraitResolveCommon::CachedEquality x) {
     s << x.ty;
     return;
 }
 
 template <>
-void output<ZeroCopyOutput, std::pair<const HIRTypeData* const, TraitResolveCommon::CachedEquality>>(ZeroCopyOutput& out, std::pair<const HIRTypeData* const, TraitResolveCommon::CachedEquality> value) {
+void stl::output<ZeroCopyOutput, std::pair<const HIRTypeData* const, TraitResolveCommon::CachedEquality>>(ZeroCopyOutput& out, std::pair<const HIRTypeData* const, TraitResolveCommon::CachedEquality> value) {
     out << value.first << StringView(": ") << value.second;
 }
 
 template <>
-void output<ZeroCopyOutput, std::map<const HIRTypeData*, TraitResolveCommon::CachedEquality, HIRTypeUidOrder>>(ZeroCopyOutput& out, const std::map<const HIRTypeData*, TraitResolveCommon::CachedEquality, HIRTypeUidOrder>& values) {
+void stl::output<ZeroCopyOutput, std::map<const HIRTypeData*, TraitResolveCommon::CachedEquality, HIRTypeUidOrder>>(ZeroCopyOutput& out, const std::map<const HIRTypeData*, TraitResolveCommon::CachedEquality, HIRTypeUidOrder>& values) {
     outCont(out, values);
-}
 }

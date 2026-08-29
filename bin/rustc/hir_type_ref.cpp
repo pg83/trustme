@@ -27,19 +27,17 @@ void stl::output<ZeroCopyOutput, HIRInferClass>(ZeroCopyOutput& out, HIRInferCla
     }
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, HIRCompare>(ZeroCopyOutput& os, HIRCompare x) {
-        switch (x) {
-            case HIRCompare::Equal:
-                os << StringView("Equal");
-                break;
-            case HIRCompare::Fuzzy:
-                os << StringView("Fuzzy");
-                break;
-            case HIRCompare::Unequal:
-                os << StringView("Unequal");
-                break;
-        }
+template <>
+void stl::output<ZeroCopyOutput, HIRCompare>(ZeroCopyOutput& os, HIRCompare x) {
+    switch (x) {
+        case HIRCompare::Equal:
+            os << StringView("Equal");
+            break;
+        case HIRCompare::Fuzzy:
+            os << StringView("Fuzzy");
+            break;
+        case HIRCompare::Unequal:
+            os << StringView("Unequal");
+            break;
     }
 }

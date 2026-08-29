@@ -12157,112 +12157,110 @@ NextTraitGoalEvaluator::CanonicalGoal::CanonicalGoal(HIRPathParams params, HIRTy
 {
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, SolverImpl>(ZeroCopyOutput& os, const SolverImpl& impl) {
-        if (impl.traitImpl) {
-            os << StringView("impl(") << static_cast<const void*>(impl.traitImpl) << StringView(") ") << impl.traitPath << impl.traitImpl->traitArgs << StringView(" for ") << impl.traitImpl->type << StringView(" ") << impl.implParams;
-            return;
-        }
-        os << StringView("bound ") << impl.type << StringView(" : ?") << impl.traitArgs << StringView(" + {") << impl.associated << StringView("}");
-    }
-
-    template <>
-    void output<ZeroCopyOutput, TraitResolution::MethodCandidate>(ZeroCopyOutput& os, const TraitResolution::MethodCandidate& candidate) {
-        os << StringView("{") << candidate.borrow << StringView(", ") << candidate.path;
-        if (candidate.inherentImpl) {
-            os << StringView(", inherent");
-        }
-        os << StringView("}");
-    }
-
-    template <>
-    void output<ZeroCopyOutput, ThinVector<TraitResolution::MethodCandidate>>(ZeroCopyOutput& out, const ThinVector<TraitResolution::MethodCandidate>& values) {
-        outCont(out, values);
-    }
-
-    template <>
-    void output<ZeroCopyOutput, TraitResolution::AutoderefBorrow>(ZeroCopyOutput& os, TraitResolution::AutoderefBorrow x) {
-        switch (x) {
-            case TraitResolution::AutoderefBorrow::None:
-                os << StringView("None");
-                break;
-            case TraitResolution::AutoderefBorrow::Shared:
-                os << StringView("Shared");
-                break;
-            case TraitResolution::AutoderefBorrow::Unique:
-                os << StringView("Unique");
-                break;
-            case TraitResolution::AutoderefBorrow::RawShared:
-                os << StringView("RawShared");
-                break;
-            case TraitResolution::AutoderefBorrow::PinShared:
-                os << StringView("PinShared");
-                break;
-            case TraitResolution::AutoderefBorrow::Owned:
-                os << StringView("Owned");
-                break;
-        }
+template <>
+void stl::output<ZeroCopyOutput, SolverImpl>(ZeroCopyOutput& os, const SolverImpl& impl) {
+    if (impl.traitImpl) {
+        os << StringView("impl(") << static_cast<const void*>(impl.traitImpl) << StringView(") ") << impl.traitPath << impl.traitImpl->traitArgs << StringView(" for ") << impl.traitImpl->type << StringView(" ") << impl.implParams;
         return;
     }
+    os << StringView("bound ") << impl.type << StringView(" : ?") << impl.traitArgs << StringView(" + {") << impl.associated << StringView("}");
+}
 
-    template <>
-    void output<ZeroCopyOutput, TraitResolution::AllowedReceivers>(ZeroCopyOutput& os, TraitResolution::AllowedReceivers x) {
-        switch (x) {
-            case TraitResolution::AllowedReceivers::All:
-                os << StringView("All");
-                break;
-            case TraitResolution::AllowedReceivers::AnyBorrow:
-                os << StringView("AnyBorrow");
-                break;
-            case TraitResolution::AllowedReceivers::SharedBorrow:
-                os << StringView("SharedBorrow");
-                break;
-            case TraitResolution::AllowedReceivers::Value:
-                os << StringView("Value");
-                break;
-            case TraitResolution::AllowedReceivers::Box:
-                os << StringView("Box");
-                break;
-        }
-        return;
+template <>
+void stl::output<ZeroCopyOutput, TraitResolution::MethodCandidate>(ZeroCopyOutput& os, const TraitResolution::MethodCandidate& candidate) {
+    os << StringView("{") << candidate.borrow << StringView(", ") << candidate.path;
+    if (candidate.inherentImpl) {
+        os << StringView(", inherent");
     }
+    os << StringView("}");
+}
 
-    template <>
-    void output<ZeroCopyOutput, TraitResolution::MethodAccess>(ZeroCopyOutput& os, TraitResolution::MethodAccess x) {
-        switch (x) {
-            case TraitResolution::MethodAccess::Shared:
-                os << StringView("Shared");
-                break;
-            case TraitResolution::MethodAccess::Unique:
-                os << StringView("Unique");
-                break;
-            case TraitResolution::MethodAccess::Move:
-                os << StringView("Move");
-                break;
-        }
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, ThinVector<TraitResolution::MethodCandidate>>(ZeroCopyOutput& out, const ThinVector<TraitResolution::MethodCandidate>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, HMTypeInferrence::FmtType>(ZeroCopyOutput& os, HMTypeInferrence::FmtType x) {
-        x.ctxt.printType(os, x.ty);
-        return;
+template <>
+void stl::output<ZeroCopyOutput, TraitResolution::AutoderefBorrow>(ZeroCopyOutput& os, TraitResolution::AutoderefBorrow x) {
+    switch (x) {
+        case TraitResolution::AutoderefBorrow::None:
+            os << StringView("None");
+            break;
+        case TraitResolution::AutoderefBorrow::Shared:
+            os << StringView("Shared");
+            break;
+        case TraitResolution::AutoderefBorrow::Unique:
+            os << StringView("Unique");
+            break;
+        case TraitResolution::AutoderefBorrow::RawShared:
+            os << StringView("RawShared");
+            break;
+        case TraitResolution::AutoderefBorrow::PinShared:
+            os << StringView("PinShared");
+            break;
+        case TraitResolution::AutoderefBorrow::Owned:
+            os << StringView("Owned");
+            break;
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, HMTypeInferrence::FmtPP>(ZeroCopyOutput& os, HMTypeInferrence::FmtPP x) {
-        x.ctxt.printPathparams(os, x.pps);
-        return;
+template <>
+void stl::output<ZeroCopyOutput, TraitResolution::AllowedReceivers>(ZeroCopyOutput& os, TraitResolution::AllowedReceivers x) {
+    switch (x) {
+        case TraitResolution::AllowedReceivers::All:
+            os << StringView("All");
+            break;
+        case TraitResolution::AllowedReceivers::AnyBorrow:
+            os << StringView("AnyBorrow");
+            break;
+        case TraitResolution::AllowedReceivers::SharedBorrow:
+            os << StringView("SharedBorrow");
+            break;
+        case TraitResolution::AllowedReceivers::Value:
+            os << StringView("Value");
+            break;
+        case TraitResolution::AllowedReceivers::Box:
+            os << StringView("Box");
+            break;
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::pair<TraitResolution::AutoderefBorrow, HIRPath>>(ZeroCopyOutput& out, const std::pair<TraitResolution::AutoderefBorrow, HIRPath>& value) {
-        out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
+template <>
+void stl::output<ZeroCopyOutput, TraitResolution::MethodAccess>(ZeroCopyOutput& os, TraitResolution::MethodAccess x) {
+    switch (x) {
+        case TraitResolution::MethodAccess::Shared:
+            os << StringView("Shared");
+            break;
+        case TraitResolution::MethodAccess::Unique:
+            os << StringView("Unique");
+            break;
+        case TraitResolution::MethodAccess::Move:
+            os << StringView("Move");
+            break;
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<std::pair<TraitResolution::AutoderefBorrow, HIRPath>>>(ZeroCopyOutput& out, const std::vector<std::pair<TraitResolution::AutoderefBorrow, HIRPath>>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, HMTypeInferrence::FmtType>(ZeroCopyOutput& os, HMTypeInferrence::FmtType x) {
+    x.ctxt.printType(os, x.ty);
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, HMTypeInferrence::FmtPP>(ZeroCopyOutput& os, HMTypeInferrence::FmtPP x) {
+    x.ctxt.printPathparams(os, x.pps);
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::pair<TraitResolution::AutoderefBorrow, HIRPath>>(ZeroCopyOutput& out, const std::pair<TraitResolution::AutoderefBorrow, HIRPath>& value) {
+    out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::vector<std::pair<TraitResolution::AutoderefBorrow, HIRPath>>>(ZeroCopyOutput& out, const std::vector<std::pair<TraitResolution::AutoderefBorrow, HIRPath>>& values) {
+    outCont(out, values);
 }

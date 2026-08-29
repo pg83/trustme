@@ -150,52 +150,50 @@ Ordering HIRGenericParams::ord(const HIRGenericParams& x) const {
     return OrdEqual;
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, HIRGenericParams::PrintArgs>(ZeroCopyOutput& os, HIRGenericParams::PrintArgs x) {
-        if (x.gp.types.size() > 0 || x.gp.values.size() > 0) {
-            os << StringView("<");
-            size_t typeIndex = 0;
-            size_t valueIndex = 0;
-            for (size_t i = 0; i < x.gp.paramCount(); i++) {
-                if (x.gp.paramKindAt(i) == HIRGenericParamKind::Type) {
-                    const auto& typ = x.gp.types[typeIndex++];
-                    os << typ.name;
-                    if (!typ.isSized) {
-                        os << StringView(": ?Sized");
-                    }
-                    if (typ.defaultValue && !typ.defaultValue->is_Infer()) {
-                        os << StringView(" = ") << typ.defaultValue;
-                    }
-                } else {
-                    const auto& valP = x.gp.values[valueIndex++];
-                    os << StringView("const ") << valP.name << StringView(": ") << valP.type;
+template <>
+void stl::output<ZeroCopyOutput, HIRGenericParams::PrintArgs>(ZeroCopyOutput& os, HIRGenericParams::PrintArgs x) {
+    if (x.gp.types.size() > 0 || x.gp.values.size() > 0) {
+        os << StringView("<");
+        size_t typeIndex = 0;
+        size_t valueIndex = 0;
+        for (size_t i = 0; i < x.gp.paramCount(); i++) {
+            if (x.gp.paramKindAt(i) == HIRGenericParamKind::Type) {
+                const auto& typ = x.gp.types[typeIndex++];
+                os << typ.name;
+                if (!typ.isSized) {
+                    os << StringView(": ?Sized");
                 }
-                os << StringView(",");
-            }
-            os << StringView(">");
-        }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, HIRGenericParams::PrintBounds>(ZeroCopyOutput& os, HIRGenericParams::PrintBounds x) {
-        if (x.gp.bounds.size() > 0) {
-            os << StringView(" where ");
-            bool commaNeeded = false;
-            for (const auto& b : x.gp.bounds) {
-                if (commaNeeded) {
-                    os << StringView(", ");
+                if (typ.defaultValue && !typ.defaultValue->is_Infer()) {
+                    os << StringView(" = ") << typ.defaultValue;
                 }
-                os << b;
-                commaNeeded = true;
+            } else {
+                const auto& valP = x.gp.values[valueIndex++];
+                os << StringView("const ") << valP.name << StringView(": ") << valP.type;
             }
+            os << StringView(",");
         }
-        return;
+        os << StringView(">");
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<HIRGenericBound>>(ZeroCopyOutput& out, const std::vector<HIRGenericBound>& values) {
-        outCont(out, values);
+template <>
+void stl::output<ZeroCopyOutput, HIRGenericParams::PrintBounds>(ZeroCopyOutput& os, HIRGenericParams::PrintBounds x) {
+    if (x.gp.bounds.size() > 0) {
+        os << StringView(" where ");
+        bool commaNeeded = false;
+        for (const auto& b : x.gp.bounds) {
+            if (commaNeeded) {
+                os << StringView(", ");
+            }
+            os << b;
+            commaNeeded = true;
+        }
     }
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::vector<HIRGenericBound>>(ZeroCopyOutput& out, const std::vector<HIRGenericBound>& values) {
+    outCont(out, values);
 }

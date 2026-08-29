@@ -3302,28 +3302,26 @@ auto TransmuteRelation::check() -> bool {
     return check(0, 0);
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, Ent>(ZeroCopyOutput& os, const Ent& e) {
-        os << StringView("Ent { #") << e.field << StringView(": s=") << e.size << StringView(" a=") << e.align << (e.userAlign ? "!" : "") << StringView(" : ") << e.ty << StringView(" }");
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, Ent>(ZeroCopyOutput& os, const Ent& e) {
+    os << StringView("Ent { #") << e.field << StringView(": s=") << e.size << StringView(" a=") << e.align << (e.userAlign ? "!" : "") << StringView(" : ") << e.ty << StringView(" }");
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<Ent>>(ZeroCopyOutput& out, const std::vector<Ent>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<Ent>>(ZeroCopyOutput& out, const std::vector<Ent>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, TypeRepr::FieldPath>(ZeroCopyOutput& os, const TypeRepr::FieldPath& x) {
-        os << x.size << StringView("@") << x.index;
-        for (auto idx : x.subFields) {
-            if (idx == TypeRepr::FieldPath::ARRAY_ELEMENT) {
-                os << StringView("[0]");
-            } else {
-                os << StringView(".") << idx;
-            }
+template <>
+void stl::output<ZeroCopyOutput, TypeRepr::FieldPath>(ZeroCopyOutput& os, const TypeRepr::FieldPath& x) {
+    os << x.size << StringView("@") << x.index;
+    for (auto idx : x.subFields) {
+        if (idx == TypeRepr::FieldPath::ARRAY_ELEMENT) {
+            os << StringView("[0]");
+        } else {
+            os << StringView(".") << idx;
         }
-        return;
     }
+    return;
 }

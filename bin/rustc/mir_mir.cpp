@@ -1889,104 +1889,102 @@ void stl::output<ZeroCopyOutput, std::vector<MIRAsmParam>>(ZeroCopyOutput& out, 
     outCont(out, values);
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, MIRLValue>(ZeroCopyOutput& os, const MIRLValue& x) {
-        MIRLValue::CRef(x).fmt(os);
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, MIRLValue>(ZeroCopyOutput& os, const MIRLValue& x) {
+    MIRLValue::CRef(x).fmt(os);
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, MIRLValue::Storage>(ZeroCopyOutput& os, const MIRLValue::Storage& r) {
-        switch (r.tag()) {
-            case MIRLValue::Storage::TAG_Return: {
-                os << StringView("retval");
-                break;
-            }
-            case MIRLValue::Storage::TAG_Argument: {
-                decltype(r.as_Argument()) e = r.as_Argument();
-                os << StringView("a") << e;
-                break;
-            }
-            case MIRLValue::Storage::TAG_Local: {
-                decltype(r.as_Local()) e = r.as_Local();
-                os << StringView("_") << e;
-                break;
-            }
-            case MIRLValue::Storage::TAG_Static: {
-                decltype(r.as_Static()) e = r.as_Static();
-                os << StringView("(") << e << StringView(")");
-                break;
-            }
+template <>
+void stl::output<ZeroCopyOutput, MIRLValue::Storage>(ZeroCopyOutput& os, const MIRLValue::Storage& r) {
+    switch (r.tag()) {
+        case MIRLValue::Storage::TAG_Return: {
+            os << StringView("retval");
+            break;
         }
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, MIRLValue::Wrapper>(ZeroCopyOutput& os, MIRLValue::Wrapper w) {
-        switch (w.tag()) {
-            case MIRLValue::Wrapper::TAG_Field: {
-                decltype(w.as_Field()) e = w.as_Field();
-                os << StringView(".") << e;
-                break;
-            }
-            case MIRLValue::Wrapper::TAG_Deref: {
-                os << StringView("*");
-                break;
-            }
-            case MIRLValue::Wrapper::TAG_Index: {
-                decltype(w.as_Index()) e = w.as_Index();
-                os << StringView("[_") << e << StringView("]");
-                break;
-            }
-            case MIRLValue::Wrapper::TAG_Downcast: {
-                decltype(w.as_Downcast()) e = w.as_Downcast();
-                os << StringView("#") << e;
-                break;
-            }
+        case MIRLValue::Storage::TAG_Argument: {
+            decltype(r.as_Argument()) e = r.as_Argument();
+            os << StringView("a") << e;
+            break;
         }
-        return;
+        case MIRLValue::Storage::TAG_Local: {
+            decltype(r.as_Local()) e = r.as_Local();
+            os << StringView("_") << e;
+            break;
+        }
+        case MIRLValue::Storage::TAG_Static: {
+            decltype(r.as_Static()) e = r.as_Static();
+            os << StringView("(") << e << StringView(")");
+            break;
+        }
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, MIRLValue::CRef>(ZeroCopyOutput& os, MIRLValue::CRef x) {
-        x.fmt(os);
-        return;
+template <>
+void stl::output<ZeroCopyOutput, MIRLValue::Wrapper>(ZeroCopyOutput& os, MIRLValue::Wrapper w) {
+    switch (w.tag()) {
+        case MIRLValue::Wrapper::TAG_Field: {
+            decltype(w.as_Field()) e = w.as_Field();
+            os << StringView(".") << e;
+            break;
+        }
+        case MIRLValue::Wrapper::TAG_Deref: {
+            os << StringView("*");
+            break;
+        }
+        case MIRLValue::Wrapper::TAG_Index: {
+            decltype(w.as_Index()) e = w.as_Index();
+            os << StringView("[_") << e << StringView("]");
+            break;
+        }
+        case MIRLValue::Wrapper::TAG_Downcast: {
+            decltype(w.as_Downcast()) e = w.as_Downcast();
+            os << StringView("#") << e;
+            break;
+        }
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, MIRLValue::MRef>(ZeroCopyOutput& os, MIRLValue::MRef x) {
-        x.fmt(os);
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, MIRLValue::CRef>(ZeroCopyOutput& os, MIRLValue::CRef x) {
+    x.fmt(os);
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::pair<std::string, MIRLValue>>(ZeroCopyOutput& out, const std::pair<std::string, MIRLValue>& value) {
-        out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
-    }
+template <>
+void stl::output<ZeroCopyOutput, MIRLValue::MRef>(ZeroCopyOutput& os, MIRLValue::MRef x) {
+    x.fmt(os);
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<std::pair<std::string, MIRLValue>>>(ZeroCopyOutput& out, const std::vector<std::pair<std::string, MIRLValue>>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::pair<std::string, MIRLValue>>(ZeroCopyOutput& out, const std::pair<std::string, MIRLValue>& value) {
+    out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<MIRParam>>(ZeroCopyOutput& out, const std::vector<MIRParam>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<std::pair<std::string, MIRLValue>>>(ZeroCopyOutput& out, const std::vector<std::pair<std::string, MIRLValue>>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<MIRLValue::Wrapper>>(ZeroCopyOutput& out, const std::vector<MIRLValue::Wrapper>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<MIRParam>>(ZeroCopyOutput& out, const std::vector<MIRParam>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::pair<MIRLValue, MIRRValue>>(ZeroCopyOutput& out, const std::pair<MIRLValue, MIRRValue>& value) {
-        out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<MIRLValue::Wrapper>>(ZeroCopyOutput& out, const std::vector<MIRLValue::Wrapper>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<std::pair<MIRLValue, MIRRValue>>>(ZeroCopyOutput& out, const std::vector<std::pair<MIRLValue, MIRRValue>>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::pair<MIRLValue, MIRRValue>>(ZeroCopyOutput& out, const std::pair<MIRLValue, MIRRValue>& value) {
+    out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::vector<std::pair<MIRLValue, MIRRValue>>>(ZeroCopyOutput& out, const std::vector<std::pair<MIRLValue, MIRRValue>>& values) {
+    outCont(out, values);
 }

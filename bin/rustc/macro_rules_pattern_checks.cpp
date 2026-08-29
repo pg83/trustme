@@ -347,14 +347,12 @@ void MacroRulesCheckFollowSets(const MacroPatEnt* ents, size_t count) {
     checkRun(ents, count, none);
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, Described>(ZeroCopyOutput& os, Described x) {
-        if (isFragment(x.e)) {
-            os << StringView("`$") << x.e.name << StringView(":") << fragmentName(x.e.type) << StringView("`");
-            return;
-        }
-        os << StringView("`") << x.e.tok << StringView("`");
+template <>
+void stl::output<ZeroCopyOutput, Described>(ZeroCopyOutput& os, Described x) {
+    if (isFragment(x.e)) {
+        os << StringView("`$") << x.e.name << StringView(":") << fragmentName(x.e.type) << StringView("`");
         return;
     }
+    os << StringView("`") << x.e.tok << StringView("`");
+    return;
 }

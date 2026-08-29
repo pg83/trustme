@@ -3419,11 +3419,9 @@ namespace {
     }
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, eParsePathGenericMode>(ZeroCopyOutput& out, eParsePathGenericMode value) {
+void stl::output<ZeroCopyOutput, eParsePathGenericMode>(ZeroCopyOutput& out, eParsePathGenericMode value) {
     out << static_cast<unsigned>(value);
-}
 }
 
 ASTExprNodeP ParseExpr0(TokenStream& lex);

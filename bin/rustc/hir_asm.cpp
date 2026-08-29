@@ -169,31 +169,29 @@ void stl::output<ZeroCopyOutput, std::vector<AsmLine>>(ZeroCopyOutput& out, cons
     outCont(out, values);
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, AsmLine>(ZeroCopyOutput& os, const AsmLine& line) {
-        line.fmt(os);
-    }
+template <>
+void stl::output<ZeroCopyOutput, AsmLine>(ZeroCopyOutput& os, const AsmLine& line) {
+    line.fmt(os);
+}
 
-    template <>
-    void output<ZeroCopyOutput, AsmDirection>(ZeroCopyOutput& os, AsmDirection d) {
-        switch (d) {
-            case AsmDirection::In:
-                os << StringView("in");
-                return;
-            case AsmDirection::Out:
-                os << StringView("out");
-                return;
-            case AsmDirection::LateOut:
-                os << StringView("lateout");
-                return;
-            case AsmDirection::InOut:
-                os << StringView("inout");
-                return;
-            case AsmDirection::InLateOut:
-                os << StringView("inlateout");
-                return;
-        }
-        return;
+template <>
+void stl::output<ZeroCopyOutput, AsmDirection>(ZeroCopyOutput& os, AsmDirection d) {
+    switch (d) {
+        case AsmDirection::In:
+            os << StringView("in");
+            return;
+        case AsmDirection::Out:
+            os << StringView("out");
+            return;
+        case AsmDirection::LateOut:
+            os << StringView("lateout");
+            return;
+        case AsmDirection::InOut:
+            os << StringView("inout");
+            return;
+        case AsmDirection::InLateOut:
+            os << StringView("inlateout");
+            return;
     }
+    return;
 }

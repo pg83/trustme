@@ -12799,96 +12799,94 @@ auto RpitOriginMonomorph::getValue(const Span&, const HIRGenericRef& generic) co
     return it == valueBindings.end() ? HIRConstGeneric::make_Generic(generic) : it->second.clone();
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, PossibleType>(ZeroCopyOutput& out, PossibleType value) {
-        value.fmt(out);
-    }
+template <>
+void stl::output<ZeroCopyOutput, PossibleType>(ZeroCopyOutput& out, PossibleType value) {
+    value.fmt(out);
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<PossibleType>>(ZeroCopyOutput& out, const std::vector<PossibleType>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<PossibleType>>(ZeroCopyOutput& out, const std::vector<PossibleType>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, CoerceResult>(ZeroCopyOutput& out, CoerceResult value) {
-        out << static_cast<int>(value);
-    }
+template <>
+void stl::output<ZeroCopyOutput, CoerceResult>(ZeroCopyOutput& out, CoerceResult value) {
+    out << static_cast<int>(value);
+}
 
-    template <>
-    void output<ZeroCopyOutput, IvarPossFallbackType>(ZeroCopyOutput& os, IvarPossFallbackType t) {
-        switch (t) {
-            case IvarPossFallbackType::None:
-                os << StringView("");
-                break;
-            case IvarPossFallbackType::Backwards:
-                os << StringView(" backwards");
-                break;
-            case IvarPossFallbackType::Assume:
-                os << StringView(" weak");
-                break;
-            case IvarPossFallbackType::IgnoreWeakDisable:
-                os << StringView(" unblock");
-                break;
-            case IvarPossFallbackType::FinalOption:
-                os << StringView(" final");
-                break;
-        }
-        return;
+template <>
+void stl::output<ZeroCopyOutput, IvarPossFallbackType>(ZeroCopyOutput& os, IvarPossFallbackType t) {
+    switch (t) {
+        case IvarPossFallbackType::None:
+            os << StringView("");
+            break;
+        case IvarPossFallbackType::Backwards:
+            os << StringView(" backwards");
+            break;
+        case IvarPossFallbackType::Assume:
+            os << StringView(" weak");
+            break;
+        case IvarPossFallbackType::IgnoreWeakDisable:
+            os << StringView(" unblock");
+            break;
+        case IvarPossFallbackType::FinalOption:
+            os << StringView(" final");
+            break;
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, Context::PossibleTypeSource>(ZeroCopyOutput& os, Context::PossibleTypeSource x) {
-        switch (x) {
-            case Context::PossibleTypeSource::UnsizeTo:
-                os << StringView("UnsizeTo");
-                break;
-            case Context::PossibleTypeSource::CoerceTo:
-                os << StringView("CoerceTo");
-                break;
-            case Context::PossibleTypeSource::UnsizeFrom:
-                os << StringView("UnsizeFrom");
-                break;
-            case Context::PossibleTypeSource::CoerceFrom:
-                os << StringView("CoerceFrom");
-                break;
-        }
-        return;
+template <>
+void stl::output<ZeroCopyOutput, Context::PossibleTypeSource>(ZeroCopyOutput& os, Context::PossibleTypeSource x) {
+    switch (x) {
+        case Context::PossibleTypeSource::UnsizeTo:
+            os << StringView("UnsizeTo");
+            break;
+        case Context::PossibleTypeSource::CoerceTo:
+            os << StringView("CoerceTo");
+            break;
+        case Context::PossibleTypeSource::UnsizeFrom:
+            os << StringView("UnsizeFrom");
+            break;
+        case Context::PossibleTypeSource::CoerceFrom:
+            os << StringView("CoerceFrom");
+            break;
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, Context::IvarUnknownType>(ZeroCopyOutput& os, Context::IvarUnknownType x) {
-        switch (x) {
-            case Context::IvarUnknownType::To:
-                os << StringView("To");
-                break;
-            case Context::IvarUnknownType::From:
-                os << StringView("From");
-                break;
-            case Context::IvarUnknownType::Bound:
-                os << StringView("Bound");
-                break;
-        }
-        return;
+template <>
+void stl::output<ZeroCopyOutput, Context::IvarUnknownType>(ZeroCopyOutput& os, Context::IvarUnknownType x) {
+    switch (x) {
+        case Context::IvarUnknownType::To:
+            os << StringView("To");
+            break;
+        case Context::IvarUnknownType::From:
+            os << StringView("From");
+            break;
+        case Context::IvarUnknownType::Bound:
+            os << StringView("Bound");
+            break;
     }
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, Context::Coercion>(ZeroCopyOutput& os, Context::Coercion v) {
-        os << StringView("R") << v.ruleIdx << StringView(" ") << v.leftTy << StringView(" := ") << static_cast<const void*>(v.rightNodePtr) << StringView(" ") << static_cast<const void*>(&**v.rightNodePtr) << StringView(" (") << (*v.rightNodePtr)->resType << StringView(")");
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, Context::Coercion>(ZeroCopyOutput& os, Context::Coercion v) {
+    os << StringView("R") << v.ruleIdx << StringView(" ") << v.leftTy << StringView(" := ") << static_cast<const void*>(v.rightNodePtr) << StringView(" ") << static_cast<const void*>(&**v.rightNodePtr) << StringView(" (") << (*v.rightNodePtr)->resType << StringView(")");
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, Context::Associated>(ZeroCopyOutput& os, const Context::Associated& v) {
-        os << StringView("R") << v.ruleIdx << StringView(" ");
-        if (v.name == "") {
-            os << StringView("req ty ") << v.implTy << StringView(" impl ") << v.trait << v.params;
-        } else {
-            os << v.leftTy << StringView(" = ") << StringView("< `") << v.implTy << StringView("` as `") << v.trait << v.params << StringView("` >::") << v.name << v.atyPp;
-        }
-        if (v.isOperator) {
-            os << StringView(" - op");
-        }
-        return;
+template <>
+void stl::output<ZeroCopyOutput, Context::Associated>(ZeroCopyOutput& os, const Context::Associated& v) {
+    os << StringView("R") << v.ruleIdx << StringView(" ");
+    if (v.name == "") {
+        os << StringView("req ty ") << v.implTy << StringView(" impl ") << v.trait << v.params;
+    } else {
+        os << v.leftTy << StringView(" = ") << StringView("< `") << v.implTy << StringView("` as `") << v.trait << v.params << StringView("` >::") << v.name << v.atyPp;
     }
+    if (v.isOperator) {
+        os << StringView(" - op");
+    }
+    return;
 }

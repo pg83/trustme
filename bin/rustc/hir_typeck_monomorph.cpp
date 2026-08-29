@@ -143,19 +143,17 @@ const HIRPathParams* MonomorphState::getHrbParams() const {
     return nullptr;
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, MonomorphState>(ZeroCopyOutput& os, const MonomorphState& ms) {
-        os << StringView("MonomorphState {");
-        if (ms.selfTy != HIRTypeRef()) {
-            os << StringView(" self=") << ms.selfTy;
-        }
-        if (ms.ppImpl) {
-            os << StringView(" I=") << *ms.ppImpl;
-        }
-        if (ms.ppMethod) {
-            os << StringView(" M=") << *ms.ppMethod;
-        }
-        os << StringView(" }");
+template <>
+void stl::output<ZeroCopyOutput, MonomorphState>(ZeroCopyOutput& os, const MonomorphState& ms) {
+    os << StringView("MonomorphState {");
+    if (ms.selfTy != HIRTypeRef()) {
+        os << StringView(" self=") << ms.selfTy;
     }
+    if (ms.ppImpl) {
+        os << StringView(" I=") << *ms.ppImpl;
+    }
+    if (ms.ppMethod) {
+        os << StringView(" M=") << *ms.ppMethod;
+    }
+    os << StringView(" }");
 }

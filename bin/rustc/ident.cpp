@@ -1,10 +1,9 @@
 #include "ident.h"
-#include "output.h"
 
 #include "common.h"
+#include "output.h"
 
 #include <std/mem/obj_pool.h>
-
 
 using namespace stl;
 
@@ -14,9 +13,6 @@ namespace {
     unsigned int macroDefinitionId(unsigned int definition) {
         return definition & ~ITEM_OPAQUE;
     }
-}
-
-namespace stl {
 }
 
 bool Ident::Hygiene::isVisible(const Hygiene& srcH) const {
@@ -60,12 +56,6 @@ RcString Ident::Hygiene::applyToItemName(const RcString& name) const {
     }
     return RcString::newInterned(std::string(static_cast<const char*>(os.data()), os.length()));
 }
-
-
-
-
-
-
 
 Ident::Hygiene::Inner Ident::Hygiene::clone() const {
     return inner ? *inner : Inner{};
@@ -218,20 +208,19 @@ void Ident::Hygiene::fmt(ZeroCopyOutput& os) const {
     os << StringView("*/");
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, Ident>(ZeroCopyOutput& os, Ident x) {
+void stl::output<ZeroCopyOutput, Ident>(ZeroCopyOutput& os, Ident x) {
     os << x.name << x.hygiene;
     return;
 }
 
 template <>
-void output<ZeroCopyOutput, Ident::Hygiene>(ZeroCopyOutput& os, Ident::Hygiene x) {
+void stl::output<ZeroCopyOutput, Ident::Hygiene>(ZeroCopyOutput& os, Ident::Hygiene x) {
     x.fmt(os);
 }
 
 template <>
-void output<ZeroCopyOutput, Ident::ModPath>(ZeroCopyOutput& os, const Ident::ModPath& x) {
+void stl::output<ZeroCopyOutput, Ident::ModPath>(ZeroCopyOutput& os, const Ident::ModPath& x) {
     os << StringView("::\"") << x.crate << StringView("\"");
     for (const auto& e : x.ents) {
         os << StringView("::") << e;
@@ -240,7 +229,6 @@ void output<ZeroCopyOutput, Ident::ModPath>(ZeroCopyOutput& os, const Ident::Mod
 }
 
 template <>
-void output<ZeroCopyOutput, std::set<Ident>>(ZeroCopyOutput& out, const std::set<Ident>& values) {
+void stl::output<ZeroCopyOutput, std::set<Ident>>(ZeroCopyOutput& out, const std::set<Ident>& values) {
     outCont(out, values);
-}
 }

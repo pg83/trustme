@@ -695,97 +695,95 @@ void stl::output<ZeroCopyOutput, ASTPathBindingModuleHir>(ZeroCopyOutput& out, A
     out << StringView("ASTPathBindingModuleHir(crate = ") << static_cast<const void*>(value.crate) << StringView(", mod = ") << static_cast<const void*>(value.mod) << StringView(")");
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, ASTPathBinding<ASTPathBindingValue>>(ZeroCopyOutput& out, const ASTPathBinding<ASTPathBindingValue>& value) {
-        if (value.is_Unbound()) {
-            out << StringView("Unbound");
-        } else {
-            out << value.binding << StringView("[") << value.path << StringView("]");
-        }
+template <>
+void stl::output<ZeroCopyOutput, ASTPathBinding<ASTPathBindingValue>>(ZeroCopyOutput& out, const ASTPathBinding<ASTPathBindingValue>& value) {
+    if (value.is_Unbound()) {
+        out << StringView("Unbound");
+    } else {
+        out << value.binding << StringView("[") << value.path << StringView("]");
     }
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTPathBinding<ASTPathBindingType>>(ZeroCopyOutput& out, const ASTPathBinding<ASTPathBindingType>& value) {
-        if (value.is_Unbound()) {
-            out << StringView("Unbound");
-        } else {
-            out << value.binding << StringView("[") << value.path << StringView("]");
-        }
+template <>
+void stl::output<ZeroCopyOutput, ASTPathBinding<ASTPathBindingType>>(ZeroCopyOutput& out, const ASTPathBinding<ASTPathBindingType>& value) {
+    if (value.is_Unbound()) {
+        out << StringView("Unbound");
+    } else {
+        out << value.binding << StringView("[") << value.path << StringView("]");
     }
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTPathBinding<ASTPathBindingMacro>>(ZeroCopyOutput& out, const ASTPathBinding<ASTPathBindingMacro>& value) {
-        if (value.is_Unbound()) {
-            out << StringView("Unbound");
-        } else {
-            out << value.binding << StringView("[") << value.path << StringView("]");
-        }
+template <>
+void stl::output<ZeroCopyOutput, ASTPathBinding<ASTPathBindingMacro>>(ZeroCopyOutput& out, const ASTPathBinding<ASTPathBindingMacro>& value) {
+    if (value.is_Unbound()) {
+        out << StringView("Unbound");
+    } else {
+        out << value.binding << StringView("[") << value.path << StringView("]");
     }
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTPathParams>(ZeroCopyOutput& os, const ASTPathParams& x) {
-        if (x.isRtn) {
-            os << StringView("(..)");
-            return;
-        }
-        if (x.isParen) {
-            auto& t = x.entries.at(0).as_Type();
-            os << t;
-            auto& rv = x.entries.at(1).as_AssociatedTyEqual();
-            os << StringView("->");
-            os << rv.second;
-            return;
-        }
-        bool needsComma = false;
-        os << StringView(x.isParen ? "(" : "<");
-        for (const auto& e : x.entries) {
-            if (e.is_Null()) {
-                continue;
-            }
-            if (needsComma) {
-                os << StringView(", ");
-            }
-            needsComma = true;
-
-            e.fmt(os);
-        }
-        os << StringView(x.isParen ? ")" : ">");
+template <>
+void stl::output<ZeroCopyOutput, ASTPathParams>(ZeroCopyOutput& os, const ASTPathParams& x) {
+    if (x.isRtn) {
+        os << StringView("(..)");
         return;
     }
-
-    template <>
-    void output<ZeroCopyOutput, ASTPathNode>(ZeroCopyOutput& os, const ASTPathNode& pn) {
-        pn.printPretty(os, false);
+    if (x.isParen) {
+        auto& t = x.entries.at(0).as_Type();
+        os << t;
+        auto& rv = x.entries.at(1).as_AssociatedTyEqual();
+        os << StringView("->");
+        os << rv.second;
         return;
     }
-
-    template <>
-    void output<ZeroCopyOutput, ASTPath>(ZeroCopyOutput& os, const ASTPath& path) {
-        path.printPretty(os, false, true);
-        return;
-    }
-
-    template <>
-    void output<ZeroCopyOutput, ASTAbsolutePath>(ZeroCopyOutput& os, const ASTAbsolutePath& x) {
-        if (x.crate != "") {
-            os << StringView("::\"") << x.crate << StringView("\"");
-        } else {
-            os << StringView("crate");
+    bool needsComma = false;
+    os << StringView(x.isParen ? "(" : "<");
+    for (const auto& e : x.entries) {
+        if (e.is_Null()) {
+            continue;
         }
-        for (const auto& n : x.nodes) {
-            os << StringView("::") << n;
+        if (needsComma) {
+            os << StringView(", ");
         }
-        return;
-    }
+        needsComma = true;
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<ASTPathNode>>(ZeroCopyOutput& out, const std::vector<ASTPathNode>& values) {
-        outCont(out, values);
+        e.fmt(os);
     }
+    os << StringView(x.isParen ? ")" : ">");
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<ASTPath>>(ZeroCopyOutput& out, const std::vector<ASTPath>& values) {
-        outCont(out, values);
+template <>
+void stl::output<ZeroCopyOutput, ASTPathNode>(ZeroCopyOutput& os, const ASTPathNode& pn) {
+    pn.printPretty(os, false);
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, ASTPath>(ZeroCopyOutput& os, const ASTPath& path) {
+    path.printPretty(os, false, true);
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, ASTAbsolutePath>(ZeroCopyOutput& os, const ASTAbsolutePath& x) {
+    if (x.crate != "") {
+        os << StringView("::\"") << x.crate << StringView("\"");
+    } else {
+        os << StringView("crate");
     }
+    for (const auto& n : x.nodes) {
+        os << StringView("::") << n;
+    }
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::vector<ASTPathNode>>(ZeroCopyOutput& out, const std::vector<ASTPathNode>& values) {
+    outCont(out, values);
+}
+
+template <>
+void stl::output<ZeroCopyOutput, std::vector<ASTPath>>(ZeroCopyOutput& out, const std::vector<ASTPath>& values) {
+    outCont(out, values);
 }

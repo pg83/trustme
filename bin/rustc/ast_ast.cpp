@@ -573,72 +573,70 @@ ASTImplDef::ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, ASTT
 {
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, ASTStructItem>(ZeroCopyOutput& out, const ASTStructItem& item) {
-        out << item.vis << item.name << StringView(": ") << item.type;
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTStructItem>(ZeroCopyOutput& out, const ASTStructItem& item) {
+    out << item.vis << item.name << StringView(": ") << item.type;
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTTupleItem>(ZeroCopyOutput& out, const ASTTupleItem& item) {
-        out << item.vis << item.type;
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTTupleItem>(ZeroCopyOutput& out, const ASTTupleItem& item) {
+    out << item.vis << item.type;
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTImplDef>(ZeroCopyOutput& os, const ASTImplDef& impl) {
-        os << StringView("impl ") << StringView(impl.isConst() ? "const " : "") << StringView("<") << impl.params() << StringView("> ") << impl.trait().ent << StringView(" for ") << impl.type();
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTImplDef>(ZeroCopyOutput& os, const ASTImplDef& impl) {
+    os << StringView("impl ") << StringView(impl.isConst() ? "const " : "") << StringView("<") << impl.params() << StringView("> ") << impl.trait().ent << StringView(" for ") << impl.type();
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTImpl>(ZeroCopyOutput& os, const ASTImpl& impl) {
-        os << impl.def();
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTImpl>(ZeroCopyOutput& os, const ASTImpl& impl) {
+    os << impl.def();
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTUseItem::Ent>(ZeroCopyOutput& os, const ASTUseItem::Ent& x) {
-        os << x.name << StringView("=") << x.path;
-        return;
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTUseItem::Ent>(ZeroCopyOutput& os, const ASTUseItem::Ent& x) {
+    os << x.name << StringView("=") << x.path;
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTEnumVariant>(ZeroCopyOutput& os, const ASTEnumVariant& x) {
-        os << StringView("EnumVariant(") << x.name;
-        switch (x.data.tag()) {
-            case ASTEnumVariantData::TAG_Unit: {
-                break;
-            }
-            case ASTEnumVariantData::TAG_Tuple: {
-                auto& e = x.data.as_Tuple();
-                os << StringView("(") << e.items << StringView(")");
-                break;
-            }
-            case ASTEnumVariantData::TAG_Struct: {
-                auto& e = x.data.as_Struct();
-                os << StringView(" { ") << e.fields << StringView(" }");
-                break;
-            }
+template <>
+void stl::output<ZeroCopyOutput, ASTEnumVariant>(ZeroCopyOutput& os, const ASTEnumVariant& x) {
+    os << StringView("EnumVariant(") << x.name;
+    switch (x.data.tag()) {
+        case ASTEnumVariantData::TAG_Unit: {
+            break;
         }
-        if (x.discriminantValue) {
-            os << StringView(" = ") << x.discriminantValue;
+        case ASTEnumVariantData::TAG_Tuple: {
+            auto& e = x.data.as_Tuple();
+            os << StringView("(") << e.items << StringView(")");
+            break;
         }
-        os << StringView(")");
-        return;
+        case ASTEnumVariantData::TAG_Struct: {
+            auto& e = x.data.as_Struct();
+            os << StringView(" { ") << e.fields << StringView(" }");
+            break;
+        }
     }
+    if (x.discriminantValue) {
+        os << StringView(" = ") << x.discriminantValue;
+    }
+    os << StringView(")");
+    return;
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<ASTStructItem>>(ZeroCopyOutput& out, const std::vector<ASTStructItem>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<ASTStructItem>>(ZeroCopyOutput& out, const std::vector<ASTStructItem>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<ASTTupleItem>>(ZeroCopyOutput& out, const std::vector<ASTTupleItem>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<ASTTupleItem>>(ZeroCopyOutput& out, const std::vector<ASTTupleItem>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<ASTUseItem::Ent>>(ZeroCopyOutput& out, const std::vector<ASTUseItem::Ent>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<ASTUseItem::Ent>>(ZeroCopyOutput& out, const std::vector<ASTUseItem::Ent>& values) {
+    outCont(out, values);
 }

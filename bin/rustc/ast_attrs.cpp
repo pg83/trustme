@@ -113,31 +113,29 @@ void ASTAttribute::parseParenIdentListCb(ASTAttributeIdentCallback& itemCb) cons
     lex.getTokenCheck(TOK_PAREN_CLOSE);
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, ASTAttribute>(ZeroCopyOutput& os, const ASTAttribute& x) {
-        x.fmt(os);
+template <>
+void stl::output<ZeroCopyOutput, ASTAttribute>(ZeroCopyOutput& os, const ASTAttribute& x) {
+    x.fmt(os);
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, ASTAttributeList>(ZeroCopyOutput& out, const ASTAttributeList& value) {
+    for (const auto& item : value.items) {
+        out << StringView("#[") << item << StringView("]");
+    }
+}
+
+template <>
+void stl::output<ZeroCopyOutput, ASTAttributeName>(ZeroCopyOutput& out, const ASTAttributeName& value) {
+    if (value.elems.empty()) {
+        out << StringView("<empty>");
         return;
     }
-
-    template <>
-    void output<ZeroCopyOutput, ASTAttributeList>(ZeroCopyOutput& out, const ASTAttributeList& value) {
-        for (const auto& item : value.items) {
-            out << StringView("#[") << item << StringView("]");
+    for (const auto& item : value.elems) {
+        if (&item != &value.elems.front()) {
+            out << StringView("::");
         }
-    }
-
-    template <>
-    void output<ZeroCopyOutput, ASTAttributeName>(ZeroCopyOutput& out, const ASTAttributeName& value) {
-        if (value.elems.empty()) {
-            out << StringView("<empty>");
-            return;
-        }
-        for (const auto& item : value.elems) {
-            if (&item != &value.elems.front()) {
-                out << StringView("::");
-            }
-            out << item;
-        }
+        out << item;
     }
 }

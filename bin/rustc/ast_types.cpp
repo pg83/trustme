@@ -473,59 +473,57 @@ void stl::output<ZeroCopyOutput, ASTBoundConstness>(ZeroCopyOutput& out, ASTBoun
     }
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, ASTType*>(ZeroCopyOutput& out, ASTType* type) {
-        if (type) {
-            out << *type;
-        } else {
-            out << StringView("(null-type)");
-        }
+template <>
+void stl::output<ZeroCopyOutput, ASTType*>(ZeroCopyOutput& out, ASTType* type) {
+    if (type) {
+        out << *type;
+    } else {
+        out << StringView("(null-type)");
     }
+}
 
-    template <>
-    void output<ZeroCopyOutput, const ASTType*>(ZeroCopyOutput& out, const ASTType* type) {
-        if (type) {
-            out << *type;
-        } else {
-            out << StringView("(null-type)");
-        }
+template <>
+void stl::output<ZeroCopyOutput, const ASTType*>(ZeroCopyOutput& out, const ASTType* type) {
+    if (type) {
+        out << *type;
+    } else {
+        out << StringView("(null-type)");
     }
+}
 
-    template <>
-    void output<ZeroCopyOutput, TypeData::Tag>(ZeroCopyOutput& out, TypeData::Tag value) {
-        out << static_cast<unsigned>(value);
-    }
+template <>
+void stl::output<ZeroCopyOutput, TypeData::Tag>(ZeroCopyOutput& out, TypeData::Tag value) {
+    out << static_cast<unsigned>(value);
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTType>(ZeroCopyOutput& os, const ASTType& tr) {
-        tr.print(os, true);
+template <>
+void stl::output<ZeroCopyOutput, ASTType>(ZeroCopyOutput& os, const ASTType& tr) {
+    tr.print(os, true);
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, PrettyPrintType>(ZeroCopyOutput& os, PrettyPrintType x) {
+    x.print(os);
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, ASTHigherRankedBounds>(ZeroCopyOutput& out, const ASTHigherRankedBounds& value) {
+    if (value.empty()) {
         return;
     }
-
-    template <>
-    void output<ZeroCopyOutput, PrettyPrintType>(ZeroCopyOutput& os, PrettyPrintType x) {
-        x.print(os);
-        return;
+    out << StringView("for<");
+    for (const auto& lifetime : value.lifetimes) {
+        out << lifetime << StringView(",");
     }
-
-    template <>
-    void output<ZeroCopyOutput, ASTHigherRankedBounds>(ZeroCopyOutput& out, const ASTHigherRankedBounds& value) {
-        if (value.empty()) {
-            return;
-        }
-        out << StringView("for<");
-        for (const auto& lifetime : value.lifetimes) {
-            out << lifetime << StringView(",");
-        }
-        for (const auto& type : value.types) {
-            out << type << StringView(",");
-        }
-        out << StringView("> ");
+    for (const auto& type : value.types) {
+        out << type << StringView(",");
     }
+    out << StringView("> ");
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<ASTType*>>(ZeroCopyOutput& out, const std::vector<ASTType*>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<ASTType*>>(ZeroCopyOutput& out, const std::vector<ASTType*>& values) {
+    outCont(out, values);
 }

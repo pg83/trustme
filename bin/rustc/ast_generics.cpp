@@ -76,34 +76,32 @@ void ASTGenericParams::addParam(GenericParam gp, size_t boundsStart, size_t boun
     params.back().boundsEnd = boundsEnd;
 }
 
-namespace stl {
-    template <>
-    void output<ZeroCopyOutput, ASTTypeParam>(ZeroCopyOutput& out, const ASTTypeParam& value) {
-        out << value.name() << StringView(" = ") << value.getDefault();
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTTypeParam>(ZeroCopyOutput& out, const ASTTypeParam& value) {
+    out << value.name() << StringView(" = ") << value.getDefault();
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTLifetimeParam>(ZeroCopyOutput& out, const ASTLifetimeParam& value) {
-        out << StringView("'") << value.name();
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTLifetimeParam>(ZeroCopyOutput& out, const ASTLifetimeParam& value) {
+    out << StringView("'") << value.name();
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTValueParam>(ZeroCopyOutput& out, const ASTValueParam& value) {
-        out << StringView("const ") << value.name() << StringView(": ") << value.type();
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTValueParam>(ZeroCopyOutput& out, const ASTValueParam& value) {
+    out << StringView("const ") << value.name() << StringView(": ") << value.type();
+}
 
-    template <>
-    void output<ZeroCopyOutput, ASTGenericParams>(ZeroCopyOutput& out, const ASTGenericParams& value) {
-        out << StringView("<") << value.params << StringView("> where {") << value.bounds << StringView("}");
-    }
+template <>
+void stl::output<ZeroCopyOutput, ASTGenericParams>(ZeroCopyOutput& out, const ASTGenericParams& value) {
+    out << StringView("<") << value.params << StringView("> where {") << value.bounds << StringView("}");
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<ASTGenericBound>>(ZeroCopyOutput& out, const std::vector<ASTGenericBound>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<ASTGenericBound>>(ZeroCopyOutput& out, const std::vector<ASTGenericBound>& values) {
+    outCont(out, values);
+}
 
-    template <>
-    void output<ZeroCopyOutput, std::vector<GenericParam>>(ZeroCopyOutput& out, const std::vector<GenericParam>& values) {
-        outCont(out, values);
-    }
+template <>
+void stl::output<ZeroCopyOutput, std::vector<GenericParam>>(ZeroCopyOutput& out, const std::vector<GenericParam>& values) {
+    outCont(out, values);
 }

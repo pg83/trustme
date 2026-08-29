@@ -1,4 +1,5 @@
 #include "hir_item_path.h"
+
 #include "output.h"
 
 using namespace stl;
@@ -110,12 +111,11 @@ bool HIRItemPath::operator==(const HIRSimplePath& sp) const {
     return true;
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, HIRItemPath>(ZeroCopyOutput& os, const HIRItemPath& x) {
+void stl::output<ZeroCopyOutput, HIRItemPath>(ZeroCopyOutput& os, const HIRItemPath& x) {
     if (x.wrapped) {
         os << *x.wrapped;
-    return;
+        return;
     }
     if (x.parent) {
         os << *x.parent;
@@ -137,5 +137,4 @@ void output<ZeroCopyOutput, HIRItemPath>(ZeroCopyOutput& os, const HIRItemPath& 
         os << StringView("::\"") << x.crateName << StringView("\"");
     }
     return;
-}
 }

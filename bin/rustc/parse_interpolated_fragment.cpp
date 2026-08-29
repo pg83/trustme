@@ -1,9 +1,8 @@
 #include "parse_interpolated_fragment.h"
-#include "output.h"
 
+#include "output.h"
 #include "ast_ast.h"
 #include "ast_expr.h"
-
 
 using namespace stl;
 
@@ -110,8 +109,6 @@ InterpolatedFragment::InterpolatedFragment(ASTVisibility v)
 {
 }
 
-
-
 TokenTree& InterpolatedFragment::asTt() {
     BUG_ASSERT(type == TT);
     return *reinterpret_cast<TokenTree*>(ptr);
@@ -122,9 +119,8 @@ const TokenTree& InterpolatedFragment::asTt() const {
     return *reinterpret_cast<TokenTree*>(ptr);
 }
 
-namespace stl {
 template <>
-void output<ZeroCopyOutput, InterpolatedFragment>(ZeroCopyOutput& os, InterpolatedFragment const& x) {
+void stl::output<ZeroCopyOutput, InterpolatedFragment>(ZeroCopyOutput& os, InterpolatedFragment const& x) {
     switch (x.type) {
         case InterpolatedFragment::TT:
             os << StringView("tt[") << x.asTt() << StringView("]");
@@ -165,5 +161,4 @@ void output<ZeroCopyOutput, InterpolatedFragment>(ZeroCopyOutput& os, Interpolat
             break;
     }
     return;
-}
 }
