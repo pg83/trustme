@@ -21,6 +21,7 @@
 
 #include <cctype>
 #include <string_view>
+#include <sstream>
 
 using namespace stl;
 
@@ -63,45 +64,45 @@ namespace {
 
         bool operator!=(const FmtArgs& x) const;
 
-        friend std::ostream& operator<<(std::ostream& os, const FmtArgs& x) {
-            os << "Align(";
+        friend ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const FmtArgs& x) {
+            os << StringView("Align(");
             switch (x.align) {
                 case Align::Unspec:
-                    os << "-";
+                    os << StringView("-");
                     break;
                 case Align::Left:
-                    os << "<";
+                    os << StringView("<");
                     break;
                 case Align::Center:
-                    os << "^";
+                    os << StringView("^");
                     break;
                 case Align::Right:
-                    os << ">";
+                    os << StringView(">");
                     break;
             }
-            os << "'" << x.alignChar << "'";
-            os << ")";
-            os << "Sign(";
+            os << StringView("'") << x.alignChar << StringView("'");
+            os << StringView(")");
+            os << StringView("Sign(");
             switch (x.sign) {
                 case Sign::Unspec:
-                    os << " ";
+                    os << StringView(" ");
                     break;
                 case Sign::Plus:
-                    os << "+";
+                    os << StringView("+");
                     break;
                 case Sign::Minus:
-                    os << "-";
+                    os << StringView("-");
                     break;
             }
             if (x.alternate) {
-                os << "#";
+                os << StringView("#");
             }
             if (x.zeroPad) {
-                os << "0";
+                os << StringView("0");
             }
-            os << ")";
-            os << "Width(" << (x.widthIsArg ? "$" : "") << x.width << ")";
-            os << "Prec(" << (x.precIsArg ? "$" : "") << x.prec << ")";
+            os << StringView(")");
+            os << StringView("Width(") << (x.widthIsArg ? "$" : "") << x.width << StringView(")");
+            os << StringView("Prec(") << (x.precIsArg ? "$" : "") << x.prec << StringView(")");
             return os;
         }
     };
@@ -349,7 +350,7 @@ namespace {
 
         auto* formatStringNp = cast<ASTExprNodeString>(&*n);
         if (!formatStringNp) {
-            ERROR(sp, E0000, "asm! requires a string literal - got " << *n);
+            ERROR(sp, E0000, StringView("asm! requires a string literal - got ") << *n);
         }
         return mv$(formatStringNp->value);
     }
@@ -388,7 +389,7 @@ namespace {
         if (str == "zmm_reg") {
             return AsmRegisterClass::x86Zmm;
         }
-        ERROR(sp, E0000, "Unknown register for x86/x86-64 - `" << str << "`");
+        ERROR(sp, E0000, StringView("Unknown register for x86/x86-64 - `") << str << StringView("`"));
     }
 
     AsmRegisterClass getRegClassRiscv(const Span& sp, const RcString& str) {
@@ -398,7 +399,7 @@ namespace {
         if (str == "freg") {
             return AsmRegisterClass::riscvFreg;
         }
-        ERROR(sp, E0000, "Unknown register for riscv64 - `" << str << "`");
+        ERROR(sp, E0000, StringView("Unknown register for riscv64 - `") << str << StringView("`"));
     }
 
     AsmRegisterClass getRegClass(const WireBoard& wb, const Span& sp, const RcString& str) {
@@ -411,7 +412,7 @@ namespace {
         if (TargetGetCurSpec(wb).arch.name == "riscv64") {
             return getRegClassRiscv(sp, str);
         }
-        ERROR(sp, E0000, "Unknown architecture for asm!");
+        ERROR(sp, E0000, StringView("Unknown architecture for asm!"));
     }
 
     const char* x86ReservedRegister(const std::string& name) {
@@ -492,7 +493,7 @@ namespace {
             const bool sysv = abi == "C" || abi == "system" || abi == "sysv64";
             const bool win = abi == "win64" || abi == "efiapi";
             if (!sysv && !win) {
-                ERROR(sp, E0000, "Unsupported clobber ABI `" << abi << "` for x86-64");
+                ERROR(sp, E0000, StringView("Unsupported clobber ABI `") << abi << StringView("` for x86-64"));
             }
             std::vector<std::string> rv = {"rax", "rcx", "rdx"};
             if (sysv) {
@@ -500,52 +501,52 @@ namespace {
                 rv.push_back("rdi");
             }
             for (unsigned i = 8; i <= 11; i++) {
-                rv.push_back(FMT("r" << i));
+                rv.push_back(FMT(StringView("r") << i));
             }
             for (unsigned i = 0; i <= 15; i++) {
-                rv.push_back(FMT("xmm" << i));
+                rv.push_back(FMT(StringView("xmm") << i));
             }
             for (unsigned i = 16; i <= 31; i++) {
-                rv.push_back(FMT("zmm" << i));
+                rv.push_back(FMT(StringView("zmm") << i));
             }
             for (unsigned i = 0; i <= 7; i++) {
-                rv.push_back(FMT("k" << i));
-                rv.push_back(FMT("mm" << i));
-                rv.push_back(i == 0 ? "st" : FMT("st(" << i << ")"));
-                rv.push_back(FMT("tmm" << i));
+                rv.push_back(FMT(StringView("k") << i));
+                rv.push_back(FMT(StringView("mm") << i));
+                rv.push_back(i == 0 ? "st" : FMT(StringView("st(") << i << StringView(")")));
+                rv.push_back(FMT(StringView("tmm") << i));
             }
             return rv;
         }
         if (arch == "x86") {
             if (abi != "C" && abi != "system" && abi != "efiapi" && abi != "cdecl" && abi != "stdcall" && abi != "fastcall") {
-                ERROR(sp, E0000, "Unsupported clobber ABI `" << abi << "` for x86");
+                ERROR(sp, E0000, StringView("Unsupported clobber ABI `") << abi << StringView("` for x86"));
             }
             std::vector<std::string> rv = {"eax", "ecx", "edx"};
             for (unsigned i = 0; i <= 7; i++) {
-                rv.push_back(FMT("xmm" << i));
-                rv.push_back(FMT("k" << i));
-                rv.push_back(FMT("mm" << i));
-                rv.push_back(i == 0 ? "st" : FMT("st(" << i << ")"));
+                rv.push_back(FMT(StringView("xmm") << i));
+                rv.push_back(FMT(StringView("k") << i));
+                rv.push_back(FMT(StringView("mm") << i));
+                rv.push_back(i == 0 ? "st" : FMT(StringView("st(") << i << StringView(")")));
             }
             return rv;
         }
         if (arch == "riscv64") {
             if (abi != "C" && abi != "system" && abi != "efiapi") {
-                ERROR(sp, E0000, "Unsupported clobber ABI `" << abi << "` for RISC-V");
+                ERROR(sp, E0000, StringView("Unsupported clobber ABI `") << abi << StringView("` for RISC-V"));
             }
             std::vector<std::string> rv;
             for (auto i : {1u, 5u, 6u, 7u, 10u, 11u, 12u, 13u, 14u, 15u, 16u, 17u, 28u, 29u, 30u, 31u}) {
-                rv.push_back(FMT("x" << i));
+                rv.push_back(FMT(StringView("x") << i));
             }
             for (auto i : {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 10u, 11u, 12u, 13u, 14u, 15u, 16u, 17u, 28u, 29u, 30u, 31u}) {
-                rv.push_back(FMT("f" << i));
+                rv.push_back(FMT(StringView("f") << i));
             }
             for (unsigned i = 0; i <= 31; i++) {
-                rv.push_back(FMT("v" << i));
+                rv.push_back(FMT(StringView("v") << i));
             }
             return rv;
         }
-        ERROR(sp, E0000, "clobber_abi is unsupported for target architecture `" << arch << "`");
+        ERROR(sp, E0000, StringView("clobber_abi is unsupported for target architecture `") << arch << StringView("`"));
     }
 
     std::string getString(const Span& sp, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const TokenTree& tt) {
@@ -553,18 +554,18 @@ namespace {
         lex.parseState().wb = &wb;
 
         auto n = ParseExprVal(lex);
-        ASSERT_BUG(sp, n, "No expression returned");
+        ASSERT_BUG(sp, n, StringView("No expression returned"));
         if (lex.lookahead(0) == TOK_COMMA) {
             lex.getToken();
         }
         if (lex.lookahead(0) != TOK_EOF) {
-            ERROR(sp, E0000, "Unexpected token after string literal - " << lex.getToken());
+            ERROR(sp, E0000, StringView("Unexpected token after string literal - ") << lex.getToken());
         }
         ExpandBareExpr(*lex.parseState().wb, crate, mod, n);
 
         auto* stringNp = cast<ASTExprNodeString>(&*n);
         if (!stringNp) {
-            ERROR(sp, E0000, "Expected a string literal - got " << *n);
+            ERROR(sp, E0000, StringView("Expected a string literal - got ") << *n);
         }
         return mv$(stringNp->value);
     }
@@ -689,7 +690,7 @@ namespace {
                             s++;
                         } while (isdigit(*s));
                         if (argIdx >= nPositional) {
-                            ERROR(sp, E0000, "Positional argument " << argIdx << " out of range in \"" << formatString << "\"");
+                            ERROR(sp, E0000, StringView("Positional argument ") << argIdx << StringView(" out of range in \"") << formatString << StringView("\""));
                         }
                         index = argIdx;
                     } else {
@@ -785,7 +786,7 @@ namespace {
                         if (*s == '*') {
                             args.precIsArg = true;
                             if (nextFree == nPositional) {
-                                ERROR(sp, E0000, "Not enough arguments passed, expected at least " << nPositional + 1);
+                                ERROR(sp, E0000, StringView("Not enough arguments passed, expected at least ") << nPositional + 1);
                             }
                             args.prec = nextFree;
                             nextFree++;
@@ -818,14 +819,14 @@ namespace {
                                 s = start;
                             }
                         } else {
-                            ERROR(sp, E0000, "Unexpected character in precision");
+                            ERROR(sp, E0000, StringView("Unexpected character in precision"));
                         }
                     }
 
                     skipWhitespace();
 
                     if (s == sEnd) {
-                        ERROR(sp, E0000, "Unexpected end of formatting string");
+                        ERROR(sp, E0000, StringView("Unexpected end of formatting string"));
                     }
 
                     if (s[0] == '}') {
@@ -833,7 +834,7 @@ namespace {
                     } else if (s[1] == '}') {
                         switch (s[0]) {
                             default:
-                                ERROR(sp, E0000, "Unknown formatting type specifier '" << *s << "'");
+                                ERROR(sp, E0000, StringView("Unknown formatting type specifier '") << *s << StringView("'"));
                             case '?':
                                 s++;
                                 traitName = "Debug";
@@ -878,19 +879,19 @@ namespace {
                             traitName = "Debug";
                             s += 2;
                         } else {
-                            TODO(sp, "Parse formatting fragment at \"" << fmtFragStr << "\" (long type) - s=...\"" << s << "\"");
+                            TODO(sp, StringView("Parse formatting fragment at \"") << fmtFragStr << StringView("\" (long type) - s=...\"") << s << StringView("\""));
                         }
                     }
                 } else {
                     if (*s != '}') {
-                        ERROR(sp, E0000, "Malformed formatting fragment, unexpected " << *s);
+                        ERROR(sp, E0000, StringView("Malformed formatting fragment, unexpected ") << *s);
                     }
                     traitName = "Display";
                 }
 
                 if (index == ~0u) {
                     if (nextFree == nPositional) {
-                        ERROR(sp, E0000, "Not enough arguments passed, expected at least " << nPositional + 1);
+                        ERROR(sp, E0000, StringView("Not enough arguments passed, expected at least ") << nPositional + 1);
                     }
                     index = nextFree;
                     nextFree++;
@@ -914,11 +915,11 @@ namespace {
             case ASTCrate::LOAD_NONE:
                 break;
             case ASTCrate::LOAD_CORE:
-                ASSERT_BUG(Span(), crate.extCratenameCore != "", "");
+                ASSERT_BUG(Span(), crate.extCratenameCore != "", StringView(""));
                 ap.crate = crate.extCratenameCore;
                 break;
             case ASTCrate::LOAD_STD:
-                ASSERT_BUG(Span(), crate.extCratenameCore != "", "");
+                ASSERT_BUG(Span(), crate.extCratenameCore != "", StringView(""));
                 ap.crate = crate.extCratenameCore;
                 break;
         }
@@ -949,12 +950,12 @@ namespace {
         Token tok;
 
         auto formatStringNode = ParseExprVal(lex);
-        ASSERT_BUG(sp, formatStringNode, "No expression returned");
+        ASSERT_BUG(sp, formatStringNode, StringView("No expression returned"));
         ExpandBareExpr(*lex.parseState().wb, crate, lex.parseState().getCurrentMod(), formatStringNode);
 
         auto* formatStringNp = cast<ASTExprNodeString>(&*formatStringNode);
         if (!formatStringNp) {
-            ERROR(sp, E0000, "format_args! requires a string literal - got " << *formatStringNode);
+            ERROR(sp, E0000, StringView("format_args! requires a string literal - got ") << *formatStringNode);
         }
         const auto& formatStringSp = formatStringNp->span();
         const auto& formatString = formatStringNp->value;
@@ -974,18 +975,18 @@ namespace {
                 GET_TOK(tok, lex);
                 auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
 
-                DEBUG("Named `" << name << "`");
+                DEBUG(StringView("Named `") << name << StringView("`"));
                 GET_CHECK_TOK(tok, lex, TOK_EQUAL);
 
                 auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
 
                 auto insRv = namedArgsIndex.insert(std::make_pair(mv$(name), static_cast<unsigned>(namedArgs.size())));
                 if (insRv.second == false) {
-                    ERROR(sp, E0000, "Duplicate definition of named argument `" << insRv.first->first << "`");
+                    ERROR(sp, E0000, StringView("Duplicate definition of named argument `") << insRv.first->first << StringView("`"));
                 }
                 namedArgs.push_back(mv$(exprTt));
             } else {
-                DEBUG("Free");
+                DEBUG(StringView("Free"));
                 auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
                 freeArgs.push_back(mv$(exprTt));
             }
@@ -1017,11 +1018,11 @@ namespace {
         bool isSimple = true;
         for (unsigned int i = 0; i < fragments.size(); i++) {
             if (fragments[i].argIndex != i) {
-                DEBUG(i << "Ordering mismach");
+                DEBUG(i << StringView("Ordering mismach"));
                 isSimple = false;
             }
             if (fragments[i].args != FmtArgs{}) {
-                DEBUG(i << " Args changed - " << fragments[i].args << " != " << FmtArgs{});
+                DEBUG(i << StringView(" Args changed - ") << fragments[i].args << StringView(" != ") << FmtArgs{});
                 isSimple = false;
             }
         }
@@ -1043,7 +1044,7 @@ namespace {
         toks.push_back(TokenTree(TOK_BRACE_OPEN));
         toks.push_back(TokenTree(TOK_PAREN_OPEN));
         for (unsigned int i = 0; i < freeArgs.size() + namedArgs.size(); i++) {
-            toks.push_back(ident(FMT("a" << i).c_str()));
+            toks.push_back(ident(FMT(StringView("a") << i).c_str()));
             toks.push_back(TokenTree(TOK_COMMA));
         }
         toks.push_back(TokenTree(TOK_PAREN_CLOSE));
@@ -1081,18 +1082,19 @@ namespace {
                 toks.push_back(TokenTree(TOK_AMP));
                 toks.push_back(TokenTree(TOK_SQUARE_OPEN));
                 for (const auto& frag : fragments) {
-                    std::stringstream newFnSs;
-                    newFnSs << "new";
+                    StringBuilder newFnSs;
+                    newFnSs << StringView("new");
                     for (const char* s = frag.traitName; *s; s++) {
                         if (isupper(*s)) {
-                            newFnSs << "_" << char(tolower(*s));
+                            newFnSs << StringView("_") << char(tolower(*s));
                         } else {
                             newFnSs << *s;
                         }
                     }
-                    pushPath(toks, crate, {"fmt", "rt", "Argument", newFnSs.str().c_str()});
+                    const std::string newFn(static_cast<const char*>(newFnSs.data()), newFnSs.length());
+                    pushPath(toks, crate, {"fmt", "rt", "Argument", newFn.c_str()});
                     toks.push_back(Token(TOK_PAREN_OPEN));
-                    toks.push_back(ident(FMT("a" << frag.argIndex).c_str()));
+                    toks.push_back(ident(FMT(StringView("a") << frag.argIndex).c_str()));
                     toks.push_back(Token(TOK_PAREN_CLOSE));
                     toks.push_back(TokenTree(TOK_COMMA));
                 }
@@ -1214,7 +1216,7 @@ namespace {
                             pushPathCount("Is");
                             pushToks(toks, TOK_PAREN_OPEN);
                             if (frag.args.precIsArg) {
-                                pushToks(toks, TOK_STAR, ident(FMT("a" << frag.args.prec).c_str()));
+                                pushToks(toks, TOK_STAR, ident(FMT(StringView("a") << frag.args.prec).c_str()));
                                 pushToks(toks, TOK_RWORD_AS, ident("u16"));
                             } else {
                                 pushToks(toks, Token(U128(frag.args.prec), CORETYPE_U16));
@@ -1230,7 +1232,7 @@ namespace {
                             pushPathCount("Is");
                             pushToks(toks, TOK_PAREN_OPEN);
                             if (frag.args.widthIsArg) {
-                                pushToks(toks, TOK_STAR, ident(FMT("a" << frag.args.width).c_str()));
+                                pushToks(toks, TOK_STAR, ident(FMT(StringView("a") << frag.args.width).c_str()));
                                 pushToks(toks, TOK_RWORD_AS, ident("u16"));
                             } else {
                                 pushToks(toks, Token(U128(frag.args.width), CORETYPE_U16));
@@ -1258,7 +1260,7 @@ namespace {
 
     std::string includeGetString(const Span& sp, TokenStream& lex, const ASTCrate& crate, ASTModule& mod) {
         auto n = ParseExprVal(lex);
-        ASSERT_BUG(sp, n, "No expression returned");
+        ASSERT_BUG(sp, n, StringView("No expression returned"));
         if (lex.lookahead(0) == TOK_COMMA) {
             lex.getToken();
         }
@@ -1266,13 +1268,13 @@ namespace {
 
         auto* stringNp = cast<ASTExprNodeString>(&*n);
         if (!stringNp) {
-            ERROR(sp, E0000, "include! requires a string literal - got " << *n);
+            ERROR(sp, E0000, StringView("include! requires a string literal - got ") << *n);
         }
         return mv$(stringNp->value);
     }
 
     std::string getPathRelativeTo(const std::string& basePath, std::string path) {
-        DEBUG(basePath << ", " << path);
+        DEBUG(basePath << StringView(", ") << path);
         if (path[0] == '/') {
             return path;
         }
@@ -1285,7 +1287,7 @@ namespace {
             if (slash == std::string::npos) {
                 return path;
             } else {
-                DEBUG("> slash = " << slash);
+                DEBUG(StringView("> slash = ") << slash);
                 slash += 1;
                 std::string rv;
                 rv.reserve(slash + path.size());
@@ -1339,17 +1341,17 @@ void RegisterBuiltinMacros(ExpandRegistry& registry) {
 }
 
 std::unique_ptr<TokenStream> ExpandProcMacro::expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) {
-    ERROR(sp, E0000, "macro doesn't take an identifier");
+    ERROR(sp, E0000, StringView("macro doesn't take an identifier"));
 }
 
 auto CTraceMacrosExpander::expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) -> std::unique_ptr<TokenStream> {
     auto lex = TTStream(sp, ParseState(), tt);
     const auto setting = lex.getToken();
     if (setting.type() != TOK_RWORD_TRUE && setting.type() != TOK_RWORD_FALSE) {
-        ERROR(sp, E0000, "trace_macros! expects `true` or `false`");
+        ERROR(sp, E0000, StringView("trace_macros! expects `true` or `false`"));
     }
     if (lex.lookahead(0) != TOK_EOF) {
-        ERROR(sp, E0000, "trace_macros! expects exactly one boolean argument");
+        ERROR(sp, E0000, StringView("trace_macros! expects exactly one boolean argument"));
     }
     return makeMacroExpansionPlaceholder(sp);
 }
@@ -1359,12 +1361,12 @@ auto CLogSyntaxExpander::expand(const Span& sp, const WireBoard&, const ASTCrate
     bool first = true;
     while (lex.lookahead(0) != TOK_EOF) {
         if (!first) {
-            std::cout << ' ';
+            sysO << ' ';
         }
-        std::cout << lex.getToken().toStr();
+        sysO << lex.getToken().toStr();
         first = false;
     }
-    std::cout << std::endl;
+    sysO << endL;
     return makeMacroExpansionPlaceholder(sp);
 }
 
@@ -1384,7 +1386,7 @@ auto CIterExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& 
 
     auto* closure = cast<ASTExprNodeClosure>(node.get());
     if (!closure || closure->isPinned || cast<ASTExprNodeAsyncBlock>(closure->code.get())) {
-        ERROR(sp, E0000, "iter! requires a plain closure");
+        ERROR(sp, E0000, StringView("iter! requires a plain closure"));
     }
 
     auto generatorNode = makeAstExprNode<ASTExprNodeGeneratorBlock>(*crate.pool, mv$(closure->code), closure->returnType, true, true);
@@ -1508,7 +1510,7 @@ auto CLlvmAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrat
     }
 
     if (lex.lookahead(0) != TOK_EOF) {
-        ERROR(sp, E0000, "Unexpected token in asm! - " << lex.getToken());
+        ERROR(sp, E0000, StringView("Unexpected token in asm! - ") << lex.getToken());
     }
 
     auto rv = makeAstExprNode<ASTExprNodeAsm>(*crate.pool, mv$(templateText), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags));
@@ -1571,47 +1573,47 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
 
                 if (tok.ident().name == "pure") {
                     if (options.pure) {
-                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                        ERROR(lex.pointSpan(), E0000, StringView("Duplicate specification of option `") << tok.ident().name << StringView("`"));
                     }
                     options.pure = 1;
                 } else if (tok.ident().name == "nomem") {
                     if (options.nomem) {
-                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                        ERROR(lex.pointSpan(), E0000, StringView("Duplicate specification of option `") << tok.ident().name << StringView("`"));
                     }
                     options.nomem = 1;
                 } else if (tok.ident().name == "readonly") {
                     if (options.readonly) {
-                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                        ERROR(lex.pointSpan(), E0000, StringView("Duplicate specification of option `") << tok.ident().name << StringView("`"));
                     }
                     options.readonly = 1;
                 } else if (tok.ident().name == "preserves_flags") {
                     if (options.preservesFlags) {
-                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                        ERROR(lex.pointSpan(), E0000, StringView("Duplicate specification of option `") << tok.ident().name << StringView("`"));
                     }
                     options.preservesFlags = 1;
                 } else if (tok.ident().name == "noreturn") {
                     if (options.noreturn) {
-                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                        ERROR(lex.pointSpan(), E0000, StringView("Duplicate specification of option `") << tok.ident().name << StringView("`"));
                     }
                     options.noreturn = 1;
                 } else if (tok.ident().name == "nostack") {
                     if (options.nostack) {
-                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                        ERROR(lex.pointSpan(), E0000, StringView("Duplicate specification of option `") << tok.ident().name << StringView("`"));
                     }
                     options.nostack = 1;
                 } else if (tok.ident().name == "att_syntax") {
                     if (options.attSyntax) {
-                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                        ERROR(lex.pointSpan(), E0000, StringView("Duplicate specification of option `") << tok.ident().name << StringView("`"));
                     }
                     // TODO: x86(-64) only
                     options.attSyntax = 1;
                 } else if (tok.ident().name == "raw") {
                     if (options.raw) {
-                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                        ERROR(lex.pointSpan(), E0000, StringView("Duplicate specification of option `") << tok.ident().name << StringView("`"));
                     }
                     options.raw = 1;
                 } else {
-                    ERROR(lex.pointSpan(), E0000, "Unknown asm option - " << tok.ident().name);
+                    ERROR(lex.pointSpan(), E0000, StringView("Unknown asm option - ") << tok.ident().name);
                 }
 
                 if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
@@ -1641,7 +1643,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         } else if (v == "label") {
             auto e = ParseExpr0(lex);
             if (!cast<ASTExprNodeBlock>(e.get())) {
-                ERROR(sp, E0000, "asm! label operand requires a block");
+                ERROR(sp, E0000, StringView("asm! label operand requires a block"));
             }
             paramSpec = ASTExprNodeAsm2::Param::make_Label({std::move(e)});
         } else {
@@ -1657,7 +1659,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             } else if (v == "inout") {
                 dir = AsmDirection::InOut;
             } else {
-                ERROR(sp, E0000, "Unknown asm fragment - `" << v << "`");
+                ERROR(sp, E0000, StringView("Unknown asm fragment - `") << v << StringView("`"));
             }
 
             GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
@@ -1679,7 +1681,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                     case AsmDirection::Out:
                         break;
                     default:
-                        ERROR(sp, E0000, "Invalid use of _ in asm!");
+                        ERROR(sp, E0000, StringView("Invalid use of _ in asm!"));
                 }
                 paramSpec = ASTExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), nullptr, nullptr});
             } else {
@@ -1691,7 +1693,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                         case AsmDirection::InOut:
                             break;
                         default:
-                            ERROR(sp, E0000, "Invalid use of => in asm!");
+                            ERROR(sp, E0000, StringView("Invalid use of => in asm!"));
                     }
                     GET_TOK(tok, lex);
                     if (lex.lookahead(0) == TOK_UNDERSCORE) {
@@ -1727,7 +1729,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             if (!positional) {
                 seenNonPositional = true;
             } else if (seenNonPositional) {
-                ERROR(sp, E0000, "positional arguments cannot follow named arguments or explicit register arguments");
+                ERROR(sp, E0000, StringView("positional arguments cannot follow named arguments or explicit register arguments"));
             }
         }
     }
@@ -1750,13 +1752,13 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             const auto& name = spec->as_Explicit();
             if (isX86) {
                 if (const char* what = x86ReservedRegister(name)) {
-                    ERROR(sp, E0000, "invalid register `" << name << "`: " << what << " cannot be used as an operand for inline asm");
+                    ERROR(sp, E0000, StringView("invalid register `") << name << StringView("`: ") << what << StringView(" cannot be used as an operand for inline asm"));
                 }
             }
             const auto canonical = isX86 ? canonicalX86Register(name, is64Bit) : name;
             auto inserted = seen.insert(std::make_pair(canonical, name));
             if (!inserted.second) {
-                ERROR(sp, E0000, "register `" << name << "` conflicts with register `" << inserted.first->second << "`");
+                ERROR(sp, E0000, StringView("register `") << name << StringView("` conflicts with register `") << inserted.first->second << StringView("`"));
             }
         }
     }
@@ -1773,7 +1775,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         }
     }
     if (hasLabel && hasOutputValue) {
-        ERROR(sp, E0000, "using both label and output operands for inline assembly is unstable in Rust 1.90");
+        ERROR(sp, E0000, StringView("using both label and output operands for inline assembly is unstable in Rust 1.90"));
     }
 
     if (!clobberAbis.empty()) {
@@ -1795,7 +1797,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             if (spec && spec->is_Explicit()) {
                 explicitOutputs.insert(isX86 ? canonicalX86Register(spec->as_Explicit(), is64Bit) : spec->as_Explicit());
             } else if (spec) {
-                ERROR(sp, E0000, "asm with `clobber_abi` must specify explicit registers for outputs");
+                ERROR(sp, E0000, StringView("asm with `clobber_abi` must specify explicit registers for outputs"));
             }
         }
 
@@ -1813,13 +1815,13 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
     }
 
     if (options.nomem && options.readonly) {
-        ERROR(sp, E0000, "asm! options `nomem` and `readonly` are mutually exclusive");
+        ERROR(sp, E0000, StringView("asm! options `nomem` and `readonly` are mutually exclusive"));
     }
     if (options.pure && !(options.nomem || options.readonly)) {
-        ERROR(sp, E0000, "asm! marked `pure` without `nomem` or `readonly`");
+        ERROR(sp, E0000, StringView("asm! marked `pure` without `nomem` or `readonly`"));
     }
     if (options.noreturn && hasOutputValue) {
-        ERROR(sp, E0000, "asm outputs are not allowed with the `noreturn` option");
+        ERROR(sp, E0000, StringView("asm outputs are not allowed with the `noreturn` option"));
     }
 
     unsigned nextIndex = 0;
@@ -1836,10 +1838,10 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             if (*c == '}') {
                 c++;
                 if (!*c) {
-                    ERROR(sp, E0000, "Unexpected EOF in asm! format string");
+                    ERROR(sp, E0000, StringView("Unexpected EOF in asm! format string"));
                 }
                 if (*c != '}') {
-                    ERROR(sp, E0000, "Closing braces in `asm!` need to be written as `}}`");
+                    ERROR(sp, E0000, StringView("Closing braces in `asm!` need to be written as `}}`"));
                 }
                 c++;
                 curString += '}';
@@ -1860,24 +1862,24 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                     c++;
                 }
                 if (!*c) {
-                    ERROR(sp, E0000, "Unexpected EOF in asm! format string");
+                    ERROR(sp, E0000, StringView("Unexpected EOF in asm! format string"));
                 }
                 AsmLineFragment frag;
                 if (name.empty()) {
                     frag.index = nextIndex;
                     if (frag.index >= params.size()) {
-                        ERROR(sp, E0000, "asm! format doesn't have enough arguments");
+                        ERROR(sp, E0000, StringView("asm! format doesn't have enough arguments"));
                     }
                     nextIndex++;
                 } else if (std::isdigit(name[0])) {
                     frag.index = std::stoul(name);
                     if (frag.index >= params.size()) {
-                        ERROR(sp, E0000, "asm! format string index out of range - " << frag.index);
+                        ERROR(sp, E0000, StringView("asm! format string index out of range - ") << frag.index);
                     }
                 } else {
                     auto it = std::find(names.begin(), names.end(), name);
                     if (it == names.end()) {
-                        ERROR(sp, E0000, "asm! format string references undefined value - `" << name << "`");
+                        ERROR(sp, E0000, StringView("asm! format string references undefined value - `") << name << StringView("`"));
                     }
                     frag.index = it - names.begin();
                 }
@@ -1885,7 +1887,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                 if (*c == ':') {
                     c++;
                     if (!*c) {
-                        ERROR(sp, E0000, "Unexpected EOF in asm! format string");
+                        ERROR(sp, E0000, StringView("Unexpected EOF in asm! format string"));
                     }
                     if (*c != '}') {
                         frag.modifier = *c;
@@ -1893,10 +1895,10 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                     }
                 }
                 if (!*c) {
-                    ERROR(sp, E0000, "Unexpected EOF in asm! format string");
+                    ERROR(sp, E0000, StringView("Unexpected EOF in asm! format string"));
                 }
                 if (*c != '}') {
-                    ERROR(sp, E0000, "Expected '}' in asm! format string");
+                    ERROR(sp, E0000, StringView("Expected '}' in asm! format string"));
                 }
 
                 frag.before = std::move(curString);
@@ -1938,16 +1940,16 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             unused += 1;
         }
         if (unused == 1) {
-            ERROR(sp, E0000, "unused asm argument");
+            ERROR(sp, E0000, StringView("unused asm argument"));
         } else if (unused > 1) {
-            ERROR(sp, E0000, "multiple unused asm arguments");
+            ERROR(sp, E0000, StringView("multiple unused asm arguments"));
         }
     }
 
     for (const auto& line : lines) {
         for (const auto& frag : line.frags) {
             if (frag.index == UINT_MAX) {
-                ERROR(sp, E0000, "asm! marked `pure` without `nomem` or `readonly`");
+                ERROR(sp, E0000, StringView("asm! marked `pure` without `nomem` or `readonly`"));
             }
             if (frag.modifier != '\0') {
                 // TODO: Check that the modifier is valid for the specifier
@@ -1964,14 +1966,14 @@ auto CGlobalAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCr
 
     auto node = o->getToken().takeFragNode();
     auto* nodeAp = cast<ASTExprNodeAsm2>(node.get());
-    ASSERT_BUG(sp, nodeAp, "");
+    ASSERT_BUG(sp, nodeAp, StringView(""));
     auto& nodeA = *nodeAp;
 
     {
         const auto& o = nodeA.options;
         const char* bad = o.pure ? "pure" : o.nomem ? "nomem" : o.readonly ? "readonly" : o.preservesFlags ? "preserves_flags" : o.noreturn ? "noreturn" : o.nostack ? "nostack" : nullptr;
         if (bad) {
-            ERROR(sp, E0000, "the `" << bad << "` option cannot be used with `global_asm!`");
+            ERROR(sp, E0000, StringView("the `") << bad << StringView("` option cannot be used with `global_asm!`"));
         }
     }
 
@@ -1990,15 +1992,15 @@ auto CGlobalAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCr
                 break;
             }
             case ASTAsmParam::TAG_Label: {
-                ERROR(sp, E0000, "`label` is not allowed in `global_asm!`");
+                ERROR(sp, E0000, StringView("`label` is not allowed in `global_asm!`"));
                 break;
             }
             case ASTAsmParam::TAG_RegSingle: {
-                ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
+                ERROR(sp, E0000, StringView("Only `sym` and `const` are allowed in `global_asm!`"));
                 break;
             }
             case ASTAsmParam::TAG_Reg: {
-                ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
+                ERROR(sp, E0000, StringView("Only `sym` and `const` are allowed in `global_asm!`"));
                 break;
             }
         }
@@ -2012,7 +2014,7 @@ auto CNakedAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCra
 
     auto node = o->getToken().takeFragNode();
     auto* nodeAp = cast<ASTExprNodeAsm2>(node.get());
-    ASSERT_BUG(sp, nodeAp, "");
+    ASSERT_BUG(sp, nodeAp, StringView(""));
     nodeAp->options.naked = true;
 
     return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
@@ -2134,8 +2136,8 @@ auto GenericAssertCaptureVisitor::visit(ASTExprNodeNamedValue& node) -> void {
     }
 
     const auto captureIndex = captures.size();
-    const auto captureName = RcString::newInterned(FMT("__capture" << captureIndex));
-    const auto localBindName = RcString::newInterned(FMT("__local_bind" << captureIndex));
+    const auto captureName = RcString::newInterned(FMT(StringView("__capture") << captureIndex));
+    const auto localBindName = RcString::newInterned(FMT(StringView("__local_bind") << captureIndex));
     captures.push_back({ASTPath(node.path), name, captureName, localBindName, !consumed});
 
     if (consumed) {
@@ -2194,7 +2196,7 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
     lex.parseState().module = &mod;
 
     auto n = ParseExpr0(lex);
-    ASSERT_BUG(sp, n, "No expression returned");
+    ASSERT_BUG(sp, n, StringView("No expression returned"));
 
     std::vector<TokenTree> toks;
     const auto expansionHygiene = Ident::Hygiene::newScope(wb.id, *wb.pool);
@@ -2240,9 +2242,9 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
         GET_CHECK_TOK(tok, lex, TOK_EOF);
         toks.push_back(Token(TOK_PAREN_CLOSE));
     } else if (tok == TOK_EOF) {
-        std::stringstream ss;
+        StringBuilder ss;
         n->print(ss);
-        auto conditionText = ss.str();
+        std::string conditionText(static_cast<const char*>(ss.data()), ss.length());
 
         const auto genericAssert = RcString::newInterned("generic_assert");
         if (crate.features.count(genericAssert) != 0) {
@@ -2302,11 +2304,11 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
                     i += 1;
                 }
             }
-            auto message = FMT("Assertion failed: " << conditionText);
+            auto message = FMT(StringView("Assertion failed: ") << conditionText);
             if (!captureVisitor.captures.empty()) {
                 message += "\nWith captures:\n";
                 for (const auto& capture : captureVisitor.captures) {
-                    message += FMT("  " << capture.name << " = {:?}\n");
+                    message += FMT(StringView("  ") << capture.name << StringView(" = {:?}\n"));
                 }
             }
             toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
@@ -2328,7 +2330,7 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
             toks.push_back(Token(TOK_PAREN_OPEN));
             toks.push_back(Token(TOK_STRING, std::string("assertion failed: {}"), {}));
             toks.push_back(Token(TOK_COMMA));
-            toks.push_back(Token(TOK_STRING, ss.str(), {}));
+            toks.push_back(Token(TOK_STRING, std::string(static_cast<const char*>(ss.data()), ss.length()), {}));
             toks.push_back(Token(TOK_PAREN_CLOSE));
         }
     } else {
@@ -2344,7 +2346,7 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
 }
 
 auto CExpanderCompileError::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
-    ERROR(sp, E0000, "compile_error! " << tt);
+    ERROR(sp, E0000, StringView("compile_error! ") << tt);
 }
 
 auto CConcatExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
@@ -2361,9 +2363,9 @@ auto CConcatExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate
         }
 
         auto v = ParseExpr0(lex);
-        DEBUG("concat - v=" << *v);
+        DEBUG(StringView("concat - v=") << *v);
         ExpandBareExpr(wb, crate, mod, v);
-        DEBUG("concat[pe] - v=" << *v);
+        DEBUG(StringView("concat[pe] - v=") << *v);
         // TODO: Visitor instead
         if (auto* vp = cast<ASTExprNodeString>(v.get())) {
             rv += vp->value;
@@ -2380,17 +2382,17 @@ auto CConcatExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate
         } else if (auto* vp = cast<ASTExprNodeUniOp>(v.get())) {
             const auto* inner = vp->value.get();
             if (vp->type != ASTExprNodeUniOp::NEGATE) {
-                ERROR(sp, E0000, "Unexpected expression type in concat! argument");
+                ERROR(sp, E0000, StringView("Unexpected expression type in concat! argument"));
             } else if (const auto* iv = cast<const ASTExprNodeInteger>(inner)) {
-                rv += FMT("-" << iv->value);
+                rv += FMT(StringView("-") << iv->value);
             } else if (const auto* fv = cast<const ASTExprNodeFloat>(inner)) {
                 rv += "-";
                 rv += formatFloatValueForToken(fv->value);
             } else {
-                ERROR(sp, E0000, "Unexpected expression type in concat! argument");
+                ERROR(sp, E0000, StringView("Unexpected expression type in concat! argument"));
             }
         } else {
-            ERROR(sp, E0000, "Unexpected expression type in concat! argument");
+            ERROR(sp, E0000, StringView("Unexpected expression type in concat! argument"));
         }
     } while (GET_TOK(tok, lex) == TOK_COMMA);
     if (tok.type() != TOK_EOF) {
@@ -2403,7 +2405,7 @@ auto CConcatExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate
 auto CConcatBytesExpander::getArrayByte(const Span& sp, const ASTExprNode& node) -> char {
     const auto* value = cast<const ASTExprNodeInteger>(&node);
     if (!value || (value->datatype != CORETYPE_ANY && value->datatype != CORETYPE_U8) || !value->value.isU64() || value->value.truncateU64() > 0xff) {
-        ERROR(sp, E0000, "concat_bytes! array elements must be byte or u8 literals");
+        ERROR(sp, E0000, StringView("concat_bytes! array elements must be byte or u8 literals"));
     }
     return static_cast<char>(value->value.truncateU64());
 }
@@ -2411,7 +2413,7 @@ auto CConcatBytesExpander::getArrayByte(const Span& sp, const ASTExprNode& node)
 auto CConcatBytesExpander::append(const Span& sp, std::string& output, const ASTExprNode& node) -> void {
     if (const auto* value = cast<const ASTExprNodeInteger>(&node)) {
         if (value->datatype != CORETYPE_U8 || !value->value.isU64() || value->value.truncateU64() > 0xff) {
-            ERROR(sp, E0000, "concat_bytes! arguments must be byte string, byte, or byte-array literals");
+            ERROR(sp, E0000, StringView("concat_bytes! arguments must be byte string, byte, or byte-array literals"));
         }
         output.push_back(static_cast<char>(value->value.truncateU64()));
         return;
@@ -2430,13 +2432,13 @@ auto CConcatBytesExpander::append(const Span& sp, std::string& output, const AST
 
         const auto* count = cast<const ASTExprNodeInteger>(value->size.get());
         if (!count || !count->value.isU64()) {
-            ERROR(sp, E0000, "concat_bytes! repeat count must be an integer literal");
+            ERROR(sp, E0000, StringView("concat_bytes! repeat count must be an integer literal"));
         }
         const auto byte = getArrayByte(sp, *value->values.at(0));
         output.append(static_cast<size_t>(count->value.truncateU64()), byte);
         return;
     }
-    ERROR(sp, E0000, "concat_bytes! arguments must be byte string, byte, or byte-array literals");
+    ERROR(sp, E0000, StringView("concat_bytes! arguments must be byte string, byte, or byte-array literals"));
 }
 
 auto CConcatBytesExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
@@ -2490,7 +2492,7 @@ auto CExpanderEnv::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
 
     const char* varValCstr = getenv(varname.c_str());
     if (!varValCstr) {
-        ERROR(sp, E0000, "Environment variable '" << varname << "' not defined");
+        ERROR(sp, E0000, StringView("Environment variable '") << varname << StringView("' not defined"));
     }
     return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, std::string(varValCstr), {}))));
 }
@@ -2616,7 +2618,7 @@ auto CIncludeExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrat
 
     ParseState ps;
     ps.module = &mod;
-    DEBUG("Edition = " << crate.edition);
+    DEBUG(StringView("Edition = ") << crate.edition);
     return box$(Lexer(wb.id, *crate.hirPool, filePath, crate.edition, ps));
 }
 
@@ -2633,7 +2635,7 @@ auto CIncludeBytesExpander::expand(const Span& sp, const WireBoard& wb, const AS
 
     std::ifstream is(filePath);
     if (!is.good()) {
-        ERROR(sp, E0000, "Cannot open file " << filePath << " for include_bytes!");
+        ERROR(sp, E0000, StringView("Cannot open file ") << filePath << StringView(" for include_bytes!"));
     }
     std::stringstream ss;
     ss << is.rdbuf();
@@ -2656,7 +2658,7 @@ auto CIncludeStrExpander::expand(const Span& sp, const WireBoard& wb, const ASTC
 
     std::ifstream is(filePath);
     if (!is.good()) {
-        ERROR(sp, E0000, "Cannot open file " << filePath << " for include_str!");
+        ERROR(sp, E0000, StringView("Cannot open file ") << filePath << StringView(" for include_str!"));
     }
     std::stringstream ss;
     ss << is.rdbuf();
@@ -2790,10 +2792,17 @@ auto CExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crat
         if (!rv.empty() && tokensNeedSpace(prev, tok.type())) {
             rv += " ";
         }
-        DEBUG(" += " << tok);
+        DEBUG(StringView(" += ") << tok);
         rv += tok.toStr();
         prev = tok.type();
     }
 
     return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(rv), {}))));
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, FmtArgs>(ZeroCopyOutput& out, const FmtArgs& value) {
+    operator<<(out, value);
+}
 }

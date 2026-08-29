@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "ast_attrs.h"
 
 #include <string>
@@ -33,9 +35,7 @@ public:
     static ASTVisibility makeRestricted(Ty ty, ASTAbsolutePath p);
     static ASTVisibility makeRestricted(ASTAbsolutePath p, ASTPath inPath);
 
-    void fmt(std::ostream& os) const;
-    friend std::ostream& operator<<(std::ostream& os, const ASTVisibility& x);
-
+    void fmt(stl::ZeroCopyOutput& os) const;
     Ty ty() const {
         return ty_;
     }

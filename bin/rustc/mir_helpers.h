@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "mir_mir.h"
 #include "hir_typeck_static.h"
 
@@ -26,7 +28,7 @@ typedef unsigned int MIRBasicBlockId;
 struct CheckFailure: public std::exception {};
 
 struct MIRPathCallback {
-    virtual void write(std::ostream& os) const = 0;
+    virtual void write(stl::ZeroCopyOutput& os) const = 0;
 };
 
 template <typename F>
@@ -38,7 +40,7 @@ struct MIRPathCb final: MIRPathCallback {
     {
     }
 
-    void write(std::ostream& os) const override {
+    void write(stl::ZeroCopyOutput& os) const override {
         f(os);
     }
 };
@@ -47,7 +49,7 @@ struct MIRPathCb final: MIRPathCallback {
     do {                                         \
         const char* __fcn = __FUNCTION__;        \
         (state).printBug([&](auto& _os) {        \
-            _os << __fcn << ": " << __VA_ARGS__; \
+            _os << __fcn << stl::StringView(": ") << __VA_ARGS__; \
         });                                      \
         UNREACHABLE();                           \
     } while (0)
@@ -55,13 +57,13 @@ struct MIRPathCb final: MIRPathCallback {
     do {                                                                                           \
         if (!(cnd))                                                                                \
             (state).printBug([&](auto& _os) {                                                      \
-                _os << __FILE__ << ":" << __LINE__ << " ASSERT " #cnd " failed - " << __VA_ARGS__; \
+                _os << stl::StringView(__FILE__) << stl::StringView(":") << __LINE__ << stl::StringView(" ASSERT " #cnd " failed - ") << __VA_ARGS__; \
             });                                                                                    \
     } while (0)
 #define MIR_TODO(state, ...)                                           \
     do {                                                               \
         (state).printTodo([&](auto& _os) {                             \
-            _os << __FILE__ << ":" << __LINE__ << ": " << __VA_ARGS__; \
+            _os << stl::StringView(__FILE__) << stl::StringView(":") << __LINE__ << stl::StringView(": ") << __VA_ARGS__; \
         });                                                            \
         UNREACHABLE();                                                 \
     } while (0)
@@ -120,7 +122,7 @@ public:
 
     unsigned int getCurStmtOfs() const;
 
-    void fmtPos(std::ostream& os, bool includePath = false) const;
+    void fmtPos(stl::ZeroCopyOutput& os, bool includePath = false) const;
 
     template <typename F>
     void printBug(F f) const {
@@ -161,7 +163,6 @@ public:
 
     TypeNameString intrinsicTypeName(const HIRTypeData* ty) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const MIRTypeResolve& x);
 };
 
 class MIRValueLifetime {

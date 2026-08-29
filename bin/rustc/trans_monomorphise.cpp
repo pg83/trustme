@@ -117,10 +117,10 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
     BUG_ASSERT(tpl);
 
     if (const auto* marker = asyncDropPollMarker(tpl)) {
-        ASSERT_BUG(sp, marker->params.types.size() == 2, "async-drop poll marker has " << marker->params.types.size() << " type arguments");
+        ASSERT_BUG(sp, marker->params.types.size() == 2, StringView("async-drop poll marker has ") << marker->params.types.size() << StringView(" type arguments"));
         auto dropeeTy = params.monomorph(resolve, marker->params.types[0]);
         auto outerTy = params.monomorph(resolve, marker->params.types[1]);
-        ASSERT_BUG(sp, !monomorphiseTypeNeeded(dropeeTy) && !monomorphiseTypeNeeded(outerTy), "async-drop poll remained generic after monomorphisation: " << dropeeTy << " in " << outerTy);
+        ASSERT_BUG(sp, !monomorphiseTypeNeeded(dropeeTy) && !monomorphiseTypeNeeded(outerTy), StringView("async-drop poll remained generic after monomorphisation: ") << dropeeTy << StringView(" in ") << outerTy);
         return AsyncDropPollBuilder(sp, resolve, dropeeTy, outerTy).build();
     }
 
@@ -128,9 +128,9 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
 
     output.locals.reserve(tpl->locals.size());
     for (const auto& var : tpl->locals) {
-        DEBUG("- _" << output.locals.size() << " (" << var << ")");
+        DEBUG(StringView("- _") << output.locals.size() << StringView(" (") << var << StringView(")"));
         output.locals.push_back(params.monomorph(resolve, var));
-        DEBUG(" = " << output.locals.back());
+        DEBUG(StringView(" = ") << output.locals.back());
     }
     output.dropFlags = tpl->dropFlags;
 
@@ -139,7 +139,7 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
     for (const auto& block : tpl->blocks) {
         std::vector<MIRStatement> statements;
 
-        TRACE_FUNCTION_F("bb" << output.blocks.size());
+        TRACE_FUNCTION_F(StringView("bb") << output.blocks.size());
         statements.reserve(block.statements.size());
         for (const auto& stmt : block.statements) {
             switch (stmt.tag()) {
@@ -183,7 +183,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
 
         HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override {
             out.addType(type, false);
-            auto name = RcString::newInterned(FMT("ConstEvalMonomorph#" << count));
+            auto name = RcString::newInterned(FMT(StringView("ConstEvalMonomorph#") << count));
             count++;
             auto p = HIRSimplePath(crate.crateName, {name});
             auto* ent = crate.pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newGlobal(), HIRValueItem(crate.pool->make<HIRStatic>(HIRStatic(HIRLinkage(), false, std::move(type), HIRExprPtr())))});
@@ -219,7 +219,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             const auto& path = ent.first;
             const auto& pp = ent.second->pp;
             const auto& c = *ent.second->ptr;
-            TRACE_FUNCTION_FR("CONSTANT " << path, "CONSTANT " << path);
+            TRACE_FUNCTION_FR(StringView("CONSTANT ") << path, StringView("CONSTANT ") << path);
             auto ty = pp.monomorph(resolve, c.type);
             auto eval = HIREvaluator{pp.sp, wb, nvs};
             eval.resolve.setBothGenericsRaw(pp.gdefImpl, &c.params);
@@ -243,7 +243,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             const auto& path = ent.first;
             const auto& pp = ent.second->pp;
             const auto& s = *ent.second->ptr;
-            TRACE_FUNCTION_FR("STATIC " << path, "STATIC " << path);
+            TRACE_FUNCTION_FR(StringView("STATIC ") << path, StringView("STATIC ") << path);
             auto ty = pp.monomorph(resolve, s.type);
             auto eval = HIREvaluator{pp.sp, wb, nvs};
             eval.resolve.setBothGenericsRaw(pp.gdefImpl, &s.params);
@@ -262,7 +262,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         while (insertedStatics < nvs.added.size()) {
             auto& value = nvs.added[insertedStatics++];
             auto* out = list.addStatic(crate.types, HIRPath(value.first));
-            ASSERT_BUG(Span(), out, "Generated static " << value.first << " already in TransList?");
+            ASSERT_BUG(Span(), out, StringView("Generated static ") << value.first << StringView(" already in TransList?"));
             out->ptr = value.second;
             generated.push_back(HIRPath(value.first));
         }
@@ -300,8 +300,8 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             if (monomorphNeeded) {
                 const auto& path = fcnEnt.first;
                 const auto& pp = transFcn->pp;
-                TRACE_FUNCTION_FR("FUNCTION " << path, "FUNCTION " << path);
-                ASSERT_BUG(Span(), fcn.code.mir, "No code for " << path);
+                TRACE_FUNCTION_FR(StringView("FUNCTION ") << path, StringView("FUNCTION ") << path);
+                ASSERT_BUG(Span(), fcn.code.mir, StringView("No code for ") << path);
 
                 // TODO: Get the item params too
                 if (pp.ppImpl.hasParams()) {
@@ -332,7 +332,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
                 generatedFunctions.pushBack(transFcn);
                 resolve.clearBothGenerics();
             } else {
-                DEBUG("Non-generic: FUNCTION " << fcnEnt.first);
+                DEBUG(StringView("Non-generic: FUNCTION ") << fcnEnt.first);
                 if (fcn.code.mir) {
                     generatedFunctions.pushBack(transFcn);
                 }
@@ -409,9 +409,9 @@ auto AsyncDropPollBuilder::buildAsyncDestructor(const HIRTypeData* ty, MIRLValue
     auto& types = resolve.hirCrate().types;
     const auto& pinPath = resolve.hirCrate().getLangItemPathOpt("pin");
     const auto& pollPath = resolve.hirCrate().getLangItemPathOpt("Poll");
-    ASSERT_BUG(sp, !pinPath.components().empty(), "AsyncDrop poll for " << ty << " without the Pin lang item");
-    ASSERT_BUG(sp, !pollPath.components().empty(), "AsyncDrop poll for " << ty << " without the Poll lang item");
-    ASSERT_BUG(sp, !resolve.langFuture().components().empty(), "AsyncDrop poll for " << ty << " without the Future lang item");
+    ASSERT_BUG(sp, !pinPath.components().empty(), StringView("AsyncDrop poll for ") << ty << StringView(" without the Pin lang item"));
+    ASSERT_BUG(sp, !pollPath.components().empty(), StringView("AsyncDrop poll for ") << ty << StringView(" without the Poll lang item"));
+    ASSERT_BUG(sp, !resolve.langFuture().components().empty(), StringView("AsyncDrop poll for ") << ty << StringView(" without the Future lang item"));
     const auto storagePtrLocal = newLocal(types.pointer(HIRBorrowType::Unique, futureTy));
     const auto valueRefTy = types.borrow(HIRBorrowType::Unique, ty);
     const auto valueRefLocal = newLocal(valueRefTy);
@@ -574,7 +574,7 @@ auto AsyncDropPollBuilder::buildStructFields(const HIRTypeData* ty, MIRLValue va
 
 auto AsyncDropPollBuilder::buildFields(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
     if (const auto* array = ty->opt_Array()) {
-        ASSERT_BUG(sp, array->size.is_Known(), "async drop of an array with unevaluated length: " << ty);
+        ASSERT_BUG(sp, array->size.is_Known(), StringView("async drop of an array with unevaluated length: ") << ty);
         for (size_t i = array->size.as_Known(); i > 0; i--) {
             next = buildField(array->inner, MIRLValue::newField(value.clone(), static_cast<unsigned>(i - 1)), next);
         }
@@ -607,7 +607,7 @@ auto AsyncDropPollBuilder::buildCoroutineDrop(const HIRTypeData* ty, MIRLValue v
     MonomorphState monomorph(types);
     auto item = resolve.getValue(sp, dropPath, monomorph);
     const auto* functionPtr = item.opt_Function();
-    ASSERT_BUG(sp, functionPtr && (*functionPtr)->code.mir, "coroutine Drop MIR is unavailable for " << ty);
+    ASSERT_BUG(sp, functionPtr && (*functionPtr)->code.mir, StringView("coroutine Drop MIR is unavailable for ") << ty);
     const auto* function = *functionPtr;
     const auto& source = *function->code.mir;
 
@@ -792,7 +792,7 @@ auto AsyncDropPollBuilder::CoroutineDropCloner::cloneStmt(const MIRStatement& sr
 
 auto AsyncDropPollBuilder::CoroutineDropCloner::cloneLval(const MIRLValue& src) const -> MIRLValue {
     if (src.root.is_Argument()) {
-        ASSERT_BUG(sp, src.root.as_Argument() == 0 && !src.wrappers.empty() && src.wrappers.front().is_Deref(), "unexpected coroutine Drop argument lvalue " << src);
+        ASSERT_BUG(sp, src.root.as_Argument() == 0 && !src.wrappers.empty() && src.wrappers.front().is_Deref(), StringView("unexpected coroutine Drop argument lvalue ") << src);
         auto rv = dropee.clone();
         for (size_t i = 1; i < src.wrappers.size(); i++) {
             auto wrapper = src.wrappers[i];
@@ -825,13 +825,13 @@ Cloner::Cloner(const Span& sp, const ::StaticTraitResolve& resolve, const TransP
 auto Cloner::valueGenericType(HIRGenericRef g) const -> const HIRTypeData* {
     switch (g.group()) {
         case 0:
-            ASSERT_BUG(sp, g.idx() < resolve_.implGenerics().values.size(), "Value generic " << g << " out of bounds in impl: " << resolve_.implGenerics().values.size());
+            ASSERT_BUG(sp, g.idx() < resolve_.implGenerics().values.size(), StringView("Value generic ") << g << StringView(" out of bounds in impl: ") << resolve_.implGenerics().values.size());
             return resolve_.implGenerics().values.at(g.idx()).type;
         case 1:
-            ASSERT_BUG(sp, g.idx() < resolve_.itemGenerics().values.size(), "Value generic " << g << " out of bounds in fcn: " << resolve_.itemGenerics().values.size());
+            ASSERT_BUG(sp, g.idx() < resolve_.itemGenerics().values.size(), StringView("Value generic ") << g << StringView(" out of bounds in fcn: ") << resolve_.itemGenerics().values.size());
             return resolve_.itemGenerics().values.at(g.idx()).type;
         default:
-            BUG(Span(), "");
+            BUG(Span(), StringView(""));
     }
 }
 

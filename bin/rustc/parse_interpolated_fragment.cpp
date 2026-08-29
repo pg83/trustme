@@ -1,9 +1,11 @@
 #include "parse_interpolated_fragment.h"
+#include "output.h"
 
 #include "ast_ast.h"
 #include "ast_expr.h"
 
-#include <iostream>
+
+using namespace stl;
 
 InterpolatedFragment::~InterpolatedFragment() {
     if (ptr) {
@@ -108,48 +110,7 @@ InterpolatedFragment::InterpolatedFragment(ASTVisibility v)
 {
 }
 
-std::ostream& operator<<(std::ostream& os, InterpolatedFragment const& x) {
-    switch (x.type) {
-        case InterpolatedFragment::TT:
-            os << "tt[" << x.asTt() << "]";
-            break;
-        case InterpolatedFragment::PAT:
-            os << "pat[" << *reinterpret_cast<ASTPattern*>(x.ptr) << "]";
-            break;
-        case InterpolatedFragment::PATH:
-            os << "path[" << *reinterpret_cast<ASTPath*>(x.ptr) << "]";
-            break;
-        case InterpolatedFragment::TYPE:
-            os << "type[" << *reinterpret_cast<ASTType**>(x.ptr) << "]";
-            break;
 
-        case InterpolatedFragment::EXPR:
-            os << "expr[" << *reinterpret_cast<const ASTExprNode*>(x.ptr) << "]";
-            break;
-        case InterpolatedFragment::STMT:
-            os << "stmt[" << *reinterpret_cast<const ASTExprNode*>(x.ptr) << "]";
-            break;
-        case InterpolatedFragment::STMT_ITEM: {
-            const auto& namedItem = *reinterpret_cast<const ASTNamed<ASTItem>*>(x.ptr);
-            os << "stmt-item[" << namedItem.data.tagStr() << "(" << namedItem.name << ")]";
-        } break;
-        case InterpolatedFragment::BLOCK:
-            os << "block[" << *reinterpret_cast<const ASTExprNode*>(x.ptr) << "]";
-            break;
-
-        case InterpolatedFragment::META:
-            os << "meta[" << *reinterpret_cast<const ASTAttribute*>(x.ptr) << "]";
-            break;
-        case InterpolatedFragment::ITEM: {
-            const auto& namedItem = *reinterpret_cast<const ASTNamed<ASTItem>*>(x.ptr);
-            os << "item[" << namedItem.data.tagStr() << "(" << namedItem.name << ")]";
-        } break;
-        case InterpolatedFragment::VIS:
-            os << "vis[" << *reinterpret_cast<const ASTVisibility*>(x.ptr) << "]";
-            break;
-    }
-    return os;
-}
 
 TokenTree& InterpolatedFragment::asTt() {
     BUG_ASSERT(type == TT);
@@ -159,4 +120,50 @@ TokenTree& InterpolatedFragment::asTt() {
 const TokenTree& InterpolatedFragment::asTt() const {
     BUG_ASSERT(type == TT);
     return *reinterpret_cast<TokenTree*>(ptr);
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, InterpolatedFragment>(ZeroCopyOutput& os, InterpolatedFragment const& x) {
+    switch (x.type) {
+        case InterpolatedFragment::TT:
+            os << StringView("tt[") << x.asTt() << StringView("]");
+            break;
+        case InterpolatedFragment::PAT:
+            os << StringView("pat[") << *reinterpret_cast<ASTPattern*>(x.ptr) << StringView("]");
+            break;
+        case InterpolatedFragment::PATH:
+            os << StringView("path[") << *reinterpret_cast<ASTPath*>(x.ptr) << StringView("]");
+            break;
+        case InterpolatedFragment::TYPE:
+            os << StringView("type[") << *reinterpret_cast<ASTType**>(x.ptr) << StringView("]");
+            break;
+
+        case InterpolatedFragment::EXPR:
+            os << StringView("expr[") << *reinterpret_cast<const ASTExprNode*>(x.ptr) << StringView("]");
+            break;
+        case InterpolatedFragment::STMT:
+            os << StringView("stmt[") << *reinterpret_cast<const ASTExprNode*>(x.ptr) << StringView("]");
+            break;
+        case InterpolatedFragment::STMT_ITEM: {
+            const auto& namedItem = *reinterpret_cast<const ASTNamed<ASTItem>*>(x.ptr);
+            os << StringView("stmt-item[") << namedItem.data.tagStr() << StringView("(") << namedItem.name << StringView(")]");
+        } break;
+        case InterpolatedFragment::BLOCK:
+            os << StringView("block[") << *reinterpret_cast<const ASTExprNode*>(x.ptr) << StringView("]");
+            break;
+
+        case InterpolatedFragment::META:
+            os << StringView("meta[") << *reinterpret_cast<const ASTAttribute*>(x.ptr) << StringView("]");
+            break;
+        case InterpolatedFragment::ITEM: {
+            const auto& namedItem = *reinterpret_cast<const ASTNamed<ASTItem>*>(x.ptr);
+            os << StringView("item[") << namedItem.data.tagStr() << StringView("(") << namedItem.name << StringView(")]");
+        } break;
+        case InterpolatedFragment::VIS:
+            os << StringView("vis[") << *reinterpret_cast<const ASTVisibility*>(x.ptr) << StringView("]");
+            break;
+    }
+    return;
+}
 }

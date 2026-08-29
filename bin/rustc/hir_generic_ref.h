@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "rc_string.h"
 
 #include <cstdint>
@@ -66,7 +68,6 @@ struct HIRGenericRef {
         return this->ord(x) == OrdLess;
     }
 
-    void fmt(std::ostream& os) const;
+    void fmt(stl::ZeroCopyOutput& os) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const HIRGenericRef& x);
 };

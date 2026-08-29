@@ -1,4 +1,5 @@
 #include "main_bindings.h"
+#include "output_file.h"
 
 #include "ast_ast.h"
 #include "hir_hir.h"
@@ -35,9 +36,8 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
-#include <iomanip>
 #include <iostream>
+#include <fstream>
 #include <pthread.h>
 
 using namespace stl;
@@ -177,7 +177,7 @@ namespace {
 
         if (params.debug.pause) {
             char c;
-            std::cerr << "Pausing to attach a debugger\nType any text to continue" << std::endl;
+            sysE << StringView("Pausing to attach a debugger\nType any text to continue") << endL;
             std::cin >> c;
         }
 
@@ -204,11 +204,12 @@ namespace {
             TargetSetCfg(wb, params.target);
         }
         if (params.printCfgs) {
-            CfgDump(*wb.settings, std::cout);
+            auto out = sysO;
+            CfgDump(*wb.settings, out);
             return 0;
         }
         if (params.crateNameQuery != "") {
-            std::cout << HIRDeserialiseJustName(params.crateNameQuery.c_str()) << std::endl;
+            sysO << HIRDeserialiseJustName(params.crateNameQuery.c_str()) << endL;
             return 0;
         }
         if (params.targetSaveback != "") {
@@ -217,7 +218,7 @@ namespace {
         }
 
         if (params.infile == "") {
-            std::cerr << "No input file passed" << std::endl;
+            sysE << StringView("No input file passed") << endL;
             return 1;
         }
 
@@ -311,24 +312,24 @@ namespace {
             if (params.outfile == "") {
                 switch (crate.crateType) {
                     case ASTCrate::Type::RustLib:
-                        params.outfile = FMT(params.outputDir << "lib" << crate.crateNameSet << ".rlib");
+                        params.outfile = FMT(params.outputDir << StringView("lib") << crate.crateNameSet << StringView(".rlib"));
                         break;
                     case ASTCrate::Type::Executable:
                         params.outfile = FMT(params.outputDir << crate.crateNameSet);
                         break;
                     case ASTCrate::Type::ProcMacro:
-                        params.outfile = FMT(params.outputDir << "lib" << crate.crateNameSet << "-plugin");
+                        params.outfile = FMT(params.outputDir << StringView("lib") << crate.crateNameSet << StringView("-plugin"));
                         break;
                     default:
-                        params.outfile = FMT(params.outputDir << crate.crateNameSet << ".o");
+                        params.outfile = FMT(params.outputDir << crate.crateNameSet << StringView(".o"));
                         break;
                 }
-                DEBUG("params.outfile = " << params.outfile);
+                DEBUG(StringView("params.outfile = ") << params.outfile);
             }
 
             if (params.debug.dumpAst) {
                 {
-                    DumpRust(FMT(params.outfile << "_1_ast.rs").c_str(), crate);
+                    DumpRust(FMT(params.outfile << StringView("_1_ast.rs")).c_str(), crate);
                 }
             }
 
@@ -345,17 +346,17 @@ namespace {
                     RcString panicCrateName;
                     bool panicRuntimeNeeded = false;
                     for (const auto& ec : crate.externCrates) {
-                        DEBUG("Looking at lang items from " << ec.first << " : " << FMT_CB(ss, for (const auto& item : ec.second.hir->langItems) ss << item << ',';));
+                        DEBUG(StringView("Looking at lang items from ") << ec.first << StringView(" : ") << FMT_CB(ss, for (const auto& item : ec.second.hir->langItems) ss << item << ',';));
                         if (ec.second.hir->langItems.count("trustme-allocator")) {
                             if (allocatorCrateLoaded) {
-                                ERROR(Span(), E0000, "Multiple allocator crates loaded - " << allocCrateName << " and " << ec.first);
+                                ERROR(Span(), E0000, StringView("Multiple allocator crates loaded - ") << allocCrateName << StringView(" and ") << ec.first);
                             }
                             allocCrateName = ec.first;
                             allocatorCrateLoaded = true;
                         }
                         if (ec.second.hir->langItems.count("trustme-panic_runtime")) {
                             if (panicRuntimeLoaded) {
-                                WARNING(Span(), W0000, "Multiple panic_runtime crates loaded - " << panicCrateName << " and " << ec.first);
+                                WARNING(Span(), W0000, StringView("Multiple panic_runtime crates loaded - ") << panicCrateName << StringView(" and ") << ec.first);
                             } else {
                                 panicCrateName = ec.first;
                                 panicRuntimeLoaded = true;
@@ -401,17 +402,17 @@ namespace {
                 PathEnumerator pe;
                 pe.visitModule(crate.rootModule_);
 
-                std::ofstream of{params.emitDepfile};
+                OutputFile of{params.emitDepfile};
                 // TODO: Escape spaces and colons in these paths
-                of << params.outfile << ": " << params.infile;
+                of << params.outfile << StringView(": ") << params.infile;
                 for (const auto& modPath : pe.out) {
-                    of << " " << modPath;
+                    of << StringView(" ") << modPath;
                 }
-                of << std::endl;
+                of << endL;
 
-                of << params.outfile << ":";
+                of << params.outfile << StringView(":");
                 for (const auto& ec : crate.externCrates) {
-                    of << " " << ec.second.filename;
+                    of << StringView(" ") << ec.second.filename;
                 }
             }
 
@@ -428,7 +429,7 @@ namespace {
 
             if (params.debug.dumpAst) {
                 {
-                    DumpRust(FMT(params.outfile << "_1_ast.rs").c_str(), crate);
+                    DumpRust(FMT(params.outfile << StringView("_1_ast.rs")).c_str(), crate);
                 }
             }
 
@@ -454,7 +455,7 @@ namespace {
             memoryDump(memoryDumpSequence, "AST Dropped");
             if (params.debug.dumpHir) {
                 {
-                    std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
+                    OutputFile os(FMT(params.outfile << StringView("_2_hir.rs")));
                     HIRDump(os, *hirCrate);
                 }
             }
@@ -491,7 +492,7 @@ namespace {
             }
             if (params.debug.dumpHir) {
                 {
-                    std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
+                    OutputFile os(FMT(params.outfile << StringView("_2_hir.rs")));
                     HIRDump(os, *hirCrate);
                 }
             }
@@ -506,7 +507,7 @@ namespace {
             }
             if (params.debug.dumpHir) {
                 {
-                    std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
+                    OutputFile os(FMT(params.outfile << StringView("_2_hir.rs")));
                     HIRDump(os, *hirCrate);
                 }
             }
@@ -551,7 +552,7 @@ namespace {
             }
             if (params.debug.dumpHir) {
                 {
-                    std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
+                    OutputFile os(FMT(params.outfile << StringView("_2_hir.rs")));
                     HIRDump(os, *hirCrate);
                 }
             }
@@ -565,7 +566,7 @@ namespace {
             }
             if (params.debug.dumpMir) {
                 {
-                    std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
+                    OutputFile os(FMT(params.outfile << StringView("_3_mir.rs")));
                     MIRDump(os, *hirCrate);
                 }
             }
@@ -579,7 +580,7 @@ namespace {
             }
             if (params.debug.dumpMir) {
                 {
-                    std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
+                    OutputFile os(FMT(params.outfile << StringView("_3_mir.rs")));
                     MIRDump(os, *hirCrate);
                 }
             }
@@ -605,19 +606,18 @@ namespace {
             transOpt.debugInfo = params.debugInfo;
 
             if (params.codegen.emitLinkManifest != "") {
-                std::ofstream manifest(params.codegen.emitLinkManifest.c_str());
-                ASSERT_BUG(Span(), manifest.is_open(), "Failed to open link manifest `" << params.codegen.emitLinkManifest << "`");
+                OutputFile manifest(params.codegen.emitLinkManifest.c_str());
                 for (const auto& path : params.nativeLibSearchDirs) {
-                    manifest << "search\t" << path << "\n";
+                    manifest << StringView("search\t") << path << StringView("\n");
                 }
                 for (const auto& path : hirCrate->linkPaths) {
-                    manifest << "search\t" << path << "\n";
+                    manifest << StringView("search\t") << path << StringView("\n");
                 }
                 for (const auto& lib : hirCrate->extLibs) {
-                    manifest << "lib\t" << lib.name << "\n";
+                    manifest << StringView("lib\t") << lib.name << StringView("\n");
                 }
                 for (const auto& arg : params.codegen.linkerArgs) {
-                    manifest << "arg\t" << arg << "\n";
+                    manifest << StringView("arg\t") << arg << StringView("\n");
                 }
                 for (const auto& crateName : hirCrate->extCratesOrdered) {
                     const auto& ext = hirCrate->extCrates.at(crateName);
@@ -627,10 +627,9 @@ namespace {
                     if (ext.data->langItems.count("trustme-panic_runtime") && strncmp(crateName.c_str(), transOpt.panicCrate.c_str(), transOpt.panicCrate.size()) != 0) {
                         continue;
                     }
-                    manifest << "object\t" << ext.objectPath << "\n";
+                    manifest << StringView("object\t") << ext.objectPath << StringView("\n");
                 }
                 manifest.close();
-                ASSERT_BUG(Span(), !manifest.bad(), "Failed to write link manifest `" << params.codegen.emitLinkManifest << "`");
             }
 
             if (params.testHarness) {
@@ -644,7 +643,7 @@ namespace {
                     crateForSer.crateName = hirCrate->crateName;
                     crateForSer.edition = hirCrate->edition;
                     for (const auto& i : hirCrate->rootModule.macroItems) {
-                        DEBUG(i.first << ": " << i.second->ent.tagStr());
+                        DEBUG(i.first << StringView(": ") << i.second->ent.tagStr());
                         if (const auto* e = i.second->ent.opt_ProcMacro()) {
                             crateForSer.rootModule.macroItems.insert(std::make_pair(i.first, crateForSer.pool->make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{i.second->publicity, *e})));
                         }
@@ -659,7 +658,7 @@ namespace {
                     HIRSerialise(params.outfile, *hirCrate);
                 } else {
                     {
-                        std::ofstream marker(params.outfile);
+                        OutputFile marker(params.outfile);
                     }
                 }
                 return 0;
@@ -668,7 +667,7 @@ namespace {
             TransList items = [&]() {
                 switch (crateType) {
                     case ASTCrate::Type::Unknown:
-                        std::cerr << "BUG? Unknown crate type" << std::endl;
+                        sysE << StringView("BUG? Unknown crate type") << endL;
                         exit(1);
                         break;
                     case ASTCrate::Type::RustLib:
@@ -679,7 +678,7 @@ namespace {
                     case ASTCrate::Type::Executable:
                         return TransEnumerateMain(wb, *hirCrate);
                 }
-                BUG(Span(), "Invalid crate_type value");
+                BUG(Span(), StringView("Invalid crate_type value"));
             }();
             {
                 // TODO: Drop glue generation?
@@ -750,7 +749,7 @@ namespace {
         try {
             args.result = compile(args.argc, args.argv);
         } catch (const std::exception& e) {
-            std::cerr << "error: " << e.what() << std::endl;
+            sysE << StringView("error: ") << e.what() << endL;
             ::exit(1);
         }
         return nullptr;
@@ -759,22 +758,22 @@ namespace {
     static void printRustcVersion(bool verbose) {
         const char* rustcTarget = RUSTC_TARGET_VERSION;
 
-        std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << std::endl;
+        sysO << StringView("rustc ") << rustcTarget << StringView(".100 (trustme ") << VersionGetString() << StringView(")") << endL;
         if (!verbose) {
             return;
         }
-        std::cout << "binary: rustc" << std::endl;
-        std::cout << "commit-hash: " << VersionGetGitHash() << std::endl;
-        std::cout << "commit-date: UNKNOWN" << std::endl;
-        std::cout << "build-date: " << VersionGetBuildTime() << std::endl;
-        std::cout << "host: UNKNOWN" << std::endl;
-        std::cout << "release: " << rustcTarget << ".100" << std::endl;
+        sysO << StringView("binary: rustc") << endL;
+        sysO << StringView("commit-hash: ") << VersionGetGitHash() << endL;
+        sysO << StringView("commit-date: UNKNOWN") << endL;
+        sysO << StringView("build-date: ") << VersionGetBuildTime() << endL;
+        sysO << StringView("host: UNKNOWN") << endL;
+        sysO << StringView("release: ") << rustcTarget << StringView(".100") << endL;
     }
 }
 
 void ExpandTestHarness(ASTCrate& crate) {
-    ASSERT_BUG(Span(), crate.extCratenameTest != "", "Crate `test` not loaded");
-    ASSERT_BUG(Span(), crate.extCratenameStd != "", "Crate `std` not loaded");
+    ASSERT_BUG(Span(), crate.extCratenameTest != "", StringView("Crate `test` not loaded"));
+    ASSERT_BUG(Span(), crate.extCratenameStd != "", StringView("Crate `std` not loaded"));
     auto cTest = crate.extCratenameTest;
 
     auto mainFn = ASTFunction{Span(), mkType(*crate.pool, ASTTypeTags::Unit(), Span()), {}};
@@ -902,7 +901,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             path = spec.substr(equals + 1);
         }
         if (path.empty()) {
-            std::cerr << "Option -L requires a non-empty path" << std::endl;
+            sysE << StringView("Option -L requires a non-empty path") << endL;
             exit(1);
         }
 
@@ -916,7 +915,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
         } else if (kind == "framework") {
             this->frameworkSearchDirs.push_back(std::move(path));
         } else {
-            std::cerr << "Unknown -L search path kind '" << kind << "'" << std::endl;
+            sysE << StringView("Unknown -L search path kind '") << kind << StringView("'") << endL;
             exit(1);
         }
     };
@@ -947,7 +946,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             if (this->infile == "") {
                 this->infile = arg;
             } else {
-                std::cerr << "Unexpected free argument" << std::endl;
+                sysE << StringView("Unexpected free argument") << endL;
                 exit(1);
             }
         } else if (arg[1] != '-') {
@@ -957,7 +956,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 case 'L':
                     if (arg[1] == '\0') {
                         if (i == argc - 1) {
-                            std::cerr << "Option " << arg << " requires an argument" << std::endl;
+                            sysE << StringView("Option ") << arg << StringView(" requires an argument") << endL;
                             exit(1);
                         }
                         addLibrarySearchDir(argv[++i]);
@@ -968,7 +967,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 case 'l':
                     if (arg[1] == '\0') {
                         if (i == argc - 1) {
-                            std::cerr << "Option " << arg << " requires an argument" << std::endl;
+                            sysE << StringView("Option ") << arg << StringView(" requires an argument") << endL;
                             exit(1);
                         }
                         this->libraries.push_back(argv[++i]);
@@ -984,7 +983,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     const char* lintName;
                     if (arg[1] == '\0') {
                         if (i == argc - 1) {
-                            std::cerr << "Option -" << flag << " requires an argument" << std::endl;
+                            sysE << StringView("Option -") << flag << StringView(" requires an argument") << endL;
                             exit(1);
                         }
                         lintName = argv[++i];
@@ -992,7 +991,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         lintName = arg + 1;
                     }
                     if (lintName[0] == '\0') {
-                        std::cerr << "Option -" << flag << " requires an argument" << std::endl;
+                        sysE << StringView("Option -") << flag << StringView(" requires an argument") << endL;
                         exit(1);
                     }
                     const auto level = flag == 'A' ? CfgLintLevel::Allow : flag == 'W' ? CfgLintLevel::Warn : flag == 'D' ? CfgLintLevel::Deny : CfgLintLevel::Forbid;
@@ -1004,7 +1003,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     std::string optval;
                     if (arg[1] == '\0') {
                         if (i == argc - 1) {
-                            std::cerr << "Option " << arg << " requires an argument" << std::endl;
+                            sysE << StringView("Option ") << arg << StringView(" requires an argument") << endL;
                             exit(1);
                         }
                         optname = argv[++i];
@@ -1018,7 +1017,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     }
                     auto getOptval = [&]() {
                         if (eqPos == std::string::npos) {
-                            std::cerr << "Flag -C " << optname << " requires an argument" << std::endl;
+                            sysE << StringView("Flag -C ") << optname << StringView(" requires an argument") << endL;
                             exit(1);
                         }
                     };
@@ -1066,7 +1065,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
                             this->overflowChecks = true;
                         } else {
-                            std::cerr << "invalid value for -C " << optname << ": '" << optval << "'" << std::endl;
+                            sysE << StringView("invalid value for -C ") << optname << StringView(": '") << optval << StringView("'") << endL;
                             exit(1);
                         }
                         this->overflowChecksExplicit = true;
@@ -1085,7 +1084,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "z") {
                             this->optLevel = OptimizationLevel::SizeMin;
                         } else {
-                            std::cerr << "optimization level needs to be between 0-3, s or z (instead was '" << optval << "')" << std::endl;
+                            sysE << StringView("optimization level needs to be between 0-3, s or z (instead was '") << optval << StringView("')") << endL;
                             exit(1);
                         }
                     } else if (optname == "debug-assertions" || optname == "debug_assertions") {
@@ -1094,7 +1093,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
                             this->debugAssertions = false;
                         } else {
-                            std::cerr << "invalid value for -C debug-assertions: '" << optval << "'" << std::endl;
+                            sysE << StringView("invalid value for -C debug-assertions: '") << optval << StringView("'") << endL;
                             exit(1);
                         }
                         this->debugAssertionsExplicit = true;
@@ -1105,7 +1104,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             const auto end = optval.find(',', start);
                             const auto feature = optval.substr(start, end == std::string::npos ? std::string::npos : end - start);
                             if (feature != "-crt-static") {
-                                std::cerr << "unsupported value for -C target-feature: '" << feature << "' (trustme only supports -crt-static)" << std::endl;
+                                sysE << StringView("unsupported value for -C target-feature: '") << feature << StringView("' (trustme only supports -crt-static)") << endL;
                                 exit(1);
                             }
                             if (end == std::string::npos) {
@@ -1126,11 +1125,11 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "2" || optval == "full") {
                             this->debugInfo = DebugInfoLevel::Full;
                         } else {
-                            std::cerr << "invalid value for -C debuginfo: '" << optval << "'" << std::endl;
+                            sysE << StringView("invalid value for -C debuginfo: '") << optval << StringView("'") << endL;
                             exit(1);
                         }
                     } else {
-                        std::cerr << "Unknown codegen option: '" << optname << "'" << std::endl;
+                        sysE << StringView("Unknown codegen option: '") << optname << StringView("'") << endL;
                         exit(1);
                     }
                 }
@@ -1140,7 +1139,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     std::string optval;
                     if (arg[1] == '\0') {
                         if (i == argc - 1) {
-                            std::cerr << "Option " << arg << " requires an argument" << std::endl;
+                            sysE << StringView("Option ") << arg << StringView(" requires an argument") << endL;
                             exit(1);
                         }
                         optname = argv[++i];
@@ -1154,13 +1153,13 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     }
                     auto getOptval = [&]() {
                         if (eqPos == std::string::npos) {
-                            std::cerr << "Flag -Z " << optname << " requires an argument" << std::endl;
+                            sysE << StringView("Flag -Z ") << optname << StringView(" requires an argument") << endL;
                             exit(1);
                         }
                     };
                     auto noOptval = [&]() {
                         if (eqPos != std::string::npos) {
-                            std::cerr << "Flag -Z " << optname << " doesn't take an argument" << std::endl;
+                            sysE << StringView("Flag -Z ") << optname << StringView(" doesn't take an argument") << endL;
                             exit(1);
                         }
                     };
@@ -1172,18 +1171,18 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     } else if (optname == "mir-opt-level") {
                         getOptval();
                         if (optval.empty()) {
-                            std::cerr << "Invalid number for -Z mir-opt-level: '" << optval << "'" << std::endl;
+                            sysE << StringView("Invalid number for -Z mir-opt-level: '") << optval << StringView("'") << endL;
                             exit(1);
                         }
                         unsigned value = 0;
                         for (const char c : optval) {
                             if (c < '0' || c > '9') {
-                                std::cerr << "Invalid number for -Z mir-opt-level: '" << optval << "'" << std::endl;
+                                sysE << StringView("Invalid number for -Z mir-opt-level: '") << optval << StringView("'") << endL;
                                 exit(1);
                             }
                             const unsigned digit = c - '0';
                             if (value > (UINT_MAX - digit) / 10) {
-                                std::cerr << "Number for -Z mir-opt-level is too large: '" << optval << "'" << std::endl;
+                                sysE << StringView("Number for -Z mir-opt-level is too large: '") << optval << StringView("'") << endL;
                                 exit(1);
                             }
                             value = value * 10 + digit;
@@ -1196,7 +1195,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
                             this->ubChecks = false;
                         } else {
-                            std::cerr << "invalid value for -Z ub-checks: '" << optval << "'" << std::endl;
+                            sysE << StringView("invalid value for -Z ub-checks: '") << optval << StringView("'") << endL;
                             exit(1);
                         }
                         this->ubChecksExplicit = true;
@@ -1209,7 +1208,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "none") {
                             this->fmtDebug = Settings::FmtDebug::None;
                         } else {
-                            std::cerr << "invalid value for -Z fmt-debug: '" << optval << "' (expected 'full', 'shallow', or 'none')" << std::endl;
+                            sysE << StringView("invalid value for -Z fmt-debug: '") << optval << StringView("' (expected 'full', 'shallow', or 'none')") << endL;
                             exit(1);
                         }
                     } else if (optname == "link-directives") {
@@ -1219,12 +1218,12 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "no") {
                             settings.linkDirectives = false;
                         } else {
-                            std::cerr << "invalid value for -Z link-directives: '" << optval << "' (expected 'yes' or 'no')" << std::endl;
+                            sysE << StringView("invalid value for -Z link-directives: '") << optval << StringView("' (expected 'yes' or 'no')") << endL;
                             exit(1);
                         }
                     } else if (optname == "next-solver") {
                         if (!(eqPos == std::string::npos || optval == "globally" || optval == "coherence")) {
-                            std::cerr << "Invalid value for -Z next-solver: '" << optval << "' (the legacy trait solver has been removed)" << std::endl;
+                            sysE << StringView("Invalid value for -Z next-solver: '") << optval << StringView("' (the legacy trait solver has been removed)") << endL;
                             exit(1);
                         }
                     } else if (optname == "dump-ast") {
@@ -1254,7 +1253,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "mir") {
                             this->lastStage = STAGE_MIR;
                         } else {
-                            std::cerr << "Unknown argument to -Z stop-after - '" << optval << "'" << std::endl;
+                            sysE << StringView("Unknown argument to -Z stop-after - '") << optval << StringView("'") << endL;
                             exit(1);
                         }
                     } else if (optname == "pause-after-start") {
@@ -1288,7 +1287,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 switch (*arg) {
                     case 'o':
                         if (i == argc - 1) {
-                            std::cerr << "Option -" << *arg << " requires an argument" << std::endl;
+                            sysE << StringView("Option -") << *arg << StringView(" requires an argument") << endL;
                             exit(1);
                         }
                         this->outfile = argv[++i];
@@ -1300,7 +1299,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         this->debugInfo = DebugInfoLevel::Full;
                         break;
                     default:
-                        std::cerr << "Unknown option: '-" << *arg << "'" << std::endl;
+                        sysE << StringView("Unknown option: '-") << *arg << StringView("'") << endL;
                         exit(1);
                 }
             }
@@ -1308,7 +1307,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             auto checkWithArg = [&](const char* name) -> const char* {
                 if (strcmp(arg + 2, name) == 0) {
                     if (i == argc - 1) {
-                        std::cerr << "Flag " << arg << " requires an argument" << std::endl;
+                        sysE << StringView("Flag ") << arg << StringView(" requires an argument") << endL;
                         exit(1);
                     }
                     return argv[++i];
@@ -1331,59 +1330,59 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 this->crateNameQuery = metadata;
             } else if (strcmp(arg, "--crate") == 0) {
                 if (i == argc - 1) {
-                    std::cerr << "Option " << arg << " requires an argument" << std::endl;
+                    sysE << StringView("Option ") << arg << StringView(" requires an argument") << endL;
                     exit(1);
                 }
                 const char* desc = argv[++i];
                 const char* pos = std::strchr(desc, '=');
                 if (!pos || pos == desc || !pos[1]) {
-                    std::cerr << "Option --crate requires <unique-name>=<metadata-path>" << std::endl;
+                    sysE << StringView("Option --crate requires <unique-name>=<metadata-path>") << endL;
                     exit(1);
                 }
                 auto name = RcString::newInterned(desc, pos - desc);
                 settings.crateOverride(name).metadataPath = pos + 1;
             } else if (strcmp(arg, "--crate-object") == 0) {
                 if (i == argc - 1) {
-                    std::cerr << "Option " << arg << " requires an argument" << std::endl;
+                    sysE << StringView("Option ") << arg << StringView(" requires an argument") << endL;
                     exit(1);
                 }
                 const char* desc = argv[++i];
                 const char* pos = std::strchr(desc, '=');
                 if (!pos || pos == desc || !pos[1]) {
-                    std::cerr << "Option --crate-object requires <unique-name>=<object-path>" << std::endl;
+                    sysE << StringView("Option --crate-object requires <unique-name>=<object-path>") << endL;
                     exit(1);
                 }
                 auto name = RcString::newInterned(desc, pos - desc);
                 settings.crateOverride(name).objectPath = pos + 1;
             } else if (strcmp(arg, "--proc-macro") == 0) {
                 if (i == argc - 1) {
-                    std::cerr << "Option " << arg << " requires an argument" << std::endl;
+                    sysE << StringView("Option ") << arg << StringView(" requires an argument") << endL;
                     exit(1);
                 }
                 const char* desc = argv[++i];
                 const char* pos = std::strchr(desc, '=');
                 if (!pos || pos == desc || !pos[1]) {
-                    std::cerr << "Option --proc-macro requires <unique-name>=<executable-path>" << std::endl;
+                    sysE << StringView("Option --proc-macro requires <unique-name>=<executable-path>") << endL;
                     exit(1);
                 }
                 auto name = RcString::newInterned(desc, pos - desc);
                 settings.crateOverride(name).procMacroPath = pos + 1;
             } else if (strcmp(arg, "--crate-alias") == 0) {
                 if (i == argc - 1) {
-                    std::cerr << "Option " << arg << " requires an argument" << std::endl;
+                    sysE << StringView("Option ") << arg << StringView(" requires an argument") << endL;
                     exit(1);
                 }
                 const char* desc = argv[++i];
                 const char* pos = std::strchr(desc, '=');
                 if (!pos || pos == desc || !pos[1]) {
-                    std::cerr << "Option --crate-alias requires <source-name>=<unique-name>" << std::endl;
+                    sysE << StringView("Option --crate-alias requires <source-name>=<unique-name>") << endL;
                     exit(1);
                 }
                 auto name = RcString::newInterned(desc, pos - desc);
                 settings.crateOverride(name).target = pos + 1;
             } else if (strcmp(arg, "--extern") == 0) {
                 if (i == argc - 1) {
-                    std::cerr << "Option " << arg << " requires an argument" << std::endl;
+                    sysE << StringView("Option ") << arg << StringView(" requires an argument") << endL;
                     exit(1);
                 }
                 const char* desc = argv[++i];
@@ -1408,7 +1407,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 } else if (strcmp(typeStr, "proc-macro") == 0) {
                     this->crateType = ASTCrate::Type::ProcMacro;
                 } else {
-                    std::cerr << "Unknown value for --crate-type: " << typeStr << std::endl;
+                    sysE << StringView("Unknown value for --crate-type: ") << typeStr << endL;
                     exit(1);
                 }
             } else if (const char* cfgSpec = checkWithArg("cfg")) {
@@ -1428,23 +1427,23 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             } else if (const char* checkCfgSpec = checkWithArg("check-cfg")) {
                 std::string error;
                 if (!CfgSetCheckSpec(settings, checkCfgSpec, error)) {
-                    std::cerr << "invalid `--check-cfg` argument: `" << checkCfgSpec << "`: " << error << std::endl;
+                    sysE << StringView("invalid `--check-cfg` argument: `") << checkCfgSpec << StringView("`: ") << error << endL;
                     exit(1);
                 }
             } else if (const char* envSpec = checkWithArg("env-set")) {
                 const char* separator = std::strchr(envSpec, '=');
                 if (separator == nullptr || separator == envSpec) {
-                    std::cerr << "--env-set takes an argument of the form NAME=VALUE" << std::endl;
+                    sysE << StringView("--env-set takes an argument of the form NAME=VALUE") << endL;
                     exit(1);
                 }
                 const std::string name(envSpec, separator);
                 if (::setenv(name.c_str(), separator + 1, 1) != 0) {
-                    std::cerr << "failed to set compile-time environment variable '" << name << "'" << std::endl;
+                    sysE << StringView("failed to set compile-time environment variable '") << name << StringView("'") << endL;
                     exit(1);
                 }
             } else if (const char* forceWarn = checkWithArg("force-warn")) {
                 if (forceWarn[0] == '\0') {
-                    std::cerr << "Flag --force-warn requires an argument" << std::endl;
+                    sysE << StringView("Flag --force-warn requires an argument") << endL;
                     exit(1);
                 }
                 CfgSetLintLevel(settings, forceWarn, CfgLintLevel::ForceWarn);
@@ -1459,7 +1458,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 } else if (strcmp(lintCap, "forbid") == 0) {
                     level = CfgLintLevel::Forbid;
                 } else {
-                    std::cerr << "unknown lint level: `" << lintCap << "`" << std::endl;
+                    sysE << StringView("unknown lint level: `") << lintCap << StringView("`") << endL;
                     exit(1);
                 }
                 CfgSetLintCap(settings, level);
@@ -1467,13 +1466,13 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 if (std::strcmp(emit, "metadata") == 0) {
                     this->emitMetadataOnly = true;
                 } else {
-                    std::cerr << "Ignoring `--emit " << emit << "` for compatability with rustc" << std::endl;
+                    sysE << StringView("Ignoring `--emit ") << emit << StringView("` for compatability with rustc") << endL;
                 }
             } else if (const char* targetName = checkWithArg("target")) {
                 this->target = targetName;
             } else if (strcmp(arg, "--dump-target-spec") == 0) {
                 if (i == argc - 1) {
-                    std::cerr << "Flag " << arg << " requires an argument" << std::endl;
+                    sysE << StringView("Flag ") << arg << StringView(" requires an argument") << endL;
                     exit(1);
                 }
                 this->targetSaveback = argv[++i];
@@ -1489,11 +1488,11 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 } else if (strcmp(editionStr, "2024") == 0) {
                     this->edition = ASTEdition::Rust2024;
                 } else {
-                    std::cerr << "Unknown value for " << arg << " - '" << editionStr << "'" << std::endl;
+                    sysE << StringView("Unknown value for ") << arg << StringView(" - '") << editionStr << StringView("'") << endL;
                     exit(1);
                 }
             } else {
-                std::cerr << "Unknown option '" << arg << "'" << std::endl;
+                sysE << StringView("Unknown option '") << arg << StringView("'") << endL;
                 exit(1);
             }
         }
@@ -1521,14 +1520,14 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             } else if (s == "mir") {
                 this->debug.dumpMir = true;
             } else {
-                std::cerr << "Unknown option in $TRUSTME_DUMP '" << s << "'" << std::endl;
+                sysE << StringView("Unknown option in $TRUSTME_DUMP '") << s << StringView("'") << endL;
             }
         }
     }
 }
 
 void ProgramParams::showHelp() const {
-    std::cout << "USAGE: rustc <sourcefile>\n"
+    sysO << StringView("USAGE: rustc <sourcefile>\n"
                  "\n"
                  "OPTIONS:\n"
                  "-L [kind=]<dir>    : Search for crates or native libraries in this directory\n"
@@ -1556,7 +1555,7 @@ void ProgramParams::showHelp() const {
                  "--target <name>    : Compile code for the given target\n"
                  "--test             : Generate a unit test executable\n"
                  "-C <option>        : Code-generation options\n"
-                 "-Z <option>        : Debugging/experimental options\n";
+                 "-Z <option>        : Debugging/experimental options\n");
 }
 
 auto ProgramParams::effectiveMirOptLevel() const -> unsigned {

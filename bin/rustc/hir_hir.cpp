@@ -1,6 +1,7 @@
 #include "hir_hir.h"
 
 #include "floats.h"
+#include "output.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
 #include "wire_board.h"
@@ -166,12 +167,12 @@ namespace {
     }
 
     const HIRModule& getContainingModule(const HIRCrate& crate, const Span& sp, const HIRSimplePath& path, bool ignoreCrateName, bool ignoreLastNode) {
-        ASSERT_BUG(sp, path.components().size() > 0u, "Invalid path (no nodes) - " << path);
-        ASSERT_BUG(sp, path.components().size() > (ignoreLastNode ? 1u : 0u), "Invalid path (only one node with `ignore_last_node` - " << path);
+        ASSERT_BUG(sp, path.components().size() > 0u, StringView("Invalid path (no nodes) - ") << path);
+        ASSERT_BUG(sp, path.components().size() > (ignoreLastNode ? 1u : 0u), StringView("Invalid path (only one node with `ignore_last_node` - ") << path);
 
         const HIRModule* mod;
         if (!ignoreCrateName && path.crateName() != crate.crateName) {
-            ASSERT_BUG(sp, crate.extCrates.count(path.crateName()) > 0, "Crate '" << path.crateName() << "' not loaded for " << path);
+            ASSERT_BUG(sp, crate.extCrates.count(path.crateName()) > 0, StringView("Crate '") << path.crateName() << StringView("' not loaded for ") << path);
             mod = &crate.extCrates.at(path.crateName()).data->rootModule;
         } else {
             mod = &crate.rootModule;
@@ -180,12 +181,12 @@ namespace {
             const auto& pc = path.components()[i];
             auto it = mod->modItems.find(pc);
             if (it == mod->modItems.end()) {
-                BUG(sp, "Couldn't find component " << i << " of " << path);
+                BUG(sp, StringView("Couldn't find component ") << i << StringView(" of ") << path);
             }
             if (const auto* e = it->second->ent.opt_Module()) {
                 mod = e;
             } else {
-                BUG(sp, "Node " << i << " of path " << path << " wasn't a module");
+                BUG(sp, StringView("Node ") << i << StringView(" of path ") << path << StringView(" wasn't a module"));
             }
         }
         return *mod;
@@ -204,7 +205,7 @@ namespace {
         if (isUnboundedInfer(matchType) || (matchPath && matchPath->binding.is_Unbound() && !matchPath->path.data.is_Generic())) {
             return false;
         }
-        ASSERT_BUG(Span(), scratch.depth < 8, "impl matcher nested too deep");
+        ASSERT_BUG(Span(), scratch.depth < 8, StringView("impl matcher nested too deep"));
         STD_DEFER {
             scratch.depth--;
         };
@@ -228,7 +229,7 @@ namespace {
         if (leftOpen) {
             return ::OrdEqual;
         }
-        BUG(sp, "Mismatched const values - " << left << " and " << right);
+        BUG(sp, StringView("Mismatched const values - ") << left << StringView(" and ") << right);
     }
 
     ::Ordering combineSpecificity(TypeOrdContext& context, ::Ordering left, ::Ordering right) {
@@ -261,40 +262,40 @@ namespace {
                 UNREACHABLE();
             }
             case HIRTypeData::TAG_Infer: {
-                BUG(sp, "Hit infer");
+                BUG(sp, StringView("Hit infer"));
                 break;
             }
             case HIRTypeData::TAG_Diverge: {
-                BUG(sp, "Hit diverge");
+                BUG(sp, StringView("Hit diverge"));
                 break;
             }
             case HIRTypeData::TAG_NodeType: {
-                BUG(sp, "Hit " << left);
+                BUG(sp, StringView("Hit ") << left);
                 break;
             }
             case HIRTypeData::TAG_Primitive: {
                 auto& le = (*left).as_Primitive();
                 if (const auto* re = right->opt_Primitive()) {
                     if (le != *re) {
-                        BUG(sp, "Mismatched types - " << left << " and " << right);
+                        BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                     }
                     return ::OrdEqual;
                 } else {
-                    BUG(sp, "Mismatched types - " << left << " and " << right);
+                    BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
                 break;
             }
             case HIRTypeData::TAG_Path: {
                 auto& le = (*left).as_Path();
                 if (!right->is_Path() || le.path.data.tag() != right->as_Path().path.data.tag()) {
-                    BUG(sp, "Mismatched types - " << left << " and " << right);
+                    BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
                 switch (le.path.data.tag()) {
                     case HIRPathData::TAG_Generic: {
                         auto& lpe = le.path.data.as_Generic();
                         auto& rpe = right->as_Path().path.data.as_Generic();
                         if (lpe.path != rpe.path) {
-                            BUG(sp, "Mismatched types - " << left << " and " << right);
+                            BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                         }
                         return typelistOrdSpecific(context, sp, lpe.params.types, rpe.params.types);
                         break;
@@ -309,22 +310,22 @@ namespace {
                         break;
                     }
                 }
-                TODO(sp, "Path - " << le.path << " and " << right);
+                TODO(sp, StringView("Path - ") << le.path << StringView(" and ") << right);
                 break;
             }
             case HIRTypeData::TAG_TraitObject: {
                 auto& le = (*left).as_TraitObject();
-                ASSERT_BUG(sp, right->is_TraitObject(), "Mismatched types - " << left << " vs " << right);
+                ASSERT_BUG(sp, right->is_TraitObject(), StringView("Mismatched types - ") << left << StringView(" vs ") << right);
                 const auto& re = right->as_TraitObject();
-                ASSERT_BUG(sp, le.trait.path.path == re.trait.path.path, "Mismatched types - " << left << " vs " << right);
-                ASSERT_BUG(sp, le.markers.size() == re.markers.size(), "Mismatched types - " << left << " vs " << right);
+                ASSERT_BUG(sp, le.trait.path.path == re.trait.path.path, StringView("Mismatched types - ") << left << StringView(" vs ") << right);
+                ASSERT_BUG(sp, le.markers.size() == re.markers.size(), StringView("Mismatched types - ") << left << StringView(" vs ") << right);
 
                 auto ord = typelistOrdSpecific(context, sp, le.trait.path.params.types, re.trait.path.params.types);
                 if (ord != ::OrdEqual) {
                     return ord;
                 }
                 for (size_t i = 0; i < le.markers.size(); i++) {
-                    ASSERT_BUG(sp, le.markers[i].path == re.markers[i].path, "Mismatched types - " << left << " vs " << right);
+                    ASSERT_BUG(sp, le.markers[i].path == re.markers[i].path, StringView("Mismatched types - ") << left << StringView(" vs ") << right);
                     ord = typelistOrdSpecific(context, sp, le.markers[i].params.types, re.markers[i].params.types);
                     if (ord != ::OrdEqual) {
                         return ord;
@@ -333,11 +334,11 @@ namespace {
                 return ::OrdEqual;
             }
             case HIRTypeData::TAG_ErasedType: {
-                TODO(sp, "ErasedType - " << left);
+                TODO(sp, StringView("ErasedType - ") << left);
                 break;
             }
             case HIRTypeData::TAG_NamedFunction: {
-                BUG(sp, "Hit function type");
+                BUG(sp, StringView("Hit function type"));
                 break;
             }
             case HIRTypeData::TAG_Function: {
@@ -345,9 +346,9 @@ namespace {
                     if (left == right) {
                         return ::OrdEqual;
                     }
-                    TODO(sp, "Function - " << left << " vs " << right);
+                    TODO(sp, StringView("Function - ") << left << StringView(" vs ") << right);
                 } else {
-                    BUG(sp, "Mismatched types - " << left << " and " << right);
+                    BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
                 break;
             }
@@ -356,7 +357,7 @@ namespace {
                 if (const auto* re = right->opt_Tuple()) {
                     return typelistOrdSpecific(context, sp, le, *re);
                 } else {
-                    BUG(sp, "Mismatched types - " << left << " and " << right);
+                    BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
                 break;
             }
@@ -365,7 +366,7 @@ namespace {
                 if (const auto* re = right->opt_Slice()) {
                     return typeOrdSpecific(context, sp, le.inner, re->inner);
                 } else {
-                    BUG(sp, "Mismatched types - " << left << " and " << right);
+                    BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
                 break;
             }
@@ -374,7 +375,7 @@ namespace {
                 if (const auto* re = right->opt_Pattern()) {
                     return typeOrdSpecific(context, sp, le.inner, re->inner);
                 } else {
-                    BUG(sp, "Mismatched types - " << left << " and " << right);
+                    BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
                 break;
             }
@@ -383,7 +384,7 @@ namespace {
                 if (const auto* re = right->opt_Array()) {
                     return combineSpecificity(context, typeOrdSpecific(context, sp, le.inner, re->inner), arraySizeOrdSpecific(sp, le.size, re->size));
                 } else {
-                    BUG(sp, "Mismatched types - " << left << " and " << right);
+                    BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
                 break;
             }
@@ -391,11 +392,11 @@ namespace {
                 auto& le = (*left).as_Pointer();
                 if (const auto* re = right->opt_Pointer()) {
                     if (le.type != re->type) {
-                        BUG(sp, "Mismatched types - " << left << " and " << right);
+                        BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                     }
                     return typeOrdSpecific(context, sp, le.inner, re->inner);
                 } else {
-                    BUG(sp, "Mismatched types - " << left << " and " << right);
+                    BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
                 break;
             }
@@ -403,11 +404,11 @@ namespace {
                 auto& le = (*left).as_Borrow();
                 if (const auto* re = right->opt_Borrow()) {
                     if (le.type != re->type) {
-                        BUG(sp, "Mismatched types - " << left << " and " << right);
+                        BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                     }
                     return typeOrdSpecific(context, sp, le.inner, re->inner);
                 } else {
-                    BUG(sp, "Mismatched types - " << left << " and " << right);
+                    BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
                 break;
             }
@@ -548,7 +549,7 @@ namespace {
                 }
             }
             if (type->is_Infer() && !type->as_Infer().isLit()) {
-                DEBUG("Search all lists");
+                DEBUG(StringView("Search all lists"));
                 for (const auto& list : it->second.named) {
                     if (findImplsList(list.second, type, tyRes, crate.implMatcherScratch, callback)) {
                         return true;
@@ -594,54 +595,6 @@ namespace {
 
         return false;
     }
-}
-
-std::ostream& operator<<(std::ostream& os, const HIRPublicity& x) {
-    switch (x.kind) {
-        case HIRPublicity::Kind::Global:
-            os << "pub";
-            break;
-        case HIRPublicity::Kind::None:
-            os << "priv";
-            break;
-        case HIRPublicity::Kind::Restricted:
-            os << "pub(" << *x.visPath << ")";
-            break;
-    }
-    return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const HIRConstGeneric& x) {
-    switch (x.tag()) {
-        case HIRConstGeneric::TAG_Infer: {
-            auto& e = x.as_Infer();
-            os << "Infer";
-            if (e.index != ~0u) {
-                os << "(";
-                os << e.index;
-                os << ")";
-            }
-            break;
-        }
-        case HIRConstGeneric::TAG_Unevaluated: {
-            auto& e = x.as_Unevaluated();
-            os << "Unevaluated(";
-            e->fmt(os);
-            os << ")";
-            break;
-        }
-        case HIRConstGeneric::TAG_Generic: {
-            auto& e = x.as_Generic();
-            os << "Generic(" << e << ")";
-            break;
-        }
-        case HIRConstGeneric::TAG_Evaluated: {
-            auto& e = x.as_Evaluated();
-            os << "Evaluated(" << *e << ")";
-            break;
-        }
-    }
-    return os;
 }
 
 bool HIRConstGeneric::operator==(const HIRConstGeneric& x) const {
@@ -714,13 +667,9 @@ Ordering HIRConstGeneric::ord(const HIRConstGeneric& x) const {
     return OrdEqual;
 }
 
-std::ostream& operator<<(std::ostream& os, const HIRConstGenericUnevaluated& x) {
-    x.fmt(os);
-    return os;
-}
-
 HIRConstGenericUnevaluated::HIRConstGenericUnevaluated(HIRExprPtr ep)
-    : expr(std::make_shared<HIRExprPtr>(std::move(ep))) {
+    : expr(std::make_shared<HIRExprPtr>(std::move(ep)))
+{
 }
 
 HIRConstGenericUnevaluated HIRConstGenericUnevaluated::clone() const {
@@ -775,67 +724,52 @@ Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) co
     return OrdEqual;
 }
 
-void HIRConstGenericUnevaluated::fmt(std::ostream& os) const {
-    os << "{";
+void HIRConstGenericUnevaluated::fmt(ZeroCopyOutput& os) const {
+    os << StringView("{");
     if (this->selfType) {
-        os << "S=" << this->selfType;
+        os << StringView("S=") << this->selfType;
     }
-    os << "0=" << this->paramsImpl;
-    os << "1=" << this->paramsItem;
-    os << "}";
+    os << StringView("0=") << this->paramsImpl;
+    os << StringView("1=") << this->paramsItem;
+    os << StringView("}");
     if (expr->mir) {
         for (const auto& b : expr->mir->blocks) {
-            os << "bb" << (&b - expr->mir->blocks.data()) << ":{ ";
+            os << StringView("bb") << (&b - expr->mir->blocks.data()) << StringView(":{ ");
             for (const auto& s : b.statements) {
-                os << s << "; ";
+                os << s << StringView("; ");
             }
             os << b.terminator;
-            os << " }";
+            os << StringView(" }");
         }
     } else {
-        struct NoNewline: public std::ostream, std::streambuf {
-            std::ostream& inner;
+        struct NoNewline final: ZeroCopyOutput {
+            ZeroCopyOutput& inner;
+            char buffer[4096];
 
-            NoNewline(std::ostream& inner)
-                : std::ostream(this)
-                , inner(inner) {
+            NoNewline(ZeroCopyOutput& inner)
+                : inner(inner)
+            {
             }
 
-            int overflow(int c) override {
-                switch (c) {
-                    case '\n':
-                        inner.put(' ');
-                        break;
-                    default:
-                        inner.put(c);
-                        break;
+            void* imbueImpl(size_t* len) override {
+                if (*len > sizeof(buffer)) {
+                    *len = sizeof(buffer);
                 }
-                return 0;
+                return buffer;
+            }
+
+            void commitImpl(size_t len) override {
+                for (size_t i = 0; i < len; ++i) {
+                    if (buffer[i] == '\n') {
+                        buffer[i] = ' ';
+                    }
+                }
+                inner.write(buffer, len);
             }
         } innerOs(os);
 
         HIRDumpExpr(innerOs, *expr);
     }
-}
-
-std::ostream& operator<<(std::ostream& os, const HIRStruct::Repr& x) {
-    os << "repr(";
-    switch (x) {
-        case HIRStruct::Repr::Rust:
-            os << "Rust";
-            break;
-        case HIRStruct::Repr::C:
-            os << "C";
-            break;
-        case HIRStruct::Repr::Simd:
-            os << "simd";
-            break;
-        case HIRStruct::Repr::Transparent:
-            os << "transparent";
-            break;
-    }
-    os << ")";
-    return os;
 }
 
 HIRConstGeneric HIRConstGeneric::clone() const {
@@ -861,7 +795,7 @@ HIRConstGeneric HIRConstGeneric::clone() const {
 }
 
 bool HIRPublicity::isVisible(const HIRSimplePath& p) const {
-    DEBUG(*this << " " << p);
+    DEBUG(*this << StringView(" ") << p);
     switch (kind) {
         case Kind::Global:
             return true;
@@ -871,6 +805,20 @@ bool HIRPublicity::isVisible(const HIRSimplePath& p) const {
             return p.startsWith(*visPath);
     }
     UNREACHABLE();
+}
+
+void HIRPublicity::fmt(ZeroCopyOutput& out) const {
+    switch (kind) {
+        case Kind::Global:
+            out << StringView("pub");
+            break;
+        case Kind::None:
+            out << StringView("priv");
+            break;
+        case Kind::Restricted:
+            out << StringView("pub(") << *visPath << StringView(")");
+            break;
+    }
 }
 
 HIRTypeRef HIRFunction::makePtrTy(const Span& sp, const Monomorphiser& ms) const {
@@ -995,7 +943,7 @@ U128 HIREnum::getValue(size_t idx) const {
 const HIRSimplePath& HIRCrate::getLangItemPath(const Span& sp, const char* name) const {
     auto it = this->langItems.find(name);
     if (it == this->langItems.end()) {
-        ERROR(sp, E0000, "Undefined language item '" << name << "' required");
+        ERROR(sp, E0000, StringView("Undefined language item '") << name << StringView("' required"));
     }
     return it->second;
 }
@@ -1013,7 +961,7 @@ const HIRMacroItem& HIRCrate::getMacroitemByPath(const Span& sp, const HIRSimple
 
     auto it = mod.macroItems.find(ignoreLastNode ? path.components()[path.components().size() - 2] : path.components().back());
     if (it == mod.macroItems.end()) {
-        BUG(sp, "Could not find macro name in " << path);
+        BUG(sp, StringView("Could not find macro name in ") << path);
     }
 
     return it->second->ent;
@@ -1024,7 +972,7 @@ const HIRTypeItem& HIRCrate::getTypeitemByPath(const Span& sp, const HIRSimplePa
 
     auto it = mod.modItems.find(ignoreLastNode ? path.components()[path.components().size() - 2] : path.components().back());
     if (it == mod.modItems.end()) {
-        BUG(sp, "Could not find type " << path);
+        BUG(sp, StringView("Could not find type ") << path);
     }
 
     return it->second->ent;
@@ -1060,11 +1008,11 @@ const HIRTypeItem* HIRCrate::getTypeitemByPathOpt(const HIRSimplePath& path) con
 
 const HIRModule& HIRCrate::getModByPath(const Span& sp, const HIRSimplePath& path, bool ignoreLastNode /*=false*/, bool ignoreCrateName /*=false*/) const {
     if (ignoreLastNode) {
-        ASSERT_BUG(sp, path.components().size() > 0, "get_mod_by_path received invalid path with ignore_last_node=true - " << path);
+        ASSERT_BUG(sp, path.components().size() > 0, StringView("get_mod_by_path received invalid path with ignore_last_node=true - ") << path);
     }
     if (path.components().size() == (ignoreLastNode ? 1 : 0)) {
         if (!ignoreCrateName && path.crateName() != crateName) {
-            ASSERT_BUG(sp, extCrates.count(path.crateName()) > 0, "Crate '" << path.crateName() << "' not loaded");
+            ASSERT_BUG(sp, extCrates.count(path.crateName()) > 0, StringView("Crate '") << path.crateName() << StringView("' not loaded"));
             return extCrates.at(path.crateName()).data->rootModule;
         } else {
             return this->rootModule;
@@ -1075,9 +1023,9 @@ const HIRModule& HIRCrate::getModByPath(const Span& sp, const HIRSimplePath& pat
             return *e;
         } else {
             if (ignoreLastNode) {
-                BUG(sp, "Parent path of " << path << " didn't point to a module");
+                BUG(sp, StringView("Parent path of ") << path << StringView(" didn't point to a module"));
             } else {
-                BUG(sp, "Module path " << path << " didn't point to a module");
+                BUG(sp, StringView("Module path ") << path << StringView(" didn't point to a module"));
             }
         }
     }
@@ -1089,7 +1037,7 @@ const HIRTrait& HIRCrate::getTraitByPath(const Span& sp, const HIRSimplePath& pa
         auto& e = ti.as_Trait();
         return e;
     } else {
-        BUG(sp, "Trait path " << path << " didn't point to a trait (" << ti.tagStr() << ")");
+        BUG(sp, StringView("Trait path ") << path << StringView(" didn't point to a trait (") << ti.tagStr() << StringView(")"));
     }
 }
 
@@ -1132,7 +1080,7 @@ const HIRStruct& HIRCrate::getStructByPath(const Span& sp, const HIRSimplePath& 
         auto& e = ti.as_Struct();
         return e;
     } else {
-        BUG(sp, "Struct path " << path << " didn't point to a struct (" << ti.tagStr() << ")");
+        BUG(sp, StringView("Struct path ") << path << StringView(" didn't point to a struct (") << ti.tagStr() << StringView(")"));
     }
 }
 
@@ -1142,7 +1090,7 @@ const HIRUnion& HIRCrate::getUnionByPath(const Span& sp, const HIRSimplePath& pa
         auto& e = ti.as_Union();
         return e;
     } else {
-        BUG(sp, "Path " << path << " didn't point to a union (" << ti.tagStr() << ")");
+        BUG(sp, StringView("Path ") << path << StringView(" didn't point to a union (") << ti.tagStr() << StringView(")"));
     }
 }
 
@@ -1152,13 +1100,13 @@ const HIREnum& HIRCrate::getEnumByPath(const Span& sp, const HIRSimplePath& path
         auto& e = ti.as_Enum();
         return e;
     } else {
-        BUG(sp, "Enum path " << path << " didn't point to an enum (" << ti.tagStr() << ")");
+        BUG(sp, StringView("Enum path ") << path << StringView(" didn't point to an enum (") << ti.tagStr() << StringView(")"));
     }
 }
 
 const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName) const {
     if (path.crateName() == "#intrinsics") {
-        ASSERT_BUG(sp, path.components().size() == 1, "");
+        ASSERT_BUG(sp, path.components().size() == 1, StringView(""));
         if (path.components().back() == "offset_of") {
             if (!intrinsicOffsetof.as_Function()) {
                 auto* v = pool->make<HIRFunction>(HIRFunction{HIRFunction::Receiver::Free, HIRGenericParams{}, {}, types.primitive(HIRCoreType::Usize), {}});
@@ -1169,7 +1117,7 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
             }
             return intrinsicOffsetof;
         }
-        TODO(sp, "Get intrinsic " << path.components().back());
+        TODO(sp, StringView("Get intrinsic ") << path.components().back());
     }
     if (path.crateName() == this->crateName && path.components().size() == 1) {
         auto i = std::find_if(newValues.begin(), newValues.end(), [&](const auto& v) {
@@ -1183,7 +1131,7 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
 
     auto it = mod.valueItems.find(path.components().back());
     if (it == mod.valueItems.end()) {
-        BUG(sp, "Could not find value name " << path);
+        BUG(sp, StringView("Could not find value name ") << path);
     }
 
     if (const auto* imp = it->second->ent.opt_Import(); imp && !imp->isVariant && imp->path != path) {
@@ -1198,7 +1146,7 @@ const HIRFunction& HIRCrate::getFunctionByPath(const Span& sp, const HIRSimplePa
     if (ti.is_Function()) {
         return *ti.as_Function();
     } else {
-        BUG(sp, "Function path " << path << " didn't point to an function (" << ti.tagStr() << ")");
+        BUG(sp, StringView("Function path ") << path << StringView(" didn't point to an function (") << ti.tagStr() << StringView(")"));
     }
 }
 
@@ -1220,7 +1168,7 @@ const HIRStatic& HIRCrate::getStaticByPath(const Span& sp, const HIRSimplePath& 
     const auto& m = this->getModByPath(sp, path, /*ignore_last*/ true);
     auto it = m.valueItems.find(path.components().back());
     if (it != m.valueItems.end()) {
-        ASSERT_BUG(sp, it->second->ent.is_Static(), "`static` path " << path << " didn't point to a static - " << it->second->ent.tagStr());
+        ASSERT_BUG(sp, it->second->ent.is_Static(), StringView("`static` path ") << path << StringView(" didn't point to a static - ") << it->second->ent.tagStr());
         return *it->second->ent.as_Static();
     }
     for (const auto& e : m.inlineStatics) {
@@ -1236,7 +1184,7 @@ const HIRStatic& HIRCrate::getStaticByPath(const Span& sp, const HIRSimplePath& 
             return *i->second->ent.as_Static();
         }
     }
-    BUG(sp, "`static` path " << path << " can't be found");
+    BUG(sp, StringView("`static` path ") << path << StringView(" can't be found"));
 }
 
 void HIRCrate::postLoadUpdate(const RcString& name) {
@@ -1288,7 +1236,7 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
             return false;
         }
         if (ord != ::OrdEqual) {
-            DEBUG("- Trait arguments " << (ord == ::OrdLess ? "less" : "more") << " specific");
+            DEBUG(StringView("- Trait arguments ") << StringView(ord == ::OrdLess ? "less" : "more") << StringView(" specific"));
             return ord == ::OrdGreater;
         }
 
@@ -1297,7 +1245,7 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
             return false;
         }
         if (ord != ::OrdEqual) {
-            DEBUG("- Type " << this->type << " " << (ord == ::OrdLess ? "less" : "more") << " specific than " << other.type);
+            DEBUG(StringView("- Type ") << this->type << StringView(" ") << StringView(ord == ::OrdLess ? "less" : "more") << StringView(" specific than ") << other.type);
             return ord == ::OrdGreater;
         }
     }
@@ -1323,10 +1271,10 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     auto boundsT = flattenBounds(types, params.bounds);
     auto boundsO = flattenBounds(types, other.params.bounds);
 
-    DEBUG("bounds_t = " << boundsT);
-    DEBUG("bounds_o = " << boundsO);
+    DEBUG(StringView("bounds_t = ") << boundsT);
+    DEBUG(StringView("bounds_o = ") << boundsO);
     if (boundsT.size() < boundsO.size()) {
-        DEBUG("Bound count");
+        DEBUG(StringView("Bound count"));
         return false;
     }
 
@@ -1361,7 +1309,7 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
                         return true;
                     }
                 }
-                TODO(sp, *itT << " ?= " << *itO);
+                TODO(sp, *itT << StringView(" ?= ") << *itO);
             }
         }
 
@@ -1369,17 +1317,17 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
             isEqual = false;
             ++itT;
         } else {
-            DEBUG(*itT << " ?= " << *itO << " : " << cmp);
+            DEBUG(*itT << StringView(" ?= ") << *itO << StringView(" : ") << cmp);
             return false;
         }
     }
     if (itT != boundsT.end()) {
-        DEBUG("Remaining local bounds - " << *itT);
+        DEBUG(StringView("Remaining local bounds - ") << *itT);
         return true;
     } else if (isEqual && stricterImplicitSized) {
         return true;
     } else {
-        DEBUG("Out of local bounds, equal or less specific");
+        DEBUG(StringView("Out of local bounds, equal or less specific"));
         return !isEqual;
     }
 }
@@ -1394,7 +1342,7 @@ bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRTypeData* t
                 }
             }
             if (type->is_Infer() && !type->as_Infer().isLit()) {
-                DEBUG("Search all lists");
+                DEBUG(StringView("Search all lists"));
                 for (const auto& list : it->second.named) {
                     if (findImplsList(list.second, type, tyRes, implMatcherScratch, callback)) {
                         return true;
@@ -1480,12 +1428,12 @@ bool HIRCrate::findTypeImplsCb(const HIRTypeData* type, tCbResolveType tyRes, HI
 
 const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, HIRTypeRef& retTy) const {
     if (!ep) {
-        ASSERT_BUG(Span(), ep.mir, "No HIR (!ep) and no MIR (!ep.m_mir) for " << ip);
+        ASSERT_BUG(Span(), ep.mir, StringView("No HIR (!ep) and no MIR (!ep.m_mir) for ") << ip);
         return &*ep.mir;
     } else {
         if (!ep.mir) {
             TRACE_FUNCTION_F(ip);
-            ASSERT_BUG(Span(), ep.state, "No ExprState for " << ip);
+            ASSERT_BUG(Span(), ep.state, StringView("No ExprState for ") << ip);
 
             auto& epMut = const_cast<HIRExprPtr&>(ep);
 
@@ -1501,7 +1449,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
             // TODO: Ensure that all referenced items have constants evaluated
             if (ep.state->stage < HIRExprState::Stage::ConstEval) {
                 if (ep.state->stage == HIRExprState::Stage::ConstEvalRequest) {
-                    ERROR(Span(), E0000, "Loop in constant evaluation");
+                    ERROR(Span(), E0000, StringView("Loop in constant evaluation"));
                 }
                 ep.state->stage = HIRExprState::Stage::ConstEvalRequest;
                 ConvertHIRResolveUFCSExpr(wb, *this, ip, epMut);
@@ -1511,7 +1459,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
 
             if (ep.state->stage < HIRExprState::Stage::Typecheck) {
                 if (ep.state->stage == HIRExprState::Stage::TypecheckRequest) {
-                    ERROR(Span(), E0000, "Loop in constant evaluation");
+                    ERROR(Span(), E0000, StringView("Loop in constant evaluation"));
                 }
                 ep.state->stage = HIRExprState::Stage::TypecheckRequest;
 
@@ -1523,7 +1471,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
                 ms.traits = ep.state->traits;
                 ms.modPaths.push_back(ep.state->modPath);
                 TypecheckCode(ms, const_cast<HIRFunction::argsT&>(args), retTy, epMut);
-                ASSERT_BUG(Span(), ep.state->stage == HIRExprState::Stage::Typecheck, "Typecheck_Code didn't set stage");
+                ASSERT_BUG(Span(), ep.state->stage == HIRExprState::Stage::Typecheck, StringView("Typecheck_Code didn't set stage"));
             }
             if (ep.state->stage < HIRExprState::Stage::PostTypecheck) {
                 HIRExpandAnnotateUsageExpr(wb, *this, ip, epMut);
@@ -1531,7 +1479,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
             }
             if (ep.state->stage < HIRExprState::Stage::Sbc) {
                 if (ep.state->stage == HIRExprState::Stage::SbcRequest) {
-                    ERROR(Span(), E0000, "Loop in constant evaluation");
+                    ERROR(Span(), E0000, StringView("Loop in constant evaluation"));
                 }
                 ep.state->stage = HIRExprState::Stage::SbcRequest;
                 HIRExpandClosuresExpr(wb, *this, retTy, epMut);
@@ -1539,7 +1487,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
             }
             if (ep.state->stage < HIRExprState::Stage::Expand) {
                 if (ep.state->stage == HIRExprState::Stage::ExpandRequest) {
-                    ERROR(Span(), E0000, "Loop in constant evaluation");
+                    ERROR(Span(), E0000, StringView("Loop in constant evaluation"));
                 }
                 ep.state->stage = HIRExprState::Stage::ExpandRequest;
                 HIRExpandUfcsEverythingExpr(wb, *this, epMut, ep.state->currentTraitImpl);
@@ -1549,7 +1497,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
             }
             if (ep.state->stage < HIRExprState::Stage::Mir) {
                 if (ep.state->stage == HIRExprState::Stage::MirRequest) {
-                    ERROR(Span(), E0000, "Loop in constant evaluation");
+                    ERROR(Span(), E0000, StringView("Loop in constant evaluation"));
                 }
                 ep.state->stage = HIRExprState::Stage::MirRequest;
                 HIRGenerateMIRExpr(wb, *this, ip, epMut, args, retTy);
@@ -1570,7 +1518,7 @@ HIRTypeRef HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, const 
     vtableParams.types.resize(te.trait.path.params.types.size() + this->typeIndexes.size());
     for (const auto& tyB : te.trait.typeBounds) {
         if (this->typeIndexes.count(tyB.first) == 0) {
-            WARNING(sp, W0000, "Trait object path " << te.trait << " references a type with no vtable type index");
+            WARNING(sp, W0000, StringView("Trait object path ") << te.trait << StringView(" references a type with no vtable type index"));
             continue;
         }
         auto idx = this->typeIndexes.at(tyB.first);
@@ -1582,7 +1530,7 @@ HIRTypeRef HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, const 
 unsigned HIRTrait::getVtableValueIndex(const HIRGenericPath& traitPath, const RcString& name) const {
     auto its = this->valueIndexes.equal_range(name);
     for (auto it = its.first; it != its.second; ++it) {
-        DEBUG(traitPath << " :: " << name << " - " << it->second.second);
+        DEBUG(traitPath << StringView(" :: ") << name << StringView(" - ") << it->second.second);
         if (it->second.second.path == traitPath.path) {
             // TODO: Match generics using match_test_generics comparing to the trait args
             BUG_ASSERT(it->second.first > 0);
@@ -1622,7 +1570,7 @@ const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIR
     const HIRStruct* strP = nullptr;
     switch (binding.tag()) {
         case HIRPatternPathBinding::TAG_Unbound: {
-            BUG(sp, "Unexpected unbound named pattern - " << path);
+            BUG(sp, StringView("Unexpected unbound named pattern - ") << path);
             break;
         }
         case HIRPatternPathBinding::TAG_Struct: {
@@ -1631,23 +1579,23 @@ const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIR
             break;
         }
         case HIRPatternPathBinding::TAG_Union: {
-            BUG(sp, "Tuple pattern used on union " << path);
+            BUG(sp, StringView("Tuple pattern used on union ") << path);
             break;
         }
         case HIRPatternPathBinding::TAG_Enum: {
             auto& be = binding.as_Enum();
             const auto& enm = *be.ptr;
             if (isTuple) {
-                ASSERT_BUG(sp, enm.data.is_Data(), "PathTuple pattern with non-data enum - " << path);
+                ASSERT_BUG(sp, enm.data.is_Data(), StringView("PathTuple pattern with non-data enum - ") << path);
             } else {
-                ASSERT_BUG(sp, enm.data.is_Data(), "PathNamed pattern with non-data enum - " << path);
+                ASSERT_BUG(sp, enm.data.is_Data(), StringView("PathNamed pattern with non-data enum - ") << path);
             }
             const auto& enmD = enm.data.as_Data();
-            ASSERT_BUG(sp, be.varIdx < enmD.size(), "Variant index " << be.varIdx << " out of range - " << path);
+            ASSERT_BUG(sp, be.varIdx < enmD.size(), StringView("Variant index ") << be.varIdx << StringView(" out of range - ") << path);
             if (isTuple) {
-                ASSERT_BUG(sp, !enmD[be.varIdx].isStruct, "PathTuple pattern with brace enum variant - " << path);
+                ASSERT_BUG(sp, !enmD[be.varIdx].isStruct, StringView("PathTuple pattern with brace enum variant - ") << path);
             } else {
-                ASSERT_BUG(sp, enmD[be.varIdx].isStruct, "PathNamed pattern with non-brace enum variant - " << path);
+                ASSERT_BUG(sp, enmD[be.varIdx].isStruct, StringView("PathNamed pattern with non-brace enum variant - ") << path);
             }
             strP = enmD[be.varIdx].type->as_Path().binding.as_Struct();
             break;
@@ -1656,9 +1604,9 @@ const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIR
     const auto& str = *strP;
 
     if (isTuple) {
-        ASSERT_BUG(sp, str.data.is_Tuple(), "PathTuple pattern with non-tuple struct - " << str.data.tagStr());
+        ASSERT_BUG(sp, str.data.is_Tuple(), StringView("PathTuple pattern with non-tuple struct - ") << str.data.tagStr());
     } else {
-        ASSERT_BUG(sp, str.data.is_Named(), "Struct pattern on non-brace struct");
+        ASSERT_BUG(sp, str.data.is_Named(), StringView("Struct pattern on non-brace struct"));
     }
     return str;
 }
@@ -1718,7 +1666,7 @@ U128 EncodedLiteralSlice::readUint(size_t size /*=0*/) const {
     if (size == 0) {
         size = this->size;
     }
-    ASSERT_BUG(Span(), size <= this->size, "Over-large read (" << size << " > " << this->size << ")");
+    ASSERT_BUG(Span(), size <= this->size, StringView("Over-large read (") << size << StringView(" > ") << this->size << StringView(")"));
     U128 v(0);
     for (size_t i = 0; i < size; i++) {
         size_t bit = i * 8;
@@ -1726,7 +1674,7 @@ U128 EncodedLiteralSlice::readUint(size_t size /*=0*/) const {
             v |= U128(base.bytes[ofs + i]) << bit;
         }
     }
-    DEBUG("(" << size << ") = " << v);
+    DEBUG(StringView("(") << size << StringView(") = ") << v);
     return v;
 }
 
@@ -1738,7 +1686,7 @@ S128 EncodedLiteralSlice::readSint(size_t size /*=0*/) const {
     if (size < 128 / 8 && ((v >> (8 * size - 1)) != 0)) {
         v |= U128(UINT64_MAX, UINT64_MAX) << (8 * size);
     }
-    DEBUG("(" << size << ") = " << v);
+    DEBUG(StringView("(") << size << StringView(") = ") << v);
     return S128(v);
 }
 
@@ -1769,7 +1717,7 @@ FloatValue EncodedLiteralSlice::readFloat(size_t size /*=0*/) const {
             return v;
         }
         default:
-            BUG(Span(), "Unexpected float size");
+            BUG(Span(), StringView("Unexpected float size"));
     }
 }
 
@@ -1861,34 +1809,10 @@ Ordering EncodedLiteralSlice::ord(const EncodedLiteralSlice& x) const {
     return OrdEqual;
 }
 
-std::ostream& operator<<(std::ostream& os, const EncodedLiteralSlice& x) {
-    auto it = std::find_if(x.base.relocations.begin(), x.base.relocations.end(), [&](const Reloc& r) {
-        return r.ofs >= x.ofs;
-    });
-    for (size_t i = 0; i < x.size; i++) {
-        const char* HEX = "0123456789ABCDEF";
-        auto o = x.ofs + i;
-        auto b = x.base.bytes[o];
-        if (it != x.base.relocations.end() && it->ofs == o) {
-            auto& r = *it;
-            if (r.p) {
-                os << "{&" << *r.p << "}";
-            } else {
-                os << "{\"" << FmtEscaped(r.bytes) << "\"}";
-            }
-            ++it;
-        }
-        os << HEX[b >> 4] << HEX[b & 0xF];
-        if ((i + 1) % 8 == 0 && i + 1 < x.size) {
-            os << " ";
-        }
-    }
-    return os;
-}
-
 HIRPublicity::HIRPublicity(Kind kind, std::shared_ptr<HIRSimplePath> p)
     : kind(kind)
-    , visPath(p) {
+    , visPath(p)
+{
 }
 
 HIRPublicity HIRPublicity::newPriv(HIRSimplePath p) {
@@ -1904,7 +1828,8 @@ HIRStatic::HIRStatic(HIRLinkage linkage, bool isMut, HIRTypeRef type, HIRExprPtr
     : linkage(std::move(linkage))
     , isMut(isMut)
     , type(std::move(type))
-    , value(std::move(value)) {
+    , value(std::move(value))
+{
 }
 
 HIRConstant::HIRConstant() {
@@ -1913,7 +1838,8 @@ HIRConstant::HIRConstant() {
 HIRConstant::HIRConstant(HIRGenericParams params, HIRTypeRef type, HIRExprPtr value)
     : params(std::move(params))
     , type(std::move(type))
-    , value(std::move(value)) {
+    , value(std::move(value))
+{
 }
 
 HIRFunction::HIRFunction() {
@@ -1925,18 +1851,21 @@ HIRFunction::HIRFunction(Receiver receiver, HIRGenericParams params, argsT args,
     , args(std::move(args))
     , variadic(false)
     , returnType(std::move(retTy))
-    , code(std::move(code)) {
+    , code(std::move(code))
+{
 }
 
 HIRStruct::FieldDefault::FieldDefault(size_t index, HIRExprPtr v)
     : index(index)
-    , expr(std::move(v)) {
+    , expr(std::move(v))
+{
 }
 
 HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data)
     : params(mv$(params))
     , repr(mv$(repr))
-    , data(mv$(data)) {
+    , data(mv$(data))
+{
 }
 
 HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data, unsigned align, HIRTraitMarkings tm, HIRStructMarkings sm)
@@ -1945,7 +1874,8 @@ HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data, unsigned ali
     , data(mv$(data))
     , forcedAlignment(align)
     , markings(mv$(tm))
-    , structMarkings(mv$(sm)) {
+    , structMarkings(mv$(sm))
+{
 }
 
 HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType)
@@ -1953,7 +1883,8 @@ HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, st
     , isSized(isSized)
     , traitBounds(std::move(traitBounds))
     , hasDefault(defaultType && !defaultType->is_Infer())
-    , defaultValue(defaultType) {
+    , defaultValue(defaultType)
+{
     BUG_ASSERT(defaultType);
 }
 
@@ -1966,7 +1897,8 @@ HIRTrait::HIRTrait(HIRGenericParams gps, std::vector<HIRTraitPath> parents)
     , isFundamental(false)
     , skipArrayDuringMethodDispatch(false)
     , skipBoxedSliceDuringMethodDispatch(false)
-    , vtableParentTraitsStart(0) {
+    , vtableParentTraitsStart(0)
+{
 }
 
 HIRModule::HIRModule() {
@@ -1975,7 +1907,8 @@ HIRModule::HIRModule() {
 HIRCrate::HIRCrate(ObjPool* pool, HIRTypeInterner& types)
     : pool(pool)
     , types(types)
-    , intrinsicOffsetof(HIRValueItem::make_Function(nullptr)) {
+    , intrinsicOffsetof(HIRValueItem::make_Function(nullptr))
+{
 }
 
 bool HIRCrate::isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias, const HIRSimplePath* names, size_t nameCount) const {
@@ -2056,7 +1989,7 @@ const HIRConstant& HIRCrate::getConstantByPath(const Span& sp, const HIRSimplePa
     if (ti.is_Constant()) {
         return *ti.as_Constant();
     } else {
-        BUG(sp, "`const` path " << path << " didn't point to an enum");
+        BUG(sp, StringView("`const` path ") << path << StringView(" didn't point to an enum"));
     }
 }
 
@@ -2071,7 +2004,8 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
 
 ImplMatcher::ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics)
     : HIRMatchGenerics(BorrowMatchedValues{})
-    , implTypes(buf) {
+    , implTypes(buf)
+{
     implTypes.clear();
     implTypes.zero(implGenerics.types.size());
 }
@@ -2096,7 +2030,8 @@ auto ImplMatcher::mappedType(unsigned binding) const -> HIRTypeRef {
 
 ImplHeadMonomorphiser::ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplMatcher& matcher)
     : Monomorphiser(types)
-    , matcher(matcher) {
+    , matcher(matcher)
+{
 }
 
 auto ImplHeadMonomorphiser::getType(const Span&, const HIRGenericRef& generic) const -> HIRTypeRef {
@@ -2117,4 +2052,61 @@ auto ImplHeadMonomorphiser::getValue(const Span&, const HIRGenericRef& generic) 
 
 auto ImplHeadMonomorphiser::complete() const -> bool {
     return complete_;
+}
+
+namespace stl {
+    template <>
+    void output<ZeroCopyOutput, HIRPublicity>(ZeroCopyOutput& out, const HIRPublicity& value) {
+        value.fmt(out);
+    }
+
+    template <>
+    void output<ZeroCopyOutput, HIRConstGeneric>(ZeroCopyOutput& out, const HIRConstGeneric& value) {
+        switch (value.tag()) {
+            case HIRConstGeneric::TAG_Infer: {
+                const auto& inner = value.as_Infer();
+                out << StringView("Infer");
+                if (inner.index != ~0u) {
+                    out << StringView("(") << inner.index << StringView(")");
+                }
+                break;
+            }
+            case HIRConstGeneric::TAG_Unevaluated:
+                out << StringView("Unevaluated(");
+                value.as_Unevaluated()->fmt(out);
+                out << StringView(")");
+                break;
+            case HIRConstGeneric::TAG_Generic:
+                out << StringView("Generic(") << value.as_Generic() << StringView(")");
+                break;
+            case HIRConstGeneric::TAG_Evaluated:
+                out << StringView("Evaluated(") << *value.as_Evaluated() << StringView(")");
+                break;
+        }
+    }
+
+    template <>
+    void output<ZeroCopyOutput, HIRConstGenericUnevaluated>(ZeroCopyOutput& out, const HIRConstGenericUnevaluated& value) {
+        value.fmt(out);
+    }
+
+    template <>
+    void output<ZeroCopyOutput, HIRStruct::Repr>(ZeroCopyOutput& out, HIRStruct::Repr value) {
+        out << StringView("repr(");
+        switch (value) {
+            case HIRStruct::Repr::Rust:
+                out << StringView("Rust");
+                break;
+            case HIRStruct::Repr::C:
+                out << StringView("C");
+                break;
+            case HIRStruct::Repr::Simd:
+                out << StringView("simd");
+                break;
+            case HIRStruct::Repr::Transparent:
+                out << StringView("transparent");
+                break;
+        }
+        out << StringView(")");
+    }
 }

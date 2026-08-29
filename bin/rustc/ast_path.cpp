@@ -1,166 +1,24 @@
 #include "ast_path.h"
+#include "output.h"
 
 #include "ast_ast.h"
 #include "ast_expr.h"
 #include "ast_types.h"
 #include "parse_parseerror.h"
 
-#include <iostream>
 #include <algorithm>
+
+using namespace stl;
 
 #define PRETTY_PATH_PRINT 1
 
-std::ostream& operator<<(std::ostream& os, const ASTPathBindingType& x) {
-    switch (x.tag()) {
-        case ASTPathBindingType::TAG_Unbound: {
-            os << "_";
-            break;
-        }
-        case ASTPathBindingType::TAG_Crate: {
-            os << "Crate";
-            break;
-        }
-        case ASTPathBindingType::TAG_Primitive: {
-            os << "Primitive";
-            break;
-        }
-        case ASTPathBindingType::TAG_Module: {
-            os << "Module";
-            break;
-        }
-        case ASTPathBindingType::TAG_Trait: {
-            os << "Trait";
-            break;
-        }
-        case ASTPathBindingType::TAG_TraitAlias: {
-            os << "TraitAlias";
-            break;
-        }
-        case ASTPathBindingType::TAG_Struct: {
-            os << "Struct";
-            break;
-        }
-        case ASTPathBindingType::TAG_Enum: {
-            os << "Enum";
-            break;
-        }
-        case ASTPathBindingType::TAG_Union: {
-            os << "Union";
-            break;
-        }
-        case ASTPathBindingType::TAG_EnumVar: {
-            auto& i = x.as_EnumVar();
-            os << "EnumVar(" << i.idx << ")";
-            break;
-        }
-        case ASTPathBindingType::TAG_TypeAlias: {
-            os << "TypeAlias";
-            break;
-        }
-        case ASTPathBindingType::TAG_TypeParameter: {
-            auto& i = x.as_TypeParameter();
-            os << "TyParam(" << i.slot << ")";
-            break;
-        }
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTPathBindingValue& x) {
-    switch (x.tag()) {
-        case ASTPathBindingValue::TAG_Unbound: {
-            os << "_";
-            break;
-        }
-        case ASTPathBindingValue::TAG_Struct: {
-            os << "Struct";
-            break;
-        }
-        case ASTPathBindingValue::TAG_Static: {
-            os << "Static";
-            break;
-        }
-        case ASTPathBindingValue::TAG_Function: {
-            os << "Function";
-            break;
-        }
-        case ASTPathBindingValue::TAG_EnumVar: {
-            auto& i = x.as_EnumVar();
-            os << "EnumVar(" << i.idx << ")";
-            break;
-        }
-        case ASTPathBindingValue::TAG_Generic: {
-            auto& i = x.as_Generic();
-            os << "Param(" << i.index << ")";
-            break;
-        }
-        case ASTPathBindingValue::TAG_Variable: {
-            auto& i = x.as_Variable();
-            os << "Var(" << i.slot << ")";
-            break;
-        }
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTPathBindingMacro& x) {
-    switch (x.tag()) {
-        case ASTPathBindingMacro::TAG_Unbound: {
-            os << "_";
-            break;
-        }
-        case ASTPathBindingMacro::TAG_ProcMacroDerive: {
-            auto& i = x.as_ProcMacroDerive();
-            os << "ProcMacroDerive(? " << i.macName << ")";
-            break;
-        }
-        case ASTPathBindingMacro::TAG_ProcMacroAttribute: {
-            auto& i = x.as_ProcMacroAttribute();
-            os << "ProcMacroAttribute(? " << i.macName << ")";
-            break;
-        }
-        case ASTPathBindingMacro::TAG_ProcMacro: {
-            auto& i = x.as_ProcMacro();
-            os << "ProcMacro(? " << i.macName << ")";
-            break;
-        }
-        case ASTPathBindingMacro::TAG_MacroRules: {
-            os << "MacroRules(? ?)";
-            break;
-        }
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTPathParams& x) {
-    if (x.isRtn) {
-        os << "(..)";
-        return os;
-    }
-    if (x.isParen) {
-        auto& t = x.entries.at(0).as_Type();
-        os << t;
-        auto& rv = x.entries.at(1).as_AssociatedTyEqual();
-        os << "->";
-        os << rv.second;
-        return os;
-    }
-    bool needsComma = false;
-    os << (x.isParen ? "(" : "<");
-    for (const auto& e : x.entries) {
-        if (e.is_Null()) {
-            continue;
-        }
-        if (needsComma) {
-            os << ", ";
-        }
-        needsComma = true;
 
-        e.fmt(os);
-    }
-    os << (x.isParen ? ")" : ">");
-    return os;
-}
+
+
+
 
 ASTPathParams::ASTPathParams() = default;
 ASTPathParams::~ASTPathParams() = default;
@@ -266,11 +124,11 @@ Ordering ASTPathParamEnt::ord(const ASTPathParamEnt& x) const {
     UNREACHABLE();
 }
 
-void ASTPathParamEnt::fmt(std::ostream& os) const {
+void ASTPathParamEnt::fmt(ZeroCopyOutput& os) const {
     switch ((*this).tag()) {
         case ASTPathParamEnt::TAG_Null: {
             auto& _ = (*this).as_Null();
-            os << "/*removed*/";
+            os << StringView("/*removed*/");
             break;
         }
         case ASTPathParamEnt::TAG_Lifetime: {
@@ -290,20 +148,20 @@ void ASTPathParamEnt::fmt(std::ostream& os) const {
         }
         case ASTPathParamEnt::TAG_AssociatedTyEqual: {
             auto& v = (*this).as_AssociatedTyEqual();
-            os << v.first << "=" << v.second;
+            os << v.first << StringView("=") << v.second;
             break;
         }
         case ASTPathParamEnt::TAG_AssociatedValueEqual: {
             auto& v = (*this).as_AssociatedValueEqual();
-            os << v.first << "=" << *v.second;
+            os << v.first << StringView("=") << *v.second;
             break;
         }
         case ASTPathParamEnt::TAG_AssociatedTyBound: {
             auto& v = (*this).as_AssociatedTyBound();
-            os << v.first << ": ";
+            os << v.first << StringView(": ");
             for (const auto& trait : v.second) {
                 if (&trait != v.second.data()) {
-                    os << " + ";
+                    os << StringView(" + ");
                 }
                 os << trait.hrbs << *trait.path;
             }
@@ -337,20 +195,17 @@ Ordering ASTPathNode::ord(const ASTPathNode& x) const {
     return OrdEqual;
 }
 
-void ASTPathNode::printPretty(std::ostream& os, bool isTypeContext) const {
+void ASTPathNode::printPretty(ZeroCopyOutput& os, bool isTypeContext) const {
     os << ident_.name;
     if (!params_.isEmpty()) {
         if (!isTypeContext) {
-            os << "::";
+            os << StringView("::");
         }
         os << params_;
     }
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTPathNode& pn) {
-    pn.printPretty(os, false);
-    return os;
-}
+
 
 namespace {
     template <typename T>
@@ -515,17 +370,17 @@ Ordering ASTPath::ord(const ASTPath& x) const {
     return OrdEqual;
 }
 
-void ASTPath::printPretty(std::ostream& os, bool isTypeContext, bool isDebug) const {
+void ASTPath::printPretty(ZeroCopyOutput& os, bool isTypeContext, bool isDebug) const {
     switch (cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
-            os << "/*inv*/";
+            os << StringView("/*inv*/");
             return;
         }
         case ASTPathClass::TAG_Local: {
             auto& ent = cls.as_Local();
             if (bindings.value.is_Unbound() && bindings.type.is_Unbound()) {
                 if (isDebug) {
-                    os << "/*var*/";
+                    os << StringView("/*var*/");
                 }
             } else {
                 BUG_ASSERT(bindings.value.binding.is_Variable() || bindings.value.binding.is_Generic() || bindings.type.binding.is_TypeParameter());
@@ -540,7 +395,7 @@ void ASTPath::printPretty(std::ostream& os, bool isTypeContext, bool isDebug) co
             }
             for (const auto& n : ent.nodes) {
                 if (&n != &ent.nodes[0]) {
-                    os << "::";
+                    os << StringView("::");
                 }
                 n.printPretty(os, isTypeContext);
             }
@@ -548,18 +403,18 @@ void ASTPath::printPretty(std::ostream& os, bool isTypeContext, bool isDebug) co
         }
         case ASTPathClass::TAG_Self: {
             auto& ent = cls.as_Self();
-            os << "self";
+            os << StringView("self");
             for (const auto& n : ent.nodes) {
-                os << "::";
+                os << StringView("::");
                 n.printPretty(os, isTypeContext);
             }
             break;
         }
         case ASTPathClass::TAG_Super: {
             auto& ent = cls.as_Super();
-            os << "super";
+            os << StringView("super");
             for (const auto& n : ent.nodes) {
-                os << "::";
+                os << StringView("::");
                 n.printPretty(os, isTypeContext);
             }
             break;
@@ -568,14 +423,14 @@ void ASTPath::printPretty(std::ostream& os, bool isTypeContext, bool isDebug) co
             auto& ent = cls.as_Absolute();
             const char* cn = ent.crate.c_str();
             if (!cn[0]) {
-                os << "crate";
+                os << StringView("crate");
             } else if (cn[0] == '=') {
-                os << "::" << cn + 1;
+                os << StringView("::") << cn + 1;
             } else {
-                os << "::\"" << cn << "\"";
+                os << StringView("::\"") << cn << StringView("\"");
             }
             for (const auto& n : ent.nodes) {
-                os << "::";
+                os << StringView("::");
                 n.printPretty(os, isTypeContext);
             }
             break;
@@ -583,58 +438,55 @@ void ASTPath::printPretty(std::ostream& os, bool isTypeContext, bool isDebug) co
         case ASTPathClass::TAG_UFCS: {
             auto& ent = cls.as_UFCS();
             if (ent.trait) {
-                os << "<" << *ent.type << " as ";
+                os << StringView("<") << *ent.type << StringView(" as ");
                 if (ent.trait->cls.is_Invalid()) {
-                    os << "_";
+                    os << StringView("_");
                 } else {
                     os << *ent.trait;
                 }
-                os << ">";
+                os << StringView(">");
             } else {
-                os << "<" << *ent.type << ">";
+                os << StringView("<") << *ent.type << StringView(">");
             }
             for (const auto& n : ent.nodes) {
-                os << "::";
+                os << StringView("::");
                 n.printPretty(os, isTypeContext);
             }
             break;
         }
     }
     if (isDebug) {
-        os << "/*";
+        os << StringView("/*");
         bool printed = false;
         if (!bindings.value.is_Unbound()) {
             if (printed) {
-                os << ",";
+                os << StringView(",");
             }
-            os << "v:" << bindings.value;
+            os << StringView("v:") << bindings.value;
             printed = true;
         }
         if (!bindings.type.is_Unbound()) {
             if (printed) {
-                os << ",";
+                os << StringView(",");
             }
-            os << "t:" << bindings.type;
+            os << StringView("t:") << bindings.type;
             printed = true;
         }
         if (!bindings.macro.is_Unbound()) {
             if (printed) {
-                os << ",";
+                os << StringView(",");
             }
-            os << "m:" << bindings.macro;
+            os << StringView("m:") << bindings.macro;
             printed = true;
         }
         if (!printed) {
-            os << "?";
+            os << StringView("?");
         }
-        os << "*/";
+        os << StringView("*/");
     }
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTPath& path) {
-    path.printPretty(os, false, true);
-    return os;
-}
+
 
 ASTAbsolutePath::ASTAbsolutePath() {
 }
@@ -777,13 +629,13 @@ const RcString& ASTPath::asTrivial() const {
             return e.nodes[0].name();
         }
     }
-    BUG(Span(), "as_trivial on non-trivial path");
+    BUG(Span(), StringView("as_trivial on non-trivial path"));
 }
 
 size_t ASTPath::size() const {
     switch (cls.tag()) {
         case Class::TAG_Invalid: {
-            BUG(Span(), "Path::size() on Invalid");
+            BUG(Span(), StringView("Path::size() on Invalid"));
         }
         case Class::TAG_Local: {
             return 1;
@@ -809,16 +661,16 @@ size_t ASTPath::size() const {
             return ent.nodes.size();
         }
     }
-    BUG(Span(), "Path::size() fell off");
+    BUG(Span(), StringView("Path::size() fell off"));
 }
 
 std::vector<ASTPathNode>& ASTPath::nodes() {
     switch (cls.tag()) {
         case Class::TAG_Invalid: {
-            BUG(Span(), "Path::nodes() on Invalid");
+            BUG(Span(), StringView("Path::nodes() on Invalid"));
         }
         case Class::TAG_Local: {
-            BUG(Span(), "Path::nodes() on Local");
+            BUG(Span(), StringView("Path::nodes() on Local"));
         }
         case Class::TAG_Relative: {
             auto& ent = cls.as_Relative();
@@ -841,23 +693,234 @@ std::vector<ASTPathNode>& ASTPath::nodes() {
             return ent.nodes;
         }
     }
-    BUG(Span(), "Path::nodes() fell off");
+    BUG(Span(), StringView("Path::nodes() fell off"));
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTAbsolutePath& x) {
-    if (x.crate != "") {
-        os << "::\"" << x.crate << "\"";
-    } else {
-        os << "crate";
-    }
-    for (const auto& n : x.nodes) {
-        os << "::" << n;
-    }
-    return os;
-}
+
 
 void ASTPath::append(ASTPathNode node) {
     BUG_ASSERT(!cls.is_Invalid());
     nodes().push_back(mv$(node));
     bindings = Bindings();
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, ASTPathBinding<ASTPathBindingValue>>(ZeroCopyOutput& out, const ASTPathBinding<ASTPathBindingValue>& value) {
+    if (value.is_Unbound()) {
+        out << StringView("Unbound");
+    } else {
+        out << value.binding << StringView("[") << value.path << StringView("]");
+    }
+}
+
+template <>
+void output<ZeroCopyOutput, ASTPathBinding<ASTPathBindingType>>(ZeroCopyOutput& out, const ASTPathBinding<ASTPathBindingType>& value) {
+    if (value.is_Unbound()) {
+        out << StringView("Unbound");
+    } else {
+        out << value.binding << StringView("[") << value.path << StringView("]");
+    }
+}
+
+template <>
+void output<ZeroCopyOutput, ASTPathBinding<ASTPathBindingMacro>>(ZeroCopyOutput& out, const ASTPathBinding<ASTPathBindingMacro>& value) {
+    if (value.is_Unbound()) {
+        out << StringView("Unbound");
+    } else {
+        out << value.binding << StringView("[") << value.path << StringView("]");
+    }
+}
+
+template <>
+void output<ZeroCopyOutput, ASTPathBindingType>(ZeroCopyOutput& os, const ASTPathBindingType& x) {
+    switch (x.tag()) {
+        case ASTPathBindingType::TAG_Unbound: {
+            os << StringView("_");
+            break;
+        }
+        case ASTPathBindingType::TAG_Crate: {
+            os << StringView("Crate");
+            break;
+        }
+        case ASTPathBindingType::TAG_Primitive: {
+            os << StringView("Primitive");
+            break;
+        }
+        case ASTPathBindingType::TAG_Module: {
+            os << StringView("Module");
+            break;
+        }
+        case ASTPathBindingType::TAG_Trait: {
+            os << StringView("Trait");
+            break;
+        }
+        case ASTPathBindingType::TAG_TraitAlias: {
+            os << StringView("TraitAlias");
+            break;
+        }
+        case ASTPathBindingType::TAG_Struct: {
+            os << StringView("Struct");
+            break;
+        }
+        case ASTPathBindingType::TAG_Enum: {
+            os << StringView("Enum");
+            break;
+        }
+        case ASTPathBindingType::TAG_Union: {
+            os << StringView("Union");
+            break;
+        }
+        case ASTPathBindingType::TAG_EnumVar: {
+            auto& i = x.as_EnumVar();
+            os << StringView("EnumVar(") << i.idx << StringView(")");
+            break;
+        }
+        case ASTPathBindingType::TAG_TypeAlias: {
+            os << StringView("TypeAlias");
+            break;
+        }
+        case ASTPathBindingType::TAG_TypeParameter: {
+            auto& i = x.as_TypeParameter();
+            os << StringView("TyParam(") << i.slot << StringView(")");
+            break;
+        }
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTPathBindingValue>(ZeroCopyOutput& os, const ASTPathBindingValue& x) {
+    switch (x.tag()) {
+        case ASTPathBindingValue::TAG_Unbound: {
+            os << StringView("_");
+            break;
+        }
+        case ASTPathBindingValue::TAG_Struct: {
+            os << StringView("Struct");
+            break;
+        }
+        case ASTPathBindingValue::TAG_Static: {
+            os << StringView("Static");
+            break;
+        }
+        case ASTPathBindingValue::TAG_Function: {
+            os << StringView("Function");
+            break;
+        }
+        case ASTPathBindingValue::TAG_EnumVar: {
+            auto& i = x.as_EnumVar();
+            os << StringView("EnumVar(") << i.idx << StringView(")");
+            break;
+        }
+        case ASTPathBindingValue::TAG_Generic: {
+            auto& i = x.as_Generic();
+            os << StringView("Param(") << i.index << StringView(")");
+            break;
+        }
+        case ASTPathBindingValue::TAG_Variable: {
+            auto& i = x.as_Variable();
+            os << StringView("Var(") << i.slot << StringView(")");
+            break;
+        }
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTPathBindingMacro>(ZeroCopyOutput& os, const ASTPathBindingMacro& x) {
+    switch (x.tag()) {
+        case ASTPathBindingMacro::TAG_Unbound: {
+            os << StringView("_");
+            break;
+        }
+        case ASTPathBindingMacro::TAG_ProcMacroDerive: {
+            auto& i = x.as_ProcMacroDerive();
+            os << StringView("ProcMacroDerive(? ") << i.macName << StringView(")");
+            break;
+        }
+        case ASTPathBindingMacro::TAG_ProcMacroAttribute: {
+            auto& i = x.as_ProcMacroAttribute();
+            os << StringView("ProcMacroAttribute(? ") << i.macName << StringView(")");
+            break;
+        }
+        case ASTPathBindingMacro::TAG_ProcMacro: {
+            auto& i = x.as_ProcMacro();
+            os << StringView("ProcMacro(? ") << i.macName << StringView(")");
+            break;
+        }
+        case ASTPathBindingMacro::TAG_MacroRules: {
+            os << StringView("MacroRules(? ?)");
+            break;
+        }
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTPathParams>(ZeroCopyOutput& os, const ASTPathParams& x) {
+    if (x.isRtn) {
+        os << StringView("(..)");
+        return;
+    }
+    if (x.isParen) {
+        auto& t = x.entries.at(0).as_Type();
+        os << t;
+        auto& rv = x.entries.at(1).as_AssociatedTyEqual();
+        os << StringView("->");
+        os << rv.second;
+        return;
+    }
+    bool needsComma = false;
+    os << StringView(x.isParen ? "(" : "<");
+    for (const auto& e : x.entries) {
+        if (e.is_Null()) {
+            continue;
+        }
+        if (needsComma) {
+            os << StringView(", ");
+        }
+        needsComma = true;
+
+        e.fmt(os);
+    }
+    os << StringView(x.isParen ? ")" : ">");
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTPathNode>(ZeroCopyOutput& os, const ASTPathNode& pn) {
+    pn.printPretty(os, false);
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTPath>(ZeroCopyOutput& os, const ASTPath& path) {
+    path.printPretty(os, false, true);
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTAbsolutePath>(ZeroCopyOutput& os, const ASTAbsolutePath& x) {
+    if (x.crate != "") {
+        os << StringView("::\"") << x.crate << StringView("\"");
+    } else {
+        os << StringView("crate");
+    }
+    for (const auto& n : x.nodes) {
+        os << StringView("::") << n;
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<ASTPathNode>>(ZeroCopyOutput& out, const std::vector<ASTPathNode>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<ASTPath>>(ZeroCopyOutput& out, const std::vector<ASTPath>& values) {
+    outCont(out, values);
+}
+
 }

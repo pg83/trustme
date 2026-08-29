@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "hir_asm.h"
 #include "ast_attrs.h"
 #include "ast_types.h"
@@ -11,7 +13,6 @@
 
 #include <memory>
 #include <vector>
-#include <ostream>
 #include <utility>
 
 class ASTPattern;
@@ -26,7 +27,7 @@ public:
     virtual ~ASTExprNode() = 0;
 
     virtual void visit(ASTNodeVisitor& nv) = 0;
-    virtual void print(std::ostream& os) const = 0;
+    virtual void print(stl::ZeroCopyOutput& os) const = 0;
     virtual ASTExprNodeP clone() const = 0;
     virtual unsigned int nodeKind() const = 0;
 
@@ -94,7 +95,7 @@ struct ASTExprNodeBlock: public ASTExprNode {
     static constexpr unsigned int kind = 1;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -108,7 +109,7 @@ struct ASTExprNodeAsyncBlock: public ASTExprNode {
     static constexpr unsigned int kind = 2;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -126,7 +127,7 @@ struct ASTExprNodeGeneratorBlock: public ASTExprNode {
     static constexpr unsigned int kind = 3;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -138,7 +139,7 @@ struct ASTExprNodeTry: public ASTExprNode {
     static constexpr unsigned int kind = 4;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -154,7 +155,7 @@ struct ASTExprNodeMacro: public ASTExprNode {
     static constexpr unsigned int kind = 5;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -175,7 +176,7 @@ struct ASTExprNodeAsm: public ASTExprNode {
     static constexpr unsigned int kind = 6;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -193,7 +194,7 @@ struct ASTExprNodeAsm2: public ASTExprNode {
     static constexpr unsigned int kind = 7;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -216,7 +217,7 @@ struct ASTExprNodeFlow: public ASTExprNode {
     static constexpr unsigned int kind = 8;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -234,7 +235,7 @@ struct ASTExprNodeLetBinding: public ASTExprNode {
     static constexpr unsigned int kind = 9;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -263,7 +264,7 @@ struct ASTExprNodeAssign: public ASTExprNode {
     static constexpr unsigned int kind = 10;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -276,7 +277,7 @@ struct ASTExprNodeCallPath: public ASTExprNode {
     static constexpr unsigned int kind = 11;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -290,7 +291,7 @@ struct ASTExprNodeCallMethod: public ASTExprNode {
     static constexpr unsigned int kind = 12;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -303,7 +304,7 @@ struct ASTExprNodeCallObject: public ASTExprNode {
     static constexpr unsigned int kind = 13;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -318,7 +319,7 @@ struct ASTExprNodeLoop: public ASTExprNode {
     static constexpr unsigned int kind = 14;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -335,7 +336,7 @@ struct ASTExprNodeFor: public ASTExprNode {
     static constexpr unsigned int kind = 15;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -354,7 +355,7 @@ struct ASTExprNodeWhile: public ASTExprNode {
     static constexpr unsigned int kind = 16;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -379,7 +380,7 @@ struct ASTExprNodeMatch: public ASTExprNode {
     static constexpr unsigned int kind = 17;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -397,7 +398,7 @@ struct ASTExprNodeIf: public ASTExprNode {
     static constexpr unsigned int kind = 18;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -405,7 +406,7 @@ struct ASTExprNodeWildcardPattern: public ASTExprNode {
     static constexpr unsigned int kind = 19;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -418,7 +419,7 @@ struct ASTExprNodeInteger: public ASTExprNode {
     static constexpr unsigned int kind = 20;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -431,7 +432,7 @@ struct ASTExprNodeFloat: public ASTExprNode {
     static constexpr unsigned int kind = 21;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -443,7 +444,7 @@ struct ASTExprNodeBool: public ASTExprNode {
     static constexpr unsigned int kind = 22;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -457,7 +458,7 @@ struct ASTExprNodeString: public ASTExprNode {
     static constexpr unsigned int kind = 23;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -469,7 +470,7 @@ struct ASTExprNodeByteString: public ASTExprNode {
     static constexpr unsigned int kind = 24;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -481,7 +482,7 @@ struct ASTExprNodeCString: public ASTExprNode {
     static constexpr unsigned int kind = 25;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -493,7 +494,7 @@ struct ASTExprNodeSuffixedLiteral: public ASTExprNode {
     static constexpr unsigned int kind = 40;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -524,7 +525,7 @@ struct ASTExprNodeClosure: public ASTExprNode {
     static constexpr unsigned int kind = 26;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -545,7 +546,7 @@ struct ASTExprNodeStructLiteral: public ASTExprNode {
     static constexpr unsigned int kind = 27;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -559,7 +560,7 @@ struct ASTExprNodeStructLiteralPattern: public ASTExprNode {
     static constexpr unsigned int kind = 28;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -574,7 +575,7 @@ struct ASTExprNodeArray: public ASTExprNode {
     static constexpr unsigned int kind = 29;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -586,7 +587,7 @@ struct ASTExprNodeTuple: public ASTExprNode {
     static constexpr unsigned int kind = 30;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -598,7 +599,7 @@ struct ASTExprNodeNamedValue: public ASTExprNode {
     static constexpr unsigned int kind = 31;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -611,7 +612,7 @@ struct ASTExprNodeField: public ASTExprNode {
     static constexpr unsigned int kind = 32;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -624,7 +625,7 @@ struct ASTExprNodeIndex: public ASTExprNode {
     static constexpr unsigned int kind = 33;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -636,7 +637,7 @@ struct ASTExprNodeDeref: public ASTExprNode {
     static constexpr unsigned int kind = 34;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -649,7 +650,7 @@ struct ASTExprNodeCast: public ASTExprNode {
     static constexpr unsigned int kind = 35;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -662,7 +663,7 @@ struct ASTExprNodeTypeAnnotation: public ASTExprNode {
     static constexpr unsigned int kind = 36;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -707,7 +708,7 @@ struct ASTExprNodeBinOp: public ASTExprNode {
     static constexpr unsigned int kind = 37;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -738,7 +739,7 @@ struct ASTExprNodeUniOp: public ASTExprNode {
     static constexpr unsigned int kind = 38;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 
@@ -752,7 +753,7 @@ struct ASTExprNodeMacroDefinition: public ASTExprNode {
     static constexpr unsigned int kind = 39;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
-    void print(std::ostream& os) const override;
+    void print(stl::ZeroCopyOutput& os) const override;
     ASTExprNodeP clone() const override;
 };
 

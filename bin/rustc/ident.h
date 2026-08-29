@@ -8,6 +8,7 @@
 
 namespace stl {
     class ObjPool;
+    class ZeroCopyOutput;
 }
 
 struct Ident {
@@ -15,7 +16,6 @@ struct Ident {
     struct ModPath {
         RcString crate;
         std::vector<RcString> ents;
-        friend std::ostream& operator<<(std::ostream& os, const ModPath& x);
     };
 
     // TODO: make this a reference-counted pointer instead (so it's cheaper to copy)
@@ -69,6 +69,8 @@ struct Ident {
 
         RcString applyToItemName(const RcString& name) const;
 
+        void fmt(stl::ZeroCopyOutput& out) const;
+
         Ordering ord(const Hygiene& x) const;
 
         bool operator==(const Hygiene& x) const {
@@ -83,7 +85,6 @@ struct Ident {
             return ord(x) == OrdLess;
         }
 
-        friend std::ostream& operator<<(std::ostream& os, const Hygiene& v);
     };
 
     Hygiene hygiene;
@@ -132,5 +133,4 @@ struct Ident {
 
     bool operator<(const Ident& x) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const Ident& x);
 };

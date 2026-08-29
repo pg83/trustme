@@ -28,7 +28,6 @@ struct HIRTypeEqualityCb final: HIRTypeEqualityCallback {
         f(type);
     }
 };
-
 struct HIRGenericBoundCallback {
     virtual bool visit(const HIRGenericBound& bound) = 0;
 };
@@ -246,5 +245,3 @@ protected:
         return iterateBoundsCb(cb);
     }
 };
-
-std::ostream& operator<<(std::ostream& s, const TraitResolveCommon::CachedEquality& x);

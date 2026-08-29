@@ -7,6 +7,8 @@
 #include <limits.h>
 #include <stdexcept>
 
+using namespace stl;
+
 FsPath::FsPath(const char* s)
     : str_(s)
 {
@@ -207,4 +209,11 @@ FsPath::ComponentsIter::ComponentsIter(const FsPath& p, size_t i)
     if (end == std::string::npos) {
         end = p.str_.size();
     }
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, FsPath>(ZeroCopyOutput& out, const FsPath& path) {
+    out << path.str();
+}
 }

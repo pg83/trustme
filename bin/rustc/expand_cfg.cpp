@@ -126,7 +126,7 @@ namespace {
                 if (lex.lookahead(0) == TOK_INTERPOLATED_EXPR) {
                     auto n = lex.getTokenCheck(TOK_INTERPOLATED_EXPR).takeFragNode();
                     const auto* np = cast<ASTExprNodeString>(n.get());
-                    ASSERT_BUG(n->span(), np, "");
+                    ASSERT_BUG(n->span(), np, StringView(""));
                     val = np->value;
                 } else {
                     GET_CHECK_TOK(tok, lex, TOK_STRING);
@@ -134,7 +134,7 @@ namespace {
                 }
                 auto its = cfg.values.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
-                    DEBUG(name << ": '" << it->second << "' == '" << val << "'");
+                    DEBUG(name << StringView(": '") << it->second << StringView("' == '") << val << StringView("'"));
                     if (it->second == val) {
                         return true;
                     }
@@ -145,7 +145,7 @@ namespace {
 
                 auto it2 = cfg.valueFcns.find(name.c_str());
                 if (it2 != cfg.valueFcns.end()) {
-                    DEBUG(name << ": ('" << val << "')?");
+                    DEBUG(name << StringView(": ('") << val << StringView("')?"));
                     return it2->second->matches(val);
                 }
 
@@ -185,7 +185,7 @@ namespace {
                     bool rv = true;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
                         const auto field = lex.getTokenCheck(TOK_IDENT).ident().name;
-                        const auto canonical = RcString::newInterned(FMT("target_" << field));
+                        const auto canonical = RcString::newInterned(FMT(StringView("target_") << field));
                         rv &= checkCfgInner1(cfg, canonical, lex);
                         if (lex.lookahead(0) != TOK_COMMA) {
                             break;
@@ -224,7 +224,7 @@ namespace {
                     auto want = H::parse(wanted);
                     return have >= want;
                 } else {
-                    ERROR(lex.pointSpan(), E0000, "Unknown cfg() function - " << name);
+                    ERROR(lex.pointSpan(), E0000, StringView("Unknown cfg() function - ") << name);
                 }
 
                 break;
@@ -243,13 +243,13 @@ CfgState* CfgCreateState(ObjPool& pool) {
     return pool.make<CfgState>(pool);
 }
 
-void CfgDump(const Settings& settings, std::ostream& os) {
+void CfgDump(const Settings& settings, ZeroCopyOutput& os) {
     const auto& cfg = *settings.cfg;
     for (const auto& v : cfg.values) {
-        os << ">" << v.first << "=" << v.second << std::endl;
+        os << StringView(">") << v.first << StringView("=") << v.second << endL;
     }
     for (const auto& f : cfg.flags) {
-        os << ">" << f << std::endl;
+        os << StringView(">") << f << endL;
     }
 }
 
@@ -385,7 +385,7 @@ auto CfgSpecParser::take(char c) -> bool {
 
 auto CfgSpecParser::expect(char c, const char* description) -> void {
     if (!take(c)) {
-        fail(FMT("expected " << description));
+        fail(FMT(StringView("expected ") << description));
     }
 }
 
@@ -476,7 +476,7 @@ auto CfgSpecParser::stringLiteral() -> std::string {
                 break;
             }
             default:
-                fail(FMT("unsupported string escape \\" << c));
+                fail(FMT(StringView("unsupported string escape \\") << c));
         }
     }
     fail("unterminated string literal");
@@ -500,7 +500,7 @@ auto CfgSpecParser::parseCfgOption() -> std::pair<std::string, std::optional<std
 }
 
 auto CCfgExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
-    DEBUG("cfg!() - " << tt);
+    DEBUG(StringView("cfg!() - ") << tt);
     auto lex = TTStream(sp, ParseState(), tt);
     const auto& cfg = *wb.settings->cfg;
     bool rv = checkCfgInner(cfg, lex);
@@ -510,7 +510,7 @@ auto CCfgExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
 }
 
 auto CCfgSelectExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
-    DEBUG("cfg_select!() - " << tt);
+    DEBUG(StringView("cfg_select!() - ") << tt);
     auto lex = TTStream(sp, ParseState(), tt);
     for (;;) {
         const auto& cfg = *wb.settings->cfg;
@@ -523,7 +523,7 @@ auto CCfgSelectExpander::expand(const Span& sp, const WireBoard& wb, const ASTCr
     }
     lex.getTokenCheck(TOK_EOF);
 
-    ERROR(sp, E0000, "cfg_select - Nothing matched");
+    ERROR(sp, E0000, StringView("cfg_select - Nothing matched"));
 }
 
 auto CCfgHandler::stage() const -> AttrStage {
@@ -555,42 +555,42 @@ auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
-    DEBUG("#[cfg] expr - " << mi);
+    DEBUG(StringView("#[cfg] expr - ") << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
         expr.reset();
     }
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const -> void {
-    DEBUG("#[cfg] struct item - " << mi);
+    DEBUG(StringView("#[cfg] struct item - ") << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
         si.name = RcString();
     }
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& i) const -> void {
-    DEBUG("#[cfg] tuple item - " << mi);
+    DEBUG(StringView("#[cfg] tuple item - ") << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
         i.type = ::mkType(*crate.pool, sp);
     }
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& i) const -> void {
-    DEBUG("#[cfg] enum variant - " << mi);
+    DEBUG(StringView("#[cfg] enum variant - ") << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
         i.name = RcString();
     }
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& i) const -> void {
-    DEBUG("#[cfg] match arm - " << mi);
+    DEBUG(StringView("#[cfg] match arm - ") << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
         i.patterns.clear();
     }
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& i) const -> void {
-    DEBUG("#[cfg] struct lit - " << mi);
+    DEBUG(StringView("#[cfg] struct lit - ") << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
         i.value.reset();
     }

@@ -3,7 +3,6 @@
 #include "common.h"
 
 #include <cstring>
-#include <ostream>
 
 class RcString {
     u32 id;
@@ -101,8 +100,6 @@ public:
     bool operator!=(const char* s) const {
         return this->ord(s) != OrdEqual;
     }
-
-    friend std::ostream& operator<<(std::ostream& os, const RcString& x);
 
     friend bool operator==(const char* a, const RcString& b) {
         return b == a;

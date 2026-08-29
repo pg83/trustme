@@ -1,15 +1,18 @@
 #include "version.h"
+#include "output.h"
 
-#include <sstream>
+#include <std/str/builder.h>
+
+using namespace stl;
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 12
 #define VERSION_PATCH 0
 
 std::string VersionGetString() {
-    std::stringstream ss;
-    ss << "v" << VERSION_MAJOR << "." << VERSION_MINOR << "." << VERSION_PATCH << " " << VERSION_GIT_BRANCH << ":" << VERSION_GIT_SHORTHASH;
-    return ss.str();
+    StringBuilder out;
+    out << StringView("v") << VERSION_MAJOR << StringView(".") << VERSION_MINOR << StringView(".") << VERSION_PATCH << StringView(" ") << StringView(VERSION_GIT_BRANCH) << StringView(":") << StringView(VERSION_GIT_SHORTHASH);
+    return std::string(static_cast<const char*>(out.data()), out.length());
 }
 
 const char* VersionGetGitHash() {

@@ -1,4 +1,6 @@
 #include "trans_target.h"
+#include "output.h"
+#include "output_file.h"
 
 #include "toml.h"
 #include "hir_hir.h"
@@ -244,20 +246,20 @@ namespace {
         for (auto keyVal : tomlFile) {
             BUG_ASSERT(keyVal.path.size() > 1);
 
-            DEBUG(keyVal.path << " = " << keyVal.value);
+            DEBUG(keyVal.path << StringView(" = ") << keyVal.value);
             auto checkPathLength = [&](const TomlKeyValue& kv, unsigned len) {
                 if (kv.path.size() != len) {
                     if (kv.path.size() > len) {
-                        std::cerr << "ERROR: Unexpected sub-node to  " << kv.path << " in " << filename << std::endl;
+                        sysE << StringView("ERROR: Unexpected sub-node to  ") << kv.path << StringView(" in ") << filename << endL;
                     } else {
-                        std::cerr << "ERROR: Expected sub-nodes in  " << kv.path << " in " << filename << std::endl;
+                        sysE << StringView("ERROR: Expected sub-nodes in  ") << kv.path << StringView(" in ") << filename << endL;
                     }
                     exit(1);
                 }
             };
             auto checkPathLengthMin = [&](const TomlKeyValue& kv, unsigned len) {
                 if (kv.path.size() < len) {
-                    std::cerr << "ERROR: Expected sub-nodes in " << kv.path << " in " << filename << std::endl;
+                    sysE << StringView("ERROR: Expected sub-nodes in ") << kv.path << StringView(" in ") << filename << endL;
                 }
             };
 
@@ -294,11 +296,11 @@ namespace {
                         } else if (keyVal.value.asString() == archRiscv64().name) {
                             rv.arch = archRiscv64();
                         } else {
-                            std::cerr << "ERROR: Unknown architecture name '" << keyVal.value.asString() << "' in " << filename << std::endl;
+                            sysE << StringView("ERROR: Unknown architecture name '") << keyVal.value.asString() << StringView("' in ") << filename << endL;
                             exit(1);
                         }
                     } else {
-                        std::cerr << "Warning: Unknown configuration item " << keyVal.path[0] << "." << keyVal.path[1] << " in " << filename << std::endl;
+                        sysE << StringView("Warning: Unknown configuration item ") << keyVal.path[0] << StringView(".") << keyVal.path[1] << StringView(" in ") << filename << endL;
                     }
                 } else if (keyVal.path[0] == "backend") {
                     checkPathLengthMin(keyVal, 2);
@@ -308,7 +310,7 @@ namespace {
                         if (keyVal.path[2] == "variant") {
                             checkPathLength(keyVal, 3);
                             if (keyVal.value.asString() != "gnu") {
-                                std::cerr << "ERROR: Unknown C variant name '" << keyVal.value.asString() << "' in " << filename << std::endl;
+                                sysE << StringView("ERROR: Unknown C variant name '") << keyVal.value.asString() << StringView("' in ") << filename << endL;
                                 exit(1);
                             }
                         } else if (keyVal.path[2] == "target") {
@@ -333,17 +335,17 @@ namespace {
                                 rv.backendC.linkerOptsPost.push_back(v.asString());
                             }
                         } else {
-                            std::cerr << "WARNING: Unknown field backend.c." << keyVal.path[2] << " in " << filename << std::endl;
+                            sysE << StringView("WARNING: Unknown field backend.c.") << keyVal.path[2] << StringView(" in ") << filename << endL;
                         }
                     } else {
-                        std::cerr << "WARNING: Unknown configuration item backend." << keyVal.path[1] << " in " << filename << std::endl;
+                        sysE << StringView("WARNING: Unknown configuration item backend.") << keyVal.path[1] << StringView(" in ") << filename << endL;
                     }
                 } else if (keyVal.path[0] == "arch") {
                     checkPathLengthMin(keyVal, 2);
                     if (keyVal.path[1] == "name") {
                         checkPathLength(keyVal, 2);
                         if (rv.arch.name != "") {
-                            std::cerr << "ERROR: Architecture already specified to be '" << rv.arch.name << "'" << std::endl;
+                            sysE << StringView("ERROR: Architecture already specified to be '") << rv.arch.name << StringView("'") << endL;
                             exit(1);
                         }
                         rv.arch.name = keyVal.value.asString();
@@ -385,24 +387,24 @@ namespace {
                         } else if (keyVal.path[2] == "ptr") {
                             rv.arch.alignments.ptr = keyVal.value.asInt();
                         } else {
-                            std::cerr << "WARNING: Unknown field arch.alignments." << keyVal.path[1] << " in " << filename << std::endl;
+                            sysE << StringView("WARNING: Unknown field arch.alignments.") << keyVal.path[1] << StringView(" in ") << filename << endL;
                         }
                     } else {
-                        std::cerr << "WARNING: Unknown field arch." << keyVal.path[1] << " in " << filename << std::endl;
+                        sysE << StringView("WARNING: Unknown field arch.") << keyVal.path[1] << StringView(" in ") << filename << endL;
                     }
                 } else {
-                    std::cerr << "WARNING: Unknown configuration item " << keyVal.path[0] << " in " << filename << std::endl;
+                    sysE << StringView("WARNING: Unknown configuration item ") << keyVal.path[0] << StringView(" in ") << filename << endL;
                 }
             }
         }
 
         // TODO: Ensure that everything is set
         if (rv.arch.name == "") {
-            std::cerr << "ERROR: Architecture not specified in " << filename << std::endl;
+            sysE << StringView("ERROR: Architecture not specified in ") << filename << endL;
             exit(1);
         }
         if (rv.family == "windows" || rv.osName == "windows") {
-            std::cerr << "ERROR: Windows targets are not supported in " << filename << std::endl;
+            sysE << StringView("ERROR: Windows targets are not supported in ") << filename << endL;
             exit(1);
         }
 
@@ -411,7 +413,7 @@ namespace {
 
     void saveSpecToFile(const std::string& filename, const TargetSpec& spec) {
         // TODO: Have a round-trip unit test
-        std::ofstream of(filename);
+        OutputFile of(filename);
 
         struct H {
             static const char* tfstr(bool v) {
@@ -419,48 +421,48 @@ namespace {
             }
         };
 
-        of << "[target]\n"
-           << "family = \"" << spec.family << "\"\n"
-           << "os-name = \"" << spec.osName << "\"\n"
-           << "env-name = \"" << spec.envName << "\"\n"
-           << "\n"
-           << "[backend.c]\n"
-           << "variant = \"gnu\"\n"
-           << "target = \"" << spec.backendC.cCompiler << "\"\n"
-           << "compiler-opts = [";
+        of << StringView("[target]\n")
+           << StringView("family = \"") << spec.family << StringView("\"\n")
+           << StringView("os-name = \"") << spec.osName << StringView("\"\n")
+           << StringView("env-name = \"") << spec.envName << StringView("\"\n")
+           << StringView("\n")
+           << StringView("[backend.c]\n")
+           << StringView("variant = \"gnu\"\n")
+           << StringView("target = \"") << spec.backendC.cCompiler << StringView("\"\n")
+           << StringView("compiler-opts = [");
         for (const auto& s : spec.backendC.compilerOpts) {
-            of << "\"" << s << "\",";
+            of << StringView("\"") << s << StringView("\",");
         }
-        of << "]\n"
-           << "linker-opts-pre = [";
+        of << StringView("]\n")
+           << StringView("linker-opts-pre = [");
         for (const auto& s : spec.backendC.linkerOptsPre) {
-            of << "\"" << s << "\",";
+            of << StringView("\"") << s << StringView("\",");
         }
-        of << "]\n"
-           << "linker-opts-post = [";
+        of << StringView("]\n")
+           << StringView("linker-opts-post = [");
         for (const auto& s : spec.backendC.linkerOptsPost) {
-            of << "\"" << s << "\",";
+            of << StringView("\"") << s << StringView("\",");
         }
-        of << "]\n"
-           << "\n"
-           << "[arch]\n"
-           << "name = \"" << spec.arch.name << "\"\n"
-           << "pointer-bits = " << spec.arch.pointerBits << "\n"
-           << "is-big-endian = " << H::tfstr(spec.arch.bigEndian) << "\n"
-           << "has-atomic-u8 = " << H::tfstr(spec.arch.atomics.u8) << "\n"
-           << "has-atomic-u16 = " << H::tfstr(spec.arch.atomics.u16) << "\n"
-           << "has-atomic-u32 = " << H::tfstr(spec.arch.atomics.u32) << "\n"
-           << "has-atomic-u64 = " << H::tfstr(spec.arch.atomics.u64) << "\n"
-           << "has-atomic-ptr = " << H::tfstr(spec.arch.atomics.ptr) << "\n"
-           << "alignments = {"
-           << " u16 = " << static_cast<int>(spec.arch.alignments.u16) << ","
-           << " u32 = " << static_cast<int>(spec.arch.alignments.u32) << ","
-           << " u64 = " << static_cast<int>(spec.arch.alignments.u64) << ","
-           << " u128 = " << static_cast<int>(spec.arch.alignments.u128) << ","
-           << " f32 = " << static_cast<int>(spec.arch.alignments.f32) << ","
-           << " f64 = " << static_cast<int>(spec.arch.alignments.f64) << ","
-           << " ptr = " << static_cast<int>(spec.arch.alignments.ptr) << " }\n"
-           << "\n";
+        of << StringView("]\n")
+           << StringView("\n")
+           << StringView("[arch]\n")
+           << StringView("name = \"") << spec.arch.name << StringView("\"\n")
+           << StringView("pointer-bits = ") << spec.arch.pointerBits << StringView("\n")
+           << StringView("is-big-endian = ") << H::tfstr(spec.arch.bigEndian) << StringView("\n")
+           << StringView("has-atomic-u8 = ") << H::tfstr(spec.arch.atomics.u8) << StringView("\n")
+           << StringView("has-atomic-u16 = ") << H::tfstr(spec.arch.atomics.u16) << StringView("\n")
+           << StringView("has-atomic-u32 = ") << H::tfstr(spec.arch.atomics.u32) << StringView("\n")
+           << StringView("has-atomic-u64 = ") << H::tfstr(spec.arch.atomics.u64) << StringView("\n")
+           << StringView("has-atomic-ptr = ") << H::tfstr(spec.arch.atomics.ptr) << StringView("\n")
+           << StringView("alignments = {")
+           << StringView(" u16 = ") << static_cast<int>(spec.arch.alignments.u16) << StringView(",")
+           << StringView(" u32 = ") << static_cast<int>(spec.arch.alignments.u32) << StringView(",")
+           << StringView(" u64 = ") << static_cast<int>(spec.arch.alignments.u64) << StringView(",")
+           << StringView(" u128 = ") << static_cast<int>(spec.arch.alignments.u128) << StringView(",")
+           << StringView(" f32 = ") << static_cast<int>(spec.arch.alignments.f32) << StringView(",")
+           << StringView(" f64 = ") << static_cast<int>(spec.arch.alignments.f64) << StringView(",")
+           << StringView(" ptr = ") << static_cast<int>(spec.arch.alignments.ptr) << StringView(" }\n")
+           << StringView("\n");
     }
 
     TargetSpec initFromSpecName(const std::string& targetName) {
@@ -524,7 +526,7 @@ namespace {
         } else if (targetName == "x86_64-unknown-haiku") {
             return TargetSpec{"unix", "haiku", "gnu", {false, "x86_64-unknown-haiku", {}, {}}, archX86_64()};
         } else {
-            std::cerr << "Unknown target name '" << targetName << "'" << std::endl;
+            sysE << StringView("Unknown target name '") << targetName << StringView("'") << endL;
             abort();
         }
         UNREACHABLE();
@@ -570,15 +572,12 @@ namespace {
         });
     }
 
-    std::ostream& operator<<(std::ostream& os, const Ent& e) {
-        os << "Ent { #" << e.field << ": s=" << e.size << " a=" << e.align << (e.userAlign ? "!" : "") << " : " << e.ty << " }";
-        return os;
-    }
+
 
     bool makeFieldEnt(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, HIRTypeRef ty, Ent& out) {
         size_t size, align;
         if (!TargetGetSizeAndAlignOf(sp, resolve, ty, size, align)) {
-            DEBUG("Can't get size/align of " << ty);
+            DEBUG(StringView("Can't get size/align of ") << ty);
             return false;
         }
         out = Ent{idx, size, align, HIRTypeRef(), false};
@@ -606,7 +605,7 @@ namespace {
                     if (!makeFieldEnt(sp, resolve, idx, monomorph(e.ent), ent)) {
                         return false;
                     }
-                    DEBUG("#" << idx << ": " << ent);
+                    DEBUG(StringView("#") << idx << StringView(": ") << ent);
                     idx++;
                     ents.push_back(mv$(ent));
                 }
@@ -620,7 +619,7 @@ namespace {
                     if (!makeFieldEnt(sp, resolve, idx, monomorph(e.ty), ent)) {
                         return false;
                     }
-                    DEBUG("#" << idx << " " << e.name << ": " << ent);
+                    DEBUG(StringView("#") << idx << StringView(" ") << e.name << StringView(": ") << ent);
                     idx++;
                     ents.push_back(mv$(ent));
                 }
@@ -642,9 +641,9 @@ namespace {
 
     HIRTypeRef asyncDropGlueType(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* dropeeTy) {
         const auto* outerPath = outerTy->opt_Path();
-        ASSERT_BUG(sp, outerPath && outerPath->binding.is_Struct() && outerPath->path.data.is_Generic(), "invalid async-drop glue type " << outerTy);
+        ASSERT_BUG(sp, outerPath && outerPath->binding.is_Struct() && outerPath->path.data.is_Generic(), StringView("invalid async-drop glue type ") << outerTy);
         auto path = outerPath->path.data.as_Generic().clone();
-        ASSERT_BUG(sp, !path.params.types.empty(), "async-drop glue type without its dropee argument: " << outerTy);
+        ASSERT_BUG(sp, !path.params.types.empty(), StringView("async-drop glue type without its dropee argument: ") << outerTy);
         path.params.types[0] = dropeeTy;
         return resolve.hirCrate().types.path(std::move(path), outerPath->binding.as_Struct());
     }
@@ -726,7 +725,7 @@ namespace {
 
     bool asyncDropCoroutineStateLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* stateTy, AsyncDropFieldLayout& out) {
         const auto* path = stateTy->opt_Path();
-        ASSERT_BUG(sp, path && path->binding.is_Struct() && path->path.data.is_Generic(), "invalid coroutine state type " << stateTy);
+        ASSERT_BUG(sp, path && path->binding.is_Struct() && path->path.data.is_Generic(), StringView("invalid coroutine state type ") << stateTy);
         const auto& generic = path->path.data.as_Generic();
         const auto& str = *path->binding.as_Struct();
         auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, stateTy, &generic.params, nullptr);
@@ -755,15 +754,15 @@ namespace {
 
     bool asyncDropCoroutineFieldsLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* ty, AsyncDropFieldLayout& out) {
         const auto& pathTy = ty->as_Path();
-        ASSERT_BUG(sp, (pathTy.isFuture() || pathTy.isGenerator()) && pathTy.binding.is_Struct() && pathTy.path.data.is_Generic(), "invalid coroutine type " << ty);
+        ASSERT_BUG(sp, (pathTy.isFuture() || pathTy.isGenerator()) && pathTy.binding.is_Struct() && pathTy.path.data.is_Generic(), StringView("invalid coroutine type ") << ty);
         const auto* fields = pathTy.binding.as_Struct()->data.opt_Tuple();
-        ASSERT_BUG(sp, fields && !fields->empty(), "coroutine without its state field: " << ty);
+        ASSERT_BUG(sp, fields && !fields->empty(), StringView("coroutine without its state field: ") << ty);
         auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, ty, &pathTy.path.data.as_Generic().params, nullptr);
         for (size_t i = 0; i < fields->size(); i++) {
             auto fieldTy = resolve.monomorphExpand(sp, fields->at(i).ent, monomorph);
             if (i == 0) {
                 const auto* fieldPath = fieldTy->opt_Path();
-                ASSERT_BUG(sp, fieldPath && fieldPath->path.data.is_Generic() && fieldPath->path.data.as_Generic().path == resolve.hirCrate().getLangItemPath(sp, "maybe_uninit") && fieldPath->path.data.as_Generic().params.types.size() == 1, "coroutine state is not MaybeUninit<State>: " << fieldTy);
+                ASSERT_BUG(sp, fieldPath && fieldPath->path.data.is_Generic() && fieldPath->path.data.as_Generic().path == resolve.hirCrate().getLangItemPath(sp, "maybe_uninit") && fieldPath->path.data.as_Generic().params.types.size() == 1, StringView("coroutine state is not MaybeUninit<State>: ") << fieldTy);
                 if (!asyncDropCoroutineStateLayout(sp, resolve, outerTy, fieldPath->path.data.as_Generic().params.types[0], out)) {
                     return false;
                 }
@@ -795,7 +794,7 @@ namespace {
     bool extendAsyncDropGlueRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, TypeRepr& repr) {
         const auto& pathTy = ty->as_Path();
         const auto& path = pathTy.path.data.as_Generic();
-        ASSERT_BUG(sp, !path.params.types.empty(), "async-drop glue type without its dropee argument: " << ty);
+        ASSERT_BUG(sp, !path.params.types.empty(), StringView("async-drop glue type without its dropee argument: ") << ty);
         const auto* dropeeTy = path.params.types[0];
 
         HIRPath dropPath{HIRSimplePath()};
@@ -819,7 +818,7 @@ namespace {
                 if (!addAsyncDropFieldLayout(sp, resolve, ty, array->inner, element)) {
                     return false;
                 }
-                ASSERT_BUG(sp, element.futures.length() == 1, "async array element did not produce one glue future");
+                ASSERT_BUG(sp, element.futures.length() == 1, StringView("async array element did not produce one glue future"));
                 hasAsyncFields = true;
                 const size_t pointerSize = TargetGetPointerBits() / 8;
                 offset = alignTo(offset, pointerSize);
@@ -889,7 +888,7 @@ namespace {
         }
         const size_t outerSize = alignTo(offset, align);
         const size_t storageOffset = alignTo(repr.size, align);
-        ASSERT_BUG(sp, storageOffset < outerSize, "async-drop glue has no suspension storage: " << ty);
+        ASSERT_BUG(sp, storageOffset < outerSize, StringView("async-drop glue has no suspension storage: ") << ty);
         auto storageTy = resolve.hirCrate().types.array(resolve.hirCrate().types.primitive(HIRCoreType::U8), outerSize - storageOffset);
         repr.fields.push_back(TypeRepr::Field{storageOffset, std::move(storageTy)});
         repr.align = align;
@@ -965,14 +964,14 @@ namespace {
             maxAlign = std::max(maxAlign, align);
 
             if (e.field != ~0u) {
-                ASSERT_BUG(sp, e.field < fields.size(), "Field index out of range");
-                ASSERT_BUG(sp, fields[e.field].ty == HIRTypeRef(), "Dupliate field index");
+                ASSERT_BUG(sp, e.field < fields.size(), StringView("Field index out of range"));
+                ASSERT_BUG(sp, fields[e.field].ty == HIRTypeRef(), StringView("Dupliate field index"));
                 fields[e.field].offset = curOfs;
                 fields[e.field].ty = e.ty;
             }
-            DEBUG("#" << e.field << " @" << curOfs << "+" << e.size << " : " << e.ty);
+            DEBUG(StringView("#") << e.field << StringView(" @") << curOfs << StringView("+") << e.size << StringView(" : ") << e.ty);
             if (e.size == SIZE_MAX) {
-                ASSERT_BUG(sp, &e == &ents.back(), "Unsized item isn't the last item in " << ty);
+                ASSERT_BUG(sp, &e == &ents.back(), StringView("Unsized item isn't the last item in ") << ty);
                 curOfs = SIZE_MAX;
             } else {
                 curOfs += e.size;
@@ -988,12 +987,12 @@ namespace {
             }
         }
         for (const auto& f : fields) {
-            ASSERT_BUG(sp, f.ty != HIRTypeRef(), "Uninitialised field found - " << (&f - &fields[0]));
+            ASSERT_BUG(sp, f.ty != HIRTypeRef(), StringView("Uninitialised field found - ") << (&f - &fields[0]));
         }
         rv.align = maxAlign;
         rv.size = curOfs;
         rv.fields = std::move(fields);
-        DEBUG(ty << ": size = " << rv.size << ", align = " << rv.align);
+        DEBUG(ty << StringView(": size = ") << rv.size << StringView(", align = ") << rv.align);
         return box$(rv);
     }
 
@@ -1032,7 +1031,7 @@ namespace {
                 sorting = StructSorting::None;
             }
         } else if (const auto* te = ty->opt_Tuple()) {
-            DEBUG("Tuple " << ty);
+            DEBUG(StringView("Tuple ") << ty);
             unsigned int idx = 0;
             for (const auto& t : *te) {
                 Ent ent;
@@ -1044,7 +1043,7 @@ namespace {
             }
             sorting = (!ents.empty() && ents.back().size == SIZE_MAX) ? StructSorting::AllButFinal : StructSorting::All;
         } else {
-            BUG(sp, "Unexpected type in creating type repr - " << ty);
+            BUG(sp, StringView("Unexpected type in creating type repr - ") << ty);
         }
 
         auto repr = makeTypeReprStructInner(sp, ty, ents, sorting, forcedAlignment, maxAlignment);
@@ -1238,7 +1237,7 @@ namespace {
                         }
                     }
                     if (str->structMarkings.isNonzero) {
-                        DEBUG(ty << " tagged NonZero");
+                        DEBUG(ty << StringView(" tagged NonZero"));
                         outPath.subFields.push_back(0);
                         outPath.size = r->size;
                         if ((r->fields[0].ty->is_Pointer() || r->fields[0].ty->is_Borrow()) && outPath.size > TargetGetPointerBits() / 8) {
@@ -1316,7 +1315,7 @@ namespace {
     }
 
     bool getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t minOffset, size_t maxOffset, size_t requiredCount, TypeRepr::FieldPath& outPath, size_t& nicheStart) {
-        TRACE_FUNCTION_F(ty << " min_offset=" << minOffset << " max_offset=" << maxOffset << " required_count=" << requiredCount);
+        TRACE_FUNCTION_F(ty << StringView(" min_offset=") << minOffset << StringView(" max_offset=") << maxOffset << StringView(" required_count=") << requiredCount);
         switch (ty->tag()) {
             break;
             case HIRTypeData::TAG_Tuple: {
@@ -1328,7 +1327,7 @@ namespace {
                 for (size_t i = 0; i < r->fields.size(); i++) {
                     const auto& f = r->fields[i];
                     auto size = getSizeOrZero(sp, resolve, f.ty);
-                    DEBUG(i << ": " << f.offset << " + " << size);
+                    DEBUG(i << StringView(": ") << f.offset << StringView(" + ") << size);
                     if (f.offset >= maxOffset) {
                         continue;
                     } else if (f.offset + size > minOffset) {
@@ -1395,7 +1394,7 @@ namespace {
                     for (size_t i = 0; i < r->fields.size(); i++) {
                         const auto& f = r->fields[i];
                         auto size = getSizeOrZero(sp, resolve, f.ty);
-                        DEBUG(i << ": " << f.offset << " + " << size);
+                        DEBUG(i << StringView(": ") << f.offset << StringView(" + ") << size);
                         if (f.offset >= maxOffset) {
                             continue;
                         } else if (f.offset + size > minOffset) {
@@ -1465,7 +1464,7 @@ namespace {
                                 return false;
                             }
                             auto ofs = getOffset(sp, resolve, r, ve.field);
-                            DEBUG("Linear - Tag offset: " << ofs);
+                            DEBUG(StringView("Linear - Tag offset: ") << ofs);
                             if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t)) {
                                 const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
                                 const size_t validEnd = ve.offset + ve.numVariants - 1;
@@ -1484,7 +1483,7 @@ namespace {
                         case TypeReprVariantMode::TAG_Values: {
                             auto& ve = r->variants.as_Values();
                             auto ofs = getOffset(sp, resolve, r, ve.field);
-                            DEBUG("Values - Tag offset: " << ofs);
+                            DEBUG(StringView("Values - Tag offset: ") << ofs);
                             if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t) && !ve.values.empty()) {
                                 const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
                                 std::vector<size_t> values;
@@ -1521,7 +1520,7 @@ namespace {
                             return false;
                         }
                         case TypeReprVariantMode::TAG_NonZero: {
-                            DEBUG("Non-zero enum, can't niche");
+                            DEBUG(StringView("Non-zero enum, can't niche"));
                             return false;
                         }
                     }
@@ -1626,20 +1625,20 @@ namespace {
                         auto t = monomorph(var.type);
                         size_t size, align;
                         if (!TargetGetSizeAndAlignOf(sp, resolve, t, size, align)) {
-                            DEBUG("Generic type in enum - " << t);
+                            DEBUG(StringView("Generic type in enum - ") << t);
                             return nullptr;
                         }
                         if (size == SIZE_MAX) {
-                            BUG(sp, "Unsized type in enum - " << t);
+                            BUG(sp, StringView("Unsized type in enum - ") << t);
                         }
                         maxSize = std::max(maxSize, size);
                         maxAlign = std::max(maxAlign, align);
                         rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
 
-                        ASSERT_BUG(sp, !var.discriminantExpr, "TODO: Handle explicit discriminants with repr(C) data");
+                        ASSERT_BUG(sp, !var.discriminantExpr, StringView("TODO: Handle explicit discriminants with repr(C) data"));
                     }
 
-                    DEBUG("max_size = " << maxSize << ", max_align = " << maxAlign);
+                    DEBUG(StringView("max_size = ") << maxSize << StringView(", max_align = ") << maxAlign);
                     auto tagTy = enm.tagRepr == HIREnum::Repr::Auto ? HIRCoreType::U32 : enm.getReprType(enm.tagRepr);
                     rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(tagTy)});
                     size_t tagSize, tagAlign;
@@ -1664,7 +1663,7 @@ namespace {
                         auto t = monomorph(e[0].type);
                         const auto* innerRepr = TargetGetTypeRepr(sp, resolve, t);
                         if (!innerRepr) {
-                            DEBUG("Generic type in enum - " << t);
+                            DEBUG(StringView("Generic type in enum - ") << t);
                             return nullptr;
                         }
                         rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
@@ -1692,19 +1691,19 @@ namespace {
                         auto variantType = monomorph(var.type);
                         auto forcedAlignment = variantType->is_Path() && variantType->as_Path().binding.is_Struct() ? variantType->as_Path().binding.as_Struct()->forcedAlignment : 0;
                         variants.push_back({mv$(variantType), {}, forcedAlignment});
-                        TRACE_FUNCTION_F("Variant #" << (&var - e.data()));
+                        TRACE_FUNCTION_F(StringView("Variant #") << (&var - e.data()));
                         if (var.type == resolve.hirCrate().types.unit()) {
                             continue;
                         }
                         if (!structEnumerateFields(sp, resolve, variants.back().type, variants.back().ents)) {
-                            DEBUG("Generic type in enum - " << variants.back().type);
+                            DEBUG(StringView("Generic type in enum - ") << variants.back().type);
                             return nullptr;
                         }
-                        DEBUG(variants.back().type << ": " << variants.back().ents);
+                        DEBUG(variants.back().type << StringView(": ") << variants.back().ents);
                     }
 
                     if (enm.tagRepr == HIREnum::Repr::Auto) {
-                        ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
+                        ASSERT_BUG(sp, !hasExplcitValue, StringView("Explicit tag without a repr"));
                         if (rv.variants.is_None() && variants.size() == 2) {
                             size_t sizes[2] = {0, 0};
                             for (size_t i = 0; i < 2; i++) {
@@ -1712,12 +1711,12 @@ namespace {
                                     sizes[i] += ent.size;
                                 }
                             }
-                            DEBUG("sizes = {" << sizes[0] << "," << sizes[1] << "}");
+                            DEBUG(StringView("sizes = {") << sizes[0] << StringView(",") << sizes[1] << StringView("}"));
                             auto minSize = std::min(sizes[0], sizes[1]);
                             auto maxSize = std::max(sizes[0], sizes[1]);
                             if (minSize == 0 && maxSize > 0) {
                                 unsigned nzVar = (sizes[0] == 0 ? 1 : 0);
-                                DEBUG("Variant #" << nzVar << " is populated, checking for NonZero");
+                                DEBUG(StringView("Variant #") << nzVar << StringView(" is populated, checking for NonZero"));
                                 for (size_t i = 0; i < variants[nzVar].ents.size(); i++) {
                                     TypeRepr::FieldPath nzPath;
                                     if (getNonzeroPath(sp, resolve, variants[nzVar].ents[i].ty, nzPath)) {
@@ -1725,7 +1724,7 @@ namespace {
                                         nzPath.index = nzVar;
                                         std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
-                                        DEBUG("nz_path = " << nzPath.subFields);
+                                        DEBUG(StringView("nz_path = ") << nzPath.subFields);
                                         size_t size0, size1;
                                         size_t align0, align1;
                                         TargetGetSizeAndAlignOf(sp, resolve, variants[0].type, size0, align0);
@@ -1767,7 +1766,7 @@ namespace {
                                 }
                             }
 
-                            DEBUG("Niche optimisation: max_var_size=" << maxVarSize << " n_match=" << nMatch << " biggest_var=" << biggestVar << " min_offset=" << minOffset);
+                            DEBUG(StringView("Niche optimisation: max_var_size=") << maxVarSize << StringView(" n_match=") << nMatch << StringView(" biggest_var=") << biggestVar << StringView(" min_offset=") << minOffset);
                             if (nMatch == 1) {
                                 const size_t nicheVariantStart = biggestVar == 0 ? 1 : 0;
                                 const size_t nicheVariantEnd = biggestVar + 1 == variants.size() ? biggestVar - 1 : variants.size() - 1;
@@ -1786,7 +1785,7 @@ namespace {
                                         nzPath.subFields.push_back(i);
                                         nzPath.index = biggestVar;
                                         std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
-                                        DEBUG("Niche optimisation (trailing): value offset=" << nicheStart << " path=" << nzPath << " (@" << nicheOffset << ")");
+                                        DEBUG(StringView("Niche optimisation (trailing): value offset=") << nicheStart << StringView(" path=") << nzPath << StringView(" (@") << nicheOffset << StringView(")"));
 
                                         BUG_ASSERT(rv.variants.is_None());
                                         rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nzPath), nicheStart, e.size()});
@@ -1801,7 +1800,7 @@ namespace {
                                             std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
                                             nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
                                             if (nicheOffset != 0) {
-                                                DEBUG("Ignore niche not at the start of the struture");
+                                                DEBUG(StringView("Ignore niche not at the start of the struture"));
                                                 continue;
                                             }
                                             std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
@@ -1810,7 +1809,7 @@ namespace {
                                             nzPath.index = biggestVar;
                                             std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
-                                            DEBUG("Niche optimisation (leading): linear offset=" << nicheStart << " path=" << nzPath << " @byte " << nicheOffset);
+                                            DEBUG(StringView("Niche optimisation (leading): linear offset=") << nicheStart << StringView(" path=") << nzPath << StringView(" @byte ") << nicheOffset);
                                             nicheBeforeData = true;
                                             nonNicheOffset = nzPath.size;
                                             BUG_ASSERT(rv.variants.is_None());
@@ -1847,7 +1846,7 @@ namespace {
                                         nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U128);
                                         break;
                                     default:
-                                        BUG(sp, "Unknown niche size: " << nichePath);
+                                        BUG(sp, StringView("Unknown niche size: ") << nichePath);
                                 }
                                 BUG_ASSERT(reprs.size() == variants.size());
                                 size_t finalSize = 0;
@@ -1861,7 +1860,7 @@ namespace {
                                                 variants[i].ents[0].align = 1;
                                                 variants[i].ents[0].size = nicheOffset;
                                                 variants[i].ents[0].field = ~0u;
-                                                TODO(sp, "Handle adding padding");
+                                                TODO(sp, StringView("Handle adding padding"));
                                             }
                                             variants[i].ents.insert(variants[i].ents.begin(), Ent());
                                             variants[i].ents[0].align = nichePath.size;
@@ -1882,7 +1881,7 @@ namespace {
                                             }
                                             BUG_ASSERT(nicheOffset % nichePath.size == 0);
                                             BUG_ASSERT(maxOfs % nichePath.size == 0);
-                                            ASSERT_BUG(sp, nicheOffset >= maxOfs, "Niche offset (" << nicheOffset << ") overlaps with variant data (" << maxOfs << ")");
+                                            ASSERT_BUG(sp, nicheOffset >= maxOfs, StringView("Niche offset (") << nicheOffset << StringView(") overlaps with variant data (") << maxOfs << StringView(")"));
                                             auto reqPadding = nicheOffset - maxOfs;
                                             if (reqPadding > 0) {
                                                 variants[i].ents.push_back(Ent());
@@ -1920,7 +1919,7 @@ namespace {
                                         sz++;
                                     }
                                     if (sz != rv.size || finalAlign != rv.align) {
-                                        DEBUG("Capping ABI: " << ty << " " << rv.size << "/" << rv.align << " -> " << sz << "/" << finalAlign << " (union of the final variants)");
+                                        DEBUG(StringView("Capping ABI: ") << ty << StringView(" ") << rv.size << StringView("/") << rv.align << StringView(" -> ") << sz << StringView("/") << finalAlign << StringView(" (union of the final variants)"));
                                         rv.size = sz;
                                         rv.align = finalAlign;
                                     }
@@ -1928,9 +1927,9 @@ namespace {
 
                                 auto tagOffset = getOffset(sp, resolve, &rv, nichePath);
                                 if (nonNicheOffset != 0) {
-                                    ASSERT_BUG(sp, tagOffset < nonNicheOffset, "Niche offset invalid: " << tagOffset << " >= " << nonNicheOffset);
+                                    ASSERT_BUG(sp, tagOffset < nonNicheOffset, StringView("Niche offset invalid: ") << tagOffset << StringView(" >= ") << nonNicheOffset);
                                 } else {
-                                    ASSERT_BUG(sp, tagOffset >= minOffset, "Niche offset invalid: " << tagOffset << " < " << minOffset);
+                                    ASSERT_BUG(sp, tagOffset >= minOffset, StringView("Niche offset invalid: ") << tagOffset << StringView(" < ") << minOffset);
                                 }
                             }
                         }
@@ -1941,16 +1940,16 @@ namespace {
                         if (enm.tagRepr != HIREnum::Repr::Auto) {
                             tagTy = resolve.hirCrate().types.primitive(enm.getReprType(enm.tagRepr));
                         } else {
-                            ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
+                            ASSERT_BUG(sp, !hasExplcitValue, StringView("Explicit tag without a repr"));
                             if (e.size() <= 1) {
-                                BUG(sp, "Reached auto tag type logic with zero/one-sized enum");
+                                BUG(sp, StringView("Reached auto tag type logic with zero/one-sized enum"));
                             } else if (e.size() <= 255) {
                                 tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U8);
-                                DEBUG("u8 data tag");
+                                DEBUG(StringView("u8 data tag"));
                             } else if (e.size() <= UINT16_MAX) {
                                 tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U16);
                             } else {
-                                ASSERT_BUG(sp, e.size() <= UINT32_MAX, "");
+                                ASSERT_BUG(sp, e.size() <= UINT32_MAX, StringView(""));
                                 tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U32);
                             }
                         }
@@ -1994,7 +1993,7 @@ namespace {
                             for (const auto& v : e) {
                                 vals.push_back(v.discriminantValue);
                             }
-                            DEBUG("vals = " << vals);
+                            DEBUG(StringView("vals = ") << vals);
                             rv.variants = TypeRepr::VariantMode::make_Values({{e.size(), tagSize, {}}, std::move(vals)});
                         } else {
                             rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
@@ -2055,7 +2054,7 @@ namespace {
                     for (const auto& v : e.variants) {
                         vals.push_back(v.val);
                     }
-                    DEBUG("vals = " << vals);
+                    DEBUG(StringView("vals = ") << vals);
                     rv.variants = TypeRepr::VariantMode::make_Values({{0, static_cast<u8>(rv.size), {}}, std::move(vals)});
                 }
             } break;
@@ -2071,22 +2070,22 @@ namespace {
 
         switch (rv.variants.tag()) {
             case TypeReprVariantMode::TAG_None: {
-                DEBUG("rv.variants = None");
+                DEBUG(StringView("rv.variants = None"));
                 break;
             }
             case TypeReprVariantMode::TAG_Linear: {
                 auto& e = rv.variants.as_Linear();
-                DEBUG("rv.variants = Linear {" << " field=" << e.field << " value " << e.offset << "+" << e.numVariants << " }");
+                DEBUG(StringView("rv.variants = Linear {") << StringView(" field=") << e.field << StringView(" value ") << e.offset << StringView("+") << e.numVariants << StringView(" }"));
                 break;
             }
             case TypeReprVariantMode::TAG_Values: {
                 auto& e = rv.variants.as_Values();
-                DEBUG("rv.variants = Values {" << " field=" << e.field << " values " << e.values << " }");
+                DEBUG(StringView("rv.variants = Values {") << StringView(" field=") << e.field << StringView(" values ") << e.values << StringView(" }"));
                 break;
             }
             case TypeReprVariantMode::TAG_NonZero: {
                 auto& e = rv.variants.as_NonZero();
-                DEBUG("rv.variants = NonZero {" << " field=" << e.field << " zero_variant=" << e.zeroVariant << " }");
+                DEBUG(StringView("rv.variants = NonZero {") << StringView(" field=") << e.field << StringView(" zero_variant=") << e.zeroVariant << StringView(" }"));
                 break;
             }
         }
@@ -2115,11 +2114,11 @@ namespace {
             rv.fields.push_back({0, monomorph(var.ty)});
             size_t size, align;
             if (!TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, size, align)) {
-                DEBUG("Generic type encounterd after monomorphise in union - " << rv.fields.back().ty);
+                DEBUG(StringView("Generic type encounterd after monomorphise in union - ") << rv.fields.back().ty);
                 return nullptr;
             }
             if (size == SIZE_MAX) {
-                BUG(sp, "Unsized type in union");
+                BUG(sp, StringView("Unsized type in union"));
             }
             rv.size = std::max(rv.size, size);
             rv.align = std::max(rv.align, align);
@@ -2156,7 +2155,7 @@ namespace {
                         return nullptr;
                     case HIRTypePathBinding::TAG_Opaque:
                     case HIRTypePathBinding::TAG_Unbound:
-                        BUG(sp, "Encountered invalid type in make_type_repr - " << ty);
+                        BUG(sp, StringView("Encountered invalid type in make_type_repr - ") << ty);
                 }
                 UNREACHABLE();
             case HIRTypeData::TAG_NodeType:
@@ -2165,7 +2164,7 @@ namespace {
                     repr->align = 1;
                     return repr;
                 }
-                TODO(sp, "Type repr for " << ty);
+                TODO(sp, StringView("Type repr for ") << ty);
             // TODO: Why is `make_type_repr` being called on these?
             case HIRTypeData::TAG_Primitive:
             case HIRTypeData::TAG_Borrow:
@@ -2173,13 +2172,13 @@ namespace {
             case HIRTypeData::TAG_Pattern:
                 return nullptr;
             default:
-                TODO(sp, "Type repr for " << ty);
+                TODO(sp, StringView("Type repr for ") << ty);
         }
     }
 
     std::unique_ptr<TypeRepr> makeTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         std::unique_ptr<TypeRepr> rv;
-        TRACE_FUNCTION_FR(ty, ty << " " << FMT_CB(ss, if (rv) { ss << "size=" << rv->size << ", align=" << rv->align; } else { ss << "NONE"; }));
+        TRACE_FUNCTION_FR(ty, ty << StringView(" ") << FMT_CB(ss, if (rv) { ss << StringView("size=") << rv->size << StringView(", align=") << rv->align; } else { ss << StringView("NONE"); }));
         rv = make_type_repr_(sp, resolve, ty);
         return rv;
     }
@@ -2232,16 +2231,16 @@ static void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const
     if (!hasAbiIdentity(ty)) {
         const auto* reprPtr = repr.get();
         auto ires = cache.unencoded.emplace(ty, mv$(repr));
-        ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
+        ASSERT_BUG(sp, ires.second, StringView("set_type_repr called for type that already has a repr: ") << ty);
         cache.exact.emplace(ty, reprPtr);
-        DEBUG("Set temporary repr for " << ty);
+        DEBUG(StringView("Set temporary repr for ") << ty);
         return;
     }
     auto symbol = FMT(TransMangle(resolve.board(), ty));
     auto ires = cache.encoded.emplace(mv$(symbol), TargetLayoutContext::CachedTypeRepr{ty, mv$(repr)});
-    ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
+    ASSERT_BUG(sp, ires.second, StringView("set_type_repr called for type that already has a repr: ") << ty);
     cache.exact.emplace(ty, ires.first->second.repr.get());
-    DEBUG("Set repr for " << ty);
+    DEBUG(StringView("Set repr for ") << ty);
 }
 
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
@@ -2263,7 +2262,7 @@ void TargetSetCfg(WireBoard& wb, const std::string& targetName) {
     auto* spec = wb.pool->make<TargetSpec>(initFromSpecName(targetName));
     wb.target = spec;
     if (spec->arch.pointerBits != 64 || spec->arch.bigEndian) {
-        std::cerr << "error: unsupported target `" << targetName << "`: only 64-bit little-endian targets are supported" << std::endl;
+        sysE << StringView("error: unsupported target `") << targetName << StringView("`: only 64-bit little-endian targets are supported") << endL;
         abort();
     }
     const TargetSpec& tgt = *spec;
@@ -2419,7 +2418,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u128;
                     return true;
                 case HIRCoreType::Str:
-                    DEBUG("sizeof on a `str` - unsized");
+                    DEBUG(StringView("sizeof on a `str` - unsized"));
                     outSize = SIZE_MAX;
                     outAlign = 1;
                     return true;
@@ -2432,14 +2431,14 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 return false;
             }
             if (te.binding.is_ExternType()) {
-                DEBUG("sizeof on extern type - unsized");
+                DEBUG(StringView("sizeof on extern type - unsized"));
                 outAlign = 0;
                 outSize = SIZE_MAX;
                 return true;
             }
             const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
             if (!repr) {
-                DEBUG("Cannot get type repr for " << ty);
+                DEBUG(StringView("Cannot get type repr for ") << ty);
                 return false;
             }
             outSize = repr->size;
@@ -2447,17 +2446,17 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             return true;
         }
         case HIRTypeData::TAG_Generic: {
-            DEBUG("No repr for Generic - " << ty);
+            DEBUG(StringView("No repr for Generic - ") << ty);
             return false;
         }
         case HIRTypeData::TAG_TraitObject: {
             outAlign = 0;
             outSize = SIZE_MAX;
-            DEBUG("sizeof on a trait object - unsized");
+            DEBUG(StringView("sizeof on a trait object - unsized"));
             return true;
         }
         case HIRTypeData::TAG_ErasedType: {
-            BUG(sp, "sizeof on an erased type - shouldn't exist");
+            BUG(sp, StringView("sizeof on an erased type - shouldn't exist"));
             break;
         }
         case HIRTypeData::TAG_Array: {
@@ -2469,14 +2468,14 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 return false;
             }
             if (!te.size.is_Known()) {
-                DEBUG("Size unknown - " << ty);
+                DEBUG(StringView("Size unknown - ") << ty);
                 return false;
             }
             if (te.size.as_Known() == 0 || outSize == 0) {
                 outSize = 0;
             } else {
                 if (SIZE_MAX / te.size.as_Known() <= outSize) {
-                    BUG(sp, "Integer overflow calculating array size");
+                    BUG(sp, StringView("Integer overflow calculating array size"));
                 }
                 outSize *= te.size.as_Known();
             }
@@ -2488,13 +2487,13 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 return false;
             }
             outSize = SIZE_MAX;
-            DEBUG("sizeof on a slice - unsized");
+            DEBUG(StringView("sizeof on a slice - unsized"));
             return true;
         }
         case HIRTypeData::TAG_Tuple: {
             const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
             if (!repr) {
-                DEBUG("Cannot get type repr for " << ty);
+                DEBUG(StringView("Cannot get type repr for ") << ty);
                 return false;
             }
             outSize = repr->size;
@@ -2568,7 +2567,7 @@ bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HI
     size_t ignoreAlign;
     bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, outSize, ignoreAlign);
     if (rv && outSize == SIZE_MAX) {
-        BUG(sp, "Getting size of Unsized type - " << ty);
+        BUG(sp, StringView("Getting size of Unsized type - ") << ty);
     }
     return rv;
 }
@@ -2577,7 +2576,7 @@ bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const H
     size_t ignoreSize;
     bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, ignoreSize, outAlign);
     if (rv && ignoreSize == SIZE_MAX) {
-        BUG(sp, "Getting alignment of Unsized type - " << ty);
+        BUG(sp, StringView("Getting alignment of Unsized type - ") << ty);
     }
     return rv;
 }
@@ -2626,16 +2625,16 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
         auto repr = makeTypeRepr(sp, resolve, ty);
         const auto* rv = repr.get();
         auto ires = cache.unencoded.emplace(ty, mv$(repr));
-        ASSERT_BUG(sp, ires.second, "Type representation was created recursively for " << ty);
+        ASSERT_BUG(sp, ires.second, StringView("Type representation was created recursively for ") << ty);
         cache.exact.emplace(ty, rv);
-        DEBUG("Created temporary repr for " << ty);
+        DEBUG(StringView("Created temporary repr for ") << ty);
         return rv;
     }
 
     auto symbol = FMT(TransMangle(resolve.board(), ty));
     auto existing = cache.encoded.find(symbol);
     if (existing != cache.encoded.end()) {
-        ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equalsIgnoringRegions(ty), "Distinct types have the same mangled name: " << existing->second.canonical << " and " << ty);
+        ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equalsIgnoringRegions(ty), StringView("Distinct types have the same mangled name: ") << existing->second.canonical << StringView(" and ") << ty);
         const auto* repr = existing->second.repr.get();
         cache.exact.emplace(ty, repr);
         return repr;
@@ -2644,9 +2643,9 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     auto repr = makeTypeRepr(sp, resolve, ty);
     const auto* rv = repr.get();
     auto ires = cache.encoded.emplace(mv$(symbol), TargetLayoutContext::CachedTypeRepr{ty, mv$(repr)});
-    ASSERT_BUG(sp, ires.second, "Type representation was created recursively for " << ty);
+    ASSERT_BUG(sp, ires.second, StringView("Type representation was created recursively for ") << ty);
     cache.exact.emplace(ty, rv);
-    DEBUG("Created repr for " << ty);
+    DEBUG(StringView("Created repr for ") << ty);
     return rv;
 }
 
@@ -2656,11 +2655,11 @@ const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& 
         const auto field = subFields[ofs++];
         if (field == TypeRepr::FieldPath::ARRAY_ELEMENT) {
             const auto* array = (*ty)->opt_Array();
-            ASSERT_BUG(sp, array && array->size.is_Known() && array->size.as_Known() > 0, "Array field path on non-array " << *ty);
+            ASSERT_BUG(sp, array && array->size.is_Known() && array->size.as_Known() > 0, StringView("Array field path on non-array ") << *ty);
             ty = &array->inner;
         } else {
             const auto* innerRepr = TargetGetTypeRepr(sp, resolve, *ty);
-            ASSERT_BUG(sp, innerRepr, "No inner repr for " << *ty);
+            ASSERT_BUG(sp, innerRepr, StringView("No inner repr for ") << *ty);
             ty = &innerRepr->fields.at(field).ty;
         }
     }
@@ -2737,10 +2736,10 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
             varIdx = ve.decodeTag(v);
             if (ve.isNiche(varIdx)) {
                 subHasTag = false;
-                DEBUG("VariantMode::Linear - Niche #" << varIdx);
+                DEBUG(StringView("VariantMode::Linear - Niche #") << varIdx);
             } else {
                 subHasTag = true;
-                DEBUG("VariantMode::Linear - Other #" << varIdx);
+                DEBUG(StringView("VariantMode::Linear - Other #") << varIdx);
             }
             break;
         }
@@ -2751,9 +2750,9 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
             auto it = std::find_if(ve.values.begin(), ve.values.end(), [&](const U128& candidate) {
                 return (candidate & mask) == v;
             });
-            ASSERT_BUG(sp, it != ve.values.end(), "Invalid enum tag: " << v);
+            ASSERT_BUG(sp, it != ve.values.end(), StringView("Invalid enum tag: ") << v);
             varIdx = it - ve.values.begin();
-            DEBUG("VariantMode::Values - #" << varIdx);
+            DEBUG(StringView("VariantMode::Values - #") << varIdx);
             break;
         }
         case TypeReprVariantMode::TAG_NonZero: {
@@ -2768,7 +2767,7 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
             }
 
             varIdx = (isNonzero ? 1 - ve.zeroVariant : ve.zeroVariant);
-            DEBUG("VariantMode::NonZero - #" << varIdx);
+            DEBUG(StringView("VariantMode::NonZero - #") << varIdx);
             break;
         }
     }
@@ -2799,17 +2798,7 @@ TargetArch::Alignments::Alignments(u8 u16, u8 u32, u8 u64, u8 u128, u8 f32, u8 f
 {
 }
 
-std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x) {
-    os << x.size << "@" << x.index;
-    for (auto idx : x.subFields) {
-        if (idx == TypeRepr::FieldPath::ARRAY_ELEMENT) {
-            os << "[0]";
-        } else {
-            os << "." << idx;
-        }
-    }
-    return os;
-}
+
 
 auto AsyncDropFieldLayout::empty() const -> bool {
     return futures.empty();
@@ -2962,7 +2951,7 @@ auto TransmuteLayoutBuilder::aggregate(const TypeRepr& repr, int skipField) -> B
 }
 
 auto TransmuteLayoutBuilder::addVariantPayload(std::vector<Segment>& segments, const TypeRepr& outerRepr, unsigned variant, bool skipSyntheticTag, size_t tagOffset, size_t tagSize) -> void {
-    ASSERT_BUG(sp, variant < outerRepr.fields.size(), "Enum variant field is missing");
+    ASSERT_BUG(sp, variant < outerRepr.fields.size(), StringView("Enum variant field is missing"));
     const auto& outerField = outerRepr.fields[variant];
     const auto* payloadRepr = TargetGetTypeRepr(sp, resolve, outerField.ty);
     if (!payloadRepr) {
@@ -3049,7 +3038,7 @@ auto TransmuteLayoutBuilder::enumLayout(const HIRTypeData* ty, const TypeRepr& r
             alternatives.push_back(value.fragment);
         }
     } else {
-        BUG(sp, "Unhandled enum representation for " << ty);
+        BUG(sp, StringView("Unhandled enum representation for ") << ty);
     }
     return {nfa.alternative(std::move(alternatives)), repr.size};
 }
@@ -3343,4 +3332,30 @@ auto TransmuteRelation::check() -> bool {
         return false;
     }
     return check(0, 0);
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, Ent>(ZeroCopyOutput& os, const Ent& e) {
+        os << StringView("Ent { #") << e.field << StringView(": s=") << e.size << StringView(" a=") << e.align << (e.userAlign ? "!" : "") << StringView(" : ") << e.ty << StringView(" }");
+        return;
+    }
+
+template <>
+void output<ZeroCopyOutput, std::vector<Ent>>(ZeroCopyOutput& out, const std::vector<Ent>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, TypeRepr::FieldPath>(ZeroCopyOutput& os, const TypeRepr::FieldPath& x) {
+    os << x.size << StringView("@") << x.index;
+    for (auto idx : x.subFields) {
+        if (idx == TypeRepr::FieldPath::ARRAY_ELEMENT) {
+            os << StringView("[0]");
+        } else {
+            os << StringView(".") << idx;
+        }
+    }
+    return;
+}
 }

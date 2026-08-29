@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "rc_string.h"
 
 #include <memory>
@@ -17,7 +19,7 @@ struct SpanInner;
 struct SpanInnerSource;
 
 struct SpanMessageCallback {
-    virtual void write(std::ostream& os) = 0;
+    virtual void write(stl::ZeroCopyOutput& os) = 0;
 };
 
 template <typename F>
@@ -29,7 +31,7 @@ struct SpanMessageCb final: SpanMessageCallback {
     {
     }
 
-    void write(std::ostream& os) override {
+    void write(stl::ZeroCopyOutput& os) override {
         f(os);
     }
 };
@@ -105,8 +107,6 @@ public:
         noteCb(cb);
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const Span& sp);
-
 private:
     void printSpanMessage(SpanMessageCallback& tag, SpanMessageCallback& msg) const;
 };
@@ -154,7 +154,7 @@ public:
     Span parentSpan;
 
     virtual ~SpanInner() = 0;
-    virtual void fmt(std::ostream& os) const = 0;
+    virtual void fmt(stl::ZeroCopyOutput& os) const = 0;
     virtual RcString crateName() const = 0;
     virtual unsigned int nodeKind() const = 0;
 };
@@ -173,7 +173,7 @@ public:
     unsigned int endOfs;
 
     ~SpanInnerSource() override;
-    void fmt(std::ostream& os) const override;
+    void fmt(stl::ZeroCopyOutput& os) const override;
 
     RcString crateName() const override;
 
@@ -189,7 +189,7 @@ struct SpanInnerMacro: public SpanInner {
     RcString macro;
 
     ~SpanInnerMacro() override;
-    void fmt(std::ostream& os) const override;
+    void fmt(stl::ZeroCopyOutput& os) const override;
 
     RcString crateName() const override;
 
@@ -213,41 +213,41 @@ Spanned<T> makeSpanned(Span sp, T val) {
 
 #define ERROR(span, code, msg)                           \
     do {                                                 \
-        ::Span(span).error(code, [&](std::ostream& os) { \
+        ::Span(span).error(code, [&](stl::ZeroCopyOutput& os) { \
             os << msg;                                   \
         });                                              \
     } while (0)
 #define WARNING(span, code, msg)                           \
     do {                                                   \
-        ::Span(span).warning(code, [&](std::ostream& os) { \
+        ::Span(span).warning(code, [&](stl::ZeroCopyOutput& os) { \
             os << msg;                                     \
         });                                                \
     } while (0)
 #define NOTE(span, msg)                           \
     do {                                          \
-        ::Span(span).note([&](std::ostream& os) { \
+        ::Span(span).note([&](stl::ZeroCopyOutput& os) { \
             os << msg;                            \
         });                                       \
     } while (0)
 #define BUG(span, msg)                                        \
     do {                                                      \
-        ::Span(span).bug([&](std::ostream& os) {              \
-            os << __FILE__ << ":" << __LINE__ << ": " << msg; \
+        ::Span(span).bug([&](stl::ZeroCopyOutput& os) {              \
+            os << stl::StringView(__FILE__) << stl::StringView(":") << __LINE__ << stl::StringView(": ") << msg; \
         });                                                   \
     } while (0)
 #define TODO(span, msg)                                                                     \
     do {                                                                                    \
         const char* __TODO_func = __func__;                                                 \
-        ::Span(span).bug([&](std::ostream& os) {                                            \
-            os << __FILE__ << ":" << __LINE__ << ": TODO: " << __TODO_func << " - " << msg; \
+        ::Span(span).bug([&](stl::ZeroCopyOutput& os) {                                            \
+            os << stl::StringView(__FILE__) << stl::StringView(":") << __LINE__ << stl::StringView(": TODO: ") << __TODO_func << stl::StringView(" - ") << msg; \
         });                                                                                 \
     } while (0)
 
 #define ASSERT_BUG(span, cnd, msg)                                                               \
     do {                                                                                         \
         if (!(cnd)) {                                                                            \
-            ::Span(span).bug([&](std::ostream& os) {                                             \
-                os << "ASSERT FAIL: " << __FILE__ << ":" << __LINE__ << ":" #cnd << ": " << msg; \
+            ::Span(span).bug([&](stl::ZeroCopyOutput& os) {                                             \
+                os << stl::StringView("ASSERT FAIL: ") << stl::StringView(__FILE__) << stl::StringView(":") << __LINE__ << stl::StringView(":" #cnd) << stl::StringView(": ") << msg; \
             });                                                                                  \
         }                                                                                        \
     } while (0)

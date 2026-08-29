@@ -1,4 +1,5 @@
 #include "ast_types.h"
+#include "output.h"
 
 #include "ast_ast.h"
 #include "ast_expr.h"
@@ -120,7 +121,7 @@ const char* coretypeName(const eCoreType ct) {
         case CORETYPE_F128:
             return "f128";
     }
-    DEBUG("Unknown core type?! " << ct);
+    DEBUG(StringView("Unknown core type?! ") << ct);
     return "NFI";
 }
 
@@ -298,7 +299,7 @@ Ordering ASTType::ord(const ASTType& x) const {
                 return rv;
             }
             if (ent.size) {
-                TODO(Span(), "Sized array comparisons");
+                TODO(Span(), StringView("Sized array comparisons"));
             }
             return OrdEqual;
             break;
@@ -348,18 +349,16 @@ Ordering ASTType::ord(const ASTType& x) const {
             break;
         }
     }
-    BUG(Span(), "Unhandled ASTType* class '" << data.tag() << "'");
+    BUG(Span(), StringView("Unhandled ASTType* class '") << data.tag() << StringView("'"));
 }
 
-std::ostream& operator<<(std::ostream& os, const eCoreType ct) {
-    return os << coretypeName(ct);
-}
+
 
 Ordering ord(ASTType* a, ASTType* b) {
     return a->ord(*b);
 }
 
-void ASTType::print(std::ostream& os, bool isDebug /*=false*/) const {
+void ASTType::print(ZeroCopyOutput& os, bool isDebug /*=false*/) const {
 #define _(VAR, ...)                              \
     case TypeData::TAG_##VAR: {                  \
         const auto& ent = this->data.as_##VAR(); \
@@ -371,133 +370,117 @@ void ASTType::print(std::ostream& os, bool isDebug /*=false*/) const {
         const auto& ent = this->data.as_##VAR(); \
         (void)&ent;
     switch (this->data.tag()) {
-        _(None, os << "!/*none*/!";)
-        _(Any, os << "_";)
-        _(Bang, os << "!";)
+        _(None, os << StringView("!/*none*/!");)
+        _(Any, os << StringView("_");)
+        _(Bang, os << StringView("!");)
         _(Macro, os << *ent.inv;)
-        _(Unit, os << "()";)
+        _(Unit, os << StringView("()");)
         _(Primitive, os << ent.coreType;)
         break;
         case TypeData::TAG_Function: {
             auto& ent = data.as_Function();
             os << ent.info.hrbs;
             if (ent.info.abi != "") {
-                os << "extern \"" << ent.info.abi << "\" ";
+                os << StringView("extern \"") << ent.info.abi << StringView("\" ");
             }
             if (ent.info.isUnsafe) {
-                os << "unsafe ";
+                os << StringView("unsafe ");
             }
-            os << "fn(";
+            os << StringView("fn(");
             for (const auto& arg : ent.info.argTypes) {
                 arg->print(os, isDebug);
-                os << ", ";
+                os << StringView(", ");
             }
-            os << ")";
+            os << StringView(")");
             if (!ent.info.rettype->isUnit()) {
-                os << " -> " << *ent.info.rettype;
+                os << StringView(" -> ") << *ent.info.rettype;
             }
         } break;
-            _(Tuple, os << "( "; for (const auto& it : ent.innerTypes) {
+            _(Tuple, os << StringView("( "); for (const auto& it : ent.innerTypes) {
                 it->print(os, isDebug);
-                os << ", ";
-            } os << ")";)
+                os << StringView(", ");
+            } os << StringView(")");)
             break;
         case TypeData::TAG_Borrow: {
             auto& ent = data.as_Borrow();
-            os << "&";
+            os << StringView("&");
             if (ent.lifetime != ASTLifetimeRef()) {
-                os << ent.lifetime << " ";
+                os << ent.lifetime << StringView(" ");
             }
             os << (ent.isMut ? "mut " : "");
             ent.inner->print(os, isDebug);
         } break;
-            _(Pointer, os << "*" << (ent.isMut ? "mut " : "const "); ent.inner->print(os, isDebug);)
-            _(Array, os << "["; ent.inner->print(os, isDebug); os << "; "; if (ent.size) { os << *ent.size; } else { os << "_"; } os << "]";)
-            _(Slice, os << "["; ent.inner->print(os, isDebug); os << "]";)
-            _(Pattern, ent.inner->print(os, isDebug); os << " is " << *ent.pattern;)
-            _(Generic, if (isDebug) os << "/* arg */ "; os << ent.name; if (isDebug) os << "/*" << ent.index << "*/";)
+            _(Pointer, os << StringView("*") << (ent.isMut ? "mut " : "const "); ent.inner->print(os, isDebug);)
+            _(Array, os << StringView("["); ent.inner->print(os, isDebug); os << StringView("; "); if (ent.size) { os << *ent.size; } else { os << StringView("_"); } os << StringView("]");)
+            _(Slice, os << StringView("["); ent.inner->print(os, isDebug); os << StringView("]");)
+            _(Pattern, ent.inner->print(os, isDebug); os << StringView(" is ") << *ent.pattern;)
+            _(Generic, if (isDebug) os << StringView("/* arg */ "); os << ent.name; if (isDebug) os << StringView("/*") << ent.index << StringView("*/");)
             _(Path, ent->printPretty(os, true, isDebug);)
-            _(TraitObject, os << "("; bool needsPlus = false; for (const auto& it : ent.traits) {
+            _(TraitObject, os << StringView("("); bool needsPlus = false; for (const auto& it : ent.traits) {
                 if (needsPlus) {
-                    os << "+";
+                    os << StringView("+");
                 }
                 needsPlus = true;
                 os << it.hrbs;
                 if (it.constness == ASTBoundConstness::Always) {
-                    os << "const ";
+                    os << StringView("const ");
                 } else if (it.constness == ASTBoundConstness::Maybe) {
-                    os << "[const] ";
+                    os << StringView("[const] ");
                 }
                 it.path->printPretty(os, true, isDebug);
             } for (const auto& it : ent.lifetimes) {
                 if (it.binding() != ASTLifetimeRef::BINDING_UNSPECIFIED) {
                     if (needsPlus) {
-                        os << "+";
+                        os << StringView("+");
                     }
                     needsPlus = true;
                     os << it;
                 }
-            } os << ")";)
-            _(ErasedType, os << "impl "; bool needsPlus = false; for (const auto& it : ent->traits) {
+            } os << StringView(")");)
+            _(ErasedType, os << StringView("impl "); bool needsPlus = false; for (const auto& it : ent->traits) {
                 if (needsPlus) {
-                    os << "+";
+                    os << StringView("+");
                 }
                 needsPlus = true;
                 os << it.hrbs;
                 if (it.constness == ASTBoundConstness::Always) {
-                    os << "const ";
+                    os << StringView("const ");
                 } else if (it.constness == ASTBoundConstness::Maybe) {
-                    os << "[const] ";
+                    os << StringView("[const] ");
                 }
                 it.path->printPretty(os, true, isDebug);
             } for (const auto& it : ent->maybeTraits) {
                 if (needsPlus) {
-                    os << "+";
+                    os << StringView("+");
                 }
                 needsPlus = true;
                 os << it.hrbs;
                 it.path->printPretty(os, true, isDebug);
             } for (const auto& it : ent->lifetimes) {
                 if (needsPlus) {
-                    os << "+";
+                    os << StringView("+");
                 }
                 needsPlus = true;
                 os << it;
-            } if (ent->use) { os << "use" << *ent->use; } os << "";)
+            } if (ent->use) { os << StringView("use") << *ent->use; } os << StringView("");)
     }
 #undef _
 #undef _2
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTType& tr) {
-    tr.print(os, true);
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const PrettyPrintType& x) {
-    x.type_->print(os, false);
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTLifetimeRef& x) {
-    if (x.binding_ == ASTLifetimeRef::BINDING_STATIC) {
-        os << "'static";
-    } else if (x.binding_ == ASTLifetimeRef::BINDING_INFER) {
-        os << "'_";
-    } else if (x.binding_ == ASTLifetimeRef::BINDING_UNSPECIFIED) {
-        os << "/*'UNSPEC*/";
-    } else {
-        os << "'" << x.name_.name;
-        if (x.binding_ != ASTLifetimeRef::BINDING_UNBOUND) {
-            os << "/*" << x.binding_ << "*/";
-        }
-    }
-    return os;
-}
+
+
+
 
 PrettyPrintType::PrettyPrintType(const ASTType* ty)
     : type_(ty)
 {
+}
+
+void PrettyPrintType::print(ZeroCopyOutput& os) const {
+    type_->print(os, false);
 }
 
 ASTType* mkType(ObjPool& pool, Span sp, TypeData data) {
@@ -571,4 +554,70 @@ ASTType* mkType(ObjPool& pool, Span sp, ASTPath path) {
 
 ASTType* mkType(ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, std::vector<ASTLifetimeRef> lifetimes) {
     return mkType(pool, sp, TypeData::make_TraitObject({mv$(traits), mv$(lifetimes)}));
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, ASTType*>(ZeroCopyOutput& out, ASTType* type) {
+    if (type) {
+        out << *type;
+    } else {
+        out << StringView("(null-type)");
+    }
+}
+
+template <>
+void output<ZeroCopyOutput, const ASTType*>(ZeroCopyOutput& out, const ASTType* type) {
+    if (type) {
+        out << *type;
+    } else {
+        out << StringView("(null-type)");
+    }
+}
+
+template <>
+void output<ZeroCopyOutput, TypeData::Tag>(ZeroCopyOutput& out, TypeData::Tag value) {
+    out << static_cast<unsigned>(value);
+}
+
+template <>
+void output<ZeroCopyOutput, eCoreType>(ZeroCopyOutput& os, const eCoreType ct) {
+    os << coretypeName(ct);
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTType>(ZeroCopyOutput& os, const ASTType& tr) {
+    tr.print(os, true);
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, PrettyPrintType>(ZeroCopyOutput& os, PrettyPrintType x) {
+    x.print(os);
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTLifetimeRef>(ZeroCopyOutput& os, ASTLifetimeRef x) {
+    if (x.binding() == ASTLifetimeRef::BINDING_STATIC) {
+        os << StringView("'static");
+    } else if (x.binding() == ASTLifetimeRef::BINDING_INFER) {
+        os << StringView("'_");
+    } else if (x.binding() == ASTLifetimeRef::BINDING_UNSPECIFIED) {
+        os << StringView("/*'UNSPEC*/");
+    } else {
+        os << StringView("'") << x.name().name;
+        if (x.binding() != ASTLifetimeRef::BINDING_UNBOUND) {
+            os << StringView("/*") << x.binding() << StringView("*/");
+        }
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<ASTType*>>(ZeroCopyOutput& out, const std::vector<ASTType*>& values) {
+    outCont(out, values);
+}
+
 }

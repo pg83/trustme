@@ -1,9 +1,10 @@
 #pragma once
 
+#include "output.h"
+
 #include "common.h"
 
 #include <cstring>
-#include <iostream>
 #include <stdint.h>
 
 class U128 {
@@ -207,7 +208,9 @@ public:
 
     bool bit(unsigned idx) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const U128& x);
+    void fmt(stl::ZeroCopyOutput& out) const;
+
+    void fmtHex(stl::ZeroCopyOutput& out, unsigned width, bool uppercase) const;
 
 private:
     // TODO: All of these are functionally identical to code in `codegen_c.cpp` - could it be shared?
@@ -221,6 +224,14 @@ private:
 
     static bool div128O(U128 a, U128 b, U128* q, U128* r);
 };
+
+struct FormattedU128Hex {
+    U128 value;
+    unsigned width;
+    bool uppercase;
+};
+
+FormattedU128Hex formatHex(U128 value, unsigned width = 0, bool uppercase = false);
 
 class S128 {
     U128 inner;
@@ -366,9 +377,7 @@ public:
 
     S128 operator>>(unsigned bits) const;
 
-    void fmt(std::ostream& os) const;
-
-    friend std::ostream& operator<<(std::ostream& os, const S128& x);
+    void fmt(stl::ZeroCopyOutput& os) const;
 
 private:
     static int cmp128s(U128 a, U128 b);

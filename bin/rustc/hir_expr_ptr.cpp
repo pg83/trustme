@@ -58,14 +58,14 @@ const MIRFunction* HIRExprPtr::getMirOpt() const {
 
 const MIRFunction& HIRExprPtr::getMirOrError(const Span& sp) const {
     if (!this->mir) {
-        BUG(sp, "No MIR");
+        BUG(sp, StringView("No MIR"));
     }
     return *this->mir;
 }
 
 MIRFunction& HIRExprPtr::getMirOrErrorMut(const Span& sp) {
     if (!this->mir) {
-        BUG(sp, "No MIR");
+        BUG(sp, StringView("No MIR"));
     }
     return *this->mir;
 }

@@ -107,7 +107,7 @@ void ASTCrate::loadExterns(Settings& settings) {
         auto n = this->loadExternCrate(settings, Span(), "std");
     }
 
-    DEBUG("Load from --extern");
+    DEBUG(StringView("Load from --extern"));
     settings.crateOverrides.visit([&](const CrateOverride& entry) {
         if (!entry.isExtern) {
             return;
@@ -116,7 +116,7 @@ void ASTCrate::loadExterns(Settings& settings) {
             const auto* target = settings.findCrateOverride(entry.target);
             const auto path = target && target->metadataPath != "" ? target->metadataPath : entry.target;
             if (!std::ifstream(path.c_str()).good()) {
-                DEBUG("Skipping --extern " << entry.name << ": " << path << " does not exist");
+                DEBUG(StringView("Skipping --extern ") << entry.name << StringView(": ") << path << StringView(" does not exist"));
                 return;
             }
         }
@@ -131,7 +131,7 @@ void ASTCrate::loadExterns(Settings& settings) {
 // TODO: Handle disambiguating crates with the same name (e.g. libc in std and crates.io libc)
 
 RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& name, const std::string& basename /*=""*/) {
-    TRACE_FUNCTION_F("Loading crate '" << name << "' (basename='" << basename << "')");
+    TRACE_FUNCTION_F(StringView("Loading crate '") << name << StringView("' (basename='") << basename << StringView("')"));
     std::string path;
     auto* entry = settings.findCrateOverride(name);
     const CrateOverride* artifacts = nullptr;
@@ -142,9 +142,9 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         artifacts = entry;
         expectedName = name;
         if (!std::ifstream(path).good()) {
-            ERROR(sp, E0000, "Unable to open crate '" << name << "' at path " << path);
+            ERROR(sp, E0000, StringView("Unable to open crate '") << name << StringView("' at path ") << path);
         }
-        DEBUG("path = " << path << " (--crate)");
+        DEBUG(StringView("path = ") << path << StringView(" (--crate)"));
     } else if (entry && entry->target != "") {
         auto* target = settings.findCrateOverride(entry->target);
         if (target && target->metadataPath != "") {
@@ -155,16 +155,16 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
             path = entry->target.c_str();
         }
         if (!std::ifstream(path).good()) {
-            ERROR(sp, E0000, "Unable to open crate '" << name << "' at path " << path);
+            ERROR(sp, E0000, StringView("Unable to open crate '") << name << StringView("' at path ") << path);
         }
-        DEBUG("path = " << path << " (--extern)");
+        DEBUG(StringView("path = ") << path << StringView(" (--extern)"));
     } else if (basename != "") {
         bool hasExactCrates = false;
         settings.crateOverrides.visit([&](const CrateOverride& entry) {
             hasExactCrates |= entry.metadataPath != "";
         });
         if (hasExactCrates) {
-            ERROR(sp, E0000, "Crate '" << name << "' is missing from the explicit --crate table");
+            ERROR(sp, E0000, StringView("Crate '") << name << StringView("' is missing from the explicit --crate table"));
         }
         for (const auto& p : settings.crateLoadDirs) {
             path = p + "/" + basename;
@@ -177,19 +177,19 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
             }
         }
         if (!std::ifstream(path).good()) {
-            ERROR(sp, E0000, "Unable to locate crate '" << name << "' with filename " << basename << " in search directories");
+            ERROR(sp, E0000, StringView("Unable to locate crate '") << name << StringView("' with filename ") << basename << StringView(" in search directories"));
         }
-        DEBUG("path = " << path << " (basename)");
+        DEBUG(StringView("path = ") << path << StringView(" (basename)"));
     } else {
         std::vector<std::string> paths;
 #define RLIB_SUFFIX ".rlib"
 #define RDYLIB_SUFFIX ".so"
 #define PLUGIN_SUFFIX "-plugin"
-        auto directFilename = FMT("lib" << name << RLIB_SUFFIX);
-        auto directFilenameSo = FMT("lib" << name << RDYLIB_SUFFIX);
-        auto namePrefix = FMT("lib" << name << "-");
+        auto directFilename = FMT(StringView("lib") << name << StringView(RLIB_SUFFIX));
+        auto directFilenameSo = FMT(StringView("lib") << name << StringView(RDYLIB_SUFFIX));
+        auto namePrefix = FMT(StringView("lib") << name << StringView("-"));
         for (const auto& p : settings.crateLoadDirs) {
-            DEBUG("Searching in " << p);
+            DEBUG(StringView("Searching in ") << p);
             path = p + "/" + directFilename;
             if (std::ifstream(path).good()) {
                 paths.push_back(path);
@@ -204,7 +204,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
 
             auto dp = opendir(p.c_str());
             if (!dp) {
-                DEBUG("Unable to opendir `" << p << "`");
+                DEBUG(StringView("Unable to opendir `") << p << StringView("`"));
                 continue;
             }
             struct dirent* ent;
@@ -233,7 +233,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
                     continue;
                 }
 
-                DEBUG(fname << " vs " << namePrefix);
+                DEBUG(fname << StringView(" vs ") << namePrefix);
                 if (strncmp(namePrefix.c_str(), fname, namePrefix.size()) != 0) {
                     continue;
                 }
@@ -246,20 +246,20 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
             }
         }
         if (paths.size() > 1) {
-            ERROR(sp, E0000, "Multiple options for crate '" << name << "' in search directories - " << paths);
+            ERROR(sp, E0000, StringView("Multiple options for crate '") << name << StringView("' in search directories - ") << paths);
         }
         if (paths.size() == 0) {
-            ERROR(sp, E0000, "Unable to locate crate '" << name << "' in search directories");
+            ERROR(sp, E0000, StringView("Unable to locate crate '") << name << StringView("' in search directories"));
         }
         path = paths.front();
-        DEBUG("path = " << path << " (search)");
+        DEBUG(StringView("path = ") << path << StringView(" (search)"));
     }
 
     auto ec = ASTExternCrate{wb.id, hirPool, types, name, path};
     auto realName = ec.hir->crateName;
     BUG_ASSERT(realName != "");
     if (expectedName != "" && realName != expectedName) {
-        ERROR(sp, E0000, "Crate artifact " << path << " contains '" << realName << "', expected '" << expectedName << "'");
+        ERROR(sp, E0000, StringView("Crate artifact ") << path << StringView(" contains '") << realName << StringView("', expected '") << expectedName << StringView("'"));
     }
     if (!artifacts) {
         if (auto* realArtifacts = settings.findCrateOverride(realName)) {
@@ -273,7 +273,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
     }
     auto res = externCrates.insert(std::make_pair(realName, mv$(ec)));
     if (!res.second) {
-        DEBUG("Duplicate load of '" << realName);
+        DEBUG(StringView("Duplicate load of '") << realName);
         return realName;
     }
     auto& extCrate = res.first->second;
@@ -283,7 +283,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         if (externCrates.count(ext.first) == 0) {
             const auto loadName = this->loadExternCrate(settings, sp, ext.first, ext.second.basename);
             if (loadName != ext.first) {
-                ERROR(sp, E0000, "The crate file `" << ext.second.basename << "` didn't load the expected crate - have " << loadName << " != exp " << ext.first);
+                ERROR(sp, E0000, StringView("The crate file `") << ext.second.basename << StringView("` didn't load the expected crate - have ") << loadName << StringView(" != exp ") << ext.first);
             }
         }
     }
@@ -310,7 +310,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         }
     }
 
-    DEBUG("Loaded '" << name << "' from '" << basename << "' (actual name is '" << realName << "' aka `" << extCrate.shortName << "`)");
+    DEBUG(StringView("Loaded '") << name << StringView("' from '") << basename << StringView("' (actual name is '") << realName << StringView("' aka `") << extCrate.shortName << StringView("`)"));
     return realName;
 }
 
@@ -319,7 +319,7 @@ ASTExternCrate::ASTExternCrate(u32& id, ObjPool* pool, HIRTypeInterner& types, c
     , shortName(name)
     , filename(path)
 {
-    TRACE_FUNCTION_F("name=" << name << ", path='" << path << "'");
+    TRACE_FUNCTION_F(StringView("name=") << name << StringView(", path='") << path << StringView("'"));
     hir = HIRDeserialise(id, pool, types, path);
 
     hir->postLoadUpdate(name);

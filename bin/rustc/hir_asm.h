@@ -1,9 +1,10 @@
 #pragma once
 
+#include "output.h"
+
 /*
  */
 #include <climits>
-#include <ostream>
 #include <string>
 #include <vector>
 
@@ -17,8 +18,6 @@ enum class AsmDirection {
     InOut,
     InLateOut
 };
-
-std::ostream& operator<<(std::ostream& os, const AsmDirection& d);
 
 enum class AsmRegisterClass {
     x86Reg,
@@ -44,8 +43,6 @@ static inline bool operator!=(const AsmRegisterSpec& a, const AsmRegisterSpec& b
 
 const char* to_string(const AsmRegisterClass& c);
 
-std::ostream& operator<<(std::ostream& os, const AsmRegisterSpec& s);
-
 struct AsmLineFragment {
     std::string before;
 
@@ -63,7 +60,7 @@ struct AsmLine {
     std::vector<AsmLineFragment> frags;
     std::string trailing;
 
-    void fmt(std::ostream& os) const;
+    void fmt(stl::ZeroCopyOutput& os) const;
 
     bool operator==(const AsmLine& x) const {
         return frags == x.frags && trailing == x.trailing;
@@ -87,7 +84,7 @@ struct AsmOptions {
 
     bool any() const;
 
-    void fmt(std::ostream& os) const;
+    void fmt(stl::ZeroCopyOutput& os) const;
 
     bool operator==(const AsmOptions& x) const;
 };

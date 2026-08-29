@@ -1,4 +1,5 @@
 #include "macro_rules_pattern_checks.h"
+#include "output.h"
 
 #include "common.h"
 #include "macro_rules_macro_rules.h"
@@ -166,12 +167,7 @@ namespace {
         }
     }
 
-    std::ostream& operator<<(std::ostream& os, const Described& x) {
-        if (isFragment(x.e)) {
-            return os << "`$" << x.e.name << ":" << fragmentName(x.e.type) << "`";
-        }
-        return os << "`" << x.e.tok << "`";
-    }
+
 
     void checkRun(const Ent* ents, size_t count, const Ents& outer) {
         for (size_t i = 0; i < count; i++) {
@@ -195,7 +191,7 @@ namespace {
             }
             for (size_t k = 0; k < follow.length(); k++) {
                 if (!followAllowed(e.type, *follow[k])) {
-                    ERROR(e.sp, E0000, "`$" << e.name << ":" << fragmentName(e.type) << "` may be followed by " << Described{*follow[k]} << ", which is not allowed for `" << fragmentName(e.type) << "` fragments -- allowed there are " << allowedAfter(e.type));
+                    ERROR(e.sp, E0000, StringView("`$") << e.name << StringView(":") << fragmentName(e.type) << StringView("` may be followed by ") << Described{*follow[k]} << StringView(", which is not allowed for `") << fragmentName(e.type) << StringView("` fragments -- allowed there are ") << allowedAfter(e.type));
                 }
             }
         }
@@ -205,4 +201,16 @@ namespace {
 void MacroRulesCheckFollowSets(const MacroPatEnt* ents, size_t count) {
     Ents none;
     checkRun(ents, count, none);
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, Described>(ZeroCopyOutput& os, Described x) {
+        if (isFragment(x.e)) {
+            os << StringView("`$") << x.e.name << StringView(":") << fragmentName(x.e.type) << StringView("`");
+    return;
+        }
+        os << StringView("`") << x.e.tok << StringView("`");
+    return;
+    }
 }

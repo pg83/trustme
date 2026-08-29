@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "span.h"
 #include "hir_expr.h"
 #include "hir_expr_ptr.h"
@@ -17,7 +19,7 @@ struct Context {
     public:
         virtual ~Revisitor() = default;
         virtual const Span& span() const = 0;
-        virtual void fmt(std::ostream& os) const = 0;
+        virtual void fmt(stl::ZeroCopyOutput& os) const = 0;
         virtual bool revisit(Context& context, bool isFallback) = 0;
     };
 
@@ -31,7 +33,6 @@ struct Context {
         HIRTypeRef leftTy;
         HIRExprNodeP* rightNodePtr;
 
-        friend std::ostream& operator<<(std::ostream& os, const Coercion& v);
     };
 
     struct IVarPossible {
@@ -94,7 +95,6 @@ struct Context {
         std::vector<StallDependency> stalledOn;
         std::vector<CapturedIvarPossible> stalledPossibilities;
 
-        friend std::ostream& operator<<(std::ostream& os, const Associated& v);
     };
 
     const HIRCrate& crate;

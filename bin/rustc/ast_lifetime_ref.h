@@ -63,5 +63,4 @@ public:
         return ord(x) == OrdLess;
     };
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTLifetimeRef& x);
 };

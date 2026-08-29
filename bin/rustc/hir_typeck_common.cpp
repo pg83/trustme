@@ -1,4 +1,5 @@
 #include "hir_typeck_common.h"
+#include "output.h"
 
 #include "hir_path.h"
 #include "wire_board.h"
@@ -6,6 +7,8 @@
 #include "hir_conv_main_bindings.h"
 
 #include <std/alg/defer.h>
+
+using namespace stl;
 
 namespace {
     template <typename I>
@@ -149,7 +152,7 @@ bool monomorphiseTypeNeeded(const HIRTypeData* tpl) {
 HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer /*=true*/) const {
     switch ((*tpl).tag()) {
         case HIRTypeData::TAG_Infer: {
-            ASSERT_BUG(sp, allowInfer, "Unexpected ivar seen - " << tpl);
+            ASSERT_BUG(sp, allowInfer, StringView("Unexpected ivar seen - ") << tpl);
             return tpl;
         }
         case HIRTypeData::TAG_Diverge: {
@@ -356,7 +359,7 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
         HIRArraySize sz;
         if (se->is_Generic()) {
             sz = this->getValue(sp, se->as_Generic());
-            DEBUG(tpl << " -> " << sz);
+            DEBUG(tpl << StringView(" -> ") << sz);
         } else if (se->is_Unevaluated()) {
             sz = HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(se->as_Unevaluated()->monomorph(sp, *this, true)));
         } else {
@@ -369,7 +372,7 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
             if (this->constevalWb) {
                 ConvertHIRConstantEvaluateConstGeneric(sp, *this->constevalWb, *this->constevalWb->crate, types.primitive(HIRCoreType::Usize), sz.as_Unevaluated());
             } else {
-                DEBUG("TODO: Evaluate unevaluated generic for array size - " << *se);
+                DEBUG(StringView("TODO: Evaluate unevaluated generic for array size - ") << *se);
             }
         }
 
@@ -405,34 +408,34 @@ HIRTypeRef MonomorphiserPP::getType(const Span& sp, const HIRGenericRef& ty) con
         if (const auto* s = this->getSelfType()) {
             return s;
         } else {
-            BUG(sp, "Unexpected Self");
+            BUG(sp, StringView("Unexpected Self"));
         }
     } else {
         switch (ty.group()) {
             case 0:
                 if (const auto* p = this->getImplParams()) {
-                    ASSERT_BUG(sp, ty.idx() < p->types.size(), "Type param " << ty << " out of range for (max " << p->types.size() << ")");
+                    ASSERT_BUG(sp, ty.idx() < p->types.size(), StringView("Type param ") << ty << StringView(" out of range for (max ") << p->types.size() << StringView(")"));
                     return p->types[ty.idx()];
                 } else {
-                    BUG(sp, "Impl parameters were not expected (got " << ty << ")");
+                    BUG(sp, StringView("Impl parameters were not expected (got ") << ty << StringView(")"));
                 }
                 break;
             case 1:
                 if (const auto* p = this->getMethodParams()) {
-                    ASSERT_BUG(sp, ty.idx() < p->types.size(), "Type param " << ty << " out of range for (max " << p->types.size() << ")");
+                    ASSERT_BUG(sp, ty.idx() < p->types.size(), StringView("Type param ") << ty << StringView(" out of range for (max ") << p->types.size() << StringView(")"));
                     return p->types[ty.idx()];
                 } else {
-                    BUG(sp, "Method parameters were not expected (got " << ty << ")");
+                    BUG(sp, StringView("Method parameters were not expected (got ") << ty << StringView(")"));
                 }
                 break;
             case GENERICHrtb:
                 if (const auto* p = this->getHrbParams()) {
-                    ASSERT_BUG(sp, ty.idx() < p->types.size(), "HRTB type param " << ty << " out of range for (max " << p->types.size() << ")");
+                    ASSERT_BUG(sp, ty.idx() < p->types.size(), StringView("HRTB type param ") << ty << StringView(" out of range for (max ") << p->types.size() << StringView(")"));
                     return p->types[ty.idx()];
                 }
                 return types.generic(ty.name, ty.binding);
             default:
-                BUG(sp, "Unexpected type param " << ty);
+                BUG(sp, StringView("Unexpected type param ") << ty);
         }
     }
 }
@@ -442,45 +445,32 @@ HIRConstGeneric MonomorphiserPP::getValue(const Span& sp, const HIRGenericRef& v
     switch (val.group()) {
         case 0:
             if (const auto* p = this->getImplParams()) {
-                ASSERT_BUG(sp, val.idx() < p->values.size(), "Value param " << val << " out of range for (max " << p->values.size() << ")");
+                ASSERT_BUG(sp, val.idx() < p->values.size(), StringView("Value param ") << val << StringView(" out of range for (max ") << p->values.size() << StringView(")"));
                 return p->values[val.idx()].clone();
             } else {
-                BUG(sp, "Impl parameters were not expected (got " << val << ")");
+                BUG(sp, StringView("Impl parameters were not expected (got ") << val << StringView(")"));
             }
             break;
         case 1:
             if (const auto* p = this->getMethodParams()) {
-                ASSERT_BUG(sp, val.idx() < p->values.size(), "Value param " << val << " out of range for (max " << p->values.size() << ")");
+                ASSERT_BUG(sp, val.idx() < p->values.size(), StringView("Value param ") << val << StringView(" out of range for (max ") << p->values.size() << StringView(")"));
                 return p->values[val.idx()].clone();
             } else {
-                BUG(sp, "Method parameters were not expected (got " << val << ")");
+                BUG(sp, StringView("Method parameters were not expected (got ") << val << StringView(")"));
             }
             break;
         case GENERICHrtb:
             if (const auto* p = this->getHrbParams()) {
-                ASSERT_BUG(sp, val.idx() < p->values.size(), "HRTB value param " << val << " out of range for (max " << p->values.size() << ")");
+                ASSERT_BUG(sp, val.idx() < p->values.size(), StringView("HRTB value param ") << val << StringView(" out of range for (max ") << p->values.size() << StringView(")"));
                 return p->values[val.idx()].clone();
             }
             return val;
         default:
-            BUG(sp, "Unexpected value param " << val);
+            BUG(sp, StringView("Unexpected value param ") << val);
     }
 }
 
-std::ostream& operator<<(std::ostream& os, const MonomorphState& ms) {
-    os << "MonomorphState {";
-    if (ms.selfTy != HIRTypeRef()) {
-        os << " self=" << ms.selfTy;
-    }
-    if (ms.ppImpl) {
-        os << " I=" << *ms.ppImpl;
-    }
-    if (ms.ppMethod) {
-        os << " M=" << *ms.ppMethod;
-    }
-    os << " }";
-    return os;
-}
+
 
 bool typeClassPrimitiveCompatible(HIRInferClass ic, HIRCoreType ct) {
     switch (ic) {
@@ -521,9 +511,9 @@ bool typeClassPrimitiveCompatible(HIRInferClass ic, HIRCoreType ct) {
 void checkTypeClassPrimitive(const Span& sp, const HIRTypeData* type, HIRInferClass ic, HIRCoreType ct) {
     if (!typeClassPrimitiveCompatible(ic, ct)) {
         if (ic == HIRInferClass::Float) {
-            ERROR(sp, E0000, "Type unificiation of float literal with non-float - " << type);
+            ERROR(sp, E0000, StringView("Type unificiation of float literal with non-float - ") << type);
         }
-        ERROR(sp, E0000, "Type unificiation of integer literal with non-integer - " << type);
+        ERROR(sp, E0000, StringView("Type unificiation of integer literal with non-integer - ") << type);
     }
 }
 
@@ -1156,4 +1146,22 @@ auto CloneTyWithMonomorph::monomorphType(const Span& sp, const HIRTypeData* ty, 
         return rv;
     }
     return Monomorphiser::monomorphType(sp, ty, allowInfer);
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, MonomorphState>(ZeroCopyOutput& os, const MonomorphState& ms) {
+    os << StringView("MonomorphState {");
+    if (ms.selfTy != HIRTypeRef()) {
+        os << StringView(" self=") << ms.selfTy;
+    }
+    if (ms.ppImpl) {
+        os << StringView(" I=") << *ms.ppImpl;
+    }
+    if (ms.ppMethod) {
+        os << StringView(" M=") << *ms.ppMethod;
+    }
+    os << StringView(" }");
+    return;
+}
 }

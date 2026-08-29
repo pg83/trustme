@@ -1,4 +1,7 @@
 #include "hir_item_path.h"
+#include "output.h"
+
+using namespace stl;
 
 HIRItemPath::HIRItemPath(const char* crate)
     : crateName(crate)
@@ -107,28 +110,32 @@ bool HIRItemPath::operator==(const HIRSimplePath& sp) const {
     return true;
 }
 
-std::ostream& operator<<(std::ostream& os, const HIRItemPath& x) {
+namespace stl {
+template <>
+void output<ZeroCopyOutput, HIRItemPath>(ZeroCopyOutput& os, const HIRItemPath& x) {
     if (x.wrapped) {
-        return os << *x.wrapped;
+        os << *x.wrapped;
+    return;
     }
     if (x.parent) {
         os << *x.parent;
     }
     if (x.name) {
-        os << "::" << x.name;
+        os << StringView("::") << x.name;
     } else if (x.ty) {
-        os << "<" << *x.ty;
+        os << StringView("<") << *x.ty;
         if (x.trait) {
-            os << " as " << *x.trait;
+            os << StringView(" as ") << *x.trait;
             if (x.traitParams) {
                 os << *x.traitParams;
             }
         }
-        os << ">";
+        os << StringView(">");
     } else if (x.trait) {
-        os << "<* as " << *x.trait << ">";
+        os << StringView("<* as ") << *x.trait << StringView(">");
     } else if (x.crateName) {
-        os << "::\"" << x.crateName << "\"";
+        os << StringView("::\"") << x.crateName << StringView("\"");
     }
-    return os;
+    return;
+}
 }

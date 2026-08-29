@@ -1,4 +1,7 @@
 #include "hir_expr.h"
+#include "output.h"
+
+using namespace stl;
 
 HIRExprNode::~HIRExprNode() {
 }
@@ -188,7 +191,7 @@ void HIRExprVisitor::visitNode(HIRExprNode& node) {
 
 void HIRExprVisitorDef::visitNodePtr(HIRExprNodeP& nodePtr) {
     BUG_ASSERT(nodePtr);
-    TRACE_FUNCTION_F(&*nodePtr << " " << nodePtr->typeName());
+    TRACE_FUNCTION_F(static_cast<const void*>(&*nodePtr) << StringView(" ") << nodePtr->typeName());
     nodePtr->visit(*this);
     if (nodePtr->resType != HIRTypeRef()) {
         updateType(nodePtr->resType);
@@ -196,7 +199,7 @@ void HIRExprVisitorDef::visitNodePtr(HIRExprNodeP& nodePtr) {
 }
 
 DEF_VISIT_H(HIRExprNodeBlock, node) {
-    TRACE_FUNCTION_F("_Block");
+    TRACE_FUNCTION_F(StringView("_Block"));
     for (auto& subnode : node.nodes) {
         visitNodePtr(subnode);
     }
@@ -206,12 +209,12 @@ DEF_VISIT_H(HIRExprNodeBlock, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeConstBlock, node) {
-    TRACE_FUNCTION_F("_ConstBlock");
+    TRACE_FUNCTION_F(StringView("_ConstBlock"));
     visitNodePtr(node.inner);
 }
 
 DEF_VISIT_H(HIRExprNodeAsm, node) {
-    TRACE_FUNCTION_F("_Asm");
+    TRACE_FUNCTION_F(StringView("_Asm"));
     for (auto& v : node.outputs) {
         visitNodePtr(v.value);
     }
@@ -221,7 +224,7 @@ DEF_VISIT_H(HIRExprNodeAsm, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeAsm2, node) {
-    TRACE_FUNCTION_F("_Asm2");
+    TRACE_FUNCTION_F(StringView("_Asm2"));
     for (auto& v : node.params) {
         switch (v.tag()) {
             case HIRAsmParam::TAG_Const: {
@@ -259,27 +262,27 @@ DEF_VISIT_H(HIRExprNodeAsm2, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeReturn, node) {
-    TRACE_FUNCTION_F("_Return");
+    TRACE_FUNCTION_F(StringView("_Return"));
     visitNodePtr(node.value);
 }
 
 DEF_VISIT_H(HIRExprNodeYield, node) {
-    TRACE_FUNCTION_F("_Yield");
+    TRACE_FUNCTION_F(StringView("_Yield"));
     visitNodePtr(node.value);
 }
 
 DEF_VISIT_H(HIRExprNodeAWait, node) {
-    TRACE_FUNCTION_F("_AWait");
+    TRACE_FUNCTION_F(StringView("_AWait"));
     visitNodePtr(node.value);
 }
 
 DEF_VISIT_H(HIRExprNodeUse, node) {
-    TRACE_FUNCTION_F("_Use");
+    TRACE_FUNCTION_F(StringView("_Use"));
     visitNodePtr(node.value);
 }
 
 DEF_VISIT_H(HIRExprNodeLet, node) {
-    TRACE_FUNCTION_F("_Let: " << node.pattern);
+    TRACE_FUNCTION_F(StringView("_Let: ") << node.pattern);
     if (node.value) {
         visitNodePtr(node.value);
     }
@@ -288,19 +291,19 @@ DEF_VISIT_H(HIRExprNodeLet, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeLoop, node) {
-    TRACE_FUNCTION_F("_Loop");
+    TRACE_FUNCTION_F(StringView("_Loop"));
     visitNodePtr(node.code);
 }
 
 DEF_VISIT_H(HIRExprNodeLoopControl, node) {
-    TRACE_FUNCTION_F("_LoopControl");
+    TRACE_FUNCTION_F(StringView("_LoopControl"));
     if (node.value) {
         visitNodePtr(node.value);
     }
 }
 
 DEF_VISIT_H(HIRExprNodeMatch, node) {
-    TRACE_FUNCTION_F("_Match");
+    TRACE_FUNCTION_F(StringView("_Match"));
     visitNodePtr(node.value);
     for (auto& arm : node.arms) {
         for (auto& pat : arm.patterns) {
@@ -314,37 +317,37 @@ DEF_VISIT_H(HIRExprNodeMatch, node) {
     }
 }
 
-DEF_VISIT(HIRExprNodeAssign, node, TRACE_FUNCTION_F("_Assign"); visitNodePtr(node.slot); visitNodePtr(node.value);)
-DEF_VISIT(HIRExprNodeBinOp, node, TRACE_FUNCTION_F("_BinOp"); visitNodePtr(node.left); visitNodePtr(node.right);)
-DEF_VISIT(HIRExprNodeUniOp, node, TRACE_FUNCTION_F("_UniOp"); visitNodePtr(node.value);)
-DEF_VISIT(HIRExprNodeBorrow, node, TRACE_FUNCTION_F("_Borrow"); visitNodePtr(node.value);)
+DEF_VISIT(HIRExprNodeAssign, node, TRACE_FUNCTION_F(StringView("_Assign")); visitNodePtr(node.slot); visitNodePtr(node.value);)
+DEF_VISIT(HIRExprNodeBinOp, node, TRACE_FUNCTION_F(StringView("_BinOp")); visitNodePtr(node.left); visitNodePtr(node.right);)
+DEF_VISIT(HIRExprNodeUniOp, node, TRACE_FUNCTION_F(StringView("_UniOp")); visitNodePtr(node.value);)
+DEF_VISIT(HIRExprNodeBorrow, node, TRACE_FUNCTION_F(StringView("_Borrow")); visitNodePtr(node.value);)
 DEF_VISIT(HIRExprNodeRawBorrow, node, visitNodePtr(node.value);)
 
 DEF_VISIT_H(HIRExprNodeCast, node) {
-    TRACE_FUNCTION_F("_Cast " << node.dstType);
+    TRACE_FUNCTION_F(StringView("_Cast ") << node.dstType);
     updateType(node.dstType);
     visitNodePtr(node.value);
 }
 
 DEF_VISIT_H(HIRExprNodeUnsize, node) {
-    TRACE_FUNCTION_F("_Unsize " << node.dstType);
+    TRACE_FUNCTION_F(StringView("_Unsize ") << node.dstType);
     updateType(node.dstType);
     visitNodePtr(node.value);
 }
 
 DEF_VISIT_H(HIRExprNodeIndex, node) {
-    TRACE_FUNCTION_F("_Index");
+    TRACE_FUNCTION_F(StringView("_Index"));
     visitNodePtr(node.value);
     visitNodePtr(node.index);
 }
 
 DEF_VISIT_H(HIRExprNodeDeref, node) {
-    TRACE_FUNCTION_F("_Deref");
+    TRACE_FUNCTION_F(StringView("_Deref"));
     visitNodePtr(node.value);
 }
 
 DEF_VISIT_H(HIRExprNodeEmplace, node) {
-    TRACE_FUNCTION_F("_Emplace");
+    TRACE_FUNCTION_F(StringView("_Emplace"));
     if (node.place) {
         visitNodePtr(node.place);
     }
@@ -352,7 +355,7 @@ DEF_VISIT_H(HIRExprNodeEmplace, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeTupleVariant, node) {
-    TRACE_FUNCTION_F("_TupleVariant: " << node.path);
+    TRACE_FUNCTION_F(StringView("_TupleVariant: ") << node.path);
     visitGenericPath(HIRVisitor::PathContext::VALUE, node.path);
 
     for (auto& ty : node.argTypes) {
@@ -367,7 +370,7 @@ DEF_VISIT_H(HIRExprNodeTupleVariant, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeCallPath, node) {
-    TRACE_FUNCTION_F("_CallPath: " << node.path);
+    TRACE_FUNCTION_F(StringView("_CallPath: ") << node.path);
     for (auto& ty : node.cache.argTypes) {
         updateType(ty);
     }
@@ -379,7 +382,7 @@ DEF_VISIT_H(HIRExprNodeCallPath, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeCallValue, node) {
-    TRACE_FUNCTION_F("_CallValue:");
+    TRACE_FUNCTION_F(StringView("_CallValue:"));
     for (auto& ty : node.argTypes) {
         updateType(ty);
     }
@@ -391,7 +394,7 @@ DEF_VISIT_H(HIRExprNodeCallValue, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeCallMethod, node) {
-    TRACE_FUNCTION_FR("_CallMethod: " << node.method, "_CallMethod: " << node.method);
+    TRACE_FUNCTION_FR(StringView("_CallMethod: ") << node.method, StringView("_CallMethod: ") << node.method);
     visitPathParams(node.params);
     for (auto& ty : node.cache.argTypes) {
         updateType(ty);
@@ -406,18 +409,18 @@ DEF_VISIT_H(HIRExprNodeCallMethod, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeField, node) {
-    TRACE_FUNCTION_F("_Field: " << node.field);
+    TRACE_FUNCTION_F(StringView("_Field: ") << node.field);
     visitNodePtr(node.value);
 }
 
-DEF_VISIT(HIRExprNodeLiteral, node, TRACE_FUNCTION_F("_Literal");)
-DEF_VISIT(HIRExprNodeUnitVariant, node, TRACE_FUNCTION_F("_UnitVariant: " << node.path); visitGenericPath(HIRVisitor::PathContext::VALUE, node.path);)
-DEF_VISIT(HIRExprNodePathValue, node, TRACE_FUNCTION_F("_PathValue: " << node.path); visitPath(HIRVisitor::PathContext::VALUE, node.path);)
-DEF_VISIT(HIRExprNodeVariable, node, TRACE_FUNCTION_F("_Variable: #" << node.slot);)
-DEF_VISIT(HIRExprNodeConstParam, node, TRACE_FUNCTION_F("_ConstParam");)
+DEF_VISIT(HIRExprNodeLiteral, node, TRACE_FUNCTION_F(StringView("_Literal"));)
+DEF_VISIT(HIRExprNodeUnitVariant, node, TRACE_FUNCTION_F(StringView("_UnitVariant: ") << node.path); visitGenericPath(HIRVisitor::PathContext::VALUE, node.path);)
+DEF_VISIT(HIRExprNodePathValue, node, TRACE_FUNCTION_F(StringView("_PathValue: ") << node.path); visitPath(HIRVisitor::PathContext::VALUE, node.path);)
+DEF_VISIT(HIRExprNodeVariable, node, TRACE_FUNCTION_F(StringView("_Variable: #") << node.slot);)
+DEF_VISIT(HIRExprNodeConstParam, node, TRACE_FUNCTION_F(StringView("_ConstParam"));)
 
 DEF_VISIT_H(HIRExprNodeStructLiteral, node) {
-    TRACE_FUNCTION_F("_StructLiteral: " << node.realPath);
+    TRACE_FUNCTION_F(StringView("_StructLiteral: ") << node.realPath);
     if (node.type != HIRTypeRef()) {
         updateType(node.type);
     }
@@ -432,14 +435,14 @@ DEF_VISIT_H(HIRExprNodeStructLiteral, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeTuple, node) {
-    TRACE_FUNCTION_F("_Tuple");
+    TRACE_FUNCTION_F(StringView("_Tuple"));
     for (auto& val : node.vals) {
         visitNodePtr(val);
     }
 }
 
 DEF_VISIT_H(HIRExprNodeArrayList, node) {
-    TRACE_FUNCTION_F("_ArrayList");
+    TRACE_FUNCTION_F(StringView("_ArrayList"));
     for (auto& val : node.vals) {
         visitNodePtr(val);
     }
@@ -447,7 +450,7 @@ DEF_VISIT_H(HIRExprNodeArrayList, node) {
 DEF_VISIT(HIRExprNodeArraySized, node, visitNodePtr(node.val);)
 
 DEF_VISIT_H(HIRExprNodeClosure, node) {
-    TRACE_FUNCTION_F("_Closure");
+    TRACE_FUNCTION_F(StringView("_Closure"));
     if (node.objPath != HIRGenericPath()) {
         for (auto& cap : node.captures) {
             visitNodePtr(cap);
@@ -462,21 +465,10 @@ DEF_VISIT_H(HIRExprNodeClosure, node) {
     }
 }
 
-std::ostream& operator<<(std::ostream& os, const HIRExprNodeClosure::AvuCache::Capture& x) {
-    os << "#" << x.rootSlot;
-    for (const auto& n : x.fields) {
-        if (n == RcString()) {
-            os << ".*";
-        } else {
-            os << "." << n;
-        }
-    }
-    os << "[" << x.usage << "]";
-    return os;
-}
+
 
 DEF_VISIT_H(HIRExprNodeGenerator, node) {
-    TRACE_FUNCTION_F("_Generator");
+    TRACE_FUNCTION_F(StringView("_Generator"));
     updateType(node.returnType);
     updateType(node.yieldTy);
     updateType(node.resumeTy);
@@ -501,7 +493,7 @@ DEF_VISIT_H(HIRExprNodeGeneratorWrapper, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeAsyncBlock, node) {
-    TRACE_FUNCTION_F("_AsyncBlock");
+    TRACE_FUNCTION_F(StringView("_AsyncBlock"));
     updateType(node.returnType);
     if (node.code) {
         visitNodePtr(node.code);
@@ -1221,20 +1213,37 @@ HIRExprVisitorDef::HIRExprVisitorDef(HIRTypeInterner& types)
 {
 }
 
-std::ostream& operator<<(std::ostream& os, const HIRValueUsage& x) {
+namespace stl {
+template <>
+void output<ZeroCopyOutput, HIRExprNodeClosure::AvuCache::Capture>(ZeroCopyOutput& os, const HIRExprNodeClosure::AvuCache::Capture& x) {
+    os << StringView("#") << x.rootSlot;
+    for (const auto& n : x.fields) {
+        if (n == RcString()) {
+            os << StringView(".*");
+        } else {
+            os << StringView(".") << n;
+        }
+    }
+    os << StringView("[") << x.usage << StringView("]");
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, HIRValueUsage>(ZeroCopyOutput& os, HIRValueUsage x) {
     switch (x) {
         case HIRValueUsage::Unknown:
-            os << "Unknown";
+            os << StringView("Unknown");
             break;
         case HIRValueUsage::Borrow:
-            os << "Borrow";
+            os << StringView("Borrow");
             break;
         case HIRValueUsage::Mutate:
-            os << "Mutate";
+            os << StringView("Mutate");
             break;
         case HIRValueUsage::Move:
-            os << "Move";
+            os << StringView("Move");
             break;
     }
-    return os;
+    return;
+}
 }

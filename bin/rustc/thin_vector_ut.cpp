@@ -1,12 +1,27 @@
 #include "thin_vector.h"
+#include "output.h"
 
+#include <std/str/builder.h>
 #include <std/tst/ut.h>
 
 #include <string>
 #include <vector>
-#include <sstream>
 
 using namespace stl;
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, ThinVector<int>>(ZeroCopyOutput& out, const ThinVector<int>& value) {
+    bool first = true;
+    for (auto item : value) {
+        if (!first) {
+            out << StringView(", ");
+        }
+        first = false;
+        out << item;
+    }
+}
+}
 
 namespace {
     struct Counted {
@@ -24,9 +39,7 @@ namespace {
 
     int Counted::liveCount = 0;
 
-    std::ostream& operator<<(std::ostream& os, const Counted& c) {
-        return os << c.value;
-    }
+
 
     Ordering ord(const Counted& a, const Counted& b) {
         return ::ord(a.value, b.value);
@@ -217,14 +230,14 @@ STD_TEST_SUITE(ThinVectorAccessAndOrder) {
 
     STD_TEST(streamInsertion) {
         ThinVector<int> v(std::vector<int>{1, 2, 3});
-        std::ostringstream os;
+        StringBuilder os;
         os << v;
-        STD_INSIST(os.str() == "1, 2, 3");
+        STD_INSIST(std::string(static_cast<const char*>(os.data()), os.length()) == "1, 2, 3");
 
         ThinVector<int> empty;
-        std::ostringstream os2;
+        StringBuilder os2;
         os2 << empty;
-        STD_INSIST(os2.str().empty());
+        STD_INSIST(os2.empty());
     }
 }
 
@@ -266,4 +279,12 @@ auto Counted::operator=(Counted&& o) -> Counted& {
 
 Counted::~Counted() {
     liveCount--;
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, Counted>(ZeroCopyOutput& os, const Counted& c) {
+        os << c.value;
+    return;
+    }
 }

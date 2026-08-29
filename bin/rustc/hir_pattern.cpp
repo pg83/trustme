@@ -1,203 +1,13 @@
 #include "hir_pattern.h"
+#include "output.h"
 
-std::ostream& operator<<(std::ostream& os, const HIRPattern::Value& x) {
-    switch (x.tag()) {
-        case HIRPattern::Value::TAG_Integer: {
-            auto& e = x.as_Integer();
-            // TODO: Print with type (and signed-ness)
-            os << e.value;
-            break;
-        }
-        case HIRPattern::Value::TAG_Float: {
-            auto& e = x.as_Float();
-            // TODO: Print with type
-            os << e.value;
-            break;
-        }
-        case HIRPattern::Value::TAG_String: {
-            auto& e = x.as_String();
-            os << "\"" << e << "\"";
-            break;
-        }
-        case HIRPattern::Value::TAG_ByteString: {
-            auto& e = x.as_ByteString();
-            os << "b\"" << e.v << "\"";
-            break;
-        }
-        case HIRPattern::Value::TAG_Named: {
-            auto& e = x.as_Named();
-            os << e.path;
-            break;
-        }
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const HIRPatternBinding& x) {
-    if (x.isMutable) {
-        os << "mut ";
-    }
-    switch (x.type) {
-        case HIRPatternBinding::Type::Move:
-            break;
-        case HIRPatternBinding::Type::Ref:
-            os << "ref ";
-            break;
-        case HIRPatternBinding::Type::MutRef:
-            os << "ref mut ";
-            break;
-    }
-    os << x.name << "/*" << x.slot << "*/" << " @ ";
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const HIRPattern& x) {
-    for (const auto& pb : x.bindings) {
-        os << pb;
-    }
-    if (x.implicitDerefCount > 0) {
-        os << "&*" << x.implicitDerefCount;
-    }
-    switch (x.data.tag()) {
-        case HIRPatternData::TAG_Any: {
-            os << "_";
-            break;
-        }
-        case HIRPatternData::TAG_Box: {
-            auto& e = x.data.as_Box();
-            os << "box " << *e.sub;
-            break;
-        }
-        case HIRPatternData::TAG_Deref: {
-            auto& e = x.data.as_Deref();
-            os << "deref!(" << *e.sub << ")";
-            break;
-        }
-        case HIRPatternData::TAG_Ref: {
-            auto& e = x.data.as_Ref();
-            switch (e.type) {
-                case HIRBorrowType::Shared:
-                    os << "&";
-                    break;
-                case HIRBorrowType::Unique:
-                    os << "&mut ";
-                    break;
-                case HIRBorrowType::Owned:
-                    os << "&move ";
-                    break;
-            }
-            os << *e.sub;
-            break;
-        }
-        case HIRPatternData::TAG_Tuple: {
-            auto& e = x.data.as_Tuple();
-            os << "(";
-            for (const auto& s : e.subPatterns) {
-                os << s << ", ";
-            }
-            os << ")";
-            break;
-        }
-        case HIRPatternData::TAG_SplitTuple: {
-            auto& e = x.data.as_SplitTuple();
-            os << "(";
-            for (const auto& s : e.leading) {
-                os << s << ", ";
-            }
-            os << ".., ";
-            for (const auto& s : e.trailing) {
-                os << s << ", ";
-            }
-            os << ")";
-            break;
-        }
-        case HIRPatternData::TAG_PathValue: {
-            auto& e = x.data.as_PathValue();
-            os << e.path;
-            break;
-        }
-        case HIRPatternData::TAG_PathTuple: {
-            auto& e = x.data.as_PathTuple();
-            os << e.path;
-            os << "(";
-            for (const auto& s : e.leading) {
-                os << s << ", ";
-            }
-            if (e.isSplit) {
-                os << "..";
-                for (const auto& s : e.trailing) {
-                    os << ", " << s;
-                }
-            }
-            os << ")";
-            break;
-        }
-        case HIRPatternData::TAG_PathNamed: {
-            auto& e = x.data.as_PathNamed();
-            os << e.path;
-            os << "{ ";
-            for (const auto& ns : e.subPatterns) {
-                os << ns.first << ": " << ns.second << ", ";
-            }
-            os << "}";
-            break;
-        }
-        case HIRPatternData::TAG_Value: {
-            auto& e = x.data.as_Value();
-            os << e.val;
-            break;
-        }
-        case HIRPatternData::TAG_Range: {
-            auto& e = x.data.as_Range();
-            if (e.start) {
-                os << *e.start;
-            }
-            os << " .." << (e.isInclusive ? "=" : "") << " ";
-            if (e.end) {
-                os << *e.end;
-            }
-            break;
-        }
-        case HIRPatternData::TAG_Slice: {
-            auto& e = x.data.as_Slice();
-            os << "[";
-            for (const auto& s : e.subPatterns) {
-                os << s << ", ";
-            }
-            os << "]";
-            break;
-        }
-        case HIRPatternData::TAG_SplitSlice: {
-            auto& e = x.data.as_SplitSlice();
-            os << "[ ";
-            for (const auto& s : e.leading) {
-                os << s << ", ";
-            }
-            if (e.extraBind.isValid()) {
-                os << e.extraBind;
-            }
-            os << "..";
-            for (const auto& s : e.trailing) {
-                os << ", " << s;
-            }
-            os << " ]";
-            break;
-        }
-        case HIRPatternData::TAG_Or: {
-            auto& e = x.data.as_Or();
-            os << "(";
-            for (size_t i = 0; i < e.size(); i++) {
-                if (i != 0) {
-                    os << "|";
-                }
-                os << e[i];
-            }
-            os << ")";
-            break;
-        }
-    }
-    return os;
-}
+
+
+
+
+using namespace stl;
 
 namespace {
     void visitPatternDeclarationSlots(const HIRPattern& pattern, std::vector<unsigned>& slots) {
@@ -564,4 +374,224 @@ HIRPattern::HIRPattern(HIRPatternBinding pb, Data d)
     if (pb.isValid()) {
         bindings.push_back(std::move(pb));
     }
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, HIRPattern::Value>(ZeroCopyOutput& os, const HIRPattern::Value& x) {
+    switch (x.tag()) {
+        case HIRPattern::Value::TAG_Integer: {
+            auto& e = x.as_Integer();
+            // TODO: Print with type (and signed-ness)
+            os << e.value;
+            break;
+        }
+        case HIRPattern::Value::TAG_Float: {
+            auto& e = x.as_Float();
+            // TODO: Print with type
+            os << e.value;
+            break;
+        }
+        case HIRPattern::Value::TAG_String: {
+            auto& e = x.as_String();
+            os << StringView("\"") << e << StringView("\"");
+            break;
+        }
+        case HIRPattern::Value::TAG_ByteString: {
+            auto& e = x.as_ByteString();
+            os << StringView("b\"") << e.v << StringView("\"");
+            break;
+        }
+        case HIRPattern::Value::TAG_Named: {
+            auto& e = x.as_Named();
+            os << e.path;
+            break;
+        }
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, HIRPatternBinding>(ZeroCopyOutput& os, HIRPatternBinding x) {
+    if (x.isMutable) {
+        os << StringView("mut ");
+    }
+    switch (x.type) {
+        case HIRPatternBinding::Type::Move:
+            break;
+        case HIRPatternBinding::Type::Ref:
+            os << StringView("ref ");
+            break;
+        case HIRPatternBinding::Type::MutRef:
+            os << StringView("ref mut ");
+            break;
+    }
+    os << x.name << StringView("/*") << x.slot << StringView("*/") << StringView(" @ ");
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, HIRPattern>(ZeroCopyOutput& os, const HIRPattern& x) {
+    for (const auto& pb : x.bindings) {
+        os << pb;
+    }
+    if (x.implicitDerefCount > 0) {
+        os << StringView("&*") << x.implicitDerefCount;
+    }
+    switch (x.data.tag()) {
+        case HIRPatternData::TAG_Any: {
+            os << StringView("_");
+            break;
+        }
+        case HIRPatternData::TAG_Box: {
+            auto& e = x.data.as_Box();
+            os << StringView("box ") << *e.sub;
+            break;
+        }
+        case HIRPatternData::TAG_Deref: {
+            auto& e = x.data.as_Deref();
+            os << StringView("deref!(") << *e.sub << StringView(")");
+            break;
+        }
+        case HIRPatternData::TAG_Ref: {
+            auto& e = x.data.as_Ref();
+            switch (e.type) {
+                case HIRBorrowType::Shared:
+                    os << StringView("&");
+                    break;
+                case HIRBorrowType::Unique:
+                    os << StringView("&mut ");
+                    break;
+                case HIRBorrowType::Owned:
+                    os << StringView("&move ");
+                    break;
+            }
+            os << *e.sub;
+            break;
+        }
+        case HIRPatternData::TAG_Tuple: {
+            auto& e = x.data.as_Tuple();
+            os << StringView("(");
+            for (const auto& s : e.subPatterns) {
+                os << s << StringView(", ");
+            }
+            os << StringView(")");
+            break;
+        }
+        case HIRPatternData::TAG_SplitTuple: {
+            auto& e = x.data.as_SplitTuple();
+            os << StringView("(");
+            for (const auto& s : e.leading) {
+                os << s << StringView(", ");
+            }
+            os << StringView(".., ");
+            for (const auto& s : e.trailing) {
+                os << s << StringView(", ");
+            }
+            os << StringView(")");
+            break;
+        }
+        case HIRPatternData::TAG_PathValue: {
+            auto& e = x.data.as_PathValue();
+            os << e.path;
+            break;
+        }
+        case HIRPatternData::TAG_PathTuple: {
+            auto& e = x.data.as_PathTuple();
+            os << e.path;
+            os << StringView("(");
+            for (const auto& s : e.leading) {
+                os << s << StringView(", ");
+            }
+            if (e.isSplit) {
+                os << StringView("..");
+                for (const auto& s : e.trailing) {
+                    os << StringView(", ") << s;
+                }
+            }
+            os << StringView(")");
+            break;
+        }
+        case HIRPatternData::TAG_PathNamed: {
+            auto& e = x.data.as_PathNamed();
+            os << e.path;
+            os << StringView("{ ");
+            for (const auto& ns : e.subPatterns) {
+                os << ns.first << StringView(": ") << ns.second << StringView(", ");
+            }
+            os << StringView("}");
+            break;
+        }
+        case HIRPatternData::TAG_Value: {
+            auto& e = x.data.as_Value();
+            os << e.val;
+            break;
+        }
+        case HIRPatternData::TAG_Range: {
+            auto& e = x.data.as_Range();
+            if (e.start) {
+                os << *e.start;
+            }
+            os << StringView(" ..") << (e.isInclusive ? "=" : "") << StringView(" ");
+            if (e.end) {
+                os << *e.end;
+            }
+            break;
+        }
+        case HIRPatternData::TAG_Slice: {
+            auto& e = x.data.as_Slice();
+            os << StringView("[");
+            for (const auto& s : e.subPatterns) {
+                os << s << StringView(", ");
+            }
+            os << StringView("]");
+            break;
+        }
+        case HIRPatternData::TAG_SplitSlice: {
+            auto& e = x.data.as_SplitSlice();
+            os << StringView("[ ");
+            for (const auto& s : e.leading) {
+                os << s << StringView(", ");
+            }
+            if (e.extraBind.isValid()) {
+                os << e.extraBind;
+            }
+            os << StringView("..");
+            for (const auto& s : e.trailing) {
+                os << StringView(", ") << s;
+            }
+            os << StringView(" ]");
+            break;
+        }
+        case HIRPatternData::TAG_Or: {
+            auto& e = x.data.as_Or();
+            os << StringView("(");
+            for (size_t i = 0; i < e.size(); i++) {
+                if (i != 0) {
+                    os << StringView("|");
+                }
+                os << e[i];
+            }
+            os << StringView(")");
+            break;
+        }
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<HIRPattern>>(ZeroCopyOutput& out, const std::vector<HIRPattern>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::pair<HIRPattern, HIRTypeRef>>(ZeroCopyOutput& out, const std::pair<HIRPattern, HIRTypeRef>& value) {
+    out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<std::pair<HIRPattern, HIRTypeRef>>>(ZeroCopyOutput& out, const std::vector<std::pair<HIRPattern, HIRTypeRef>>& values) {
+    outCont(out, values);
+}
+
 }

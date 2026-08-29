@@ -54,6 +54,6 @@ generate(
         }
         Ordering ord(const HIRTypeDataNodeType& x) const;
         HIRTypeDataNodeType clone() const;
-        void fmt(std::ostream& os) const;
+        void fmt(stl::ZeroCopyOutput& os) const;
     """,
 )

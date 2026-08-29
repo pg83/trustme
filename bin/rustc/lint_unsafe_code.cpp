@@ -7,6 +7,8 @@
 #include "wire_board.h"
 #include "hir_visitor.h"
 
+using namespace stl;
+
 namespace {
     const char* const LINT_NAME = "unsafe_code";
 
@@ -55,11 +57,11 @@ namespace {
                 break;
             case CfgLintLevel::Warn:
             case CfgLintLevel::ForceWarn:
-                WARNING(sp, W0000, "usage of " << what);
+                WARNING(sp, W0000, StringView("usage of ") << what);
                 break;
             case CfgLintLevel::Deny:
             case CfgLintLevel::Forbid:
-                ERROR(sp, E0000, "usage of " << what);
+                ERROR(sp, E0000, StringView("usage of ") << what);
                 break;
         }
     }

@@ -5,7 +5,7 @@
 #include <std/sys/types.h>
 
 #include <cstdint>
-#include <sstream>
+#include <string>
 
 using FloatValue = Float128;
 
@@ -23,8 +23,6 @@ FloatValue floatValueMinimumNumber(FloatValue lhs, FloatValue rhs);
 FloatValue floatValueMaximumNumber(FloatValue lhs, FloatValue rhs);
 FloatValue positiveNanFloatValue();
 std::string formatFloatValueForToken(FloatValue value);
-
-std::ostringstream&& operator<<(std::ostringstream&& os, const FloatValue& value);
 
 struct F16 {
     u16 v;

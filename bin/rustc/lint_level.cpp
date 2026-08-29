@@ -3,6 +3,8 @@
 #include "span.h"
 #include "hir_hir.h"
 
+using namespace stl;
+
 CfgLintLevel ApplyLintLevelOverrides(const Settings& settings, const LintLevelOverrides& overrides, const char* name, CfgLintLevel inherited) {
     auto level = inherited;
 
@@ -36,9 +38,9 @@ CfgLintLevel LintLevelForModulePath(const Settings& settings, const HIRCrate& cr
     level = ApplyLintLevelOverrides(settings, module->lintLevels, name, level);
     for (const auto& component : path.components()) {
         const auto item = module->modItems.find(component);
-        ASSERT_BUG(Span(), item != module->modItems.end(), "missing source module " << path);
+        ASSERT_BUG(Span(), item != module->modItems.end(), StringView("missing source module ") << path);
         module = item->second->ent.opt_Module();
-        ASSERT_BUG(Span(), module, "source module path names a non-module: " << path);
+        ASSERT_BUG(Span(), module, StringView("source module path names a non-module: ") << path);
         level = ApplyLintLevelOverrides(settings, module->lintLevels, name, level);
     }
     return level;

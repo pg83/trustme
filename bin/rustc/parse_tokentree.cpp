@@ -1,7 +1,10 @@
 #include "parse_tokentree.h"
+#include "output.h"
 
 #include "common.h"
 #include "ast_edition.h"
+
+using namespace stl;
 
 TokenTree TokenTree::clone() const {
     if (subtrees.size() == 0) {
@@ -16,35 +19,7 @@ TokenTree TokenTree::clone() const {
     }
 }
 
-std::ostream& operator<<(std::ostream& os, const TokenTree& tt) {
-    if (tt.subtrees.size() == 0) {
-        switch (tt.tok_.type()) {
-            case TOK_IDENT:
-            case TOK_LIFETIME:
-                os << "/*" << tt.edition << " " << tt.hygiene_ << "*/";
-                break;
-            default:
-                if (TOK_INTERPOLATED_PATH <= tt.tok_.type() && tt.tok_.type() <= TOK_INTERPOLATED_VIS) {
-                    os << "/*" << tt.edition << " int*/";
-                } else {
-                    os << "/*" << tt.edition << "*/";
-                }
-                break;
-        }
-        return os << tt.tok_.toStr();
-    } else {
-        os << "/*" << tt.edition << " " << tt.hygiene_ << " TT*/";
-        bool first = true;
-        for (const auto& i : tt.subtrees) {
-            if (!first) {
-                os << " ";
-            }
-            os << i;
-            first = false;
-        }
-        return os;
-    }
-}
+
 
 TokenTree::~TokenTree() {
 }
@@ -90,4 +65,40 @@ const TokenTree& TokenTree::operator[](unsigned int idx) const {
 TokenTree& TokenTree::operator[](unsigned int idx) {
     BUG_ASSERT(idx < subtrees.size());
     return subtrees[idx];
+}
+
+void TokenTree::fmt(ZeroCopyOutput& os) const {
+    if (subtrees.empty()) {
+        switch (tok_.type()) {
+            case TOK_IDENT:
+            case TOK_LIFETIME:
+                os << StringView("/*") << edition << StringView(" ") << hygiene_ << StringView("*/");
+                break;
+            default:
+                if (TOK_INTERPOLATED_PATH <= tok_.type() && tok_.type() <= TOK_INTERPOLATED_VIS) {
+                    os << StringView("/*") << edition << StringView(" int*/");
+                } else {
+                    os << StringView("/*") << edition << StringView("*/");
+                }
+                break;
+        }
+        os << tok_.toStr();
+    } else {
+        os << StringView("/*") << edition << StringView(" ") << hygiene_ << StringView(" TT*/");
+        bool first = true;
+        for (const auto& i : subtrees) {
+            if (!first) {
+                os << StringView(" ");
+            }
+            os << i;
+            first = false;
+        }
+    }
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, TokenTree>(ZeroCopyOutput& os, const TokenTree& tree) {
+    tree.fmt(os);
+}
 }

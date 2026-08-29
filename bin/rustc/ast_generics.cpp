@@ -73,3 +73,15 @@ void ASTGenericParams::addParam(GenericParam gp, size_t boundsStart, size_t boun
     params.back().boundsStart = boundsStart;
     params.back().boundsEnd = boundsEnd;
 }
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, std::vector<ASTGenericBound>>(ZeroCopyOutput& out, const std::vector<ASTGenericBound>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<GenericParam>>(ZeroCopyOutput& out, const std::vector<GenericParam>& values) {
+    outCont(out, values);
+}
+}

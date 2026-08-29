@@ -93,13 +93,13 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
 
     switch ((*curTy).tag()) {
         default:
-            BUG(sp, "Unknown receiver type - " << curTy);
+            BUG(sp, StringView("Unknown receiver type - ") << curTy);
         case HIRTypeData::TAG_Generic: {
             auto& te = (*curTy).as_Generic();
             if (te.isSelf()) {
                 byvalue.insert(sp, impl);
             } else {
-                BUG(sp, "Receiver generic not `Self` - " << curTy);
+                BUG(sp, StringView("Receiver generic not `Self` - ") << curTy);
             }
             break;
         }
@@ -135,14 +135,14 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
         }
         case HIRTypeData::TAG_Path: {
             auto& te = (*curTy).as_Path();
-            ASSERT_BUG(sp, te.path.data.is_Generic(), "Receiver path not a generic path - " << curTy);
+            ASSERT_BUG(sp, te.path.data.is_Generic(), StringView("Receiver path not a generic path - ") << curTy);
             const auto& gp = te.path.data.as_Generic();
             if (gp.params.types.empty()) {
-                DEBUG("m_concrete[" << gp.path << "] += impl" << impl.params.fmtArgs() << " " << impl.type);
+                DEBUG(StringView("m_concrete[") << gp.path << StringView("] += impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);
                 concrete[gp.path].push_back(&impl);
                 return;
             }
-            DEBUG("m_path[" << gp.path << "] += " << gp.params.types.at(0) << " impl" << impl.params.fmtArgs() << " " << impl.type);
+            DEBUG(StringView("m_path[") << gp.path << StringView("] += ") << gp.params.types.at(0) << StringView(" impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);
             path[gp.path].insert(sp, gp.params.types.at(0), impl);
             break;
         }
@@ -151,7 +151,7 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
 
 void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct, tCbResolveType tyRes, Callback& cb) const {
     const auto& curTy = tyRes.getType(sp, curTyAct);
-    TRACE_FUNCTION_F("[Inner] " << curTy);
+    TRACE_FUNCTION_F(StringView("[Inner] ") << curTy);
     byvalue.iterate(curTy, cb);
 
     const Inner* inner = nullptr;
@@ -215,9 +215,9 @@ void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct,
 
     if (inner) {
         BUG_ASSERT(innerTy);
-        DEBUG("inner_ty = " << innerTy);
+        DEBUG(StringView("inner_ty = ") << innerTy);
         inner->find(sp, innerTy, tyRes, cb);
-        DEBUG("no wrapper");
+        DEBUG(StringView("no wrapper"));
     }
 }
 
@@ -239,7 +239,7 @@ void InherentCacheImpl::insertAll(const Span& sp, const HIRTypeImpl& impl, const
             case HIRFunction::Receiver::Free:
                 break;
             case HIRFunction::Receiver::Custom:
-                ASSERT_BUG(sp, fcn.receiverType, "Custom receiver without a receiver type");
+                ASSERT_BUG(sp, fcn.receiverType, StringView("Custom receiver without a receiver type"));
                 items[name].insert(sp, *fcn.receiverType, impl);
                 break;
             case HIRFunction::Receiver::Box:
@@ -263,7 +263,7 @@ void InherentCacheImpl::insertAll(const Span& sp, const HIRTypeImpl& impl, const
 }
 
 void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, Callback& cb) const {
-    TRACE_FUNCTION_F(name << ", " << ty);
+    TRACE_FUNCTION_F(name << StringView(", ") << ty);
 
     struct FilterCallback final: Callback {
         const Span& sp;
@@ -282,7 +282,7 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
         }
 
         void visit(const HIRTypeData* roughSelfTy, const HIRTypeImpl& impl) override {
-            DEBUG("- " << roughSelfTy);
+            DEBUG(StringView("- ") << roughSelfTy);
             const HIRFunction& fcn = impl.methods.at(name).data;
 
             struct GetSelf: public HIRMatchGenerics {
@@ -301,12 +301,12 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
                 }
 
                 HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
-                    TODO(Span(), "GetSelf::match_val " << g << " with " << sz);
+                    TODO(Span(), StringView("GetSelf::match_val ") << g << StringView(" with ") << sz);
                 }
             } getself;
 
             if (fcn.receiver == HIRFunction::Receiver::Custom) {
-                ASSERT_BUG(sp, fcn.receiverType, "Custom receiver without a receiver type");
+                ASSERT_BUG(sp, fcn.receiverType, StringView("Custom receiver without a receiver type"));
                 if ((*fcn.receiverType)->matchTestGenerics(sp, ty, HIRResolvePlaceholdersNop(), getself)) {
                     auto selfTy = getself.detectedSelfTy ? *getself.detectedSelfTy : impl.type;
                     const auto* resolvedSelfTy = tyRes.getType(sp, selfTy);

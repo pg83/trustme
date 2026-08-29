@@ -1,4 +1,7 @@
 #include "ast_attrs.h"
+#include "output.h"
+
+using namespace stl;
 
 ASTAttribute::ASTAttribute(Span sp, ASTAttributeName name, TokenTree data)
     : span_(std::move(sp))
@@ -8,7 +11,10 @@ ASTAttribute::ASTAttribute(Span sp, ASTAttributeName name, TokenTree data)
 {
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTAttribute& x) {
+namespace stl {
+template <>
+void output<ZeroCopyOutput, ASTAttribute>(ZeroCopyOutput& os, const ASTAttribute& x) {
     x.fmt(os);
-    return os;
+    return;
+}
 }

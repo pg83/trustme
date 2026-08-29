@@ -1,8 +1,11 @@
 #include "ast_expr.h"
+#include "output.h"
 
 #include "ast_ast.h"
 
 #include <cctype>
+
+using namespace stl;
 
 const char* ASTExprNodeP::typeName() const {
     return typeid(*ptr).name();
@@ -44,19 +47,9 @@ ASTExpr ASTExpr::clone() const {
     }
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTExpr& pat) {
-    if (pat.node_) {
-        return os << *pat.node_;
-    } else {
-        return os << "/* null */";
-    }
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTExprNode& node) {
-    BUG_ASSERT(static_cast<const void*>(&node) != nullptr);
-    node.print(os);
-    return os;
-}
+
+
 
 ASTExprNode::~ASTExprNode() {
 }
@@ -225,7 +218,7 @@ unsigned int ASTExprNodeMacroDefinition::nodeKind() const {
     void nodeType ::visit(ASTNodeVisitor& nv) { \
         nv.visit(*this);                        \
     }                                           \
-    void nodeType ::print(std::ostream& os) const _print ASTExprNodeP nodeType ::clone() const _clone
+    void nodeType ::print(ZeroCopyOutput& os) const _print ASTExprNodeP nodeType ::clone() const _clone
 #define OPT_CLONE(node) (node.get() ? node->clone() : ASTExprNodeP())
 
 namespace {
@@ -266,11 +259,11 @@ namespace {
         return true;
     }
 
-    void printMacroTokens(std::ostream& os, const TokenTree& tree, bool& hasPrevious, eTokenType& previous) {
+    void printMacroTokens(ZeroCopyOutput& os, const TokenTree& tree, bool& hasPrevious, eTokenType& previous) {
         if (tree.isToken()) {
             const auto current = tree.tok().type();
             if (hasPrevious && macroTokenNeedsSpace(previous, current)) {
-                os << " ";
+                os << StringView(" ");
             }
             os << tree.tok().toStr();
             previous = current;
@@ -284,33 +277,33 @@ namespace {
 
 #define NEWNODE(type, ...) mkExprnodep(span(), makeAstExprNode<type>(pool() __VA_OPT__(, ) __VA_ARGS__))
 
-    void printFmtString(std::ostream& os, const std::string& s) {
+    void printFmtString(ZeroCopyOutput& os, const std::string& s) {
         static const char* hex = "0123456789ABCDEF";
         for (auto c : s) {
             if (c == '{') {
-                os << "{{";
+                os << StringView("{{");
             } else if (c == '\\') {
-                os << "\\\\";
+                os << StringView("\\\\");
             } else if (c == '"') {
-                os << "\\\"";
+                os << StringView("\\\"");
             } else if (std::isprint(c)) {
                 os << c;
             } else {
-                os << "\\x" << hex[c >> 4] << hex[c & 15];
+                os << StringView("\\x") << hex[c >> 4] << hex[c & 15];
             }
         }
     }
 
-    void fmtIfletConditions(std::ostream& os, const std::vector<ASTIfLetCondition>& conditions) {
+    void fmtIfletConditions(ZeroCopyOutput& os, const std::vector<ASTIfLetCondition>& conditions) {
         for (const auto& cond : conditions) {
             if (&cond != &conditions.front()) {
-                os << " && ";
+                os << StringView(" && ");
             }
             if (cond.optPat) {
-                os << "let ";
-                os << *cond.optPat << " = ";
+                os << StringView("let ");
+                os << *cond.optPat << StringView(" = ");
             }
-            os << "(" << *cond.value << ")";
+            os << StringView("(") << *cond.value << StringView(")");
         }
     }
 
@@ -328,11 +321,11 @@ namespace {
         return newConds;
     }
 
-    static void printClosureParameterPattern(std::ostream& os, const ASTPattern& pattern) {
+    static void printClosureParameterPattern(ZeroCopyOutput& os, const ASTPattern& pattern) {
         if (pattern.bindings().empty() && pattern.data().is_MaybeBind()) {
             const auto& ident = pattern.data().as_MaybeBind().name;
             if (ident.isRaw) {
-                os << "r#";
+                os << StringView("r#");
             }
             os << ident.name;
             return;
@@ -344,11 +337,11 @@ namespace {
 NODE(
     ASTExprNodeBlock,
     {
-        os << "{";
+        os << StringView("{");
         for (const auto& n : nodes) {
-            os << " " << *n.node << (n.hasSemicolon ? ";" : "");
+            os << StringView(" ") << *n.node << (n.hasSemicolon ? ";" : "");
         }
-        os << " }";
+        os << StringView(" }");
     },
     {
         std::vector<Line> newNodes;
@@ -359,17 +352,17 @@ NODE(
     }
 )
 
-NODE(ASTExprNodeAsyncBlock, { os << "async " << (isMove ? "move " : "") << (isUse ? "use " : "") << *inner; }, { return NEWNODE(ASTExprNodeAsyncBlock, inner->clone(), isMove, isUse); })
+NODE(ASTExprNodeAsyncBlock, { os << StringView("async ") << (isMove ? "move " : "") << (isUse ? "use " : "") << *inner; }, { return NEWNODE(ASTExprNodeAsyncBlock, inner->clone(), isMove, isUse); })
 NODE(ASTExprNodeGeneratorBlock, { os << (isAsync ? "async gen " : "gen ") << (isMove ? "move " : "") << *inner; }, { return NEWNODE(ASTExprNodeGeneratorBlock, inner->clone(), returnType->clone(), isMove, isCoroutineClosureBody, isAsync); })
-NODE(ASTExprNodeTry, { os << "try " << *inner; }, { return NEWNODE(ASTExprNodeTry, inner->clone()); })
+NODE(ASTExprNodeTry, { os << StringView("try ") << *inner; }, { return NEWNODE(ASTExprNodeTry, inner->clone()); })
 
 NODE(
     ASTExprNodeMacro,
     {
         path.printPretty(os, false);
-        os << "!";
+        os << StringView("!");
         if (ident.size() > 0) {
-            os << " " << ident << " ";
+            os << StringView(" ") << ident << StringView(" ");
         }
         os << (isBraced ? "{ " : "(");
         bool hasPrevious = false;
@@ -383,24 +376,24 @@ NODE(
 NODE(
     ASTExprNodeAsm,
     {
-        os << "llvm_asm!( \"" << text << "\"";
-        os << " :";
+        os << StringView("llvm_asm!( \"") << text << StringView("\"");
+        os << StringView(" :");
         for (const auto& v : output) {
-            os << " \"" << v.name << "\" (" << *v.value << "),";
+            os << StringView(" \"") << v.name << StringView("\" (") << *v.value << StringView("),");
         }
-        os << " :";
+        os << StringView(" :");
         for (const auto& v : input) {
-            os << " \"" << v.name << "\" (" << *v.value << "),";
+            os << StringView(" \"") << v.name << StringView("\" (") << *v.value << StringView("),");
         }
-        os << " :";
+        os << StringView(" :");
         for (const auto& v : clobbers) {
-            os << " \"" << v << "\",";
+            os << StringView(" \"") << v << StringView("\",");
         }
-        os << " :";
+        os << StringView(" :");
         for (const auto& v : flags) {
-            os << " \"" << v << "\",";
+            os << StringView(" \"") << v << StringView("\",");
         }
-        os << " )";
+        os << StringView(" )");
     },
     {
         std::vector<ASTExprNodeAsm::ValRef> outputs;
@@ -415,70 +408,70 @@ NODE(
     }
 )
 
-void AsmLine::fmt(std::ostream& os) const {
-    os << "\"";
+void AsmLine::fmt(ZeroCopyOutput& os) const {
+    os << StringView("\"");
     for (const auto& f : this->frags) {
         printFmtString(os, f.before);
-        os << "{" << f.index;
+        os << StringView("{") << f.index;
         if (f.modifier) {
-            os << ":" << f.modifier;
+            os << StringView(":") << f.modifier;
         }
-        os << "}";
+        os << StringView("}");
     }
     printFmtString(os, this->trailing);
-    os << "\"";
+    os << StringView("\"");
 }
 
 NODE(
     ASTExprNodeAsm2,
     {
-        os << "asm!( ";
+        os << StringView("asm!( ");
         for (const auto& l : lines) {
             l.fmt(os);
-            os << ", ";
+            os << StringView(", ");
         }
         for (const auto& p : params) {
             switch (p.tag()) {
                 case ASTAsmParam::TAG_Const: {
                     auto& e = p.as_Const();
-                    os << "const " << *e;
+                    os << StringView("const ") << *e;
                     break;
                 }
                 case ASTAsmParam::TAG_Sym: {
                     auto& e = p.as_Sym();
-                    os << "sym " << e;
+                    os << StringView("sym ") << e;
                     break;
                 }
                 case ASTAsmParam::TAG_Label: {
                     auto& e = p.as_Label();
-                    os << "label " << *e.code;
+                    os << StringView("label ") << *e.code;
                     break;
                 }
                 case ASTAsmParam::TAG_RegSingle: {
                     auto& e = p.as_RegSingle();
-                    os << "reg(" << e.dir << " " << e.spec << ") " << *e.val;
+                    os << StringView("reg(") << e.dir << StringView(" ") << e.spec << StringView(") ") << *e.val;
                     break;
                 }
                 case ASTAsmParam::TAG_Reg: {
                     auto& e = p.as_Reg();
-                    os << "reg(" << e.dir << " " << e.spec << ") ";
+                    os << StringView("reg(") << e.dir << StringView(" ") << e.spec << StringView(") ");
                     if (e.valIn) {
                         os << *e.valIn;
                     } else {
-                        os << "_";
+                        os << StringView("_");
                     }
-                    os << " => ";
+                    os << StringView(" => ");
                     if (e.valOut) {
                         os << *e.valOut;
                     } else {
-                        os << "_";
+                        os << StringView("_");
                     }
                     break;
                 }
             }
-            os << ", ";
+            os << StringView(", ");
         }
-        os << " )";
+        os << StringView(" )");
     },
     {
         std::vector<Param> params;
@@ -522,26 +515,26 @@ NODE(
     {
         switch (type) {
             case RETURN:
-                os << "return";
+                os << StringView("return");
                 break;
             case TAILCALL:
-                os << "become";
+                os << StringView("become");
                 break;
             case YIELD:
-                os << "yield";
+                os << StringView("yield");
                 break;
             case BREAK:
-                os << "break";
+                os << StringView("break");
                 break;
             case CONTINUE:
-                os << "continue";
+                os << StringView("continue");
                 break;
             case YEET:
-                os << "do yeet";
+                os << StringView("do yeet");
                 break;
         }
         if (value) {
-            os << " " << *value;
+            os << StringView(" ") << *value;
         }
     },
     { return NEWNODE(ASTExprNodeFlow, type, target, value ? value->clone() : nullptr); }
@@ -550,11 +543,11 @@ NODE(
 NODE(
     ASTExprNodeLetBinding,
     {
-        os << (isSuper ? "super let " : "let ") << pat << ": " << type;
+        os << (isSuper ? "super let " : "let ") << pat << StringView(": ") << type;
         if (value) {
-            os << " = " << *value;
+            os << StringView(" = ") << *value;
             if (elseNode) {
-                os << " else " << *elseNode;
+                os << StringView(" else ") << *elseNode;
             }
         }
     },
@@ -564,43 +557,43 @@ NODE(
 NODE(
     ASTExprNodeAssign,
     {
-        os << *slot << " ";
+        os << *slot << StringView(" ");
         switch (op) {
             case NONE:
-                os << "=";
+                os << StringView("=");
                 break;
             case ADD:
-                os << "+=";
+                os << StringView("+=");
                 break;
             case SUB:
-                os << "-=";
+                os << StringView("-=");
                 break;
             case MUL:
-                os << "*=";
+                os << StringView("*=");
                 break;
             case DIV:
-                os << "/=";
+                os << StringView("/=");
                 break;
             case MOD:
-                os << "%=";
+                os << StringView("%=");
                 break;
             case AND:
-                os << "&=";
+                os << StringView("&=");
                 break;
             case OR:
-                os << "|=";
+                os << StringView("|=");
                 break;
             case XOR:
-                os << "^=";
+                os << StringView("^=");
                 break;
             case SHR:
-                os << ">>=";
+                os << StringView(">>=");
                 break;
             case SHL:
-                os << "<<=";
+                os << StringView("<<=");
                 break;
         }
-        os << " " << *value;
+        os << StringView(" ") << *value;
     },
     { return NEWNODE(ASTExprNodeAssign, op, slot->clone(), value->clone()); }
 )
@@ -609,14 +602,14 @@ NODE(
     ASTExprNodeCallPath,
     {
         path.printPretty(os, false);
-        os << "(";
+        os << StringView("(");
         for (const auto& a : args) {
             if (&a != &args.front()) {
-                os << ", ";
+                os << StringView(", ");
             }
             os << *a;
         }
-        os << ")";
+        os << StringView(")");
     },
     {
         std::vector<ASTExprNodeP> args;
@@ -630,11 +623,11 @@ NODE(
 NODE(
     ASTExprNodeCallMethod,
     {
-        os << "(" << *val << ")." << method << "(";
+        os << StringView("(") << *val << StringView(").") << method << StringView("(");
         for (const auto& a : args) {
-            os << *a << ",";
+            os << *a << StringView(",");
         }
-        os << ")";
+        os << StringView(")");
     },
     {
         std::vector<ASTExprNodeP> args;
@@ -648,11 +641,11 @@ NODE(
 NODE(
     ASTExprNodeCallObject,
     {
-        os << "(" << *val << ")(";
+        os << StringView("(") << *val << StringView(")(");
         for (const auto& a : args) {
-            os << *a << ",";
+            os << *a << StringView(",");
         }
-        os << ")";
+        os << StringView(")");
     },
     {
         std::vector<ASTExprNodeP> args;
@@ -663,13 +656,13 @@ NODE(
     }
 )
 
-NODE(ASTExprNodeLoop, { os << "LOOP [" << label << "] " << *code; }, { return NEWNODE(ASTExprNodeLoop, label, code->clone()); })
+NODE(ASTExprNodeLoop, { os << StringView("LOOP [") << label << StringView("] ") << *code; }, { return NEWNODE(ASTExprNodeLoop, label, code->clone()); })
 
 NODE(
     ASTExprNodeFor,
     {
-        os << "FOR [" << label << "] " << pattern << "in" << *value;
-        os << " " << *code;
+        os << StringView("FOR [") << label << StringView("] ") << pattern << StringView("in") << *value;
+        os << StringView(" ") << *code;
     },
     { return NEWNODE(ASTExprNodeFor, label, pattern.clone(), value->clone(), code->clone(), isAwait); }
 )
@@ -678,11 +671,11 @@ NODE(
     ASTExprNodeWhile,
     {
         if (label != "") {
-            os << "'" << label << ": ";
+            os << StringView("'") << label << StringView(": ");
         }
-        os << "while ";
+        os << StringView("while ");
         fmtIfletConditions(os, conditions);
-        os << " { " << *code << " }";
+        os << StringView(" { ") << *code << StringView(" }");
     },
     {
         auto newConds = cloneIfletConditions(conditions);
@@ -693,19 +686,19 @@ NODE(
 NODE(
     ASTExprNodeMatch,
     {
-        os << "match (" << *val << ") {";
+        os << StringView("match (") << *val << StringView(") {");
         for (const auto& arm : arms) {
             for (const auto& pat : arm.patterns) {
-                os << " " << pat;
+                os << StringView(" ") << pat;
             }
             if (arm.guard.size() > 0) {
-                os << " if ";
+                os << StringView(" if ");
                 fmtIfletConditions(os, arm.guard);
             }
 
-            os << " => " << *arm.code << ",";
+            os << StringView(" => ") << *arm.code << StringView(",");
         }
-        os << "}";
+        os << StringView("}");
     },
     {
         std::vector<ASTExprNodeMatchArm> newArms;
@@ -726,14 +719,14 @@ NODE(
     {
         for (const auto& arm : arms) {
             if (&arm != arms.data()) {
-                os << " else ";
+                os << StringView(" else ");
             }
-            os << "if ";
+            os << StringView("if ");
             fmtIfletConditions(os, arm.conditions);
-            os << " { " << *arm.body << " }";
+            os << StringView(" { ") << *arm.body << StringView(" }");
         }
         if (elseNode) {
-            os << " else { " << *elseNode << " }";
+            os << StringView(" else { ") << *elseNode << StringView(" }");
         }
     },
     {
@@ -746,12 +739,12 @@ NODE(
     }
 )
 
-NODE(ASTExprNodeWildcardPattern, { os << "_"; }, { return NEWNODE(ASTExprNodeWildcardPattern); })
+NODE(ASTExprNodeWildcardPattern, { os << StringView("_"); }, { return NEWNODE(ASTExprNodeWildcardPattern); })
 NODE(
     ASTExprNodeInteger,
     {
         if (datatype == CORETYPE_CHAR) {
-            os << "'\\u{" << std::hex << value << std::dec << "}'";
+            os << StringView("'\\u{") << formatHex(value) << StringView("}'");
         } else {
             os << value;
             if (datatype == CORETYPE_ANY)
@@ -784,33 +777,33 @@ NODE(
     {
         os << hrbs;
         if (isPinned) {
-            os << "static ";
+            os << StringView("static ");
         }
         if (isMove) {
-            os << "move ";
+            os << StringView("move ");
         }
         if (isUse) {
-            os << "use ";
+            os << StringView("use ");
         }
-        os << "|";
+        os << StringView("|");
         bool needsComma = false;
         for (const auto& a : args) {
             if (needsComma) {
-                os << ", ";
+                os << StringView(", ");
             }
             needsComma = true;
             printClosureParameterPattern(os, a.first);
             if (!a.second->isWildcard()) {
-                os << ": ";
+                os << StringView(": ");
                 a.second->print(os, false);
             }
         }
-        os << "|";
+        os << StringView("|");
         if (!returnType->isWildcard()) {
-            os << " -> ";
+            os << StringView(" -> ");
             returnType->print(os, false);
         }
-        os << " " << *code;
+        os << StringView(" ") << *code;
     },
     {
         ASTExprNodeClosure::argsT args;
@@ -825,20 +818,20 @@ NODE(
     ASTExprNodeStructLiteral,
     {
         path.printPretty(os, false);
-        os << " { ";
+        os << StringView(" { ");
         for (const auto& v : values) {
             if (&v != &values.front()) {
-                os << ", ";
+                os << StringView(", ");
             }
-            os << v.name << ": " << *v.value;
+            os << v.name << StringView(": ") << *v.value;
         }
         if (baseValue) {
             if (!values.empty()) {
-                os << ", ";
+                os << StringView(", ");
             }
-            os << ".." << *baseValue;
+            os << StringView("..") << *baseValue;
         }
-        os << " }";
+        os << StringView(" }");
     },
     {
         ASTExprNodeStructLiteral::tValues vals;
@@ -853,11 +846,11 @@ NODE(
 NODE(
     ASTExprNodeStructLiteralPattern,
     {
-        os << path << " /*pat*/ { ";
+        os << path << StringView(" /*pat*/ { ");
         for (const auto& v : values) {
-            os << v.name << ": " << *v.value << ", ";
+            os << v.name << StringView(": ") << *v.value << StringView(", ");
         }
-        os << ".. }";
+        os << StringView(".. }");
     },
     {
         ASTExprNodeStructLiteral::tValues vals;
@@ -873,15 +866,15 @@ NODE(
 NODE(
     ASTExprNodeArray,
     {
-        os << "[";
+        os << StringView("[");
         if (size.get()) {
-            os << *values[0] << "; " << *size;
+            os << *values[0] << StringView("; ") << *size;
         } else {
             for (const auto& a : values) {
-                os << *a << ",";
+                os << *a << StringView(",");
             }
         }
-        os << "]";
+        os << StringView("]");
     },
     {
         if (size.get()) {
@@ -899,11 +892,11 @@ NODE(
 NODE(
     ASTExprNodeTuple,
     {
-        os << "(";
+        os << StringView("(");
         for (const auto& a : values) {
-            os << *a << ",";
+            os << *a << StringView(",");
         }
-        os << ")";
+        os << StringView(")");
     },
     {
         std::vector<ASTExprNodeP> nodes;
@@ -916,106 +909,106 @@ NODE(
 
 NODE(ASTExprNodeNamedValue, { path.printPretty(os, false); }, { return NEWNODE(ASTExprNodeNamedValue, ASTPath(path)); })
 
-NODE(ASTExprNodeField, { os << "(" << *obj << ")." << name; }, { return NEWNODE(ASTExprNodeField, obj->clone(), name); })
+NODE(ASTExprNodeField, { os << StringView("(") << *obj << StringView(").") << name; }, { return NEWNODE(ASTExprNodeField, obj->clone(), name); })
 
-NODE(ASTExprNodeIndex, { os << "(" << *obj << ")[" << *idx << "]"; }, { return NEWNODE(ASTExprNodeIndex, obj->clone(), idx->clone()); })
+NODE(ASTExprNodeIndex, { os << StringView("(") << *obj << StringView(")[") << *idx << StringView("]"); }, { return NEWNODE(ASTExprNodeIndex, obj->clone(), idx->clone()); })
 
-NODE(ASTExprNodeDeref, { os << "*(" << *value << ")"; }, { return NEWNODE(ASTExprNodeDeref, value->clone()); });
+NODE(ASTExprNodeDeref, { os << StringView("*(") << *value << StringView(")"); }, { return NEWNODE(ASTExprNodeDeref, value->clone()); });
 
-NODE(ASTExprNodeCast, { os << "(" << *value << " as " << type << ")"; }, { return NEWNODE(ASTExprNodeCast, value->clone(), type->clone()); })
-NODE(ASTExprNodeTypeAnnotation, { os << "(" << *value << ": " << type << ")"; }, { return NEWNODE(ASTExprNodeTypeAnnotation, value->clone(), type->clone()); })
+NODE(ASTExprNodeCast, { os << StringView("(") << *value << StringView(" as ") << type << StringView(")"); }, { return NEWNODE(ASTExprNodeCast, value->clone(), type->clone()); })
+NODE(ASTExprNodeTypeAnnotation, { os << StringView("(") << *value << StringView(": ") << type << StringView(")"); }, { return NEWNODE(ASTExprNodeTypeAnnotation, value->clone(), type->clone()); })
 
 NODE(
     ASTExprNodeBinOp,
     {
         if (type == RANGE_INC) {
-            os << "(";
+            os << StringView("(");
             if (left) {
-                os << *left << " ";
+                os << *left << StringView(" ");
             }
-            os << "... " << *right;
-            os << ")";
+            os << StringView("... ") << *right;
+            os << StringView(")");
             return;
         }
         if (type == RANGE) {
-            os << "(";
+            os << StringView("(");
             if (left) {
                 os << *left;
             }
-            os << "..";
+            os << StringView("..");
             if (right) {
-                os << " " << *right;
+                os << StringView(" ") << *right;
             }
-            os << ")";
+            os << StringView(")");
             return;
         }
-        os << "(" << *left << " ";
+        os << StringView("(") << *left << StringView(" ");
         switch (type) {
             case CMPEQU:
-                os << "==";
+                os << StringView("==");
                 break;
             case CMPNEQU:
-                os << "!=";
+                os << StringView("!=");
                 break;
             case CMPLT:
-                os << "<";
+                os << StringView("<");
                 break;
             case CMPLTE:
-                os << "<=";
+                os << StringView("<=");
                 break;
             case CMPGT:
-                os << ">";
+                os << StringView(">");
                 break;
             case CMPGTE:
-                os << ">=";
+                os << StringView(">=");
                 break;
             case BOOLAND:
-                os << "&&";
+                os << StringView("&&");
                 break;
             case BOOLOR:
-                os << "||";
+                os << StringView("||");
                 break;
             case BITAND:
-                os << "&";
+                os << StringView("&");
                 break;
             case BITOR:
-                os << "|";
+                os << StringView("|");
                 break;
             case BITXOR:
-                os << "^";
+                os << StringView("^");
                 break;
             case SHR:
-                os << ">>";
+                os << StringView(">>");
                 break;
             case SHL:
-                os << "<<";
+                os << StringView("<<");
                 break;
             case MULTIPLY:
-                os << "*";
+                os << StringView("*");
                 break;
             case DIVIDE:
-                os << "/";
+                os << StringView("/");
                 break;
             case MODULO:
-                os << "%";
+                os << StringView("%");
                 break;
             case ADD:
-                os << "+";
+                os << StringView("+");
                 break;
             case SUB:
-                os << "-";
+                os << StringView("-");
                 break;
             case RANGE:
-                os << "..";
+                os << StringView("..");
                 break;
             case RANGE_INC:
-                os << "...";
+                os << StringView("...");
                 break;
             case PLACE_IN:
-                os << "<-";
+                os << StringView("<-");
                 break;
         }
-        os << " " << *right << ")";
+        os << StringView(" ") << *right << StringView(")");
     },
     {
         auto rv = NEWNODE(ASTExprNodeBinOp, type, OPT_CLONE(left), OPT_CLONE(right));
@@ -1029,43 +1022,43 @@ NODE(
     {
         switch (type) {
             case NEGATE:
-                os << "-";
+                os << StringView("-");
                 break;
             case INVERT:
-                os << "!";
+                os << StringView("!");
                 break;
             case BOX:
-                os << "box ";
+                os << StringView("box ");
                 break;
             case REF:
-                os << "&";
+                os << StringView("&");
                 break;
             case REFMUT:
-                os << "&mut ";
+                os << StringView("&mut ");
                 break;
             case RawBorrow:
-                os << "&raw const ";
+                os << StringView("&raw const ");
                 break;
             case RawBorrowMut:
-                os << "&raw mut ";
+                os << StringView("&raw mut ");
                 break;
             case PinBorrow:
-                os << "&pin const ";
+                os << StringView("&pin const ");
                 break;
             case PinBorrowMut:
-                os << "&pin mut ";
+                os << StringView("&pin mut ");
                 break;
             case QMARK:
-                os << *value << "?";
+                os << *value << StringView("?");
                 return;
             case AWait:
-                os << *value << ".await";
+                os << *value << StringView(".await");
                 return;
             case AWaitNext:
-                os << *value << ".await/*next*/";
+                os << *value << StringView(".await/*next*/");
                 return;
             case USE:
-                os << *value << ".use";
+                os << *value << StringView(".use");
                 return;
         }
         os << *value;
@@ -1073,7 +1066,7 @@ NODE(
     { return NEWNODE(ASTExprNodeUniOp, type, value->clone()); }
 )
 
-NODE(ASTExprNodeMacroDefinition, { os << "/* macro definition #" << definitionId << " */"; }, { return NEWNODE(ASTExprNodeMacroDefinition, definitionId, tokenHygiene, definitionHygiene); })
+NODE(ASTExprNodeMacroDefinition, { os << StringView("/* macro definition #") << definitionId << StringView(" */"); }, { return NEWNODE(ASTExprNodeMacroDefinition, definitionId, tokenHygiene, definitionHygiene); })
 
 #define NV(type, actions)                       \
     void ASTNodeVisitorDef::visit(type& node) { \
@@ -1088,7 +1081,7 @@ NV(ASTExprNodeBlock, {
 NV(ASTExprNodeAsyncBlock, { visit(node.inner); })
 NV(ASTExprNodeGeneratorBlock, { visit(node.inner); })
 NV(ASTExprNodeTry, { visit(node.inner); })
-NV(ASTExprNodeMacro, { BUG(node.span(), "Hit unexpanded macro in expression - " << node); })
+NV(ASTExprNodeMacro, { BUG(node.span(), StringView("Hit unexpanded macro in expression - ") << node); })
 NV(ASTExprNodeAsm, {
     for (auto& v : node.output) {
         visit(v.value);
@@ -1542,4 +1535,27 @@ void ASTNodeVisitorDef::visit(ASTExprNodeP& cnode) {
 
 bool ASTNodeVisitor::isConst() const {
     return false;
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, ASTExprNodeMacro>(ZeroCopyOutput& os, const ASTExprNodeMacro& node) {
+    node.print(os);
+}
+
+template <>
+void output<ZeroCopyOutput, ASTExpr>(ZeroCopyOutput& os, ASTExpr pat) {
+    if (pat) {
+        os << pat.node();
+    } else {
+        os << StringView("/* null */");
+    }
+}
+
+template <>
+void output<ZeroCopyOutput, ASTExprNode>(ZeroCopyOutput& os, const ASTExprNode& node) {
+    BUG_ASSERT(static_cast<const void*>(&node) != nullptr);
+    node.print(os);
+    return;
+}
 }

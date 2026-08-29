@@ -112,7 +112,7 @@ namespace {
             return *hit;
         }
         auto& sb = mangleBegin(context);
-        sb << "ZRT";
+        sb << StringView("ZRT");
         Mangler(context, includeLifetimeIdentity ? LifetimeIdentityMode::All : LifetimeIdentityMode::Erased).fmtType(v);
         return *cache.insert(reinterpret_cast<uintptr_t>(v), mangleFinish(sb));
     }
@@ -125,7 +125,7 @@ void TransCreateManglingContext(WireBoard& wb, ObjPool& pool) {
 RcString TransMangle(const WireBoard& wb, const HIRSimplePath& p) {
     auto& context = *wb.mangling;
     auto& sb = mangleBegin(context);
-    sb << "ZRG";
+    sb << StringView("ZRG");
     Mangler(context).fmtSimplePath(p);
     Mangler(context).fmtPathParams({});
     return mangleFinish(sb);
@@ -134,7 +134,7 @@ RcString TransMangle(const WireBoard& wb, const HIRSimplePath& p) {
 RcString TransMangle(const WireBoard& wb, const HIRGenericPath& p) {
     auto& context = *wb.mangling;
     auto& sb = mangleBegin(context);
-    sb << "ZRG";
+    sb << StringView("ZRG");
     Mangler(context).fmtGenericPath(p);
     return mangleFinish(sb);
 }
@@ -142,7 +142,7 @@ RcString TransMangle(const WireBoard& wb, const HIRGenericPath& p) {
 RcString TransMangle(const WireBoard& wb, const HIRPath& p) {
     auto& context = *wb.mangling;
     auto& sb = mangleBegin(context);
-    sb << "ZR";
+    sb << StringView("ZR");
     Mangler(context).fmtPath(p);
     return mangleFinish(sb);
 }
@@ -150,7 +150,7 @@ RcString TransMangle(const WireBoard& wb, const HIRPath& p) {
 RcString TransMangleValue(const WireBoard& wb, const HIRGenericPath& p) {
     auto& context = *wb.mangling;
     auto& sb = mangleBegin(context);
-    sb << "ZRG";
+    sb << StringView("ZRG");
     Mangler(context, LifetimeIdentityMode::Closed).fmtGenericPath(p);
     return mangleFinish(sb);
 }
@@ -162,7 +162,7 @@ RcString TransMangleValue(const WireBoard& wb, const HIRSimplePath& p) {
 RcString TransMangleValue(const WireBoard& wb, const HIRPath& p) {
     auto& context = *wb.mangling;
     auto& sb = mangleBegin(context);
-    sb << "ZR";
+    sb << StringView("ZR");
     Mangler(context, LifetimeIdentityMode::Closed).fmtPath(p);
     return mangleFinish(sb);
 }
@@ -208,7 +208,7 @@ auto Mangler::fmtName(const RcString& s) -> void {
         auto idx = it - windowBegin;
         auto len = 1 + static_cast<unsigned>(std::ceil(std::log10(idx + 1) / std::log10(26)));
         if (len < s.size()) {
-            os << "_";
+            os << StringView("_");
             fmtBase26Int(idx);
             return;
         }
@@ -249,7 +249,7 @@ auto Mangler::fmtName(const char* const s) -> void {
             // HACK: Only treat the last one as special, previous ones are replaced by underscores
             hashPos = p;
         } else {
-            BUG(Span(), "Encounteded invalid character in symbol name while mangling: '" << *p << "' in '" << name << "'");
+            BUG(Span(), StringView("Encounteded invalid character in symbol name while mangling: '") << *p << StringView("' in '") << name << StringView("'"));
         }
     }
 
@@ -257,7 +257,7 @@ auto Mangler::fmtName(const char* const s) -> void {
         auto preHashLen = static_cast<int>(hashPos - name);
         if (hashPos == name && (isdigit(static_cast<unsigned char>(hashPos[1])) || hashPos[1] == '_')) {
             fmtBase26Int(size - 1);
-            ASSERT_BUG(Span(), hashPos[1] != '_', "Leading underscore not valid in '" << name << "'");
+            ASSERT_BUG(Span(), hashPos[1] != '_', StringView("Leading underscore not valid in '") << name << StringView("'"));
             os << '_';
             os << hashPos + 1;
         } else {
@@ -288,7 +288,7 @@ auto Mangler::fmtName(const char* const s) -> void {
 
 auto Mangler::fmtSimplePath(const HIRSimplePath& sp) -> void {
     os << sp.components().size();
-    os << "c";
+    os << StringView("c");
     this->fmtName(sp.crateName());
     for (const auto& c : sp.components()) {
         this->fmtName(c);
@@ -298,10 +298,10 @@ auto Mangler::fmtSimplePath(const HIRSimplePath& sp) -> void {
 auto Mangler::fmtPathParams(const HIRPathParams& pp) -> void {
     os << pp.types.size();
     if (pp.values.size() > 0) {
-        os << "v";
+        os << StringView("v");
         os << pp.values.size();
     }
-    os << "g";
+    os << StringView("g");
     for (const auto& ty : pp.types) {
         fmtType(ty);
     }
@@ -313,26 +313,26 @@ auto Mangler::fmtPathParams(const HIRPathParams& pp) -> void {
 auto Mangler::fmtConstGeneric(const HIRConstGeneric& value) -> void {
     const auto* evaluated = value.opt_Evaluated();
     if (!evaluated) {
-        BUG(Span(), "Non-encodable const generic " << value);
+        BUG(Span(), StringView("Non-encodable const generic ") << value);
     }
     const auto& literal = **evaluated;
-    os << "V" << literal.bytes.size() << "_";
+    os << StringView("V") << literal.bytes.size() << StringView("_");
     for (const auto byte : literal.bytes) {
-        os << "0123456789abcdef"[byte >> 4];
-        os << "0123456789abcdef"[byte & 0xF];
+        os << StringView("0123456789abcdef")[byte >> 4];
+        os << StringView("0123456789abcdef")[byte & 0xF];
     }
     if (!literal.relocations.empty()) {
-        os << "_" << literal.relocations.size() << "R";
+        os << StringView("_") << literal.relocations.size() << StringView("R");
         for (const auto& relocation : literal.relocations) {
-            os << relocation.ofs << "o" << relocation.len;
+            os << relocation.ofs << StringView("o") << relocation.len;
             if (relocation.p) {
-                os << "p";
+                os << StringView("p");
                 fmtPath(*relocation.p);
             } else {
-                os << "b" << relocation.bytes.size() << "_";
+                os << StringView("b") << relocation.bytes.size() << StringView("_");
                 for (const auto byte : relocation.bytes) {
-                    os << "0123456789abcdef"[static_cast<unsigned char>(byte) >> 4];
-                    os << "0123456789abcdef"[static_cast<unsigned char>(byte) & 0xF];
+                    os << StringView("0123456789abcdef")[static_cast<unsigned char>(byte) >> 4];
+                    os << StringView("0123456789abcdef")[static_cast<unsigned char>(byte) & 0xF];
                 }
             }
         }
@@ -348,13 +348,13 @@ auto Mangler::fmtPath(const HIRPath& p) -> void {
     switch (p.data.tag()) {
         case HIRPathData::TAG_Generic: {
             auto& e = p.data.as_Generic();
-            os << "G";
+            os << StringView("G");
             this->fmtGenericPath(e);
             break;
         }
         case HIRPathData::TAG_UfcsInherent: {
             auto& e = p.data.as_UfcsInherent();
-            os << "I";
+            os << StringView("I");
             this->fmtType(e.type);
             this->fmtName(e.item);
             this->fmtPathParams(e.params);
@@ -362,7 +362,7 @@ auto Mangler::fmtPath(const HIRPath& p) -> void {
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& e = p.data.as_UfcsKnown();
-            os << "Q";
+            os << StringView("Q");
             this->fmtType(e.type);
             this->fmtGenericPath(e.trait);
             this->fmtName(e.item);
@@ -370,7 +370,7 @@ auto Mangler::fmtPath(const HIRPath& p) -> void {
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            BUG(Span(), "Non-encodable path " << p);
+            BUG(Span(), StringView("Non-encodable path ") << p);
             break;
         }
     }
@@ -382,10 +382,10 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
         case HIRTypeData::TAG_Generic:
         case HIRTypeData::TAG_ErasedType:
         case HIRTypeData::TAG_NodeType:
-            BUG(Span(), "Non-encodable type " << ty);
+            BUG(Span(), StringView("Non-encodable type ") << ty);
         case HIRTypeData::TAG_Tuple: {
             auto& e = (*ty).as_Tuple();
-            os << "T" << e.size();
+            os << StringView("T") << e.size();
             for (const auto& sty : e) {
                 this->fmtType(sty);
             }
@@ -393,13 +393,13 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
         }
         case HIRTypeData::TAG_Slice: {
             auto& e = (*ty).as_Slice();
-            os << "S";
+            os << StringView("S");
             this->fmtType(e.inner);
             break;
         }
         case HIRTypeData::TAG_Array: {
             auto& e = (*ty).as_Array();
-            os << "A" << e.size.as_Known();
+            os << StringView("A") << e.size.as_Known();
             this->fmtType(e.inner);
             break;
         }
@@ -410,7 +410,7 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
         }
         case HIRTypeData::TAG_TraitObject: {
             auto& e = (*ty).as_TraitObject();
-            os << "D";
+            os << StringView("D");
             this->fmtGenericPath(e.trait.path);
             os << e.trait.typeBounds.size();
             // HACK: Assume all TraitObject types have the same aty set (std::map is deterministic)
@@ -422,24 +422,24 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
                 this->fmtGenericPath(p);
             }
             if (includeLifetimeIdentity(e.lifetimeIdentityHasFree) && e.lifetimeIdentity != "") {
-                os << "l";
+                os << StringView("l");
                 this->fmtName(e.lifetimeIdentity);
             }
             break;
         }
         case HIRTypeData::TAG_NamedFunction: {
             auto& e = (*ty).as_NamedFunction();
-            os << "f";
+            os << StringView("f");
             this->fmtPath(e.path);
             break;
         }
         case HIRTypeData::TAG_Function: {
             auto& e = (*ty).as_Function();
-            os << "F";
+            os << StringView("F");
             os << (e.isUnsafe ? "u" : "");
             os << (e.trackCaller ? "c" : "");
             if (e.abi != ABI_RUST) {
-                os << "e";
+                os << StringView("e");
                 this->fmtName(e.abi.c_str());
             }
             os << e.argTypes.size();
@@ -448,23 +448,23 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
             }
             this->fmtType(e.rettype);
             if (includeLifetimeIdentity(e.lifetimeIdentityHasFree) && e.lifetimeIdentity != "") {
-                os << "l";
+                os << StringView("l");
                 this->fmtName(e.lifetimeIdentity);
             }
             break;
         }
         case HIRTypeData::TAG_Borrow: {
             auto& e = (*ty).as_Borrow();
-            os << "B";
+            os << StringView("B");
             switch (e.type) {
                 case HIRBorrowType::Shared:
-                    os << "s";
+                    os << StringView("s");
                     break;
                 case HIRBorrowType::Unique:
-                    os << "u";
+                    os << StringView("u");
                     break;
                 case HIRBorrowType::Owned:
-                    os << "o";
+                    os << StringView("o");
                     break;
             }
             this->fmtType(e.inner);
@@ -472,16 +472,16 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
         }
         case HIRTypeData::TAG_Pointer: {
             auto& e = (*ty).as_Pointer();
-            os << "P";
+            os << StringView("P");
             switch (e.type) {
                 case HIRBorrowType::Shared:
-                    os << "s";
+                    os << StringView("s");
                     break;
                 case HIRBorrowType::Unique:
-                    os << "u";
+                    os << StringView("u");
                     break;
                 case HIRBorrowType::Owned:
-                    os << "o";
+                    os << StringView("o");
                     break;
             }
             this->fmtType(e.inner);
@@ -556,9 +556,9 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
         }
         case HIRTypeData::TAG_Pattern: {
             auto& e = (*ty).as_Pattern();
-            os << "Q";
+            os << StringView("Q");
             this->fmtType(e.inner);
-            os << e.pattern.alternatives.size() << "r";
+            os << e.pattern.alternatives.size() << StringView("r");
             for (const auto& range : e.pattern.alternatives) {
                 os << (range.hasStart ? 's' : 'n');
                 if (range.hasStart) {

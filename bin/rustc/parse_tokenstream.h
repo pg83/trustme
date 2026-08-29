@@ -6,7 +6,6 @@
 #include "parse_token.h"
 
 #include <vector>
-#include <iostream>
 #include <algorithm>
 
 class ASTModule;
@@ -41,7 +40,6 @@ public:
 
     ASTModule& getCurrentMod();
 
-    friend std::ostream& operator<<(std::ostream& os, const ParseState& ps);
 };
 
 class TokenStream {

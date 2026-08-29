@@ -56,5 +56,4 @@ public:
 
     bool operator==(const HIRSimplePath& sp) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const HIRItemPath& x);
 };

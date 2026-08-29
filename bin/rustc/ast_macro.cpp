@@ -1,4 +1,7 @@
 #include "ast_macro.h"
+#include "output.h"
+
+using namespace stl;
 
 ASTMacroInvocation::ASTMacroInvocation() {
 }
@@ -17,7 +20,9 @@ void ASTMacroInvocation::clear() {
     input = TokenTree();
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTMacroInvocation& x) {
-    os << x.macroPath << "! " << x.ident << x.input;
-    return os;
+namespace stl {
+template <>
+void output<ZeroCopyOutput, ASTMacroInvocation>(ZeroCopyOutput& os, const ASTMacroInvocation& x) {
+    os << x.path() << StringView("! ") << x.inputIdent() << x.inputTt();
+}
 }

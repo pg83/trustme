@@ -15,7 +15,6 @@ struct WireBoard;
 class SimplePatEnt;
 class MacroExpansionEnt;
 
-std::ostream& operator<<(std::ostream& os, const MacroExpansionEnt& x);
 void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansionEnt>& contents);
 
 enum : unsigned int {
@@ -72,8 +71,6 @@ struct MacroPatEnt {
 
     MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, std::vector<MacroPatEnt> ents);
 
-    friend std::ostream& operator<<(std::ostream& os, const MacroPatEnt& x);
-    friend std::ostream& operator<<(std::ostream& os, const MacroPatEnt::Type& x);
 };
 
 struct SimplePatIfCheck {
@@ -92,12 +89,9 @@ struct SimplePatIfCheck {
         return this->ty == x.ty && this->tok == x.tok;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const SimplePatIfCheck& x);
 };
 
 #include "macro_rules_macro_rules_tu.h"
-
-std::ostream& operator<<(std::ostream& os, const SimplePatEnt& x);
 
 struct MacroRulesArm {
     std::vector<RcString> paramNames;

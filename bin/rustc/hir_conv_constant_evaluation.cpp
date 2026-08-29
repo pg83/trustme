@@ -1,4 +1,5 @@
 #include "hir_conv_constant_evaluation.h"
+#include "output.h"
 
 #include "floats.h"
 #include "int128.h"
@@ -245,8 +246,8 @@ namespace {
     };
 
     struct IValue {
-        virtual void fmtIdent(std::ostream& os) const = 0;
-        virtual void fmt(std::ostream& os, size_t ofs, size_t len) const = 0;
+        virtual void fmtIdent(ZeroCopyOutput& os) const = 0;
+        virtual void fmt(ZeroCopyOutput& os, size_t ofs, size_t len) const = 0;
 
         virtual size_t size() const = 0;
         virtual const u8* getBytes(size_t ofs, size_t len, bool checkMask) const = 0;
@@ -300,11 +301,11 @@ namespace {
 
         MIREvalStaticRef* asStaticref() const;
 
-        friend std::ostream& operator<<(std::ostream& os, const MIREvalRelocPtr& ptr) {
+        friend ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const MIREvalRelocPtr& ptr) {
             if (ptr.ptr) {
                 ptr.asValuePtr()->fmtIdent(os);
             } else {
-                os << "NULL";
+                os << StringView("NULL");
             }
             return os;
         }
@@ -322,9 +323,9 @@ namespace {
 
         MIREvalConstant(const void* data, size_t len);
 
-        void fmtIdent(std::ostream& os) const override;
+        void fmtIdent(ZeroCopyOutput& os) const override;
 
-        void fmt(std::ostream& os, size_t ofs, size_t len) const override;
+        void fmt(ZeroCopyOutput& os, size_t ofs, size_t len) const override;
 
         size_t size() const override;
 
@@ -355,9 +356,9 @@ namespace {
 
         MIREvalStaticRef(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending);
 
-        void fmtIdent(std::ostream& os) const override;
+        void fmtIdent(ZeroCopyOutput& os) const override;
 
-        void fmt(std::ostream& os, size_t ofs, size_t len) const override;
+        void fmt(ZeroCopyOutput& os, size_t ofs, size_t len) const override;
 
         size_t size() const override;
 
@@ -437,8 +438,6 @@ namespace {
 
         std::pair<u64, MIREvalRelocPtr> readPtr(const MIRTypeResolve& state) const;
 
-        friend std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr);
-
         void ensureLive(const MIRTypeResolve& state) const;
     };
 
@@ -447,7 +446,7 @@ namespace {
 
         explicit MIREvalPathCallback(const HIRItemPath& path);
 
-        void write(std::ostream& os) const override;
+        void write(ZeroCopyOutput& os) const override;
     };
 
     std::optional<U128> enumTagUnsignedMax(HIRCoreType ty) {
@@ -470,11 +469,11 @@ namespace {
         for (const auto& var : variants) {
             const auto value = getValue(var);
             if (max && value > *max) {
-                ERROR(sp, E0000, "discriminant value `" << value << "` for variant `" << var.name << "` is not in the range of the enum's tag type");
+                ERROR(sp, E0000, StringView("discriminant value `") << value << StringView("` for variant `") << var.name << StringView("` is not in the range of the enum's tag type"));
             }
             auto inserted = seen.insert(std::make_pair(value, var.name));
             if (!inserted.second) {
-                ERROR(sp, E0000, "discriminant value `" << value << "` assigned more than once - `" << inserted.first->second << "` and `" << var.name << "`");
+                ERROR(sp, E0000, StringView("discriminant value `") << value << StringView("` assigned more than once - `") << inserted.first->second << StringView("` and `") << var.name << StringView("`"));
             }
         }
     }
@@ -594,20 +593,20 @@ namespace {
     }
 
     void translateConstExprBody(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRTypeData* type, const HIRConstGenericUnevaluated& value) {
-        ASSERT_BUG(sp, type, "translateConstExprBody without an expected type");
+        ASSERT_BUG(sp, type, StringView("translateConstExprBody without an expected type"));
         const auto& expr = *value.expr;
-        ASSERT_BUG(sp, expr.state, "Const-generic expression has no state");
+        ASSERT_BUG(sp, expr.state, StringView("Const-generic expression has no state"));
         const auto& state = *expr.state;
-        auto name = FMT("const_" << &expr << "#");
+        auto name = FMT(StringView("const_") << static_cast<const void*>(&expr) << StringView("#"));
         HIRTypeRef exp = type;
         crate.getOrGenMir(wb, HIRItemPath(state.modPath, name.c_str()), expr, exp);
     }
 
     EncodedLiteral evaluateConstgeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRTypeData* type, const HIRConstGenericUnevaluated& value) {
         const auto& expr = *value.expr;
-        ASSERT_BUG(sp, expr.state, "Const-generic expression has no state");
+        ASSERT_BUG(sp, expr.state, StringView("Const-generic expression has no state"));
         const auto& state = *expr.state;
-        auto name = FMT("const_" << &expr << "#");
+        auto name = FMT(StringView("const_") << static_cast<const void*>(&expr) << StringView("#"));
 
         NewvalStateNop nvs{sp};
         auto eval = HIREvaluator{sp, wb, nvs};
@@ -626,12 +625,12 @@ namespace {
         Value
     };
 
-    void putbHex(std::ostream& os, u8 v) {
+    void putbHex(ZeroCopyOutput& os, u8 v) {
         char tmp[3];
         tmp[0] = "0123456789ABCDEF"[v >> 4];
         tmp[1] = "0123456789ABCDEF"[v & 0xF];
         tmp[2] = '\0';
-        os << tmp;
+        os << StringView(tmp);
     }
 
     U128 floatToUintSaturating(double v, unsigned bits) {
@@ -669,16 +668,7 @@ namespace {
         return S128(magnitude > maxMagnitude ? maxMagnitude : magnitude);
     }
 
-    std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr) {
-        if (!vr.storage) {
-            os << "ValueRef(null)";
-        } else {
-            os << "ValueRef({" << vr.ofs << "+" << vr.len << "}";
-            vr.storage.asValue().fmt(os, vr.ofs, vr.len);
-            os << ")";
-        }
-        return os;
-    }
+
 
     void ConvertHIRConstantEvaluateStatic(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRStatic& e) {
         Expander exp{wb};
@@ -745,9 +735,9 @@ struct HIREvaluator::MIREvalAllocation final: public IValue {
     MIREvalAllocation(const MIREvalAllocation&) = delete;
     MIREvalAllocation& operator=(const MIREvalAllocation&) = delete;
 
-    void fmtIdent(std::ostream& os) const override;
+    void fmtIdent(ZeroCopyOutput& os) const override;
 
-    void fmt(std::ostream& os, size_t ofs, size_t len) const override;
+    void fmt(ZeroCopyOutput& os, size_t ofs, size_t len) const override;
 
     size_t size() const override;
 
@@ -854,7 +844,7 @@ struct HIREvaluator::MIREvalCallStackEntry {
     size_t sizeOfOrBug(const HIRTypeData* ty) const;
 };
 
-static std::ostream& operator<<(std::ostream& os, const MIREvalAllocationPtr& ap) {
+static ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const MIREvalAllocationPtr& ap) {
     os << MIREvalValueRef(ap);
     return os;
 }
@@ -868,14 +858,14 @@ static size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const
         if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
             const auto* array = (*ty)->opt_Array();
             if (!array || !array->size.is_Known() || array->size.as_Known() == 0) {
-                BUG(sp, "Layout not computable during const evaluation - " << "array element in " << *ty);
+                BUG(sp, StringView("Layout not computable during const evaluation - ") << StringView("array element in ") << *ty);
             }
             ty = &array->inner;
             continue;
         }
         r = TargetGetTypeRepr(sp, resolve, *ty);
         if (!r) {
-            BUG(sp, "Layout not computable during const evaluation - " << "repr of " << *ty);
+            BUG(sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << *ty);
         }
         BUG_ASSERT(f < r->fields.size());
         ofs += r->fields[f].offset;
@@ -904,7 +894,7 @@ static EntPtr getEntFullpath(const Span& sp, const ::StaticTraitResolve& resolve
             return EntPtr();
         }
         case TypeckValuePtr::TAG_NotYetKnown: {
-            BUG(sp, "getValue could not commit to an impl for " << path);
+            BUG(sp, StringView("getValue could not commit to an impl for ") << path);
         }
         case TypeckValuePtr::TAG_Constant: {
             auto& e = v.as_Constant();
@@ -923,7 +913,7 @@ static EntPtr getEntFullpath(const Span& sp, const ::StaticTraitResolve& resolve
             return EntPtr::Data_Enum{e.e, e.v};
         }
         case TypeckValuePtr::TAG_EnumValue: {
-            TODO(sp, "Handle EnumValue - " << path);
+            TODO(sp, StringView("Handle EnumValue - ") << path);
             break;
         }
         case TypeckValuePtr::TAG_StructConstructor: {
@@ -931,7 +921,7 @@ static EntPtr getEntFullpath(const Span& sp, const ::StaticTraitResolve& resolve
             return e.s;
         }
         case TypeckValuePtr::TAG_StructConstant: {
-            TODO(sp, "Handle StructConstant - " << path);
+            TODO(sp, StringView("Handle StructConstant - ") << path);
             break;
         }
     }
@@ -977,11 +967,11 @@ static bool samePointerProvenance(const MIREvalRelocPtr& left, const MIREvalRelo
 static MIREvalValueRef pointerBytes(MIREvalCallStackEntry& localState, std::pair<u64, MIREvalRelocPtr> pointer, size_t length, const char* intrinsic) {
     const auto& state = localState.state;
     resolveStaticPointer(localState, pointer);
-    MIR_ASSERT(state, pointer.second, "`" << intrinsic << "` cannot access an absolute pointer");
-    MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, "Invalid pointer passed to `" << intrinsic << "`");
+    MIR_ASSERT(state, pointer.second, StringView("`") << intrinsic << StringView("` cannot access an absolute pointer"));
+    MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, StringView("Invalid pointer passed to `") << intrinsic << StringView("`"));
     const u64 offset = pointer.first - EncodedLiteral::PTR_BASE;
-    MIR_ASSERT(state, offset <= pointer.second.asValue().size(), "Pointer passed to `" << intrinsic << "` is out of bounds");
-    MIR_ASSERT(state, length <= pointer.second.asValue().size() - offset, "Memory range passed to `" << intrinsic << "` is out of bounds");
+    MIR_ASSERT(state, offset <= pointer.second.asValue().size(), StringView("Pointer passed to `") << intrinsic << StringView("` is out of bounds"));
+    MIR_ASSERT(state, length <= pointer.second.asValue().size() - offset, StringView("Memory range passed to `") << intrinsic << StringView("` is out of bounds"));
     return MIREvalValueRef(pointer.second, offset).slice(0, length);
 }
 
@@ -1007,7 +997,7 @@ static u8 pointerGuaranteedCmp(const std::pair<u64, MIREvalRelocPtr>& left, cons
 static std::pair<MIREvalValueRef, MIREvalValueRef> getTupleTBool(const MIREvalCallStackEntry& localState, MIREvalValueRef& src, const HIRTypeData* t) {
     auto tupleT = localState.rootResolve.crate.types.tuple({t, localState.rootResolve.crate.types.primitive(HIRCoreType::Bool)});
     auto* repr = TargetGetTypeRepr(localState.state.sp, localState.rootResolve, tupleT);
-    MIR_ASSERT(localState.state, repr, "No repr for " << tupleT);
+    MIR_ASSERT(localState.state, repr, StringView("No repr for ") << tupleT);
     auto s = localState.sizeOfOrBug(t);
     return std::make_pair(src.slice(repr->fields[0].offset, s), src.slice(repr->fields[1].offset, 1));
 }
@@ -1025,7 +1015,7 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
         auto r = tiR.ty == TypeInfo::Unsigned ? localState.readParamUint(tiR.bits, valR) : localState.readParamSint(tiR.bits, valR).getInner();
         auto amt = r.truncateU64();
         if (amt > ti.bits) {
-            DEBUG("Shift out of range - " << r << " > " << ti.bits);
+            DEBUG(StringView("Shift out of range - ") << r << StringView(" > ") << ti.bits);
             didOverflow = true;
             amt = 0;
         }
@@ -1040,7 +1030,7 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
                         dst.writeUint(state, ti.bits, ti.mask(l >> amt));
                         break;
                     default:
-                        MIR_BUG(state, "This block should only be active for SHL/SHR");
+                        MIR_BUG(state, StringView("This block should only be active for SHL/SHR"));
                 }
                 break;
             }
@@ -1054,18 +1044,18 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
                         dst.writeUint(state, ti.bits, ti.mask(l >> amt));
                         break;
                     default:
-                        MIR_BUG(state, "This block should only be active for SHL/SHR");
+                        MIR_BUG(state, StringView("This block should only be active for SHL/SHR"));
                 }
                 break;
             }
             default:
-                MIR_BUG(state, "Invalid use of BIT_SHL/BIT_SHR on " << ty);
+                MIR_BUG(state, StringView("Invalid use of BIT_SHL/BIT_SHR on ") << ty);
         }
         return didOverflow;
     }
     {
         HIRTypeRef tmpR;
-        MIR_ASSERT(state, ty == localState.state.getParamType(tmpR, valR), "BinOp with mismatched types");
+        MIR_ASSERT(state, ty == localState.state.getParamType(tmpR, valR), StringView("BinOp with mismatched types"));
     }
 
     switch (ti.ty) {
@@ -1092,7 +1082,7 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
                         dst.writeUint(state, ti.bits, U128(0, 0x7fff800000000000));
                         break;
                     default:
-                        MIR_BUG(state, "Invalid float width " << ti.bits);
+                        MIR_BUG(state, StringView("Invalid float width ") << ti.bits);
                 }
             };
             switch (op) {
@@ -1115,15 +1105,15 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
                 case MIRBinOp::SUB_OV:
                 case MIRBinOp::MUL_OV:
                 case MIRBinOp::DIV_OV:
-                    MIR_TODO(state, "do_arith float unimplemented - val = " << l << " , " << r);
+                    MIR_TODO(state, StringView("do_arith float unimplemented - val = ") << l << StringView(" , ") << r);
 
                 case MIRBinOp::BIT_OR:
                 case MIRBinOp::BIT_AND:
                 case MIRBinOp::BIT_XOR:
-                    MIR_BUG(state, "do_arith float with bitwise - val = " << l << " , " << r);
+                    MIR_BUG(state, StringView("do_arith float with bitwise - val = ") << l << StringView(" , ") << r);
                 case MIRBinOp::BIT_SHL:
                 case MIRBinOp::BIT_SHR:
-                    MIR_BUG(state, "Bitshifts should be handled in caller");
+                    MIR_BUG(state, StringView("Bitshifts should be handled in caller"));
                 case MIRBinOp::EQ:
                     dst.writeByte(state, l == r);
                     break;
@@ -1195,7 +1185,7 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
                 case MIRBinOp::SUB_OV:
                 case MIRBinOp::MUL_OV:
                 case MIRBinOp::DIV_OV:
-                    MIR_TODO(state, "do_arith unsigned - val = " << l << " , " << r);
+                    MIR_TODO(state, StringView("do_arith unsigned - val = ") << l << StringView(" , ") << r);
 
                 case MIRBinOp::BIT_OR:
                     dst.writeUint(state, ti.bits, l | r);
@@ -1208,7 +1198,7 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
                     break;
                 case MIRBinOp::BIT_SHL:
                 case MIRBinOp::BIT_SHR:
-                    MIR_BUG(state, "Bitshifts should be handled in caller");
+                    MIR_BUG(state, StringView("Bitshifts should be handled in caller"));
 
                 case MIRBinOp::EQ:
                     dst.writeByte(state, l == r);
@@ -1233,10 +1223,10 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
         }
         case TypeInfo::Signed: {
             auto l = localState.readParamSint(ti.bits, valL);
-            DEBUG(l << " from " << valL);
+            DEBUG(l << StringView(" from ") << valL);
             auto r = localState.readParamSint(ti.bits, valR);
-            DEBUG(r << " from " << valR);
-            DEBUG(l << " " << int(op) << " " << r);
+            DEBUG(r << StringView(" from ") << valR);
+            DEBUG(l << StringView(" ") << int(op) << StringView(" ") << r);
             const auto signBit = U128(1) << (ti.bits - 1);
             const auto minValue = signBit;
             const auto maxValue = signBit - 1u;
@@ -1294,7 +1284,7 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
                 case MIRBinOp::SUB_OV:
                 case MIRBinOp::MUL_OV:
                 case MIRBinOp::DIV_OV:
-                    MIR_TODO(state, "do_arith signed - val = " << l << " , " << r);
+                    MIR_TODO(state, StringView("do_arith signed - val = ") << l << StringView(" , ") << r);
 
                 case MIRBinOp::BIT_OR:
                     dst.writeUint(state, ti.bits, (l | r).getInner());
@@ -1307,7 +1297,7 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
                     break;
                 case MIRBinOp::BIT_SHL:
                 case MIRBinOp::BIT_SHR:
-                    MIR_BUG(state, "Bitshifts should be handled in caller");
+                    MIR_BUG(state, StringView("Bitshifts should be handled in caller"));
 
                 case MIRBinOp::EQ:
                     dst.writeByte(state, l == r);
@@ -1343,7 +1333,7 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
                         auto ptr = vr.readPtr(localState.state);
                         this->len = vr.slice(TargetGetPointerBits() / 8).readUsize(localState.state);
                         this->data = ptr.second.asValue().getBytes(ptr.first - EncodedLiteral::PTR_BASE, this->len, true);
-                        MIR_ASSERT(localState.state, this->data, "Invalid pointer " << p << " : " << vr << " = " << ptr.second << " @ " << ptr.first << "+" << this->len);
+                        MIR_ASSERT(localState.state, this->data, StringView("Invalid pointer ") << p << StringView(" : ") << vr << StringView(" = ") << ptr.second << StringView(" @ ") << ptr.first << StringView("+") << this->len);
                         this->reloc = std::move(ptr.second);
                     }
                 };
@@ -1376,11 +1366,11 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
                         dst.writeByte(state, cmp <= 0);
                         break;
                     default:
-                        MIR_BUG(state, "BinOp " << int(op) << " on " << ty << " - Byte slice or &str");
+                        MIR_BUG(state, StringView("BinOp ") << int(op) << StringView(" on ") << ty << StringView(" - Byte slice or &str"));
                 }
                 break;
             } else {
-                MIR_BUG(state, "BinOp on " << ty);
+                MIR_BUG(state, StringView("BinOp on ") << ty);
             }
             break;
         }
@@ -1391,28 +1381,28 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
 static void writeCtfeUnsizeMetadata(MIREvalCallStackEntry& localState, MIREvalValueRef dst, const HIRTypeData* dynamicTypeD, const HIRTypeData* dynamicTypeS) {
     const auto& state = localState.state;
     while (const auto* pathD = dynamicTypeD->opt_Path()) {
-        MIR_ASSERT(state, pathD->binding.is_Struct(), "Pointer unsize to " << dynamicTypeD);
+        MIR_ASSERT(state, pathD->binding.is_Struct(), StringView("Pointer unsize to ") << dynamicTypeD);
         const auto* pathS = dynamicTypeS->opt_Path();
-        MIR_ASSERT(state, pathS && pathS->binding.is_Struct() && pathS->binding.as_Struct() == pathD->binding.as_Struct(), "Pointer unsize from " << dynamicTypeS << " to " << dynamicTypeD);
+        MIR_ASSERT(state, pathS && pathS->binding.is_Struct() && pathS->binding.as_Struct() == pathD->binding.as_Struct(), StringView("Pointer unsize from ") << dynamicTypeS << StringView(" to ") << dynamicTypeD);
         const auto& markings = pathD->binding.as_Struct()->structMarkings;
-        MIR_ASSERT(state, markings.coerceUnsized != HIRStructMarkings::Coerce::None, "Pointer unsize through non-CoerceUnsized type " << dynamicTypeD);
+        MIR_ASSERT(state, markings.coerceUnsized != HIRStructMarkings::Coerce::None, StringView("Pointer unsize through non-CoerceUnsized type ") << dynamicTypeD);
         dynamicTypeD = pathD->path.data.as_Generic().params.types.at(markings.unsizedParam);
         dynamicTypeS = pathS->path.data.as_Generic().params.types.at(markings.unsizedParam);
     }
 
     const auto ptrSize = TargetGetPointerBits() / 8;
     if (const auto* traitObject = dynamicTypeD->opt_TraitObject()) {
-        MIR_ASSERT(state, !dynamicTypeS->is_TraitObject(), "Trait-object pointer upcast must provide explicit metadata");
+        MIR_ASSERT(state, !dynamicTypeS->is_TraitObject(), StringView("Trait-object pointer upcast must provide explicit metadata"));
         auto vtablePath = HIRPath(dynamicTypeS, traitObject->trait.path.clone(), localState.rootResolve.board().ctfe->vtableName());
         auto vtable = MIREvalStaticRefPtr::allocate(localState.valuePool, std::move(vtablePath), nullptr, 0);
         dst.slice(ptrSize).writePtr(state, EncodedLiteral::PTR_BASE, std::move(vtable));
     } else if (dynamicTypeD->is_Slice()) {
         const auto* array = dynamicTypeS->opt_Array();
-        MIR_ASSERT(state, array && array->size.is_Known(), "Pointer unsize to slice from " << dynamicTypeS);
+        MIR_ASSERT(state, array && array->size.is_Known(), StringView("Pointer unsize to slice from ") << dynamicTypeS);
         dst.slice(ptrSize).writeUint(state, TargetGetPointerBits(), array->size.as_Known());
     } else {
         const auto metadataType = localState.resolve.metadataType(state.sp, dynamicTypeD);
-        MIR_ASSERT(state, metadataType == MetadataType::None || metadataType == MetadataType::Zero, "Unhandled pointer metadata " << metadataType << " for " << dynamicTypeD);
+        MIR_ASSERT(state, metadataType == MetadataType::None || metadataType == MetadataType::Zero, StringView("Unhandled pointer metadata ") << metadataType << StringView(" for ") << dynamicTypeD);
     }
 }
 
@@ -1421,22 +1411,22 @@ static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallS
     const auto& state = localState.state;
     auto* enmRepr = TargetGetTypeRepr(state.sp, resolve, ty);
     if (!enmRepr) {
-        BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
+        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
     }
     if (valueCount > 0) {
-        MIR_ASSERT(state, index < enmRepr->fields.size(), "Enum representation has no variant " << index << " for " << ty);
+        MIR_ASSERT(state, index < enmRepr->fields.size(), StringView("Enum representation has no variant ") << index << StringView(" for ") << ty);
         const auto ofs = enmRepr->fields[index].offset;
         const auto& innerType = enmRepr->fields[index].ty;
         auto* innerRepr = TargetGetTypeRepr(state.sp, resolve, innerType);
         if (!innerRepr) {
-            BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << innerType);
+            BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << innerType);
         }
-        MIR_ASSERT(state, valueCount <= innerRepr->fields.size(), "Enum variant " << index << " has " << innerRepr->fields.size() << " fields, got " << valueCount);
+        MIR_ASSERT(state, valueCount <= innerRepr->fields.size(), StringView("Enum variant ") << index << StringView(" has ") << innerRepr->fields.size() << StringView(" fields, got ") << valueCount);
         for (size_t i = 0; i < valueCount; i++) {
             const size_t size = localState.sizeOfOrBug(innerRepr->fields[i].ty);
             auto fieldDst = dst.slice(ofs + innerRepr->fields[i].offset, size);
             writeField(fieldDst, i);
-            DEBUG("@" << (ofs + innerRepr->fields[i].offset) << " = " << fieldDst);
+            DEBUG(StringView("@") << (ofs + innerRepr->fields[i].offset) << StringView(" = ") << fieldDst);
         }
     }
 
@@ -1456,7 +1446,7 @@ static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallS
                 if (variant.field.size % 8 > 0) {
                     dst.slice(offset, variant.field.size % 8).writeUint(state, (variant.field.size % 8) * 8, 0);
                 }
-                DEBUG("@" << offset << " = " << dst.slice(savedOffset, variant.field.size) << " NonZero");
+                DEBUG(StringView("@") << offset << StringView(" = ") << dst.slice(savedOffset, variant.field.size) << StringView(" NonZero"));
             }
             break;
         }
@@ -1464,7 +1454,7 @@ static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallS
             auto& variant = enmRepr->variants.as_Linear();
             if (!variant.isNiche(index)) {
                 const auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
-                MIR_ASSERT(state, variant.field.size <= 64 / 8, "");
+                MIR_ASSERT(state, variant.field.size <= 64 / 8, StringView(""));
                 dst.slice(offset, variant.field.size).writeUint(state, variant.field.size * 8, variant.tagValue(index));
             }
             break;
@@ -1473,7 +1463,7 @@ static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallS
             auto& variant = enmRepr->variants.as_Values();
             const auto& field = enmRepr->fields[variant.field.index];
             const auto typeInfo = TypeInfo::forType(field.ty);
-            MIR_ASSERT(state, typeInfo.ty == TypeInfo::Signed || typeInfo.ty == TypeInfo::Unsigned, "EnumVariant: Values not integer - " << field.ty);
+            MIR_ASSERT(state, typeInfo.ty == TypeInfo::Signed || typeInfo.ty == TypeInfo::Unsigned, StringView("EnumVariant: Values not integer - ") << field.ty);
             auto tagDst = dst.slice(field.offset, (typeInfo.bits + 7) / 8);
             if (typeInfo.ty == TypeInfo::Signed) {
                 tagDst.writeSint(state, typeInfo.bits, S128(variant.values.at(index)));
@@ -1498,7 +1488,7 @@ MIREvalConstantPtr MIREvalConstantPtr::allocate(ObjPool* pool, const void* data,
 MIREvalAllocationPtr MIREvalAllocationPtr::allocate(ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty) {
     size_t len;
     if (!TargetGetSizeOf(Span(), resolve, ty, len)) {
-        BUG(Span(), "Layout not computable during const evaluation - " << "sizeof " << ty);
+        BUG(Span(), StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
     }
     auto* data = static_cast<u8*>(pool->allocate(len + ((len + 7) / 8)));
     MIREvalAllocationPtr rv;
@@ -1612,13 +1602,13 @@ MIREvalAllocationPtr HIREvaluator::runUntilStackEmpty() {
                 state.setCurStmt(nextBlock, 0);
         }
     }
-    ERROR(this->rootSpan, E0000, "Constant evaluation ran for too long - " << numStmtsRun << " statements, " << idx << " blocks");
+    ERROR(this->rootSpan, E0000, StringView("Constant evaluation ran for too long - ") << numStmtsRun << StringView(" statements, ") << idx << StringView(" blocks"));
 }
 
 void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStatement& stmt) {
     const auto& state = localState.state;
 
-    DEBUG("F" << localState.frameIndex << " " << state << stmt);
+    DEBUG(StringView("F") << localState.frameIndex << StringView(" ") << state << stmt);
     switch (stmt.tag()) {
         case MIRStatement::TAG_Assign: {
             break;
@@ -1628,29 +1618,29 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         }
         case MIRStatement::TAG_SetDropFlag: {
             auto& se = stmt.as_SetDropFlag();
-            MIR_ASSERT(state, se.idx < localState.dropFlags.size(), "Drop flag " << se.idx << " out of range");
+            MIR_ASSERT(state, se.idx < localState.dropFlags.size(), StringView("Drop flag ") << se.idx << StringView(" out of range"));
             if (se.other == UINT_MAX) {
                 localState.dropFlags[se.idx] = se.newVal;
             } else {
-                MIR_ASSERT(state, se.other < localState.dropFlags.size(), "Drop flag " << se.other << " out of range");
+                MIR_ASSERT(state, se.other < localState.dropFlags.size(), StringView("Drop flag ") << se.other << StringView(" out of range"));
                 localState.dropFlags[se.idx] = se.newVal != localState.dropFlags[se.other];
             }
             return;
         }
         case MIRStatement::TAG_SaveDropFlag: {
-            MIR_TODO(state, "Non-assign statement - " << stmt);
+            MIR_TODO(state, StringView("Non-assign statement - ") << stmt);
             break;
         }
         case MIRStatement::TAG_LoadDropFlag: {
-            MIR_TODO(state, "Non-assign statement - " << stmt);
+            MIR_TODO(state, StringView("Non-assign statement - ") << stmt);
             break;
         }
         case MIRStatement::TAG_Asm: {
-            MIR_TODO(state, "Non-assign statement - " << stmt);
+            MIR_TODO(state, StringView("Non-assign statement - ") << stmt);
             break;
         }
         case MIRStatement::TAG_Asm2: {
-            MIR_TODO(state, "Non-assign statement - " << stmt);
+            MIR_TODO(state, StringView("Non-assign statement - ") << stmt);
             break;
         }
     }
@@ -1684,7 +1674,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
 
             switch ((*castType).tag()) {
                 default:
-                    MIR_TODO(state, "RValue::Cast to " << castType << " from " << srcTy << ", val = " << inval);
+                    MIR_TODO(state, StringView("RValue::Cast to ") << castType << StringView(" from ") << srcTy << StringView(", val = ") << inval);
                     break;
                 case HIRTypeData::TAG_Primitive: {
                     auto& te = (*castType).as_Primitive();
@@ -1699,7 +1689,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                                     dst.writeUint(state, ti.bits, v.getInner());
                                 } break;
                                 case TypeInfo::Unsigned:
-                                    MIR_ASSERT(state, !srcTy->is_NamedFunction(), "");
+                                    MIR_ASSERT(state, !srcTy->is_NamedFunction(), StringView(""));
                                     dst.writeUint(state, ti.bits, inval.readUint(state, srcTi.bits));
                                     break;
                                 case TypeInfo::Float: {
@@ -1711,16 +1701,16 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                                     }
                                 } break;
                                 case TypeInfo::Other: {
-                                    MIR_ASSERT(state, ((*srcTy).is_Path() && ((*srcTy).as_Path().binding.is_Enum())), "Constant cast Variant to integer with invalid type - " << srcTy);
-                                    MIR_ASSERT(state, srcTy->as_Path().binding.as_Enum(), "Enum binding pointer not set! - " << srcTy);
+                                    MIR_ASSERT(state, ((*srcTy).is_Path() && ((*srcTy).as_Path().binding.is_Enum())), StringView("Constant cast Variant to integer with invalid type - ") << srcTy);
+                                    MIR_ASSERT(state, srcTy->as_Path().binding.as_Enum(), StringView("Enum binding pointer not set! - ") << srcTy);
                                     const HIREnum& enm = *srcTy->as_Path().binding.as_Enum();
-                                    MIR_ASSERT(state, enm.isValue(), "Constant cast Variant to integer with non-value enum - " << srcTy);
+                                    MIR_ASSERT(state, enm.isValue(), StringView("Constant cast Variant to integer with non-value enum - ") << srcTy);
                                     const auto* repr = TargetGetTypeRepr(state.sp, resolve, srcTy);
                                     if (!repr) {
-                                        BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << srcTy);
+                                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << srcTy);
                                     }
                                     if (repr->variants.is_None()) {
-                                        MIR_ASSERT(state, enm.numVariants() == 1, "Enum with no tag and " << enm.numVariants() << " variants - " << srcTy);
+                                        MIR_ASSERT(state, enm.numVariants() == 1, StringView("Enum with no tag and ") << enm.numVariants() << StringView(" variants - ") << srcTy);
                                         dst.writeUint(state, ti.bits, U128(enm.getDiscriminant(0)));
                                         break;
                                     }
@@ -1732,7 +1722,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                                     if (tagTi.ty == TypeInfo::Signed) {
                                         dst.writeSint(state, ti.bits, src.readSint(state, tagTi.bits));
                                     } else {
-                                        MIR_ASSERT(state, tagTi.ty == TypeInfo::Unsigned, "Enum tag is not an integer - " << field.ty);
+                                        MIR_ASSERT(state, tagTi.ty == TypeInfo::Unsigned, StringView("Enum tag is not an integer - ") << field.ty);
                                         dst.writeUint(state, ti.bits, src.readUint(state, tagTi.bits));
                                     }
                                 } break;
@@ -1754,11 +1744,11 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                                     dst.writeFloat(state, ti.bits, inval.readFloat(state, srcTi.bits));
                                     break;
                                 case TypeInfo::Other:
-                                    MIR_TODO(state, "Cast " << srcTy << " to float");
+                                    MIR_TODO(state, StringView("Cast ") << srcTy << StringView(" to float"));
                             }
                             break;
                         default:
-                            MIR_TODO(state, "RValue::Cast to " << castType << ", val = " << inval);
+                            MIR_TODO(state, StringView("RValue::Cast to ") << castType << StringView(", val = ") << inval);
                     }
                     break;
                 } break;
@@ -1799,13 +1789,13 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                 case MIRBinOp::DIV:
                 case MIRBinOp::MOD:
                     if (didOverflow) {
-                        MIR_BUG(state, "Division/modulo by zero!");
+                        MIR_BUG(state, StringView("Division/modulo by zero!"));
                     }
                     break;
                 case MIRBinOp::BIT_SHL:
                 case MIRBinOp::BIT_SHR:
                     if (didOverflow) {
-                        MIR_BUG(state, "Bit shift out of range");
+                        MIR_BUG(state, StringView("Bit shift out of range"));
                     }
                     break;
                 default:
@@ -1837,7 +1827,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                 case TypeInfo::Float: {
                     switch (e.op) {
                         case MIRUniOp::INV:
-                            MIR_BUG(state, "Invalid invert of Float");
+                            MIR_BUG(state, StringView("Invalid invert of Float"));
                         case MIRUniOp::NEG: {
                             auto bits = localState.getLval(e.val).readUint(state, ti.bits);
                             bits = bits ^ (U128(1) << (ti.bits - 1));
@@ -1848,7 +1838,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                     break;
                 }
                 case TypeInfo::Other:
-                    MIR_BUG(state, "UniOp on " << tyL);
+                    MIR_BUG(state, StringView("UniOp on ") << tyL);
             }
             break;
         }
@@ -1876,7 +1866,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
 
                 switch ((*dstTy).tag()) {
                     default:
-                        MIR_TODO(state, "RValue::MakeDst Coerce to " << dstTy);
+                        MIR_TODO(state, StringView("RValue::MakeDst Coerce to ") << dstTy);
                         break;
                     case HIRTypeData::TAG_Path: {
                         auto& te = (*dstTy).as_Path();
@@ -1896,13 +1886,13 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                             }
                         }
                         if (!done) {
-                            MIR_TODO(state, "RValue::MakeDst Coerce to " << dstTy);
+                            MIR_TODO(state, StringView("RValue::MakeDst Coerce to ") << dstTy);
                         }
                         break;
                     }
                     case HIRTypeData::TAG_Borrow: {
                         auto& te = (*dstTy).as_Borrow();
-                        MIR_ASSERT(state, srcTy->is_Borrow(), "RValue::MakeDst from " << srcTy << " to " << dstTy);
+                        MIR_ASSERT(state, srcTy->is_Borrow(), StringView("RValue::MakeDst from ") << srcTy << StringView(" to ") << dstTy);
                         const auto srcInner = srcTy->as_Borrow().inner;
                         const auto srcMetadata = localState.resolve.metadataType(state.sp, srcInner);
                         if (srcMetadata == MetadataType::Slice || srcMetadata == MetadataType::TraitObject) {
@@ -1914,7 +1904,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                     }
                     case HIRTypeData::TAG_Pointer: {
                         auto& te = (*dstTy).as_Pointer();
-                        MIR_ASSERT(state, srcTy->is_Pointer(), "RValue::MakeDst from " << srcTy << " to " << dstTy);
+                        MIR_ASSERT(state, srcTy->is_Pointer(), StringView("RValue::MakeDst from ") << srcTy << StringView(" to ") << dstTy);
                         const auto srcInner = srcTy->as_Pointer().inner;
                         const auto srcMetadata = localState.resolve.metadataType(state.sp, srcInner);
                         if (srcMetadata == MetadataType::Slice || srcMetadata == MetadataType::TraitObject) {
@@ -1947,9 +1937,9 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
             const auto& ty = state.getLvalueType(tmp, sa.dst);
             auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
             if (!repr) {
-                BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
+                BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
             }
-            MIR_ASSERT(state, repr->fields.size() == e.vals.size(), "");
+            MIR_ASSERT(state, repr->fields.size() == e.vals.size(), StringView(""));
             for (size_t i = 0; i < e.vals.size(); i++) {
                 size_t sz = localState.sizeOfOrBug(repr->fields[i].ty);
                 localState.writeParam(dst.slice(repr->fields[i].offset, sz), e.vals[i]);
@@ -1962,14 +1952,14 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
             const auto& ty = state.getLvalueType(tmp, sa.dst);
             auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
             if (!repr) {
-                BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
+                BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
             }
-            MIR_ASSERT(state, repr->fields.size() == e.vals.size(), "");
+            MIR_ASSERT(state, repr->fields.size() == e.vals.size(), StringView(""));
             for (size_t i = 0; i < e.vals.size(); i++) {
                 size_t sz = localState.sizeOfOrBug(repr->fields[i].ty);
                 auto localDst = dst.slice(repr->fields[i].offset, sz);
                 localState.writeParam(localDst, e.vals[i]);
-                DEBUG("@" << repr->fields[i].offset << " = " << localDst);
+                DEBUG(StringView("@") << repr->fields[i].offset << StringView(" = ") << localDst);
             }
             break;
         }
@@ -2040,16 +2030,16 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
             break;
         }
     }
-    DEBUG("> F" << localState.frameIndex << " " << sa.dst << " := " << dst);
+    DEBUG(StringView("> F") << localState.frameIndex << StringView(" ") << sa.dst << StringView(" := ") << dst);
 }
 
 unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MIRTerminator& terminator) {
     const auto& state = localState.state;
 
-    DEBUG("F" << localState.frameIndex << " " << state << terminator);
+    DEBUG(StringView("F") << localState.frameIndex << StringView(" ") << state << terminator);
     switch (terminator.tag()) {
         default:
-            MIR_BUG(state, "Unexpected terminator - " << terminator);
+            MIR_BUG(state, StringView("Unexpected terminator - ") << terminator);
             break;
         case MIRTerminator::TAG_Goto: {
             auto& e = terminator.as_Goto();
@@ -2061,7 +2051,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
         case MIRTerminator::TAG_If: {
             auto& e = terminator.as_If();
             bool res = U128(0) != localState.getLval(e.cond).readUint(state, 1);
-            DEBUG(state << " IF " << res);
+            DEBUG(state << StringView(" IF ") << res);
             return res ? e.bbTrue : e.bbFalse;
         }
         case MIRTerminator::TAG_Switch: {
@@ -2073,8 +2063,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             const auto& ty = state.getLvalueType(tmp, e.val);
             auto lit = localState.getLval(e.val);
             auto varIdx = localState.readEnumVariant(ty, lit);
-            DEBUG(state << " = " << varIdx);
-            MIR_ASSERT(state, varIdx < e.targets.size(), "Switch " << varIdx << " out of range in target list (" << e.targets.size() << ")");
+            DEBUG(state << StringView(" = ") << varIdx);
+            MIR_ASSERT(state, varIdx < e.targets.size(), StringView("Switch ") << varIdx << StringView(" out of range in target list (") << e.targets.size() << StringView(")"));
             return e.targets[varIdx];
         }
         case MIRTerminator::TAG_SwitchValue: {
@@ -2087,7 +2077,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             unsigned targetIdx = ~0u;
             switch (e.values.tag()) {
                 default:
-                    MIR_TODO(state, "SwitchValue - " << e.values.tagStr());
+                    MIR_TODO(state, StringView("SwitchValue - ") << e.values.tagStr());
                     break;
                 case MIRSwitchValues::TAG_Unsigned: {
                     auto& vals = e.values.as_Unsigned();
@@ -2130,7 +2120,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             auto value = localState.getLval(e.slot);
             if (!localState.valueReachableFromReturn(value)) {
                 if (localState.valueNeedsNonConstDrop(ty, value)) {
-                    ERROR(this->rootSpan, E0000, "destructor of `" << ty << "` cannot be evaluated at compile-time");
+                    ERROR(this->rootSpan, E0000, StringView("destructor of `") << ty << StringView("` cannot be evaluated at compile-time"));
                 }
                 if (e.kind == MIRDropKind::DEEP) {
                     this->runConstDrop(localState, ty, e.slot);
@@ -2154,25 +2144,25 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 if (this->callFunction(localState, e.retVal, fcnp, std::move(callArgs), e.source, indirect)) {
                     return TERM_RET_PUSHED;
                 }
-                DEBUG("> F" << localState.frameIndex << " " << e.retVal << " := " << localState.getLval(e.retVal));
+                DEBUG(StringView("> F") << localState.frameIndex << StringView(" ") << e.retVal << StringView(" := ") << localState.getLval(e.retVal));
                 return e.retBlock;
             };
 
             if (const auto* te = e.fcn.opt_Intrinsic()) {
                 auto dst = localState.getLval(e.retVal);
                 auto readTraitObjectVtableUsize = [&](size_t field) -> u64 {
-                    MIR_ASSERT(state, field == 1 || field == 2, "Invalid vtable header field " << field);
+                    MIR_ASSERT(state, field == 1 || field == 2, StringView("Invalid vtable header field ") << field);
                     const size_t ptrSize = TargetGetPointerBits() / 8;
                     auto arg = localState.getLval(e.args.at(0).as_LValue());
                     auto vtablePtr = arg.slice(ptrSize).readPtr(state);
-                    MIR_ASSERT(state, vtablePtr.first >= EncodedLiteral::PTR_BASE, "Invalid trait object vtable pointer");
-                    MIR_ASSERT(state, vtablePtr.second, "Trait object has no vtable relocation");
+                    MIR_ASSERT(state, vtablePtr.first >= EncodedLiteral::PTR_BASE, StringView("Invalid trait object vtable pointer"));
+                    MIR_ASSERT(state, vtablePtr.second, StringView("Trait object has no vtable relocation"));
                     if (auto* staticRef = vtablePtr.second.asStaticref()) {
                         if (const auto* path = staticRef->path().data.opt_UfcsKnown(); path && path->item == "vtable#") {
                             size_t size;
                             size_t align;
-                            MIR_ASSERT(state, TargetGetSizeAndAlignOf(state.sp, this->resolve, path->type, size, align), "Invalid vtable source type " << path->type);
-                            MIR_ASSERT(state, size != SIZE_MAX, "Unsized vtable source type " << path->type);
+                            MIR_ASSERT(state, TargetGetSizeAndAlignOf(state.sp, this->resolve, path->type, size, align), StringView("Invalid vtable source type ") << path->type);
+                            MIR_ASSERT(state, size != SIZE_MAX, StringView("Unsized vtable source type ") << path->type);
                             return field == 1 ? size : align;
                         }
                         if (!staticRef->hasValue()) {
@@ -2188,7 +2178,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     if (TargetGetSizeOf(state.sp, this->resolve, ty, sizeVal)) {
                         dst.writeUint(state, TargetGetPointerBits(), U128(sizeVal));
                     } else {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << ty);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
                     }
                 } else if (te->name == "size_of_val") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -2197,22 +2187,22 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     if (ty->is_TraitObject()) {
                         sizeVal = readTraitObjectVtableUsize(1);
                     } else if (!TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal)) {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << ty);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("size/align of ") << ty);
                     }
                     if (sizeVal == SIZE_MAX) {
                         size_t itemSize;
                         if (const auto* slice = ty->opt_Slice()) {
                             if (!TargetGetSizeOf(state.sp, this->resolve, slice->inner, itemSize)) {
-                                BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << slice->inner);
+                                BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << slice->inner);
                             }
                         } else if (ty == HIRCoreType::Str) {
                             itemSize = 1;
                         } else {
-                            BUG(state.sp, "Layout not computable during const evaluation - " << "unsized tail of " << ty);
+                            BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("unsized tail of ") << ty);
                         }
                         auto arg = localState.getLval(e.args.at(0).as_LValue());
                         const auto len = arg.slice(TargetGetPointerBits() / 8).readUsize(state);
-                        MIR_ASSERT(state, itemSize == 0 || len <= SIZE_MAX / itemSize, "`size_of_val` overflow for " << ty);
+                        MIR_ASSERT(state, itemSize == 0 || len <= SIZE_MAX / itemSize, StringView("`size_of_val` overflow for ") << ty);
                         sizeVal = len * itemSize;
                     }
                     dst.writeUint(state, TargetGetPointerBits(), U128(sizeVal));
@@ -2222,7 +2212,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     if (TargetGetAlignOf(state.sp, this->resolve, ty, alignVal)) {
                         dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                     } else {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "alignof " << ty);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("alignof ") << ty);
                     }
                 } else if (te->name == "align_of_val" || te->name == "min_align_of_val") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -2234,7 +2224,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     } else if (TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal) && alignVal > 0) {
                         dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                     } else {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "alignof " << ty);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("alignof ") << ty);
                     }
                 } else if (te->name == "offset_of") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -2255,13 +2245,13 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto tyPath = resolve.hirCrate().getLangItemPath(state.sp, "panic_location");
                     auto ty = resolve.hirCrate().types.path(tyPath, &resolve.hirCrate().getStructByPath(state.sp, tyPath));
                     auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
-                    MIR_ASSERT(state, repr, "No repr for panic::Location?");
-                    MIR_ASSERT(state, repr->fields.size() == 4, "Unexpected item count in panic::Location");
+                    MIR_ASSERT(state, repr, StringView("No repr for panic::Location?"));
+                    MIR_ASSERT(state, repr->fields.size() == 4, StringView("Unexpected item count in panic::Location"));
                     auto val = MIREvalRelocPtr(MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, ty));
                     dst.writePtr(state, EncodedLiteral::PTR_BASE, val);
                     auto rv = MIREvalValueRef(val);
                     auto pb = TargetGetPointerBits() / 8;
-                    MIR_ASSERT(state, localState.tracksCaller, "`caller_location` used outside a #[track_caller] function");
+                    MIR_ASSERT(state, localState.tracksCaller, StringView("`caller_location` used outside a #[track_caller] function"));
                     const auto& caller = localState.callerLocation;
                     const auto* filename = caller.filename.c_str();
                     const auto filenameLen = caller.filename.size();
@@ -2271,14 +2261,14 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     rv.slice(repr->fields[2].offset, 4).writeUint(state, 32, caller.column);
                 } else if (te->name == "ctpop") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "ctpop with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("ctpop with non-primitive ") << ty);
                     auto ti = TypeInfo::forType(ty);
                     auto val = ti.mask(localState.readParamUint(ti.bits, e.args.at(0)));
                     unsigned rv = __builtin_popcountll(val.getLo()) + __builtin_popcountll(val.getHi());
                     dst.writeUint(state, 32, U128(rv));
                 } else if (te->name == "cttz" || te->name == "cttz_nonzero") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`cttz` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`cttz` with non-primitive ") << ty);
                     auto ti = TypeInfo::forType(ty);
                     auto val = ti.mask(localState.readParamUint(ti.bits, e.args.at(0)));
                     unsigned rv = 0;
@@ -2293,7 +2283,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     dst.writeUint(state, 32, U128(rv));
                 } else if (te->name == "ctlz" || te->name == "ctlz_nonzero") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`ctlz` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`ctlz` with non-primitive ") << ty);
                     auto ti = TypeInfo::forType(ty);
                     auto val = ti.mask(localState.readParamUint(ti.bits, e.args.at(0)));
                     unsigned rv = 0;
@@ -2304,7 +2294,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     dst.writeUint(state, 32, U128(ti.bits - rv));
                 } else if (te->name == "bswap") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "bswap with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("bswap with non-primitive ") << ty);
                     auto ti = TypeInfo::forType(ty);
                     auto val = localState.readParamUint(ti.bits, e.args.at(0));
 
@@ -2349,12 +2339,12 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                             rv = H::bswap128(val);
                             break;
                         default:
-                            MIR_TODO(state, "Handle bswap with " << ty);
+                            MIR_TODO(state, StringView("Handle bswap with ") << ty);
                     }
                     dst.writeUint(state, ti.bits, rv);
                 } else if (te->name == "bitreverse") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "bswap with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("bswap with non-primitive ") << ty);
                     auto ti = TypeInfo::forType(ty);
 
                     auto val = localState.readParamUint(ti.bits, e.args.at(0));
@@ -2369,7 +2359,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     dst.writeUint(state, ti.bits, rv);
                 } else if (te->name == "rotate_left" || te->name == "rotate_right") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), te->name << " with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), te->name << StringView(" with non-primitive ") << ty);
                     auto ti = TypeInfo::forType(ty);
 
                     auto val = localState.readParamUint(ti.bits, e.args.at(0));
@@ -2391,83 +2381,83 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     dst.writeUint(state, ti.bits, rv);
                 } else if (te->name == "add_with_overflow") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     auto dstTup = getTupleTBool(localState, dst, ty);
                     bool overflowed = doArithChecked(localState, ty, dstTup.first, e.args.at(0), MIRBinOp::ADD, e.args.at(1));
                     dstTup.second.writeUint(state, 8, U128(overflowed ? 1 : 0));
                 } else if (te->name == "sub_with_overflow") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     auto dstTup = getTupleTBool(localState, dst, ty);
                     bool overflowed = doArithChecked(localState, ty, dstTup.first, e.args.at(0), MIRBinOp::SUB, e.args.at(1));
                     dstTup.second.writeUint(state, 8, U128(overflowed ? 1 : 0));
                 } else if (te->name == "mul_with_overflow") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     auto dstTup = getTupleTBool(localState, dst, ty);
                     bool overflowed = doArithChecked(localState, ty, dstTup.first, e.args.at(0), MIRBinOp::MUL, e.args.at(1));
                     dstTup.second.writeUint(state, 8, U128(overflowed ? 1 : 0));
                 } else if (te->name == "wrapping_add" || te->name == "unchecked_add") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::ADD, e.args.at(1));
                 } else if (te->name == "wrapping_sub" || te->name == "unchecked_sub") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::SUB, e.args.at(1));
                 } else if (te->name == "wrapping_mul" || te->name == "unchecked_mul") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::MUL, e.args.at(1));
                 } else if (te->name == "unchecked_shl") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::BIT_SHL, e.args.at(1));
                 } else if (te->name == "unchecked_shr") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::BIT_SHR, e.args.at(1));
                 } else if (te->name == "unchecked_rem") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     bool wasOverflow = doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::MOD, e.args.at(1));
-                    MIR_ASSERT(state, !wasOverflow, "`" << te->name << "` overflowed");
+                    MIR_ASSERT(state, !wasOverflow, StringView("`") << te->name << StringView("` overflowed"));
                 } else if (te->name == "unchecked_div") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     bool wasOverflow = doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::DIV, e.args.at(1));
-                    MIR_ASSERT(state, !wasOverflow, "`" << te->name << "` overflowed");
+                    MIR_ASSERT(state, !wasOverflow, StringView("`") << te->name << StringView("` overflowed"));
                 } else if (te->name == "exact_div") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     bool wasOverflow = doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::DIV, e.args.at(1));
-                    MIR_ASSERT(state, !wasOverflow, "`" << te->name << "` overflowed");
+                    MIR_ASSERT(state, !wasOverflow, StringView("`") << te->name << StringView("` overflowed"));
                 } else if (te->name == "saturating_add") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::ADD, e.args.at(1), true);
                 } else if (te->name == "saturating_sub") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
+                    MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::SUB, e.args.at(1), true);
                 } else if (te->name == "transmute" || te->name == "transmute_unchecked") {
                     localState.writeParam(dst, e.args.at(0));
                 } else if (te->name == "init") {
-                    MIR_ASSERT(state, e.args.empty(), "`init` takes no arguments");
+                    MIR_ASSERT(state, e.args.empty(), StringView("`init` takes no arguments"));
                     memset(dst.extWriteBytes(state, dst.getLen()), 0, dst.getLen());
                 } else if (te->name == "unlikely") {
                     localState.writeParam(dst, e.args.at(0));
                 } else if (te->name == "fabsf16" || te->name == "fabsf32" || te->name == "fabsf64" || te->name == "fabsf128") {
                     HIRTypeRef tmp;
                     auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
-                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
+                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     auto bits = localState.readParamFloatBits(ti.bits, e.args.at(0));
                     bits &= ~(U128(1) << (ti.bits - 1));
                     dst.writeUint(state, ti.bits, bits);
                 } else if (te->name == "copysignf16" || te->name == "copysignf32" || te->name == "copysignf64" || te->name == "copysignf128") {
                     HIRTypeRef tmp;
                     auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
-                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
+                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     auto value = localState.readParamFloatBits(ti.bits, e.args.at(0));
                     auto sign = localState.readParamFloatBits(ti.bits, e.args.at(1));
                     auto signMask = U128(1) << (ti.bits - 1);
@@ -2475,32 +2465,32 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 } else if (te->name == "floorf16" || te->name == "floorf32" || te->name == "floorf64" || te->name == "floorf128") {
                     HIRTypeRef tmp;
                     auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
-                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
+                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     dst.writeFloat(state, ti.bits, floatValueFloor(localState.readParamFloat(ti.bits, e.args.at(0))));
                 } else if (te->name == "ceilf16" || te->name == "ceilf32" || te->name == "ceilf64" || te->name == "ceilf128") {
                     HIRTypeRef tmp;
                     auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
-                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
+                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     dst.writeFloat(state, ti.bits, floatValueCeil(localState.readParamFloat(ti.bits, e.args.at(0))));
                 } else if (te->name == "roundf16" || te->name == "roundf32" || te->name == "roundf64" || te->name == "roundf128") {
                     HIRTypeRef tmp;
                     auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
-                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
+                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     dst.writeFloat(state, ti.bits, floatValueRound(localState.readParamFloat(ti.bits, e.args.at(0))));
                 } else if (te->name == "round_ties_even_f16" || te->name == "round_ties_even_f32" || te->name == "round_ties_even_f64" || te->name == "round_ties_even_f128") {
                     HIRTypeRef tmp;
                     auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
-                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
+                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     dst.writeFloat(state, ti.bits, floatValueRoundEven(localState.readParamFloat(ti.bits, e.args.at(0))));
                 } else if (te->name == "truncf16" || te->name == "truncf32" || te->name == "truncf64" || te->name == "truncf128") {
                     HIRTypeRef tmp;
                     auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
-                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
+                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     dst.writeFloat(state, ti.bits, floatValueTrunc(localState.readParamFloat(ti.bits, e.args.at(0))));
                 } else if (te->name == "minnumf16" || te->name == "minnumf32" || te->name == "minnumf64" || te->name == "minnumf128" || te->name == "maxnumf16" || te->name == "maxnumf32" || te->name == "maxnumf64" || te->name == "maxnumf128") {
                     HIRTypeRef tmp;
                     auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
-                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
+                    MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     auto lhs = localState.readParamFloat(ti.bits, e.args.at(0));
                     auto rhs = localState.readParamFloat(ti.bits, e.args.at(1));
                     bool isMin = te->name == "minnumf16" || te->name == "minnumf32" || te->name == "minnumf64" || te->name == "minnumf128";
@@ -2519,23 +2509,23 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         auto rhs = localState.readParamUint(ti.bits, e.args.at(1));
                         result = lhs == rhs ? 0 : lhs < rhs ? -1 : 1;
                     } else {
-                        MIR_BUG(state, "`three_way_compare` with unsupported type " << state.getParamType(tmp, e.args.at(0)));
+                        MIR_BUG(state, StringView("`three_way_compare` with unsupported type ") << state.getParamType(tmp, e.args.at(0)));
                     }
                     dst.writeSint(state, dst.getLen() * 8, S128(result));
                 } else if (te->name == "assume") {
                     auto val = localState.readParamUint(8, e.args.at(0));
-                    MIR_ASSERT(state, val != 0, "`assume` failed");
+                    MIR_ASSERT(state, val != 0, StringView("`assume` failed"));
                 } else if (te->name == "assert_inhabited") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     // TODO: Determine if the type is inhabited (i.e. isn't diverge)
                     bool isUninhabited = resolve.typeIsImpossible(state.sp, ty);
-                    MIR_ASSERT(state, !isUninhabited, "assert_inhabited " << ty << " failed");
+                    MIR_ASSERT(state, !isUninhabited, StringView("assert_inhabited ") << ty << StringView(" failed"));
                 } else if (te->name == "const_eval_select") {
                     auto argTy = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, argTy->is_Tuple(), "`" << te->name << "` requires a tuple for ARG, got " << argTy);
+                    MIR_ASSERT(state, argTy->is_Tuple(), StringView("`") << te->name << StringView("` requires a tuple for ARG, got ") << argTy);
                     auto* repr = TargetGetTypeRepr(state.sp, resolve, argTy);
                     if (!repr) {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << argTy);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << argTy);
                     }
                     auto argVal = localState.getLval(e.args.at(0).as_LValue());
                     const auto& fcnArg = e.args.at(1);
@@ -2545,15 +2535,15 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         case MIRParam::TAG_LValue: {
                             auto& e = fcnArg.as_LValue();
                             auto fcnVal = localState.getLval(e).readPtr(state);
-                            MIR_ASSERT(state, fcnVal.first == EncodedLiteral::PTR_BASE, "");
+                            MIR_ASSERT(state, fcnVal.first == EncodedLiteral::PTR_BASE, StringView(""));
 
                             const auto* fcnSr = fcnVal.second.asStaticref();
-                            MIR_ASSERT(state, fcnSr, "");
+                            MIR_ASSERT(state, fcnSr, StringView(""));
                             fcnPath = localState.valuePool->make<HIRPath>(fcnSr->path().clone());
                             break;
                         }
                         case MIRParam::TAG_Borrow: {
-                            MIR_BUG(state, "Invalid argument for function pointer to `const_eval_select`: " << fcnArg);
+                            MIR_BUG(state, StringView("Invalid argument for function pointer to `const_eval_select`: ") << fcnArg);
                             break;
                         }
                         case MIRParam::TAG_Constant: {
@@ -2561,10 +2551,10 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                             if (const auto* ce = e.opt_Function()) {
                                 fcnPath = localState.valuePool->make<HIRPath>(ms.monomorphPath(state.sp, *ce->p));
                             } else if (const auto* ce = e.opt_ItemAddr()) {
-                                MIR_ASSERT(state, ce->offset == U128(0), "Function pointer has a non-zero offset: " << ce->offset);
+                                MIR_ASSERT(state, ce->offset == U128(0), StringView("Function pointer has a non-zero offset: ") << ce->offset);
                                 fcnPath = localState.valuePool->make<HIRPath>(ms.monomorphPath(state.sp, **ce));
                             } else {
-                                MIR_BUG(state, "Invalid argument for function pointer to `const_eval_select`: " << fcnArg);
+                                MIR_BUG(state, StringView("Invalid argument for function pointer to `const_eval_select`: ") << fcnArg);
                             }
                             break;
                         }
@@ -2586,13 +2576,13 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t elementSize;
                     if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << ty);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
                     }
                     auto ptrSrc = localState.readParamPtr(e.args.at(0));
                     auto ptrDst = localState.readParamPtr(e.args.at(1));
                     U128 count = localState.readParamUint(TargetGetPointerBits(), e.args.at(2));
-                    MIR_ASSERT(state, count.isU64(), "Excessive count in `" << te->name << "`");
-                    MIR_ASSERT(state, count * elementSize < U128(SIZE_MAX), "Excessive size in `" << te->name << "`");
+                    MIR_ASSERT(state, count.isU64(), StringView("Excessive count in `") << te->name << StringView("`"));
+                    MIR_ASSERT(state, count * elementSize < U128(SIZE_MAX), StringView("Excessive size in `") << te->name << StringView("`"));
                     size_t nbytes = elementSize * count.truncateU64();
                     if (nbytes != 0) {
                         auto vrSrc = pointerBytes(localState, ptrSrc, nbytes, te->name.c_str());
@@ -2607,7 +2597,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto leftPtr = localState.readParamPtr(e.args.at(0));
                     auto rightPtr = localState.readParamPtr(e.args.at(1));
                     auto count = localState.readParamUint(TargetGetPointerBits(), e.args.at(2));
-                    MIR_ASSERT(state, count.isU64() && count <= U128(SIZE_MAX), "Excessive count in `compare_bytes`");
+                    MIR_ASSERT(state, count.isU64() && count <= U128(SIZE_MAX), StringView("Excessive count in `compare_bytes`"));
                     const size_t nbytes = count.truncateU64();
                     int result = 0;
                     if (nbytes != 0) {
@@ -2622,7 +2612,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     size_t size;
                     size_t alignment;
                     if (!TargetGetSizeAndAlignOf(state.sp, resolve, ty, size, alignment)) {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << ty);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("size/align of ") << ty);
                     }
                     auto leftPtr = localState.readParamPtr(e.args.at(0));
                     auto rightPtr = localState.readParamPtr(e.args.at(1));
@@ -2633,7 +2623,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         const u64 address = pointer.second ? pointer.first - EncodedLiteral::PTR_BASE : pointer.first;
                         return alignment == 0 || address % alignment == 0;
                     };
-                    MIR_ASSERT(state, isAligned(leftPtr) && isAligned(rightPtr), "Unaligned pointer passed to `raw_eq`");
+                    MIR_ASSERT(state, isAligned(leftPtr) && isAligned(rightPtr), StringView("Unaligned pointer passed to `raw_eq`"));
                     bool equal = true;
                     if (size != 0) {
                         auto left = pointerBytes(localState, leftPtr, size, "raw_eq");
@@ -2650,11 +2640,11 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     size_t vectorSize;
                     size_t elementSize;
                     if (!TargetGetSizeOf(state.sp, resolve, vectorTy, vectorSize) || !TargetGetSizeOf(state.sp, resolve, elementTy, elementSize)) {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << vectorTy << " / " << elementTy);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << vectorTy << StringView(" / ") << elementTy);
                     }
-                    MIR_ASSERT(state, elementSize != 0 && vectorSize % elementSize == 0, "Invalid SIMD layout for `" << te->name << "`");
+                    MIR_ASSERT(state, elementSize != 0 && vectorSize % elementSize == 0, StringView("Invalid SIMD layout for `") << te->name << StringView("`"));
                     auto index = localState.readParamUint(32, e.args.at(1));
-                    MIR_ASSERT(state, index.isU64() && index < U128(vectorSize / elementSize), "SIMD index out of bounds in `" << te->name << "`");
+                    MIR_ASSERT(state, index.isU64() && index < U128(vectorSize / elementSize), StringView("SIMD index out of bounds in `") << te->name << StringView("`"));
                     auto inputStorage = MIREvalAllocationPtr::allocateScratch(localState.valuePool, vectorSize);
                     MIREvalValueRef input(inputStorage);
                     localState.writeParam(input, e.args.at(0));
@@ -2665,18 +2655,18 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     size_t vectorSize;
                     size_t elementSize;
                     if (!TargetGetSizeOf(state.sp, resolve, vectorTy, vectorSize) || !TargetGetSizeOf(state.sp, resolve, elementTy, elementSize)) {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << vectorTy << " / " << elementTy);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << vectorTy << StringView(" / ") << elementTy);
                     }
-                    MIR_ASSERT(state, elementSize != 0 && vectorSize % elementSize == 0, "Invalid SIMD layout for `" << te->name << "`");
+                    MIR_ASSERT(state, elementSize != 0 && vectorSize % elementSize == 0, StringView("Invalid SIMD layout for `") << te->name << StringView("`"));
                     auto index = localState.readParamUint(32, e.args.at(1));
-                    MIR_ASSERT(state, index.isU64() && index < U128(vectorSize / elementSize), "SIMD index out of bounds in `" << te->name << "`");
+                    MIR_ASSERT(state, index.isU64() && index < U128(vectorSize / elementSize), StringView("SIMD index out of bounds in `") << te->name << StringView("`"));
                     localState.writeParam(dst, e.args.at(0));
                     localState.writeParam(dst.slice(index.truncateU64() * elementSize, elementSize), e.args.at(2));
                 } else if (te->name == "offset") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0)->as_Pointer().inner);
                     size_t elementSize;
                     if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << ty);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
                     }
                     auto ptrPair = localState.readParamPtr(e.args.at(0));
                     auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
@@ -2685,7 +2675,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t elementSize;
                     if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << ty);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
                     }
                     auto ptrPair = localState.readParamPtr(e.args.at(0));
                     auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
@@ -2694,35 +2684,35 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t elementSize;
                     if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << ty);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
                     }
-                    MIR_ASSERT(state, elementSize != 0, "`" << te->name << "` called for a zero-sized type");
-                    MIR_ASSERT(state, elementSize <= static_cast<size_t>(INT64_MAX), "Element size overflows isize in `" << te->name << "`");
+                    MIR_ASSERT(state, elementSize != 0, StringView("`") << te->name << StringView("` called for a zero-sized type"));
+                    MIR_ASSERT(state, elementSize <= static_cast<size_t>(INT64_MAX), StringView("Element size overflows isize in `") << te->name << StringView("`"));
                     auto pointer = localState.readParamPtr(e.args.at(0));
                     auto base = localState.readParamPtr(e.args.at(1));
                     resolveStaticPointer(localState, pointer);
                     resolveStaticPointer(localState, base);
-                    MIR_ASSERT(state, samePointerProvenance(pointer.second, base.second), "`" << te->name << "` called on pointers into different allocations");
+                    MIR_ASSERT(state, samePointerProvenance(pointer.second, base.second), StringView("`") << te->name << StringView("` called on pointers into different allocations"));
 
                     if (pointer.second) {
-                        MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE && base.first >= EncodedLiteral::PTR_BASE, "Invalid pointer passed to `" << te->name << "`");
+                        MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE && base.first >= EncodedLiteral::PTR_BASE, StringView("Invalid pointer passed to `") << te->name << StringView("`"));
                         const auto allocationSize = pointer.second.asValue().size();
-                        MIR_ASSERT(state, pointer.first - EncodedLiteral::PTR_BASE <= allocationSize && base.first - EncodedLiteral::PTR_BASE <= allocationSize, "Out-of-bounds pointer passed to `" << te->name << "`");
+                        MIR_ASSERT(state, pointer.first - EncodedLiteral::PTR_BASE <= allocationSize && base.first - EncodedLiteral::PTR_BASE <= allocationSize, StringView("Out-of-bounds pointer passed to `") << te->name << StringView("`"));
                     }
 
                     i64 byteDistance;
                     if (pointer.first >= base.first) {
                         const u64 magnitude = pointer.first - base.first;
-                        MIR_ASSERT(state, magnitude <= static_cast<u64>(INT64_MAX), "Pointer distance overflows isize in `" << te->name << "`");
+                        MIR_ASSERT(state, magnitude <= static_cast<u64>(INT64_MAX), StringView("Pointer distance overflows isize in `") << te->name << StringView("`"));
                         byteDistance = static_cast<i64>(magnitude);
                     } else {
                         const u64 magnitude = base.first - pointer.first;
-                        MIR_ASSERT(state, te->name != "ptr_offset_from_unsigned", "Negative pointer distance in `ptr_offset_from_unsigned`");
-                        MIR_ASSERT(state, magnitude <= static_cast<u64>(INT64_MAX), "Pointer distance underflows isize in `" << te->name << "`");
+                        MIR_ASSERT(state, te->name != "ptr_offset_from_unsigned", StringView("Negative pointer distance in `ptr_offset_from_unsigned`"));
+                        MIR_ASSERT(state, magnitude <= static_cast<u64>(INT64_MAX), StringView("Pointer distance underflows isize in `") << te->name << StringView("`"));
                         byteDistance = -static_cast<i64>(magnitude);
                     }
-                    MIR_ASSERT(state, pointer.second || byteDistance == 0, "`" << te->name << "` called on distinct absolute pointers");
-                    MIR_ASSERT(state, byteDistance % static_cast<i64>(elementSize) == 0, "Pointer distance is not a multiple of the element size in `" << te->name << "`");
+                    MIR_ASSERT(state, pointer.second || byteDistance == 0, StringView("`") << te->name << StringView("` called on distinct absolute pointers"));
+                    MIR_ASSERT(state, byteDistance % static_cast<i64>(elementSize) == 0, StringView("Pointer distance is not a multiple of the element size in `") << te->name << StringView("`"));
                     const i64 elementDistance = byteDistance / static_cast<i64>(elementSize);
                     if (te->name == "ptr_offset_from_unsigned") {
                         dst.writeUint(state, TargetGetPointerBits(), U128(static_cast<u64>(elementDistance)));
@@ -2737,15 +2727,15 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t elementSize;
                     if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << ty);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
                     }
                     auto ptrDst = localState.getLval(e.args.at(0).as_LValue()).readPtr(state);
                     auto val = localState.readParamUint(8, e.args.at(1));
                     U128 count = localState.readParamUint(TargetGetPointerBits(), e.args.at(2));
-                    MIR_ASSERT(state, count.isU64(), "Excessive count in `" << te->name << "`");
-                    MIR_ASSERT(state, count * elementSize < U128(SIZE_MAX), "Excessive size in `" << te->name << "`");
+                    MIR_ASSERT(state, count.isU64(), StringView("Excessive count in `") << te->name << StringView("`"));
+                    MIR_ASSERT(state, count * elementSize < U128(SIZE_MAX), StringView("Excessive size in `") << te->name << StringView("`"));
                     size_t nbytes = elementSize * count.truncateU64();
-                    MIR_ASSERT(state, ptrDst.first >= EncodedLiteral::PTR_BASE, "");
+                    MIR_ASSERT(state, ptrDst.first >= EncodedLiteral::PTR_BASE, StringView(""));
                     MIREvalValueRef vrDst = MIREvalValueRef(ptrDst.second, ptrDst.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
                     memset(vrDst.extWriteBytes(state, nbytes), val.truncateU64(), nbytes);
                 } else if (te->name == "read_via_copy") {
@@ -2759,7 +2749,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     } else {
                         const auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
                         if (!repr) {
-                            BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
+                            BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
                         }
 
                         MIREvalValueRef value;
@@ -2767,7 +2757,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                             value = localState.getLval(arg->val);
                         } else {
                             auto ptr = localState.readParamPtr(e.args.at(0));
-                            MIR_ASSERT(state, ptr.first >= EncodedLiteral::PTR_BASE, "Null pointer passed to `discriminant_value`");
+                            MIR_ASSERT(state, ptr.first >= EncodedLiteral::PTR_BASE, StringView("Null pointer passed to `discriminant_value`"));
                             value = MIREvalValueRef(ptr.second, ptr.first - EncodedLiteral::PTR_BASE);
                         }
 
@@ -2797,7 +2787,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                                 const auto ofs = repr->getOffset(state.sp, resolve, ve.field);
                                 const auto& tagTy = TargetGetInnerType(state.sp, resolve, *repr, ve.field.index, ve.field.subFields);
                                 const auto tagInfo = TypeInfo::forType(tagTy);
-                                MIR_ASSERT(state, tagInfo.ty == TypeInfo::Signed || tagInfo.ty == TypeInfo::Unsigned, "Non-integer enum tag " << tagTy);
+                                MIR_ASSERT(state, tagInfo.ty == TypeInfo::Signed || tagInfo.ty == TypeInfo::Unsigned, StringView("Non-integer enum tag ") << tagTy);
                                 auto tag = value.slice(ofs, ve.field.size);
                                 if (tagInfo.ty == TypeInfo::Signed) {
                                     dst.writeSint(state, dst.getLen() * 8, tag.readSint(state, tagInfo.bits));
@@ -2833,7 +2823,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     dst.writeUint(state, TargetGetPointerBits(), count);
                 } else if (te->name == "assert_zero_valid") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, !ty->is_Borrow(), "`assert_zero_valid`: Borrow cannot be zero");
+                    MIR_ASSERT(state, !ty->is_Borrow(), StringView("`assert_zero_valid`: Borrow cannot be zero"));
                     // TODO: Other cases?
                 } else if (te->name == "assert_mem_uninitialized_valid") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -2841,23 +2831,23 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 } else if (te->name == "is_val_statically_known") {
                     dst.writeUint(state, 8, e.args.at(0).is_Constant() || e.args.at(0).is_Borrow());
                 } else {
-                    MIR_TODO(state, "Call intrinsic \"" << te->name << "\" - " << terminator);
+                    MIR_TODO(state, StringView("Call intrinsic \"") << te->name << StringView("\" - ") << terminator);
                 }
-                DEBUG("> F" << localState.frameIndex << " " << e.retVal << " := " << dst);
+                DEBUG(StringView("> F") << localState.frameIndex << StringView(" ") << e.retVal << StringView(" := ") << dst);
                 return e.retBlock;
             } else if (const auto* te = e.fcn.opt_Path()) {
                 const auto& fcnpRaw = *te;
-                DEBUG("ms=" << ms);
+                DEBUG(StringView("ms=") << ms);
                 auto* fcnp = localState.valuePool->make<HIRPath>(ms.monomorphPath(state.sp, fcnpRaw));
 
                 const auto* rustcIntrinsic = getRustcIntrinsicName(state.sp, resolve, *fcnp);
                 if (rustcIntrinsic && *rustcIntrinsic == "ptr_guaranteed_cmp") {
-                    MIR_ASSERT(state, e.args.size() == 2, "invalid ptr_guaranteed_cmp signature");
+                    MIR_ASSERT(state, e.args.size() == 2, StringView("invalid ptr_guaranteed_cmp signature"));
                     auto left = localState.readParamPtr(e.args.at(0));
                     auto right = localState.readParamPtr(e.args.at(1));
                     auto dst = localState.getLval(e.retVal);
                     dst.writeUint(state, 8, pointerGuaranteedCmp(left, right));
-                    DEBUG("> F" << localState.frameIndex << " " << e.retVal << " := " << dst);
+                    DEBUG(StringView("> F") << localState.frameIndex << StringView(" ") << e.retVal << StringView(" := ") << dst);
                     return e.retBlock;
                 }
 
@@ -2867,7 +2857,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     const unsigned pointerBits = TargetGetPointerBits();
                     auto readUsize = [&](size_t argument) {
                         auto value = localState.readParamUint(pointerBits, e.args.at(argument));
-                        MIR_ASSERT(state, value.isU64(), "`" << intrinsic << "` argument does not fit usize");
+                        MIR_ASSERT(state, value.isU64(), StringView("`") << intrinsic << StringView("` argument does not fit usize"));
                         return value.truncateU64();
                     };
                     auto readAlignment = [&](size_t argument) {
@@ -2876,44 +2866,44 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                             alignment = 1;
                         }
                         if ((alignment & (alignment - 1)) != 0 || alignment > (1ull << 29)) {
-                            ERROR(state.sp, E0000, "`" << intrinsic << "` requires a valid power-of-two alignment, got " << alignment);
+                            ERROR(state.sp, E0000, StringView("`") << intrinsic << StringView("` requires a valid power-of-two alignment, got ") << alignment);
                         }
                         return alignment;
                     };
 
                     if (strcmp(intrinsic, "const_allocate") == 0) {
-                        MIR_ASSERT(state, e.args.size() == 2, "invalid const_allocate signature");
+                        MIR_ASSERT(state, e.args.size() == 2, StringView("invalid const_allocate signature"));
                         const u64 size = readUsize(0);
                         const u64 alignment = readAlignment(1);
-                        MIR_ASSERT(state, size <= SIZE_MAX, "const_allocate size is too large");
-                        MIR_ASSERT(state, alignment <= SIZE_MAX, "const_allocate alignment is too large");
+                        MIR_ASSERT(state, size <= SIZE_MAX, StringView("const_allocate size is too large"));
+                        MIR_ASSERT(state, alignment <= SIZE_MAX, StringView("const_allocate alignment is too large"));
                         auto allocation = MIREvalAllocationPtr::allocateHeap(localState.valuePool, size, alignment);
                         dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalRelocPtr(allocation));
                     } else if (strcmp(intrinsic, "const_deallocate") == 0) {
-                        MIR_ASSERT(state, e.args.size() == 3, "invalid const_deallocate signature");
+                        MIR_ASSERT(state, e.args.size() == 3, StringView("invalid const_deallocate signature"));
                         auto pointer = localState.readParamPtr(e.args.at(0));
                         const u64 size = readUsize(1);
                         const u64 alignment = readAlignment(2);
                         if (auto* allocation = pointer.second.asAllocation(); allocation && allocation->isConstHeapAllocation()) {
-                            MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, "const_deallocate pointer is not at the start of its allocation");
-                            MIR_ASSERT(state, allocation->isAlive(), "const_deallocate of an already deallocated allocation");
-                            MIR_ASSERT(state, !allocation->wasMadeGlobal(), "const_deallocate of an allocation made global in this evaluation");
-                            MIR_ASSERT(state, allocation->size() == size, "const_deallocate size does not match const_allocate");
-                            MIR_ASSERT(state, allocation->getHeapAlignment() == alignment, "const_deallocate alignment does not match const_allocate");
+                            MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, StringView("const_deallocate pointer is not at the start of its allocation"));
+                            MIR_ASSERT(state, allocation->isAlive(), StringView("const_deallocate of an already deallocated allocation"));
+                            MIR_ASSERT(state, !allocation->wasMadeGlobal(), StringView("const_deallocate of an allocation made global in this evaluation"));
+                            MIR_ASSERT(state, allocation->size() == size, StringView("const_deallocate size does not match const_allocate"));
+                            MIR_ASSERT(state, allocation->getHeapAlignment() == alignment, StringView("const_deallocate alignment does not match const_allocate"));
                             allocation->deallocate();
                         }
                     } else {
-                        MIR_ASSERT(state, e.args.size() == 1, "invalid const_make_global signature");
+                        MIR_ASSERT(state, e.args.size() == 1, StringView("invalid const_make_global signature"));
                         auto pointer = localState.readParamPtr(e.args.at(0));
                         auto* allocation = pointer.second.asAllocation();
-                        MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, "const_make_global pointer is not at the start of its allocation");
-                        MIR_ASSERT(state, allocation && allocation->isConstHeapAllocation(), "const_make_global pointer was not returned by const_allocate");
-                        MIR_ASSERT(state, allocation->isAlive(), "const_make_global of a deallocated allocation");
-                        MIR_ASSERT(state, !allocation->wasMadeGlobal(), "const_make_global called twice for one allocation");
+                        MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, StringView("const_make_global pointer is not at the start of its allocation"));
+                        MIR_ASSERT(state, allocation && allocation->isConstHeapAllocation(), StringView("const_make_global pointer was not returned by const_allocate"));
+                        MIR_ASSERT(state, allocation->isAlive(), StringView("const_make_global of a deallocated allocation"));
+                        MIR_ASSERT(state, !allocation->wasMadeGlobal(), StringView("const_make_global called twice for one allocation"));
                         allocation->makeGlobal();
                         dst.writePtr(state, pointer.first, pointer.second);
                     }
-                    DEBUG("> F" << localState.frameIndex << " " << e.retVal << " := " << dst);
+                    DEBUG(StringView("> F") << localState.frameIndex << StringView(" ") << e.retVal << StringView(" := ") << dst);
                     return e.retBlock;
                 }
 
@@ -2921,15 +2911,15 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             } else if (const auto* te = e.fcn.opt_Value()) {
                 HIRTypeRef tmp;
                 const auto& ty = state.getLvalueType(tmp, *te);
-                MIR_ASSERT(state, ty->is_Function(), "Indirect call through non-function-pointer type " << ty);
+                MIR_ASSERT(state, ty->is_Function(), StringView("Indirect call through non-function-pointer type ") << ty);
 
                 auto pointer = localState.getLval(*te).readPtr(state);
-                MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, "Function pointer has a nonzero offset");
+                MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, StringView("Function pointer has a nonzero offset"));
                 const auto* function = pointer.second.asStaticref();
-                MIR_ASSERT(state, function, "Function pointer has no symbolic function relocation");
+                MIR_ASSERT(state, function, StringView("Function pointer has no symbolic function relocation"));
                 return callPath(localState.valuePool->make<HIRPath>(function->path().clone()), true);
             } else {
-                MIR_BUG(state, "Unexpected terminator - " << terminator);
+                MIR_BUG(state, StringView("Unexpected terminator - ") << terminator);
             }
             break;
         }
@@ -2959,19 +2949,19 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             if (const auto* value = e.fcn.opt_Value()) {
                 HIRTypeRef tmp;
                 const auto& ty = state.getLvalueType(tmp, *value);
-                MIR_ASSERT(state, ty->is_Function(), "Indirect tail call through non-function-pointer type " << ty);
+                MIR_ASSERT(state, ty->is_Function(), StringView("Indirect tail call through non-function-pointer type ") << ty);
 
                 auto pointer = localState.getLval(*value).readPtr(state);
-                MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, "Function pointer has a nonzero offset");
+                MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, StringView("Function pointer has a nonzero offset"));
                 const auto* function = pointer.second.asStaticref();
-                MIR_ASSERT(state, function, "Function pointer has no symbolic function relocation");
+                MIR_ASSERT(state, function, StringView("Function pointer has no symbolic function relocation"));
                 return callPath(localState.valuePool->make<HIRPath>(function->path().clone()), true);
             }
-            MIR_BUG(state, "Intrinsic used as an explicit tail-call target");
+            MIR_BUG(state, StringView("Intrinsic used as an explicit tail-call target"));
             break;
         }
     }
-    MIR_BUG(state, "Unreachable terminator");
+    MIR_BUG(state, StringView("Unreachable terminator"));
 }
 
 bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, HIRPath* fcnPath, std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect) {
@@ -2987,7 +2977,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
                 if (const auto* nf = e->type->opt_NamedFunction()) {
                     pathP = &nf->path;
                 } else {
-                    MIR_TODO(localState.state, "Get function from fn-ptr - " << e->type);
+                    MIR_TODO(localState.state, StringView("Get function from fn-ptr - ") << e->type);
                 }
                 // TODO: Convert `call_args` - discard the first and extract tuple from the second
                 const auto& argTupleTy = e->trait.params.types.at(0);
@@ -3009,7 +2999,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
     const auto& path = *pathP;
 
     if (monomorphisePathNeeded(path)) {
-        BUG(state.sp, "Const call to generic " << path << " during concrete evaluation");
+        BUG(state.sp, StringView("Const call to generic ") << path << StringView(" during concrete evaluation"));
     }
 
     if (requireConstCalls) {
@@ -3032,8 +3022,8 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
                     selectedImpl = response.impl->traitImpl;
                     return false;
                 });
-                MIR_ASSERT(state, hasConstBound || selectedImpl, "const trait call did not resolve to an impl: " << path);
-                MIR_ASSERT(state, hasConstBound || (selectedImpl && selectedImpl->isConst), "const trait call requires a const impl: " << path);
+                MIR_ASSERT(state, hasConstBound || selectedImpl, StringView("const trait call did not resolve to an impl: ") << path);
+                MIR_ASSERT(state, hasConstBound || (selectedImpl && selectedImpl->isConst), StringView("const trait call requires a const impl: ") << path);
             }
         }
     }
@@ -3049,19 +3039,19 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
             ep.state->stage = prev;
         }
 
-        DEBUG("Call function " << *fcnPath << ": fcn_ms=" << fcnMs);
+        DEBUG(StringView("Call function ") << *fcnPath << StringView(": fcn_ms=") << fcnMs);
         // TODO: Set m_const during parse and check here
         if (!fcn.code && !fcn.code.mir) {
             if (fcn.linkage.name == "") {
             } else if (fcn.linkage.name == "panic_impl") {
-                MIR_TODO(state, "panic in constant evaluation");
+                MIR_TODO(state, StringView("panic in constant evaluation"));
             } else {
-                MIR_TODO(state, "Call extern function `" << fcn.linkage.name << "` (" << *fcnPath << ")");
+                MIR_TODO(state, StringView("Call extern function `") << fcn.linkage.name << StringView("` (") << *fcnPath << StringView(")"));
             }
         }
 
         const auto* mir = this->resolve.hirCrate().getOrGenMir(this->resolve.board(), HIRItemPath(*fcnPath), fcn);
-        MIR_ASSERT(state, mir, "No MIR for function " << *fcnPath);
+        MIR_ASSERT(state, mir, StringView("No MIR for function ") << *fcnPath);
 
         HIRFunction::argsT argDefs;
         for (const auto& a : fcn.args) {
@@ -3087,7 +3077,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         pushStackEntry(HIRItemPath(*fcnPath), *mir, std::move(fcnMs), std::move(retTy), std::move(argDefs), std::move(callArgs), &fcn.params, implParamsDef, std::move(callerLocation), tracksCaller);
         return true;
     } else if (rv.is_NotFound() && monomorphisePathNeeded(path)) {
-        BUG(state.sp, "Unresolved generic path " << path << " during concrete evaluation");
+        BUG(state.sp, StringView("Unresolved generic path ") << path << StringView(" during concrete evaluation"));
     } else if (rv.is_Struct()) {
         auto dst = localState.getLval(rvSlot);
 
@@ -3095,14 +3085,14 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         const auto& ty = state.getLvalueType(tmp, rvSlot);
         auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
         if (!repr) {
-            BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
+            BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
         }
-        MIR_ASSERT(state, repr->fields.size() == callArgs.size(), "");
+        MIR_ASSERT(state, repr->fields.size() == callArgs.size(), StringView(""));
         for (size_t i = 0; i < callArgs.size(); i++) {
             size_t sz = localState.sizeOfOrBug(repr->fields[i].ty);
             auto localDst = dst.slice(repr->fields[i].offset, sz);
             localDst.copyFrom(state, MIREvalValueRef(callArgs[i]));
-            DEBUG("@" << repr->fields[i].offset << " = " << localDst);
+            DEBUG(StringView("@") << repr->fields[i].offset << StringView(" = ") << localDst);
         }
         return false;
     } else if (rv.is_Enum()) {
@@ -3115,7 +3105,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         });
         return false;
     } else {
-        MIR_TODO(state, "Could not find function for " << path << " - " << rv.tagStr());
+        MIR_TODO(state, StringView("Could not find function for ") << path << StringView(" - ") << rv.tagStr());
     }
 }
 
@@ -3123,7 +3113,7 @@ void HIREvaluator::callConstDestructor(MIREvalCallStackEntry& localState, HIRTyp
     const auto& state = localState.state;
     auto& types = resolve.hirCrate().types;
 
-    DEBUG("Const drop of " << ty << " at " << slot);
+    DEBUG(StringView("Const drop of ") << ty << StringView(" at ") << slot);
     std::vector<MIREvalAllocationPtr> callArgs;
     callArgs.push_back(MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, types.borrow(HIRBorrowType::Unique, ty)));
     localState.writeParam(MIREvalValueRef(callArgs.back()), MIRParam::make_Borrow({HIRBorrowType::Unique, slot.clone()}));
@@ -3165,7 +3155,7 @@ void HIREvaluator::runConstDrop(MIREvalCallStackEntry& localState, HIRTypeRef ty
                     return;
                 case HIRTypePathBinding::TAG_Struct: {
                     const auto* repr = TargetGetTypeRepr(state.sp, localState.rootResolve, ty);
-                    MIR_ASSERT(state, repr, "No representation for struct " << ty);
+                    MIR_ASSERT(state, repr, StringView("No representation for struct ") << ty);
                     for (size_t i = 0; i < repr->fields.size(); i++) {
                         this->runConstDrop(localState, repr->fields[i].ty, MIRLValue::newField(slot.clone(), static_cast<unsigned>(i)));
                     }
@@ -3178,8 +3168,8 @@ void HIREvaluator::runConstDrop(MIREvalCallStackEntry& localState, HIRTypeRef ty
                     }
                     const auto variant = localState.readEnumVariant(ty, localState.getLval(slot));
                     const auto* repr = TargetGetTypeRepr(state.sp, localState.rootResolve, ty);
-                    MIR_ASSERT(state, repr, "No representation for enum " << ty);
-                    MIR_ASSERT(state, variant < repr->fields.size(), "Enum representation has no variant " << variant << " for " << ty);
+                    MIR_ASSERT(state, repr, StringView("No representation for enum ") << ty);
+                    MIR_ASSERT(state, variant < repr->fields.size(), StringView("Enum representation has no variant ") << variant << StringView(" for ") << ty);
                     this->runConstDrop(localState, repr->fields[variant].ty, MIRLValue::newDowncast(slot.clone(), variant));
                     break;
                 }
@@ -3208,24 +3198,24 @@ void HIREvaluator::runConstDrop(MIREvalCallStackEntry& localState, HIRTypeRef ty
 
 EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MIREvalAllocation& a) {
     const auto* aBytes = a.getBytes(0, a.size(), false);
-    ASSERT_BUG(this->rootSpan, aBytes, "Unable to get entire allocation - " << FMT_CB(ss, a.fmt(ss, 0, a.size())));
+    ASSERT_BUG(this->rootSpan, aBytes, StringView("Unable to get entire allocation - ") << FMT_CB(ss, a.fmt(ss, 0, a.size())));
     EncodedLiteral rv;
     rv.bytes.insert(rv.bytes.begin(), aBytes, aBytes + a.size());
     for (const auto& r : a.getRelocations()) {
         if (const auto* innerAlloc = r.ptr.asAllocation()) {
             if (innerAlloc->isConstHeapAllocation() || innerAlloc->isWritable()) {
-                ASSERT_BUG(this->rootSpan, innerAlloc->isAlive(), "constant contains a pointer to a deallocated allocation");
+                ASSERT_BUG(this->rootSpan, innerAlloc->isAlive(), StringView("constant contains a pointer to a deallocated allocation"));
                 auto innerVal = allocationToEncoded(innerAlloc->getType(), *innerAlloc);
                 HIRTypeRef staticType;
                 size_t staticAlignment = 0;
                 if (innerAlloc->isConstHeapAllocation()) {
                     if (!innerAlloc->wasMadeGlobal()) {
-                        ERROR(this->rootSpan, E0000, "a const heap allocation escaped without const_make_global");
+                        ERROR(this->rootSpan, E0000, StringView("a const heap allocation escaped without const_make_global"));
                     }
                     staticType = resolve.hirCrate().types.array(resolve.hirCrate().types.primitive(HIRCoreType::U8), innerAlloc->size());
                     staticAlignment = innerAlloc->getHeapAlignment();
                 } else {
-                    ASSERT_BUG(this->rootSpan, innerAlloc->getType(), "typed CTFE allocation has no type");
+                    ASSERT_BUG(this->rootSpan, innerAlloc->getType(), StringView("typed CTFE allocation has no type"));
                     staticType = MonomorphiserNop(resolve.hirCrate().types).monomorphType(Span(), innerAlloc->getType());
                 }
 
@@ -3244,7 +3234,7 @@ EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MI
             auto ptr = c->getBytes(0, size, true);
             rv.relocations.push_back(Reloc::newBytes(r.offset, TargetGetPointerBits() / 8, std::string(ptr, ptr + size)));
         } else {
-            BUG(this->rootSpan, "");
+            BUG(this->rootSpan, StringView(""));
         }
     }
     return rv;
@@ -3256,13 +3246,13 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
 
 EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, HIRTypeRef exp, MonomorphState ms) {
     TRACE_FUNCTION_F(ip);
-    DEBUG("ms = " << ms);
+    DEBUG(StringView("ms = ") << ms);
     const auto* mir = this->resolve.hirCrate().getOrGenMir(this->resolve.board(), ip, expr, exp);
 
     resolve.revealOpaqueTypes(expr.span(), exp);
 
     if (mir) {
-        ASSERT_BUG(Span(), expr.state, "");
+        ASSERT_BUG(Span(), expr.state, StringView(""));
         if (!resolve.itemGenericsPtr() && !resolve.implGenericsPtr()) {
             resolve.setBothGenericsRaw(expr.state->implGenerics, expr.state->itemGenerics);
         }
@@ -3277,7 +3267,7 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
         if (!ms.ppImpl && resolve.implGenericsPtr()) {
             ms.ppImpl = &(nopParamsImpl = resolve.implGenericsPtr()->makeNopParams(resolve.hirCrate().types, 0));
         }
-        DEBUG("(filled missing params) ms = " << ms);
+        DEBUG(StringView("(filled missing params) ms = ") << ms);
     }
 
     if (mir) {
@@ -3292,12 +3282,12 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
         this->pushStackEntry(ip, *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenericsPtr(), resolve.implGenericsPtr(), SourceLocation(this->rootSpan), false);
         auto rvRaw = this->runUntilStackEmpty();
 
-        ASSERT_BUG(this->rootSpan, rvRaw, "evaluate_constant_mir returned null allocation");
+        ASSERT_BUG(this->rootSpan, rvRaw, StringView("evaluate_constant_mir returned null allocation"));
 
-        DEBUG(ip << " = " << MIREvalValueRef(rvRaw));
+        DEBUG(ip << StringView(" = ") << MIREvalValueRef(rvRaw));
         return this->allocationToEncoded(exp, *rvRaw);
     } else {
-        BUG(this->rootSpan, "Attempting to evaluate constant expression with no associated code");
+        BUG(this->rootSpan, StringView("Attempting to evaluate constant expression with no associated code"));
     }
 }
 
@@ -3312,12 +3302,12 @@ void ConvertHIRConstantEvaluate(const WireBoard& wb, HIRCrate& crate) {
     ExpanderApply(*crate.pool, crate.types).visitCrate(crate);
     for (auto& newTyPair : crate.newTypes) {
         auto res = crate.rootModule.modItems.insert(mv$(newTyPair));
-        ASSERT_BUG(Span(), res.second, "Duplicate type in consteval?");
+        ASSERT_BUG(Span(), res.second, StringView("Duplicate type in consteval?"));
     }
     crate.newTypes.clear();
     for (auto& newValPair : crate.newValues) {
         auto res = crate.rootModule.valueItems.insert(mv$(newValPair));
-        ASSERT_BUG(Span(), res.second, "Duplicate value in consteval?");
+        ASSERT_BUG(Span(), res.second, StringView("Duplicate value in consteval?"));
     }
     crate.newValues.clear();
 }
@@ -3366,10 +3356,10 @@ void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve,
     const HIRGenericParams* resolvedImplParams = nullptr;
     auto value = resolve.getValue(e.value.span(), path, constMs, false, &resolvedImplParams);
     const auto* constant = value.opt_Constant();
-    ASSERT_BUG(e.value.span(), constant && *constant == &e, "Resolved a different constant for " << path);
+    ASSERT_BUG(e.value.span(), constant && *constant == &e, StringView("Resolved a different constant for ") << path);
 
     HIRItemPath modIp{e.value.state->modPath};
-    auto nvs = NewvalState(e.value.state->module, modIp, FMT("const" << &e << "#"));
+    auto nvs = NewvalState(e.value.state->module, modIp, FMT(StringView("const") << static_cast<const void*>(&e) << StringView("#")));
     auto eval = HIREvaluator(e.value.span(), callerResolve.board(), nvs);
     eval.resolve.setBothGenericsRaw(resolvedImplParams, &e.params);
     auto type = constMs.monomorphType(e.value.span(), e.type);
@@ -3429,15 +3419,15 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
             const auto& ue = *v.as_Unevaluated();
 
             {
-                ASSERT_BUG(sp, paramsDef, "Missing generic parameter definitions for " << params);
+                ASSERT_BUG(sp, paramsDef, StringView("Missing generic parameter definitions for ") << params);
                 auto idx = static_cast<size_t>(&v - &params.values.front());
-                ASSERT_BUG(sp, idx < paramsDef->values.size(), "");
+                ASSERT_BUG(sp, idx < paramsDef->values.size(), StringView(""));
                 const HIRTypeData* ty = paramsDef->values[idx].type;
                 HIRTypeRef tmp;
                 if (monomorphiseTypeNeeded(ty)) {
                     MonomorphStatePtr ms(crate.types, nullptr, &params, &params);
                     ty = tmp = ms.monomorphType(sp, ty);
-                    ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
+                    ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), StringView("") << ty);
                 }
                 translateConstExprBody(sp, wb, crate, ty, ue);
                 const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, ue);
@@ -3645,7 +3635,7 @@ NewvalStateNop::NewvalStateNop(const Span& sp)
 }
 
 auto NewvalStateNop::newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) -> HIRPath {
-    TODO(this->sp, "new_static while evaluating a const generic");
+    TODO(this->sp, StringView("new_static while evaluating a const generic"));
 }
 
 NewvalState::NewvalState(const HIRModule& mod, const HIRItemPath& modPath, std::string prefix)
@@ -3656,7 +3646,7 @@ NewvalState::NewvalState(const HIRModule& mod, const HIRItemPath& modPath, std::
 }
 
 auto NewvalState::newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) -> HIRPath {
-    ASSERT_BUG(Span(), type != HIRTypeRef(), "");
+    ASSERT_BUG(Span(), type != HIRTypeRef(), StringView(""));
     auto name = RcString::newInterned(FMT(namePrefix << nextItemIdx));
     nextItemIdx++;
     auto rv = modPath.getSimplePath() + name.c_str();
@@ -3666,7 +3656,7 @@ auto NewvalState::newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignm
     s.valueGenerated = true;
     s.saveLiteral = true;
 
-    DEBUG(rv << ": " << s.type << " = " << s.valueRes);
+    DEBUG(rv << StringView(": ") << s.type << StringView(" = ") << s.valueRes);
     const_cast<HIRModule&>(mod).inlineStatics.push_back(std::make_pair(mv$(name), box$(s)));
     return rv;
 }
@@ -3763,16 +3753,16 @@ MIREvalConstant::MIREvalConstant(const void* data, size_t len)
     , data(reinterpret_cast<const u8*>(data)) {
 }
 
-auto MIREvalConstant::fmtIdent(std::ostream& os) const -> void {
-    os << "C:" << (const void*)this->data;
+auto MIREvalConstant::fmtIdent(ZeroCopyOutput& os) const -> void {
+    os << StringView("C:") << (const void*)this->data;
 }
 
-auto MIREvalConstant::fmt(std::ostream& os, size_t ofs, size_t len) const -> void {
+auto MIREvalConstant::fmt(ZeroCopyOutput& os, size_t ofs, size_t len) const -> void {
     BUG_ASSERT(ofs <= length);
     BUG_ASSERT(ofs + len <= length);
     for (size_t i = 0; i < len; i++) {
         if (i != 0 && (ofs + i) % 8 == 0) {
-            os << " ";
+            os << StringView(" ");
         }
         putbHex(os, this->data[ofs + i]);
     }
@@ -3834,27 +3824,27 @@ MIREvalAllocation::MIREvalAllocation(u8* data, size_t len, const HIRTypeData* ty
     memset(data, 0, len + (len + 7) / 8);
 }
 
-auto MIREvalAllocation::fmtIdent(std::ostream& os) const -> void {
-    os << "A:" << this;
+auto MIREvalAllocation::fmtIdent(ZeroCopyOutput& os) const -> void {
+    os << StringView("A:") << static_cast<const void*>(this);
 }
 
-auto MIREvalAllocation::fmt(std::ostream& os, size_t ofs, size_t len) const -> void {
+auto MIREvalAllocation::fmt(ZeroCopyOutput& os, size_t ofs, size_t len) const -> void {
     BUG_ASSERT(ofs <= length);
     BUG_ASSERT(ofs + len <= length);
     for (size_t i = 0; i < len; i++) {
         auto j = ofs + i;
         if (i != 0 && j % 8 == 0) {
-            os << " ";
+            os << StringView(" ");
         }
         for (const auto& r : relocations) {
             if (r.offset == j) {
-                os << "{" << r.ptr << "}";
+                os << StringView("{") << r.ptr << StringView("}");
             }
         }
         if (getMask()[j / 8] & (1 << j % 8)) {
             putbHex(os, data[j]);
         } else {
-            os << "--";
+            os << StringView("--");
         }
     }
 }
@@ -3926,7 +3916,7 @@ auto MIREvalAllocation::isWritable() const -> bool {
 }
 
 auto MIREvalAllocation::extWriteBytes(size_t ofs, size_t len) -> u8* {
-    ASSERT_BUG(Span(), ofs <= length && len <= length && ofs + len <= length, "OOB write: " << ofs << "+" << len << " out of " << length);
+    ASSERT_BUG(Span(), ofs <= length && len <= length && ofs + len <= length, StringView("OOB write: ") << ofs << StringView("+") << len << StringView(" out of ") << length);
     {
         auto* m = this->getMask();
         size_t mo = ofs, ml = len;
@@ -4033,16 +4023,16 @@ MIREvalStaticRef::MIREvalStaticRef(ObjPool* pool, HIRPath p, const EncodedLitera
     BUG_ASSERT(!encoded || encoded->bytes.size() == length);
 }
 
-auto MIREvalStaticRef::fmtIdent(std::ostream& os) const -> void {
+auto MIREvalStaticRef::fmtIdent(ZeroCopyOutput& os) const -> void {
     os << this->path_;
 }
 
-auto MIREvalStaticRef::fmt(std::ostream& os, size_t ofs, size_t len) const -> void {
-    os << "[" << path_ << "]";
+auto MIREvalStaticRef::fmt(ZeroCopyOutput& os, size_t ofs, size_t len) const -> void {
+    os << StringView("[") << path_ << StringView("]");
     if (encoded) {
         os << EncodedLiteralSlice(*encoded).slice(ofs, len);
     } else {
-        os << "?";
+        os << StringView("?");
     }
 }
 
@@ -4068,7 +4058,7 @@ auto MIREvalStaticRef::getBytes(size_t ofs, size_t len, bool checkMask) const ->
             return reinterpret_cast<const u8*>("");
         }
         if (valuePending) {
-            ERROR(Span(), E0000, "cycle detected when evaluating static `" << path_ << "`");
+            ERROR(Span(), E0000, StringView("cycle detected when evaluating static `") << path_ << StringView("`"));
         }
         return nullptr;
     }
@@ -4106,7 +4096,7 @@ auto MIREvalStaticRef::getReloc(size_t ofs) const -> MIREvalRelocPtr {
                 MIREvalRelocPtr reloc;
                 if (r.p) {
                     return MIREvalRelocPtr(MIREvalStaticRefPtr::allocate(pool, r.p->clone(), nullptr, 0));
-                    TODO(Span(), "Convert relocation pointer - " << *r.p);
+                    TODO(Span(), StringView("Convert relocation pointer - ") << *r.p);
                 } else {
                     return MIREvalRelocPtr(MIREvalAllocationPtr::allocateRo(pool, r.bytes.data(), r.bytes.size()));
                 }
@@ -4141,7 +4131,7 @@ MIREvalValueRef::MIREvalValueRef(MIREvalRelocPtr alloc, size_t ofs)
 }
 
 auto MIREvalValueRef::slice(size_t ofs, size_t len) const -> MIREvalValueRef {
-    ASSERT_BUG(Span(), ofs <= this->len && ofs + len <= this->len, "ValueRef::slice: " << ofs << "+" << len << " out of range (" << this->len << ")");
+    ASSERT_BUG(Span(), ofs <= this->len && ofs + len <= this->len, StringView("ValueRef::slice: ") << ofs << StringView("+") << len << StringView(" out of range (") << this->len << StringView(")"));
 
     MIREvalValueRef rv;
     rv.storage = storage;
@@ -4151,7 +4141,7 @@ auto MIREvalValueRef::slice(size_t ofs, size_t len) const -> MIREvalValueRef {
 }
 
 auto MIREvalValueRef::slice(size_t ofs) const -> MIREvalValueRef {
-    ASSERT_BUG(Span(), ofs <= this->len, "ValueRef::slice: " << ofs << " out of range (" << this->len << ")");
+    ASSERT_BUG(Span(), ofs <= this->len, StringView("ValueRef::slice: ") << ofs << StringView(" out of range (") << this->len << StringView(")"));
     return slice(ofs, this->len - ofs);
 }
 
@@ -4177,13 +4167,13 @@ auto MIREvalValueRef::copyFrom(const MIRTypeResolve& state, const MIREvalValueRe
     size_t len = std::min(this->len, other.len);
     if (this->storage == other.storage) {
         if (this->ofs < other.ofs) {
-            MIR_ASSERT(state, this->ofs + len <= other.ofs, "Overlapping copy_from: " << other.ofs << "+" << len << " and " << this->ofs << "+" << len);
+            MIR_ASSERT(state, this->ofs + len <= other.ofs, StringView("Overlapping copy_from: ") << other.ofs << StringView("+") << len << StringView(" and ") << this->ofs << StringView("+") << len);
         } else {
-            MIR_ASSERT(state, other.ofs + len <= this->ofs, "Overlapping copy_from: " << other.ofs << "+" << len << " and " << this->ofs << "+" << len);
+            MIR_ASSERT(state, other.ofs + len <= this->ofs, StringView("Overlapping copy_from: ") << other.ofs << StringView("+") << len << StringView(" and ") << this->ofs << StringView("+") << len);
         }
     }
     const auto* src = other.storage.asValue().getBytes(other.ofs, len, /*check_mask*/ false);
-    MIR_ASSERT(state, src, "Invalid read " << other.storage << " - " << other.ofs << "+" << len);
+    MIR_ASSERT(state, src, StringView("Invalid read ") << other.storage << StringView(" - ") << other.ofs << StringView("+") << len);
     storage.asValue().writeBytes(this->ofs, src, len);
     storage.asValue().writeMaskFrom(this->ofs, other.storage.asValue(), other.ofs, len);
     for (size_t i = 0; i < len; i++) {
@@ -4213,8 +4203,8 @@ auto MIREvalValueRef::copyFromOverlapping(const MIRTypeResolve& state, const MIR
 
 auto MIREvalValueRef::writeBytes(const MIRTypeResolve& state, const void* data, size_t len) -> void {
     ensureLive(state);
-    MIR_ASSERT(state, storage, "Writing to invalid slot");
-    MIR_ASSERT(state, storage.asValue().isWritable(), "Writing to read-only slot");
+    MIR_ASSERT(state, storage, StringView("Writing to invalid slot"));
+    MIR_ASSERT(state, storage.asValue().isWritable(), StringView("Writing to read-only slot"));
     if (len > 0) {
         storage.asValue().writeBytes(ofs, data, len);
     }
@@ -4222,8 +4212,8 @@ auto MIREvalValueRef::writeBytes(const MIRTypeResolve& state, const void* data, 
 
 auto MIREvalValueRef::extWriteBytes(const MIRTypeResolve& state, size_t len) -> u8* {
     ensureLive(state);
-    MIR_ASSERT(state, storage, "Writing to invalid slot");
-    MIR_ASSERT(state, storage.asValue().isWritable(), "Writing to read-only slot");
+    MIR_ASSERT(state, storage, StringView("Writing to invalid slot"));
+    MIR_ASSERT(state, storage.asValue().isWritable(), StringView("Writing to read-only slot"));
     return storage.asValue().extWriteBytes(ofs, len);
 }
 
@@ -4250,7 +4240,7 @@ auto MIREvalValueRef::writeFloat(const MIRTypeResolve& state, unsigned bits, Flo
             writeBytes(state, &vF128, 16);
         } break;
         default:
-            MIR_BUG(state, "Unexpected float size (write): " << bits);
+            MIR_BUG(state, StringView("Unexpected float size (write): ") << bits);
     }
 }
 
@@ -4280,10 +4270,10 @@ auto MIREvalValueRef::setReloc(MIREvalRelocPtr reloc) -> void {
 
 auto MIREvalValueRef::extReadBytes(const MIRTypeResolve& state, size_t len) const -> const u8* {
     ensureLive(state);
-    MIR_ASSERT(state, storage, "");
-    MIR_ASSERT(state, len >= 1, "");
+    MIR_ASSERT(state, storage, StringView(""));
+    MIR_ASSERT(state, len >= 1, StringView(""));
     const auto* src = storage.asValue().getBytes(ofs, len, /*check_mask*/ true);
-    MIR_ASSERT(state, src, "Invalid read: " << ofs << "+" << len << " (in " << *this << ")");
+    MIR_ASSERT(state, src, StringView("Invalid read: ") << ofs << StringView("+") << len << StringView(" (in ") << *this << StringView(")"));
     return src;
 }
 
@@ -4316,7 +4306,7 @@ auto MIREvalValueRef::readFloat(const MIRTypeResolve& state, unsigned bits) cons
             return vF;
         } break;
         default:
-            MIR_BUG(state, "Unexpected float size: " << bits);
+            MIR_BUG(state, StringView("Unexpected float size: ") << bits);
     }
 }
 
@@ -4345,7 +4335,7 @@ auto MIREvalValueRef::readPtr(const MIRTypeResolve& state) const -> std::pair<u6
 
 auto MIREvalValueRef::ensureLive(const MIRTypeResolve& state) const -> void {
     if (auto* allocation = storage.asAllocation()) {
-        MIR_ASSERT(state, allocation->isAlive(), "use of deallocated const heap allocation");
+        MIR_ASSERT(state, allocation->isAlive(), StringView("use of deallocated const heap allocation"));
     }
 }
 
@@ -4440,7 +4430,7 @@ MIREvalPathCallback::MIREvalPathCallback(const HIRItemPath& path)
     : path(path) {
 }
 
-auto MIREvalPathCallback::write(std::ostream& os) const -> void {
+auto MIREvalPathCallback::write(ZeroCopyOutput& os) const -> void {
     os << path;
 }
 
@@ -4481,7 +4471,7 @@ auto MIREvalCallStackEntry::monomorphExpand(const HIRTypeData* ty) const -> HIRT
 
 auto MIREvalCallStackEntry::readEnumVariant(const HIRTypeData* ty, MIREvalValueRef value) const -> unsigned {
     auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
-    MIR_ASSERT(state, repr, "No representation for enum " << ty);
+    MIR_ASSERT(state, repr, StringView("No representation for enum ") << ty);
 
     unsigned variant = 0;
     switch (repr->variants.tag()) {
@@ -4498,7 +4488,7 @@ auto MIREvalCallStackEntry::readEnumVariant(const HIRTypeData* ty, MIREvalValueR
             auto& ve = repr->variants.as_Values();
             auto tag = value.slice(repr->getOffset(state.sp, rootResolve, ve.field), ve.field.size).readUint(state, 8 * ve.field.size).truncateU64();
             auto it = std::find(ve.values.begin(), ve.values.end(), tag);
-            MIR_ASSERT(state, it != ve.values.end(), "Invalid enum tag " << tag << " for " << ty);
+            MIR_ASSERT(state, it != ve.values.end(), StringView("Invalid enum tag ") << tag << StringView(" for ") << ty);
             variant = it - ve.values.begin();
             break;
         }
@@ -4562,7 +4552,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRTypeData* ty, MIREva
         }
         case HIRTypeData::TAG_NodeType: {
             auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
-            MIR_ASSERT(state, repr, "No representation for " << ty);
+            MIR_ASSERT(state, repr, StringView("No representation for ") << ty);
             for (const auto& field : repr->fields) {
                 auto size = sizeOfOrBug(field.ty);
                 if (valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size))) {
@@ -4596,7 +4586,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRTypeData* ty, MIREva
                 return false;
             }
             auto pointer = value.readPtr(state);
-            MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, "Invalid owned pointer while checking a constant drop");
+            MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, StringView("Invalid owned pointer while checking a constant drop"));
             auto size = sizeOfOrBug(te.inner);
             auto inner = MIREvalValueRef(pointer.second, pointer.first - EncodedLiteral::PTR_BASE).slice(0, size);
             return valueNeedsNonConstDrop(te.inner, inner);
@@ -4626,7 +4616,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRTypeData* ty, MIREva
                 }
                 case HIRTypePathBinding::TAG_Struct: {
                     auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
-                    MIR_ASSERT(state, repr, "No representation for struct " << ty);
+                    MIR_ASSERT(state, repr, StringView("No representation for struct ") << ty);
                     for (const auto& field : repr->fields) {
                         auto size = sizeOfOrBug(field.ty);
                         if (valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size))) {
@@ -4642,17 +4632,17 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRTypeData* ty, MIREva
                         return false;
                     }
                     auto variant = readEnumVariant(ty, value);
-                    MIR_ASSERT(state, variant < variants->size(), "Enum variant " << variant << " out of range for " << ty);
+                    MIR_ASSERT(state, variant < variants->size(), StringView("Enum variant ") << variant << StringView(" out of range for ") << ty);
 
                     auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
-                    MIR_ASSERT(state, repr, "No representation for enum " << ty);
-                    MIR_ASSERT(state, variant < repr->fields.size(), "Enum representation has no variant " << variant << " for " << ty);
+                    MIR_ASSERT(state, repr, StringView("No representation for enum ") << ty);
+                    MIR_ASSERT(state, variant < repr->fields.size(), StringView("Enum representation has no variant ") << variant << StringView(" for ") << ty);
                     const auto& field = repr->fields[variant];
                     auto size = sizeOfOrBug(field.ty);
                     return valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size));
                 }
             }
-            MIR_BUG(state, "Unreachable path binding");
+            MIR_BUG(state, StringView("Unreachable path binding"));
         }
         case HIRTypeData::TAG_Array: {
             auto& te = (*ty).as_Array();
@@ -4676,7 +4666,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRTypeData* ty, MIREva
         }
         case HIRTypeData::TAG_Tuple: {
             auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
-            MIR_ASSERT(state, repr, "No representation for tuple " << ty);
+            MIR_ASSERT(state, repr, StringView("No representation for tuple ") << ty);
             for (const auto& field : repr->fields) {
                 auto size = sizeOfOrBug(field.ty);
                 if (valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size))) {
@@ -4686,7 +4676,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRTypeData* ty, MIREva
             return false;
         }
     }
-    MIR_BUG(state, "Unreachable type while checking a constant drop");
+    MIR_BUG(state, StringView("Unreachable type while checking a constant drop"));
 }
 
 auto MIREvalCallStackEntry::getStaticrefMono(const HIRPath& p, HIRTypeRef* outTy) const -> MIREvalStaticRefPtr {
@@ -4698,7 +4688,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
     if (visitPathTysWith(p, [&](const auto& ty) -> bool {
         return ty->is_Generic();
     })) {
-        BUG(state.sp, "Static " << p << " references a generic parameter after substitution");
+        BUG(state.sp, StringView("Static ") << p << StringView(" references a generic parameter after substitution"));
     }
 
     if (const auto* pe = p.data.opt_UfcsKnown()) {
@@ -4718,7 +4708,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
         auto staticTy = constMs.monomorphType(state.sp, s.type);
         size_t staticSize;
         if (!TargetGetSizeOf(state.sp, rootResolve, staticTy, staticSize)) {
-            BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << staticTy);
+            BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << staticTy);
         }
         if (outTy) {
             *outTy = staticTy;
@@ -4726,7 +4716,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
 
         if (!s.valueGenerated) {
             if (!s.value && !s.value.mir) {
-                DEBUG("No value and no mir");
+                DEBUG(StringView("No value and no mir"));
                 return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, staticSize);
             }
 
@@ -4738,7 +4728,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
                     item.valueEvaluating = false;
                 };
                 ConvertHIRConstantEvaluateStatic(resolve.board(), resolve.hirCrate(), implParamsDef, p, item);
-                DEBUG("Static " << p << " is already being evaluated; address-only reference");
+                DEBUG(StringView("Static ") << p << StringView(" is already being evaluated; address-only reference"));
             }
         }
 
@@ -4746,7 +4736,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
             auto& item = const_cast<HIRStatic&>(s);
 
             if (item.valueEvaluating) {
-                DEBUG("- Already being evaluated, taking the address only: " << p);
+                DEBUG(StringView("- Already being evaluated, taking the address only: ") << p);
                 return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, staticSize, /*valuePending=*/true);
             }
             if (item.value.state) {
@@ -4756,7 +4746,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
                     case HIRExprState::Stage::SbcRequest:
                     case HIRExprState::Stage::ExpandRequest:
                     case HIRExprState::Stage::MirRequest:
-                        DEBUG("- Already being worked out, taking the address only: " << p);
+                        DEBUG(StringView("- Already being worked out, taking the address only: ") << p);
                         return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, staticSize, /*valuePending=*/true);
                     default:
                         break;
@@ -4764,19 +4754,19 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
             }
 
             HIRItemPath modIp{item.value.state->modPath};
-            auto nvs = NewvalState(item.value.state->module, modIp, FMT("static" << &item << "#"));
+            auto nvs = NewvalState(item.value.state->module, modIp, FMT(StringView("static") << static_cast<const void*>(&item) << StringView("#")));
             auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
-            DEBUG("- Evaluate " << p);
+            DEBUG(StringView("- Evaluate ") << p);
             item.valueGenerated = true;
             item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, staticTy, std::move(constMs));
-            DEBUG(p << " = " << item.valueRes);
+            DEBUG(p << StringView(" = ") << item.valueRes);
         }
         const auto* value = s.valueRes.bytes.size() == staticSize ? &s.valueRes : nullptr;
         return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), value, staticSize);
     } else {
-        DEBUG(ent.tagStr() << " " << p);
+        DEBUG(ent.tagStr() << StringView(" ") << p);
         if (outTy) {
-            MIR_TODO(state, "Get type for " << ent.tagStr() << " (" << p << ")");
+            MIR_TODO(state, StringView("Get type for ") << ent.tagStr() << StringView(" (") << p << StringView(")"));
         }
         return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, 0);
     }
@@ -4795,14 +4785,14 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
         }
         case MIRLValue::Storage::TAG_Local: {
             decltype(lv.root.as_Local()) e = lv.root.as_Local();
-            MIR_ASSERT(state, e < locals.size(), "Local index out of range - " << e << " >= " << locals.size());
+            MIR_ASSERT(state, e < locals.size(), StringView("Local index out of range - ") << e << StringView(" >= ") << locals.size());
             typ = localTypes[e];
             val = MIREvalValueRef(locals[e]);
             break;
         }
         case MIRLValue::Storage::TAG_Argument: {
             decltype(lv.root.as_Argument()) e = lv.root.as_Argument();
-            MIR_ASSERT(state, e < args.size(), "Argument index out of range - " << e << " >= " << args.size());
+            MIR_ASSERT(state, e < args.size(), StringView("Argument index out of range - ") << e << StringView(" >= ") << args.size());
             typ = state.args[e].second;
             val = MIREvalValueRef(args[e]);
             break;
@@ -4811,7 +4801,7 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
             decltype(lv.root.as_Static()) e = lv.root.as_Static();
             val = MIREvalValueRef(getStaticrefMono(e, lv.wrappers.empty() ? nullptr : &tmpTy));
             if (!lv.wrappers.empty()) {
-                MIR_ASSERT(state, tmpTy != HIRTypeRef(), "Type not set?");
+                MIR_ASSERT(state, tmpTy != HIRTypeRef(), StringView("Type not set?"));
             }
             typ = tmpTy;
             break;
@@ -4819,8 +4809,8 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
     }
 
     for (const auto& w : lv.wrappers) {
-        MIR_ASSERT(state, typ, "Type not set when unwrapping - " << lv);
-        DEBUG(w << " " << val << ": " << typ);
+        MIR_ASSERT(state, typ, StringView("Type not set when unwrapping - ") << lv);
+        DEBUG(w << StringView(" ") << val << StringView(": ") << typ);
         switch (w.tag()) {
             case MIRLValue::Wrapper::TAG_Field: {
                 decltype(w.as_Field()) e = w.as_Field();
@@ -4838,22 +4828,22 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
                     metadata = MIREvalValueRef();
                     size_t sz, al;
                     if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                        BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << typ);
+                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("size/align of ") << typ);
                     }
-                    MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
+                    MIR_ASSERT(state, sz < SIZE_MAX, StringView("Unsized type on index output - ") << typ);
                     size_t index = e;
                     // HACK: Allow one-past-end for `[foo, ref bar @ ...]` support
                     if (index == size) {
                         val = val.slice(index * sz, 0);
                     } else {
-                        MIR_ASSERT(state, index < size, "LValue::Index index out of range - " << index << " >= " << size);
+                        MIR_ASSERT(state, index < size, StringView("LValue::Index index out of range - ") << index << StringView(" >= ") << size);
                         val = val.slice(index * sz, sz);
                     }
                     break;
                 }
                 auto* repr = TargetGetTypeRepr(state.sp, this->rootResolve, typ);
-                MIR_ASSERT(state, repr, "No repr for " << typ);
-                MIR_ASSERT(state, e < repr->fields.size(), "LValue::Field index out of range");
+                MIR_ASSERT(state, repr, StringView("No repr for ") << typ);
+                MIR_ASSERT(state, e < repr->fields.size(), StringView("LValue::Field index out of range"));
                 if (repr->size != SIZE_MAX) {
                     metadata = MIREvalValueRef();
                 }
@@ -4862,7 +4852,7 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
 
                 size_t sz, al;
                 if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                    BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << typ);
+                    BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("size/align of ") << typ);
                 }
                 if (sz == SIZE_MAX) {
                     val = val.slice(ofs);
@@ -4877,27 +4867,27 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
                 } else if (const auto* te = typ->opt_Borrow()) {
                     typ = te->inner;
                 } else {
-                    MIR_BUG(state, "Deref of unsupported type - " << typ);
+                    MIR_BUG(state, StringView("Deref of unsupported type - ") << typ);
                 }
                 size_t sz, al;
                 if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                    BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << typ);
+                    BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("size/align of ") << typ);
                 }
                 if (sz == SIZE_MAX) {
-                    DEBUG("Reading metadata");
+                    DEBUG(StringView("Reading metadata"));
                     metadata = val.slice(TargetGetPointerBits() / 8);
                 }
                 auto p = val.readPtr(state);
                 if (auto* staticRef = p.second.asStaticref(); staticRef && !staticRef->hasValue()) {
                     p.second = MIREvalRelocPtr(getStaticref(staticRef->path().clone()));
                 }
-                MIR_ASSERT(state, p.first % al == 0, "Unaligned pointer deref");
+                MIR_ASSERT(state, p.first % al == 0, StringView("Unaligned pointer deref"));
                 bool zeroSizedDeref = sz == 0;
                 if (sz == SIZE_MAX) {
                     size_t itemSize = 1;
                     if (const auto* slice = typ->opt_Slice()) {
                         if (!TargetGetSizeOf(state.sp, rootResolve, slice->inner, itemSize)) {
-                            BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << slice->inner);
+                            BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << slice->inner);
                         }
                     } else if (typ != HIRCoreType::Str) {
                         itemSize = 1;
@@ -4905,13 +4895,13 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
                     zeroSizedDeref = itemSize == 0 || metadata.readUsize(state) == 0;
                 }
                 if (p.first < EncodedLiteral::PTR_BASE) {
-                    MIR_ASSERT(state, p.first != 0 && !p.second && zeroSizedDeref && rawAddress, "Null (<PTR_BASE) pointer deref");
-                    MIR_ASSERT(state, &w == &lv.wrappers.back(), "Raw pointer deref followed by an lvalue projection");
+                    MIR_ASSERT(state, p.first != 0 && !p.second && zeroSizedDeref && rawAddress, StringView("Null (<PTR_BASE) pointer deref"));
+                    MIR_ASSERT(state, &w == &lv.wrappers.back(), StringView("Raw pointer deref followed by an lvalue projection"));
                     *rawAddress = p.first;
                     val = MIREvalValueRef();
                     break;
                 }
-                DEBUG("> " << MIREvalValueRef(p.second) << " - o=" << (p.first - EncodedLiteral::PTR_BASE) << " sz=" << sz << " " << typ);
+                DEBUG(StringView("> ") << MIREvalValueRef(p.second) << StringView(" - o=") << (p.first - EncodedLiteral::PTR_BASE) << StringView(" sz=") << sz << StringView(" ") << typ);
                 // TODO: Determine size using metadata?
                 if (sz == SIZE_MAX) {
                     val = MIREvalValueRef(p.second, p.first - EncodedLiteral::PTR_BASE);
@@ -4930,25 +4920,25 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
                     typ = te->inner;
                     size = metadata.readUsize(state);
                 } else {
-                    MIR_BUG(state, "Index of unsupported type - " << typ);
+                    MIR_BUG(state, StringView("Index of unsupported type - ") << typ);
                 }
                 metadata = MIREvalValueRef();
                 size_t sz, al;
                 if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                    BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << typ);
+                    BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("size/align of ") << typ);
                 }
-                MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
-                MIR_ASSERT(state, e < locals.size(), "LValue::Index index local out of range");
+                MIR_ASSERT(state, sz < SIZE_MAX, StringView("Unsized type on index output - ") << typ);
+                MIR_ASSERT(state, e < locals.size(), StringView("LValue::Index index local out of range"));
                 size_t index = MIREvalValueRef(locals[e]).readUsize(state);
-                MIR_ASSERT(state, index < size, "LValue::Index index out of range - " << index << " >= " << size);
+                MIR_ASSERT(state, index < size, StringView("LValue::Index index out of range - ") << index << StringView(" >= ") << size);
                 val = val.slice(index * sz, sz);
                 break;
             }
             case MIRLValue::Wrapper::TAG_Downcast: {
                 decltype(w.as_Downcast()) e = w.as_Downcast();
                 auto* repr = TargetGetTypeRepr(state.sp, this->rootResolve, typ);
-                MIR_ASSERT(state, repr, "No repr for " << typ);
-                MIR_ASSERT(state, e < repr->fields.size(), "LValue::Downcast index out of range");
+                MIR_ASSERT(state, repr, StringView("No repr for ") << typ);
+                MIR_ASSERT(state, e < repr->fields.size(), StringView("LValue::Downcast index out of range"));
                 if (repr->size != SIZE_MAX) {
                     metadata = MIREvalValueRef();
                 }
@@ -4970,15 +4960,15 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) cons
     if (visitPathTysWith(p, [&](const auto& ty) -> bool {
         return ty->is_Generic();
     })) {
-        BUG(state.sp, "Constant " << p << " references a generic parameter after substitution");
+        BUG(state.sp, StringView("Constant ") << p << StringView(" references a generic parameter after substitution"));
     }
     MonomorphState constMs(rootResolve.crate.types);
     const HIRGenericParams* implParamsDef = nullptr;
     auto ent = getEntFullpath(state.sp, rootResolve, p, EntNS::Value, constMs, &implParamsDef);
-    MIR_ASSERT(state, ent.is_Constant(), "MIR Constant::Const(" << p << ") didn't point to a Constant - " << ent.tagStr());
+    MIR_ASSERT(state, ent.is_Constant(), StringView("MIR Constant::Const(") << p << StringView(") didn't point to a Constant - ") << ent.tagStr());
     const auto& c = *ent.as_Constant();
     if (c.valueState == HIRConstant::ValueState::InProgress) {
-        ERROR(state.sp, E0000, "cycle detected when evaluating constant `" << p << "`");
+        ERROR(state.sp, E0000, StringView("cycle detected when evaluating constant `") << p << StringView("`"));
     }
     if (c.valueState == HIRConstant::ValueState::Unknown) {
         auto& item = const_cast<HIRConstant&>(c);
@@ -4992,7 +4982,7 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) cons
             item.valueState = HIRConstant::ValueState::Generic;
         } else {
             HIRItemPath modIp{item.value.state->modPath};
-            auto nvs = NewvalState(item.value.state->module, modIp, FMT("const" << &c << "#"));
+            auto nvs = NewvalState(item.value.state->module, modIp, FMT(StringView("const") << static_cast<const void*>(&c) << StringView("#")));
             auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
             eval.resolve.setBothGenericsRaw(implParamsDef, &c.params);
             auto tempPpImpl = implParamsDef ? implParamsDef->makeNopParams(rootResolve.crate.types, 0) : HIRPathParams();
@@ -5003,7 +4993,7 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) cons
             if (!p.data.is_Generic()) {
                 tempMs.selfTy = rootResolve.crate.types.self();
             }
-            DEBUG("- Evaluate " << p);
+            DEBUG(StringView("- Evaluate ") << p);
             if (constItemMustStaySymbolic(implParamsDef, c.params)) {
                 item.valueState = HIRConstant::ValueState::Generic;
             } else {
@@ -5021,18 +5011,18 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) cons
         if (it == c.monomorphCache.end()) {
             auto& item = const_cast<HIRConstant&>(c);
             HIRItemPath modIp{item.value.state->modPath};
-            auto nvs = NewvalState(item.value.state->module, modIp, FMT("const" << &c << "#"));
+            auto nvs = NewvalState(item.value.state->module, modIp, FMT(StringView("const") << static_cast<const void*>(&c) << StringView("#")));
             auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
             eval.resolve.setBothGenericsRaw(implParamsDef, &c.params);
 
-            DEBUG("- Evaluate monomorphed " << p);
-            DEBUG("> const_ms=" << constMs);
+            DEBUG(StringView("- Evaluate monomorphed ") << p);
+            DEBUG(StringView("> const_ms=") << constMs);
             auto ty = constMs.monomorphType(item.value.span(), item.type);
             auto val = eval.evaluateConstant(HIRItemPath(p), item.value, std::move(ty), std::move(constMs));
 
             auto insertRes = item.monomorphCache.insert(std::make_pair(p.clone(), std::move(val)));
             it = insertRes.first;
-            DEBUG("Cached generic " << p);
+            DEBUG(StringView("Cached generic ") << p);
         }
 
         return it->second;
@@ -5098,7 +5088,7 @@ auto MIREvalCallStackEntry::writeConst(MIREvalValueRef dst, const MIRConstant& c
             BUG_ASSERT(e2.p);
             const auto& encoded = getConst(*e2.p, &ty);
 
-            DEBUG(*e2.p << " = " << encoded);
+            DEBUG(*e2.p << StringView(" = ") << encoded);
             writeEncoded(dst, encoded);
             break;
         }
@@ -5107,7 +5097,7 @@ auto MIREvalCallStackEntry::writeConst(MIREvalValueRef dst, const MIRConstant& c
             auto v = ms.getValue(state.sp, e2);
             EncodedLiteral tmp;
             const auto& encoded = getConst(v, tmp);
-            DEBUG(e2 << " = " << encoded);
+            DEBUG(e2 << StringView(" = ") << encoded);
             writeEncoded(dst, encoded);
             break;
         }
@@ -5117,7 +5107,7 @@ auto MIREvalCallStackEntry::writeConst(MIREvalValueRef dst, const MIRConstant& c
         case MIRConstant::TAG_ItemAddr: {
             auto& e2 = c.as_ItemAddr();
             BUG_ASSERT(e2);
-            MIR_ASSERT(state, e2.offset.isU64(), "Item address offset is too large: " << e2.offset);
+            MIR_ASSERT(state, e2.offset.isU64(), StringView("Item address offset is too large: ") << e2.offset);
             dst.writePtr(state, EncodedLiteral::PTR_BASE + e2.offset.truncateU64(), getStaticrefMono(*e2));
             break;
         }
@@ -5162,19 +5152,19 @@ auto MIREvalCallStackEntry::writeParam(MIREvalValueRef dst, const MIRParam& p) -
 auto MIREvalCallStackEntry::getConst(const HIRConstGeneric& v, EncodedLiteral& tmp) const -> const EncodedLiteral& {
     switch (v.tag()) {
         case HIRConstGeneric::TAG_Infer: {
-            BUG(state.sp, "Infer const generic during concrete evaluation");
+            BUG(state.sp, StringView("Infer const generic during concrete evaluation"));
         }
         case HIRConstGeneric::TAG_Generic: {
-            BUG(state.sp, "Generic const " << v << " during concrete evaluation");
+            BUG(state.sp, StringView("Generic const ") << v << StringView(" during concrete evaluation"));
         }
         case HIRConstGeneric::TAG_Unevaluated: {
             auto& ve = v.as_Unevaluated();
             if (!typeCanMonomorph(ve->selfType, ms) || !pathParamsCanMonomorph(ve->paramsImpl, ms) || !pathParamsCanMonomorph(ve->paramsItem, ms)) {
-                BUG(state.sp, "Unevaluated const cannot monomorph during concrete evaluation");
+                BUG(state.sp, StringView("Unevaluated const cannot monomorph during concrete evaluation"));
             }
             auto value = ve->monomorph(state.sp, ms, false);
             if (!typeIsConcrete(value.selfType) || !pathParamsAreConcrete(value.paramsImpl) || !pathParamsAreConcrete(value.paramsItem)) {
-                BUG(state.sp, "Unevaluated const not concrete after monomorph during concrete evaluation");
+                BUG(state.sp, StringView("Unevaluated const not concrete after monomorph during concrete evaluation"));
             }
             const auto& expr = *value.expr;
             MonomorphState valueMs(rootResolve.crate.types);
@@ -5200,7 +5190,7 @@ auto MIREvalCallStackEntry::readParamFloat(unsigned bits, const MIRParam& p) con
             return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readFloat(state, bits);
         }
         case MIRParam::TAG_Borrow: {
-            MIR_BUG(state, "Expected a float, got a MIR::Param::Borrow");
+            MIR_BUG(state, StringView("Expected a float, got a MIR::Param::Borrow"));
             break;
         }
         case MIRParam::TAG_Constant: {
@@ -5216,7 +5206,7 @@ auto MIREvalCallStackEntry::readParamFloat(unsigned bits, const MIRParam& p) con
                 const auto& el = getConst(ve, elTmp);
                 return EncodedLiteralSlice(el).readFloat();
             }
-            MIR_ASSERT(state, e.is_Float(), "Expected a float, got " << e);
+            MIR_ASSERT(state, e.is_Float(), StringView("Expected a float, got ") << e);
             return e.as_Float().v;
         }
     }
@@ -5230,7 +5220,7 @@ auto MIREvalCallStackEntry::readParamFloatBits(unsigned bits, const MIRParam& p)
             return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readUint(state, bits);
         }
         case MIRParam::TAG_Borrow: {
-            MIR_BUG(state, "Expected a float, got a MIR::Param::Borrow");
+            MIR_BUG(state, StringView("Expected a float, got a MIR::Param::Borrow"));
             break;
         }
         case MIRParam::TAG_Constant: {
@@ -5245,7 +5235,7 @@ auto MIREvalCallStackEntry::readParamFloatBits(unsigned bits, const MIRParam& p)
                 const auto& el = getConst(ve, elTmp);
                 return EncodedLiteralSlice(el).readUint();
             }
-            MIR_ASSERT(state, e.is_Float(), "Expected a float, got " << e);
+            MIR_ASSERT(state, e.is_Float(), StringView("Expected a float, got ") << e);
             const auto value = e.as_Float().v;
             switch (bits) {
                 case 16:
@@ -5265,7 +5255,7 @@ auto MIREvalCallStackEntry::readParamFloatBits(unsigned bits, const MIRParam& p)
                 case 128:
                     return U128(value.bitsLo(), value.bitsHi());
                 default:
-                    MIR_BUG(state, "Unexpected float size: " << bits);
+                    MIR_BUG(state, StringView("Unexpected float size: ") << bits);
             }
             break;
         }
@@ -5280,7 +5270,7 @@ auto MIREvalCallStackEntry::readParamUint(unsigned bits, const MIRParam& p) cons
             return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readUint(state, bits);
         }
         case MIRParam::TAG_Borrow: {
-            MIR_BUG(state, "Expected an integer, got a MIR::Param::Borrow");
+            MIR_BUG(state, StringView("Expected an integer, got a MIR::Param::Borrow"));
             break;
         }
         case MIRParam::TAG_Constant: {
@@ -5302,7 +5292,7 @@ auto MIREvalCallStackEntry::readParamUint(unsigned bits, const MIRParam& p) cons
             if (e.is_Bool()) {
                 return U128(e.as_Bool().v ? 1 : 0);
             }
-            MIR_ASSERT(state, e.is_Uint(), "Expected an integer, got " << e.tagStr() << " " << e);
+            MIR_ASSERT(state, e.is_Uint(), StringView("Expected an integer, got ") << e.tagStr() << StringView(" ") << e);
             return U128(e.as_Uint().v);
         }
     }
@@ -5316,7 +5306,7 @@ auto MIREvalCallStackEntry::readParamSint(unsigned bits, const MIRParam& p) cons
             return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readSint(state, bits);
         }
         case MIRParam::TAG_Borrow: {
-            MIR_BUG(state, "Expected an integer, got a MIR::Param::Borrow");
+            MIR_BUG(state, StringView("Expected an integer, got a MIR::Param::Borrow"));
             break;
         }
         case MIRParam::TAG_Constant: {
@@ -5332,7 +5322,7 @@ auto MIREvalCallStackEntry::readParamSint(unsigned bits, const MIRParam& p) cons
                 const auto& el = getConst(ve, elTmp);
                 return EncodedLiteralSlice(el).readSint();
             }
-            MIR_ASSERT(state, e.is_Int(), "Expected an integer, got " << e.tagStr() << " " << e);
+            MIR_ASSERT(state, e.is_Int(), StringView("Expected an integer, got ") << e.tagStr() << StringView(" ") << e);
             return S128(e.as_Int().v);
         }
     }
@@ -5358,9 +5348,9 @@ auto MIREvalCallStackEntry::readParamPtr(const MIRParam& p) const -> std::pair<u
         case MIRParam::TAG_Constant: {
             auto& e = p.as_Constant();
             if (!e.is_ItemAddr()) {
-                MIR_BUG(state, "Invalid argument for pointer: " << p);
+                MIR_BUG(state, StringView("Invalid argument for pointer: ") << p);
             }
-            MIR_ASSERT(state, e.as_ItemAddr().offset.isU64(), "Item address offset is too large: " << e.as_ItemAddr().offset);
+            MIR_ASSERT(state, e.as_ItemAddr().offset.isU64(), StringView("Item address offset is too large: ") << e.as_ItemAddr().offset);
             // TODO: Look up the static
             return std::make_pair(EncodedLiteral::PTR_BASE + e.as_ItemAddr().offset.truncateU64(), MIREvalRelocPtr(getStaticrefMono(*e.as_ItemAddr())));
         }
@@ -5371,7 +5361,7 @@ auto MIREvalCallStackEntry::readParamPtr(const MIRParam& p) const -> std::pair<u
 auto MIREvalCallStackEntry::sizeOfOrBug(const HIRTypeData* ty) const -> size_t {
     size_t rv;
     if (!TargetGetSizeOf(state.sp, rootResolve, ty, /*out*/ rv)) {
-        MIR_BUG(state, "No size for " << ty);
+        MIR_BUG(state, StringView("No size for ") << ty);
     }
     return rv;
 }
@@ -5523,13 +5513,13 @@ auto Expander::visitPathParams(HIRPathParams& p) -> void {
     for (auto& v : p.values) {
         if (v.is_Unevaluated()) {
             if (!getParams) {
-                ASSERT_BUG(sp, paramsUnresolved, "Path parameters visited without their definition");
+                ASSERT_BUG(sp, paramsUnresolved, StringView("Path parameters visited without their definition"));
                 continue;
             }
             {
                 const auto& paramsDef = getParams->get(sp);
                 auto idx = static_cast<size_t>(&v - &p.values.front());
-                ASSERT_BUG(sp, idx < paramsDef.values.size(), "");
+                ASSERT_BUG(sp, idx < paramsDef.values.size(), StringView(""));
                 const auto& ty = paramsDef.values[idx].type;
                 if (monomorphiseTypeNeeded(ty)) {
                     continue;
@@ -5561,7 +5551,7 @@ auto Expander::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext pc) -
     TRACE_FUNCTION_FR(p, p);
     auto saved = getParams;
     auto callback = makeCallable<GenericParamsCb>([&](const Span& sp) -> const HIRGenericParams& {
-        DEBUG("visit_generic_path[m_get_params] " << p);
+        DEBUG(StringView("visit_generic_path[m_get_params] ") << p);
         switch (pc) {
             case HIRVisitor::PathContext::VALUE: {
                 if (p.path.components().size() > 1) {
@@ -5573,11 +5563,11 @@ auto Expander::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext pc) -
                 auto& vi = crate.getValitemByPath(sp, p.path);
                 switch (vi.tag()) {
                     case HIRValueItem::TAG_Import: {
-                        BUG(sp, "Module Import");
+                        BUG(sp, StringView("Module Import"));
                         break;
                     }
                     case HIRValueItem::TAG_Static: {
-                        BUG(sp, "Getting params definition for Static - " << p);
+                        BUG(sp, StringView("Getting params definition for Static - ") << p);
                         break;
                     }
                     case HIRValueItem::TAG_Constant: {
@@ -5604,19 +5594,19 @@ auto Expander::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext pc) -
                 auto& vi = crate.getTypeitemByPath(sp, p.path);
                 switch (vi.tag()) {
                     case HIRTypeItem::TAG_Import: {
-                        BUG(sp, "Module Import");
+                        BUG(sp, StringView("Module Import"));
                         break;
                     }
                     case HIRTypeItem::TAG_Module: {
-                        BUG(sp, "mod - " << p);
+                        BUG(sp, StringView("mod - ") << p);
                         break;
                     }
                     case HIRTypeItem::TAG_TypeAlias: {
-                        BUG(sp, "type - " << p);
+                        BUG(sp, StringView("type - ") << p);
                         break;
                     }
                     case HIRTypeItem::TAG_TraitAlias: {
-                        BUG(sp, "trait= - " << p);
+                        BUG(sp, StringView("trait= - ") << p);
                         break;
                     }
                     case HIRTypeItem::TAG_Struct: {
@@ -5636,14 +5626,14 @@ auto Expander::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext pc) -
                         return e.params;
                     }
                     case HIRTypeItem::TAG_ExternType: {
-                        BUG(sp, "extern type - " << p);
+                        BUG(sp, StringView("extern type - ") << p);
                         break;
                     }
                 }
                 break;
             }
         }
-        TODO(sp, "visit_generic_path[m_get_params] - " << p);
+        TODO(sp, StringView("visit_generic_path[m_get_params] - ") << p);
     });
     getParams = &callback;
     HIRVisitor::visitGenericPath(p, pc);
@@ -5655,7 +5645,7 @@ auto Expander::visitAtyParams(const HIRGenericPath& sourceTrait, const RcString&
     auto callback = makeCallable<GenericParamsCb>([&](const Span& sp) -> const HIRGenericParams& {
         const auto& trait = crate.getTraitByPath(sp, sourceTrait.path);
         auto it = trait.types.find(name);
-        ASSERT_BUG(sp, it != trait.types.end(), "Trait " << sourceTrait.path << " has no associated type " << name);
+        ASSERT_BUG(sp, it != trait.types.end(), StringView("Trait ") << sourceTrait.path << StringView(" has no associated type ") << name);
         return it->second.generics;
     });
     getParams = &callback;
@@ -5682,7 +5672,7 @@ auto Expander::visitTraitPath(HIRTraitPath& p) -> void {
 auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
     auto saved = getParams;
     auto callback = makeCallable<GenericParamsCb>([&](const Span& sp) -> const HIRGenericParams& {
-        DEBUG("visit_path[m_get_params] " << p);
+        DEBUG(StringView("visit_path[m_get_params] ") << p);
         StaticTraitResolve resolve(wb);
         resolve.setBothGenericsRaw(implParams, itemParams);
         switch (pc) {
@@ -5691,11 +5681,11 @@ auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                 auto vi = resolve.getValue(sp, p, unused, true);
                 switch (vi.tag()) {
                     case TypeckValuePtr::TAG_NotFound: {
-                        BUG(sp, "NotFound");
+                        BUG(sp, StringView("NotFound"));
                         break;
                     }
                     case TypeckValuePtr::TAG_NotYetKnown: {
-                        TODO(sp, "NotYetKnown");
+                        TODO(sp, StringView("NotYetKnown"));
                         break;
                     }
                     case TypeckValuePtr::TAG_Static: {
@@ -5711,19 +5701,19 @@ auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                         return e->params;
                     }
                     case TypeckValuePtr::TAG_EnumConstructor: {
-                        TODO(sp, "Handle EnumConstructor - " << p);
+                        TODO(sp, StringView("Handle EnumConstructor - ") << p);
                         break;
                     }
                     case TypeckValuePtr::TAG_EnumValue: {
-                        TODO(sp, "Handle EnumValue - " << p);
+                        TODO(sp, StringView("Handle EnumValue - ") << p);
                         break;
                     }
                     case TypeckValuePtr::TAG_StructConstructor: {
-                        TODO(sp, "Handle StructConstructor - " << p);
+                        TODO(sp, StringView("Handle StructConstructor - ") << p);
                         break;
                     }
                     case TypeckValuePtr::TAG_StructConstant: {
-                        TODO(sp, "Handle StructConstant - " << p);
+                        TODO(sp, StringView("Handle StructConstant - ") << p);
                         break;
                     }
                 }
@@ -5734,14 +5724,14 @@ auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                 if (const auto* e = p.data.opt_UfcsKnown()) {
                     const auto& trait = crate.getTraitByPath(sp, e->trait.path);
                     const auto it = trait.types.find(e->item);
-                    ASSERT_BUG(sp, it != trait.types.end(), "Trait " << e->trait.path << " has no associated type " << e->item);
+                    ASSERT_BUG(sp, it != trait.types.end(), StringView("Trait ") << e->trait.path << StringView(" has no associated type ") << e->item);
                     return it->second.generics;
                 }
-                BUG(sp, "type - " << p);
+                BUG(sp, StringView("type - ") << p);
                 break;
             }
         }
-        TODO(sp, "visit_path[m_get_params] - " << p);
+        TODO(sp, StringView("visit_path[m_get_params] - ") << p);
     });
     getParams = &callback;
     HIRVisitor::visitPath(p, pc);
@@ -5770,7 +5760,7 @@ auto Expander::visitArraysize(HIRArraySize& as) -> void {
         if (!predicted) {
             fprintf(stderr, "PREDICATE MISS [visitArraysize]\n");
         }
-        DEBUG("Array size (known) = " << as);
+        DEBUG(StringView("Array size (known) = ") << as);
     }
 }
 
@@ -5857,9 +5847,9 @@ auto Expander::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
     } else if (item.valueState == HIRConstant::ValueState::Generic || item.params.isGeneric() || monomorphisePathNeeded(p.getFullPath())) {
         item.valueState = HIRConstant::ValueState::Generic;
     } else if (item.valueState == HIRConstant::ValueState::InProgress) {
-        ERROR(item.value.span(), E0000, "cycle detected when evaluating constant `" << p << "`");
+        ERROR(item.value.span(), E0000, StringView("cycle detected when evaluating constant `") << p << StringView("`"));
     } else if (item.value || item.value.mir) {
-        auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << "#")};
+        auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << StringView("#"))};
         auto eval = getEval(item.value.span(), nvs);
         if (constItemMustStaySymbolic(implParams, item.params)) {
             item.valueState = HIRConstant::ValueState::Generic;
@@ -5867,7 +5857,7 @@ auto Expander::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
             item.valueState = HIRConstant::ValueState::InProgress;
             item.valueRes = eval.evaluateConstant(p, item.value, item.type, monomorphState.clone());
             item.valueState = HIRConstant::ValueState::Known;
-            DEBUG("constant: " << item.type << " = " << item.valueRes);
+            DEBUG(StringView("constant: ") << item.type << StringView(" = ") << item.valueRes);
         }
     } else {
     }
@@ -5885,7 +5875,7 @@ auto Expander::visitStatic(HIRItemPath p, HIRStatic& item) -> void {
 
     if (pass != Pass::Values) {
     } else if (item.value) {
-        auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << "#")};
+        auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << StringView("#"))};
         auto eval = getEval(item.value.span(), nvs);
         item.valueEvaluating = true;
         STD_DEFER {
@@ -5893,7 +5883,7 @@ auto Expander::visitStatic(HIRItemPath p, HIRStatic& item) -> void {
         };
         item.valueRes = eval.evaluateConstant(p, item.value, item.type);
         item.valueGenerated = true;
-        DEBUG("static: " << item.type << " = " << item.valueRes);
+        DEBUG(StringView("static: ") << item.type << StringView(" = ") << item.valueRes);
     }
 
     itemParams = nullptr;
@@ -5915,7 +5905,7 @@ auto Expander::visitStruct(HIRItemPath p, HIRStruct& item) -> void {
     BUG_ASSERT(!implParams);
     implParams = &item.params;
     if (item.constEvalState != HIRConstEvalState::Complete) {
-        ASSERT_BUG(Span(), item.constEvalState == HIRConstEvalState::None, "Constant evaluation loop involving " << p);
+        ASSERT_BUG(Span(), item.constEvalState == HIRConstEvalState::None, StringView("Constant evaluation loop involving ") << p);
         item.constEvalState = HIRConstEvalState::Active;
         HIRVisitor::visitStruct(p, item);
         item.constEvalState = HIRConstEvalState::Complete;
@@ -5941,7 +5931,7 @@ auto Expander::visitExpr(HIRExprPtr& expr) -> void {
         }
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
-            DEBUG("expr type " << ty);
+            DEBUG(StringView("expr type ") << ty);
             return exp.visitType(ty);
         }
 
@@ -6001,10 +5991,10 @@ auto Expander::enumTagIsSigned(HIRCoreType ty) -> bool {
         case HIRCoreType::F32:
         case HIRCoreType::F64:
         case HIRCoreType::F128:
-            TODO(Span(), "Floating point enum tag.");
+            TODO(Span(), StringView("Floating point enum tag."));
             break;
         case HIRCoreType::Str:
-            BUG(Span(), "Unsized tag?!");
+            BUG(Span(), StringView("Unsized tag?!"));
     }
     return false;
 }
@@ -6040,7 +6030,7 @@ auto Expander::visitEnumVariant(const WireBoard& wb, const HIRCrate& crate, cons
     }
     auto& ctfe = *wb.ctfe;
     if (ctfe.discriminantActive(item, idx)) {
-        ERROR(*expr ? (*expr)->span() : Span(), E0000, "cycle detected when evaluating discriminant of `" << p << "::" << varName << "`");
+        ERROR(*expr ? (*expr)->span() : Span(), E0000, StringView("cycle detected when evaluating discriminant of `") << p << StringView("::") << varName << StringView("`"));
     }
     ctfe.pushDiscriminant(item, idx);
     STD_DEFER {
@@ -6050,12 +6040,12 @@ auto Expander::visitEnumVariant(const WireBoard& wb, const HIRCrate& crate, cons
     const auto ty = HIREnum::getReprType(item.tagRepr);
     U128 value(0);
     if (*expr) {
-        auto nvs = NewvalState{mod, modPath, FMT(name << "#" << varName << "_")};
+        auto nvs = NewvalState{mod, modPath, FMT(name << StringView("#") << varName << StringView("_"))};
         auto eval = HIREvaluator{(*expr)->span(), wb, nvs};
         eval.resolve.setImplGenericsRaw(MetadataType::None, item.params);
         {
             auto val = eval.evaluateConstant(p, *expr, crate.types.primitive(ty));
-            DEBUG("enum variant: " << p << "::" << varName << " = " << val);
+            DEBUG(StringView("enum variant: ") << p << StringView("::") << varName << StringView(" = ") << val);
             if (enumTagIsSigned(ty)) {
                 value = EncodedLiteralSlice(val).readSint().getInner();
             } else {
@@ -6065,7 +6055,7 @@ auto Expander::visitEnumVariant(const WireBoard& wb, const HIRCrate& crate, cons
     } else if (idx > 0) {
         visitEnumVariant(wb, crate, p, mod, modPath, name, item, idx - 1);
         value = (item.data.is_Value() ? item.data.as_Value().variants.at(idx - 1).val : item.data.as_Data().at(idx - 1).discriminantValue) + 1;
-        DEBUG("enum variant: " << p << "::" << varName << " = " << value << " (auto)");
+        DEBUG(StringView("enum variant: ") << p << StringView("::") << varName << StringView(" = ") << value << StringView(" (auto)"));
     }
     *slot = value;
     *known = true;
@@ -6151,4 +6141,18 @@ auto EnumValueExpander::visitEnum(HIRItemPath p, HIREnum& item) -> void {
         }
     }
     Expander::visitEnumInner(wb, crate, p, *mod, *modPath, p.getName(), item);
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, MIREvalValueRef>(ZeroCopyOutput& os, MIREvalValueRef vr) {
+        if (!vr.storage) {
+            os << StringView("ValueRef(null)");
+        } else {
+            os << StringView("ValueRef({") << vr.ofs << StringView("+") << vr.len << StringView("}");
+            vr.storage.asValue().fmt(os, vr.ofs, vr.len);
+            os << StringView(")");
+        }
+        return;
+    }
 }

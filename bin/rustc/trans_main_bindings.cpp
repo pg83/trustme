@@ -248,7 +248,7 @@ namespace {
         } else {
             switch ((*ty).tag()) {
                 default:
-                    TODO(sp, "auto Clone for " << ty << " - Unknown and not Copy");
+                    TODO(sp, StringView("auto Clone for ") << ty << StringView(" - Unknown and not Copy"));
                 case HIRTypeData::TAG_Path: {
                     auto& te = (*ty).as_Path();
                     if (te.isClosure()) {
@@ -269,13 +269,13 @@ namespace {
                         bb.terminator = MIRTerminator::make_Return({});
                         appendCloneCleanup(mirFcn, cleanup);
                     } else {
-                        TODO(sp, "auto Clone for " << ty << " - Unknown and not Copy");
+                        TODO(sp, StringView("auto Clone for ") << ty << StringView(" - Unknown and not Copy"));
                     }
                     break;
                 }
                 case HIRTypeData::TAG_Array: {
                     auto& te = (*ty).as_Array();
-                    ASSERT_BUG(sp, te.size.as_Known() < 256, "TODO: Is more than 256 elements sane for auto-generated non-Copy Clone impl? " << ty);
+                    ASSERT_BUG(sp, te.size.as_Known() < 256, StringView("TODO: Is more than 256 elements sane for auto-generated non-Copy Clone impl? ") << ty);
                     CloneCleanupState cleanup;
                     std::vector<MIRParam> values;
                     values.reserve(te.size.as_Known());
@@ -383,7 +383,7 @@ namespace {
     MIRLValue getUnitPtr(const Span& sp, Builder& mutator, HIRTypeRef ty, MIRLValue lv, MIRLValue& outInnerPtr) {
         if (ty->is_Path()) {
             const auto& te = ty->as_Path();
-            ASSERT_BUG(sp, te.binding.is_Struct(), "");
+            ASSERT_BUG(sp, te.binding.is_Struct(), StringView(""));
             const auto& tyPath = te.path.data.as_Generic();
             const auto& str = *te.binding.as_Struct();
             HIRTypeRef tmp;
@@ -427,7 +427,7 @@ namespace {
             outInnerPtr = lv.clone();
             return mutator.inTemporary(mv$(ty), MIRRValue::make_DstPtr({mv$(lv)}));
         } else {
-            BUG(sp, "Unexpected type coerce_unsize in receiver - " << ty);
+            BUG(sp, StringView("Unexpected type coerce_unsize in receiver - ") << ty);
         }
     }
 
@@ -562,7 +562,7 @@ static void TransEnumerateGenericFunctionItems(EnumState& state, const Span& sp,
 
         for (const auto& path : mirFcn.transEnumState->paths) {
             if (!monomorphisePathNeeded(*path)) {
-                DEBUG("Path " << *path);
+                DEBUG(StringView("Path ") << *path);
                 MonomorphState unusedMs(state.crate.types);
                 auto v = state.resolve.getValue(sp, *path, unusedMs, true);
                 bool deferBoundPath = hasConditionalBounds && v.is_NotYetKnown();
@@ -572,21 +572,21 @@ static void TransEnumerateGenericFunctionItems(EnumState& state, const Span& sp,
                 }
                 if (v.is_StructConstructor() || v.is_EnumConstructor()) {
                 } else if (deferBoundPath) {
-                    DEBUG("Defer conditionally available path " << *path);
+                    DEBUG(StringView("Defer conditionally available path ") << *path);
                 } else {
                     auto p = ms.monomorphPath(sp, *path);
                     state.rv.roots.push_back(p.clone());
                     TransEnumerateFillFromPathMono(state, std::move(p));
                 }
             } else {
-                DEBUG("Path " << *path << " - Generic");
+                DEBUG(StringView("Path ") << *path << StringView(" - Generic"));
             }
         }
     }
 }
 
 static void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool isVisible, TransPathCallback& getPath) {
-    TRACE_FUNCTION_F(getPath.get() << " : " << vi.tagStr() << " is_visible=" << isVisible);
+    TRACE_FUNCTION_F(getPath.get() << StringView(" : ") << vi.tagStr() << StringView(" is_visible=") << isVisible);
     const Span sp;
     switch (vi.tag()) {
         break;
@@ -652,7 +652,7 @@ static void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool
                 switch (e.markings.inlineType) {
                     case HIRFunction::Markings::Inline::Always:
                     case HIRFunction::Markings::Inline::Normal:
-                        DEBUG("Don't emit inlined function");
+                        DEBUG(StringView("Don't emit inlined function"));
                         isInline = true;
                         break;
                     case HIRFunction::Markings::Inline::Auto:
@@ -742,7 +742,7 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
     Span sp;
     const auto& implTy = impl.type;
 
-    TRACE_FUNCTION_F("Impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << implTy);
+    TRACE_FUNCTION_F(StringView("Impl") << impl.params.fmtArgs() << StringView(" ") << traitPath << impl.traitArgs << StringView(" for ") << implTy);
     auto paramsImpl = HIRPathParams();
     MonomorphStatePtr ms(state.crate.types);
     ms.ppImpl = &paramsImpl;
@@ -754,7 +754,7 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
             });
         }
         if (!implAvailable) {
-            DEBUG("Skip conditionally unavailable concrete impl");
+            DEBUG(StringView("Skip conditionally unavailable concrete impl"));
             return;
         }
 
@@ -766,7 +766,7 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
 
         const auto& trait = resolve.hirCrate().getTraitByPath(sp, traitPath);
         for (const auto& vi : trait.values) {
-            TRACE_FUNCTION_F("Item " << vi.first << " : " << vi.second.tagStr());
+            TRACE_FUNCTION_F(StringView("Item ") << vi.first << StringView(" : ") << vi.second.tagStr());
             if (vi.second.is_Constant())
                 ;
             else if (vi.second.is_Function() && vi.second.as_Function().params.isGeneric())
@@ -778,7 +778,7 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
                 if (vi.second.is_Function()) {
                     const auto& fcn = vi.second.as_Function();
                     bool rv = true;
-                    DEBUG("Bounds = " << fcn.params.fmtBounds());
+                    DEBUG(StringView("Bounds = ") << fcn.params.fmtBounds());
                     for (const auto& b : fcn.params.bounds) {
                         if (!b.is_TraitBound()) {
                             continue;
@@ -789,14 +789,14 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
                         auto bTpMono = cbMonomorph.monomorphTraitpath(sp, be.trait, false);
                         resolve.expandAssociatedTypesTp(sp, bTpMono);
 
-                        DEBUG("Check " << bTyMono << ": " << bTpMono);
+                        DEBUG(StringView("Check ") << bTyMono << StringView(": ") << bTpMono);
                         rv = resolve.findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](SolverResponse response) {
                             if (!response.impl) {
                                 return false;
                             }
                             for (const auto& tyB : bTpMono.typeBounds) {
                                 const auto& ty = response.impl->getType(state.crate.types, tyB.first.c_str(), tyB.second.atyParams);
-                                DEBUG("ATY " << tyB.first << " " << ty << " ?= exp " << tyB.second.type);
+                                DEBUG(StringView("ATY ") << tyB.first << StringView(" ") << ty << StringView(" ?= exp ") << tyB.second.type);
                                 if (ty != tyB.second.type) {
                                     return false;
                                 }
@@ -810,7 +810,7 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
                     if (!rv) {
                         continue;
                     }
-                    DEBUG("Params = " << fcn.params.fmtArgs());
+                    DEBUG(StringView("Params = ") << fcn.params.fmtArgs());
                 }
                 auto path = HIRPath(cbMonomorph2.monomorphType(sp, implTy), HIRGenericPath(traitPath, cbMonomorph2.monomorphPathParams(sp, impl.traitArgs, false)), vi.first, mv$(pp));
                 state.rv.roots.push_back(path.clone());
@@ -837,18 +837,18 @@ static void removeMissing(const WireBoard& wb, std::map<HIRPath, T>& target, con
     for (const auto& entry : tpl) {
         auto symbol = FMT(TransMangleValue(wb, entry.first));
         auto inserted = requiredSymbols.emplace(mv$(symbol), &entry.first);
-        ASSERT_BUG(Span(), inserted.second || inserted.first->second->equalsIgnoringRegions(entry.first), "Distinct paths have the same mangled name: " << *inserted.first->second << " and " << entry.first);
+        ASSERT_BUG(Span(), inserted.second || inserted.first->second->equalsIgnoringRegions(entry.first), StringView("Distinct paths have the same mangled name: ") << *inserted.first->second << StringView(" and ") << entry.first);
     }
 
     for (auto itIn = target.begin(); itIn != target.end();) {
         const auto symbol = FMT(TransMangleValue(wb, itIn->first));
         const auto required = requiredSymbols.find(symbol);
         if (required == requiredSymbols.end()) {
-            DEBUG("Remove " << itIn->first);
+            DEBUG(StringView("Remove ") << itIn->first);
             itIn = target.erase(itIn);
         } else {
-            ASSERT_BUG(Span(), required->second->equalsIgnoringRegions(itIn->first), "Distinct paths have the same mangled name: " << *required->second << " and " << itIn->first);
-            DEBUG("Keep " << itIn->first);
+            ASSERT_BUG(Span(), required->second->equalsIgnoringRegions(itIn->first), StringView("Distinct paths have the same mangled name: ") << *required->second << StringView(" and ") << itIn->first);
+            DEBUG(StringView("Keep ") << itIn->first);
             ++itIn;
         }
     }
@@ -869,7 +869,7 @@ static void TransEnumerateCommonPostRun(EnumState& state) {
         auto& fcnOut = *state.fcnQueue.front();
         state.fcnQueue.pop_front();
 
-        TRACE_FUNCTION_F("Function " << find_if(state.rv.functions.begin(), state.rv.functions.end(), [&](const auto& x) {
+        TRACE_FUNCTION_F(StringView("Function ") << find_if(state.rv.functions.begin(), state.rv.functions.end(), [&](const auto& x) {
             return x.second.get() == &fcnOut;
         })->first);
         TransEnumerateFillFromFunction(state, *fcnOut.path, *fcnOut.ptr, fcnOut.pp);
@@ -884,8 +884,8 @@ static TransList TransEnumerateCommonPost(EnumState& state) {
 }
 
 static bool mergeEnumeratedItems(HIRTypeInterner& types, TransList& out, TransList additions) {
-    ASSERT_BUG(Span(), additions.roots.empty(), "Incremental translation enumeration unexpectedly added roots");
-    ASSERT_BUG(Span(), additions.autoStatics.empty() && additions.autoFunctions.empty(), "Enumeration generated translation items before TransAutoImpls");
+    ASSERT_BUG(Span(), additions.roots.empty(), StringView("Incremental translation enumeration unexpectedly added roots"));
+    ASSERT_BUG(Span(), additions.autoStatics.empty() && additions.autoFunctions.empty(), StringView("Enumeration generated translation items before TransAutoImpls"));
 
     bool changed = false;
     for (auto& ent : additions.functions) {
@@ -968,14 +968,14 @@ static void TransEnumerateTypes(EnumState& state) {
             const auto& fcn = *p->ptr;
             const auto& pp = p->pp;
 
-            TRACE_FUNCTION_F("Function " << fcnPath);
+            TRACE_FUNCTION_F(StringView("Function ") << fcnPath);
             tv.visitFunction(fcnPath, fcn, pp);
         }
         state.fcnsToTypeVisit.clear();
         // TODO: Similarly restrict revisiting of statics.
 
         for (const auto& ent : state.rv.statics) {
-            TRACE_FUNCTION_F("Enumerate static " << ent.first);
+            TRACE_FUNCTION_F(StringView("Enumerate static ") << ent.first);
             BUG_ASSERT(ent.second->ptr);
             const auto& stat = *ent.second->ptr;
             const auto& pp = ent.second->pp;
@@ -983,7 +983,7 @@ static void TransEnumerateTypes(EnumState& state) {
             tv.visitType(pp.monomorph(tv.resolve, stat.type));
         }
         for (const auto& ent : state.rv.constants) {
-            TRACE_FUNCTION_F("Enumerate constant " << ent.first);
+            TRACE_FUNCTION_F(StringView("Enumerate constant ") << ent.first);
             BUG_ASSERT(ent.second->ptr);
             const auto& stat = *ent.second->ptr;
             const auto& pp = ent.second->pp;
@@ -991,7 +991,7 @@ static void TransEnumerateTypes(EnumState& state) {
             tv.visitType(pp.monomorph(tv.resolve, stat.type));
         }
         for (const auto& ent : state.rv.vtables) {
-            TRACE_FUNCTION_F("vtable " << ent.first);
+            TRACE_FUNCTION_F(StringView("vtable ") << ent.first);
             const auto& ty = ent.first.data.as_UfcsKnown().type;
             const auto& gpath = ent.first.data.as_UfcsKnown().trait;
             if (gpath.path == HIRSimplePath()) {
@@ -1020,7 +1020,7 @@ static void TransEnumerateTypes(EnumState& state) {
                 tv.resolve.expandAssociatedTypes(sp, vtableParams.types[idx]);
             }
 
-            DEBUG("VTable: " << vtableTySpath << vtableParams);
+            DEBUG(StringView("VTable: ") << vtableTySpath << vtableParams);
             tv.visitType(ty);
             tv.visitType(state.crate.types.path(HIRPath(HIRGenericPath(vtableTySpath, mv$(vtableParams))), &vtableRef));
 
@@ -1044,7 +1044,7 @@ static void TransEnumerateTypes(EnumState& state) {
         }
         constructorsVisited = state.rv.constructors.size();
         for (const auto& path : state.rv.constructors) {
-            TRACE_FUNCTION_F("constructor " << path);
+            TRACE_FUNCTION_F(StringView("constructor ") << path);
             if (path.path.components().size() > 1) {
                 const auto& item = state.crate.getTypeitemByPath(sp, path.path, false, true);
                 if (const auto* e = item.opt_Enum()) {
@@ -1066,10 +1066,10 @@ static void TransEnumerateTypes(EnumState& state) {
             TRACE_FUNCTION_F(ty);
             if (ty->is_Path()) {
                 const auto& te = ty->as_Path();
-                ASSERT_BUG(sp, te.path.data.is_Generic(), "Non-Generic type path after enumeration - " << ty);
+                ASSERT_BUG(sp, te.path.data.is_Generic(), StringView("Non-Generic type path after enumeration - ") << ty);
                 const auto& gp = te.path.data.as_Generic();
                 const HIRTraitMarkings* markingsPtr = te.binding.getTraitMarkings();
-                ASSERT_BUG(sp, markingsPtr, "Path binding not set correctly - " << ty);
+                ASSERT_BUG(sp, markingsPtr, StringView("Path binding not set correctly - ") << ty);
 
                 if (markingsPtr->hasDropImpl && (gp.path.crateName() == state.crate.crateName || gp.params.hasParams())) {
                     TransEnumerateFillFromPathMono(state, HIRPath(ty, state.crate.getLangItemPath(sp, "drop"), "drop", HIRPathParams()));
@@ -1102,8 +1102,8 @@ static void evaluateTranslationParams(const Span& sp, const WireBoard& wb, const
         return;
     }
 
-    ASSERT_BUG(sp, defs, "Missing const parameter definitions for " << params);
-    ASSERT_BUG(sp, params.values.size() <= defs->values.size(), "Too many const parameters in " << params << " for " << defs->fmtArgs());
+    ASSERT_BUG(sp, defs, StringView("Missing const parameter definitions for ") << params);
+    ASSERT_BUG(sp, params.values.size() <= defs->values.size(), StringView("Too many const parameters in ") << params << StringView(" for ") << defs->fmtArgs());
     for (size_t i = 0; i < params.values.size(); i++) {
         auto& value = params.values[i];
         if (value.is_Unevaluated()) {
@@ -1112,11 +1112,11 @@ static void evaluateTranslationParams(const Span& sp, const WireBoard& wb, const
             if (monomorphiseTypeNeeded(type)) {
                 MonomorphStatePtr ms(crate.types, nullptr, &params, &params);
                 type = tmp = ms.monomorphType(sp, type);
-                ASSERT_BUG(sp, !monomorphiseTypeNeeded(type), "Generic const parameter type " << type << " in " << defs->fmtArgs());
+                ASSERT_BUG(sp, !monomorphiseTypeNeeded(type), StringView("Generic const parameter type ") << type << StringView(" in ") << defs->fmtArgs());
             }
             ConvertHIRConstantEvaluateConstGeneric(sp, wb, crate, type, value);
         }
-        ASSERT_BUG(sp, value.is_Evaluated(), "Const parameter was not concrete at translation: " << value);
+        ASSERT_BUG(sp, value.is_Evaluated(), StringView("Const parameter was not concrete at translation: ") << value);
     }
 }
 
@@ -1141,7 +1141,7 @@ static void evaluateTranslationImplAndTraitParams(const Span& sp, const WireBoar
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            BUG(sp, "UfcsUnknown at translation: " << path);
+            BUG(sp, StringView("UfcsUnknown at translation: ") << path);
             break;
         }
     }
@@ -1167,7 +1167,7 @@ static void evaluateTranslationItemParams(const Span& sp, const WireBoard& wb, c
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            BUG(sp, "UfcsUnknown at translation: " << path);
+            BUG(sp, StringView("UfcsUnknown at translation: ") << path);
             break;
         }
     }
@@ -1232,14 +1232,14 @@ static EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate
             BUG_ASSERT(params.gdefImpl);
         }
     }
-    DEBUG(path << " = " << ent.tagStr() << " w/ impl" << params.ppImpl);
+    DEBUG(path << StringView(" = ") << ent.tagStr() << StringView(" w/ impl") << params.ppImpl);
     switch (ent.tag()) {
         default:
-            TODO(sp, path << " was " << ent.tagStr());
+            TODO(sp, path << StringView(" was ") << ent.tagStr());
         case TypeckValuePtr::TAG_NotYetKnown: {
             const auto* pe = &path.data.as_UfcsKnown();
             if (pe->item == "vtable#") {
-                DEBUG("VTable, quick return");
+                DEBUG(StringView("VTable, quick return"));
                 return EntPtr::make_AutoGenerate({});
             }
             bool foundBound = false;
@@ -1248,7 +1248,7 @@ static EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate
                 if (!response.impl) {
                     return false;
                 }
-                DEBUG("[get_ent_fullpath] Found " << response.impl->traitPath << " for " << response.impl->type);
+                DEBUG(StringView("[get_ent_fullpath] Found ") << response.impl->traitPath << StringView(" for ") << response.impl->type);
                 if (response.impl->traitImpl) {
                     foundImpl = true;
                 } else {
@@ -1259,7 +1259,7 @@ static EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate
             if (foundBound) {
                 return EntPtr::make_AutoGenerate({});
             }
-            DEBUG("NotYetKnown -> NotFound");
+            DEBUG(StringView("NotYetKnown -> NotFound"));
             return EntPtr();
         }
         case TypeckValuePtr::TAG_Function: {
@@ -1271,7 +1271,7 @@ static EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate
                 const auto& traitVi = traitRef.values.at(pe->item);
 
                 if (f == &traitVi.as_Function()) {
-                    DEBUG("Default trait body");
+                    DEBUG(StringView("Default trait body"));
                     params.forceMonomorphisation = true;
                 }
             }
@@ -1306,10 +1306,10 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
     Span sp;
     bindTranslationNominals(state.crate, pathMono);
     TRACE_FUNCTION_F(pathMono);
-    ASSERT_BUG(sp, !monomorphisePathNeeded(pathMono), "Path " << pathMono << " is generic");
+    ASSERT_BUG(sp, !monomorphisePathNeeded(pathMono), StringView("Path ") << pathMono << StringView(" is generic"));
     // TODO: If already in the list, return early
     if (pathAlreadyEnumerated(state, pathMono)) {
-        DEBUG("> Already enumerated");
+        DEBUG(StringView("> Already enumerated"));
         return;
     }
 
@@ -1334,7 +1334,7 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            BUG(sp, "UfcsUnknown - " << pathMono);
+            BUG(sp, StringView("UfcsUnknown - ") << pathMono);
             break;
         }
     }
@@ -1349,18 +1349,18 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
     }
 
     auto itemRef = getEntFullpath(sp, state.resolve.board(), state.crate, pathMono, subPp);
-    DEBUG("item_ref.tag_str() = " << itemRef.tagStr());
-    DEBUG("sub_pp.pp_method = " << subPp.ppMethod);
-    DEBUG("sub_pp.pp_impl = " << subPp.ppImpl);
+    DEBUG(StringView("item_ref.tag_str() = ") << itemRef.tagStr());
+    DEBUG(StringView("sub_pp.pp_method = ") << subPp.ppMethod);
+    DEBUG(StringView("sub_pp.pp_impl = ") << subPp.ppImpl);
     evaluateTranslationImplAndTraitParams(sp, state.resolve.board(), state.crate, pathMono, subPp);
     if (pathAlreadyEnumerated(state, pathMono)) {
-        DEBUG("> Already enumerated after const evaluation");
+        DEBUG(StringView("> Already enumerated after const evaluation"));
         return;
     }
 
     auto activePath = state.activePaths.insert(pathMono.clone());
     if (!activePath.second) {
-        DEBUG("> Already being enumerated");
+        DEBUG(StringView("> Already being enumerated"));
         return;
     }
     STD_DEFER {
@@ -1370,12 +1370,12 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
     enumerateConstRelocations(state, pathMono, subPp);
     switch (itemRef.tag()) {
         case EntPtr::TAG_NotFound: {
-            BUG(sp, "Item not found for " << pathMono);
+            BUG(sp, StringView("Item not found for ") << pathMono);
             break;
         }
         case EntPtr::TAG_AutoGenerate: {
             if (pathAlreadyEnumerated(state, pathMono)) {
-                DEBUG("> Already enumerated after const evaluation");
+                DEBUG(StringView("> Already enumerated after const evaluation"));
                 return;
             }
             if (pathMono.data.is_Generic()) {
@@ -1396,7 +1396,7 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 state.rv.autoFnptrImpls.insert(pathMono.data.as_UfcsKnown().type);
             } else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().trait == state.crate.getLangItemPathOpt("clone")) {
                 const auto& pe = pathMono.data.as_UfcsKnown();
-                ASSERT_BUG(sp, pe.item == "clone" || pe.item == "clone_from", "Unexpected Clone method called, " << pathMono);
+                ASSERT_BUG(sp, pe.item == "clone" || pe.item == "clone_from", StringView("Unexpected Clone method called, ") << pathMono);
                 const auto& innerTy = pe.type;
                 ::StaticTraitResolve resolve{state.resolve.board(), OpaqueReveal::All};
                 if (!resolve.typeIsCopy(sp, innerTy)) {
@@ -1422,7 +1422,7 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                             enumImpl(tyM);
                         }
                     } else {
-                        BUG(sp, "Unhandled magic clone in enumerate - " << innerTy);
+                        BUG(sp, StringView("Unhandled magic clone in enumerate - ") << innerTy);
                     }
                 }
                 state.rv.autoCloneImpls.insert(innerTy);
@@ -1430,7 +1430,7 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                     state.rv.autoCloneFromImpls.insert(innerTy);
                 }
             } else {
-                BUG(sp, "AutoGenerate returned for unknown path type - " << pathMono);
+                BUG(sp, StringView("AutoGenerate returned for unknown path type - ") << pathMono);
             }
             break;
         }
@@ -1438,7 +1438,7 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             auto& e = itemRef.as_Function();
             evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, e->params, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
-                DEBUG("> Already enumerated after const evaluation");
+                DEBUG(StringView("> Already enumerated after const evaluation"));
                 return;
             }
             state.enumFcn(mv$(pathMono), *e, mv$(subPp));
@@ -1448,7 +1448,7 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             auto& e = itemRef.as_Static();
             evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, e->params, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
-                DEBUG("> Already enumerated after const evaluation");
+                DEBUG(StringView("> Already enumerated after const evaluation"));
                 return;
             }
             if (auto* ptr = state.rv.addStatic(state.crate.types, mv$(pathMono))) {
@@ -1460,14 +1460,14 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             auto& e = itemRef.as_Constant();
             evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, e->params, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
-                DEBUG("> Already enumerated after const evaluation");
+                DEBUG(StringView("> Already enumerated after const evaluation"));
                 return;
             }
             switch (e->valueState) {
                 case HIRConstant::ValueState::InProgress:
-                    BUG(sp, "Constant still marked in-progress at translation: " << pathMono);
+                    BUG(sp, StringView("Constant still marked in-progress at translation: ") << pathMono);
                 case HIRConstant::ValueState::Unknown:
-                    BUG(sp, "Unevaluated constant: " << pathMono);
+                    BUG(sp, StringView("Unevaluated constant: ") << pathMono);
                 case HIRConstant::ValueState::Generic:
                     if (auto* slot = state.rv.addConst(state.crate.types, mv$(pathMono))) {
                         slot->ptr = e;
@@ -1562,7 +1562,7 @@ static void TransEnumerateFillFromMIRParam(MIREnumCache& state, const MIRParam& 
 }
 
 static void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
-    TRACE_FUNCTION_F("");
+    TRACE_FUNCTION_F(StringView(""));
     for (const auto& ty : code.locals) {
         visitTyWith(ty, [&state](const HIRTypeData* t) -> bool {
             if (const auto* te = t->opt_NamedFunction()) {
@@ -1576,7 +1576,7 @@ static void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& co
             switch (stmt.tag()) {
                 case MIRStatement::TAG_Assign: {
                     auto& se = stmt.as_Assign();
-                    DEBUG("- " << se.dst << " = " << se.src);
+                    DEBUG(StringView("- ") << se.dst << StringView(" = ") << se.src);
                     TransEnumerateFillFromMIRLValue(state, se.dst);
                     switch (se.src.tag()) {
                         case MIRRValue::TAG_Use: {
@@ -1700,7 +1700,7 @@ static void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& co
                 }
                 case MIRStatement::TAG_Asm: {
                     auto& se = stmt.as_Asm();
-                    DEBUG("- llvm_asm! ...");
+                    DEBUG(StringView("- llvm_asm! ..."));
                     for (const auto& v : se.inputs) {
                         TransEnumerateFillFromMIRLValue(state, v.second);
                     }
@@ -1727,7 +1727,7 @@ static void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& co
                 }
             }
         }
-        DEBUG("> " << bb.terminator);
+        DEBUG(StringView("> ") << bb.terminator);
         switch (bb.terminator.tag()) {
             case MIRTerminator::TAG_Incomplete: {
                 break;
@@ -1856,12 +1856,12 @@ static void TransEnumerateFillFromVTable(EnumState& state, HIRPath vtablePath, c
     }
     const auto& tr = state.crate.getTraitByPath(Span(), traitPath.path);
 
-    ASSERT_BUG(sp, !type->is_Slice(), "Getting vtable for unsized type - " << vtablePath);
-    ASSERT_BUG(sp, !type->is_TraitObject(), "Getting vtable for unsized type - " << vtablePath);
+    ASSERT_BUG(sp, !type->is_Slice(), StringView("Getting vtable for unsized type - ") << vtablePath);
+    ASSERT_BUG(sp, !type->is_TraitObject(), StringView("Getting vtable for unsized type - ") << vtablePath);
 
     auto monomorphCbTrait = MonomorphStatePtr(state.crate.types, type, &traitPath.params, nullptr);
     for (const auto& m : tr.valueIndexes) {
-        DEBUG("- " << m.second.first << " = " << m.second.second << " :: " << m.first);
+        DEBUG(StringView("- ") << m.second.first << StringView(" = ") << m.second.second << StringView(" :: ") << m.first);
         auto gpath = monomorphCbTrait.monomorphGenericpath(sp, m.second.second, false);
         const auto& fcn = state.crate.getTraitByPath(sp, gpath.path).values.at(m.first).as_Function();
         auto methodPath = HIRPath(type, gpath.clone(), m.first, HIRPathParams());
@@ -1869,7 +1869,7 @@ static void TransEnumerateFillFromVTable(EnumState& state, HIRPath vtablePath, c
         TransEnumerateFillFromPathMono(state, methodPath.clone());
     }
     for (const auto& ptPath : tr.allParentTraits) {
-        ASSERT_BUG(sp, ptPath.traitPtr, "Unset trait pointer - " << ptPath);
+        ASSERT_BUG(sp, ptPath.traitPtr, StringView("Unset trait pointer - ") << ptPath);
         const auto& pt = *ptPath.traitPtr;
         if (pt.vtablePath != HIRSimplePath()) {
             auto ptMono = MonomorphStatePtr(state.crate.types, type, &traitPath.params, nullptr).monomorphGenericpath(sp, ptPath.path);
@@ -1889,7 +1889,7 @@ static void TransEnumerateFillFromLiteral(EnumState& state, const EncodedLiteral
 }
 
 static void TransEnumerateFillFromFunction(EnumState& state, const HIRPath& p, const HIRFunction& function, const TransParams& pp) {
-    TRACE_FUNCTION_F("Function " << p << " pp=" << pp.ppImpl << " + " << pp.ppMethod);
+    TRACE_FUNCTION_F(StringView("Function ") << p << StringView(" pp=") << pp.ppImpl << StringView(" + ") << pp.ppMethod);
     if (!function.code.mir) {
         if (function.linkage.name != "") {
             auto it = state.linkFunctions.find(function.linkage.name);
@@ -1901,20 +1901,20 @@ static void TransEnumerateFillFromFunction(EnumState& state, const HIRPath& p, c
         const auto* transFcn = state.origList->findFunction(p);
         if (transFcn) {
             if (transFcn->monomorphised.code) {
-                DEBUG("Monomorphised");
+                DEBUG(StringView("Monomorphised"));
                 MIREnumCache ec;
                 TransEnumerateFillFromMIR(ec, *transFcn->monomorphised.code);
                 ec.apply(state, pp);
             } else if (transFcn->ptr->code.mir) {
-                DEBUG("Concrete");
+                DEBUG(StringView("Concrete"));
                 MIREnumCache ec;
                 TransEnumerateFillFromMIR(ec, *transFcn->ptr->code.mir);
                 ec.apply(state, pp);
             } else {
-                DEBUG("No code");
+                DEBUG(StringView("No code"));
             }
         } else {
-            ASSERT_BUG(Span(), transFcn, "Missing " << p << " in input TransList?");
+            ASSERT_BUG(Span(), transFcn, StringView("Missing ") << p << StringView(" in input TransList?"));
         }
     } else {
         const auto& mirFcn = *function.code.mir;
@@ -1934,7 +1934,7 @@ static void TransEnumerateFillFromStatic(EnumState& state, const HIRStatic& item
         TransEnumerateFillFromMIR(es, *item.value.mir);
         es.apply(state, pp);
     } else if (item.type->is_Infer()) {
-        BUG(Span(), "Enumerating static with no assigned type (unused elevated literal)");
+        BUG(Span(), StringView("Enumerating static with no assigned type (unused elevated literal)"));
     } else if (item.valueGenerated) {
         TransEnumerateFillFromLiteral(state, item.valueRes, pp);
     }
@@ -1964,7 +1964,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             // TODO: Find a way of turning a set into a vector so items can be erased.
 
             const auto* implList = implListIt->second.getListForType(ty);
-            ASSERT_BUG(Span(), implList, "No impl list of Clone for " << ty);
+            ASSERT_BUG(Span(), implList, StringView("No impl list of Clone for ") << ty);
             auto& impl = **std::find_if(implList->begin(), implList->end(), [&](const auto& i) {
                 return i->type == ty;
             });
@@ -1973,11 +1973,11 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 auto p = HIRPath(ty, HIRGenericPath(state.langClone), method);
                 auto* e = transList.addFunction(crate.types, p.clone());
                 if (!e) {
-                    DEBUG(p << " was already enumerated");
+                    DEBUG(p << StringView(" was already enumerated"));
                     return;
                 }
                 auto m = impl.methods.find(method);
-                ASSERT_BUG(Span(), m != impl.methods.end(), "Generated Clone for " << ty << " has no `" << method << "`");
+                ASSERT_BUG(Span(), m != impl.methods.end(), StringView("Generated Clone for ") << ty << StringView(" has no `") << method << StringView("`"));
                 e->ptr = &m->second.data;
             };
             bind("clone");
@@ -2030,7 +2030,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
     }
 
     {
-        TRACE_FUNCTION_F("Trait object methods");
+        TRACE_FUNCTION_F(StringView("Trait object methods"));
         transList.autoFunctions.reserve(transList.autoFunctions.size() + transList.traitObjectMethods.size());
         for (const auto& path : transList.traitObjectMethods) {
             DEBUG(path);
@@ -2044,7 +2044,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             const auto& fcnDef = trait.values.at(name).as_Function();
 
             unsigned vtableIdx = tyDyn.trait.traitPtr->getVtableValueIndex(traitPath, name);
-            ASSERT_BUG(sp, vtableIdx > 0, "Calling method '" << name << "' from " << traitPath << " through " << pe.type << " which isn't in the vtable");
+            ASSERT_BUG(sp, vtableIdx > 0, StringView("Calling method '") << name << StringView("' from ") << traitPath << StringView(" through ") << pe.type << StringView(" which isn't in the vtable"));
 
             auto pp = fcnDef.params.makeNopParams(crate.types, 1);
             MonomorphStatePtr ms(crate.types, pe.type, &traitPath.params, &pp);
@@ -2058,7 +2058,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 newFcn.args.push_back(std::make_pair(HIRPattern(), ms.monomorphType(sp, arg.second)));
                 state.resolve.expandAssociatedTypes(sp, newFcn.args.back().second);
             }
-            ASSERT_BUG(sp, !newFcn.args.empty(), "Trait object method with no arguments?!");
+            ASSERT_BUG(sp, !newFcn.args.empty(), StringView("Trait object method with no arguments?!"));
 
             newFcn.code.mir = generatedBody();
             Builder builder(state, *newFcn.code.mir);
@@ -2071,14 +2071,14 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     selfTy = crate.types.borrow(HIRBorrowType::Owned, selfTy);
                     lvPtr = builder.addLocal(crate.types.borrow(HIRBorrowType::Owned, crate.types.unit()));
                     builder.pushStmtAssign(lvPtr.clone(), MIRRValue::make_DstPtr({lvSelf.clone()}));
-                    DEBUG("<dyn " << traitPath << ">::" << name << " - By-Value");
+                    DEBUG(StringView("<dyn ") << traitPath << StringView(">::") << name << StringView(" - By-Value"));
                 } break;
                 case HIRFunction::Receiver::BorrowOwned:
                 case HIRFunction::Receiver::BorrowUnique:
                 case HIRFunction::Receiver::BorrowShared: {
                     ASSERT_BUG(sp, newFcn.args.front().second->is_Borrow(), newFcn.args.front().second);
                     auto bt = newFcn.args.front().second->as_Borrow().type;
-                    DEBUG("<dyn " << traitPath << ">::" << name << " - By-borrow");
+                    DEBUG(StringView("<dyn ") << traitPath << StringView(">::") << name << StringView(" - By-borrow"));
                     lvPtr = builder.addLocal(crate.types.borrow(bt, crate.types.unit()));
                     builder.pushStmtAssign(lvPtr.clone(), MIRRValue::make_DstPtr({lvSelf.clone()}));
                 } break;
@@ -2091,7 +2091,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     lvPtr = getUnitPtr(sp, builder, mv$(ty), MIRLValue::newArgument(0), lvSelf);
                 } break;
                 case HIRFunction::Receiver::Custom: {
-                    ASSERT_BUG(sp, fcnDef.receiverType, "Custom receiver without a receiver type");
+                    ASSERT_BUG(sp, fcnDef.receiverType, StringView("Custom receiver without a receiver type"));
                     auto thinReceiver = cloneTyWith(crate.types, sp, newFcn.args.front().second, [&](const HIRTypeData* ty, HIRTypeRef& out) {
                         if (ty == pe.type) {
                             out = crate.types.unit();
@@ -2102,7 +2102,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     lvPtr = getUnitPtr(sp, builder, mv$(thinReceiver), MIRLValue::newArgument(0), lvSelf);
                 } break;
                 default:
-                    TODO(sp, "Handle different receiver types: <dyn " << traitPath << ">::" << name << " - self: " << newFcn.args.front().second);
+                    TODO(sp, StringView("Handle different receiver types: <dyn ") << traitPath << StringView(">::") << name << StringView(" - self: ") << newFcn.args.front().second);
             }
 
             auto lvVtable = builder.addLocal(crate.types.borrow(HIRBorrowType::Shared, tyDyn.trait.traitPtr->getVtableType(sp, crate, tyDyn)));
@@ -2131,7 +2131,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
     }
 
     {
-        TRACE_FUNCTION_F("VTables");
+        TRACE_FUNCTION_F(StringView("VTables"));
         transList.autoStatics.reserve(transList.vtables.size());
         for (const auto& ent : transList.vtables) {
             Span sp;
@@ -2250,7 +2250,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 continue;
             }
 
-            DEBUG("VTABLE <empty> for " << type);
+            DEBUG(StringView("VTABLE <empty> for ") << type);
             std::vector<HIRTypeRef> tupleTys;
             tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize));
             tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize));
@@ -2278,7 +2278,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             pushPtr(HIRPath(type, "#drop_glue"));
             {
                 size_t size, align;
-                ASSERT_BUG(sp, TargetGetSizeAndAlignOf(sp, state.resolve, type, size, align), "Unexpected generic? " << type);
+                ASSERT_BUG(sp, TargetGetSizeAndAlignOf(sp, state.resolve, type, size, align), StringView("Unexpected generic? ") << type);
                 vtableData.writeUint(ofs, ptrBytes, size);
                 ofs += ptrBytes;
                 vtableData.writeUint(ofs, ptrBytes, align);
@@ -2302,12 +2302,12 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             if (traitPath.path == HIRSimplePath()) {
                 continue;
             }
-            DEBUG("VTABLE " << traitPath << " for " << type);
+            DEBUG(StringView("VTABLE ") << traitPath << StringView(" for ") << type);
             // TODO: What's the use of `ent.second` here? (it's a `Trans_Params`)
 
             const auto& trait = crate.getTraitByPath(sp, traitPath.path);
             const auto& vtableSp = trait.vtablePath;
-            ASSERT_BUG(sp, vtableSp != HIRSimplePath(), "Trait " << traitPath.path << " doesn't have a vtable");
+            ASSERT_BUG(sp, vtableSp != HIRSimplePath(), StringView("Trait ") << traitPath.path << StringView(" doesn't have a vtable"));
             auto vtableParams = traitPath.params.clone();
             for (const auto& ty : trait.typeIndexes) {
                 auto aty = crate.types.path(HIRPath(type, traitPath.clone(), ty.first), {});
@@ -2342,7 +2342,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             pushPtr(HIRPath(type, "#drop_glue"));
             {
                 size_t size, align;
-                ASSERT_BUG(sp, TargetGetSizeAndAlignOf(sp, state.resolve, type, size, align), "Unexpected generic? " << type);
+                ASSERT_BUG(sp, TargetGetSizeAndAlignOf(sp, state.resolve, type, size, align), StringView("Unexpected generic? ") << type);
                 vtableData.writeUint(ofs, ptrBytes, size);
                 ofs += ptrBytes;
                 vtableData.writeUint(ofs, ptrBytes, align);
@@ -2355,7 +2355,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         continue;
                     }
 
-                    DEBUG("- " << m.second.first << " = " << m.second.second << " :: " << m.first);
+                    DEBUG(StringView("- ") << m.second.first << StringView(" = ") << m.second.second << StringView(" :: ") << m.first);
                     auto traitGpath = monomorphCbTrait.monomorphGenericpath(sp, m.second.second, false);
                     auto itemPath = HIRPath(type, mv$(traitGpath), m.first);
                     state.resolve.expandAssociatedTypesPath(sp, itemPath);
@@ -2369,7 +2369,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         preserveTrackCaller = tplFcn.markings.trackCaller;
                         if (tplFcn.receiver == HIRFunction::Receiver::Value) {
                             auto callPath = itemPath.clone();
-                            itemPath.data.as_UfcsKnown().item = RcString::newInterned(FMT(m.first << "#ptr"));
+                            itemPath.data.as_UfcsKnown().item = RcString::newInterned(FMT(m.first << StringView("#ptr")));
                             auto* e = transList.addFunction(crate.types, itemPath.clone());
                             if (e) {
                                 HIRFunction newFcn;
@@ -2384,7 +2384,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                     state.resolve.expandAssociatedTypes(sp, newFcn.args[i].second);
                                 }
 
-                                DEBUG("> Generate shim: " << itemPath);
+                                DEBUG(StringView("> Generate shim: ") << itemPath);
                                 newFcn.code.mir = generatedBody();
                                 auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
                                     os << itemPath;
@@ -2408,14 +2408,14 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                             }
                         }
                     }
-                    //MIR_ASSERT(*m_mir_res, tr.m_values.at(m.first).is_Function(), "TODO: Handle generating vtables with non-function items");
+                    //MIR_ASSERT(*m_mir_res, tr.m_values.at(m.first).is_Function(), StringView("TODO: Handle generating vtables with non-function items"));
                     pushPtr(mv$(itemPath), preserveTrackCaller);
                 }
             }
             for (size_t i = 0; i < trait.allParentTraits.size(); i++) {
                 const auto& pt = trait.allParentTraits[i];
                 const auto& fld = repr->fields.at(trait.vtableParentTraitsStart + i);
-                ASSERT_BUG(sp, fld.offset == ofs, "");
+                ASSERT_BUG(sp, fld.offset == ofs, StringView(""));
                 if (!fld.ty->is_Tuple()) {
                     auto ptMono = MonomorphStatePtr(crate.types, type, &traitPath.params, nullptr).monomorphGenericpath(sp, pt.path);
                     auto ptVtablePath = HIRPath(type, mv$(ptMono), ent.first.data.as_UfcsKnown().item);
@@ -2438,7 +2438,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
     }
 
     {
-        TRACE_FUNCTION_F("Drop Glue");
+        TRACE_FUNCTION_F(StringView("Drop Glue"));
         for (const auto& ty : transList.types) {
             Span sp;
             if (ty.second) {
@@ -2477,7 +2477,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             if (const auto* ity = state.resolve.isTypeOwnedBox(ty)) {
                 auto innerVal = derefBox(MIRLValue::newDeref(builder.self.clone()));
                 HIRTypeRef tmp;
-                ASSERT_BUG(sp, localMirRes.getLvalueType(tmp, innerVal) == ity, "Hard-coded box pointer path didn't result in the inner type");
+                ASSERT_BUG(sp, localMirRes.getLvalueType(tmp, innerVal) == ity, StringView("Hard-coded box pointer path didn't result in the inner type"));
                 ownedBoxPointeeDrop = builder.pushStmtDrop(std::move(innerVal));
             }
 
@@ -2493,15 +2493,15 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         UNREACHABLE();
                     }
                     case HIRTypeData::TAG_TraitObject: {
-                        TODO(sp, "Drop glue for TraitObject? " << ty);
+                        TODO(sp, StringView("Drop glue for TraitObject? ") << ty);
                         break;
                     }
                     case HIRTypeData::TAG_Slice: {
-                        TODO(sp, "Drop glue for Slice? " << ty);
+                        TODO(sp, StringView("Drop glue for Slice? ") << ty);
                         break;
                     }
                     case HIRTypeData::TAG_NodeType: {
-                        TODO(sp, "Drop glue for NodeType? " << ty);
+                        TODO(sp, StringView("Drop glue for NodeType? ") << ty);
                         break;
                     }
                     case HIRTypeData::TAG_Diverge: {
@@ -2578,10 +2578,10 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 }
 
                                 if (ty->is_Path() && (ty->as_Path().isGenerator() || ty->as_Path().isFuture())) {
-                                    ASSERT_BUG(sp, hasDrop, "");
+                                    ASSERT_BUG(sp, hasDrop, StringView(""));
                                 } else {
                                     const auto* repr = TargetGetTypeRepr(sp, state.resolve, ty);
-                                    ASSERT_BUG(sp, repr, "No repr for struct " << ty);
+                                    ASSERT_BUG(sp, repr, StringView("No repr for struct ") << ty);
 
                                     auto self = MIRLValue::newDeref(builder.self.clone());
                                     auto fldLv = MIRLValue::newField(mv$(self), 0);
@@ -2689,7 +2689,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 auto p = HIRPath(ty, state.resolve.langDrop(), "drop");
                                 const HIRGenericParams* implParamsDef = nullptr;
                                 auto fcnE = state.resolve.getValue(sp, p, /*out*/ params, /*signature_only=*/false, &implParamsDef);
-                                ASSERT_BUG(sp, fcnE.is_Function(), "Drop didn't point to a function! " << fcnE.tagStr() << " " << p);
+                                ASSERT_BUG(sp, fcnE.is_Function(), StringView("Drop didn't point to a function! ") << fcnE.tagStr() << StringView(" ") << p);
                                 e->ptr = fcnE.as_Function();
                                 e->pp.selfType = params.getSelfType();
                                 e->pp.gdefImpl = implParamsDef;
@@ -2707,7 +2707,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             }
 
             if (ownedBoxPointeeDrop != ~0u) {
-                ASSERT_BUG(sp, ownedBoxDropCall != ~0u, "Owned Box did not have a Drop implementation: " << ty);
+                ASSERT_BUG(sp, ownedBoxDropCall != ~0u, StringView("Owned Box did not have a Drop implementation: ") << ty);
 
                 if (builder.mir.blocks.back().terminator.is_Incomplete()) {
                     builder.terminateBlock(MIRTerminator::make_Return({}));
@@ -2833,13 +2833,13 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
 
     struct H1 {
         static void enumerateTypeImpl(EnumState& state, HIRTypeImpl& impl) {
-            TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " " << impl.type);
+            TRACE_FUNCTION_F(StringView("impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);
             HIRPathParams implParams = HIRPathParams();
             MonomorphStatePtr ms(state.crate.types);
             ms.ppImpl = &implParams;
             if (!impl.params.isGeneric()) {
                 for (auto& fcn : impl.methods) {
-                    DEBUG("fn " << fcn.first << fcn.second.data.params.fmtArgs());
+                    DEBUG(StringView("fn ") << fcn.first << fcn.second.data.params.fmtArgs());
                     if (!fcn.second.data.params.isGeneric()) {
                         TransParams pp(state.crate.types);
                         pp.ppImpl = implParams.clone();
@@ -2999,10 +2999,10 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
         const auto& type = vtp.first.data.as_UfcsKnown().type;
 
         HIRPath dropGlueFn(type, "#drop_glue");
-        DEBUG("++ " << dropGlueFn);
+        DEBUG(StringView("++ ") << dropGlueFn);
         newList.functions.insert(std::make_pair(std::move(dropGlueFn), nullptr));
 
-        DEBUG("++ " << vtp.first);
+        DEBUG(StringView("++ ") << vtp.first);
         newList.statics.insert(std::make_pair(vtp.first.clone(), nullptr));
 
         if (traitPath.path == HIRSimplePath()) {
@@ -3022,16 +3022,16 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
                 auto itemPath = HIRPath(type, mv$(traitGpath), m.first);
                 state.resolve.expandAssociatedTypesPath(sp, itemPath);
 
-                DEBUG("++ " << itemPath);
+                DEBUG(StringView("++ ") << itemPath);
                 newList.functions.insert(std::make_pair(std::move(itemPath), nullptr));
 
                 const auto& srcTrait = state.resolve.hirCrate().getTraitByPath(sp, m.second.second.path);
                 const auto& item = srcTrait.values.at(m.first);
                 if (item.is_Function() && item.as_Function().receiver == HIRFunction::Receiver::Value) {
                     traitGpath = monomorphCbTrait.monomorphGenericpath(sp, m.second.second, false);
-                    auto itemPath = HIRPath(type, mv$(traitGpath), RcString::newInterned(FMT(m.first << "#ptr")));
+                    auto itemPath = HIRPath(type, mv$(traitGpath), RcString::newInterned(FMT(m.first << StringView("#ptr"))));
                     state.resolve.expandAssociatedTypesPath(sp, itemPath);
-                    DEBUG("++ " << itemPath);
+                    DEBUG(StringView("++ ") << itemPath);
                     newList.functions.insert(std::make_pair(std::move(itemPath), nullptr));
                 }
             }
@@ -3050,32 +3050,32 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
         }
 
         HIRPath dropGlueFn(ty.first, "#drop_glue");
-        DEBUG("++ " << dropGlueFn);
+        DEBUG(StringView("++ ") << dropGlueFn);
         newList.functions.insert(std::make_pair(std::move(dropGlueFn), nullptr));
 
         if (ty.first->is_Path() && ty.first->as_Path().binding.getTraitMarkings()->hasDropImpl) {
             auto fcnPath = HIRPath(ty.first, state.resolve.langDrop(), "drop");
-            DEBUG("++ " << fcnPath);
+            DEBUG(StringView("++ ") << fcnPath);
             newList.functions.insert(std::make_pair(std::move(fcnPath), nullptr));
         }
     }
     for (const auto& ty : newList.autoCloneImpls) {
         HIRPath fnPath(ty, crate.getLangItemPath(Span(), "clone"), "clone");
-        DEBUG("++ " << fnPath);
+        DEBUG(StringView("++ ") << fnPath);
         newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
     }
     for (const auto& ty : newList.autoCloneFromImpls) {
         HIRPath fnPath(ty, crate.getLangItemPath(Span(), "clone"), "clone_from");
-        DEBUG("++ " << fnPath);
+        DEBUG(StringView("++ ") << fnPath);
         newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
     }
     for (const auto& fnPath : newList.traitObjectMethods) {
-        DEBUG("++ " << fnPath);
+        DEBUG(StringView("++ ") << fnPath);
         newList.functions.insert(std::make_pair(fnPath.clone(), nullptr));
     }
     for (const auto& ty : newList.autoFnptrImpls) {
         HIRPath fnPath(ty, crate.getLangItemPath(Span(), "fn_ptr_trait"), "addr");
-        DEBUG("++ " << fnPath);
+        DEBUG(StringView("++ ") << fnPath);
         newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
     }
 
@@ -3088,7 +3088,7 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
 
     list.clearTypes();
     for (const auto& ty : newList.types) {
-        ASSERT_BUG(Span(), list.addType(ty.first, ty.second), "Duplicate type in cleaned translation list: " << ty.first);
+        ASSERT_BUG(Span(), list.addType(ty.first, ty.second), StringView("Duplicate type in cleaned translation list: ") << ty.first);
     }
     list.constructors = mv$(newList.constructors);
     removeMissing(wb, list.functions, newList.functions);
@@ -3111,7 +3111,7 @@ bool TransEnumerateGeneratedLiteral(const WireBoard& wb, TransList& list, const 
     EnumState state{wb};
     for (const auto& relocation : literal.relocations) {
         if (relocation.p && !transListContainsPath(list, *relocation.p)) {
-            ASSERT_BUG(Span(), !monomorphisePathNeeded(*relocation.p), "Generated literal contains a generic translation path: " << *relocation.p);
+            ASSERT_BUG(Span(), !monomorphisePathNeeded(*relocation.p), StringView("Generated literal contains a generic translation path: ") << *relocation.p);
             TransEnumerateFillFromPathMono(state, relocation.p->clone());
         }
     }
@@ -3129,7 +3129,7 @@ bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const Vect
             returnType = function->monomorphised.retTy;
             args = &function->monomorphised.argTys;
         } else {
-            ASSERT_BUG(Span(), function->ptr->code.mir, "Generated function has no MIR: " << *function->path);
+            ASSERT_BUG(Span(), function->ptr->code.mir, StringView("Generated function has no MIR: ") << *function->path);
             mir = &*function->ptr->code.mir;
             returnType = function->ptr->returnType;
             args = &function->ptr->args;
@@ -3146,7 +3146,7 @@ bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const Vect
             enumerateDestructorType(state, type);
         }
         for (const auto* path : cache.paths) {
-            ASSERT_BUG(Span(), !monomorphisePathNeeded(*path), "Generated MIR contains a generic translation path: " << *path);
+            ASSERT_BUG(Span(), !monomorphisePathNeeded(*path), StringView("Generated MIR contains a generic translation path: ") << *path);
             if (!transListContainsPath(list, *path)) {
                 TransEnumerateFillFromPathMono(state, path->clone());
             }
@@ -3330,7 +3330,7 @@ BindTranslationNominals::BindTranslationNominals(const HIRCrate& crate)
             const auto& item = crate.getTypeitemByPath(Span(), path);
             switch (item.tag()) {
                 default:
-                    BUG(Span(), "Nominal translation type points to " << item.tagStr() << " - " << ty);
+                    BUG(Span(), StringView("Nominal translation type points to ") << item.tagStr() << StringView(" - ") << ty);
                 case HIRTypeItem::TAG_ExternType: {
                     auto& e = item.as_ExternType();
                     pathTy->binding = HIRTypePathBinding::make_ExternType(&e);
@@ -3370,11 +3370,11 @@ auto EnumState::enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp) -> vo
     if (auto* e = rv.addFunction(crate.types, mv$(p))) {
         auto name = FMT(TransMangleValue(resolve.board(), *e->path));
         auto inserted = emittedFunctions.insert(name).second;
-        ASSERT_BUG(Span(), inserted, "Duplicated mangled name - " << *e->path);
+        ASSERT_BUG(Span(), inserted, StringView("Duplicated mangled name - ") << *e->path);
         fcnsToTypeVisit.push_back(e);
         e->ptr = &fcn;
         e->pp = mv$(pp);
-        DEBUG(*e->path << " w/ " << e->pp.ppImpl << " and " << e->pp.ppMethod);
+        DEBUG(*e->path << StringView(" w/ ") << e->pp.ppImpl << StringView(" and ") << e->pp.ppMethod);
         fcnQueue.push_back(e);
     }
 }
@@ -3417,7 +3417,7 @@ auto GlobalAsmOperandEvaluator::evaluate(HIRGlobalAssembly& item) -> void {
 
 auto GlobalAsmOperandEvaluator::visitConstgeneric(HIRConstGeneric& value) -> void {
     ConvertHIRConstantEvaluateConstGeneric(*span, wb, crate, value);
-    ASSERT_BUG(*span, value.is_Evaluated(), "global_asm operand remained unevaluated at translation");
+    ASSERT_BUG(*span, value.is_Evaluated(), StringView("global_asm operand remained unevaluated at translation"));
 }
 
 MIREnumCache::MIREnumCache() {
@@ -3451,16 +3451,16 @@ auto MIREnumCache::insertDestructorType(const HIRTypeData* newTy) -> void {
 }
 
 auto MIREnumCache::apply(EnumState& state, const TransParams& pp) const -> void {
-    TRACE_FUNCTION_F(" w/ impl=" << pp.ppImpl << " method=" << pp.ppMethod);
+    TRACE_FUNCTION_F(StringView(" w/ impl=") << pp.ppImpl << StringView(" method=") << pp.ppMethod);
     for (const auto* tyP : this->typeids) {
-        DEBUG("TypeID " << tyP);
+        DEBUG(StringView("TypeID ") << tyP);
         state.rv.typeids.insert(pp.monomorph(state.resolve, tyP));
     }
     for (const auto* tyP : this->destructorTypes) {
         enumerateDestructorType(state, pp.monomorph(state.resolve, tyP));
     }
     for (const auto& path : this->paths) {
-        DEBUG("Path " << *path);
+        DEBUG(StringView("Path ") << *path);
         TransEnumerateFillFromPath(state, *path, pp);
     }
 }
@@ -3522,7 +3522,7 @@ auto TypeVisitor::visitStruct(const HIRTypeData* selfType, const HIRGenericPath&
     }
     if (item.structMarkings.isAsyncDropGlue) {
         const auto* repr = TargetGetTypeRepr(sp, resolve, selfType);
-        ASSERT_BUG(sp, repr && repr->fields.size() >= fieldCount, "invalid async-drop glue representation for " << selfType);
+        ASSERT_BUG(sp, repr && repr->fields.size() >= fieldCount, StringView("invalid async-drop glue representation for ") << selfType);
         for (size_t i = fieldCount; i < repr->fields.size(); i++) {
             visitType(repr->fields[i].ty);
         }
@@ -3569,24 +3569,24 @@ auto TypeVisitor::visitType(const HIRTypeData* ty, Mode mode) -> void {
         return;
     }
 
-    TRACE_FUNCTION_F(ty << " - " << (mode == Mode::Shallow ? "Shallow" : (mode == Mode::Normal ? "Normal" : "Deep")));
+    TRACE_FUNCTION_F(ty << StringView(" - ") << (mode == Mode::Shallow ? "Shallow" : (mode == Mode::Normal ? "Normal" : "Deep")));
     if (mode == Mode::Shallow) {
         switch ((*ty).tag()) {
             default:
                 break;
             case HIRTypeData::TAG_Infer: {
-                BUG(sp, "`_` type hit in enumeration");
+                BUG(sp, StringView("`_` type hit in enumeration"));
                 break;
             }
             case HIRTypeData::TAG_Path: {
                 auto& te = (*ty).as_Path();
                 switch (te.binding.tag()) {
                     case HIRTypePathBinding::TAG_Unbound: {
-                        BUG(sp, "Unbound type hit in enumeration - " << ty);
+                        BUG(sp, StringView("Unbound type hit in enumeration - ") << ty);
                         break;
                     }
                     case HIRTypePathBinding::TAG_Opaque: {
-                        BUG(sp, "Opaque type hit in enumeration - " << ty);
+                        BUG(sp, StringView("Opaque type hit in enumeration - ") << ty);
                         break;
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
@@ -3606,7 +3606,7 @@ auto TypeVisitor::visitType(const HIRTypeData* ty, Mode mode) -> void {
             }
             case HIRTypeData::TAG_Array: {
                 auto& te = (*ty).as_Array();
-                ASSERT_BUG(sp, te.size.is_Known(), "Encountered unknown array size - " << ty);
+                ASSERT_BUG(sp, te.size.is_Known(), StringView("Encountered unknown array size - ") << ty);
                 break;
             }
             case HIRTypeData::TAG_Function: {
@@ -3636,24 +3636,24 @@ auto TypeVisitor::visitType(const HIRTypeData* ty, Mode mode) -> void {
     } else {
         if (activeSet.find(ty) != activeSet.end()) {
             // TODO: Handle recursion
-            BUG(sp, "- Type recursion on " << ty);
+            BUG(sp, StringView("- Type recursion on ") << ty);
         }
         activeSet.insert(ty);
 
         switch ((*ty).tag()) {
             case HIRTypeData::TAG_Infer: {
-                BUG(sp, "`_` type hit in enumeration");
+                BUG(sp, StringView("`_` type hit in enumeration"));
                 break;
             }
             case HIRTypeData::TAG_Generic: {
-                BUG(sp, "Generic type hit in enumeration - " << ty);
+                BUG(sp, StringView("Generic type hit in enumeration - ") << ty);
                 break;
             }
             case HIRTypeData::TAG_ErasedType: {
                 break;
             }
             case HIRTypeData::TAG_NodeType: {
-                BUG(sp, "NodeType type hit in enumeration - " << ty);
+                BUG(sp, StringView("NodeType type hit in enumeration - ") << ty);
                 break;
             }
             case HIRTypeData::TAG_Diverge: {
@@ -3666,11 +3666,11 @@ auto TypeVisitor::visitType(const HIRTypeData* ty, Mode mode) -> void {
                 auto& te = (*ty).as_Path();
                 switch (te.binding.tag()) {
                     case HIRTypePathBinding::TAG_Unbound: {
-                        BUG(sp, "Unbound type hit in enumeration - " << ty);
+                        BUG(sp, StringView("Unbound type hit in enumeration - ") << ty);
                         break;
                     }
                     case HIRTypePathBinding::TAG_Opaque: {
-                        BUG(sp, "Opaque type hit in enumeration - " << ty);
+                        BUG(sp, StringView("Opaque type hit in enumeration - ") << ty);
                         break;
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
@@ -3710,7 +3710,7 @@ auto TypeVisitor::visitType(const HIRTypeData* ty, Mode mode) -> void {
             }
             case HIRTypeData::TAG_Array: {
                 auto& te = (*ty).as_Array();
-                ASSERT_BUG(sp, te.size.is_Known(), "Encountered unknown array size - " << ty);
+                ASSERT_BUG(sp, te.size.is_Known(), StringView("Encountered unknown array size - ") << ty);
                 visitType(te.inner, mode);
                 break;
             }
@@ -3758,8 +3758,8 @@ auto TypeVisitor::visitType(const HIRTypeData* ty, Mode mode) -> void {
 
     bool shallow = (mode == Mode::Shallow);
     auto i = out.types.size();
-    ASSERT_BUG(sp, out.addType(ty, shallow), "Type was emitted while it was being visited: " << ty);
-    DEBUG("Add type " << ty << (shallow ? " (Shallow)" : "") << " " << i);
+    ASSERT_BUG(sp, out.addType(ty, shallow), StringView("Type was emitted while it was being visited: ") << ty);
+    DEBUG(StringView("Add type ") << ty << (shallow ? " (Shallow)" : "") << StringView(" ") << i);
 }
 
 void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, const HIRFunction& fcn, const TransParams& pp) {
@@ -3807,7 +3807,7 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
     }
     if (prevList) {
         const auto* transFcn = prevList->findFunction(path);
-        ASSERT_BUG(sp, transFcn, "Unable to find " << path << " in first-pass enumerate result");
+        ASSERT_BUG(sp, transFcn, StringView("Unable to find ") << path << StringView(" in first-pass enumerate result"));
         if (transFcn && transFcn->monomorphised.code) {
             mirP = &*transFcn->monomorphised.code;
             useMonomorph = false;
@@ -3854,7 +3854,7 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                     ;
                     switch (lv.root.tag()) {
                         case MIRLValue::Storage::TAG_Return: {
-                            MIR_TODO(localMirRes, "Get return type for MIR type enumeration");
+                            MIR_TODO(localMirRes, StringView("Get return type for MIR type enumeration"));
                             break;
                         }
                         case MIRLValue::Storage::TAG_Argument: {
@@ -3878,19 +3878,19 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                             switch (path.data.tag()) {
                                 case HIRPathData::TAG_Generic: {
                                     auto& pe = path.data.as_Generic();
-                                    MIR_ASSERT(localMirRes, pe.params.types.empty(), "Path params on static - " << path);
+                                    MIR_ASSERT(localMirRes, pe.params.types.empty(), StringView("Path params on static - ") << path);
                                     const auto& s = tv.resolve.hirCrate().getStaticByPath(localMirRes.sp, pe.path);
                                     ty = s.type;
                                     break;
                                 }
                                 case HIRPathData::TAG_UfcsKnown: {
-                                    MIR_TODO(localMirRes, "LValue::Static - UfcsKnown - " << path);
+                                    MIR_TODO(localMirRes, StringView("LValue::Static - UfcsKnown - ") << path);
                                 }
                                 case HIRPathData::TAG_UfcsUnknown: {
-                                    MIR_BUG(localMirRes, "Encountered UfcsUnknown in LValue::Static - " << path);
+                                    MIR_BUG(localMirRes, StringView("Encountered UfcsUnknown in LValue::Static - ") << path);
                                 }
                                 case HIRPathData::TAG_UfcsInherent: {
-                                    MIR_TODO(localMirRes, "LValue::Static - UfcsInherent - " << path);
+                                    MIR_TODO(localMirRes, StringView("LValue::Static - UfcsInherent - ") << path);
                                 }
                             }
                             break;

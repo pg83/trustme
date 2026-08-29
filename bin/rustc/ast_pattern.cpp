@@ -1,229 +1,19 @@
 #include "ast_pattern.h"
+#include "output.h"
 
 #include "common.h"
 #include "ast_ast.h"
 #include "ast_expr.h"
 
-std::ostream& operator<<(std::ostream& os, const ASTPattern::Value& val) {
-    switch (val.tag()) {
-        case ASTPattern::Value::TAG_Invalid: {
-            os << "/*BAD PAT VAL*/";
-            break;
-        }
-        case ASTPattern::Value::TAG_Integer: {
-            auto& e = val.as_Integer();
-            switch (e.type) {
-                case CORETYPE_BOOL:
-                    os << (e.value != U128(0) ? "true" : "false");
-                    break;
-                case CORETYPE_F32:
-                case CORETYPE_F64:
-                    BUG(Span(), "Hit F32/f64 in printing pattern literal");
-                    break;
-                default:
-                    os << e.value;
-                    break;
-            }
-            break;
-        }
-        case ASTPattern::Value::TAG_Float: {
-            auto& e = val.as_Float();
-            switch (e.type) {
-                case CORETYPE_BOOL:
-                    os << (e.value != FloatValue() ? "true" : "false");
-                    break;
-                case CORETYPE_ANY:
-                case CORETYPE_F32:
-                case CORETYPE_F64:
-                    os << e.value;
-                    break;
-                default:
-                    BUG(Span(), "Hit integer in printing pattern literal");
-                    break;
-            }
-            break;
-        }
-        case ASTPattern::Value::TAG_String: {
-            auto& e = val.as_String();
-            os << "\"" << e << "\"";
-            break;
-        }
-        case ASTPattern::Value::TAG_ByteString: {
-            auto& e = val.as_ByteString();
-            os << "b\"" << e.v << "\"";
-            break;
-        }
-        case ASTPattern::Value::TAG_Named: {
-            auto& e = val.as_Named();
-            os << e;
-            break;
-        }
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTPattern::TuplePat& val) {
-    if (val.hasWildcard) {
-        os << val.start;
-        os << ".., ";
-        os << val.end;
-    } else {
-        os << val.start;
-        BUG_ASSERT(val.end.size() == 0);
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTPatternBinding& pb) {
-    if (pb.isMutable) {
-        os << "mut ";
-    }
-    switch (pb.type) {
-        case ASTPatternBinding::Type::MOVE:
-            break;
-        case ASTPatternBinding::Type::REF:
-            os << "ref ";
-            break;
-        case ASTPatternBinding::Type::MUTREF:
-            os << "ref mut ";
-            break;
-    }
-    os << pb.name;
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTPattern& pat) {
-    for (const auto& pb : pat.bindings_) {
-        os << pb << " @ ";
-    }
-    switch (pat.data_.tag()) {
-        case ASTPatternData::TAG_MaybeBind: {
-            auto& ent = pat.data_.as_MaybeBind();
-            os << ent.name << "?";
-            break;
-        }
-        case ASTPatternData::TAG_Macro: {
-            auto& ent = pat.data_.as_Macro();
-            os << *ent.inv;
-            break;
-        }
-        case ASTPatternData::TAG_Any: {
-            os << "_";
-            break;
-        }
-        case ASTPatternData::TAG_Never: {
-            os << "!";
-            break;
-        }
-        case ASTPatternData::TAG_Box: {
-            auto& ent = pat.data_.as_Box();
-            os << "box " << *ent.sub;
-            break;
-        }
-        case ASTPatternData::TAG_Guard: {
-            auto& ent = pat.data_.as_Guard();
-            os << "(" << *ent.sub << " if " << *ent.cond << ")";
-            break;
-        }
-        case ASTPatternData::TAG_Deref: {
-            auto& ent = pat.data_.as_Deref();
-            os << "deref!(" << *ent.sub << ")";
-            break;
-        }
-        case ASTPatternData::TAG_Ref: {
-            auto& ent = pat.data_.as_Ref();
-            os << "&" << (ent.mut ? "mut " : "") << *ent.sub;
-            break;
-        }
-        case ASTPatternData::TAG_Value: {
-            auto& ent = pat.data_.as_Value();
-            if (!ent.start.is_Invalid()) {
-                os << ent.start;
-            }
-            if (!ent.end.is_Invalid()) {
-                os << " ..= " << ent.end;
-            }
-            break;
-        }
-        case ASTPatternData::TAG_ValueLeftInc: {
-            auto& ent = pat.data_.as_ValueLeftInc();
-            if (ent.start.is_Invalid() && ent.end.is_Invalid()) {
-                os << "..";
-            } else {
-                os << ent.start << " .. " << ent.end;
-            }
-            break;
-        }
-        case ASTPatternData::TAG_Tuple: {
-            auto& ent = pat.data_.as_Tuple();
-            os << "(" << ent << ")";
-            break;
-        }
-        case ASTPatternData::TAG_StructTuple: {
-            auto& ent = pat.data_.as_StructTuple();
-            os << ent.path << " (" << ent.tupPat << ")";
-            break;
-        }
-        case ASTPatternData::TAG_Struct: {
-            auto& ent = pat.data_.as_Struct();
-            os << ent.path << " {";
-            for (const auto& e : ent.subPatterns) {
-                os << e.attrs;
-                os << e.name << ": " << e.pat;
-                os << ",";
-            }
-            os << "}";
-            if (ent.isExhaustive) {
-                os << "..";
-            }
-            break;
-        }
-        case ASTPatternData::TAG_Slice: {
-            auto& ent = pat.data_.as_Slice();
-            os << "[";
-            os << ent.subPats;
-            os << "]";
-            break;
-        }
-        case ASTPatternData::TAG_SplitSlice: {
-            auto& ent = pat.data_.as_SplitSlice();
-            os << "[";
-            bool needsComma = false;
-            if (ent.leading.size()) {
-                os << ent.leading;
-                needsComma = true;
-            }
 
-            if (needsComma) {
-                os << ", ";
-            }
-            if (ent.extraBind.isValid()) {
-                os << ent.extraBind;
-            }
-            os << "..";
-            needsComma = true;
 
-            if (ent.trailing.size()) {
-                if (needsComma) {
-                    os << ", ";
-                }
-                os << ent.trailing;
-            }
-            os << "]";
-            break;
-        }
-        case ASTPatternData::TAG_Or: {
-            auto& ent = pat.data_.as_Or();
-            os << "(";
-            for (const auto& e : ent) {
-                os << (&e == &ent.front() ? "" : " | ") << e;
-            }
-            os << ")";
-            break;
-        }
-    }
-    return os;
-}
+
+
+
+using namespace stl;
 
 ASTPattern::~ASTPattern() {
 }
@@ -692,4 +482,237 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
         }
     }
     UNREACHABLE();
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, ASTPattern::Value>(ZeroCopyOutput& os, const ASTPattern::Value& val) {
+    switch (val.tag()) {
+        case ASTPattern::Value::TAG_Invalid: {
+            os << StringView("/*BAD PAT VAL*/");
+            break;
+        }
+        case ASTPattern::Value::TAG_Integer: {
+            auto& e = val.as_Integer();
+            switch (e.type) {
+                case CORETYPE_BOOL:
+                    os << (e.value != U128(0) ? "true" : "false");
+                    break;
+                case CORETYPE_F32:
+                case CORETYPE_F64:
+                    BUG(Span(), StringView("Hit F32/f64 in printing pattern literal"));
+                    break;
+                default:
+                    os << e.value;
+                    break;
+            }
+            break;
+        }
+        case ASTPattern::Value::TAG_Float: {
+            auto& e = val.as_Float();
+            switch (e.type) {
+                case CORETYPE_BOOL:
+                    os << (e.value != FloatValue() ? "true" : "false");
+                    break;
+                case CORETYPE_ANY:
+                case CORETYPE_F32:
+                case CORETYPE_F64:
+                    os << e.value;
+                    break;
+                default:
+                    BUG(Span(), StringView("Hit integer in printing pattern literal"));
+                    break;
+            }
+            break;
+        }
+        case ASTPattern::Value::TAG_String: {
+            auto& e = val.as_String();
+            os << StringView("\"") << e << StringView("\"");
+            break;
+        }
+        case ASTPattern::Value::TAG_ByteString: {
+            auto& e = val.as_ByteString();
+            os << StringView("b\"") << e.v << StringView("\"");
+            break;
+        }
+        case ASTPattern::Value::TAG_Named: {
+            auto& e = val.as_Named();
+            os << e;
+            break;
+        }
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTPattern::TuplePat>(ZeroCopyOutput& os, const ASTPattern::TuplePat& val) {
+    if (val.hasWildcard) {
+        os << val.start;
+        os << StringView(".., ");
+        os << val.end;
+    } else {
+        os << val.start;
+        BUG_ASSERT(val.end.size() == 0);
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTPatternBinding>(ZeroCopyOutput& os, ASTPatternBinding pb) {
+    if (pb.isMutable) {
+        os << StringView("mut ");
+    }
+    switch (pb.type) {
+        case ASTPatternBinding::Type::MOVE:
+            break;
+        case ASTPatternBinding::Type::REF:
+            os << StringView("ref ");
+            break;
+        case ASTPatternBinding::Type::MUTREF:
+            os << StringView("ref mut ");
+            break;
+    }
+    os << pb.name;
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTPattern>(ZeroCopyOutput& os, const ASTPattern& pat) {
+    for (const auto& pb : pat.bindings()) {
+        os << pb << StringView(" @ ");
+    }
+    switch (pat.data().tag()) {
+        case ASTPatternData::TAG_MaybeBind: {
+            auto& ent = pat.data().as_MaybeBind();
+            os << ent.name << StringView("?");
+            break;
+        }
+        case ASTPatternData::TAG_Macro: {
+            auto& ent = pat.data().as_Macro();
+            os << *ent.inv;
+            break;
+        }
+        case ASTPatternData::TAG_Any: {
+            os << StringView("_");
+            break;
+        }
+        case ASTPatternData::TAG_Never: {
+            os << StringView("!");
+            break;
+        }
+        case ASTPatternData::TAG_Box: {
+            auto& ent = pat.data().as_Box();
+            os << StringView("box ") << *ent.sub;
+            break;
+        }
+        case ASTPatternData::TAG_Guard: {
+            auto& ent = pat.data().as_Guard();
+            os << StringView("(") << *ent.sub << StringView(" if ") << *ent.cond << StringView(")");
+            break;
+        }
+        case ASTPatternData::TAG_Deref: {
+            auto& ent = pat.data().as_Deref();
+            os << StringView("deref!(") << *ent.sub << StringView(")");
+            break;
+        }
+        case ASTPatternData::TAG_Ref: {
+            auto& ent = pat.data().as_Ref();
+            os << StringView("&") << (ent.mut ? "mut " : "") << *ent.sub;
+            break;
+        }
+        case ASTPatternData::TAG_Value: {
+            auto& ent = pat.data().as_Value();
+            if (!ent.start.is_Invalid()) {
+                os << ent.start;
+            }
+            if (!ent.end.is_Invalid()) {
+                os << StringView(" ..= ") << ent.end;
+            }
+            break;
+        }
+        case ASTPatternData::TAG_ValueLeftInc: {
+            auto& ent = pat.data().as_ValueLeftInc();
+            if (ent.start.is_Invalid() && ent.end.is_Invalid()) {
+                os << StringView("..");
+            } else {
+                os << ent.start << StringView(" .. ") << ent.end;
+            }
+            break;
+        }
+        case ASTPatternData::TAG_Tuple: {
+            auto& ent = pat.data().as_Tuple();
+            os << StringView("(") << ent << StringView(")");
+            break;
+        }
+        case ASTPatternData::TAG_StructTuple: {
+            auto& ent = pat.data().as_StructTuple();
+            os << ent.path << StringView(" (") << ent.tupPat << StringView(")");
+            break;
+        }
+        case ASTPatternData::TAG_Struct: {
+            auto& ent = pat.data().as_Struct();
+            os << ent.path << StringView(" {");
+            for (const auto& e : ent.subPatterns) {
+                os << e.attrs;
+                os << e.name << StringView(": ") << e.pat;
+                os << StringView(",");
+            }
+            os << StringView("}");
+            if (ent.isExhaustive) {
+                os << StringView("..");
+            }
+            break;
+        }
+        case ASTPatternData::TAG_Slice: {
+            auto& ent = pat.data().as_Slice();
+            os << StringView("[");
+            os << ent.subPats;
+            os << StringView("]");
+            break;
+        }
+        case ASTPatternData::TAG_SplitSlice: {
+            auto& ent = pat.data().as_SplitSlice();
+            os << StringView("[");
+            bool needsComma = false;
+            if (ent.leading.size()) {
+                os << ent.leading;
+                needsComma = true;
+            }
+
+            if (needsComma) {
+                os << StringView(", ");
+            }
+            if (ent.extraBind.isValid()) {
+                os << ent.extraBind;
+            }
+            os << StringView("..");
+            needsComma = true;
+
+            if (ent.trailing.size()) {
+                if (needsComma) {
+                    os << StringView(", ");
+                }
+                os << ent.trailing;
+            }
+            os << StringView("]");
+            break;
+        }
+        case ASTPatternData::TAG_Or: {
+            auto& ent = pat.data().as_Or();
+            os << StringView("(");
+            for (const auto& e : ent) {
+                os << (&e == &ent.front() ? "" : " | ") << e;
+            }
+            os << StringView(")");
+            break;
+        }
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<ASTPattern>>(ZeroCopyOutput& out, const std::vector<ASTPattern>& values) {
+    outCont(out, values);
+}
+
 }

@@ -1,4 +1,5 @@
 #include "rc_string.h"
+#include "output.h"
 
 #include <string>
 #include <cstring>
@@ -113,10 +114,7 @@ Ordering RcString::ord(const char* s) const {
     return ::ord(cmp, 0);
 }
 
-std::ostream& operator<<(std::ostream& os, const RcString& x) {
-    os.write(x.c_str(), x.size());
-    return os;
-}
+
 
 int RcString::compare(size_t o, size_t l, const char* s) const {
     BUG_ASSERT(o <= this->size());
@@ -181,4 +179,28 @@ auto StrInterner::intern(const char* s, size_t len) -> u32 {
         grow();
     }
     return id;
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, RcString>(ZeroCopyOutput& os, RcString x) {
+    os.write(x.c_str(), x.size());
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<RcString>>(ZeroCopyOutput& out, const std::vector<RcString>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::pair<const RcString, RcString>>(ZeroCopyOutput& out, std::pair<const RcString, RcString> value) {
+    out << value.first << StringView(": ") << value.second;
+}
+
+template <>
+void output<ZeroCopyOutput, std::map<RcString, RcString>>(ZeroCopyOutput& out, const std::map<RcString, RcString>& values) {
+    outCont(out, values);
+}
+
 }

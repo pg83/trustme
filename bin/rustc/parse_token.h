@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "span.h"
 #include "ident.h"
 #include "floats.h"
@@ -26,8 +28,6 @@ public:
 
     Position(RcString filename, unsigned int line, unsigned int ofs);
 };
-
-std::ostream& operator<<(std::ostream& os, const Position& p);
 
 struct ASTType;
 class TokenTree;
@@ -191,11 +191,8 @@ public:
     static const char* typestr(enum eTokenType type);
     static eTokenType typefromstr(const std::string& s);
 
-    friend std::ostream& operator<<(std::ostream& os, const Token& tok);
 };
 
-std::ostream& operator<<(std::ostream& os, const Token& tok);
-
-void printEscapedLiteral(std::ostream& os, eTokenType type, const u8* value, size_t size);
+void printEscapedLiteral(stl::ZeroCopyOutput& os, eTokenType type, const u8* value, size_t size);
 
 bool tokensNeedSpace(eTokenType prev, eTokenType cur);

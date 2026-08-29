@@ -5,24 +5,25 @@
 #include "hir_visitor.h"
 #include "mir_operations.h"
 
-#include <iomanip>
+
+using namespace stl;
 
 namespace {
     struct MirDumper {
-        std::ostream& os;
+        ZeroCopyOutput& os;
         unsigned int indentLevel;
 
-        MirDumper(std::ostream& os, unsigned int il);
+        MirDumper(ZeroCopyOutput& os, unsigned int il);
 
         void dumpMir(const MIRFunction& fcn);
 
-        void fmtVal(std::ostream& os, const MIRLValue& lval);
+        void fmtVal(ZeroCopyOutput& os, const MIRLValue& lval);
 
-        void fmtVal(std::ostream& os, const MIRConstant& e);
+        void fmtVal(ZeroCopyOutput& os, const MIRConstant& e);
 
-        void fmtVal(std::ostream& os, const MIRParam& param);
+        void fmtVal(ZeroCopyOutput& os, const MIRParam& param);
 
-        void fmtVal(std::ostream& os, const MIRRValue& rval);
+        void fmtVal(ZeroCopyOutput& os, const MIRRValue& rval);
 
         RepeatLitStr indent() const;
 
@@ -32,11 +33,11 @@ namespace {
     };
 
     struct TreeVisitor: public HIRVisitor {
-        std::ostream& os;
+        ZeroCopyOutput& os;
         unsigned int indentLevel;
         bool shortItemName = false;
 
-        TreeVisitor(HIRTypeInterner& types, std::ostream& os);
+        TreeVisitor(HIRTypeInterner& types, ZeroCopyOutput& os);
 
         void visitTypeImpl(HIRTypeImpl& impl) override;
 
@@ -59,24 +60,24 @@ namespace {
         void decIndent();
     };
 
-    void dumpMir(std::ostream& os, unsigned int il, const MIRFunction& fcn) {
+    void dumpMir(ZeroCopyOutput& os, unsigned int il, const MIRFunction& fcn) {
         MirDumper md{os, il};
         md.dumpMir(fcn);
     }
 }
 
-void MIRDump(std::ostream& sink, const HIRCrate& crate) {
+void MIRDump(ZeroCopyOutput& sink, const HIRCrate& crate) {
     TreeVisitor tv{crate.types, sink};
 
     tv.visitCrate(const_cast<HIRCrate&>(crate));
 }
 
-void MIRDumpFcn(std::ostream& sink, const MIRFunction& fcn, unsigned int il) {
+void MIRDumpFcn(ZeroCopyOutput& sink, const MIRFunction& fcn, unsigned int il) {
     MirDumper md{sink, il};
     md.dumpMir(fcn);
 }
 
-MirDumper::MirDumper(std::ostream& os, unsigned int il)
+MirDumper::MirDumper(ZeroCopyOutput& os, unsigned int il)
     : os(os)
     , indentLevel(il)
 {
@@ -84,17 +85,17 @@ MirDumper::MirDumper(std::ostream& os, unsigned int il)
 
 auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
     for (size_t i = 0; i < fcn.locals.size(); i++) {
-        os << indent() << "let _$" << i << ": " << fcn.locals[i] << ";\n";
+        os << indent() << StringView("let _$") << i << StringView(": ") << fcn.locals[i] << StringView(";\n");
     }
     for (unsigned int i = 0; i < fcn.dropFlags.size(); i++) {
-        os << indent() << "let df$" << i << " = " << fcn.dropFlags[i] << ";\n";
+        os << indent() << StringView("let df$") << i << StringView(" = ") << fcn.dropFlags[i] << StringView(";\n");
     }
 
 #define FMT_M(x) FMT_CB(os, this->fmtVal(os, x);)
     for (unsigned int i = 0; i < fcn.blocks.size(); i++) {
         const auto& block = fcn.blocks[i];
 
-        os << indent() << "bb" << i << ": {\n";
+        os << indent() << StringView("bb") << i << StringView(": {\n");
         incIndent();
         for (const auto& stmt : block.statements) {
             os << indent();
@@ -102,70 +103,70 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
             switch (stmt.tag()) {
                 case MIRStatement::TAG_Assign: {
                     auto& e = stmt.as_Assign();
-                    os << FMT_M(e.dst) << " = " << FMT_M(e.src) << ";\n";
+                    os << FMT_M(e.dst) << StringView(" = ") << FMT_M(e.src) << StringView(";\n");
                     break;
                 }
                 case MIRStatement::TAG_Asm: {
                     auto& e = stmt.as_Asm();
-                    os << "(";
+                    os << StringView("(");
                     for (const auto& v : e.outputs) {
-                        os << "\"" << ::FmtEscaped(v.first) << "\"=" << FMT_M(v.second) << ",";
+                        os << StringView("\"") << ::FmtEscaped(v.first) << StringView("\"=") << FMT_M(v.second) << StringView(",");
                     }
-                    os << ") = asm! \"";
+                    os << StringView(") = asm! \"");
                     os << ::FmtEscaped(e.tpl);
-                    os << "\"(";
+                    os << StringView("\"(");
                     for (const auto& v : e.inputs) {
-                        os << "\"" << ::FmtEscaped(v.first) << "\"=" << FMT_M(v.second) << ",";
+                        os << StringView("\"") << ::FmtEscaped(v.first) << StringView("\"=") << FMT_M(v.second) << StringView(",");
                     }
-                    os << " : ";
+                    os << StringView(" : ");
                     for (const auto& v : e.clobbers) {
-                        os << "\"" << v << "\",";
+                        os << StringView("\"") << v << StringView("\",");
                     }
-                    os << ")";
+                    os << StringView(")");
                     for (const auto& v : e.flags) {
-                        os << " \"" << v << "\"";
+                        os << StringView(" \"") << v << StringView("\"");
                     }
-                    os << ";\n";
+                    os << StringView(";\n");
                     break;
                 }
                 case MIRStatement::TAG_Asm2: {
                     auto& e = stmt.as_Asm2();
-                    os << "asm2!(";
+                    os << StringView("asm2!(");
                     for (const auto& l : e.lines) {
                         l.fmt(os);
                     }
                     for (const auto& p : e.params) {
-                        os << ", ";
+                        os << StringView(", ");
                         switch (p.tag()) {
                             case MIRAsmParam::TAG_Const: {
                                 auto& v = p.as_Const();
-                                os << "const " << v;
+                                os << StringView("const ") << v;
                                 break;
                             }
                             case MIRAsmParam::TAG_Sym: {
                                 auto& v = p.as_Sym();
-                                os << "sym " << v;
+                                os << StringView("sym ") << v;
                                 break;
                             }
                             case MIRAsmParam::TAG_Reg: {
                                 auto& v = p.as_Reg();
-                                os << "reg " << v.dir << " " << v.spec;
+                                os << StringView("reg ") << v.dir << StringView(" ") << v.spec;
                                 if (v.input) {
                                     os << FMT_M(*v.input);
                                 } else {
-                                    os << "_";
+                                    os << StringView("_");
                                 }
-                                os << " => ";
+                                os << StringView(" => ");
                                 if (v.output) {
                                     os << FMT_M(*v.output);
                                 } else {
-                                    os << "_";
+                                    os << StringView("_");
                                 }
                                 break;
                             }
                             case MIRAsmParam::TAG_Label: {
                                 auto& v = p.as_Label();
-                                os << "label bb" << v;
+                                os << StringView("label bb") << v;
                                 break;
                             }
                         }
@@ -173,39 +174,39 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
                     if (e.options.any()) {
                         e.options.fmt(os);
                     }
-                    os << ")";
+                    os << StringView(")");
                     break;
                 }
                 case MIRStatement::TAG_SetDropFlag: {
                     auto& e = stmt.as_SetDropFlag();
-                    os << "df$" << e.idx << " = ";
+                    os << StringView("df$") << e.idx << StringView(" = ");
                     if (e.other == ~0u) {
                         os << e.newVal;
                     } else if (!e.newVal) {
-                        os << "df$" << e.other;
+                        os << StringView("df$") << e.other;
                     } else {
-                        os << "! df$" << e.other;
+                        os << StringView("! df$") << e.other;
                     }
-                    os << ";\n";
+                    os << StringView(";\n");
                     break;
                 }
                 case MIRStatement::TAG_SaveDropFlag: {
                     auto& e = stmt.as_SaveDropFlag();
-                    os << "SaveDropFlag(" << FMT_M(e.slot) << " BIT " << e.bitIndex << " = df$" << e.idx << ")";
+                    os << StringView("SaveDropFlag(") << FMT_M(e.slot) << StringView(" BIT ") << e.bitIndex << StringView(" = df$") << e.idx << StringView(")");
                     break;
                 }
                 case MIRStatement::TAG_LoadDropFlag: {
                     auto& e = stmt.as_LoadDropFlag();
-                    os << "LoadDropFlag(df$" << e.idx << " = " << FMT_M(e.slot) << " BIT " << e.bitIndex << ")";
+                    os << StringView("LoadDropFlag(df$") << e.idx << StringView(" = ") << FMT_M(e.slot) << StringView(" BIT ") << e.bitIndex << StringView(")");
                     break;
                 }
                 case MIRStatement::TAG_ScopeEnd: {
                     auto& e = stmt.as_ScopeEnd();
-                    os << "// Scope End: ";
+                    os << StringView("// Scope End: ");
                     for (auto idx : e.slots) {
-                        os << "_$" << idx << ",";
+                        os << StringView("_$") << idx << StringView(",");
                     }
-                    os << "\n";
+                    os << StringView("\n");
                     break;
                 }
             }
@@ -215,142 +216,142 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
         auto fmtUnwind = [this](const MIRUnwindAction& action) {
             switch (action.tag()) {
                 case MIRUnwindAction::TAG_Continue: {
-                    os << "continue";
+                    os << StringView("continue");
                     break;
                 }
                 case MIRUnwindAction::TAG_Cleanup: {
                     auto& ue = action.as_Cleanup();
-                    os << "cleanup bb" << ue;
+                    os << StringView("cleanup bb") << ue;
                     break;
                 }
                 case MIRUnwindAction::TAG_Terminate: {
-                    os << "terminate";
+                    os << StringView("terminate");
                     break;
                 }
                 case MIRUnwindAction::TAG_Unreachable: {
-                    os << "unreachable";
+                    os << StringView("unreachable");
                     break;
                 }
             }
         };
         switch (block.terminator.tag()) {
             case MIRTerminator::TAG_Incomplete: {
-                os << "INVALID;\n";
+                os << StringView("INVALID;\n");
                 break;
             }
             case MIRTerminator::TAG_Return: {
-                os << "return;\n";
+                os << StringView("return;\n");
                 break;
             }
             case MIRTerminator::TAG_UnwindResume: {
-                os << "unwind resume;\n";
+                os << StringView("unwind resume;\n");
                 break;
             }
             case MIRTerminator::TAG_UnwindTerminate: {
-                os << "unwind terminate;\n";
+                os << StringView("unwind terminate;\n");
                 break;
             }
             case MIRTerminator::TAG_Unreachable: {
-                os << "unreachable;\n";
+                os << StringView("unreachable;\n");
                 break;
             }
             case MIRTerminator::TAG_Goto: {
                 auto& e = block.terminator.as_Goto();
-                os << "goto bb" << e << ";\n";
+                os << StringView("goto bb") << e << StringView(";\n");
                 break;
             }
             case MIRTerminator::TAG_If: {
                 auto& e = block.terminator.as_If();
-                os << "if " << FMT_M(e.cond) << " { goto bb" << e.bbTrue << "; } else { goto bb" << e.bbFalse << "; }\n";
+                os << StringView("if ") << FMT_M(e.cond) << StringView(" { goto bb") << e.bbTrue << StringView("; } else { goto bb") << e.bbFalse << StringView("; }\n");
                 break;
             }
             case MIRTerminator::TAG_Switch: {
                 auto& e = block.terminator.as_Switch();
-                os << "switch " << FMT_M(e.val) << " {";
+                os << StringView("switch ") << FMT_M(e.val) << StringView(" {");
                 for (unsigned int j = 0; j < e.targets.size(); j++) {
-                    os << j << " => bb" << e.targets[j] << ", ";
+                    os << j << StringView(" => bb") << e.targets[j] << StringView(", ");
                 }
-                os << "}\n";
+                os << StringView("}\n");
                 break;
             }
             case MIRTerminator::TAG_SwitchValue: {
                 auto& e = block.terminator.as_SwitchValue();
-                os << "switch " << FMT_M(e.val) << " {";
+                os << StringView("switch ") << FMT_M(e.val) << StringView(" {");
                 switch (e.values.tag()) {
                     case MIRSwitchValues::TAG_Unsigned: {
                         auto& ve = e.values.as_Unsigned();
                         for (unsigned int j = 0; j < e.targets.size(); j++) {
-                            os << ve[j] << " => bb" << e.targets[j] << ", ";
+                            os << ve[j] << StringView(" => bb") << e.targets[j] << StringView(", ");
                         }
                         break;
                     }
                     case MIRSwitchValues::TAG_Signed: {
                         auto& ve = e.values.as_Signed();
                         for (unsigned int j = 0; j < e.targets.size(); j++) {
-                            os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";
+                            os << (ve[j] >= 0 ? "+" : "") << ve[j] << StringView(" => bb") << e.targets[j] << StringView(", ");
                         }
                         break;
                     }
                     case MIRSwitchValues::TAG_String: {
                         auto& ve = e.values.as_String();
                         for (unsigned int j = 0; j < e.targets.size(); j++) {
-                            os << "\"" << FmtEscaped(ve[j]) << "\" => bb" << e.targets[j] << ", ";
+                            os << StringView("\"") << FmtEscaped(ve[j]) << StringView("\" => bb") << e.targets[j] << StringView(", ");
                         }
                         break;
                     }
                     case MIRSwitchValues::TAG_ByteString: {
                         auto& ve = e.values.as_ByteString();
                         for (unsigned int j = 0; j < e.targets.size(); j++) {
-                            os << "b\"";
+                            os << StringView("b\"");
                             for (size_t i = 0; i < ve[j].size(); i++) {
                                 auto b = ve[j][i];
                                 switch (b) {
                                     case '\\':
-                                        os << "\\\\";
+                                        os << StringView("\\\\");
                                         break;
                                     case '\"':
-                                        os << "\\\"";
+                                        os << StringView("\\\"");
                                         break;
                                     default:
                                         if (' ' <= b && b < 0x7f) {
                                             os << char(ve[j][i]);
                                         } else {
-                                            os << "\\x";
-                                            os << "0123456789ABCDEF"[b >> 4];
-                                            os << "0123456789ABCDEF"[b & 15];
+                                            os << StringView("\\x");
+                                            os << StringView("0123456789ABCDEF")[b >> 4];
+                                            os << StringView("0123456789ABCDEF")[b & 15];
                                         }
                                         break;
                                 }
                             }
-                            os << "\" => bb" << e.targets[j] << ", ";
+                            os << StringView("\" => bb") << e.targets[j] << StringView(", ");
                         }
                         break;
                     }
                 }
-                os << "_ => bb" << e.defTarget << "}\n";
+                os << StringView("_ => bb") << e.defTarget << StringView("}\n");
                 break;
             }
             case MIRTerminator::TAG_Drop: {
                 auto& e = block.terminator.as_Drop();
-                os << "drop(" << FMT_M(e.slot);
+                os << StringView("drop(") << FMT_M(e.slot);
                 if (e.kind == MIRDropKind::SHALLOW) {
-                    os << " SHALLOW";
+                    os << StringView(" SHALLOW");
                 }
                 if (e.flagIdx != ~0u) {
-                    os << " IF df$" << e.flagIdx;
+                    os << StringView(" IF df$") << e.flagIdx;
                 }
-                os << ") goto bb" << e.target << " unwind ";
+                os << StringView(") goto bb") << e.target << StringView(" unwind ");
                 fmtUnwind(e.unwind);
-                os << "\n";
+                os << StringView("\n");
                 break;
             }
             case MIRTerminator::TAG_Call: {
                 auto& e = block.terminator.as_Call();
-                os << FMT_M(e.retVal) << " = ";
+                os << FMT_M(e.retVal) << StringView(" = ");
                 switch (e.fcn.tag()) {
                     case MIRCallTarget::TAG_Value: {
                         auto& e2 = e.fcn.as_Value();
-                        os << "(" << FMT_M(e2) << ")";
+                        os << StringView("(") << FMT_M(e2) << StringView(")");
                         break;
                     }
                     case MIRCallTarget::TAG_Path: {
@@ -360,26 +361,26 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
                     }
                     case MIRCallTarget::TAG_Intrinsic: {
                         auto& e2 = e.fcn.as_Intrinsic();
-                        os << "\"" << e2.name << "\"::" << e2.params;
+                        os << StringView("\"") << e2.name << StringView("\"::") << e2.params;
                         break;
                     }
                 }
-                os << "( ";
+                os << StringView("( ");
                 for (const auto& arg : e.args) {
-                    os << FMT_M(arg) << ", ";
+                    os << FMT_M(arg) << StringView(", ");
                 }
-                os << ") goto bb" << e.retBlock << " unwind ";
+                os << StringView(") goto bb") << e.retBlock << StringView(" unwind ");
                 fmtUnwind(e.unwind);
-                os << "\n";
+                os << StringView("\n");
                 break;
             }
             case MIRTerminator::TAG_TailCall: {
                 auto& e = block.terminator.as_TailCall();
-                os << "tailcall ";
+                os << StringView("tailcall ");
                 switch (e.fcn.tag()) {
                     case MIRCallTarget::TAG_Value: {
                         auto& e2 = e.fcn.as_Value();
-                        os << "(" << FMT_M(e2) << ")";
+                        os << StringView("(") << FMT_M(e2) << StringView(")");
                         break;
                     }
                     case MIRCallTarget::TAG_Path: {
@@ -389,53 +390,53 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
                     }
                     case MIRCallTarget::TAG_Intrinsic: {
                         auto& e2 = e.fcn.as_Intrinsic();
-                        os << "\"" << e2.name << "\"::" << e2.params;
+                        os << StringView("\"") << e2.name << StringView("\"::") << e2.params;
                         break;
                     }
                 }
-                os << "( ";
+                os << StringView("( ");
                 for (const auto& arg : e.args) {
-                    os << FMT_M(arg) << ", ";
+                    os << FMT_M(arg) << StringView(", ");
                 }
-                os << ")\n";
+                os << StringView(")\n");
                 break;
             }
             case MIRTerminator::TAG_Asm2: {
                 auto& e = block.terminator.as_Asm2();
-                os << "asm2!(";
+                os << StringView("asm2!(");
                 for (const auto& l : e.lines) {
                     l.fmt(os);
                 }
-                os << ") -> ";
+                os << StringView(") -> ");
                 if (e.retBlock != ~0u) {
-                    os << "bb" << e.retBlock << ", ";
+                    os << StringView("bb") << e.retBlock << StringView(", ");
                 }
                 for (const auto& p : e.params) {
                     if (const auto* target = p.opt_Label()) {
-                        os << "bb" << *target << ", ";
+                        os << StringView("bb") << *target << StringView(", ");
                     }
                 }
-                os << "\n";
+                os << StringView("\n");
                 break;
             }
         }
         decIndent();
-        os << indent() << "}\n";
+        os << indent() << StringView("}\n");
 
         os.flush();
     }
 #undef FMT
 }
 
-auto MirDumper::fmtVal(std::ostream& os, const MIRLValue& lval) -> void {
+auto MirDumper::fmtVal(ZeroCopyOutput& os, const MIRLValue& lval) -> void {
     os << lval;
 }
 
-auto MirDumper::fmtVal(std::ostream& os, const MIRConstant& e) -> void {
+auto MirDumper::fmtVal(ZeroCopyOutput& os, const MIRConstant& e) -> void {
     os << e;
 }
 
-auto MirDumper::fmtVal(std::ostream& os, const MIRParam& param) -> void {
+auto MirDumper::fmtVal(ZeroCopyOutput& os, const MIRParam& param) -> void {
     switch (param.tag()) {
         case MIRParam::TAG_LValue: {
             auto& e = param.as_LValue();
@@ -444,20 +445,20 @@ auto MirDumper::fmtVal(std::ostream& os, const MIRParam& param) -> void {
         }
         case MIRParam::TAG_Borrow: {
             auto& e = param.as_Borrow();
-            os << "&";
+            os << StringView("&");
             switch (e.type) {
                 case HIRBorrowType::Shared:
                     break;
                 case HIRBorrowType::Unique:
-                    os << "mut ";
+                    os << StringView("mut ");
                     break;
                 case HIRBorrowType::Owned:
-                    os << "move ";
+                    os << StringView("move ");
                     break;
             }
-            os << "(";
+            os << StringView("(");
             fmtVal(os, e.val);
-            os << ")";
+            os << StringView(")");
             break;
         }
         case MIRParam::TAG_Constant: {
@@ -468,7 +469,7 @@ auto MirDumper::fmtVal(std::ostream& os, const MIRParam& param) -> void {
     }
 }
 
-auto MirDumper::fmtVal(std::ostream& os, const MIRRValue& rval) -> void {
+auto MirDumper::fmtVal(ZeroCopyOutput& os, const MIRRValue& rval) -> void {
     switch (rval.tag()) {
         case MIRRValue::TAG_Use: {
             auto& e = rval.as_Use();
@@ -482,193 +483,193 @@ auto MirDumper::fmtVal(std::ostream& os, const MIRRValue& rval) -> void {
         }
         case MIRRValue::TAG_SizedArray: {
             auto& e = rval.as_SizedArray();
-            os << "[";
+            os << StringView("[");
             fmtVal(os, e.val);
-            os << ";" << e.count << "]";
+            os << StringView(";") << e.count << StringView("]");
             break;
         }
         case MIRRValue::TAG_Borrow: {
             auto& e = rval.as_Borrow();
-            os << "&";
+            os << StringView("&");
             switch (e.type) {
                 case HIRBorrowType::Shared:
                     break;
                 case HIRBorrowType::Unique:
-                    os << "mut ";
+                    os << StringView("mut ");
                     break;
                 case HIRBorrowType::Owned:
-                    os << "move ";
+                    os << StringView("move ");
                     break;
             }
-            os << "(";
+            os << StringView("(");
             fmtVal(os, e.val);
-            os << ")";
+            os << StringView(")");
             break;
         }
         case MIRRValue::TAG_Cast: {
             auto& e = rval.as_Cast();
-            os << "(";
+            os << StringView("(");
             fmtVal(os, e.val);
-            os << ") as " << e.type;
+            os << StringView(") as ") << e.type;
             break;
         }
         case MIRRValue::TAG_BinOp: {
             auto& e = rval.as_BinOp();
             switch (e.op) {
                 case MIRBinOp::ADD:
-                    os << "ADD";
+                    os << StringView("ADD");
                     break;
                 case MIRBinOp::SUB:
-                    os << "SUB";
+                    os << StringView("SUB");
                     break;
                 case MIRBinOp::MUL:
-                    os << "MUL";
+                    os << StringView("MUL");
                     break;
                 case MIRBinOp::DIV:
-                    os << "DIV";
+                    os << StringView("DIV");
                     break;
                 case MIRBinOp::MOD:
-                    os << "MOD";
+                    os << StringView("MOD");
                     break;
                 case MIRBinOp::ADD_OV:
-                    os << "ADD_OV";
+                    os << StringView("ADD_OV");
                     break;
                 case MIRBinOp::SUB_OV:
-                    os << "SUB_OV";
+                    os << StringView("SUB_OV");
                     break;
                 case MIRBinOp::MUL_OV:
-                    os << "MUL_OV";
+                    os << StringView("MUL_OV");
                     break;
                 case MIRBinOp::DIV_OV:
-                    os << "DIV_OV";
+                    os << StringView("DIV_OV");
                     break;
 
                 case MIRBinOp::BIT_OR:
-                    os << "BIT_OR";
+                    os << StringView("BIT_OR");
                     break;
                 case MIRBinOp::BIT_AND:
-                    os << "BIT_AND";
+                    os << StringView("BIT_AND");
                     break;
                 case MIRBinOp::BIT_XOR:
-                    os << "BIT_XOR";
+                    os << StringView("BIT_XOR");
                     break;
 
                 case MIRBinOp::BIT_SHR:
-                    os << "BIT_SHR";
+                    os << StringView("BIT_SHR");
                     break;
                 case MIRBinOp::BIT_SHL:
-                    os << "BIT_SHL";
+                    os << StringView("BIT_SHL");
                     break;
 
                 case MIRBinOp::EQ:
-                    os << "EQ";
+                    os << StringView("EQ");
                     break;
                 case MIRBinOp::NE:
-                    os << "NE";
+                    os << StringView("NE");
                     break;
                 case MIRBinOp::GT:
-                    os << "GT";
+                    os << StringView("GT");
                     break;
                 case MIRBinOp::GE:
-                    os << "GE";
+                    os << StringView("GE");
                     break;
                 case MIRBinOp::LT:
-                    os << "LT";
+                    os << StringView("LT");
                     break;
                 case MIRBinOp::LE:
-                    os << "LE";
+                    os << StringView("LE");
                     break;
             }
-            os << "(";
+            os << StringView("(");
             fmtVal(os, e.valL);
-            os << ", ";
+            os << StringView(", ");
             fmtVal(os, e.valR);
-            os << ")";
+            os << StringView(")");
             break;
         }
         case MIRRValue::TAG_UniOp: {
             auto& e = rval.as_UniOp();
             switch (e.op) {
                 case MIRUniOp::INV:
-                    os << "INV";
+                    os << StringView("INV");
                     break;
                 case MIRUniOp::NEG:
-                    os << "NEG";
+                    os << StringView("NEG");
                     break;
             }
-            os << "(";
+            os << StringView("(");
             fmtVal(os, e.val);
-            os << ")";
+            os << StringView(")");
             break;
         }
         case MIRRValue::TAG_DstMeta: {
             auto& e = rval.as_DstMeta();
-            os << "META(";
+            os << StringView("META(");
             fmtVal(os, e.val);
-            os << ")";
+            os << StringView(")");
             break;
         }
         case MIRRValue::TAG_DstPtr: {
             auto& e = rval.as_DstPtr();
-            os << "PTR(";
+            os << StringView("PTR(");
             fmtVal(os, e.val);
-            os << ")";
+            os << StringView(")");
             break;
         }
         case MIRRValue::TAG_MakeDst: {
             auto& e = rval.as_MakeDst();
-            os << "DST(";
+            os << StringView("DST(");
             fmtVal(os, e.ptrVal);
-            os << ", ";
+            os << StringView(", ");
             fmtVal(os, e.metaVal);
-            os << ")";
+            os << StringView(")");
             break;
         }
         case MIRRValue::TAG_Tuple: {
             auto& e = rval.as_Tuple();
-            os << "(";
+            os << StringView("(");
             for (const auto& v : e.vals) {
                 fmtVal(os, v);
-                os << ", ";
+                os << StringView(", ");
             }
-            os << ")";
+            os << StringView(")");
             break;
         }
         case MIRRValue::TAG_Array: {
             auto& e = rval.as_Array();
-            os << "[";
+            os << StringView("[");
             for (const auto& v : e.vals) {
                 fmtVal(os, v);
-                os << ", ";
+                os << StringView(", ");
             }
-            os << "]";
+            os << StringView("]");
             break;
         }
         case MIRRValue::TAG_UnionVariant: {
             auto& e = rval.as_UnionVariant();
-            os << e.path << " #" << e.index << " (";
+            os << e.path << StringView(" #") << e.index << StringView(" (");
             fmtVal(os, e.val);
-            os << ")";
+            os << StringView(")");
             break;
         }
         case MIRRValue::TAG_EnumVariant: {
             auto& e = rval.as_EnumVariant();
-            os << e.path << " #" << e.index << " { ";
+            os << e.path << StringView(" #") << e.index << StringView(" { ");
             for (const auto& v : e.vals) {
                 fmtVal(os, v);
-                os << ", ";
+                os << StringView(", ");
             }
-            os << "}";
+            os << StringView("}");
             break;
         }
         case MIRRValue::TAG_Struct: {
             auto& e = rval.as_Struct();
-            os << e.path << " { ";
+            os << e.path << StringView(" { ");
             for (const auto& v : e.vals) {
                 fmtVal(os, v);
-                os << ", ";
+                os << StringView(", ");
             }
-            os << "}";
+            os << StringView("}");
             break;
         }
     }
@@ -686,7 +687,7 @@ auto MirDumper::decIndent() -> void {
     indentLevel--;
 }
 
-TreeVisitor::TreeVisitor(HIRTypeInterner& types, std::ostream& os)
+TreeVisitor::TreeVisitor(HIRTypeInterner& types, ZeroCopyOutput& os)
     : HIRVisitor(nullptr, types)
     , os(os)
     , indentLevel(0)
@@ -696,15 +697,15 @@ TreeVisitor::TreeVisitor(HIRTypeInterner& types, std::ostream& os)
 auto TreeVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     shortItemName = true;
 
-    os << indent() << "impl" << impl.params.fmtArgs() << " " << impl.type << "\n";
+    os << indent() << StringView("impl") << impl.params.fmtArgs() << StringView(" ") << impl.type << StringView("\n");
     if (!impl.params.bounds.empty()) {
-        os << indent() << " " << impl.params.fmtBounds() << "\n";
+        os << indent() << StringView(" ") << impl.params.fmtBounds() << StringView("\n");
     }
-    os << indent() << "{\n";
+    os << indent() << StringView("{\n");
     incIndent();
     HIRVisitor::visitTypeImpl(impl);
     decIndent();
-    os << indent() << "}\n";
+    os << indent() << StringView("}\n");
 
     shortItemName = false;
 }
@@ -712,15 +713,15 @@ auto TreeVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
 auto TreeVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
     shortItemName = true;
 
-    os << indent() << "impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.type << "\n";
+    os << indent() << StringView("impl") << impl.params.fmtArgs() << StringView(" ") << traitPath << impl.traitArgs << StringView(" for ") << impl.type << StringView("\n");
     if (!impl.params.bounds.empty()) {
-        os << indent() << " " << impl.params.fmtBounds() << "\n";
+        os << indent() << StringView(" ") << impl.params.fmtBounds() << StringView("\n");
     }
-    os << indent() << "{\n";
+    os << indent() << StringView("{\n");
     incIndent();
     HIRVisitor::visitTraitImpl(traitPath, impl);
     decIndent();
-    os << indent() << "}\n";
+    os << indent() << StringView("}\n");
 
     shortItemName = false;
 }
@@ -728,11 +729,11 @@ auto TreeVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
 auto TreeVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) -> void {
     shortItemName = true;
 
-    os << indent() << "impl" << impl.params.fmtArgs() << " " << (impl.isPositive ? "" : "!") << traitPath << impl.traitArgs << " for " << impl.type << "\n";
+    os << indent() << StringView("impl") << impl.params.fmtArgs() << StringView(" ") << (impl.isPositive ? "" : "!") << traitPath << impl.traitArgs << StringView(" for ") << impl.type << StringView("\n");
     if (!impl.params.bounds.empty()) {
-        os << indent() << " " << impl.params.fmtBounds() << "\n";
+        os << indent() << StringView(" ") << impl.params.fmtBounds() << StringView("\n");
     }
-    os << indent() << "{ }\n";
+    os << indent() << StringView("{ }\n");
 
     shortItemName = false;
 }
@@ -740,15 +741,15 @@ auto TreeVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl&
 auto TreeVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
     shortItemName = true;
 
-    os << indent() << "trait " << p << item.params.fmtArgs() << "\n";
+    os << indent() << StringView("trait ") << p << item.params.fmtArgs() << StringView("\n");
     if (!item.params.bounds.empty()) {
-        os << indent() << " " << item.params.fmtBounds() << "\n";
+        os << indent() << StringView(" ") << item.params.fmtBounds() << StringView("\n");
     }
-    os << indent() << "{\n";
+    os << indent() << StringView("{\n");
     incIndent();
     HIRVisitor::visitTrait(p, item);
     decIndent();
-    os << indent() << "}\n";
+    os << indent() << StringView("}\n");
 
     shortItemName = false;
 }
@@ -756,84 +757,84 @@ auto TreeVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
 auto TreeVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     os << indent();
     if (item.isConst) {
-        os << "const ";
+        os << StringView("const ");
     }
     if (item.unsafe) {
-        os << "unsafe ";
+        os << StringView("unsafe ");
     }
     if (item.abi != ABI_RUST) {
-        os << "extern \"" << item.abi << "\" ";
+        os << StringView("extern \"") << item.abi << StringView("\" ");
     }
-    os << "fn ";
+    os << StringView("fn ");
     if (shortItemName) {
         os << p.getName();
     } else {
         os << p;
     }
-    os << item.params.fmtArgs() << "(";
+    os << item.params.fmtArgs() << StringView("(");
     for (unsigned int i = 0; i < item.args.size(); i++) {
         if (i == 0 && item.args[i].first.bindings.size() > 0 && item.args[i].first.bindings[0].name == "self") {
-            os << "self=";
+            os << StringView("self=");
         }
-        os << "arg$" << i << ": " << item.args[i].second << ", ";
+        os << StringView("arg$") << i << StringView(": ") << item.args[i].second << StringView(", ");
     }
-    os << ") -> " << item.returnType << "\n";
+    os << StringView(") -> ") << item.returnType << StringView("\n");
     if (!item.params.bounds.empty()) {
-        os << indent() << " " << item.params.fmtBounds() << "\n";
+        os << indent() << StringView(" ") << item.params.fmtBounds() << StringView("\n");
     }
 
     if (item.code) {
-        os << indent() << "{\n";
+        os << indent() << StringView("{\n");
         incIndent();
         dumpMir(os, indentLevel, item.code.getMirOrError(Span()));
         decIndent();
-        os << indent() << "}\n";
+        os << indent() << StringView("}\n");
     } else {
-        os << indent() << "  ;\n";
+        os << indent() << StringView("  ;\n");
     }
 }
 
 auto TreeVisitor::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
     os << indent();
-    os << "const ";
+    os << StringView("const ");
     if (shortItemName) {
         os << p.getName();
     } else {
         os << p;
     }
-    os << ": " << item.type;
+    os << StringView(": ") << item.type;
     if (item.value) {
         incIndent();
-        os << " = {\n";
+        os << StringView(" = {\n");
         incIndent();
         dumpMir(os, indentLevel, item.value.getMirOrError(Span()));
         decIndent();
-        os << indent() << "} /* = " << item.valueRes << "*/;\n";
+        os << indent() << StringView("} /* = ") << item.valueRes << StringView("*/;\n");
         decIndent();
     } else {
-        os << ";\n";
+        os << StringView(";\n");
     }
 }
 
 auto TreeVisitor::visitStatic(HIRItemPath p, HIRStatic& item) -> void {
     os << indent();
-    os << "static ";
+    os << StringView("static ");
     if (shortItemName) {
         os << p.getName();
     } else {
         os << p;
     }
-    os << ": " << item.type;
+    os << StringView(": ") << item.type;
     if (item.value) {
         incIndent();
-        os << " = {\n";
+        os << StringView(" = {\n");
         incIndent();
         dumpMir(os, indentLevel, item.value.getMirOrError(Span()));
         decIndent();
-        os << indent() << "} /* = " << item.valueRes << "*/;\n";
+        os << indent() << StringView("} /* = ") << item.valueRes << StringView("*/;\n");
         decIndent();
     } else {
-        os << ";\n";
+        os << StringView(";\n");
     }
 }
 

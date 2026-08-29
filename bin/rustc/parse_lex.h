@@ -39,8 +39,6 @@ struct Codepoint {
 };
 
 std::string& operator+=(std::string& s, const Codepoint& cp);
-std::ostream& operator<<(std::ostream& s, const Codepoint& cp);
-
 Token LexFindOperator(stl::StringView s);
 Token LexFindOperator(const std::string& s);
 Token LexFindReservedWord(const std::string& s, ASTEdition edition);

@@ -16,8 +16,10 @@ class TomlFileIter;
 struct TomlKeyValue;
 
 class TomlLexer {
+public:
     struct TomlToken;
 
+private:
     friend class TomlFile;
     std::ifstream input;
 
@@ -29,7 +31,13 @@ protected:
     TomlToken getToken();
 
 public:
-    friend std::ostream& operator<<(std::ostream& os, const TomlLexer& x);
+    const std::string& getFilename() const {
+        return filename;
+    }
+
+    unsigned getLine() const {
+        return line;
+    }
 };
 
 class TomlFile {
@@ -72,8 +80,6 @@ struct TomlValue {
         List,
     };
 
-    friend std::ostream& operator<<(std::ostream& os, const Type& e);
-
     struct TypeError: public std::exception {
         Type have;
         Type exp;
@@ -84,7 +90,6 @@ struct TomlValue {
 
         const char* what() const noexcept override;
 
-        friend std::ostream& operator<<(std::ostream& os, const TypeError& e);
     };
 
     Type type;
@@ -108,7 +113,6 @@ struct TomlValue {
 
     const std::vector<TomlValue>& asList() const;
 
-    friend std::ostream& operator<<(std::ostream& os, const TomlValue& x);
 };
 
 struct TomlKeyValue {

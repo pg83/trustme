@@ -8,6 +8,8 @@
 
 #include <set>
 
+using namespace stl;
+
 namespace {
     template <typename F>
     void collectLintNames(const ASTAttribute& mi, const F& cb) {
@@ -68,7 +70,7 @@ namespace {
         auto forbidden = outerForbidden;
         readLintAttrs(item.attrs, forbidden, [&](const Span& sp, const RcString& lint) {
             if (outerForbidden.count(lint)) {
-                ERROR(sp, E0000, "lint `" << lint << "` is forbidden by an enclosing item and cannot be lowered here");
+                ERROR(sp, E0000, StringView("lint `") << lint << StringView("` is forbidden by an enclosing item and cannot be lowered here"));
             }
         });
         if (auto* sub = item.data.opt_Module()) {

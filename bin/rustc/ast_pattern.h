@@ -149,7 +149,6 @@ public:
         return data_.as_StructTuple().path;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTPattern& pat);
 };
 
 struct ASTStructPatternEntry {
@@ -158,6 +157,4 @@ struct ASTStructPatternEntry {
     ASTPattern pat;
 };
 
-std::ostream& operator<<(std::ostream& os, const ASTPattern::Value& val);
-std::ostream& operator<<(std::ostream& os, const ASTPattern::TuplePat& val);
 Ordering ord(const ASTPattern& a, const ASTPattern& b);

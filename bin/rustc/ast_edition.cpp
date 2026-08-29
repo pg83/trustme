@@ -1,19 +1,25 @@
 #include "ast_edition.h"
+#include "output.h"
 
-std::ostream& operator<<(std::ostream& os, const ASTEdition& e) {
+using namespace stl;
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, ASTEdition>(ZeroCopyOutput& os, ASTEdition e) {
     switch (e) {
         case ASTEdition::Rust2015:
-            os << "Rust2015";
+            os << StringView("Rust2015");
             break;
         case ASTEdition::Rust2018:
-            os << "Rust2018";
+            os << StringView("Rust2018");
             break;
         case ASTEdition::Rust2021:
-            os << "Rust2021";
+            os << StringView("Rust2021");
             break;
         case ASTEdition::Rust2024:
-            os << "Rust2024";
+            os << StringView("Rust2024");
             break;
     }
-    return os;
+    return;
+}
 }

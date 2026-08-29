@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "span.h"
 #include "ident.h"
 #include "common.h"
@@ -53,8 +55,6 @@ struct ASTAbsolutePath {
         return !(*this == x);
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTAbsolutePath& x);
-
     bool isParentOf(const ASTAbsolutePath& other) const;
 };
 
@@ -64,10 +64,6 @@ struct ASTPathBindingModuleHir {
 };
 
 #include "ast_path_binding_tu.h"
-
-std::ostream& operator<<(std::ostream& os, const ASTPathBindingValue& x);
-std::ostream& operator<<(std::ostream& os, const ASTPathBindingType& x);
-std::ostream& operator<<(std::ostream& os, const ASTPathBindingMacro& x);
 
 template <typename T>
 struct ASTPathBinding {
@@ -96,14 +92,6 @@ struct ASTPathBinding {
         return ASTPathBinding(path, binding.clone());
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTPathBinding<T>& x) {
-        if (!x.is_Unbound()) {
-            os << x.binding << "[" << x.path << "]";
-        } else {
-            os << "Unbound";
-        }
-        return os;
-    }
 };
 
 class ASTPathParamEnt;
@@ -127,7 +115,6 @@ struct ASTPathParams {
 
     Ordering ord(const ASTPathParams& x) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTPathParams& x);
 };
 
 class ASTPathNode {
@@ -158,13 +145,12 @@ public:
     }
 
     Ordering ord(const ASTPathNode& x) const;
-    void printPretty(std::ostream& os, bool isTypeContext) const;
+    void printPretty(stl::ZeroCopyOutput& os, bool isTypeContext) const;
 
     bool operator==(const ASTPathNode& x) const {
         return ord(x) == OrdEqual;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTPathNode& pn);
 };
 
 #include "ast_path_class_tu.h"
@@ -310,9 +296,7 @@ public:
         return ord(x) != OrdLess;
     }
 
-    void printPretty(std::ostream& os, bool isTypeContext, bool isDebug = false) const;
-    friend std::ostream& operator<<(std::ostream& os, const ASTPath& path);
-
+    void printPretty(stl::ZeroCopyOutput& os, bool isTypeContext, bool isDebug = false) const;
 private:
     void checkParamCounts(const ASTGenericParams& params, bool expectParams, ASTPathNode& node);
 

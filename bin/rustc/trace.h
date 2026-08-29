@@ -1,10 +1,10 @@
 #pragma once
 
+#include "output.h"
+
 #if defined(TRUSTME_DEBUG)
 
-    #include <ostream>
-
-std::ostream& traceOutput(const char* function);
+stl::OutBuf traceOutput(const char* function);
 
 struct TraceLog {
     const char* function;
@@ -15,10 +15,10 @@ struct TraceLog {
     TraceLog(const char* function, WriteInput writeInput)
         : function(function)
     {
-        auto& out = traceOutput(function);
-        out << ">> (";
+        auto out = traceOutput(function);
+        out << stl::StringView(">> (");
         writeInput(out);
-        out << ")\n";
+        out << stl::StringView(")\n");
     }
 
     ~TraceLog();
@@ -34,17 +34,17 @@ struct TraceLogWithOutput {
         : function(function)
         , writeOutput(writeOutput)
     {
-        auto& out = traceOutput(function);
-        out << ">> (";
+        auto out = traceOutput(function);
+        out << stl::StringView(">> (");
         writeInput(out);
-        out << ")\n";
+        out << stl::StringView(")\n");
     }
 
     ~TraceLogWithOutput() {
-        auto& out = traceOutput(function);
-        out << "<< (";
+        auto out = traceOutput(function);
+        out << stl::StringView("<< (");
         writeOutput(out);
-        out << ")\n";
+        out << stl::StringView(")\n");
     }
 };
 

@@ -8,7 +8,6 @@
 
 #include <string>
 #include <vector>
-#include <iostream>
 
 struct HIRTypeParamDef {
     RcString name;
@@ -34,8 +33,6 @@ enum class HIRGenericParamKind : u8 {
 class HIRGenericParams;
 
 #include "hir_generic_params_tu.h"
-std::ostream& operator<<(std::ostream& os, const HIRGenericBound& x);
-
 class HIRGenericParams {
 public:
     std::vector<HIRTypeParamDef> types;
@@ -73,7 +70,6 @@ public:
 
         PrintArgs(const HIRGenericParams& gp);
 
-        friend std::ostream& operator<<(std::ostream& os, const PrintArgs& x);
     };
 
     PrintArgs fmtArgs() const {
@@ -85,7 +81,6 @@ public:
 
         PrintBounds(const HIRGenericParams& gp);
 
-        friend std::ostream& operator<<(std::ostream& os, const PrintBounds& x);
     };
 
     PrintBounds fmtBounds() const {

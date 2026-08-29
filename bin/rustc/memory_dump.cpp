@@ -1,17 +1,20 @@
 #include "memory_dump.h"
 
 #include "compile_error.h"
+#include "output.h"
 
+#include <std/ios/sys.h>
 #include <std/sys/types.h>
 
 #include <vector>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
 
 #if defined(__linux__)
     #include <zlib.h>
 #endif
+
+using namespace stl;
 
 void memoryDump(unsigned& sequence, const char* phase) {
     if (getenv("TRUSTME_DUMPMEM")) {
@@ -169,7 +172,7 @@ void memoryDump(unsigned& sequence, const char* phase) {
             do {
                 ret = deflate(&zstream, Z_FINISH);
                 if (ret == Z_STREAM_ERROR) {
-                    std::cerr << "ERROR: zlib deflate stream error (cleanup)";
+                    sysE << StringView("ERROR: zlib deflate stream error (cleanup)");
                     abort();
                 }
                 if (zstream.avail_out != zlibBuffer.size()) {
@@ -193,7 +196,9 @@ void memoryDump(unsigned& sequence, const char* phase) {
                 }
                 BUG_ASSERT(chunkCountFlushed == r.firstChunk);
     #if DEBUG_MEM_DUMP
-                std::cout << chunkCountFlushed << "/" << chunkCount << ": " << std::hex << r.vStart << " -- " << r.vEnd << "(" << (r.vEnd - r.vStart) << ")" << std::dec << " " << r.flagsStr << " : " << r.name << "\n";
+                char range[128];
+                snprintf(range, sizeof(range), "%llx -- %llx(%llx)", static_cast<unsigned long long>(r.vStart), static_cast<unsigned long long>(r.vEnd), static_cast<unsigned long long>(r.vEnd - r.vStart));
+                sysO << chunkCountFlushed << StringView("/") << chunkCount << StringView(": ") << static_cast<const char*>(range) << StringView(" ") << static_cast<const char*>(r.flagsStr) << StringView(" : ") << r.name << endL;
     #endif
                 if (r.vStart / chunkSize == (r.vEnd - 1) / chunkSize) {
                     memcpy(buf.data() + r.vStart % chunkSize, (const void*)r.vStart, r.vEnd - r.vStart);
@@ -258,7 +263,7 @@ void memoryDump(unsigned& sequence, const char* phase) {
         fwrite(&regs, sizeof(regs), 1, outFp);
         fclose(outFp);
 #else
-        std::cerr << "NOTE: No memory dump supported on this platform" << std::endl;
+        sysE << StringView("NOTE: No memory dump supported on this platform") << endL;
 #endif
     }
 }

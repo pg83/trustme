@@ -13,9 +13,6 @@ generate(
         ("size_t", "boundsStart", "0"),
         ("size_t", "boundsEnd", "0"),
     ],
-    extra="""
-        friend std::ostream& operator<<(std::ostream& os, const GenericParam& x);
-    """,
 )
 
 generate(

@@ -7,6 +7,8 @@
 #include "wire_board.h"
 #include "hir_visitor.h"
 
+using namespace stl;
+
 namespace {
     const char* const LINT_NAME = "unused_must_use";
 
@@ -146,11 +148,11 @@ auto MustUseVisitor::report(const Span& sp, const char* what) -> void {
             break;
         case CfgLintLevel::Warn:
         case CfgLintLevel::ForceWarn:
-            WARNING(sp, W0000, "unused " << what << " that must be used");
+            WARNING(sp, W0000, StringView("unused ") << what << StringView(" that must be used"));
             break;
         case CfgLintLevel::Deny:
         case CfgLintLevel::Forbid:
-            ERROR(sp, E0000, "unused " << what << " that must be used");
+            ERROR(sp, E0000, StringView("unused ") << what << StringView(" that must be used"));
             break;
     }
 }

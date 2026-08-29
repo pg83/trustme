@@ -1,4 +1,5 @@
 #include "resolve_common.h"
+#include "output.h"
 
 #include "ast_ast.h"
 #include "hir_hir.h"
@@ -12,6 +13,8 @@
 #include <std/alg/defer.h>
 
 #include <span>
+
+using namespace stl;
 
 namespace {
     struct ResolveState {
@@ -53,17 +56,7 @@ namespace {
     }
 }
 
-std::ostream& operator<<(std::ostream& os, ResolveNamespace ns) {
-    switch (ns) {
-        case ResolveNamespace::Namespace:
-            return os << "Namespace";
-        case ResolveNamespace::Value:
-            return os << "Value";
-        case ResolveNamespace::Macro:
-            return os << "Macro";
-    }
-    return os << "?";
-}
+
 
 // TODO: Function that turns a relative path into a canonical absolute path to the containing module
 
@@ -74,7 +67,7 @@ ResolveModuleRef ResolveLookupGetModule(const Span& sp, const Settings& settings
 }
 
 ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, ASTAbsolutePath* outPath) {
-    TRACE_FUNCTION_F("path=" << path << " in " << basePath);
+    TRACE_FUNCTION_F(StringView("path=") << path << StringView(" in ") << basePath);
     ResolveState rs(span, settings, crate);
 
     const auto& itemName = path.nodes().back().name();
@@ -100,7 +93,7 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
             if (path.cls.is_Relative() && path.cls.as_Relative().hygiene.hasModPath()) {
                 const auto& inP = path.cls.as_Relative().hygiene.modPath();
                 tmpP = HIRSimplePath(inP.crate, inP.ents);
-                DEBUG("vis_path=" << tmpP);
+                DEBUG(StringView("vis_path=") << tmpP);
                 visPath = &tmpP;
             }
             auto rv = rs.findItemHir(*modPtr, itemName, ResolveNamespace::Macro, outPath, visPath);
@@ -122,7 +115,7 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
 }
 
 ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, const ASTPath& path, ResolveNamespace ns, ASTAbsolutePath* outPath) {
-    TRACE_FUNCTION_F("path=" << path << " in " << basePath);
+    TRACE_FUNCTION_F(StringView("path=") << path << StringView(" in ") << basePath);
     ResolveState rs(sp, settings, crate);
 
     auto mod = rs.getModule(basePath, path, true, outPath);
@@ -135,10 +128,10 @@ ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& s
             }
             auto res = rs.findItem(*modPtr, path.nodes().back().name(), ns, outPath);
             if (res.is_None()) {
-                BUG(sp, "Unable to find " << path << " (starting from " << basePath << ")");
+                BUG(sp, StringView("Unable to find ") << path << StringView(" (starting from ") << basePath << StringView(")"));
             }
 
-            TODO(sp, "");
+            TODO(sp, StringView(""));
             break;
         }
         case ResolveModuleRef::TAG_Hir: {
@@ -148,7 +141,7 @@ ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& s
             return mod;
         }
         case ResolveModuleRef::TAG_None: {
-            BUG(sp, "Unable to find " << path << " (starting from " << basePath << ")");
+            BUG(sp, StringView("Unable to find ") << path << StringView(" (starting from ") << basePath << StringView(")"));
             break;
         }
     }
@@ -163,35 +156,35 @@ ResolveState::ResolveState(const Span& span, const Settings& settings, const AST
 }
 
 auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool ignoreLast, ASTAbsolutePath* outPath, bool ignoreHygiene) -> ResolveModuleRef {
-    TRACE_FUNCTION_F(path << " in " << basePath << (ignoreLast ? " (ignore last)" : ""));
+    TRACE_FUNCTION_F(path << StringView(" in ") << basePath << (ignoreLast ? " (ignore last)" : ""));
     const auto& baseNodes = basePath.nodes();
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
-            BUG(sp, "Invalid path class encountered");
+            BUG(sp, StringView("Invalid path class encountered"));
             break;
         }
         case ASTPathClass::TAG_Local: {
-            BUG(sp, "Local path class in use statement");
+            BUG(sp, StringView("Local path class in use statement"));
             break;
         }
         case ASTPathClass::TAG_UFCS: {
-            BUG(sp, "UFCS path class in use statement");
+            BUG(sp, StringView("UFCS path class in use statement"));
             break;
         }
         case ASTPathClass::TAG_Relative: {
             auto& e = path.cls.as_Relative();
-            DEBUG("Relative " << path);
-            ASSERT_BUG(sp, !e.nodes.empty(), "");
+            DEBUG(StringView("Relative ") << path);
+            ASSERT_BUG(sp, !e.nodes.empty(), StringView(""));
             if (!ignoreHygiene && e.hygiene.hasModPath()) {
                 const auto& mp = e.hygiene.modPath();
                 if (mp.crate != "") {
-                    ASSERT_BUG(sp, this->crate.externCrates.count(mp.crate), "Crate not loaded for " << mp);
+                    ASSERT_BUG(sp, this->crate.externCrates.count(mp.crate), StringView("Crate not loaded for ") << mp);
                     const auto& crate = this->crate.externCrates.at(mp.crate);
                     const HIRModule* mod = &crate.hir->rootModule;
                     for (const auto& n : mp.ents) {
-                        ASSERT_BUG(sp, mod->modItems.count(n), "Node `" << n << "` missing in path " << mp);
+                        ASSERT_BUG(sp, mod->modItems.count(n), StringView("Node `") << n << StringView("` missing in path ") << mp);
                         const auto& i = *mod->modItems.at(n);
-                        ASSERT_BUG(sp, i.ent.is_Module(), "Node `" << n << "` not a module in path " << mp);
+                        ASSERT_BUG(sp, i.ent.is_Module(), StringView("Node `") << n << StringView("` not a module in path ") << mp);
                         mod = &i.ent.as_Module();
                     }
                     if (outPath) {
@@ -211,19 +204,19 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                 // HACK: If the target path is a crate name, then return `ImplicitPrelude` instead of the current module
                 if (crate.edition >= ASTEdition::Rust2018) {
                     const auto& name = e.nodes.back().name();
-                    DEBUG("Trying implicit externs for " << name);
-                    DEBUG(FmtLambda([&](std::ostream& os) {
+                    DEBUG(StringView("Trying implicit externs for ") << name);
+                    DEBUG(FMT_CB(os,
                         for (const auto& v : settings.implicitCrates) {
-                            os << " " << v.first;
+                            os << StringView(" ") << v.first;
                         }
-                    }));
+                    ));
                     auto ecIt = settings.implicitCrates.find(name);
                     if (ecIt != settings.implicitCrates.end()) {
                         return ResolveModuleRef::make_ImplicitPrelude({});
                     }
                 }
 
-                DEBUG("Ignore last");
+                DEBUG(StringView("Ignore last"));
                 const auto& currentMod = this->getModByTruePath(baseNodes, baseNodes.size());
                 if (outPath) {
                     *outPath = currentMod.path();
@@ -251,7 +244,7 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                                 if (c.name == "") {
                                     return getModuleAst(crate.rootModule_, path, 1, ignoreLast, outPath);
                                 }
-                                ASSERT_BUG(sp, crate.externCrates.count(c.name) > 0, "Unable to find crate `" << c.name << "`");
+                                ASSERT_BUG(sp, crate.externCrates.count(c.name) > 0, StringView("Unable to find crate `") << c.name << StringView("`"));
                                 return getModuleHir(crate.externCrates.at(c.name).hir->rootModule, path, 1, ignoreLast, outPath);
                             }
                             case ASTItem::TAG_Module: {
@@ -274,21 +267,21 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                     }
                     case ResolveItemRefType::TAG_Hir: {
                         auto& iEntPtr = realMod.as_Hir();
-                        ASSERT_BUG(sp, !iEntPtr->is_Import(), "");
+                        ASSERT_BUG(sp, !iEntPtr->is_Import(), StringView(""));
                         if (iEntPtr->is_Enum()) {
-                            DEBUG("Enum");
+                            DEBUG(StringView("Enum"));
                             return ResolveModuleRef();
                         }
                         if (iEntPtr->is_Trait()) {
                             return ResolveModuleRef();
                         }
 
-                        ASSERT_BUG(sp, iEntPtr->is_Module(), "Expected Module, got " << iEntPtr->tagStr() << " for " << name << " in [" << baseNodes << "]");
+                        ASSERT_BUG(sp, iEntPtr->is_Module(), StringView("Expected Module, got ") << iEntPtr->tagStr() << StringView(" for ") << name << StringView(" in [") << baseNodes << StringView("]"));
                         return getModuleHir(iEntPtr->as_Module(), path, 1, ignoreLast, outPath);
                         break;
                     }
                     case ResolveItemRefType::TAG_None: {
-                        DEBUG("Keep searching (" << i << "/" << baseNodes.size() << ")");
+                        DEBUG(StringView("Keep searching (") << i << StringView("/") << baseNodes.size() << StringView(")"));
                         break;
                     }
                 }
@@ -297,20 +290,20 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
             } while (i < baseNodes.size() && baseNodes[baseNodes.size() - i].name().c_str()[0] == '#');
 
             if (crate.edition >= ASTEdition::Rust2018 || name == "core" || name == "std") {
-                DEBUG("Trying implicit externs for " << name);
-                DEBUG(FmtLambda([&](std::ostream& os) {
+                DEBUG(StringView("Trying implicit externs for ") << name);
+                DEBUG(FMT_CB(os,
                     for (const auto& v : settings.implicitCrates) {
-                        os << " " << v.first;
+                        os << StringView(" ") << v.first;
                     }
-                }));
+                ));
                 auto ecIt = settings.implicitCrates.find(name);
                 if (ecIt != settings.implicitCrates.end()) {
                     if (ecIt->second == "") {
                         return getModuleAst(crate.rootModule_, path, 1, ignoreLast, outPath);
                     } else {
-                        ASSERT_BUG(sp, crate.externCrates.count(ecIt->second), "Crate \"" << ecIt->second << "\" not loaded (for \"" << ecIt->first << "\")");
+                        ASSERT_BUG(sp, crate.externCrates.count(ecIt->second), StringView("Crate \"") << ecIt->second << StringView("\" not loaded (for \"") << ecIt->first << StringView("\")"));
                         const auto& ec = crate.externCrates.at(ecIt->second);
-                        DEBUG("Implicitly imported crate");
+                        DEBUG(StringView("Implicitly imported crate"));
                         if (outPath) {
                             *outPath = ASTAbsolutePath(ecIt->second, {});
                         }
@@ -318,11 +311,11 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                     }
                 }
             }
-            DEBUG("Not found");
+            DEBUG(StringView("Not found"));
             return ResolveModuleRef();
         }
         case ASTPathClass::TAG_Self: {
-            DEBUG("Self " << path);
+            DEBUG(StringView("Self ") << path);
             size_t i = 0;
             while (i < baseNodes.size() && baseNodes[baseNodes.size() - i - 1].name().c_str()[0] == '#') {
                 i += 1;
@@ -331,21 +324,21 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
             return getModuleAst(startMod, path, 0, ignoreLast, outPath);
         }
         case ASTPathClass::TAG_Super: {
-            DEBUG("Super " << path);
+            DEBUG(StringView("Super ") << path);
             size_t i = 0;
             while (i < baseNodes.size() && baseNodes[baseNodes.size() - i - 1].name().c_str()[0] == '#') {
                 i += 1;
             }
             i += 1;
-            ASSERT_BUG(sp, i <= baseNodes.size(), "");
+            ASSERT_BUG(sp, i <= baseNodes.size(), StringView(""));
             const auto& startMod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
             return getModuleAst(startMod, path, 0, ignoreLast, outPath);
         }
         case ASTPathClass::TAG_Absolute: {
             auto& e = path.cls.as_Absolute();
-            DEBUG("Absolute " << path);
+            DEBUG(StringView("Absolute ") << path);
             if (e.crate == "" || e.crate == crate.crateNameReal) {
-                DEBUG("Current crate");
+                DEBUG(StringView("Current crate"));
                 return getModuleAst(crate.rootModule_, path, 0, ignoreLast, outPath);
             } else if (e.crate.c_str()[0] == '=') {
                 const char* n = e.crate.c_str() + 1;
@@ -361,7 +354,7 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                 }
                 auto ecIt2 = crate.externCrates.find(ecIt->second);
                 if (ecIt2 == crate.externCrates.end()) {
-                    DEBUG("Crate " << ecIt->second << " not found");
+                    DEBUG(StringView("Crate ") << ecIt->second << StringView(" not found"));
                     return ResolveModuleRef();
                 }
                 if (outPath) {
@@ -371,7 +364,7 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
             } else {
                 auto ecIt = crate.externCrates.find(e.crate);
                 if (ecIt == crate.externCrates.end()) {
-                    DEBUG("Crate " << e.crate << " not found");
+                    DEBUG(StringView("Crate ") << e.crate << StringView(" not found"));
                     return ResolveModuleRef();
                 }
                 if (outPath) {
@@ -400,7 +393,7 @@ auto ResolveState::getModuleForMacro(const ASTPath& basePath, const ASTPath& pat
         return getModuleAst(crate.rootModule_, path, 1, /*ignore_last=*/true, outPath);
     }
 
-    ASSERT_BUG(sp, crate.externCrates.count(implicitIt->second), "Crate \"" << implicitIt->second << "\" not loaded (for \"" << crateAlias << "\")");
+    ASSERT_BUG(sp, crate.externCrates.count(implicitIt->second), StringView("Crate \"") << implicitIt->second << StringView("\" not loaded (for \"") << crateAlias << StringView("\")"));
     const auto& externalCrate = crate.externCrates.at(implicitIt->second);
     if (outPath) {
         *outPath = ASTAbsolutePath(implicitIt->second, {});
@@ -409,22 +402,22 @@ auto ResolveState::getModuleForMacro(const ASTPath& basePath, const ASTPath& pat
 }
 
 auto ResolveState::getModuleAst(const ASTModule& startMod, const ASTPath& path, size_t startOffset, bool ignoreLast, ASTAbsolutePath* outPath) -> ResolveModuleRef {
-    TRACE_FUNCTION_F("start_offset=" << startOffset << ", ignore_last=" << ignoreLast);
+    TRACE_FUNCTION_F(StringView("start_offset=") << startOffset << StringView(", ignore_last=") << ignoreLast);
     const ASTModule* mod = &startMod;
-    ASSERT_BUG(Span(), path.nodes().size() >= (ignoreLast ? 1 : 0), "" << path);
+    ASSERT_BUG(Span(), path.nodes().size() >= (ignoreLast ? 1 : 0), StringView("") << path);
 
     for (size_t idx = startOffset; idx < path.nodes().size() - (ignoreLast ? 1 : 0); idx++) {
         const auto& name = path.nodes()[idx].name();
 
         auto res = findItem(*mod, name, ResolveNamespace::Namespace, outPath);
         if (res.is_None()) {
-            DEBUG("Unable to find " << name << " in module " << mod->path() << " for " << path);
+            DEBUG(StringView("Unable to find ") << name << StringView(" in module ") << mod->path() << StringView(" for ") << path);
             return ResolveModuleRef();
         }
         const auto& r = res.as_Namespace();
         switch (r.tag()) {
             case ResolveItemRefType::TAG_None: {
-                DEBUG("Not found (Namespace::None)");
+                DEBUG(StringView("Not found (Namespace::None)"));
                 return ResolveModuleRef();
             }
             case ResolveItemRefType::TAG_Ast: {
@@ -438,11 +431,11 @@ auto ResolveState::getModuleAst(const ASTModule& startMod, const ASTPath& path, 
                     if (i->name == "") {
                         return getModuleAst(crate.rootModule_, path, idx + 1, ignoreLast, outPath);
                     } else {
-                        ASSERT_BUG(sp, crate.externCrates.count(i->name) != 0, "Cannot find crate `" << i->name << "`");
+                        ASSERT_BUG(sp, crate.externCrates.count(i->name) != 0, StringView("Cannot find crate `") << i->name << StringView("`"));
                         return getModuleHir(crate.externCrates.at(i->name).hir->rootModule, path, idx + 1, ignoreLast, outPath);
                     }
                 } else {
-                    DEBUG("Found " << e->tagStr() << ", not module");
+                    DEBUG(StringView("Found ") << e->tagStr() << StringView(", not module"));
                     return ResolveModuleRef();
                 }
                 break;
@@ -457,7 +450,7 @@ auto ResolveState::getModuleAst(const ASTModule& startMod, const ASTPath& path, 
                 if (const auto* i = e->opt_Module()) {
                     return getModuleHir(*i, path, idx + 1, ignoreLast, outPath);
                 } else {
-                    DEBUG("Found HIR " << e->tagStr() << ", not module");
+                    DEBUG(StringView("Found HIR ") << e->tagStr() << StringView(", not module"));
                     return ResolveModuleRef();
                 }
                 break;
@@ -479,19 +472,19 @@ auto ResolveState::getModuleAst(const ASTModule& startMod, const ASTPath& path, 
 }
 
 auto ResolveState::getModuleHir(const HIRModule& startMod, const ASTPath& path, size_t startOffset, bool ignoreLast, ASTAbsolutePath* outPath) -> ResolveModuleRef {
-    TRACE_FUNCTION_F("path=" << path << ", start_offset=" << startOffset << ", ignore_last=" << ignoreLast);
+    TRACE_FUNCTION_F(StringView("path=") << path << StringView(", start_offset=") << startOffset << StringView(", ignore_last=") << ignoreLast);
     const HIRModule* mod = &startMod;
-    ASSERT_BUG(Span(), path.nodes().size() >= (ignoreLast ? 1 : 0), "" << path);
+    ASSERT_BUG(Span(), path.nodes().size() >= (ignoreLast ? 1 : 0), StringView("") << path);
     for (size_t i = startOffset; i < path.nodes().size() - (ignoreLast ? 1 : 0); i++) {
         const auto& name = path.nodes()[i].name();
         auto it = mod->modItems.find(name);
         if (it == mod->modItems.end() || !it->second->publicity.isGlobal()) {
-            DEBUG(name << " Not Found");
+            DEBUG(name << StringView(" Not Found"));
             return ResolveModuleRef();
         }
         const auto* ti = &it->second->ent;
         if (const auto* imp = ti->opt_Import()) {
-            ASSERT_BUG(sp, crate.externCrates.count(imp->path.crateName()), "Crate " << imp->path.crateName() << " not loaded");
+            ASSERT_BUG(sp, crate.externCrates.count(imp->path.crateName()), StringView("Crate ") << imp->path.crateName() << StringView(" not loaded"));
             const auto& extCrate = *crate.externCrates.at(imp->path.crateName()).hir;
             if (imp->path.components().empty()) {
                 mod = &extCrate.rootModule;
@@ -508,7 +501,7 @@ auto ResolveState::getModuleHir(const HIRModule& startMod, const ASTPath& path, 
         }
         switch ((*ti).tag()) {
             default:
-                DEBUG(name << " Not Module, instead " << ti->tagStr());
+                DEBUG(name << StringView(" Not Module, instead ") << ti->tagStr());
                 return ResolveModuleRef();
             case HIRTypeItem::TAG_Module: {
                 auto& m = (*ti).as_Module();
@@ -518,7 +511,7 @@ auto ResolveState::getModuleHir(const HIRModule& startMod, const ASTPath& path, 
         }
     }
     if (outPath) {
-        ASSERT_BUG(sp, outPath->crate != "", "Invalid HIR output path - crate name not set");
+        ASSERT_BUG(sp, outPath->crate != "", StringView("Invalid HIR output path - crate name not set"));
     }
     return ResolveModuleRef(mod);
 }
@@ -542,7 +535,7 @@ auto ResolveState::getModByTruePath(const std::vector<ASTPathNode>& baseNodes, s
             }
         }
         if (!nextMod) {
-            BUG(sp, "Unable to find component `" << tgtName << "` of [" << baseNodes << "] in module " << mod->path());
+            BUG(sp, StringView("Unable to find component `") << tgtName << StringView("` of [") << baseNodes << StringView("] in module ") << mod->path());
         }
         mod = nextMod;
     }
@@ -582,15 +575,15 @@ auto ResolveState::matchingNamespace(const ASTItem& i, ResolveNamespace ns) -> b
 }
 
 auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath) -> ResolveItemRef {
-    TRACE_FUNCTION_F("Looking for " << name << " in " << mod.path() << " (ns=" << ns << ")");
+    TRACE_FUNCTION_F(StringView("Looking for ") << name << StringView(" in ") << mod.path() << StringView(" (ns=") << ns << StringView(")"));
     if (mod.indexPopulated) {
-        TODO(sp, "Look up in index");
+        TODO(sp, StringView("Look up in index"));
     }
 
     auto guardEnt = std::make_pair(&mod, name);
     bool visitUse = true;
     if (std::count(antirecurseStack.begin(), antirecurseStack.end(), guardEnt) > 0) {
-        DEBUG("Recursion detected, not looking at `use` statements in " << mod.path());
+        DEBUG(StringView("Recursion detected, not looking at `use` statements in ") << mod.path());
         visitUse = false;
     }
 
@@ -601,9 +594,9 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
 
     if (ns == ResolveNamespace::Macro) {
         for (const auto& i : mod.macros()) {
-            DEBUG("> MACRO " << i.name);
+            DEBUG(StringView("> MACRO ") << i.name);
             if (i.name == name) {
-                DEBUG("Found in ast (macro)");
+                DEBUG(StringView("Found in ast (macro)"));
                 if (outPath) {
                     outPath->nodes.push_back(name);
                 }
@@ -616,13 +609,13 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
             }
             if (mac.name == name) {
                 // TODO: What about macro re-exports a builtin?
-                DEBUG("Found in ast (macro import) - " << mac.path);
+                DEBUG(StringView("Found in ast (macro import) - ") << mac.path);
                 if (outPath) {
                     *outPath = mac.path;
                 }
                 switch (mac.ref.tag()) {
                     case MacroRef::TAG_None: {
-                        BUG(sp, "macro_imports_res had a None entry");
+                        BUG(sp, StringView("macro_imports_res had a None entry"));
                         break;
                     }
                     case MacroRef::TAG_MacroRules: {
@@ -657,7 +650,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
             if (outPath) {
                 outPath->nodes.push_back(name);
             }
-            DEBUG("Found in ast (" << i->data.tagStr() << ")");
+            DEBUG(StringView("Found in ast (") << i->data.tagStr() << StringView(")"));
             switch (ns) {
                 case ResolveNamespace::Macro:
                     if (const auto* mac = i->data.opt_Macro()) {
@@ -670,7 +663,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                         }
                         return ResolveItemRefMacro(&**mac);
                     }
-                    DEBUG("- Ignoring macro");
+                    DEBUG(StringView("- Ignoring macro"));
                     break;
                 case ResolveNamespace::Namespace:
                     return ResolveItemRefType(&i->data);
@@ -685,7 +678,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
             }
             for (const auto& e : useStmt->entries) {
                 if (e.name == name) {
-                    DEBUG("Use " << e.name << " := " << e.path);
+                    DEBUG(StringView("Use ") << e.name << StringView(" := ") << e.path);
                     if (e.path.cls.is_Absolute() && e.path.cls.as_Absolute().crate == CRATE_BUILTINS) {
                         const auto& pe = e.path.cls.as_Absolute();
                         if (ns == ResolveNamespace::Macro) {
@@ -715,7 +708,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                                     return ResolveItemRefType::make_HirRoot(&*crate.externCrates.at(tmp.crate).hir);
                                 }
                                 case ResolveModuleRef::TAG_ImplicitPrelude: {
-                                    TODO(sp, "ImplicitPrelude?");
+                                    TODO(sp, StringView("ImplicitPrelude?"));
                                     break;
                                 }
                                 case ResolveModuleRef::TAG_None: {
@@ -735,7 +728,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                             auto& modPtr = tgtMod.as_Ast();
                             auto rv = this->findItem(*modPtr, itemName, ns, outPath);
                             if (!rv.is_None()) {
-                                DEBUG("Found in AST use");
+                                DEBUG(StringView("Found in AST use"));
                                 return rv;
                             }
                             break;
@@ -744,7 +737,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                             auto& modPtr = tgtMod.as_Hir();
                             auto rv = this->findItemHir(*modPtr, itemName, ns, outPath);
                             if (!rv.is_None()) {
-                                DEBUG("Found in HIR use");
+                                DEBUG(StringView("Found in HIR use"));
                                 return rv;
                             }
                             break;
@@ -759,7 +752,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                                     }
                                     return ResolveItemRefType(&*crate.externCrates.at(ecIt->second).hir);
                                 }
-                                TODO(sp, "ImplicitPrelude?");
+                                TODO(sp, StringView("ImplicitPrelude?"));
                             }
                             break;
                         }
@@ -778,23 +771,23 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
             }
             for (const auto& e : useStmt->entries) {
                 if (e.name == "") {
-                    DEBUG("Glob use " << e.path);
+                    DEBUG(StringView("Glob use ") << e.path);
                     auto srcMod = this->getModule(mod.path(), e.path, /*ignore_last=*/false, outPath);
                     switch (srcMod.tag()) {
                         case ResolveModuleRef::TAG_None: {
                             auto& _ = srcMod.as_None();
-                            DEBUG("Unable to find " << e.path);
+                            DEBUG(StringView("Unable to find ") << e.path);
                             break;
                         }
                         case ResolveModuleRef::TAG_ImplicitPrelude: {
-                            TODO(sp, "ImplicitPrelude? " << e.path);
+                            TODO(sp, StringView("ImplicitPrelude? ") << e.path);
                             break;
                         }
                         case ResolveModuleRef::TAG_Ast: {
                             auto& sm = srcMod.as_Ast();
                             auto rv = findItem(*sm, name, ns, outPath);
                             if (!rv.is_None()) {
-                                DEBUG("Found in AST glob");
+                                DEBUG(StringView("Found in AST glob"));
                                 return rv;
                             }
                             break;
@@ -803,7 +796,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                             auto& sm = srcMod.as_Hir();
                             auto rv = this->findItemHir(*sm, name, ns, outPath);
                             if (!rv.is_None()) {
-                                DEBUG("Found HIR glob");
+                                DEBUG(StringView("Found HIR glob"));
                                 return rv;
                             }
                             break;
@@ -814,7 +807,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
         }
     }
     if (mod.isAnon()) {
-        DEBUG("Recurse to parent");
+        DEBUG(StringView("Recurse to parent"));
         const ASTModule* m = &crate.rootModule_;
         for (size_t i = 0; i < mod.path().nodes.size() - 1; i++) {
             auto& tgtName = mod.path().nodes[i];
@@ -827,7 +820,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
         }
         return findItem(*m, name, ns, outPath);
     }
-    DEBUG("Not found");
+    DEBUG(StringView("Not found"));
     return ResolveItemRef::make_None({});
 }
 
@@ -835,7 +828,7 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
     const auto& visPath = visPathP ? *visPathP : HIRSimplePath();
     TRACE_FUNCTION_F(itemName);
     if (outPath) {
-        ASSERT_BUG(sp, outPath->crate != "", "Crate not filled");
+        ASSERT_BUG(sp, outPath->crate != "", StringView("Crate not filled"));
     }
 
     struct H {
@@ -853,7 +846,7 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
         case ResolveNamespace::Namespace: {
             auto it = mod.modItems.find(itemName);
             if (it != mod.modItems.end() && it->second->publicity.isVisible(visPath)) {
-                DEBUG("Found `" << itemName << "` in HIR namespace");
+                DEBUG(StringView("Found `") << itemName << StringView("` in HIR namespace"));
                 const HIRTypeItem* ti;
                 if (const auto* p = it->second->ent.opt_Import()) {
                     if (outPath) {
@@ -870,14 +863,14 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                     }
                     ti = &it->second->ent;
                 }
-                ASSERT_BUG(sp, !ti->is_Import(), "Recursive namespace import in HIR: " << it->second->ent.as_Import().path << " pointed to " << ti->as_Import().path);
+                ASSERT_BUG(sp, !ti->is_Import(), StringView("Recursive namespace import in HIR: ") << it->second->ent.as_Import().path << StringView(" pointed to ") << ti->as_Import().path);
                 return ResolveItemRefType(ti);
             }
         } break;
         case ResolveNamespace::Value: {
             auto it = mod.valueItems.find(itemName);
             if (it != mod.valueItems.end() && it->second->publicity.isVisible(visPath)) {
-                DEBUG("Found `" << itemName << "` in HIR value");
+                DEBUG(StringView("Found `") << itemName << StringView("` in HIR value"));
                 const HIRValueItem* vi;
                 if (const auto* p = it->second->ent.opt_Import()) {
                     if (outPath) {
@@ -890,18 +883,18 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                     }
                     vi = &it->second->ent;
                 }
-                ASSERT_BUG(sp, !vi->is_Import(), "Recursive value import in HIR: " << it->second->ent.as_Import().path << " pointed to " << vi->as_Import().path);
+                ASSERT_BUG(sp, !vi->is_Import(), StringView("Recursive value import in HIR: ") << it->second->ent.as_Import().path << StringView(" pointed to ") << vi->as_Import().path);
                 return ResolveItemRefValue(vi);
             }
         } break;
         case ResolveNamespace::Macro: {
             auto it = mod.macroItems.find(itemName);
             if (it == mod.macroItems.end()) {
-                DEBUG("Did not find `" << itemName << "` in HIR macro");
+                DEBUG(StringView("Did not find `") << itemName << StringView("` in HIR macro"));
             } else if (!it->second->publicity.isVisible(visPath)) {
-                DEBUG("Found `" << itemName << "` in HIR macro - but not public, ignoring");
+                DEBUG(StringView("Found `") << itemName << StringView("` in HIR macro - but not public, ignoring"));
             } else {
-                DEBUG("Found `" << itemName << "` in HIR macro");
+                DEBUG(StringView("Found `") << itemName << StringView("` in HIR macro"));
                 const HIRMacroItem* mi;
                 if (const auto* p = it->second->ent.opt_Import()) {
                     if (outPath) {
@@ -914,9 +907,9 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                             if (auto* pm = ExpandFindProcMacro(wb, name)) {
                                 return ResolveItemRefMacro(pm);
                             }
-                            //    TODO(sp, "Resolve HIR import to decorator");
+                            //    TODO(sp, StringView("Resolve HIR import to decorator"));
 
-                            DEBUG("Import of builtins: Not found");
+                            DEBUG(StringView("Import of builtins: Not found"));
                             return {};
                         }
                     };
@@ -947,7 +940,7 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                 switch ((*mi).tag()) {
                     case HIRMacroItem::TAG_Import: {
                         auto& me = (*mi).as_Import();
-                        BUG(sp, "Recursive macro import in HIR: " << it->second->ent.as_Import().path << " pointed to " << me.path);
+                        BUG(sp, StringView("Recursive macro import in HIR: ") << it->second->ent.as_Import().path << StringView(" pointed to ") << me.path);
                         break;
                     }
                     case HIRMacroItem::TAG_MacroRules: {
@@ -964,4 +957,23 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
     }
 
     return ResolveItemRef::make_None({});
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, ResolveNamespace>(ZeroCopyOutput& os, ResolveNamespace ns) {
+    switch (ns) {
+        case ResolveNamespace::Namespace:
+            os << StringView("Namespace");
+    return;
+        case ResolveNamespace::Value:
+            os << StringView("Value");
+    return;
+        case ResolveNamespace::Macro:
+            os << StringView("Macro");
+    return;
+    }
+    os << StringView("?");
+    return;
+}
 }

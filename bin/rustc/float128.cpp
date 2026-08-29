@@ -1,11 +1,13 @@
 #include "float128.h"
+#include "output.h"
 
 #include "compile_error.h"
 
 #include <string>
 #include <vector>
 #include <cstring>
-#include <ostream>
+
+using namespace stl;
 
 namespace {
     using u128 = unsigned __int128;
@@ -1017,26 +1019,7 @@ Float128 Float128::parseDecimal(const char* text) {
     return roundPack(false, static_cast<i32>(exponent2), significand, sticky);
 }
 
-std::ostream& operator<<(std::ostream& os, const Float128& value) {
-    const auto unpacked = unpack(value.hi, value.lo);
-    if (unpacked.kind == Kind::NotANumber) {
-        return os << (unpacked.negative ? "-nan" : "nan");
-    }
-    if (unpacked.kind == Kind::Infinity) {
-        return os << (unpacked.negative ? "-inf" : "inf");
-    }
-    const int precision = static_cast<int>(os.precision());
-    const auto field = os.flags() & std::ios_base::floatfield;
-    std::string text;
-    if (field == std::ios_base::scientific) {
-        text = formatScientific(unpacked, precision < 0 ? 6 : precision);
-    } else if (field == std::ios_base::fixed) {
-        text = formatFixed(unpacked, precision < 0 ? 6 : precision);
-    } else {
-        text = formatDefault(unpacked, precision < 0 ? 6 : precision);
-    }
-    return os << text;
-}
+
 
 auto BigUint::trim() -> void {
     while (!limbs_.empty() && limbs_.back() == 0) {
@@ -1176,4 +1159,45 @@ auto BigUint::toDecimal() const -> std::string {
         }
     }
     return std::string(reversed.rbegin(), reversed.rend());
+}
+
+FormattedFloat128 formatFloat128(Float128 value, FloatFormat format, int precision) {
+    return {value, format, precision};
+}
+
+static void outputFloat128(ZeroCopyOutput& os, Float128 value, FloatFormat format, int precision) {
+    const auto unpacked = unpack(value.bitsHi(), value.bitsLo());
+    if (unpacked.kind == Kind::NotANumber) {
+        os << (unpacked.negative ? "-nan" : "nan");
+        return;
+    }
+    if (unpacked.kind == Kind::Infinity) {
+        os << (unpacked.negative ? "-inf" : "inf");
+        return;
+    }
+    std::string text;
+    switch (format) {
+        case FloatFormat::Scientific:
+            text = formatScientific(unpacked, precision);
+            break;
+        case FloatFormat::Fixed:
+            text = formatFixed(unpacked, precision);
+            break;
+        case FloatFormat::Default:
+            text = formatDefault(unpacked, precision);
+            break;
+    }
+    os << text;
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, Float128>(ZeroCopyOutput& os, Float128 value) {
+    outputFloat128(os, value, FloatFormat::Default, 6);
+}
+
+template <>
+void output<ZeroCopyOutput, FormattedFloat128>(ZeroCopyOutput& os, FormattedFloat128 value) {
+    outputFloat128(os, value.value, value.format, value.precision);
+}
 }

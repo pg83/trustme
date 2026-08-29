@@ -14,8 +14,6 @@ enum class MetadataType {
     TraitObject,
 };
 
-std::ostream& operator<<(std::ostream& os, const MetadataType& x);
-
 struct StaticNamedTraitCallback {
     virtual bool visit(const HIRPathParams& params, HIRTraitPath::assocListT assoc) = 0;
 };

@@ -1,6 +1,9 @@
 #include "floats.h"
+#include "output.h"
 
-#include <iomanip>
+#include <std/str/builder.h>
+
+using namespace stl;
 
 FloatValue parseFloatValue(const char* text) {
     return Float128::parseDecimal(text);
@@ -57,9 +60,9 @@ FloatValue positiveNanFloatValue() {
 std::string formatFloatValueForToken(FloatValue value) {
     std::string rv;
     for (int precision = 1; precision <= 36; precision++) {
-        std::ostringstream os;
-        os << std::setprecision(precision) << value;
-        rv = os.str();
+        StringBuilder out;
+        out << formatFloat128(value, FloatFormat::Default, precision);
+        rv.assign(static_cast<const char*>(out.data()), out.length());
         if (parseFloatValue(rv.c_str()) == value) {
             break;
         }
@@ -68,11 +71,6 @@ std::string formatFloatValueForToken(FloatValue value) {
         rv += ".0";
     }
     return rv;
-}
-
-std::ostringstream&& operator<<(std::ostringstream&& os, const FloatValue& value) {
-    static_cast<std::ostream&>(os) << value;
-    return std::move(os);
 }
 
 F16::F16()

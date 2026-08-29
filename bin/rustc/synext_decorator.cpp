@@ -856,7 +856,7 @@ namespace {
     static void makeRefpatA(const Span& sp, ASTExprNodeBlock& block, std::vector<ASTPattern>& patsA, const std::vector<ASTTupleItem>& subTypes, F cb) {
         std::vector<ASTExprNodeBlock::Line> nodes;
         for (size_t idx = 0; idx < subTypes.size(); idx++) {
-            auto nameA = RcString::newInterned(FMT("a" << idx));
+            auto nameA = RcString::newInterned(FMT(StringView("a") << idx));
             patsA.push_back(ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF));
             block.pushStmt(cb(idx, makeAstExprNode<ASTExprNodeNamedValue>(block.pool(), ASTPath(nameA))));
         }
@@ -867,7 +867,7 @@ namespace {
         std::vector<ASTExprNodeBlock::Line> nodes;
         size_t idx = 0;
         for (const auto& fld : fields) {
-            auto nameA = RcString::newInterned(FMT("a" << fld.name));
+            auto nameA = RcString::newInterned(FMT(StringView("a") << fld.name));
             patsA.push_back(ASTStructPatternEntry{ASTAttributeList(), fld.name, ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF)});
             block.pushStmt(cb(idx, makeAstExprNode<ASTExprNodeNamedValue>(block.pool(), ASTPath(nameA))));
             idx++;
@@ -877,8 +877,8 @@ namespace {
     template <typename F>
     static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, std::vector<ASTPattern>& patsA, std::vector<ASTPattern>& patsB, const std::vector<ASTTupleItem>& subTypes, F cb) {
         for (size_t idx = 0; idx < subTypes.size(); idx++) {
-            auto nameA = RcString::newInterned(FMT("a" << idx));
-            auto nameB = RcString::newInterned(FMT("b" << idx));
+            auto nameA = RcString::newInterned(FMT(StringView("a") << idx));
+            auto nameB = RcString::newInterned(FMT(StringView("b") << idx));
             patsA.push_back(ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF));
             patsB.push_back(ASTPattern(ASTPattern::TagBind(), sp, nameB, ASTPatternBinding::Type::REF));
             block.pushStmt(cb(idx, makeAstExprNode<ASTExprNodeNamedValue>(block.pool(), ASTPath(nameA)), makeAstExprNode<ASTExprNodeNamedValue>(block.pool(), ASTPath(nameB))));
@@ -889,8 +889,8 @@ namespace {
     static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, std::vector<ASTStructPatternEntry>& patsA, std::vector<ASTStructPatternEntry>& patsB, const std::vector<ASTStructItem>& fields, F cb) {
         size_t idx = 0;
         for (const auto& fld : fields) {
-            auto nameA = RcString::newInterned(FMT("a" << fld.name));
-            auto nameB = RcString::newInterned(FMT("b" << fld.name));
+            auto nameA = RcString::newInterned(FMT(StringView("a") << fld.name));
+            auto nameB = RcString::newInterned(FMT(StringView("b") << fld.name));
             patsA.push_back(ASTStructPatternEntry{ASTAttributeList(), fld.name, ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF)});
             patsB.push_back(ASTStructPatternEntry{ASTAttributeList(), fld.name, ASTPattern(ASTPattern::TagBind(), sp, nameB, ASTPatternBinding::Type::REF)});
             block.pushStmt(cb(idx, makeAstExprNode<ASTExprNodeNamedValue>(block.pool(), ASTPath(nameA)), makeAstExprNode<ASTExprNodeNamedValue>(block.pool(), ASTPath(nameB))));
@@ -931,12 +931,12 @@ namespace {
                 rv.push_back(std::move(item));
             } else if (lex.getTokenIf(TOK_INTERPOLATED_TYPE, tok)) {
                 const auto& ty = tok.fragType();
-                ASSERT_BUG(lex.pointSpan(), ty->isPath(), "TODO: No path :ty in derive, " << ty);
-                ASSERT_BUG(lex.pointSpan(), ty->data.as_Path(), "" << ty);
+                ASSERT_BUG(lex.pointSpan(), ty->isPath(), StringView("TODO: No path :ty in derive, ") << ty);
+                ASSERT_BUG(lex.pointSpan(), ty->data.as_Path(), StringView("") << ty);
                 rv.push_back(*ty->data.as_Path());
             } else if (lex.getTokenIf(TOK_INTERPOLATED_META, tok)) {
                 const auto& mi = tok.fragMeta();
-                ASSERT_BUG(lex.pointSpan(), !mi.name().elems.empty(), "Empty meta item in derive");
+                ASSERT_BUG(lex.pointSpan(), !mi.name().elems.empty(), StringView("Empty meta item in derive"));
                 auto item = ASTPath::newRelative({}, {});
                 for (const auto& e : mi.name().elems) {
                     item += ASTPathNode(e);
@@ -1231,7 +1231,7 @@ namespace {
             }
         }
         if (!hasField) {
-            ERROR(sp, E0000, "CoercePointee can only be derived for a struct with fields");
+            ERROR(sp, E0000, StringView("CoercePointee can only be derived for a struct with fields"));
         }
 
         size_t pointeeIndex = SIZE_MAX;
@@ -1241,14 +1241,14 @@ namespace {
                 typeCount++;
                 if (type->attrs().has("pointee")) {
                     if (pointeeIndex != SIZE_MAX) {
-                        ERROR(sp, E0000, "Only one CoercePointee type parameter can have #[pointee]");
+                        ERROR(sp, E0000, StringView("Only one CoercePointee type parameter can have #[pointee]"));
                     }
                     pointeeIndex = i;
                 }
             }
         }
         if (typeCount == 0) {
-            ERROR(sp, E0000, "CoercePointee requires a generic type parameter");
+            ERROR(sp, E0000, StringView("CoercePointee requires a generic type parameter"));
         }
         if (typeCount == 1 && pointeeIndex == SIZE_MAX) {
             for (size_t i = 0; i < sourceParams.params.size(); i++) {
@@ -1259,14 +1259,14 @@ namespace {
             }
         }
         if (pointeeIndex == SIZE_MAX) {
-            ERROR(sp, E0000, "One CoercePointee type parameter must have #[pointee]");
+            ERROR(sp, E0000, StringView("One CoercePointee type parameter must have #[pointee]"));
         }
 
         const auto& pointeeName = sourceParams.params[pointeeIndex].as_Type().name();
         const auto targetName = RcString::newInterned("__S");
         auto* targetParamType = mkType(*selfType->pool, sp, targetName);
         auto* targetSelfType = selfType->clone();
-        ASSERT_BUG(sp, substituteType(targetSelfType, pointeeName, targetParamType), "CoercePointee self type does not use " << pointeeName);
+        ASSERT_BUG(sp, substituteType(targetSelfType, pointeeName, targetParamType), StringView("CoercePointee self type does not use ") << pointeeName);
 
         addCoercePointeeImpl(sp, mod, getPath(opts.coreName, "marker", "CoercePointeeValidated"), makeImplParams(*selfType->pool, sp, sourceParams), selfType->clone());
 
@@ -1294,7 +1294,7 @@ namespace {
 
     template <typename T>
     void deriveCoercePointee(const Span& sp, const DeriveOpts&, ASTModule&, const ASTGenericParams&, ASTType*, const T&) {
-        ERROR(sp, E0000, "CoercePointee can only be derived for structs");
+        ERROR(sp, E0000, StringView("CoercePointee can only be derived for structs"));
     }
 
     std::vector<RcString> findMacro(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, const ASTPath& traitPath) {
@@ -1310,7 +1310,7 @@ namespace {
                             break;
                         case MacroRef::TAG_ExternalProcMacro: {
                             auto& pm = macImport.ref.as_ExternalProcMacro();
-                            DEBUG("proc_macro " << pm->path);
+                            DEBUG(StringView("proc_macro ") << pm->path);
                             macPath.push_back(pm->path.crateName());
                             macPath.insert(macPath.end(), pm->path.components().begin(), pm->path.components().end());
                             break;
@@ -1336,11 +1336,11 @@ namespace {
                     break;
                 }
                 case MacroRef::TAG_BuiltinProcMacro: {
-                    TODO(sp, "Handle builtin proc macro");
+                    TODO(sp, StringView("Handle builtin proc macro"));
                     break;
                 }
                 case MacroRef::TAG_MacroRules: {
-                    TODO(sp, "Custom derive using macro_rules?");
+                    TODO(sp, StringView("Custom derive using macro_rules?"));
                     break;
                 }
             }
@@ -1356,7 +1356,7 @@ namespace {
         }
         const bool isConstDerive = attr.name() == "derive_const";
 
-        DEBUG("path = " << path);
+        DEBUG(StringView("path = ") << path);
         auto type = makeType(*crate.pool, sp, path, item.params());
 
         DeriveOpts opts = {crate.extCratenameCore};
@@ -1374,7 +1374,7 @@ namespace {
 
         std::vector<ASTPath> missingHandlers;
         for (const auto& traitPath : deriveItems) {
-            DEBUG("- " << traitPath);
+            DEBUG(StringView("- ") << traitPath);
             if (isCoercePointee(traitPath)) {
                 deriveCoercePointee(sp, opts, mod, item.params(), type, item);
                 continue;
@@ -1403,17 +1403,17 @@ namespace {
                     lex->parseState().module = &mod;
                     ParseModRootItems(*lex, mod);
                 } else {
-                    ERROR(sp, E0000, "proc_macro derive failed");
+                    ERROR(sp, E0000, StringView("proc_macro derive failed"));
                 }
                 continue;
             }
 
-            DEBUG("> No handler for " << traitPath);
+            DEBUG(StringView("> No handler for ") << traitPath);
             missingHandlers.push_back(traitPath);
         }
 
         if (!missingHandlers.empty()) {
-            ERROR(sp, E0000, "Failed to apply #[derive] - Missing handlers for " << missingHandlers);
+            ERROR(sp, E0000, StringView("Failed to apply #[derive] - Missing handlers for ") << missingHandlers);
         }
     }
 
@@ -1423,10 +1423,10 @@ namespace {
             const auto& otherPath = rv.first->second;
             if (path != otherPath) {
                 // HACK: Anon modules get visited twice, so can lead to duplicate annotations
-                ERROR(sp, E0000, "Duplicate definition of language item '" << name << "' - " << otherPath << " and " << path);
+                ERROR(sp, E0000, StringView("Duplicate definition of language item '") << name << StringView("' - ") << otherPath << StringView(" and ") << path);
             }
         } else {
-            DEBUG("Bind '" << name << "' to " << path);
+            DEBUG(StringView("Bind '") << name << StringView("' to ") << path);
         }
     }
 
@@ -1434,7 +1434,7 @@ namespace {
         const char* realName = nullptr;
         if (const auto* handler = registry.find(name.c_str())) {
             if (type != handler->type) {
-                ERROR(sp, E0000, "Language item '" << name << "' " << path << " - on incorrect item type " << type << " != " << handler->type);
+                ERROR(sp, E0000, StringView("Language item '") << name << StringView("' ") << path << StringView(" - on incorrect item type ") << static_cast<int>(type) << StringView(" != ") << static_cast<int>(handler->type));
             }
             handler->cb(sp, crate, name, path);
             return;
@@ -1500,7 +1500,7 @@ namespace {
         } else if (name == "u128_shr") {
         } else if (name == "u128_shro") {
         } else {
-            ERROR(sp, E0000, "Unknown language item '" << name << "'");
+            ERROR(sp, E0000, StringView("Unknown language item '") << name << StringView("'"));
         }
 
         if (type == ITEM_EXTERN_FN) {
@@ -1513,7 +1513,7 @@ namespace {
             const auto& otherPath = rv.first->second;
             if (path != otherPath) {
                 // HACK: Anon modules get visited twice, so can lead to duplicate annotations
-                ERROR(sp, E0000, "Duplicate definition of language item '" << name << "' - " << otherPath << " and " << path);
+                ERROR(sp, E0000, StringView("Duplicate definition of language item '") << name << StringView("' - ") << otherPath << StringView(" and ") << path);
             }
         }
     }
@@ -1887,7 +1887,7 @@ auto CHandlerInline::handle(const ASTAttribute& mi, ASTFunction& fcn) const -> v
         } else if (attr == "always") {
             fcn.markings.inlineType = ASTFunction::Markings::Inline::Always;
         } else {
-            ERROR(lex.pointSpan(), E0000, "Unknown inline type #[inline(" << attr << ")]");
+            ERROR(lex.pointSpan(), E0000, StringView("Unknown inline type #[inline(") << attr << StringView(")]"));
         }
         lex.getTokenCheck(TOK_PAREN_CLOSE);
         lex.getTokenCheck(TOK_EOF);
@@ -1906,9 +1906,9 @@ auto CHandlerRustcAlign::handle(const ASTAttribute& mi, ASTFunction& fcn) const 
     TTStream lex(mi.span(), ParseState(), mi.data());
     lex.getTokenCheck(TOK_PAREN_OPEN);
     auto value = lex.getTokenCheck(TOK_INTEGER).intval();
-    ASSERT_BUG(lex.pointSpan(), value > U128(0), "#[rustc_align(" << value << ")] - alignment must be non-zero");
-    ASSERT_BUG(lex.pointSpan(), (value & (value - 1)) == U128(0), "#[rustc_align(" << value << ")] - alignment must be a power of two");
-    ASSERT_BUG(lex.pointSpan(), value < U128(UINT64_MAX), "#[rustc_align(" << value << ")] - alignment is too large");
+    ASSERT_BUG(lex.pointSpan(), value > U128(0), StringView("#[rustc_align(") << value << StringView(")] - alignment must be non-zero"));
+    ASSERT_BUG(lex.pointSpan(), (value & (value - 1)) == U128(0), StringView("#[rustc_align(") << value << StringView(")] - alignment must be a power of two"));
+    ASSERT_BUG(lex.pointSpan(), value < U128(UINT64_MAX), StringView("#[rustc_align(") << value << StringView(")] - alignment is too large"));
     fcn.markings.alignment = value.truncateU64();
     lex.getTokenCheck(TOK_PAREN_CLOSE);
     lex.getTokenCheck(TOK_EOF);
@@ -1921,9 +1921,9 @@ auto CHandlerRustcLegacyConstGenerics::handle(const ASTAttribute& mi, ASTFunctio
     auto& list = fcn.markings.rustcLegacyConstGenerics;
     do {
         auto idxRaw = lex.getTokenCheck(TOK_INTEGER).intval();
-        ASSERT_BUG(lex.pointSpan(), idxRaw < U128(UINT_MAX), "#[rustc_legacy_const_generics(" << idxRaw << ")] too large");
+        ASSERT_BUG(lex.pointSpan(), idxRaw < U128(UINT_MAX), StringView("#[rustc_legacy_const_generics(") << idxRaw << StringView(")] too large"));
         auto idx = static_cast<unsigned>(idxRaw.truncateU64());
-        ASSERT_BUG(lex.pointSpan(), std::find(list.begin(), list.end(), idx) == list.end(), "#[rustc_legacy_const_generics(" << idx << ")] duplicate index");
+        ASSERT_BUG(lex.pointSpan(), std::find(list.begin(), list.end(), idx) == list.end(), StringView("#[rustc_legacy_const_generics(") << idx << StringView(")] duplicate index"));
         list.push_back(idx);
     } while (lex.getTokenIf(TOK_COMMA));
 
@@ -1942,7 +1942,7 @@ auto CHandlerRepr::getReprName(TokenStream& lex) -> RcString {
         if (ty && ty->isPath() && ty->path().nodes().size() == 1) {
             return ty->path().nodes().back().name();
         }
-        ERROR(lex.pointSpan(), E0000, "#[repr(...)] with a type that does not name a representation");
+        ERROR(lex.pointSpan(), E0000, StringView("#[repr(...)] with a type that does not name a representation"));
     }
     return lex.getTokenCheck(TOK_IDENT).ident().name;
 }
@@ -1983,11 +1983,11 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
                 if (lex.getTokenIf(TOK_PAREN_OPEN)) {
                     auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
                     auto* val = cast<ASTExprNodeInteger>(&*n);
-                    ASSERT_BUG(n->span(), val, "#[repr(packed(...))] - alignment must be an integer");
+                    ASSERT_BUG(n->span(), val, StringView("#[repr(packed(...))] - alignment must be an integer"));
                     auto v = val->value;
-                    ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(packed(" << v << "))] - alignment must be non-zero");
-                    ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(packed(" << v << "))] - alignment must be a power of two");
-                    ASSERT_BUG(lex.pointSpan(), s->markings.alignValue == 0, "#[repr(packed(" << v << "))] - conflicts with previous alignment");
+                    ASSERT_BUG(lex.pointSpan(), v > U128(0), StringView("#[repr(packed(") << v << StringView("))] - alignment must be non-zero"));
+                    ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), StringView("#[repr(packed(") << v << StringView("))] - alignment must be a power of two"));
+                    ASSERT_BUG(lex.pointSpan(), s->markings.alignValue == 0, StringView("#[repr(packed(") << v << StringView("))] - conflicts with previous alignment"));
                     // TODO: I believe this should change the internal aligment too?
                     s->markings.maxFieldAlign = v.truncateU64();
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
@@ -2002,17 +2002,17 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
                 lex.getTokenCheck(TOK_PAREN_OPEN);
                 auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
                 auto* val = cast<ASTExprNodeInteger>(&*n);
-                ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
+                ASSERT_BUG(n->span(), val, StringView("#[repr(align(...))] - alignment must be an integer"));
                 auto v = val->value;
-                ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
-                ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
+                ASSERT_BUG(lex.pointSpan(), v > U128(0), StringView("#[repr(align(") << v << StringView("))] - alignment must be non-zero"));
+                ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), StringView("#[repr(align(") << v << StringView("))] - alignment must be a power of two"));
                 s->markings.alignValue = std::max(s->markings.alignValue, v.truncateU64());
                 lex.getTokenCheck(TOK_PAREN_CLOSE);
             } else if (reprType == "Rust") {
             } else if (reprType == "no_niche") {
                 // TODO: rust-lang/rust#68303 happens with UnsafeCell and niche optionisations
             } else {
-                TODO(sp, "Handle struct repr '" << reprType << "'");
+                TODO(sp, StringView("Handle struct repr '") << reprType << StringView("'"));
             }
         } while (lex.getTokenIf(TOK_COMMA));
         lex.getTokenCheck(TOK_PAREN_CLOSE);
@@ -2024,7 +2024,7 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
 
         while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
             auto setRepr = [&](ASTEnum::Markings::Repr r) {
-                ASSERT_BUG(lex.pointSpan(), e->markings.repr == ASTEnum::Markings::Repr::Rust, "Multiple enum reprs set");
+                ASSERT_BUG(lex.pointSpan(), e->markings.repr == ASTEnum::Markings::Repr::Rust, StringView("Multiple enum reprs set"));
                 e->markings.repr = r;
             };
             auto reprStr = getReprName(lex);
@@ -2058,17 +2058,17 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
                 lex.getTokenCheck(TOK_PAREN_OPEN);
                 auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
                 auto* val = cast<ASTExprNodeInteger>(&*n);
-                ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
+                ASSERT_BUG(n->span(), val, StringView("#[repr(align(...))] - alignment must be an integer"));
                 auto v = val->value;
-                ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
-                ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
+                ASSERT_BUG(lex.pointSpan(), v > U128(0), StringView("#[repr(align(") << v << StringView("))] - alignment must be non-zero"));
+                ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), StringView("#[repr(align(") << v << StringView("))] - alignment must be a power of two"));
                 e->markings.alignValue = std::max(e->markings.alignValue, v.truncateU64());
                 lex.getTokenCheck(TOK_PAREN_CLOSE);
             } else if (reprStr == "Rust") {
             } else if (reprStr == "transparent") {
-                ASSERT_BUG(lex.pointSpan(), e->variants().size() == 1, "#[repr(transparent)] needs exactly one variant");
+                ASSERT_BUG(lex.pointSpan(), e->variants().size() == 1, StringView("#[repr(transparent)] needs exactly one variant"));
             } else {
-                ERROR(lex.pointSpan(), E0000, "Unknown enum repr '" << reprStr << "'");
+                ERROR(lex.pointSpan(), E0000, StringView("Unknown enum repr '") << reprStr << StringView("'"));
             }
             if (!lex.getTokenIf(TOK_COMMA)) {
                 break;
@@ -2097,10 +2097,10 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
                 if (lex.getTokenIf(TOK_PAREN_OPEN)) {
                     auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
                     auto* val = cast<ASTExprNodeInteger>(&*n);
-                    ASSERT_BUG(n->span(), val, "#[repr(packed(...))] - alignment must be an integer");
+                    ASSERT_BUG(n->span(), val, StringView("#[repr(packed(...))] - alignment must be an integer"));
                     auto v = val->value;
-                    ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(packed(" << v << "))] - alignment must be non-zero");
-                    ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(packed(" << v << "))] - alignment must be a power of two");
+                    ASSERT_BUG(lex.pointSpan(), v > U128(0), StringView("#[repr(packed(") << v << StringView("))] - alignment must be non-zero"));
+                    ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), StringView("#[repr(packed(") << v << StringView("))] - alignment must be a power of two"));
                     e->markings.maxFieldAlign = v.truncateU64();
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
                 } else {
@@ -2110,21 +2110,21 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
                 lex.getTokenCheck(TOK_PAREN_OPEN);
                 auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
                 auto* val = cast<ASTExprNodeInteger>(&*n);
-                ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
+                ASSERT_BUG(n->span(), val, StringView("#[repr(align(...))] - alignment must be an integer"));
                 auto v = val->value;
-                ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
-                ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
+                ASSERT_BUG(lex.pointSpan(), v > U128(0), StringView("#[repr(align(") << v << StringView("))] - alignment must be non-zero"));
+                ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), StringView("#[repr(align(") << v << StringView("))] - alignment must be a power of two"));
                 e->markings.alignValue = std::max(e->markings.alignValue, v.truncateU64());
                 lex.getTokenCheck(TOK_PAREN_CLOSE);
             } else {
-                ERROR(lex.pointSpan(), E0000, "Unknown union repr '" << reprStr << "'");
+                ERROR(lex.pointSpan(), E0000, StringView("Unknown union repr '") << reprStr << StringView("'"));
             }
         } while (lex.getTokenIf(TOK_COMMA));
 
         lex.getTokenCheck(TOK_PAREN_CLOSE);
         lex.getTokenCheck(TOK_EOF);
     } else {
-        ERROR(mi.span(), E0000, "Unexpected attribute #[repr] on " << i.tagStr());
+        ERROR(mi.span(), E0000, StringView("Unexpected attribute #[repr] on ") << i.tagStr());
     }
 }
 
@@ -2151,15 +2151,15 @@ auto CHandlerRustcLayoutScalarValidRangeStart::handle(const Span& sp, const ASTA
         lex.getTokenCheck(TOK_PAREN_OPEN);
         auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
         auto* np = cast<ASTExprNodeInteger>(n.get());
-        ASSERT_BUG(n->span(), np, "#[rustc_layout_scalar_valid_range_start] requires an integer - got " << FMT_CB(ss, n->print(ss)));
+        ASSERT_BUG(n->span(), np, StringView("#[rustc_layout_scalar_valid_range_start] requires an integer - got ") << FMT_CB(ss, n->print(ss)));
         lex.getTokenCheck(TOK_PAREN_CLOSE);
         lex.getTokenCheck(TOK_EOF);
 
         s->markings.scalarValidStartSet = true;
         s->markings.scalarValidStart = np->value;
-        DEBUG(path << " #[rustc_layout_scalar_valid_range_start]: " << std::hex << s->markings.scalarValidStart);
+        DEBUG(path << StringView(" #[rustc_layout_scalar_valid_range_start]: ") << formatHex(s->markings.scalarValidStart));
     } else {
-        TODO(sp, "#[rustc_layout_scalar_valid_range_start] on " << i.tagStr());
+        TODO(sp, StringView("#[rustc_layout_scalar_valid_range_start] on ") << i.tagStr());
     }
 }
 
@@ -2175,14 +2175,14 @@ auto CHandlerRustcLayoutScalarValidRangeEnd::handle(const Span& sp, const ASTAtt
         lex.getTokenCheck(TOK_PAREN_OPEN);
         auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
         auto* np = cast<ASTExprNodeInteger>(n.get());
-        ASSERT_BUG(n->span(), np, "#[rustc_layout_scalar_valid_range_end] requires an integer - got " << FMT_CB(ss, n->print(ss)));
+        ASSERT_BUG(n->span(), np, StringView("#[rustc_layout_scalar_valid_range_end] requires an integer - got ") << FMT_CB(ss, n->print(ss)));
         lex.getTokenCheck(TOK_PAREN_CLOSE);
         lex.getTokenCheck(TOK_EOF);
         s->markings.scalarValidEndSet = true;
         s->markings.scalarValidEnd = np->value;
-        DEBUG(path << " #[rustc_layout_scalar_valid_range_end]: " << std::hex << s->markings.scalarValidEnd);
+        DEBUG(path << StringView(" #[rustc_layout_scalar_valid_range_end]: ") << formatHex(s->markings.scalarValidEnd));
     } else {
-        TODO(sp, "#[rustc_layout_scalar_valid_range_end] on " << i.tagStr());
+        TODO(sp, StringView("#[rustc_layout_scalar_valid_range_end] on ") << i.tagStr());
     }
 }
 
@@ -2192,15 +2192,15 @@ auto CHandlerLinkName::stage() const -> AttrStage {
 
 auto CHandlerLinkName::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     auto linkName = mi.parseEqualsString(wb, crate, mod);
-    ASSERT_BUG(sp, linkName != "", "Empty #[link_name] attribute");
+    ASSERT_BUG(sp, linkName != "", StringView("Empty #[link_name] attribute"));
 
     if (i.is_None()) {
     } else if (auto* fcn = i.opt_Function()) {
-        ASSERT_BUG(sp, fcn->markings.linkName == "", "Duplicate #[link_name] attributes");
+        ASSERT_BUG(sp, fcn->markings.linkName == "", StringView("Duplicate #[link_name] attributes"));
         fcn->markings.linkName = linkName;
     } else if (auto* st = i.opt_Static()) {
-        ASSERT_BUG(sp, st->sClass() != ASTStatic::CONST, "#[link_name] on `const`");
-        ASSERT_BUG(sp, st->markings.linkName == "", "Duplicate #[link_name] attributes");
+        ASSERT_BUG(sp, st->sClass() != ASTStatic::CONST, StringView("#[link_name] on `const`"));
+        ASSERT_BUG(sp, st->markings.linkName == "", StringView("Duplicate #[link_name] attributes"));
         st->markings.linkName = linkName;
     } else {
     }
@@ -2212,15 +2212,15 @@ auto CHandlerLinkSection::stage() const -> AttrStage {
 
 auto CHandlerLinkSection::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     auto linkSection = mi.parseEqualsString(wb, crate, mod);
-    ASSERT_BUG(sp, linkSection != "", "Empty #[link_section] attribute");
+    ASSERT_BUG(sp, linkSection != "", StringView("Empty #[link_section] attribute"));
 
     if (i.is_None()) {
     } else if (auto* fcn = i.opt_Function()) {
-        ASSERT_BUG(sp, fcn->markings.linkSection == "", "Duplicate #[link_section] attributes");
+        ASSERT_BUG(sp, fcn->markings.linkSection == "", StringView("Duplicate #[link_section] attributes"));
         fcn->markings.linkSection = linkSection;
     } else if (auto* st = i.opt_Static()) {
-        ASSERT_BUG(sp, st->sClass() != ASTStatic::CONST, "#[link_section] on `const`");
-        ASSERT_BUG(sp, st->markings.linkSection == "", "Duplicate #[link_section] attributes");
+        ASSERT_BUG(sp, st->sClass() != ASTStatic::CONST, StringView("#[link_section] on `const`"));
+        ASSERT_BUG(sp, st->markings.linkSection == "", StringView("Duplicate #[link_section] attributes"));
         st->markings.linkSection = linkSection;
     } else {
     }
@@ -2246,14 +2246,14 @@ auto CHandlerLink::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
                 lex.getTokenCheck(TOK_EQUAL);
                 auto v = lex.getTokenCheck(TOK_STRING).str();
                 if (v == "") {
-                    ERROR(sp, E0000, "Empty name on extern block");
+                    ERROR(sp, E0000, StringView("Empty name on extern block"));
                 }
                 link.libName = v;
             } else if (key == "kind") {
                 lex.getTokenCheck(TOK_EQUAL);
                 auto v = lex.getTokenCheck(TOK_STRING).str();
                 if (v == "") {
-                    ERROR(sp, E0000, "Empty `kind` on extern block #[link]");
+                    ERROR(sp, E0000, StringView("Empty `kind` on extern block #[link]"));
                 }
                 // TODO: save and use the kind
             } else if (key == "cfg") {
@@ -2262,18 +2262,18 @@ auto CHandlerLink::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
                 lex.getTokenCheck(TOK_EQUAL);
                 auto v = lex.getTokenCheck(TOK_STRING).str();
                 if (v == "") {
-                    ERROR(sp, E0000, "Empty `modifiers` on extern block #[link]");
+                    ERROR(sp, E0000, StringView("Empty `modifiers` on extern block #[link]"));
                 }
                 // TODO: save and use the `modifiers` value
             } else {
-                TODO(sp, "Unknown attribute `#[link(" << key << ")]`");
+                TODO(sp, StringView("Unknown attribute `#[link(") << key << StringView(")]`"));
             }
             if (!lex.getTokenIf(TOK_COMMA)) {
                 break;
             }
         }
         if (link.libName == "") {
-            ERROR(sp, E0000, "No name in `#[link]`");
+            ERROR(sp, E0000, StringView("No name in `#[link]`"));
         }
         if (emit && wb.settings->linkDirectives) {
             b->libraries.push_back(std::move(link));
@@ -2281,7 +2281,7 @@ auto CHandlerLink::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
         lex.getTokenCheck(TOK_PAREN_CLOSE);
         lex.getTokenCheck(TOK_EOF);
     } else {
-        TODO(sp, "#[link] on " << i.tagStr());
+        TODO(sp, StringView("#[link] on ") << i.tagStr());
     }
 }
 
@@ -2307,7 +2307,7 @@ auto CHandlerLinkage::handle(const Span& sp, const ASTAttribute& mi, const WireB
     } else if (linkageStr == "external") {
     } else if (linkageStr == "internal" || linkageStr == "private") {
     } else {
-        TODO(sp, "#[linkage=\"" << linkageStr << "\"]");
+        TODO(sp, StringView("#[linkage=\"") << linkageStr << StringView("\"]"));
     }
 
     if (auto* f = i.opt_Function()) {
@@ -2316,7 +2316,7 @@ auto CHandlerLinkage::handle(const Span& sp, const ASTAttribute& mi, const WireB
             case ASTLinkage::Weak:
                 break;
             default:
-                TODO(sp, "#[linkage=\"" << linkageStr << "\"] on " << i.tagStr());
+                TODO(sp, StringView("#[linkage=\"") << linkageStr << StringView("\"] on ") << i.tagStr());
         }
         f->markings.linkage = linkage;
     } else if (auto* f = i.opt_Static()) {
@@ -2326,11 +2326,11 @@ auto CHandlerLinkage::handle(const Span& sp, const ASTAttribute& mi, const WireB
             case ASTLinkage::ExternWeak:
                 break;
             default:
-                TODO(sp, "#[linkage=\"" << linkageStr << "\"] on " << i.tagStr());
+                TODO(sp, StringView("#[linkage=\"") << linkageStr << StringView("\"] on ") << i.tagStr());
         }
         f->markings.linkage = linkage;
     } else {
-        TODO(sp, "#[linkage] - " << i.tagStr() << " " << path << ": " << mi);
+        TODO(sp, StringView("#[linkage] - ") << i.tagStr() << StringView(" ") << path << StringView(": ") << mi);
     }
 }
 
@@ -2349,13 +2349,13 @@ auto CHandlerRustcIntrinsic::stage() const -> AttrStage {
 auto CHandlerRustcIntrinsic::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (auto* e = i.opt_Function()) {
         if (e->abi() != ABI_RUST) {
-            ERROR(sp, E0000, "#[rustc_intrinsic] on function with ABI already set (`" << e->abi() << "`)");
+            ERROR(sp, E0000, StringView("#[rustc_intrinsic] on function with ABI already set (`") << e->abi() << StringView("`)"));
         }
         if (!e->code()) {
             e->setAbi("rust-intrinsic");
         }
     } else {
-        ERROR(sp, E0000, "#[rustc_intrinsic] on non-function");
+        ERROR(sp, E0000, StringView("#[rustc_intrinsic] on non-function"));
     }
 }
 
@@ -2368,21 +2368,21 @@ auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const W
     } else if (i.opt_Macro()) {
     } else if (const auto* invocation = i.opt_MacroInv(); invocation && invocation->path().isTrivial() && invocation->path().asTrivial() == "macro_rules") {
     } else {
-        ERROR(sp, E0000, "#[track_caller] on non-function");
+        ERROR(sp, E0000, StringView("#[track_caller] on non-function"));
     }
 }
 
 auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (/*auto* e =*/i.opt_Function()) {
     } else {
-        ERROR(sp, E0000, "#[track_caller] on non-function");
+        ERROR(sp, E0000, StringView("#[track_caller] on non-function"));
     }
 }
 
 auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
     if (/*auto* e =*/i.opt_Function()) {
     } else {
-        ERROR(sp, E0000, "#[track_caller] on non-function");
+        ERROR(sp, E0000, StringView("#[track_caller] on non-function"));
     }
 }
 
@@ -2390,7 +2390,7 @@ auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const W
     if (auto* n = cast<ASTExprNodeClosure>(expr.get())) {
         n->trackCaller = true;
     } else {
-        ERROR(sp, E0000, "#[track_caller] on non-function");
+        ERROR(sp, E0000, StringView("#[track_caller] on non-function"));
     }
 }
 
@@ -2406,51 +2406,51 @@ auto CHandlerUnsafe::handleItem(const Span& sp, const ASTAttribute& mi, const Wi
         auto ident = lex.getTokenCheck(TOK_IDENT).ident().name;
 
         if (ident == "no_mangle") {
-            DEBUG("#[unsafe(no_mangle)] " << name);
+            DEBUG(StringView("#[unsafe(no_mangle)] ") << name);
             if (auto* e = i.opt_Function()) {
                 e->markings.linkName = name.c_str();
             } else if (auto* e = i.opt_Static()) {
                 e->markings.linkName = name.c_str();
             } else {
-                ERROR(sp, E0000, "#[unsafe(" << ident << ")] on bad item: " << i.tagStr());
+                ERROR(sp, E0000, StringView("#[unsafe(") << ident << StringView(")] on bad item: ") << i.tagStr());
             }
         } else if (ident == "export_name") {
             lex.getTokenCheck(TOK_EQUAL);
             auto s = lex.getTokenCheck(TOK_STRING).str();
 
-            DEBUG("#[unsafe(export_name)] " << name << " as `" << s << "`");
+            DEBUG(StringView("#[unsafe(export_name)] ") << name << StringView(" as `") << s << StringView("`"));
             if (auto* e = i.opt_Function()) {
                 e->markings.linkName = s;
             } else if (auto* e = i.opt_Static()) {
                 e->markings.linkName = s;
             } else {
-                ERROR(sp, E0000, "#[unsafe(" << ident << ")] on bad item: " << i.tagStr());
+                ERROR(sp, E0000, StringView("#[unsafe(") << ident << StringView(")] on bad item: ") << i.tagStr());
             }
         } else if (ident == "link_section") {
             lex.getTokenCheck(TOK_EQUAL);
             auto s = lex.getTokenCheck(TOK_STRING).str();
 
-            DEBUG("#[unsafe(link_section)] " << name << " in `" << s);
+            DEBUG(StringView("#[unsafe(link_section)] ") << name << StringView(" in `") << s);
             if (auto* e = i.opt_Function()) {
                 e->markings.linkSection = s;
             } else if (auto* e = i.opt_Static()) {
                 e->markings.linkSection = s;
             } else {
-                ERROR(sp, E0000, "#[unsafe(" << ident << ")] on bad item: " << i.tagStr());
+                ERROR(sp, E0000, StringView("#[unsafe(") << ident << StringView(")] on bad item: ") << i.tagStr());
             }
         } else if (ident == "ffi_const") {
             if (/*auto* e =*/i.opt_Function()) {
             } else {
-                ERROR(sp, E0000, "#[unsafe(" << ident << ")] on non-function");
+                ERROR(sp, E0000, StringView("#[unsafe(") << ident << StringView(")] on non-function"));
             }
         } else if (ident == "naked") {
             if (auto* e = i.opt_Function()) {
                 e->markings.isNaked = true;
             } else {
-                ERROR(sp, E0000, "#[unsafe(" << ident << ")] on non-function");
+                ERROR(sp, E0000, StringView("#[unsafe(") << ident << StringView(")] on non-function"));
             }
         } else {
-            ERROR(sp, E0000, "Unknown #[unsafe(" << ident << ")]");
+            ERROR(sp, E0000, StringView("Unknown #[unsafe(") << ident << StringView(")]"));
         }
 
         if (lex.lookahead(0) != TOK_COMMA) {
@@ -2492,7 +2492,7 @@ auto DecoratorCrateType::handle(const Span& sp, const ASTAttribute& mi, const Wi
     } else if (name == "staticlib") {
         crate.crateType = ASTCrate::Type::RustLib;
     } else {
-        ERROR(sp, E0000, "Unknown crate type '" << name << "'");
+        ERROR(sp, E0000, StringView("Unknown crate type '") << name << StringView("'"));
     }
 }
 
@@ -2514,7 +2514,7 @@ auto DecoratorRecursionLimit::handle(const Span& sp, const ASTAttribute& mi, con
     char* end = nullptr;
     const auto value = std::strtoul(text.c_str(), &end, 10);
     if (text.empty() || *end != '\0') {
-        ERROR(sp, E0000, "#![recursion_limit] needs a number, got `" << text << "`");
+        ERROR(sp, E0000, StringView("#![recursion_limit] needs a number, got `") << text << StringView("`"));
     }
     wb.settings->recursionLimit = static_cast<unsigned int>(value);
 }
@@ -2540,7 +2540,7 @@ auto DecoratorAllocator::handle(const Span& sp, const ASTAttribute& mi, const Wi
 
 auto DecoratorAllocator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (!i.is_Function()) {
-        ERROR(sp, E0000, "#[allocator] can only be put on functions and the crate - found on " << i.tagStr());
+        ERROR(sp, E0000, StringView("#[allocator] can only be put on functions and the crate - found on ") << i.tagStr());
     }
     // TODO: Ensure that this is an extern { fn }
     // TODO: Does this need to do anything?
@@ -2564,7 +2564,7 @@ auto DecoratorNeedsPanicRuntime::handle(const Span& sp, const ASTAttribute& mi, 
 }
 
 auto Deriver::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const -> ASTImpl {
-    ERROR(sp, E0000, "Cannot derive(" << traitName() << ") on union");
+    ERROR(sp, E0000, StringView("Cannot derive(") << traitName() << StringView(") on union"));
 }
 
 template <typename F>
@@ -3409,7 +3409,7 @@ auto DeriverClone::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
                 std::vector<ASTExprNodeP> nodes;
 
                 for (size_t idx = 0; idx < e.items.size(); idx++) {
-                    auto nameA = RcString::newInterned(FMT("a" << idx));
+                    auto nameA = RcString::newInterned(FMT(StringView("a") << idx));
                     patsA.push_back(ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF));
                     nodes.push_back(this->cloneValDirect(opts.coreName, NEWNODE(NamedValue, ASTPath(nameA))));
                 }
@@ -3424,7 +3424,7 @@ auto DeriverClone::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
                 ASTExprNodeStructLiteral::tValues vals;
 
                 for (const auto& fld : e.fields) {
-                    auto nameA = RcString::newInterned(FMT("a" << fld.name));
+                    auto nameA = RcString::newInterned(FMT(StringView("a") << fld.name));
                     patsA.push_back(ASTStructPatternEntry{ASTAttributeList(), fld.name, ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF)});
                     vals.push_back({{}, fld.name, this->cloneValDirect(opts.coreName, NEWNODE(NamedValue, ASTPath(nameA)))});
                 }
@@ -3566,13 +3566,13 @@ auto DeriverDefault::handleItem(Span sp, const DeriveOpts& opts, const ASTGeneri
     for (const auto& v : enm.variants()) {
         if (v.attrs.has("default")) {
             if (defaultVar) {
-                ERROR(sp, E0000, "Multiple #[default] attributes");
+                ERROR(sp, E0000, StringView("Multiple #[default] attributes"));
             }
             defaultVar = &v;
         }
     }
     if (!defaultVar) {
-        ERROR(sp, E0000, "No #[default] attribute on enum with derive(Default)");
+        ERROR(sp, E0000, StringView("No #[default] attribute on enum with derive(Default)"));
     }
 
     ASTPath varPath = *type->data.as_Path() + ASTPathNode(defaultVar->name);
@@ -4230,7 +4230,7 @@ auto DecoratorDerive::handle(const Span& sp, const ASTAttribute& attr, const Wir
             break;
         }
         default: {
-            TODO(sp, "Handle #[derive] for other item types - " << i.tagStr());
+            TODO(sp, StringView("Handle #[derive] for other item types - ") << i.tagStr());
             break;
         }
     }
@@ -4287,7 +4287,7 @@ auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& attr, const W
     auto name = attr.parseEqualsString(wb, crate, mod);
     switch (i.tag()) {
         default:
-            TODO(sp, "Unknown item type " << i.tagStr() << " with #[" << attr << "] attached at " << path);
+            TODO(sp, StringView("Unknown item type ") << i.tagStr() << StringView(" with #[") << attr << StringView("] attached at ") << path);
             break;
         case ASTItem::TAG_None: {
             break;
@@ -4323,7 +4323,7 @@ auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& attr, const W
             } else if (name == "f32_runtime") {
             } else if (name == "f64_runtime") {
             } else {
-                ERROR(sp, E0000, "Unknown lang item '" << name << "' on impl");
+                ERROR(sp, E0000, StringView("Unknown lang item '") << name << StringView("' on impl"));
             }
 
             // TODO: Somehow annotate these impls to allow them to provide inherents?
@@ -4369,7 +4369,7 @@ auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& attr, const W
 auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
     auto name = mi.parseEqualsString(wb, crate, crate.rootModule_);
     if (name == "into_future") {
-        ASSERT_BUG(sp, i.is_Function(), "#[lang = \"into_future\"] on non-function trait item " << path);
+        ASSERT_BUG(sp, i.is_Function(), StringView("#[lang = \"into_future\"] on non-function trait item ") << path);
         handleLangItem(registry, sp, crate, path, name, ITEM_FN, i);
     }
 }
@@ -4392,10 +4392,10 @@ auto DecoratorMain::handle(const Span& sp, const ASTAttribute& attr, const WireB
         auto rv = crate.langItems.insert(std::make_pair(std::string("trustme-main"), path));
         if (!rv.second) {
             const auto& otherPath = rv.first->second;
-            ERROR(sp, E0000, "Duplicate definition of #[main] - " << otherPath << " and " << path);
+            ERROR(sp, E0000, StringView("Duplicate definition of #[main] - ") << otherPath << StringView(" and ") << path);
         }
     } else {
-        ERROR(sp, E0000, "#[main] on non-function " << path);
+        ERROR(sp, E0000, StringView("#[main] on non-function ") << path);
     }
 }
 
@@ -4409,10 +4409,10 @@ auto DecoratorStart::handle(const Span& sp, const ASTAttribute& attr, const Wire
         auto rv = crate.langItems.insert(std::make_pair(std::string("trustme-start"), path));
         if (!rv.second) {
             const auto& otherPath = rv.first->second;
-            ERROR(sp, E0000, "Duplicate definition of #[start] - " << otherPath << " and " << path);
+            ERROR(sp, E0000, StringView("Duplicate definition of #[start] - ") << otherPath << StringView(" and ") << path);
         }
     } else {
-        ERROR(sp, E0000, "#[start] on non-function " << path);
+        ERROR(sp, E0000, StringView("#[start] on non-function ") << path);
     }
 }
 
@@ -4425,10 +4425,10 @@ auto DecoratorPanicImplementation::handle(const Span& sp, const ASTAttribute& at
         auto rv = crate.langItems.insert(std::make_pair(std::string("trustme-panic_implementation"), path));
         if (!rv.second) {
             const auto& otherPath = rv.first->second;
-            ERROR(sp, E0000, "Duplicate definition of #[panic_implementation] - " << otherPath << " and " << path);
+            ERROR(sp, E0000, StringView("Duplicate definition of #[panic_implementation] - ") << otherPath << StringView(" and ") << path);
         }
     } else {
-        ERROR(sp, E0000, "#[panic_implementation] on non-function " << path);
+        ERROR(sp, E0000, StringView("#[panic_implementation] on non-function ") << path);
     }
 }
 
@@ -4441,10 +4441,10 @@ auto DecoratorPanicHandler::handle(const Span& sp, const ASTAttribute& attr, con
         auto rv = crate.langItems.insert(std::make_pair(std::string("trustme-panic_implementation"), path));
         if (!rv.second) {
             const auto& otherPath = rv.first->second;
-            ERROR(sp, E0000, "Duplicate definition of #[panic_handler] - " << otherPath << " and " << path);
+            ERROR(sp, E0000, StringView("Duplicate definition of #[panic_handler] - ") << otherPath << StringView(" and ") << path);
         }
     } else {
-        ERROR(sp, E0000, "#[panic_handler] on non-function " << path);
+        ERROR(sp, E0000, StringView("#[panic_handler] on non-function ") << path);
     }
 }
 
@@ -4464,7 +4464,7 @@ auto DecoratorAllocErrorHandler::handle(const Span& sp, const ASTAttribute& attr
         auto rv = crate.langItems.insert(std::make_pair(std::string("trustme-alloc_error_handler"), path));
         if (!rv.second) {
             const auto& otherPath = rv.first->second;
-            ERROR(sp, E0000, "Duplicate definition of #[alloc_error_handler] - " << otherPath << " and " << path);
+            ERROR(sp, E0000, StringView("Duplicate definition of #[alloc_error_handler] - ") << otherPath << StringView(" and ") << path);
         }
     }
 }
@@ -4475,11 +4475,11 @@ auto DecoratorGlobalAllocator::stage() const -> AttrStage {
 
 auto DecoratorGlobalAllocator::handle(const Span& sp, const ASTAttribute&, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& item) const -> void {
     if (!item.is_Static()) {
-        ERROR(sp, E0000, "#[global_allocator] on non-static " << path);
+        ERROR(sp, E0000, StringView("#[global_allocator] on non-static ") << path);
     }
     auto rv = crate.langItems.insert(std::make_pair(std::string("trustme-global_allocator"), path));
     if (!rv.second && rv.first->second != path) {
-        ERROR(sp, E0000, "Duplicate definition of #[global_allocator] - " << rv.first->second << " and " << path);
+        ERROR(sp, E0000, StringView("Duplicate definition of #[global_allocator] - ") << rv.first->second << StringView(" and ") << path);
     }
 }
 
@@ -4668,8 +4668,8 @@ auto CHandlerRustBox::stage() const -> AttrStage {
 
 auto CHandlerRustBox::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
     auto* n = cast<ASTExprNodeCallPath>(expr.get());
-    ASSERT_BUG(expr->span(), n, "");
-    ASSERT_BUG(expr->span(), n->args.size() == 1, "");
+    ASSERT_BUG(expr->span(), n, StringView(""));
+    ASSERT_BUG(expr->span(), n->args.size() == 1, StringView(""));
     auto val = std::move(n->args[0]);
     auto span = n->span();
     expr = makeAstExprNode<ASTExprNodeUniOp>(*crate.pool, ASTExprNodeUniOp::BOX, std::move(val));
@@ -4714,7 +4714,7 @@ auto DecoratorNoStd::stage() const -> AttrStage {
 
 auto DecoratorNoStd::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
     if (crate.loadStd != ASTCrate::LOAD_STD && crate.loadStd != ASTCrate::LOAD_CORE) {
-        WARNING(sp, W0000, "Use of #![no_std] with itself or #![no_core]");
+        WARNING(sp, W0000, StringView("Use of #![no_std] with itself or #![no_core]"));
         return;
     }
     crate.loadStd = ASTCrate::LOAD_CORE;
@@ -4726,7 +4726,7 @@ auto DecoratorNoCore::stage() const -> AttrStage {
 
 auto DecoratorNoCore::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
     if (crate.loadStd != ASTCrate::LOAD_STD && crate.loadStd != ASTCrate::LOAD_NONE) {
-        WARNING(sp, W0000, "Use of #![no_core] with itself or #![no_std]");
+        WARNING(sp, W0000, StringView("Use of #![no_core] with itself or #![no_std]"));
     }
     crate.loadStd = ASTCrate::LOAD_NONE;
 }
@@ -4747,7 +4747,7 @@ auto DecoratorNoPrelude::handle(const Span& sp, const ASTAttribute& mi, const Wi
     if (i.is_Module()) {
         i.as_Module().insertPrelude = false;
     } else {
-        ERROR(sp, E0000, "Invalid use of #[no_prelude] on non-module");
+        ERROR(sp, E0000, StringView("Invalid use of #[no_prelude] on non-module"));
     }
 }
 
@@ -4758,12 +4758,12 @@ auto DecoratorPreludeImport::stage() const -> AttrStage {
 auto DecoratorPreludeImport::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (const auto* e = i.opt_Use()) {
         if (e->entries.size() != 1) {
-            ERROR(sp, E0000, "#[prelude_import] should be on a single-entry use");
+            ERROR(sp, E0000, StringView("#[prelude_import] should be on a single-entry use"));
         }
         ASSERT_BUG(sp, path.nodes.size() > 0, path);
         ASSERT_BUG(sp, path.nodes.back() == "", path);
         if (e->entries.front().name != "") {
-            ERROR(sp, E0000, "#[prelude_import] should be on a glob");
+            ERROR(sp, E0000, StringView("#[prelude_import] should be on a glob"));
         }
         const auto& p = e->entries.front().path;
         // TODO: Ensure that this statement is a glob (has a name of "")
@@ -4775,7 +4775,7 @@ auto DecoratorPreludeImport::handle(const Span& sp, const ASTAttribute& mi, cons
             crate.preludePath = ASTPath(p);
         }
     } else {
-        ERROR(sp, E0000, "Invalid use of #[prelude_import] on non-use");
+        ERROR(sp, E0000, StringView("Invalid use of #[prelude_import] on non-use"));
     }
 }
 
@@ -4785,7 +4785,7 @@ auto CTestHandler::stage() const -> AttrStage {
 
 auto CTestHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (!i.is_Function()) {
-        ERROR(sp, E0000, "#[test] can only be put on functions - found on " << i.tagStr());
+        ERROR(sp, E0000, StringView("#[test] can only be put on functions - found on ") << i.tagStr());
     }
 
     if (crate.testHarness) {
@@ -4811,7 +4811,7 @@ auto CTestHandlerSP::stage() const -> AttrStage {
 
 auto CTestHandlerSP::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (!i.is_Function()) {
-        ERROR(sp, E0000, "#[should_panic] can only be put on functions - found on " << i.tagStr());
+        ERROR(sp, E0000, StringView("#[should_panic] can only be put on functions - found on ") << i.tagStr());
     }
 
     if (crate.testHarness) {
@@ -4865,7 +4865,7 @@ auto CTestHandlerIgnore::stage() const -> AttrStage {
 
 auto CTestHandlerIgnore::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (!i.is_Function()) {
-        ERROR(sp, E0000, "#[ignore] can only be put on functions - found on " << i.tagStr());
+        ERROR(sp, E0000, StringView("#[ignore] can only be put on functions - found on ") << i.tagStr());
     }
 
     if (crate.testHarness) {

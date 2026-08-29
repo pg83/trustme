@@ -317,10 +317,10 @@ namespace {
     DEF_D(HIRExternLibrary, return d.deserialiseExtlib();)
 
     struct TreeVisitor: public HIRVisitor, public HIRExprVisitor {
-        std::ostream& os;
+        ZeroCopyOutput& os;
         unsigned int indentLevel;
 
-        TreeVisitor(HIRTypeInterner& types, std::ostream& os);
+        TreeVisitor(HIRTypeInterner& types, ZeroCopyOutput& os);
 
         void visitModule(HIRItemPath p, HIRModule& mod) override;
 
@@ -722,7 +722,7 @@ HIRArraySize HirDeserialiser::deserialiseArraysize() {
         _(Known, in.readU64c())
         _(Unevaluated, deserialiseConstgeneric())
         default:
-            BUG(Span(), "Bad tag for HIR::ArraySize - " << tag);
+            BUG(Span(), StringView("Bad tag for HIR::ArraySize - ") << tag);
 #undef _
     }
 }
@@ -730,13 +730,13 @@ HIRArraySize HirDeserialiser::deserialiseArraysize() {
 HIRTypeRef HirDeserialiser::deserialiseType() {
     HIRTypeRef rv;
 
-    TRACE_FUNCTION_FR("", rv);
+    TRACE_FUNCTION_FR(StringView(""), rv);
     auto idx = in.readCount();
     if (idx != ~0u) {
-        DEBUG("#" << idx << "");
+        DEBUG(StringView("#") << idx << StringView(""));
         rv = types.at(idx);
         return rv;
-        DEBUG("Fresh (=" << types.size() << ")");
+        DEBUG(StringView("Fresh (=") << types.size() << StringView(")"));
     }
     auto _ = in.openObject("HIR::TypeData");
 
@@ -752,7 +752,7 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
         _(Generic, deserialiseGenericref())
         _(TraitObject, {deserialiseTraitpath(), deserialiseVec<HIRGenericPath>(), in.readIstring(), in.readBool()})
         case HIRTypeData::TAG_ErasedType:
-            TODO(Span(), "ErasedType");
+            TODO(Span(), StringView("ErasedType"));
             _(Array, {deserialiseType(), deserialiseArraysize()})
             _(Slice, {deserialiseType()})
             _(Tuple, deserialiseVec<HIRTypeRef>())
@@ -783,7 +783,7 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
         }
 #undef _
         default:
-            BUG(Span(), "Bad tag for HIR::ASTType* - " << tag);
+            BUG(Span(), StringView("Bad tag for HIR::ASTType* - ") << tag);
     }
     types.push_back(rv);
     return rv;
@@ -803,7 +803,7 @@ HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
 
 HIRPathParams HirDeserialiser::deserialisePathparams() {
     HIRPathParams rv;
-    TRACE_FUNCTION_FR("", rv);
+    TRACE_FUNCTION_FR(StringView(""), rv);
     rv.types = deserialiseThinvec<HIRTypeRef>();
     rv.values = deserialiseThinvec<HIRConstGeneric>();
     return rv;
@@ -811,7 +811,7 @@ HIRPathParams HirDeserialiser::deserialisePathparams() {
 
 HIRGenericPath HirDeserialiser::deserialiseGenericpath() {
     HIRGenericPath rv;
-    TRACE_FUNCTION_FR("", rv);
+    TRACE_FUNCTION_FR(StringView(""), rv);
     rv.path = deserialiseSimplepath();
     rv.params = deserialisePathparams();
     return rv;
@@ -830,17 +830,17 @@ HIRPath HirDeserialiser::deserialisePath() {
     TRACE_FUNCTION;
     switch (auto tag = in.readTag()) {
         case 0:
-            DEBUG("Generic");
+            DEBUG(StringView("Generic"));
             return HIRPath(deserialiseGenericpath());
         case 1:
-            DEBUG("Inherent");
+            DEBUG(StringView("Inherent"));
             return HIRPath(HIRPath::Data::Data_UfcsInherent{deserialiseType(), in.readIstring(), deserialisePathparams(), deserialisePathparams()});
         case 2: {
-            DEBUG("Known");
+            DEBUG(StringView("Known"));
             return HIRPath(HIRPath::Data::Data_UfcsKnown{deserialiseType(), deserialiseGenericpath(), in.readIstring(), deserialisePathparams()});
         }
         default:
-            BUG(Span(), "Bad tag for HIR::Path - " << tag);
+            BUG(Span(), StringView("Bad tag for HIR::Path - ") << tag);
     }
 }
 
@@ -851,26 +851,26 @@ HIRGenericParams HirDeserialiser::deserialiseGenericparams() {
     params.paramKinds.grow(paramKindCount);
     for (size_t i = 0; i < paramKindCount; i++) {
         auto kind = static_cast<HIRGenericParamKind>(in.readU8());
-        ASSERT_BUG(Span(), kind == HIRGenericParamKind::Type || kind == HIRGenericParamKind::Value, "Invalid generic parameter kind");
+        ASSERT_BUG(Span(), kind == HIRGenericParamKind::Type || kind == HIRGenericParamKind::Value, StringView("Invalid generic parameter kind"));
         params.paramKinds.pushBack(kind);
     }
     params.types = deserialiseVec<HIRTypeParamDef>();
     params.values = deserialiseVec<HIRValueParamDef>();
     params.bounds = deserialiseVec<HIRGenericBound>();
-    DEBUG("params = " << params.fmtArgs() << ", " << params.fmtBounds());
+    DEBUG(StringView("params = ") << params.fmtArgs() << StringView(", ") << params.fmtBounds());
     return params;
 }
 
 HIRTypeParamDef HirDeserialiser::deserialiseTyparamdef() {
     auto rv = HIRTypeParamDef{in.readIstring(), deserialiseType(), in.readBool()};
-    DEBUG("::HIR::TypeParamDef { " << rv.name << ", " << rv.defaultValue << ", " << rv.isSized << "}");
+    DEBUG(StringView("::HIR::TypeParamDef { ") << rv.name << StringView(", ") << rv.defaultValue << StringView(", ") << rv.isSized << StringView("}"));
     return rv;
 }
 
 HIRValueParamDef HirDeserialiser::deserialiseValueparamdef() {
     auto rv = HIRValueParamDef{in.readIstring(), deserialiseType()};
     rv.defaultValue = deserialiseConstgeneric();
-    DEBUG("::HIR::ValueParamDef { " << rv.name << ": " << rv.type << " = " << rv.defaultValue << "}");
+    DEBUG(StringView("::HIR::ValueParamDef { ") << rv.name << StringView(": ") << rv.type << StringView(" = ") << rv.defaultValue << StringView("}"));
     return rv;
 }
 
@@ -886,7 +886,7 @@ HIRGenericBound HirDeserialiser::deserialiseGenericbound() {
         case 3:
             return HIRGenericBound::make_TypeEquality({deserialiseType(), deserialiseType()});
         default:
-            BUG(Span(), "Bad tag for HIR::GenericBound - " << tag);
+            BUG(Span(), StringView("Bad tag for HIR::GenericBound - ") << tag);
     }
 }
 
@@ -904,7 +904,7 @@ HIREnum HirDeserialiser::deserialiseEnum() {
                         des.deserialiseVec<HIREnum::ValueVariant>(),
                     });
                 default:
-                    BUG(Span(), "Bad tag for HIR::Enum::Class - " << tag);
+                    BUG(Span(), StringView("Bad tag for HIR::Enum::Class - ") << tag);
             }
         }
     };
@@ -922,13 +922,13 @@ HIREnum HirDeserialiser::deserialiseEnum() {
 
 HIREnum::DataVariant HirDeserialiser::deserialiseEnumdatavariant() {
     auto name = in.readIstring();
-    DEBUG("Enum::DataVariant " << name);
+    DEBUG(StringView("Enum::DataVariant ") << name);
     return HIREnum::DataVariant{mv$(name), in.readBool(), deserialiseType(), HIRExprPtr{}, U128(in.readU64())};
 }
 
 HIREnum::ValueVariant HirDeserialiser::deserialiseEnumvaluevariant() {
     auto name = in.readIstring();
-    DEBUG("Enum::ValueVariant " << name);
+    DEBUG(StringView("Enum::ValueVariant ") << name);
     return HIREnum::ValueVariant{mv$(name), HIRExprPtr{}, U128(in.readU64())};
 }
 
@@ -950,32 +950,32 @@ HIRUnion HirDeserialiser::deserialiseUnion() {
 }
 
 HIRStruct HirDeserialiser::deserialiseStruct() {
-    TRACE_FUNCTION_FR("", in.getPos());
+    TRACE_FUNCTION_FR(StringView(""), in.getPos());
     auto _ = in.openObject("HIR::Struct");
     auto params = deserialiseGenericparams();
-    DEBUG("params = " << params.fmtArgs() << params.fmtBounds());
+    DEBUG(StringView("params = ") << params.fmtArgs() << params.fmtBounds());
     auto repr = static_cast<HIRStruct::Repr>(in.readTag());
 
     HIRStruct::Data data;
     switch (auto tag = in.readTag()) {
         case HIRStruct::Data::TAG_Unit:
-            DEBUG("Unit");
+            DEBUG(StringView("Unit"));
             data = HIRStruct::Data::make_Unit({});
             break;
         case HIRStruct::Data::TAG_Tuple:
-            DEBUG("Tuple");
+            DEBUG(StringView("Tuple"));
             data = HIRStruct::Data(deserialiseVec<HIRVisEnt<HIRTypeRef>>());
             break;
         case HIRStruct::Data::TAG_Named:
-            DEBUG("Named");
+            DEBUG(StringView("Named"));
             data = HIRStruct::Data(deserialiseVec<HIRStructField>());
             break;
         default:
-            BUG(Span(), "Bad tag for HIR::Struct::Data - " << tag);
+            BUG(Span(), StringView("Bad tag for HIR::Struct::Data - ") << tag);
     }
     unsigned forcedAlignment = in.readCount();
     unsigned maxFieldAlignment = in.readCount();
-    DEBUG("align = " << forcedAlignment);
+    DEBUG(StringView("align = ") << forcedAlignment);
     const bool mustUse = in.readBool();
     auto markings = deserialiseMarkings();
     auto strMarkings = deserialiseStrMarkings();
@@ -1035,7 +1035,7 @@ HIRConstGeneric HirDeserialiser::deserialiseConstgeneric() {
         _(Evaluated, freezeEncodedLiteral(pool, deserialiseEncodedliteral()))
 #undef _
         default:
-            BUG(Span(), "Unknown HIR::ConstGeneric tag when deserialising - " << tag);
+            BUG(Span(), StringView("Unknown HIR::ConstGeneric tag when deserialising - ") << tag);
     }
 }
 
@@ -1122,7 +1122,7 @@ AsmRegisterSpec HirDeserialiser::deserialiseAsmSpec() {
         case AsmRegisterSpec::TAG_Explicit:
             return in.readString();
         default:
-            BUG(Span(), "Bad tag for AsmCommon::RegisterSpec - " << tag);
+            BUG(Span(), StringView("Bad tag for AsmCommon::RegisterSpec - ") << tag);
     }
 }
 
@@ -1137,13 +1137,13 @@ MIRAsmParam HirDeserialiser::deserialiseAsmParam() {
         case MIRAsmParam::TAG_Label:
             return MIRAsmParam::make_Label(static_cast<unsigned int>(in.readCount()));
         default:
-            BUG(Span(), "Bad tag for MIR::AsmParam - " << tag);
+            BUG(Span(), StringView("Bad tag for MIR::AsmParam - ") << tag);
     }
 }
 
 MIRStatement HirDeserialiser::deserialiseMirStatement() {
     MIRStatement rv;
-    TRACE_FUNCTION_FR("", rv);
+    TRACE_FUNCTION_FR(StringView(""), rv);
     auto _ = in.openObject("MIR::Statement");
 
     switch (auto tag = in.readTag()) {
@@ -1151,7 +1151,7 @@ MIRStatement HirDeserialiser::deserialiseMirStatement() {
             rv = MIRStatement::make_Assign({deserialiseMirLvalue(), deserialiseMirRvalue()});
             break;
         case 1:
-            BUG(Span(), "Obsolete MIR statement Drop in metadata");
+            BUG(Span(), StringView("Obsolete MIR statement Drop in metadata"));
         case 2:
             rv = MIRStatement::make_Asm({in.readString(), deserialiseVec<std::pair<std::string, MIRLValue>>(), deserialiseVec<std::pair<std::string, MIRLValue>>(), deserialiseVec<std::string>(), deserialiseVec<std::string>()});
             break;
@@ -1175,14 +1175,14 @@ MIRStatement HirDeserialiser::deserialiseMirStatement() {
             rv = MIRStatement::make_LoadDropFlag({static_cast<unsigned>(in.readCount()), deserialiseMirLvalue(), static_cast<unsigned>(in.readCount())});
             break;
         default:
-            BUG(Span(), "Bad tag for MIR::Statement - " << tag);
+            BUG(Span(), StringView("Bad tag for MIR::Statement - ") << tag);
     }
     return rv;
 }
 
 MIRTerminator HirDeserialiser::deserialiseMirTerminator() {
     MIRTerminator rv;
-    TRACE_FUNCTION_FR("", rv);
+    TRACE_FUNCTION_FR(StringView(""), rv);
     rv = this->deserialise_mir_terminator_();
     return rv;
 }
@@ -1219,7 +1219,7 @@ MIRTerminator HirDeserialiser::deserialise_mir_terminator_() {
         _(Asm2, {deserialiseAsmOptions(), deserialiseVec<AsmLine>(), deserialiseVec<MIRAsmParam>(), static_cast<unsigned int>(in.readCount())})
 #undef _
         default:
-            BUG(Span(), "Bad tag for MIR::Terminator - " << tag);
+            BUG(Span(), StringView("Bad tag for MIR::Terminator - ") << tag);
     }
 }
 
@@ -1234,7 +1234,7 @@ MIRUnwindAction HirDeserialiser::deserialiseMirUnwindAction() {
         case MIRUnwindAction::TAG_Unreachable:
             return MIRUnwindAction::make_Unreachable({});
         default:
-            BUG(Span(), "Bad tag for MIR::UnwindAction - " << tag);
+            BUG(Span(), StringView("Bad tag for MIR::UnwindAction - ") << tag);
     }
 }
 
@@ -1254,7 +1254,7 @@ MIRSwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
         _(ByteString, deserialiseVec<std::vector<u8>>())
 #undef _
         default:
-            BUG(Span(), "Bad tag for MIR::SwitchValues - " << tag);
+            BUG(Span(), StringView("Bad tag for MIR::SwitchValues - ") << tag);
     }
 }
 
@@ -1268,7 +1268,7 @@ MIRCallTarget HirDeserialiser::deserialiseMirCalltarget() {
         _(Intrinsic, {in.readIstring(), deserialisePathparams()})
 #undef _
         default:
-            BUG(Span(), "Bad tag for MIR::CallTarget - " << tag);
+            BUG(Span(), StringView("Bad tag for MIR::CallTarget - ") << tag);
     }
 }
 
@@ -1352,15 +1352,15 @@ RcString HIRDeserialiseJustName(const std::string& filename) {
 
 #define NODE_IS(valptr, tysuf) (cast<const HIRExprNode##tysuf>(&*valptr) != nullptr)
 
-void HIRDump(std::ostream& sink, const HIRCrate& crate) {
+void HIRDump(ZeroCopyOutput& sink, const HIRCrate& crate) {
     TreeVisitor tv{crate.types, sink};
 
     tv.visitCrate(const_cast<HIRCrate&>(crate));
 }
 
-void HIRDumpExpr(std::ostream& sink, const HIRExprPtr& expr) {
+void HIRDumpExpr(ZeroCopyOutput& sink, const HIRExprPtr& expr) {
     if (!expr) {
-        sink << "/*NULL*/";
+        sink << StringView("/*NULL*/");
         return;
     }
 
@@ -1411,7 +1411,7 @@ auto HirDeserialiser::deserialiseCount() -> size_t {
 
 template <typename V>
 auto HirDeserialiser::deserialiseStrmap() -> std::map<std::string, V> {
-    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
+    TRACE_FUNCTION_F(StringView("<") << typeid(V).name() << StringView(">"));
     size_t n = in.readCount();
     std::map<std::string, V> rv;
     for (size_t i = 0; i < n; i++) {
@@ -1423,12 +1423,12 @@ auto HirDeserialiser::deserialiseStrmap() -> std::map<std::string, V> {
 
 template <typename V>
 auto HirDeserialiser::deserialiseStrumap() -> std::unordered_map<std::string, V> {
-    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
+    TRACE_FUNCTION_F(StringView("<") << typeid(V).name() << StringView(">"));
     size_t n = in.readCount();
     std::unordered_map<std::string, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readString();
-        DEBUG("- " << s);
+        DEBUG(StringView("- ") << s);
         rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
@@ -1436,12 +1436,12 @@ auto HirDeserialiser::deserialiseStrumap() -> std::unordered_map<std::string, V>
 
 template <typename V>
 auto HirDeserialiser::deserialiseStrummap() -> std::unordered_multimap<std::string, V> {
-    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
+    TRACE_FUNCTION_F(StringView("<") << typeid(V).name() << StringView(">"));
     size_t n = in.readCount();
     std::unordered_multimap<std::string, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readString();
-        DEBUG("- " << s);
+        DEBUG(StringView("- ") << s);
         rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
@@ -1449,7 +1449,7 @@ auto HirDeserialiser::deserialiseStrummap() -> std::unordered_multimap<std::stri
 
 template <typename V>
 auto HirDeserialiser::deserialiseIstrmap() -> std::map<RcString, V> {
-    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
+    TRACE_FUNCTION_F(StringView("<") << typeid(V).name() << StringView(">"));
     size_t n = in.readCount();
     std::map<RcString, V> rv;
     for (size_t i = 0; i < n; i++) {
@@ -1472,12 +1472,12 @@ auto HirDeserialiser::deserialiseIstrumapPooled() -> std::unordered_map<RcString
 
 template <typename V>
 auto HirDeserialiser::deserialiseIstrumap() -> std::unordered_map<RcString, V> {
-    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
+    TRACE_FUNCTION_F(StringView("<") << typeid(V).name() << StringView(">"));
     size_t n = in.readCount();
     std::unordered_map<RcString, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readIstring();
-        DEBUG("- " << s);
+        DEBUG(StringView("- ") << s);
         rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
@@ -1485,12 +1485,12 @@ auto HirDeserialiser::deserialiseIstrumap() -> std::unordered_map<RcString, V> {
 
 template <typename V>
 auto HirDeserialiser::deserialiseIstrummap() -> std::unordered_multimap<RcString, V> {
-    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
+    TRACE_FUNCTION_F(StringView("<") << typeid(V).name() << StringView(">"));
     size_t n = in.readCount();
     std::unordered_multimap<RcString, V> rv;
     for (size_t i = 0; i < n; i++) {
         auto s = in.readIstring();
-        DEBUG("- " << s);
+        DEBUG(StringView("- ") << s);
         rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
     }
     return rv;
@@ -1498,7 +1498,7 @@ auto HirDeserialiser::deserialiseIstrummap() -> std::unordered_multimap<RcString
 
 template <typename V>
 auto HirDeserialiser::deserialisePathmap() -> std::map<HIRSimplePath, V> {
-    TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
+    TRACE_FUNCTION_F(StringView("<") << typeid(V).name() << StringView(">"));
     size_t n = in.readCount();
     std::map<HIRSimplePath, V> rv;
     for (size_t i = 0; i < n; i++) {
@@ -1510,10 +1510,10 @@ auto HirDeserialiser::deserialisePathmap() -> std::map<HIRSimplePath, V> {
 
 template <typename T, typename F>
 auto HirDeserialiser::deserialiseVecC(F cb) -> std::vector<T> {
-    TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.getPos());
+    TRACE_FUNCTION_FR(StringView("<") << typeid(T).name() << StringView(">"), in.getPos());
     auto _ = in.openObject(typeid(std::vector<T>).name());
     size_t n = in.readCount();
-    DEBUG("n = " << n);
+    DEBUG(StringView("n = ") << n);
     std::vector<T> rv;
     rv.reserve(n);
     for (size_t i = 0; i < n; i++) {
@@ -1531,10 +1531,10 @@ auto HirDeserialiser::deserialiseVec() -> std::vector<T> {
 
 template <typename T, typename F>
 auto HirDeserialiser::deserialiseThinvecC(F cb) -> ThinVector<T> {
-    TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.getPos());
+    TRACE_FUNCTION_FR(StringView("<") << typeid(T).name() << StringView(">"), in.getPos());
     auto _ = in.openObject(typeid(ThinVector<T>).name());
     size_t n = in.readCount();
-    DEBUG("n = " << n);
+    DEBUG(StringView("n = ") << n);
     ThinVector<T> rv;
     rv.reserveInit(n);
     for (size_t i = 0; i < n; i++) {
@@ -1552,10 +1552,10 @@ auto HirDeserialiser::deserialiseThinvec() -> ThinVector<T> {
 
 template <typename T>
 auto HirDeserialiser::deserialiseSet() -> std::set<T> {
-    TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.getPos());
+    TRACE_FUNCTION_FR(StringView("<") << typeid(T).name() << StringView(">"), in.getPos());
     auto _ = in.openObject(typeid(std::set<T>).name());
     size_t n = in.readCount();
-    DEBUG("n = " << n);
+    DEBUG(StringView("n = ") << n);
     std::set<T> rv;
     for (size_t i = 0; i < n; i++) {
         rv.insert(D<T>::des(*this));
@@ -1579,7 +1579,7 @@ auto HirDeserialiser::deserialisePtr() -> std::unique_ptr<T> {
 
 auto HirDeserialiser::deserialiseProcmacro() -> HIRProcMacro {
     HIRProcMacro pm;
-    TRACE_FUNCTION_FR("", "ProcMacro { " << pm.name << ", " << pm.path << ", [" << pm.attributes << "]}");
+    TRACE_FUNCTION_FR(StringView(""), StringView("ProcMacro { ") << pm.name << StringView(", ") << pm.path << StringView(", [") << pm.attributes << StringView("]}"));
     switch (in.readTag()) {
         case 0:
             pm.ty = HIRProcMacro::Ty::Function;
@@ -1594,14 +1594,14 @@ auto HirDeserialiser::deserialiseProcmacro() -> HIRProcMacro {
     pm.name = in.readIstring();
     pm.path = deserialiseSimplepath();
     pm.attributes = deserialiseVec<std::string>();
-    DEBUG("pm = ProcMacro { " << pm.name << ", " << pm.path << ", [" << pm.attributes << "]}");
+    DEBUG(StringView("pm = ProcMacro { ") << pm.name << StringView(", ") << pm.path << StringView(", [") << pm.attributes << StringView("]}"));
     return pm;
 }
 
 auto HirDeserialiser::deserialiseTypeimpl() -> HIRTypeImpl {
     HIRTypeImpl rv;
 
-    TRACE_FUNCTION_FR("", "impl" << rv.params.fmtArgs() << " " << rv.type);
+    TRACE_FUNCTION_FR(StringView(""), StringView("impl") << rv.params.fmtArgs() << StringView(" ") << rv.type);
     rv.params = deserialiseGenericparams();
     rv.type = deserialiseType();
 
@@ -1626,40 +1626,40 @@ auto HirDeserialiser::deserialiseTypeimpl() -> HIRTypeImpl {
 auto HirDeserialiser::deserialiseTraitimpl() -> HIRTraitImpl {
     HIRTraitImpl rv;
 
-    TRACE_FUNCTION_FR("", "impl" << rv.params.fmtArgs() << " ?" << rv.traitArgs << " for " << rv.type);
+    TRACE_FUNCTION_FR(StringView(""), StringView("impl") << rv.params.fmtArgs() << StringView(" ?") << rv.traitArgs << StringView(" for ") << rv.type);
     rv.params = deserialiseGenericparams();
     rv.traitArgs = deserialisePathparams();
     rv.type = deserialiseType();
     rv.isConst = in.readBool();
     rv.isReservation = in.readBool();
 
-    DEBUG("impl" << rv.params.fmtArgs() << " ?" << rv.traitArgs << " for " << rv.type);
+    DEBUG(StringView("impl") << rv.params.fmtArgs() << StringView(" ?") << rv.traitArgs << StringView(" for ") << rv.type);
     size_t methodCount = in.readCount();
     for (size_t i = 0; i < methodCount; i++) {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
-        DEBUG((isSpec ? "default " : "") << "fn " << name);
+        DEBUG((isSpec ? "default " : "") << StringView("fn ") << name);
         rv.methods.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRFunction>{isSpec, deserialiseFunction()}));
     }
     size_t constCount = in.readCount();
     for (size_t i = 0; i < constCount; i++) {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
-        DEBUG((isSpec ? "default " : "") << "const " << name);
+        DEBUG((isSpec ? "default " : "") << StringView("const ") << name);
         rv.constants.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRConstant>{isSpec, deserialiseConstant()}));
     }
     size_t staticCount = in.readCount();
     for (size_t i = 0; i < staticCount; i++) {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
-        DEBUG((isSpec ? "default " : "") << "static " << name);
+        DEBUG((isSpec ? "default " : "") << StringView("static ") << name);
         rv.statics.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRStatic>{isSpec, deserialiseStatic()}));
     }
     size_t typeCount = in.readCount();
     for (size_t i = 0; i < typeCount; i++) {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
-        DEBUG((isSpec ? "default " : "") << "type " << name);
+        DEBUG((isSpec ? "default " : "") << StringView("type ") << name);
         rv.types.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRTypeRef>{isSpec, deserialiseType()}));
     }
 
@@ -1735,7 +1735,7 @@ auto HirDeserialiser::deserialiseSimplepatent() -> ::SimplePatEnt {
                 return deserialiseSimplepatifcheck();
             })});
         default:
-            BUG(Span(), "Bad tag for MacroPatEnt - #" << static_cast<int>(tag));
+            BUG(Span(), StringView("Bad tag for MacroPatEnt - #") << static_cast<int>(tag));
     }
 }
 
@@ -1768,7 +1768,7 @@ auto HirDeserialiser::deserialiseMacropatent() -> ::MacroPatEnt {
         case ::MacroPatEnt::PAT_VIS:
             break;
         default:
-            BUG(Span(), "Bad tag for MacroPatEnt - #" << static_cast<int>(rv.type) << " " << rv.type);
+            BUG(Span(), StringView("Bad tag for MacroPatEnt - #") << static_cast<int>(rv.type) << StringView(" ") << rv.type);
     }
     return rv;
 }
@@ -1809,7 +1809,7 @@ auto HirDeserialiser::deserialiseMacroexpansionent() -> ::MacroExpansionEnt {
             return ::MacroExpansionEnt(std::move(entries));
         }
         default:
-            BUG(Span(), "Bad tag for MacroExpansionEnt - " << tag);
+            BUG(Span(), StringView("Bad tag for MacroExpansionEnt - ") << tag);
     }
 }
 
@@ -1823,7 +1823,7 @@ auto HirDeserialiser::deserialiseMacroexpansionconcatent() -> ::MacroExpansionCo
         case ::MacroExpansionConcatEnt::TAG_Named:
             return ::MacroExpansionConcatEnt::make_Named(in.readCount());
         default:
-            BUG(Span(), "Bad tag for MacroExpansionConcatEnt - " << tag);
+            BUG(Span(), StringView("Bad tag for MacroExpansionConcatEnt - ") << tag);
     }
 }
 
@@ -1854,7 +1854,7 @@ auto HirDeserialiser::deserialiseTokendata() -> TokenData {
             return TokenData::make_Float({dty, in.readFloatValue()});
         }
         default:
-            BUG(Span(), "Bad tag for Token::Data - " << static_cast<int>(tag));
+            BUG(Span(), StringView("Bad tag for Token::Data - ") << static_cast<int>(tag));
     }
 }
 
@@ -1877,13 +1877,13 @@ auto HirDeserialiser::deserialiseMirParam() -> MIRParam {
         case MIRParam::TAG_Constant:
             return deserialiseMirConstant();
         default:
-            BUG(Span(), "Bad tag for MIR::Param - " << tag);
+            BUG(Span(), StringView("Bad tag for MIR::Param - ") << tag);
     }
 }
 
 auto HirDeserialiser::deserialiseMirLvalue() -> MIRLValue {
     MIRLValue rv;
-    TRACE_FUNCTION_FR("", rv);
+    TRACE_FUNCTION_FR(StringView(""), rv);
     rv = deserialise_mir_lvalue_();
     return rv;
 }
@@ -1921,7 +1921,7 @@ auto HirDeserialiser::deserialiseMirRvalue() -> MIRRValue {
         _(Struct, {deserialiseGenericpath(), deserialiseVec<MIRParam>()})
 #undef _
         default:
-            BUG(Span(), "Bad tag for MIR::RValue - " << tag);
+            BUG(Span(), StringView("Bad tag for MIR::RValue - ") << tag);
     }
 }
 
@@ -1949,7 +1949,7 @@ auto HirDeserialiser::deserialiseMirConstant() -> MIRConstant {
             _(ItemAddr, {box$(deserialisePath()), in.readU128()})
 #undef _
         default:
-            BUG(Span(), "Bad tag for MIR::Const - " << tag);
+            BUG(Span(), StringView("Bad tag for MIR::Const - ") << tag);
     }
 }
 
@@ -1985,7 +1985,7 @@ auto HirDeserialiser::deserialiseTypeitem() -> HIRTypeItem {
         case 8:
             return HIRTypeItem(deserialiseTraitalias());
         default:
-            BUG(Span(), "Bad tag for HIR::TypeItem - " << tag);
+            BUG(Span(), StringView("Bad tag for HIR::TypeItem - ") << tag);
     }
 }
 
@@ -2007,7 +2007,7 @@ auto HirDeserialiser::deserialiseValueitem() -> HIRValueItem {
         case 5:
             return HIRValueItem::make_StructConstructor({deserialiseSimplepath()});
         default:
-            BUG(Span(), "Bad tag for HIR::ValueItem - " << tag);
+            BUG(Span(), StringView("Bad tag for HIR::ValueItem - ") << tag);
     }
 }
 
@@ -2023,7 +2023,7 @@ auto HirDeserialiser::deserialiseMacroitem() -> HIRMacroItem {
             return deserialiseProcmacro();
     }
 
-    TODO(Span(), "Bad tag for MacroItem - " << tag);
+    TODO(Span(), StringView("Bad tag for MacroItem - ") << tag);
 }
 
 auto HirDeserialiser::deserialiseLinkage() -> HIRLinkage {
@@ -2081,7 +2081,7 @@ auto HirDeserialiser::deserialiseFcnargs() -> std::vector<std::pair<HIRPattern, 
     for (size_t i = 0; i < n; i++) {
         rv.push_back(std::make_pair(HIRPattern{}, deserialiseType()));
     }
-    DEBUG("rv = " << rv);
+    DEBUG(StringView("rv = ") << rv);
     return rv;
 }
 
@@ -2184,7 +2184,7 @@ auto HirDeserialiser::deserialiseTraitvalueitem() -> HIRTraitValueItem {
         _(Function, deserialiseFunction())
 #undef _
         default:
-            BUG(Span(), "Bad tag for HIR::TraitValueItem - " << tag);
+            BUG(Span(), StringView("Bad tag for HIR::TraitValueItem - ") << tag);
     }
 }
 
@@ -2198,7 +2198,7 @@ auto D<std::pair<T, U>>::des(HirDeserialiser& d) -> std::pair<T, U> {
     return std::make_pair(mv$(a), D<U>::des(d));
 }
 
-TreeVisitor::TreeVisitor(HIRTypeInterner& types, std::ostream& os)
+TreeVisitor::TreeVisitor(HIRTypeInterner& types, ZeroCopyOutput& os)
     : HIRVisitor(nullptr, types)
     , os(os)
     , indentLevel(0)
@@ -2207,14 +2207,14 @@ TreeVisitor::TreeVisitor(HIRTypeInterner& types, std::ostream& os)
 
 auto TreeVisitor::visitModule(HIRItemPath p, HIRModule& mod) -> void {
     if (p.getName()[0]) {
-        os << indent() << "mod " << p.getName() << " {\n";
+        os << indent() << StringView("mod ") << p.getName() << StringView(" {\n");
         incIndent();
     }
 
     // TODO: Include trait list
     if (true) {
         for (const auto& t : mod.traits) {
-            os << indent() << "use " << t << ";\n";
+            os << indent() << StringView("use ") << t << StringView(";\n");
         }
     }
     // TODO: Print publicitiy.
@@ -2222,47 +2222,47 @@ auto TreeVisitor::visitModule(HIRItemPath p, HIRModule& mod) -> void {
 
     if (p.getName()[0]) {
         decIndent();
-        os << indent() << "}\n";
+        os << indent() << StringView("}\n");
     }
 }
 
 auto TreeVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
-    os << indent() << "impl" << impl.params.fmtArgs() << " " << impl.type << "\n";
+    os << indent() << StringView("impl") << impl.params.fmtArgs() << StringView(" ") << impl.type << StringView("\n");
     if (!impl.params.bounds.empty()) {
-        os << indent() << " " << impl.params.fmtBounds() << "\n";
+        os << indent() << StringView(" ") << impl.params.fmtBounds() << StringView("\n");
     }
-    os << indent() << "{\n";
+    os << indent() << StringView("{\n");
     incIndent();
     HIRVisitor::visitTypeImpl(impl);
     decIndent();
-    os << indent() << "}\n";
+    os << indent() << StringView("}\n");
 }
 
 auto TreeVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
-    os << indent() << "impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.type << "\n";
+    os << indent() << StringView("impl") << impl.params.fmtArgs() << StringView(" ") << traitPath << impl.traitArgs << StringView(" for ") << impl.type << StringView("\n");
     if (!impl.params.bounds.empty()) {
-        os << indent() << " " << impl.params.fmtBounds() << "\n";
+        os << indent() << StringView(" ") << impl.params.fmtBounds() << StringView("\n");
     }
-    os << indent() << "{\n";
+    os << indent() << StringView("{\n");
     incIndent();
     for (auto& ent : impl.types) {
-        os << indent() << "type " << ent.first << " = " << ent.second.data << "\n";
+        os << indent() << StringView("type ") << ent.first << StringView(" = ") << ent.second.data << StringView("\n");
     }
     HIRVisitor::visitTraitImpl(traitPath, impl);
     decIndent();
-    os << indent() << "}\n";
+    os << indent() << StringView("}\n");
 }
 
 auto TreeVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) -> void {
-    os << indent() << "impl" << impl.params.fmtArgs() << " " << (impl.isPositive ? "" : "!") << traitPath << impl.traitArgs << " for " << impl.type << "\n";
+    os << indent() << StringView("impl") << impl.params.fmtArgs() << StringView(" ") << (impl.isPositive ? "" : "!") << traitPath << impl.traitArgs << StringView(" for ") << impl.type << StringView("\n");
     if (!impl.params.bounds.empty()) {
-        os << indent() << " " << impl.params.fmtBounds() << "\n";
+        os << indent() << StringView(" ") << impl.params.fmtBounds() << StringView("\n");
     }
-    os << indent() << "{ }\n";
+    os << indent() << StringView("{ }\n");
 }
 
 auto TreeVisitor::visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) -> void {
-    os << indent() << "type " << p.getName() << item.params.fmtArgs() << " = " << item.type << item.params.fmtBounds() << "\n";
+    os << indent() << StringView("type ") << p.getName() << item.params.fmtArgs() << StringView(" = ") << item.type << item.params.fmtBounds() << StringView("\n");
 }
 
 auto TreeVisitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) -> void {
@@ -2270,147 +2270,147 @@ auto TreeVisitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) -> void {
 }
 
 auto TreeVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
-    os << indent() << "trait " << p.getName() << item.params.fmtArgs() << "\n";
+    os << indent() << StringView("trait ") << p.getName() << item.params.fmtArgs() << StringView("\n");
     if (!item.parentTraits.empty()) {
-        os << indent() << "  " << ": ";
+        os << indent() << StringView("  ") << StringView(": ");
         bool isFirst = true;
         for (auto& bound : item.parentTraits) {
             if (!isFirst) {
-                os << indent() << "  " << "+ ";
+                os << indent() << StringView("  ") << StringView("+ ");
             }
-            os << bound << "\n";
+            os << bound << StringView("\n");
             isFirst = false;
         }
     }
     if (!item.params.bounds.empty()) {
-        os << indent() << " " << item.params.fmtBounds() << "\n";
+        os << indent() << StringView(" ") << item.params.fmtBounds() << StringView("\n");
     }
     if (!item.allParentTraits.empty()) {
-        os << indent() << "/* All parent traits:\n";
+        os << indent() << StringView("/* All parent traits:\n");
         for (const auto& t : item.allParentTraits) {
-            os << indent() << t << "\n";
+            os << indent() << t << StringView("\n");
         }
-        os << indent() << "*/\n";
+        os << indent() << StringView("*/\n");
     }
-    os << indent() << "{\n";
+    os << indent() << StringView("{\n");
     incIndent();
 
     for (auto& i : item.types) {
-        os << indent() << "type " << i.first;
+        os << indent() << StringView("type ") << i.first;
         if (!i.second.traitBounds.empty()) {
-            os << ": ";
+            os << StringView(": ");
             bool isFirst = true;
             for (auto& bound : i.second.traitBounds) {
                 if (!isFirst) {
-                    os << " + ";
+                    os << StringView(" + ");
                 }
                 os << bound;
                 isFirst = false;
             }
         }
-        os << ";\n";
+        os << StringView(";\n");
     }
 
     HIRVisitor::visitTrait(p, item);
 
     decIndent();
-    os << indent() << "}\n";
+    os << indent() << StringView("}\n");
 }
 
 auto TreeVisitor::visitStruct(HIRItemPath p, HIRStruct& item) -> void {
-    os << indent() << "struct " << p.getName() << item.params.fmtArgs();
+    os << indent() << StringView("struct ") << p.getName() << item.params.fmtArgs();
     switch (item.data.tag()) {
         case HIRStructData::TAG_Unit: {
             if (item.params.bounds.empty()) {
-                os << ";\n";
+                os << StringView(";\n");
             } else {
-                os << "\n";
-                os << indent() << " " << item.params.fmtBounds() << "\n";
-                os << indent() << "    ;\n";
+                os << StringView("\n");
+                os << indent() << StringView(" ") << item.params.fmtBounds() << StringView("\n");
+                os << indent() << StringView("    ;\n");
             }
             break;
         }
         case HIRStructData::TAG_Tuple: {
             auto& flds = item.data.as_Tuple();
-            os << "(";
+            os << StringView("(");
             for (const auto& fld : flds) {
-                os << fld.publicity << " " << fld.ent << ", ";
+                os << fld.publicity << StringView(" ") << fld.ent << StringView(", ");
             }
             if (item.params.bounds.empty()) {
-                os << ");\n";
+                os << StringView(");\n");
             } else {
-                os << ")\n";
-                os << indent() << " " << item.params.fmtBounds() << "\n";
-                os << indent() << "    ;\n";
+                os << StringView(")\n");
+                os << indent() << StringView(" ") << item.params.fmtBounds() << StringView("\n");
+                os << indent() << StringView("    ;\n");
             }
             break;
         }
         case HIRStructData::TAG_Named: {
             auto& flds = item.data.as_Named();
-            os << "\n";
+            os << StringView("\n");
             if (!item.params.bounds.empty()) {
-                os << indent() << " " << item.params.fmtBounds() << "\n";
+                os << indent() << StringView(" ") << item.params.fmtBounds() << StringView("\n");
             }
-            os << indent() << "{\n";
+            os << indent() << StringView("{\n");
             incIndent();
             for (const auto& fld : flds) {
-                os << indent() << fld.vis << " " << fld.name << ": " << fld.ty;
+                os << indent() << fld.vis << StringView(" ") << fld.name << StringView(": ") << fld.ty;
                 if (fld.defaultValue) {
-                    os << " = " << *fld.defaultValue;
+                    os << StringView(" = ") << *fld.defaultValue;
                 }
-                os << ",\n";
+                os << StringView(",\n");
             }
             decIndent();
-            os << indent() << "}\n";
+            os << indent() << StringView("}\n");
             break;
         }
     }
 }
 
 auto TreeVisitor::visitEnum(HIRItemPath p, HIREnum& item) -> void {
-    os << indent() << "enum " << p.getName() << item.params.fmtArgs() << "\n";
+    os << indent() << StringView("enum ") << p.getName() << item.params.fmtArgs() << StringView("\n");
     if (!item.params.bounds.empty()) {
-        os << indent() << " " << item.params.fmtBounds() << "\n";
+        os << indent() << StringView(" ") << item.params.fmtBounds() << StringView("\n");
     }
-    os << indent() << "{\n";
+    os << indent() << StringView("{\n");
     incIndent();
     if (const auto* e = item.data.opt_Value()) {
         for (const auto& var : e->variants) {
             os << indent() << var.name;
-            os << ",\n";
+            os << StringView(",\n");
         }
     } else {
         for (const auto& var : item.data.as_Data()) {
             os << indent() << var.name;
             if (var.type == typeInterner().unit()) {
             } else {
-                os << " " << var.type << (var.isStruct ? "/*struct*/" : "");
+                os << StringView(" ") << var.type << (var.isStruct ? "/*struct*/" : "");
             }
-            os << ",\n";
+            os << StringView(",\n");
         }
     }
     decIndent();
-    os << indent() << "}\n";
+    os << indent() << StringView("}\n");
 }
 
 auto TreeVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     os << indent();
     if (item.isConst) {
-        os << "const ";
+        os << StringView("const ");
     }
     if (item.unsafe) {
-        os << "unsafe ";
+        os << StringView("unsafe ");
     }
     if (item.abi != ABI_RUST) {
-        os << "extern \"" << item.abi << "\" ";
+        os << StringView("extern \"") << item.abi << StringView("\" ");
     }
-    os << "fn " << p.getName() << item.params.fmtArgs() << "(";
+    os << StringView("fn ") << p.getName() << item.params.fmtArgs() << StringView("(");
     for (const auto& arg : item.args) {
-        os << arg.first << ": " << arg.second << ", ";
+        os << arg.first << StringView(": ") << arg.second << StringView(", ");
     }
-    os << ") -> " << item.returnType << "\n";
+    os << StringView(") -> ") << item.returnType << StringView("\n");
     if (!item.params.bounds.empty()) {
-        os << indent() << " " << item.params.fmtBounds() << "\n";
+        os << indent() << StringView(" ") << item.params.fmtBounds() << StringView("\n");
     }
 
     if (item.code) {
@@ -2418,48 +2418,48 @@ auto TreeVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
         if (cast<HIRExprNodeBlock>(&*item.code)) {
             item.code->visit(*this);
         } else {
-            os << "{\n";
+            os << StringView("{\n");
             incIndent();
             os << indent();
 
             item.code->visit(*this);
 
-            os << "\n";
+            os << StringView("\n");
             decIndent();
             os << indent();
-            os << "}";
+            os << StringView("}");
         }
-        os << "\n";
+        os << StringView("\n");
     } else {
-        os << indent() << "  ;\n";
+        os << indent() << StringView("  ;\n");
     }
 }
 
 auto TreeVisitor::visitStatic(HIRItemPath p, HIRStatic& item) -> void {
     if (item.linkage.name != "") {
-        os << indent() << "#[link_name=\"" << item.linkage.name << "\"]\n";
+        os << indent() << StringView("#[link_name=\"") << item.linkage.name << StringView("\"]\n");
     }
     if (item.value) {
-        os << indent() << "static " << p.getName() << item.params.fmtArgs() << ": " << item.type << " = " << item.valueRes;
+        os << indent() << StringView("static ") << p.getName() << item.params.fmtArgs() << StringView(": ") << item.type << StringView(" = ") << item.valueRes;
     } else if (item.valueGenerated) {
-        os << indent() << "static " << p.getName() << item.params.fmtArgs() << ": " << item.type << " = /*magic*/ " << item.valueRes;
+        os << indent() << StringView("static ") << p.getName() << item.params.fmtArgs() << StringView(": ") << item.type << StringView(" = /*magic*/ ") << item.valueRes;
     } else {
-        os << indent() << "extern static " << p.getName() << ": " << item.type;
+        os << indent() << StringView("extern static ") << p.getName() << StringView(": ") << item.type;
     }
     if (!item.params.bounds.empty()) {
-        os << indent() << " " << item.params.fmtBounds() << "\n";
+        os << indent() << StringView(" ") << item.params.fmtBounds() << StringView("\n");
     }
-    os << ";\n";
+    os << StringView(";\n");
 }
 
 auto TreeVisitor::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
-    os << indent() << "const " << p.getName() << ": " << item.type << " = " << item.valueRes;
+    os << indent() << StringView("const ") << p.getName() << StringView(": ") << item.type << StringView(" = ") << item.valueRes;
     if (item.value /*&& item.m_value_state != HIR::Constant::ValueState::Known*/) {
-        os << " /*= ";
+        os << StringView(" /*= ");
         item.value->visit(*this);
-        os << "*/";
+        os << StringView("*/");
     }
-    os << ";\n";
+    os << StringView(";\n");
 }
 
 #ifdef NODE_IS
@@ -2490,155 +2490,155 @@ auto TreeVisitor::nodeIsLeaf(const HIRExprNode& node) -> bool {
 
 auto TreeVisitor::visitNodePtr(HIRExprNodeP& nodePtr) -> void {
     HIRExprVisitor::visitNodePtr(nodePtr);
-    os << "/*: " << nodePtr->resType << " */";
+    os << StringView("/*: ") << nodePtr->resType << StringView(" */");
 }
 
 auto TreeVisitor::visit(HIRExprNodeBlock& node) -> void {
-    os << "{\n";
+    os << StringView("{\n");
     incIndent();
     for (auto& sn : node.nodes) {
         os << indent();
         this->visitNodePtr(sn);
-        os << ";\n";
+        os << StringView(";\n");
     }
     if (node.valueNode) {
         os << indent();
         this->visitNodePtr(node.valueNode);
-        os << "\n";
+        os << StringView("\n");
     }
     decIndent();
-    os << indent() << "}";
+    os << indent() << StringView("}");
 }
 
 auto TreeVisitor::visit(HIRExprNodeConstBlock& node) -> void {
-    os << "const ";
+    os << StringView("const ");
     node.inner->visit(*this);
 }
 
 auto TreeVisitor::visit(HIRExprNodeAsm& node) -> void {
-    os << "llvm_asm!(";
-    os << ")";
+    os << StringView("llvm_asm!(");
+    os << StringView(")");
 }
 
 auto TreeVisitor::visit(HIRExprNodeAsm2& node) -> void {
-    os << "asm!(";
-    os << ")";
+    os << StringView("asm!(");
+    os << StringView(")");
 }
 
 auto TreeVisitor::visit(HIRExprNodeReturn& node) -> void {
-    os << (node.isTailCall ? "become" : "return");
+    os << StringView(node.isTailCall ? "become" : "return");
     if (node.value) {
-        os << " ";
+        os << StringView(" ");
         this->visitNodePtr(node.value);
     }
 }
 
 auto TreeVisitor::visit(HIRExprNodeYield& node) -> void {
-    os << "yield";
+    os << StringView("yield");
     if (node.value) {
-        os << " ";
+        os << StringView(" ");
         this->visitNodePtr(node.value);
     }
 }
 
 auto TreeVisitor::visit(HIRExprNodeAWait& node) -> void {
-    os << "(";
+    os << StringView("(");
     this->visitNodePtr(node.value);
-    os << ").await";
+    os << StringView(").await");
 }
 
 auto TreeVisitor::visit(HIRExprNodeUse& node) -> void {
-    os << "(";
+    os << StringView("(");
     this->visitNodePtr(node.value);
-    os << ").use";
+    os << StringView(").use");
 }
 
 auto TreeVisitor::visit(HIRExprNodeLet& node) -> void {
-    os << "let " << node.pattern << ": " << node.type;
+    os << StringView("let ") << node.pattern << StringView(": ") << node.type;
     if (node.value) {
-        os << " = ";
+        os << StringView(" = ");
         this->visitNodePtr(node.value);
     }
-    os << ";";
+    os << StringView(";");
 }
 
 auto TreeVisitor::visit(HIRExprNodeLoop& node) -> void {
     if (node.label != "") {
-        os << "'" << node.label << ": ";
+        os << StringView("'") << node.label << StringView(": ");
     }
-    os << "loop ";
+    os << StringView("loop ");
     this->visitNodePtr(node.code);
 }
 
 auto TreeVisitor::visit(HIRExprNodeLoopControl& node) -> void {
     os << (node.isContinue ? "continue" : "break");
     if (node.label != "") {
-        os << " '" << node.label;
+        os << StringView(" '") << node.label;
     }
     if (node.value) {
-        os << " ";
+        os << StringView(" ");
         this->visitNodePtr(node.value);
     }
 }
 
 auto TreeVisitor::visit(HIRExprNodeMatch& node) -> void {
-    os << "match ";
+    os << StringView("match ");
     this->visitNodePtr(node.value);
-    os << " {\n";
+    os << StringView(" {\n");
     for (/*const*/ auto& arm : node.arms) {
         os << indent();
         os << arm.patterns.front();
         for (unsigned int i = 1; i < arm.patterns.size(); i++) {
-            os << " | " << arm.patterns[i];
+            os << StringView(" | ") << arm.patterns[i];
         }
 
         if (arm.guards.size() > 0) {
-            os << " if ";
+            os << StringView(" if ");
             for (auto& c : arm.guards) {
                 if (&c != &arm.guards.front()) {
-                    os << " && ";
+                    os << StringView(" && ");
                 }
-                os << "let " << c.pat << " = ";
+                os << StringView("let ") << c.pat << StringView(" = ");
                 this->visitNodePtr(c.val);
             }
         }
-        os << " => ";
+        os << StringView(" => ");
         incIndent();
         this->visitNodePtr(arm.code);
         decIndent();
-        os << ",\n";
+        os << StringView(",\n");
     }
-    os << indent() << "}";
+    os << indent() << StringView("}");
 }
 
 auto TreeVisitor::visit(HIRExprNodeAssign& node) -> void {
     this->visitNodePtr(node.slot);
-    os << " " << HIRExprNodeAssign::opname(node.op) << "= ";
+    os << StringView(" ") << HIRExprNodeAssign::opname(node.op) << StringView("= ");
     this->visitNodePtr(node.value);
 }
 
 auto TreeVisitor::visit(HIRExprNodeBinOp& node) -> void {
-    os << "(";
+    os << StringView("(");
     this->visitNodePtr(node.left);
-    os << ")";
-    os << " " << HIRExprNodeBinOp::opname(node.op) << " ";
-    os << "(";
+    os << StringView(")");
+    os << StringView(" ") << HIRExprNodeBinOp::opname(node.op) << StringView(" ");
+    os << StringView("(");
     this->visitNodePtr(node.right);
-    os << ")";
+    os << StringView(")");
 }
 
 auto TreeVisitor::visit(HIRExprNodeUniOp& node) -> void {
     switch (node.op) {
         case HIRExprNodeUniOp::Op::Invert:
-            os << "!";
+            os << StringView("!");
             break;
         case HIRExprNodeUniOp::Op::Negate:
-            os << "-";
+            os << StringView("-");
             break;
     }
-    os << "(";
+    os << StringView("(");
     this->visitNodePtr(node.value);
-    os << ")";
+    os << StringView(")");
 }
 
 #ifdef NODE_IS
@@ -2647,25 +2647,25 @@ auto TreeVisitor::visit(HIRExprNodeUniOp& node) -> void {
 #define NODE_IS(valptr, tysuf) (cast<const HIRExprNode##tysuf>(&*valptr) != nullptr)
 
 auto TreeVisitor::visit(HIRExprNodeBorrow& node) -> void {
-    os << "&";
+    os << StringView("&");
     switch (node.type) {
         case HIRBorrowType::Shared:
             break;
         case HIRBorrowType::Unique:
-            os << "mut ";
+            os << StringView("mut ");
             break;
         case HIRBorrowType::Owned:
-            os << "move ";
+            os << StringView("move ");
             break;
     }
 
     bool skipParens = this->nodeIsLeaf(*node.value) || NODE_IS(node.value, Deref);
     if (!skipParens) {
-        os << "(";
+        os << StringView("(");
     }
     this->visitNodePtr(node.value);
     if (!skipParens) {
-        os << ")";
+        os << StringView(")");
     }
 }
 
@@ -2677,25 +2677,25 @@ auto TreeVisitor::visit(HIRExprNodeBorrow& node) -> void {
 #define NODE_IS(valptr, tysuf) (cast<const HIRExprNode##tysuf>(&*valptr) != nullptr)
 
 auto TreeVisitor::visit(HIRExprNodeRawBorrow& node) -> void {
-    os << "&raw ";
+    os << StringView("&raw ");
     switch (node.type) {
         case HIRBorrowType::Shared:
             break;
         case HIRBorrowType::Unique:
-            os << "mut ";
+            os << StringView("mut ");
             break;
         case HIRBorrowType::Owned:
-            os << "move ";
+            os << StringView("move ");
             break;
     }
 
     bool skipParens = this->nodeIsLeaf(*node.value) || NODE_IS(node.value, Deref);
     if (!skipParens) {
-        os << "(";
+        os << StringView("(");
     }
     this->visitNodePtr(node.value);
     if (!skipParens) {
-        os << ")";
+        os << StringView(")");
     }
 }
 
@@ -2703,34 +2703,34 @@ auto TreeVisitor::visit(HIRExprNodeRawBorrow& node) -> void {
 
 auto TreeVisitor::visit(HIRExprNodeCast& node) -> void {
     this->visitNodePtr(node.value);
-    os << " as " << node.dstType;
+    os << StringView(" as ") << node.dstType;
 }
 
 auto TreeVisitor::visit(HIRExprNodeUnsize& node) -> void {
     this->visitNodePtr(node.value);
-    os << " : " << node.dstType;
+    os << StringView(" : ") << node.dstType;
 }
 
 auto TreeVisitor::visit(HIRExprNodeIndex& node) -> void {
     // TODO: Avoid parens
-    os << "(";
+    os << StringView("(");
     this->visitNodePtr(node.value);
-    os << ")";
-    os << "[";
+    os << StringView(")");
+    os << StringView("[");
     this->visitNodePtr(node.index);
-    os << "]";
+    os << StringView("]");
 }
 
 auto TreeVisitor::visit(HIRExprNodeDeref& node) -> void {
-    os << "*";
+    os << StringView("*");
 
     bool skipParens = this->nodeIsLeaf(*node.value);
     if (!skipParens) {
-        os << "(";
+        os << StringView("(");
     }
     this->visitNodePtr(node.value);
     if (!skipParens) {
-        os << ")";
+        os << StringView(")");
     }
 }
 
@@ -2738,70 +2738,70 @@ auto TreeVisitor::visit(HIRExprNodeEmplace& node) -> void {
     if (node.type == HIRExprNodeEmplace::Type::Noop) {
         return node.value->visit(*this);
     }
-    os << "(";
+    os << StringView("(");
     this->visitNodePtr(node.place);
-    os << " <- ";
+    os << StringView(" <- ");
     this->visitNodePtr(node.value);
-    os << ")";
-    os << "/*" << (node.type == HIRExprNodeEmplace::Type::Boxer ? "box" : "place") << "*/";
+    os << StringView(")");
+    os << StringView("/*") << (node.type == HIRExprNodeEmplace::Type::Boxer ? "box" : "place") << StringView("*/");
 }
 
 auto TreeVisitor::visit(HIRExprNodeTupleVariant& node) -> void {
     os << node.path;
-    os << "(";
+    os << StringView("(");
     for (/*const*/ auto& arg : node.args) {
         this->visitNodePtr(arg);
-        os << ", ";
+        os << StringView(", ");
     }
-    os << ")";
+    os << StringView(")");
 }
 
 auto TreeVisitor::visit(HIRExprNodeCallPath& node) -> void {
     os << node.path;
-    os << "(";
+    os << StringView("(");
     for (/*const*/ auto& arg : node.args) {
         this->visitNodePtr(arg);
-        os << ", ";
+        os << StringView(", ");
     }
-    os << ")";
-    os << "/* : " << node.resType << " */";
+    os << StringView(")");
+    os << StringView("/* : ") << node.resType << StringView(" */");
 }
 
 auto TreeVisitor::visit(HIRExprNodeCallValue& node) -> void {
     // TODO: Avoid brackets if not needed
-    os << "(";
+    os << StringView("(");
     this->visitNodePtr(node.value);
-    os << ")";
-    os << "(";
+    os << StringView(")");
+    os << StringView("(");
     for (/*const*/ auto& arg : node.args) {
         this->visitNodePtr(arg);
-        os << ", ";
+        os << StringView(", ");
     }
-    os << ")";
+    os << StringView(")");
 }
 
 auto TreeVisitor::visit(HIRExprNodeCallMethod& node) -> void {
     // TODO: Avoid brackets if not needed
-    os << "(";
+    os << StringView("(");
     this->visitNodePtr(node.value);
-    os << ")";
-    os << "." << node.method << node.params << "(";
+    os << StringView(")");
+    os << StringView(".") << node.method << node.params << StringView("(");
     for (/*const*/ auto& arg : node.args) {
         this->visitNodePtr(arg);
-        os << ", ";
+        os << StringView(", ");
     }
-    os << ")";
+    os << StringView(")");
     if (!node.cache.argTypes.empty()) {
-        os << "/*CACHE:" << node.cache.argTypes << "*/";
+        os << StringView("/*CACHE:") << node.cache.argTypes << StringView("*/");
     }
 }
 
 auto TreeVisitor::visit(HIRExprNodeField& node) -> void {
     // TODO: Avoid brackets if not needed
-    os << "(";
+    os << StringView("(");
     this->visitNodePtr(node.value);
-    os << ")";
-    os << "." << node.field;
+    os << StringView(")");
+    os << StringView(".") << node.field;
 }
 
 auto TreeVisitor::visit(HIRExprNodeLiteral& node) -> void {
@@ -2810,47 +2810,47 @@ auto TreeVisitor::visit(HIRExprNodeLiteral& node) -> void {
             auto& e = node.data.as_Integer();
             switch (e.type) {
                 case HIRCoreType::U8:
-                    os << e.value << "_u8";
+                    os << e.value << StringView("_u8");
                     break;
                 case HIRCoreType::U16:
-                    os << e.value << "_u16";
+                    os << e.value << StringView("_u16");
                     break;
                 case HIRCoreType::U32:
-                    os << e.value << "_u32";
+                    os << e.value << StringView("_u32");
                     break;
                 case HIRCoreType::U64:
-                    os << e.value << "_u64";
+                    os << e.value << StringView("_u64");
                     break;
                 case HIRCoreType::Usize:
-                    os << e.value << "_usize";
+                    os << e.value << StringView("_usize");
                     break;
                 case HIRCoreType::I8:
-                    os << /*I128*/ (e.value) << "_i8";
+                    os << /*I128*/ (e.value) << StringView("_i8");
                     break;
                 case HIRCoreType::I16:
-                    os << /*I128*/ (e.value) << "_i16";
+                    os << /*I128*/ (e.value) << StringView("_i16");
                     break;
                 case HIRCoreType::I32:
-                    os << /*I128*/ (e.value) << "_i32";
+                    os << /*I128*/ (e.value) << StringView("_i32");
                     break;
                 case HIRCoreType::I64:
-                    os << /*I128*/ (e.value) << "_i64";
+                    os << /*I128*/ (e.value) << StringView("_i64");
                     break;
                 case HIRCoreType::Isize:
-                    os << /*I128*/ (e.value) << "_isize";
+                    os << /*I128*/ (e.value) << StringView("_isize");
                     break;
                 case HIRCoreType::Char: {
                     auto v = e.value.truncateU64();
                     if (v == '\\' || v == '\'') {
-                        os << "'\\" << static_cast<char>(v) << "'";
+                        os << StringView("'\\") << static_cast<char>(v) << StringView("'");
                     } else if (' ' <= v && v <= 0x7F) {
-                        os << "'" << static_cast<char>(v) << "'";
+                        os << StringView("'") << static_cast<char>(v) << StringView("'");
                     } else {
-                        os << "'\\u{" << std::hex << v << std::dec << "}'";
+                        os << StringView("'\\u{") << formatHex(v) << StringView("}'");
                     }
                 } break;
                 default:
-                    os << e.value << "_unk";
+                    os << e.value << StringView("_unk");
                     break;
             }
             break;
@@ -2859,47 +2859,47 @@ auto TreeVisitor::visit(HIRExprNodeLiteral& node) -> void {
             auto& e = node.data.as_Float();
             switch (e.type) {
                 case HIRCoreType::F32:
-                    os << e.value << "_f32";
+                    os << e.value << StringView("_f32");
                     break;
                 case HIRCoreType::F64:
-                    os << e.value << "_f64";
+                    os << e.value << StringView("_f64");
                     break;
                 default:
-                    os << e.value << "_unk";
+                    os << e.value << StringView("_unk");
                     break;
             }
             break;
         }
         case HIRExprLiteral::TAG_Boolean: {
             auto& e = node.data.as_Boolean();
-            os << (e ? "true" : "false");
+            os << StringView(e ? "true" : "false");
             break;
         }
         case HIRExprLiteral::TAG_String: {
             auto& e = node.data.as_String();
-            os << "\"" << FmtEscaped(e) << "\"";
+            os << StringView("\"") << FmtEscaped(e) << StringView("\"");
             break;
         }
         case HIRExprLiteral::TAG_CString: {
             auto& e = node.data.as_CString();
-            os << "c\"" << FmtEscaped(e.v) << "\"";
+            os << StringView("c\"") << FmtEscaped(e.v) << StringView("\"");
             break;
         }
         case HIRExprLiteral::TAG_ByteString: {
             auto& e = node.data.as_ByteString();
-            os << "b\"";
+            os << StringView("b\"");
             for (auto b : e) {
                 if (b == '\\' || b == '\"') {
-                    os << "\\" << b;
+                    os << StringView("\\") << b;
                 } else if (' ' <= b && b <= 0x7F) {
                     os << b;
                 } else {
                     char buf[3];
                     sprintf(buf, "%02x", static_cast<u8>(b));
-                    os << "\\x" << buf;
+                    os << StringView("\\x") << StringView(buf);
                 }
             }
-            os << "\"";
+            os << StringView("\"");
             break;
         }
     }
@@ -2914,119 +2914,119 @@ auto TreeVisitor::visit(HIRExprNodePathValue& node) -> void {
 }
 
 auto TreeVisitor::visit(HIRExprNodeVariable& node) -> void {
-    os << node.name << "#" << node.slot;
+    os << node.name << StringView("#") << node.slot;
 }
 
 auto TreeVisitor::visit(HIRExprNodeConstParam& node) -> void {
-    os << node.name << "#" << node.binding;
+    os << node.name << StringView("#") << node.binding;
 }
 
 auto TreeVisitor::visit(HIRExprNodeStructLiteral& node) -> void {
-    os << node.type << " {\n";
+    os << node.type << StringView(" {\n");
     incIndent();
     for (/*const*/ auto& val : node.values) {
-        os << indent() << val.first << ": ";
+        os << indent() << val.first << StringView(": ");
         this->visitNodePtr(val.second);
-        os << ",\n";
+        os << StringView(",\n");
     }
     if (node.baseValue) {
-        os << indent() << ".. ";
+        os << indent() << StringView(".. ");
         this->visitNodePtr(node.baseValue);
-        os << "\n";
+        os << StringView("\n");
     }
-    os << indent() << "}";
+    os << indent() << StringView("}");
     decIndent();
 }
 
 auto TreeVisitor::visit(HIRExprNodeTuple& node) -> void {
-    os << "(";
+    os << StringView("(");
     for (/*const*/ auto& val : node.vals) {
         this->visitNodePtr(val);
-        os << ", ";
+        os << StringView(", ");
     }
-    os << ")";
+    os << StringView(")");
 }
 
 auto TreeVisitor::visit(HIRExprNodeArrayList& node) -> void {
-    os << "[";
+    os << StringView("[");
     for (/*const*/ auto& val : node.vals) {
         this->visitNodePtr(val);
-        os << ", ";
+        os << StringView(", ");
     }
-    os << "]";
+    os << StringView("]");
 }
 
 auto TreeVisitor::visit(HIRExprNodeArraySized& node) -> void {
-    os << "[";
+    os << StringView("[");
     this->visitNodePtr(node.val);
-    os << "; " << node.size;
-    os << "]";
+    os << StringView("; ") << node.size;
+    os << StringView("]");
 }
 
 auto TreeVisitor::visit(HIRExprNodeClosure& node) -> void {
     if (node.code) {
         if (node.isMove) {
-            os << " move";
+            os << StringView(" move");
         }
         if (node.isUse) {
-            os << " use";
+            os << StringView(" use");
         }
-        os << "|";
+        os << StringView("|");
         for (const auto& arg : node.args) {
-            os << arg.first << ": " << arg.second << ", ";
+            os << arg.first << StringView(": ") << arg.second << StringView(", ");
         }
-        os << "| -> " << node.returnType << " ";
+        os << StringView("| -> ") << node.returnType << StringView(" ");
         this->visitNodePtr(node.code);
     } else {
-        os << node.objPath << "( ";
+        os << node.objPath << StringView("( ");
         for (/*const*/ auto& cap : node.captures) {
             this->visitNodePtr(cap);
-            os << ", ";
+            os << StringView(", ");
         }
-        os << ")";
+        os << StringView(")");
     }
 }
 
 auto TreeVisitor::visit(HIRExprNodeGenerator& node) -> void {
     if (node.code) {
-        os << "/*gen*/";
+        os << StringView("/*gen*/");
         if (node.isPinned) {
-            os << "static ";
+            os << StringView("static ");
         }
         if (node.isMove) {
-            os << " move";
+            os << StringView(" move");
         }
-        os << "|";
-        os << "| -> " << node.returnType << " ";
+        os << StringView("|");
+        os << StringView("| -> ") << node.returnType << StringView(" ");
         this->visitNodePtr(node.code);
     } else {
-        os << node.objPath << "( ";
+        os << node.objPath << StringView("( ");
         for (/*const*/ auto& cap : node.captures) {
             this->visitNodePtr(cap);
-            os << ", ";
+            os << StringView(", ");
         }
-        os << ")";
+        os << StringView(")");
     }
 }
 
 auto TreeVisitor::visit(HIRExprNodeGeneratorWrapper& node) -> void {
-    os << "/*gen body*/";
-    os << "|";
-    os << "| -> " << node.returnType << " ";
+    os << StringView("/*gen body*/");
+    os << StringView("|");
+    os << StringView("| -> ") << node.returnType << StringView(" ");
     this->visitNodePtr(node.code);
 }
 
 auto TreeVisitor::visit(HIRExprNodeAsyncBlock& node) -> void {
     if (node.isMove) {
-        os << "move ";
+        os << StringView("move ");
     }
-    os << "async {";
+    os << StringView("async {");
     if (!node.code) {
-        os << "/* lowered: " << node.objPath << " */";
+        os << StringView("/* lowered: ") << node.objPath << StringView(" */");
     } else {
         this->visitNodePtr(node.code);
     }
-    os << "}";
+    os << StringView("}");
 }
 
 auto TreeVisitor::indent() const -> RepeatLitStr {
@@ -3073,7 +3073,7 @@ template <typename V>
 auto HirSerialiser::serialisePathmap(const std::map<HIRSimplePath, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
-        DEBUG("- " << v.first);
+        DEBUG(StringView("- ") << v.first);
         serialise(v.first);
         serialise(v.second);
     }
@@ -3110,7 +3110,7 @@ template <typename V>
 auto HirSerialiser::serialiseStrmap(const std::unordered_multimap<std::string, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
-        DEBUG("- " << v.first);
+        DEBUG(StringView("- ") << v.first);
         out.writeString(v.first);
         serialise(v.second);
     }
@@ -3118,7 +3118,7 @@ auto HirSerialiser::serialiseStrmap(const std::unordered_multimap<std::string, V
 
 template <typename T>
 auto HirSerialiser::serialiseVec(const ThinVector<T>& vec) -> void {
-    TRACE_FUNCTION_F("<" << typeid(T).name() << "> size=" << vec.size());
+    TRACE_FUNCTION_F(StringView("<") << typeid(T).name() << StringView("> size=") << vec.size());
     auto _ = out.openObject(typeid(ThinVector<T>).name());
     out.writeCount(vec.size());
     for (const auto& i : vec) {
@@ -3128,7 +3128,7 @@ auto HirSerialiser::serialiseVec(const ThinVector<T>& vec) -> void {
 
 template <typename T>
 auto HirSerialiser::serialiseVec(const std::vector<T>& vec) -> void {
-    TRACE_FUNCTION_F("<" << typeid(T).name() << "> size=" << vec.size());
+    TRACE_FUNCTION_F(StringView("<") << typeid(T).name() << StringView("> size=") << vec.size());
     auto _ = out.openObject(typeid(std::vector<T>).name());
     out.writeCount(vec.size());
     for (const auto& i : vec) {
@@ -3143,7 +3143,7 @@ auto HirSerialiser::serialise(const std::vector<T>& vec) -> void {
 
 template <typename T>
 auto HirSerialiser::serialise(const std::set<T>& s) -> void {
-    TRACE_FUNCTION_F("size=" << s.size());
+    TRACE_FUNCTION_F(StringView("size=") << s.size());
     auto _ = out.openObject(typeid(std::set<T>).name());
     out.writeCount(s.size());
     for (const auto& i : s) {
@@ -3211,7 +3211,7 @@ auto HirSerialiser::serialise(i64 v) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRGenericRef& ge) -> void {
-    ASSERT_BUG(Span(), !ge.isSolverExistential(), "solver existential escaped into serialised HIR: " << ge);
+    ASSERT_BUG(Span(), !ge.isSolverExistential(), StringView("solver existential escaped into serialised HIR: ") << ge);
     out.writeString(ge.name);
     out.writeU16(ge.binding);
 }
@@ -3241,13 +3241,13 @@ auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
 
     auto it = types.find(tyStr);
     if (it != types.end()) {
-        DEBUG("Cached " << it->second);
+        DEBUG(StringView("Cached ") << it->second);
         out.writeCount(it->second);
         return;
     }
     out.writeCount(~0u);
 
-    DEBUG("Fresh " << types.size());
+    DEBUG(StringView("Fresh ") << types.size());
     auto _ = out.openObject("HIR::TypeData");
     out.writeTag(ty->tag());
     switch ((*ty).tag()) {
@@ -3282,7 +3282,7 @@ auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
         }
         case HIRTypeData::TAG_ErasedType: {
             auto& e = (*ty).as_ErasedType();
-            TODO(Span(), "Serialse ErasedType?");
+            TODO(Span(), StringView("Serialse ErasedType?"));
 
             out.writeBool(e.isSized);
             serialiseVec(e.traits);
@@ -3352,7 +3352,7 @@ auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
             break;
         } break;
         case HIRTypeData::TAG_NodeType:
-            BUG(Span(), "Encountered invalid type when serialising - " << ty);
+            BUG(Span(), StringView("Encountered invalid type when serialising - ") << ty);
             break;
     }
 
@@ -3406,7 +3406,7 @@ auto HirSerialiser::serialise(const HIRTraitPath::AtyBound& e) -> void {
 }
 
 auto HirSerialiser::serialisePath(const HIRPath& path) -> void {
-    TRACE_FUNCTION_F("path=" << path);
+    TRACE_FUNCTION_F(StringView("path=") << path);
     switch (path.data.tag()) {
         case HIRPathData::TAG_Generic: {
             auto& e = path.data.as_Generic();
@@ -3433,7 +3433,7 @@ auto HirSerialiser::serialisePath(const HIRPath& path) -> void {
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            DEBUG("-- UfcsUnknown - " << path);
+            DEBUG(StringView("-- UfcsUnknown - ") << path);
             BUG_ASSERT(!"Unexpected UfcsUnknown");
             break;
         }
@@ -3441,7 +3441,7 @@ auto HirSerialiser::serialisePath(const HIRPath& path) -> void {
 }
 
 auto HirSerialiser::serialiseGenerics(const HIRGenericParams& params) -> void {
-    ASSERT_BUG(Span(), params.paramKinds.empty() || params.hasParamOrder(), "Incomplete generic parameter order: " << params.paramKinds.length() << " entries for " << params.paramCount() << " parameters");
+    ASSERT_BUG(Span(), params.paramKinds.empty() || params.hasParamOrder(), StringView("Incomplete generic parameter order: ") << params.paramKinds.length() << StringView(" entries for ") << params.paramCount() << StringView(" parameters"));
     out.writeCount(params.paramKinds.length());
     for (const auto kind : params.paramKinds) {
         out.writeU8(static_cast<u8>(kind));
@@ -3486,7 +3486,7 @@ auto HirSerialiser::serialise(const HIRGenericBound& b) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRProcMacro& pm) -> void {
-    TRACE_FUNCTION_F("pm = ProcMacro { " << pm.name << ", " << pm.path << ", [" << pm.attributes << "] }");
+    TRACE_FUNCTION_F(StringView("pm = ProcMacro { ") << pm.name << StringView(", ") << pm.path << StringView(", [") << pm.attributes << StringView("] }"));
     switch (pm.ty) {
         case HIRProcMacro::Ty::Function:
             out.writeTag(0);
@@ -3564,7 +3564,7 @@ auto HirSerialiser::serialiseModule(const HIRModule& mod) -> void {
 }
 
 auto HirSerialiser::serialiseTypeimpl(const HIRTypeImpl& impl) -> void {
-    TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " " << impl.type);
+    TRACE_FUNCTION_F(StringView("impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);
     serialiseGenerics(impl.params);
     serialiseType(impl.type);
 
@@ -3596,7 +3596,7 @@ auto HirSerialiser::serialise(const HIRTypeImpl& impl) -> void {
 }
 
 auto HirSerialiser::serialiseTraitimpl(const HIRTraitImpl& impl) -> void {
-    TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " ?" << impl.traitArgs << " for " << impl.type);
+    TRACE_FUNCTION_F(StringView("impl") << impl.params.fmtArgs() << StringView(" ?") << impl.traitArgs << StringView(" for ") << impl.type);
     serialiseGenerics(impl.params);
     serialisePathparams(impl.traitArgs);
     serialiseType(impl.type);
@@ -3605,28 +3605,28 @@ auto HirSerialiser::serialiseTraitimpl(const HIRTraitImpl& impl) -> void {
 
     out.writeCount(impl.methods.size());
     for (const auto& v : impl.methods) {
-        DEBUG("fn " << v.first);
+        DEBUG(StringView("fn ") << v.first);
         out.writeString(v.first);
         out.writeBool(v.second.isSpecialisable);
         serialise(v.second.data);
     }
     out.writeCount(impl.constants.size());
     for (const auto& v : impl.constants) {
-        DEBUG("const " << v.first);
+        DEBUG(StringView("const ") << v.first);
         out.writeString(v.first);
         out.writeBool(v.second.isSpecialisable);
         serialise(v.second.data);
     }
     out.writeCount(impl.statics.size());
     for (const auto& v : impl.statics) {
-        DEBUG("static " << v.first);
+        DEBUG(StringView("static ") << v.first);
         out.writeString(v.first);
         out.writeBool(v.second.isSpecialisable);
         serialise(v.second.data);
     }
     out.writeCount(impl.types.size());
     for (const auto& v : impl.types) {
-        DEBUG("type " << v.first);
+        DEBUG(StringView("type ") << v.first);
         out.writeString(v.first);
         out.writeBool(v.second.isSpecialisable);
         serialise(v.second.data);
@@ -3866,7 +3866,7 @@ auto HirSerialiser::serialise(const EncodedLiteral& lit) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRConstGenericUnevaluated& v) -> void {
-    ASSERT_BUG(v.expr->span(), v.expr->mir, "Encountered non-translated value in ConstGeneric: " << v);
+    ASSERT_BUG(v.expr->span(), v.expr->mir, StringView("Encountered non-translated value in ConstGeneric: ") << v);
     out.writeBool(v.selfType != nullptr);
     if (v.selfType) {
         serialiseType(v.selfType);
@@ -4207,7 +4207,7 @@ auto HirSerialiser::serialise(const MIRCallTarget& ct) -> void {
 }
 
 auto HirSerialiser::serialise(const MIRParam& p) -> void {
-    TRACE_FUNCTION_F("Param = " << p);
+    TRACE_FUNCTION_F(StringView("Param = ") << p);
     out.writeTag(static_cast<int>(p.tag()));
     switch (p.tag()) {
         case MIRParam::TAG_LValue: {
@@ -4230,7 +4230,7 @@ auto HirSerialiser::serialise(const MIRParam& p) -> void {
 }
 
 auto HirSerialiser::serialise(const MIRLValue& lv) -> void {
-    TRACE_FUNCTION_F("LValue = " << lv);
+    TRACE_FUNCTION_F(StringView("LValue = ") << lv);
     if (lv.root.is_Static()) {
         out.writeCount(3);
         serialisePath(lv.root.as_Static());
@@ -4245,7 +4245,7 @@ auto HirSerialiser::serialise(const MIRLValue::Wrapper& w) -> void {
 }
 
 auto HirSerialiser::serialise(const MIRRValue& val) -> void {
-    TRACE_FUNCTION_F("RValue = " << val);
+    TRACE_FUNCTION_F(StringView("RValue = ") << val);
     out.writeTag(val.tag());
     switch (val.tag()) {
         case MIRRValue::TAG_Use: {
@@ -4388,7 +4388,7 @@ auto HirSerialiser::serialise(const MIRConstant& v) -> void {
         }
         case MIRConstant::TAG_Const: {
             auto& e = v.as_Const();
-            ASSERT_BUG(Span(), monomorphisePathNeeded(*e.p), "Unexpected Constant: " << *e.p);
+            ASSERT_BUG(Span(), monomorphisePathNeeded(*e.p), StringView("Unexpected Constant: ") << *e.p);
             serialisePath(*e.p);
             break;
         }
@@ -4542,7 +4542,7 @@ auto HirSerialiser::serialise(const HIRLinkage& linkage) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRFunction& fcn) -> void {
-    TRACE_FUNCTION_F("_function:");
+    TRACE_FUNCTION_F(StringView("_function:"));
     BUG_ASSERT(!fcn.traitReturnType);
     auto _ = out.openObject("HIR::Function");
 
@@ -4560,7 +4560,7 @@ auto HirSerialiser::serialise(const HIRFunction& fcn) -> void {
     for (const auto& a : fcn.args) {
         serialise(a.second);
     }
-    DEBUG("m_args = " << fcn.args);
+    DEBUG(StringView("m_args = ") << fcn.args);
     out.writeBool(fcn.variadic);
     out.writeBool(fcn.hasNamedVariadic);
     serialise(fcn.returnType);
@@ -4583,7 +4583,7 @@ auto HirSerialiser::serialise(const HIRFunction::Markings& m) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRConstant& item) -> void {
-    TRACE_FUNCTION_F("_constant:");
+    TRACE_FUNCTION_F(StringView("_constant:"));
     serialiseGenerics(item.params);
     serialise(item.type);
     serialise(item.value);
@@ -4595,7 +4595,7 @@ auto HirSerialiser::serialise(const HIRConstant& item) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRStatic& item) -> void {
-    TRACE_FUNCTION_F("_static:");
+    TRACE_FUNCTION_F(StringView("_static:"));
     serialise(item.linkage);
     serialiseGenerics(item.params);
 
@@ -4714,7 +4714,7 @@ auto HirSerialiser::serialise(const HIRStructMarkings& m) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRStruct& item) -> void {
-    TRACE_FUNCTION_F("Struct");
+    TRACE_FUNCTION_F(StringView("Struct"));
     auto _ = out.openObject("HIR::Struct");
 
     serialiseGenerics(item.params);
@@ -4755,7 +4755,7 @@ auto HirSerialiser::serialise(const HIRStructField& fld) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRUnion& item) -> void {
-    TRACE_FUNCTION_F("Union");
+    TRACE_FUNCTION_F(StringView("Union"));
     serialiseGenerics(item.params);
     out.writeTag(static_cast<int>(item.repr));
 
@@ -4772,7 +4772,7 @@ auto HirSerialiser::serialise(const HIRExternType& item) -> void {
 }
 
 auto HirSerialiser::serialise(const HIRTrait& item) -> void {
-    TRACE_FUNCTION_F("_trait:");
+    TRACE_FUNCTION_F(StringView("_trait:"));
     auto _ = out.openObject("HIR::Trait");
 
     serialiseGenerics(item.params);
@@ -4791,19 +4791,19 @@ auto HirSerialiser::serialise(const HIRTraitValueItem& tvi) -> void {
     switch (tvi.tag()) {
         case HIRTraitValueItem::TAG_Constant: {
             auto& e = tvi.as_Constant();
-            DEBUG("Constant");
+            DEBUG(StringView("Constant"));
             serialise(e);
             break;
         }
         case HIRTraitValueItem::TAG_Static: {
             auto& e = tvi.as_Static();
-            DEBUG("Static");
+            DEBUG(StringView("Static"));
             serialise(e);
             break;
         }
         case HIRTraitValueItem::TAG_Function: {
             auto& e = tvi.as_Function();
-            DEBUG("Function");
+            DEBUG(StringView("Function"));
             serialise(e);
             break;
         }

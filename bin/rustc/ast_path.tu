@@ -17,6 +17,6 @@ generate(
     extra="""
         ASTPathParamEnt clone() const;
         Ordering ord(const ASTPathParamEnt& x) const;
-        void fmt(std::ostream& os) const;
+        void fmt(stl::ZeroCopyOutput& os) const;
     """,
 )

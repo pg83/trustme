@@ -1,6 +1,5 @@
 #pragma once
 
-#include <ostream>
 #include <stddef.h>
 
 template <typename T>
@@ -31,20 +30,3 @@ public:
         return ptr + len;
     }
 };
-
-namespace std {
-    template <typename T>
-    ostream& operator<<(ostream& os, const slice<T>& x) {
-        os << "[";
-        bool first = true;
-        for (const auto& e : x) {
-            if (!first) {
-                os << ",";
-            }
-            first = false;
-            os << e;
-        }
-        os << "]";
-        return os;
-    }
-}

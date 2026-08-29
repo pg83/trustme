@@ -30,7 +30,6 @@ generate(
         ], copy=False),
     ],
     extra="""
-        friend std::ostream& operator<<(std::ostream& os, const MIRConstant& v);
         ::Ordering ord(const MIRConstant& b) const;
         bool operator==(const MIRConstant& b) const {
             return ord(b) == ::OrdEqual;
@@ -72,7 +71,6 @@ generate(
     ],
     extra="""
         MIRParam clone() const;
-        friend std::ostream& operator<<(std::ostream& os, const MIRParam& v);
         bool operator==(const MIRParam& b) const;
         bool operator!=(const MIRParam& b) const {
             return !(*this == b);

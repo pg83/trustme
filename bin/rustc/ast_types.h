@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "span.h"
 #include "common.h"
 #include "coretypes.h"
@@ -42,7 +44,6 @@ public:
 
     bool empty() const;
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTHigherRankedBounds& x);
 };
 
 class PrettyPrintType {
@@ -51,9 +52,8 @@ class PrettyPrintType {
 public:
     PrettyPrintType(const ASTType* ty);
 
-    void print(std::ostream& os) const;
+    void print(stl::ZeroCopyOutput& os) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const PrettyPrintType& v);
 };
 
 struct TypeFunction {
@@ -211,7 +211,7 @@ struct ASTType {
                 return e.inner;
             }
             default: {
-                BUG(Span(), "Called inner_type on non-wrapper");
+                BUG(Span(), stl::StringView("Called inner_type on non-wrapper"));
             }
         }
     }
@@ -226,7 +226,7 @@ struct ASTType {
         return ord(x) != OrdEqual;
     }
 
-    void print(std::ostream& os, bool isDebug = false) const;
+    void print(stl::ZeroCopyOutput& os, bool isDebug = false) const;
 
     PrettyPrintType printPretty() const {
         return PrettyPrintType(this);
@@ -251,11 +251,5 @@ ASTType* mkType(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Path, Span sp, ASTPath path);
 ASTType* mkType(stl::ObjPool& pool, Span sp, ASTPath path);
 ASTType* mkType(stl::ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, std::vector<ASTLifetimeRef> lifetimes);
-
-std::ostream& operator<<(std::ostream& os, const ASTType& tr);
-
-inline std::ostream& operator<<(std::ostream& os, const ASTType* tr) {
-    return tr ? (os << *tr) : (os << "(null-type)");
-}
 
 Ordering ord(ASTType* a, ASTType* b);

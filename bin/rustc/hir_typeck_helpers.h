@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "hir_hir.h"
 #include "hir_expr.h"
 #include "thin_vector.h"
@@ -40,7 +42,6 @@ struct SolverImpl {
     HIRTypeRef monomorphImplType(HIRTypeInterner& types, const Span& sp, const HIRTypeData* type, const HIRPathParams& methodParams = {}) const;
     HIRTraitPath monomorphImplTraitPath(HIRTypeInterner& types, const Span& sp, const HIRTraitPath& traitPath, const HIRPathParams& methodParams = {}) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const SolverImpl& impl);
 };
 
 struct SolverSlotValues {
@@ -136,7 +137,6 @@ public:
 
         FmtType(const HMTypeInferrence& ctxt, const HIRTypeData* ty);
 
-        friend std::ostream& operator<<(std::ostream& os, const FmtType& x);
     };
 
     struct FmtPP {
@@ -145,7 +145,6 @@ public:
 
         FmtPP(const HMTypeInferrence& ctxt, const HIRPathParams& pps);
 
-        friend std::ostream& operator<<(std::ostream& os, const FmtPP& x);
     };
 
 public:
@@ -198,9 +197,9 @@ public:
     void compactIvars();
     bool applyDefault(unsigned int index);
 
-    void printType(std::ostream& os, const HIRTypeData* tr, LList<const HIRTypeData*> stack = {}) const;
-    void printGenericpath(std::ostream& os, const HIRGenericPath& pps, LList<const HIRTypeData*> stack) const;
-    void printPathparams(std::ostream& os, const HIRPathParams& pps, LList<const HIRTypeData*> stack = {}) const;
+    void printType(stl::ZeroCopyOutput& os, const HIRTypeData* tr, LList<const HIRTypeData*> stack = {}) const;
+    void printGenericpath(stl::ZeroCopyOutput& os, const HIRGenericPath& pps, LList<const HIRTypeData*> stack) const;
+    void printPathparams(stl::ZeroCopyOutput& os, const HIRPathParams& pps, LList<const HIRTypeData*> stack = {}) const;
 
     FmtType fmtType(const HIRTypeData* tr) const {
         return FmtType(*this, tr);
@@ -755,10 +754,7 @@ public:
         HIRPath path;
         const HIRTypeImpl* inherentImpl;
 
-        friend std::ostream& operator<<(std::ostream& os, const MethodCandidate& candidate);
     };
-
-    friend std::ostream& operator<<(std::ostream& os, const AutoderefBorrow& x);
 
     unsigned int autoderefFindMethod(
         const Span& sp,
@@ -804,7 +800,6 @@ public:
         Value,
         Box,
     };
-    friend std::ostream& operator<<(std::ostream& os, const AllowedReceivers& x);
     bool findMethod(const Span& sp, const tTraitList& traits, const std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const ThinVector<HIRTypeRef>& argumentTypes, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
 
     const HIRFunction* traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const;

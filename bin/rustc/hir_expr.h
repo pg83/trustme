@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "span.h"
 #include "hir_asm.h"
 #include "hir_type.h"
@@ -20,8 +22,6 @@ enum class HIRValueUsage {
 
     Move,
 };
-
-std::ostream& operator<<(std::ostream& os, const HIRValueUsage& x);
 
 class HIRGenericParams;
 
@@ -677,8 +677,6 @@ struct HIRExprNodeClosure: public HIRExprNode {
     void visit(HIRExprVisitor& nv) override;
 };
 
-std::ostream& operator<<(std::ostream& os, const HIRExprNodeClosure::AvuCache::Capture& x);
-
 struct HIRExprNodeGenerator: public HIRExprNode {
     HIRTypeRef returnType;
     HIRTypeRef resumeTy;
@@ -894,4 +892,4 @@ public:
     virtual void visitGenericPath(HIRVisitor::PathContext pc, HIRGenericPath& ty);
 };
 
-void HIRDumpExpr(std::ostream& sink, const HIRExprPtr& expr);
+void HIRDumpExpr(stl::ZeroCopyOutput& sink, const HIRExprPtr& expr);

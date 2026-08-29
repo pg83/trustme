@@ -1,4 +1,5 @@
 #include "hir_path.h"
+#include "output.h"
 
 #include "hir_expr.h"
 #include "hir_type.h"
@@ -115,98 +116,15 @@ HIRTraitPath::~HIRTraitPath() = default;
 HIRTraitPath::HIRTraitPath(HIRTraitPath&&) = default;
 HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
 
-std::ostream& operator<<(std::ostream& os, const HIRSimplePath& x) {
-    if (x.crateName() != "") {
-        os << "::\"" << x.crateName() << "\"";
-    } else if (x.components().size() == 0) {
-        os << "::";
-    } else {
-    }
-    for (const auto& n : x.components()) {
-        os << "::" << n;
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const HIRPathParams& x) {
-    bool hasArgs = (x.types.size() > 0 || x.values.size() > 0);
 
-    if (hasArgs) {
-        os << "<";
-    }
-    for (const auto& ty : x.types) {
-        os << ty << ",";
-    }
-    for (const auto& v : x.values) {
-        os << "{" << v << "},";
-    }
-    if (hasArgs) {
-        os << ">";
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const HIRGenericPath& x) {
-    os << x.path << x.params;
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const HIRTraitPath& x) {
-    if (x.constness == HIRBoundConstness::Always) {
-        os << "const ";
-    } else if (x.constness == HIRBoundConstness::Maybe) {
-        os << "[const] ";
-    }
-    os << x.path.path;
-    bool hasArgs = (x.path.params.types.size() > 0 || x.typeBounds.size() > 0 || x.traitBounds.size() > 0);
 
-    if (hasArgs) {
-        os << "<";
-    }
-    for (const auto& ty : x.path.params.types) {
-        os << ty << ",";
-    }
-    for (const auto& v : x.path.params.values) {
-        os << v << ",";
-    }
-    for (const auto& assoc : x.typeBounds) {
-        os << assoc.first << "{" << assoc.second.sourceTrait << "}=" << assoc.second << ",";
-    }
-    for (const auto& assoc : x.traitBounds) {
-        for (const auto& trait : assoc.second.traits) {
-            os << assoc.first << "{" << assoc.second.sourceTrait << "}: " << trait << ",";
-        }
-    }
-    if (hasArgs) {
-        os << ">";
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const HIRPath& x) {
-    switch (x.data.tag()) {
-        case HIRPath::Data::TAG_Generic: {
-            auto& e = x.data.as_Generic();
-            return os << e;
-        }
-        case HIRPath::Data::TAG_UfcsInherent: {
-            auto& e = x.data.as_UfcsInherent();
-            return os << "<" << e.type << " /*- " << e.implParams << "*/>::" << e.item << e.params;
-        }
-        case HIRPath::Data::TAG_UfcsKnown: {
-            auto& e = x.data.as_UfcsKnown();
-            os << "<" << e.type << " as ";
-            os << e.trait << ">::" << e.item << e.params;
-            return os;
-            break;
-        }
-        case HIRPath::Data::TAG_UfcsUnknown: {
-            auto& e = x.data.as_UfcsUnknown();
-            return os << "<" << e.type << " as _>::" << e.item << e.params;
-        }
-    }
-    return os;
-}
+
+
+
 
 HIRSimplePath HIRSimplePath::parent() const {
     if (!p) {
@@ -552,7 +470,7 @@ HIRCompare HIRPathParams::compareWithPlaceholders(const Span& sp, const HIRPathP
 HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathParams& x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& match) const {
     auto rv = HIRCompare::Equal;
 
-    TRACE_FUNCTION_F("(PathParams) " << *this << " with " << x);
+    TRACE_FUNCTION_F(StringView("(PathParams) ") << *this << StringView(" with ") << x);
     if (this->types.size() != x.types.size()) {
         return HIRCompare::Unequal;
     }
@@ -898,20 +816,7 @@ HIRPath::HIRPath(Data data)
 HIRConstGenericUnevaluated::HIRConstGenericUnevaluated() {
 }
 
-std::ostream& operator<<(std::ostream& os, const HIRCompare& x) {
-    switch (x) {
-        case HIRCompare::Equal:
-            os << "Equal";
-            break;
-        case HIRCompare::Fuzzy:
-            os << "Fuzzy";
-            break;
-        case HIRCompare::Unequal:
-            os << "Unequal";
-            break;
-    }
-    return os;
-}
+
 
 HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y) {
     if (x == HIRCompare::Unequal) {
@@ -924,13 +829,156 @@ HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y) {
     return x;
 }
 
-std::ostream& operator<<(std::ostream& os, const HIRTraitPath::AtyEqual& x) {
-    os << x.type;
-    return os;
-}
+
 
 PathNode::PathNode(u64 h1, u64 h2, ThinVector<RcString> m, PathNode* next)
     : HIRSimplePathData{h1, h2, std::move(m)}
     , next(next)
 {
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, HIRSimplePath>(ZeroCopyOutput& os, HIRSimplePath x) {
+    if (x.crateName() != "") {
+        os << StringView("::\"") << x.crateName() << StringView("\"");
+    } else if (x.components().size() == 0) {
+        os << StringView("::");
+    } else {
+    }
+    for (const auto& n : x.components()) {
+        os << StringView("::") << n;
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, HIRPathParams>(ZeroCopyOutput& os, const HIRPathParams& x) {
+    bool hasArgs = (x.types.size() > 0 || x.values.size() > 0);
+
+    if (hasArgs) {
+        os << StringView("<");
+    }
+    for (const auto& ty : x.types) {
+        os << ty << StringView(",");
+    }
+    for (const auto& v : x.values) {
+        os << StringView("{") << v << StringView("},");
+    }
+    if (hasArgs) {
+        os << StringView(">");
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, HIRGenericPath>(ZeroCopyOutput& os, const HIRGenericPath& x) {
+    os << x.path << x.params;
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, HIRTraitPath>(ZeroCopyOutput& os, const HIRTraitPath& x) {
+    if (x.constness == HIRBoundConstness::Always) {
+        os << StringView("const ");
+    } else if (x.constness == HIRBoundConstness::Maybe) {
+        os << StringView("[const] ");
+    }
+    os << x.path.path;
+    bool hasArgs = (x.path.params.types.size() > 0 || x.typeBounds.size() > 0 || x.traitBounds.size() > 0);
+
+    if (hasArgs) {
+        os << StringView("<");
+    }
+    for (const auto& ty : x.path.params.types) {
+        os << ty << StringView(",");
+    }
+    for (const auto& v : x.path.params.values) {
+        os << v << StringView(",");
+    }
+    for (const auto& assoc : x.typeBounds) {
+        os << assoc.first << StringView("{") << assoc.second.sourceTrait << StringView("}=") << assoc.second << StringView(",");
+    }
+    for (const auto& assoc : x.traitBounds) {
+        for (const auto& trait : assoc.second.traits) {
+            os << assoc.first << StringView("{") << assoc.second.sourceTrait << StringView("}: ") << trait << StringView(",");
+        }
+    }
+    if (hasArgs) {
+        os << StringView(">");
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, HIRPath>(ZeroCopyOutput& os, const HIRPath& x) {
+    switch (x.data.tag()) {
+        case HIRPath::Data::TAG_Generic: {
+            auto& e = x.data.as_Generic();
+            os << e;
+    return;
+        }
+        case HIRPath::Data::TAG_UfcsInherent: {
+            auto& e = x.data.as_UfcsInherent();
+            os << StringView("<") << e.type << StringView(" /*- ") << e.implParams << StringView("*/>::") << e.item << e.params;
+    return;
+        }
+        case HIRPath::Data::TAG_UfcsKnown: {
+            auto& e = x.data.as_UfcsKnown();
+            os << StringView("<") << e.type << StringView(" as ");
+            os << e.trait << StringView(">::") << e.item << e.params;
+            return;
+            break;
+        }
+        case HIRPath::Data::TAG_UfcsUnknown: {
+            auto& e = x.data.as_UfcsUnknown();
+            os << StringView("<") << e.type << StringView(" as _>::") << e.item << e.params;
+    return;
+        }
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, HIRCompare>(ZeroCopyOutput& os, HIRCompare x) {
+    switch (x) {
+        case HIRCompare::Equal:
+            os << StringView("Equal");
+            break;
+        case HIRCompare::Fuzzy:
+            os << StringView("Fuzzy");
+            break;
+        case HIRCompare::Unequal:
+            os << StringView("Unequal");
+            break;
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, HIRTraitPath::AtyEqual>(ZeroCopyOutput& os, const HIRTraitPath::AtyEqual& x) {
+    os << x.type;
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, std::pair<const RcString, HIRTraitPath::AtyEqual>>(ZeroCopyOutput& out, const std::pair<const RcString, HIRTraitPath::AtyEqual>& value) {
+    out << value.first << StringView(": ") << value.second;
+}
+
+template <>
+void output<ZeroCopyOutput, std::map<RcString, HIRTraitPath::AtyEqual>>(ZeroCopyOutput& out, const std::map<RcString, HIRTraitPath::AtyEqual>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<HIRTraitPath>>(ZeroCopyOutput& out, const std::vector<HIRTraitPath>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::pair<const std::string, HIRSimplePath>>(ZeroCopyOutput& out, const std::pair<const std::string, HIRSimplePath>& value) {
+    out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
+}
+
 }

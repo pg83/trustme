@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "span.h"
 #include "hir_path.h"
 #include "hir_expr_ptr.h"
@@ -52,8 +54,6 @@ enum class HIRCoreType {
     Char,
     Str,
 };
-std::ostream& operator<<(std::ostream& os, const HIRCoreType& ct);
-
 bool isInteger(const HIRCoreType& v);
 
 bool isFloat(const HIRCoreType& v);
@@ -63,11 +63,7 @@ enum class HIRBorrowType {
     Unique,
     Owned,
 };
-std::ostream& operator<<(std::ostream& os, const HIRBorrowType& bt);
-
 #include "hir_type_binding_tu.h"
-
-std::ostream& operator<<(std::ostream& os, const HIRArraySize& x);
 
 struct HIRTypeDataPath {
     HIRPath path;
@@ -154,7 +150,7 @@ struct HIRTypePatternRange {
 
     HIRTypePatternRange clone() const;
     Ordering ord(const HIRTypePatternRange& x) const;
-    void fmt(std::ostream& os) const;
+    void fmt(stl::ZeroCopyOutput& os) const;
 };
 
 struct HIRTypePattern {
@@ -162,7 +158,7 @@ struct HIRTypePattern {
 
     HIRTypePattern clone() const;
     Ordering ord(const HIRTypePattern& x) const;
-    void fmt(std::ostream& os) const;
+    void fmt(stl::ZeroCopyOutput& os) const;
 };
 
 struct HIRTypeDataInfer {
@@ -236,5 +232,3 @@ inline bool operator==(HIRTypeRef ty, HIRCoreType ct) {
 inline bool operator!=(HIRTypeRef ty, HIRCoreType ct) {
     return !(ty == ct);
 }
-
-std::ostream& operator<<(std::ostream& os, const HIRTypeData* ty);

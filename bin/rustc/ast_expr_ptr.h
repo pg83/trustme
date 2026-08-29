@@ -5,8 +5,6 @@
 class ASTExprNode;
 class ASTNodeVisitor;
 
-std::ostream& operator<<(std::ostream& os, const ASTExprNode& node);
-
 class ASTExprNodeP {
     ASTExprNode* ptr;
 
@@ -95,5 +93,4 @@ public:
 
     ASTExpr clone() const;
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTExpr& pat);
 };

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "span.h"
 #include "common.h"
 #include "thin_vector.h"
@@ -35,12 +37,8 @@ struct HIRInferData {
 };
 
 #include "hir_path_tu.h"
-std::ostream& operator<<(std::ostream& os, const HIRConstGeneric& x);
-
 class HIRTrait;
 class HIRGenericParams;
-
-std::ostream& operator<<(std::ostream& os, const HIRCompare& x);
 
 HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y);
 
@@ -130,7 +128,6 @@ public:
     }
 
     bool startsWith(const HIRSimplePath& x, bool skipLast = false) const;
-    friend std::ostream& operator<<(std::ostream& os, const HIRSimplePath& x);
 };
 
 struct HIRPathParams {
@@ -167,7 +164,6 @@ struct HIRPathParams {
 
     Ordering ord(const HIRPathParams& x) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const HIRPathParams& x);
 };
 
 class HIRGenericPath {
@@ -197,7 +193,6 @@ public:
 
     Ordering ord(const HIRGenericPath& x) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const HIRGenericPath& x);
 };
 
 class HIRTraitPath {
@@ -214,7 +209,6 @@ public:
             return AtyEqual{sourceTrait.clone(), atyParams.clone(), type};
         }
 
-        friend std::ostream& operator<<(std::ostream& os, const AtyEqual& x);
     };
 
     struct AtyBound {
@@ -260,7 +254,6 @@ public:
 
     Ordering ord(const HIRTraitPath& x) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const HIRTraitPath& x);
 };
 
 #include "hir_path_data_tu.h"
@@ -295,7 +288,6 @@ public:
         return ord(x) == OrdLess;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const HIRPath& x);
 };
 
 struct HIRConstGenericUnevaluated {
@@ -311,7 +303,7 @@ struct HIRConstGenericUnevaluated {
     HIRConstGenericUnevaluated monomorph(const Span& sp, const Monomorphiser& ms, bool allowInfer = true) const;
     bool equivalent(const HIRConstGenericUnevaluated& x) const;
     Ordering ord(const HIRConstGenericUnevaluated& x) const;
-    void fmt(std::ostream& os) const;
+    void fmt(stl::ZeroCopyOutput& os) const;
 
 private:
     HIRConstGenericUnevaluated();

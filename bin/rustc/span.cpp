@@ -1,9 +1,11 @@
 #include "span.h"
+#include "output.h"
 
 #include "common.h"
 #include "parse_lex.h"
 
-#include <iostream>
+
+using namespace stl;
 
 Span::Span(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs)
     : ptr(SpanInnerSource::alloc(parent, std::move(filename), startLine, startOfs, endLine, endOfs))
@@ -57,25 +59,25 @@ const SpanInnerSource& Span::getTopFileSpan() const {
     if (const auto* ts = cast<const SpanInnerSource>(topSpan->get())) {
         return *ts;
     }
-    TODO(*this, "Top span isn't source?");
+    TODO(*this, StringView("Top span isn't source?"));
 }
 
 void Span::printSpanMessage(SpanMessageCallback& tag, SpanMessageCallback& msg) const {
     const Span& sp = *this;
-    auto& sink = std::cerr;
-    sink << sp << " ";
+    auto sink = sysE;
+    sink << sp << StringView(" ");
     tag.write(sink);
-    sink << ": ";
+    sink << StringView(": ");
     msg.write(sink);
-    sink << std::endl;
+    sink << endL;
 
     if (sp.get()) {
         for (auto parent = sp->parentSpan; parent != Span(); parent = parent->parentSpan) {
-            sink << parent << ": note: From here" << std::endl;
+            sink << parent << StringView(": note: From here") << endL;
         }
     }
 
-    sink << std::flush;
+    sink << flsH;
 }
 
 void spanUnreachableAt(const char* file, int line) {
@@ -85,7 +87,7 @@ void spanUnreachableAt(const char* file, int line) {
 
 void Span::bugCb(SpanMessageCallback& msg) const {
     auto tag = makeCallable<SpanMessageCb>([](auto& os) {
-        os << "BUG";
+        os << StringView("BUG");
     });
     printSpanMessage(tag, msg);
     abort();
@@ -93,7 +95,7 @@ void Span::bugCb(SpanMessageCallback& msg) const {
 
 void Span::errorCb(ErrorType errorTag, SpanMessageCallback& msg) const {
     auto tag = makeCallable<SpanMessageCb>([errorTag](auto& os) {
-        os << "error:" << errorTag;
+        os << StringView("error:") << errorTag;
     });
     printSpanMessage(tag, msg);
     abort();
@@ -101,14 +103,14 @@ void Span::errorCb(ErrorType errorTag, SpanMessageCallback& msg) const {
 
 void Span::warningCb(WarningType warningTag, SpanMessageCallback& msg) const {
     auto tag = makeCallable<SpanMessageCb>([warningTag](auto& os) {
-        os << "warn:" << warningTag;
+        os << StringView("warn:") << warningTag;
     });
     printSpanMessage(tag, msg);
 }
 
 void Span::noteCb(SpanMessageCallback& msg) const {
     auto tag = makeCallable<SpanMessageCb>([](auto& os) {
-        os << "note";
+        os << StringView("note");
     });
     printSpanMessage(tag, msg);
 }
@@ -123,14 +125,14 @@ unsigned int SpanInnerSource::nodeKind() const {
     return SpanInnerSource::kind;
 }
 
-void SpanInnerSource::fmt(std::ostream& os) const {
+void SpanInnerSource::fmt(ZeroCopyOutput& os) const {
     os << this->filename;
     if (this->startLine != this->endLine) {
-        os << ":" << this->startLine << "-" << this->endLine;
+        os << StringView(":") << this->startLine << StringView("-") << this->endLine;
     } else if (this->startOfs != this->endOfs) {
-        os << ":" << this->startLine << ":" << this->startOfs << "-" << this->endOfs;
+        os << StringView(":") << this->startLine << StringView(":") << this->startOfs << StringView("-") << this->endOfs;
     } else {
-        os << ":" << this->startLine << ":" << this->startOfs;
+        os << StringView(":") << this->startLine << StringView(":") << this->startOfs;
     }
 }
 
@@ -141,8 +143,8 @@ unsigned int SpanInnerMacro::nodeKind() const {
     return SpanInnerMacro::kind;
 }
 
-void SpanInnerMacro::fmt(std::ostream& os) const {
-    os << "MACRO<::\"" << this->crate << "\"::" << this->macro << ">";
+void SpanInnerMacro::fmt(ZeroCopyOutput& os) const {
+    os << StringView("MACRO<::\"") << this->crate << StringView("\"::") << this->macro << StringView(">");
 }
 
 /*static*/ SpanInner* SpanInnerMacro::alloc(Span parent, RcString crate, RcString macro) {
@@ -154,14 +156,7 @@ void SpanInnerMacro::fmt(std::ostream& os) const {
     return rv;
 }
 
-std::ostream& operator<<(std::ostream& os, const Span& sp) {
-    if (sp.ptr) {
-        sp.ptr->fmt(os);
-    } else {
-        os << "<null>";
-    }
-    return os;
-}
+
 
 Span::Span()
     : ptr(nullptr)
@@ -204,4 +199,26 @@ RcString SpanInnerSource::crateName() const {
 
 RcString SpanInnerMacro::crateName() const {
     return crate;
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, ErrorType>(ZeroCopyOutput& os, ErrorType value) {
+    os << static_cast<unsigned>(value);
+}
+
+template <>
+void output<ZeroCopyOutput, WarningType>(ZeroCopyOutput& os, WarningType value) {
+    os << static_cast<unsigned>(value);
+}
+
+template <>
+void output<ZeroCopyOutput, Span>(ZeroCopyOutput& os, const Span& sp) {
+    if (sp.get()) {
+        sp.get()->fmt(os);
+    } else {
+        os << StringView("<null>");
+    }
+    return;
+}
 }

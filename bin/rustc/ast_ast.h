@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "hir_asm.h"
 #include "ast_item.h"
 #include "settings.h"
@@ -40,10 +42,6 @@ struct ASTStructItem {
 
     ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExpr defaultValue);
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTStructItem& x) {
-        return os << x.vis << x.name << ": " << x.type;
-    }
-
     ASTStructItem clone() const;
 };
 
@@ -53,10 +51,6 @@ struct ASTTupleItem {
     ASTType* type;
 
     ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, ASTType* ty);
-
-    friend std::ostream& operator<<(std::ostream& os, const ASTTupleItem& x) {
-        return os << x.vis << x.type;
-    }
 
     ASTTupleItem clone() const;
 };
@@ -435,7 +429,6 @@ struct ASTEnumVariant {
 
     ASTEnumVariant(ASTAttributeList attrs, RcString name, std::vector<ASTStructItem> fields);
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTEnumVariant& x);
 };
 
 class ASTEnum {
@@ -613,7 +606,6 @@ public:
         return type_;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTImplDef& impl);
 };
 
 class ASTImpl {
@@ -663,8 +655,6 @@ public:
 
     bool hasNamedItem(const RcString& name) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTImpl& impl);
-
 private:
 };
 
@@ -678,7 +668,6 @@ struct ASTUseItem {
         RcString name;
 
         bool isSelf = false;
-        friend std::ostream& operator<<(std::ostream& os, const ASTUseItem::Ent& x);
     };
 
     std::vector<Ent> entries;

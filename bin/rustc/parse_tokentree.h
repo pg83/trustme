@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "ident.h"
 #include "parse_token.h"
 
@@ -61,5 +63,5 @@ public:
         return edition;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const TokenTree& tt);
+    void fmt(stl::ZeroCopyOutput& out) const;
 };

@@ -1,4 +1,5 @@
 #include "ast_ast.h"
+#include "output.h"
 
 #include "common.h"
 #include "synext.h"
@@ -10,8 +11,9 @@
 #include "parse_parseerror.h"
 #include "parse_interpolated_fragment.h"
 
-#include <iostream>
 #include <algorithm>
+
+using namespace stl;
 
 ASTTrait::ASTTrait()
     : isMarker_(false)
@@ -69,26 +71,9 @@ const ASTAttribute* ASTAttributeList::get(const char* name) const {
     return nullptr;
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTAttributeList& x) {
-    for (const auto& i : x.items) {
-        os << "#[" << i << "]";
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTAttributeName& x) {
-    if (x.elems.empty()) {
-        os << "<empty>";
-    } else {
-        for (const auto& i : x.elems) {
-            if (&i != &x.elems.front()) {
-                os << "::";
-            }
-            os << i;
-        }
-    }
-    return os;
-}
+
+
 
 ASTAttribute::ASTAttribute(const ASTAttribute& x)
     : span_(x.span_)
@@ -102,7 +87,7 @@ ASTAttribute ASTAttribute::clone() const {
     return ASTAttribute(*this);
 }
 
-void ASTAttribute::fmt(std::ostream& os) const {
+void ASTAttribute::fmt(ZeroCopyOutput& os) const {
     os << name_;
     os << data_;
 }
@@ -163,41 +148,38 @@ ASTVisibility ASTVisibility::makeRestricted(ASTAbsolutePath p, ASTPath inPath) {
     return rv;
 }
 
-void ASTVisibility::fmt(std::ostream& os) const {
+void ASTVisibility::fmt(ZeroCopyOutput& os) const {
     switch (ty_) {
         case Ty::Private:
             break;
         case Ty::Pub:
-            os << "pub ";
+            os << StringView("pub ");
             break;
         case Ty::Crate:
-            os << "crate ";
+            os << StringView("crate ");
             break;
         case Ty::PubCrate:
-            os << "pub(crate) ";
+            os << StringView("pub(crate) ");
             break;
         case Ty::PubSuper:
-            os << "pub(super) ";
+            os << StringView("pub(super) ");
             break;
         case Ty::PubSelf:
-            os << "pub(self) ";
+            os << StringView("pub(self) ");
             break;
         case Ty::PubIn:
-            os << "pub(in ";
+            os << StringView("pub(in ");
             if (inPath_) {
                 os << *inPath_;
             } else {
-                os << "???";
+                os << StringView("???");
             }
-            os << ")";
+            os << StringView(")");
             break;
     }
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTVisibility& x) {
-    x.fmt(os);
-    return os;
-}
+
 
 bool ASTVisibility::isVisible(const ASTAbsolutePath& fromMod) const {
     if (visPath_) {
@@ -231,7 +213,7 @@ void ASTVisibility::inplaceUnion(const ASTVisibility& x) {
     } else if (x.contains(*this)) {
         visPath_ = x.visPath_;
     } else {
-        TODO(Span(), "Union with incompatible visbility");
+        TODO(Span(), StringView("Union with incompatible visbility"));
     }
 }
 
@@ -394,9 +376,7 @@ ASTUnion ASTUnion::clone() const {
     return ASTUnion(params_.clone(), mv$(newVars));
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTImplDef& impl) {
-    return os << "impl " << (impl.isConst_ ? "const " : "") << "<" << impl.params_ << "> " << impl.trait_.ent << " for " << impl.type_ << "";
-}
+
 
 void ASTImpl::addFunction(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTFunction fcn, RcString sourceName) {
     if (sourceName == "") {
@@ -432,13 +412,9 @@ bool ASTImpl::hasNamedItem(const RcString& name) const {
     return false;
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTImpl& impl) {
-    return os << impl.def_;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTUseItem::Ent& x) {
-    return os << x.name << "=" << x.path;
-}
+
+
 
 ASTMacroInvocation ASTMacroInvocation::clone() const {
     return ASTMacroInvocation(span_, ASTPath(macroPath), ident, input.clone());
@@ -462,12 +438,12 @@ ASTExternBlock::ASTExternBlock(ASTExternBlock&&) = default;
 ASTExternBlock& ASTExternBlock::operator=(ASTExternBlock&&) = default;
 
 void ASTExternBlock::addItem(ASTNamed<ASTItem> namedItem) {
-    ASSERT_BUG(namedItem.span, namedItem.data.is_Function() || namedItem.data.is_Static() || namedItem.data.is_Type() || namedItem.data.is_MacroInv(), "Incorrect item type for ExternBlock - " << namedItem.data.tagStr());
+    ASSERT_BUG(namedItem.span, namedItem.data.is_Function() || namedItem.data.is_Static() || namedItem.data.is_Type() || namedItem.data.is_MacroInv(), StringView("Incorrect item type for ExternBlock - ") << namedItem.data.tagStr());
     items_.push_back(mv$(namedItem));
 }
 
 ASTExternBlock ASTExternBlock::clone() const {
-    TODO(Span(), "Clone an extern block");
+    TODO(Span(), StringView("Clone an extern block"));
 }
 
 ASTGlobalAsm ASTGlobalAsm::clone() const {
@@ -502,8 +478,8 @@ ASTModule::ASTModule(ASTModule&&) = default;
 ASTModule& ASTModule::operator=(ASTModule&&) = default;
 
 std::shared_ptr<ASTModule> ASTModule::addAnon() {
-    auto rv = std::shared_ptr<ASTModule>(new ASTModule(myPath + RcString::newInterned(FMT("#" << anonModules.size()))));
-    DEBUG("New anon " << rv->myPath);
+    auto rv = std::shared_ptr<ASTModule>(new ASTModule(myPath + RcString::newInterned(FMT(StringView("#") << anonModules.size()))));
+    DEBUG(StringView("New anon ") << rv->myPath);
     rv->fileInfo = fileInfo;
 
     anonModules.push_back(rv);
@@ -548,11 +524,11 @@ ASTItem ASTItem::clone() const {
             return ASTItem(e);
         }
         case ASTItem::TAG_MacroInv: {
-            TODO(Span(), "Clone on Item::MacroInv");
+            TODO(Span(), StringView("Clone on Item::MacroInv"));
             break;
         }
         case ASTItem::TAG_Macro: {
-            TODO(Span(), "Clone on Item::Macro");
+            TODO(Span(), StringView("Clone on Item::Macro"));
             break;
         }
         case ASTItem::TAG_Use: {
@@ -560,7 +536,7 @@ ASTItem ASTItem::clone() const {
             return ASTItem(e.clone());
         }
         case ASTItem::TAG_ExternBlock: {
-            TODO(Span(), "Clone on Item::" << this->tagStr());
+            TODO(Span(), StringView("Clone on Item::") << this->tagStr());
             break;
         }
         case ASTItem::TAG_GlobalAsm: {
@@ -568,15 +544,15 @@ ASTItem ASTItem::clone() const {
             return ASTItem(e.clone());
         }
         case ASTItem::TAG_Impl: {
-            TODO(Span(), "Clone on Item::" << this->tagStr());
+            TODO(Span(), StringView("Clone on Item::") << this->tagStr());
             break;
         }
         case ASTItem::TAG_NegImpl: {
-            TODO(Span(), "Clone on Item::" << this->tagStr());
+            TODO(Span(), StringView("Clone on Item::") << this->tagStr());
             break;
         }
         case ASTItem::TAG_Module: {
-            TODO(Span(), "Clone on Item::" << this->tagStr());
+            TODO(Span(), StringView("Clone on Item::") << this->tagStr());
             break;
         }
         case ASTItem::TAG_Crate: {
@@ -619,111 +595,19 @@ ASTItem ASTItem::clone() const {
     UNREACHABLE();
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTTypeParam& tp) {
-    os << tp.name_;
-    os << " = ";
-    os << tp.defaultValue_;
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTLifetimeParam& p) {
-    os << "'" << p.name_;
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTValueParam& p) {
-    os << "const " << p.name_ << ": " << p.type_;
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTHigherRankedBounds& x) {
-    if (!x.empty()) {
-        os << "for<";
-        for (const auto& l : x.lifetimes) {
-            os << l << ",";
-        }
-        for (const auto& t : x.types) {
-            os << t << ",";
-        }
-        os << "> ";
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const GenericParam& x) {
-    switch (x.tag()) {
-        case GenericParam::TAG_None: {
-            os << "/*-*/";
-            break;
-        }
-        case GenericParam::TAG_Lifetime: {
-            auto& e = x.as_Lifetime();
-            os << e;
-            break;
-        }
-        case GenericParam::TAG_Type: {
-            auto& e = x.as_Type();
-            os << e;
-            break;
-        }
-        case GenericParam::TAG_Value: {
-            auto& e = x.as_Value();
-            os << e;
-            break;
-        }
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTGenericBound& x) {
-    switch (x.tag()) {
-        case ASTGenericBound::TAG_None: {
-            os << "/*-*/";
-            break;
-        }
-        case ASTGenericBound::TAG_Lifetime: {
-            auto& ent = x.as_Lifetime();
-            os << ent.test << ": " << ent.bound;
-            break;
-        }
-        case ASTGenericBound::TAG_TypeLifetime: {
-            auto& ent = x.as_TypeLifetime();
-            os << ent.type << ": " << ent.bound;
-            break;
-        }
-        case ASTGenericBound::TAG_IsTrait: {
-            auto& ent = x.as_IsTrait();
-            os << ent.outerHrbs << ent.type << ": ";
-            if (ent.constness == ASTBoundConstness::Always) {
-                os << "const ";
-            } else if (ent.constness == ASTBoundConstness::Maybe) {
-                os << "[const] ";
-            }
-            os << ent.innerHrbs << ent.trait;
-            break;
-        }
-        case ASTGenericBound::TAG_MaybeTrait: {
-            auto& ent = x.as_MaybeTrait();
-            os << ent.type << ": ?" << ent.trait;
-            break;
-        }
-        case ASTGenericBound::TAG_NotTrait: {
-            auto& ent = x.as_NotTrait();
-            os << ent.type << ": !" << ent.trait;
-            break;
-        }
-        case ASTGenericBound::TAG_Equality: {
-            auto& ent = x.as_Equality();
-            os << ent.type << " = " << ent.replacement;
-            break;
-        }
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const ASTGenericParams& tps) {
-    return os << "<" << tps.params << "> where {" << tps.bounds << "}";
-}
+
+
+
+
+
+
+
 
 ASTAttributeList::ASTAttributeList() = default;
 
@@ -899,25 +783,216 @@ ASTImplDef::ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, ASTT
 {
 }
 
-std::ostream& operator<<(std::ostream& os, const ASTEnumVariant& x) {
-    os << "EnumVariant(" << x.name;
+namespace stl {
+template <>
+void output<ZeroCopyOutput, ASTStructItem>(ZeroCopyOutput& out, const ASTStructItem& item) {
+    out << item.vis << item.name << StringView(": ") << item.type;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTTupleItem>(ZeroCopyOutput& out, const ASTTupleItem& item) {
+    out << item.vis << item.type;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTAttributeList>(ZeroCopyOutput& os, const ASTAttributeList& x) {
+    for (const auto& i : x.items) {
+        os << StringView("#[") << i << StringView("]");
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTAttributeName>(ZeroCopyOutput& os, const ASTAttributeName& x) {
+    if (x.elems.empty()) {
+        os << StringView("<empty>");
+    } else {
+        for (const auto& i : x.elems) {
+            if (&i != &x.elems.front()) {
+                os << StringView("::");
+            }
+            os << i;
+        }
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTVisibility>(ZeroCopyOutput& os, const ASTVisibility& x) {
+    x.fmt(os);
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTImplDef>(ZeroCopyOutput& os, const ASTImplDef& impl) {
+    os << StringView("impl ") << StringView(impl.isConst() ? "const " : "") << StringView("<") << impl.params() << StringView("> ") << impl.trait().ent << StringView(" for ") << impl.type();
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTImpl>(ZeroCopyOutput& os, const ASTImpl& impl) {
+    os << impl.def();
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTUseItem::Ent>(ZeroCopyOutput& os, const ASTUseItem::Ent& x) {
+    os << x.name << StringView("=") << x.path;
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTTypeParam>(ZeroCopyOutput& os, const ASTTypeParam& tp) {
+    os << tp.name();
+    os << StringView(" = ");
+    os << tp.getDefault();
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTLifetimeParam>(ZeroCopyOutput& os, const ASTLifetimeParam& p) {
+    os << StringView("'") << p.name();
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTValueParam>(ZeroCopyOutput& os, const ASTValueParam& p) {
+    os << StringView("const ") << p.name() << StringView(": ") << p.type();
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTHigherRankedBounds>(ZeroCopyOutput& os, const ASTHigherRankedBounds& x) {
+    if (!x.empty()) {
+        os << StringView("for<");
+        for (const auto& l : x.lifetimes) {
+            os << l << StringView(",");
+        }
+        for (const auto& t : x.types) {
+            os << t << StringView(",");
+        }
+        os << StringView("> ");
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, GenericParam>(ZeroCopyOutput& os, const GenericParam& x) {
+    switch (x.tag()) {
+        case GenericParam::TAG_None: {
+            os << StringView("/*-*/");
+            break;
+        }
+        case GenericParam::TAG_Lifetime: {
+            auto& e = x.as_Lifetime();
+            os << e;
+            break;
+        }
+        case GenericParam::TAG_Type: {
+            auto& e = x.as_Type();
+            os << e;
+            break;
+        }
+        case GenericParam::TAG_Value: {
+            auto& e = x.as_Value();
+            os << e;
+            break;
+        }
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTGenericBound>(ZeroCopyOutput& os, const ASTGenericBound& x) {
+    switch (x.tag()) {
+        case ASTGenericBound::TAG_None: {
+            os << StringView("/*-*/");
+            break;
+        }
+        case ASTGenericBound::TAG_Lifetime: {
+            auto& ent = x.as_Lifetime();
+            os << ent.test << StringView(": ") << ent.bound;
+            break;
+        }
+        case ASTGenericBound::TAG_TypeLifetime: {
+            auto& ent = x.as_TypeLifetime();
+            os << ent.type << StringView(": ") << ent.bound;
+            break;
+        }
+        case ASTGenericBound::TAG_IsTrait: {
+            auto& ent = x.as_IsTrait();
+            os << ent.outerHrbs << ent.type << StringView(": ");
+            if (ent.constness == ASTBoundConstness::Always) {
+                os << StringView("const ");
+            } else if (ent.constness == ASTBoundConstness::Maybe) {
+                os << StringView("[const] ");
+            }
+            os << ent.innerHrbs << ent.trait;
+            break;
+        }
+        case ASTGenericBound::TAG_MaybeTrait: {
+            auto& ent = x.as_MaybeTrait();
+            os << ent.type << StringView(": ?") << ent.trait;
+            break;
+        }
+        case ASTGenericBound::TAG_NotTrait: {
+            auto& ent = x.as_NotTrait();
+            os << ent.type << StringView(": !") << ent.trait;
+            break;
+        }
+        case ASTGenericBound::TAG_Equality: {
+            auto& ent = x.as_Equality();
+            os << ent.type << StringView(" = ") << ent.replacement;
+            break;
+        }
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTGenericParams>(ZeroCopyOutput& os, const ASTGenericParams& tps) {
+    os << StringView("<") << tps.params << StringView("> where {") << tps.bounds << StringView("}");
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, ASTEnumVariant>(ZeroCopyOutput& os, const ASTEnumVariant& x) {
+    os << StringView("EnumVariant(") << x.name;
     switch (x.data.tag()) {
         case ASTEnumVariantData::TAG_Unit: {
             break;
         }
         case ASTEnumVariantData::TAG_Tuple: {
             auto& e = x.data.as_Tuple();
-            os << "(" << e.items << ")";
+            os << StringView("(") << e.items << StringView(")");
             break;
         }
         case ASTEnumVariantData::TAG_Struct: {
             auto& e = x.data.as_Struct();
-            os << " { " << e.fields << " }";
+            os << StringView(" { ") << e.fields << StringView(" }");
             break;
         }
     }
     if (x.discriminantValue) {
-        os << " = " << x.discriminantValue;
+        os << StringView(" = ") << x.discriminantValue;
     }
-    return os << ")";
+    os << StringView(")");
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<ASTStructItem>>(ZeroCopyOutput& out, const std::vector<ASTStructItem>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<ASTTupleItem>>(ZeroCopyOutput& out, const std::vector<ASTTupleItem>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<ASTUseItem::Ent>>(ZeroCopyOutput& out, const std::vector<ASTUseItem::Ent>& values) {
+    outCont(out, values);
+}
+
 }

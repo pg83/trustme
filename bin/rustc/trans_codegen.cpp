@@ -19,7 +19,6 @@
 #include <std/mem/obj_pool.h>
 
 #include <fstream>
-#include <iomanip>
 #include <algorithm>
 
 using namespace stl;
@@ -85,7 +84,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
     } else if (opt.mode == "c") {
         codegen = TransCodegenGetGeneratorC(wb, *cratePtr, outfile);
     } else {
-        BUG(sp, "Unknown codegen mode '" << opt.mode << "'");
+        BUG(sp, StringView("Unknown codegen mode '") << opt.mode << StringView("'"));
     }
 
     for (const auto& ty : list.types) {
@@ -156,14 +155,14 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
                 continue;
             }
             const auto& function = *node->function;
-            DEBUG("FUNCTION PROTO " << *function.path);
+            DEBUG(StringView("FUNCTION PROTO ") << *function.path);
             const auto& fcn = *function.ptr;
             const bool isExtern = !static_cast<bool>(fcn.code);
             codegen->emitFunctionProto(*function.path, fcn, function.pp, isExtern);
         }
     } else {
         for (const auto& ent : list.functions) {
-            DEBUG("FUNCTION " << ent.first);
+            DEBUG(StringView("FUNCTION ") << ent.first);
             BUG_ASSERT(ent.second->ptr);
             const auto& fcn = *ent.second->ptr;
             bool isExtern = !static_cast<bool>(fcn.code);
@@ -191,8 +190,8 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
         const auto& stat = *ent.second->ptr;
 
         DEBUG(
-            "STATIC proto " << ent.first << ": "
-                            << "(m_value_generated=" << stat.valueGenerated << " && !m_no_emit_value=" << stat.noEmitValue << ") || is_generic=" << stat.params.isGeneric()
+            StringView("STATIC proto ") << ent.first << StringView(": ")
+                            << StringView("(m_value_generated=") << stat.valueGenerated << StringView(" && !m_no_emit_value=") << stat.noEmitValue << StringView(") || is_generic=") << stat.params.isGeneric()
         );
         if ((stat.valueGenerated && !stat.noEmitValue) || stat.params.isGeneric()) {
             codegen->emitStaticProto(ent.first, stat, ent.second->pp);
@@ -202,7 +201,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
     }
     auto emitStaticDefinitions = [&]() {
         for (const auto& ent : list.statics) {
-            DEBUG("STATIC " << ent.first);
+            DEBUG(StringView("STATIC ") << ent.first);
             BUG_ASSERT(ent.second->ptr);
             const auto& stat = *ent.second->ptr;
 
@@ -222,7 +221,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
         const auto& fcn = *function.ptr;
         const auto& pp = function.pp;
         TRACE_FUNCTION_F(path);
-        DEBUG("FUNCTION CODE " << path);
+        DEBUG(StringView("FUNCTION CODE ") << path);
         bool isExtern = !static_cast<bool>(fcn.code);
         bool isMethod = (fcn.args.size() > 0 && visitTyWith(fcn.args[0].second, [&](const auto& x) {
             return x == cratePtr->types.self();
@@ -234,7 +233,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
 
             codegen->emitFunctionCode(path, fcn, pp, isExtern, function.monomorphised.code, hasPrototype);
         } else {
-            ASSERT_BUG(sp, !isMonomorph, "Function that required monomorphisation wasn't monomorphised");
+            ASSERT_BUG(sp, !isMonomorph, StringView("Function that required monomorphisation wasn't monomorphised"));
             codegen->emitFunctionCode(path, fcn, pp, isExtern, fcn.code.mir, hasPrototype);
         }
     };

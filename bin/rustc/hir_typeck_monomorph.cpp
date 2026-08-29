@@ -1,5 +1,7 @@
 #include "hir_typeck_monomorph.h"
 
+using namespace stl;
+
 Monomorphiser::Monomorphiser(HIRTypeInterner& types)
     : types(types)
     , constevalWb(nullptr)
@@ -116,7 +118,7 @@ HIRTypeRef OpaqueAliasParamMonomorph::getType(const Span& sp, const HIRGenericRe
     auto type = MonomorphiserNop::getType(sp, generic);
     for (size_t i = 0; i < params.types.size(); i++) {
         if (params.types[i] == type) {
-            ASSERT_BUG(sp, i < alias.generics.types.size(), "Opaque alias type parameter count mismatch");
+            ASSERT_BUG(sp, i < alias.generics.types.size(), StringView("Opaque alias type parameter count mismatch"));
             return types.generic(alias.generics.types[i].name, i);
         }
     }
@@ -127,7 +129,7 @@ HIRConstGeneric OpaqueAliasParamMonomorph::getValue(const Span& sp, const HIRGen
     for (size_t i = 0; i < params.values.size(); i++) {
         const auto* param = params.values[i].opt_Generic();
         if (param && *param == generic) {
-            ASSERT_BUG(sp, i < alias.generics.values.size(), "Opaque alias const parameter count mismatch");
+            ASSERT_BUG(sp, i < alias.generics.values.size(), StringView("Opaque alias const parameter count mismatch"));
             return HIRGenericRef(alias.generics.values[i].name, i);
         }
     }

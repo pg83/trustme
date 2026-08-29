@@ -3,19 +3,21 @@
 #include "trans_mangling.h"
 #include "hir_typeck_static.h"
 
+using namespace stl;
+
 TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
     BUG_ASSERT(wb_);
     auto symbol = FMT(TransMangleValue(*wb_, p));
     auto existing = functionSymbols.find(symbol);
     if (existing != functionSymbols.end()) {
-        ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p), "Distinct function paths have the same mangled name: " << existing->second << " and " << p);
+        ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p), StringView("Distinct function paths have the same mangled name: ") << existing->second << StringView(" and ") << p);
         return nullptr;
     }
 
     auto rv = functions.insert(std::make_pair(mv$(p), nullptr));
     if (rv.second) {
         functionSymbols.emplace(mv$(symbol), rv.first->first.clone());
-        DEBUG("Function " << rv.first->first);
+        DEBUG(StringView("Function ") << rv.first->first);
         BUG_ASSERT(!rv.first->second);
         rv.first->second.reset(new TransListFunction(types, rv.first->first));
         return &*rv.first->second;
@@ -36,9 +38,9 @@ const TransListFunction* TransList::findFunction(const HIRPath& p) const {
     if (canonical == functionSymbols.end()) {
         return nullptr;
     }
-    ASSERT_BUG(Span(), canonical->second.equalsIgnoringRegions(p), "Distinct function paths have the same mangled name: " << canonical->second << " and " << p);
+    ASSERT_BUG(Span(), canonical->second.equalsIgnoringRegions(p), StringView("Distinct function paths have the same mangled name: ") << canonical->second << StringView(" and ") << p);
     exact = functions.find(canonical->second);
-    ASSERT_BUG(Span(), exact != functions.end(), "Function symbol index is stale for " << p);
+    ASSERT_BUG(Span(), exact != functions.end(), StringView("Function symbol index is stale for ") << p);
     return exact->second.get();
 }
 
@@ -53,7 +55,7 @@ bool TransList::hasType(HIRTypeRef type, bool shallow) const {
     if (existing == typeSymbols.end()) {
         return false;
     }
-    ASSERT_BUG(Span(), existing->second.canonical == type || existing->second.canonical->equalsIgnoringRegions(type), "Distinct types have the same mangled name: " << existing->second.canonical << " and " << type);
+    ASSERT_BUG(Span(), existing->second.canonical == type || existing->second.canonical->equalsIgnoringRegions(type), StringView("Distinct types have the same mangled name: ") << existing->second.canonical << StringView(" and ") << type);
     return existing->second.hasDefinition || (shallow && existing->second.hasPrototype);
 }
 
@@ -65,7 +67,7 @@ bool TransList::addType(HIRTypeRef type, bool shallow) {
         typeSymbols.emplace(mv$(symbol), TypeEmissionState{type, shallow, !shallow});
     } else {
         auto& state = existing->second;
-        ASSERT_BUG(Span(), state.canonical == type || state.canonical->equalsIgnoringRegions(type), "Distinct types have the same mangled name: " << state.canonical << " and " << type);
+        ASSERT_BUG(Span(), state.canonical == type || state.canonical->equalsIgnoringRegions(type), StringView("Distinct types have the same mangled name: ") << state.canonical << StringView(" and ") << type);
         auto& alreadyEmitted = shallow ? state.hasPrototype : state.hasDefinition;
         if (alreadyEmitted || (shallow && state.hasDefinition)) {
             return false;
@@ -86,14 +88,14 @@ TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
     auto symbol = FMT(TransMangleValue(*wb_, p));
     auto existing = staticSymbols.find(symbol);
     if (existing != staticSymbols.end()) {
-        ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p), "Distinct static paths have the same mangled name: " << existing->second << " and " << p);
+        ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p), StringView("Distinct static paths have the same mangled name: ") << existing->second << StringView(" and ") << p);
         return nullptr;
     }
 
     auto rv = statics.insert(std::make_pair(mv$(p), nullptr));
     if (rv.second) {
         staticSymbols.emplace(mv$(symbol), rv.first->first.clone());
-        DEBUG("Static " << rv.first->first);
+        DEBUG(StringView("Static ") << rv.first->first);
         BUG_ASSERT(!rv.first->second);
         rv.first->second.reset(new TransListStatic(types));
         return &*rv.first->second;
@@ -105,7 +107,7 @@ TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
 TransListConst* TransList::addConst(HIRTypeInterner& types, HIRPath p) {
     auto rv = constants.insert(std::make_pair(mv$(p), nullptr));
     if (rv.second) {
-        DEBUG("Const " << rv.first->first);
+        DEBUG(StringView("Const ") << rv.first->first);
         BUG_ASSERT(!rv.first->second);
         rv.first->second.reset(new TransListConst(types));
         return &*rv.first->second;
@@ -150,7 +152,7 @@ HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPat
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            BUG(sp, "Encountered UfcsUnknown");
+            BUG(sp, StringView("Encountered UfcsUnknown"));
             break;
         }
     }

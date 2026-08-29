@@ -2,20 +2,22 @@
 
 #if defined(TRUSTME_DEBUG)
 
-    #include <iostream>
+using namespace stl;
 
-std::ostream& traceOutput(const char* function) {
-    return std::cout << function << ": ";
+OutBuf traceOutput(const char* function) {
+    auto out = sysO;
+    out << function << StringView(": ");
+    return out;
 }
 
 TraceLog::TraceLog(const char* function)
     : function(function)
 {
-    traceOutput(function) << ">>\n";
+    traceOutput(function) << StringView(">>\n");
 }
 
 TraceLog::~TraceLog() {
-    traceOutput(function) << "<< ()\n";
+    traceOutput(function) << StringView("<< ()\n");
 }
 
 #endif

@@ -2,7 +2,6 @@
 
 #include <std/sys/types.h>
 
-#include <iosfwd>
 #include <cstdint>
 
 class Float128 {
@@ -57,5 +56,18 @@ public:
     static Float128 minimumNumber(const Float128& a, const Float128& b);
     static Float128 maximumNumber(const Float128& a, const Float128& b);
 
-    friend std::ostream& operator<<(std::ostream& os, const Float128& value);
 };
+
+enum class FloatFormat {
+    Default,
+    Fixed,
+    Scientific,
+};
+
+struct FormattedFloat128 {
+    Float128 value;
+    FloatFormat format;
+    int precision;
+};
+
+FormattedFloat128 formatFloat128(Float128 value, FloatFormat format, int precision);

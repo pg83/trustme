@@ -64,7 +64,7 @@ generate(
         }
 
         HIRTypeData cloneData() const;
-        void fmt(std::ostream& os) const;
+        void fmt(stl::ZeroCopyOutput& os) const;
 
         // Deliberately semantic relations. Plain ASTType* equality is pointer identity.
         bool equalsIgnoringRegions(HIRTypeRef x) const;

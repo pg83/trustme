@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 /*
  * Generic representation of a filesystem path (HEADER)
  */
@@ -95,7 +97,4 @@ public:
 
     FsPath normalise() const;
 
-    friend std::ostream& operator<<(std::ostream& os, const FsPath& p) {
-        return os << p.str_;
-    }
 };

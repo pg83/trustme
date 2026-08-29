@@ -12,6 +12,7 @@
 #include "expand_cfg.h"
 #include "wire_board.h"
 #include "main_bindings.h"
+#include "output_file.h"
 #include "parse_ttstream.h"
 
 #include <std/str/view.h>
@@ -21,6 +22,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <unordered_set>
+#include <sstream>
 
 using namespace stl;
 
@@ -83,8 +85,8 @@ namespace {
         Span thisSpan;
         const HIRProcMacro& procMacroDesc;
         ASTEdition edition;
-        std::ofstream dumpFileOut;
-        std::ofstream dumpFileRes;
+        std::unique_ptr<OutputFile> dumpFileOut;
+        std::unique_ptr<OutputFile> dumpFileRes;
 
         std::unordered_map<const SpanInner*, size_t> knownSpans;
         std::unordered_set<size_t> sentSpans;
@@ -243,7 +245,7 @@ namespace {
     ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath) {
         TRACE_FUNCTION_F(macPath);
         const auto& crateName = macPath.front();
-        ASSERT_BUG(sp, crate.externCrates.count(crateName), "Crate not loaded for macro: [" << macPath << "]");
+        ASSERT_BUG(sp, crate.externCrates.count(crateName), StringView("Crate not loaded for macro: [") << macPath << StringView("]"));
         const auto& extCrate = crate.externCrates.at(crateName);
         // TODO: Ensure that this macro is in the listed crate.
         const HIRProcMacro* pmp = nullptr;
@@ -265,7 +267,7 @@ namespace {
             }
         }
         if (!pmp) {
-            ERROR(sp, E0000, "Unable to find referenced proc macro " << macPath);
+            ERROR(sp, E0000, StringView("Unable to find referenced proc macro ") << macPath);
         }
 
         const auto* procMacroExeName = extCrate.procMacroFilename != "" ? extCrate.procMacroFilename.c_str() : extCrate.filename.c_str();
@@ -286,8 +288,8 @@ namespace {
         if (attrInput) {
             // TODO: Assert that this is a `#[proc_macro_attribute]` macro
             if (attrInput->size() != 0) {
-                ASSERT_BUG(sp, attrInput->size() >= 2, "");
-                ASSERT_BUG(sp, (*attrInput)[0].tok() == TOK_PAREN_OPEN || (*attrInput)[0].tok() == TOK_SQUARE_OPEN, "");
+                ASSERT_BUG(sp, attrInput->size() >= 2, StringView(""));
+                ASSERT_BUG(sp, (*attrInput)[0].tok() == TOK_PAREN_OPEN || (*attrInput)[0].tok() == TOK_SQUARE_OPEN, StringView(""));
                 ProcMacroVisitor v(wb, sp, *wb.settings, pmi);
                 for (size_t i = 1; i < attrInput->size() - 1; i++) {
                     v.visitTokentree((*attrInput)[i]);
@@ -355,7 +357,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
-        DEBUG("derive on struct");
+        DEBUG(StringView("derive on struct"));
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitStruct(itemName, vis, i);
@@ -364,7 +366,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTEnum& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
-        DEBUG("derive on enum");
+        DEBUG(StringView("derive on enum"));
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitEnum(itemName, vis, i);
@@ -373,7 +375,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTUnion& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
-        DEBUG("derive on union");
+        DEBUG(StringView("derive on union"));
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitUnion(itemName, vis, i);
@@ -404,20 +406,20 @@ ProcMacroInv::ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const ch
     if (getenv("TRUSTME_DUMP_PROCMACRO") && getenv("TRUSTME_DUMP_PROCMACRO")[0]) {
         // TODO: Dump both input and output, AND (optionally) dump each invocation
         std::string namePrefix;
-        namePrefix = FMT(getenv("TRUSTME_DUMP_PROCMACRO") << "-" << ++id);
-        DEBUG("Dumping to " << namePrefix);
-        dumpFileOut.open(FMT(namePrefix << "-out.bin"), std::ios::out | std::ios::binary);
-        dumpFileRes.open(FMT(namePrefix << "-res.bin"), std::ios::out | std::ios::binary);
-        DEBUG("Set TRUSTME_DUMP_PROCMACRO=procmacro_dump to dump to `procmacro_dump-NNN-{out,res}.bin`");
+        namePrefix = FMT(getenv("TRUSTME_DUMP_PROCMACRO") << StringView("-") << ++id);
+        DEBUG(StringView("Dumping to ") << namePrefix);
+        dumpFileOut = std::make_unique<OutputFile>(FMT(namePrefix << StringView("-out.bin")));
+        dumpFileRes = std::make_unique<OutputFile>(FMT(namePrefix << StringView("-res.bin")));
+        DEBUG(StringView("Set TRUSTME_DUMP_PROCMACRO=procmacro_dump to dump to `procmacro_dump-NNN-{out,res}.bin`"));
     }
     int stdinPipes[2];
     if (pipe(stdinPipes) != 0) {
-        BUG(sp, "Unable to create stdin pipe pair for proc macro, " << strerror(errno));
+        BUG(sp, StringView("Unable to create stdin pipe pair for proc macro, ") << strerror(errno));
     }
     this->handles.childStdin = stdinPipes[1];
     int stdoutPipes[2];
     if (pipe(stdoutPipes) != 0) {
-        BUG(sp, "Unable to create stdout pipe pair for proc macro, " << strerror(errno));
+        BUG(sp, StringView("Unable to create stdout pipe pair for proc macro, ") << strerror(errno));
     }
     this->handles.childStdout = stdoutPipes[0];
 
@@ -431,10 +433,10 @@ ProcMacroInv::ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const ch
     posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[1]);
 
     char* argv[3] = {const_cast<char*>(executable), const_cast<char*>(procMacroDesc.name.c_str()), nullptr};
-    DEBUG(argv[0] << " " << argv[1]);
+    DEBUG(argv[0] << StringView(" ") << argv[1]);
     int rv = posix_spawn(&this->handles.childPid, executable, &file_actions, nullptr, argv, environ);
     if (rv != 0) {
-        BUG(sp, "Error in posix_spawn - " << rv << " - can't start `" << executable << "`");
+        BUG(sp, StringView("Error in posix_spawn - ") << rv << StringView(" - can't start `") << executable << StringView("`"));
     }
 
     posix_spawn_file_actions_destroy(&file_actions);
@@ -452,12 +454,12 @@ ProcMacroInv::Handles::Handles(Handles&& x)
     x.childPid = 0;
     x.childStdin = -1;
     x.childStdout = -1;
-    DEBUG("");
+    DEBUG(StringView(""));
 }
 
 ProcMacroInv::~ProcMacroInv() {
     if (this->handles.childPid != 0) {
-        DEBUG("Waiting for child " << this->handles.childPid << " to terminate");
+        DEBUG(StringView("Waiting for child ") << this->handles.childPid << StringView(" to terminate"));
         int status;
         waitpid(this->handles.childPid, &status, 0);
         close(this->handles.childStdout);
@@ -469,14 +471,14 @@ bool ProcMacroInv::checkGood() {
     char v;
     int rv = read(this->handles.childStdout, &v, 1);
     if (rv == 0) {
-        DEBUG("Unexpected EOF from child");
+        DEBUG(StringView("Unexpected EOF from child"));
         return false;
     }
     if (rv < 0) {
-        DEBUG("Error reading from child, rv=" << rv << " " << strerror(errno));
+        DEBUG(StringView("Error reading from child, rv=") << rv << StringView(" ") << strerror(errno));
         return false;
     }
-    DEBUG("Child started, value = " << (int)v);
+    DEBUG(StringView("Child started, value = ") << (int)v);
     if (v != 0) {
         return false;
     }
@@ -493,11 +495,11 @@ void ProcMacroInv::sendBytes(const void* val, size_t size) {
 }
 
 void ProcMacroInv::sendBytesRaw(const void* val, size_t size) {
-    if (dumpFileOut.is_open()) {
-        dumpFileOut.write(reinterpret_cast<const char*>(val), size);
+    if (dumpFileOut) {
+        dumpFileOut->write(val, size);
     }
     if (write(this->handles.childStdin, val, size) != static_cast<ssize_t>(size)) {
-        BUG(parentSpan, "Error writing to child, " << strerror(errno));
+        BUG(parentSpan, StringView("Error writing to child, ") << strerror(errno));
     }
 }
 
@@ -525,7 +527,7 @@ u8 ProcMacroInv::recvU8() {
 
 std::string ProcMacroInv::recvBytes() {
     auto len = this->recvV128u();
-    ASSERT_BUG(this->parentSpan, len < SIZE_MAX, "Oversized string from child process");
+    ASSERT_BUG(this->parentSpan, len < SIZE_MAX, StringView("Oversized string from child process"));
     std::string val;
     val.resize(len);
 
@@ -540,19 +542,19 @@ void ProcMacroInv::recvBytesRaw(void* outVoid, size_t len) {
     while (rem > 0) {
         auto n = read(this->handles.childStdout, &val[ofs], rem);
         if (n == 0) {
-            BUG(this->thisSpan, "Unexpected EOF while reading from child process");
+            BUG(this->thisSpan, StringView("Unexpected EOF while reading from child process"));
         }
         if (n < 0) {
-            BUG(this->parentSpan, "Error while reading from child process");
+            BUG(this->parentSpan, StringView("Error while reading from child process"));
         }
         BUG_ASSERT(static_cast<size_t>(n) <= rem);
         ofs += n;
         rem -= n;
     }
 
-    if (dumpFileRes.is_open()) {
-        dumpFileRes.write(reinterpret_cast<const char*>(outVoid), len);
-        dumpFileRes.flush();
+    if (dumpFileRes) {
+        dumpFileRes->write(outVoid, len);
+        dumpFileRes->flush();
     }
 }
 
@@ -590,7 +592,7 @@ Position ProcMacroInv::getPosition() const {
 
 Token ProcMacroInv::realGetToken() {
     auto rv = this->realGetToken_();
-    DEBUG("ProcMacroInv: " << rv);
+    DEBUG(StringView("ProcMacroInv: ") << rv);
     return rv;
 }
 
@@ -605,11 +607,11 @@ Token ProcMacroInv::realGetToken_() {
 
     switch (static_cast<TokenClass>(v)) {
         case TokenClass::EndOfStream:
-            TODO(this->parentSpan, "EndOfStream");
+            TODO(this->parentSpan, StringView("EndOfStream"));
         case TokenClass::SpanRef:
-            TODO(this->parentSpan, "SpanDef");
+            TODO(this->parentSpan, StringView("SpanDef"));
         case TokenClass::SpanDef:
-            TODO(this->parentSpan, "SpanDef");
+            TODO(this->parentSpan, StringView("SpanDef"));
             break;
         case TokenClass::Symbol: {
             auto val = this->recvBytes();
@@ -677,7 +679,7 @@ Token ProcMacroInv::realGetToken_() {
                     ty = CORETYPE_U128;
                     break;
                 default:
-                    BUG(this->parentSpan, "Invalid integer size from child process");
+                    BUG(this->parentSpan, StringView("Invalid integer size from child process"));
             }
             auto val = this->recvV128uU128();
             return Token(val, ty);
@@ -707,12 +709,12 @@ Token ProcMacroInv::realGetToken_() {
                     ty = CORETYPE_I128;
                     break;
                 default:
-                    BUG(this->parentSpan, "Invalid integer size from child process");
+                    BUG(this->parentSpan, StringView("Invalid integer size from child process"));
             }
             auto val = this->recvV128uU128();
             if (val.truncateU64() & 1) {
                 val = ~(val >> 1) + 1;
-                TODO(this->parentSpan, "Negative literal from proc macro, what?");
+                TODO(this->parentSpan, StringView("Negative literal from proc macro, what?"));
             } else {
                 val = (val >> 1);
             }
@@ -731,7 +733,7 @@ Token ProcMacroInv::realGetToken_() {
                     ty = CORETYPE_F64;
                     break;
                 default:
-                    BUG(this->parentSpan, "Invalid float size from child process");
+                    BUG(this->parentSpan, StringView("Invalid float size from child process"));
             }
             double val;
             this->recvBytesRaw(&val, sizeof(val));
@@ -742,15 +744,15 @@ Token ProcMacroInv::realGetToken_() {
             std::istringstream input(text + " ");
             Lexer lexer(this->parseState().wb->id, this->typePool(), input, edition, this->parseState());
             auto token = lexer.getToken();
-            ASSERT_BUG(this->parentSpan, token != TOK_EOF, "Empty raw literal from child process");
-            ASSERT_BUG(this->parentSpan, lexer.getToken() == TOK_EOF, "Raw literal contains multiple tokens: `" << text << "`");
+            ASSERT_BUG(this->parentSpan, token != TOK_EOF, StringView("Empty raw literal from child process"));
+            ASSERT_BUG(this->parentSpan, lexer.getToken() == TOK_EOF, StringView("Raw literal contains multiple tokens: `") << text << StringView("`"));
             token.setPos(this->getPosition());
             return token;
         }
 
-            //    TODO(this->m_parent_span, "Handle ints/floats/fragments from child process");
+            //    TODO(this->m_parent_span, StringView("Handle ints/floats/fragments from child process"));
     }
-    BUG(this->parentSpan, "Invalid token class from child process - " << int(v));
+    BUG(this->parentSpan, StringView("Invalid token class from child process - ") << int(v));
 
     UNREACHABLE();
 }
@@ -764,7 +766,7 @@ Token ProcMacroInv::takePendingSymbol() {
             return token;
         }
     }
-    BUG(this->parentSpan, "Unknown symbol byte from child process - " << remaining[0]);
+    BUG(this->parentSpan, StringView("Unknown symbol byte from child process - ") << remaining[0]);
 }
 
 Ident::Hygiene ProcMacroInv::realGetHygiene() const {
@@ -781,7 +783,7 @@ auto DecoratorProcMacroDerive::handle(const Span& sp, const ASTAttribute& attr, 
     }
 
     if (!i.is_Function()) {
-        TODO(sp, "Error for proc_macro_derive on non-Function");
+        TODO(sp, StringView("Error for proc_macro_derive on non-Function"));
     }
 
     std::vector<std::string> attributes;
@@ -803,7 +805,7 @@ auto DecoratorProcMacroDerive::handle(const Span& sp, const ASTAttribute& attr, 
             } while (lex.getTokenIf(TOK_COMMA));
             lex.getTokenCheck(TOK_PAREN_CLOSE);
         } else {
-            ERROR(sp, E0000, "Unexpected `" << k << "` in `#[proc_macro_derive]`");
+            ERROR(sp, E0000, StringView("Unexpected `") << k << StringView("` in `#[proc_macro_derive]`"));
         }
     }
     lex.getTokenCheck(TOK_PAREN_CLOSE);
@@ -821,7 +823,7 @@ auto DecoratorProcMacroAttribute::handle(const Span& sp, const ASTAttribute& att
     }
 
     if (!i.is_Function()) {
-        TODO(sp, "Error for #[proc_macro_attribute] on non-Function");
+        TODO(sp, StringView("Error for #[proc_macro_attribute] on non-Function"));
     }
 
     crate.procMacros.push_back(ASTProcMacroDef{ASTProcMacroTy::Attribute, path.nodes.back(), path, {}});
@@ -837,7 +839,7 @@ auto DecoratorProcMacro::handle(const Span& sp, const ASTAttribute& attr, const 
     }
 
     if (!i.is_Function()) {
-        TODO(sp, "Error for #[proc_macro] on non-Function");
+        TODO(sp, StringView("Error for #[proc_macro] on non-Function"));
     }
 
     crate.procMacros.push_back(ASTProcMacroDef{ASTProcMacroTy::Function, path.nodes.back(), path, {}});
@@ -845,8 +847,10 @@ auto DecoratorProcMacro::handle(const Span& sp, const ASTAttribute& attr, const 
 
 auto ProcMacroInv::sendDone() -> void {
     this->sendU8(static_cast<u8>(TokenClass::EndOfStream));
-    dumpFileOut.flush();
-    DEBUG("Input tokens sent");
+    if (dumpFileOut) {
+        dumpFileOut->flush();
+    }
+    DEBUG(StringView("Input tokens sent"));
 }
 
 auto ProcMacroInv::sendSymbol(const char* val) -> void {
@@ -962,7 +966,7 @@ auto ProcMacroInv::sendInt(eCoreType ct, U128 v) -> void {
             this->sendU8(size);
             break;
         default:
-            BUG(parentSpan, "Unknown integer type");
+            BUG(parentSpan, StringView("Unknown integer type"));
     }
     this->sendV128u(v);
 }
@@ -980,7 +984,7 @@ auto ProcMacroInv::sendFloat(eCoreType ct, FloatValue v) -> void {
             this->sendU8(64);
             break;
         default:
-            BUG(parentSpan, "Unknown float type");
+            BUG(parentSpan, StringView("Unknown float type"));
     }
     double wireValue = static_cast<double>(v);
     this->sendBytesRaw(&wireValue, sizeof(wireValue));
@@ -1046,22 +1050,22 @@ auto ProcMacroVisitor::visitBoundConstness(ASTBoundConstness constness) -> void 
 auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
     switch (tok.type()) {
         case TOK_NULL:
-            BUG(sp, "Unexpected NUL in token stream");
+            BUG(sp, StringView("Unexpected NUL in token stream"));
         case TOK_EOF:
-            BUG(sp, "Unexpected EOF in token stream");
+            BUG(sp, StringView("Unexpected EOF in token stream"));
 
         case TOK_NEWLINE:
         case TOK_WHITESPACE:
         case TOK_COMMENT:
-            BUG(sp, "Unexpected whitepace in tokenstream");
+            BUG(sp, StringView("Unexpected whitepace in tokenstream"));
             break;
         case TOK_INTERPOLATED_TYPE:
             visitType(const_cast<::Token&>(tok).fragType());
             break;
         case TOK_INTERPOLATED_PATH:
-            TODO(sp, "TOK_INTERPOLATED_PATH");
+            TODO(sp, StringView("TOK_INTERPOLATED_PATH"));
         case TOK_INTERPOLATED_PATTERN:
-            TODO(sp, "TOK_INTERPOLATED_PATTERN");
+            TODO(sp, StringView("TOK_INTERPOLATED_PATTERN"));
         case TOK_INTERPOLATED_STMT:
         case TOK_INTERPOLATED_BLOCK:
         case TOK_INTERPOLATED_EXPR:
@@ -1071,7 +1075,7 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_INTERPOLATED_STMT_ITEM:
         case TOK_INTERPOLATED_ITEM:
         case TOK_INTERPOLATED_VIS:
-            TODO(sp, "TOK_INTERPOLATED_...");
+            TODO(sp, StringView("TOK_INTERPOLATED_..."));
         case TOK_IDENT:
             pmi.sendIdent(tok.ident().name.c_str());
             break; // TODO: Raw idents
@@ -1098,7 +1102,7 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             pmi.sendBytestring(tok.str());
             break;
         case TOK_CSTRING:
-            TODO(sp, "TOK_CSTRING");
+            TODO(sp, StringView("TOK_CSTRING"));
         case TOK_LITERAL_SUFFIXED:
             pmi.sendRawLiteral(tok.str());
             break;
@@ -1468,7 +1472,7 @@ auto ProcMacroVisitor::visitPattern(const ASTPattern& pat) -> void {
     }
     switch (pat.data().tag()) {
         default:
-            TODO(sp, "visit_pattern " << pat.data().tagStr() << " - " << pat);
+            TODO(sp, StringView("visit_pattern ") << pat.data().tagStr() << StringView(" - ") << pat);
         case ASTPatternData::TAG_Any: {
             pmi.sendRword("_");
             break;
@@ -1545,9 +1549,9 @@ auto ProcMacroVisitor::visitLifetime(const ASTLifetimeRef& x) -> void {
 }
 
 auto ProcMacroVisitor::visitTypeAsText(const ASTType* ty) -> void {
-    std::stringstream ss;
-    ss << ty << " ";
-    parseString(ss.str());
+    StringBuilder ss;
+    ss << ty << StringView(" ");
+    parseString(std::string(static_cast<const char*>(ss.data()), ss.length()));
 }
 
 auto ProcMacroVisitor::visitType(::ASTType* ty) -> void {
@@ -1580,7 +1584,7 @@ auto ProcMacroVisitor::visitType(::ASTType* ty) -> void {
             break;
         }
         case TypeData::TAG_Primitive: {
-            TODO(sp, "proc_macro send primitive - " << ty);
+            TODO(sp, StringView("proc_macro send primitive - ") << ty);
             break;
         }
         case TypeData::TAG_Function: {
@@ -1714,7 +1718,7 @@ auto ProcMacroVisitor::visitType(::ASTType* ty) -> void {
                 this->visitLifetime(lft);
             }
             if (te->use) {
-                TODO(Span(), "`use`");
+                TODO(Span(), StringView("`use`"));
             }
             break;
         }
@@ -1826,7 +1830,7 @@ auto ProcMacroVisitor::visitPath(const ASTPath& path, bool isExpr) -> void {
     const std::vector<ASTPathNode>* nodes = nullptr;
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
-            BUG(sp, "Invalid path");
+            BUG(sp, StringView("Invalid path"));
             break;
         }
         case ASTPathClass::TAG_Local: {
@@ -1911,7 +1915,7 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
             }
             switch (param.tag()) {
                 case GenericParam::TAG_None: {
-                    BUG(sp, "Enountered GenericParam::None");
+                    BUG(sp, StringView("Enountered GenericParam::None"));
                     break;
                 }
                 case GenericParam::TAG_Lifetime: {
@@ -1931,7 +1935,7 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                             auto& tuMatch = params.bounds[i];
                             switch (tuMatch.tag()) {
                                 default:
-                                    BUG(sp, "");
+                                    BUG(sp, StringView(""));
                                 case ASTGenericBound::TAG_None: {
                                     break;
                                 }
@@ -1963,7 +1967,7 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                             auto& tuMatch = params.bounds[i];
                             switch (tuMatch.tag()) {
                                 default:
-                                    BUG(sp, "Unhandled bound type - " << params.bounds[i]);
+                                    BUG(sp, StringView("Unhandled bound type - ") << params.bounds[i]);
                                 case ASTGenericBound::TAG_None: {
                                     break;
                                 }
@@ -1976,7 +1980,7 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                                     auto& be = tuMatch.as_IsTrait();
                                     BUG_ASSERT(be.outerHrbs.empty());
                                     if (!be.innerHrbs.empty()) {
-                                        TODO(sp, "be.inner_hrbs");
+                                        TODO(sp, StringView("be.inner_hrbs"));
                                     }
                                     visitBoundConstness(be.constness);
                                     visitPath(be.trait);
@@ -2111,15 +2115,16 @@ auto ProcMacroVisitor::visitBounds(const ASTGenericParams& params) -> void {
 }
 
 auto ProcMacroVisitor::visitNode(const ASTExprNode& e) -> void {
-    DEBUG("NODE: " << e);
+    DEBUG(StringView("NODE: ") << e);
     // TODO: Dump to a string, then re-parse into a TT and then send that TT
 
-    std::stringstream ss;
+    StringBuilder ss;
     DumpASTNode(ss, e);
-    ss << " ";
+    ss << StringView(" ");
 
-    DEBUG("STRING: " << ss.str());
-    parseString(ss.str());
+    const std::string text(static_cast<const char*>(ss.data()), ss.length());
+    DEBUG(StringView("STRING: ") << text);
+    parseString(text);
 }
 
 auto ProcMacroVisitor::parseString(const std::string& s) -> void {
@@ -2159,7 +2164,7 @@ auto ProcMacroVisitor::visitAttr(const ASTAttribute& a) -> void {
         }
     }
     if (this->skipDeriveAttrs && a.name().isTrivial() && (a.name().asTrivial() == "derive" || a.name().asTrivial() == "derive_const")) {
-        DEBUG("Skip " << a << " (derive input)");
+        DEBUG(StringView("Skip ") << a << StringView(" (derive input)"));
         return;
     }
     auto isLocal = (a.name().isTrivial() && pmi.attrIsUsed(a.name().asTrivial()));
@@ -2167,12 +2172,12 @@ auto ProcMacroVisitor::visitAttr(const ASTAttribute& a) -> void {
         if (isLocal) {
             a.markInert();
         }
-        DEBUG("Send " << a);
+        DEBUG(StringView("Send ") << a);
         pmi.sendSymbol("#");
         pmi.sendSymbol("[");
         this->visitMetaItem(a);
         pmi.sendSymbol("]");
-        DEBUG("Skip " << a << " (" << pmi.procMacroDesc.attributes << ")");
+        DEBUG(StringView("Skip ") << a << StringView(" (") << pmi.procMacroDesc.attributes << StringView(")"));
     }
 }
 
@@ -2326,7 +2331,7 @@ auto ProcMacroVisitor::visitEnum(const RcString& name, const ASTVisibility& vis,
 }
 
 auto ProcMacroVisitor::visitUnion(const RcString& name, const ASTVisibility& vis, const ASTUnion& unn) -> void {
-    TODO(sp, "visit_union");
+    TODO(sp, StringView("visit_union"));
 }
 
 auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& vis, const ASTFunction& fcn) -> void {
@@ -2417,7 +2422,7 @@ auto ProcMacroVisitor::visitUse(const RcString& /*name*/, const ASTVisibility& v
         } else {
         }
     } else {
-        TODO(sp, "Multiple items");
+        TODO(sp, StringView("Multiple items"));
     }
     pmi.sendSymbol(";");
 }
@@ -2467,7 +2472,7 @@ auto ProcMacroVisitor::visitTrait(const RcString& name, const ASTVisibility& vis
         this->visitAttrs(i.attrs);
         switch (i.data.tag()) {
             default:
-                TODO(i.span, "visit_trait item - " << i.data.tagStr());
+                TODO(i.span, StringView("visit_trait item - ") << i.data.tagStr());
                 break;
             case ASTItem::TAG_Function: {
                 auto& e = i.data.as_Function();
@@ -2482,7 +2487,7 @@ auto ProcMacroVisitor::visitTrait(const RcString& name, const ASTVisibility& vis
             case ASTItem::TAG_Type: {
                 auto& e = i.data.as_Type();
                 if (!e.selfBounds.bounds.empty()) {
-                    TODO(i.span, "visit_trait - associated type with bounds - " << i.name);
+                    TODO(i.span, StringView("visit_trait - associated type with bounds - ") << i.name);
                 }
                 this->visitVis(itemVis);
                 pmi.sendRword("type");
@@ -2508,7 +2513,7 @@ auto ProcMacroVisitor::visitImpl(const ASTImpl& impl) -> void {
         const auto& item = *i.data;
         switch (item.tag()) {
             default:
-                TODO(sp, "Item " << item.tagStr());
+                TODO(sp, StringView("Item ") << item.tagStr());
                 break;
             case ASTItem::TAG_Function: {
                 auto& e = item.as_Function();
@@ -2528,7 +2533,7 @@ auto ProcMacroVisitor::visitImpl(const ASTImpl& impl) -> void {
 auto ProcMacroVisitor::visitItem(const RcString& name, const ASTVisibility& vis, const ASTItem& item) -> void {
     switch (item.tag()) {
         default:
-            TODO(sp, "visit_item - " << item.tagStr());
+            TODO(sp, StringView("visit_item - ") << item.tagStr());
             break;
         case ASTItem::TAG_Impl: {
             auto& e = item.as_Impl();

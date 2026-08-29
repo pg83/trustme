@@ -1,4 +1,5 @@
 #include "parse_token.h"
+#include "output.h"
 
 #include "common.h"
 #include "ast_ast.h"
@@ -10,7 +11,7 @@
 #include <std/str/view.h>
 #include <std/str/builder.h>
 
-#include <iomanip>
+#include <sstream>
 
 using namespace stl;
 
@@ -22,24 +23,24 @@ namespace {
 
         static size_t utf8Run(StringView s, size_t i);
 
-        friend std::ostream& operator<<(std::ostream& os, const EscapedString& x) {
+        friend ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const EscapedString& x) {
             for (size_t i = 0; i < x.s.length(); i++) {
                 const u8 b = x.s[i];
                 switch (b) {
                     case '"':
-                        os << "\\\"";
+                        os << StringView("\\\"");
                         continue;
                     case '\\':
-                        os << "\\\\";
+                        os << StringView("\\\\");
                         continue;
                     case '\n':
-                        os << "\\n";
+                        os << StringView("\\n");
                         continue;
                     case '\r':
-                        os << "\\r";
+                        os << StringView("\\r");
                         continue;
                     case '\t':
-                        os << "\\t";
+                        os << StringView("\\t");
                         continue;
                     default:
                         break;
@@ -49,7 +50,7 @@ namespace {
                     continue;
                 }
                 if (b < 0x80) {
-                    os << "\\u{" << std::hex << static_cast<unsigned int>(b) << std::dec << "}";
+                    os << StringView("\\u{") << formatHex(static_cast<unsigned int>(b)) << StringView("}");
                     continue;
                 }
                 if (const auto run = utf8Run(x.s, i)) {
@@ -57,7 +58,7 @@ namespace {
                     i += run - 1;
                     continue;
                 }
-                os << "\\x" << std::hex << std::uppercase << static_cast<unsigned int>(b) << std::nouppercase << std::dec;
+                os << StringView("\\x") << formatHex(static_cast<unsigned int>(b), 0, true);
             }
             return os;
         }
@@ -68,24 +69,24 @@ namespace {
 
         EscapedByteString(StringView s);
 
-        friend std::ostream& operator<<(std::ostream& os, const EscapedByteString& x) {
+        friend ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const EscapedByteString& x) {
             for (size_t i = 0; i < x.s.length(); i++) {
                 const u8 b = x.s[i];
                 switch (b) {
                     case '"':
-                        os << "\\\"";
+                        os << StringView("\\\"");
                         continue;
                     case '\\':
-                        os << "\\\\";
+                        os << StringView("\\\\");
                         continue;
                     case '\n':
-                        os << "\\n";
+                        os << StringView("\\n");
                         continue;
                     case '\r':
-                        os << "\\r";
+                        os << StringView("\\r");
                         continue;
                     case '\t':
-                        os << "\\t";
+                        os << StringView("\\t");
                         continue;
                     default:
                         break;
@@ -94,7 +95,7 @@ namespace {
                     os << static_cast<char>(b);
                     continue;
                 }
-                os << "\\x" << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(b) << std::nouppercase << std::dec << std::setfill(' ');
+                os << StringView("\\x") << formatHex(static_cast<unsigned int>(b), 2, true);
             }
             return os;
         }
@@ -214,7 +215,7 @@ Token Token::makeFloat(FloatValue val, enum eCoreType datatype) {
         case CORETYPE_ANY:
             break;
         default:
-            BUG(Span(), "Bad type for float");
+            BUG(Span(), StringView("Bad type for float"));
     }
     return rv;
 }
@@ -358,7 +359,7 @@ Token::Token(const Token& t)
             break;
         }
         case TokenData::TAG_Fragment: {
-            BUG(Span(Span(), t.pos), "Attempted to copy a fragment - " << t);
+            BUG(Span(Span(), t.pos), StringView("Attempted to copy a fragment - ") << t);
             break;
         }
     }
@@ -428,7 +429,7 @@ Token Token::clone() const {
                     break;
                 }
                 default:
-                    BUG(Span(Span(), pos), "Fragment with invalid token type (" << *this << ")");
+                    BUG(Span(Span(), pos), StringView("Fragment with invalid token type (") << *this << StringView(")"));
                     break;
             }
             BUG_ASSERT(rv.data_.is_Fragment());
@@ -501,17 +502,17 @@ enum eTokenType Token::typefromstr(const std::string& s) {
     return TOK_NULL;
 }
 
-void printEscapedLiteral(std::ostream& os, eTokenType type, const u8* value, size_t size) {
+void printEscapedLiteral(ZeroCopyOutput& os, eTokenType type, const u8* value, size_t size) {
     const auto bytes = StringView(value, size);
     switch (type) {
         case TOK_STRING:
-            os << "\"" << EscapedString(bytes) << "\"";
+            os << StringView("\"") << EscapedString(bytes) << StringView("\"");
             return;
         case TOK_BYTESTRING:
-            os << "b\"" << EscapedByteString(bytes) << "\"";
+            os << StringView("b\"") << EscapedByteString(bytes) << StringView("\"");
             return;
         case TOK_CSTRING:
-            os << "c\"" << EscapedString(bytes) << "\"";
+            os << StringView("c\"") << EscapedString(bytes) << StringView("\"");
             return;
         default:
             compileErrorBugCheck("printEscapedLiteral called for a non-string token");
@@ -555,7 +556,10 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
 }
 
 std::string Token::toStr() const {
-    std::stringstream ss;
+    StringBuilder ss;
+    const auto takeString = [&]() {
+        return std::string(static_cast<const char*>(ss.data()), ss.length());
+    };
     switch (type_) {
         case TOK_NULL:
             return "/*null*/";
@@ -570,19 +574,19 @@ std::string Token::toStr() const {
             return "/*" + data_.as_String() + "*/";
         case TOK_INTERPOLATED_TYPE:
             (*reinterpret_cast<const ::ASTType**>(data_.as_Fragment()))->print(ss, false);
-            return ss.str();
+            return takeString();
         case TOK_INTERPOLATED_PATH:
             reinterpret_cast<const ASTPath*>(data_.as_Fragment())->printPretty(ss, true);
-            return ss.str();
+            return takeString();
         case TOK_INTERPOLATED_PATTERN:
             // TODO: Use a pretty printer too?
             return FMT(*reinterpret_cast<const ASTPattern*>(data_.as_Fragment()));
         case TOK_INTERPOLATED_STMT:
         case TOK_INTERPOLATED_BLOCK:
         case TOK_INTERPOLATED_EXPR: {
-            std::stringstream ss;
-            reinterpret_cast<const ASTExprNode*>(data_.as_Fragment())->print(ss);
-            return ss.str();
+            StringBuilder out;
+            reinterpret_cast<const ASTExprNode*>(data_.as_Fragment())->print(out);
+            return {static_cast<const char*>(out.data()), out.length()};
         }
         case TOK_INTERPOLATED_META: {
             StringBuilder out;
@@ -594,14 +598,14 @@ std::string Token::toStr() const {
         case TOK_INTERPOLATED_ITEM:
             return "/*:item*/";
         case TOK_INTERPOLATED_VIS: {
-            std::stringstream ss;
-            ss << *reinterpret_cast<const ASTVisibility*>(data_.as_Fragment());
-            return ss.str();
+            StringBuilder out;
+            out << *reinterpret_cast<const ASTVisibility*>(data_.as_Fragment());
+            return {static_cast<const char*>(out.data()), out.length()};
         }
         case TOK_IDENT:
             return data_.as_Ident().isRaw ? "r#" + std::string(data_.as_Ident().name.c_str()) : std::string(data_.as_Ident().name.c_str());
         case TOK_LIFETIME:
-            return FMT("'" << data_.as_Ident().name.c_str());
+            return FMT(StringView("'") << data_.as_Ident().name.c_str());
         case TOK_INTEGER: {
             auto v = data_.as_Integer().intval;
             switch (data_.as_Integer().datatype) {
@@ -613,10 +617,10 @@ std::string Token::toStr() const {
                             case '\\':
                                 return "'\\\\'";
                             default:
-                                return FMT("'" << (char)v.truncateU64() << "'");
+                                return FMT(StringView("'") << (char)v.truncateU64() << StringView("'"));
                         }
                     }
-                    return FMT("'\\u{" << std::hex << v << std::dec << "}'");
+                    return FMT(StringView("'\\u{") << formatHex(v) << StringView("}'"));
                 case CORETYPE_ANY:
                     return FMT(data_.as_Integer().intval);
                 default:
@@ -625,7 +629,7 @@ std::string Token::toStr() const {
             break;
         }
         case TOK_CHAR:
-            return FMT("'\\u{" << std::hex << data_.as_Integer().intval << "}");
+            return FMT(StringView("'\\u{") << formatHex(data_.as_Integer().intval) << StringView("}"));
         case TOK_FLOAT:
             if (data_.as_Float().datatype == CORETYPE_ANY) {
                 return formatFloatValueForToken(data_.as_Float().floatval);
@@ -635,25 +639,25 @@ std::string Token::toStr() const {
         case TOK_STRING: {
             const auto& text = data_.as_String();
             if (!isDocComment_) {
-                return FMT("\"" << EscapedString(literalBytes(text)) << "\"");
+                return FMT(StringView("\"") << EscapedString(literalBytes(text)) << StringView("\""));
             }
             auto hashes = rawStringHashes(literalBytes(text));
-            ss << "r";
+            ss << StringView("r");
             for (size_t i = 0; i < hashes; i++) {
-                ss << "#";
+                ss << StringView("#");
             }
-            ss << "\"" << text << "\"";
+            ss << StringView("\"") << text << StringView("\"");
             for (size_t i = 0; i < hashes; i++) {
-                ss << "#";
+                ss << StringView("#");
             }
-            return ss.str();
+            return takeString();
         }
         case TOK_CSTRING:
-            return FMT("c\"" << EscapedString(literalBytes(data_.as_String())) << "\"");
+            return FMT(StringView("c\"") << EscapedString(literalBytes(data_.as_String())) << StringView("\""));
         case TOK_LITERAL_SUFFIXED:
             return data_.as_String();
         case TOK_BYTESTRING:
-            return FMT("b\"" << EscapedByteString(literalBytes(data_.as_String())) << "\"");
+            return FMT(StringView("b\"") << EscapedByteString(literalBytes(data_.as_String())) << StringView("\""));
         case TOK_HASH:
             return "#";
         case TOK_UNDERSCORE:
@@ -887,74 +891,9 @@ std::string Token::toStr() const {
     compileErrorBugCheck("Reached end of Token::to_str");
 }
 
-std::ostream& operator<<(std::ostream& os, const Token& tok) {
-    os << Token::typestr(tok.type());
-    switch (tok.type()) {
-        case TOK_STRING:
-        case TOK_BYTESTRING:
-        case TOK_LITERAL_SUFFIXED:
-            if (tok.data_.is_String()) {
-                os << "\"" << EscapedString(literalBytes(tok.str())) << "\"";
-            } else if (tok.data_.is_None())
-                ;
-            else {
-                os << "?inner?";
-            }
-            os << tok.hygiene_;
-            break;
-        case TOK_IDENT:
-        case TOK_LIFETIME:
-            if (const auto* td = tok.data_.opt_Ident()) {
-                os << "\"" << td->name << "\"" << td->hygiene;
-            } else if (tok.data_.is_None())
-                ;
-            else {
-                os << "?inner?";
-            }
-            break;
-        case TOK_INTEGER:
-            if (tok.data_.is_Integer()) {
-                os << ":" << tok.intval();
-            }
-            break;
-        case TOK_INTERPOLATED_TYPE:
-            os << ":" << *reinterpret_cast<ASTType**>(tok.data_.as_Fragment());
-            break;
-        case TOK_INTERPOLATED_PATTERN:
-            os << ":" << *reinterpret_cast<ASTPattern*>(tok.data_.as_Fragment());
-            break;
-        case TOK_INTERPOLATED_PATH:
-            os << ":" << *reinterpret_cast<ASTPath*>(tok.data_.as_Fragment());
-            break;
-        case TOK_INTERPOLATED_EXPR:
-            os << ":" << *reinterpret_cast<const ASTExprNode*>(tok.data_.as_Fragment());
-            break;
-        case TOK_INTERPOLATED_STMT:
-            os << ":" << *reinterpret_cast<const ASTExprNode*>(tok.data_.as_Fragment());
-            break;
-        case TOK_INTERPOLATED_STMT_ITEM: {
-            const auto& namedItem = *reinterpret_cast<const ASTNamed<ASTItem>*>(tok.data_.as_Fragment());
-            os << ":" << namedItem.data.tagStr() << "(" << namedItem.name << ")";
-        } break;
-        case TOK_INTERPOLATED_BLOCK:
-            os << ":" << *reinterpret_cast<const ASTExprNode*>(tok.data_.as_Fragment());
-            break;
-        case TOK_INTERPOLATED_META:
-            os << ":" << *reinterpret_cast<ASTAttribute*>(tok.data_.as_Fragment());
-            break;
-        case TOK_INTERPOLATED_ITEM: {
-            const auto& namedItem = *reinterpret_cast<const ASTNamed<ASTItem>*>(tok.data_.as_Fragment());
-            os << ":" << namedItem.data.tagStr() << "(" << namedItem.name << ")";
-        } break;
-        default:
-            break;
-    }
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const Position& p) {
-    return os << std::dec << p.filename << ":" << p.line;
-}
+
+
 
 Position::Position()
     : filename("")
@@ -1097,4 +1036,105 @@ auto EscapedString::utf8Run(StringView s, size_t i) -> size_t {
 EscapedByteString::EscapedByteString(StringView s)
     : s(s)
 {
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, EscapedString>(ZeroCopyOutput& os, EscapedString value) {
+    operator<<(os, value);
+}
+
+template <>
+void output<ZeroCopyOutput, EscapedByteString>(ZeroCopyOutput& os, EscapedByteString value) {
+    operator<<(os, value);
+}
+
+template <>
+void output<ZeroCopyOutput, Token>(ZeroCopyOutput& os, const Token& tok) {
+    const auto& data = tok.rawData();
+    os << Token::typestr(tok.type());
+    switch (tok.type()) {
+        case TOK_STRING:
+        case TOK_BYTESTRING:
+        case TOK_LITERAL_SUFFIXED:
+            if (data.is_String()) {
+                os << StringView("\"") << EscapedString(literalBytes(tok.str())) << StringView("\"");
+            } else if (data.is_None())
+                ;
+            else {
+                os << StringView("?inner?");
+            }
+            os << tok.strHygiene();
+            break;
+        case TOK_IDENT:
+        case TOK_LIFETIME:
+            if (const auto* td = data.opt_Ident()) {
+                os << StringView("\"") << td->name << StringView("\"") << td->hygiene;
+            } else if (data.is_None())
+                ;
+            else {
+                os << StringView("?inner?");
+            }
+            break;
+        case TOK_INTEGER:
+            if (data.is_Integer()) {
+                os << StringView(":") << tok.intval();
+            }
+            break;
+        case TOK_INTERPOLATED_TYPE:
+            os << StringView(":") << *reinterpret_cast<ASTType**>(data.as_Fragment());
+            break;
+        case TOK_INTERPOLATED_PATTERN:
+            os << StringView(":") << *reinterpret_cast<ASTPattern*>(data.as_Fragment());
+            break;
+        case TOK_INTERPOLATED_PATH:
+            os << StringView(":") << *reinterpret_cast<ASTPath*>(data.as_Fragment());
+            break;
+        case TOK_INTERPOLATED_EXPR:
+            os << StringView(":") << *reinterpret_cast<const ASTExprNode*>(data.as_Fragment());
+            break;
+        case TOK_INTERPOLATED_STMT:
+            os << StringView(":") << *reinterpret_cast<const ASTExprNode*>(data.as_Fragment());
+            break;
+        case TOK_INTERPOLATED_STMT_ITEM: {
+            const auto& namedItem = *reinterpret_cast<const ASTNamed<ASTItem>*>(data.as_Fragment());
+            os << StringView(":") << namedItem.data.tagStr() << StringView("(") << namedItem.name << StringView(")");
+        } break;
+        case TOK_INTERPOLATED_BLOCK:
+            os << StringView(":") << *reinterpret_cast<const ASTExprNode*>(data.as_Fragment());
+            break;
+        case TOK_INTERPOLATED_META:
+            os << StringView(":") << *reinterpret_cast<ASTAttribute*>(data.as_Fragment());
+            break;
+        case TOK_INTERPOLATED_ITEM: {
+            const auto& namedItem = *reinterpret_cast<const ASTNamed<ASTItem>*>(data.as_Fragment());
+            os << StringView(":") << namedItem.data.tagStr() << StringView("(") << namedItem.name << StringView(")");
+        } break;
+        default:
+            break;
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, Position>(ZeroCopyOutput& os, const Position& p) {
+    os << p.filename << StringView(":") << p.line;
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, eTokenType>(ZeroCopyOutput& out, eTokenType value) {
+    out << static_cast<unsigned>(value);
+}
+
+template <>
+void output<ZeroCopyOutput, std::pair<size_t, eTokenType>>(ZeroCopyOutput& out, const std::pair<size_t, eTokenType>& value) {
+    out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<std::pair<size_t, eTokenType>>>(ZeroCopyOutput& out, const std::vector<std::pair<size_t, eTokenType>>& values) {
+    outCont(out, values);
+}
+
 }

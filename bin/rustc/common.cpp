@@ -1,4 +1,55 @@
 #include "common.h"
+#include "output.h"
+
+using namespace stl;
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, Ordering>(ZeroCopyOutput& out, Ordering value) {
+    out << static_cast<int>(value);
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<std::string>>(ZeroCopyOutput& out, const std::vector<std::string>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<size_t>>(ZeroCopyOutput& out, const std::vector<size_t>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::pair<size_t, size_t>>(ZeroCopyOutput& out, const std::pair<size_t, size_t>& value) {
+    out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<unsigned>>(ZeroCopyOutput& out, const std::vector<unsigned>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<std::vector<std::string>>>(ZeroCopyOutput& out, const std::vector<std::vector<std::string>>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::pair<const unsigned, unsigned>>(ZeroCopyOutput& out, std::pair<const unsigned, unsigned> value) {
+    out << value.first << StringView(": ") << value.second;
+}
+
+template <>
+void output<ZeroCopyOutput, std::map<unsigned, unsigned>>(ZeroCopyOutput& out, const std::map<unsigned, unsigned>& values) {
+    outCont(out, values);
+}
+
+template <>
+void output<ZeroCopyOutput, std::set<unsigned>>(ZeroCopyOutput& out, const std::set<unsigned>& values) {
+    outCont(out, values);
+}
+
+}
 
 FmtEscaped::FmtEscaped(const std::string& s)
     : s(s.c_str())
@@ -6,27 +57,52 @@ FmtEscaped::FmtEscaped(const std::string& s)
 {
 }
 
-std::ostream& operator<<(std::ostream& os, const FmtEscaped& x) {
-    os << std::hex;
-    for (auto s = x.s; s != x.e; s++) {
+
+
+Ordering ord(bool l, bool r) {
+    if (l == r) {
+        return OrdEqual;
+    } else if (l) {
+        return OrdGreater;
+    } else {
+        return OrdLess;
+    }
+}
+
+Ordering ord(const std::string& l, const std::string& r) {
+    if (l == r) {
+        return OrdEqual;
+    } else if (l > r) {
+        return OrdGreater;
+    } else {
+        return OrdLess;
+    }
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, FmtEscaped>(ZeroCopyOutput& os, FmtEscaped x) {
+    for (auto s = x.begin(); s != x.end(); s++) {
         switch (*s) {
             case '\0':
-                os << "\\0";
+                os << StringView("\\0");
                 break;
             case '\n':
-                os << "\\n";
+                os << StringView("\\n");
                 break;
             case '\\':
-                os << "\\\\";
+                os << StringView("\\\\");
                 break;
             case '"':
-                os << "\\\"";
+                os << StringView("\\\"");
                 break;
             default:
                 u8 v = *s;
                 if (v < 0x80) {
                     if (v < ' ' || v > 0x7F) {
-                        os << "\\u{" << std::hex << (unsigned int)v << "}";
+                        os << StringView("\\u{");
+                        os << formatHex(v);
+                        os << StringView("}");
                     } else {
                         os << static_cast<char>(v);
                     }
@@ -40,7 +116,9 @@ std::ostream& operator<<(std::ostream& os, const FmtEscaped& x) {
                         continue;
                     }
                     val |= (u32)(v & 0x3F) << 0;
-                    os << "\\u{" << std::hex << val << "}";
+                    os << StringView("\\u{");
+                    os << formatHex(val);
+                    os << StringView("}");
                 } else if (v < 0xF0) {
                     u32 val = (u32)(v & 0x0F) << 12;
                     v = (u8) * ++s;
@@ -55,7 +133,9 @@ std::ostream& operator<<(std::ostream& os, const FmtEscaped& x) {
                         continue;
                     }
                     val |= (u32)(v & 0x3F) << 0;
-                    os << "\\u{" << std::hex << val << "}";
+                    os << StringView("\\u{");
+                    os << formatHex(val);
+                    os << StringView("}");
                 } else if (v < 0xF8) {
                     u32 val = (u32)(v & 0x07) << 18;
                     v = (u8) * ++s;
@@ -76,31 +156,19 @@ std::ostream& operator<<(std::ostream& os, const FmtEscaped& x) {
                         continue;
                     }
                     val |= (u32)(v & 0x3F) << 0;
-                    os << "\\u{" << std::hex << val << "}";
+                    os << StringView("\\u{");
+                    os << formatHex(val);
+                    os << StringView("}");
                 }
                 break;
         }
     }
-    os << std::dec;
-    return os;
 }
 
-Ordering ord(bool l, bool r) {
-    if (l == r) {
-        return OrdEqual;
-    } else if (l) {
-        return OrdGreater;
-    } else {
-        return OrdLess;
+template <>
+void output<ZeroCopyOutput, RepeatLitStr>(ZeroCopyOutput& os, RepeatLitStr value) {
+    for (int i = 0; i < value.n; ++i) {
+        os << value.s;
     }
 }
-
-Ordering ord(const std::string& l, const std::string& r) {
-    if (l == r) {
-        return OrdEqual;
-    } else if (l > r) {
-        return OrdGreater;
-    } else {
-        return OrdLess;
-    }
 }

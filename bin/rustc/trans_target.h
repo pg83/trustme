@@ -124,8 +124,6 @@ struct TypeRepr {
     std::pair<unsigned, bool> getEnumVariant(const Span& sp, const StaticTraitResolve& resolve, const EncodedLiteralSlice& lit) const;
 };
 
-std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x);
-
 struct WireBoard;
 void TargetCreateLayoutContext(WireBoard& wb, stl::ObjPool& pool);
 const TargetSpec& TargetGetCurSpec(const WireBoard& wb);

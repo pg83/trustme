@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "ast_expr_ptr.h"
 #include "parse_tokentree.h"
 
@@ -26,8 +28,6 @@ struct ASTAttributeIdentCb final: ASTAttributeIdentCallback {
 };
 
 class ASTAttribute;
-std::ostream& operator<<(std::ostream& os, const ASTAttribute& x);
-
 class ASTAttributeList {
 public:
     std::vector<ASTAttribute> items;
@@ -56,7 +56,6 @@ public:
         return get(name) != 0;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTAttributeList& x);
 };
 
 struct ASTAttributeName {
@@ -84,7 +83,6 @@ struct ASTAttributeName {
         return !(*this == x);
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTAttributeName& x);
 };
 
 class ASTAttribute {
@@ -103,7 +101,7 @@ public:
     ASTAttribute& operator=(ASTAttribute&&) = default;
     ASTAttribute clone() const;
 
-    void fmt(std::ostream& os) const;
+    void fmt(stl::ZeroCopyOutput& os) const;
 
     void markInert() const {
         isInert_ = true;
@@ -141,7 +139,6 @@ public:
         parseParenIdentListCb(cb);
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTAttribute& x);
 };
 
 #include "ast_attrs_tu.h"

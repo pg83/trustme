@@ -67,7 +67,8 @@ public:
 
     bool isVisible(const HIRSimplePath& p) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const HIRPublicity& x);
+    void fmt(stl::ZeroCopyOutput& os) const;
+
 };
 
 enum class HIRConstEvalState {
@@ -415,8 +416,6 @@ public:
 
     bool mustUse = false;
 };
-
-std::ostream& operator<<(std::ostream& os, const HIRStruct::Repr& x);
 
 class HIRUnion {
 public:

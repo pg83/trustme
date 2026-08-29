@@ -129,7 +129,6 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 
     const HIRPathParams* getHrbParams() const override;
 };
-
 struct MonomorphState: public MonomorphiserPP {
     HIRTypeRef selfTy;
     const HIRPathParams* ppImpl;
@@ -159,5 +158,3 @@ struct MonomorphState: public MonomorphiserPP {
 
     const HIRPathParams* getHrbParams() const override;
 };
-
-std::ostream& operator<<(std::ostream& os, const MonomorphState& ms);

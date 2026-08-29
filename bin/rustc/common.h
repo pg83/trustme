@@ -1,16 +1,22 @@
 #pragma once
 
+#include "output.h"
+
+#include <std/str/builder.h>
 #include <std/sys/types.h>
 
 #include <map>
 #include <set>
 #include <memory>
 #include <vector>
-#include <sstream>
 #include <utility>
-#include <iostream>
 
-#define FMT(ss) (static_cast<std::ostringstream&&>(std::ostringstream() << ss).str())
+#define FMT(ss)                                                                                                        \
+    ([&] {                                                                                                             \
+        ::stl::StringBuilder fmtOut;                                                                                   \
+        fmtOut << ss;                                                                                                  \
+        return std::string(static_cast<const char*>(fmtOut.data()), fmtOut.length());                                  \
+    }())
 
 #define mv$(...) std::move(__VA_ARGS__)
 #define box$(...) ::makeUniquePtr(std::move(__VA_ARGS__))
@@ -22,38 +28,14 @@
 struct RepeatLitStr {
     const char* s;
     int n;
-
-    friend std::ostream& operator<<(std::ostream& os, const RepeatLitStr& r) {
-        for (int i = 0; i < r.n; i++) {
-            os << r.s;
-        }
-        return os;
-    }
 };
 
-template <typename F>
-struct FmtLambda {
-    F f;
-
-    explicit FmtLambda(F f)
-        : f(f)
-    {
-    }
-
-    void operator()(std::ostream& os) const {
-        f(os);
-    }
-
-    friend std::ostream& operator<<(std::ostream& os, const FmtLambda& x) {
-        x(os);
-        return os;
-    }
-};
-
-#define FMT_CB(os, ...)         \
-    ::FmtLambda([&](auto& os) { \
-        __VA_ARGS__;            \
-    })
+#define FMT_CB(os, ...)                                                                                                 \
+    ([&] {                                                                                                              \
+        ::stl::StringBuilder os;                                                                                        \
+        __VA_ARGS__;                                                                                                    \
+        return std::string(static_cast<const char*>(os.data()), os.length());                                           \
+    }())
 
 template <typename Y, typename X>
 Y* cast(X* x) noexcept {
@@ -282,119 +264,6 @@ struct LList {
     }
 };
 
-template <typename T>
-struct Join {
-    const char* sep;
-    const std::vector<T>& v;
-
-    friend std::ostream& operator<<(std::ostream& os, const Join& j) {
-        if (j.v.size() > 0) {
-            os << j.v[0];
-        }
-        for (unsigned int i = 1; i < j.v.size(); i++) {
-            os << j.sep << j.v[i];
-        }
-        return os;
-    }
-};
-
-template <typename T>
-inline Join<T> join(const char* sep, const std::vector<T> v) {
-    return Join<T>({sep, v});
-}
-
-namespace std {
-    inline std::ostream& operator<<(std::ostream& os, char8_t v) {
-        return os << static_cast<char>(v);
-    }
-
-    template <typename T>
-    inline auto operator<<(std::ostream& os, const T& v) -> decltype(v.fmt(os)) {
-        return v.fmt(os);
-    }
-
-    template <typename T>
-    inline std::ostream& operator<<(std::ostream& os, const std::vector<T*>& v) {
-        if (v.size() > 0) {
-            bool isFirst = true;
-            for (const auto& i : v) {
-                if (!isFirst) {
-                    os << ", ";
-                }
-                isFirst = false;
-                os << *i;
-            }
-        }
-        return os;
-    }
-
-    template <typename T>
-    inline std::ostream& operator<<(std::ostream& os, const std::vector<T>& v) {
-        if (v.size() > 0) {
-            bool isFirst = true;
-            for (const auto& i : v) {
-                if (!isFirst) {
-                    os << ", ";
-                }
-                isFirst = false;
-                os << i;
-            }
-        }
-        return os;
-    }
-
-    template <typename T>
-    inline std::ostream& operator<<(std::ostream& os, const std::set<T>& v) {
-        if (v.size() > 0) {
-            bool isFirst = true;
-            for (const auto& i : v) {
-                if (!isFirst) {
-                    os << ", ";
-                }
-                isFirst = false;
-                os << i;
-            }
-        }
-        return os;
-    }
-
-    template <typename T, typename U>
-    inline std::ostream& operator<<(std::ostream& os, const std::pair<T, U>& v) {
-        os << "(" << v.first << ", " << v.second << ")";
-        return os;
-    }
-
-    template <typename T, typename U, class Cmp>
-    inline std::ostream& operator<<(std::ostream& os, const std::map<T, U, Cmp>& v) {
-        if (v.size() > 0) {
-            bool isFirst = true;
-            for (const auto& i : v) {
-                if (!isFirst) {
-                    os << ", ";
-                }
-                isFirst = false;
-                os << i.first << ": " << i.second;
-            }
-        }
-        return os;
-    }
-
-    template <typename T, typename U, class Cmp>
-    inline std::ostream& operator<<(std::ostream& os, const std::multimap<T, U, Cmp>& v) {
-        if (v.size() > 0) {
-            bool isFirst = true;
-            for (const auto& i : v) {
-                if (!isFirst) {
-                    os << ", ";
-                }
-                isFirst = false;
-                os << i.first << ": " << i.second;
-            }
-        }
-        return os;
-    }
-}
-
 class FmtEscaped {
     const char* s;
     const char* e;
@@ -402,7 +271,13 @@ class FmtEscaped {
 public:
     FmtEscaped(const std::string& s);
 
-    friend std::ostream& operator<<(std::ostream& os, const FmtEscaped& x);
+    const char* begin() const {
+        return s;
+    }
+
+    const char* end() const {
+        return e;
+    }
 };
 
 template <typename T>
@@ -499,7 +374,7 @@ public:
     }
 
     ~NullOnDrop() {
-        DEBUG("NULL " << &ptr);
+        DEBUG(stl::StringView("NULL ") << static_cast<const void*>(&ptr));
         ptr = nullptr;
     }
 };

@@ -1,4 +1,7 @@
 #include "hir_generic_ref.h"
+#include "output.h"
+
+using namespace stl;
 
 HIRGenericRef::HIRGenericRef(RcString name, u32 binding)
     : name(std::move(name))
@@ -35,7 +38,10 @@ Ordering HIRGenericRef::ord(const HIRGenericRef& x) const {
     return rv;
 }
 
-std::ostream& operator<<(std::ostream& os, const HIRGenericRef& x) {
+namespace stl {
+template <>
+void output<ZeroCopyOutput, HIRGenericRef>(ZeroCopyOutput& os, HIRGenericRef x) {
     x.fmt(os);
-    return os;
+    return;
+}
 }

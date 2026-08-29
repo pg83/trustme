@@ -23,6 +23,10 @@ class ScopeHandle {
     ScopeHandle(const MirBuilder& builder, unsigned int idx);
 
 public:
+    unsigned index() const {
+        return idx;
+    }
+
     ScopeHandle(const ScopeHandle& x) = delete;
 
     ScopeHandle(ScopeHandle&& x);
@@ -31,7 +35,6 @@ public:
     ScopeHandle& operator=(ScopeHandle&& x) = delete;
     ~ScopeHandle();
 
-    friend std::ostream& operator<<(std::ostream& os, const ScopeHandle& x);
 };
 
 enum class InvalidType {
@@ -41,8 +44,6 @@ enum class InvalidType {
 };
 
 #include "mir_from_hir_tu.h"
-std::ostream& operator<<(std::ostream& os, const VarState& x);
-
 struct SplitArm {
     bool hasEarlyTerminated = false;
     bool alwaysEarlyTerminated = false;
@@ -93,7 +94,6 @@ struct fieldPathT {
         return ::ord(data, x.data);
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const fieldPathT& x);
 };
 
 struct PatternBinding {
@@ -112,7 +112,6 @@ struct PatternBinding {
         return rootIndex == x.rootIndex && field == x.field && binding == x.binding && splitSlice == x.splitSlice;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const PatternBinding& x);
 };
 
 class MirBuilder {

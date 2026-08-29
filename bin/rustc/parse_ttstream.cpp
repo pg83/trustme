@@ -2,16 +2,18 @@
 
 #include "common.h"
 
+using namespace stl;
+
 TTStream::TTStream(Span parent, ParseState ps, const TokenTree& inputTt)
     : TokenStream(ps)
     , parentSpan(mv$(parent))
 {
-    DEBUG("parent " << parentSpan);
+    DEBUG(StringView("parent ") << parentSpan);
     for (auto s = parentSpan; s; s = s->parentSpan) {
-        DEBUG("parent " << s->parentSpan);
+        DEBUG(StringView("parent ") << s->parentSpan);
     }
-    DEBUG("input_tt = [" << inputTt << "]");
-    DEBUG("Set edition " << inputTt.getEdition());
+    DEBUG(StringView("input_tt = [") << inputTt << StringView("]"));
+    DEBUG(StringView("Set edition ") << inputTt.getEdition());
     edition = inputTt.getEdition();
     stack.push_back(std::make_pair(0, &inputTt));
 }
@@ -41,13 +43,13 @@ Token TTStream::realGetToken() {
                 return subtree.tok().clone();
             } else {
                 stack.push_back(std::make_pair(0, &subtree));
-                DEBUG("Set edition " << edition << " -> " << subtree.getEdition());
+                DEBUG(StringView("Set edition ") << edition << StringView(" -> ") << subtree.getEdition());
                 edition = subtree.getEdition();
             }
         } else {
             stack.pop_back();
             if (!stack.empty()) {
-                DEBUG("Restore edition " << edition << " -> " << stack.back().second->getEdition());
+                DEBUG(StringView("Restore edition ") << edition << StringView(" -> ") << stack.back().second->getEdition());
                 edition = stack.back().second->getEdition();
             }
         }

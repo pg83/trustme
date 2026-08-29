@@ -1,11 +1,11 @@
 #include "float128.h"
 
+#include <std/str/builder.h>
 #include <std/tst/ut.h>
 
 #include <string>
 #include <cstdint>
 #include <cstring>
-#include <sstream>
 
 using namespace stl;
 
@@ -54,9 +54,15 @@ namespace {
     }
 
     static std::string render(const Float128& value) {
-        std::ostringstream out;
+        StringBuilder out;
         out << value;
-        return out.str();
+        return std::string(static_cast<const char*>(out.data()), out.length());
+    }
+
+    static std::string render(Float128 value, FloatFormat format, int precision) {
+        StringBuilder out;
+        out << formatFloat128(value, format, precision);
+        return std::string(static_cast<const char*>(out.data()), out.length());
     }
 
     static double doubleFromBits(u64 bits) {
@@ -299,40 +305,11 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST(render(Float128::infinity(false)) == "inf");
         STD_INSIST(render(Float128::infinity(true)) == "-inf");
         STD_INSIST(render(Float128::quietNan()) == "nan");
-        {
-            std::ostringstream out;
-            out.precision(18);
-            out << std::scientific << Float128(1.0) / Float128(3.0);
-            STD_INSIST(out.str() == "3.333333333333333333e-01");
-        }
-        {
-            std::ostringstream out;
-            out.precision(10);
-            out << std::scientific << Float128(static_cast<double>(1.0f / 3.0f));
-            STD_INSIST(out.str() == "3.3333334327e-01");
-        }
-        {
-            std::ostringstream out;
-            out.precision(2);
-            out << std::fixed << Float128(0.996);
-            STD_INSIST(out.str() == "1.00");
-        }
-        {
-            std::ostringstream out;
-            out.precision(0);
-            out << std::fixed << Float128(0.5);
-            STD_INSIST(out.str() == "0");
-        }
-        {
-            std::ostringstream out;
-            out.precision(0);
-            out << std::fixed << Float128(1.5);
-            STD_INSIST(out.str() == "2");
-        }
-        {
-            std::ostringstream out;
-            out << std::scientific << Float128();
-            STD_INSIST(out.str() == "0.000000e+00");
-        }
+        STD_INSIST(render(Float128(1.0) / Float128(3.0), FloatFormat::Scientific, 18) == "3.333333333333333333e-01");
+        STD_INSIST(render(Float128(static_cast<double>(1.0f / 3.0f)), FloatFormat::Scientific, 10) == "3.3333334327e-01");
+        STD_INSIST(render(Float128(0.996), FloatFormat::Fixed, 2) == "1.00");
+        STD_INSIST(render(Float128(0.5), FloatFormat::Fixed, 0) == "0");
+        STD_INSIST(render(Float128(1.5), FloatFormat::Fixed, 0) == "2");
+        STD_INSIST(render(Float128(), FloatFormat::Scientific, 6) == "0.000000e+00");
     }
 }

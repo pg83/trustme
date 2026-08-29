@@ -1,6 +1,9 @@
 #include "hir_asm.h"
+#include "output.h"
 
 #include "span.h"
+
+using namespace stl;
 
 AsmLineFragment::AsmLineFragment()
     : index(UINT_MAX)
@@ -38,11 +41,11 @@ bool AsmOptions::any() const {
     return false;
 }
 
-void AsmOptions::fmt(std::ostream& os) const {
-    os << "options(";
+void AsmOptions::fmt(ZeroCopyOutput& os) const {
+    os << StringView("options(");
 #define _(n) \
     if (n)   \
-    os << #n ","
+    os << StringView(#n ",")
     _(pure);
     _(nomem);
     _(readonly);
@@ -53,7 +56,7 @@ void AsmOptions::fmt(std::ostream& os) const {
     _(raw);
     _(naked);
 #undef _
-    os << ")";
+    os << StringView(")");
 }
 
 bool AsmOptions::operator==(const AsmOptions& x) const {
@@ -73,21 +76,7 @@ bool AsmOptions::operator==(const AsmOptions& x) const {
     return true;
 }
 
-std::ostream& operator<<(std::ostream& os, const AsmDirection& d) {
-    switch (d) {
-        case AsmDirection::In:
-            return os << "in";
-        case AsmDirection::Out:
-            return os << "out";
-        case AsmDirection::LateOut:
-            return os << "lateout";
-        case AsmDirection::InOut:
-            return os << "inout";
-        case AsmDirection::InLateOut:
-            return os << "inlateout";
-    }
-    return os;
-}
+
 
 bool operator==(const AsmRegisterSpec& a, const AsmRegisterSpec& b) {
     if (a.tag() != b.tag()) {
@@ -132,7 +121,36 @@ const char* to_string(const AsmRegisterClass& c) {
     UNREACHABLE();
 }
 
-std::ostream& operator<<(std::ostream& os, const AsmRegisterSpec& s) {
+namespace stl {
+template <>
+void output<ZeroCopyOutput, AsmLine>(ZeroCopyOutput& os, const AsmLine& line) {
+    line.fmt(os);
+}
+
+template <>
+void output<ZeroCopyOutput, AsmDirection>(ZeroCopyOutput& os, AsmDirection d) {
+    switch (d) {
+        case AsmDirection::In:
+            os << StringView("in");
+    return;
+        case AsmDirection::Out:
+            os << StringView("out");
+    return;
+        case AsmDirection::LateOut:
+            os << StringView("lateout");
+    return;
+        case AsmDirection::InOut:
+            os << StringView("inout");
+    return;
+        case AsmDirection::InLateOut:
+            os << StringView("inlateout");
+    return;
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, AsmRegisterSpec>(ZeroCopyOutput& os, const AsmRegisterSpec& s) {
     switch (s.tag()) {
         case AsmRegisterSpec::TAG_Class: {
             auto& c = s.as_Class();
@@ -141,9 +159,10 @@ std::ostream& operator<<(std::ostream& os, const AsmRegisterSpec& s) {
         }
         case AsmRegisterSpec::TAG_Explicit: {
             auto& e = s.as_Explicit();
-            os << "\"" << e << "\"";
+            os << StringView("\"") << e << StringView("\"");
             break;
         }
     }
-    return os;
+    return;
+}
 }

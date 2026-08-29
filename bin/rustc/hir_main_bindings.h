@@ -1,9 +1,10 @@
 #pragma once
 
+#include "output.h"
+
 #include <std/sys/types.h>
 
 #include <string>
-#include <iostream>
 
 class RcString;
 
@@ -17,7 +18,7 @@ namespace stl {
     class ObjPool;
 }
 
-void HIRDump(std::ostream& sink, const HIRCrate& crate);
+void HIRDump(stl::ZeroCopyOutput& sink, const HIRCrate& crate);
 HIRCrate* LowerHIRFromAST(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& crate);
 void HIRSerialise(const std::string& filename, const HIRCrate& crate);
 

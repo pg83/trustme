@@ -1,5 +1,7 @@
 #pragma once
 
+#include "output.h"
+
 #include "floats.h"
 #include "int128.h"
 #include "hir_asm.h"
@@ -350,7 +352,7 @@ struct MIRLValue {
 
         unsigned as_Index() const;
 
-        void fmt(std::ostream& os) const;
+        void fmt(stl::ZeroCopyOutput& os) const;
         Ordering ord(const RefCommon& b) const;
     };
 
@@ -361,8 +363,6 @@ struct MIRLValue {
         CRef(const MIRLValue& lv, size_t wc);
 
         const CRef innerRef() const;
-
-        friend std::ostream& operator<<(std::ostream& os, const CRef& x);
 
         bool operator<(const CRef& b) const {
             return this->ord(b) == OrdLess;
@@ -385,16 +385,11 @@ struct MIRLValue {
 
         void replace(MIRLValue x);
 
-        friend std::ostream& operator<<(std::ostream& os, const MRef& x);
     };
 
     Ordering ord(const MIRLValue::CRef& x) const;
     Ordering ord(const MIRLValue::MRef& x) const;
 };
-
-std::ostream& operator<<(std::ostream& os, const MIRLValue& x);
-std::ostream& operator<<(std::ostream& os, const MIRLValue::Storage& x);
-std::ostream& operator<<(std::ostream& os, const MIRLValue::Wrapper& x);
 
 static inline bool operator<(const MIRLValue& a, const MIRLValue::CRef& b) {
     return a.ord(b) == OrdLess;
@@ -500,7 +495,6 @@ enum class MIRDropKind {
 
 #include "mir_mir_tu.h"
 
-std::ostream& operator<<(std::ostream& os, const MIRRValue& x);
 bool operator==(const MIRRValue& a, const MIRRValue& b);
 
 static inline bool operator!=(const MIRRValue& a, const MIRRValue& b) {
@@ -509,14 +503,12 @@ static inline bool operator!=(const MIRRValue& a, const MIRRValue& b) {
 
 bool operator==(const MIRAsmParam& a, const MIRAsmParam& b);
 
-std::ostream& operator<<(std::ostream& os, const MIRTerminator& x);
 bool operator==(const MIRTerminator& a, const MIRTerminator& b);
 
 static inline bool operator!=(const MIRTerminator& a, const MIRTerminator& b) {
     return !(a == b);
 }
 
-std::ostream& operator<<(std::ostream& os, const MIRStatement& x);
 bool operator==(const MIRStatement& a, const MIRStatement& b);
 
 static inline bool operator!=(const MIRStatement& a, const MIRStatement& b) {

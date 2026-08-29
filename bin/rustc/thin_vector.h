@@ -1,12 +1,13 @@
 #pragma once
 
+#include "output.h"
+
 #include "common.h"
 
 #include <new>
 #include <cstdio>
 #include <vector>
 #include <cstdlib>
-#include <ostream>
 #include <utility>
 
 template <typename T>
@@ -299,18 +300,3 @@ private:
         return ptr ? (Meta*)(ptr - metadataLen()) : nullptr;
     }
 };
-
-template <typename T>
-inline std::ostream& operator<<(std::ostream& os, const ThinVector<T>& v) {
-    if (v.size() > 0) {
-        bool isFirst = true;
-        for (const auto& i : v) {
-            if (!isFirst) {
-                os << ", ";
-            }
-            isFirst = false;
-            os << i;
-        }
-    }
-    return os;
-}

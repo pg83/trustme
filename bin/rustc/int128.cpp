@@ -1,4 +1,7 @@
 #include "int128.h"
+#include "output.h"
+
+using namespace stl;
 
 U128::U128()
     : lo(0)
@@ -395,7 +398,7 @@ S128 S128::operator>>(unsigned bits) const {
     return S128(U128(inner.lo >> bits | (inner.hi << (64 - bits)), static_cast<u64>(static_cast<i64>(inner.hi) >> bits)));
 }
 
-void S128::fmt(std::ostream& os) const {
+void S128::fmt(ZeroCopyOutput& os) const {
     if (isI64()) {
         os << static_cast<i64>(inner.lo);
     } else {
@@ -418,48 +421,66 @@ int S128::cmp128s(U128 a, U128 b) {
     return 0;
 }
 
-std::ostream& operator<<(std::ostream& os, const U128& x) {
-    if (x.hi == 0) {
-        os << x.lo;
-    } else {
-        char output[40 + 1];
-        auto v = x;
-        unsigned i = 0;
-        const char* chars = (os.flags() & std::ios_base::uppercase) ? "0123456789ABCDEF" : "0123456789abcdef";
-        switch (os.flags() & std::ios_base::basefield) {
-            case std::ios_base::hex:
-                while (v.hi > 0 || v.lo > 0) {
-                    output[i++] = chars[(v.lo & 0xF)];
-                    v >>= 4u;
-                }
-                break;
-            case std::ios_base::oct:
-                while (v.hi > 0 || v.lo > 0) {
-                    output[i++] = chars[(v.lo & 7)];
-                    v >>= 3u;
-                }
-                break;
-            case std::ios_base::dec:
-            default:
-                while (v.hi > 0 || v.lo > 0) {
-                    U128 v2(0), rem(0);
-                    U128::div128O(v, U128(10), &v2, &rem);
-                    output[i++] = chars[(rem.lo % 10)];
-                    v = v2;
-                }
-                break;
-        }
-        for (auto v = os.width(); v > i; v--) {
-            os << ' ';
-        }
-        while (i--) {
-            os << output[i];
-        }
+void U128::fmt(ZeroCopyOutput& os) const {
+    if (hi == 0) {
+        os << lo;
+        return;
     }
-    return os;
+    char digits[40];
+    auto value = *this;
+    unsigned length = 0;
+    while (value != 0) {
+        U128 quotient;
+        U128 remainder;
+        div128O(value, U128(10), &quotient, &remainder);
+        digits[length++] = static_cast<char>('0' + remainder.lo);
+        value = quotient;
+    }
+    while (length > 0) {
+        os << digits[--length];
+    }
 }
 
-std::ostream& operator<<(std::ostream& os, const S128& x) {
+void U128::fmtHex(ZeroCopyOutput& os, unsigned width, bool uppercase) const {
+    const char* chars = uppercase ? "0123456789ABCDEF" : "0123456789abcdef";
+    char digits[32];
+    auto value = *this;
+    unsigned length = 0;
+    do {
+        digits[length++] = chars[value.lo & 0xf];
+        value >>= 4u;
+    } while (value != 0);
+    while (length < width) {
+        digits[length++] = '0';
+    }
+    while (length > 0) {
+        os << digits[--length];
+    }
+}
+
+FormattedU128Hex formatHex(U128 value, unsigned width, bool uppercase) {
+    return {value, width, uppercase};
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, U128>(ZeroCopyOutput& os, U128 x) {
     x.fmt(os);
-    return os;
+}
+
+template <>
+void output<ZeroCopyOutput, S128>(ZeroCopyOutput& os, S128 x) {
+    x.fmt(os);
+}
+
+template <>
+void output<ZeroCopyOutput, FormattedU128Hex>(ZeroCopyOutput& os, FormattedU128Hex value) {
+    value.value.fmtHex(os, value.width, value.uppercase);
+}
+
+template <>
+void output<ZeroCopyOutput, std::vector<U128>>(ZeroCopyOutput& out, const std::vector<U128>& values) {
+    outCont(out, values);
+}
+
 }

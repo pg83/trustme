@@ -1,4 +1,5 @@
 #include "parse_tokenstream.h"
+#include "output.h"
 
 #include "common.h"
 #include "ast_crate.h"
@@ -64,7 +65,7 @@ Token TokenStream::getTokenCheck(eTokenType exp) {
 
 void TokenStream::putback(Token tok) {
     if (cacheValid) {
-        DEBUG("" << getPosition() << " - Double putback: " << tok << " but " << cache);
+        DEBUG(StringView("") << getPosition() << StringView(" - Double putback: ") << tok << StringView(" but ") << cache);
         compileErrorBugCheck("Double putback");
     } else {
         cacheValid = true;
@@ -87,13 +88,13 @@ eTokenType TokenStream::lookahead(unsigned int i) {
     }
 
     while (i >= lookahead_.size()) {
-        DEBUG("lookahead - read #" << lookahead_.size());
+        DEBUG(StringView("lookahead - read #") << lookahead_.size());
         auto tok = this->innerGetToken();
         auto hygiene = this->realGetHygiene();
         lookahead_.push_back({mv$(tok), this->realGetEdition(), mv$(hygiene)});
     }
 
-    DEBUG("lookahead(" << i << ") = " << lookahead_[i].tok);
+    DEBUG(StringView("lookahead(") << i << StringView(") = ") << lookahead_[i].tok);
     return lookahead_[i].tok.type();
 }
 
@@ -190,21 +191,11 @@ SavedParseState::SavedParseState(TokenStream& lex, ParseState state)
 }
 
 SavedParseState::~SavedParseState() {
-    DEBUG("Restoring " << state);
+    DEBUG(StringView("Restoring ") << state);
     lex.parseState() = state;
 }
 
-std::ostream& operator<<(std::ostream& os, const ParseState& ps) {
-    os << "ParseState {";
-    if (ps.disallowStructLiteral) {
-        os << " disallow_struct_literal";
-    }
-    if (ps.noExpandMacros) {
-        os << " no_expand_macros";
-    }
-    os << " }";
-    return os;
-}
+
 
 void TokenStream::pushHygine() {
 }
@@ -214,4 +205,19 @@ void TokenStream::popHygine() {
 
 Span TokenStream::outerSpan() const {
     return Span();
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, ParseState>(ZeroCopyOutput& os, const ParseState& ps) {
+    os << StringView("ParseState {");
+    if (ps.disallowStructLiteral) {
+        os << StringView(" disallow_struct_literal");
+    }
+    if (ps.noExpandMacros) {
+        os << StringView(" no_expand_macros");
+    }
+    os << StringView(" }");
+    return;
+}
 }

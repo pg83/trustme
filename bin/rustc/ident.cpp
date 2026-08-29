@@ -1,10 +1,10 @@
 #include "ident.h"
+#include "output.h"
 
 #include "common.h"
 
 #include <std/mem/obj_pool.h>
 
-#include <iostream>
 
 using namespace stl;
 
@@ -14,6 +14,9 @@ namespace {
     unsigned int macroDefinitionId(unsigned int definition) {
         return definition & ~ITEM_OPAQUE;
     }
+}
+
+namespace stl {
 }
 
 bool Ident::Hygiene::isVisible(const Hygiene& srcH) const {
@@ -48,52 +51,21 @@ RcString Ident::Hygiene::applyToItemName(const RcString& name) const {
         return name;
     }
 
-    std::ostringstream os;
-    os << name << "#h";
+    StringBuilder os;
+    os << name << StringView("#h");
     for (size_t i = 0; i < h.contexts.size(); i++) {
         if ((h.macroDefinitions[i] & ITEM_OPAQUE) != 0) {
-            os << "_" << h.contexts[i];
+            os << StringView("_") << h.contexts[i];
         }
     }
-    return RcString::newInterned(os.str());
+    return RcString::newInterned(std::string(static_cast<const char*>(os.data()), os.length()));
 }
 
-std::ostream& operator<<(std::ostream& os, const Ident& x) {
-    os << x.name << x.hygiene;
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const Ident::Hygiene& x) {
-    os << "/*[";
-    if (x.inner) {
-        for (size_t i = 0; i < x.inner->contexts.size(); i++) {
-            if (i != 0) {
-                os << ", ";
-            }
-            os << x.inner->contexts[i];
-            if (x.inner->macroDefinitions[i] != 0) {
-                os << "@" << macroDefinitionId(x.inner->macroDefinitions[i]);
-                if ((x.inner->macroDefinitions[i] & ITEM_OPAQUE) != 0) {
-                    os << "#item";
-                }
-            }
-        }
-    }
-    os << "]";
-    if (x.inner && x.inner->searchModule) {
-        os << " " << *x.inner->searchModule;
-    }
-    os << "*/";
-    return os;
-}
 
-std::ostream& operator<<(std::ostream& os, const Ident::ModPath& x) {
-    os << "::\"" << x.crate << "\"";
-    for (const auto& e : x.ents) {
-        os << "::" << e;
-    }
-    return os;
-}
+
+
+
 
 Ident::Hygiene::Inner Ident::Hygiene::clone() const {
     return inner ? *inner : Inner{};
@@ -221,4 +193,54 @@ bool Ident::operator<(const Ident& x) const {
         return this->hygiene < x.hygiene;
     }
     return false;
+}
+
+void Ident::Hygiene::fmt(ZeroCopyOutput& os) const {
+    os << StringView("/*[");
+    if (inner) {
+        for (size_t i = 0; i < inner->contexts.size(); i++) {
+            if (i != 0) {
+                os << StringView(", ");
+            }
+            os << inner->contexts[i];
+            if (inner->macroDefinitions[i] != 0) {
+                os << StringView("@") << macroDefinitionId(inner->macroDefinitions[i]);
+                if ((inner->macroDefinitions[i] & ITEM_OPAQUE) != 0) {
+                    os << StringView("#item");
+                }
+            }
+        }
+    }
+    os << StringView("]");
+    if (inner && inner->searchModule) {
+        os << StringView(" ") << *inner->searchModule;
+    }
+    os << StringView("*/");
+}
+
+namespace stl {
+template <>
+void output<ZeroCopyOutput, Ident>(ZeroCopyOutput& os, Ident x) {
+    os << x.name << x.hygiene;
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, Ident::Hygiene>(ZeroCopyOutput& os, Ident::Hygiene x) {
+    x.fmt(os);
+}
+
+template <>
+void output<ZeroCopyOutput, Ident::ModPath>(ZeroCopyOutput& os, const Ident::ModPath& x) {
+    os << StringView("::\"") << x.crate << StringView("\"");
+    for (const auto& e : x.ents) {
+        os << StringView("::") << e;
+    }
+    return;
+}
+
+template <>
+void output<ZeroCopyOutput, std::set<Ident>>(ZeroCopyOutput& out, const std::set<Ident>& values) {
+    outCont(out, values);
+}
 }

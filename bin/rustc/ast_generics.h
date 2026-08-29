@@ -43,7 +43,6 @@ public:
         return defaultValue_;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTTypeParam& tp);
 };
 
 class ASTLifetimeParam {
@@ -70,7 +69,6 @@ public:
         return name_;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTLifetimeParam& p);
 };
 
 class ASTValueParam {
@@ -116,12 +114,9 @@ public:
         return defaultValue_;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTValueParam& p);
 };
 
 #include "ast_generics_tu.h"
-
-std::ostream& operator<<(std::ostream& os, const ASTGenericBound& x);
 
 class ASTGenericParams {
 public:
@@ -166,5 +161,4 @@ public:
 
     int findName(const char* name) const;
 
-    friend std::ostream& operator<<(std::ostream& os, const ASTGenericParams& tp);
 };
