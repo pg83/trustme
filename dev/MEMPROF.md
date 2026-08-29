@@ -51,10 +51,7 @@ python3 dev/embed_text.py bin/rustc/prelude.inc $G/codegen_c_prelude.h CODEGEN_C
 python3 dev/gen_unicode_nfc.py $G/unicode_nfc_tables.inc
 
 # c++ = the usual realm wrapper (clang + realm CFLAGS/CPPFLAGS/LDFLAGS).
-FLAGS="-std=c++26 -O2 -g -I bin/rustc -I $G -I ext/libstd
-       -DVERSION_GIT_ISDIRTY=0 -DVERSION_GIT_FULLHASH=\"\\\"u\\\"\"
-       -DVERSION_GIT_SHORTHASH=\"\\\"t\\\"\" -DVERSION_BUILDTIME=\"\\\"u\\\"\"
-       -DVERSION_GIT_BRANCH=\"\\\"m\\\"\""
+FLAGS="-std=c++26 -O2 -g -I bin/rustc -I $G -I ext/libstd"
 ls bin/rustc/*.cpp $G/*_tu.cpp | grep -v '_ut.cpp\|sample' |
     xargs -P $(nproc) -I{} sh -c "c++ $FLAGS -c {} -o $W/objs/\$(basename {} .cpp).o"
 

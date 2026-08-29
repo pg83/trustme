@@ -25,8 +25,7 @@
       mkToolchain =
         pkgs:
         pkgs.gcc16Stdenv.mkDerivation {
-          pname = "trustme-toolchain";
-          version = "0.1.0";
+          name = "trustme-toolchain";
 
           src = self;
 
@@ -65,7 +64,6 @@
               cd cargo
               go test ./...
             )
-            TRUSTME_TARGET_VER=1.90 .build-nix/rustc/rustc -vV
             runHook postCheck
           '';
 

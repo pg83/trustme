@@ -2,7 +2,6 @@
 
 #include "ast_ast.h"
 #include "hir_hir.h"
-#include "version.h"
 #include "ast_dump.h"
 #include "ast_expr.h"
 #include "settings.h"
@@ -763,21 +762,6 @@ namespace {
         }
         return nullptr;
     }
-
-    static void printRustcVersion(bool verbose) {
-        const char* rustcTarget = RUSTC_TARGET_VERSION;
-
-        sysO << StringView("rustc ") << rustcTarget << StringView(".100 (trustme ") << VersionGetString() << StringView(")") << endL;
-        if (!verbose) {
-            return;
-        }
-        sysO << StringView("binary: rustc") << endL;
-        sysO << StringView("commit-hash: ") << VersionGetGitHash() << endL;
-        sysO << StringView("commit-date: UNKNOWN") << endL;
-        sysO << StringView("build-date: ") << VersionGetBuildTime() << endL;
-        sysO << StringView("host: UNKNOWN") << endL;
-        sysO << StringView("release: ") << rustcTarget << StringView(".100") << endL;
-    }
 }
 
 void ExpandTestHarness(ASTCrate& crate) {
@@ -931,21 +915,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
 
     if (const auto* a = getenv("TRUSTME_LIBDIR")) {
         addLibrarySearchDir(a);
-    }
-
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-vV") == 0 || strcmp(argv[i], "-Vv") == 0) {
-            printRustcVersion(true);
-            exit(0);
-        }
-        if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
-            bool verbose = false;
-            for (int j = 1; j < argc; j++) {
-                verbose |= strcmp(argv[j], "--verbose") == 0 || strcmp(argv[j], "-v") == 0;
-            }
-            printRustcVersion(verbose);
-            exit(0);
-        }
     }
 
     for (int i = 1; i < argc; i++) {

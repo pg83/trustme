@@ -36,10 +36,6 @@ parseGlobals:
 		arg := args[commandIndex]
 
 		switch arg {
-		case "-V", "--version":
-			fmt.Println("cargo 0.1.0 (trustme)")
-
-			return
 		case "-h", "--help":
 			usage(os.Stdout)
 
@@ -126,7 +122,6 @@ Commands:
   help     Print this message
 
 Options:
-  -V, --version  Print version info and exit
   -h, --help     Print help
 `)
 }

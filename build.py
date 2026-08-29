@@ -57,16 +57,6 @@ system_rustc_mode = bool(build.flags.system_rustc)
 
 build.includes += ["$(S)/bin/rustc", "$(B)/gen"]
 
-# version.cpp expects these from the build system (Makefile filled them from
-# git); pin static values so the build stays hermetic.
-build.cppflags += [
-    "-DVERSION_GIT_ISDIRTY=0",
-    '-DVERSION_GIT_FULLHASH="unknown"',
-    '-DVERSION_GIT_SHORTHASH="trustme"',
-    '-DVERSION_BUILDTIME="unknown"',
-    '-DVERSION_GIT_BRANCH="master"',
-]
-
 build.cxxflags += [
     "-std=c++26",
     "-O2",
@@ -1089,10 +1079,8 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_target_version_default.py",
-        "$(B)/bin/rustc",
         "$(B)/tst/unit/target_version_default.stamp",
     ],
-    deps=[rustc],
     descr="UT",
     color="green",
 ))
