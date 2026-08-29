@@ -331,7 +331,9 @@
    `BindPlaceholders`, `BindResponse` и адресные placeholder names удалены.
    Оставшийся `HIRTraitImplCallback` принадлежит низкоуровневому HIR index: он
    только перечисляет declarations, не несёт `HIRCompare` и не является solver
-   boundary.
+   boundary. Candidate assembly, evaluator и `SolverResponse` используют
+   нативный `SolverImpl`; `ImplRef`, оба направления legacy-моста и сами файлы
+   `hir_typeck_impl_ref.{h,cpp,tu}` удалены.
 5. `fticCheckParams`, `OwnedImplMatcher`, raw static inherent matcher и
    consumer method fallback удалены. Inherent headers унифицируются под
    snapshot, bounds проверяются typed solver goals, method selection возвращает
@@ -345,7 +347,7 @@
    parsing исходников. Семантические Rust-регрессии остаются проверкой
    поведения.
 
-После merge с trunk `0a3608378` полный Nix `unit` зелёный: 1011/1011. Миграция
+После merge с trunk `0a3608378` полный Nix `unit` зелёный. Миграция
 по перечисленным семи пунктам закрыта. Общие feature gaps компилятора, например
 ещё не реализованный builtin `MetaSized`, являются отдельными задачами и не
 поддерживаются legacy/fuzzy fallback-контуром.

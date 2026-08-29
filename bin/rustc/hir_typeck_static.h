@@ -67,8 +67,6 @@ class StaticTraitResolve: public TraitResolveCommon {
 
     mutable HIRTypeRefMap<HIRTypeRef> atyCache;
 
-    mutable bool normalizingBoundType = false;
-
     OpaqueReveal reveal_ = OpaqueReveal::UserFacing;
 
     mutable NextSolverBridge* nextSolver = nullptr;

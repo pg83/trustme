@@ -1,8 +1,8 @@
 #pragma once
 
+#include "hir_hir.h"
 #include "hir_type.h"
 #include "hir_generic_params.h"
-#include "hir_typeck_impl_ref.h"
 #include "hir_typeck_monomorph.h"
 
 enum class SolverCertainty : u8 {

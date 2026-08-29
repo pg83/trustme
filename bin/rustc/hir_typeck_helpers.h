@@ -18,18 +18,29 @@ struct SolverImpl {
     HIRSimplePath traitPath;
     const HIRTraitImpl* traitImpl = nullptr;
 
-    HIRTypeRef type;
+    HIRTypeRef type = nullptr;
     HIRPathParams traitArgs;
     HIRTraitPath::assocListT associated;
     HIRBoundConstness constness = HIRBoundConstness::Never;
 
-    static SolverImpl fromLegacy(ImplRef impl);
+    SolverImpl(HIRPathParams implParams, const HIRTrait& trait, const HIRSimplePath& traitPath, const HIRTraitImpl& traitImpl);
+    SolverImpl(const HIRTypeData* type, const HIRPathParams* traitArgs, const HIRTraitPath::assocListT* associated, HIRBoundConstness constness = HIRBoundConstness::Never);
+    SolverImpl(HIRTypeRef type, HIRPathParams traitArgs, HIRTraitPath::assocListT associated, HIRBoundConstness constness = HIRBoundConstness::Never);
+
+    bool isTraitImpl() const {
+        return traitImpl != nullptr;
+    }
 
     HIRTypeRef getImplType(HIRTypeInterner& types) const;
     HIRPathParams getTraitParams(HIRTypeInterner& types) const;
     HIRTypeRef getTraitTyParam(HIRTypeInterner& types, unsigned index) const;
     HIRTypeRef getType(HIRTypeInterner& types, const char* name, const HIRPathParams& params) const;
     bool typeIsSpecialisable(const char* name) const;
+    bool moreSpecificThan(HIRTypeInterner& types, const SolverImpl& other) const;
+    HIRTypeRef monomorphImplType(HIRTypeInterner& types, const Span& sp, const HIRTypeData* type, const HIRPathParams& methodParams = {}) const;
+    HIRTraitPath monomorphImplTraitPath(HIRTypeInterner& types, const Span& sp, const HIRTraitPath& traitPath, const HIRPathParams& methodParams = {}) const;
+
+    friend std::ostream& operator<<(std::ostream& os, const SolverImpl& impl);
 };
 
 struct SolverSlotValues {
@@ -469,7 +480,7 @@ struct TraitPathCb final: TraitPathCallback {
 };
 
 struct AssembledImplCallback {
-    virtual bool visit(ImplRef impl, SolverCertainty certainty = SolverCertainty::Proven) = 0;
+    virtual bool visit(SolverImpl impl, SolverCertainty certainty = SolverCertainty::Proven) = 0;
 };
 
 struct SolverResponseCallback {
@@ -514,7 +525,7 @@ struct AssembledImplCb final: AssembledImplCallback {
         : f(f) {
     }
 
-    bool visit(ImplRef impl, SolverCertainty certainty) override {
+    bool visit(SolverImpl impl, SolverCertainty certainty) override {
         return f(mv$(impl), certainty);
     }
 };
@@ -676,7 +687,7 @@ public:
         return solveNormalizesToCb(sp, goal, cb);
     }
 
-    bool implsOverlap(const Span& sp, const ImplRef& left, const ImplRef& right) const;
+    bool implsOverlap(const Span& sp, const SolverImpl& left, const SolverImpl& right) const;
 
     const HIRPathParams& solverExistentials(const Span& sp, const HIRGenericParams& definition) const;
 

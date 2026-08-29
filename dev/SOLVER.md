@@ -15,6 +15,8 @@ snapshot и возвращает `Proven`, `Ambiguous` или `Mismatch`.
 - `SolverResponse` содержит certainty, type/const slots, trait obligations,
   type/value equalities, выбранный solver impl и агрегат операторной
   семантики. Индивидуальных ambiguous candidates в ответе нет.
+- Candidate assembly, evaluator и ответ используют нативный `SolverImpl`;
+  legacy-представления `ImplRef` и преобразований в него нет.
 - `Context::applySolverResponse(const SolverResponse&)` — единственная точка
   применения inference-эффектов к caller table.
 - Coercion/unsize передаются в `TraitGoalQuery` как данные relation. Их
@@ -59,7 +61,7 @@ declarations для candidate assembly. Он не является границ�
   API ломает сборку, без парсинга исходников тестом.
 - Семантические Rust-регрессии покрывают ambiguity, ParamEnv, projections,
   coercion/unsize, operators, inherent methods и static consumers.
-- Итоговый Nix `unit` на рабочем дереве: 1011/1011.
+- Итоговый полный Nix `unit` на рабочем дереве зелёный.
 
 История миграции, аудит преждевременного «готово» и закрытие каждого найденного
 моста находятся в `SOLVER_EX.md`.
