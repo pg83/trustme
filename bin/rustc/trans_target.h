@@ -1,15 +1,15 @@
-struct Settings;
-
-namespace stl {
-    class ObjPool;
-}
-
 #pragma once
 
 #include "hir_type.h"
 #include "hir_typeck_static.h"
 
 #include <cstddef>
+
+struct Settings;
+
+namespace stl {
+    class ObjPool;
+}
 
 struct TargetArch {
     std::string name;
