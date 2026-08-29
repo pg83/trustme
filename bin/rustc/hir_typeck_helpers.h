@@ -22,10 +22,14 @@ struct SolverImpl {
     HIRPathParams traitArgs;
     HIRTraitPath::assocListT associated;
     HIRBoundConstness constness = HIRBoundConstness::Never;
-    bool ambiguousIdentity = false;
 
     static SolverImpl fromLegacy(ImplRef impl);
-    ImplRef legacy() const;
+
+    HIRTypeRef getImplType(HIRTypeInterner& types) const;
+    HIRPathParams getTraitParams(HIRTypeInterner& types) const;
+    HIRTypeRef getTraitTyParam(HIRTypeInterner& types, unsigned index) const;
+    HIRTypeRef getType(HIRTypeInterner& types, const char* name, const HIRPathParams& params) const;
+    bool typeIsSpecialisable(const char* name) const;
 };
 
 struct SolverSlotValues {
@@ -63,7 +67,6 @@ struct SolverResponse {
     ThinVector<SolverTypeEquality> equalities;
     ThinVector<SolverValueEquality> valueEqualities;
     const SolverImpl* impl = nullptr;
-    bool hasImpl = false;
     SolverOperatorSummary operatorSummary;
 };
 
@@ -84,8 +87,7 @@ struct NextSolverCrateCache {
 
     NextSolverCrateCache()
         : pool(stl::ObjPool::fromMemory())
-        , index(pool.mutPtr())
-    {
+        , index(pool.mutPtr()) {
     }
 
     Entry* find(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) const {
@@ -218,7 +220,7 @@ public:
 
     unsigned int newIvar(HIRInferClass ic = HIRInferClass::None);
     HIRTypeRef newIvarTr(HIRInferClass ic = HIRInferClass::None);
-    void setIvarTo(unsigned int slot, HIRTypeRef type);
+    void setIvarTo(unsigned int slot, HIRTypeRef type, bool solverProven = false);
     void ivarUnify(unsigned int leftSlot, unsigned int rightSlot);
 
     unsigned int newIvarVal();
@@ -304,6 +306,7 @@ public:
         bool bindRigidValues = false;
         bool relateProjectionInputs = false;
         bool rigidGenericsAreDistinct = false;
+        bool rigidProjectionsAreDistinct = false;
     };
 
     enum class Outcome : u8 {
@@ -357,6 +360,7 @@ private:
     bool bindRigidValues_;
     bool relateProjectionInputs_;
     bool rigidGenericsAreDistinct_;
+    bool rigidProjectionsAreDistinct_;
     stl::Vector<PendingEquality> pending_;
     ThinVector<PendingValueEquality> pendingValues_;
 };
@@ -388,6 +392,11 @@ struct SolverOperatorGoal {
     const HIRTraitImpl* currentImpl = nullptr;
 };
 
+enum class SolverAmbiguityPolicy : u8 {
+    Suppress,
+    Report,
+};
+
 struct TraitGoalQuery {
     const char* assocName = nullptr;
     const HIRTypeData* assocType = nullptr;
@@ -401,6 +410,19 @@ struct TraitGoalQuery {
 
     const ThinVector<SolverCoercionConstraint>* coercions = nullptr;
     const SolverOperatorGoal* operatorGoal = nullptr;
+    SolverAmbiguityPolicy ambiguity = SolverAmbiguityPolicy::Suppress;
+};
+
+enum class InherentItemKind : u8 {
+    Type,
+    Method,
+    Value,
+};
+
+struct InherentImplSelection {
+    SolverCertainty certainty = SolverCertainty::NoSolution;
+    const HIRTypeImpl* impl = nullptr;
+    HIRPathParams implParams;
 };
 
 struct NormalizesTo {
@@ -421,8 +443,7 @@ struct TraitBoundCb final: TraitBoundCallback {
     F f;
 
     explicit TraitBoundCb(F f)
-        : f(f)
-    {
+        : f(f) {
     }
 
     bool visit(HIRCompare cmp, const HIRTypeData* type, const HIRGenericPath& traitPath, const TraitResolveCommon::CachedBound& info) override {
@@ -439,8 +460,7 @@ struct TraitPathCb final: TraitPathCallback {
     F f;
 
     explicit TraitPathCb(F f)
-        : f(f)
-    {
+        : f(f) {
     }
 
     bool visit(const HIRTraitPath& trait) override {
@@ -465,8 +485,7 @@ struct SolverResponseCb final: SolverResponseCallback {
     F f;
 
     explicit SolverResponseCb(F f)
-        : f(f)
-    {
+        : f(f) {
     }
 
     bool visit(SolverResponse response) override {
@@ -479,8 +498,7 @@ struct NormalizesToCb final: NormalizesToCallback {
     F f;
 
     explicit NormalizesToCb(F f)
-        : f(f)
-    {
+        : f(f) {
     }
 
     bool visit(NormalizesToResponse response) override {
@@ -493,8 +511,7 @@ struct AssembledImplCb final: AssembledImplCallback {
     F f;
 
     explicit AssembledImplCb(F f)
-        : f(f)
-    {
+        : f(f) {
     }
 
     bool visit(ImplRef impl, SolverCertainty certainty) override {
@@ -511,8 +528,7 @@ struct UnsizeTypeCb final: UnsizeTypeCallback {
     F f;
 
     explicit UnsizeTypeCb(F f)
-        : f(f)
-    {
+        : f(f) {
     }
 
     void visit(HIRTypeRef newDst) override {
@@ -548,6 +564,12 @@ private:
 
     mutable stl::ObjPool::Ref eatCachePool;
     mutable stl::IntMap<EatCacheEntry> eatCache;
+    struct SolverExistentials {
+        const HIRGenericParams* definition;
+        HIRPathParams params;
+    };
+
+    mutable stl::IntMap<ThinVector<SolverExistentials>> solverExistentials_;
     mutable u64 eatCacheGeneration = 0;
     mutable bool normalizingBoundType = false;
 
@@ -656,7 +678,13 @@ public:
 
     bool implsOverlap(const Span& sp, const ImplRef& left, const ImplRef& right) const;
 
-    HIRCompare fticCheckParams(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitArgs, const HIRTypeData* implTy, HIRPathParams& outImplParams, bool evaluateBounds = true, bool commitDefiningOpaque = false, SolverResponse* effects = nullptr) const;
+    const HIRPathParams& solverExistentials(const Span& sp, const HIRGenericParams& definition) const;
+
+    Unifier::Outcome relateInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRTypeData* receiver, HIRPathParams& implParams) const;
+    SolverCertainty evaluateInherentImpl(const Span& sp, const HIRTypeImpl& impl, const HIRTypeData* receiver, HIRPathParams& implParams) const;
+    SolverCertainty probeInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRTypeData* receiver, HIRPathParams& implParams) const;
+
+    InherentImplSelection selectInherentImpl(const Span& sp, const HIRTypeData* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams = nullptr) const;
 
     bool findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, TraitPathCallback& callback) const;
 
@@ -691,12 +719,13 @@ private:
     }
 
     HIRPathParams makeFreshImplParams(const HIRGenericParams& params) const;
+    HIRPathParams materializeImplParams(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& inferenceParams, size_t externalTypeIvars, size_t externalValueIvars) const;
     SolverCertainty solveNonBuiltinTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRTypeData* type) const;
     HIRCompare typeIsSizedBuiltin(const Span& sp, const HIRTypeData* type) const;
     HIRCompare typeIsCopyBuiltin(const Span& sp, const HIRTypeData* type) const;
     SolverCertainty evaluateCoercionGoal(const Span& sp, const SolverCoercionConstraint& constraint, const HIRTypeData* input, ThinVector<SolverTypeEquality>* equalities = nullptr) const;
     Ordering compareCoercionEndpoints(const Span& sp, const SolverCoercionConstraint& constraint, const HIRTypeData* left, const HIRTypeData* right) const;
-    SolverCertainty evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, u32 conditionalScope = 0) const;
+    SolverCertainty evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, u32 conditionalScope = 0, bool onlyBoundsConstrainingTraitParams = false) const;
     SolverCertainty evaluateInherentImplBounds(const Span& sp, const HIRTypeImpl& impl, const HIRPathParams& implParams) const;
 
 public:
@@ -710,6 +739,14 @@ public:
 
         PinShared,
     };
+    struct MethodCandidate {
+        AutoderefBorrow borrow;
+        HIRPath path;
+        const HIRTypeImpl* inherentImpl;
+
+        friend std::ostream& operator<<(std::ostream& os, const MethodCandidate& candidate);
+    };
+
     friend std::ostream& operator<<(std::ostream& os, const AutoderefBorrow& x);
 
     unsigned int autoderefFindMethod(
@@ -719,9 +756,10 @@ public:
         unsigned int typeIvarCount,
         const HIRTypeData* topTy,
         const RcString& methodName,
+        const ThinVector<HIRTypeRef>& argumentTypes,
         const HIRTypeData* expectedResult,
         bool mustDecide,
-        /* Out -> */ std::vector<std::pair<AutoderefBorrow, HIRPath>>& possibilities
+        /* Out -> */ ThinVector<MethodCandidate>& possibilities
     ) const;
 
     unsigned int autoderefFindField(const Span& sp, const HIRTypeData* topTy, const RcString& name, /* Out -> */ HIRTypeRef& fieldType) const;
@@ -756,7 +794,7 @@ public:
         Box,
     };
     friend std::ostream& operator<<(std::ostream& os, const AllowedReceivers& x);
-    bool findMethod(const Span& sp, const tTraitList& traits, const std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ std::vector<std::pair<AutoderefBorrow, HIRPath>>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
+    bool findMethod(const Span& sp, const tTraitList& traits, const std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const ThinVector<HIRTypeRef>& argumentTypes, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
 
     const HIRFunction* traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const;
     bool traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const;

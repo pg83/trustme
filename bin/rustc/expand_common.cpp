@@ -15,6 +15,10 @@
 #include "expand_proc_macro.h"
 #include "macro_rules_macro_rules.h"
 
+#include <std/lib/vector.h>
+
+using namespace stl;
+
 void RegisterSynextBuiltins(ExpandRegistry& registry);
 void RegisterCfgBuiltins(ExpandRegistry& registry);
 void RegisterProcMacroBuiltins(ExpandRegistry& registry);
@@ -32,6 +36,7 @@ namespace {
         LList<const ASTModule*> modstack;
         ExpandMode mode;
         ASTModule* currentMod;
+        Vector<const ASTModule*>* activeAnonModules = nullptr;
         mutable bool change;
         mutable bool hasMissing;
 
@@ -1304,6 +1309,7 @@ namespace {
                 auto& e = i.data.as_Module();
                 LList<const ASTModule*> subModstack(&es.modstack, &e);
                 ExpandState esInner(es.wb, es.crate, subModstack, es.mode, &e);
+                esInner.activeAnonModules = es.activeAnonModules;
                 ExpandMod(esInner, path, e, 0);
                 ExpandAttrs(es, attrs, AttrStage::Post, path, mod, idx, vis, i.data);
                 es.change |= esInner.change;
@@ -1701,25 +1707,37 @@ namespace {
         }
     }
 
-    void ExpandModIndexAnon(ASTCrate& crate, ASTModule& mod) {
+    bool ContainsModule(const Vector<const ASTModule*>& modules, const ASTModule* module) {
+        for (const auto* existing : modules) {
+            if (existing == module) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void PruneInactiveAnonModules(const Vector<const ASTModule*>& active, ASTModule& mod) {
         TRACE_FUNCTION_F("mod=" << mod.path());
-        for (auto& i : mod.items) {
-            DEBUG("- " << i->data.tagStr() << " '" << i->name << "'");
-            if (auto* e = i->data.opt_Module()) {
-                ExpandModIndexAnon(crate, *e);
-
-                // TODO: Also ensure that all #[macro_export] macros end up in parent
+        for (auto& item : mod.items) {
+            if (auto* module = item->data.opt_Module()) {
+                PruneInactiveAnonModules(active, *module);
             }
         }
 
-        for (auto& mp : mod.anonMods()) {
-            if (mp.use_count() == 1) {
-                DEBUG("- " << mp->path() << " dropped due to node destruction");
-                mp.reset();
+        for (auto& module : mod.anonMods()) {
+            if (!module || !ContainsModule(active, module.get())) {
+                if (module) {
+                    DEBUG("- " << module->path() << " dropped because it is inactive");
+                }
+                module.reset();
             } else {
-                ExpandModIndexAnon(crate, *mp);
+                PruneInactiveAnonModules(active, *module);
             }
         }
+    }
+
+    void ExpandModIndexAnon(const Vector<const ASTModule*>& active, ASTModule& mod) {
+        PruneInactiveAnonModules(active, mod);
     }
 
     void Expand_Mod_Early(const WireBoard& wb, ASTCrate& crate, ASTModule& mod, std::vector<std::unique_ptr<ASTNamed<ASTItem>>>& newRootItems) {
@@ -2019,10 +2037,12 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
         es.hasMissing = false;
     }
     es.mode = ExpandMode::Final;
+    Vector<const ASTModule*> activeAnonModules;
+    es.activeAnonModules = &activeAnonModules;
     ExpandMod(es, ASTAbsolutePath(), crate.rootModule_);
     ASSERT_BUG(Span(), !es.hasMissing, "Expand too too many attempts");
 
-    ExpandModIndexAnon(crate, crate.rootModule_);
+    ExpandModIndexAnon(activeAnonModules, crate.rootModule_);
 
     {
         auto& exportedMacros = crate.exportedMacros;
@@ -2272,6 +2292,10 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
     this->inAssignLhs = false;
     unsigned int modItemCount = 0;
     bool hasLocalMod = node.localMod != nullptr;
+
+    if (node.localMod && expandState.activeAnonModules && !ContainsModule(*expandState.activeAnonModules, node.localMod.get())) {
+        expandState.activeAnonModules->pushBack(node.localMod.get());
+    }
 
     auto prevModstack = this->expandState.modstack;
     if (node.localMod) {

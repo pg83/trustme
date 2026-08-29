@@ -3,7 +3,12 @@
 #include <std/mem/obj_pool.h>
 
 #include <cassert>
+#include <cstdlib>
 #include <set>
+
+[[noreturn]] void compileErrorBugCheckAt(const char*, int, const char*) {
+    std::abort();
+}
 
 int main() {
     auto pool = stl::ObjPool::fromMemory();

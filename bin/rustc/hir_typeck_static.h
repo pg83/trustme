@@ -25,8 +25,7 @@ struct StaticNamedTraitCb final: StaticNamedTraitCallback {
     F f;
 
     explicit StaticNamedTraitCb(F f)
-        : f(f)
-    {
+        : f(f) {
     }
 
     bool visit(const HIRPathParams& params, HIRTraitPath::assocListT assoc) override {
@@ -43,8 +42,7 @@ struct StaticTraitPathCb final: StaticTraitPathCallback {
     F f;
 
     explicit StaticTraitPathCb(F f)
-        : f(f)
-    {
+        : f(f) {
     }
 
     bool visit(const HIRTraitPath& trait) override {

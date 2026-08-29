@@ -201,8 +201,7 @@ void TypecheckModuleLevel(const WireBoard& wb, HIRCrate& crate) {
 Visitor::Visitor(const WireBoard& wb, HIRCrate& crate)
     : HIRVisitor(nullptr, crate.types)
     , crate(crate)
-    , resolve_(wb)
-{
+    , resolve_(wb) {
 }
 
 auto Visitor::pushModTraits(const HIRModule& mod) -> ModTraitsGuard {
@@ -538,7 +537,7 @@ auto Visitor::setFromImpl(const HIRGenericPath& traitPath, const HIRTrait& trait
     auto& e = pd.as_UfcsUnknown();
     const auto& type = e.type;
     return resolve_.findImpl(Span(), traitPath.path, traitPath.params, type, [&](SolverResponse response) {
-        if (response.certainty != SolverCertainty::Proven) {
+        if (response.certainty == SolverCertainty::NoSolution) {
             return false;
         }
         pd = getUfcsKnown(mv$(e), makeGenericPath(traitPath.path, trait), trait);
@@ -892,8 +891,7 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
                 std::map<unsigned int, const HIRTypeData*> rpitMapping;
 
                 MCB()
-                    : HIRMatchGenerics(BorrowMatchedValues{})
-                {
+                    : HIRMatchGenerics(BorrowMatchedValues{}) {
                 }
 
                 HIRCompare cmpType(const Span& sp, const HIRTypeData* tyL, const HIRTypeData* tyR, tCbResolveType resolveCb) override {

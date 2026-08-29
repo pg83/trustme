@@ -163,7 +163,7 @@
 5	make_unique	bin/rustc/hir_typeck_expr_cs.cpp
 3	new	bin/rustc/hir_typeck_expr_cs.cpp
 2	std::map	bin/rustc/hir_typeck_expr_cs.cpp
-55	std::vector	bin/rustc/hir_typeck_expr_cs.cpp
+54	std::vector	bin/rustc/hir_typeck_expr_cs.cpp
 3	unique_ptr	bin/rustc/hir_typeck_expr_cs.cpp
 1	std::map	bin/rustc/hir_typeck_expr_cs.h
 1	std::unordered	bin/rustc/hir_typeck_expr_cs.h
@@ -172,8 +172,8 @@
 3	std::vector	bin/rustc/hir_typeck_expr_visit.h
 1	new	bin/rustc/hir_typeck_helpers.cpp
 2	std::unordered	bin/rustc/hir_typeck_helpers.cpp
-29	std::vector	bin/rustc/hir_typeck_helpers.cpp
-9	std::vector	bin/rustc/hir_typeck_helpers.h
+27	std::vector	bin/rustc/hir_typeck_helpers.cpp
+7	std::vector	bin/rustc/hir_typeck_helpers.h
 1	unique_ptr	bin/rustc/hir_typeck_helpers.h
 2	std::map	bin/rustc/hir_typeck_main_bindings.cpp
 1	std::string	bin/rustc/hir_typeck_main_bindings.cpp

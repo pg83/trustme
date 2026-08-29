@@ -1,65 +1,65 @@
 # SOLVER.md — единый goal solver
 
-Цель выполнена: typeck пользуется одним goal solver. Снаружи солвера нет
-выбора impl'а по `HIRCompare::Fuzzy`, повторного legacy-поиска и угадывания
-типа по trait possibilities.
+Typeck пользуется одним goal solver. Потребитель не видит множество viable
+impl'ов, не выбирает кандидата по `HIRCompare::Fuzzy` и не повторяет legacy
+поиск после `Ambiguous`.
 
-`Fuzzy` допустим только как внутренний результат сопоставления головы
-кандидата. Через границу солвера выходят `NoSolution`, `Ambiguous` или
-`Proven` и типизированные ограничения ответа.
+Через границу солвера выходят только `NoSolution`, `Ambiguous` или `Proven` и
+типизированные данные ответа. `Fuzzy` остался во внутренних структурных
+фильтрах; окончательная relation кандидата выполняется `Unifier` под
+snapshot и возвращает `Proven`, `Ambiguous` или `Mismatch`.
 
-## 1. Нормальный ответ солвера — сделано
+## Ответ и граница
 
 - Все type/const inference variables входной цели канонизируются.
-- Кандидаты проверяются в изолированном inference state под snapshot.
-- `SolverResponse` хранит certainty, type/const-слоты, equalities, obligations
-  и, когда это требуется probe-запросу, неоднозначные candidates.
-- `Context::applySolverResponse` применяет ответ к caller inference обычной
-  унификацией; typeck не повторяет выбор кандидата.
+- `SolverResponse` содержит certainty, type/const slots, trait obligations,
+  type/value equalities, выбранный solver impl и агрегат операторной
+  семантики. Индивидуальных ambiguous candidates в ответе нет.
+- `Context::applySolverResponse(const SolverResponse&)` — единственная точка
+  применения inference-эффектов к caller table.
+- Coercion/unsize передаются в `TraitGoalQuery` как данные relation. Их
+  проверка, сравнение endpoints и ranking выполняются внутри солвера; callback
+  в `Context` и post-solver retry удалены.
 - Кэш хранит полный неизменяемый canonical response. One-shot response,
-  `slotsBefore` и мутация inference на границе удалены.
+  `slotsBefore` и мутация caller inference на границе удалены.
 
-## 2. Проекции решает солвер — сделано
+## Проекции и выбор
 
 - `NormalizesTo(<T as Trait>::Assoc, ?out)` возвращает associated output и все
   inference-эффекты одним типизированным ответом.
-- Dynamic/static EAT только ставят цель и применяют её ответ.
-- Selection, specialization, associated item и builtin-кандидаты выбираются
-  внутри solver candidate assembly.
-- Отдельные EAT-селекторы, depth/recursion state, `definingUse`,
-  `selfSimilarChain`, `noGoalBridge` и legacy fallback удалены.
+- Dynamic/static EAT только ставят цель и применяют ответ.
+- Trait impl, ParamEnv, builtin, trait-object и opaque heads проходят общую
+  транзакционную relation. Pending alias relations становятся nested goals.
+- Specialization, associated item source, inherent impl и method selection
+  решаются до выхода из solver/selection слоя.
+- Отдельные EAT-селекторы, recursion state, `definingUse`, `selfSimilarChain`,
+  `noGoalBridge` и consumer fallback удалены.
 
-## 3. Потребители переведены — сделано
+## Потребители
 
-На solve/apply переведены:
+На solve/apply переведены expression typeck, static resolve, method lookup,
+autoderef и builtin-доказательства, включая `Deref`, `Unsize` и
+`CoerceUnsized`. Static bridge передаёт полный `SolverResponse`; `canUnsize`
+ставит обычную цель `Unsize<dst>` и принимает только `Proven`.
 
-1. trait/associated constraints expression typeck;
-2. static resolve и проверка bounds;
-3. method probe/confirm и autoderef;
-4. `Deref`, `Unsize`, `CoerceUnsized` и остальные builtin-доказательства.
+Identity retry, specialisable repeat, операторный legacy probe, trait-driven
+possibilities и ручной выбор единственного ambiguous candidate удалены.
+Поздний output diverging closure передаётся явной obligation, без мутации HIR
+через `const_cast`.
 
-Identity-retry, specialisable-repeat и операторный legacy probe удалены.
-Поздний output diverging closure передаётся явной obligation, без мутации
-HIR через `const_cast`.
+Низкоуровневый `HIRTraitImplCallback` в `HIRCrate` только перечисляет HIR
+declarations для candidate assembly. Он не является границей solver API, не
+несёт `HIRCompare` и не выбирает ответ.
 
-## 4. Старая механика удалена — сделано
+## Gates
 
-- Публичных `findTraitImplsLegacy*`/`findTraitImplsMagic*` и отдельного static
-  selector больше нет.
-- Внутреннее перечисление impl/builtin/ParamEnv существует только как часть
-  candidate assembly и проверки repertoire.
-- `selectSpecialisableFallback` удалён.
-- Trait possibilities удалены из `possibleIvarVals`/`checkIvarPoss`.
-  Направленный coercion graph оставлен отдельным механизмом.
-- `HIRCompare::Fuzzy` не передаётся наружу через solver callbacks.
+- C++ UT компиляцией фиксирует точную форму `SolverResponse` и
+  `TraitGoalQuery`, а также единственный overload
+  `Context::applySolverResponse`. Возврат candidate export или старого apply
+  API ломает сборку, без парсинга исходников тестом.
+- Семантические Rust-регрессии покрывают ambiguity, ParamEnv, projections,
+  coercion/unsize, operators, inherent methods и static consumers.
+- Итоговый Nix `unit` на рабочем дереве: 1011/1011.
 
-## Definition of done
-
-- [x] В typeck нет вызовов публичных legacy/magic selector API.
-- [x] Нет retry после ответа goal solver и выбора типа из trait possibilities.
-- [x] Проекции нормализуются только через `NormalizesTo`.
-- [x] Ограничения доказательства переносятся typed response и применяются в
-  одной точке.
-- [x] Итоговый Nix `unit` зелёный на финальном рабочем дереве: 1004/1004.
-
-Подробная история перехода и регрессий находится в `SOLVER_EX.md`.
+История миграции, аудит преждевременного «готово» и закрытие каждого найденного
+моста находятся в `SOLVER_EX.md`.

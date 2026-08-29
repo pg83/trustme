@@ -672,8 +672,7 @@ namespace {
                     Rewriter(const std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, const std::map<unsigned, unsigned>& dropFlagMapping, unsigned dropFlagsField)
                         : mappings_(mappings)
                         , dropFlagMapping(dropFlagMapping)
-                        , dropFlagsField(dropFlagsField)
-                    {
+                        , dropFlagsField(dropFlagsField) {
                     }
 
                     bool visitLvalue(MIRLValue& lv, MIRValUsage u) override {
@@ -2714,8 +2713,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                         MIRBasicBlockId block0;
 
                         DivergingGuardMapper(MIRBasicBlockId block0)
-                            : block0(block0)
-                        {
+                            : block0(block0) {
                         }
 
                         MIRBasicBlockId updateBbRef(MIRBasicBlockId bbIdx) override {
@@ -2785,8 +2783,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                         , condFalse(condFalse)
                         , condTrue(condTrue)
                         , newCondFalse(builder.newBbUnlinked())
-                        , newCondTrue(builder.newBbUnlinked())
-                    {
+                        , newCondTrue(builder.newBbUnlinked()) {
                         DEBUG("new_cond_false=" << newCondFalse << ", new_cond_true=" << newCondTrue);
                     }
 
@@ -5237,8 +5234,7 @@ MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const 
     , langBox_(nullptr)
     , blockActive_(false)
     , resultValid(false)
-    , fcnScope_(*this, 0)
-{
+    , fcnScope_(*this, 0) {
     if (resolve.hirCrate().langItems.count("owned_box") > 0) {
         langBox_ = &resolve.hirCrate().langItems.at("owned_box");
     }
@@ -6113,8 +6109,7 @@ void MirBuilder::insertCloned(const Span& sp, const SavedCode& c, CloneMapper& m
 
             Cloner(const Span& sp, CloneMapper& mapper, HIRTypeInterner& types)
                 : MIRCloner(sp, types)
-                , mapper(mapper)
-            {
+                , mapper(mapper) {
             }
 
             MIRBasicBlockId mapBbIdx(MIRBasicBlockId idx) const override {
@@ -7706,14 +7701,12 @@ bool VarState::getUsedDropFlags(std::set<unsigned>* out) const {
 
 ScopeHandle::ScopeHandle(const MirBuilder& builder, unsigned int idx)
     : builder(builder)
-    , idx(idx)
-{
+    , idx(idx) {
 }
 
 ScopeHandle::ScopeHandle(ScopeHandle&& x)
     : builder(x.builder)
-    , idx(x.idx)
-{
+    , idx(x.idx) {
     x.idx = ~0;
 }
 
@@ -7721,19 +7714,16 @@ PatternBinding::PatternBinding(fieldPathT field, const HIRPatternBinding& bindin
     : field(std::move(field))
     , rootIndex(rootIndex)
     , binding(&binding)
-    , splitSlice(SIZE_MAX, SIZE_MAX)
-{
+    , splitSlice(SIZE_MAX, SIZE_MAX) {
 }
 
 MirBuilder::ScopeDef::ScopeDef(const Span& span)
-    : span(span)
-{
+    : span(span) {
 }
 
 MirBuilder::ScopeDef::ScopeDef(const Span& span, ScopeType data)
     : span(span)
-    , data(mv$(data))
-{
+    , data(mv$(data)) {
 }
 
 MirBuilder::SavedAliases MirBuilder::saveAliases() const {
@@ -7784,8 +7774,7 @@ MIRLValue MirBuilder::getRvalInIfCond(const Span& sp, MIRRValue val) {
 }
 
 MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
-    : state(mv$(vs))
-{
+    : state(mv$(vs)) {
 }
 
 std::ostream& operator<<(std::ostream& os, const ScopeHandle& x) {
@@ -7822,8 +7811,7 @@ std::ostream& operator<<(std::ostream& os, const PatternBinding& x) {
 ExprVisitorConv::ExprVisitorConv(MirBuilder& builder, const std::vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator)
     : builder(builder)
     , variableTypes(varTypes)
-    , isGenerator(isGenerator != nullptr)
-{
+    , isGenerator(isGenerator != nullptr) {
     if (isGenerator) {
         generatorState.isFuture = isGenerator->isFuture;
         generatorState.isAsyncGen = isGenerator->isAsyncGen;
@@ -7847,7 +7835,7 @@ auto ExprVisitorConv::hasDropImpl(const Span& sp, const HIRTypeData* ty) const -
         return false;
     }
     return builder.resolve().findImpl(sp, trait, HIRPathParams{}, ty, [](SolverResponse response) {
-        return response.certainty == SolverCertainty::Proven && response.impl->traitImpl;
+        return response.certainty == SolverCertainty::Proven && response.impl && response.impl->traitImpl;
     });
 }
 
@@ -8287,8 +8275,7 @@ auto ExprVisitorConv::generatorPruneInactiveLocals(const Span& sp, const StaticT
                 ThinVector<MIRBasicBlockId>& targets;
 
                 explicit TargetCollector(ThinVector<MIRBasicBlockId>& targets)
-                    : targets(targets)
-                {
+                    : targets(targets) {
                 }
 
                 void visitTarget(const MIRBasicBlockId& target) override {
@@ -10118,8 +10105,8 @@ auto ExprVisitorConv::visit(HIRExprNodeUnsize& node) -> void {
         switch ((*tyOut).tag()) {
             default: {
                 const auto& langUnsize = builder.crate().getLangItemPath(node.span(), "unsize");
-                if (builder.resolve().findImpl(node.span(), langUnsize, HIRPathParams(tyOut), tyIn, [](SolverResponse) {
-                    return true;
+                if (builder.resolve().findImpl(node.span(), langUnsize, HIRPathParams(tyOut), tyIn, [](SolverResponse response) {
+                    return response.certainty == SolverCertainty::Proven;
                 })) {
                     // - HACK: Emit a cast operation on the pointers. Leave it up to monomorph to 'fix' it
                     builder.setResult(node.span(), MIRRValue::make_MakeDst({mv$(ptrLval), MIRConstant::make_ItemAddr({})}));
@@ -11280,21 +11267,18 @@ auto ExprVisitorConv::visit(HIRExprNodeAsyncBlock& node) -> void {
 }
 
 ExprVisitorConv::GeneratorState::State::State(MIRBasicBlockId entry)
-    : entrypoint(entry)
-{
+    : entrypoint(entry) {
 }
 
 PatternDump::PatternDump(const StaticTraitResolve& resolve, const HIRTypeData* ty, const std::vector<PatternRule>& rules)
     : resolve(resolve)
     , ty(ty)
-    , rules(rules)
-{
+    , rules(rules) {
 }
 
 template <typename F>
 PatternSubsetCb<F>::PatternSubsetCb(F f)
-    : f(f)
-{
+    : f(f) {
 }
 
 template <typename F>
@@ -11304,8 +11288,7 @@ auto PatternSubsetCb<F>::visitSubset(size_t index) -> void {
 
 template <typename F>
 PatternTypeCb<F>::PatternTypeCb(F f)
-    : f(f)
-{
+    : f(f) {
 }
 
 template <typename F>
@@ -11319,8 +11302,7 @@ PatternRulesetBuilder::PatternRulesetBuilder(const StaticTraitResolve& resolve, 
     , rulesets(1)
     , subsetStart(0)
     , subsetEnd(1)
-    , nextRootIndex(sharedNextRootIndex ? sharedNextRootIndex : &nextRootStorage)
-{
+    , nextRootIndex(sharedNextRootIndex ? sharedNextRootIndex : &nextRootStorage) {
     if (resolve.hirCrate().langItems.count("owned_box") > 0) {
         langBox = &resolve.hirCrate().langItems.at("owned_box");
     }
@@ -11333,8 +11315,7 @@ auto PatternRulesetBuilder::multiplyRulesets(size_t n, F f) -> void {
 }
 
 PatternRulesetBuilder::Ruleset::Ruleset()
-    : isImpossible(false)
-{
+    : isImpossible(false) {
 }
 
 auto PatternRulesetBuilder::Ruleset::clone() const -> Ruleset {
@@ -11350,21 +11331,18 @@ auto PatternRulesetBuilder::Ruleset::clone() const -> Ruleset {
 }
 
 RulesetRef::RulesetRef(std::vector<PatternRuleset>& rules)
-    : rulesVec(&rules)
-{
+    : rulesVec(&rules) {
 }
 
 RulesetRef::RulesetRef(RulesetRef& parent, size_t start, size_t n)
     : parent(&parent)
     , parentOfs(start)
-    , parentLen(n)
-{
+    , parentLen(n) {
 }
 
 RulesetRef::RulesetRef(RulesetRef& parent, size_t idx)
     : parent(&parent)
-    , parentOfs(idx)
-{
+    , parentOfs(idx) {
 }
 
 auto RulesetRef::size() const -> size_t {
@@ -11421,8 +11399,7 @@ auto tRulesSubset::encodeArmIdx(size_t armIdx, size_t patIdx) -> size_t {
 }
 
 tRulesSubset::tRulesSubset(size_t exp, bool isArmIndexes)
-    : isArmIndexes(isArmIndexes)
-{
+    : isArmIndexes(isArmIndexes) {
     ruleSets.reserve(exp);
     armIdxes.reserve(exp);
 }
@@ -11503,8 +11480,7 @@ MatchGenGrouped::MatchGenGrouped(MirBuilder& builder, const Span& sp, const HIRT
     , topTy(topTy)
     , topVal(topVal)
     , armsCode(armsCode)
-    , fieldPathOfs(fieldPathOfs)
-{
+    , fieldPathOfs(fieldPathOfs) {
 }
 
 auto MatchGenGrouped::pushCompare(MIRLValue left, MIRBinOp op, MIRParam right) -> MIRLValue {

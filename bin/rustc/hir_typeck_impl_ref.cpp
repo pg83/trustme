@@ -159,15 +159,13 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIRTypeInterner& types, cons
 HIRTypeRef ImplRef::Monomorph::getType(const Span& sp, const HIRGenericRef& ge) const /*override*/
 {
     if (ge.isSelf()) {
-        if (this->ti.selfCache == HIRTypeRef()) {
-            this->ti.selfCache = types.diverge();
-            this->ti.selfCache = this->monomorphType(sp, this->ti.impl->type);
-        } else if (this->ti.selfCache == types.diverge()) {
-            // BUG!
-            BUG(sp, "Use of `Self` in expansion of `Self`");
-        } else {
+        if (!selfType_) {
+            ASSERT_BUG(sp, !resolvingSelf_, "Use of `Self` in expansion of `Self`");
+            resolvingSelf_ = true;
+            selfType_ = monomorphType(sp, ti.impl->type);
+            resolvingSelf_ = false;
         }
-        return this->ti.selfCache;
+        return selfType_;
     }
     return MonomorphStatePtr(types, nullptr, &this->ti.implParams, &this->params).getType(sp, ge);
 }
@@ -365,23 +363,19 @@ std::ostream& operator<<(std::ostream& os, const ImplRef& x) {
 }
 
 ImplRef::ImplRef()
-    : data(Data::make_TraitImpl({{}, nullptr, nullptr, nullptr}))
-{
+    : data(Data::make_TraitImpl({{}, nullptr, nullptr, nullptr})) {
 }
 
 ImplRef::ImplRef(HIRPathParams implParams, const HIRTrait& traitRef, const HIRSimplePath& trait, const HIRTraitImpl& impl)
-    : data(Data::make_TraitImpl({mv$(implParams), &traitRef, &trait, &impl}))
-{
+    : data(Data::make_TraitImpl({mv$(implParams), &traitRef, &trait, &impl})) {
 }
 
 ImplRef::ImplRef(const HIRTypeData* type, const HIRPathParams* args, const HIRTraitPath::assocListT* assoc, HIRBoundConstness constness)
-    : data(Data::make_BoundedPtr({type, args, assoc, constness}))
-{
+    : data(Data::make_BoundedPtr({type, args, assoc, constness})) {
 }
 
 ImplRef::ImplRef(HIRTypeRef type, HIRPathParams args, HIRTraitPath::assocListT assoc, HIRBoundConstness constness)
-    : data(Data::make_Bounded({mv$(type), mv$(args), mv$(assoc), constness}))
-{
+    : data(Data::make_Bounded({mv$(type), mv$(args), mv$(assoc), constness})) {
 }
 
 HIRBoundConstness ImplRef::boundConstness() const {
@@ -397,6 +391,5 @@ HIRBoundConstness ImplRef::boundConstness() const {
 ImplRef::Monomorph::Monomorph(HIRTypeInterner& types, const ImplRef::Data::Data_TraitImpl& ti, const HIRPathParams& params)
     : Monomorphiser(types)
     , ti(ti)
-    , params(params)
-{
+    , params(params) {
 }

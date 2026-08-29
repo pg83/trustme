@@ -231,12 +231,9 @@ namespace {
 
     bool traitContainsMethodInner(const HIRTrait& traitPtr, const RcString& name, const HIRFunction*& outFcnPtr) {
         auto it = traitPtr.values.find(name);
-        if (it != traitPtr.values.end()) {
-            if (it->second.is_Function()) {
-                const auto& v = it->second.as_Function();
-                outFcnPtr = &v;
-                return true;
-            }
+        if (it != traitPtr.values.end() && it->second.is_Function()) {
+            outFcnPtr = &it->second.as_Function();
+            return true;
         }
         return false;
     }
@@ -438,8 +435,6 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     const SolverImpl* correlateSolverImplForRead(const SolverImpl& source, const SolverSlotValues& slots, const HIRTypeData* type, const HIRPathParams& params) const;
 
-    ImplRef monomorphSolverImplForLegacy(const SolverImpl& source, const Monomorphiser& monomorph) const;
-
     SolverResponse monomorphSolverResponse(const SolverResponse& source, const Monomorphiser& monomorph, bool includeObligations = true) const;
 
     SolverSlotValues extractSlotValues(const CanonicalGoal& goal, const ImplRef& response, const CanonicalizeTraitGoal& canonicalizer, Certainty certainty) const;
@@ -472,7 +467,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     void pushCandidate(size_t frameIndex, ImplRef impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl = nullptr, HIRPathParams markerImplParams = {}, bool autoBuiltin = false, CandidateSource source = CandidateSource::Other, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {});
 
-    Certainty relateAssembledHead(const HIRPathParams& goalParams, const HIRTypeData* goalType, ImplRef& impl, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities) const;
+    Certainty relateAssembledHead(CandidateSource source, const HIRPathParams& goalParams, const HIRTypeData* goalType, ImplRef& impl, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities) const;
 
     bool assembledHeadIsExact(const HIRPathParams& goalParams, const HIRTypeData* goalType, const ImplRef& impl) const;
 
@@ -509,7 +504,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     CandidateBindingResult bindCandidatePlaceholders(Candidate& candidate, const HIRTypeData* nestedType, const HIRTraitPath::assocListT& associated, bool useCandidateResponse = false);
 
-    CandidateBindingResult bindCandidateResponse(Candidate& candidate, const HIRTypeData* nestedType, const HIRPathParams& nestedParams, const HIRTraitPath::assocListT& nestedAssociated, const ImplRef& response);
+    CandidateBindingResult bindCandidateResponse(Candidate& candidate, const HIRTypeData* nestedType, const HIRPathParams& nestedParams, const HIRTraitPath::assocListT& nestedAssociated, const SolverImpl& response);
 
     Certainty unifyProbe(const HIRTypeData* left, const HIRTypeData* right);
 
@@ -521,7 +516,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     Certainty evaluateHeadEquality(Candidate& candidate, const SolverTypeEquality& equality);
 
-    Certainty matchAssociatedTypes(const HIRSimplePath& trait, Candidate& candidate, const HIRTraitPath::assocListT* associated);
+    Certainty matchAssociatedTypes(const HIRSimplePath& trait, Candidate& candidate, const HIRTraitPath::assocListT* associated, const Monomorphiser* headBindings = nullptr);
 
     Certainty evaluateAutoBuiltin(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type);
 
@@ -568,7 +563,6 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
 SolverImpl SolverImpl::fromLegacy(ImplRef impl) {
     SolverImpl result;
-    result.ambiguousIdentity = impl.isAmbiguousIdentity();
     if (auto* traitImpl = impl.data.opt_TraitImpl()) {
         ASSERT_BUG(Span(), traitImpl->traitPtr && traitImpl->impl, "invalid trait impl solver response");
         result.implParams = std::move(traitImpl->implParams);
@@ -597,22 +591,96 @@ SolverImpl SolverImpl::fromLegacy(ImplRef impl) {
     return result;
 }
 
-ImplRef SolverImpl::legacy() const {
-    ImplRef result;
-    if (traitImpl) {
-        ASSERT_BUG(Span(), trait, "trait impl solver response has no trait declaration");
-        result = ImplRef(implParams.clone(), *trait, traitPath, *traitImpl);
-    } else {
-        HIRTraitPath::assocListT assoc;
-        for (const auto& entry : associated) {
-            assoc.insert({entry.first, entry.second.clone()});
+namespace {
+    struct SolverImplTraitMonomorph final: Monomorphiser {
+        const HIRTraitImpl& traitImpl_;
+        const HIRPathParams& implParams_;
+        const HIRPathParams& methodParams_;
+        mutable HIRTypeRef selfType_ = nullptr;
+        mutable bool resolvingSelf_ = false;
+
+        SolverImplTraitMonomorph(HIRTypeInterner& types, const HIRTraitImpl& traitImpl, const HIRPathParams& implParams, const HIRPathParams& methodParams)
+            : Monomorphiser(types)
+            , traitImpl_(traitImpl)
+            , implParams_(implParams)
+            , methodParams_(methodParams) {
         }
-        result = ImplRef(type, traitArgs.clone(), std::move(assoc), constness);
+
+        HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override {
+            if (generic.isSelf()) {
+                ASSERT_BUG(sp, !resolvingSelf_, "Use of Self in expansion of Self");
+                if (!selfType_) {
+                    resolvingSelf_ = true;
+                    selfType_ = monomorphType(sp, traitImpl_.type);
+                    resolvingSelf_ = false;
+                }
+                return selfType_;
+            }
+            return MonomorphStatePtr(types, nullptr, &implParams_, &methodParams_).getType(sp, generic);
+        }
+
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override {
+            return MonomorphStatePtr(types, nullptr, &implParams_, &methodParams_).getValue(sp, generic);
+        }
+    };
+}
+
+HIRTypeRef SolverImpl::getImplType(HIRTypeInterner& types) const {
+    if (!traitImpl) {
+        return type;
     }
-    if (ambiguousIdentity) {
-        result.markAmbiguousIdentity();
+    Span sp;
+    return SolverImplTraitMonomorph(types, *traitImpl, implParams, {}).monomorphType(sp, traitImpl->type);
+}
+
+HIRPathParams SolverImpl::getTraitParams(HIRTypeInterner& types) const {
+    if (!traitImpl) {
+        return traitArgs.clone();
     }
-    return result;
+    Span sp;
+    return SolverImplTraitMonomorph(types, *traitImpl, implParams, {}).monomorphPathParams(sp, traitImpl->traitArgs, true);
+}
+
+HIRTypeRef SolverImpl::getTraitTyParam(HIRTypeInterner& types, unsigned index) const {
+    if (!traitImpl) {
+        return index < traitArgs.types.size() ? traitArgs.types[index] : HIRTypeRef();
+    }
+    if (index >= traitImpl->traitArgs.types.size()) {
+        return HIRTypeRef();
+    }
+    Span sp;
+    return SolverImplTraitMonomorph(types, *traitImpl, implParams, {}).monomorphType(sp, traitImpl->traitArgs.types[index]);
+}
+
+HIRTypeRef SolverImpl::getType(HIRTypeInterner& types, const char* name, const HIRPathParams& params) const {
+    if (!name[0]) {
+        return HIRTypeRef();
+    }
+    if (!traitImpl) {
+        const auto it = associated.find(name);
+        return it != associated.end() && it->second.atyParams.equalsIgnoringRegions(params) ? it->second.type : HIRTypeRef();
+    }
+
+    Span sp;
+    const auto it = traitImpl->types.find(name);
+    if (it != traitImpl->types.end()) {
+        return SolverImplTraitMonomorph(types, *traitImpl, implParams, params).monomorphType(sp, it->second.data);
+    }
+    ASSERT_BUG(sp, trait, "trait impl solver response has no trait declaration");
+    const auto defaultIt = trait->types.find(name);
+    if (defaultIt == trait->types.end() || !defaultIt->second.hasDefault) {
+        return HIRTypeRef();
+    }
+    auto defaultType = MonomorphStatePtr(types, types.self(), &traitImpl->traitArgs, nullptr).monomorphType(sp, defaultIt->second.defaultValue);
+    return SolverImplTraitMonomorph(types, *traitImpl, implParams, params).monomorphType(sp, defaultType);
+}
+
+bool SolverImpl::typeIsSpecialisable(const char* name) const {
+    if (!traitImpl) {
+        return false;
+    }
+    const auto it = traitImpl->types.find(name);
+    return it != traitImpl->types.end() && it->second.isSpecialisable;
 }
 
 void HMTypeInferrence::checkForLoops() {
@@ -1491,7 +1559,7 @@ const HIRTypeData* HMTypeInferrence::getType(unsigned idx) const {
     BUG(Span(), "Loop detected while resolving type ivar " << idx);
 }
 
-void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
+void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type, bool solverProven) {
     auto sp = Span();
     const auto rootIndex = this->rootIvarIndex(slot);
     auto& rootIvar = ivars.at(rootIndex);
@@ -1541,8 +1609,7 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
         // TODO: Avoid needing to clone in all cases?
         struct MonomorphAddLifetimes: public Monomorphiser {
             explicit MonomorphAddLifetimes(HIRTypeInterner& types)
-                : Monomorphiser(types)
-            {
+                : Monomorphiser(types) {
             }
 
             HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override {
@@ -1572,6 +1639,9 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
                         }
                         checkTypeClassPrimitive(sp, type, e->tyClass, *primitive);
                     } else if (type->is_Diverge()) {
+                    } else if (solverProven) {
+                        const auto* path = type->opt_Path();
+                        ASSERT_BUG(sp, path && path->path.data.is_UfcsKnown(), "Solver-proven literal fallback target is not a projection: " << type);
                     } else {
                         BUG(sp, "Setting primitive to " << type);
                     }
@@ -2038,8 +2108,7 @@ bool HMTypeInferrence::containsLiveIvar(const HIRTypeData* type, unsigned int ro
 }
 
 Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve)
-    : Unifier(sp, table, resolve, {})
-{
+    : Unifier(sp, table, resolve, {}) {
 }
 
 Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve, Options options)
@@ -2049,7 +2118,7 @@ Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution*
     , bindRigidValues_(options.bindRigidValues)
     , relateProjectionInputs_(options.relateProjectionInputs)
     , rigidGenericsAreDistinct_(options.rigidGenericsAreDistinct)
-{
+    , rigidProjectionsAreDistinct_(options.rigidProjectionsAreDistinct) {
 }
 
 bool Unifier::opaqueCanReveal(const HIRTypeData* type) const {
@@ -2121,6 +2190,38 @@ Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTyp
         return Outcome::Proven;
     }
 
+    const auto isDeferredRigidAtom = [](const HIRTypeData* type) {
+        if (const auto* infer = type->opt_Infer()) {
+            return !inferIsLive(type);
+        }
+        const auto* generic = type->opt_Generic();
+        return generic && generic->isPlaceholder();
+    };
+    const auto isRigidStructuralType = [](const HIRTypeData* type) {
+        switch (type->tag()) {
+            case HIRTypeData::TAG_Array:
+            case HIRTypeData::TAG_Slice:
+            case HIRTypeData::TAG_Tuple:
+            case HIRTypeData::TAG_Borrow:
+            case HIRTypeData::TAG_Pointer:
+            case HIRTypeData::TAG_NamedFunction:
+            case HIRTypeData::TAG_Function:
+            case HIRTypeData::TAG_TraitObject:
+            case HIRTypeData::TAG_Pattern:
+                return true;
+            default:
+                return false;
+        }
+    };
+    const auto rigidAtomOccursIn = [](const HIRTypeData* atom, const HIRTypeData* type) {
+        return visitTyWith(type, [&](const HIRTypeData* inner) {
+            return inner == atom;
+        });
+    };
+    if ((isDeferredRigidAtom(left) && isRigidStructuralType(right) && rigidAtomOccursIn(left, right)) || (isDeferredRigidAtom(right) && isRigidStructuralType(left) && rigidAtomOccursIn(right, left))) {
+        return Outcome::Mismatch;
+    }
+
     const bool leftLive = inferIsLive(left);
     const bool rightLive = inferIsLive(right);
     if (leftLive && rightLive) {
@@ -2172,7 +2273,6 @@ Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTyp
         }
         return this->defer(left, right);
     }
-
     if (rigidGenericsAreDistinct_) {
         const auto isOrdinaryGeneric = [](const HIRTypeData* type) {
             const auto* generic = type->opt_Generic();
@@ -2189,8 +2289,24 @@ Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTyp
         const auto* leftProjection = leftPath ? leftPath->path.data.opt_UfcsKnown() : nullptr;
         const auto* rightProjection = rightPath ? rightPath->path.data.opt_UfcsKnown() : nullptr;
         if (leftProjection || rightProjection) {
+            if (rigidProjectionsAreDistinct_ && resolve_) {
+                auto normalizedLeft = leftProjection ? resolve_->expandAssociatedTypes(sp_, left) : HIRTypeRef();
+                auto normalizedRight = rightProjection ? resolve_->expandAssociatedTypes(sp_, right) : HIRTypeRef();
+                if (normalizedLeft && normalizedLeft->is_Infer()) {
+                    normalizedLeft = left;
+                }
+                if (normalizedRight && normalizedRight->is_Infer()) {
+                    normalizedRight = right;
+                }
+                if ((normalizedLeft && normalizedLeft != left) || (normalizedRight && normalizedRight != right)) {
+                    return this->unifyResolved(normalizedLeft ? normalizedLeft : left, normalizedRight ? normalizedRight : right);
+                }
+            }
             if (!leftProjection || !rightProjection) {
-                return this->defer(left, right);
+                if (!rigidProjectionsAreDistinct_) {
+                    return this->defer(left, right);
+                }
+                return Outcome::Mismatch;
             }
             if (leftProjection->trait.path != rightProjection->trait.path || leftProjection->item != rightProjection->item) {
                 return Outcome::Mismatch;
@@ -2201,6 +2317,7 @@ Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTyp
             return Outcome::Proven;
         }
     }
+
     if (typeIsRigidUnknown(left) || typeIsRigidUnknown(right)) {
         return this->defer(left, right);
     }
@@ -2794,17 +2911,16 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         const auto nameMetadata = RcString::newInterned("Metadata");
         const auto delegateMetadata = [&](const HIRTypeData* tailTy) {
             return this->solveTraitGoal(sp, trait, params, tailTy, [&](SolverResponse response) {
-                if (!response.hasImpl || !response.impl) {
+                if (!response.impl) {
                     return false;
                 }
-                auto impl = response.impl->legacy();
                 HIRTraitPath::assocListT assoc;
-                auto metadataTy = impl.getType(crate.types, "Metadata", {});
+                auto metadataTy = response.impl->getType(crate.types, "Metadata", {});
                 if (metadataTy) {
                     assoc.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{trait, {}, std::move(metadataTy)}));
                 }
                 return callback.visit(ImplRef(type, params.clone(), std::move(assoc)), response.certainty);
-            }, {.assocName = ""});
+            }, {.ambiguity = SolverAmbiguityPolicy::Report});
         };
         // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
 
@@ -2985,18 +3101,17 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
         HIRTypeRef outputType = HIRTypeRef();
         auto futureCertainty = SolverCertainty::NoSolution;
         this->solveTraitGoal(sp, langFuture(), {}, futureType, [&](SolverResponse response) {
-            if (!response.hasImpl || !response.impl) {
+            if (!response.impl) {
                 return false;
             }
-            auto impl = response.impl->legacy();
-            auto candidateOutput = impl.getType(crate.types, "Output", {});
+            auto candidateOutput = response.impl->getType(crate.types, "Output", {});
             if (candidateOutput == HIRTypeRef()) {
                 return false;
             }
             outputType = mv$(candidateOutput);
             futureCertainty = response.certainty;
             return response.certainty == SolverCertainty::Proven;
-        }, {.assocName = ""});
+        }, {.ambiguity = SolverAmbiguityPolicy::Report});
         if (outputType == HIRTypeRef()) {
             return false;
         }
@@ -3115,18 +3230,17 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                 const auto& fnTrait = trait == langAsyncFn() ? langFn() : (trait == langAsyncFnMut() ? langFnMut() : langFnOnce());
                 HIRTypeRef futureType;
                 this->solveTraitGoal(sp, langFnOnce(), params, type, [&](SolverResponse response) {
-                    if (response.certainty != SolverCertainty::Proven || !response.hasImpl || !response.impl) {
+                    if (response.certainty != SolverCertainty::Proven || !response.impl) {
                         return false;
                     }
-                    auto impl = response.impl->legacy();
-                    futureType = impl.getType(crate.types, "Output", {});
+                    futureType = response.impl->getType(crate.types, "Output", {});
                     return futureType != HIRTypeRef();
-                }, {.assocName = ""});
+                }, {.ambiguity = SolverAmbiguityPolicy::Report});
                 bool callable = fnTrait == langFnOnce();
                 if (!callable) {
                     callable = this->solveTraitGoal(sp, fnTrait, params, type, [](SolverResponse response) {
-                        return response.hasImpl && response.certainty == SolverCertainty::Proven;
-                    }, {.assocName = ""});
+                        return response.impl && response.certainty == SolverCertainty::Proven;
+                    }, {.ambiguity = SolverAmbiguityPolicy::Report});
                 }
                 if (callable && futureType != HIRTypeRef() && findAsyncCallable(params.types.front()->as_Tuple(), futureType, true, true)) {
                     return true;
@@ -3246,45 +3360,32 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
         case HIRTypeData::TAG_TraitObject: {
             auto& e = (*type).as_TraitObject();
             if (trait == e.trait.path.path) {
-                auto cmp = comparePp(sp, e.trait.path.params, params);
-                if (cmp != HIRCompare::Unequal) {
-                    DEBUG("TraitObject impl params" << e.trait.path.params);
-                    return callback.visit(ImplRef(type, &e.trait.path.params, &e.trait.typeBounds, e.trait.constness));
-                }
+                return callback.visit(ImplRef(type, &e.trait.path.params, &e.trait.typeBounds, e.trait.constness));
             }
             for (const auto& mt : e.markers) {
                 if (trait == mt.path) {
-                    auto cmp = comparePp(sp, mt.params, params);
-                    if (cmp != HIRCompare::Unequal) {
-                        return callback.visit(ImplRef(type, &mt.params, nullptr));
-                    }
+                    return callback.visit(ImplRef(type, &mt.params, nullptr));
                 }
             }
 
             if (e.trait.path.path != HIRSimplePath()) {
-                // NOTE: `params` (aka des_params) is not used (TODO)
                 bool rv = false;
                 bool isSupertrait = false;
                 this->findNamedTraitInTrait(sp, trait, params, *e.trait.traitPtr, e.trait.path.path, e.trait.path.params, type, [&](const HIRTraitPath& iTp) {
-                    auto cmp = this->comparePp(sp, iTp.path.params, params);
-                    if (cmp != HIRCompare::Unequal) {
-                        HIRTraitPath::assocListT assocClone;
-                        for (const auto& e : iTp.typeBounds) {
-                            assocClone.insert(std::make_pair(e.first, e.second.clone()));
-                        }
-                        for (const auto& bound : e.trait.typeBounds) {
-                            if (bound.second.sourceTrait.path == trait && comparePp(sp, bound.second.sourceTrait.params, iTp.path.params) != HIRCompare::Unequal) {
-                                assocClone.erase(bound.first);
-                                assocClone.insert(std::make_pair(bound.first, bound.second.clone()));
-                            }
-                        }
-                        auto ir = ImplRef(type, iTp.path.params.clone(), mv$(assocClone));
-                        DEBUG("TraitObject: - ir = " << ir);
-                        isSupertrait = true;
-                        rv = callback.visit(mv$(ir));
-                        return cmp == HIRCompare::Equal;
+                    HIRTraitPath::assocListT assocClone;
+                    for (const auto& entry : iTp.typeBounds) {
+                        assocClone.insert(std::make_pair(entry.first, entry.second.clone()));
                     }
-                    return false;
+                    for (const auto& bound : e.trait.typeBounds) {
+                        if (bound.second.sourceTrait.path == trait && comparePp(sp, bound.second.sourceTrait.params, iTp.path.params) != HIRCompare::Unequal) {
+                            assocClone.erase(bound.first);
+                            assocClone.insert(std::make_pair(bound.first, bound.second.clone()));
+                        }
+                    }
+                    auto impl = ImplRef(type, iTp.path.params.clone(), mv$(assocClone));
+                    isSupertrait = true;
+                    rv = callback.visit(mv$(impl));
+                    return rv;
                 });
                 if (isSupertrait) {
                     return rv;
@@ -3296,36 +3397,26 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
             auto& e = (*type).as_ErasedType();
             for (const auto& traitPath : e.traits) {
                 if (trait == traitPath.path.path) {
-                    auto cmp = comparePp(sp, traitPath.path.params, params);
-                    if (cmp != HIRCompare::Unequal) {
-                        DEBUG("TraitObject impl params" << traitPath.path.params);
-                        return callback.visit(ImplRef(type, &traitPath.path.params, &traitPath.typeBounds, traitPath.constness));
-                    }
+                    return callback.visit(ImplRef(type, &traitPath.path.params, &traitPath.typeBounds, traitPath.constness));
                 }
 
-                // NOTE: `params` (aka des_params) is not used (TODO)
                 bool rv = false;
                 bool isSupertrait = false;
                 this->findNamedTraitInTrait(sp, trait, params, *traitPath.traitPtr, traitPath.path.path, traitPath.path.params, type, [&](const HIRTraitPath& iTp) {
-                    auto cmp = this->comparePp(sp, iTp.path.params, params);
-                    if (cmp != HIRCompare::Unequal) {
-                        HIRTraitPath::assocListT assocClone;
-                        for (const auto& e : iTp.typeBounds) {
-                            assocClone.insert(std::make_pair(e.first, e.second.clone()));
-                        }
-                        for (const auto& e : traitPath.typeBounds) {
-                            if (e.second.sourceTrait.path == trait && comparePp(sp, e.second.sourceTrait.params, iTp.path.params) != HIRCompare::Unequal) {
-                                assocClone.erase(e.first);
-                                assocClone.insert(std::make_pair(e.first, e.second.clone()));
-                            }
-                        }
-                        auto ir = ImplRef(type, iTp.path.params.clone(), mv$(assocClone));
-                        DEBUG("ErasedType: - ir = " << ir);
-                        isSupertrait = true;
-                        rv = callback.visit(mv$(ir));
-                        return cmp == HIRCompare::Equal;
+                    HIRTraitPath::assocListT assocClone;
+                    for (const auto& entry : iTp.typeBounds) {
+                        assocClone.insert(std::make_pair(entry.first, entry.second.clone()));
                     }
-                    return false;
+                    for (const auto& bound : traitPath.typeBounds) {
+                        if (bound.second.sourceTrait.path == trait && comparePp(sp, bound.second.sourceTrait.params, iTp.path.params) != HIRCompare::Unequal) {
+                            assocClone.erase(bound.first);
+                            assocClone.insert(std::make_pair(bound.first, bound.second.clone()));
+                        }
+                    }
+                    auto impl = ImplRef(type, iTp.path.params.clone(), mv$(assocClone));
+                    isSupertrait = true;
+                    rv = callback.visit(mv$(impl));
+                    return rv;
                 });
                 if (isSupertrait) {
                     return rv;
@@ -3334,12 +3425,6 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*type).as_Generic();
-            if ((e.binding >> 8) == 2) {
-                // TODO: This is probably going to break something in the future.
-                DEBUG("- Magic impl for placeholder type");
-                return callback.visit(ImplRef(type, nullptr, nullptr));
-            }
             break;
         }
         case HIRTypeData::TAG_Path: {
@@ -3380,25 +3465,21 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                     }
 
                     if (bound.path.path == trait) {
-                        auto cmp = this->comparePp(sp, *bParamsMono, params);
-                        if (cmp != HIRCompare::Unequal) {
-                            if (bParamsMono == &paramsMonoO) {
-                                // TODO: assoc bounds
-                                if (callback.visit(ImplRef(type, mv$(paramsMonoO), mv$(bAtys), bound.constness))) {
-                                    return true;
-                                }
-                                paramsMonoO = monomorphCb.monomorphPathParams(sp, bParams, false);
-                                if (paramsNeedNormalisation) {
-                                    this->expandAssociatedTypesParams(sp, paramsMonoO);
-                                }
-                            } else if (!bAtys.empty()) {
-                                if (callback.visit(ImplRef(type, bParamsMono->clone(), mv$(bAtys), bound.constness))) {
-                                    return true;
-                                }
-                            } else {
-                                if (callback.visit(ImplRef(type, &bound.path.params, nullptr, bound.constness))) {
-                                    return true;
-                                }
+                        if (bParamsMono == &paramsMonoO) {
+                            if (callback.visit(ImplRef(type, mv$(paramsMonoO), mv$(bAtys), bound.constness))) {
+                                return true;
+                            }
+                            paramsMonoO = monomorphCb.monomorphPathParams(sp, bParams, false);
+                            if (paramsNeedNormalisation) {
+                                this->expandAssociatedTypesParams(sp, paramsMonoO);
+                            }
+                        } else if (!bAtys.empty()) {
+                            if (callback.visit(ImplRef(type, bParamsMono->clone(), mv$(bAtys), bound.constness))) {
+                                return true;
+                            }
+                        } else {
+                            if (callback.visit(ImplRef(type, &bound.path.params, nullptr, bound.constness))) {
+                                return true;
                             }
                         }
                     }
@@ -3407,16 +3488,14 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                     bool rv = false;
                     bool ret = false;
                     this->findNamedTraitInTrait(sp, trait, params, *bound.traitPtr, bound.path.path, *bParamsMono, type, [&](const HIRTraitPath& iTp) {
-                        auto cmp = this->comparePp(sp, iTp.path.params, params);
-                        DEBUG("Opaque Path: cmp=" << cmp << ", impl " << iTp.path << " for " << type << " -- desired " << trait << params);
                         HIRTraitPath::assocListT assocClone;
                         for (const auto& aty : iTp.typeBounds) {
                             assocClone.insert(std::make_pair(aty.first, aty.second.clone()));
                         }
                         auto ir = ImplRef(type, iTp.path.params.clone(), mv$(assocClone), iTp.constness);
-                        rv |= (cmp != HIRCompare::Unequal && callback.visit(std::move(ir)));
+                        rv |= callback.visit(std::move(ir));
                         ret = true;
-                        return false;
+                        return rv;
                     });
                     if (ret) {
                         return rv;
@@ -3443,7 +3522,7 @@ TraitResolution::TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, c
     , currentTraitPtr(currentTrait ? &crate.getTraitByPath(Span(), currentTrait->path) : nullptr)
     , eatCachePool(ObjPool::fromMemory())
     , eatCache(eatCachePool.mutPtr())
-{
+    , solverExistentials_(eatCachePool.mutPtr()) {
     implGenerics_ = implParams;
     itemGenerics_ = itemParams;
     prepIndexes(Span());
@@ -3522,6 +3601,113 @@ HIRPathParams TraitResolution::makeFreshImplParams(const HIRGenericParams& param
     return result;
 }
 
+const HIRPathParams& TraitResolution::solverExistentials(const Span& sp, const HIRGenericParams& definition) const {
+    const auto key = splitMix64(reinterpret_cast<uintptr_t>(&definition));
+    auto* bucket = solverExistentials_.find(key);
+    if (bucket) {
+        for (const auto& entry : *bucket) {
+            if (entry.definition == &definition) {
+                return entry.params;
+            }
+        }
+    } else {
+        bucket = solverExistentials_.insert(key);
+    }
+
+    const auto scope = ++this->board().id;
+    ASSERT_BUG(sp, scope != 0, "solver existential scope exhausted");
+
+    HIRPathParams params;
+    params.types.reserve(definition.types.size());
+    for (size_t i = 0; i < definition.types.size(); i++) {
+        ASSERT_BUG(sp, i < 256, "Too many candidate type parameters");
+        params.types.push_back(crate.types.generic(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i))));
+    }
+    params.values.reserve(definition.values.size());
+    for (size_t i = 0; i < definition.values.size(); i++) {
+        ASSERT_BUG(sp, i < 256, "Too many candidate value parameters");
+        params.values.push_back(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i)));
+    }
+    bucket->push_back(SolverExistentials{&definition, std::move(params)});
+    return bucket->back().params;
+}
+
+HIRPathParams TraitResolution::materializeImplParams(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& inferenceParams, size_t externalTypeIvars, size_t externalValueIvars) const {
+    const auto& stable = this->solverExistentials(sp, definition);
+
+    struct Materialize final: public MonomorphiserNop {
+        const HMTypeInferrence& table;
+        const HIRPathParams& inference;
+        const HIRPathParams& stable;
+        size_t externalTypeIvars;
+        size_t externalValueIvars;
+
+    public:
+        Materialize(HIRTypeInterner& types, const HMTypeInferrence& table, const HIRPathParams& inference, const HIRPathParams& stable, size_t externalTypeIvars, size_t externalValueIvars)
+            : MonomorphiserNop(types)
+            , table(table)
+            , inference(inference)
+            , stable(stable)
+            , externalTypeIvars(externalTypeIvars)
+            , externalValueIvars(externalValueIvars) {
+        }
+
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
+            if (const auto* infer = type->opt_Infer()) {
+                for (size_t i = 0; i < inference.types.size(); i++) {
+                    const auto* parameter = inference.types[i]->opt_Infer();
+                    if (!parameter || parameter->index != infer->index) {
+                        continue;
+                    }
+                    const auto* resolved = table.getType(type);
+                    if (const auto* resolvedInfer = resolved->opt_Infer()) {
+                        for (size_t j = 0; j < inference.types.size(); j++) {
+                            const auto* candidate = inference.types[j]->opt_Infer();
+                            if (candidate && candidate->index == resolvedInfer->index) {
+                                return stable.types[j];
+                            }
+                        }
+                        if (resolvedInfer->index >= externalTypeIvars) {
+                            return stable.types[i];
+                        }
+                        return resolved;
+                    }
+                    return this->monomorphType(sp, resolved, allowInfer);
+                }
+            }
+            return MonomorphiserNop::monomorphType(sp, type, allowInfer);
+        }
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override {
+            if (const auto* infer = value.opt_Infer()) {
+                for (size_t i = 0; i < inference.values.size(); i++) {
+                    const auto* parameter = inference.values[i].opt_Infer();
+                    if (!parameter || parameter->index != infer->index) {
+                        continue;
+                    }
+                    const auto& resolved = table.getValue(value);
+                    if (const auto* resolvedInfer = resolved.opt_Infer()) {
+                        for (size_t j = 0; j < inference.values.size(); j++) {
+                            const auto* candidate = inference.values[j].opt_Infer();
+                            if (candidate && candidate->index == resolvedInfer->index) {
+                                return stable.values[j].clone();
+                            }
+                        }
+                        if (resolvedInfer->index >= externalValueIvars) {
+                            return stable.values[i].clone();
+                        }
+                        return resolved.clone();
+                    }
+                    return this->monomorphConstgeneric(sp, resolved, allowInfer);
+                }
+            }
+            return MonomorphiserNop::monomorphConstgeneric(sp, value, allowInfer);
+        }
+    } materialize(crate.types, ivars, inferenceParams, stable, externalTypeIvars, externalValueIvars);
+
+    return materialize.monomorphPathParams(sp, inferenceParams, true);
+}
+
 bool TraitResolution::implsOverlap(const Span& sp, const ImplRef& left, const ImplRef& right) const {
     const auto* leftImpl = left.data.opt_TraitImpl();
     const auto* rightImpl = right.data.opt_TraitImpl();
@@ -3533,10 +3719,6 @@ bool TraitResolution::implsOverlap(const Span& sp, const ImplRef& left, const Im
     }
     if (leftImpl->impl == rightImpl->impl) {
         return true;
-    }
-
-    if (!leftImpl->impl->overlapsWith(crate, *rightImpl->impl)) {
-        return false;
     }
 
     if (!coherenceEvaluator) {
@@ -3565,13 +3747,13 @@ SolverCertainty TraitResolution::solveNonBuiltinTraitGoal(const Span& sp, const 
     }
     SolverCertainty certainty = SolverCertainty::NoSolution;
     auto callback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-        if (!response.hasImpl) {
+        if (!response.impl) {
             return false;
         }
         certainty = response.certainty;
         return true;
     });
-    nonBuiltinSolver->evaluateTyped(sp, trait, HIRPathParams{}, type, callback, {.assocName = "", .allowInferInputs = true}, true, false);
+    nonBuiltinSolver->evaluateTyped(sp, trait, HIRPathParams{}, type, callback, {.allowInferInputs = true, .ambiguity = SolverAmbiguityPolicy::Report}, true, false);
     return certainty;
 }
 
@@ -3984,44 +4166,387 @@ void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& i
     input = crate.types.intern(mv$(data));
 }
 
+Unifier::Outcome TraitResolution::relateInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRTypeData* receiver, HIRPathParams& implParams) const {
+    ASSERT_BUG(sp, implParams.types.size() <= impl.params.types.size(), "Too many inherent impl type parameters");
+    implParams.types.reserve(impl.params.types.size());
+    while (implParams.types.size() < impl.params.types.size()) {
+        implParams.types.push_back(ivars.newIvarTr());
+    }
+    for (auto& type : implParams.types) {
+        if (const auto* infer = type->opt_Infer(); infer && infer->index == ~0u) {
+            type = ivars.newIvarTr(infer->tyClass);
+        }
+    }
+
+    ASSERT_BUG(sp, implParams.values.size() <= impl.params.values.size(), "Too many inherent impl const parameters");
+    implParams.values.reserve(impl.params.values.size());
+    while (implParams.values.size() < impl.params.values.size()) {
+        implParams.values.push_back(HIRConstGeneric::make_Infer({ivars.newIvarVal()}));
+    }
+    for (auto& value : implParams.values) {
+        if (const auto* infer = value.opt_Infer(); infer && infer->index == ~0u) {
+            value = HIRConstGeneric::make_Infer({ivars.newIvarVal()});
+        }
+    }
+
+    auto monomorph = MonomorphStatePtr(crate.types, receiver, &implParams, nullptr);
+    monomorph.setConstevalState(this->board(), HIRItemPath(""));
+    const auto candidate = monomorph.monomorphType(sp, impl.type, true);
+    Unifier relation(
+        sp,
+        ivars,
+        this,
+        {
+            .bindRigidValues = true,
+            .relateProjectionInputs = true,
+        }
+    );
+    return relation.unify(receiver, candidate);
+}
+
+SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, u32 conditionalScope, bool onlyBoundsConstrainingTraitParams) const {
+    auto result = SolverCertainty::Proven;
+    const auto merge = [&](SolverCertainty certainty) {
+        if (certainty == SolverCertainty::NoSolution) {
+            result = SolverCertainty::NoSolution;
+        } else if (certainty == SolverCertainty::Ambiguous && result == SolverCertainty::Proven) {
+            result = SolverCertainty::Ambiguous;
+        }
+    };
+    const auto mergeRelation = [&](Unifier::Outcome outcome) {
+        switch (outcome) {
+            case Unifier::Outcome::Proven:
+                break;
+            case Unifier::Outcome::Ambiguous:
+                merge(SolverCertainty::Ambiguous);
+                break;
+            case Unifier::Outcome::Mismatch:
+                merge(SolverCertainty::NoSolution);
+                break;
+        }
+    };
+
+    struct ContainsConditionalParameter final: MonomorphiserNop {
+        u32 scope;
+        mutable bool found = false;
+
+        ContainsConditionalParameter(HIRTypeInterner& types, u32 scope)
+            : MonomorphiserNop(types)
+            , scope(scope) {
+        }
+
+        HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override {
+            found |= generic.solverScope == scope;
+            return MonomorphiserNop::getType(sp, generic);
+        }
+
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override {
+            found |= generic.solverScope == scope;
+            return MonomorphiserNop::getValue(sp, generic);
+        }
+
+        bool contains(const Span& sp, const HIRTypeData* type) const {
+            found = false;
+            (void)this->monomorphType(sp, type, true);
+            return found;
+        }
+
+        bool contains(const Span& sp, const HIRTraitPath& trait) const {
+            found = false;
+            (void)this->monomorphTraitpath(sp, trait, true);
+            return found;
+        }
+    } conditional(crate.types, conditionalScope);
+
+    struct ContainsTraitParameter final: MonomorphiserNop {
+        mutable bool found = false;
+
+        explicit ContainsTraitParameter(HIRTypeInterner& types)
+            : MonomorphiserNop(types) {
+        }
+
+        HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override {
+            found |= generic.group() == GENERICImpl;
+            return MonomorphiserNop::getType(sp, generic);
+        }
+
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override {
+            found |= generic.group() == GENERICImpl;
+            return MonomorphiserNop::getValue(sp, generic);
+        }
+
+        bool contains(const Span& sp, const HIRTypeData* type) const {
+            found = false;
+            (void)this->monomorphType(sp, type, true);
+            return found;
+        }
+
+        bool contains(const Span& sp, const HIRTraitPath& trait) const {
+            found = false;
+            (void)this->monomorphTraitpath(sp, trait, true);
+            return found;
+        }
+    } containsTraitParameter(crate.types);
+
+    for (const auto& bound : definition.bounds) {
+        if (const auto* traitBound = bound.opt_TraitBound()) {
+            if (onlyBoundsConstrainingTraitParams) {
+                bool constrainsTraitParameter = false;
+                for (const auto& associated : traitBound->trait.typeBounds) {
+                    constrainsTraitParameter |= containsTraitParameter.contains(sp, associated.second.type);
+                }
+                if (!constrainsTraitParameter) {
+                    continue;
+                }
+            }
+            auto realType = monomorph.monomorphType(sp, traitBound->type, true);
+            auto realTrait = monomorph.monomorphTraitpath(sp, traitBound->trait, true);
+            realType = this->expandAssociatedTypes(sp, std::move(realType));
+            for (auto& argument : realTrait.path.params.types) {
+                argument = this->expandAssociatedTypes(sp, std::move(argument));
+            }
+            for (auto& associated : realTrait.typeBounds) {
+                associated.second.type = this->expandAssociatedTypes(sp, std::move(associated.second.type));
+            }
+            if (conditionalScope && (conditional.contains(sp, realType) || conditional.contains(sp, realTrait))) {
+                continue;
+            }
+
+            bool sawResponse = false;
+            this->solveTraitGoal(sp, realTrait.path.path, realTrait.path.params, realType, [&](SolverResponse response) {
+                if (!response.impl) {
+                    return false;
+                }
+                sawResponse = true;
+                merge(response.certainty);
+
+                Unifier relation(
+                    sp,
+                    ivars,
+                    this,
+                    {
+                        .bindRigidValues = true,
+                        .relateProjectionInputs = true,
+                    }
+                );
+                const auto relateType = [&](const HIRTypeData* left, const HIRTypeData* right) {
+                    if (result == SolverCertainty::NoSolution) {
+                        return;
+                    }
+                    auto normalizedLeft = this->expandAssociatedTypes(sp, left);
+                    auto normalizedRight = this->expandAssociatedTypes(sp, right);
+                    mergeRelation(relation.unify(normalizedLeft, normalizedRight));
+                };
+                const auto relateValue = [&](const HIRConstGeneric& left, const HIRConstGeneric& right) {
+                    if (result != SolverCertainty::NoSolution) {
+                        mergeRelation(relation.unifyValues(left, right));
+                    }
+                };
+
+                ASSERT_BUG(sp, response.slots.typeInputs.size() == response.slots.types.size(), "Malformed solver type slots in inherent impl bound");
+                for (size_t i = 0; i < response.slots.types.size(); i++) {
+                    relateType(response.slots.typeInputs[i], response.slots.types[i]);
+                }
+                ASSERT_BUG(sp, response.slots.valueInputs.size() == response.slots.values.size(), "Malformed solver value slots in inherent impl bound");
+                for (size_t i = 0; i < response.slots.values.size(); i++) {
+                    relateValue(response.slots.valueInputs[i], response.slots.values[i]);
+                }
+                for (const auto& equality : response.equalities) {
+                    relateType(equality.left, equality.right);
+                }
+                for (const auto& equality : response.valueEqualities) {
+                    relateValue(equality.left, equality.right);
+                }
+                if (!response.obligations.empty()) {
+                    merge(SolverCertainty::Ambiguous);
+                }
+
+                for (const auto& associated : realTrait.typeBounds) {
+                    auto actual = response.impl->getType(crate.types, associated.first.c_str(), associated.second.atyParams);
+                    if (actual == HIRTypeRef()) {
+                        actual = crate.types.path(HIRPath(realType, associated.second.sourceTrait.clone(), associated.first, associated.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
+                    }
+                    actual = this->expandAssociatedTypes(sp, std::move(actual));
+                    relateType(associated.second.type, actual);
+                }
+                return true;
+            }, {.allowInferInputs = true, .ambiguity = SolverAmbiguityPolicy::Report});
+
+            if (!sawResponse) {
+                bool unresolved = ivars.typeContainsIvars(realType, false) || ivars.pathparamsContainIvars(realTrait.path.params, false);
+                for (const auto& associated : realTrait.typeBounds) {
+                    unresolved |= ivars.pathparamsContainIvars(associated.second.sourceTrait.params, false) || ivars.pathparamsContainIvars(associated.second.atyParams, false) || ivars.typeContainsIvars(associated.second.type, false);
+                }
+                if (unresolved) {
+                    merge(SolverCertainty::Ambiguous);
+                    continue;
+                }
+                return SolverCertainty::NoSolution;
+            }
+            if (result == SolverCertainty::NoSolution) {
+                return result;
+            }
+        } else if (const auto* equality = bound.opt_TypeEquality()) {
+            if (onlyBoundsConstrainingTraitParams && !containsTraitParameter.contains(sp, equality->type) && !containsTraitParameter.contains(sp, equality->otherType)) {
+                continue;
+            }
+            const auto left = monomorph.monomorphType(sp, equality->type, true);
+            const auto right = monomorph.monomorphType(sp, equality->otherType, true);
+            if (conditionalScope && (conditional.contains(sp, left) || conditional.contains(sp, right))) {
+                continue;
+            }
+            Unifier relation(
+                sp,
+                ivars,
+                this,
+                {
+                    .bindRigidValues = true,
+                    .relateProjectionInputs = true,
+                }
+            );
+            mergeRelation(relation.unify(left, right));
+            if (result == SolverCertainty::NoSolution) {
+                return result;
+            }
+        }
+    }
+
+    ASSERT_BUG(sp, parameters.types.size() == definition.types.size(), "Generic bound parameter count mismatch");
+    if (onlyBoundsConstrainingTraitParams) {
+        return result;
+    }
+    for (size_t i = 0; i < definition.types.size(); i++) {
+        if (!definition.types[i].isSized) {
+            continue;
+        }
+        const auto* parameter = ivars.getType(parameters.types[i]);
+        if (conditionalScope && conditional.contains(sp, parameter)) {
+            continue;
+        }
+        switch (this->typeIsSized(sp, parameter)) {
+            case HIRCompare::Equal:
+                break;
+            case HIRCompare::Fuzzy:
+                merge(SolverCertainty::Ambiguous);
+                break;
+            case HIRCompare::Unequal:
+                return SolverCertainty::NoSolution;
+        }
+    }
+    return result;
+}
+
+SolverCertainty TraitResolution::evaluateInherentImplBounds(const Span& sp, const HIRTypeImpl& impl, const HIRPathParams& implParams) const {
+    auto monomorph = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr);
+    monomorph.setConstevalState(this->board(), HIRItemPath(""));
+    return this->evaluateGenericBounds(sp, impl.params, implParams, monomorph);
+}
+
+SolverCertainty TraitResolution::evaluateInherentImpl(const Span& sp, const HIRTypeImpl& impl, const HIRTypeData* receiver, HIRPathParams& implParams) const {
+    auto result = SolverCertainty::Proven;
+    switch (this->relateInherentImplHeader(sp, impl, receiver, implParams)) {
+        case Unifier::Outcome::Proven:
+            break;
+        case Unifier::Outcome::Ambiguous:
+            result = SolverCertainty::Ambiguous;
+            break;
+        case Unifier::Outcome::Mismatch:
+            return SolverCertainty::NoSolution;
+    }
+    const auto bounds = this->evaluateInherentImplBounds(sp, impl, implParams);
+    if (bounds == SolverCertainty::NoSolution) {
+        return bounds;
+    }
+    if (bounds == SolverCertainty::Ambiguous) {
+        result = bounds;
+    }
+    return result;
+}
+
+SolverCertainty TraitResolution::probeInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRTypeData* receiver, HIRPathParams& implParams) const {
+    const auto snapshot = ivars.snapshot();
+    STD_DEFER {
+        ivars.rollbackTo(snapshot);
+    };
+
+    HIRTypeRef inferenceReceiver = receiver;
+    ivars.addIvars(inferenceReceiver);
+    HIRPathParams inferenceParams = implParams.clone();
+    SolverCertainty certainty;
+    switch (this->relateInherentImplHeader(sp, impl, inferenceReceiver, inferenceParams)) {
+        case Unifier::Outcome::Proven:
+            certainty = SolverCertainty::Proven;
+            break;
+        case Unifier::Outcome::Ambiguous:
+            certainty = SolverCertainty::Ambiguous;
+            break;
+        case Unifier::Outcome::Mismatch:
+            return SolverCertainty::NoSolution;
+    }
+    if (certainty != SolverCertainty::NoSolution) {
+        implParams = this->materializeImplParams(sp, impl.params, inferenceParams, snapshot.ivarCount, snapshot.valueCount);
+    }
+    return certainty;
+}
+
+InherentImplSelection TraitResolution::selectInherentImpl(const Span& sp, const HIRTypeData* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams) const {
+    InherentImplSelection selected;
+    crate.findTypeImpls(receiver, ivars.callbackResolveInfer(), [&](const HIRTypeImpl& impl) {
+        bool hasItem = false;
+        switch (kind) {
+            case InherentItemKind::Type:
+                hasItem = impl.types.count(item) != 0;
+                break;
+            case InherentItemKind::Method:
+                hasItem = impl.methods.count(item) != 0;
+                break;
+            case InherentItemKind::Value:
+                hasItem = impl.methods.count(item) != 0 || impl.constants.count(item) != 0;
+                break;
+        }
+        if (!hasItem) {
+            return false;
+        }
+
+        HIRPathParams implParams = initialParams ? initialParams->clone() : HIRPathParams();
+        if (implParams.types.size() > impl.params.types.size() || implParams.values.size() > impl.params.values.size()) {
+            return false;
+        }
+        const auto certainty = this->probeInherentImplHeader(sp, impl, receiver, implParams);
+        if (certainty == SolverCertainty::NoSolution) {
+            return false;
+        }
+        if (selected.certainty != SolverCertainty::NoSolution) {
+            selected.certainty = SolverCertainty::Ambiguous;
+            selected.impl = nullptr;
+            selected.implParams = {};
+            return false;
+        }
+        selected.certainty = SolverCertainty::Proven;
+        selected.impl = &impl;
+        selected.implParams = std::move(implParams);
+        return false;
+    });
+    return selected;
+}
+
 bool TraitResolution::expandAssociatedTypesInplaceUfcsInherent(const Span& sp, HIRTypeRef& input, SolverResponseCallback* effects) const {
     TRACE_FUNCTION_FR(input, input);
     ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsInherent(), input);
 
     const auto& pe = input->as_Path().path.data.as_UfcsInherent();
-    const HIRTypeAlias* alias = nullptr;
-    const HIRGenericParams* implParamsDef = nullptr;
-    const HIRTypeImpl* selectedImpl = nullptr;
-    HIRPathParams implParams;
-    HIRCompare bestMatch = HIRCompare::Unequal;
-    const HIRPathParams noTraitParams;
-
-    crate.findTypeImpls(pe.type, ivars.callbackResolveInfer(), [&](const auto& impl) {
-        const auto itemIt = impl.types.find(pe.item);
-        if (itemIt == impl.types.end()) {
-            return false;
-        }
-
-        HIRPathParams candidateParams;
-        const auto match = this->fticCheckParams(sp, HIRSimplePath(), nullptr, pe.type, impl.params, noTraitParams, impl.type, candidateParams);
-        if (match != HIRCompare::Unequal && (bestMatch == HIRCompare::Unequal || match == HIRCompare::Equal)) {
-            alias = &itemIt->second.data;
-            implParamsDef = &impl.params;
-            selectedImpl = &impl;
-            implParams = mv$(candidateParams);
-            bestMatch = match;
-        }
-        return bestMatch == HIRCompare::Equal;
-    });
-
-    if (!alias) {
-        DEBUG("No inherent associated type candidate for " << input);
+    auto selection = this->selectInherentImpl(sp, pe.type, pe.item, InherentItemKind::Type);
+    if (selection.certainty != SolverCertainty::Proven || !selection.impl) {
+        DEBUG("No proven inherent associated type candidate for " << input);
         return false;
     }
-
-    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, implParamsDef, implParams);
+    const auto& selectedImpl = *selection.impl;
+    const auto& alias = selectedImpl.types.at(pe.item).data;
+    auto implParams = pe.implParams.clone();
+    ASSERT_BUG(sp, this->relateInherentImplHeader(sp, selectedImpl, pe.type, implParams) != Unifier::Outcome::Mismatch, "Selected inherent associated type impl no longer matches " << pe.type);
+    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &selectedImpl.params, implParams);
     if (effects) {
-        auto selectedType = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr).monomorphType(sp, selectedImpl->type);
+        auto selectedType = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr).monomorphType(sp, selectedImpl.type);
         SolverResponse response;
         response.certainty = SolverCertainty::Proven;
         response.equalities.push_back(SolverTypeEquality{pe.type, selectedType});
@@ -4029,12 +4554,12 @@ bool TraitResolution::expandAssociatedTypesInplaceUfcsInherent(const Span& sp, H
     }
 
     auto itemParams = pe.params.clone();
-    if (itemParams.types.size() != alias->params.types.size() || itemParams.values.size() != alias->params.values.size()) {
+    if (itemParams.types.size() != alias.params.types.size() || itemParams.values.size() != alias.params.values.size()) {
         ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
     }
-    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &alias->params, itemParams);
+    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &alias.params, itemParams);
 
-    input = MonomorphStatePtr(crate.types, pe.type, &implParams, &itemParams).monomorphType(sp, alias->type);
+    input = MonomorphStatePtr(crate.types, pe.type, &implParams, &itemParams).monomorphType(sp, alias.type);
     return true;
 }
 
@@ -4062,7 +4587,6 @@ void TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span& sp, HIRT
         auto data = input->cloneData();
         data.as_Path().binding = HIRTypePathBinding::make_Opaque({});
         input = crate.types.intern(std::move(data));
-        DEBUG("Couldn't resolve associated type for " << input << " (will try again later)");
     }
 }
 
@@ -4072,7 +4596,6 @@ bool TraitResolution::findNamedTraitInTraitCb(const Span& sp, const HIRSimplePat
         BUG(sp, "Incorrect number of parameters for trait " << traitPath);
     }
 
-    DEBUG(traitPtr.allParentTraits);
     auto monomorphCb = MonomorphStatePtr(crate.types, targetType, &pp, nullptr);
     for (const auto& pt : traitPtr.allParentTraits) {
         auto ptMono = monomorphCb.monomorphTraitpath(sp, pt, false);
@@ -4108,47 +4631,20 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
 
     // TODO: A bound can imply something via its associated types. How deep can this go?
 
-    {
-        bool rv = this->iterateBoundsTraits(sp, type, trait, [&](HIRCompare cmp, const HIRTypeData* boundTy, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
-            const auto& storedParams = boundTrait.params;
-            HIRPathParams normalisedParams;
-            const HIRPathParams* boundParams = &storedParams;
-            if (std::any_of(storedParams.types.begin(), storedParams.types.end(), [&](const auto& ty) {
-                return this->hasAssociatedType(ty);
-            })) {
-                normalisedParams = storedParams.clone();
-                this->expandAssociatedTypesParams(sp, normalisedParams);
-                boundParams = &normalisedParams;
-            }
-
-            const bool hasHrtb = pathParamsContainGenericGroup(*boundParams, GENERICHrtb);
-            if (!hasHrtb) {
-                auto relation = cmp;
-                relation &= this->comparePp(sp, *boundParams, params);
-                if (relation == HIRCompare::Unequal) {
-                    return false;
-                }
-                DEBUG("[find_trait_impls_bound] - Fuzzy match");
-            }
-            return callback.visit(ImplRef(boundTy, &boundTrait.params, &boundInfo.assoc, boundInfo.constness));
-        });
-        if (rv) {
-            return rv;
+    for (const auto& bound : traitBounds) {
+        if (bound.first.second.path != trait) {
+            continue;
+        }
+        if (callback.visit(ImplRef(bound.first.first, &bound.first.second.params, &bound.second.assoc, bound.second.constness))) {
+            return true;
         }
     }
 
     auto visitDeclaredTrait = [&](auto&& visit, const HIRTypeData* subject, const HIRTraitPath& declaredTrait, bool matchCurrent) -> bool {
         if (matchCurrent && declaredTrait.path.path == trait) {
-            auto ord = subject->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
-            if (ord != HIRCompare::Unequal) {
-                ord &= this->comparePp(sp, declaredTrait.path.params, params);
-                if (ord != HIRCompare::Unequal) {
-                    DEBUG("[find_trait_impls_bound] Implied declaration bound " << subject << " : " << declaredTrait);
-                    auto response = declaredTrait.clone();
-                    if (callback.visit(ImplRef(subject, mv$(response.path.params), mv$(response.typeBounds), response.constness))) {
-                        return true;
-                    }
-                }
+            auto response = declaredTrait.clone();
+            if (callback.visit(ImplRef(subject, mv$(response.path.params), mv$(response.typeBounds), response.constness))) {
+                return true;
             }
         }
 
@@ -4209,16 +4705,21 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
 
         for (const auto& associated : environmentInfo.traitPtr->types) {
             const auto& definition = associated.second;
-            if (definition.generics.isGeneric() || !definition.generics.isEmpty()) {
-                continue;
+            HIRPathParams noAssociatedParams;
+            const HIRPathParams* associatedParams = &noAssociatedParams;
+            if (definition.generics.isGeneric()) {
+                if (!assocInfo || assocInfo->item != associated.first || assocInfo->params.types.size() != definition.generics.types.size() || assocInfo->params.values.size() != definition.generics.values.size()) {
+                    continue;
+                }
+                associatedParams = &assocInfo->params;
             }
             if (std::none_of(definition.traitBounds.begin(), definition.traitBounds.end(), [&](const auto& declaredTrait) {
                 return declaredTraitMayMatch(declaredTraitMayMatch, declaredTrait, false);
             })) {
                 continue;
             }
-            auto associatedType = crate.types.path(HIRPath(environmentType, environmentTrait.clone(), associated.first, {}), HIRTypePathBinding::make_Opaque({}));
-            monomorph.ppMethod = &associatedType->as_Path().path.data.as_UfcsKnown().params;
+            auto associatedType = crate.types.path(HIRPath(environmentType, environmentTrait.clone(), associated.first, associatedParams->clone()), HIRTypePathBinding::make_Opaque({}));
+            monomorph.ppMethod = associatedParams;
             bool found = false;
             for (const auto& declaredTrait : definition.traitBounds) {
                 if (!declaredTraitMayMatch(declaredTraitMayMatch, declaredTrait, false)) {
@@ -4239,49 +4740,23 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
 
     if (assocInfo) {
         bool rv = this->iterateBoundsTraits(sp, assocInfo->type, assocInfo->trait.path, [&](HIRCompare cmp, const HIRTypeData* boundTy, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
-            cmp &= this->comparePp(sp, boundTrait.params, assocInfo->trait.params);
-            if (cmp == HIRCompare::Fuzzy) {
-                //TODO(sp, "Handle fuzzy matches searching for associated type bounds");
-            } else if (cmp == HIRCompare::Unequal) {
+            if (cmp == HIRCompare::Unequal) {
                 return false;
             }
-            auto outerOrd = cmp;
 
             const auto& traitRef = *boundInfo.traitPtr;
             const auto& at = traitRef.types.at(assocInfo->item);
             for (const auto& bound : at.traitBounds) {
                 if (bound.path.path == trait) {
-                    auto monomorphCb = MonomorphStatePtr(crate.types, assocInfo->type, &assocInfo->trait.params, &assocInfo->params);
+                    auto monomorphCb = MonomorphStatePtr(crate.types, boundTy, &boundTrait.params, &assocInfo->params);
 
-                    DEBUG("- Found an associated type bound for this trait via another bound");
-                    HIRCompare ord = outerOrd;
-                    if (monomorphisePathparamsNeeded(bound.path.params)) {
-                        // TODO: Use a compare+callback method instead
-                        auto bParamsMono = monomorphCb.monomorphPathParams(sp, bound.path.params, false);
-                        this->expandAssociatedTypesParams(sp, bParamsMono);
-                        ord &= this->comparePp(sp, bParamsMono, params);
-                    } else {
-                        ord &= this->comparePp(sp, bound.path.params, params);
-                    }
-                    if (ord == HIRCompare::Unequal) {
-                        DEBUG("[find_trait_impls_bound] - Mismatch");
-                        DEBUG("[find_trait_impls_bound] - Mismatch");
-                        return false;
-                    }
-                    if (ord == HIRCompare::Fuzzy) {
-                        DEBUG("Fuzzy match");
-                        DEBUG("[find_trait_impls_bound] - Fuzzy match");
-                    }
-
-                    DEBUG("[find_trait_impls_bound] Match " << boundTy << " : " << boundTrait);
                     auto tpMono = monomorphCb.monomorphTraitpath(sp, bound, false);
                     this->expandAssociatedTypesParams(sp, tpMono.path.params);
                     for (auto& ty : tpMono.typeBounds) {
                         ty.second.type = this->expandAssociatedTypes(sp, mv$(ty.second.type));
                     }
-                    DEBUG("- tp_mono = " << tpMono);
-                    // TODO: Instead of using `type` here, build the real type
-                    if (callback.visit(ImplRef(type, mv$(tpMono.path.params), mv$(tpMono.typeBounds), tpMono.constness))) {
+                    auto projectedSubject = crate.types.path(HIRPath(boundTy, boundTrait.clone(), assocInfo->item, assocInfo->params.clone()), HIRTypePathBinding::make_Opaque({}));
+                    if (callback.visit(ImplRef(std::move(projectedSubject), mv$(tpMono.path.params), mv$(tpMono.typeBounds), tpMono.constness))) {
                         return true;
                     }
                 }
@@ -4293,484 +4768,6 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
         }
     }
     return false;
-}
-
-HIRCompare TraitResolution::fticCheckParams(
-    const Span& sp,
-    const HIRSimplePath& trait,
-    const HIRPathParams* paramsPtr,
-    const HIRTypeData* type,
-    const HIRGenericParams& implParamsDef,
-    const HIRPathParams& implTraitArgs,
-    const HIRTypeData* implTy,
-    /*Out->*/ HIRPathParams& outImplParams,
-    bool evaluateBounds /*=true*/,
-    bool commitDefiningOpaque /*=false*/,
-    SolverResponse* effects /*=nullptr*/
-) const {
-    struct GetParams: public HIRMatchGenerics {
-        Span sp;
-        HIRPathParams& outImplParams;
-
-        GetParams(Span sp, ObjPool& valuePool, HIRPathParams& outImplParams)
-            : HIRMatchGenerics(valuePool)
-            , sp(sp)
-            , outImplParams(outImplParams)
-        {
-        }
-
-        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override {
-            BUG_ASSERT(g.binding < outImplParams.types.size());
-            if (outImplParams.types[g.binding] == HIRTypeRef()) {
-                outImplParams.types[g.binding] = ty;
-                return HIRCompare::Equal;
-            } else {
-                auto rv = outImplParams.types[g.binding]->compareWithPlaceholders(sp, ty, resolveCb);
-
-                // - TODO: Store the least fuzzy option, or store all fuzzy options?
-                if (rv == HIRCompare::Fuzzy && outImplParams.types[g.binding]->is_Infer()) {
-                    const auto& existingResolved = resolveCb.getType(sp, outImplParams.types[g.binding]);
-                    const auto* existingInfer = existingResolved->opt_Infer();
-                    if (existingInfer && existingInfer->index != ~0u) {
-                        const bool recursive = visitTyWith(ty, [&](const HIRTypeData* inner) {
-                            if (const auto* infer = inner->opt_Infer()) {
-                                if (infer->index == ~0u) {
-                                    return false;
-                                }
-                                const auto& resolved = resolveCb.getType(sp, inner);
-                                const auto* resolvedInfer = resolved->opt_Infer();
-                                return resolvedInfer && resolvedInfer->index == existingInfer->index;
-                            }
-                            return false;
-                        });
-                        if (recursive) {
-                            return HIRCompare::Unequal;
-                        }
-                    }
-                    outImplParams.types[g.binding] = ty;
-                }
-                return rv;
-            }
-        }
-
-        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
-            ASSERT_BUG(sp, g.binding < outImplParams.values.size(), "Value generic " << g << " out of range (" << outImplParams.values.size() << ")");
-            if (sz.is_Infer()) {
-                ASSERT_BUG(sp, sz.as_Infer().index != ~0u, "");
-            }
-            if (outImplParams.values[g.binding] == HIRConstGeneric()) {
-                outImplParams.values[g.binding] = sz.clone();
-                return HIRCompare::Equal;
-            } else {
-                if (outImplParams.values[g.binding] == sz) {
-                    return HIRCompare::Equal;
-                }
-                if (outImplParams.values[g.binding].is_Infer()) {
-                    if (!sz.is_Infer()) {
-                        outImplParams.values[g.binding] = sz.clone();
-                    }
-                    return HIRCompare::Fuzzy;
-                }
-                if (sz.is_Infer()) {
-                    return HIRCompare::Fuzzy;
-                }
-                if (outImplParams.values[g.binding].is_Unevaluated()) {
-                    if (sz.is_Evaluated()) {
-                        outImplParams.values[g.binding] = sz.clone();
-                    }
-                    return HIRCompare::Fuzzy;
-                }
-                if (sz.is_Unevaluated()) {
-                    return HIRCompare::Fuzzy;
-                }
-                return HIRCompare::Unequal;
-            }
-        }
-    };
-
-    GetParams getParams{sp, *crate.pool, outImplParams};
-
-    outImplParams.types.resize(implParamsDef.types.size());
-    outImplParams.values.resize(implParamsDef.values.size());
-
-    // - HACK: match_test_generics_fuzz has been changed to return Fuzzy if there's a tag mismatch and the LHS is an Opaque path
-    auto match = HIRCompare::Equal;
-    match &= implTy->matchTestGenericsFuzz(sp, type, this->ivars.callbackResolveInfer(), getParams);
-    if (paramsPtr) {
-        const auto& params = *paramsPtr;
-        const HIRPathParams* traitArgs = &implTraitArgs;
-        HIRPathParams monomorphTraitArgs;
-        bool implParamsKnown = match != HIRCompare::Unequal;
-        for (const auto& ty : outImplParams.types) {
-            implParamsKnown &= ty != HIRTypeRef();
-        }
-        for (const auto& value : outImplParams.values) {
-            implParamsKnown &= value != HIRConstGeneric();
-        }
-        if (implParamsKnown && monomorphisePathparamsNeeded(implTraitArgs)) {
-            MonomorphStatePtr monomorph(crate.types, nullptr, &outImplParams, nullptr);
-            monomorph.setConstevalState(this->board(), HIRItemPath(""));
-            monomorphTraitArgs = monomorph.monomorphPathParams(sp, implTraitArgs, true);
-            traitArgs = &monomorphTraitArgs;
-        }
-        if (traitArgs == &implTraitArgs) {
-            match &= traitArgs->matchTestGenericsFuzz(sp, params, this->ivars.callbackResolveInfer(), getParams);
-        } else {
-            match &= traitArgs->compareWithPlaceholders(sp, params, this->ivars.callbackResolveInfer());
-        }
-        if (match == HIRCompare::Unequal) {
-            return HIRCompare::Unequal;
-        }
-    } else {
-        if (match == HIRCompare::Unequal) {
-            return HIRCompare::Unequal;
-        }
-    }
-
-    HIRPathParams placeholders;
-    RcString placeholderName;
-    bool placeholdersNeeded = false;
-    {
-        for (const auto& ty : outImplParams.types) {
-            if (ty == HIRTypeRef()) {
-                placeholdersNeeded = true;
-            }
-        }
-        for (const auto& val : outImplParams.values) {
-            if (val == HIRConstGeneric()) {
-                placeholdersNeeded = true;
-            }
-        }
-    }
-    if (placeholdersNeeded) {
-        placeholderName = RcString::newInterned(FMT("impl_?_" << &implParamsDef));
-        for (unsigned int i = 0; i < outImplParams.types.size(); i++) {
-            if (outImplParams.types[i] == HIRTypeRef()) {
-                if (placeholders.types.size() == 0) {
-                    placeholders.types.resize(outImplParams.types.size());
-                }
-                placeholders.types[i] = crate.types.generic(placeholderName, 2 * 256 + i);
-            }
-        }
-        for (unsigned int i = 0; i < outImplParams.values.size(); i++) {
-            if (outImplParams.values[i] == HIRConstGeneric()) {
-                if (placeholders.values.size() == 0) {
-                    placeholders.values.resize(outImplParams.values.size());
-                }
-                placeholders.values[i] = HIRGenericRef(placeholderName, 2 * 256 + i);
-            }
-        }
-    } else {
-    }
-
-    if (!evaluateBounds) {
-        for (size_t i = 0; i < outImplParams.types.size(); i++) {
-            if (outImplParams.types[i] == HIRTypeRef()) {
-                outImplParams.types[i] = std::move(placeholders.types[i]);
-            }
-        }
-        for (size_t i = 0; i < outImplParams.values.size(); i++) {
-            if (outImplParams.values[i] == HIRConstGeneric()) {
-                outImplParams.values[i] = std::move(placeholders.values[i]);
-            }
-        }
-        return match;
-    }
-    auto cbInfer = this->ivars.callbackResolveInfer();
-
-    struct Matcher: public HIRMatchGenerics, public Monomorphiser {
-        Span sp;
-        const HIRPathParams& implParams;
-        RcString placeholderName;
-        HIRPathParams& placeholders;
-
-        Matcher(HIRTypeInterner& types, Span sp, const HIRPathParams& implParams, RcString placeholderName, HIRPathParams& placeholders)
-            : HIRMatchGenerics(types.objectPool())
-            , Monomorphiser(types)
-            , sp(sp)
-            , implParams(implParams)
-            , placeholderName(placeholderName)
-            , placeholders(placeholders)
-        {
-        }
-
-        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override {
-            if (const auto* e = ty->opt_Generic()) {
-                if (e->binding == g.binding && e->name == g.name) {
-                    return HIRCompare::Equal;
-                }
-            }
-            if (g.isPlaceholder() && g.name == placeholderName) {
-                auto i = g.idx();
-                ASSERT_BUG(sp, implParams.types[i] == HIRTypeRef(), "Placeholder to populated type returned - " << implParams.types[i] << " vs " << ty);
-                auto& ph = placeholders.types[i];
-                // TODO: Only want to do this if ... what?
-
-                if (ph->is_Generic() && ph->as_Generic().binding == g.binding) {
-                    ph = ty;
-                    return HIRCompare::Equal;
-                } else {
-                    return ph->compareWithPlaceholders(sp, ty, resolveCb);
-                }
-            } else {
-                if (g.isPlaceholder()) {
-                    return HIRCompare::Fuzzy;
-                }
-                if (ty->is_Infer() && !ty->as_Infer().isLit()) {
-                    return HIRCompare::Fuzzy;
-                }
-                if (ty->is_Path() && ty->as_Path().binding.is_Unbound()) {
-                    return HIRCompare::Fuzzy;
-                }
-                if (ty->is_Generic() && ty->as_Generic().isPlaceholder()) {
-                    return HIRCompare::Fuzzy;
-                }
-                return HIRCompare::Unequal;
-            }
-        }
-
-        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& v) override {
-            if (const auto* e = v.opt_Generic()) {
-                if (e->binding == g.binding && e->name == g.name) {
-                    return HIRCompare::Equal;
-                }
-            }
-            if (g.isPlaceholder() && g.name == placeholderName) {
-                auto i = g.idx();
-                ASSERT_BUG(sp, implParams.values[i] == HIRConstGeneric(), "Placeholder to populated value returned - " << implParams.values[i] << " vs " << v);
-                auto& ph = placeholders.values[i];
-                if (ph.is_Generic() && ph.as_Generic().binding == g.binding) {
-                    ph = v.clone();
-                    return HIRCompare::Equal;
-                } else {
-                    TODO(Span(), "[ftic_check_params:cb_match] Compare placeholder " << i << " " << ph << " == " << v);
-                }
-            } else {
-                if (g.isPlaceholder()) {
-                    return HIRCompare::Fuzzy;
-                }
-                if (v.is_Infer()) {
-                    return HIRCompare::Fuzzy;
-                }
-                return HIRCompare::Unequal;
-            }
-        }
-
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& ge) const override {
-            //    // TODO: `impl_type` or `des_type`
-            //    //TODO(sp, "[find_impl__check_crate_raw] Self - " << impl_type << " or " << des_type);
-
-            ASSERT_BUG(sp, !ge.isPlaceholder(), "[find_impl__check_crate_raw] Placeholder param seen - " << ge);
-            if (implParams.types.at(ge.binding) != HIRTypeRef()) {
-                return implParams.types.at(ge.binding);
-            }
-            ASSERT_BUG(sp, placeholders.types.size() == implParams.types.size(), "Placeholder size mismatch: " << placeholders.types.size() << " != " << implParams.types.size());
-            return placeholders.types.at(ge.binding);
-        }
-
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override {
-            ASSERT_BUG(sp, val.binding < 256, "Generic value binding in " << val << " out of range (>=256)");
-            ASSERT_BUG(sp, val.binding < implParams.values.size(), "Generic value binding in " << val << " out of range (>= " << implParams.values.size() << ")");
-            if (implParams.values.at(val.binding) != HIRConstGeneric()) {
-                return implParams.values.at(val.binding).clone();
-            }
-            ASSERT_BUG(sp, placeholders.values.size() == implParams.values.size(), "Placeholder size mismatch: " << placeholders.values.size() << " != " << implParams.values.size());
-            return placeholders.values.at(val.binding).clone();
-        }
-    };
-
-    Matcher matcher{crate.types, sp, outImplParams, placeholderName, placeholders};
-
-    using DeferredTypeConstraint = std::pair<const HIRTypeData*, const HIRTypeData*>;
-
-    int loops = 0;
-    HIRPathParams lastPlaceholders;
-    ThinVector<DeferredTypeConstraint> deferredTypeConstraints;
-    do {
-        ASSERT_BUG(sp, loops < 4, "Excessive iterations while resolving bound placeholders");
-        loops += 1;
-        lastPlaceholders = placeholders.clone();
-        deferredTypeConstraints.clear();
-        for (const auto& bound : implParamsDef.bounds) {
-            switch (bound.tag()) {
-                case HIRGenericBound::TAG_TraitBound: {
-                    auto& be = bound.as_TraitBound();
-                    auto realType = matcher.monomorphType(sp, be.type, false);
-                    auto realTrait = matcher.monomorphTraitpath(sp, be.trait, false);
-                    realType = this->expandAssociatedTypes(sp, mv$(realType));
-                    for (auto& p : realTrait.path.params.types) {
-                        p = this->expandAssociatedTypes(sp, mv$(p));
-                    }
-                    for (auto& ab : realTrait.typeBounds) {
-                        ab.second.type = this->expandAssociatedTypes(sp, mv$(ab.second.type));
-                    }
-                    const auto& realTraitPath = realTrait.path;
-                    bool foundFuzzyMatch = false;
-                    if (((*realType).is_Path() && ((*realType).as_Path().binding.is_Unbound()))) {
-                        foundFuzzyMatch = true;
-                    }
-                    if (((*realType).is_Infer() && ((*realType).as_Infer().isLit() == false))) {
-                        foundFuzzyMatch = true;
-                    }
-                    HIRPathParams savedPh = placeholders.clone();
-                    HIRPathParams fuzzyPh;
-                    ThinVector<DeferredTypeConstraint> fuzzyTypeConstraints;
-                    unsigned numFuzzy = 0;
-                    bool fuzzyCompatible = true;
-                    bool rv = false;
-                    this->solveTraitGoal(sp, realTraitPath.path, realTraitPath.params, realType, [&](SolverResponse response) {
-                        if (!response.hasImpl || !response.impl) {
-                            return false;
-                        }
-                        auto impl = response.impl->legacy();
-                        ThinVector<DeferredTypeConstraint> candidateTypeConstraints;
-                        // TODO: Save and restore placeholders if this isn't a full match
-                        auto cmp = response.certainty == SolverCertainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy;
-                        if (cmp == HIRCompare::Fuzzy) {
-                            auto iTy = impl.getImplType(crate.types);
-                            this->expandAssociatedTypesInplace(sp, iTy);
-                            auto iTp = impl.getTraitParams(crate.types);
-                            for (auto& t : iTp.types) {
-                                this->expandAssociatedTypesInplace(sp, t);
-                            }
-                            cmp &= realType->matchTestGenericsFuzz(sp, iTy, cbInfer, matcher);
-                            cmp &= realTraitPath.params.matchTestGenericsFuzz(sp, iTp, cbInfer, matcher);
-                        }
-                        for (const auto& assocBound : realTrait.typeBounds) {
-                            HIRTypeRef tmp;
-                            const HIRTypeData* ty;
-
-                            tmp = impl.getType(crate.types, assocBound.first.c_str(), assocBound.second.atyParams);
-                            if (tmp == HIRTypeRef()) {
-                                tmp = this->expandAssociatedTypes(sp, crate.types.path(HIRPath(HIRPath::Data::Data_UfcsKnown{realType, realTraitPath.clone(), assocBound.first, {}}), {}));
-                                ty = tmp;
-                            } else {
-                                this->expandAssociatedTypesInplace(sp, tmp);
-                                ty = this->ivars.getType(tmp);
-                            }
-                            auto cmpI = assocBound.second.type->matchTestGenericsFuzz(sp, ty, cbInfer, matcher);
-                            const auto containsOpaqueInScope = [&](const HIRTypeData* type, bool defining) {
-                                return visitTyWith(type, [&](const HIRTypeData* inner) {
-                                    const auto* erased = inner->opt_ErasedType();
-                                    const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
-                                    return alias && (this->isOpaqueAliasDefiningScope(*alias->inner) == defining);
-                                });
-                            };
-                            const bool containsDefiningOpaque = containsOpaqueInScope(ty, true) || containsOpaqueInScope(assocBound.second.type, true);
-                            if (cmpI == HIRCompare::Fuzzy && !containsDefiningOpaque && (containsOpaqueInScope(ty, false) || containsOpaqueInScope(assocBound.second.type, false)) && assocBound.second.type->compareWithPlaceholders(sp, ty, cbInfer) == HIRCompare::Unequal) {
-                                cmpI = HIRCompare::Unequal;
-                            }
-                            switch (cmpI) {
-                                case HIRCompare::Equal:
-                                    DEBUG("Equal");
-                                    break;
-                                case HIRCompare::Unequal:
-                                    DEBUG("Assoc `" << assocBound.first << "` didn't match - " << ty << " != " << assocBound.second.type);
-                                    cmp = HIRCompare::Unequal;
-                                    break;
-                                case HIRCompare::Fuzzy:
-                                    // TODO: When a fuzzy match is encountered on a conditional bound, returning `false` can lead to an false negative (and a compile error)
-
-                                    if (commitDefiningOpaque && effects && containsDefiningOpaque) {
-                                        candidateTypeConstraints.emplace_back(ty, assocBound.second.type);
-                                    }
-                                    cmp = HIRCompare::Fuzzy;
-                                    break;
-                            }
-                            if (cmp == HIRCompare::Unequal) {
-                                break;
-                            }
-                        }
-
-                        if (cmp == HIRCompare::Fuzzy) {
-                            foundFuzzyMatch |= true;
-                            if (numFuzzy > 0 && fuzzyPh != placeholders) {
-                                fuzzyCompatible = false;
-                            }
-                            numFuzzy += 1;
-
-                            if (numFuzzy == 1) {
-                                fuzzyTypeConstraints = std::move(candidateTypeConstraints);
-                            } else {
-                                fuzzyTypeConstraints.clear();
-                            }
-
-                            fuzzyPh = std::move(placeholders);
-                            // TODO: Should this do some form of reset?
-                            placeholders.types.resize(fuzzyPh.types.size());
-                            placeholders.values.resize(fuzzyPh.values.size());
-                        }
-                        if (cmp != HIRCompare::Equal) {
-                            placeholders = savedPh.clone();
-                        }
-                        rv = cmp == HIRCompare::Equal;
-                        return rv;
-                    }, {.assocName = ""});
-                    if (rv) {
-                    } else if (foundFuzzyMatch) {
-                        if (numFuzzy == 0) {
-                        } else if (numFuzzy == 1) {
-                            placeholders = std::move(fuzzyPh);
-                            for (const auto& constraint : fuzzyTypeConstraints) {
-                                deferredTypeConstraints.push_back(constraint);
-                            }
-                        } else if (fuzzyCompatible) {
-                            placeholders = std::move(fuzzyPh);
-                        } else {
-                        }
-                        match = HIRCompare::Fuzzy;
-                    } else if (((*realType).is_Infer() && ((*realType).as_Infer().tyClass == HIRInferClass::None))) {
-                        match = HIRCompare::Fuzzy;
-                    } else if (((*realType).is_Generic() && ((*realType).as_Generic().isPlaceholder()))) {
-                        match = HIRCompare::Fuzzy;
-                    } else {
-                        return HIRCompare::Unequal;
-                    }
-
-                    break;
-                }
-                case HIRGenericBound::TAG_TypeEquality: {
-                    auto& be = bound.as_TypeEquality();
-                    TODO(sp, "Check bound " << be.type << " = " << be.otherType);
-                    break;
-                }
-            }
-        }
-    } while (placeholders != lastPlaceholders);
-
-    for (size_t i = 0; i < outImplParams.types.size(); i++) {
-        if (outImplParams.types[i] == HIRTypeRef()) {
-            outImplParams.types[i] = std::move(placeholders.types[i]);
-        }
-        ASSERT_BUG(sp, outImplParams.types[i] != HIRTypeRef(), "");
-    }
-    for (size_t i = 0; i < outImplParams.values.size(); i++) {
-        if (outImplParams.values[i] == HIRConstGeneric()) {
-            outImplParams.values[i] = std::move(placeholders.values[i]);
-        }
-        ASSERT_BUG(sp, outImplParams.values[i] != HIRConstGeneric(), "");
-    }
-
-    for (size_t i = 0; i < implParamsDef.types.size(); i++) {
-        if (implParamsDef.types.at(i).isSized) {
-            if (outImplParams.types[i] != HIRTypeRef()) {
-                auto cmp = typeIsSized(sp, outImplParams.types[i]);
-                if (cmp == HIRCompare::Unequal) {
-                    return HIRCompare::Unequal;
-                }
-            } else {
-                // TODO: Set match to fuzzy?
-            }
-        }
-    }
-
-    if (commitDefiningOpaque && effects) {
-        for (const auto& constraint : deferredTypeConstraints) {
-            effects->equalities.push_back(SolverTypeEquality{constraint.first, constraint.second});
-        }
-    }
-
-    return match;
 }
 
 const HIRFunction* TraitResolution::traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const {
@@ -4920,8 +4917,14 @@ HIRCompare TraitResolution::typeIsSizedBuiltin(const Span& sp, const HIRTypeData
             auto& e = (*type).as_Generic();
             switch (e.group()) {
                 case 0:
+                    if (!this->implGenerics_) {
+                        return HIRCompare::Fuzzy;
+                    }
                     return this->implGenerics_->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
                 case 1:
+                    if (!this->itemGenerics_) {
+                        return HIRCompare::Fuzzy;
+                    }
                     return this->itemGenerics_->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
                 default:
                     return HIRCompare::Equal;
@@ -5333,15 +5336,14 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
             good = true;
         } else {
             good = solveTraitGoal(sp, de->trait.path.path, de->trait.path.params, srcTy, [&](SolverResponse response) {
-                if (!response.hasImpl || !response.impl) {
+                if (!response.impl) {
                     return false;
                 }
 
-                const auto impl = response.impl->legacy();
                 auto candidateCmp = response.certainty == SolverCertainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy;
                 HIRTypeData::Data_TraitObject candidateE;
                 candidateE.trait.path = de->trait.path.path;
-                candidateE.trait.path.params = impl.getTraitParams(crate.types);
+                candidateE.trait.path.params = response.impl->getTraitParams(crate.types);
 
                 auto remapSourceTrait = [&](const HIRGenericPath& sourceTrait) {
                     if (sourceTrait.path == de->trait.path.path) {
@@ -5386,7 +5388,7 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                 };
 
                 for (const auto& aty : de->trait.typeBounds) {
-                    auto atyv = impl.getType(crate.types, aty.first.c_str(), aty.second.atyParams);
+                    auto atyv = response.impl->getType(crate.types, aty.first.c_str(), aty.second.atyParams);
                     if (atyv == HIRTypeRef()) {
                         auto p = HIRPath(srcTy, aty.second.sourceTrait.clone(), aty.first, aty.second.atyParams.clone());
                         atyv = this->expandAssociatedTypes(sp, crate.types.path(mv$(p), {}));
@@ -5404,17 +5406,16 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                 totalCmp &= candidateCmp;
                 tmpE = std::move(candidateE);
                 return true;
-            }, {.assocName = ""});
+            }, {.ambiguity = SolverAmbiguityPolicy::Report});
         }
 
         auto cb = [&](SolverResponse response) {
-            if (!response.hasImpl || !response.impl) {
+            if (!response.impl) {
                 return false;
             }
-            const auto impl = response.impl->legacy();
             const auto cmp = response.certainty == SolverCertainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy;
             totalCmp &= cmp;
-            tmpE.markers.back().params = impl.getTraitParams(crate.types);
+            tmpE.markers.back().params = response.impl->getTraitParams(crate.types);
             return true;
         };
         for (const auto& marker : de->markers) {
@@ -5422,7 +5423,7 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                 break;
             }
             tmpE.markers.push_back(marker.path);
-            good &= solveTraitGoal(sp, marker.path, marker.params, srcTy, cb, {.assocName = ""});
+            good &= solveTraitGoal(sp, marker.path, marker.params, srcTy, cb, {.ambiguity = SolverAmbiguityPolicy::Report});
         }
 
         if (good && totalCmp == HIRCompare::Fuzzy && newTypeCallback) {
@@ -5501,6 +5502,10 @@ SolverCertainty TraitResolution::evaluateCoercionGoal(const Span& sp, const Solv
     destination = resolveKnown(destination);
     source = resolveKnown(source);
 
+    if (!destination->is_Infer() && !source->is_Infer() && relateEquality(destination, source) == SolverCertainty::Proven) {
+        return SolverCertainty::Proven;
+    }
+
     const auto unsize = [&](const HIRTypeData* rawDestination, const HIRTypeData* rawSource) {
         const auto* destination = resolveKnown(rawDestination);
         const auto* source = resolveKnown(rawSource);
@@ -5556,10 +5561,10 @@ SolverCertainty TraitResolution::evaluateCoercionGoal(const Span& sp, const Solv
     if (!langCoerceUnsized.components().empty() && (typeIsBounded(source) || typeIsBounded(destination))) {
         SolverCertainty result = SolverCertainty::NoSolution;
         solveTraitGoal(sp, langCoerceUnsized, HIRPathParams(destination), source, [&](SolverResponse response) {
-            if (response.hasImpl) {
+            if (response.impl) {
                 result = response.certainty;
             }
-            return response.hasImpl;
+            return response.impl != nullptr;
         }, {.allowInferInputs = true});
         if (result != SolverCertainty::NoSolution) {
             return result;
@@ -5666,7 +5671,32 @@ SolverCertainty TraitResolution::evaluateCoercionGoal(const Span& sp, const Solv
             if (destinationBorrow->type > sourceBorrow->type) {
                 return SolverCertainty::NoSolution;
             }
-            return unsize(destinationBorrow->inner, sourceBorrow->inner);
+            auto result = unsize(destinationBorrow->inner, sourceBorrow->inner);
+            if (result == SolverCertainty::Proven) {
+                return result;
+            }
+
+            const HIRTypeData* current = sourceBorrow->inner;
+            HIRTypeRef target;
+            for (unsigned depth = 0; depth < board().settings->recursionLimit; depth++) {
+                switch (autoderefStep(sp, current, target)) {
+                    case AutoderefResult::NoMatch:
+                        return result;
+                    case AutoderefResult::Ambiguous:
+                        return SolverCertainty::Ambiguous;
+                    case AutoderefResult::Match:
+                        current = target;
+                        break;
+                }
+                const auto dereferenced = unsize(destinationBorrow->inner, current);
+                if (dereferenced == SolverCertainty::Proven) {
+                    return dereferenced;
+                }
+                if (dereferenced == SolverCertainty::Ambiguous) {
+                    result = dereferenced;
+                }
+            }
+            return SolverCertainty::Ambiguous;
         }
         return compare(destination, source);
     }
@@ -5678,11 +5708,26 @@ SolverCertainty TraitResolution::evaluateCoercionGoal(const Span& sp, const Solv
 }
 
 Ordering TraitResolution::compareCoercionEndpoints(const Span& sp, const SolverCoercionConstraint& constraint, const HIRTypeData* left, const HIRTypeData* right) const {
-    if (constraint.direction != SolverCoercionConstraint::Direction::InputIsDestination) {
-        return OrdEqual;
-    }
     left = ivars.getType(left);
     right = ivars.getType(right);
+    if (constraint.direction == SolverCoercionConstraint::Direction::InputIsSource) {
+        const auto* destination = ivars.getType(constraint.other);
+        const bool leftExact = ivars.typesEqual(left, destination);
+        const bool rightExact = ivars.typesEqual(right, destination);
+        if (leftExact != rightExact) {
+            return leftExact ? OrdGreater : OrdLess;
+        }
+        if (left->is_Diverge() != right->is_Diverge()) {
+            return left->is_Diverge() ? OrdLess : OrdGreater;
+        }
+        return OrdEqual;
+    }
+    const auto* source = ivars.getType(constraint.other);
+    const bool leftExact = ivars.typesEqual(left, source);
+    const bool rightExact = ivars.typesEqual(right, source);
+    if (leftExact != rightExact) {
+        return leftExact ? OrdGreater : OrdLess;
+    }
     const auto compatibleTarget = [&](const HIRTypeData* leftInner, const HIRTypeData* rightInner) {
         return ivars.typesEqual(leftInner, rightInner) || leftInner->compareWithPlaceholders(sp, rightInner, ivars.callbackResolveInfer()) != HIRCompare::Unequal;
     };
@@ -5748,26 +5793,25 @@ TraitResolution::AutoderefResult TraitResolution::autoderefStep(const Span& sp, 
 
         this->solveTraitGoal(sp, langDeref_, HIRPathParams{}, ty, [&](SolverResponse response) {
             const auto inspect = [&](const SolverImpl& solverImpl, SolverCertainty candidateCertainty) {
-                auto impl = solverImpl.legacy();
-                auto foundTarget = impl.getType(crate.types, "Target", {});
+                auto foundTarget = solverImpl.getType(crate.types, "Target", {});
                 if (foundTarget == HIRTypeRef()) {
                     foundTarget = crate.types.path(HIRPath(ty, langDeref_, RcString::newInterned("Target")), HIRTypePathBinding::make_Opaque({}));
                 } else {
                     this->expandAssociatedTypesInplace(sp, foundTarget);
                 }
                 candidateTarget = foundTarget;
-                candidateImplType = impl.getImplType(crate.types);
+                candidateImplType = solverImpl.getImplType(crate.types);
                 certainty = candidateCertainty;
             };
 
-            if (response.hasImpl && response.impl && !response.impl->ambiguousIdentity) {
+            if (response.impl) {
                 inspect(*response.impl, response.certainty);
                 return true;
             }
 
-            ambiguous = response.hasImpl;
+            ambiguous |= response.certainty == SolverCertainty::Ambiguous;
             return false;
-        }, {.assocName = ""});
+        }, {.ambiguity = SolverAmbiguityPolicy::Report});
 
         if (ambiguous) {
             DEBUG("Ambiguous Deref impl for " << ty);
@@ -5801,9 +5845,10 @@ unsigned int TraitResolution::autoderefFindMethod(
     unsigned int typeIvarCount,
     const HIRTypeData* topTy,
     const RcString& methodName,
+    const ThinVector<HIRTypeRef>& argumentTypes,
     const HIRTypeData* expectedResult,
     bool mustDecide,
-    /* Out -> */ std::vector<std::pair<AutoderefBorrow, HIRPath>>& possibilities
+    /* Out -> */ ThinVector<MethodCandidate>& possibilities
 ) const {
     {
         TRACE_FUNCTION_F("{" << topTy << "}." << methodName);
@@ -5821,7 +5866,7 @@ unsigned int TraitResolution::autoderefFindMethod(
             std::vector<HIRSimplePath> candidateTraits;
             candidateTraits.reserve(possibilities.size());
             for (const auto& possibility : possibilities) {
-                const auto* path = possibility.second.data.opt_UfcsKnown();
+                const auto* path = possibility.path.data.opt_UfcsKnown();
                 if (!path) {
                     return;
                 }
@@ -5833,6 +5878,70 @@ unsigned int TraitResolution::autoderefFindMethod(
                 auto selectedPossibility = mv$(possibilities[*selected]);
                 possibilities.clear();
                 possibilities.push_back(mv$(selectedPossibility));
+            }
+        };
+        auto canonicalizeTraitCandidates = [&]() {
+            auto sharedParams = [&](const HIRPathParams& shape) {
+                ASSERT_BUG(sp, typeIvarCount <= ivars.size(), "Invalid method ivar split");
+                ASSERT_BUG(sp, shape.types.size() <= typeIvarCount, "Not enough type ivars for method candidate");
+                ASSERT_BUG(sp, shape.values.size() <= ivars.size() - typeIvarCount, "Not enough value ivars for method candidate");
+
+                HIRPathParams params;
+                params.types.reserve(shape.types.size());
+                for (size_t i = 0; i < shape.types.size(); i++) {
+                    params.types.push_back(crate.types.infer(ivars[i], HIRInferClass::None));
+                }
+                params.values.reserve(shape.values.size());
+                for (size_t i = 0; i < shape.values.size(); i++) {
+                    params.values.push_back(HIRConstGeneric::make_Infer({ivars[typeIvarCount + i]}));
+                }
+                return params;
+            };
+
+            for (auto first = possibilities.begin(); first != possibilities.end(); ++first) {
+                auto* firstPath = first->path.data.opt_UfcsKnown();
+                if (!firstPath) {
+                    continue;
+                }
+                for (auto second = first + 1; second != possibilities.end();) {
+                    auto* secondPath = second->path.data.opt_UfcsKnown();
+                    if (!secondPath) {
+                        ++second;
+                        continue;
+                    }
+                    if (first->path == second->path) {
+                        for (auto move = second; move + 1 != possibilities.end(); ++move) {
+                            *move = std::move(*(move + 1));
+                        }
+                        possibilities.pop_back();
+                        continue;
+                    }
+
+                    const bool sameSelf = firstPath->type == secondPath->type || firstPath->type->equalsIgnoringRegions(secondPath->type);
+                    if (!sameSelf || firstPath->trait.path != secondPath->trait.path) {
+                        ++second;
+                        continue;
+                    }
+
+                    firstPath->trait.params = sharedParams(firstPath->trait.params);
+                    for (auto move = second; move + 1 != possibilities.end(); ++move) {
+                        *move = std::move(*(move + 1));
+                    }
+                    possibilities.pop_back();
+                }
+            }
+        };
+        auto preferCurrentTraitCandidate = [&]() {
+            if (possibilities.size() > 1 && currentTraitPath_) {
+                for (size_t i = 0; i < possibilities.size(); i++) {
+                    const auto* path = possibilities[i].path.data.opt_UfcsKnown();
+                    if (path && path->trait.path == currentTraitPath_->path) {
+                        auto selected = mv$(possibilities[i]);
+                        possibilities.clear();
+                        possibilities.push_back(mv$(selected));
+                        break;
+                    }
+                }
             }
         };
         do {
@@ -5859,15 +5968,14 @@ unsigned int TraitResolution::autoderefFindMethod(
             DEBUG(derefCount << ": " << ty);
             bool undecided = false;
 
-            if (this->findMethod(sp, traits, ivars, typeIvarCount, ty, methodName, expectedResult, curAccess, AutoderefBorrow::None, possibilities, &undecided)) {
-                DEBUG("FOUND *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
+            if (this->findMethod(sp, traits, ivars, typeIvarCount, ty, methodName, argumentTypes, expectedResult, curAccess, AutoderefBorrow::None, possibilities, &undecided)) {
             }
 
             if (possibilities.empty()) {
                 if (const auto* ptr = ty->opt_Pointer()) {
                     if (ptr->type != HIRBorrowType::Shared) {
                         auto constTy = crate.types.pointer(HIRBorrowType::Shared, ptr->inner);
-                        if (this->findMethod(sp, traits, ivars, typeIvarCount, constTy, methodName, expectedResult, curAccess, AutoderefBorrow::RawShared, possibilities)) {
+                        if (this->findMethod(sp, traits, ivars, typeIvarCount, constTy, methodName, argumentTypes, expectedResult, curAccess, AutoderefBorrow::RawShared, possibilities, &undecided)) {
                         }
                     }
                 }
@@ -5883,7 +5991,7 @@ unsigned int TraitResolution::autoderefFindMethod(
                         if (const auto* borrow = pinInner->opt_Borrow(); borrow && borrow->type == HIRBorrowType::Unique) {
                             auto shared = crate.types.borrow(HIRBorrowType::Shared, borrow->inner);
                             auto sharedPin = crate.types.path(HIRGenericPath(langPin, HIRPathParams(shared)), pathTy->binding.clone());
-                            if (this->findMethod(sp, traits, ivars, typeIvarCount, sharedPin, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::PinShared, possibilities, &undecided)) {
+                            if (this->findMethod(sp, traits, ivars, typeIvarCount, sharedPin, methodName, argumentTypes, expectedResult, MethodAccess::Move, AutoderefBorrow::PinShared, possibilities, &undecided)) {
                             }
                         }
                     }
@@ -5891,19 +5999,18 @@ unsigned int TraitResolution::autoderefFindMethod(
             }
 
             auto borrowTy = crate.types.borrow(HIRBorrowType::Shared, ty);
-            if (this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Shared, possibilities, &undecided)) {
-                DEBUG("FOUND & *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
+            if (possibilities.empty() && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, argumentTypes, expectedResult, MethodAccess::Move, AutoderefBorrow::Shared, possibilities, &undecided)) {
             }
             borrowTy = crate.types.borrow(HIRBorrowType::Unique, ty);
-            if (curAccess >= MethodAccess::Unique && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Unique, possibilities, &undecided)) {
-                DEBUG("FOUND &mut *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
+            if (possibilities.empty() && curAccess >= MethodAccess::Unique && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, argumentTypes, expectedResult, MethodAccess::Move, AutoderefBorrow::Unique, possibilities, &undecided)) {
             }
             borrowTy = crate.types.borrow(HIRBorrowType::Owned, ty);
-            if (curAccess >= MethodAccess::Move && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Owned, possibilities, &undecided)) {
-                DEBUG("FOUND &move *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
+            if (possibilities.empty() && curAccess >= MethodAccess::Move && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, argumentTypes, expectedResult, MethodAccess::Move, AutoderefBorrow::Owned, possibilities, &undecided)) {
             }
             if (!possibilities.empty()) {
+                canonicalizeTraitCandidates();
                 collapseToMostSpecificSubtrait();
+                preferCurrentTraitCandidate();
                 if (undecided && !mustDecide) {
                     DEBUG("- " << possibilities.size() << " options and the receiver is not known, pausing");
                     possibilities.clear();
@@ -5911,6 +6018,9 @@ unsigned int TraitResolution::autoderefFindMethod(
                 }
                 DEBUG("FOUND " << possibilities.size() << " options: " << possibilities);
                 return derefCount;
+            }
+            if (undecided && !mustDecide) {
+                return ~0u;
             }
 
             derefCount += 1;
@@ -5963,6 +6073,14 @@ std::ostream& operator<<(std::ostream& os, const TraitResolution::AutoderefBorro
             break;
     }
     return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const TraitResolution::MethodCandidate& candidate) {
+    os << '{' << candidate.borrow << ", " << candidate.path;
+    if (candidate.inherentImpl) {
+        os << ", inherent";
+    }
+    return os << '}';
 }
 
 std::ostream& operator<<(std::ostream& os, const TraitResolution::AllowedReceivers& x) {
@@ -6056,14 +6174,12 @@ std::optional<HIRTypeRef> TraitResolution::checkMethodReceiver(const Span& sp, c
                 receiverType
             );
             // TODO: Handle custom-receiver functions
-
             {
                 struct GetSelf: public HIRMatchGenerics {
                     std::optional<HIRTypeRef> detectedSelfTy;
 
                     GetSelf()
-                        : HIRMatchGenerics(BorrowMatchedValues{})
-                    {
+                        : HIRMatchGenerics(BorrowMatchedValues{}) {
                     }
 
                     HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override {
@@ -6097,9 +6213,8 @@ std::optional<HIRTypeRef> TraitResolution::checkMethodReceiver(const Span& sp, c
     return std::nullopt;
 }
 
-bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ std::vector<std::pair<AutoderefBorrow, HIRPath>>& possibilities, /* Out -> */ bool* outUndecided) const {
+bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const ThinVector<HIRTypeRef>& argumentTypes, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided) const {
     bool rv = false;
-    auto cbInfer = this->ivars.callbackResolveInfer();
 
     TRACE_FUNCTION_FR("ty=" << ty << ", name=" << methodName << ", access=" << access, rv << " " << possibilities);
     auto getIvaredParams = [&](const HIRGenericParams& tpl) -> HIRPathParams {
@@ -6122,77 +6237,65 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
     };
 
     // TODO: Have a cache of name+receiver_type to a list of types and impls
-
-    DEBUG("> Inherent methods");
     const auto* inherentReceiver = ty;
     while (const auto* borrow = inherentReceiver->opt_Borrow()) {
         inherentReceiver = this->ivars.getType(borrow->inner);
     }
     const auto* erased = inherentReceiver->opt_ErasedType();
     const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+    const bool inherentReceiverUnknown = inherentReceiver->is_Infer();
     const bool opaqueCanReveal = !erased || (alias && this->isOpaqueAliasDefiningScope(*alias->inner)) || erased->inner.is_Known();
-    if (opaqueCanReveal) {
+    if (inherentReceiverUnknown) {
+        if (outUndecided) {
+            *outUndecided = true;
+        }
+    } else if (opaqueCanReveal) {
         this->wb.inherentMethods->find(sp, methodName, ty, this->ivars.callbackResolveInfer(), [&](const HIRTypeData* selfTy, const HIRTypeImpl& impl) {
             const auto& method = impl.methods.at(methodName);
             if (!method.publicity.isVisible(this->visPath)) {
                 return;
             }
+            const auto snapshot = this->ivars.snapshot();
+            STD_DEFER {
+                this->ivars.rollbackTo(snapshot);
+            };
             HIRPathParams implParams;
-            auto cmp = fticCheckParams(sp, HIRSimplePath(), nullptr, selfTy, impl.params, {}, impl.type, implParams);
-            if (cmp != HIRCompare::Unequal) {
+            const auto inherentResult = this->evaluateInherentImpl(sp, impl, selfTy, implParams);
+            if (inherentResult != SolverCertainty::NoSolution) {
                 if (outUndecided && typeIsUnboundedInfer(this->ivars.getType(selfTy))) {
                     *outUndecided = true;
                 }
                 {
-                    HIRPathParams methodParams;
-                    RcString placeholderName;
-                    if (method.data.params.isGeneric()) {
-                        placeholderName = RcString::newInterned(FMT("method_wf_" << &method.data));
-                    }
-                    methodParams.types.reserve(method.data.params.types.size());
-                    for (size_t i = 0; i < method.data.params.types.size(); i++) {
-                        methodParams.types.push_back(crate.types.generic(placeholderName, GENERICPlaceholder * 256 + i));
-                    }
-                    methodParams.values.reserve(method.data.params.values.size());
-                    for (size_t i = 0; i < method.data.params.values.size(); i++) {
-                        methodParams.values.push_back(HIRGenericRef(placeholderName, GENERICPlaceholder, i));
+                    const auto& methodParams = this->solverExistentials(sp, method.data.params);
+                    u32 methodScope = 0;
+                    if (!methodParams.types.empty()) {
+                        const auto* generic = methodParams.types.front()->opt_Generic();
+                        ASSERT_BUG(sp, generic && generic->isSolverExistential(), "Method type parameter is not a solver existential");
+                        methodScope = generic->solverScope;
+                    } else if (!methodParams.values.empty()) {
+                        const auto* generic = methodParams.values.front().opt_Generic();
+                        ASSERT_BUG(sp, generic && generic->isSolverExistential(), "Method value parameter is not a solver existential");
+                        methodScope = generic->solverScope;
                     }
 
-                    const auto monomorph = MonomorphStatePtr(crate.types, selfTy, &implParams, &methodParams);
-                    const auto returnType = monomorph.monomorphType(sp, method.data.returnType, true);
-                    auto wf = HIRCompare::Equal;
-                    visitTyWith(returnType, [&](const HIRTypeData* inner) {
-                        const auto* path = inner->opt_Path();
-                        const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
-                        if (!projection) {
-                            return false;
-                        }
-                        if (!nextSolver) {
-                            ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
-                            nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*this, crate);
-                        }
-                        auto projectionWf = nextSolver->evaluateCertainty(sp, projection->trait.path, projection->trait.params, projection->type);
-                        if (projectionWf == HIRCompare::Unequal && placeholderName != RcString()) {
-                            const bool dependsOnMethodParam = visitTyWith(inner, [&](const HIRTypeData* part) {
-                                const auto* generic = part->opt_Generic();
-                                return generic && generic->isPlaceholder() && generic->name == placeholderName;
-                            });
-                            if (dependsOnMethodParam) {
-                                projectionWf = HIRCompare::Fuzzy;
-                            }
-                        }
-                        wf &= projectionWf;
-                        return wf == HIRCompare::Unequal;
-                    });
-                    if (wf == HIRCompare::Unequal) {
+                    auto monomorph = MonomorphStatePtr(crate.types, selfTy, &implParams, &methodParams);
+                    monomorph.setConstevalState(this->board(), HIRItemPath(""));
+                    const auto methodBounds = this->evaluateGenericBounds(sp, method.data.params, methodParams, monomorph, methodScope);
+                    if (methodBounds == SolverCertainty::NoSolution) {
                         return;
                     }
+                    if (outUndecided && methodBounds == SolverCertainty::Ambiguous) {
+                        *outUndecided = true;
+                    }
                 }
-                possibilities.push_back(std::make_pair(borrowType, HIRPath(selfTy, methodName, {})));
-                DEBUG("++ " << possibilities.back());
+                possibilities.push_back({borrowType, HIRPath(selfTy, methodName, {}), &impl});
                 rv = true;
             }
         });
+    }
+
+    if (rv) {
+        return true;
     }
 
     // TODO: Handle custom recievers by finding the bottom of a deref chain (or take the top-level reciever as an argument here?)
@@ -6256,25 +6359,32 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
             if (((**selfTy).is_Infer() && ((**selfTy).as_Infer().isLit() == false))) {
                 return false;
             }
-            // TODO: Do a fuzzy match here?
-            auto cmp = (*selfTy)->compareWithPlaceholders(sp, eType, cbInfer);
-            if (cmp == HIRCompare::Equal) {
-                // TODO: Re-monomorphise final trait using `ty`?
+            const auto snapshot = this->ivars.snapshot();
+            Unifier relation(
+                sp,
+                this->ivars,
+                this,
+                {
+                    .relateProjectionInputs = true,
+                    .rigidGenericsAreDistinct = true,
+                }
+            );
+            const auto outcome = relation.unify(*selfTy, eType);
+            const bool boundInference = this->ivars.mutationGeneration != snapshot.generation;
+            this->ivars.rollbackTo(snapshot);
+            if (outcome == Unifier::Outcome::Mismatch) {
+                continue;
+            }
+            if (outUndecided && (outcome == Unifier::Outcome::Ambiguous || boundInference)) {
+                *outUndecided = true;
+            }
 
-                possibilities.push_back(std::make_pair(borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
-                rv = true;
-                foundBound = true;
+            // TODO: Re-monomorphise final trait using `ty`?
+            possibilities.push_back({borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}})), nullptr});
+            rv = true;
+            foundBound = true;
+            if (outcome == Unifier::Outcome::Proven && !boundInference) {
                 recordBoundGlobalness(eType, eTraitGp, eTraitInfo);
-            } else if (cmp == HIRCompare::Fuzzy) {
-                possibilities.push_back(std::make_pair(borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
-                DEBUG("++ " << possibilities.back());
-                DEBUG("++ " << possibilities.back());
-                rv = true;
-                foundBound = true;
-                recordBoundGlobalness(eType, eTraitGp, eTraitInfo);
-            } else {
-                DEBUG("> Type mismatch - " << *selfTy << " != " << eType);
-                DEBUG("> Receiver mismatch");
             }
         } else {
         }
@@ -6298,12 +6408,10 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
                 {
                     const bool crateImplFound = solveTraitGoal(sp, finalTraitPath.path, traitParams, *selfTy, [](SolverResponse response) {
-                        return response.hasImpl && response.certainty == SolverCertainty::Proven;
-                    }, {.assocName = ""});
+                        return response.impl && response.certainty == SolverCertainty::Proven;
+                    }, {.ambiguity = SolverAmbiguityPolicy::Report});
                     if (crateImplFound) {
-                        DEBUG("Found trait impl " << currentTraitPath_->path << traitParams << " for " << *selfTy << " (" << this->ivars.fmtType(*selfTy) << ")");
-                        possibilities.push_back(std::make_pair(borrowType, HIRPath(*selfTy, HIRGenericPath(finalTraitPath.path, mv$(traitParams)), methodName, {})));
-                        DEBUG("++ " << possibilities.back());
+                        possibilities.push_back({borrowType, HIRPath(*selfTy, HIRGenericPath(finalTraitPath.path, mv$(traitParams)), methodName, {}), nullptr});
                         return true;
                     } else {
                     }
@@ -6343,8 +6451,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
         auto addTraitObjectMethod = [&](const HIRFunction& fcn, HIRGenericPath finalTraitPath) {
             DEBUG("- Found trait " << finalTraitPath << " (trait object)");
             if (auto selfTyP = checkMethodReceiver(sp, fcn, ty, access)) {
-                possibilities.push_back(std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
-                DEBUG("++ " << possibilities.back());
+                possibilities.push_back({borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {}), nullptr});
                 rv = true;
                 foundTraitObject = true;
             }
@@ -6384,7 +6491,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
             if (const auto* fcnPtr = this->traitContainsMethod(sp, traitPath.path, trait, crate.types.self(), methodName, finalTraitPath)) {
                 DEBUG("- Found trait " << finalTraitPath << " (erased type)");
                 if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
-                    possibilities.push_back(std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
+                    possibilities.push_back({borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {}), nullptr});
                     rv = true;
                 }
             }
@@ -6415,8 +6522,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                         monomorphCb.ppHrb = &ppHrb;
                         finalTraitPath = monomorphCb.monomorphGenericpath(sp, finalTraitPath, false);
 
-                        DEBUG("- Monomorph to " << finalTraitPath);
-                        possibilities.push_back(std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
+                        possibilities.push_back({borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {}), nullptr});
                         rv = true;
                     }
                 }
@@ -6457,7 +6563,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                             DEBUG("- Monomorph to " << finalTraitPath);
                         }
 
-                        possibilities.push_back(std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
+                        possibilities.push_back({borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {}), nullptr});
                         rv = true;
                     }
                 }
@@ -6491,14 +6597,112 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
         DEBUG("- Found trait " << finalTraitPath << " (in scope)");
         if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
             const auto& selfTy = *selfTyP;
-
-            DEBUG("Search for impl of " << *traitRef.first << " for " << selfTy);
             HIRPathParams traitParams = getIvaredParams(traitRef.second->params);
 
             // TODO: Re-monomorphise the trait path!
 
             bool undecided = false;
             bool implFound = false;
+
+            const auto inputSnapshot = this->ivars.snapshot();
+            STD_DEFER {
+                this->ivars.rollbackTo(inputSnapshot);
+            };
+            auto methodParams = this->makeFreshImplParams(fcnPtr->params);
+            auto methodMonomorph = MonomorphStatePtr(crate.types, selfTy, &traitParams, &methodParams);
+            bool inputsApplicable = true;
+            if (fcnPtr->fixedArgCount() == argumentTypes.size() + 1) {
+                for (size_t i = 0; i < argumentTypes.size(); i++) {
+                    const auto expectedArgument = methodMonomorph.monomorphType(sp, fcnPtr->args[i + 1].second, true);
+                    const auto equalitySnapshot = this->ivars.snapshot();
+                    Unifier equality(sp, this->ivars, this, {.relateProjectionInputs = true});
+                    const auto equalityOutcome = equality.unify(expectedArgument, argumentTypes[i]);
+                    if (equalityOutcome != Unifier::Outcome::Mismatch) {
+                        this->ivars.commit(equalitySnapshot);
+                        continue;
+                    }
+                    this->ivars.rollbackTo(equalitySnapshot);
+
+                    ThinVector<SolverTypeEquality> equalities;
+                    const auto coercion = this->evaluateCoercionGoal(
+                        sp,
+                        SolverCoercionConstraint{
+                            0,
+                            argumentTypes[i],
+                            SolverCoercionConstraint::Direction::InputIsDestination,
+                            SolverCoercionOp::Coercion,
+                        },
+                        expectedArgument,
+                        &equalities
+                    );
+                    if (coercion == SolverCertainty::NoSolution) {
+                        inputsApplicable = false;
+                        break;
+                    }
+                    const auto* destination = this->ivars.getType(expectedArgument);
+                    const auto* source = this->ivars.getType(argumentTypes[i]);
+                    if (equalities.empty() && (destination->is_Infer() || source->is_Infer())) {
+                        equalities.push_back(SolverTypeEquality{destination, source});
+                    }
+                    if (equalities.empty() && coercion == SolverCertainty::Ambiguous) {
+                        const HIRTypeData* destinationInner = nullptr;
+                        const HIRTypeData* sourceInner = nullptr;
+                        if (const auto* destinationPointer = destination->opt_Pointer()) {
+                            if (const auto* sourceBorrow = source->opt_Borrow(); sourceBorrow && destinationPointer->type <= sourceBorrow->type) {
+                                destinationInner = destinationPointer->inner;
+                                sourceInner = sourceBorrow->inner;
+                            } else if (const auto* sourcePointer = source->opt_Pointer(); sourcePointer && destinationPointer->type <= sourcePointer->type) {
+                                destinationInner = destinationPointer->inner;
+                                sourceInner = sourcePointer->inner;
+                            }
+                        } else if (const auto* destinationBorrow = destination->opt_Borrow()) {
+                            if (const auto* sourceBorrow = source->opt_Borrow(); sourceBorrow && destinationBorrow->type <= sourceBorrow->type) {
+                                destinationInner = destinationBorrow->inner;
+                                sourceInner = sourceBorrow->inner;
+                            }
+                        }
+                        if (destinationInner && sourceInner) {
+                            equalities.push_back(SolverTypeEquality{destinationInner, sourceInner});
+                        }
+                    }
+                    for (const auto& equality : equalities) {
+                        Unifier relation(
+                            sp,
+                            this->ivars,
+                            this,
+                            {
+                                .relateProjectionInputs = true,
+                            }
+                        );
+                        if (relation.unify(equality.left, equality.right) == Unifier::Outcome::Mismatch) {
+                            inputsApplicable = false;
+                            break;
+                        }
+                    }
+                    if (!inputsApplicable) {
+                        break;
+                    }
+                }
+            }
+            if (!inputsApplicable) {
+                continue;
+            }
+            constexpr bool onlyBoundsConstrainingTraitParams = true;
+            bool methodBoundsDeferred = false;
+            const auto methodBoundsSnapshot = this->ivars.snapshot();
+            const auto methodBounds = this->evaluateGenericBounds(sp, fcnPtr->params, methodParams, methodMonomorph, 0, onlyBoundsConstrainingTraitParams);
+            if (methodBounds == SolverCertainty::NoSolution) {
+                this->ivars.rollbackTo(methodBoundsSnapshot);
+                if (!this->paramsContainIvars(traitParams)) {
+                    continue;
+                }
+                methodBoundsDeferred = true;
+            } else {
+                this->ivars.commit(methodBoundsSnapshot);
+            }
+            if (methodBounds == SolverCertainty::Ambiguous) {
+                undecided = true;
+            }
 
             const bool receiverIsOpen = visitTyWith(this->ivars.getType(selfTy), [&](const HIRTypeData* inner) {
                 const auto* r = this->ivars.getType(inner);
@@ -6508,8 +6712,8 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
             HIRTypeRef methodReturn;
             const HIRPath::Data::Data_UfcsKnown* returnProjection = nullptr;
-            if (expectedResult && !fcnPtr->params.isGeneric()) {
-                methodReturn = MonomorphStatePtr(crate.types, selfTy, &traitParams, nullptr).monomorphType(sp, fcnPtr->returnType, true);
+            if (expectedResult) {
+                methodReturn = methodMonomorph.monomorphType(sp, fcnPtr->returnType, true);
                 const auto* returnPath = methodReturn->opt_Path();
                 returnProjection = returnPath ? returnPath->path.data.opt_UfcsKnown() : nullptr;
                 if (returnProjection) {
@@ -6519,6 +6723,24 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                         returnProjection = nullptr;
                     }
                 }
+                if (!returnProjection && !methodReturn->is_ErasedType()) {
+                    const auto snapshot = this->ivars.snapshot();
+                    Unifier relation(sp, this->ivars, this);
+                    const auto outcome = relation.unify(methodReturn, expectedResult);
+                    if (outcome == Unifier::Outcome::Mismatch) {
+                        this->ivars.rollbackTo(snapshot);
+                        continue;
+                    }
+                    auto constrainedParams = traitParams.clone();
+                    for (auto& type : constrainedParams.types) {
+                        type = this->ivars.getType(type);
+                    }
+                    for (auto& value : constrainedParams.values) {
+                        value = this->ivars.getValue(value).clone();
+                    }
+                    this->ivars.rollbackTo(snapshot);
+                    traitParams = std::move(constrainedParams);
+                }
             }
             const TraitGoalQuery methodQuery{
                 .assocName = returnProjection ? returnProjection->item.c_str() : (receiverIsOpen ? "" : nullptr),
@@ -6527,9 +6749,66 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 .allowInferInputs = receiverIsOpen,
             };
             solveTraitGoal(sp, *traitRef.first, traitParams, selfTy, [&](SolverResponse response) {
-                if (!response.hasImpl) {
+                if (!response.impl) {
+                    if (response.certainty == SolverCertainty::Ambiguous) {
+                        undecided = true;
+                    }
+                    if (response.certainty == SolverCertainty::Proven) {
+                        implFound = true;
+                        return true;
+                    }
                     return false;
                 }
+
+                const auto responseSnapshot = this->ivars.snapshot();
+                Unifier responseRelation(
+                    sp,
+                    this->ivars,
+                    this,
+                    {
+                        .bindRigidValues = true,
+                        .relateProjectionInputs = true,
+                    }
+                );
+                const auto relateType = [&](const HIRTypeData* left, const HIRTypeData* right) {
+                    auto normalizedLeft = this->expandAssociatedTypes(sp, left);
+                    auto normalizedRight = this->expandAssociatedTypes(sp, right);
+                    return responseRelation.unify(normalizedLeft, normalizedRight) != Unifier::Outcome::Mismatch;
+                };
+                const auto relateValue = [&](const HIRConstGeneric& left, const HIRConstGeneric& right) {
+                    return responseRelation.unifyValues(left, right) != Unifier::Outcome::Mismatch;
+                };
+                bool responseApplies = true;
+                ASSERT_BUG(sp, response.slots.typeInputs.size() == response.slots.types.size(), "Malformed method solver type slots");
+                for (size_t i = 0; responseApplies && i < response.slots.types.size(); i++) {
+                    responseApplies = relateType(response.slots.typeInputs[i], response.slots.types[i]);
+                }
+                ASSERT_BUG(sp, response.slots.valueInputs.size() == response.slots.values.size(), "Malformed method solver value slots");
+                for (size_t i = 0; responseApplies && i < response.slots.values.size(); i++) {
+                    responseApplies = relateValue(response.slots.valueInputs[i], response.slots.values[i]);
+                }
+                for (const auto& equality : response.equalities) {
+                    responseApplies &= relateType(equality.left, equality.right);
+                }
+                for (const auto& equality : response.valueEqualities) {
+                    responseApplies &= relateValue(equality.left, equality.right);
+                }
+                if (!responseApplies) {
+                    this->ivars.rollbackTo(responseSnapshot);
+                    return false;
+                }
+
+                if (methodBoundsDeferred) {
+                    const auto resolvedMethodBounds = this->evaluateGenericBounds(sp, fcnPtr->params, methodParams, methodMonomorph, 0, onlyBoundsConstrainingTraitParams);
+                    if (resolvedMethodBounds == SolverCertainty::NoSolution) {
+                        this->ivars.rollbackTo(responseSnapshot);
+                        return false;
+                    }
+                    if (resolvedMethodBounds == SolverCertainty::Ambiguous) {
+                        undecided = true;
+                    }
+                }
+                this->ivars.commit(responseSnapshot);
                 implFound = true;
                 if (receiverIsOpen && response.certainty != SolverCertainty::Proven) {
                     DEBUG("[find_method] impl only matches while the receiver is unknown");
@@ -6538,9 +6817,10 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 return true;
             }, methodQuery);
             if (implFound) {
-                DEBUG("Found trait impl " << *traitRef.first << traitParams << " for " << selfTy << " (" << this->ivars.fmtType(selfTy) << ")");
-                possibilities.push_back(std::make_pair(borrowType, HIRPath(selfTy, HIRGenericPath(*traitRef.first, mv$(traitParams)), methodName, {})));
-                DEBUG("++ " << possibilities.back());
+                auto constrainedSelf = HIRTypeRef(selfTy);
+                this->ivars.expandIvars(constrainedSelf);
+                this->ivars.expandIvarsParams(traitParams);
+                possibilities.push_back({borrowType, HIRPath(constrainedSelf, HIRGenericPath(*traitRef.first, mv$(traitParams)), methodName, {}), nullptr});
                 rv = true;
             }
             if (undecided && outUndecided) {
@@ -6670,26 +6950,22 @@ bool TraitResolution::findField(const Span& sp, const HIRTypeData* ty, const RcS
 
 HMTypeInferrence::FmtType::FmtType(const HMTypeInferrence& ctxt, const HIRTypeData* ty)
     : ctxt(ctxt)
-    , ty(ty)
-{
+    , ty(ty) {
 }
 
 HMTypeInferrence::FmtPP::FmtPP(const HMTypeInferrence& ctxt, const HIRPathParams& pps)
     : ctxt(ctxt)
-    , pps(pps)
-{
+    , pps(pps) {
 }
 
 HMTypeInferrence::IVar::IVar(HIRTypeRef type)
     : alias(~0u)
-    , type(type)
-{
+    , type(type) {
 }
 
 HMTypeInferrence::IVarValue::IVarValue()
     : alias(~0u)
-    , val(new HIRConstGeneric())
-{
+    , val(new HIRConstGeneric()) {
 }
 
 HMTypeInferrence::HMTypeInferrence(HIRTypeInterner& types)
@@ -6697,8 +6973,7 @@ HMTypeInferrence::HMTypeInferrence(HIRTypeInterner& types)
     , hasChanged(false)
     , aliasIvarPool(ObjPool::fromMemory())
     , aliasTypeIvars(aliasIvarPool.mutPtr())
-    , aliasValueIvars(aliasIvarPool.mutPtr())
-{
+    , aliasValueIvars(aliasIvarPool.mutPtr()) {
 }
 
 bool HMTypeInferrence::takeChanged() {
@@ -6786,8 +7061,7 @@ void HMTypeInferrence::rollbackTo(const Snapshot& snapshot) {
 }
 
 HMTypeInferrence::ResolvePlaceholders::ResolvePlaceholders(const HMTypeInferrence& parent)
-    : parent(parent)
-{
+    : parent(parent) {
 }
 
 HIRTypeRef TraitResolution::expandAssociatedTypes(const Span& sp, HIRTypeRef input, SolverResponseCallback* effects) const {
@@ -6836,7 +7110,7 @@ std::ostream& operator<<(std::ostream& os, const HMTypeInferrence::FmtPP& x) {
 }
 
 const HIRTypeData* HMTypeInferrence::ResolvePlaceholders::getType(const Span& sp, const HIRTypeData* ty) const {
-    if (ty->is_Infer()) {
+    if (const auto* infer = ty->opt_Infer(); infer && infer->index != ~0u) {
         return parent.getType(ty);
     } else {
         return ty;
@@ -6844,7 +7118,7 @@ const HIRTypeData* HMTypeInferrence::ResolvePlaceholders::getType(const Span& sp
 }
 
 const HIRConstGeneric& HMTypeInferrence::ResolvePlaceholders::getVal(const Span& sp, const HIRConstGeneric& v) const {
-    if (v.is_Infer()) {
+    if (const auto* infer = v.opt_Infer(); infer && infer->index != ~0u) {
         return parent.getValue(v);
     } else {
         return v;
@@ -6867,8 +7141,7 @@ auto CanonicalizeTraitGoal::canonicalPlaceholderName(const RcString& name) const
 
 CanonicalizeTraitGoal::CanonicalizeTraitGoal(HIRTypeInterner& types, const HMTypeInferrence* ivarTable)
     : Monomorphiser(types)
-    , ivarTable_(ivarTable)
-{
+    , ivarTable_(ivarTable) {
 }
 
 auto CanonicalizeTraitGoal::canonicalIvar(const HIRTypeData* infer) const -> HIRTypeRef {
@@ -7058,8 +7331,7 @@ InstantiateCanonicalTraitResponse::InstantiateCanonicalTraitResponse(HIRTypeInte
     : Monomorphiser(types)
     , goalNames(goalNames)
     , goalCanonicalizer(goalCanonicalizer)
-    , instance(instance)
-{
+    , instance(instance) {
 }
 
 auto InstantiateCanonicalTraitResponse::monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer) const -> HIRTypeRef {
@@ -7112,8 +7384,7 @@ InstantiateTraitResponseForCaller::InstantiateTraitResponseForCaller(HIRTypeInte
     : Monomorphiser(types)
     , ivars(ivars)
     , goalNames(goalNames)
-    , goalCanonicalizer(goalCanonicalizer)
-{
+    , goalCanonicalizer(goalCanonicalizer) {
 }
 
 auto InstantiateTraitResponseForCaller::monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer) const -> HIRTypeRef {
@@ -7240,8 +7511,7 @@ auto CorrelateSolverResponseSlots::correlatePath(const HIRPath& input, const HIR
 
 CorrelateSolverResponseSlots::CorrelateSolverResponseSlots(HIRTypeInterner& interner, const SolverSlotValues& slots)
     : MonomorphiserNop(interner)
-    , slots_(slots)
-{
+    , slots_(slots) {
 }
 
 auto CorrelateSolverResponseSlots::correlateType(const HIRTypeData* input, const HIRTypeData* response) -> void {
@@ -7347,9 +7617,8 @@ auto CorrelateSolverResponseSlots::correlateType(const HIRTypeData* input, const
 }
 
 auto CorrelateSolverResponseSlots::correlateImpl(const ImplRef& input, const SolverImpl& response) -> void {
-    auto responseImpl = response.legacy();
-    correlateType(input.getImplType(types), responseImpl.getImplType(types));
-    correlateParams(input.getTraitParams(types), responseImpl.getTraitParams(types));
+    correlateType(input.getImplType(types), response.getImplType(types));
+    correlateParams(input.getTraitParams(types), response.getTraitParams(types));
 }
 
 auto CorrelateSolverResponseSlots::monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer) const -> HIRTypeRef {
@@ -7377,8 +7646,7 @@ auto CorrelateSolverResponseSlots::monomorphConstgeneric(const Span& sp, const H
 
 DecanonicalizeSolverInfers::DecanonicalizeSolverInfers(HIRTypeInterner& types, const CanonicalizeTraitGoal& canonicalizer)
     : MonomorphiserNop(types)
-    , canonicalizer_(canonicalizer)
-{
+    , canonicalizer_(canonicalizer) {
 }
 
 auto DecanonicalizeSolverInfers::monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer) const -> HIRTypeRef {
@@ -8074,9 +8342,6 @@ auto NextTraitGoalEvaluator::monomorphImplRef(const ImplRef& source, const Monom
         const auto& owned = source.data.as_Bounded();
         result = ImplRef(monomorph.monomorphType(span(), owned.type, true), monomorph.monomorphPathParams(span(), owned.traitArgs, true), monomorphAssociated(&owned.assoc));
     }
-    if (source.isAmbiguousIdentity()) {
-        result.markAmbiguousIdentity();
-    }
     return result;
 }
 
@@ -8086,18 +8351,28 @@ auto NextTraitGoalEvaluator::ownSolverImpl(ImplRef source) const -> const Solver
 }
 
 auto NextTraitGoalEvaluator::monomorphSolverImpl(const SolverImpl& source, const Monomorphiser& monomorph) const -> const SolverImpl* {
-    return ownSolverImpl(monomorphImplRef(source.legacy(), monomorph));
+    SolverImpl result;
+    result.trait = source.trait;
+    result.traitPath = source.traitPath;
+    result.traitImpl = source.traitImpl;
+    result.implParams = monomorph.monomorphPathParams(span(), source.implParams, true);
+    result.type = source.type == HIRTypeRef() ? HIRTypeRef() : monomorph.monomorphType(span(), source.type, true);
+    result.traitArgs = monomorph.monomorphPathParams(span(), source.traitArgs, true);
+    for (const auto& entry : source.associated) {
+        result.associated.insert({entry.first, monomorph.monomorphTpAtyEqual(span(), entry.second, true)});
+    }
+    result.constness = source.constness;
+    return crate.pool->make<SolverImpl>(std::move(result));
 }
 
 auto NextTraitGoalEvaluator::correlateSolverImplForRead(const SolverImpl& source, const SolverSlotValues& slots, const HIRTypeData* type, const HIRPathParams& params) const -> const SolverImpl* {
-    auto raw = source.legacy();
     CorrelateSolverResponseSlots correlate(crate.types, slots);
     auto resolveInput = [&](const HIRTypeData* input) {
         const auto* infer = input->opt_Infer();
         return infer && infer->index == ~0u ? input : resolve_.ivars.getType(input);
     };
-    correlate.correlateType(resolveInput(type), raw.getImplType(crate.types));
-    auto responseParams = raw.getTraitParams(crate.types);
+    correlate.correlateType(resolveInput(type), source.getImplType(crate.types));
+    auto responseParams = source.getTraitParams(crate.types);
     if (params.types.size() == responseParams.types.size()) {
         for (size_t i = 0; i < params.types.size(); i++) {
             correlate.correlateType(resolveInput(params.types[i]), responseParams.types[i]);
@@ -8106,32 +8381,11 @@ auto NextTraitGoalEvaluator::correlateSolverImplForRead(const SolverImpl& source
     return monomorphSolverImpl(source, correlate);
 }
 
-auto NextTraitGoalEvaluator::monomorphSolverImplForLegacy(const SolverImpl& source, const Monomorphiser& monomorph) const -> ImplRef {
-    if (source.traitImpl) {
-        ASSERT_BUG(span(), source.trait, "trait impl solver response has no trait declaration");
-        auto result = ImplRef(monomorph.monomorphPathParams(span(), source.implParams, true), *source.trait, source.traitPath, *source.traitImpl);
-        if (source.ambiguousIdentity) {
-            result.markAmbiguousIdentity();
-        }
-        return result;
-    }
-    HIRTraitPath::assocListT associated;
-    for (const auto& entry : source.associated) {
-        associated.insert({entry.first, monomorph.monomorphTpAtyEqual(span(), entry.second, true)});
-    }
-    auto result = ImplRef(monomorph.monomorphType(span(), source.type, true), monomorph.monomorphPathParams(span(), source.traitArgs, true), std::move(associated), source.constness);
-    if (source.ambiguousIdentity) {
-        result.markAmbiguousIdentity();
-    }
-    return result;
-}
-
 auto NextTraitGoalEvaluator::monomorphSolverResponse(const SolverResponse& source, const Monomorphiser& monomorph, bool includeObligations) const -> SolverResponse {
     SolverResponse result;
     result.certainty = source.certainty;
     result.operatorSummary = source.operatorSummary;
-    result.hasImpl = source.hasImpl;
-    if (source.hasImpl) {
+    if (source.impl) {
         ASSERT_BUG(span(), source.impl, "solver response has no implementation");
         result.impl = monomorphSolverImpl(*source.impl, monomorph);
     }
@@ -8205,8 +8459,7 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
             : MonomorphiserNop(interner)
             , canonicalizer_(canonicalizer)
             , foreignTypeName_(RcString::newInterned("#solver-foreign-type"))
-            , foreignValueName_(RcString::newInterned("#solver-foreign-value"))
-        {
+            , foreignValueName_(RcString::newInterned("#solver-foreign-value")) {
             for (size_t i = 0; i < canonicalizer_.typeSlotCount(); i++) {
                 types.push_back(table.newIvarTr(canonicalizer_.canonicalTypeSlot(i)->as_Infer().tyClass));
             }
@@ -8472,8 +8725,7 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
             , foreignTypeName_(RcString::newInterned("#solver-foreign-type"))
             , foreignValueName_(RcString::newInterned("#solver-foreign-value"))
             , foreignTypes_(foreignTypes)
-            , foreignValues_(foreignValues)
-        {
+            , foreignValues_(foreignValues) {
         }
 
         HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override {
@@ -8766,7 +9018,7 @@ auto NextTraitGoalEvaluator::pushCandidate(size_t frameIndex, ImplRef impl, bool
     candidates.push_back(candidateNodes.make(std::move(impl), headExact, headRelation, markerImpl, std::move(markerImplParams), autoBuiltin, source, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities)));
 }
 
-auto NextTraitGoalEvaluator::relateAssembledHead(const HIRPathParams& goalParams, const HIRTypeData* goalType, ImplRef& impl, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities) const -> Certainty {
+auto NextTraitGoalEvaluator::relateAssembledHead(CandidateSource source, const HIRPathParams& goalParams, const HIRTypeData* goalType, ImplRef& impl, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities) const -> Certainty {
     struct HrtbTypeBinding {
         HIRGenericRef generic;
         HIRTypeRef probe;
@@ -8785,8 +9037,7 @@ auto NextTraitGoalEvaluator::relateAssembledHead(const HIRPathParams& goalParams
 
         InstantiateHrtb(HIRTypeInterner& types, HMTypeInferrence& table)
             : MonomorphiserNop(types)
-            , table_(table)
-        {
+            , table_(table) {
         }
 
         HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override {
@@ -8878,11 +9129,23 @@ auto NextTraitGoalEvaluator::relateAssembledHead(const HIRPathParams& goalParams
     const auto candidateType = typeHasHrtb ? instantiatedType : originalCandidateType;
     const HIRPathParams& candidateParams = paramsHaveHrtb ? instantiatedParams : originalCandidateParams;
 
-    Unifier unifier(span(), resolve_.ivars, &resolve_, {.bindRigidValues = headHasHrtb});
+    const bool paramEnvHead = source == CandidateSource::ParamEnv || source == CandidateSource::AliasBound;
+    Unifier unifier(
+        span(),
+        resolve_.ivars,
+        &resolve_,
+        {
+            .bindRigidValues = headHasHrtb,
+            .relateProjectionInputs = paramEnvHead,
+            .rigidProjectionsAreDistinct = paramEnvHead,
+        }
+    );
     auto relation = unifier.unify(goalType, candidateType);
     if (relation == Unifier::Outcome::Mismatch) {
         return Certainty::NoSolution;
     }
+    const auto selfTypePending = unifier.pending().length();
+    const auto selfValuePending = unifier.pendingValues().size();
     for (size_t i = 0; i < candidateParams.types.size(); i++) {
         relation = unifier.unify(goalParams.types[i], candidateParams.types[i]);
         if (relation == Unifier::Outcome::Mismatch) {
@@ -8906,8 +9169,7 @@ auto NextTraitGoalEvaluator::relateAssembledHead(const HIRPathParams& goalParams
                 : MonomorphiserNop(types)
                 , table_(table)
                 , typeBindings_(typeBindings)
-                , valueBindings_(valueBindings)
-            {
+                , valueBindings_(valueBindings) {
             }
 
             HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
@@ -8979,11 +9241,33 @@ auto NextTraitGoalEvaluator::relateAssembledHead(const HIRPathParams& goalParams
             headValueEqualities.push_back(SolverValueEquality{goalParams.values[i].clone(), stableCandidateParams.values[i].clone()});
         }
     }
-    headNormalizationAmbiguity = !unifier.pendingValues().empty();
-    for (const auto& equality : unifier.pending()) {
+    const auto isCanonicalTypeInput = [](const HIRTypeData* type) {
+        const auto* infer = type->opt_Infer();
+        return infer && isSolverCanonicalInfer(infer->index);
+    };
+    const auto isCanonicalValueInput = [](const HIRConstGeneric& value) {
+        const auto* infer = value.opt_Infer();
+        return infer && isSolverCanonicalInfer(infer->index);
+    };
+    bool unresolved = false;
+    headNormalizationAmbiguity = false;
+    for (size_t i = 0; i < unifier.pending().length(); i++) {
+        const auto& equality = unifier.pending()[i];
+        if (i >= selfTypePending && (isCanonicalTypeInput(equality.left) || isCanonicalTypeInput(equality.right))) {
+            continue;
+        }
+        unresolved = true;
         headNormalizationAmbiguity |= resolve_.hasAssociatedType(equality.left) || resolve_.hasAssociatedType(equality.right);
     }
-    return relation == Unifier::Outcome::Proven ? Certainty::Proven : Certainty::Ambiguous;
+    for (size_t i = 0; i < unifier.pendingValues().size(); i++) {
+        const auto& equality = unifier.pendingValues()[i];
+        if (i >= selfValuePending && (isCanonicalValueInput(equality.left) || isCanonicalValueInput(equality.right))) {
+            continue;
+        }
+        unresolved = true;
+        headNormalizationAmbiguity = true;
+    }
+    return unresolved ? Certainty::Ambiguous : Certainty::Proven;
 }
 
 auto NextTraitGoalEvaluator::assembledHeadIsExact(const HIRPathParams& goalParams, const HIRTypeData* goalType, const ImplRef& impl) const -> bool {
@@ -9046,8 +9330,7 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
             : MonomorphiserNop(types)
             , table(table)
             , inferenceParams(inferenceParams)
-            , stableExistentials(stableExistentials)
-        {
+            , stableExistentials(stableExistentials) {
         }
 
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
@@ -9088,9 +9371,20 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
 
     MaterializeCandidate materialize(crate.types, resolve_.ivars, inferenceParams, stableExistentials);
     outputParams = materialize.monomorphPathParams(span(), inferenceParams, true);
-    headNormalizationAmbiguity = !unifier.pendingValues().empty();
+    headNormalizationAmbiguity = false;
+    const auto isCanonicalTypeInput = [](const HIRTypeData* type) {
+        const auto* infer = type->opt_Infer();
+        return infer && isSolverCanonicalInfer(infer->index);
+    };
+    const auto isCanonicalValueInput = [](const HIRConstGeneric& value) {
+        const auto* infer = value.opt_Infer();
+        return infer && isSolverCanonicalInfer(infer->index);
+    };
+    bool unresolved = false;
     for (const auto& equality : unifier.pending()) {
-        headNormalizationAmbiguity |= resolve_.hasAssociatedType(equality.left) || resolve_.hasAssociatedType(equality.right);
+        const bool pendingUnresolved = !isCanonicalTypeInput(equality.left) && !isCanonicalTypeInput(equality.right);
+        unresolved |= pendingUnresolved;
+        headNormalizationAmbiguity |= pendingUnresolved && (resolve_.hasAssociatedType(equality.left) || resolve_.hasAssociatedType(equality.right));
         headEqualities.push_back(
             SolverTypeEquality{
                 materialize.monomorphType(span(), equality.left, true),
@@ -9099,6 +9393,9 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
         );
     }
     for (const auto& equality : unifier.pendingValues()) {
+        const bool pendingUnresolved = !isCanonicalValueInput(equality.left) && !isCanonicalValueInput(equality.right);
+        unresolved |= pendingUnresolved;
+        headNormalizationAmbiguity |= pendingUnresolved;
         headValueEqualities.push_back(
             SolverValueEquality{
                 materialize.monomorphConstgeneric(span(), equality.left, true),
@@ -9106,7 +9403,7 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
             }
         );
     }
-    return relation == Unifier::Outcome::Proven ? Certainty::Proven : Certainty::Ambiguous;
+    return unresolved ? Certainty::Ambiguous : Certainty::Proven;
 }
 
 auto NextTraitGoalEvaluator::assembleAliasBoundCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) -> void {
@@ -9130,7 +9427,7 @@ auto NextTraitGoalEvaluator::assembleAliasBoundCandidates(size_t frameIndex, con
             bool headNormalizationAmbiguity = false;
             ThinVector<SolverTypeEquality> headEqualities;
             ThinVector<SolverValueEquality> headValueEqualities;
-            const auto relation = relateAssembledHead(params, type, impl, headNormalizationAmbiguity, headEqualities, headValueEqualities);
+            const auto relation = relateAssembledHead(CandidateSource::AliasBound, params, type, impl, headNormalizationAmbiguity, headEqualities, headValueEqualities);
             if (relation == Certainty::NoSolution) {
                 return;
             }
@@ -9174,7 +9471,7 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
             bool headNormalizationAmbiguity = false;
             ThinVector<SolverTypeEquality> headEqualities;
             ThinVector<SolverValueEquality> headValueEqualities;
-            auto relation = relateAssembledHead(params, type, impl, headNormalizationAmbiguity, headEqualities, headValueEqualities);
+            auto relation = relateAssembledHead(source, params, type, impl, headNormalizationAmbiguity, headEqualities, headValueEqualities);
             if (relation == Certainty::NoSolution) {
                 return false;
             }
@@ -9304,8 +9601,7 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(HIRPathParams& params, Relate 
         InstantiateCandidate(HIRTypeInterner& types, const Vector<CandidateTypeBinding>& typeBindings, const Vector<CandidateValueBinding>& valueBindings)
             : MonomorphiserNop(types)
             , typeBindings_(typeBindings)
-            , valueBindings_(valueBindings)
-        {
+            , valueBindings_(valueBindings) {
         }
 
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
@@ -9363,8 +9659,7 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(HIRPathParams& params, Relate 
         Relations(const Span& span, InstantiateCandidate& instantiate, Unifier& unifier)
             : span_(span)
             , instantiate_(instantiate)
-            , unifier_(unifier)
-        {
+            , unifier_(unifier) {
         }
 
         void mismatch() {
@@ -9416,8 +9711,7 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(HIRPathParams& params, Relate 
             : MonomorphiserNop(types)
             , table_(table)
             , typeBindings_(typeBindings)
-            , valueBindings_(valueBindings)
-        {
+            , valueBindings_(valueBindings) {
         }
 
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
@@ -9473,11 +9767,10 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
         auto candidateOutput = useCandidateResponse ? candidate.impl.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams) : HIRTypeRef();
         if (!useCandidateResponse) {
             auto nestedCallback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-                if (response.certainty != Certainty::Proven || !response.hasImpl || !response.impl || response.impl->ambiguousIdentity) {
+                if (response.certainty != Certainty::Proven || !response.impl) {
                     return false;
                 }
-                auto impl = response.impl->legacy();
-                auto output = impl.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams);
+                auto output = response.impl->getType(crate.types, requirement.first.c_str(), requirement.second.atyParams);
                 if (output == HIRTypeRef()) {
                     return false;
                 }
@@ -9491,6 +9784,16 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
         }
         if (!useCandidateResponse && !typeHasUfcsUnknown(candidateOutput)) {
             candidateOutput = resolve_.expandAssociatedTypes(span(), std::move(candidateOutput));
+        }
+        const bool callableOutput = requirement.first == "Output" && (
+            requirement.second.sourceTrait.path == resolve_.langFn() ||
+            requirement.second.sourceTrait.path == resolve_.langFnMut() ||
+            requirement.second.sourceTrait.path == resolve_.langFnOnce()
+        );
+        const auto* candidateOutputInfer = candidateOutput->opt_Infer();
+        const auto* resolvedCandidateOutput = candidateOutputInfer && candidateOutputInfer->index == ~0u ? candidateOutput : resolve_.ivars.getType(candidateOutput);
+        if (callableOutput && resolvedCandidateOutput->is_Diverge()) {
+            continue;
         }
         const auto* candidatePattern = useCandidateResponse ? candidateOutput : requirement.second.type;
         const auto* responseValue = useCandidateResponse ? requirement.second.type : candidateOutput;
@@ -9512,14 +9815,14 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
     return changed ? CandidateBindingResult::Changed : CandidateBindingResult::Unchanged;
 }
 
-auto NextTraitGoalEvaluator::bindCandidateResponse(Candidate& candidate, const HIRTypeData* nestedType, const HIRPathParams& nestedParams, const HIRTraitPath::assocListT& nestedAssociated, const ImplRef& response) -> CandidateBindingResult {
+auto NextTraitGoalEvaluator::bindCandidateResponse(Candidate& candidate, const HIRTypeData* nestedType, const HIRPathParams& nestedParams, const HIRTraitPath::assocListT& nestedAssociated, const SolverImpl& response) -> CandidateBindingResult {
     HIRPathParams* candidateParams = nullptr;
     if (auto* traitImpl = candidate.impl.data.opt_TraitImpl()) {
         candidateParams = &traitImpl->implParams;
     } else if (candidate.markerImpl) {
         candidateParams = &candidate.markerImplParams;
     }
-    if (!candidateParams || response.isAmbiguousIdentity()) {
+    if (!candidateParams) {
         return CandidateBindingResult::Unchanged;
     }
 
@@ -9531,6 +9834,16 @@ auto NextTraitGoalEvaluator::bindCandidateResponse(Candidate& candidate, const H
             if (output == HIRTypeRef()) {
                 relations.mismatch();
                 break;
+            }
+            const bool callableOutput = requirement.first == "Output" && (
+                requirement.second.sourceTrait.path == resolve_.langFn() ||
+                requirement.second.sourceTrait.path == resolve_.langFnMut() ||
+                requirement.second.sourceTrait.path == resolve_.langFnOnce()
+            );
+            const auto* outputInfer = output->opt_Infer();
+            const auto* resolvedOutput = outputInfer && outputInfer->index == ~0u ? output : resolve_.ivars.getType(output);
+            if (callableOutput && resolvedOutput->is_Diverge()) {
+                continue;
             }
             relations.type(requirement.second.type, output);
         }
@@ -9650,7 +9963,7 @@ auto NextTraitGoalEvaluator::relateTypes(Candidate& candidate, const HIRTypeData
             const auto* infer = type->opt_Infer();
             return infer && isSolverCanonicalInfer(infer->index);
         };
-        if (isSolverExistential(equality.left) || isSolverExistential(equality.right)) {
+        if (isSolverExistential(equality.left) || isSolverExistential(equality.right) || containsDefiningOpaque(equality.left) || containsDefiningOpaque(equality.right)) {
             continue;
         }
 
@@ -9716,6 +10029,9 @@ auto NextTraitGoalEvaluator::evaluateHeadEquality(Candidate& candidate, const So
     if (relation == Certainty::Proven) {
         return relation;
     }
+    if (containsDefiningOpaque(equality.left) || containsDefiningOpaque(equality.right)) {
+        return Certainty::Ambiguous;
+    }
 
     bool sawAlias = false;
     bool failed = false;
@@ -9757,7 +10073,7 @@ auto NextTraitGoalEvaluator::evaluateHeadEquality(Candidate& candidate, const So
     return Certainty::Ambiguous;
 }
 
-auto NextTraitGoalEvaluator::matchAssociatedTypes(const HIRSimplePath& trait, Candidate& candidate, const HIRTraitPath::assocListT* associated) -> Certainty {
+auto NextTraitGoalEvaluator::matchAssociatedTypes(const HIRSimplePath& trait, Candidate& candidate, const HIRTraitPath::assocListT* associated, const Monomorphiser* headBindings) -> Certainty {
     if (!associated || associated->empty()) {
         return Certainty::Proven;
     }
@@ -9791,10 +10107,12 @@ auto NextTraitGoalEvaluator::matchAssociatedTypes(const HIRSimplePath& trait, Ca
             }
             output = makeAssociatedProjection(impl, aty.sourceTrait, requirement.first, aty.atyParams);
         }
-        if (containsDefiningOpaque(output) || containsDefiningOpaque(aty.type)) {
-            continue;
+        auto required = HIRTypeRef(aty.type);
+        if (headBindings) {
+            output = headBindings->monomorphType(span(), output, true);
+            required = headBindings->monomorphType(span(), required, true);
         }
-        const auto relation = this->relateTypes(candidate, output, aty.type);
+        const auto relation = this->relateTypes(candidate, output, required);
         if (relation == Certainty::NoSolution) {
             if (resolve_.ivars.getType(output)->is_Diverge()) {
                 result = Certainty::Ambiguous;
@@ -9928,7 +10246,130 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
             return Certainty::NoSolution;
         }
     }
-    auto result = candidate->impl.isAmbiguousIdentity() ? Certainty::Ambiguous : candidate->headRelation;
+
+    struct CandidateHeadTypeBinding {
+        HIRTypeRef original;
+        HIRTypeRef probe;
+    };
+    struct CandidateHeadValueBinding {
+        HIRConstGeneric original;
+        unsigned probeIndex;
+    };
+    struct InstantiateCandidateHead final: MonomorphiserNop {
+        HMTypeInferrence& table;
+        mutable ThinVector<CandidateHeadTypeBinding> types;
+        mutable ThinVector<CandidateHeadValueBinding> values;
+
+        InstantiateCandidateHead(HIRTypeInterner& interner, HMTypeInferrence& table)
+            : MonomorphiserNop(interner)
+            , table(table) {
+        }
+
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
+            const auto* infer = type->opt_Infer();
+            if (!infer || infer->index == ~0u || (isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index))) {
+                return MonomorphiserNop::monomorphType(sp, type, allowInfer);
+            }
+            for (const auto& binding : types) {
+                if (binding.original == type) {
+                    return binding.probe;
+                }
+            }
+            auto probe = table.newIvarTr(infer->tyClass);
+            types.push_back(CandidateHeadTypeBinding{type, probe});
+            return probe;
+        }
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override {
+            const auto* infer = value.opt_Infer();
+            if (!infer || infer->index == ~0u || (isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index))) {
+                return MonomorphiserNop::monomorphConstgeneric(sp, value, allowInfer);
+            }
+            for (const auto& binding : values) {
+                if (binding.original == value) {
+                    return HIRConstGeneric::make_Infer({binding.probeIndex});
+                }
+            }
+            const auto probeIndex = table.newIvarVal();
+            values.push_back(CandidateHeadValueBinding{value.clone(), probeIndex});
+            return HIRConstGeneric::make_Infer({probeIndex});
+        }
+    };
+    struct MaterializeCandidateHead final: MonomorphiserNop {
+        const HMTypeInferrence& table;
+        const ThinVector<CandidateHeadTypeBinding>& types;
+        const ThinVector<CandidateHeadValueBinding>& values;
+        mutable unsigned resolvingDepth = 0;
+
+        MaterializeCandidateHead(HIRTypeInterner& interner, const HMTypeInferrence& table, const ThinVector<CandidateHeadTypeBinding>& types, const ThinVector<CandidateHeadValueBinding>& values)
+            : MonomorphiserNop(interner)
+            , table(table)
+            , types(types)
+            , values(values) {
+        }
+
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
+            if (const auto* infer = type->opt_Infer()) {
+                for (const auto& binding : types) {
+                    const bool matches = resolvingDepth == 0 ? binding.original == type : binding.probe == type;
+                    if (!matches) {
+                        continue;
+                    }
+                    const auto* resolved = table.getType(binding.probe);
+                    if (resolved == binding.probe) {
+                        return binding.original;
+                    }
+                    resolvingDepth++;
+                    auto materialized = this->monomorphType(sp, resolved, allowInfer);
+                    resolvingDepth--;
+                    return materialized;
+                }
+            }
+            return MonomorphiserNop::monomorphType(sp, type, allowInfer);
+        }
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override {
+            if (const auto* infer = value.opt_Infer()) {
+                for (const auto& binding : values) {
+                    const bool matches = resolvingDepth == 0 ? binding.original == value : binding.probeIndex == infer->index;
+                    if (!matches) {
+                        continue;
+                    }
+                    const auto probe = HIRConstGeneric::make_Infer({binding.probeIndex});
+                    const auto& resolved = table.getValue(probe);
+                    if (resolved == probe) {
+                        return binding.original.clone();
+                    }
+                    resolvingDepth++;
+                    auto materialized = this->monomorphConstgeneric(sp, resolved, allowInfer);
+                    resolvingDepth--;
+                    return materialized;
+                }
+            }
+            return MonomorphiserNop::monomorphConstgeneric(sp, value, allowInfer);
+        }
+    };
+
+    HMTypeInferrence headTable(crate.types);
+    InstantiateCandidateHead instantiateHead(crate.types, headTable);
+    Unifier headUnifier(span(), headTable, nullptr, {.bindRigidValues = true});
+    for (const auto& equality : candidate->headEqualities) {
+        const auto left = instantiateHead.monomorphType(span(), equality.left, true);
+        const auto right = instantiateHead.monomorphType(span(), equality.right, true);
+        if (headUnifier.unify(left, right) == Unifier::Outcome::Mismatch && !containsDefiningOpaque(equality.left) && !containsDefiningOpaque(equality.right)) {
+            return Certainty::NoSolution;
+        }
+    }
+    for (const auto& equality : candidate->headValueEqualities) {
+        const auto left = instantiateHead.monomorphConstgeneric(span(), equality.left, true);
+        const auto right = instantiateHead.monomorphConstgeneric(span(), equality.right, true);
+        if (headUnifier.unifyValues(left, right) == Unifier::Outcome::Mismatch) {
+            return Certainty::NoSolution;
+        }
+    }
+    MaterializeCandidateHead materializeHead(crate.types, headTable, instantiateHead.types, instantiateHead.values);
+
+    auto result = candidate->headRelation;
 
     for (const auto& equality : candidate->headEqualities) {
         const auto equalityResult = evaluateHeadEquality(*candidate, equality);
@@ -9968,7 +10409,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         }
     }
 
-    const auto assocResult = matchAssociatedTypes(trait, *candidate, associated);
+    const auto assocResult = matchAssociatedTypes(trait, *candidate, associated, &materializeHead);
     if (assocResult == Certainty::NoSolution) {
         return Certainty::NoSolution;
     }
@@ -9979,13 +10420,23 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
     }
 
     const auto* traitImpl = candidate->impl.data.opt_TraitImpl();
-    const HIRGenericParams* implParamsDef = markerImpl ? &markerImpl->params : (traitImpl && traitImpl->impl ? &traitImpl->impl->params : nullptr);
+    const auto candidateType = candidate->impl.getImplType(crate.types);
+    const auto* candidatePath = candidateType->opt_Path();
+    const auto* associatedProjection = candidatePath ? candidatePath->path.data.opt_UfcsKnown() : nullptr;
+    const HIRAssociatedType* associatedDefinition = nullptr;
+    if (!markerImpl && !traitImpl && associatedProjection) {
+        const auto& definitionTrait = crate.getTraitByPath(span(), associatedProjection->trait.path);
+        if (const auto it = definitionTrait.types.find(associatedProjection->item); it != definitionTrait.types.end()) {
+            associatedDefinition = &it->second;
+        }
+    }
+    const HIRGenericParams* implParamsDef = markerImpl ? &markerImpl->params : (traitImpl && traitImpl->impl ? &traitImpl->impl->params : associatedDefinition ? &associatedDefinition->generics : nullptr);
     if (!implParamsDef) {
         return result;
     }
+    const HIRPathParams* boundParams = markerImpl ? &candidate->markerImplParams : traitImpl ? &traitImpl->implParams : &associatedProjection->params;
 
     {
-        const HIRPathParams* boundParams = markerImpl ? &candidate->markerImplParams : &traitImpl->implParams;
         for (size_t i = 0; i < implParamsDef->types.size() && i < boundParams->types.size(); i++) {
             if (!implParamsDef->types[i].isSized) {
                 continue;
@@ -10025,8 +10476,11 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         if (markerImpl) {
             auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
             monomorphBound(ms);
-        } else {
+        } else if (traitImpl) {
             auto ms = candidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
+            monomorphBound(ms);
+        } else {
+            auto ms = MonomorphStatePtr(crate.types, associatedProjection->type, &associatedProjection->trait.params, &associatedProjection->params);
             monomorphBound(ms);
         }
     };
@@ -10068,16 +10522,20 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
             if (nested == Certainty::NoSolution) {
                 return Certainty::NoSolution;
             }
-            if (nested == Certainty::Ambiguous && candidateNeedsResponseConstraints(*candidate)) {
-                Certainty responseCertainty = Certainty::NoSolution;
-                auto nestedCallback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-                    if (!response.hasImpl || !response.impl || bindCandidateResponse(*candidate, nestedType, nestedParams, nestedAssociated, response.impl->legacy()) == CandidateBindingResult::Mismatch) {
-                        return false;
-                    }
-                    responseCertainty = response.certainty;
-                    return true;
-                });
-                const bool hasResponse = evaluateTyped(span(), nestedTrait, nestedParams, nestedType, nestedCallback, {.assocName = ""});
+        if (nested != Certainty::NoSolution && candidateNeedsResponseConstraints(*candidate)) {
+            Certainty responseCertainty = Certainty::NoSolution;
+            auto nestedCallback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
+                if (response.impl && bindCandidateResponse(*candidate, nestedType, nestedParams, nestedAssociated, *response.impl) == CandidateBindingResult::Mismatch) {
+                    return false;
+                }
+                if (!response.impl && response.certainty != Certainty::Ambiguous) {
+                    return false;
+                }
+                responseCertainty = response.certainty;
+                appendRelationEffects(*candidate, std::move(response));
+                return true;
+            });
+                const bool hasResponse = evaluateTyped(span(), nestedTrait, nestedParams, nestedType, nestedCallback, {.ambiguity = SolverAmbiguityPolicy::Report});
                 if (!hasResponse) {
                     return Certainty::NoSolution;
                 }
@@ -10097,12 +10555,16 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                 auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
                 left = ms.monomorphType(span(), equality->type);
                 right = ms.monomorphType(span(), equality->otherType);
-            } else {
+            } else if (traitImpl) {
                 auto ms = candidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
                 left = ms.monomorphType(span(), equality->type);
                 right = ms.monomorphType(span(), equality->otherType);
+            } else {
+                auto ms = MonomorphStatePtr(crate.types, associatedProjection->type, &associatedProjection->trait.params, &associatedProjection->params);
+                left = ms.monomorphType(span(), equality->type);
+                right = ms.monomorphType(span(), equality->otherType);
             }
-            const auto relation = this->unifyProbe(left, right);
+            const auto relation = this->relateTypes(*candidate, left, right);
             if (relation == Certainty::NoSolution) {
                 return Certainty::NoSolution;
             }
@@ -10322,12 +10784,9 @@ auto NextTraitGoalEvaluator::matchRootAssociated(const HIRSimplePath& trait, Can
         if (impl.data.is_TraitImpl()) {
             return Certainty::Ambiguous;
         }
-        return Certainty::Ambiguous;
+        return !assocType || typeHasUnknown(assocType) ? Certainty::Proven : Certainty::Ambiguous;
     }
     if (!assocType) {
-        return Certainty::Proven;
-    }
-    if (containsDefiningOpaque(output) || containsDefiningOpaque(assocType)) {
         return Certainty::Proven;
     }
     const auto relation = this->relateTypes(candidate, assocType, output);
@@ -10370,12 +10829,7 @@ auto NextTraitGoalEvaluator::materializeRootAssociated(ImplRef impl, const HIRSi
     auto projection = makeAssociatedProjection(type, sourceTrait, name, itemParams);
     associated.erase(name);
     associated.insert({name, HIRTraitPath::AtyEqual{std::move(sourceTrait), itemParams.clone(), std::move(projection)}});
-    const bool ambiguousIdentity = impl.isAmbiguousIdentity();
-    auto result = ImplRef(std::move(type), std::move(params), std::move(associated));
-    if (ambiguousIdentity) {
-        result.markAmbiguousIdentity();
-    }
-    return result;
+    return ImplRef(std::move(type), std::move(params), std::move(associated));
 }
 
 auto NextTraitGoalEvaluator::appendResponseObligations(ThinVector<SolverObligation>& obligations, const Candidate* candidate, const Monomorphiser& canonicalizer) const -> void {
@@ -10507,7 +10961,15 @@ auto NextTraitGoalEvaluator::responsesEqual(const ImplRef& left, const ImplRef& 
         const auto* leftImpl = left.data.opt_TraitImpl();
         const auto* rightImpl = right.data.opt_TraitImpl();
         if (leftImpl || rightImpl) {
-            return leftImpl && rightImpl && leftImpl->impl == rightImpl->impl;
+            if (!leftImpl || !rightImpl) {
+                return false;
+            }
+            const bool leftDefines = implDefinesValue(left, valueName);
+            const bool rightDefines = implDefinesValue(right, valueName);
+            if (!leftDefines && !rightDefines) {
+                return true;
+            }
+            return leftDefines && rightDefines && leftImpl->impl == rightImpl->impl;
         }
         return true;
     }
@@ -10534,8 +10996,7 @@ NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, c
     , overlapCache(crate.pool)
     , candidateNodes(crate.pool)
     , activeGoalNodes(crate.pool)
-    , cachedGoalNodes(crate.pool)
-{
+    , cachedGoalNodes(crate.pool) {
     frames.reserve(16);
     goalStack.reserve(16);
     goalCache.reserve(64);
@@ -10680,6 +11141,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     const bool allowInferInputs = query.allowInferInputs;
     const auto* excludedImpl = query.excludedImpl;
     const bool hasCoercionGoals = query.coercions && !query.coercions->empty();
+    const bool coercionSelectsCandidate = hasCoercionGoals && trait != resolve_.langPointeeSized();
     const bool hasSelfCoercionGoal = hasCoercionGoals && std::any_of(query.coercions->begin(), query.coercions->end(), [](const SolverCoercionConstraint& constraint) {
         return constraint.isSelf;
     });
@@ -10729,15 +11191,11 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
     }
     auto emitForcedAmbiguity = [&]() {
-        if (!assocName) {
+        if (query.ambiguity != SolverAmbiguityPolicy::Report) {
             return false;
         }
-        auto ambiguous = ImplRef(goalType, goalParams.clone(), HIRTraitPath::assocListT());
-        ambiguous.markAmbiguousIdentity();
         SolverResponse response;
         response.certainty = Certainty::Ambiguous;
-        response.impl = ownSolverImpl(materializeRootAssociated(std::move(ambiguous), trait, assocName, assocParams));
-        response.hasImpl = true;
         if (query.operatorGoal) {
             response.operatorSummary.hasSemanticImpl = true;
         }
@@ -10811,7 +11269,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         return callback.visit(std::move(callerResponse));
     };
-    const bool cacheableResponse = assocName && !assocName[0] && !excludedImpl && !hasCoercionGoals && !query.operatorGoal;
+    const bool cacheableResponse = query.ambiguity == SolverAmbiguityPolicy::Report && !assocName && !excludedImpl && !hasCoercionGoals && !query.operatorGoal;
     const bool crateCacheableResponse = cacheableResponse && crateCacheUsable() && goalIsConcrete(trait, canonical);
     if (cacheableResponse) {
         if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse) {
@@ -11002,7 +11460,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     };
 
     const auto classifyOperatorImpl = [&](SolverOperatorSummary& summary, const ImplRef& impl) {
-        if (!query.operatorGoal || impl.isAmbiguousIdentity()) {
+        if (!query.operatorGoal) {
             return;
         }
         const bool builtinSignature = operatorImplHasBuiltinSignature(impl);
@@ -11015,18 +11473,51 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
     };
 
-    auto emitResponse = [&](ImplRef response, Certainty certainty, const Candidate* responseCandidate = nullptr) {
+    const auto appendCandidateEffects = [&](SolverResponse& response, const Candidate* candidate) {
+        appendResponseObligations(response.obligations, candidate, canonicalizer);
+        if (!candidate) {
+            return;
+        }
+        const auto appendTypes = [&](const auto& equalities) {
+            for (const auto& equality : equalities) {
+                response.equalities.push_back(
+                    SolverTypeEquality{
+                        canonicalizer.monomorphType(span(), equality.left, true),
+                        canonicalizer.monomorphType(span(), equality.right, true),
+                    }
+                );
+            }
+        };
+        const auto appendValues = [&](const auto& equalities) {
+            for (const auto& equality : equalities) {
+                response.valueEqualities.push_back(
+                    SolverValueEquality{
+                        canonicalizer.monomorphConstgeneric(span(), equality.left, true),
+                        canonicalizer.monomorphConstgeneric(span(), equality.right, true),
+                    }
+                );
+            }
+        };
+        appendTypes(candidate->headEqualities);
+        appendValues(candidate->headValueEqualities);
+        appendTypes(candidate->relationEqualities);
+        appendValues(candidate->relationValueEqualities);
+        appendTypes(candidate->coercionEqualities);
+    };
+
+    auto emitResponse = [&](ImplRef response, Certainty certainty, const Candidate* responseCandidate = nullptr, bool exposeImpl = true) {
         canonicalizer.freeze();
         auto canonicalResponse = monomorphImplRef(response, canonicalizer);
         SolverResponse solverResponse;
         solverResponse.certainty = certainty;
         solverResponse.slots = extractSlotValues(canonical, canonicalResponse, canonicalizer, solverResponse.certainty);
-        solverResponse.impl = ownSolverImpl(monomorphImplRef(canonicalResponse, MonomorphiserNop(crate.types)));
-        solverResponse.hasImpl = true;
+        if (exposeImpl) {
+            solverResponse.impl = ownSolverImpl(monomorphImplRef(canonicalResponse, MonomorphiserNop(crate.types)));
+        }
         if (distinctViable.empty()) {
             classifyOperatorImpl(solverResponse.operatorSummary, canonicalResponse);
         }
-        if (solverResponse.impl->ambiguousIdentity) {
+        if (!exposeImpl) {
             for (size_t i = 0; i < solverResponse.slots.types.size(); i++) {
                 solverResponse.slots.types[i] = solverResponse.slots.typeInputs[i];
             }
@@ -11034,50 +11525,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 solverResponse.slots.values[i] = solverResponse.slots.valueInputs[i].clone();
             }
         }
-        appendResponseObligations(solverResponse.obligations, responseCandidate, canonicalizer);
-        if (responseCandidate) {
-            for (const auto& equality : responseCandidate->headEqualities) {
-                solverResponse.equalities.push_back(
-                    SolverTypeEquality{
-                        canonicalizer.monomorphType(span(), equality.left, true),
-                        canonicalizer.monomorphType(span(), equality.right, true),
-                    }
-                );
-            }
-            for (const auto& equality : responseCandidate->headValueEqualities) {
-                solverResponse.valueEqualities.push_back(
-                    SolverValueEquality{
-                        canonicalizer.monomorphConstgeneric(span(), equality.left, true),
-                        canonicalizer.monomorphConstgeneric(span(), equality.right, true),
-                    }
-                );
-            }
-            for (const auto& equality : responseCandidate->relationEqualities) {
-                solverResponse.equalities.push_back(
-                    SolverTypeEquality{
-                        canonicalizer.monomorphType(span(), equality.left, true),
-                        canonicalizer.monomorphType(span(), equality.right, true),
-                    }
-                );
-            }
-            for (const auto& equality : responseCandidate->relationValueEqualities) {
-                solverResponse.valueEqualities.push_back(
-                    SolverValueEquality{
-                        canonicalizer.monomorphConstgeneric(span(), equality.left, true),
-                        canonicalizer.monomorphConstgeneric(span(), equality.right, true),
-                    }
-                );
-            }
-            for (const auto& equality : responseCandidate->coercionEqualities) {
-                solverResponse.equalities.push_back(
-                    SolverTypeEquality{
-                        canonicalizer.monomorphType(span(), equality.left, true),
-                        canonicalizer.monomorphType(span(), equality.right, true),
-                    }
-                );
-            }
-        }
-        if (canonicalAssocType && assocName && assocName[0] && !solverResponse.impl->ambiguousIdentity) {
+        appendCandidateEffects(solverResponse, responseCandidate);
+        if (exposeImpl && canonicalAssocType && assocName && assocName[0]) {
             const HIRPathParams noParams;
             const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noParams;
             auto output = canonicalResponse.getType(crate.types, assocName, itemParams);
@@ -11088,12 +11537,54 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         if (distinctViable.length() != 0) {
             ThinVector<SolverSlotValues> candidateSlots;
+            ThinVector<SolverResponse> candidateEffects;
             for (size_t i = 0; i < distinctViable.length(); i++) {
                 const auto* candidate = distinctViable[i].first;
                 const auto candidateCertainty = distinctViable[i].second;
                 auto candidateImpl = monomorphImplRef(candidate->impl, canonicalizer);
                 classifyOperatorImpl(solverResponse.operatorSummary, candidateImpl);
                 candidateSlots.push_back(extractSlotValues(canonical, candidateImpl, canonicalizer, candidateCertainty));
+                SolverResponse effects;
+                appendCandidateEffects(effects, candidate);
+                if (canonicalAssocType && assocName && assocName[0]) {
+                    const HIRPathParams noParams;
+                    const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noParams;
+                    auto output = candidateImpl.getType(crate.types, assocName, itemParams);
+                    const Candidate* inheritedFrom = nullptr;
+                    if (output == HIRTypeRef() && candidate->impl.data.is_TraitImpl()) {
+                        const auto considerInherited = [&](const Candidate* source) {
+                            if (!source || !source->impl.data.is_TraitImpl() || !candidate->impl.moreSpecificThan(crate.types, source->impl)) {
+                                return;
+                            }
+                            auto sourceImpl = monomorphImplRef(source->impl, canonicalizer);
+                            if (sourceImpl.getType(crate.types, assocName, itemParams) == HIRTypeRef()) {
+                                return;
+                            }
+                            if (!inheritedFrom || source->impl.moreSpecificThan(crate.types, inheritedFrom->impl)) {
+                                inheritedFrom = source;
+                            }
+                        };
+                        for (const Candidate* source = candidate->specializationItemSource; source; source = source->specializationItemSource) {
+                            considerInherited(source);
+                        }
+                        for (const auto& viable : distinctViable) {
+                            for (const Candidate* source = viable.first; source; source = source->specializationItemSource) {
+                                if (source != candidate) {
+                                    considerInherited(source);
+                                }
+                            }
+                        }
+                        if (inheritedFrom) {
+                            auto sourceImpl = monomorphImplRef(inheritedFrom->impl, canonicalizer);
+                            output = sourceImpl.getType(crate.types, assocName, itemParams);
+                        }
+                    }
+                    if (output != HIRTypeRef()) {
+                        output = normalizeGoalInput(std::move(output));
+                        appendAssociatedEquality(effects, canonicalAssocType, std::move(output));
+                    }
+                }
+                candidateEffects.push_back(std::move(effects));
             }
 
             const auto& first = candidateSlots.front();
@@ -11131,9 +11622,59 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                     solverResponse.slots.values[slot] = common.clone();
                 }
             }
+
+            const auto& firstEffects = candidateEffects.front();
+            const auto sharedTypeEquality = [&](const SolverTypeEquality& equality) {
+                for (size_t candidate = 1; candidate < candidateEffects.size(); candidate++) {
+                    const auto& equalities = candidateEffects[candidate].equalities;
+                    if (std::none_of(equalities.begin(), equalities.end(), [&](const SolverTypeEquality& other) {
+                            return (other.left == equality.left && other.right == equality.right) || (other.left == equality.right && other.right == equality.left);
+                        })) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+            const auto sharedValueEquality = [&](const SolverValueEquality& equality) {
+                for (size_t candidate = 1; candidate < candidateEffects.size(); candidate++) {
+                    const auto& equalities = candidateEffects[candidate].valueEqualities;
+                    if (std::none_of(equalities.begin(), equalities.end(), [&](const SolverValueEquality& other) {
+                            return (other.left == equality.left && other.right == equality.right) || (other.left == equality.right && other.right == equality.left);
+                        })) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+            const auto sharedObligation = [&](const SolverObligation& obligation) {
+                for (size_t candidate = 1; candidate < candidateEffects.size(); candidate++) {
+                    const auto& obligations = candidateEffects[candidate].obligations;
+                    if (std::none_of(obligations.begin(), obligations.end(), [&](const SolverObligation& other) {
+                            return other.type == obligation.type && other.trait == obligation.trait;
+                        })) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+            for (const auto& equality : firstEffects.equalities) {
+                if (sharedTypeEquality(equality)) {
+                    solverResponse.equalities.push_back(equality);
+                }
+            }
+            for (const auto& equality : firstEffects.valueEqualities) {
+                if (sharedValueEquality(equality)) {
+                    solverResponse.valueEqualities.push_back(SolverValueEquality{equality.left.clone(), equality.right.clone()});
+                }
+            }
+            for (const auto& obligation : firstEffects.obligations) {
+                if (sharedObligation(obligation)) {
+                    solverResponse.obligations.push_back(SolverObligation{obligation.type, obligation.trait.clone()});
+                }
+            }
         }
         if (!cacheableResponse || canonicalizer.sawForeignIvar()) {
-            return deliverResponse(solverResponse, &response);
+            return deliverResponse(solverResponse, exposeImpl ? &response : nullptr);
         }
         if (crateCacheableResponse && rigidKey && cycleHits_ == cycleHitsBefore && !canonicalResponse.data.is_BoundedPtr()) {
             auto* global = crateCache().insert(rootHash, trait, canonical.params.clone(), canonical.type, solverResponse.certainty);
@@ -11150,7 +11691,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         const bool coinductive = crate.getTraitByPath(span(), trait).isCoinductive;
         cycleHits_++;
         DEBUG("evaluate exit: active-goal cycle");
-        return emitResponse(ImplRef(resolvedType, &goalParams, nullptr), coinductive ? Certainty::Proven : Certainty::Ambiguous);
+        return emitResponse(ImplRef(resolvedType, &goalParams, nullptr), coinductive ? Certainty::Proven : Certainty::Ambiguous, nullptr, coinductive);
     }
     auto* rootGoal = pushActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr);
 
@@ -11176,6 +11717,19 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     };
 
     assembleCandidates(frameIndex, trait, canonical.params, canonical.type, includeRootMagicCandidates);
+    if (coercionSelectsCandidate && canonical.type->is_Infer()) {
+        for (const auto& constraint : canonicalCoercions) {
+            if (!constraint.isSelf) {
+                continue;
+            }
+            const auto* guidedSelf = constraint.other;
+            const auto* guidedPath = guidedSelf->opt_Path();
+            if (guidedSelf->is_Infer() || (guidedPath && guidedPath->binding.is_Unbound())) {
+                continue;
+            }
+            assembleCandidates(frameIndex, trait, canonical.params, guidedSelf, includeRootMagicCandidates);
+        }
+    }
     auto& frame = *frames[frameIndex];
     const size_t candidateCount = frame.candidates.size();
 
@@ -11201,19 +11755,19 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         rootAssociated.insert({RcString::newInterned(assocName), HIRTraitPath::AtyEqual{std::move(sourceTrait), canonicalAssocParams ? canonicalAssocParams->clone() : noAssocParams.clone(), candidateAssocType}});
     }
-    for (size_t i = 0; i < candidateCount; i++) {
+    auto evaluateCandidateAt = [&](size_t i) {
+        auto* candidate = frame.candidates[i];
         if (excludedImpl) {
-            const auto* traitImpl = frame.candidates[i]->impl.data.opt_TraitImpl();
+            const auto* traitImpl = candidate->impl.data.opt_TraitImpl();
             if (traitImpl && traitImpl->impl == excludedImpl) {
-                frame.candidates[i]->traitCertainty = Certainty::NoSolution;
-                frame.candidates[i]->certainty = Certainty::NoSolution;
-                continue;
+                candidate->traitCertainty = Certainty::NoSolution;
+                candidate->certainty = Certainty::NoSolution;
+                return false;
             }
         }
         auto certainty = evaluateCandidate(frameIndex, i, trait, rootAssociated.empty() ? nullptr : &rootAssociated);
-        auto* candidate = frame.candidates[i];
         candidate->traitCertainty = certainty;
-        if (!candidate->isNegative()) {
+        if (!candidate->isNegative() && rootAssociated.empty()) {
             const auto assocCertainty = matchRootAssociated(trait, *candidate, assocName, candidateAssocType, canonicalAssocParams);
             if (assocCertainty == Certainty::NoSolution) {
                 certainty = Certainty::NoSolution;
@@ -11226,14 +11780,30 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (candidate->isNegative()) {
             negativeProven |= certainty == Certainty::Proven;
             negativeAmbiguous |= certainty == Certainty::Ambiguous;
-            continue;
+            return false;
         }
         suppressAutoBuiltin |= candidate->isPositiveMarkerImpl() && certainty != Certainty::NoSolution;
         if (certainty != Certainty::NoSolution) {
             frame.viable.push_back(candidate);
         }
-    }
+        return !hasCoercionGoals && candidate->traitCertainty == Certainty::Proven && paramEnvCandidateIsNonGlobal(*candidate);
+    };
 
+    bool provenNonGlobalParamEnv = false;
+    for (size_t i = 0; i < candidateCount; i++) {
+        if (frame.candidates[i]->source == CandidateSource::ParamEnv) {
+            provenNonGlobalParamEnv |= evaluateCandidateAt(i);
+        }
+    }
+    for (size_t i = 0; i < candidateCount; i++) {
+        const auto source = frame.candidates[i]->source;
+        if (source == CandidateSource::ParamEnv) {
+            continue;
+        }
+        if (!provenNonGlobalParamEnv || source == CandidateSource::AliasBound) {
+            evaluateCandidateAt(i);
+        }
+    }
     if (suppressAutoBuiltin || negativeProven) {
         auto& viable = frame.viable;
         viable.erase(
@@ -11254,7 +11824,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
     }
 
-    if (hasCoercionGoals) {
+    if (coercionSelectsCandidate) {
         struct RelatedCandidate {
             Candidate* candidate;
             HIRTypeRef self;
@@ -11333,7 +11903,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     }
 
     const bool hasNonGlobalParamEnv = std::any_of(frame.viable.begin(), frame.viable.end(), [&](const Candidate* candidate) {
-        return paramEnvCandidateIsNonGlobal(*candidate) && candidate->coercionsProven;
+        return paramEnvCandidateIsNonGlobal(*candidate) && candidate->traitCertainty == Certainty::Proven && candidate->coercionsProven;
     });
     if (hasNonGlobalParamEnv) {
         auto& viable = frame.viable;
@@ -11429,17 +11999,27 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             if (!left.data.is_TraitImpl() || !right.data.is_TraitImpl()) {
                 continue;
             }
-            if (coherenceMode || !resolve_.implsOverlap(span(), left, right)) {
+            if (coherenceMode) {
                 continue;
             }
-            if (left.moreSpecificThan(crate.types, right)) {
+            const auto leftType = left.getImplType(crate.types);
+            const auto rightType = right.getImplType(crate.types);
+            const auto leftParams = left.getTraitParams(crate.types);
+            const auto rightParams = right.getTraitParams(crate.types);
+            const bool sameInstantiatedHead = (leftType == rightType || leftType->equalsIgnoringRegions(rightType)) && leftParams.equalsIgnoringRegions(rightParams);
+            if (!sameInstantiatedHead && !resolve_.implsOverlap(span(), left, right)) {
+                continue;
+            }
+            const bool leftMoreSpecific = left.moreSpecificThan(crate.types, right);
+            const bool rightMoreSpecific = right.moreSpecificThan(crate.types, left);
+            if (leftMoreSpecific) {
                 if (!frame.viable[i]->ambiguityBeyondHead) {
                     frame.viable[j]->discarded = true;
                     recordItemSource(frame.viable[i], frame.viable[j]);
                 } else if (frame.viable[j]->certainty == Certainty::Proven) {
                     frame.viable[i]->discarded = true;
                 }
-            } else if (right.moreSpecificThan(crate.types, left)) {
+            } else if (rightMoreSpecific) {
                 if (!frame.viable[j]->ambiguityBeyondHead) {
                     frame.viable[i]->discarded = true;
                     recordItemSource(frame.viable[j], frame.viable[i]);
@@ -11461,9 +12041,11 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         frame.viable.end()
     );
 
+    bool sameResponse = true;
     bool oneResponse = true;
     for (size_t i = 1; i < frame.viable.size(); i++) {
         if (!responsesEqual(frame.viable.front()->impl, frame.viable[i]->impl, assocName, canonicalAssocParams, valueName)) {
+            sameResponse = false;
             oneResponse = false;
             break;
         }
@@ -11497,6 +12079,9 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
         }
         const auto certainty = selected->certainty;
+        if (certainty == Certainty::Ambiguous && selected->nestedAmbiguity && resolvedType->is_Infer() && hasSelfCoercionGoal) {
+            return emitForcedAmbiguity();
+        }
         DEBUG("next-solver: applying merged response " << selected->impl << " certainty=" << static_cast<unsigned>(certainty));
         if (assocName && assocName[0] && selected->impl.data.is_TraitImpl() && selected->traitCertainty == Certainty::Proven) {
             const HIRPathParams noParams;
@@ -11531,7 +12116,33 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (valueName && selected->impl.data.is_TraitImpl()) {
             responseSource = specializationValueSource(selected, valueName);
             if (!responseSource) {
-                return false;
+                const auto& traitDef = crate.getTraitByPath(span(), trait);
+                const auto valueIt = traitDef.values.find(RcString::newInterned(valueName));
+                bool hasDefault = false;
+                if (valueIt != traitDef.values.end()) {
+                    const auto& value = valueIt->second;
+                    switch (value.tag()) {
+                        case HIRTraitValueItem::TAG_Constant: {
+                            const auto& constant = value.as_Constant();
+                            hasDefault = constant.value || constant.valueState != HIRConstant::ValueState::Unknown;
+                            break;
+                        }
+                        case HIRTraitValueItem::TAG_Static: {
+                            const auto& staticValue = value.as_Static();
+                            hasDefault = staticValue.value || staticValue.value.mir;
+                            break;
+                        }
+                        case HIRTraitValueItem::TAG_Function: {
+                            const auto& function = value.as_Function();
+                            hasDefault = function.code || function.code.mir;
+                            break;
+                        }
+                    }
+                }
+                if (!hasDefault) {
+                    return false;
+                }
+                responseSource = selected;
             }
         }
         auto selectedResponse = monomorphImplRef(responseSource->impl, MonomorphiserNop(crate.types));
@@ -11546,8 +12157,10 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         distinctViable.pushBack({candidate, candidateCertainty});
     }
     auto ambiguous = ImplRef(resolvedType, goalParams.clone(), HIRTraitPath::assocListT());
-    ambiguous.markAmbiguousIdentity();
-    return emitResponse(materializeRootAssociated(std::move(ambiguous), trait, assocName, canonicalAssocParams), Certainty::Ambiguous);
+    const bool responseProven = sameResponse && std::any_of(frame.viable.begin(), frame.viable.end(), [](const Candidate* candidate) {
+        return candidate->certainty == Certainty::Proven;
+    });
+    return emitResponse(std::move(ambiguous), responseProven ? Certainty::Proven : Certainty::Ambiguous, nullptr, false);
 }
 
 auto NextTraitGoalEvaluator::evaluateNormalizesTo(const Span& callSpan, const NormalizesTo& goal, NormalizesToCallback& callback, bool callerBoundary) -> bool {
@@ -11622,8 +12235,7 @@ NextTraitGoalEvaluator::Candidate::Candidate(ImplRef impl, bool headExact, Certa
     , source(source)
     , headNormalizationAmbiguity(headNormalizationAmbiguity)
     , headEqualities(std::move(headEqualities))
-    , headValueEqualities(std::move(headValueEqualities))
-{
+    , headValueEqualities(std::move(headValueEqualities)) {
 }
 
 auto NextTraitGoalEvaluator::Candidate::isNegative() const -> bool {
@@ -11654,18 +12266,15 @@ NextTraitGoalEvaluator::GoalKey::GoalKey(size_t hash, const HIRSimplePath& trait
     , trait(trait)
     , params(params.clone())
     , type(type)
-    , associated(cloneAssociated(associated))
-{
+    , associated(cloneAssociated(associated)) {
 }
 
 NextTraitGoalEvaluator::CachedGoal::CachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, Certainty certainty)
     : goal(hash, trait, params, type, associated)
-    , certainty(certainty)
-{
+    , certainty(certainty) {
 }
 
 NextTraitGoalEvaluator::CanonicalGoal::CanonicalGoal(HIRPathParams params, HIRTypeRef type)
     : params(std::move(params))
-    , type(type)
-{
+    , type(type) {
 }

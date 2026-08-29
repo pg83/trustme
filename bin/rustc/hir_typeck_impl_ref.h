@@ -12,7 +12,6 @@ struct ImplRef {
     using Data = ImplRefData;
 
     Data data;
-    bool isAmbiguousIdentity_ = false;
 
     ImplRef();
 
@@ -26,14 +25,6 @@ struct ImplRef {
         return !(data.is_TraitImpl() && data.as_TraitImpl().impl == nullptr);
     }
 
-    bool isAmbiguousIdentity() const {
-        return isAmbiguousIdentity_;
-    }
-
-    void markAmbiguousIdentity() {
-        isAmbiguousIdentity_ = true;
-    }
-
     HIRBoundConstness boundConstness() const;
 
     bool moreSpecificThan(HIRTypeInterner& types, const ImplRef& other) const;
@@ -45,6 +36,8 @@ struct ImplRef {
         friend struct ImplRef;
         const ImplRef::Data::Data_TraitImpl& ti;
         const HIRPathParams& params;
+        mutable HIRTypeRef selfType_ = nullptr;
+        mutable bool resolvingSelf_ = false;
 
         Monomorph(HIRTypeInterner& types, const ImplRef::Data::Data_TraitImpl& ti, const HIRPathParams& params);
 

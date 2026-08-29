@@ -53,25 +53,6 @@ namespace {
         bool complete() const;
     };
 
-    struct ImplTyMatcher: public HIRMatchGenerics, public Monomorphiser {
-        ThinVector<std::optional<HIRTypeRef>> implTys;
-        ThinVector<std::optional<HIRConstGeneric>> implVals;
-
-        explicit ImplTyMatcher(HIRTypeInterner& types);
-
-        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override;
-
-        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
-
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override;
-
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
-
-        void reinit(const HIRGenericParams& params);
-
-        void fmt(std::ostream& os) const;
-    };
-
     const HIRConstGeneric* getUnevaluatedParam(const HIRConstGenericUnevaluated& value, unsigned int binding) {
         const HIRPathParams* params = nullptr;
         switch (binding >> 8) {
@@ -739,8 +720,7 @@ std::ostream& operator<<(std::ostream& os, const HIRConstGenericUnevaluated& x) 
 }
 
 HIRConstGenericUnevaluated::HIRConstGenericUnevaluated(HIRExprPtr ep)
-    : expr(std::make_shared<HIRExprPtr>(std::move(ep)))
-{
+    : expr(std::make_shared<HIRExprPtr>(std::move(ep))) {
 }
 
 HIRConstGenericUnevaluated HIRConstGenericUnevaluated::clone() const {
@@ -818,8 +798,7 @@ void HIRConstGenericUnevaluated::fmt(std::ostream& os) const {
 
             NoNewline(std::ostream& inner)
                 : std::ostream(this)
-                , inner(inner)
-            {
+                , inner(inner) {
             }
 
             int overflow(int c) override {
@@ -1405,224 +1384,6 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     }
 }
 
-bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other) const {
-    // TODO: Pre-calculate impl trees (with pointers to parent impls)
-    struct H {
-        static bool typesOverlap(const HIRPathParams& a, const HIRPathParams& b) {
-            for (unsigned int i = 0; i < std::min(a.types.size(), b.types.size()); i++) {
-                if (!H::typesOverlap(a.types[i], b.types[i])) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        static bool typesOverlapPath(const HIRPath& a, const HIRPath& b) {
-            if (a.data.tag() != b.data.tag()) {
-                return false;
-            }
-            switch (a.data.tag()) {
-                case HIRPathData::TAG_Generic: {
-                    auto& ape = a.data.as_Generic();
-                    auto& bpe = b.data.as_Generic();
-                    if (ape.path != bpe.path) {
-                        return false;
-                    }
-                    return H::typesOverlap(ape.params, bpe.params);
-                    break;
-                }
-                case HIRPathData::TAG_UfcsUnknown: {
-                    break;
-                }
-                case HIRPathData::TAG_UfcsKnown: {
-                    break;
-                }
-                case HIRPathData::TAG_UfcsInherent: {
-                    break;
-                }
-            }
-            return false;
-        }
-
-        static bool typesOverlap(const HIRTypeData* a, const HIRTypeData* b) {
-            Span sp;
-            if (a == b) {
-                return true;
-            }
-            if (a->is_Generic() || b->is_Generic()) {
-                return true;
-            }
-            // TODO: Unbound/Opaque paths?
-            if (a->tag() != b->tag()) {
-                return false;
-            }
-            switch ((*a).tag()) {
-                case HIRTypeData::TAG_Generic: {
-                    break;
-                }
-                case HIRTypeData::TAG_Infer: {
-                    break;
-                }
-                case HIRTypeData::TAG_Diverge: {
-                    break;
-                }
-                case HIRTypeData::TAG_NodeType: {
-                    BUG(sp, "Hit node-magic type (closure/generator/async) - " << a << " " << b);
-                    break;
-                }
-                case HIRTypeData::TAG_Primitive: {
-                    auto& ae = (*a).as_Primitive();
-                    auto& be = (*b).as_Primitive();
-                    if (ae != be) {
-                        return false;
-                    }
-                    break;
-                }
-                case HIRTypeData::TAG_Path: {
-                    auto& ae = (*a).as_Path();
-                    auto& be = (*b).as_Path();
-                    return typesOverlapPath(ae.path, be.path);
-                    //TODO(sp, "Path - " << ae.path << " and " << be.path);
-                    break;
-                }
-                case HIRTypeData::TAG_TraitObject: {
-                    auto& ae = (*a).as_TraitObject();
-                    auto& be = (*b).as_TraitObject();
-                    if (ae.trait.path.path != be.trait.path.path) {
-                        return false;
-                    }
-                    if (!H::typesOverlap(ae.trait.path.params, be.trait.path.params)) {
-                        return false;
-                    }
-                    if (ae.markers.size() != be.markers.size()) {
-                        return false;
-                    }
-                    for (size_t i = 0; i < ae.markers.size(); i++) {
-                        if (ae.markers[i].path != be.markers[i].path) {
-                            return false;
-                        }
-                        if (!H::typesOverlap(ae.markers[i].params, be.markers[i].params)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-                case HIRTypeData::TAG_ErasedType: {
-                    TODO(sp, "ErasedType - " << a);
-                    break;
-                }
-                case HIRTypeData::TAG_NamedFunction: {
-                    auto& ae = (*a).as_NamedFunction();
-                    auto& be = (*b).as_NamedFunction();
-                    return typesOverlapPath(ae.path, be.path);
-                }
-                case HIRTypeData::TAG_Function: {
-                    auto& ae = (*a).as_Function();
-                    auto& be = (*b).as_Function();
-                    if (ae.isUnsafe != be.isUnsafe) {
-                        return false;
-                    }
-                    if (ae.abi != be.abi) {
-                        return false;
-                    }
-                    if (ae.argTypes.size() != be.argTypes.size()) {
-                        return false;
-                    }
-                    for (unsigned int i = 0; i < ae.argTypes.size(); i++) {
-                        if (!H::typesOverlap(ae.argTypes[i], be.argTypes[i])) {
-                            return false;
-                        }
-                    }
-                    if (!H::typesOverlap(ae.rettype, be.rettype)) {
-                        return false;
-                    }
-                    break;
-                }
-                case HIRTypeData::TAG_Tuple: {
-                    auto& ae = (*a).as_Tuple();
-                    auto& be = (*b).as_Tuple();
-                    if (ae.size() != be.size()) {
-                        return false;
-                    }
-                    for (unsigned int i = 0; i < ae.size(); i++) {
-                        if (!H::typesOverlap(ae[i], be[i])) {
-                            return false;
-                        }
-                    }
-                    break;
-                }
-                case HIRTypeData::TAG_Slice: {
-                    auto& ae = (*a).as_Slice();
-                    auto& be = (*b).as_Slice();
-                    return H::typesOverlap(ae.inner, be.inner);
-                }
-                case HIRTypeData::TAG_Pattern: {
-                    auto& ae = (*a).as_Pattern();
-                    auto& be = (*b).as_Pattern();
-                    return H::typesOverlap(ae.inner, be.inner);
-                }
-                case HIRTypeData::TAG_Array: {
-                    auto& ae = (*a).as_Array();
-                    auto& be = (*b).as_Array();
-                    if (ae.size != be.size) {
-                        return false;
-                    }
-                    return H::typesOverlap(ae.inner, be.inner);
-                }
-                case HIRTypeData::TAG_Pointer: {
-                    auto& ae = (*a).as_Pointer();
-                    auto& be = (*b).as_Pointer();
-                    if (ae.type != be.type) {
-                        return false;
-                    }
-                    return H::typesOverlap(ae.inner, be.inner);
-                }
-                case HIRTypeData::TAG_Borrow: {
-                    auto& ae = (*a).as_Borrow();
-                    auto& be = (*b).as_Borrow();
-                    if (ae.type != be.type) {
-                        return false;
-                    }
-                    return H::typesOverlap(ae.inner, be.inner);
-                }
-            }
-            return true;
-        }
-    };
-
-    if (this->type == other.type && this->traitArgs == other.traitArgs) {
-        return true;
-    }
-
-    if (!H::typesOverlap(this->type, other.type)) {
-        return false;
-    }
-    if (!H::typesOverlap(this->traitArgs, other.traitArgs)) {
-        return false;
-    }
-
-    Span sp;
-
-    TypeOrdContext ordContext;
-    typeOrdSpecific(ordContext, sp, this->type, other.type);
-    typelistOrdSpecific(ordContext, sp, this->traitArgs.types, other.traitArgs.types);
-    if (ordContext.mixed) {
-        return false;
-    }
-
-    // TODO: Detect `impl<T> Foo<T> for Bar<T>` vs `impl<T> Foo<&T> for Bar<T>`
-
-    auto cbIdent = HIRResolvePlaceholdersNop();
-    ImplTyMatcher matcher(crate.types);
-    matcher.reinit(this->params);
-    if (this->type->matchTestGenerics(sp, other.type, cbIdent, matcher) && this->traitArgs.matchTestGenericsFuzz(sp, other.traitArgs, cbIdent, matcher) == HIRCompare::Equal) {
-        return true;
-    }
-
-    matcher.reinit(other.params);
-    return other.type->matchTestGenerics(sp, this->type, cbIdent, matcher) && other.traitArgs.matchTestGenericsFuzz(sp, this->traitArgs, cbIdent, matcher) == HIRCompare::Equal;
-}
-
 bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRTypeData* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) const {
     if (this->allTraitImpls.size() > 0) {
         auto it = this->allTraitImpls.find(trait);
@@ -2127,8 +1888,7 @@ std::ostream& operator<<(std::ostream& os, const EncodedLiteralSlice& x) {
 
 HIRPublicity::HIRPublicity(Kind kind, std::shared_ptr<HIRSimplePath> p)
     : kind(kind)
-    , visPath(p)
-{
+    , visPath(p) {
 }
 
 HIRPublicity HIRPublicity::newPriv(HIRSimplePath p) {
@@ -2144,8 +1904,7 @@ HIRStatic::HIRStatic(HIRLinkage linkage, bool isMut, HIRTypeRef type, HIRExprPtr
     : linkage(std::move(linkage))
     , isMut(isMut)
     , type(std::move(type))
-    , value(std::move(value))
-{
+    , value(std::move(value)) {
 }
 
 HIRConstant::HIRConstant() {
@@ -2154,8 +1913,7 @@ HIRConstant::HIRConstant() {
 HIRConstant::HIRConstant(HIRGenericParams params, HIRTypeRef type, HIRExprPtr value)
     : params(std::move(params))
     , type(std::move(type))
-    , value(std::move(value))
-{
+    , value(std::move(value)) {
 }
 
 HIRFunction::HIRFunction() {
@@ -2167,21 +1925,18 @@ HIRFunction::HIRFunction(Receiver receiver, HIRGenericParams params, argsT args,
     , args(std::move(args))
     , variadic(false)
     , returnType(std::move(retTy))
-    , code(std::move(code))
-{
+    , code(std::move(code)) {
 }
 
 HIRStruct::FieldDefault::FieldDefault(size_t index, HIRExprPtr v)
     : index(index)
-    , expr(std::move(v))
-{
+    , expr(std::move(v)) {
 }
 
 HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data)
     : params(mv$(params))
     , repr(mv$(repr))
-    , data(mv$(data))
-{
+    , data(mv$(data)) {
 }
 
 HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data, unsigned align, HIRTraitMarkings tm, HIRStructMarkings sm)
@@ -2190,8 +1945,7 @@ HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data, unsigned ali
     , data(mv$(data))
     , forcedAlignment(align)
     , markings(mv$(tm))
-    , structMarkings(mv$(sm))
-{
+    , structMarkings(mv$(sm)) {
 }
 
 HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType)
@@ -2199,8 +1953,7 @@ HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, st
     , isSized(isSized)
     , traitBounds(std::move(traitBounds))
     , hasDefault(defaultType && !defaultType->is_Infer())
-    , defaultValue(defaultType)
-{
+    , defaultValue(defaultType) {
     BUG_ASSERT(defaultType);
 }
 
@@ -2213,8 +1966,7 @@ HIRTrait::HIRTrait(HIRGenericParams gps, std::vector<HIRTraitPath> parents)
     , isFundamental(false)
     , skipArrayDuringMethodDispatch(false)
     , skipBoxedSliceDuringMethodDispatch(false)
-    , vtableParentTraitsStart(0)
-{
+    , vtableParentTraitsStart(0) {
 }
 
 HIRModule::HIRModule() {
@@ -2223,8 +1975,7 @@ HIRModule::HIRModule() {
 HIRCrate::HIRCrate(ObjPool* pool, HIRTypeInterner& types)
     : pool(pool)
     , types(types)
-    , intrinsicOffsetof(HIRValueItem::make_Function(nullptr))
-{
+    , intrinsicOffsetof(HIRValueItem::make_Function(nullptr)) {
 }
 
 bool HIRCrate::isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias, const HIRSimplePath* names, size_t nameCount) const {
@@ -2320,8 +2071,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
 
 ImplMatcher::ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics)
     : HIRMatchGenerics(BorrowMatchedValues{})
-    , implTypes(buf)
-{
+    , implTypes(buf) {
     implTypes.clear();
     implTypes.zero(implGenerics.types.size());
 }
@@ -2346,8 +2096,7 @@ auto ImplMatcher::mappedType(unsigned binding) const -> HIRTypeRef {
 
 ImplHeadMonomorphiser::ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplMatcher& matcher)
     : Monomorphiser(types)
-    , matcher(matcher)
-{
+    , matcher(matcher) {
 }
 
 auto ImplHeadMonomorphiser::getType(const Span&, const HIRGenericRef& generic) const -> HIRTypeRef {
@@ -2368,72 +2117,4 @@ auto ImplHeadMonomorphiser::getValue(const Span&, const HIRGenericRef& generic) 
 
 auto ImplHeadMonomorphiser::complete() const -> bool {
     return complete_;
-}
-
-ImplTyMatcher::ImplTyMatcher(HIRTypeInterner& types)
-    : HIRMatchGenerics(types.objectPool())
-    , Monomorphiser(types)
-{
-}
-
-auto ImplTyMatcher::matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) -> HIRCompare {
-    BUG_ASSERT(g.binding < implTys.size());
-    if (implTys.at(g.binding)) {
-        return (ty == *implTys.at(g.binding) ? HIRCompare::Equal : HIRCompare::Unequal);
-    } else {
-        implTys.at(g.binding) = ty;
-        return HIRCompare::Equal;
-    }
-}
-
-auto ImplTyMatcher::matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) -> HIRCompare {
-    BUG_ASSERT(g.binding < implVals.size());
-    if (implVals.at(g.binding)) {
-        return (sz == *implVals.at(g.binding) ? HIRCompare::Equal : HIRCompare::Unequal);
-    } else {
-        implVals.at(g.binding) = sz.clone();
-        return HIRCompare::Equal;
-    }
-}
-
-auto ImplTyMatcher::getType(const Span& sp, const HIRGenericRef& g) const -> HIRTypeRef {
-    ASSERT_BUG(sp, g.group() == 0, "");
-    ASSERT_BUG(sp, g.idx() < implTys.size(), "");
-    if (!implTys[g.idx()]) {
-        return types.generic(RcString(FMT("placeholder_" << &implTys << "_" << g.idx())), HIRGenericRef(RcString(), GENERICPlaceholder, g.idx()).binding);
-    }
-    return *implTys[g.idx()];
-}
-
-auto ImplTyMatcher::getValue(const Span& sp, const HIRGenericRef& g) const -> HIRConstGeneric {
-    ASSERT_BUG(sp, g.group() == 0, "");
-    ASSERT_BUG(sp, g.idx() < implVals.size(), "");
-    ASSERT_BUG(sp, implVals[g.idx()], "");
-    return implVals[g.idx()]->clone();
-}
-
-auto ImplTyMatcher::reinit(const HIRGenericParams& params) -> void {
-    this->implTys.clear();
-    this->implVals.clear();
-    this->implTys.resize(params.types.size());
-    this->implVals.resize(params.values.size());
-}
-
-auto ImplTyMatcher::fmt(std::ostream& os) const -> void {
-    for (const auto& p : this->implTys) {
-        if (p) {
-            os << *p;
-        } else {
-            os << "?";
-        }
-        os << ",";
-    }
-    for (const auto& p : this->implVals) {
-        if (p) {
-            os << *p;
-        } else {
-            os << "?";
-        }
-        os << ",";
-    }
 }

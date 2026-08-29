@@ -3022,6 +3022,9 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
                     if (response.certainty != SolverCertainty::Proven) {
                         return false;
                     }
+                    if (!response.impl) {
+                        return false;
+                    }
                     if (!response.impl->traitImpl) {
                         hasConstBound |= response.impl->constness != HIRBoundConstness::Never;
                         return false;
@@ -3451,13 +3454,11 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
 }
 
 HIREvaluator::CsePtr::CsePtr(MIREvalCallStackEntry* ptr)
-    : inner(ptr)
-{
+    : inner(ptr) {
 }
 
 HIREvaluator::CsePtr::CsePtr(CsePtr&& x)
-    : inner(x.inner)
-{
+    : inner(x.inner) {
     x.inner = nullptr;
 }
 
@@ -3474,8 +3475,7 @@ HIREvaluator::HIREvaluator(const Span& sp, const WireBoard& wb, Newval& nvs)
     , resolve(wb)
     , nvs(nvs)
     , numFrames(0)
-    , requireConstCalls(false)
-{
+    , requireConstCalls(false) {
 }
 
 #include "hir_conv_ent_ptr_tu.cpp"
@@ -3507,8 +3507,7 @@ auto CtfeContext::popDiscriminant() -> void {
 
 MonomorphAvailability::MonomorphAvailability(const MonomorphState& ms)
     : HIRVisitor(nullptr, ms.typeInterner())
-    , ms(ms)
-{
+    , ms(ms) {
 }
 
 auto MonomorphAvailability::paramsFor(const HIRGenericRef& generic) const -> const HIRPathParams* {
@@ -3582,8 +3581,7 @@ auto MonomorphAvailability::visitConstgeneric(HIRConstGeneric& value) -> void {
 }
 
 ExprCaptureScan::ExprCaptureScan(HIRTypeInterner& types)
-    : HIRExprVisitorDef(types)
-{
+    : HIRExprVisitorDef(types) {
 }
 
 auto ExprCaptureScan::addSlot(u64 (&masks)[2], u32 binding) -> void {
@@ -3643,8 +3641,7 @@ auto ExprCaptureScan::visit(HIRExprNodeCallMethod& node) -> void {
 }
 
 NewvalStateNop::NewvalStateNop(const Span& sp)
-    : sp(sp)
-{
+    : sp(sp) {
 }
 
 auto NewvalStateNop::newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) -> HIRPath {
@@ -3655,8 +3652,7 @@ NewvalState::NewvalState(const HIRModule& mod, const HIRItemPath& modPath, std::
     : mod(mod)
     , modPath(modPath)
     , namePrefix(prefix)
-    , nextItemIdx(0)
-{
+    , nextItemIdx(0) {
 }
 
 auto NewvalState::newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) -> HIRPath {
@@ -3677,8 +3673,7 @@ auto NewvalState::newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignm
 
 template <typename T>
 MIREvalPtr<T>::MIREvalPtr()
-    : ptr(nullptr)
-{
+    : ptr(nullptr) {
 }
 
 template <typename T>
@@ -3711,25 +3706,21 @@ auto IValue::writeBytes(size_t ofs, const void* data, size_t len) -> void {
 }
 
 MIREvalRelocPtr::MIREvalRelocPtr()
-    : ptr(0)
-{
+    : ptr(0) {
 }
 
 MIREvalRelocPtr::MIREvalRelocPtr(MIREvalAllocationPtr p)
-    : ptr(0)
-{
+    : ptr(0) {
     set(reinterpret_cast<uintptr_t>(p.ptr), TAG_Allocation);
 }
 
 MIREvalRelocPtr::MIREvalRelocPtr(MIREvalConstantPtr p)
-    : ptr(0)
-{
+    : ptr(0) {
     set(reinterpret_cast<uintptr_t>(p.ptr), TAG_Constant);
 }
 
 MIREvalRelocPtr::MIREvalRelocPtr(MIREvalStaticRefPtr p)
-    : ptr(0)
-{
+    : ptr(0) {
     set(reinterpret_cast<uintptr_t>(p.ptr), TAG_StaticRef);
 }
 
@@ -3769,8 +3760,7 @@ auto MIREvalRelocPtr::set(uintptr_t ptr, Tag tag) -> void {
 
 MIREvalConstant::MIREvalConstant(const void* data, size_t len)
     : length(len)
-    , data(reinterpret_cast<const u8*>(data))
-{
+    , data(reinterpret_cast<const u8*>(data)) {
 }
 
 auto MIREvalConstant::fmtIdent(std::ostream& os) const -> void {
@@ -3840,8 +3830,7 @@ MIREvalAllocation::MIREvalAllocation(u8* data, size_t len, const HIRTypeData* ty
     , isLive(true)
     , isGlobal(false)
     , heapAlignment(0)
-    , data(data)
-{
+    , data(data) {
     memset(data, 0, len + (len + 7) / 8);
 }
 
@@ -4040,8 +4029,7 @@ MIREvalStaticRef::MIREvalStaticRef(ObjPool* pool, HIRPath p, const EncodedLitera
     , path_(std::move(p))
     , encoded(lit)
     , length(len)
-    , valuePending(valuePending)
-{
+    , valuePending(valuePending) {
     BUG_ASSERT(!encoded || encoded->bytes.size() == length);
 }
 
@@ -4139,15 +4127,13 @@ auto MIREvalStaticRef::path() const -> const HIRPath& {
 MIREvalValueRef::MIREvalValueRef()
     : storage()
     , ofs(0)
-    , len(0)
-{
+    , len(0) {
 }
 
 MIREvalValueRef::MIREvalValueRef(MIREvalRelocPtr alloc, size_t ofs)
     : storage(alloc)
     , ofs(ofs)
-    , len(0)
-{
+    , len(0) {
     if (alloc) {
         BUG_ASSERT(ofs <= alloc.asValue().size());
         len = alloc.asValue().size() - ofs;
@@ -4451,8 +4437,7 @@ auto TypeInfo::mask(double v) const -> double {
 }
 
 MIREvalPathCallback::MIREvalPathCallback(const HIRItemPath& path)
-    : path(path)
-{
+    : path(path) {
 }
 
 auto MIREvalPathCallback::write(std::ostream& os) const -> void {
@@ -4473,8 +4458,7 @@ MIREvalCallStackEntry::MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameI
     , ms(std::move(ms))
     , retval(MIREvalAllocationPtr::allocate(valuePool, rootResolve, state, retType))
     , args(args)
-    , dropFlags(fcn.dropFlags)
-{
+    , dropFlags(fcn.dropFlags) {
     this->resolve.setBothGenericsRaw(implParamsDef, itemParamsDef);
     localTypes.reserve(state.fcn.locals.size());
     locals.reserve(state.fcn.locals.size());
@@ -5394,8 +5378,7 @@ auto MIREvalCallStackEntry::sizeOfOrBug(const HIRTypeData* ty) const -> size_t {
 
 template <typename F>
 GenericParamsCb<F>::GenericParamsCb(F f)
-    : f(f)
-{
+    : f(f) {
 }
 
 template <typename F>
@@ -5413,8 +5396,7 @@ Expander::Expander(const WireBoard& wb)
     , recurseTypes(false)
     , implParams(nullptr)
     , itemParams(nullptr)
-    , pass(Pass::OuterOnly)
-{
+    , pass(Pass::OuterOnly) {
 }
 
 auto Expander::getEval(const Span& sp, NewvalState& nvs) const -> HIREvaluator {
@@ -5955,8 +5937,7 @@ auto Expander::visitExpr(HIRExprPtr& expr) -> void {
 
         Visitor(Expander& exp)
             : HIRExprVisitorDef(exp.crate.types)
-            , exp(exp)
-        {
+            , exp(exp) {
         }
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
@@ -6122,8 +6103,7 @@ auto Expander::visitEnumInner(const WireBoard& wb, const HIRCrate& crate, const 
 
 ExpanderApply::ExpanderApply(ObjPool& pool, HIRTypeInterner& types)
     : HIRVisitor(nullptr, types)
-    , pool_(pool)
-{
+    , pool_(pool) {
 }
 
 auto ExpanderApply::visitModule(HIRItemPath p, HIRModule& mod) -> void {
@@ -6144,8 +6124,7 @@ EnumValueExpander::EnumValueExpander(const WireBoard& wb)
     , crate(*wb.crate)
     , typeck(wb)
     , mod(nullptr)
-    , modPath(nullptr)
-{
+    , modPath(nullptr) {
 }
 
 auto EnumValueExpander::visitModule(HIRItemPath p, HIRModule& mod) -> void {

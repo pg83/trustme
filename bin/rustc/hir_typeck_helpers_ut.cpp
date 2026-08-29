@@ -1,9 +1,38 @@
 #include "hir_typeck_helpers.h"
+#include "hir_typeck_expr_cs.h"
 
 #include <std/tst/ut.h>
 #include <std/mem/obj_pool.h>
 
 using namespace stl;
+
+namespace {
+    [[maybe_unused]] void solverResponseApiGate(SolverResponse& response) {
+        auto& [certainty, slots, obligations, equalities, valueEqualities, impl, operatorSummary] = response;
+        (void)certainty;
+        (void)slots;
+        (void)obligations;
+        (void)equalities;
+        (void)valueEqualities;
+        (void)impl;
+        (void)operatorSummary;
+    }
+
+    [[maybe_unused]] void traitGoalQueryApiGate(TraitGoalQuery& query) {
+        auto& [assocName, assocType, assocParams, valueName, allowInferInputs, excludedImpl, coercions, operatorGoal, ambiguity] = query;
+        (void)assocName;
+        (void)assocType;
+        (void)assocParams;
+        (void)valueName;
+        (void)allowInferInputs;
+        (void)excludedImpl;
+        (void)coercions;
+        (void)operatorGoal;
+        (void)ambiguity;
+    }
+
+    [[maybe_unused]] constexpr auto applySolverResponseApiGate = &Context::applySolverResponse;
+}
 
 STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testRollbackRestoresBinding) {
@@ -367,14 +396,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto projection = [&](const HIRTypeData* input) {
             HIRGenericPath trait;
             trait.params.types.push_back(input);
-            return types.path(
-                HIRPath(
-                    types.primitive(HIRCoreType::U8),
-                    ::std::move(trait),
-                    RcString::newInterned("Output")
-                ),
-                HIRTypePathBinding::make_Opaque({})
-            );
+            return types.path(HIRPath(types.primitive(HIRCoreType::U8), ::std::move(trait), RcString::newInterned("Output")), HIRTypePathBinding::make_Opaque({}));
         };
 
         const auto rigidInput = types.generic(RcString::newInterned("T"), 0);
@@ -388,23 +410,34 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(candidate.unify(projection(rigidInput), projection(candidateSlot)) == Unifier::Outcome::Proven);
         STD_INSIST(table.getType(candidateSlot) == rigidInput);
 
-        STD_INSIST(candidate.unify(
-            projection(rigidInput),
-            projection(types.primitive(HIRCoreType::U16))
-        ) == Unifier::Outcome::Mismatch);
-        STD_INSIST(candidate.unify(
-            rigidInput,
-            projection(types.primitive(HIRCoreType::U16))
-        ) == Unifier::Outcome::Ambiguous);
+        STD_INSIST(candidate.unify(projection(rigidInput), projection(types.primitive(HIRCoreType::U16))) == Unifier::Outcome::Mismatch);
+        STD_INSIST(candidate.unify(rigidInput, projection(types.primitive(HIRCoreType::U16))) == Unifier::Outcome::Ambiguous);
 
-        Unifier paramEnv(sp, table, nullptr, {
-            .relateProjectionInputs = true,
-            .rigidGenericsAreDistinct = true,
-        });
-        STD_INSIST(paramEnv.unify(
-            rigidInput,
-            projection(types.primitive(HIRCoreType::U16))
-        ) == Unifier::Outcome::Mismatch);
+        Unifier paramEnv(
+            sp,
+            table,
+            nullptr,
+            {
+                .relateProjectionInputs = true,
+                .rigidGenericsAreDistinct = true,
+                .rigidProjectionsAreDistinct = true,
+            }
+        );
+        STD_INSIST(paramEnv.unify(rigidInput, projection(types.primitive(HIRCoreType::U16))) == Unifier::Outcome::Mismatch);
+        STD_INSIST(paramEnv.unify(projection(rigidInput), types.primitive(HIRCoreType::U16)) == Unifier::Outcome::Mismatch);
+    }
+
+    STD_TEST(testSolverProvenProjectionReplacesLiteralFallback) {
+        auto pool = ObjPool::fromMemory();
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
+        HMTypeInferrence table(types);
+
+        const auto slot = table.newIvar(HIRInferClass::Integer);
+        HIRGenericPath trait;
+        const auto projection = types.path(HIRPath(types.primitive(HIRCoreType::U8), std::move(trait), RcString::newInterned("Output")), HIRTypePathBinding::make_Opaque({}));
+        table.setIvarTo(slot, projection, true);
+        STD_INSIST(table.getType(slot)->equalsIgnoringRegions(projection));
     }
 
     STD_TEST(testCandidateConstExistentialCapturesRigidPlaceholder) {

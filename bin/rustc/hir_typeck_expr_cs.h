@@ -175,7 +175,7 @@ struct Context {
     HIRTypeRef expandAssociatedTypes(const Span& sp, HIRTypeRef input) const;
     const HIRTypeData* expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp) const;
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const;
-    void compactIvars();
+    void compactIvars(const Span& sp);
 
     void equateTypesCoerce(const Span& sp, const HIRTypeData* l, HIRExprNodeP& nodePtr);
     void recordCoercionHint(const HIRTypeData* type, HIRExprNodeP& nodePtr);

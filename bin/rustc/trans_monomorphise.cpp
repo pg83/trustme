@@ -178,8 +178,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         Nvs(TransList& out, const HIRCrate& crate)
             : out(out)
             , crate(crate)
-            , count(0)
-        {
+            , count(0) {
         }
 
         HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override {
@@ -381,7 +380,7 @@ auto AsyncDropPollBuilder::setState(unsigned state) const -> MIRStatement {
 auto AsyncDropPollBuilder::hasDropImpl(const HIRTypeData* ty) const -> bool {
     const auto& trait = resolve.langDrop();
     return !trait.components().empty() && resolve.findImpl(sp, trait, HIRPathParams{}, ty, [](SolverResponse response) {
-        return response.certainty == SolverCertainty::Proven && response.impl->traitImpl;
+        return response.certainty == SolverCertainty::Proven && response.impl && response.impl->traitImpl;
     });
 }
 
@@ -704,8 +703,7 @@ AsyncDropPollBuilder::AsyncDropPollBuilder(const Span& sp, const StaticTraitReso
     , resolve(resolve)
     , dropeeTy(dropeeTy)
     , outerTy(outerTy)
-    , statePtrLocal(newLocal(resolve.hirCrate().types.pointer(HIRBorrowType::Unique, resolve.hirCrate().types.primitive(HIRCoreType::U8))))
-{
+    , statePtrLocal(newLocal(resolve.hirCrate().types.pointer(HIRBorrowType::Unique, resolve.hirCrate().types.primitive(HIRCoreType::U8)))) {
 }
 
 auto AsyncDropPollBuilder::build() -> MIRFunctionPointer {
@@ -759,8 +757,7 @@ AsyncDropPollBuilder::CoroutineDropCloner::CoroutineDropCloner(const AsyncDropPo
     , bbBase(bbBase)
     , localBase(localBase)
     , dropFlagBase(dropFlagBase)
-    , returnLocal(returnLocal)
-{
+    , returnLocal(returnLocal) {
 }
 
 auto AsyncDropPollBuilder::CoroutineDropCloner::mapBbIdx(MIRBasicBlockId idx) const -> MIRBasicBlockId {
@@ -822,8 +819,7 @@ auto AsyncDropPollBuilder::CoroutineDropCloner::cloneLval(const MIRLValue& src) 
 Cloner::Cloner(const Span& sp, const ::StaticTraitResolve& resolve, const TransParams& params)
     : MIRCloner(sp, resolve.hirCrate().types)
     , resolve_(resolve)
-    , params(params)
-{
+    , params(params) {
 }
 
 auto Cloner::valueGenericType(HIRGenericRef g) const -> const HIRTypeData* {

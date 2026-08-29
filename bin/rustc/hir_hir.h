@@ -607,8 +607,6 @@ public:
     bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes) const;
 
     bool moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& x) const;
-
-    bool overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other) const;
 };
 
 class HIRMarkerImpl {
@@ -658,8 +656,7 @@ struct HIRTraitImplCb final: HIRTraitImplCallback {
     F f;
 
     explicit HIRTraitImplCb(F f)
-        : f(f)
-    {
+        : f(f) {
     }
 
     bool visit(const HIRTraitImpl& impl) override {
@@ -676,8 +673,7 @@ struct HIRMarkerImplCb final: HIRMarkerImplCallback {
     F f;
 
     explicit HIRMarkerImplCb(F f)
-        : f(f)
-    {
+        : f(f) {
     }
 
     bool visit(const HIRMarkerImpl& impl) override {
@@ -694,8 +690,7 @@ struct HIRTypeImplCb final: HIRTypeImplCallback {
     F f;
 
     explicit HIRTypeImplCb(F f)
-        : f(f)
-    {
+        : f(f) {
     }
 
     bool visit(const HIRTypeImpl& impl) override {
@@ -711,8 +706,7 @@ struct HIRLocalItemTypeNamePath {
     HIRLocalItemTypeNamePath(HIRSimplePath modulePath, const HIRPath* ownerPath, const HIRLocalItemTypeNamePath* next)
         : modulePath(modulePath)
         , ownerPath(ownerPath)
-        , next(next)
-    {
+        , next(next) {
     }
 };
 

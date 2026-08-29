@@ -11,7 +11,6 @@ generate(
             ("const HIRTrait*", "traitPtr"),
             ("const HIRSimplePath*", "traitPath"),
             ("const HIRTraitImpl*", "impl"),
-            ("mutable HIRTypeRef", "selfCache"),
         ], copy=False),
         v("BoundedPtr", fields=[
             ("const HIRTypeData*", "type"),

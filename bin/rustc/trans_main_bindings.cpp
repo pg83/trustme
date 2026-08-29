@@ -750,7 +750,7 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
         bool implAvailable = true;
         if (!impl.params.bounds.empty()) {
             implAvailable = resolve.findImpl(sp, traitPath, impl.traitArgs, implTy, [&](SolverResponse response) {
-                return response.certainty == SolverCertainty::Proven && response.impl->traitImpl == &impl;
+                return response.certainty == SolverCertainty::Proven && response.impl && response.impl->traitImpl == &impl;
             });
         }
         if (!implAvailable) {
@@ -791,9 +791,11 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
 
                         DEBUG("Check " << bTyMono << ": " << bTpMono);
                         rv = resolve.findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](SolverResponse response) {
-                            const auto impl = response.impl->legacy();
+                            if (!response.impl) {
+                                return false;
+                            }
                             for (const auto& tyB : bTpMono.typeBounds) {
-                                const auto& ty = impl.getType(state.crate.types, tyB.first.c_str(), tyB.second.atyParams);
+                                const auto& ty = response.impl->getType(state.crate.types, tyB.first.c_str(), tyB.second.atyParams);
                                 DEBUG("ATY " << tyB.first << " " << ty << " ?= exp " << tyB.second.type);
                                 if (ty != tyB.second.type) {
                                     return false;
@@ -1243,7 +1245,10 @@ static EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate
             bool foundBound = false;
             bool foundImpl = false;
             resolve.findImpl(sp, pe->trait.path, pe->trait.params, pe->type, [&](SolverResponse response) -> bool {
-                DEBUG("[get_ent_fullpath] Found " << response.impl->legacy());
+                if (!response.impl) {
+                    return false;
+                }
+                DEBUG("[get_ent_fullpath] Found " << response.impl->traitPath << " for " << response.impl->type);
                 if (response.impl->traitImpl) {
                     foundImpl = true;
                 } else {
@@ -3167,8 +3172,7 @@ bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const Vect
 State::State(const WireBoard& wb, HIRCrate& crate, const TransList& transList)
     : crate(crate)
     , resolve(wb, OpaqueReveal::All)
-    , transList(transList)
-{
+    , transList(transList) {
     langClone = crate.getLangItemPathOpt("clone");
 }
 
@@ -3182,8 +3186,7 @@ auto State::enqueueType(const HIRTypeData* ty) -> void {
 Builder::Builder(const State& state, MIRFunction& mir)
     : state(state)
     , mir(mir)
-    , self(MIRLValue::newArgument(0))
-{
+    , self(MIRLValue::newArgument(0)) {
     mir.blocks.push_back(MIRBasicBlock());
 }
 
@@ -3314,8 +3317,7 @@ auto Builder::pushCallDrop(const HIRTypeData* ty) -> MIRBasicBlockId {
 
 BindTranslationNominals::BindTranslationNominals(const HIRCrate& crate)
     : HIRVisitor(nullptr, crate.types)
-    , crate(crate)
-{
+    , crate(crate) {
 }
 
 [[nodiscard]] auto BindTranslationNominals::visitType(HIRTypeRef ty) -> HIRTypeRef {
@@ -3360,8 +3362,7 @@ EnumState::EnumState(const WireBoard& wb)
     : crate(*wb.crate)
     , resolve(wb, OpaqueReveal::All)
     , rv(wb)
-    , origList(nullptr)
-{
+    , origList(nullptr) {
     enumerateLinkFunctions();
 }
 
@@ -3405,8 +3406,7 @@ auto EnumState::enumerateLinkFunctionsIn(const HIRModule& mod, HIRItemPath modPa
 GlobalAsmOperandEvaluator::GlobalAsmOperandEvaluator(const WireBoard& wb)
     : HIRVisitor(nullptr, wb.crate->types)
     , wb(wb)
-    , crate(*wb.crate)
-{
+    , crate(*wb.crate) {
 }
 
 auto GlobalAsmOperandEvaluator::evaluate(HIRGlobalAssembly& item) -> void {
@@ -3467,8 +3467,7 @@ auto MIREnumCache::apply(EnumState& state, const TransParams& pp) const -> void 
 
 template <typename F>
 TransPathCb<F>::TransPathCb(F f)
-    : f(f)
-{
+    : f(f) {
 }
 
 template <typename F>
@@ -3485,8 +3484,7 @@ TypeVisitor::TypeVisitor(const WireBoard& wb, TransList& out, const TransList* p
     : crate(*wb.crate)
     , resolve(wb, OpaqueReveal::All)
     , out(out)
-    , prevList(prevList)
-{
+    , prevList(prevList) {
 }
 
 TypeVisitor::~TypeVisitor() {
@@ -3838,8 +3836,7 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                     , tv(tv)
                     , pp(pp)
                     , fcn(fcn)
-                    , localMirRes(localMirRes)
-                {
+                    , localMirRes(localMirRes) {
                 }
 
                 bool visitLvalue(const MIRLValue& lv, MIRValUsage /*vu*/) override {
