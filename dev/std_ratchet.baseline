@@ -178,7 +178,6 @@
 2	std::map	bin/rustc/hir_typeck_main_bindings.cpp
 1	std::string	bin/rustc/hir_typeck_main_bindings.cpp
 3	std::vector	bin/rustc/hir_typeck_main_bindings.cpp
-1	std::map	bin/rustc/hir_typeck_static.h
 1	make_unique	bin/rustc/hir_visitor.cpp
 1	unique_ptr	bin/rustc/hir_visitor.cpp
 1	make_shared	bin/rustc/ident.cpp

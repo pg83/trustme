@@ -2037,11 +2037,18 @@ bool HMTypeInferrence::containsLiveIvar(const HIRTypeData* type, unsigned int ro
     });
 }
 
-Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve, bool bindRigidValues)
+Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve)
+    : Unifier(sp, table, resolve, {})
+{
+}
+
+Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve, Options options)
     : sp_(sp)
     , table_(table)
     , resolve_(resolve)
-    , bindRigidValues_(bindRigidValues)
+    , bindRigidValues_(options.bindRigidValues)
+    , relateProjectionInputs_(options.relateProjectionInputs)
+    , rigidGenericsAreDistinct_(options.rigidGenericsAreDistinct)
 {
 }
 
@@ -2164,6 +2171,35 @@ Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTyp
             return Outcome::Mismatch;
         }
         return this->defer(left, right);
+    }
+
+    if (rigidGenericsAreDistinct_) {
+        const auto isOrdinaryGeneric = [](const HIRTypeData* type) {
+            const auto* generic = type->opt_Generic();
+            return generic && !generic->isPlaceholder();
+        };
+        if (isOrdinaryGeneric(left) || isOrdinaryGeneric(right)) {
+            return Outcome::Mismatch;
+        }
+    }
+
+    if (relateProjectionInputs_) {
+        const auto* leftPath = left->opt_Path();
+        const auto* rightPath = right->opt_Path();
+        const auto* leftProjection = leftPath ? leftPath->path.data.opt_UfcsKnown() : nullptr;
+        const auto* rightProjection = rightPath ? rightPath->path.data.opt_UfcsKnown() : nullptr;
+        if (leftProjection || rightProjection) {
+            if (!leftProjection || !rightProjection) {
+                return this->defer(left, right);
+            }
+            if (leftProjection->trait.path != rightProjection->trait.path || leftProjection->item != rightProjection->item) {
+                return Outcome::Mismatch;
+            }
+            if (this->unifyResolved(leftProjection->type, rightProjection->type) == Outcome::Mismatch || this->unifyParams(leftProjection->trait.params, rightProjection->trait.params) == Outcome::Mismatch || this->unifyParams(leftProjection->params, rightProjection->params) == Outcome::Mismatch) {
+                return Outcome::Mismatch;
+            }
+            return Outcome::Proven;
+        }
     }
     if (typeIsRigidUnknown(left) || typeIsRigidUnknown(right)) {
         return this->defer(left, right);
@@ -8241,7 +8277,7 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
         return result;
     }
 
-    Unifier unifier(span(), table, nullptr, true);
+    Unifier unifier(span(), table, nullptr, {.bindRigidValues = true});
     bool responseMismatch = false;
     auto unifyInstantiatedType = [&](this auto&& self, const HIRTypeData* left, const HIRTypeData* right) -> void {
         if (responseMismatch) {
@@ -8843,7 +8879,7 @@ auto NextTraitGoalEvaluator::relateAssembledHead(const HIRPathParams& goalParams
     const auto candidateType = typeHasHrtb ? instantiatedType : originalCandidateType;
     const HIRPathParams& candidateParams = paramsHaveHrtb ? instantiatedParams : originalCandidateParams;
 
-    Unifier unifier(span(), resolve_.ivars, &resolve_, headHasHrtb);
+    Unifier unifier(span(), resolve_.ivars, &resolve_, {.bindRigidValues = headHasHrtb});
     auto relation = unifier.unify(goalType, candidateType);
     if (relation == Unifier::Outcome::Mismatch) {
         return Certainty::NoSolution;
@@ -9316,7 +9352,7 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(HIRPathParams& params, Relate 
 
     InstantiateCandidate instantiate(crate.types, typeBindings, valueBindings);
     const auto probeParams = instantiate.monomorphPathParams(span(), params, true);
-    Unifier unifier(span(), resolve_.ivars, &resolve_, true);
+    Unifier unifier(span(), resolve_.ivars, &resolve_, {.bindRigidValues = true});
 
     struct Relations {
         const Span& span_;

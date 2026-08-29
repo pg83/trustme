@@ -16,23 +16,6 @@
 using namespace stl;
 
 namespace {
-    struct GetParams: public HIRMatchGenerics {
-        struct ParamsSet {
-            Vector<u8> types;
-            Vector<u8> values;
-        };
-
-        Span sp;
-        HIRPathParams& implParams;
-        ParamsSet& paramsSet;
-
-        GetParams(Span sp, ObjPool& valuePool, const HIRGenericParams& implParamsDef, HIRPathParams& implParams, ParamsSet& paramsSet);
-
-        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override;
-
-        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& value) override;
-    };
-
     bool specializationLookupNeedsResolution(const HIRTypeData* type, const HIRPathParams& params) {
         auto typeNeedsResolution = [](const HIRTypeData* inner) {
             return inner->hasTypeInfer() || inner->needsMonomorphisation() || inner->mayHaveAssociatedType();
@@ -59,16 +42,18 @@ struct StaticTraitResolve::NextSolverBridge {
 
     explicit NextSolverBridge(const WireBoard& wb);
 
-    bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, StaticImplCallback& callback);
+    bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, SolverResponseCallback& callback);
 
-    bool findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const char* valueName, StaticImplCallback& callback);
+    bool findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const char* valueName, SolverResponseCallback& callback);
+
+    SolverCertainty probeInherentImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeImpl& impl, const HIRTypeData* receiver, HIRPathParams& implParams);
 
     bool normalize(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* projection, HIRTypeRef& output);
 
     bool typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* type);
 };
 
-bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb) const {
+bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, SolverResponseCallback& foundCb) const {
     if (traitPath.components().empty()) {
         return false;
     }
@@ -85,301 +70,6 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
         nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
     }
     return nextSolver->findImpl(sp, implGenerics_, itemGenerics_, traitPath, traitParams, type, foundCb);
-}
-
-bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimplePath& desTraitPath, const HIRPathParams* desTraitParams, const HIRTypeData* desType, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitParams, const HIRTypeData* implType, StaticImplMatchCallback& foundCb) const {
-    auto cbIdent = HIRResolvePlaceholdersNop();
-
-    auto& cacheBucket = cachedImplChecks[ImplCheckKey{&implParamsDef, &implTraitParams, implType, desTraitPath.rawData(), desType}];
-    {
-        for (const auto& ent : cacheBucket) {
-            if (ent.hasDesParams != (desTraitParams != nullptr)) {
-                continue;
-            }
-            if (desTraitParams && ent.desParams != *desTraitParams) {
-                continue;
-            }
-            return foundCb.visit(ent.implParams.clone(), ent.result);
-        }
-    }
-    // TODO: What if `des_trait_params` already has impl placeholders?
-
-    HIRPathParams implParams;
-    GetParams::ParamsSet paramsSet;
-    GetParams getParams{sp, *crate.pool, implParamsDef, implParams, paramsSet};
-
-    auto match = implType->matchTestGenericsFuzz(sp, desType, cbIdent, getParams);
-
-    struct BaseImplPlaceholderIdx {
-        unsigned ty = 0;
-        unsigned val = 0;
-    } baseImplPlaceholderIdx;
-
-    if (desTraitParams) {
-        ASSERT_BUG(sp, desTraitParams->types.size() == implTraitParams.types.size(), "Size mismatch in arguments for " << desTraitPath << " - " << *desTraitParams << " and " << implTraitParams);
-        match &= implTraitParams.matchTestGenericsFuzz(sp, *desTraitParams, cbIdent, getParams);
-
-        unsigned maxImplIdxTy = 0;
-        unsigned maxImplIdxVal = 0;
-        // TODO: Get a generic visitor (running the same way as `Monomorphiser`)
-        for (const auto& r : desTraitParams->types) {
-            visitTyWith(r, [&](const HIRTypeData* t) -> bool {
-                if (t->is_Generic() && t->as_Generic().isPlaceholder()) {
-                    unsigned implIdx = t->as_Generic().idx();
-                    maxImplIdxTy = std::max(maxImplIdxTy, implIdx);
-                }
-                // TODO: Path param lifetimes, etc
-                return false;
-            });
-        }
-        baseImplPlaceholderIdx.ty = maxImplIdxTy + 1;
-        baseImplPlaceholderIdx.val = maxImplIdxVal + 1;
-
-        size_t nPlaceholderTysNeeded = std::count(paramsSet.types.begin(), paramsSet.types.end(), false);
-        size_t nPlaceholderValsNeeded = std::count(paramsSet.values.begin(), paramsSet.values.end(), false);
-        if (nPlaceholderTysNeeded > 0) {
-            ASSERT_BUG(sp, baseImplPlaceholderIdx.ty + implParams.types.size() <= 256, "Out of impl placeholder types");
-        }
-        if (nPlaceholderValsNeeded > 0) {
-            ASSERT_BUG(sp, baseImplPlaceholderIdx.val + implParams.values.size() <= 256, "Out of impl placeholder values");
-        }
-    }
-    if (match == HIRCompare::Unequal) {
-        return false;
-    }
-
-    auto placeholderName = RcString::newInterned(FMT("impl_?_" << &implParamsDef));
-    GetParams::ParamsSet placeholdersSet;
-    HIRPathParams placeholders;
-    for (unsigned int i = 0; i < implParams.types.size(); i++) {
-        if (!paramsSet.types[i]) {
-            if (placeholders.types.size() == 0) {
-                placeholders.types.resize(implParams.types.size());
-                placeholdersSet.types.zero(implParams.types.size());
-            }
-            placeholders.types[i] = crate.types.generic(placeholderName, 2 * 256 + baseImplPlaceholderIdx.ty + i);
-        }
-    }
-    for (size_t i = 0; i < implParams.values.size(); i++) {
-        if (!paramsSet.values[i]) {
-            if (placeholders.values.size() == 0) {
-                placeholders.values.resize(implParams.values.size());
-                placeholdersSet.values.zero(implParams.values.size());
-            }
-            placeholders.values[i] = HIRConstGeneric::make_Generic(HIRGenericRef(placeholderName, 2 * 256 + baseImplPlaceholderIdx.val + i));
-        }
-    }
-
-    struct Matcher: public HIRMatchGenerics, public Monomorphiser {
-        Span sp;
-        const HIRPathParams& implParams;
-        const GetParams::ParamsSet& paramsSet;
-        const BaseImplPlaceholderIdx& baseImplPlaceholderIdx;
-        RcString placeholderName;
-        HIRPathParams& placeholders;
-        GetParams::ParamsSet& placeholdersSet;
-
-        Matcher(HIRTypeInterner& types, Span sp, const HIRPathParams& implParams, const GetParams::ParamsSet& paramsSet, RcString placeholderName, const BaseImplPlaceholderIdx& baseImplPlaceholderIdx, HIRPathParams& placeholders, GetParams::ParamsSet& placeholdersSet)
-            : HIRMatchGenerics(types.objectPool())
-            , Monomorphiser(types)
-            , sp(sp)
-            , implParams(implParams)
-            , paramsSet(paramsSet)
-            , baseImplPlaceholderIdx(baseImplPlaceholderIdx)
-            , placeholderName(placeholderName)
-            , placeholders(placeholders)
-            , placeholdersSet(placeholdersSet)
-        {
-        }
-
-        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override {
-            if (ty->is_Generic() && ty->as_Generic().binding == g.binding) {
-                return HIRCompare::Equal;
-            }
-            if (g.isPlaceholder()) {
-                if (g.idx() >= baseImplPlaceholderIdx.ty) {
-                    auto i = g.idx() - baseImplPlaceholderIdx.ty;
-                    ASSERT_BUG(sp, !paramsSet.types[i], "Placeholder to populated type returned. new " << ty << ", existing " << implParams.types[i]);
-                    auto& ph = placeholders.types[i];
-                    if (!placeholdersSet.types[i]) {
-                        placeholdersSet.types.mut(i) = true;
-                        ph = ty;
-                        return HIRCompare::Equal;
-                    } else if (ph == ty) {
-                        return HIRCompare::Equal;
-                    } else {
-                        return ph->compareWithPlaceholders(sp, ty, resolveCb);
-                        //TODO(sp, "[find_impl__check_crate_raw] Compare placeholder " << i << " " << ph << " == " << ty);
-                    }
-                } else {
-                    return HIRCompare::Fuzzy;
-                }
-            } else {
-                return HIRCompare::Unequal;
-            }
-        }
-
-        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& val) override {
-            if (const auto* ge = val.opt_Generic()) {
-                if (ge->binding == g.binding) {
-                    return Equal;
-                }
-            }
-
-            if (g.isPlaceholder()) {
-                if (g.idx() >= baseImplPlaceholderIdx.val) {
-                    auto i = g.idx() - baseImplPlaceholderIdx.val;
-                    ASSERT_BUG(sp, !paramsSet.values[i], "Placeholder to populated value returned. new " << val << ", existing " << implParams.values[i]);
-                    auto& ph = placeholders.values[i];
-                    if (!placeholdersSet.values[i]) {
-                        placeholdersSet.values.mut(i) = true;
-                        ph = val.clone();
-                        return HIRCompare::Equal;
-                    } else if (ph == val) {
-                        return HIRCompare::Equal;
-                    } else {
-                        TODO(sp, "[find_impl__check_crate_raw] Compare placeholder value " << i << " " << ph << " == " << val);
-                    }
-                } else {
-                    return HIRCompare::Fuzzy;
-                }
-            }
-
-            TODO(Span(), "Matcher::match_val " << g << " with " << val);
-            return HIRCompare::Unequal;
-        }
-
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& ge) const override {
-            if (ge.isSelf()) {
-                // TODO: `impl_type` or `des_type`
-                //TODO(sp, "[find_impl__check_crate_raw] Self - " << impl_type << " or " << des_type);
-                TODO(sp, "get_type Self");
-            }
-            ASSERT_BUG(sp, !ge.isPlaceholder(), "[find_impl__check_crate_raw] Placeholder param seen - " << ge);
-            if (paramsSet.types[ge.binding]) {
-                return implParams.types.at(ge.binding);
-            }
-            return placeholders.types.at(ge.binding);
-        }
-
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override {
-            ASSERT_BUG(sp, val.binding < 256, "Generic value binding in " << val << " out of range (>=256)");
-            ASSERT_BUG(sp, val.binding < implParams.values.size(), "Generic value binding in " << val << " out of range (>= " << implParams.values.size() << ")");
-            if (paramsSet.values[val.binding]) {
-                return implParams.values.at(val.binding).clone();
-            }
-            ASSERT_BUG(sp, placeholders.values.size() == implParams.values.size(), "Placeholder size mismatch: " << placeholders.values.size() << " != " << implParams.values.size() << " - value=" << implParams.values.at(val.binding));
-            return placeholders.values.at(val.binding).clone();
-        }
-    };
-
-    Matcher matcher{crate.types, sp, implParams, paramsSet, placeholderName, baseImplPlaceholderIdx, placeholders, placeholdersSet};
-
-    HIRPathParams previousPlaceholders;
-    do {
-        previousPlaceholders = placeholders.clone();
-        for (const auto& bound : implParamsDef.bounds) {
-            if (const auto* ep = bound.opt_TraitBound()) {
-                const auto& e = *ep;
-
-                auto bTyMono = matcher.monomorphType(sp, e.type);
-                this->expandAssociatedTypes(sp, bTyMono);
-                auto bTpMono = matcher.monomorphTraitpath(sp, e.trait, false);
-                expandAssociatedTypesTp(sp, bTpMono);
-                // HACK: If the type is '_', assume the bound passes
-                if (bTyMono->is_Infer()) {
-                    continue;
-                }
-
-                // TODO: This is extrememly inefficient (looks up the trait impl 1+N times)
-                if (bTpMono.typeBounds.size() > 0) {
-                    for (const auto& assocBound : bTpMono.typeBounds) {
-                        // TODO: Can bounds have generic params (GATs)
-                        const auto& atyName = assocBound.first;
-                        const HIRTypeData* exp = assocBound.second.type;
-
-                        // TODO: use `assoc_bound.second.source_trait`
-                        HIRGenericPath atySrcTrait;
-                        traitContainsType(sp, bTpMono.path, *e.trait.traitPtr, atyName.c_str(), atySrcTrait);
-
-                        bool rv = false;
-                        if (bTyMono->is_Generic() && bTyMono->as_Generic().isPlaceholder()) {
-                            rv = true;
-                        } else {
-                            rv = this->findImpl(sp, atySrcTrait.path, atySrcTrait.params, bTyMono, [&](const ImplRef& impl, SolverCertainty) -> bool {
-                                HIRTypeRef have = impl.getType(crate.types, atyName.c_str(), assocBound.second.atyParams);
-                                if (have == HIRTypeRef()) {
-                                    have = crate.types.path(HIRPath(impl.getImplType(crate.types), HIRGenericPath(atySrcTrait.path, impl.getTraitParams(crate.types)), atyName), HIRTypePathBinding::make_Unbound({}));
-                                }
-                                this->expandAssociatedTypes(sp, have);
-
-                                auto cmp = exp->matchTestGenericsFuzz(sp, have, cbIdent, matcher);
-                                if (cmp == HIRCompare::Unequal) {
-                                }
-                                return cmp != HIRCompare::Unequal;
-                            });
-                        }
-                        if (!rv) {
-                            return false;
-                        }
-                    }
-                }
-
-                // TODO: Detect if the associated type bound above is from directly the bounded trait, and skip this if it's the case
-
-                {
-                    bool rv = false;
-                    if (bTyMono->is_Generic() && bTyMono->as_Generic().isPlaceholder()) {
-                        rv = true;
-                    } else {
-                        rv = this->findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](const auto& impl, SolverCertainty) {
-                            return true;
-                        });
-                    }
-                    if (!rv && visitTyWith(bTyMono, [](const HIRTypeData* ty) {
-                        return ty->is_Generic() && ty->as_Generic().isPlaceholder();
-                    })) {
-                        rv = true;
-                    }
-                    if (!rv && visitTraitPathTysWith(bTpMono, [](const HIRTypeData* ty) {
-                        return ty->is_Generic() && ty->as_Generic().isPlaceholder();
-                    })) {
-                        rv = true;
-                    }
-                    if (!rv) {
-                        return false;
-                    }
-                }
-            } else {
-            }
-        }
-    } while (placeholders != previousPlaceholders);
-
-    for (size_t i = 0; i < implParams.types.size(); i++) {
-        if (!paramsSet.types[i]) {
-            if (!placeholdersSet.types[i]) {
-            }
-            implParams.types[i] = std::move(placeholders.types[i]);
-        }
-    }
-
-    BUG_ASSERT(implParamsDef.types.size() == implParams.types.size());
-    for (size_t i = 0; i < implParamsDef.types.size(); i++) {
-        if (implParamsDef.types.at(i).isSized) {
-            if (!implParams.types[i]->is_Infer()) {
-                if (!typeIsSized(sp, implParams.types[i])) {
-                    return false;
-                }
-            }
-        }
-    }
-
-    // TODO: Can this be cached?
-
-    {
-        cacheBucket.push_back(ImplCheckEntry{desTraitParams != nullptr, desTraitParams ? desTraitParams->clone() : HIRPathParams(), implParams.clone(), match});
-    }
-    return foundCb.visit(mv$(implParams), match);
 }
 
 const HIRTypeData* StaticTraitResolve::fixTraitDefaultReturn(const Span& sp, const HIRItemPath& path, const HIRTypeData* tpl, HIRTypeRef& tmp) const {
@@ -1191,8 +881,8 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* type) co
 
     HIRPathParams params;
     bool proven = false;
-    this->findImpl(sp, langClone(), &params, type, [&](ImplRef, SolverCertainty certainty) {
-        proven = certainty == SolverCertainty::Proven;
+    this->findImpl(sp, langClone(), &params, type, [&](SolverResponse response) {
+        proven = response.certainty == SolverCertainty::Proven;
         return proven;
     });
     cloneCache.insert(std::make_pair(type, proven));
@@ -1202,8 +892,8 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* type) co
 bool StaticTraitResolve::typeIsSized(const Span& sp, const HIRTypeData* type) const {
     HIRPathParams params;
     bool proven = false;
-    this->findImpl(sp, langSized(), &params, type, [&](ImplRef, SolverCertainty certainty) {
-        proven = certainty == SolverCertainty::Proven;
+    this->findImpl(sp, langSized(), &params, type, [&](SolverResponse response) {
+        proven = response.certainty == SolverCertainty::Proven;
         return proven;
     });
     return proven;
@@ -1485,7 +1175,8 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
             good = true;
         } else {
             good = false;
-            findImpl(sp, de->trait.path.path, de->trait.path.params, srcTy, [&](const auto impl, SolverCertainty) {
+            findImpl(sp, de->trait.path.path, de->trait.path.params, srcTy, [&](SolverResponse response) {
+                const auto impl = response.impl->legacy();
                 good = true;
                 for (const auto& aty : de->trait.typeBounds) {
                     // TODO: Can ATY bounds have generics
@@ -1503,7 +1194,8 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
             });
         }
 
-        auto cb = [&](const auto impl, SolverCertainty) {
+        auto cb = [&](SolverResponse response) {
+            const auto impl = response.impl->legacy();
             tmpE.markers.back().params = impl.getTraitParams(crate.types);
             return true;
         };
@@ -1895,7 +1587,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             }
 
             auto pp = HIRPathParams();
-            bool hasDirectDrop = this->findImpl(sp, langDrop(), &pp, ty, [&](auto, SolverCertainty) {
+            bool hasDirectDrop = this->findImpl(sp, langDrop(), &pp, ty, [&](SolverResponse) {
                 return true;
             });
             if (hasDirectDrop) {
@@ -2040,8 +1732,8 @@ bool StaticTraitResolve::findAsyncDrop(const Span& sp, const HIRTypeData* ty, HI
     }
 
     bool found = false;
-    findImpl(sp, trait, HIRPathParams{}, ty, [&](ImplRef impl, SolverCertainty certainty) {
-        if (certainty == SolverCertainty::Proven && impl.data.is_TraitImpl()) {
+    findImpl(sp, trait, HIRPathParams{}, ty, [&](SolverResponse response) {
+        if (response.certainty == SolverCertainty::Proven && response.impl->traitImpl) {
             found = true;
             return true;
         }
@@ -2361,13 +2053,14 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 ImplRef bestImpl;
                 ValuePtr rv;
                 bool lookupNeedsResolution = specializationLookupNeedsResolution(pe.type, pe.trait.params);
-                auto visitImpl = [&](auto impl, SolverCertainty certainty) -> bool {
+                auto visitImpl = [&](SolverResponse response) -> bool {
+                    auto impl = response.impl->legacy();
                     DEBUG(impl);
                     if (!impl.data.is_TraitImpl()) {
                         hasBoundedImpl = true;
                         return false;
                     }
-                    if (certainty != SolverCertainty::Proven && lookupNeedsResolution) {
+                    if (response.certainty != SolverCertainty::Proven && lookupNeedsResolution) {
                         hasAmbiguousImpl = true;
                         return false;
                     }
@@ -2416,7 +2109,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
                     nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
                 }
-                StaticImplCb<decltype(visitImpl)> callback(visitImpl);
+                SolverResponseCb<decltype(visitImpl)> callback(visitImpl);
                 nextSolver->findValue(sp, implGenerics_, itemGenerics_, pe.trait.path, pe.trait.params, pe.type, pe.item.c_str(), callback);
                 if (!bestImpl.isValid()) {
                     if (hasBoundedImpl || hasAmbiguousImpl) {
@@ -2488,20 +2181,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
             }
             crate.findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
-                if (!pe.implParams.hasParams()) {
-                    GetParams::ParamsSet paramsSet;
-                    GetParams getParams{sp, *crate.pool, impl.params, outParams.ppImplData, paramsSet};
-
-                    auto cbIdent = HIRResolvePlaceholdersNop();
-                    impl.type->matchTestGenericsFuzz(sp, pe.type, cbIdent, getParams);
-
-                    const auto& implParams = outParams.ppImplData;
-
-                    outParams.ppImpl = &outParams.ppImplData;
-                } else {
-                    return false;
-                }
-
                 if (pe.implParams.types.size() > impl.params.types.size() || pe.implParams.values.size() > impl.params.values.size()) {
                     return false;
                 }
@@ -2510,17 +2189,14 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 if (match == SolverCertainty::NoSolution || match <= bestMatch) {
                     return false;
                 }
-                {
-                    auto it = impl.constants.find(pe.item);
-                    if (it != impl.constants.end()) {
-                        ASSERT_BUG(sp, impl.params.types.size() == outParams.ppImpl->types.size(), "Mismatch in param counts " << p << ", params are " << impl.params.fmtArgs());
-                        rv = ValuePtr{&it->second.data};
-                        return true;
-                    }
+                auto it = impl.constants.find(pe.item);
+                if (it == impl.constants.end()) {
+                    return false;
                 }
-                outParams.ppImplData = ::std::move(candidateParams);
+                outParams.ppImplData = std::move(candidateParams);
                 outParams.ppImpl = &outParams.ppImplData;
-                rv = ::std::move(candidate);
+                ASSERT_BUG(sp, impl.params.types.size() == outParams.ppImpl->types.size(), "Mismatch in param counts " << p << ", params are " << impl.params.fmtArgs());
+                rv = ValuePtr{&it->second.data};
                 bestMatch = match;
                 return bestMatch == SolverCertainty::Proven;
             });
@@ -2665,7 +2341,7 @@ StaticTraitResolve::NextSolverBridge::NextSolverBridge(const WireBoard& wb)
 {
 }
 
-auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, StaticImplCallback& callback) -> bool {
+auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, SolverResponseCallback& callback) -> bool {
     resolve_.setGenericContext(implGenerics, itemGenerics);
 
     HIRPathParams inferredParams;
@@ -2683,22 +2359,26 @@ auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGen
         params = &inferredParams;
     }
 
-    return resolve_.solveTraitGoal(sp, trait, *params, type, [&](SolverResponse response) {
-        if (!response.hasImpl || !response.impl) {
-            return false;
-        }
-        return callback.visit(response.impl->legacy(), response.certainty);
-    }, {.assocName = ""});
+    return resolve_.solveTraitGoalCb(sp, trait, *params, type, callback, {.assocName = ""});
 }
 
-auto StaticTraitResolve::NextSolverBridge::findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const char* valueName, StaticImplCallback& callback) -> bool {
+auto StaticTraitResolve::NextSolverBridge::findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const char* valueName, SolverResponseCallback& callback) -> bool {
     resolve_.setGenericContext(implGenerics, itemGenerics);
-    return resolve_.solveTraitGoal(sp, trait, params, type, [&](SolverResponse response) {
-        if (!response.hasImpl || !response.impl) {
-            return false;
-        }
-        return callback.visit(response.impl->legacy(), response.certainty);
-    }, {.valueName = valueName});
+    return resolve_.solveTraitGoalCb(sp, trait, params, type, callback, {.valueName = valueName});
+}
+
+auto StaticTraitResolve::NextSolverBridge::probeInherentImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeImpl& impl, const HIRTypeData* receiver, HIRPathParams& implParams) -> SolverCertainty {
+    resolve_.setGenericContext(implGenerics, itemGenerics);
+    const auto match = resolve_.fticCheckParams(sp, HIRSimplePath(), nullptr, receiver, impl.params, {}, impl.type, implParams);
+    switch (match) {
+        case HIRCompare::Equal:
+            return SolverCertainty::Proven;
+        case HIRCompare::Fuzzy:
+            return SolverCertainty::Ambiguous;
+        case HIRCompare::Unequal:
+            return SolverCertainty::NoSolution;
+    }
+    UNREACHABLE();
 }
 
 auto StaticTraitResolve::NextSolverBridge::normalize(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* projection, HIRTypeRef& output) -> bool {
@@ -2714,36 +2394,4 @@ auto StaticTraitResolve::NextSolverBridge::normalize(const Span& sp, const HIRGe
 auto StaticTraitResolve::NextSolverBridge::typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* type) -> bool {
     resolve_.setGenericContext(implGenerics, itemGenerics);
     return resolve_.typeIsCopy(sp, type) == HIRCompare::Equal;
-}
-
-GetParams::GetParams(Span sp, ObjPool& valuePool, const HIRGenericParams& implParamsDef, HIRPathParams& implParams, ParamsSet& paramsSet)
-    : HIRMatchGenerics(valuePool)
-    , sp(sp)
-    , implParams(implParams)
-    , paramsSet(paramsSet)
-{
-    implParams.types.resize(implParamsDef.types.size());
-    implParams.values.resize(implParamsDef.values.size());
-    paramsSet.types.zero(implParamsDef.types.size());
-    paramsSet.values.zero(implParamsDef.values.size());
-}
-
-auto GetParams::matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) -> HIRCompare {
-    ASSERT_BUG(sp, g.binding < implParams.types.size(), "[GetParams] Type generic " << g << " out of bounds (" << implParams.types.size() << ")");
-    if (!paramsSet.types[g.binding]) {
-        paramsSet.types.mut(g.binding) = true;
-        implParams.types[g.binding] = ty;
-        return HIRCompare::Equal;
-    }
-    return implParams.types[g.binding]->compareWithPlaceholders(sp, ty, resolveCb);
-}
-
-auto GetParams::matchVal(const HIRGenericRef& g, const HIRConstGeneric& value) -> HIRCompare {
-    ASSERT_BUG(sp, g.binding < implParams.values.size(), "[GetParams] Value generic " << g << " out of range (" << implParams.values.size() << ")");
-    if (!paramsSet.values[g.binding]) {
-        paramsSet.values.mut(g.binding) = true;
-        implParams.values[g.binding] = value.clone();
-        return HIRCompare::Equal;
-    }
-    return implParams.values[g.binding] == value ? HIRCompare::Equal : HIRCompare::Unequal;
 }

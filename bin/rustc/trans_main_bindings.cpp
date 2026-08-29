@@ -749,9 +749,8 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
     if (!impl.params.isGeneric()) {
         bool implAvailable = true;
         if (!impl.params.bounds.empty()) {
-            implAvailable = resolve.findImpl(sp, traitPath, impl.traitArgs, implTy, [&](const ImplRef& implRef, SolverCertainty certainty) {
-                const auto* candidate = implRef.data.opt_TraitImpl();
-                return certainty == SolverCertainty::Proven && candidate && candidate->impl == &impl;
+            implAvailable = resolve.findImpl(sp, traitPath, impl.traitArgs, implTy, [&](SolverResponse response) {
+                return response.certainty == SolverCertainty::Proven && response.impl->traitImpl == &impl;
             });
         }
         if (!implAvailable) {
@@ -791,7 +790,8 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
                         resolve.expandAssociatedTypesTp(sp, bTpMono);
 
                         DEBUG("Check " << bTyMono << ": " << bTpMono);
-                        rv = resolve.findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](const ImplRef& impl, SolverCertainty) {
+                        rv = resolve.findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](SolverResponse response) {
+                            const auto impl = response.impl->legacy();
                             for (const auto& tyB : bTpMono.typeBounds) {
                                 const auto& ty = impl.getType(state.crate.types, tyB.first.c_str(), tyB.second.atyParams);
                                 DEBUG("ATY " << tyB.first << " " << ty << " ?= exp " << tyB.second.type);
@@ -1244,9 +1244,9 @@ static EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate
             }
             bool foundBound = false;
             bool foundImpl = false;
-            resolve.findImpl(sp, pe->trait.path, pe->trait.params, pe->type, [&](auto implRef, SolverCertainty) -> bool {
-                DEBUG("[get_ent_fullpath] Found " << implRef);
-                if (implRef.data.is_TraitImpl()) {
+            resolve.findImpl(sp, pe->trait.path, pe->trait.params, pe->type, [&](SolverResponse response) -> bool {
+                DEBUG("[get_ent_fullpath] Found " << response.impl->legacy());
+                if (response.impl->traitImpl) {
                     foundImpl = true;
                 } else {
                     foundBound = true;

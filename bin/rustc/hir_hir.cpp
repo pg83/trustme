@@ -54,8 +54,8 @@ namespace {
     };
 
     struct ImplTyMatcher: public HIRMatchGenerics, public Monomorphiser {
-        std::vector<std::optional<HIRTypeRef>> implTys;
-        std::vector<std::optional<HIRConstGeneric>> implVals;
+        ThinVector<std::optional<HIRTypeRef>> implTys;
+        ThinVector<std::optional<HIRConstGeneric>> implVals;
 
         explicit ImplTyMatcher(HIRTypeInterner& types);
 

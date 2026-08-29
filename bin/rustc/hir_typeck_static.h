@@ -69,38 +69,6 @@ class StaticTraitResolve: public TraitResolveCommon {
 
     mutable HIRTypeRefMap<HIRTypeRef> atyCache;
 
-    struct ImplCheckKey {
-        const void* implParamsDef;
-        const void* implTraitParams;
-        const HIRTypeData* implType;
-        const void* desTraitPath;
-        const HIRTypeData* desType;
-
-        bool operator<(const ImplCheckKey& x) const {
-            if (implParamsDef != x.implParamsDef) {
-                return implParamsDef < x.implParamsDef;
-            }
-            if (implTraitParams != x.implTraitParams) {
-                return implTraitParams < x.implTraitParams;
-            }
-            if (implType != x.implType) {
-                return implType < x.implType;
-            }
-            if (desTraitPath != x.desTraitPath) {
-                return desTraitPath < x.desTraitPath;
-            }
-            return desType < x.desType;
-        }
-    };
-
-    struct ImplCheckEntry {
-        bool hasDesParams;
-        HIRPathParams desParams;
-        HIRPathParams implParams;
-        HIRCompare result;
-    };
-
-    mutable std::map<ImplCheckKey, ThinVector<ImplCheckEntry>> cachedImplChecks;
     mutable bool normalizingBoundType = false;
 
     OpaqueReveal reveal_ = OpaqueReveal::UserFacing;

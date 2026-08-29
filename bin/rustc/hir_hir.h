@@ -608,6 +608,7 @@ public:
 
     bool moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& x) const;
 
+    bool overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other) const;
 };
 
 class HIRMarkerImpl {
