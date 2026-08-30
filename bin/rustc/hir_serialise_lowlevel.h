@@ -11,6 +11,10 @@
 #include <vector>
 #include <stddef.h>
 
+namespace stl {
+    class ObjPool;
+}
+
 class HIRSerialiseWriter {
     class Inner;
 
@@ -24,7 +28,7 @@ public:
     HIRSerialiseWriter(HIRSerialiseWriter&&) = delete;
     ~HIRSerialiseWriter();
 
-    void open(const std::string& filename);
+    void open(stl::ObjPool& pool, const std::string& filename);
     void write(const void* data, size_t count);
 
     void writeU8(u8 v) {

@@ -420,7 +420,7 @@ namespace {
                 PathEnumerator pe;
                 pe.visitModule(crate.rootModule_);
 
-                OutputFile of{params.emitDepfile};
+                auto& of = *outputFile(*pool, params.emitDepfile.c_str());
                 // TODO: Escape spaces and colons in these paths
                 of << params.outfile << StringView(": ") << params.infile;
                 for (const auto& modPath : pe.out) {
@@ -432,6 +432,7 @@ namespace {
                 for (const auto& ec : crate.externCrates) {
                     of << StringView(" ") << ec.second.filename;
                 }
+                of.finish();
             }
 
             {
@@ -473,8 +474,9 @@ namespace {
             memoryDump(memoryDumpSequence, "AST Dropped");
             if (params.debug.dumpHir) {
                 {
-                    OutputFile os(FMT(params.outfile << StringView("_2_hir.rs")));
+                    auto& os = *outputFile(*pool, FMT(params.outfile << StringView("_2_hir.rs")).c_str());
                     HIRDump(os, *hirCrate);
+                    os.finish();
                 }
             }
             memoryDump(memoryDumpSequence, "HIR");
@@ -510,8 +512,9 @@ namespace {
             }
             if (params.debug.dumpHir) {
                 {
-                    OutputFile os(FMT(params.outfile << StringView("_2_hir.rs")));
+                    auto& os = *outputFile(*pool, FMT(params.outfile << StringView("_2_hir.rs")).c_str());
                     HIRDump(os, *hirCrate);
+                    os.finish();
                 }
             }
             // TODO: Expand vtables here?
@@ -525,8 +528,9 @@ namespace {
             }
             if (params.debug.dumpHir) {
                 {
-                    OutputFile os(FMT(params.outfile << StringView("_2_hir.rs")));
+                    auto& os = *outputFile(*pool, FMT(params.outfile << StringView("_2_hir.rs")).c_str());
                     HIRDump(os, *hirCrate);
+                    os.finish();
                 }
             }
 
@@ -570,8 +574,9 @@ namespace {
             }
             if (params.debug.dumpHir) {
                 {
-                    OutputFile os(FMT(params.outfile << StringView("_2_hir.rs")));
+                    auto& os = *outputFile(*pool, FMT(params.outfile << StringView("_2_hir.rs")).c_str());
                     HIRDump(os, *hirCrate);
+                    os.finish();
                 }
             }
             if (params.lastStage == ProgramParams::STAGE_TYPECK) {
@@ -584,8 +589,9 @@ namespace {
             }
             if (params.debug.dumpMir) {
                 {
-                    OutputFile os(FMT(params.outfile << StringView("_3_mir.rs")));
+                    auto& os = *outputFile(*pool, FMT(params.outfile << StringView("_3_mir.rs")).c_str());
                     MIRDump(os, *hirCrate);
+                    os.finish();
                 }
             }
             memoryDump(memoryDumpSequence, "MIR Gen");
@@ -598,8 +604,9 @@ namespace {
             }
             if (params.debug.dumpMir) {
                 {
-                    OutputFile os(FMT(params.outfile << StringView("_3_mir.rs")));
+                    auto& os = *outputFile(*pool, FMT(params.outfile << StringView("_3_mir.rs")).c_str());
                     MIRDump(os, *hirCrate);
+                    os.finish();
                 }
             }
             if (params.lastStage == ProgramParams::STAGE_MIR) {
@@ -624,7 +631,7 @@ namespace {
             transOpt.debugInfo = params.debugInfo;
 
             if (params.codegen.emitLinkManifest != "") {
-                OutputFile manifest(params.codegen.emitLinkManifest.c_str());
+                auto& manifest = *outputFile(*pool, params.codegen.emitLinkManifest.c_str());
                 for (const auto& path : params.nativeLibSearchDirs) {
                     manifest << StringView("search\t") << path << StringView("\n");
                 }
@@ -647,7 +654,7 @@ namespace {
                     }
                     manifest << StringView("object\t") << ext.objectPath << StringView("\n");
                 }
-                manifest.close();
+                manifest.finish();
             }
 
             if (params.testHarness) {
@@ -676,7 +683,7 @@ namespace {
                     HIRSerialise(params.outfile, *hirCrate);
                 } else {
                     {
-                        OutputFile marker(params.outfile);
+                        outputFile(*pool, params.outfile.c_str())->finish();
                     }
                 }
                 return 0;

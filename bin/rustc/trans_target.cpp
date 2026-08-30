@@ -427,9 +427,9 @@ namespace {
         return rv;
     }
 
-    void saveSpecToFile(const std::string& filename, const TargetSpec& spec) {
+    void saveSpecToFile(ObjPool& pool, const std::string& filename, const TargetSpec& spec) {
         // TODO: Have a round-trip unit test
-        OutputFile of(filename);
+        auto& of = *outputFile(pool, filename.c_str());
 
         struct H {
             static const char* tfstr(bool v) {
@@ -450,6 +450,7 @@ namespace {
             of << StringView("\"") << s << StringView("\",");
         }
         of << StringView("]\n") << StringView("\n") << StringView("[arch]\n") << StringView("name = \"") << spec.arch.name << StringView("\"\n") << StringView("pointer-bits = ") << spec.arch.pointerBits << StringView("\n") << StringView("is-big-endian = ") << H::tfstr(spec.arch.bigEndian) << StringView("\n") << StringView("has-atomic-u8 = ") << H::tfstr(spec.arch.atomics.u8) << StringView("\n") << StringView("has-atomic-u16 = ") << H::tfstr(spec.arch.atomics.u16) << StringView("\n") << StringView("has-atomic-u32 = ") << H::tfstr(spec.arch.atomics.u32) << StringView("\n") << StringView("has-atomic-u64 = ") << H::tfstr(spec.arch.atomics.u64) << StringView("\n") << StringView("has-atomic-ptr = ") << H::tfstr(spec.arch.atomics.ptr) << StringView("\n") << StringView("alignments = {") << StringView(" u16 = ") << static_cast<int>(spec.arch.alignments.u16) << StringView(",") << StringView(" u32 = ") << static_cast<int>(spec.arch.alignments.u32) << StringView(",") << StringView(" u64 = ") << static_cast<int>(spec.arch.alignments.u64) << StringView(",") << StringView(" u128 = ") << static_cast<int>(spec.arch.alignments.u128) << StringView(",") << StringView(" f32 = ") << static_cast<int>(spec.arch.alignments.f32) << StringView(",") << StringView(" f64 = ") << static_cast<int>(spec.arch.alignments.f64) << StringView(",") << StringView(" ptr = ") << static_cast<int>(spec.arch.alignments.ptr) << StringView(" }\n") << StringView("\n");
+        of.finish();
     }
 
     TargetSpec initFromSpecName(const std::string& targetName) {
@@ -2245,7 +2246,7 @@ const TargetSpec& TargetGetCurSpec(const WireBoard& wb) {
 }
 
 void TargetExportCurSpec(const WireBoard& wb, const std::string& filename) {
-    saveSpecToFile(filename, *wb.target);
+    saveSpecToFile(*wb.pool, filename, *wb.target);
 }
 
 void TargetSetCfg(WireBoard& wb, const std::string& targetName) {

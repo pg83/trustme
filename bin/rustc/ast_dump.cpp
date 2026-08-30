@@ -907,9 +907,10 @@ void RustPrinter::decIndent() {
 }
 
 void DumpRust(const char* filename, const ASTCrate& crate) {
-    OutputFile os(filename);
+    auto& os = *outputFile(*crate.pool, filename);
     RustPrinter printer(os);
     printer.handleModule(crate.rootModule());
+    os.finish();
 }
 
 void DumpASTNode(ZeroCopyOutput& os, const ASTExprNode& node) {

@@ -49,7 +49,7 @@ namespace {
         RcString TransMangle(const T& value) const;
 
         std::string outfilePath;
-        OutputFile of;
+        ZeroCopyOutput& of;
         const MIRTypeResolve* mirRes;
 
         CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile);
@@ -116,7 +116,7 @@ CodeGeneratorMonoMir::CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& 
     , wb_(wb)
     , resolve_(wb, OpaqueReveal::All)
     , outfilePath(outfile)
-    , of(outfilePath + ".mir")
+    , of(*outputFile(*crate.pool, (outfilePath + ".mir").c_str()))
 {
     for (const auto& crateName : crate.extCratesOrdered) {
         of << StringView("crate \"") << FmtEscaped(crate.extCrates.at(crateName).path) << StringView(".mir\";\n");
@@ -169,11 +169,9 @@ auto CodeGeneratorMonoMir::finalise(const TransOptions& opt, CodegenOutput outTy
         // TODO: OOM impl?
     }
 
-    of.close();
+    of.finish();
 
-    {
-        OutputFile output(outfilePath);
-    }
+    outputFile(*crate.pool, outfilePath.c_str())->finish();
 }
 
 auto CodeGeneratorMonoMir::emitType(const HIRType* ty) -> void {

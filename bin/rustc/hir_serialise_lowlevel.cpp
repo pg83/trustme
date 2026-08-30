@@ -13,14 +13,14 @@
 using namespace stl;
 
 struct HIRSerialiseWriter::Inner {
-    OutputFile backing;
+    ZeroCopyOutput* backing;
     z_stream zstream;
     Vector<unsigned char> buffer;
 
     unsigned int byteOutCount = 0;
     unsigned int byteInCount = 0;
 
-    Inner(const std::string& filename);
+    Inner(ObjPool& pool, const std::string& filename);
     ~Inner();
     void write(const void* buf, size_t len);
 };
@@ -47,7 +47,7 @@ HIRSerialiseWriter::~HIRSerialiseWriter() {
     delete inner, inner = nullptr;
 }
 
-void HIRSerialiseWriter::open(const std::string& filename) {
+void HIRSerialiseWriter::open(ObjPool& pool, const std::string& filename) {
     std::vector<std::pair<RcString, unsigned>> sorted;
     sorted.reserve(istringCache.size());
     for (const auto& e : istringCache) {
@@ -59,7 +59,7 @@ void HIRSerialiseWriter::open(const std::string& filename) {
 
     objnameCache.clear();
 
-    inner = new Inner(filename);
+    inner = new Inner(pool, filename);
     this->writeCount(sorted.size());
     for (size_t i = 0; i < sorted.size(); i++) {
         const auto& s = sorted[i].first;
@@ -88,8 +88,8 @@ void HIRSerialiseWriter::writeString(const RcString& v) {
     }
 }
 
-HIRSerialiseWriter::Inner::Inner(const std::string& filename)
-    : backing(filename)
+HIRSerialiseWriter::Inner::Inner(ObjPool& pool, const std::string& filename)
+    : backing(outputFile(pool, filename.c_str()))
     , zstream()
     , buffer()
 {
@@ -121,13 +121,14 @@ HIRSerialiseWriter::Inner::~Inner() {
         if (zstream.avail_out != buffer.length()) {
             size_t rem = buffer.length() - zstream.avail_out;
             byteOutCount += rem;
-            backing.write(buffer.data(), rem);
+            backing->write(buffer.data(), rem);
 
             zstream.avail_out = buffer.length();
             zstream.next_out = buffer.mutData();
         }
     } while (ret == Z_OK);
     deflateEnd(&zstream);
+    backing->finish();
 }
 
 void HIRSerialiseWriter::Inner::write(const void* buf, size_t len) {
@@ -150,7 +151,7 @@ void HIRSerialiseWriter::Inner::write(const void* buf, size_t len) {
 
         if (zstream.avail_in > 0) {
             size_t bytes = buffer.length() - zstream.avail_out;
-            backing.write(buffer.data(), bytes);
+            backing->write(buffer.data(), bytes);
             byteOutCount += bytes;
 
             zstream.avail_out = buffer.length();
@@ -160,7 +161,7 @@ void HIRSerialiseWriter::Inner::write(const void* buf, size_t len) {
 
     while (zstream.avail_out == 0) {
         size_t bytes = buffer.length() - zstream.avail_out;
-        backing.write(buffer.data(), bytes);
+        backing->write(buffer.data(), bytes);
         byteOutCount += bytes;
 
         zstream.avail_out = buffer.length();

@@ -85,8 +85,8 @@ namespace {
         Span thisSpan;
         const HIRProcMacro& procMacroDesc;
         ASTEdition edition;
-        std::unique_ptr<OutputFile> dumpFileOut;
-        std::unique_ptr<OutputFile> dumpFileRes;
+        ZeroCopyOutput* dumpFileOut = nullptr;
+        ZeroCopyOutput* dumpFileRes = nullptr;
 
         std::unordered_map<const SpanInner*, size_t> knownSpans;
         std::unordered_set<size_t> sentSpans;
@@ -108,7 +108,7 @@ namespace {
         Vector<u8> pendingSymbols;
         size_t pendingSymbolOffset = 0;
 
-        ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
+        ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
         ProcMacroInv(const ProcMacroInv&) = delete;
         ProcMacroInv(ProcMacroInv&&) = default;
         ProcMacroInv& operator=(const ProcMacroInv&) = delete;
@@ -270,7 +270,7 @@ namespace {
 
         const auto* procMacroExeName = extCrate.procMacroFilename != "" ? extCrate.procMacroFilename.c_str() : extCrate.filename.c_str();
 
-        auto rv = ProcMacroInv(wb.id, sp, extCrate.hir->edition, procMacroExeName, *pmp);
+        auto rv = ProcMacroInv(*crate.pool, wb.id, sp, extCrate.hir->edition, procMacroExeName, *pmp);
         rv.parseState().crate = &crate;
         rv.parseState().wb = &wb;
 
@@ -399,7 +399,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
     });
 }
 
-ProcMacroInv::ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc)
+ProcMacroInv::ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc)
     : TokenStream(ParseState())
     , parentSpan(sp)
     , thisSpan(Span(parentSpan, procMacroDesc.path.crateName(), procMacroDesc.name))
@@ -411,8 +411,8 @@ ProcMacroInv::ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const ch
         std::string namePrefix;
         namePrefix = FMT(getenv("TRUSTME_DUMP_PROCMACRO") << StringView("-") << ++id);
         DEBUG(StringView("Dumping to ") << namePrefix);
-        dumpFileOut = std::make_unique<OutputFile>(FMT(namePrefix << StringView("-out.bin")));
-        dumpFileRes = std::make_unique<OutputFile>(FMT(namePrefix << StringView("-res.bin")));
+        dumpFileOut = outputFile(pool, FMT(namePrefix << StringView("-out.bin")).c_str());
+        dumpFileRes = outputFile(pool, FMT(namePrefix << StringView("-res.bin")).c_str());
         DEBUG(StringView("Set TRUSTME_DUMP_PROCMACRO=procmacro_dump to dump to `procmacro_dump-NNN-{out,res}.bin`"));
     }
     int stdinPipes[2];

@@ -1392,7 +1392,7 @@ void HIRSerialise(const std::string& filename, const HIRCrate& crate) {
     HirSerialiser s{out, crate.types};
     s.serialiseCrate(crate);
     s.clear();
-    out.open(filename);
+    out.open(*crate.pool, filename);
     s.serialiseCrate(crate);
 }
 

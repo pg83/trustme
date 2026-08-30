@@ -137,7 +137,7 @@ namespace {
         std::string outfilePath;
         std::string outfilePathC;
 
-        OutputFile of;
+        ZeroCopyOutput& of;
         FILE* literalBlob = nullptr;
         size_t literalBlobSize = 0;
         const MIRTypeResolve* mirRes = nullptr;
@@ -728,7 +728,7 @@ CodeGeneratorC::CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const
     , resolve_(wb, OpaqueReveal::All)
     , outfilePath(outfile)
     , outfilePathC(outfile + ".cpp")
-    , of(outfilePathC)
+    , of(*outputFile(*crate.pool, outfilePathC.c_str()))
     , promotedValues(crate.pool) {
     options.emulatedI128 = TargetGetCurSpec(wb_).backendC.emulatedI128;
     if (TargetGetPointerBits() < 64 && !options.emulatedI128) {
@@ -950,7 +950,7 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
 
     of << StringView("}\n");
     emitCallerLocationDefinitions();
-    of.close();
+    of.finish();
     closeLiteralBlob();
 
     if (opt.emitCppOnly) {
@@ -1291,30 +1291,31 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
 
     StringBuilder cmdSs;
     std::string commandFile = outfilePath + "_cmd.txt";
-    std::unique_ptr<OutputFile> commandFileStream;
+    ZeroCopyOutput* commandFileStream = nullptr;
     if (getenv("TRUSTME_CCACHE")) {
         cmdSs << StringView("ccache ");
     }
     bool useArgFile = argFileStart > 0;
     if (useArgFile) {
-        commandFileStream = std::make_unique<OutputFile>(commandFile);
+        commandFileStream = outputFile(*crate.pool, commandFile.c_str());
     }
     size_t i = -1;
     for (const auto& arg : args.getVec()) {
         i++;
-        ZeroCopyOutput& outSs = useArgFile && i >= argFileStart ? static_cast<ZeroCopyOutput&>(*commandFileStream) : cmdSs;
+        ZeroCopyOutput& outSs = useArgFile && i >= argFileStart ? *commandFileStream : cmdSs;
         outSs << StringView("\"") << FmtShell(arg) << StringView("\" ");
     }
     if (useArgFile) {
         cmdSs << StringView("@\"") << FmtShell(commandFile) << StringView("\"");
-        commandFileStream->close();
+        commandFileStream->finish();
     }
     const std::string commandText(static_cast<const char*>(cmdSs.data()), cmdSs.length());
     sysO << StringView("Running command - ") << commandText << endL;
     if (opt.buildCommandFile != "") {
         sysE << StringView("INVOKE CC: ") << commandText << endL;
-        OutputFile buildCommand(opt.buildCommandFile);
+        auto& buildCommand = *outputFile(*crate.pool, opt.buildCommandFile.c_str());
         buildCommand << commandText << endL;
+        buildCommand.finish();
     } else {
         int ec = system(commandText.c_str());
         if (ec == -1) {
