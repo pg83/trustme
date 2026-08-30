@@ -4,12 +4,10 @@
 
 #include <std/lib/vector.h>
 
-using namespace stl;
+#include <map>
+#include <set>
 
-template <>
-void stl::output<ZeroCopyOutput, Ordering>(ZeroCopyOutput& out, Ordering value) {
-    out << static_cast<int>(value);
-}
+using namespace stl;
 
 template <>
 void stl::output<ZeroCopyOutput, std::vector<std::string>>(ZeroCopyOutput& out, const std::vector<std::string>& values) {
@@ -55,26 +53,6 @@ FmtEscaped::FmtEscaped(const std::string& s)
     : s(s.c_str())
     , e(s.c_str() + s.size())
 {
-}
-
-Ordering ord(bool l, bool r) {
-    if (l == r) {
-        return OrdEqual;
-    } else if (l) {
-        return OrdGreater;
-    } else {
-        return OrdLess;
-    }
-}
-
-Ordering ord(const std::string& l, const std::string& r) {
-    if (l == r) {
-        return OrdEqual;
-    } else if (l > r) {
-        return OrdGreater;
-    } else {
-        return OrdLess;
-    }
 }
 
 template <>

@@ -5,6 +5,8 @@
 
 #include <std/mem/obj_pool.h>
 
+#include <set>
+
 using namespace stl;
 
 namespace {

@@ -13,6 +13,7 @@ class HIRPath;
 class HIRType;
 
 void TransCreateManglingContext(WireBoard& wb, stl::ObjPool& pool);
+
 RcString TransMangle(const WireBoard& wb, const HIRSimplePath& path);
 RcString TransMangle(const WireBoard& wb, const HIRGenericPath& path);
 RcString TransMangle(const WireBoard& wb, const HIRPath& path);
