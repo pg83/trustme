@@ -6,7 +6,6 @@
 #include "ast_attrs.h"
 #include "ast_types.h"
 #include "ast_pattern.h"
-#include "ast_expr_ptr.h"
 #include "parse_tokentree.h"
 
 #include <std/mem/obj_pool.h>

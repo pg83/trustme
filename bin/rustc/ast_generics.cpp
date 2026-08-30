@@ -1,5 +1,6 @@
 #include "ast_generics.h"
 
+#include "ast_expr.h"
 #include "output.h"
 
 using namespace stl;
@@ -32,12 +33,12 @@ ASTLifetimeParam::ASTLifetimeParam(Span sp, ASTAttributeList attrs, Ident name)
 {
 }
 
-ASTValueParam::ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* type, ASTExpr val)
+ASTValueParam::ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* type, ASTExprNode* val)
     : attrs_(std::move(attrs))
     , span_(std::move(sp))
     , name_(std::move(name))
     , type_(std::move(type))
-    , defaultValue_(std::move(val))
+    , defaultValue_(val)
 {
 }
 
@@ -46,7 +47,7 @@ ASTValueParam::ASTValueParam(const ASTValueParam& x)
     , span_(x.span_)
     , name_(x.name_)
     , type_(x.type_->clone())
-    , defaultValue_(x.defaultValue_ ? x.defaultValue_.clone() : ASTExpr())
+    , defaultValue_(x.defaultValue_ ? x.defaultValue_->clone() : nullptr)
 {
 }
 

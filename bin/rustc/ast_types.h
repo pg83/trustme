@@ -16,7 +16,6 @@ namespace stl {
 }
 
 class ASTExprNode;
-class ASTExpr;
 class ASTLifetimeParam;
 
 class ASTPath;

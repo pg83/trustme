@@ -209,8 +209,6 @@ namespace {
 
         void parseString(const std::string& s);
 
-        void visitNodes(const ASTExpr& e);
-
         void visitTopAttrs(slice<const ASTAttribute>& attrs);
 
         void visitAttrs(const ASTAttributeList& attrs);
@@ -340,7 +338,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     auto testsArray = makeAstExprNode<ASTExprNodeArray>(*crate.pool, mv$(testNodes));
 
     size_t testCount = static_cast<ASTExprNodeArray&>(*testsArray).values.size();
-    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), makeAstExprNode<ASTExprNodeInteger>(*crate.pool, U128(testCount), CORETYPE_UINT)), ASTExpr(testsArray)};
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), makeAstExprNode<ASTExprNodeInteger>(*crate.pool, U128(testCount), CORETYPE_UINT)), testsArray};
 
     Vector<RcString> modulePath;
     modulePath.pushBack(RcString::newInterned("proc_macro#"));
@@ -2145,10 +2143,6 @@ auto ProcMacroVisitor::parseString(const std::string& s) -> void {
     }
 }
 
-auto ProcMacroVisitor::visitNodes(const ASTExpr& e) -> void {
-    this->visitNode(e.node());
-}
-
 auto ProcMacroVisitor::visitTopAttrs(slice<const ASTAttribute>& attrs) -> void {
     for (const auto& a : attrs) {
         this->visitAttr(a);
@@ -2276,7 +2270,7 @@ auto ProcMacroVisitor::visitStruct(const RcString& name, const ASTVisibility& vi
                 this->visitType(si.type);
                 if (si.defaultValue) {
                     pmi.sendSymbol("=");
-                    this->visitNodes(si.defaultValue);
+                    this->visitNode(*si.defaultValue);
                 }
                 pmi.sendSymbol(",");
             }
@@ -2328,7 +2322,7 @@ auto ProcMacroVisitor::visitEnum(const RcString& name, const ASTVisibility& vis,
         }
         if (v.discriminantValue) {
             pmi.sendSymbol("=");
-            this->visitNodes(v.discriminantValue);
+            this->visitNode(*v.discriminantValue);
         }
         pmi.sendSymbol(",");
     }
@@ -2378,8 +2372,8 @@ auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& 
     pmi.sendSymbol("->");
     this->visitType(fcn.rettype());
     this->visitBounds(fcn.params());
-    if (fcn.code().isValid()) {
-        this->visitNodes(fcn.code());
+    if (fcn.code()) {
+        this->visitNode(*fcn.code());
     } else {
         pmi.sendSymbol(";");
     }
@@ -2406,7 +2400,7 @@ auto ProcMacroVisitor::visitStatic(const RcString& name, const ASTVisibility& vi
 
     if (i.value()) {
         pmi.sendSymbol("=");
-        this->visitNode(i.value().node());
+        this->visitNode(*i.value());
     }
     this->visitBounds(i.params());
     pmi.sendSymbol(";");

@@ -5,7 +5,6 @@
 #include "common.h"
 #include "output.h"
 #include "ast_types.h"
-#include "ast_expr_ptr.h"
 #include "ast_lifetime_ref.h"
 
 #include <std/lib/vector.h>
@@ -17,6 +16,7 @@
 #include <initializer_list>
 
 class MacroRules;
+class ASTExprNode;
 
 class HIRModule;
 class HIRTrait;

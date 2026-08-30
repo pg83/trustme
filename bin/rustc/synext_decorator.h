@@ -23,7 +23,6 @@ struct ASTEnumVariant;
 class ASTModule;
 class ASTItem;
 
-class ASTExpr;
 class ASTExprNode;
 struct ASTExprNodeMatchArm;
 

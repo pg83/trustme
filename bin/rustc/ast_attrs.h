@@ -1,12 +1,12 @@
 #pragma once
 
 #include "output.h"
-#include "ast_expr_ptr.h"
 #include "parse_tokentree.h"
 
 #include <std/lib/vector.h>
 
 class ASTCrate;
+class ASTExprNode;
 struct WireBoard;
 class ASTModule;
 

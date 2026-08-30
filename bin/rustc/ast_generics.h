@@ -76,10 +76,10 @@ class ASTValueParam {
     Span span_;
     Ident name_;
     ASTType* type_;
-    ASTExpr defaultValue_;
+    ASTExprNode* defaultValue_ = nullptr;
 
 public:
-    ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* type, ASTExpr val);
+    ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* type, ASTExprNode* val);
 
     ASTValueParam(ASTValueParam&&) = default;
     ASTValueParam& operator=(ASTValueParam&&) = default;
@@ -106,12 +106,16 @@ public:
         return type_;
     }
 
-    const ASTExpr& defaultValue() const {
+    ASTExprNode* defaultValue() const {
         return defaultValue_;
     }
 
-    ASTExpr& defaultValue() {
+    ASTExprNode* defaultValue() {
         return defaultValue_;
+    }
+
+    void setDefaultValue(ASTExprNode* value) {
+        defaultValue_ = value;
     }
 };
 
@@ -150,8 +154,8 @@ public:
         addParam(std::move(param), boundsStart, boundsEnd);
     }
 
-    void addValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* ty, ASTExpr val) {
-        params.push_back(ASTValueParam(mv$(sp), mv$(attrs), mv$(name), mv$(ty), mv$(val)));
+    void addValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* ty, ASTExprNode* val) {
+        params.push_back(ASTValueParam(mv$(sp), mv$(attrs), mv$(name), mv$(ty), val));
     }
 
     void addBound(ASTGenericBound bound) {

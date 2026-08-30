@@ -44,7 +44,7 @@ ASTImpl::ASTImpl(ASTImpl&&) = default;
 ASTImpl& ASTImpl::operator=(ASTImpl&&) = default;
 
 ASTStructItem ASTStructItem::clone() const {
-    return ASTStructItem(attrs.clone(), vis, name, type->clone(), defaultValue.clone());
+    return ASTStructItem(attrs.clone(), vis, name, type->clone(), defaultValue ? defaultValue->clone() : nullptr);
 }
 
 ASTTupleItem ASTTupleItem::clone() const {
@@ -56,7 +56,7 @@ ASTTypeAlias ASTTypeAlias::clone() const {
 }
 
 ASTStatic ASTStatic::clone() const {
-    return ASTStatic(cls, type_->clone(), value_.isValid() ? ASTExpr(value_.node().clone()) : ASTExpr(), params_.clone());
+    return ASTStatic(cls, type_->clone(), value_ ? value_->clone() : nullptr, params_.clone());
 }
 
 ASTFunction::ASTFunction(Span sp, std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic, bool hasNamedVariadic)
@@ -78,16 +78,16 @@ ASTFunction ASTFunction::clone() const {
     }
 
     auto rv = ASTFunction(span_, abi_, flags, params_.clone(), rettype_->clone(), mv$(newArgs), isVariadic_, hasNamedVariadic_);
-    if (code_.isValid()) {
-        rv.code_ = ASTExpr(code_.node().clone());
+    if (code_) {
+        rv.code_ = code_->clone();
     }
     if (delegation_) {
         Delegation delegation;
         for (const auto& target : delegation_->targets) {
             delegation.targets.push_back({ASTPath(target.path), target.name});
         }
-        if (delegation_->body.isValid()) {
-            delegation.body = ASTExpr(delegation_->body.node().clone());
+        if (delegation_->body) {
+            delegation.body = delegation_->body->clone();
         }
         rv.setDelegation(mv$(delegation));
     }
@@ -160,7 +160,7 @@ ASTEnum ASTEnum::clone() const {
                 break;
             }
         }
-        newVariants.back().discriminantValue = var.discriminantValue.clone();
+        newVariants.back().discriminantValue = var.discriminantValue ? var.discriminantValue->clone() : nullptr;
     }
     auto rv = ASTEnum(params_.clone(), mv$(newVariants));
     rv.markings = markings;
@@ -411,12 +411,12 @@ ASTItem ASTItem::clone() const {
     UNREACHABLE();
 }
 
-ASTStructItem::ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExpr defaultValue)
+ASTStructItem::ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExprNode* defaultValue)
     : attrs(mv$(attrs))
     , vis(mv$(vis))
     , name(mv$(name))
     , type(mv$(ty))
-    , defaultValue(mv$(defaultValue))
+    , defaultValue(defaultValue)
 {
 }
 
@@ -449,11 +449,11 @@ ASTTraitAlias ASTTraitAlias::clone() const {
     return rv;
 }
 
-ASTStatic::ASTStatic(Class sClass, ASTType* type, ASTExpr value, ASTGenericParams params)
+ASTStatic::ASTStatic(Class sClass, ASTType* type, ASTExprNode* value, ASTGenericParams params)
     : cls(sClass)
     , params_(std::move(params))
     , type_(std::move(type))
-    , value_(std::move(value))
+    , value_(value)
 {
 }
 
@@ -620,7 +620,7 @@ void stl::output<ZeroCopyOutput, ASTEnumVariant>(ZeroCopyOutput& os, const ASTEn
         }
     }
     if (x.discriminantValue) {
-        os << StringView(" = ") << x.discriminantValue;
+        os << StringView(" = ") << *x.discriminantValue;
     }
     os << StringView(")");
     return;

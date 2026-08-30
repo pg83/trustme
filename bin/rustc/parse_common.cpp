@@ -1905,7 +1905,7 @@ namespace {
                 GET_CHECK_TOK(tok, lex, TOK_COLON);
                 auto ty = ParseType(lex);
 
-                ASTExpr val;
+                ASTExprNode* val = nullptr;
                 if (GET_TOK(tok, lex) == TOK_EQUAL) {
                     if (lex.lookahead(0) == TOK_BRACE_OPEN) {
                         val = ParseExprBlock(lex);
@@ -1915,7 +1915,7 @@ namespace {
                     GET_TOK(tok, lex);
                 }
 
-                ret.addValueParam(lex.pointSpan(), mv$(attrs), mv$(paramName), mv$(ty), mv$(val));
+                ret.addValueParam(lex.pointSpan(), mv$(attrs), mv$(paramName), mv$(ty), val);
             } else {
                 parseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_LIFETIME});
             }
@@ -2268,9 +2268,9 @@ namespace {
                     auto name = tok.ident().name;
                     GET_CHECK_TOK(tok, lex, TOK_COLON);
                     ASTType* type = ParseType(lex);
-                    ASTExpr defaultValue = lex.getTokenIf(TOK_EQUAL) ? ParseExpr(lex) : ASTExpr();
+                    ASTExprNode* defaultValue = lex.getTokenIf(TOK_EQUAL) ? ParseExpr(lex) : nullptr;
 
-                    items.push_back(ASTStructItem(mv$(itemAttrs), vis, mv$(name), mv$(type), std::move(defaultValue)));
+                    items.push_back(ASTStructItem(mv$(itemAttrs), vis, mv$(name), mv$(type), defaultValue));
                     if (GET_TOK(tok, lex) == TOK_BRACE_CLOSE) {
                         break;
                     }
@@ -2447,8 +2447,8 @@ namespace {
                     auto name = tok.ident().name;
                     GET_CHECK_TOK(tok, lex, TOK_COLON);
                     auto ty = ParseType(lex);
-                    auto def = lex.getTokenIf(TOK_EQUAL) ? ParseExpr(lex) : ASTExpr();
-                    fields.push_back(ASTStructItem(mv$(fieldAttrs), ASTVisibility::makeGlobal(), mv$(name), mv$(ty), mv$(def)));
+                    auto* def = lex.getTokenIf(TOK_EQUAL) ? ParseExpr(lex) : nullptr;
+                    fields.push_back(ASTStructItem(mv$(fieldAttrs), ASTVisibility::makeGlobal(), mv$(name), mv$(ty), def));
                 } while (GET_TOK(tok, lex) == TOK_COMMA);
                 CHECK_TOK(tok, TOK_BRACE_CLOSE);
 
@@ -2907,7 +2907,7 @@ namespace {
             }
         }
 
-        ASTExpr body;
+        ASTExprNode* body = nullptr;
         if (lex.lookahead(0) == TOK_BRACE_OPEN) {
             body = ParseExprBlock(lex);
 
@@ -2922,7 +2922,7 @@ namespace {
                 }
             } visitor;
 
-            body.node().visit(visitor);
+            body->visit(visitor);
         } else {
             GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
         }
@@ -2932,7 +2932,7 @@ namespace {
         for (auto& entry : entries) {
             delegation.targets.push_back({mv$(entry.path), entry.name});
         }
-        delegation.body = mv$(body);
+        delegation.body = body;
         itemName = delegation.targets.size() == 1 ? delegation.targets.front().name : RcString();
 
         auto span = lex.endSpan(ps);
@@ -3138,9 +3138,9 @@ namespace {
                         GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
                         return mkType(lex.typePool(), ASTTypeTags::SizedArray(), lex.endSpan(ps), mv$(inner), nullptr);
                     } else {
-                        ASTExpr arraySize = ParseExpr(lex);
+                        ASTExprNode* arraySize = ParseExpr(lex);
                         GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
-                        return mkType(lex.typePool(), ASTTypeTags::SizedArray(), lex.endSpan(ps), mv$(inner), arraySize.takeNode());
+                        return mkType(lex.typePool(), ASTTypeTags::SizedArray(), lex.endSpan(ps), mv$(inner), arraySize);
                     }
                 } else if (tok.type() == TOK_SQUARE_CLOSE) {
                     return mkType(lex.typePool(), ASTTypeTags::UnsizedArray(), lex.endSpan(ps), mv$(inner));
@@ -3430,12 +3430,12 @@ ASTExprNode* ParseExpr0(TokenStream& lex);
 
 ASTExprNode* ParseExprVal(TokenStream& lex);
 
-ASTExpr ParseExpr(TokenStream& lex) {
-    return ASTExpr(ParseExpr0(lex));
+ASTExprNode* ParseExpr(TokenStream& lex) {
+    return ParseExpr0(lex);
 }
 
-ASTExpr ParseExprBlock(TokenStream& lex) {
-    return ASTExpr(ParseExprBlockNode(lex));
+ASTExprNode* ParseExprBlock(TokenStream& lex) {
+    return ParseExprBlockNode(lex);
 }
 
 ASTExprNode* ParseExprBlockNode(TokenStream& lex) {
@@ -4615,7 +4615,7 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
             auto ty = ParseType(lex);
             GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
 
-            ASTExpr val;
+            ASTExprNode* val = nullptr;
             if (GET_TOK(tok, lex) == TOK_EQUAL) {
                 val = ParseExpr(lex);
                 GET_TOK(tok, lex);
@@ -4631,7 +4631,7 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             auto ty = ParseType(lex);
 
-            ASTExpr val;
+            ASTExprNode* val = nullptr;
             GET_TOK(tok, lex);
             if (tok.type() == TOK_RWORD_WHERE) {
                 ParseWhereClause(lex, params);
@@ -4886,7 +4886,7 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
         }
 
         // TODO: reject a valueless impl const that survives cfg.
-        ASTExpr val;
+        ASTExprNode* val = nullptr;
         if (lex.getTokenIf(TOK_EQUAL)) {
             val = ParseExpr(lex);
         }
@@ -4977,7 +4977,7 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
             auto type = ParseType(lex);
             GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
 
-            auto i = ASTItem(ASTStatic((isMut ? ASTStatic::MUT : ASTStatic::STATIC), mv$(type), ASTExpr()));
+            auto i = ASTItem(ASTStatic((isMut ? ASTStatic::MUT : ASTStatic::STATIC), mv$(type), nullptr));
             return ASTNamed<ASTItem>{lex.endSpan(ps), mv$(metaItems), vis, mv$(name), mv$(i)};
             break;
         }
@@ -5148,7 +5148,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     }
 
                     // TODO: reject a valueless const that survives cfg.
-                    ASTExpr val;
+                    ASTExprNode* val = nullptr;
                     if (lex.getTokenIf(TOK_EQUAL)) {
                         val = ParseExpr(lex);
                     }
@@ -5225,7 +5225,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             ASTType* type = ParseType(lex);
 
             // TODO: reject a valueless static that survives cfg.
-            ASTExpr val;
+            ASTExprNode* val = nullptr;
             if (lex.getTokenIf(TOK_EQUAL)) {
                 val = ParseExpr(lex);
             }

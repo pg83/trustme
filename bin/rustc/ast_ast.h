@@ -9,7 +9,6 @@
 #include "ast_types.h"
 #include "coretypes.h"
 #include "ast_pattern.h"
-#include "ast_expr_ptr.h"
 #include "ast_generics.h"
 #include "expand_common.h"
 #include "target_version.h"
@@ -26,6 +25,7 @@
 #include <unordered_map>
 
 class ASTCrate;
+class ASTExprNode;
 
 class ASTModule;
 class ASTItem;
@@ -39,9 +39,9 @@ struct ASTStructItem {
     RcString name;
     ASTType* type;
 
-    ASTExpr defaultValue;
+    ASTExprNode* defaultValue = nullptr;
 
-    ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExpr defaultValue);
+    ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExprNode* defaultValue);
 
     ASTStructItem clone() const;
 };
@@ -115,7 +115,7 @@ private:
     Class cls;
     ASTGenericParams params_;
     ASTType* type_;
-    ASTExpr value_;
+    ASTExprNode* value_;
 
 public:
     struct Markings {
@@ -124,7 +124,7 @@ public:
         ASTLinkage linkage = ASTLinkage::Default;
     } markings;
 
-    ASTStatic(Class sClass, ASTType* type, ASTExpr value, ASTGenericParams params = {});
+    ASTStatic(Class sClass, ASTType* type, ASTExprNode* value, ASTGenericParams params = {});
 
     const Class& sClass() const {
         return cls;
@@ -142,7 +142,7 @@ public:
         return type_;
     }
 
-    const ASTExpr& value() const {
+    ASTExprNode* value() const {
         return value_;
     }
 
@@ -150,8 +150,12 @@ public:
         return type_;
     }
 
-    ASTExpr& value() {
+    ASTExprNode* value() {
         return value_;
+    }
+
+    void setValue(ASTExprNode* value) {
+        value_ = value;
     }
 
     ASTStatic clone() const;
@@ -176,7 +180,7 @@ public:
         };
 
         std::vector<Target> targets;
-        ASTExpr body;
+        ASTExprNode* body = nullptr;
     };
 
     struct Flags {
@@ -204,7 +208,7 @@ public:
 private:
     Span span_;
     ASTGenericParams params_;
-    ASTExpr code_;
+    ASTExprNode* code_ = nullptr;
     ASTType* rettype_;
     Arglist args_;
     bool isVariadic_;
@@ -245,8 +249,8 @@ public:
 
     ASTFunction(Span sp, ASTType* retType, Arglist args);
 
-    void setCode(ASTExpr code) {
-        code_ = std::move(code);
+    void setCode(ASTExprNode* code) {
+        code_ = code;
     }
 
     const Span& sp() const {
@@ -285,11 +289,11 @@ public:
         return params_;
     }
 
-    const ASTExpr& code() const {
+    ASTExprNode* code() const {
         return code_;
     }
 
-    ASTExpr& code() {
+    ASTExprNode* code() {
         return code_;
     }
 
@@ -420,7 +424,7 @@ struct ASTEnumVariant {
     RcString name;
     ASTEnumVariantData data;
 
-    ASTExpr discriminantValue;
+    ASTExprNode* discriminantValue = nullptr;
 
     ASTEnumVariant();
 

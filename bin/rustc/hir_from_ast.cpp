@@ -76,7 +76,6 @@ namespace {
         HIRPath LowerHIRPatternPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
         HIRPattern LowerHIRPattern(const ASTPattern& pat);
         HIRExprPtr LowerHIRExpr(const ASTExprNode* e);
-        HIRExprPtr LowerHIRExpr(const ASTExpr& e);
         HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric = false);
         HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs = {});
         HIRConstGeneric LowerHIRConstGeneric(const ASTExprNode& nodeRef);
@@ -781,7 +780,7 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
             case GenericParam::TAG_Value: {
                 auto& tp = param.as_Value();
                 rv.paramKinds.pushBack(HIRGenericParamKind::Value);
-                rv.values.push_back(HIRValueParamDef{tp.name().name, LowerHIRType(tp.type()), tp.defaultValue() ? LowerHIRConstGeneric(tp.defaultValue().node()) : HIRConstGeneric::make_Infer({})});
+                rv.values.push_back(HIRValueParamDef{tp.name().name, LowerHIRType(tp.type()), tp.defaultValue() ? LowerHIRConstGeneric(*tp.defaultValue()) : HIRConstGeneric::make_Infer({})});
                 break;
             }
         }
@@ -1159,14 +1158,6 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
 HIRExprPtr AST2HIR::LowerHIRExpr(const ASTExprNode* e) {
     if (e) {
         return LowerHIRExprNode(*e);
-    } else {
-        return HIRExprPtr();
-    }
-}
-
-HIRExprPtr AST2HIR::LowerHIRExpr(const ASTExpr& e) {
-    if (e.isValid()) {
-        return LowerHIRExprNode(e.node());
     } else {
         return HIRExprPtr();
     }
@@ -1912,7 +1903,7 @@ tStructFields AST2HIR::LowerHIRStructFields(HIRItemPath path, const HIRGenericPa
 
             auto constantParams = params.clone();
             RebaseDefaultFieldParams(rebase).visitParams(constantParams);
-            auto constantType = rebase.monomorphType(field.defaultValue.node().span(), type);
+            auto constantType = rebase.monomorphType(field.defaultValue->span(), type);
             auto constantValue = LowerHIRExpr(field.defaultValue);
             RebaseDefaultFieldExpr exprRebase(rebase);
             constantValue->visit(exprRebase);
@@ -2212,7 +2203,7 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
 
             if (var.discriminantValue) {
                 if (repr == HIREnum::Repr::Auto) {
-                    ERROR(var.discriminantValue.node().span(), E0000, StringView("Discrimiant value set on enum with no `repr` set"));
+                    ERROR(var.discriminantValue->span(), E0000, StringView("Discrimiant value set on enum with no `repr` set"));
                 }
                 variants.back().discriminantExpr = LowerHIRExpr(var.discriminantValue);
             }
@@ -2505,7 +2496,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                 ERROR(arg.pat.span(), E0000, StringView("refutable pattern in function argument"));
             }
         }
-        if (!f.code().isValid() && !(arg.pat.data().is_Any() || arg.pat.data().is_MaybeBind())) {
+    if (!f.code() && !(arg.pat.data().is_Any() || arg.pat.data().is_MaybeBind())) {
             ERROR(arg.pat.span(), E0000, StringView("patterns aren't allowed in functions without bodies"));
         }
         const HIRTypeData* type;
@@ -2741,7 +2732,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     }
     linkage.section = f.markings.linkSection;
 
-    if (astCrate->testHarness && f.code().isValid()) {
+    if (astCrate->testHarness && f.code()) {
     } else if (f.markings.linkName != "") {
         linkage.name = f.markings.linkName;
     } else if (attrs.get("rustc_std_internal_symbol")) {
@@ -2752,7 +2743,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     } else {
     }
 
-    if (linkage.name == "" && !f.code().isValid()) {
+    if (linkage.name == "" && !f.code()) {
         linkage.name = p.getName();
     }
 
@@ -2920,7 +2911,7 @@ HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attr
             linkage.name = e.markings.linkName;
         }
         // If there's no code, demangle the name (TODO: By ABI) and set linkage.
-        else if (linkage.name == "" && !e.value().isValid()) {
+        else if (linkage.name == "" && !e.value()) {
             linkage.name = name.c_str();
         }
 

@@ -217,7 +217,7 @@ namespace {
     void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::LookupMode mode, ASTPath& path);
     void ResolveAbsoluteLifetime(Context& context, const Span& sp, ASTLifetimeRef& type);
     void ResolveAbsoluteType(Context& context, ASTType*& type);
-    void ResolveAbsoluteExpr(Context& context, ASTExpr& expr);
+    void ResolveAbsoluteExpr(Context& context, ASTExprNode* expr);
     void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node);
     void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& pat);
     void ResolveAbsoluteMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod);
@@ -1656,9 +1656,9 @@ namespace {
         }
     }
 
-    void ResolveAbsoluteExpr(Context& context, ASTExpr& expr) {
-        if (expr.isValid()) {
-            ResolveAbsoluteExprNode(context, expr.node());
+    void ResolveAbsoluteExpr(Context& context, ASTExprNode* expr) {
+        if (expr) {
+            ResolveAbsoluteExprNode(context, *expr);
         }
     }
 
@@ -2951,8 +2951,8 @@ namespace {
                 auto name = isMethod && i == 0 ? RcString::newInterned("self") : RcString::newInterned(FMT(StringView("arg") << i));
                 replacement.args()[i].pat = ASTPattern(ASTPattern::TagBind(), fcn.sp(), name);
                 auto arg = makeAstExprNode<ASTExprNodeNamedValue>(itemContext.typePool(), ASTPath(name));
-                if (i == 0 && delegation->body.isValid()) {
-                    arg = delegation->body.node().clone();
+                if (i == 0 && delegation->body) {
+                    arg = delegation->body->clone();
                     if (auto* block = cast<ASTExprNodeBlock>(arg); block && !block->localMod && block->nodes.size() == 1 && !block->nodes.front().hasSemicolon) {
                         auto unwrapped = mv$(block->nodes.front().node);
                         arg = mv$(unwrapped);
@@ -2984,7 +2984,7 @@ namespace {
                 }
                 args.push_back(mv$(arg));
             }
-            replacement.setCode(ASTExpr(makeAstExprNode<ASTExprNodeCallPath>(itemContext.typePool(), mv$(target), mv$(args))));
+            replacement.setCode(makeAstExprNode<ASTExprNodeCallPath>(itemContext.typePool(), mv$(target), mv$(args)));
             fcn = mv$(replacement);
         }
         itemContext.push(fcn.params(), GenericSlot::Level::Method, /*hasSelf=*/false, /*allowShadowing=*/fromDelegation);
@@ -4643,18 +4643,18 @@ namespace {
                         switch ((*i.data).tag()) {
                             case ASTItem::TAG_Function: {
                                 auto& e = (*i.data).as_Function();
-                                if (e.delegation() && e.delegation()->body.isValid()) {
-                                    e.delegation()->body.node().visit(exprIter);
+                                if (e.delegation() && e.delegation()->body) {
+                                    e.delegation()->body->visit(exprIter);
                                 }
-                                if (e.code().isValid()) {
-                                    e.code().node().visit(exprIter);
+                                if (e.code()) {
+                                    e.code()->visit(exprIter);
                                 }
                                 break;
                             }
                             case ASTItem::TAG_Static: {
                                 auto& e = (*i.data).as_Static();
-                                if (e.value().isValid()) {
-                                    e.value().node().visit(exprIter);
+                                if (e.value()) {
+                                    e.value()->visit(exprIter);
                                 }
                                 break;
                             }
@@ -4681,18 +4681,18 @@ namespace {
                             }
                             case ASTItem::TAG_Function: {
                                 auto& e = ti.data.as_Function();
-                                if (e.delegation() && e.delegation()->body.isValid()) {
-                                    e.delegation()->body.node().visit(exprIter);
+                                if (e.delegation() && e.delegation()->body) {
+                                    e.delegation()->body->visit(exprIter);
                                 }
-                                if (e.code().isValid()) {
-                                    e.code().node().visit(exprIter);
+                                if (e.code()) {
+                                    e.code()->visit(exprIter);
                                 }
                                 break;
                             }
                             case ASTItem::TAG_Static: {
                                 auto& e = ti.data.as_Static();
-                                if (e.value().isValid()) {
-                                    e.value().node().visit(exprIter);
+                                if (e.value()) {
+                                    e.value()->visit(exprIter);
                                 }
                                 break;
                             }
@@ -4706,26 +4706,26 @@ namespace {
                 }
                 case ASTItem::TAG_Function: {
                     auto& e = i.data.as_Function();
-                    if (e.delegation() && e.delegation()->body.isValid()) {
-                        e.delegation()->body.node().visit(exprIter);
+                    if (e.delegation() && e.delegation()->body) {
+                        e.delegation()->body->visit(exprIter);
                     }
-                    if (e.code().isValid()) {
-                        e.code().node().visit(exprIter);
+                    if (e.code()) {
+                        e.code()->visit(exprIter);
                     }
                     break;
                 }
                 case ASTItem::TAG_Static: {
                     auto& e = i.data.as_Static();
-                    if (e.value().isValid()) {
-                        e.value().node().visit(exprIter);
+                    if (e.value()) {
+                        e.value()->visit(exprIter);
                     }
                     break;
                 }
                 case ASTItem::TAG_Enum: {
                     auto& e = i.data.as_Enum();
                     for (auto& var : e.variants()) {
-                        if (var.discriminantValue.isValid()) {
-                            var.discriminantValue.node().visit(exprIter);
+                        if (var.discriminantValue) {
+                            var.discriminantValue->visit(exprIter);
                         }
                     }
                     break;

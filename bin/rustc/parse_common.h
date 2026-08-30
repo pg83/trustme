@@ -55,8 +55,8 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
 void ParseModRootItems(TokenStream& lex, ASTModule& mod);
 ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi);
 
-ASTExpr ParseExpr(TokenStream& lex);
-ASTExpr ParseExprBlock(TokenStream& lex);
+ASTExprNode* ParseExpr(TokenStream& lex);
+ASTExprNode* ParseExprBlock(TokenStream& lex);
 ASTExprNode* ParseExpr0(TokenStream& lex);
 ASTExprNode* ParseExpr13(TokenStream& lex);
 ASTExprNode* ParseExprVal(TokenStream& lex);

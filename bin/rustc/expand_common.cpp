@@ -63,7 +63,6 @@ namespace {
     void ExpandModExternCrates(const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& modpath, ASTModule& mod, unsigned int firstItem);
     void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, unsigned int firstItem = 0);
     ASTExprNode* ExpandExpr(const ExpandState& es, ASTExprNode* node);
-    void ExpandExpr(const ExpandState& es, ASTExpr& node);
     void ExpandPath(const ExpandState& es, ASTModule& mod, ASTPath& p);
     void ExpandPathParams(const ExpandState& es, ASTModule& mod, ASTPathParams& params);
 
@@ -920,12 +919,6 @@ namespace {
         return visitor.visit(node);
     }
 
-    void ExpandExpr(const ExpandState& es, ASTExpr& node) {
-        TRACE_FUNCTION_F(StringView("AST::Expr"));
-        CExpandExpr visitor{es};
-        node.visitNodes(visitor);
-    }
-
     void ExpandGenericParams(const ExpandState& es, ASTModule& mod, ASTGenericParams& params) {
         for (auto& paramDef : params.params) {
             switch (paramDef.tag()) {
@@ -996,7 +989,7 @@ namespace {
             for (auto& target : delegation->targets) {
                 ExpandPath(es, mod, target.path);
             }
-            ExpandExpr(es, delegation->body);
+            delegation->body = ExpandExpr(es, delegation->body);
         }
         for (size_t i = 0; i < e.args().size(); i++) {
             auto& arg = e.args()[i];
@@ -1012,7 +1005,7 @@ namespace {
             }));
         }
         ExpandType(es, mod, e.rettype());
-        ExpandExpr(es, e.code());
+        e.setCode(ExpandExpr(es, e.code()));
     }
 
     void Expand_Impl(const ExpandState& es, ASTPath modpath, ASTModule& mod, ASTImpl& impl) {
@@ -1076,7 +1069,7 @@ namespace {
                     auto& e = (*i.data).as_Static();
                     TRACE_FUNCTION_F(StringView("static ") << i.name);
                     ExpandGenericParams(es, mod, e.params());
-                    ExpandExpr(es, e.value());
+                    e.setValue(ExpandExpr(es, e.value()));
                     ExpandType(es, mod, e.type());
                     break;
                 }
@@ -1137,7 +1130,7 @@ namespace {
                 case ASTItem::TAG_Static: {
                     auto& e = dat.as_Static();
                     ExpandGenericParams(es, mod, e.params());
-                    ExpandExpr(es, e.value());
+                    e.setValue(ExpandExpr(es, e.value()));
                     ExpandType(es, mod, e.type());
                     break;
                 }
@@ -1338,7 +1331,7 @@ namespace {
                         switch (operand.tag()) {
                             case ASTGlobalAsmOperand::TAG_Const: {
                                 auto& expr = operand.as_Const();
-                                ExpandExpr(es, expr);
+                                expr = ExpandExpr(es, expr);
                                 break;
                             }
                             case ASTGlobalAsmOperand::TAG_Sym: {
@@ -1473,7 +1466,7 @@ namespace {
                                     d.handle(sp, a, es.wb, es.crate, si);
                                 }));
                                 ExpandType(es, mod, si.type);
-                                ExpandExpr(es, si.defaultValue);
+                                si.defaultValue = ExpandExpr(es, si.defaultValue);
                                 ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                     d.handle(sp, a, es.wb, es.crate, si);
                                 }));
@@ -1551,7 +1544,7 @@ namespace {
                                         d.handle(sp, a, es.wb, es.crate, si);
                                     }));
                                     ExpandType(es, mod, si.type);
-                                    ExpandExpr(es, si.defaultValue);
+                                    si.defaultValue = ExpandExpr(es, si.defaultValue);
                                     ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                         d.handle(sp, a, es.wb, es.crate, si);
                                     }));
@@ -1565,7 +1558,7 @@ namespace {
                                 break;
                             }
                         }
-                        ExpandExpr(es, var.discriminantValue);
+                        var.discriminantValue = ExpandExpr(es, var.discriminantValue);
                         ExpandAttrs(es, var.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                             d.handle(sp, a, es.wb, es.crate, var);
                         }));
@@ -1589,7 +1582,7 @@ namespace {
                             d.handle(sp, a, es.wb, es.crate, si);
                         }));
                         ExpandType(es, mod, si.type);
-                        ExpandExpr(es, si.defaultValue);
+                        si.defaultValue = ExpandExpr(es, si.defaultValue);
                         ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                             d.handle(sp, a, es.wb, es.crate, si);
                         }));
@@ -1653,7 +1646,7 @@ namespace {
                             case ASTItem::TAG_Static: {
                                 auto& e = ti.data.as_Static();
                                 ExpandGenericParams(es, mod, e.params());
-                                ExpandExpr(es, e.value());
+                                e.setValue(ExpandExpr(es, e.value()));
                                 ExpandType(es, mod, e.type());
                                 break;
                             }
@@ -1688,7 +1681,7 @@ namespace {
                 case ASTItem::TAG_Static: {
                     auto& e = dat.as_Static();
                     ExpandGenericParams(es, mod, e.params());
-                    ExpandExpr(es, e.value());
+                    e.setValue(ExpandExpr(es, e.value()));
                     ExpandType(es, mod, e.type());
                     break;
                 }

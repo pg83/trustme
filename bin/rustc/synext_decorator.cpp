@@ -1203,7 +1203,7 @@ namespace {
             if (auto* type = param.opt_Type()) {
                 type->getDefault() = mkType(pool, sp);
             } else if (auto* value = param.opt_Value()) {
-                value->defaultValue() = ASTExpr();
+                value->setDefaultValue(nullptr);
             }
         }
         return params;
@@ -4351,7 +4351,7 @@ auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& attr, const W
         }
         case ASTItem::TAG_Function: {
             auto& e = i.as_Function();
-            if (e.code().isValid()) {
+            if (e.code()) {
                 handleLangItem(registry, sp, crate, path, name, ITEM_FN, i);
             } else {
                 handleLangItem(registry, sp, crate, path, name, ITEM_EXTERN_FN, i);

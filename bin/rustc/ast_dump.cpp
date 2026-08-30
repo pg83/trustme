@@ -750,7 +750,7 @@ void RustPrinter::handleEnum(const ASTEnum& s) {
             }
         }
         if (i.discriminantValue) {
-            os << StringView(" = ") << i.discriminantValue;
+            os << StringView(" = ") << *i.discriminantValue;
         }
         os << StringView(",\n");
         idx++;
@@ -822,9 +822,9 @@ void RustPrinter::handleStatic(const ASTVisibility& vis, const RcString& name, c
     os << name;
     printParams(s.params());
     os << StringView(": ") << s.type();
-    if (s.value().isValid()) {
+    if (s.value()) {
         os << StringView(" = ");
-        s.value().visitNodes(*this);
+        s.value()->visit(*this);
     }
     if (!s.params().bounds.empty()) {
         os << StringView("\n");
@@ -881,12 +881,12 @@ void RustPrinter::handleFunction(const ASTVisibility& vis, const RcString& name,
         os << StringView(" -> ") << f.rettype()->printPretty();
     }
 
-    if (f.code().isValid()) {
+    if (f.code()) {
         os << StringView("\n");
         printBounds(f.params());
 
         os << indent();
-        f.code().visitNodes(*this);
+        f.code()->visit(*this);
         os << StringView("\n");
     } else {
         printBounds(f.params());
