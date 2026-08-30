@@ -508,7 +508,7 @@ void MIRTypeResolve::printMsgCb(const char* tag, SpanMessageCallback& cb) const 
     os << StringView("MIR ") << tag << StringView(": ");
     fmtPos(os, true);
     cb.write(os);
-    os << endL;
+    os << endL << flsH;
     abort();
 }
 
@@ -1133,7 +1133,8 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTy
         return "[" + intrinsicTypeNameImpl(te->inner, genericPlaceholders) + "]";
     }
     if (const auto* te = ty->opt_Array()) {
-        return FMT(StringView("[") << intrinsicTypeNameImpl(te->inner, genericPlaceholders) << StringView("; ") << te->size << StringView("]"));
+        auto size = te->size.is_Known() ? FMT(te->size.as_Known()) : (genericPlaceholders ? "_" : FMT(te->size.as_Unevaluated()));
+        return FMT(StringView("[") << intrinsicTypeNameImpl(te->inner, genericPlaceholders) << StringView("; ") << size << StringView("]"));
     }
     if (const auto* te = ty->opt_Borrow()) {
         const char* prefix = te->type == HIRBorrowType::Shared ? "&" : (te->type == HIRBorrowType::Unique ? "&mut " : "&move ");
