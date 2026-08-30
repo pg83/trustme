@@ -46,7 +46,7 @@ Ordering HIRGenericBound::ord(const HIRGenericBound& b) const {
 
 HIRPathParams HIRGenericParams::makeNopParams(HIRTypeInterner& types, unsigned level) const {
     HIRPathParams rv;
-    rv.types = ThinVector<HIRTypeRef>(this->types.size());
+    rv.types = ThinVector<const HIRTypeData*>(this->types.size());
     rv.values = ThinVector<HIRConstGeneric>(this->values.size());
     for (size_t i = 0; i < this->types.size(); i++) {
         rv.types[i] = types.generic(this->types[i].name, 256 * level + i);

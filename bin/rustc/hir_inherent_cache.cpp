@@ -287,7 +287,7 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
             const HIRFunction& fcn = impl.methods.at(name).data;
 
             struct GetSelf: public HIRMatchGenerics {
-                std::optional<HIRTypeRef> detectedSelfTy;
+                std::optional<const HIRTypeData*> detectedSelfTy;
 
                 GetSelf()
                     : HIRMatchGenerics(BorrowMatchedValues{})

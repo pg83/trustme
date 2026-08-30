@@ -32,7 +32,7 @@ public:
 
     void visitExpr(HIRExprPtr& exp) override;
 
-    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+    [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
     void visitConstgeneric(HIRConstGeneric& value) override;
 
     void visitFunction(HIRItemPath p, HIRFunction& item) override;

@@ -196,8 +196,8 @@ void HIRExprVisitorDef::visitNodePtr(HIRExprNodeP& nodePtr) {
     BUG_ASSERT(nodePtr);
     TRACE_FUNCTION_F(static_cast<const void*>(&*nodePtr) << StringView(" ") << nodePtr->typeName());
     nodePtr->visit(*this);
-    if (nodePtr->resType != HIRTypeRef()) {
-        updateType(nodePtr->resType);
+    if (nodePtr->resType != nullptr) {
+        nodePtr->resType = visitType(nodePtr->resType);
     }
 }
 
@@ -290,7 +290,7 @@ DEF_VISIT_H(HIRExprNodeLet, node) {
         visitNodePtr(node.value);
     }
     visitPattern(node.span(), node.pattern);
-    updateType(node.type);
+    node.type = visitType(node.type);
 }
 
 DEF_VISIT_H(HIRExprNodeLoop, node) {
@@ -328,13 +328,13 @@ DEF_VISIT(HIRExprNodeRawBorrow, node, visitNodePtr(node.value);)
 
 DEF_VISIT_H(HIRExprNodeCast, node) {
     TRACE_FUNCTION_F(StringView("_Cast ") << node.dstType);
-    updateType(node.dstType);
+    node.dstType = visitType(node.dstType);
     visitNodePtr(node.value);
 }
 
 DEF_VISIT_H(HIRExprNodeUnsize, node) {
     TRACE_FUNCTION_F(StringView("_Unsize ") << node.dstType);
-    updateType(node.dstType);
+    node.dstType = visitType(node.dstType);
     visitNodePtr(node.value);
 }
 
@@ -362,8 +362,8 @@ DEF_VISIT_H(HIRExprNodeTupleVariant, node) {
     visitGenericPath(HIRVisitor::PathContext::VALUE, node.path);
 
     for (auto& ty : mutRange(node.argTypes)) {
-        if (ty != HIRTypeRef()) {
-            updateType(ty);
+        if (ty != nullptr) {
+            ty = visitType(ty);
         }
     }
 
@@ -375,7 +375,7 @@ DEF_VISIT_H(HIRExprNodeTupleVariant, node) {
 DEF_VISIT_H(HIRExprNodeCallPath, node) {
     TRACE_FUNCTION_F(StringView("_CallPath: ") << node.path);
     for (auto& type : mutRange(node.cache.argTypes)) {
-        updateType(type);
+        type = visitType(type);
     }
 
     visitPath(HIRVisitor::PathContext::VALUE, node.path);
@@ -387,7 +387,7 @@ DEF_VISIT_H(HIRExprNodeCallPath, node) {
 DEF_VISIT_H(HIRExprNodeCallValue, node) {
     TRACE_FUNCTION_F(StringView("_CallValue:"));
     for (auto& type : mutRange(node.argTypes)) {
-        updateType(type);
+        type = visitType(type);
     }
 
     visitNodePtr(node.value);
@@ -400,7 +400,7 @@ DEF_VISIT_H(HIRExprNodeCallMethod, node) {
     TRACE_FUNCTION_FR(StringView("_CallMethod: ") << node.method, StringView("_CallMethod: ") << node.method);
     visitPathParams(node.params);
     for (auto& type : mutRange(node.cache.argTypes)) {
-        updateType(type);
+        type = visitType(type);
     }
 
     visitPath(HIRVisitor::PathContext::VALUE, node.methodPath);
@@ -424,8 +424,8 @@ DEF_VISIT(HIRExprNodeConstParam, node, TRACE_FUNCTION_F(StringView("_ConstParam"
 
 DEF_VISIT_H(HIRExprNodeStructLiteral, node) {
     TRACE_FUNCTION_F(StringView("_StructLiteral: ") << node.realPath);
-    if (node.type != HIRTypeRef()) {
-        updateType(node.type);
+    if (node.type != nullptr) {
+        node.type = visitType(node.type);
     }
     if (node.baseValue) {
         visitNodePtr(node.baseValue);
@@ -461,18 +461,18 @@ DEF_VISIT_H(HIRExprNodeClosure, node) {
     } else {
         for (auto& arg : node.args) {
             visitPattern(node.span(), arg.first);
-            updateType(arg.second);
+            arg.second = visitType(arg.second);
         }
-        updateType(node.returnType);
+        node.returnType = visitType(node.returnType);
         visitNodePtr(node.code);
     }
 }
 
 DEF_VISIT_H(HIRExprNodeGenerator, node) {
     TRACE_FUNCTION_F(StringView("_Generator"));
-    updateType(node.returnType);
-    updateType(node.yieldTy);
-    updateType(node.resumeTy);
+    node.returnType = visitType(node.returnType);
+    node.yieldTy = visitType(node.yieldTy);
+    node.resumeTy = visitType(node.resumeTy);
     if (node.hasResumePattern) {
         visitPattern(node.span(), node.resumePattern);
     }
@@ -486,8 +486,8 @@ DEF_VISIT_H(HIRExprNodeGenerator, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeGeneratorWrapper, node) {
-    updateType(node.returnType);
-    updateType(node.yieldTy);
+    node.returnType = visitType(node.returnType);
+    node.yieldTy = visitType(node.yieldTy);
     if (node.code) {
         visitNodePtr(node.code);
     }
@@ -495,7 +495,7 @@ DEF_VISIT_H(HIRExprNodeGeneratorWrapper, node) {
 
 DEF_VISIT_H(HIRExprNodeAsyncBlock, node) {
     TRACE_FUNCTION_F(StringView("_AsyncBlock"));
-    updateType(node.returnType);
+    node.returnType = visitType(node.returnType);
     if (node.code) {
         visitNodePtr(node.code);
     } else {
@@ -519,7 +519,7 @@ void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
         case HIRPatternData::TAG_Deref: {
             auto& e = pat.data.as_Deref();
             if (e.targetType) {
-                updateType(e.targetType);
+                e.targetType = visitType(e.targetType);
             }
             this->visitPattern(sp, *e.sub);
             break;
@@ -603,7 +603,7 @@ void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
     }
 }
 
-HIRTypeRef HIRExprVisitorDef::visitType(HIRTypeRef ty) {
+const HIRTypeData* HIRExprVisitorDef::visitType(const HIRTypeData* ty) {
     switch (ty->tag()) {
         case HIRTypeData::TAG_Infer:
         case HIRTypeData::TAG_Diverge:
@@ -633,7 +633,7 @@ HIRTypeRef HIRExprVisitorDef::visitType(HIRTypeRef ty) {
             }
             switch (e.inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Known: {
-                    updateType(e.inner.as_Known());
+                    e.inner.as_Known() = visitType(e.inner.as_Known());
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Fcn: {
@@ -716,7 +716,7 @@ HIRTypeRef HIRExprVisitorDef::visitType(HIRTypeRef ty) {
             const auto& e = ty->as_Function();
             auto nret = visitType(e.rettype);
             size_t argIdx = e.argTypes.length();
-            HIRTypeRef narg = nullptr;
+            const HIRTypeData* narg = nullptr;
             for (size_t i = 0; i < e.argTypes.length(); i++) {
                 narg = visitType(e.argTypes[i]);
                 if (narg != e.argTypes[i]) {
@@ -744,14 +744,14 @@ HIRTypeRef HIRExprVisitorDef::visitType(HIRTypeRef ty) {
 
 void HIRExprVisitorDef::visitPathParams(HIRPathParams& pp) {
     for (auto& ty : pp.types) {
-        updateType(ty);
+        ty = visitType(ty);
     }
 }
 
 void HIRExprVisitorDef::visitTraitPath(HIRTraitPath& p) {
     this->visitGenericPath(HIRVisitor::PathContext::TYPE, p.path);
     for (auto& assoc : p.typeBounds) {
-        updateType(assoc.second.type);
+        assoc.second.type = visitType(assoc.second.type);
     }
     for (auto& assoc : p.traitBounds) {
         for (auto& t : assoc.second.traits) {
@@ -769,20 +769,20 @@ void HIRExprVisitorDef::visitPath(HIRVisitor::PathContext pc, HIRPath& path) {
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& e = path.data.as_UfcsKnown();
-            updateType(e.type);
+            e.type = visitType(e.type);
             visitGenericPath(pc, e.trait);
             visitPathParams(e.params);
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
             auto& e = path.data.as_UfcsUnknown();
-            updateType(e.type);
+            e.type = visitType(e.type);
             visitPathParams(e.params);
             break;
         }
         case HIRPathData::TAG_UfcsInherent: {
             auto& e = path.data.as_UfcsInherent();
-            updateType(e.type);
+            e.type = visitType(e.type);
             visitPathParams(e.params);
             visitPathParams(e.implParams);
             break;
@@ -869,7 +869,7 @@ HIRExprNodeLoopControl::HIRExprNodeLoopControl(Span sp, RcString label, bool con
 {
 }
 
-HIRExprNodeLet::HIRExprNodeLet(Span sp, HIRPattern pat, HIRTypeRef ty, HIRExprNodeP val, bool isSuper)
+HIRExprNodeLet::HIRExprNodeLet(Span sp, HIRPattern pat, const HIRTypeData* ty, HIRExprNodeP val, bool isSuper)
     : HIRExprNode(mv$(sp))
     , pattern(mv$(pat))
     , type(mv$(ty))
@@ -1010,14 +1010,14 @@ HIRExprNodeRawBorrow::HIRExprNodeRawBorrow(Span sp, HIRBorrowType bt, HIRExprNod
 {
 }
 
-HIRExprNodeCast::HIRExprNodeCast(Span sp, HIRExprNodeP value, HIRTypeRef dstType)
+HIRExprNodeCast::HIRExprNodeCast(Span sp, HIRExprNodeP value, const HIRTypeData* dstType)
     : HIRExprNode(mv$(sp))
     , value(mv$(value))
     , dstType(mv$(dstType))
 {
 }
 
-HIRExprNodeUnsize::HIRExprNodeUnsize(Span sp, HIRExprNodeP value, HIRTypeRef dstType)
+HIRExprNodeUnsize::HIRExprNodeUnsize(Span sp, HIRExprNodeP value, const HIRTypeData* dstType)
     : HIRExprNode(mv$(sp))
     , value(mv$(value))
     , dstType(mv$(dstType))
@@ -1123,7 +1123,7 @@ HIRExprNodeConstParam::HIRExprNodeConstParam(Span sp, RcString name, unsigned in
 {
 }
 
-HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, HIRTypeRef ty, bool isStruct, HIRExprNodeP baseValue, tValues values)
+HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, const HIRTypeData* ty, bool isStruct, HIRExprNodeP baseValue, tValues values)
     : HIRExprNode(mv$(sp))
     , type(mv$(ty))
     , isStruct(isStruct)
@@ -1132,7 +1132,7 @@ HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, HIRTypeRef ty, bool 
 {
 }
 
-HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, HIRTypeRef ty, bool isStruct, bool, tValues values)
+HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, const HIRTypeData* ty, bool isStruct, bool, tValues values)
     : HIRExprNode(mv$(sp))
     , type(mv$(ty))
     , isStruct(isStruct)
@@ -1167,7 +1167,7 @@ HIRExprNodeArraySized::HIRExprNodeArraySized(Span sp, HIRExprNodeP val, HIRArray
 {
 }
 
-HIRExprNodeClosure::HIRExprNodeClosure(Span sp, argsT args, HIRTypeRef rv, HIRExprNodeP code, bool isMove, bool isUse)
+HIRExprNodeClosure::HIRExprNodeClosure(Span sp, argsT args, const HIRTypeData* rv, HIRExprNodeP code, bool isMove, bool isUse)
     : HIRExprNode(mv$(sp))
     , args(std::move(args))
     , returnType(std::move(rv))
@@ -1177,7 +1177,7 @@ HIRExprNodeClosure::HIRExprNodeClosure(Span sp, argsT args, HIRTypeRef rv, HIREx
 {
 }
 
-HIRExprNodeGenerator::HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef resumeTy, HIRPattern resumePattern, bool hasResumePattern, HIRTypeRef yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody)
+HIRExprNodeGenerator::HIRExprNodeGenerator(Span sp, const HIRTypeData* rv, const HIRTypeData* resumeTy, HIRPattern resumePattern, bool hasResumePattern, const HIRTypeData* yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody)
     : HIRExprNode(mv$(sp))
     , returnType(std::move(rv))
     , resumeTy(resumeTy)
@@ -1191,7 +1191,7 @@ HIRExprNodeGenerator::HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef re
 {
 }
 
-HIRExprNodeGeneratorWrapper::HIRExprNodeGeneratorWrapper(Span sp, HIRTypeRef rv, HIRTypeRef yieldTy, HIRExprNodeP code, bool isFuture)
+HIRExprNodeGeneratorWrapper::HIRExprNodeGeneratorWrapper(Span sp, const HIRTypeData* rv, const HIRTypeData* yieldTy, HIRExprNodeP code, bool isFuture)
     : HIRExprNode(mv$(sp))
     , isFuture(isFuture)
     , returnType(rv)
@@ -1200,7 +1200,7 @@ HIRExprNodeGeneratorWrapper::HIRExprNodeGeneratorWrapper(Span sp, HIRTypeRef rv,
 {
 }
 
-HIRExprNodeAsyncBlock::HIRExprNodeAsyncBlock(Span sp, HIRTypeRef returnType, HIRExprNodeP code, bool isMove, bool isUse)
+HIRExprNodeAsyncBlock::HIRExprNodeAsyncBlock(Span sp, const HIRTypeData* returnType, HIRExprNodeP code, bool isMove, bool isUse)
     : HIRExprNode(mv$(sp))
     , returnType(returnType)
     , code(std::move(code))

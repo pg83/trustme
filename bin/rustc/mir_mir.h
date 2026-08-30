@@ -550,7 +550,7 @@ public:
         }
     };
 
-    stl::Vector<HIRTypeRef> locals;
+    stl::Vector<const HIRTypeData*> locals;
 
     stl::Vector<bool> dropFlags;
 
@@ -592,7 +592,7 @@ public:
     std::vector<MIRParam> cloneParamVec(const std::vector<MIRParam>& src) const;
     std::vector<MIRLValue> cloneLvalVec(const std::vector<MIRLValue>& src) const;
 
-    HIRTypeRef monomorph(const HIRTypeData* x) const;
+    const HIRTypeData* monomorph(const HIRTypeData* x) const;
     HIRGenericPath monomorph(const HIRGenericPath& x) const;
     HIRPath monomorph(const HIRPath& x) const;
     HIRPathParams monomorph(const HIRPathParams& x) const;

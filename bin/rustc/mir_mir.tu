@@ -26,7 +26,7 @@ generate(
         v("ItemAddr", "ItemAddress", copy=False,
           doc="Address within a named allocation"),
         v("Encoded", fields=[
-            ("HIRTypeRef", "type"),
+            ("const HIRTypeData*", "type"),
             ("EncodedLiteral", "value"),
         ], copy=False),
     ],
@@ -99,7 +99,7 @@ generate(
         ], copy=False),
         v("Cast", fields=[
             ("MIRLValue", "val"),
-            ("HIRTypeRef", "type"),
+            ("const HIRTypeData*", "type"),
         ], copy=False, doc="Cast on primitives (thin pointers, integers, floats)"),
         v("BinOp", fields=[
             ("MIRParam", "valL"),

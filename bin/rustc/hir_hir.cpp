@@ -29,15 +29,15 @@ using namespace stl;
 
 namespace {
     struct ImplMatcher: public HIRMatchGenerics {
-        Vector<HIRTypeRef>& implTypes;
+        Vector<const HIRTypeData*>& implTypes;
 
-        ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics);
+        ImplMatcher(Vector<const HIRTypeData*>& buf, const HIRGenericParams& implGenerics);
 
         HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override;
 
         HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
 
-        HIRTypeRef mappedType(unsigned binding) const;
+        const HIRTypeData* mappedType(unsigned binding) const;
     };
 
     struct TypeOrdContext {
@@ -50,7 +50,7 @@ namespace {
 
         ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplMatcher& matcher);
 
-        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
+        const HIRTypeData* getType(const Span&, const HIRGenericRef& generic) const override;
 
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
 
@@ -105,8 +105,8 @@ namespace {
         return cmp != HIRCompare::Unequal;
     }
 
-    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ThinVector<HIRTypeRef>& left, const ThinVector<HIRTypeRef>& right);
-    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const Vector<HIRTypeRef>& left, const Vector<HIRTypeRef>& right);
+    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ThinVector<const HIRTypeData*>& left, const ThinVector<const HIRTypeData*>& right);
+    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const Vector<const HIRTypeData*>& left, const Vector<const HIRTypeData*>& right);
 
     ::Ordering arraySizeOrdSpecific(const Span& sp, const HIRArraySize& left, const HIRArraySize& right) {
         if (left == right) {
@@ -307,7 +307,7 @@ namespace {
         UNREACHABLE();
     }
 
-    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ThinVector<HIRTypeRef>& le, const ThinVector<HIRTypeRef>& re) {
+    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ThinVector<const HIRTypeData*>& le, const ThinVector<const HIRTypeData*>& re) {
         auto rv = ::OrdEqual;
         BUG_ASSERT(le.size() == re.size());
         for (unsigned int i = 0; i < le.size(); i++) {
@@ -323,7 +323,7 @@ namespace {
         return rv;
     }
 
-    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const Vector<HIRTypeRef>& le, const Vector<HIRTypeRef>& re) {
+    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const Vector<const HIRTypeData*>& le, const Vector<const HIRTypeData*>& re) {
         auto rv = ::OrdEqual;
         BUG_ASSERT(le.length() == re.length());
         for (unsigned int i = 0; i < le.length(); i++) {
@@ -585,7 +585,7 @@ void HIRPublicity::fmt(ZeroCopyOutput& out) const {
     }
 }
 
-HIRTypeRef HIRFunction::makePtrTy(const Span& sp, const Monomorphiser& ms) const {
+const HIRTypeData* HIRFunction::makePtrTy(const Span& sp, const Monomorphiser& ms) const {
     HIRTypeDataFunctionPointer ft;
     ft.isUnsafe = this->unsafe;
     ft.isVariadic = this->variadic;
@@ -598,7 +598,7 @@ HIRTypeRef HIRFunction::makePtrTy(const Span& sp, const Monomorphiser& ms) const
     return ms.typeInterner().function(std::move(ft));
 }
 
-HIRTypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIRTypeRef retTy, const tTupleFields& fields) {
+const HIRTypeData* fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, const HIRTypeData* retTy, const tTupleFields& fields) {
     HIRTypeDataFunctionPointer ft;
     ft.isUnsafe = false;
     ft.isVariadic = false;
@@ -1014,11 +1014,11 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
         }
     }
 
-    Vector<HIRTypeRef> parentMappings;
+    Vector<const HIRTypeData*> parentMappings;
     ImplMatcher parentMatcher(parentMappings, other.params);
     const bool parentMatchesChild = matchImplHead(sp, other, *this, parentMatcher);
 
-    Vector<HIRTypeRef> childMappings;
+    Vector<const HIRTypeData*> childMappings;
     ImplMatcher childMatcher(childMappings, params);
     const bool childMatchesParent = matchImplHead(sp, *this, other, childMatcher);
 
@@ -1190,10 +1190,10 @@ bool HIRCrate::findTypeImplsCb(const HIRTypeData* type, tCbResolveType tyRes, HI
     return false;
 }
 
-const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, HIRTypeRef& retTy) const {
+HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, const HIRTypeData* retTy) const {
     if (!ep) {
         ASSERT_BUG(Span(), ep.mir, StringView("No HIR (!ep) and no MIR (!ep.m_mir) for ") << ip);
-        return &*ep.mir;
+        return {&*ep.mir, retTy};
     } else {
         if (!ep.mir) {
             TRACE_FUNCTION_F(ip);
@@ -1207,7 +1207,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
                 currentTrait.params = ep.state->currentTraitImpl->traitArgs.clone();
             }
             if (ep.state->currentSelfType) {
-                ConvertHIRExpandAliasesSelfExpr(*this, ep.state->currentSelfType, const_cast<HIRFunction::argsT&>(args), retTy, epMut);
+                retTy = ConvertHIRExpandAliasesSelfExpr(*this, ep.state->currentSelfType, const_cast<HIRFunction::argsT&>(args), retTy, epMut);
             }
 
             // TODO: Ensure that all referenced items have constants evaluated
@@ -1246,7 +1246,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
                     ERROR(Span(), E0000, StringView("Loop in constant evaluation"));
                 }
                 ep.state->stage = HIRExprState::Stage::SbcRequest;
-                HIRExpandClosuresExpr(wb, *this, retTy, epMut);
+                retTy = HIRExpandClosuresExpr(wb, *this, retTy, epMut);
                 HIRExpandStaticBorrowConstantsExpr(wb, *this, ip, epMut);
             }
             if (ep.state->stage < HIRExprState::Stage::Expand) {
@@ -1269,11 +1269,11 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
             }
             BUG_ASSERT(ep.mir);
         }
-        return &*ep.mir;
+        return {&*ep.mir, retTy};
     }
 }
 
-HIRTypeRef HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, const HIRTypeData::Data_TraitObject& te) const {
+const HIRTypeData* HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, const HIRTypeData::Data_TraitObject& te) const {
     BUG_ASSERT(te.trait.traitPtr == this);
 
     const auto& vtableTySpath = this->vtablePath;
@@ -1401,7 +1401,7 @@ HIRPublicity HIRPublicity::newPriv(HIRSimplePath p) {
     return HIRPublicity(Kind::Restricted, std::make_shared<HIRSimplePath>(p.crateName(), s));
 }
 
-HIRStatic::HIRStatic(HIRLinkage linkage, bool isMut, HIRTypeRef type, HIRExprPtr value)
+HIRStatic::HIRStatic(HIRLinkage linkage, bool isMut, const HIRTypeData* type, HIRExprPtr value)
     : linkage(std::move(linkage))
     , isMut(isMut)
     , type(std::move(type))
@@ -1412,7 +1412,7 @@ HIRStatic::HIRStatic(HIRLinkage linkage, bool isMut, HIRTypeRef type, HIRExprPtr
 HIRConstant::HIRConstant() {
 }
 
-HIRConstant::HIRConstant(HIRGenericParams params, HIRTypeRef type, HIRExprPtr value)
+HIRConstant::HIRConstant(HIRGenericParams params, const HIRTypeData* type, HIRExprPtr value)
     : params(std::move(params))
     , type(std::move(type))
     , value(std::move(value))
@@ -1422,7 +1422,7 @@ HIRConstant::HIRConstant(HIRGenericParams params, HIRTypeRef type, HIRExprPtr va
 HIRFunction::HIRFunction() {
 }
 
-HIRFunction::HIRFunction(Receiver receiver, HIRGenericParams params, argsT args, HIRTypeRef retTy, HIRExprPtr code)
+HIRFunction::HIRFunction(Receiver receiver, HIRGenericParams params, argsT args, const HIRTypeData* retTy, HIRExprPtr code)
     : receiver(receiver)
     , params(std::move(params))
     , args(std::move(args))
@@ -1455,7 +1455,7 @@ HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data, unsigned ali
 {
 }
 
-HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType)
+HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, std::vector<HIRTraitPath> traitBounds, const HIRTypeData* defaultType)
     : generics(std::move(generics))
     , isSized(isSized)
     , traitBounds(std::move(traitBounds))
@@ -1504,7 +1504,7 @@ bool HIRCrate::isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias
                 break;
             }
             const auto* typeAlias = item->opt_TypeAlias();
-            if (!typeAlias || typeAlias->type == HIRTypeRef()) {
+            if (!typeAlias || typeAlias->type == nullptr) {
                 break;
             }
             const auto* erased = typeAlias->type->opt_ErasedType();
@@ -1552,7 +1552,7 @@ bool HIRCrate::isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias
                 default:
                     break;
             }
-        } else if (const auto* typeAlias = item->opt_TypeAlias(); typeAlias && typeAlias->type != HIRTypeRef()) {
+        } else if (const auto* typeAlias = item->opt_TypeAlias(); typeAlias && typeAlias->type != nullptr) {
             if (visitTyWith(typeAlias->type, containsAlias)) {
                 return true;
             }
@@ -1572,14 +1572,14 @@ const HIRConstant& HIRCrate::getConstantByPath(const Span& sp, const HIRSimplePa
 
 const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRFunction& fcn) const {
     auto ty = fcn.returnType;
-    return getOrGenMir(wb, ip, fcn.code, fcn.args, ty);
+    return getOrGenMir(wb, ip, fcn.code, fcn.args, ty).mir;
 }
 
-const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, HIRTypeRef& expTy) const {
+HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRTypeData* expTy) const {
     return getOrGenMir(wb, ip, ep, emptyMirArgs, expTy);
 }
 
-ImplMatcher::ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics)
+ImplMatcher::ImplMatcher(Vector<const HIRTypeData*>& buf, const HIRGenericParams& implGenerics)
     : HIRMatchGenerics(BorrowMatchedValues{})
     , implTypes(buf)
 {
@@ -1601,8 +1601,8 @@ auto ImplMatcher::matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) ->
     return HIRCompare::Equal;
 }
 
-auto ImplMatcher::mappedType(unsigned binding) const -> HIRTypeRef {
-    return binding < implTypes.length() ? implTypes[binding] : HIRTypeRef();
+auto ImplMatcher::mappedType(unsigned binding) const -> const HIRTypeData* {
+    return binding < implTypes.length() ? implTypes[binding] : nullptr;
 }
 
 ImplHeadMonomorphiser::ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplMatcher& matcher)
@@ -1611,7 +1611,7 @@ ImplHeadMonomorphiser::ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplM
 {
 }
 
-auto ImplHeadMonomorphiser::getType(const Span&, const HIRGenericRef& generic) const -> HIRTypeRef {
+auto ImplHeadMonomorphiser::getType(const Span&, const HIRGenericRef& generic) const -> const HIRTypeData* {
     if (generic.group() == 0) {
         auto mapped = matcher.mappedType(generic.binding);
         if (mapped) {

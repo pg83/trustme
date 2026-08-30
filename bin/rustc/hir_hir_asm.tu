@@ -10,7 +10,7 @@ generate(
     variants=[
         v("Const", fields=[
             ("HIRConstGeneric", "value"),
-            ("HIRTypeRef", "type"),
+            ("const HIRTypeData*", "type"),
         ], copy=False),
         v("Sym", "HIRPath", copy=False),
     ],

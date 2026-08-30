@@ -74,7 +74,7 @@ void MonomorphState::setImplParams(HIRPathParams pp) {
     ppImplData = std::move(pp);
 }
 
-HIRTypeRef MonomorphiserNop::getType(const Span& sp, const HIRGenericRef& ty) const {
+const HIRTypeData* MonomorphiserNop::getType(const Span& sp, const HIRGenericRef& ty) const {
     return types.generic(ty);
 }
 
@@ -89,7 +89,7 @@ OpaqueAliasParamMonomorph::OpaqueAliasParamMonomorph(HIRTypeInterner& types, con
 {
 }
 
-HIRTypeRef OpaqueAliasParamMonomorph::getType(const Span& sp, const HIRGenericRef& generic) const {
+const HIRTypeData* OpaqueAliasParamMonomorph::getType(const Span& sp, const HIRGenericRef& generic) const {
     auto type = MonomorphiserNop::getType(sp, generic);
     for (size_t i = 0; i < params.types.size(); i++) {
         if (params.types[i] == type) {
@@ -146,7 +146,7 @@ const HIRPathParams* MonomorphState::getHrbParams() const {
 template <>
 void stl::output<ZeroCopyOutput, MonomorphState>(ZeroCopyOutput& os, const MonomorphState& ms) {
     os << StringView("MonomorphState {");
-    if (ms.selfTy != HIRTypeRef()) {
+    if (ms.selfTy != nullptr) {
         os << StringView(" self=") << ms.selfTy;
     }
     if (ms.ppImpl) {

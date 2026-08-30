@@ -66,7 +66,7 @@ namespace {
     struct ExprVisitorConv: public MirConverter, public MIRDropEmitter {
         MirBuilder& builder;
 
-        const Vector<HIRTypeRef>& variableTypes;
+        const Vector<const HIRTypeData*>& variableTypes;
 
         bool isGenerator;
 
@@ -113,9 +113,9 @@ namespace {
             bool isAsyncGen = false;
         } generatorState;
 
-        ExprVisitorConv(MirBuilder& builder, const Vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator);
+        ExprVisitorConv(MirBuilder& builder, const Vector<const HIRTypeData*>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator);
 
-        bool findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path, HIRTypeRef& futureTy) const;
+        const HIRTypeData* findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path) const;
 
         bool hasDropImpl(const Span& sp, const HIRTypeData* ty) const;
 
@@ -510,9 +510,9 @@ namespace {
 
         void genForSlice(tRulesSubset rules, size_t ofs, MIRBasicBlockId defaultArm);
         void genDispatch(const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-        void genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-        void genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-        void genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+        void genDispatchPrimitive(const HIRTypeData* ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+        void genDispatchEnum(const HIRTypeData* ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+        void genDispatchSlice(const HIRTypeData* ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
 
         void genDispatchRange(const fieldPathT& fieldPath, const MIRConstant& first, const MIRConstant& last, bool isInclusive, MIRBasicBlockId defBlk);
         void genDispatchSplitslice(const fieldPathT& fieldPath, const PatternRule::Data_SplitSlice& e, MIRBasicBlockId defBlk);
@@ -639,7 +639,7 @@ namespace {
                 IntMap<unsigned> storageSlots{storagePool.mutPtr()};
                 IntMap<bool> compositeConflicts{storagePool.mutPtr()};
                 ev.generatorFindCompositeStorageConflicts(fcn, firstStoredLocal, compositeConflicts);
-                ThinVector<HIRTypeRef> storageTypes;
+                ThinVector<const HIRTypeData*> storageTypes;
                 unsigned storageSlotCount = 0;
                 auto makeStorageType = [&]() {
                     auto& crate = const_cast<HIRCrate&>(resolve.hirCrate());
@@ -669,7 +669,7 @@ namespace {
                     }
                     if (storageSlot == storageSlotCount) {
                         storageTypes.push_back(makeStorageType());
-                        fields.push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), storageTypes[storageSlot]});
+                        fields.push_back(HIRVisEnt<const HIRTypeData*>{HIRPublicity::newNone(), storageTypes[storageSlot]});
                         storageSlotCount += 1;
                     }
                     ASSERT_BUG(sp, storageSlot < storageSlotCount, StringView("Non-contiguous coroutine storage slot ") << storageSlot);
@@ -687,7 +687,7 @@ namespace {
                     DEBUG(StringView("df$") << idx << StringView(" = BIT") << dropFlagMapping[idx]);
                 }
                 auto dropFlagsFieldIdx = fields.size();
-                fields.push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), resolve.hirCrate().types.array(resolve.hirCrate().types.primitive(HIRCoreType::U8), (dropFlagMapping.size() + 7) / 8)});
+                fields.push_back(HIRVisEnt<const HIRTypeData*>{HIRPublicity::newNone(), resolve.hirCrate().types.array(resolve.hirCrate().types.primitive(HIRCoreType::U8), (dropFlagMapping.size() + 7) / 8)});
 
                 struct Rewriter: public MIRVisitorMut {
                     const std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings_;
@@ -837,14 +837,13 @@ namespace {
         return MIRFunctionPointer(new MIRFunction(mv$(fcn)));
     }
 
-    void getTyAndVal(
+    const HIRTypeData* getTyAndVal(
         const Span& sp,
         MirBuilder& builder,
         const HIRTypeData* topTy,
         const MIRLValue& topVal,
         const fieldPathT& fieldPath,
         unsigned int fieldPathOfs,
-        /*Out ->*/ HIRTypeRef& outTy,
         MIRLValue& outVal
     );
 
@@ -1109,23 +1108,22 @@ namespace {
         }
     }
 
-    void getTyAndVal(
+    const HIRTypeData* getTyAndVal(
         const Span& sp,
         MirBuilder& builder,
         const HIRTypeData* topTy,
         const MIRLValue& topVal,
         const fieldPathT& fieldPath,
         unsigned int fieldPathOfs,
-        /*Out ->*/ HIRTypeRef& outTy,
         MIRLValue& outVal
     ) {
         const StaticTraitResolve& resolve = builder.resolve();
         MIRLValue lval = topVal.clone();
-        HIRTypeRef tmpTy = topTy;
+        const HIRTypeData* tmpTy = topTy;
         const HIRTypeData* curTy = topTy;
         auto revealCurTy = [&]() {
             tmpTy = curTy;
-            resolve.revealOpaqueTypes(sp, tmpTy);
+            tmpTy = resolve.revealOpaqueTypes(sp, tmpTy);
             curTy = tmpTy;
         };
 
@@ -1172,7 +1170,7 @@ namespace {
                     auto monomorphToPtr = [&](const HIRTypeData* ty) -> const HIRTypeData* {
                         if (monomorphiseTypeNeeded(ty)) {
                             auto rv = MonomorphStatePtr(resolve.hirCrate().types, nullptr, &e.path.data.as_Generic().params, nullptr).monomorphType(sp, ty);
-                            resolve.expandAssociatedTypes(sp, rv);
+                            rv = resolve.expandAssociatedTypes(sp, rv);
                             tmpTy = mv$(rv);
                             return tmpTy;
                         } else {
@@ -1313,15 +1311,14 @@ namespace {
             lval = builder.lvalueOrTemp(sp, pattern->inner, MIRRValue::make_Cast({mv$(lval), pattern->inner}));
             curTy = pattern->inner;
         }
-        outTy = curTy;
         outVal = mv$(lval);
+        return curTy;
     }
 
-    void getPatternRoot(const Span& sp, const PatternRuleset& ruleset, unsigned rootIndex, const HIRTypeData* topTy, const MIRLValue& topVal, HIRTypeRef& rootTy, MIRLValue& rootVal) {
+    const HIRTypeData* getPatternRoot(const Span& sp, const PatternRuleset& ruleset, unsigned rootIndex, const HIRTypeData* topTy, const MIRLValue& topVal, MIRLValue& rootVal) {
         if (rootIndex == 0) {
-            rootTy = topTy;
             rootVal = topVal.clone();
-            return;
+            return topTy;
         }
         const auto derefIt = std::find_if(ruleset.derefs.begin(), ruleset.derefs.end(), [&](const auto& deref) {
             return deref.rootIndex == rootIndex;
@@ -1329,8 +1326,8 @@ namespace {
         ASSERT_BUG(sp, derefIt != ruleset.derefs.end(), StringView("Invalid pattern root ") << rootIndex);
         const auto& deref = *derefIt;
         ASSERT_BUG(sp, deref.resultLocal != ~0u, StringView("Pattern deref root has no MIR local"));
-        rootTy = deref.targetType;
         rootVal = MIRLValue::newDeref(MIRLValue::newLocal(deref.resultLocal));
+        return deref.targetType;
     }
 
     void allocatePatternDerefLocals(MirBuilder& builder, PatternRuleset& ruleset) {
@@ -1342,13 +1339,13 @@ namespace {
 
     void materializePatternDerefs(MirBuilder& builder, const Span& sp, const PatternRuleset& ruleset, const HIRTypeData* topTy, const MIRLValue& topVal) {
         for (const auto& deref : ruleset.derefs) {
-            HIRTypeRef parentTy;
+            const HIRTypeData* parentTy;
             MIRLValue parentVal;
-            getPatternRoot(sp, ruleset, deref.parentRoot, topTy, topVal, parentTy, parentVal);
+            parentTy = getPatternRoot(sp, ruleset, deref.parentRoot, topTy, topVal, parentVal);
 
-            HIRTypeRef sourceTy;
+            const HIRTypeData* sourceTy;
             MIRLValue sourceVal;
-            getTyAndVal(sp, builder, parentTy, parentVal, deref.field, 0, sourceTy, sourceVal);
+            sourceTy = getTyAndVal(sp, builder, parentTy, parentVal, deref.field, 0, sourceVal);
             ASSERT_BUG(sp, sourceTy == deref.sourceType, StringView("Deref pattern source changed from ") << deref.sourceType << StringView(" to ") << sourceTy);
 
             const auto borrow = deref.kind == HIRPattern::DerefKind::Unique ? HIRBorrowType::Unique : HIRBorrowType::Shared;
@@ -1379,9 +1376,9 @@ namespace {
     }
 
     MIRLValue getPatternBindingValue(MirConverter& conv, const Span& sp, const PatternRuleset& ruleset, const HIRTypeData* topTy, const MIRLValue& topVal, const PatternBinding& binding) {
-        HIRTypeRef rootTy;
+        const HIRTypeData* rootTy;
         MIRLValue rootVal;
-        getPatternRoot(sp, ruleset, binding.rootIndex, topTy, topVal, rootTy, rootVal);
+        rootTy = getPatternRoot(sp, ruleset, binding.rootIndex, topTy, topVal, rootVal);
         return conv.getValueForBindingPath(sp, rootTy, rootVal, binding);
     }
 
@@ -1392,9 +1389,9 @@ namespace {
         }
         for (size_t i = ruleset.bindings.size(); i--;) {
             const auto& binding = ruleset.bindings[i];
-            HIRTypeRef rootTy;
+            const HIRTypeData* rootTy;
             MIRLValue rootVal;
-            getPatternRoot(sp, ruleset, binding.rootIndex, topTy, topVal, rootTy, rootVal);
+            rootTy = getPatternRoot(sp, ruleset, binding.rootIndex, topTy, topVal, rootVal);
             conv.destructureFromList(sp, rootTy, mv$(rootVal), std::vector<PatternBinding>{binding}, updateStates);
         }
     }
@@ -1445,16 +1442,16 @@ namespace {
             }
 
             MIRLValue val;
-            HIRTypeRef ity;
+            const HIRTypeData* ity;
 
             if (rule.rootIndex == 0) {
-                getTyAndVal(sp, builder, topTy, topVal, rule.fieldPath, fieldPathOfs, ity, val);
+                ity = getTyAndVal(sp, builder, topTy, topVal, rule.fieldPath, fieldPathOfs, val);
             } else {
                 ASSERT_BUG(sp, ruleset, StringView("Adjusted pattern rule without a ruleset"));
-                HIRTypeRef rootTy;
+                const HIRTypeData* rootTy;
                 MIRLValue rootVal;
-                getPatternRoot(sp, *ruleset, rule.rootIndex, topTy, topVal, rootTy, rootVal);
-                getTyAndVal(sp, builder, rootTy, rootVal, rule.fieldPath, 0, ity, val);
+                rootTy = getPatternRoot(sp, *ruleset, rule.rootIndex, topTy, topVal, rootVal);
+                ity = getTyAndVal(sp, builder, rootTy, rootVal, rule.fieldPath, 0, val);
             }
 
             DEBUG(StringView("ty = ") << ity << StringView(", val = ") << val);
@@ -1731,7 +1728,7 @@ namespace {
                             auto& pbe = te.binding.as_Enum();
                             auto monomorph = [&](const auto& ty) {
                                 auto rv = MonomorphStatePtr(builder.resolve().crate.types, nullptr, &te.path.data.as_Generic().params, nullptr).monomorphType(sp, ty);
-                                builder.resolve().expandAssociatedTypes(sp, rv);
+                                rv = builder.resolve().expandAssociatedTypes(sp, rv);
                                 return rv;
                             };
                             ASSERT_BUG(sp, rule.is_Variant(), StringView("Rule for enum isn't Any or Variant"));
@@ -1755,7 +1752,7 @@ namespace {
                                 ASSERT_BUG(sp, pbe->data.is_Data(), StringView("Sub-rules present for non-data enum"));
                                 const auto& variants = pbe->data.as_Data();
                                 const auto& varTy = variants.at(re.idx).type;
-                                HIRTypeRef tmp;
+                                const HIRTypeData* tmp;
                                 const auto& varTyM = (monomorphiseTypeNeeded(varTy) ? tmp = monomorph(varTy) : varTy);
 
                                 MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, ruleset, re.subRules.data(), re.subRules.size(), varTyM, MIRLValue::newDowncast(val.clone(), varIdx), rule.fieldPath.size() + 1, failBb);
@@ -2426,21 +2423,20 @@ void HIRGenerateMIR(const WireBoard& wb, HIRCrate& crate) {
 
 void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const Vector<unsigned>& letElseInitializerTemps);
 
-void MIRLowerHIRGetTypeValueForPath(
+const HIRTypeData* MIRLowerHIRGetTypeValueForPath(
     const Span& sp,
     MirBuilder& builder,
     const HIRTypeData* topTy,
     const MIRLValue& topVal,
     const fieldPathT& fieldPath,
-    /*Out ->*/ HIRTypeRef& outTy,
     MIRLValue& outVal
 ) {
-    getTyAndVal(sp, builder, topTy, topVal, fieldPath, 0, outTy, outVal);
+    return getTyAndVal(sp, builder, topTy, topVal, fieldPath, 0, outVal);
 }
 
 void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRPattern& pat, MIRLValue val, const HIRExprNode* elseNode) {
     TRACE_FUNCTION;
-    HIRTypeRef outerTy = builder.valType(sp, val);
+    const HIRTypeData* outerTy = builder.valType(sp, val);
 
     auto successNode = builder.newBbUnlinked();
     auto firstCmpBlock = builder.pauseCurBlock();
@@ -2575,7 +2571,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
             auto aliases = builder.saveAliases();
             Vector<unsigned> bindingTemps;
             for (const auto& b : bindings0) {
-                HIRTypeRef finalTy = conv.getBindingType(sp, b.binding->slot);
+                const HIRTypeData* finalTy = conv.getBindingType(sp, b.binding->slot);
                 const Span& sp = arm.code->span();
                 auto val = getPatternBindingValue(conv, sp, armRules[firstArmRuleIdx], matchTy, matchVal, b);
                 DEBUG(StringView("Set alias for: ") << *b.binding << StringView(" := ") << val);
@@ -3539,8 +3535,8 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
 
 void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, const HIRTypeData* topTy) {
     TRACE_FUNCTION_F(StringView("pat=") << pat << StringView(", ty=") << topTy << StringView(",   m_field_path=[") << fieldPath << StringView("]"));
-    HIRTypeRef revealedTopTy = topTy;
-    resolve.revealOpaqueTypes(sp, revealedTopTy);
+    const HIRTypeData* revealedTopTy = topTy;
+    revealedTopTy = resolve.revealOpaqueTypes(sp, revealedTopTy);
     topTy = revealedTopTy;
 
     if (topTy->is_Diverge()) {
@@ -3949,11 +3945,11 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
             };
 
-            HIRTypeRef tmp;
+            const HIRTypeData* tmp;
             auto maybeMonomorph = [&](const HIRTypeData* ty) -> const HIRTypeData* {
                 if (monomorphiseTypeNeeded(ty)) {
                     tmp = MonomorphStatePtr(resolve.hirCrate().types, nullptr, &e.path.data.as_Generic().params, nullptr).monomorphType(sp, ty);
-                    this->resolve.expandAssociatedTypes(sp, tmp);
+                    tmp = this->resolve.expandAssociatedTypes(sp, tmp);
                     return tmp;
                 } else {
                     return ty;
@@ -4704,8 +4700,8 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
     }
 
     MIRLValue val;
-    HIRTypeRef ty;
-    getTyAndVal(sp, builder, topTy, topVal, fieldPath, fieldPathOfs, ty, val);
+    const HIRTypeData* ty;
+    ty = getTyAndVal(sp, builder, topTy, topVal, fieldPath, fieldPathOfs, val);
 
     DEBUG(StringView("ty = ") << ty << StringView(", val = ") << val);
     switch ((*ty).tag()) {
@@ -4846,7 +4842,7 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
     }
 }
 
-void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatchPrimitive(const HIRTypeData* ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     auto te = ty->as_Primitive();
     switch (te) {
         case HIRCoreType::Bool: {
@@ -5023,7 +5019,7 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const s
     }
 }
 
-void MatchGenGrouped::genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatchEnum(const HIRTypeData* ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     TRACE_FUNCTION;
     auto& te = ty->as_Path();
     const auto& pbe = te.binding.as_Enum();
@@ -5056,7 +5052,7 @@ void MatchGenGrouped::genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::v
     builder.endBlock(MIRTerminator::make_Switch({mv$(val), mv$(arms)}));
 }
 
-void MatchGenGrouped::genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatchSlice(const HIRTypeData* ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     auto valLen = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, val)}));
 
     // TODO: Re-sort the rules list to interleve Constant::Bytes and Slice
@@ -5115,8 +5111,8 @@ void MatchGenGrouped::genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::
 void MatchGenGrouped::genDispatchRange(const fieldPathT& fieldPath, const MIRConstant& first, const MIRConstant& last, bool isInclusive, MIRBasicBlockId defBlk) {
     TRACE_FUNCTION_F(StringView("field_path=") << fieldPath << StringView(", ") << first << StringView(" ..") << (isInclusive ? "=" : "") << StringView(" ") << last);
     MIRLValue val;
-    HIRTypeRef ty;
-    getTyAndVal(sp, builder, topTy, topVal, fieldPath, fieldPathOfs, ty, val);
+    const HIRTypeData* ty;
+    ty = getTyAndVal(sp, builder, topTy, topVal, fieldPath, fieldPathOfs, val);
 
     DEBUG(StringView("ty = ") << ty << StringView(", val = ") << val);
     if (const auto* tep = ty->opt_Primitive()) {
@@ -5190,8 +5186,8 @@ void MatchGenGrouped::genDispatchRange(const fieldPathT& fieldPath, const MIRCon
 void MatchGenGrouped::genDispatchSplitslice(const fieldPathT& fieldPath, const PatternRule::Data_SplitSlice& e, MIRBasicBlockId defBlk) {
     TRACE_FUNCTION_F(StringView("field_path=") << fieldPath << StringView(", [") << e.leading << StringView(", .., ") << e.trailing << StringView("]"));
     MIRLValue val;
-    HIRTypeRef ty;
-    getTyAndVal(sp, builder, topTy, topVal, fieldPath, fieldPathOfs, ty, val);
+    const HIRTypeData* ty;
+    ty = getTyAndVal(sp, builder, topTy, topVal, fieldPath, fieldPathOfs, val);
 
     DEBUG(StringView("ty = ") << ty << StringView(", val = ") << val);
     ASSERT_BUG(sp, e.leading.size() == 0, StringView("Sub-rules in MatchGenGrouped"));
@@ -6679,12 +6675,12 @@ void MirBuilder::completeScope(ScopeDef& sd) {
     }
 }
 
-HIRTypeRef MirBuilder::valType(const Span& sp, const MIRLValue& val, const MIRLValue::Wrapper* stopWrapper /*=nullptr*/) const {
-    HIRTypeRef tmp;
+const HIRTypeData* MirBuilder::valType(const Span& sp, const MIRLValue& val, const MIRLValue::Wrapper* stopWrapper /*=nullptr*/) const {
+    const HIRTypeData* tmp;
     const HIRTypeData* ty = nullptr;
     auto revealType = [&](const HIRTypeData* input) {
-        HIRTypeRef revealed = input;
-        resolve_.revealOpaqueTypes(sp, revealed);
+        const HIRTypeData* revealed = input;
+        revealed = resolve_.revealOpaqueTypes(sp, revealed);
         return revealed;
     };
     switch (val.root.tag()) {
@@ -6739,7 +6735,7 @@ HIRTypeRef MirBuilder::valType(const Span& sp, const MIRLValue& val, const MIRLV
         auto maybeMonomorph = [&](const HIRGenericParams& paramsDef, const HIRPath& p, const HIRTypeData* t) -> const HIRTypeData* {
             if (monomorphiseTypeNeeded(t)) {
                 tmp = MonomorphStatePtr(resolve_.hirCrate().types, nullptr, &p.data.as_Generic().params, nullptr).monomorphType(sp, t);
-                resolve_.expandAssociatedTypes(sp, tmp);
+                tmp = resolve_.expandAssociatedTypes(sp, tmp);
                 return tmp;
             } else {
                 return t;
@@ -7743,7 +7739,7 @@ MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
 
 #include "mir_from_hir_pattern_tu.cpp"
 
-ExprVisitorConv::ExprVisitorConv(MirBuilder& builder, const Vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator)
+ExprVisitorConv::ExprVisitorConv(MirBuilder& builder, const Vector<const HIRTypeData*>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator)
     : builder(builder)
     , variableTypes(varTypes)
     , isGenerator(isGenerator != nullptr)
@@ -7761,8 +7757,8 @@ ExprVisitorConv::ExprVisitorConv(MirBuilder& builder, const Vector<HIRTypeRef>& 
     }
 }
 
-auto ExprVisitorConv::findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path, HIRTypeRef& futureTy) const -> bool {
-    return builder.resolve().findAsyncDrop(sp, ty, path, futureTy);
+auto ExprVisitorConv::findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path) const -> const HIRTypeData* {
+    return builder.resolve().findAsyncDrop(sp, ty, path);
 }
 
 auto ExprVisitorConv::hasDropImpl(const Span& sp, const HIRTypeData* ty) const -> bool {
@@ -7894,7 +7890,7 @@ auto ExprVisitorConv::emitDropFields(const Span& sp, const HIRTypeData* ty, cons
             auto& fields = ((*str)->data).as_Tuple();
             for (size_t i = 0; i < fields.size(); i++) {
                 auto fieldTy = monomorph.monomorphType(sp, fields[i].ent);
-                builder.resolve().expandAssociatedTypes(sp, fieldTy);
+                fieldTy = builder.resolve().expandAssociatedTypes(sp, fieldTy);
                 auto field = MIRLValue::newField(value.clone(), static_cast<unsigned int>(i));
                 if (!emitAsyncDrop(sp, field.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, fieldTy)) {
                     builder.pushStmtDropRaw(sp, std::move(field));
@@ -7906,7 +7902,7 @@ auto ExprVisitorConv::emitDropFields(const Span& sp, const HIRTypeData* ty, cons
             auto& fields = ((*str)->data).as_Named();
             for (size_t i = 0; i < fields.size(); i++) {
                 auto fieldTy = monomorph.monomorphType(sp, fields[i].ty);
-                builder.resolve().expandAssociatedTypes(sp, fieldTy);
+                fieldTy = builder.resolve().expandAssociatedTypes(sp, fieldTy);
                 auto field = MIRLValue::newField(value.clone(), static_cast<unsigned int>(i));
                 if (!emitAsyncDrop(sp, field.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, fieldTy)) {
                     builder.pushStmtDropRaw(sp, std::move(field));
@@ -7926,7 +7922,7 @@ auto ExprVisitorConv::emitCoroutineAsyncDrop(const Span& sp, const HIRTypeData* 
     const auto* function = item.opt_Function();
     ASSERT_BUG(sp, function, StringView("async_drop_in_place did not resolve for ") << ty);
     auto futureTy = monomorph.monomorphType(sp, (*function)->returnType);
-    builder.resolve().expandAssociatedTypes(sp, futureTy);
+    futureTy = builder.resolve().expandAssociatedTypes(sp, futureTy);
 
     auto pointerTy = types.pointer(HIRBorrowType::Unique, ty);
     auto pointer = builder.lvalueOrTemp(sp, pointerTy, MIRRValue::make_Borrow({HIRBorrowType::Unique, true, std::move(value)}));
@@ -7956,8 +7952,8 @@ auto ExprVisitorConv::emitCoroutineAsyncDrop(const Span& sp, const HIRTypeData* 
 auto ExprVisitorConv::emitAsyncDrop(const Span& sp, MIRLValue value, unsigned int flag) -> bool {
     const HIRTypeData* ty = builder.valType(sp, value);
     HIRPath dropPath{HIRSimplePath()};
-    HIRTypeRef futureTy;
-    const bool hasAsyncDestructor = findAsyncDrop(sp, ty, dropPath, futureTy);
+    const HIRTypeData* futureTy;
+    const bool hasAsyncDestructor = (futureTy = findAsyncDrop(sp, ty, dropPath));
     if (!hasAsyncDestructor && !typeNeedsAsyncDrop(sp, ty)) {
         return false;
     }
@@ -8393,9 +8389,9 @@ auto ExprVisitorConv::scheduleRegisteredPatternDrops(const Span& sp, const HIRPa
 }
 
 auto ExprVisitorConv::getValueForBindingPath(const Span& sp, const HIRTypeData* outerTy, const MIRLValue& outerLval, const PatternBinding& b) -> MIRLValue {
-    HIRTypeRef ty;
+    const HIRTypeData* ty;
     MIRLValue lval;
-    MIRLowerHIRGetTypeValueForPath(sp, builder, outerTy, outerLval, b.field, ty, lval);
+    ty = MIRLowerHIRGetTypeValueForPath(sp, builder, outerTy, outerLval, b.field, lval);
 
     if (b.isSplitSlice()) {
         struct H {
@@ -9322,7 +9318,7 @@ auto ExprVisitorConv::panicIf(const Span& sp, MIRLValue condition, bool whenTrue
 }
 
 auto ExprVisitorConv::generateOverflowingArithmetic(const Span& sp, MIRLValue resSlot, const char* intrinsic, const char* panicLangItem, MIRParam valL, const HIRTypeData* tyL, MIRParam valR, bool updateDestState) -> void {
-    Vector<HIRTypeRef> tupleTypes(2);
+    Vector<const HIRTypeData*> tupleTypes(2);
     tupleTypes.pushBack(tyL);
     tupleTypes.pushBack(builder.resolve().crate.types.primitive(HIRCoreType::Bool));
     const auto tupleType = builder.resolve().crate.types.tuple(mv$(tupleTypes));

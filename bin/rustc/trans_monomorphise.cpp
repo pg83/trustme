@@ -53,7 +53,7 @@ namespace {
 
         MIRBasicBlockId newBlock();
 
-        unsigned newLocal(HIRTypeRef ty);
+        unsigned newLocal(const HIRTypeData* ty);
 
         MIRLValue outerValue() const;
 
@@ -67,7 +67,7 @@ namespace {
 
         MIRBasicBlockId buildSyncDestructor(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next);
 
-        MIRBasicBlockId buildAsyncDestructor(const HIRTypeData* ty, MIRLValue value, HIRPath dropPath, HIRTypeRef futureTy, MIRBasicBlockId next);
+        MIRBasicBlockId buildAsyncDestructor(const HIRTypeData* ty, MIRLValue value, HIRPath dropPath, const HIRTypeData* futureTy, MIRBasicBlockId next);
 
         MIRBasicBlockId buildDeepDrop(MIRLValue value, MIRBasicBlockId next);
 
@@ -183,7 +183,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         {
         }
 
-        HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override {
+        HIRPath newStatic(const HIRTypeData* type, EncodedLiteral value, size_t alignment) override {
             out.addType(type, false);
             auto name = RcString::newInterned(FMT(StringView("ConstEvalMonomorph#") << count));
             count++;
@@ -352,7 +352,7 @@ auto AsyncDropPollBuilder::newBlock() -> MIRBasicBlockId {
     return static_cast<MIRBasicBlockId>(output.blocks.size() - 1);
 }
 
-auto AsyncDropPollBuilder::newLocal(HIRTypeRef ty) -> unsigned {
+auto AsyncDropPollBuilder::newLocal(const HIRTypeData* ty) -> unsigned {
     const auto rv = static_cast<unsigned>(output.locals.length());
     output.locals.pushBack(std::move(ty));
     return rv;
@@ -407,7 +407,7 @@ auto AsyncDropPollBuilder::buildSyncDestructor(const HIRTypeData* ty, MIRLValue 
     return entry;
 }
 
-auto AsyncDropPollBuilder::buildAsyncDestructor(const HIRTypeData* ty, MIRLValue value, HIRPath dropPath, HIRTypeRef futureTy, MIRBasicBlockId next) -> MIRBasicBlockId {
+auto AsyncDropPollBuilder::buildAsyncDestructor(const HIRTypeData* ty, MIRLValue value, HIRPath dropPath, const HIRTypeData* futureTy, MIRBasicBlockId next) -> MIRBasicBlockId {
     auto& types = resolve.hirCrate().types;
     const auto& pinPath = resolve.hirCrate().getLangItemPathOpt("pin");
     const auto& pollPath = resolve.hirCrate().getLangItemPathOpt("Poll");
@@ -653,8 +653,8 @@ auto AsyncDropPollBuilder::buildCoroutineDrop(const HIRTypeData* ty, MIRLValue v
         }
 
         sourceTypes.setCurStmtTerm(static_cast<unsigned>(i));
-        HIRTypeRef slotTyTmp;
-        auto slotTy = cloner.monomorph(sourceTypes.getLvalueType(slotTyTmp, drop->slot));
+        const HIRTypeData* slotTyTmp;
+        auto slotTy = cloner.monomorph(sourceTypes.getLvalueType(drop->slot));
         if (!resolve.typeNeedsAsyncDrop(sp, slotTy)) {
             output.blocks[targetIdx].terminator = cloner.cloneTerm(sourceBlock.terminator);
             continue;
@@ -696,8 +696,8 @@ auto AsyncDropPollBuilder::buildType(const HIRTypeData* ty, MIRLValue value, MIR
     }
     const auto fields = buildFields(ty, value.clone(), next);
     HIRPath dropPath{HIRSimplePath()};
-    HIRTypeRef futureTy;
-    if (resolve.findAsyncDrop(sp, ty, dropPath, futureTy)) {
+    const HIRTypeData* futureTy;
+    if ((futureTy = resolve.findAsyncDrop(sp, ty, dropPath))) {
         return buildAsyncDestructor(ty, std::move(value), std::move(dropPath), std::move(futureTy), fields);
     }
     if (hasDropImpl(ty)) {

@@ -874,11 +874,11 @@ const Monomorphiser& MIRCloner::monomorphiser() const {
     return *nop;
 }
 
-HIRTypeRef MIRCloner::monomorph(const HIRTypeData* ty) const {
+const HIRTypeData* MIRCloner::monomorph(const HIRTypeData* ty) const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorphType(sp, ty);
     if (auto* r = resolve()) {
-        r->expandAssociatedTypes(sp, rv);
+        rv = r->expandAssociatedTypes(sp, rv);
     }
     return rv;
 }
@@ -889,7 +889,7 @@ HIRGenericPath MIRCloner::monomorph(const HIRGenericPath& ty) const {
     if (const auto* r = resolve()) {
         r->evaluatePathParams(sp, rv.params);
         for (auto& arg : rv.params.types) {
-            r->expandAssociatedTypes(sp, arg);
+            arg = r->expandAssociatedTypes(sp, arg);
         }
     }
     return rv;
@@ -904,34 +904,34 @@ HIRPath MIRCloner::monomorph(const HIRPath& ty) const {
                 auto& e2 = rv.data.as_Generic();
                 r->evaluatePathParams(sp, e2.params);
                 for (auto& arg : e2.params.types) {
-                    r->expandAssociatedTypes(sp, arg);
+                    arg = r->expandAssociatedTypes(sp, arg);
                 }
                 break;
             }
             case HIRPath::Data::TAG_UfcsInherent: {
                 auto& e2 = rv.data.as_UfcsInherent();
-                r->expandAssociatedTypes(sp, e2.type);
+                e2.type = r->expandAssociatedTypes(sp, e2.type);
                 r->evaluatePathParams(sp, e2.params);
                 r->evaluatePathParams(sp, e2.implParams);
                 for (auto& arg : e2.params.types) {
-                    r->expandAssociatedTypes(sp, arg);
+                    arg = r->expandAssociatedTypes(sp, arg);
                 }
                 // TODO: impl params too?
                 for (auto& arg : e2.implParams.types) {
-                    r->expandAssociatedTypes(sp, arg);
+                    arg = r->expandAssociatedTypes(sp, arg);
                 }
                 break;
             }
             case HIRPath::Data::TAG_UfcsKnown: {
                 auto& e2 = rv.data.as_UfcsKnown();
-                r->expandAssociatedTypes(sp, e2.type);
+                e2.type = r->expandAssociatedTypes(sp, e2.type);
                 r->evaluatePathParams(sp, e2.trait.params);
                 r->evaluatePathParams(sp, e2.params);
                 for (auto& arg : e2.trait.params.types) {
-                    r->expandAssociatedTypes(sp, arg);
+                    arg = r->expandAssociatedTypes(sp, arg);
                 }
                 for (auto& arg : e2.params.types) {
-                    r->expandAssociatedTypes(sp, arg);
+                    arg = r->expandAssociatedTypes(sp, arg);
                 }
                 break;
             }
@@ -950,7 +950,7 @@ HIRPathParams MIRCloner::monomorph(const HIRPathParams& ty) const {
     if (const auto* r = resolve()) {
         r->evaluatePathParams(sp, rv);
         for (auto& arg : rv.types) {
-            r->expandAssociatedTypes(sp, arg);
+            arg = r->expandAssociatedTypes(sp, arg);
         }
     }
     return rv;

@@ -35,6 +35,6 @@ HIRPath LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
 HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
 HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric = false);
 HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc);
-HIRTypeRef LowerHIRType(::ASTType* ty);
+const HIRTypeData* LowerHIRType(::ASTType* ty);
 HIRPattern LowerHIRPattern(const ASTPattern& pat);
 HIRCrate* LowerHIRFromAST(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& crate);

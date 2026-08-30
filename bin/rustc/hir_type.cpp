@@ -372,7 +372,7 @@ namespace {
         UNREACHABLE();
     }
 
-    void addTypeFlags(u32& flags, HIRTypeRef type) {
+    void addTypeFlags(u32& flags, const HIRTypeData* type) {
         if (type) {
             flags |= type->flags;
         }
@@ -589,7 +589,7 @@ namespace {
         return h;
     }
 
-    size_t hashTypeRef(HIRTypeRef type) {
+    size_t hashTypeRef(const HIRTypeData* type) {
         return std::hash<const void*>()(type);
     }
 
@@ -1436,7 +1436,7 @@ HIRTypeDataNodeType HIRTypeDataNodeType::clone() const {
     UNREACHABLE();
 }
 
-HIRTypeRef HIRTypeInterner::intern(HIRTypeData data) {
+const HIRTypeData* HIRTypeInterner::intern(HIRTypeData data) {
     data.flags = typeFlags(data);
     const auto hash = hashTypeData(data);
     const auto range = nodes.equal_range(hash);
@@ -1451,7 +1451,7 @@ HIRTypeRef HIRTypeInterner::intern(HIRTypeData data) {
     return node;
 }
 
-HIRTypeRef HIRTypeInterner::infer(unsigned int idx, HIRInferClass tyClass) {
+const HIRTypeData* HIRTypeInterner::infer(unsigned int idx, HIRInferClass tyClass) {
     return intern(HIRTypeData::make_Infer({idx, tyClass}));
 }
 
@@ -1459,76 +1459,76 @@ unsigned HIRTypeInterner::newAliasInputInfer() {
     return ~++id;
 }
 
-HIRTypeRef HIRTypeInterner::primitive(HIRCoreType ct) {
+const HIRTypeData* HIRTypeInterner::primitive(HIRCoreType ct) {
     return intern(HIRTypeData::make_Primitive(ct));
 }
 
-HIRTypeRef HIRTypeInterner::generic(HIRGenericRef generic) {
+const HIRTypeData* HIRTypeInterner::generic(HIRGenericRef generic) {
     return intern(HIRTypeData::make_Generic(mv$(generic)));
 }
 
-HIRTypeRef HIRTypeInterner::generic(RcString name, unsigned int slot) {
+const HIRTypeData* HIRTypeInterner::generic(RcString name, unsigned int slot) {
     return generic(HIRGenericRef(mv$(name), slot));
 }
 
-HIRTypeRef HIRTypeInterner::self() {
+const HIRTypeData* HIRTypeInterner::self() {
     return generic(RcString::newInterned("Self"), GENERICSelf);
 }
 
-HIRTypeRef HIRTypeInterner::unit() {
+const HIRTypeData* HIRTypeInterner::unit() {
     return intern(HIRTypeData::make_Tuple({}));
 }
 
-HIRTypeRef HIRTypeInterner::diverge() {
+const HIRTypeData* HIRTypeInterner::diverge() {
     return intern(HIRTypeData::make_Diverge({}));
 }
 
-HIRTypeRef HIRTypeInterner::borrow(HIRBorrowType bt, HIRTypeRef inner) {
+const HIRTypeData* HIRTypeInterner::borrow(HIRBorrowType bt, const HIRTypeData* inner) {
     return intern(HIRTypeData::make_Borrow({bt, inner}));
 }
 
-HIRTypeRef HIRTypeInterner::pointer(HIRBorrowType bt, HIRTypeRef inner) {
+const HIRTypeData* HIRTypeInterner::pointer(HIRBorrowType bt, const HIRTypeData* inner) {
     return intern(HIRTypeData::make_Pointer({bt, inner}));
 }
 
-HIRTypeRef HIRTypeInterner::tuple(Vector<HIRTypeRef> types) {
+const HIRTypeData* HIRTypeInterner::tuple(Vector<const HIRTypeData*> types) {
     return intern(HIRTypeData::make_Tuple(mv$(types)));
 }
 
-HIRTypeRef HIRTypeInterner::slice(HIRTypeRef inner) {
+const HIRTypeData* HIRTypeInterner::slice(const HIRTypeData* inner) {
     return intern(HIRTypeData::make_Slice({inner}));
 }
 
-HIRTypeRef HIRTypeInterner::array(HIRTypeRef inner, HIRArraySize size) {
+const HIRTypeData* HIRTypeInterner::array(const HIRTypeData* inner, HIRArraySize size) {
     return intern(HIRTypeData::make_Array({inner, mv$(size)}));
 }
 
-HIRTypeRef HIRTypeInterner::array(HIRTypeRef inner, u64 size) {
+const HIRTypeData* HIRTypeInterner::array(const HIRTypeData* inner, u64 size) {
     BUG_ASSERT(size != ~0u);
     return intern(HIRTypeData::make_Array({inner, size}));
 }
 
-HIRTypeRef HIRTypeInterner::array(HIRTypeRef inner, HIRConstGeneric size) {
+const HIRTypeData* HIRTypeInterner::array(const HIRTypeData* inner, HIRConstGeneric size) {
     return intern(HIRTypeData::make_Array({inner, mv$(size)}));
 }
 
-HIRTypeRef HIRTypeInterner::path(HIRPath path, HIRTypePathBinding binding) {
+const HIRTypeData* HIRTypeInterner::path(HIRPath path, HIRTypePathBinding binding) {
     return intern(HIRTypeData::make_Path({mv$(path), mv$(binding)}));
 }
 
-HIRTypeRef HIRTypeInterner::function(HIRTypeDataFunctionPointer ft) {
+const HIRTypeData* HIRTypeInterner::function(HIRTypeDataFunctionPointer ft) {
     return intern(HIRTypeData::make_Function(mv$(ft)));
 }
 
-HIRTypeRef HIRTypeInterner::closure(HIRExprNodeClosure* node) {
+const HIRTypeData* HIRTypeInterner::closure(HIRExprNodeClosure* node) {
     return intern(HIRTypeData::make_NodeType(HIRTypeDataNodeType::make_Closure(node)));
 }
 
-HIRTypeRef HIRTypeInterner::generator(HIRExprNodeGenerator* node) {
+const HIRTypeData* HIRTypeInterner::generator(HIRExprNodeGenerator* node) {
     return intern(HIRTypeData::make_NodeType(HIRTypeDataNodeType::make_Generator(node)));
 }
 
-HIRTypeRef HIRTypeInterner::asyncBlock(HIRExprNodeAsyncBlock* node) {
+const HIRTypeData* HIRTypeInterner::asyncBlock(HIRExprNodeAsyncBlock* node) {
     return intern(HIRTypeData::make_NodeType(HIRTypeDataNodeType::make_Async(node)));
 }
 
@@ -1544,7 +1544,7 @@ const HIRSimplePath* HIRTypeData::getSortPath() const {
 
 Ordering ord(const TypeDataErasedTypeInner& l, const TypeDataErasedTypeInner& r);
 
-bool HIRTypeData::equalsIgnoringRegions(HIRTypeRef x) const {
+bool HIRTypeData::equalsIgnoringRegions(const HIRTypeData* x) const {
     if (this == x) {
         return true;
     }
@@ -1707,7 +1707,7 @@ Ordering ord(const TypeDataErasedTypeInner& l, const TypeDataErasedTypeInner& r)
     return OrdEqual;
 }
 
-Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
+Ordering HIRTypeData::ordIgnoringRegions(const HIRTypeData* x) const {
     Ordering rv;
 
     if (this == x) {
@@ -1823,12 +1823,12 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
     UNREACHABLE();
 }
 
-bool HIRTypeData::matchTestGenerics(const Span& sp, HIRTypeRef xIn, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const {
+bool HIRTypeData::matchTestGenerics(const Span& sp, const HIRTypeData* xIn, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const {
     return this->matchTestGenericsFuzz(sp, xIn, resolvePlaceholder, callback) == HIRCompare::Equal;
 }
 
-HIRCompare HIRTypeData::matchTestGenericsFuzz(const Span& sp, HIRTypeRef xIn, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const {
-    const HIRTypeRef self = this;
+HIRCompare HIRTypeData::matchTestGenericsFuzz(const Span& sp, const HIRTypeData* xIn, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const {
+    const HIRTypeData* self = this;
     return callback.cmpType(sp, self, xIn, resolvePlaceholder);
 }
 
@@ -2485,7 +2485,7 @@ HIRTypeData HIRTypeData::cloneData() const {
         }
         case HIRTypeData::TAG_Tuple: {
             auto& e = (*this).as_Tuple();
-            Vector<HIRTypeRef> types;
+            Vector<const HIRTypeData*> types;
             for (const auto& t : e) {
                 types.pushBack(t);
             }
@@ -2521,8 +2521,8 @@ HIRTypeData HIRTypeData::cloneData() const {
     UNREACHABLE();
 }
 
-HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tCbResolveType resolvePlaceholder) const {
-    const HIRTypeRef self = this;
+HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, const HIRTypeData* x, tCbResolveType resolvePlaceholder) const {
+    const HIRTypeData* self = this;
     const auto& left = resolvePlaceholder.getType(sp, self);
     const auto& right = resolvePlaceholder.getType(sp, x);
 
@@ -3085,6 +3085,6 @@ void stl::output<ZeroCopyOutput, HIRBorrowType>(ZeroCopyOutput& os, HIRBorrowTyp
 }
 
 template <>
-void stl::output<ZeroCopyOutput, Vector<HIRTypeRef>>(ZeroCopyOutput& out, const Vector<HIRTypeRef>& values) {
+void stl::output<ZeroCopyOutput, Vector<const HIRTypeData*>>(ZeroCopyOutput& out, const Vector<const HIRTypeData*>& values) {
     outCont(out, values);
 }

@@ -32,13 +32,13 @@ void TraitResolveCommon::prepIndexes(const Span& sp) {
     DEBUG(traitBounds.size() << StringView(" trait bounds"));
 }
 
-void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, HIRTypeRef longTy, HIRTypeRef shortTy) {
+void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, const HIRTypeData* longTy, const HIRTypeData* shortTy) {
     DEBUG(StringView("ADD ") << longTy << StringView(" => ") << shortTy);
     // TODO: Sort the two types by "complexity" (most of the time long >= short)
     this->typeEqualities.insert(std::make_pair(mv$(longTy), CachedEquality{mv$(shortTy)}));
 }
 
-void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, HIRTypeRef type, HIRTraitPath traitPath, bool addParents /*=true*/) {
+void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const HIRTypeData* type, HIRTraitPath traitPath, bool addParents /*=true*/) {
     TRACE_FUNCTION_F(type << StringView(" : ") << traitPath);
     const auto boundConstness = traitPath.constness;
     auto getOrAddTraitBound = [&](const HIRGenericPath& genericPath) -> CachedBound& {

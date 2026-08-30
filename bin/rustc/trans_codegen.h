@@ -4,7 +4,6 @@
 #include "trans_main_bindings.h"
 
 class HIRTypeData;
-using HIRTypeRef = const HIRTypeData*;
 class HIRPath;
 class HIRGenericPath;
 

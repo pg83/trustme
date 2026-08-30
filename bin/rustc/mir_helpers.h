@@ -12,7 +12,6 @@
 
 class HIRCrate;
 class HIRTypeData;
-using HIRTypeRef = const HIRTypeData*;
 struct HIRPattern;
 struct HIRSimplePath;
 
@@ -72,7 +71,7 @@ struct MIRPathCb final: MIRPathCallback {
 
 class MIRTypeResolve {
 public:
-    typedef std::vector<std::pair<HIRPattern, HIRTypeRef>> argsT;
+    typedef std::vector<std::pair<HIRPattern, const HIRTypeData*>> argsT;
     using TypeNameString = std::string;
 
 private:
@@ -92,7 +91,7 @@ public:
     const MIRFunction& fcn;
 
     const HIRTypeData* monomorphedRettype;
-    const stl::Vector<HIRTypeRef>* monomorphedLocals;
+    const stl::Vector<const HIRTypeData*>* monomorphedLocals;
 
 private:
     const HIRSimplePath* langBox_ = nullptr;
@@ -142,21 +141,21 @@ public:
 
     const MIRBasicBlock& getBlock(MIRBasicBlockId id) const;
 
-    const HIRTypeData* getStaticType(HIRTypeRef& tmp, const HIRPath& path) const;
-    const HIRTypeData* getLvalueType(HIRTypeRef& tmp, const MIRLValue& val, unsigned wrapperSkipCount = 0) const;
+    const HIRTypeData* getStaticType(const HIRPath& path) const;
+    const HIRTypeData* getLvalueType(const MIRLValue& val, unsigned wrapperSkipCount = 0) const;
 
-    const HIRTypeData* getLvalueType(HIRTypeRef& tmp, const MIRLValue::CRef& val) const {
-        return getLvalueType(tmp, val.lv(), val.lv().wrappers.size() - val.wrapperCount());
+    const HIRTypeData* getLvalueType(const MIRLValue::CRef& val) const {
+        return getLvalueType(val.lv(), val.lv().wrappers.size() - val.wrapperCount());
     }
 
-    const HIRTypeData* getLvalueType(HIRTypeRef& tmp, const MIRLValue::MRef& val) const {
-        return getLvalueType(tmp, val.lv(), val.lv().wrappers.size() - val.wrapperCount());
+    const HIRTypeData* getLvalueType(const MIRLValue::MRef& val) const {
+        return getLvalueType(val.lv(), val.lv().wrappers.size() - val.wrapperCount());
     }
 
-    const HIRTypeData* getUnwrappedType(HIRTypeRef& tmp, const MIRLValue::Wrapper& w, const HIRTypeData* ty) const;
-    const HIRTypeData* getParamType(HIRTypeRef& tmp, const MIRParam& val) const;
+    const HIRTypeData* getUnwrappedType(const MIRLValue::Wrapper& w, const HIRTypeData* ty) const;
+    const HIRTypeData* getParamType(const MIRParam& val) const;
 
-    HIRTypeRef getConstType(const MIRConstant& c) const;
+    const HIRTypeData* getConstType(const MIRConstant& c) const;
 
     bool lvalueIsCopy(const MIRLValue& val) const;
     const HIRTypeData* isTypeOwnedBox(const HIRTypeData* ty) const;
@@ -279,9 +278,8 @@ public:
 template <template <typename> class Dec>
 class MIRVisitorBase {
 public:
-    using TypeVisitArg = std::conditional_t<std::is_const_v<typename Dec<int>::Type>, HIRTypeRef, HIRTypeRef&>;
-
-    virtual void visitType(TypeVisitArg t) {
+    virtual const HIRTypeData* visitType(const HIRTypeData* type) {
+        return type;
     }
 
     virtual void visitPath(typename Dec<HIRPath>::Type& path) {
@@ -293,20 +291,32 @@ public:
             }
             case HIRPathData::TAG_UfcsInherent: {
                 auto& e = path.data.as_UfcsInherent();
-                visitType(e.type);
+                if constexpr (std::is_const_v<typename Dec<HIRPath>::Type>) {
+                    visitType(e.type);
+                } else {
+                    e.type = visitType(e.type);
+                }
                 visitPathParams(e.params);
                 break;
             }
             case HIRPathData::TAG_UfcsKnown: {
                 auto& e = path.data.as_UfcsKnown();
-                visitType(e.type);
+                if constexpr (std::is_const_v<typename Dec<HIRPath>::Type>) {
+                    visitType(e.type);
+                } else {
+                    e.type = visitType(e.type);
+                }
                 visitPathParams(e.trait.params);
                 visitPathParams(e.params);
                 break;
             }
             case HIRPathData::TAG_UfcsUnknown: {
                 auto& e = path.data.as_UfcsUnknown();
-                visitType(e.type);
+                if constexpr (std::is_const_v<typename Dec<HIRPath>::Type>) {
+                    visitType(e.type);
+                } else {
+                    e.type = visitType(e.type);
+                }
                 visitPathParams(e.params);
                 break;
             }
@@ -319,7 +329,11 @@ public:
 
     virtual void visitPathParams(typename Dec<HIRPathParams>::Type& p) {
         for (auto& e : p.types) {
-            visitType(e);
+            if constexpr (std::is_const_v<typename Dec<HIRPathParams>::Type>) {
+                visitType(e);
+            } else {
+                e = visitType(e);
+            }
         }
     }
 
@@ -387,7 +401,11 @@ public:
             case MIRRValue::TAG_Cast: {
                 auto& se = rval.as_Cast();
                 rv |= visitLvalue(se.val, MIRValUsage::Move);
-                visitType(se.type);
+                if constexpr (std::is_const_v<typename Dec<MIRRValue>::Type>) {
+                    visitType(se.type);
+                } else {
+                    se.type = visitType(se.type);
+                }
                 break;
             }
             case MIRRValue::TAG_BinOp: {
@@ -709,7 +727,7 @@ public:
             }
         } else {
             for (auto& type : stl::mutRange(fcn.locals)) {
-                visitType(type);
+                type = visitType(type);
             }
         }
 

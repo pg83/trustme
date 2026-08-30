@@ -22,7 +22,7 @@ namespace {
 
     struct HirDeserialiser {
         RcString crateName;
-        Vector<HIRTypeRef> types;
+        Vector<const HIRTypeData*> types;
         HIRSerialiseReader& in;
         HIRTypeInterner& typeInterner;
         u32& id;
@@ -97,7 +97,7 @@ namespace {
 
         HIRArraySize deserialiseArraysize();
         HIRGenericRef deserialiseGenericref();
-        HIRTypeRef deserialiseType();
+        const HIRTypeData* deserialiseType();
         HIRSimplePath deserialiseSimplepath();
         HIRPathParams deserialisePathparams();
         HIRGenericPath deserialiseGenericpath();
@@ -191,7 +191,7 @@ namespace {
 
         HIRFunction::Markings deserialiseFunctionMarkings();
 
-        std::vector<std::pair<HIRPattern, HIRTypeRef>> deserialiseFcnargs();
+        std::vector<std::pair<HIRPattern, const HIRTypeData*>> deserialiseFcnargs();
 
         HIRConstant deserialiseConstant();
 
@@ -249,7 +249,7 @@ namespace {
     DEF_D(HIRVisEnt<T>, return d.deserialiseVisent<T>();)
 
     template <>
-    DEF_D(HIRTypeRef, return d.deserialiseType();)
+    DEF_D(const HIRTypeData*, return d.deserialiseType();)
     template <>
     DEF_D(HIRSimplePath, return d.deserialiseSimplepath();)
     template <>
@@ -742,8 +742,8 @@ HIRArraySize HirDeserialiser::deserialiseArraysize() {
     }
 }
 
-HIRTypeRef HirDeserialiser::deserialiseType() {
-    HIRTypeRef rv;
+const HIRTypeData* HirDeserialiser::deserialiseType() {
+    const HIRTypeData* rv;
 
     TRACE_FUNCTION_FR(StringView(""), rv);
     auto idx = in.readCount();
@@ -770,11 +770,11 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
             TODO(Span(), StringView("ErasedType"));
             _(Array, {deserialiseType(), deserialiseArraysize()})
             _(Slice, {deserialiseType()})
-            _(Tuple, deserialiseVector<HIRTypeRef>())
+            _(Tuple, deserialiseVector<const HIRTypeData*>())
             _(Borrow, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(Pointer, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(NamedFunction, {deserialisePath()})
-            _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVector<HIRTypeRef>(), in.readBool(), in.readIstring(), in.readBool()})
+            _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVector<const HIRTypeData*>(), in.readBool(), in.readIstring(), in.readBool()})
         case HIRTypeData::TAG_Pattern: {
             auto inner = deserialiseType();
             HIRTypePattern pattern;
@@ -819,7 +819,7 @@ HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
 HIRPathParams HirDeserialiser::deserialisePathparams() {
     HIRPathParams rv;
     TRACE_FUNCTION_FR(StringView(""), rv);
-    rv.types = deserialiseThinvec<HIRTypeRef>();
+    rv.types = deserialiseThinvec<const HIRTypeData*>();
     rv.values = deserialiseThinvec<HIRConstGeneric>();
     return rv;
 }
@@ -979,7 +979,7 @@ HIRStruct HirDeserialiser::deserialiseStruct() {
             break;
         case HIRStruct::Data::TAG_Tuple:
             DEBUG(StringView("Tuple"));
-            data = HIRStruct::Data(deserialiseVec<HIRVisEnt<HIRTypeRef>>());
+            data = HIRStruct::Data(deserialiseVec<HIRVisEnt<const HIRTypeData*>>());
             break;
         case HIRStruct::Data::TAG_Named:
             DEBUG(StringView("Named"));
@@ -1082,7 +1082,7 @@ MIRFunctionPointer HirDeserialiser::deserialiseMir() {
     TRACE_FUNCTION;
     MIRFunction rv;
 
-    rv.locals = deserialiseVector<HIRTypeRef>();
+    rv.locals = deserialiseVector<const HIRTypeData*>();
     rv.dropFlags = deserialiseVector<bool>();
     rv.blocks = deserialiseVec<MIRBasicBlock>();
 
@@ -1696,7 +1696,7 @@ auto HirDeserialiser::deserialiseTraitimpl() -> HIRTraitImpl {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
         DEBUG((isSpec ? "default " : "") << StringView("type ") << name);
-        rv.types.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRTypeRef>{isSpec, deserialiseType()}));
+        rv.types.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<const HIRTypeData*>{isSpec, deserialiseType()}));
     }
 
     return rv;
@@ -1900,7 +1900,7 @@ auto HirDeserialiser::deserialiseExprptr() -> HIRExprPtr {
     if (in.readBool()) {
         rv.mir = deserialiseMir();
     }
-    rv.erasedTypes = deserialiseVector<HIRTypeRef>();
+    rv.erasedTypes = deserialiseVector<const HIRTypeData*>();
     return rv;
 }
 
@@ -2110,9 +2110,9 @@ auto HirDeserialiser::deserialiseFunctionMarkings() -> HIRFunction::Markings {
     return rv;
 }
 
-auto HirDeserialiser::deserialiseFcnargs() -> std::vector<std::pair<HIRPattern, HIRTypeRef>> {
+auto HirDeserialiser::deserialiseFcnargs() -> std::vector<std::pair<HIRPattern, const HIRTypeData*>> {
     size_t n = in.readCount();
-    std::vector<std::pair<HIRPattern, HIRTypeRef>> rv;
+    std::vector<std::pair<HIRPattern, const HIRTypeData*>> rv;
     rv.reserve(n);
     for (size_t i = 0; i < n; i++) {
         rv.push_back(std::make_pair(HIRPattern{}, deserialiseType()));

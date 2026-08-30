@@ -105,7 +105,7 @@ public:
 
     HIRLinkage linkage;
     bool isMut;
-    HIRTypeRef type;
+    const HIRTypeData* type;
 
     size_t explicitAlignment = 0;
 
@@ -122,14 +122,14 @@ public:
 
     mutable std::map<HIRPath, EncodedLiteral> monomorphCache;
 
-    HIRStatic(HIRLinkage linkage, bool isMut, HIRTypeRef type, HIRExprPtr value);
+    HIRStatic(HIRLinkage linkage, bool isMut, const HIRTypeData* type, HIRExprPtr value);
 };
 
 class HIRConstant {
 public:
     HIRGenericParams params;
 
-    HIRTypeRef type;
+    const HIRTypeData* type;
     HIRExprPtr value;
 
     EncodedLiteral valueRes;
@@ -146,7 +146,7 @@ public:
 
     HIRConstant();
 
-    HIRConstant(HIRGenericParams params, HIRTypeRef type, HIRExprPtr value);
+    HIRConstant(HIRGenericParams params, const HIRTypeData* type, HIRExprPtr value);
 };
 
 class HIRFunction {
@@ -162,13 +162,13 @@ public:
         Custom,
     };
 
-    typedef std::vector<std::pair<HIRPattern, HIRTypeRef>> argsT;
+    typedef std::vector<std::pair<HIRPattern, const HIRTypeData*>> argsT;
 
     bool saveCode = false;
     HIRLinkage linkage;
 
     Receiver receiver = Receiver::Free;
-    std::optional<HIRTypeRef> receiverType;
+    std::optional<const HIRTypeData*> receiverType;
     RcString abi = RcString::newInterned(ABI_RUST);
     bool unsafe = false;
     bool isConst = false;
@@ -178,9 +178,9 @@ public:
     argsT args;
     bool variadic = false;
     bool hasNamedVariadic = false;
-    HIRTypeRef returnType;
+    const HIRTypeData* returnType;
 
-    std::optional<HIRTypeRef> traitReturnType;
+    std::optional<const HIRTypeData*> traitReturnType;
 
     SourceLocation source;
     HIRExprPtr code;
@@ -211,19 +211,19 @@ public:
 
     HIRFunction();
 
-    HIRFunction(Receiver receiver, HIRGenericParams params, argsT args, HIRTypeRef retTy, HIRExprPtr code);
+    HIRFunction(Receiver receiver, HIRGenericParams params, argsT args, const HIRTypeData* retTy, HIRExprPtr code);
 
     size_t fixedArgCount() const {
         BUG_ASSERT(!hasNamedVariadic || (variadic && !args.empty()));
         return args.size() - hasNamedVariadic;
     }
 
-    HIRTypeRef makePtrTy(const Span& sp, const Monomorphiser& ms) const;
+    const HIRTypeData* makePtrTy(const Span& sp, const Monomorphiser& ms) const;
 };
 
 struct HIRTypeAlias {
     HIRGenericParams params;
-    HIRTypeRef type;
+    const HIRTypeData* type;
 };
 
 struct HIRTraitAlias {
@@ -231,19 +231,19 @@ struct HIRTraitAlias {
     std::vector<HIRTraitPath> traits;
 };
 
-typedef std::vector<HIRVisEnt<HIRTypeRef>> tTupleFields;
+typedef std::vector<HIRVisEnt<const HIRTypeData*>> tTupleFields;
 
 struct HIRStructField {
     RcString name;
     HIRPublicity vis;
-    HIRTypeRef ty;
+    const HIRTypeData* ty;
 
     std::unique_ptr<HIRGenericPath> defaultValue;
 };
 
 typedef std::vector<HIRStructField> tStructFields;
 
-HIRTypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIRTypeRef retTy, const tTupleFields& types);
+const HIRTypeData* fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, const HIRTypeData* retTy, const tTupleFields& types);
 
 struct HIRTraitMarkings {
     bool hasADeref = false;
@@ -255,7 +255,7 @@ struct HIRTraitMarkings {
     bool isCopy = false;
 
     struct AutoMarking {
-        stl::Vector<HIRTypeRef> conditions;
+        stl::Vector<const HIRTypeData*> conditions;
 
         bool isImpled;
     };
@@ -309,7 +309,7 @@ public:
 struct HIREnumDataVariant {
     RcString name;
     bool isStruct;
-    HIRTypeRef type;
+    const HIRTypeData* type;
 
     HIRExprPtr discriminantExpr;
 
@@ -444,9 +444,9 @@ struct HIRAssociatedType {
     bool isSized;
     std::vector<HIRTraitPath> traitBounds;
     bool hasDefault;
-    HIRTypeRef defaultValue;
+    const HIRTypeData* defaultValue;
 
-    HIRAssociatedType(HIRGenericParams generics, bool isSized, std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType);
+    HIRAssociatedType(HIRGenericParams generics, bool isSized, std::vector<HIRTraitPath> traitBounds, const HIRTypeData* defaultType);
 };
 
 #include "hir_hir_trait_value_tu.h"
@@ -483,7 +483,7 @@ public:
 
     HIRTrait(HIRGenericParams gps, std::vector<HIRTraitPath> parents);
 
-    HIRTypeRef getVtableType(const Span& sp, const HIRCrate& crate, const HIRTypeData::Data_TraitObject& te) const;
+    const HIRTypeData* getVtableType(const Span& sp, const HIRCrate& crate, const HIRTypeData::Data_TraitObject& te) const;
     unsigned getVtableValueIndex(const HIRGenericPath& traitPath, const RcString& name) const;
     unsigned getVtableParentIndex(HIRTypeInterner& types, const Span& sp, const HIRPathParams& thisParams, const HIRGenericPath& traitPath) const;
     std::pair<const HIRAssociatedType*, const HIRPathParams*> getAtyDef(const RcString& name) const;
@@ -558,7 +558,7 @@ public:
     };
 
     HIRGenericParams params;
-    HIRTypeRef type;
+    const HIRTypeData* type;
 
     std::map<RcString, VisImplEnt<HIRFunction>> methods;
     std::map<RcString, VisImplEnt<HIRConstant>> constants;
@@ -585,13 +585,13 @@ public:
 
     HIRGenericParams params;
     HIRPathParams traitArgs;
-    HIRTypeRef type;
+    const HIRTypeData* type;
 
     std::map<RcString, ImplEnt<HIRFunction>> methods;
     std::map<RcString, ImplEnt<HIRConstant>> constants;
     std::map<RcString, ImplEnt<HIRStatic>> statics;
 
-    std::map<RcString, ImplEnt<HIRTypeRef>> types;
+    std::map<RcString, ImplEnt<const HIRTypeData*>> types;
 
     HIRSimplePath srcModule;
     bool isConst = false;
@@ -614,7 +614,7 @@ public:
     HIRGenericParams params;
     HIRPathParams traitArgs;
     bool isPositive;
-    HIRTypeRef type;
+    const HIRTypeData* type;
 
     HIRSimplePath srcModule;
 
@@ -629,7 +629,7 @@ public:
 
 class HIRImplMatcherScratch {
 public:
-    stl::Vector<HIRTypeRef> buffers[8];
+    stl::Vector<const HIRTypeData*> buffers[8];
     unsigned depth = 0;
 };
 
@@ -850,11 +850,16 @@ public:
         return findTypeImplsCb(type, tyRes, cb);
     }
 
-    const MIRFunction* getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, HIRTypeRef& retTy) const;
+    struct MirResult {
+        const MIRFunction* mir;
+        const HIRTypeData* type;
+    };
+
+    MirResult getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, const HIRTypeData* retTy) const;
 
     const MIRFunction* getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRFunction& fcn) const;
 
-    const MIRFunction* getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, HIRTypeRef& expTy) const;
+    MirResult getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRTypeData* expTy) const;
 };
 
 const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIRPattern::PathBinding& binding, bool isTuple);

@@ -1,5 +1,5 @@
 # A bound on a HIR generic.  clone() stays hand-written: it deliberately
-# shares the interned HIRTypeRef values instead of cloning through them.
+# shares the interned const HIRTypeData* values instead of cloning through them.
 
 generate(
     name="HIRGenericBound",
@@ -8,14 +8,14 @@ generate(
     output=True,
     variants=[
         v("TraitBound", fields=[
-            ("HIRTypeRef", "type"),
+            ("const HIRTypeData*", "type"),
             ("HIRTraitPath", "trait"),
             ("HIRBoundConstness", "constness", "HIRBoundConstness::Never"),
             ("bool", "isTrivial", "false"),
         ], copy=False),
         v("TypeEquality", fields=[
-            ("HIRTypeRef", "type"),
-            ("HIRTypeRef", "otherType"),
+            ("const HIRTypeData*", "type"),
+            ("const HIRTypeData*", "otherType"),
         ]),
     ],
     extra="""

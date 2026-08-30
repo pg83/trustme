@@ -19,44 +19,44 @@ struct SolverImpl {
     HIRSimplePath traitPath;
     const HIRTraitImpl* traitImpl = nullptr;
 
-    HIRTypeRef type = nullptr;
+    const HIRTypeData* type = nullptr;
     HIRPathParams traitArgs;
     HIRTraitPath::assocListT associated;
     HIRBoundConstness constness = HIRBoundConstness::Never;
 
     SolverImpl(HIRPathParams implParams, const HIRTrait& trait, const HIRSimplePath& traitPath, const HIRTraitImpl& traitImpl);
     SolverImpl(const HIRTypeData* type, const HIRPathParams* traitArgs, const HIRTraitPath::assocListT* associated, HIRBoundConstness constness = HIRBoundConstness::Never);
-    SolverImpl(HIRTypeRef type, HIRPathParams traitArgs, HIRTraitPath::assocListT associated, HIRBoundConstness constness = HIRBoundConstness::Never);
+    SolverImpl(const HIRTypeData* type, HIRPathParams traitArgs, HIRTraitPath::assocListT associated, HIRBoundConstness constness = HIRBoundConstness::Never);
 
     bool isTraitImpl() const {
         return traitImpl != nullptr;
     }
 
-    HIRTypeRef getImplType(HIRTypeInterner& types) const;
+    const HIRTypeData* getImplType(HIRTypeInterner& types) const;
     HIRPathParams getTraitParams(HIRTypeInterner& types) const;
-    HIRTypeRef getTraitTyParam(HIRTypeInterner& types, unsigned index) const;
-    HIRTypeRef getType(HIRTypeInterner& types, const char* name, const HIRPathParams& params) const;
+    const HIRTypeData* getTraitTyParam(HIRTypeInterner& types, unsigned index) const;
+    const HIRTypeData* getType(HIRTypeInterner& types, const char* name, const HIRPathParams& params) const;
     bool typeIsSpecialisable(const char* name) const;
     bool moreSpecificThan(HIRTypeInterner& types, const SolverImpl& other) const;
-    HIRTypeRef monomorphImplType(HIRTypeInterner& types, const Span& sp, const HIRTypeData* type, const HIRPathParams& methodParams = {}) const;
+    const HIRTypeData* monomorphImplType(HIRTypeInterner& types, const Span& sp, const HIRTypeData* type, const HIRPathParams& methodParams = {}) const;
     HIRTraitPath monomorphImplTraitPath(HIRTypeInterner& types, const Span& sp, const HIRTraitPath& traitPath, const HIRPathParams& methodParams = {}) const;
 };
 
 struct SolverSlotValues {
-    ThinVector<HIRTypeRef> typeInputs;
-    ThinVector<HIRTypeRef> types;
+    ThinVector<const HIRTypeData*> typeInputs;
+    ThinVector<const HIRTypeData*> types;
     ThinVector<HIRConstGeneric> valueInputs;
     ThinVector<HIRConstGeneric> values;
 };
 
 struct SolverObligation {
-    HIRTypeRef type;
+    const HIRTypeData* type;
     HIRTraitPath trait;
 };
 
 struct SolverTypeEquality {
-    HIRTypeRef left;
-    HIRTypeRef right;
+    const HIRTypeData* left;
+    const HIRTypeData* right;
 };
 
 struct SolverValueEquality {
@@ -147,9 +147,9 @@ public:
 public:
     struct IVar {
         unsigned int alias;
-        HIRTypeRef type;
+        const HIRTypeData* type;
 
-        explicit IVar(HIRTypeRef type);
+        explicit IVar(const HIRTypeData* type);
 
         bool isAlias() const {
             return alias != ~0u;
@@ -175,9 +175,9 @@ public:
     bool hasChanged;
 
     u64 mutationGeneration = 0;
-    stl::Vector<HIRTypeRef> expandStack;
+    stl::Vector<const HIRTypeData*> expandStack;
     stl::ObjPool::Ref aliasIvarPool;
-    stl::IntMap<HIRTypeRef> aliasTypeIvars;
+    stl::IntMap<const HIRTypeData*> aliasTypeIvars;
     stl::IntMap<HIRConstGeneric> aliasValueIvars;
 
 public:
@@ -206,7 +206,7 @@ public:
         return FmtPP(*this, v);
     }
 
-    void addIvars(HIRTypeRef& type);
+    const HIRTypeData* addIvars(const HIRTypeData* type);
     void addIvars(HIRConstGeneric& val);
 
     void addIvarsParams(HIRPathParams& params);
@@ -226,8 +226,8 @@ public:
     }
 
     unsigned int newIvar(HIRInferClass ic = HIRInferClass::None);
-    HIRTypeRef newIvarTr(HIRInferClass ic = HIRInferClass::None);
-    void setIvarTo(unsigned int slot, HIRTypeRef type, bool solverProven = false);
+    const HIRTypeData* newIvarTr(HIRInferClass ic = HIRInferClass::None);
+    void setIvarTo(unsigned int slot, const HIRTypeData* type, bool solverProven = false);
     void ivarUnify(unsigned int leftSlot, unsigned int rightSlot);
 
     unsigned int newIvarVal();
@@ -251,14 +251,13 @@ public:
     }
 
     const HIRTypeData* getType(const HIRTypeData* type) const;
-    HIRTypeRef& getType(unsigned idx);
     const HIRTypeData* getType(unsigned idx) const;
 
     const HIRConstGeneric& getValue(const HIRConstGeneric& val) const;
     const HIRConstGeneric& getValue(unsigned idx) const;
 
     void checkForLoops();
-    void expandIvars(HIRTypeRef& type);
+    const HIRTypeData* expandIvars(const HIRTypeData* type);
     void expandIvars(HIRConstGeneric& value);
     void expandIvarsParams(HIRPathParams& params);
 
@@ -285,14 +284,14 @@ private:
 
         Kind kind;
         unsigned slot;
-        HIRTypeRef oldType;
+        const HIRTypeData* oldType;
     };
 
     stl::Vector<JournalEntry> journal;
     unsigned snapshotDepth = 0;
     u64 generationCounter = 0;
 
-    void journalMutation(JournalEntry::Kind kind, unsigned slot, HIRTypeRef oldType);
+    void journalMutation(JournalEntry::Kind kind, unsigned slot, const HIRTypeData* oldType);
 
     void addIvarsTraitPath(HIRTraitPath& path);
     void expandIvarsTraitPath(HIRTraitPath& path);
@@ -325,8 +324,8 @@ public:
     };
 
     struct PendingEquality {
-        HIRTypeRef left;
-        HIRTypeRef right;
+        const HIRTypeData* left;
+        const HIRTypeData* right;
     };
 
     struct PendingValueEquality {
@@ -385,7 +384,7 @@ struct SolverCoercionConstraint {
     };
 
     unsigned typeIndex;
-    HIRTypeRef other;
+    const HIRTypeData* other;
     Direction direction;
     SolverCoercionOp op;
 
@@ -433,12 +432,12 @@ struct InherentImplSelection {
 };
 
 struct NormalizesTo {
-    HIRTypeRef projection;
+    const HIRTypeData* projection;
 };
 
 struct NormalizesToResponse {
     SolverResponse effects;
-    HIRTypeRef output;
+    const HIRTypeData* output;
 };
 
 struct TraitBoundCallback {
@@ -550,7 +549,7 @@ private:
         u64 generation;
 
         u64 ivarGeneration;
-        HIRTypeRef type;
+        const HIRTypeData* type;
     };
 
     mutable stl::ObjPool::Ref eatCachePool;
@@ -617,9 +616,8 @@ public:
 
     bool hasAssociatedType(const HIRTypeData* ty) const;
 
-    HIRTypeRef expandAssociatedTypes(const Span& sp, HIRTypeRef input, SolverResponseCallback* effects = nullptr) const;
+    const HIRTypeData* expandAssociatedTypes(const Span& sp, const HIRTypeData* input, SolverResponseCallback* effects = nullptr) const;
 
-    const HIRTypeData* expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp, SolverResponseCallback* effects = nullptr) const;
 
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params, SolverResponseCallback* effects = nullptr) const;
 
@@ -745,13 +743,11 @@ public:
         unsigned int typeIvarCount,
         const HIRTypeData* topTy,
         const RcString& methodName,
-        const ThinVector<HIRTypeRef>& argumentTypes,
+        const ThinVector<const HIRTypeData*>& argumentTypes,
         const HIRTypeData* expectedResult,
         bool mustDecide,
         /* Out -> */ ThinVector<MethodCandidate>& possibilities
     ) const;
-
-    unsigned int autoderefFindField(const Span& sp, const HIRTypeData* topTy, const RcString& name, /* Out -> */ HIRTypeRef& fieldType) const;
 
     enum class AutoderefResult {
         NoMatch,
@@ -759,11 +755,17 @@ public:
         Ambiguous,
     };
 
-    AutoderefResult autoderefStep(const Span& sp, const HIRTypeData* ty, HIRTypeRef& target, std::optional<HIRTypeRef>* implType = nullptr) const;
+    struct Autoderef {
+        AutoderefResult result;
+        const HIRTypeData* target;
+        std::optional<const HIRTypeData*> implType;
+    };
 
-    const HIRTypeData* autoderef(const Span& sp, const HIRTypeData* ty, HIRTypeRef& tmpType) const;
+    Autoderef autoderefStep(const Span& sp, const HIRTypeData* ty) const;
 
-    bool findField(const Span& sp, const HIRTypeData* ty, const RcString& name, /* Out -> */ HIRTypeRef& fieldType) const;
+    const HIRTypeData* autoderef(const Span& sp, const HIRTypeData* ty) const;
+
+    const HIRTypeData* findField(const Span& sp, const HIRTypeData* ty, const RcString& name) const;
 
     enum class MethodAccess {
         Shared,
@@ -772,7 +774,7 @@ public:
     };
 
 private:
-    std::optional<HIRTypeRef> checkMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRTypeData* ty, TraitResolution::MethodAccess access) const;
+    std::optional<const HIRTypeData*> checkMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRTypeData* ty, TraitResolution::MethodAccess access) const;
 
 public:
     enum class AllowedReceivers {
@@ -782,7 +784,7 @@ public:
         Value,
         Box,
     };
-    bool findMethod(const Span& sp, const tTraitList& traits, const stl::Vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const ThinVector<HIRTypeRef>& argumentTypes, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
+    bool findMethod(const Span& sp, const tTraitList& traits, const stl::Vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const ThinVector<const HIRTypeData*>& argumentTypes, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
 
     const HIRFunction* traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const;
     bool traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const;
@@ -794,7 +796,7 @@ public:
     const HIRTypeData* typeIsOwnedBox(const Span& sp, const HIRTypeData* ty) const;
 
 private:
-    void expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& input, SolverResponseCallback* effects = nullptr) const;
-    bool expandAssociatedTypesInplaceUfcsInherent(const Span& sp, HIRTypeRef& input, SolverResponseCallback* effects = nullptr) const;
-    void expandAssociatedTypesInplaceUfcsKnown(const Span& sp, HIRTypeRef& input, SolverResponseCallback* effects = nullptr) const;
+    const HIRTypeData* expandAssociatedTypesInplace(const Span& sp, const HIRTypeData* input, SolverResponseCallback* effects = nullptr) const;
+    const HIRTypeData* expandAssociatedTypesInplaceUfcsInherent(const Span& sp, const HIRTypeData* input, SolverResponseCallback* effects = nullptr) const;
+    const HIRTypeData* expandAssociatedTypesInplaceUfcsKnown(const Span& sp, const HIRTypeData* input, SolverResponseCallback* effects = nullptr) const;
 };

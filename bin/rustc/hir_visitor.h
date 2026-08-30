@@ -55,21 +55,17 @@ public:
         VALUE,
     };
 
-    [[nodiscard]] virtual HIRTypeRef visitType(HIRTypeRef ty);
-
-    void updateType(HIRTypeRef& ty) {
-        ty = visitType(ty);
-    }
+    [[nodiscard]] virtual const HIRTypeData* visitType(const HIRTypeData* ty);
 
     void visitTypeDataChildren(HIRTypeData& data);
 
-    [[nodiscard]] HIRTypeRef visitTypeViaHooks(HIRTypeRef ty) {
+    [[nodiscard]] const HIRTypeData* visitTypeViaHooks(const HIRTypeData* ty) {
         auto data = ty->cloneData();
         visitTypeDataChildren(data);
         return typeInterner().intern(mv$(data));
     }
 
-    [[nodiscard]] HIRTypeRef visitTypeDefaultViaHooks(HIRTypeRef ty) {
+    [[nodiscard]] const HIRTypeData* visitTypeDefaultViaHooks(const HIRTypeData* ty) {
         switch (ty->tag()) {
             case HIRTypeData::TAG_Path:
             case HIRTypeData::TAG_TraitObject:

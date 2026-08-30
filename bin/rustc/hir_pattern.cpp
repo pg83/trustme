@@ -547,11 +547,11 @@ void stl::output<ZeroCopyOutput, std::vector<HIRPattern>>(ZeroCopyOutput& out, c
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::pair<HIRPattern, HIRTypeRef>>(ZeroCopyOutput& out, const std::pair<HIRPattern, HIRTypeRef>& value) {
+void stl::output<ZeroCopyOutput, std::pair<HIRPattern, const HIRTypeData*>>(ZeroCopyOutput& out, const std::pair<HIRPattern, const HIRTypeData*>& value) {
     out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::vector<std::pair<HIRPattern, HIRTypeRef>>>(ZeroCopyOutput& out, const std::vector<std::pair<HIRPattern, HIRTypeRef>>& values) {
+void stl::output<ZeroCopyOutput, std::vector<std::pair<HIRPattern, const HIRTypeData*>>>(ZeroCopyOutput& out, const std::vector<std::pair<HIRPattern, const HIRTypeData*>>& values) {
     outCont(out, values);
 }

@@ -48,7 +48,7 @@ TransListFunction* TransList::findFunction(const HIRPath& p) {
     return const_cast<TransListFunction*>(static_cast<const TransList&>(*this).findFunction(p));
 }
 
-bool TransList::hasType(HIRTypeRef type, bool shallow) const {
+bool TransList::hasType(const HIRTypeData* type, bool shallow) const {
     BUG_ASSERT(wb_);
     const auto symbol = FMT(TransMangle(*wb_, type));
     const auto existing = typeSymbols.find(symbol);
@@ -59,7 +59,7 @@ bool TransList::hasType(HIRTypeRef type, bool shallow) const {
     return existing->second.hasDefinition || (shallow && existing->second.hasPrototype);
 }
 
-bool TransList::addType(HIRTypeRef type, bool shallow) {
+bool TransList::addType(const HIRTypeData* type, bool shallow) {
     BUG_ASSERT(wb_);
     auto symbol = FMT(TransMangle(*wb_, type));
     auto existing = typeSymbols.find(symbol);
@@ -124,30 +124,30 @@ HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPat
         case HIRPathData::TAG_Generic: {
             auto& e2 = rv.data.as_Generic();
             for (auto& arg : e2.params.types) {
-                resolve.expandAssociatedTypes(sp, arg);
+                arg = resolve.expandAssociatedTypes(sp, arg);
             }
             break;
         }
         case HIRPathData::TAG_UfcsInherent: {
             auto& e2 = rv.data.as_UfcsInherent();
-            resolve.expandAssociatedTypes(sp, e2.type);
+            e2.type = resolve.expandAssociatedTypes(sp, e2.type);
             for (auto& arg : e2.params.types) {
-                resolve.expandAssociatedTypes(sp, arg);
+                arg = resolve.expandAssociatedTypes(sp, arg);
             }
             // TODO: impl params too?
             for (auto& arg : e2.implParams.types) {
-                resolve.expandAssociatedTypes(sp, arg);
+                arg = resolve.expandAssociatedTypes(sp, arg);
             }
             break;
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& e2 = rv.data.as_UfcsKnown();
-            resolve.expandAssociatedTypes(sp, e2.type);
+            e2.type = resolve.expandAssociatedTypes(sp, e2.type);
             for (auto& arg : e2.trait.params.types) {
-                resolve.expandAssociatedTypes(sp, arg);
+                arg = resolve.expandAssociatedTypes(sp, arg);
             }
             for (auto& arg : e2.params.types) {
-                resolve.expandAssociatedTypes(sp, arg);
+                arg = resolve.expandAssociatedTypes(sp, arg);
             }
             break;
         }
@@ -166,12 +166,12 @@ HIRGenericPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const
 HIRPathParams TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPathParams& p) const {
     auto rv = this->monomorphPathParams(sp, p, false);
     for (auto& arg : rv.types) {
-        resolve.expandAssociatedTypes(sp, arg);
+        arg = resolve.expandAssociatedTypes(sp, arg);
     }
     return rv;
 }
 
-HIRTypeRef TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRTypeData* ty) const {
+const HIRTypeData* TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRTypeData* ty) const {
     return resolve.monomorphExpand(sp, ty, *this);
 }
 
@@ -206,16 +206,16 @@ TransParams& TransParams::operator=(TransParams&& x) {
     return *this;
 }
 
-TransParams TransParams::newImpl(HIRTypeInterner& types, Span sp, HIRTypeRef ty, HIRPathParams implParams) {
+TransParams TransParams::newImpl(HIRTypeInterner& types, Span sp, const HIRTypeData* ty, HIRPathParams implParams) {
     TransParams tp(types, sp);
     tp.selfType = std::move(ty);
     tp.ppImpl = std::move(implParams);
     return tp;
 }
 
-const HIRTypeData* TransParams::maybeMonomorph(const ::StaticTraitResolve& resolve, HIRTypeRef& tmp, const HIRTypeData* p) const {
+const HIRTypeData* TransParams::maybeMonomorph(const ::StaticTraitResolve& resolve, const HIRTypeData* p) const {
     if (monomorphiseTypeNeeded(p)) {
-        return tmp = this->monomorph(resolve, p);
+        return this->monomorph(resolve, p);
     } else {
         return p;
     }

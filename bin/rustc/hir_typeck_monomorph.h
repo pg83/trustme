@@ -13,7 +13,7 @@ class MonomorphiserNop: public Monomorphiser {
 public:
     using Monomorphiser::Monomorphiser;
 
-    HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override;
+    const HIRTypeData* getType(const Span& sp, const HIRGenericRef& ty) const override;
 
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
 };
@@ -25,12 +25,12 @@ class OpaqueAliasParamMonomorph: public MonomorphiserNop {
 public:
     OpaqueAliasParamMonomorph(HIRTypeInterner& types, const HIRTypeDataErasedTypeAliasInner& alias, const HIRPathParams& params);
 
-    HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override;
+    const HIRTypeData* getType(const Span& sp, const HIRGenericRef& generic) const override;
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
 };
 
-static inline const HIRTypeData* monomorphiseTypeWithOpt(const Span& sp, HIRTypeRef& tmp, const HIRTypeData* tpl, const Monomorphiser& mono, bool allowInfer = true) {
-    return (monomorphiseTypeNeeded(tpl) ? tmp = mono.monomorphType(sp, tpl, allowInfer) : tpl);
+static inline const HIRTypeData* monomorphiseTypeWithOpt(const Span& sp, const HIRTypeData* tpl, const Monomorphiser& mono, bool allowInfer = true) {
+    return monomorphiseTypeNeeded(tpl) ? mono.monomorphType(sp, tpl, allowInfer) : tpl;
 }
 
 static inline const HIRPath& monomorphisePathWithOpt(const Span& sp, HIRPath& tmp, const HIRPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
@@ -76,7 +76,7 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 };
 
 struct MonomorphState: public MonomorphiserPP {
-    HIRTypeRef selfTy;
+    const HIRTypeData* selfTy;
     const HIRPathParams* ppImpl;
     const HIRPathParams* ppMethod;
 

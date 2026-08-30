@@ -63,11 +63,11 @@ namespace {
 
         CloneTyWithMonomorph(HIRTypeInterner& types, HIRTypeCloneCallback& callback);
 
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override;
+        const HIRTypeData* getType(const Span& sp, const HIRGenericRef& g) const override;
 
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
 
-        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
+        const HIRTypeData* monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
     };
 
     struct TyVisitorGenericGroup final: TyVisitor<WConst> {
@@ -85,15 +85,15 @@ namespace {
     struct TyRewriter {
         HIRTypeInterner& types;
         HIRTypeRewriteCallback& callback;
-        Vector<HIRTypeRef> stack;
+        Vector<const HIRTypeData*> stack;
 
-        bool rewritePathParams(HIRPathParams& params);
+        void rewritePathParams(HIRPathParams& params);
 
-        bool rewriteTraitPath(HIRTraitPath& trait);
+        void rewriteTraitPath(HIRTraitPath& trait);
 
-        bool rewritePath(HIRPath& path);
+        void rewritePath(HIRPath& path);
 
-        bool rewriteType(HIRTypeRef& type);
+        const HIRTypeData* rewriteType(const HIRTypeData* type);
     };
 }
 
@@ -122,14 +122,14 @@ bool pathParamsContainGenericGroup(const HIRPathParams& params, HIRGenericGroup 
     return visitor.visitPathParams(params);
 }
 
-bool rewriteTyWithCb(HIRTypeInterner& types, HIRTypeRef& ty, HIRTypeRewriteCallback& callback) {
+const HIRTypeData* rewriteTyWithCb(HIRTypeInterner& types, const HIRTypeData* ty, HIRTypeRewriteCallback& callback) {
     TyRewriter rewriter{types, callback, {}};
     return rewriter.rewriteType(ty);
 }
 
-bool rewritePathTysWithCb(HIRTypeInterner& types, HIRPath& path, HIRTypeRewriteCallback& callback) {
+void rewritePathTysWithCb(HIRTypeInterner& types, HIRPath& path, HIRTypeRewriteCallback& callback) {
     TyRewriter rewriter{types, callback, {}};
-    return rewriter.rewritePath(path);
+    rewriter.rewritePath(path);
 }
 
 bool monomorphisePathparamsNeeded(const HIRPathParams& tpl) {
@@ -163,9 +163,9 @@ void Monomorphiser::setConstevalState(const WireBoard& wb, HIRItemPath ip) {
     this->constevalPath = ip;
 }
 
-const HIRTypeData* Monomorphiser::maybeMonomorphType(const Span& sp, HIRTypeRef& tmp, const HIRTypeData* ty, bool allowInfer) const {
+const HIRTypeData* Monomorphiser::maybeMonomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer) const {
     if (monomorphiseTypeNeeded(ty)) {
-        return tmp = monomorphType(sp, ty, allowInfer);
+        return monomorphType(sp, ty, allowInfer);
     }
     return ty;
 }
@@ -175,7 +175,7 @@ MonomorphiserPP::MonomorphiserPP(HIRTypeInterner& types)
 {
 }
 
-HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer /*=true*/) const {
+const HIRTypeData* Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer /*=true*/) const {
     switch ((*tpl).tag()) {
         case HIRTypeData::TAG_Infer: {
             ASSERT_BUG(sp, allowInfer, StringView("Unexpected ivar seen - ") << tpl);
@@ -264,7 +264,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         }
         case HIRTypeData::TAG_Tuple: {
             auto& e = (*tpl).as_Tuple();
-            Vector<HIRTypeRef> types;
+            Vector<const HIRTypeData*> types;
             for (const auto& ty : e) {
                 types.pushBack(this->monomorphType(sp, ty, allowInfer));
             }
@@ -423,12 +423,12 @@ HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, cons
     return rv;
 }
 
-HIRTypeRef cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, HIRTypeCloneCallback& callback) {
+const HIRTypeData* cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, HIRTypeCloneCallback& callback) {
     CloneTyWithMonomorph m(types, callback);
     return m.monomorphType(sp, tpl, true);
 }
 
-HIRTypeRef MonomorphiserPP::getType(const Span& sp, const HIRGenericRef& ty) const /*override*/
+const HIRTypeData* MonomorphiserPP::getType(const Span& sp, const HIRGenericRef& ty) const /*override*/
 {
     if (ty.isSelf()) {
         if (const auto* s = this->getSelfType()) {
@@ -934,76 +934,71 @@ auto TyVisitorGenericGroup::visitType(const HIRTypeData* ty) -> bool {
     return TyVisitor::visitType(ty);
 }
 
-auto TyRewriter::rewritePathParams(HIRPathParams& params) -> bool {
+auto TyRewriter::rewritePathParams(HIRPathParams& params) -> void {
     for (auto& type : params.types) {
-        if (rewriteType(type)) {
-            return true;
-        }
+        type = rewriteType(type);
     }
-    return false;
 }
 
-auto TyRewriter::rewriteTraitPath(HIRTraitPath& trait) -> bool {
-    if (rewritePathParams(trait.path.params)) {
-        return true;
-    }
+auto TyRewriter::rewriteTraitPath(HIRTraitPath& trait) -> void {
+    rewritePathParams(trait.path.params);
     for (auto& assoc : trait.typeBounds) {
-        if (rewritePathParams(assoc.second.sourceTrait.params) || rewritePathParams(assoc.second.atyParams) || rewriteType(assoc.second.type)) {
-            return true;
-        }
+        rewritePathParams(assoc.second.sourceTrait.params);
+        rewritePathParams(assoc.second.atyParams);
+        assoc.second.type = rewriteType(assoc.second.type);
     }
     for (auto& assoc : trait.traitBounds) {
-        if (rewritePathParams(assoc.second.sourceTrait.params) || rewritePathParams(assoc.second.atyParams)) {
-            return true;
-        }
+        rewritePathParams(assoc.second.sourceTrait.params);
+        rewritePathParams(assoc.second.atyParams);
         for (auto& bound : assoc.second.traits) {
-            if (rewriteTraitPath(bound)) {
-                return true;
-            }
+            rewriteTraitPath(bound);
         }
     }
-    return false;
 }
 
-auto TyRewriter::rewritePath(HIRPath& path) -> bool {
+auto TyRewriter::rewritePath(HIRPath& path) -> void {
     switch (path.data.tag()) {
         case HIRPathData::TAG_Generic: {
             auto& e = path.data.as_Generic();
-            return rewritePathParams(e.params);
+            rewritePathParams(e.params);
+            return;
         }
         case HIRPathData::TAG_UfcsInherent: {
             auto& e = path.data.as_UfcsInherent();
-            return rewriteType(e.type) || rewritePathParams(e.params) || rewritePathParams(e.implParams);
+            e.type = rewriteType(e.type);
+            rewritePathParams(e.params);
+            rewritePathParams(e.implParams);
+            return;
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& e = path.data.as_UfcsKnown();
-            return rewriteType(e.type) || rewritePathParams(e.trait.params) || rewritePathParams(e.params);
+            e.type = rewriteType(e.type);
+            rewritePathParams(e.trait.params);
+            rewritePathParams(e.params);
+            return;
         }
         case HIRPathData::TAG_UfcsUnknown: {
             auto& e = path.data.as_UfcsUnknown();
-            return rewriteType(e.type) || rewritePathParams(e.params);
+            e.type = rewriteType(e.type);
+            rewritePathParams(e.params);
+            return;
         }
     }
     UNREACHABLE();
 }
 
-auto TyRewriter::rewriteType(HIRTypeRef& type) -> bool {
+auto TyRewriter::rewriteType(const HIRTypeData* type) -> const HIRTypeData* {
     if (!type || std::find(stack.begin(), stack.end(), type) != stack.end()) {
-        return false;
+        return type;
     }
     const auto original = type;
     auto data = original->cloneData();
-    HIRTypeRef rewritten = original;
-    const bool stop = callback.rewrite(rewritten, data);
-    if (rewritten != original) {
-        type = rewritten;
-        return stop;
+    if (const auto* rewritten = callback.rewrite(original, data)) {
+        return rewritten;
     }
 
     stack.pushBack(original);
-    bool childStop = false;
-    if (!stop) {
-        switch (data.tag()) {
+    switch (data.tag()) {
             case HIRTypeData::TAG_Infer: {
                 break;
             }
@@ -1018,112 +1013,96 @@ auto TyRewriter::rewriteType(HIRTypeRef& type) -> bool {
             }
             case HIRTypeData::TAG_Path: {
                 auto& e = data.as_Path();
-                childStop = rewritePath(e.path);
+                rewritePath(e.path);
                 break;
             }
             case HIRTypeData::TAG_TraitObject: {
                 auto& e = data.as_TraitObject();
-                childStop = rewriteTraitPath(e.trait);
+                rewriteTraitPath(e.trait);
                 for (auto& marker : e.markers) {
-                    if (!childStop) {
-                        childStop = rewritePathParams(marker.params);
-                    }
+                    rewritePathParams(marker.params);
                 }
                 break;
             }
             case HIRTypeData::TAG_ErasedType: {
                 auto& e = data.as_ErasedType();
                 for (auto& trait : e.traits) {
-                    if (!childStop) {
-                        childStop = rewriteTraitPath(trait);
-                    }
+                    rewriteTraitPath(trait);
                 }
-                if (!childStop) {
-                    childStop = rewritePathParams(e.use);
-                }
-                if (!childStop) {
-                    {
+                rewritePathParams(e.use);
+                {
                         auto& tuMatch = e.inner;
                         switch (tuMatch.tag()) {
                             case TypeDataErasedTypeInner::TAG_Fcn: {
                                 auto& inner = tuMatch.as_Fcn();
-                                childStop = rewritePath(inner.origin);
+                                rewritePath(inner.origin);
                                 break;
                             }
                             case TypeDataErasedTypeInner::TAG_Known: {
                                 auto& inner = tuMatch.as_Known();
-                                childStop = rewriteType(inner);
+                                inner = rewriteType(inner);
                                 break;
                             }
                             case TypeDataErasedTypeInner::TAG_Alias: {
                                 auto& inner = tuMatch.as_Alias();
-                                childStop = rewritePathParams(inner.params);
+                                rewritePathParams(inner.params);
                                 break;
                             }
                         }
-                    }
                 }
                 break;
             }
             case HIRTypeData::TAG_Array: {
                 auto& e = data.as_Array();
-                childStop = rewriteType(e.inner);
+                e.inner = rewriteType(e.inner);
                 break;
             }
             case HIRTypeData::TAG_Slice: {
                 auto& e = data.as_Slice();
-                childStop = rewriteType(e.inner);
+                e.inner = rewriteType(e.inner);
                 break;
             }
             case HIRTypeData::TAG_Pattern: {
                 auto& e = data.as_Pattern();
-                childStop = rewriteType(e.inner);
+                e.inner = rewriteType(e.inner);
                 break;
             }
             case HIRTypeData::TAG_Tuple: {
                 auto& e = data.as_Tuple();
                 for (auto& inner : mutRange(e)) {
-                    if (!childStop) {
-                        childStop = rewriteType(inner);
-                    }
+                    inner = rewriteType(inner);
                 }
                 break;
             }
             case HIRTypeData::TAG_Borrow: {
                 auto& e = data.as_Borrow();
-                childStop = rewriteType(e.inner);
+                e.inner = rewriteType(e.inner);
                 break;
             }
             case HIRTypeData::TAG_Pointer: {
                 auto& e = data.as_Pointer();
-                childStop = rewriteType(e.inner);
+                e.inner = rewriteType(e.inner);
                 break;
             }
             case HIRTypeData::TAG_NamedFunction: {
                 auto& e = data.as_NamedFunction();
-                childStop = rewritePath(e.path);
+                rewritePath(e.path);
                 break;
             }
             case HIRTypeData::TAG_Function: {
                 auto& e = data.as_Function();
                 for (auto& type : mutRange(e.argTypes)) {
-                    if (!childStop) {
-                        childStop = rewriteType(type);
-                    }
+                    type = rewriteType(type);
                 }
-                if (!childStop) {
-                    childStop = rewriteType(e.rettype);
-                }
+                e.rettype = rewriteType(e.rettype);
                 break;
             }
             case HIRTypeData::TAG_NodeType: {
                 break;
             }
-        }
     }
     stack.popBack();
-    type = types.intern(mv$(data));
-    return stop || childStop;
+    return types.intern(mv$(data));
 }
 
 auto TyVisitorMonomorphNeeded::getTyData(const HIRTypeData* ty) const -> const HIRTypeData& {
@@ -1155,7 +1134,7 @@ CloneTyWithMonomorph::CloneTyWithMonomorph(HIRTypeInterner& types, HIRTypeCloneC
 {
 }
 
-auto CloneTyWithMonomorph::getType(const Span& sp, const HIRGenericRef& g) const -> HIRTypeRef {
+auto CloneTyWithMonomorph::getType(const Span& sp, const HIRGenericRef& g) const -> const HIRTypeData* {
     return types.generic(g.name, g.binding);
 }
 
@@ -1163,11 +1142,9 @@ auto CloneTyWithMonomorph::getValue(const Span& sp, const HIRGenericRef& g) cons
     return g;
 }
 
-auto CloneTyWithMonomorph::monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer) const -> HIRTypeRef {
-    HIRTypeRef rv;
-
-    if (callback.clone(ty, rv)) {
-        return rv;
+auto CloneTyWithMonomorph::monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer) const -> const HIRTypeData* {
+    if (const auto* replacement = callback.clone(ty)) {
+        return replacement;
     }
     return Monomorphiser::monomorphType(sp, ty, allowInfer);
 }

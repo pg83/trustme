@@ -132,11 +132,11 @@ public:
 };
 
 struct HIRPathParams {
-    ThinVector<HIRTypeRef> types;
+    ThinVector<const HIRTypeData*> types;
     ThinVector<HIRConstGeneric> values;
 
     HIRPathParams();
-    HIRPathParams(HIRTypeRef);
+    HIRPathParams(const HIRTypeData*);
     HIRPathParams clone() const;
     HIRPathParams(const HIRPathParams&) = delete;
     HIRPathParams& operator=(const HIRPathParams&) = delete;
@@ -200,7 +200,7 @@ public:
     struct AtyEqual {
         HIRGenericPath sourceTrait;
         HIRPathParams atyParams;
-        HIRTypeRef type;
+        const HIRTypeData* type;
 
         Ordering ord(const AtyEqual& x) const;
 
@@ -266,8 +266,8 @@ public:
     HIRPath(HIRGenericPath _);
     HIRPath(HIRSimplePath _);
 
-    HIRPath(HIRTypeRef ty, RcString item, HIRPathParams itemParams = HIRPathParams());
-    HIRPath(HIRTypeRef ty, HIRGenericPath trait, RcString item, HIRPathParams itemParams = HIRPathParams());
+    HIRPath(const HIRTypeData* ty, RcString item, HIRPathParams itemParams = HIRPathParams());
+    HIRPath(const HIRTypeData* ty, HIRGenericPath trait, RcString item, HIRPathParams itemParams = HIRPathParams());
 
     HIRPath clone() const;
     HIRCompare compareWithPlaceholders(const Span& sp, const HIRPath& x, tCbResolveType resolvePlaceholder) const;
@@ -287,7 +287,7 @@ public:
 };
 
 struct HIRConstGenericUnevaluated {
-    HIRTypeRef selfType = nullptr;
+    const HIRTypeData* selfType = nullptr;
 
     HIRPathParams paramsImpl;
     HIRPathParams paramsItem;

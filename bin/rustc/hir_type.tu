@@ -17,24 +17,24 @@ generate(
         v("TraitObject", "HIRTypeDataTraitObject", copy=False),
         v("ErasedType", "HIRTypeDataErasedType", copy=False),
         v("Array", fields=[
-            ("HIRTypeRef", "inner"),
+            ("const HIRTypeData*", "inner"),
             ("HIRArraySize", "size"),
         ], copy=False),
-        v("Slice", fields=[("HIRTypeRef", "inner")]),
-        v("Tuple", "stl::Vector<HIRTypeRef>"),
+        v("Slice", fields=[("const HIRTypeData*", "inner")]),
+        v("Tuple", "stl::Vector<const HIRTypeData*>"),
         v("Borrow", fields=[
             ("HIRBorrowType", "type"),
-            ("HIRTypeRef", "inner"),
+            ("const HIRTypeData*", "inner"),
         ]),
         v("Pointer", fields=[
             ("HIRBorrowType", "type"),
-            ("HIRTypeRef", "inner"),
+            ("const HIRTypeData*", "inner"),
         ]),
         v("NamedFunction", "HIRTypeDataNamedFunction", copy=False),
         v("Function", "HIRTypeDataFunctionPointer", copy=False),
         v("NodeType", "HIRTypeDataNodeType", copy=False),
         v("Pattern", fields=[
-            ("HIRTypeRef", "inner"),
+            ("const HIRTypeData*", "inner"),
             ("HIRTypePattern", "pattern"),
         ], copy=False),
     ],
@@ -68,11 +68,11 @@ generate(
         void fmt(stl::ZeroCopyOutput& os) const;
 
         // Deliberately semantic relations. Plain ASTType* equality is pointer identity.
-        bool equalsIgnoringRegions(HIRTypeRef x) const;
-        Ordering ordIgnoringRegions(HIRTypeRef x) const;
-        bool matchTestGenerics(const Span& sp, HIRTypeRef x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const;
-        HIRCompare matchTestGenericsFuzz(const Span& sp, HIRTypeRef x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const;
-        HIRCompare compareWithPlaceholders(const Span& sp, HIRTypeRef x, tCbResolveType resolvePlaceholder) const;
+        bool equalsIgnoringRegions(const HIRTypeData* x) const;
+        Ordering ordIgnoringRegions(const HIRTypeData* x) const;
+        bool matchTestGenerics(const Span& sp, const HIRTypeData* x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const;
+        HIRCompare matchTestGenericsFuzz(const Span& sp, const HIRTypeData* x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const;
+        HIRCompare compareWithPlaceholders(const Span& sp, const HIRTypeData* x, tCbResolveType resolvePlaceholder) const;
         const HIRSimplePath* getSortPath() const;
     """,
 )

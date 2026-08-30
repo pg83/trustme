@@ -54,7 +54,7 @@ namespace {
         unsigned int field;
         size_t size;
         size_t align;
-        HIRTypeRef ty;
+        const HIRTypeData* ty;
         bool userAlign = false;
     };
 
@@ -562,13 +562,13 @@ namespace {
         });
     }
 
-    bool makeFieldEnt(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, HIRTypeRef ty, Ent& out) {
+    bool makeFieldEnt(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, const HIRTypeData* ty, Ent& out) {
         size_t size, align;
         if (!TargetGetSizeAndAlignOf(sp, resolve, ty, size, align)) {
             DEBUG(StringView("Can't get size/align of ") << ty);
             return false;
         }
-        out = Ent{idx, size, align, HIRTypeRef(), false};
+        out = Ent{idx, size, align, nullptr, false};
         out.userAlign = TargetTypeHasUserAlignment(sp, resolve, ty);
         out.ty = mv$(ty);
         return true;
@@ -627,7 +627,7 @@ namespace {
         return (offset + align - 1) / align * align;
     }
 
-    HIRTypeRef asyncDropGlueType(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* dropeeTy) {
+    const HIRTypeData* asyncDropGlueType(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* dropeeTy) {
         const auto* outerPath = outerTy->opt_Path();
         ASSERT_BUG(sp, outerPath && outerPath->binding.is_Struct() && outerPath->path.data.is_Generic(), StringView("invalid async-drop glue type ") << outerTy);
         auto path = outerPath->path.data.as_Generic().clone();
@@ -786,8 +786,8 @@ namespace {
         const auto* dropeeTy = path.params.types[0];
 
         HIRPath dropPath{HIRSimplePath()};
-        HIRTypeRef customFutureTy;
-        const bool hasCustom = resolve.findAsyncDrop(sp, dropeeTy, dropPath, customFutureTy);
+        const HIRTypeData* customFutureTy;
+        const bool hasCustom = (customFutureTy = resolve.findAsyncDrop(sp, dropeeTy, dropPath));
         size_t customSize = 0;
         size_t customAlign = 1;
         if (hasCustom && !TargetGetSizeAndAlignOf(sp, resolve, customFutureTy, customSize, customAlign)) {
@@ -953,7 +953,7 @@ namespace {
 
             if (e.field != ~0u) {
                 ASSERT_BUG(sp, e.field < fields.size(), StringView("Field index out of range"));
-                ASSERT_BUG(sp, fields[e.field].ty == HIRTypeRef(), StringView("Dupliate field index"));
+                ASSERT_BUG(sp, fields[e.field].ty == nullptr, StringView("Dupliate field index"));
                 fields[e.field].offset = curOfs;
                 fields[e.field].ty = e.ty;
             }
@@ -975,7 +975,7 @@ namespace {
             }
         }
         for (const auto& f : fields) {
-            ASSERT_BUG(sp, f.ty != HIRTypeRef(), StringView("Uninitialised field found - ") << (&f - &fields[0]));
+            ASSERT_BUG(sp, f.ty != nullptr, StringView("Uninitialised field found - ") << (&f - &fields[0]));
         }
         rv.align = maxAlign;
         rv.size = curOfs;
@@ -1666,7 +1666,7 @@ namespace {
                     }
                 } else {
                     struct Variant {
-                        HIRTypeRef type;
+                        const HIRTypeData* type;
                         std::vector<Ent> ents;
                         unsigned forcedAlignment;
                     };
@@ -1819,7 +1819,7 @@ namespace {
                             if (!rv.variants.is_None()) {
                                 const auto& nichePath = rv.variants.as_Linear().field;
 
-                                HIRTypeRef nicheTy;
+                                const HIRTypeData* nicheTy;
                                 switch (nichePath.size) {
                                     case 1:
                                         nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U8);
@@ -1927,7 +1927,7 @@ namespace {
                     }
 
                     if (rv.variants.is_None()) {
-                        HIRTypeRef tagTy;
+                        const HIRTypeData* tagTy;
                         if (enm.tagRepr != HIREnum::Repr::Auto) {
                             tagTy = resolve.hirCrate().types.primitive(enm.getReprType(enm.tagRepr));
                         } else {
@@ -2174,7 +2174,7 @@ namespace {
         return rv;
     }
 
-    bool hasAbiIdentity(HIRTypeRef ty) {
+    bool hasAbiIdentity(const HIRTypeData* ty) {
         return !monomorphiseTypeNeeded(ty) && !ty->is_Infer() && !ty->is_ErasedType() && !ty->is_NodeType();
     }
 
@@ -2208,13 +2208,13 @@ namespace {
 
 struct WireBoard::TargetLayoutContext {
     struct CachedTypeRepr {
-        HIRTypeRef canonical;
+        const HIRTypeData* canonical;
         std::unique_ptr<TypeRepr> repr;
     };
 
     std::unordered_map<std::string, CachedTypeRepr> encoded;
-    std::unordered_map<HIRTypeRef, std::unique_ptr<TypeRepr>> unencoded;
-    std::unordered_map<HIRTypeRef, const TypeRepr*> exact;
+    std::unordered_map<const HIRTypeData*, std::unique_ptr<TypeRepr>> unencoded;
+    std::unordered_map<const HIRTypeData*, const TypeRepr*> exact;
 };
 
 static void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, std::unique_ptr<TypeRepr> repr) {
@@ -2603,8 +2603,8 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     if (visitTyWith(ty, [](const HIRTypeData* inner) {
         return inner->is_ErasedType();
     })) {
-        HIRTypeRef revealed = ty;
-        resolve.revealOpaqueTypes(sp, revealed);
+        const HIRTypeData* revealed = ty;
+        revealed = resolve.revealOpaqueTypes(sp, revealed);
         if (revealed != ty) {
             const auto* repr = TargetGetTypeRepr(sp, resolve, revealed);
             cache.exact.emplace(ty, repr);

@@ -37,7 +37,7 @@ namespace {
 
         const HIRPathParams* paramsFor(const HIRGenericRef& generic) const;
 
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
+        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* type) override;
 
         void visitConstgeneric(HIRConstGeneric& value) override;
     };
@@ -51,7 +51,7 @@ namespace {
 
         void addType(const HIRGenericRef& g);
 
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
 
         void visitPathParams(HIRPathParams& pp) override;
 
@@ -65,7 +65,7 @@ namespace {
 
         NewvalStateNop(const Span& sp);
 
-        HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override;
+        HIRPath newStatic(const HIRTypeData* type, EncodedLiteral value, size_t alignment) override;
     };
 
     struct NewvalState: public HIREvaluator::Newval {
@@ -76,7 +76,7 @@ namespace {
 
         NewvalState(const HIRModule& mod, const HIRItemPath& modPath, std::string prefix);
 
-        HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override;
+        HIRPath newStatic(const HIRTypeData* type, EncodedLiteral value, size_t alignment) override;
     };
 
     struct TypeInfo {
@@ -169,7 +169,7 @@ namespace {
 
         void visitArraysize(HIRArraySize& as);
 
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
 
         void visitConstant(HIRItemPath p, HIRConstant& item) override;
 
@@ -500,7 +500,7 @@ namespace {
         return hasTraitBounds(implParams) || hasTraitBounds(&itemParams);
     }
 
-    bool typeCanMonomorph(HIRTypeRef type, const MonomorphState& ms) {
+    bool typeCanMonomorph(const HIRTypeData* type, const MonomorphState& ms) {
         if (!type) {
             return true;
         }
@@ -533,7 +533,7 @@ namespace {
         return true;
     }
 
-    bool typeIsConcrete(HIRTypeRef type) {
+    bool typeIsConcrete(const HIRTypeData* type) {
         return !type || (!monomorphiseTypeNeeded(type) && !visitTyWith(type, [](const HIRTypeData* inner) {
             return inner->is_Infer();
         }));
@@ -600,7 +600,7 @@ namespace {
         ASSERT_BUG(sp, expr.state, StringView("Const-generic expression has no state"));
         const auto& state = *expr.state;
         auto name = FMT(StringView("const_") << static_cast<const void*>(&expr) << StringView("#"));
-        HIRTypeRef exp = type;
+        const HIRTypeData* exp = type;
         crate.getOrGenMir(wb, HIRItemPath(state.modPath, name.c_str()), expr, exp);
     }
 
@@ -722,7 +722,7 @@ struct HIREvaluator::MIREvalAllocation final: public IValue {
 
     unsigned length;
     bool isReadonly;
-    HIRTypeRef type_;
+    const HIRTypeData* type_;
     bool isConstHeap;
     bool isLive;
     bool isGlobal;
@@ -779,8 +779,8 @@ struct HIREvaluator::MIREvalAllocation final: public IValue {
 struct HIREvaluator::MIREvalCallStackEntry {
     ObjPool* const valuePool;
     const unsigned frameIndex;
-    const std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs;
-    const HIRTypeRef retType;
+    const std::vector<std::pair<HIRPattern, const HIRTypeData*>> argDefs;
+    const HIRTypeData* retType;
     const SourceLocation callerLocation;
     const bool tracksCaller;
 
@@ -794,16 +794,16 @@ struct HIREvaluator::MIREvalCallStackEntry {
 
     std::vector<MIREvalAllocationPtr> args;
 
-    Vector<HIRTypeRef> localTypes;
+    Vector<const HIRTypeData*> localTypes;
     std::vector<MIREvalAllocationPtr> locals;
     Vector<bool> dropFlags;
 
     MIREvalCallStackEntry(const MIREvalCallStackEntry&) = delete;
     MIREvalCallStackEntry(MIREvalCallStackEntry&&) = delete;
 
-    MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameIndex, const Span& rootSpan, const StaticTraitResolve& resolve, const MIREvalPathCallback& printPath, HIRTypeRef expTy, std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs, const MIRFunction& fcn, MonomorphState ms, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller);
+    MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameIndex, const Span& rootSpan, const StaticTraitResolve& resolve, const MIREvalPathCallback& printPath, const HIRTypeData* expTy, std::vector<std::pair<HIRPattern, const HIRTypeData*>> argDefs, const MIRFunction& fcn, MonomorphState ms, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller);
 
-    HIRTypeRef monomorphExpand(const HIRTypeData* ty) const;
+    const HIRTypeData* monomorphExpand(const HIRTypeData* ty) const;
 
     unsigned readEnumVariant(const HIRTypeData* ty, MIREvalValueRef value) const;
 
@@ -813,13 +813,13 @@ struct HIREvaluator::MIREvalCallStackEntry {
 
     bool valueNeedsNonConstDrop(const HIRTypeData* ty, MIREvalValueRef value) const;
 
-    MIREvalStaticRefPtr getStaticrefMono(const HIRPath& p, HIRTypeRef* outTy = nullptr) const;
+    MIREvalStaticRefPtr getStaticrefMono(const HIRPath& p, const HIRTypeData** outTy = nullptr) const;
 
-    MIREvalStaticRefPtr getStaticref(HIRPath p, HIRTypeRef* outTy = nullptr) const;
+    MIREvalStaticRefPtr getStaticref(HIRPath p, const HIRTypeData** outTy = nullptr) const;
 
     MIREvalValueRef getLval(const MIRLValue& lv, MIREvalValueRef* meta = nullptr, u64* rawAddress = nullptr);
 
-    const EncodedLiteral& getConst(const HIRPath& inP, HIRTypeRef* outTy) const;
+    const EncodedLiteral& getConst(const HIRPath& inP, const HIRTypeData** outTy) const;
 
     void writeEncoded(MIREvalValueRef dst, const EncodedLiteral& encoded);
 
@@ -995,7 +995,7 @@ static u8 pointerGuaranteedCmp(const std::pair<u64, MIREvalRelocPtr>& left, cons
 }
 
 static std::pair<MIREvalValueRef, MIREvalValueRef> getTupleTBool(const MIREvalCallStackEntry& localState, MIREvalValueRef& src, const HIRTypeData* t) {
-    Vector<HIRTypeRef> tupleTypes;
+    Vector<const HIRTypeData*> tupleTypes;
     tupleTypes.pushBack(t);
     tupleTypes.pushBack(localState.rootResolve.crate.types.primitive(HIRCoreType::Bool));
     auto tupleT = localState.rootResolve.crate.types.tuple(std::move(tupleTypes));
@@ -1011,8 +1011,8 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
     bool didOverflow = false;
 
     if (op == MIRBinOp::BIT_SHL || op == MIRBinOp::BIT_SHR) {
-        HIRTypeRef tmpR;
-        const auto& tyR = localState.state.getParamType(tmpR, valR);
+        const HIRTypeData* tmpR;
+        const auto& tyR = localState.state.getParamType(valR);
         auto tiR = TypeInfo::forType(tyR);
 
         auto r = tiR.ty == TypeInfo::Unsigned ? localState.readParamUint(tiR.bits, valR) : localState.readParamSint(tiR.bits, valR).getInner();
@@ -1057,8 +1057,8 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData*
         return didOverflow;
     }
     {
-        HIRTypeRef tmpR;
-        MIR_ASSERT(state, ty == localState.state.getParamType(tmpR, valR), StringView("BinOp with mismatched types"));
+        const HIRTypeData* tmpR;
+        MIR_ASSERT(state, ty == localState.state.getParamType(valR), StringView("BinOp with mismatched types"));
     }
 
     switch (ti.ty) {
@@ -1503,14 +1503,14 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocate(ObjPool* pool, const StaticT
 MIREvalAllocationPtr MIREvalAllocationPtr::allocateScratch(ObjPool* pool, size_t size) {
     auto* data = static_cast<u8*>(pool->allocate(size + ((size + 7) / 8)));
     MIREvalAllocationPtr rv;
-    rv.ptr = pool->make<MIREvalAllocation>(data, size, HIRTypeRef());
+    rv.ptr = pool->make<MIREvalAllocation>(data, size, nullptr);
     return rv;
 }
 
 MIREvalAllocationPtr MIREvalAllocationPtr::allocateHeap(ObjPool* pool, size_t size, size_t alignment) {
     auto* data = static_cast<u8*>(pool->allocate(size + ((size + 7) / 8)));
     MIREvalAllocationPtr rv;
-    rv.ptr = pool->make<MIREvalAllocation>(data, size, HIRTypeRef());
+    rv.ptr = pool->make<MIREvalAllocation>(data, size, nullptr);
     rv->isConstHeap = true;
     rv->heapAlignment = alignment;
     return rv;
@@ -1519,7 +1519,7 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocateHeap(ObjPool* pool, size_t si
 MIREvalAllocationPtr MIREvalAllocationPtr::allocateRo(ObjPool* pool, const void* dataIn, size_t len) {
     auto* data = static_cast<u8*>(pool->allocate(len + ((len + 7) / 8)));
     MIREvalAllocationPtr rv;
-    rv.ptr = pool->make<MIREvalAllocation>(data, len, HIRTypeRef());
+    rv.ptr = pool->make<MIREvalAllocation>(data, len, nullptr);
     rv->writeBytes(0, dataIn, len);
     rv->isReadonly = true;
     return rv;
@@ -1556,7 +1556,7 @@ HIREvaluator::CsePtr::~CsePtr() {
     }
 }
 
-void HIREvaluator::pushStackEntry(HIRItemPath printPath, const MIRFunction& fcn, MonomorphState ms, HIRTypeRef exp, HIRFunction::argsT argDefs, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller) {
+void HIREvaluator::pushStackEntry(HIRItemPath printPath, const MIRFunction& fcn, MonomorphState ms, const HIRTypeData* exp, HIRFunction::argsT argDefs, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller) {
     MIREvalPathCallback pathCallback(printPath);
     this->callStack.push_back(new MIREvalCallStackEntry(this->valuePool.mutPtr(), this->numFrames, this->rootSpan, this->resolve, pathCallback, std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef, std::move(callerLocation), tracksCaller));
     this->numFrames += 1;
@@ -1669,8 +1669,8 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         }
         case MIRRValue::TAG_Cast: {
             auto& e = sa.src.as_Cast();
-            HIRTypeRef tmp;
-            const auto& srcTy = state.getLvalueType(tmp, e.val);
+            const HIRTypeData* tmp;
+            const auto& srcTy = state.getLvalueType(e.val);
 
             auto inval = localState.getLval(e.val);
             auto castType = localState.monomorphExpand(e.type);
@@ -1785,8 +1785,8 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         }
         case MIRRValue::TAG_BinOp: {
             auto& e = sa.src.as_BinOp();
-            HIRTypeRef tmp;
-            const auto& tyL = state.getParamType(tmp, e.valL);
+            const HIRTypeData* tmp;
+            const auto& tyL = state.getParamType(e.valL);
             bool didOverflow = doArithChecked(localState, tyL, dst, e.valL, e.op, e.valR);
             switch (e.op) {
                 case MIRBinOp::DIV:
@@ -1808,8 +1808,8 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         }
         case MIRRValue::TAG_UniOp: {
             auto& e = sa.src.as_UniOp();
-            HIRTypeRef tmp;
-            const auto& tyL = state.getLvalueType(tmp, e.val);
+            const HIRTypeData* tmp;
+            const auto& tyL = state.getLvalueType(e.val);
             auto ti = TypeInfo::forType(tyL);
 
             switch (ti.ty) {
@@ -1862,10 +1862,10 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         case MIRRValue::TAG_MakeDst: {
             auto& e = sa.src.as_MakeDst();
             if ((e.metaVal.is_Constant() && e.metaVal.as_Constant().is_ItemAddr() && e.metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
-                HIRTypeRef tmp;
-                const auto& srcTy = state.getParamType(tmp, e.ptrVal);
-                HIRTypeRef tmp2;
-                const auto& dstTy = state.getLvalueType(tmp2, sa.dst);
+                const HIRTypeData* tmp;
+                const auto& srcTy = state.getParamType(e.ptrVal);
+                const HIRTypeData* tmp2;
+                const auto& dstTy = state.getLvalueType(sa.dst);
 
                 switch ((*dstTy).tag()) {
                     default:
@@ -1936,8 +1936,8 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         }
         case MIRRValue::TAG_Tuple: {
             auto& e = sa.src.as_Tuple();
-            HIRTypeRef tmp;
-            const auto& ty = state.getLvalueType(tmp, sa.dst);
+            const HIRTypeData* tmp;
+            const auto& ty = state.getLvalueType(sa.dst);
             auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
             if (!repr) {
                 BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
@@ -1951,8 +1951,8 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         }
         case MIRRValue::TAG_Struct: {
             auto& e = sa.src.as_Struct();
-            HIRTypeRef tmp;
-            const auto& ty = state.getLvalueType(tmp, sa.dst);
+            const HIRTypeData* tmp;
+            const auto& ty = state.getLvalueType(sa.dst);
             auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
             if (!repr) {
                 BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
@@ -1989,8 +1989,8 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
             }
 
             if (count > 0) {
-                HIRTypeRef tmp;
-                const auto& ty = state.getLvalueType(tmp, sa.dst);
+                const HIRTypeData* tmp;
+                const auto& ty = state.getLvalueType(sa.dst);
                 const auto& ity = ty->as_Array().inner;
                 size_t sz = localState.sizeOfOrBug(ity);
 
@@ -2005,8 +2005,8 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         }
         case MIRRValue::TAG_Array: {
             auto& e = sa.src.as_Array();
-            HIRTypeRef tmp;
-            const auto& ty = state.getLvalueType(tmp, sa.dst);
+            const HIRTypeData* tmp;
+            const auto& ty = state.getLvalueType(sa.dst);
             const auto& ity = ty->as_Array().inner;
             size_t sz = localState.sizeOfOrBug(ity);
 
@@ -2025,8 +2025,8 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         }
         case MIRRValue::TAG_EnumVariant: {
             auto& e = sa.src.as_EnumVariant();
-            HIRTypeRef tmp;
-            const auto& ty = state.getLvalueType(tmp, sa.dst);
+            const HIRTypeData* tmp;
+            const auto& ty = state.getLvalueType(sa.dst);
             writeCtfeEnumVariant(resolve, localState, dst, ty, e.index, e.vals.size(), [&](MIREvalValueRef fieldDst, size_t i) {
                 localState.writeParam(fieldDst, e.vals[i]);
             });
@@ -2062,8 +2062,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             if (e.validFlag != ~0u && !localState.dropFlags[e.validFlag]) {
                 return e.invalidTarget;
             }
-            HIRTypeRef tmp;
-            const auto& ty = state.getLvalueType(tmp, e.val);
+            const HIRTypeData* tmp;
+            const auto& ty = state.getLvalueType(e.val);
             auto lit = localState.getLval(e.val);
             auto varIdx = localState.readEnumVariant(ty, lit);
             DEBUG(state << StringView(" = ") << varIdx);
@@ -2072,8 +2072,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
         }
         case MIRTerminator::TAG_SwitchValue: {
             auto& e = terminator.as_SwitchValue();
-            HIRTypeRef tmp;
-            const auto& ty = state.getLvalueType(tmp, e.val);
+            const HIRTypeData* tmp;
+            const auto& ty = state.getLvalueType(e.val);
             auto ti = TypeInfo::forType(ty);
             auto lit = localState.getLval(e.val);
 
@@ -2118,8 +2118,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 return e.target;
             }
 
-            HIRTypeRef tmp;
-            const auto& ty = state.getLvalueType(tmp, e.slot);
+            const HIRTypeData* tmp;
+            const auto& ty = state.getLvalueType(e.slot);
             auto value = localState.getLval(e.slot);
             if (!localState.valueReachableFromReturn(value)) {
                 if (localState.valueNeedsNonConstDrop(ty, value)) {
@@ -2138,8 +2138,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 std::vector<MIREvalAllocationPtr> callArgs;
                 callArgs.reserve(e.args.size());
                 for (const auto& a : e.args) {
-                    HIRTypeRef tmp;
-                    const auto& ty = state.getParamType(tmp, a);
+                    const HIRTypeData* tmp;
+                    const auto& ty = state.getParamType(a);
                     callArgs.push_back(MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, ty));
                     localState.writeParam(MIREvalValueRef(callArgs.back()), a);
                 }
@@ -2451,48 +2451,48 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 } else if (te->name == "unlikely") {
                     localState.writeParam(dst, e.args.at(0));
                 } else if (te->name == "fabsf16" || te->name == "fabsf32" || te->name == "fabsf64" || te->name == "fabsf128") {
-                    HIRTypeRef tmp;
-                    auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
+                    const HIRTypeData* tmp;
+                    auto ti = TypeInfo::forType(state.getParamType(e.args.at(0)));
                     MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     auto bits = localState.readParamFloatBits(ti.bits, e.args.at(0));
                     bits &= ~(U128(1) << (ti.bits - 1));
                     dst.writeUint(state, ti.bits, bits);
                 } else if (te->name == "copysignf16" || te->name == "copysignf32" || te->name == "copysignf64" || te->name == "copysignf128") {
-                    HIRTypeRef tmp;
-                    auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
+                    const HIRTypeData* tmp;
+                    auto ti = TypeInfo::forType(state.getParamType(e.args.at(0)));
                     MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     auto value = localState.readParamFloatBits(ti.bits, e.args.at(0));
                     auto sign = localState.readParamFloatBits(ti.bits, e.args.at(1));
                     auto signMask = U128(1) << (ti.bits - 1);
                     dst.writeUint(state, ti.bits, (value & ~signMask) | (sign & signMask));
                 } else if (te->name == "floorf16" || te->name == "floorf32" || te->name == "floorf64" || te->name == "floorf128") {
-                    HIRTypeRef tmp;
-                    auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
+                    const HIRTypeData* tmp;
+                    auto ti = TypeInfo::forType(state.getParamType(e.args.at(0)));
                     MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     dst.writeFloat(state, ti.bits, floatValueFloor(localState.readParamFloat(ti.bits, e.args.at(0))));
                 } else if (te->name == "ceilf16" || te->name == "ceilf32" || te->name == "ceilf64" || te->name == "ceilf128") {
-                    HIRTypeRef tmp;
-                    auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
+                    const HIRTypeData* tmp;
+                    auto ti = TypeInfo::forType(state.getParamType(e.args.at(0)));
                     MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     dst.writeFloat(state, ti.bits, floatValueCeil(localState.readParamFloat(ti.bits, e.args.at(0))));
                 } else if (te->name == "roundf16" || te->name == "roundf32" || te->name == "roundf64" || te->name == "roundf128") {
-                    HIRTypeRef tmp;
-                    auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
+                    const HIRTypeData* tmp;
+                    auto ti = TypeInfo::forType(state.getParamType(e.args.at(0)));
                     MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     dst.writeFloat(state, ti.bits, floatValueRound(localState.readParamFloat(ti.bits, e.args.at(0))));
                 } else if (te->name == "round_ties_even_f16" || te->name == "round_ties_even_f32" || te->name == "round_ties_even_f64" || te->name == "round_ties_even_f128") {
-                    HIRTypeRef tmp;
-                    auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
+                    const HIRTypeData* tmp;
+                    auto ti = TypeInfo::forType(state.getParamType(e.args.at(0)));
                     MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     dst.writeFloat(state, ti.bits, floatValueRoundEven(localState.readParamFloat(ti.bits, e.args.at(0))));
                 } else if (te->name == "truncf16" || te->name == "truncf32" || te->name == "truncf64" || te->name == "truncf128") {
-                    HIRTypeRef tmp;
-                    auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
+                    const HIRTypeData* tmp;
+                    auto ti = TypeInfo::forType(state.getParamType(e.args.at(0)));
                     MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     dst.writeFloat(state, ti.bits, floatValueTrunc(localState.readParamFloat(ti.bits, e.args.at(0))));
                 } else if (te->name == "minnumf16" || te->name == "minnumf32" || te->name == "minnumf64" || te->name == "minnumf128" || te->name == "maxnumf16" || te->name == "maxnumf32" || te->name == "maxnumf64" || te->name == "maxnumf128") {
-                    HIRTypeRef tmp;
-                    auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
+                    const HIRTypeData* tmp;
+                    auto ti = TypeInfo::forType(state.getParamType(e.args.at(0)));
                     MIR_ASSERT(state, ti.ty == TypeInfo::Float, StringView("`") << te->name << StringView("` with non-float argument"));
                     auto lhs = localState.readParamFloat(ti.bits, e.args.at(0));
                     auto rhs = localState.readParamFloat(ti.bits, e.args.at(1));
@@ -2500,8 +2500,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto value = isMin ? floatValueMinimumNumber(lhs, rhs) : floatValueMaximumNumber(lhs, rhs);
                     dst.writeFloat(state, ti.bits, value);
                 } else if (te->name == "three_way_compare") {
-                    HIRTypeRef tmp;
-                    auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
+                    const HIRTypeData* tmp;
+                    auto ti = TypeInfo::forType(state.getParamType(e.args.at(0)));
                     i64 result;
                     if (ti.ty == TypeInfo::Signed) {
                         auto lhs = localState.readParamSint(ti.bits, e.args.at(0));
@@ -2512,7 +2512,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         auto rhs = localState.readParamUint(ti.bits, e.args.at(1));
                         result = lhs == rhs ? 0 : lhs < rhs ? -1 : 1;
                     } else {
-                        MIR_BUG(state, StringView("`three_way_compare` with unsupported type ") << state.getParamType(tmp, e.args.at(0)));
+                        MIR_BUG(state, StringView("`three_way_compare` with unsupported type ") << state.getParamType(e.args.at(0)));
                     }
                     dst.writeSint(state, dst.getLen() * 8, S128(result));
                 } else if (te->name == "assume") {
@@ -2912,8 +2912,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
 
                 return callPath(fcnp, false);
             } else if (const auto* te = e.fcn.opt_Value()) {
-                HIRTypeRef tmp;
-                const auto& ty = state.getLvalueType(tmp, *te);
+                const HIRTypeData* tmp;
+                const auto& ty = state.getLvalueType(*te);
                 MIR_ASSERT(state, ty->is_Function(), StringView("Indirect call through non-function-pointer type ") << ty);
 
                 auto pointer = localState.getLval(*te).readPtr(state);
@@ -2932,8 +2932,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 std::vector<MIREvalAllocationPtr> callArgs;
                 callArgs.reserve(e.args.size());
                 for (const auto& arg : e.args) {
-                    HIRTypeRef tmp;
-                    const auto& ty = state.getParamType(tmp, arg);
+                    const HIRTypeData* tmp;
+                    const auto& ty = state.getParamType(arg);
                     callArgs.push_back(MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, ty));
                     localState.writeParam(MIREvalValueRef(callArgs.back()), arg);
                 }
@@ -2950,8 +2950,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 return callPath(localState.valuePool->make<HIRPath>(path->clone()), false);
             }
             if (const auto* value = e.fcn.opt_Value()) {
-                HIRTypeRef tmp;
-                const auto& ty = state.getLvalueType(tmp, *value);
+                const HIRTypeData* tmp;
+                const auto& ty = state.getLvalueType(*value);
                 MIR_ASSERT(state, ty->is_Function(), StringView("Indirect tail call through non-function-pointer type ") << ty);
 
                 auto pointer = localState.getLval(*value).readPtr(state);
@@ -3059,11 +3059,11 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         HIRFunction::argsT argDefs;
         for (const auto& a : fcn.args) {
             auto argTy = this->resolve.monomorphExpand(this->rootSpan, a.second, fcnMs);
-            this->resolve.revealOpaqueTypes(this->rootSpan, argTy);
+            argTy = this->resolve.revealOpaqueTypes(this->rootSpan, argTy);
             argDefs.push_back(std::make_pair(HIRPattern(), std::move(argTy)));
         }
         auto retTy = this->resolve.monomorphExpand(this->rootSpan, fcn.returnType, fcnMs);
-        this->resolve.revealOpaqueTypes(this->rootSpan, retTy);
+        retTy = this->resolve.revealOpaqueTypes(this->rootSpan, retTy);
 
         const bool tracksCaller = resolve.hirCrate().functionTracksCaller(state.sp, path, fcn);
         SourceLocation callerLocation;
@@ -3084,8 +3084,8 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
     } else if (rv.is_Struct()) {
         auto dst = localState.getLval(rvSlot);
 
-        HIRTypeRef tmp;
-        const auto& ty = state.getLvalueType(tmp, rvSlot);
+        const HIRTypeData* tmp;
+        const auto& ty = state.getLvalueType(rvSlot);
         auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
         if (!repr) {
             BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
@@ -3101,8 +3101,8 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
     } else if (rv.is_Enum()) {
         const auto& enumEnt = rv.as_Enum();
         auto dst = localState.getLval(rvSlot);
-        HIRTypeRef tmp;
-        const auto& ty = state.getLvalueType(tmp, rvSlot);
+        const HIRTypeData* tmp;
+        const auto& ty = state.getLvalueType(rvSlot);
         writeCtfeEnumVariant(resolve, localState, dst, ty, enumEnt.idx, callArgs.size(), [&](MIREvalValueRef fieldDst, size_t i) {
             fieldDst.copyFrom(state, MIREvalValueRef(callArgs[i]));
         });
@@ -3112,7 +3112,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
     }
 }
 
-void HIREvaluator::callConstDestructor(MIREvalCallStackEntry& localState, HIRTypeRef ty, const MIRLValue& slot) {
+void HIREvaluator::callConstDestructor(MIREvalCallStackEntry& localState, const HIRTypeData* ty, const MIRLValue& slot) {
     const auto& state = localState.state;
     auto& types = resolve.hirCrate().types;
 
@@ -3132,7 +3132,7 @@ void HIREvaluator::callConstDestructor(MIREvalCallStackEntry& localState, HIRTyp
     }
 }
 
-void HIREvaluator::runConstDrop(MIREvalCallStackEntry& localState, HIRTypeRef ty, const MIRLValue& slot) {
+void HIREvaluator::runConstDrop(MIREvalCallStackEntry& localState, const HIRTypeData* ty, const MIRLValue& slot) {
     const auto& state = localState.state;
     if (!localState.rootResolve.typeNeedsDropGlue(state.sp, ty)) {
         return;
@@ -3209,7 +3209,7 @@ EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MI
             if (innerAlloc->isConstHeapAllocation() || innerAlloc->isWritable()) {
                 ASSERT_BUG(this->rootSpan, innerAlloc->isAlive(), StringView("constant contains a pointer to a deallocated allocation"));
                 auto innerVal = allocationToEncoded(innerAlloc->getType(), *innerAlloc);
-                HIRTypeRef staticType;
+                const HIRTypeData* staticType;
                 size_t staticAlignment = 0;
                 if (innerAlloc->isConstHeapAllocation()) {
                     if (!innerAlloc->wasMadeGlobal()) {
@@ -3243,16 +3243,18 @@ EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MI
     return rv;
 }
 
-EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, HIRTypeRef exp) {
+EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, const HIRTypeData* exp) {
     return evaluateConstant(ip, expr, exp, MonomorphState(resolve.hirCrate().types));
 }
 
-EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, HIRTypeRef exp, MonomorphState ms) {
+EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, const HIRTypeData* exp, MonomorphState ms) {
     TRACE_FUNCTION_F(ip);
     DEBUG(StringView("ms = ") << ms);
-    const auto* mir = this->resolve.hirCrate().getOrGenMir(this->resolve.board(), ip, expr, exp);
+    const auto mirResult = this->resolve.hirCrate().getOrGenMir(this->resolve.board(), ip, expr, exp);
+    const auto* mir = mirResult.mir;
+    exp = mirResult.type;
 
-    resolve.revealOpaqueTypes(expr.span(), exp);
+    exp = resolve.revealOpaqueTypes(expr.span(), exp);
 
     if (mir) {
         ASSERT_BUG(Span(), expr.state, StringView(""));
@@ -3426,7 +3428,7 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
                 auto idx = static_cast<size_t>(&v - &params.values.front());
                 ASSERT_BUG(sp, idx < paramsDef->values.size(), StringView(""));
                 const HIRTypeData* ty = paramsDef->values[idx].type;
-                HIRTypeRef tmp;
+                const HIRTypeData* tmp;
                 if (monomorphiseTypeNeeded(ty)) {
                     MonomorphStatePtr ms(crate.types, nullptr, &params, &params);
                     ty = tmp = ms.monomorphType(sp, ty);
@@ -3518,7 +3520,7 @@ auto MonomorphAvailability::paramsFor(const HIRGenericRef& generic) const -> con
     }
 }
 
-[[nodiscard]] auto MonomorphAvailability::visitType(HIRTypeRef type) -> HIRTypeRef {
+[[nodiscard]] auto MonomorphAvailability::visitType(const HIRTypeData* type) -> const HIRTypeData* {
     if (!available) {
         return type;
     }
@@ -3600,7 +3602,7 @@ auto ExprCaptureScan::addType(const HIRGenericRef& g) -> void {
     }
 }
 
-[[nodiscard]] auto ExprCaptureScan::visitType(HIRTypeRef ty) -> HIRTypeRef {
+[[nodiscard]] auto ExprCaptureScan::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
     if (ty) {
         if (ty->flags & (HIRTypeData::HAS_UNEVALUATED_CONST | HIRTypeData::HAS_DEFERRED_CONST)) {
             out.unknown = true;
@@ -3643,7 +3645,7 @@ NewvalStateNop::NewvalStateNop(const Span& sp)
 {
 }
 
-auto NewvalStateNop::newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) -> HIRPath {
+auto NewvalStateNop::newStatic(const HIRTypeData* type, EncodedLiteral value, size_t alignment) -> HIRPath {
     TODO(this->sp, StringView("new_static while evaluating a const generic"));
 }
 
@@ -3655,8 +3657,8 @@ NewvalState::NewvalState(const HIRModule& mod, const HIRItemPath& modPath, std::
 {
 }
 
-auto NewvalState::newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) -> HIRPath {
-    ASSERT_BUG(Span(), type != HIRTypeRef(), StringView(""));
+auto NewvalState::newStatic(const HIRTypeData* type, EncodedLiteral value, size_t alignment) -> HIRPath {
+    ASSERT_BUG(Span(), type != nullptr, StringView(""));
     auto name = RcString::newInterned(FMT(namePrefix << nextItemIdx));
     nextItemIdx++;
     auto rv = modPath.getSimplePath() + name.c_str();
@@ -4455,7 +4457,7 @@ auto MIREvalPathCallback::write(ZeroCopyOutput& os) const -> void {
     os << path;
 }
 
-MIREvalCallStackEntry::MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameIndex, const Span& rootSpan, const StaticTraitResolve& resolve, const MIREvalPathCallback& printPath, HIRTypeRef expTy, std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs, const MIRFunction& fcn, MonomorphState ms, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller)
+MIREvalCallStackEntry::MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameIndex, const Span& rootSpan, const StaticTraitResolve& resolve, const MIREvalPathCallback& printPath, const HIRTypeData* expTy, std::vector<std::pair<HIRPattern, const HIRTypeData*>> argDefs, const MIRFunction& fcn, MonomorphState ms, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller)
     : valuePool(valuePool)
     , frameIndex(frameIndex)
     , argDefs(std::move(argDefs))
@@ -4476,7 +4478,7 @@ MIREvalCallStackEntry::MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameI
     locals.reserve(state.fcn.locals.length());
     for (size_t i = 0; i < state.fcn.locals.length(); i++) {
         auto localType = state.resolve.monomorphExpand(state.sp, state.fcn.locals[i], this->ms);
-        state.resolve.revealOpaqueTypes(state.sp, localType);
+        localType = state.resolve.revealOpaqueTypes(state.sp, localType);
         localTypes.pushBack(std::move(localType));
         locals.push_back(MIREvalAllocationPtr::allocate(valuePool, rootResolve, state, localTypes.back()));
     }
@@ -4485,9 +4487,9 @@ MIREvalCallStackEntry::MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameI
     state.monomorphedLocals = &localTypes;
 }
 
-auto MIREvalCallStackEntry::monomorphExpand(const HIRTypeData* ty) const -> HIRTypeRef {
+auto MIREvalCallStackEntry::monomorphExpand(const HIRTypeData* ty) const -> const HIRTypeData* {
     auto rv = this->resolve.monomorphExpand(this->state.sp, ty, this->ms);
-    this->resolve.revealOpaqueTypes(this->state.sp, rv);
+    rv = this->resolve.revealOpaqueTypes(this->state.sp, rv);
     return rv;
 }
 
@@ -4701,11 +4703,11 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRTypeData* ty, MIREva
     MIR_BUG(state, StringView("Unreachable type while checking a constant drop"));
 }
 
-auto MIREvalCallStackEntry::getStaticrefMono(const HIRPath& p, HIRTypeRef* outTy) const -> MIREvalStaticRefPtr {
+auto MIREvalCallStackEntry::getStaticrefMono(const HIRPath& p, const HIRTypeData** outTy) const -> MIREvalStaticRefPtr {
     return getStaticref(ms.monomorphPath(state.sp, p), outTy);
 }
 
-auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> MIREvalStaticRefPtr {
+auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRTypeData** outTy) const -> MIREvalStaticRefPtr {
     rootResolve.revealOpaqueTypesPath(state.sp, p);
     if (visitPathTysWith(p, [&](const auto& ty) -> bool {
         return ty->is_Generic();
@@ -4795,7 +4797,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
 }
 
 auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, u64* rawAddress) -> MIREvalValueRef {
-    HIRTypeRef tmpTy = nullptr;
+    const HIRTypeData* tmpTy = nullptr;
     const HIRTypeData* typ = nullptr;
     MIREvalValueRef metadata;
     MIREvalValueRef val;
@@ -4823,7 +4825,7 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
             decltype(lv.root.as_Static()) e = lv.root.as_Static();
             val = MIREvalValueRef(getStaticrefMono(e, lv.wrappers.empty() ? nullptr : &tmpTy));
             if (!lv.wrappers.empty()) {
-                MIR_ASSERT(state, tmpTy != HIRTypeRef(), StringView("Type not set?"));
+                MIR_ASSERT(state, tmpTy != nullptr, StringView("Type not set?"));
             }
             typ = tmpTy;
             break;
@@ -4976,7 +4978,7 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
     return val;
 }
 
-auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) const -> const EncodedLiteral& {
+auto MIREvalCallStackEntry::getConst(const HIRPath& inP, const HIRTypeData** outTy) const -> const EncodedLiteral& {
     auto p = ms.monomorphPath(state.sp, inP);
     rootResolve.revealOpaqueTypesPath(state.sp, p);
     if (visitPathTysWith(p, [&](const auto& ty) -> bool {
@@ -4995,7 +4997,7 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) cons
     if (c.valueState == HIRConstant::ValueState::Unknown) {
         auto& item = const_cast<HIRConstant&>(c);
         {
-            HIRTypeRef bodyTy = item.type;
+            const HIRTypeData* bodyTy = item.type;
             rootResolve.hirCrate().getOrGenMir(rootResolve.board(), HIRItemPath(p), item.value, bodyTy);
         }
         const auto& caps = exprCaptures(rootResolve.crate.types, item.value);
@@ -5106,7 +5108,7 @@ auto MIREvalCallStackEntry::writeConst(MIREvalValueRef dst, const MIRConstant& c
         }
         case MIRConstant::TAG_Const: {
             auto& e2 = c.as_Const();
-            HIRTypeRef ty;
+            const HIRTypeData* ty;
             BUG_ASSERT(e2.p);
             const auto& encoded = getConst(*e2.p, &ty);
 
@@ -5788,7 +5790,7 @@ auto Expander::visitArraysize(HIRArraySize& as) -> void {
     }
 }
 
-[[nodiscard]] auto Expander::visitType(HIRTypeRef ty) -> HIRTypeRef {
+[[nodiscard]] auto Expander::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
     ty = visitTypeDefaultViaHooks(ty);
 
     if (ty->is_Array()) {
@@ -5955,7 +5957,7 @@ auto Expander::visitExpr(HIRExprPtr& expr) -> void {
         {
         }
 
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override {
             DEBUG(StringView("expr type ") << ty);
             return exp.visitType(ty);
         }

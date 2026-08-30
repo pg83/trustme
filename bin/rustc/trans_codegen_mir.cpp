@@ -81,7 +81,7 @@ namespace {
 
         void emitGlobalAsm(const HIRGlobalAssembly&) override;
 
-        const HIRTypeData* monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunction& item, const TransParams& params);
+        const HIRTypeData* monomorphiseFcnReturn(const HIRFunction& item, const TransParams& params);
     };
 
     template <typename T>
@@ -181,7 +181,7 @@ auto CodeGeneratorMonoMir::emitType(const HIRTypeData* ty) -> void {
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("type ") << ty;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
     if (const auto* te = ty->opt_Tuple()) {
@@ -275,16 +275,16 @@ auto CodeGeneratorMonoMir::emitStruct(const Span& sp, const HIRGenericPath& p, c
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("struct ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
     auto dropGluePath = HIRPath(crate.types.path(p.clone(), &item), "#drop_glue");
 
     TRACE_FUNCTION_F(p);
-    HIRTypeRef ty = crate.types.path(p.clone(), &item);
+    const HIRTypeData* ty = crate.types.path(p.clone(), &item);
 
     struct H {
-        static HIRTypeRef getMetadataType(const Span& sp, const ::StaticTraitResolve& resolve, const TypeRepr& r) {
+        static const HIRTypeData* getMetadataType(const Span& sp, const ::StaticTraitResolve& resolve, const TypeRepr& r) {
             ASSERT_BUG(sp, r.fields.size() > 0, StringView(""));
             auto& t = r.fields.back().ty;
             if (t->is_Primitive() && t->as_Primitive() == HIRCoreType::Str) {
@@ -331,10 +331,10 @@ auto CodeGeneratorMonoMir::emitStruct(const Span& sp, const HIRGenericPath& p, c
 
 auto CodeGeneratorMonoMir::emitConstructorEnum(const Span& sp, const HIRGenericPath& varPath, const HIREnum& item, size_t varIdx) -> void {
     TRACE_FUNCTION_F(varPath);
-    HIRTypeRef tmp;
+    const HIRTypeData* tmp;
     MonomorphStatePtr ms(crate.types, nullptr, &varPath.params, nullptr);
     auto monomorph = [&](const auto& x) {
-        return resolve_.monomorphExpandOpt(sp, tmp, x, ms);
+        return resolve_.monomorphExpandOpt(sp, x, ms);
     };
 
     auto enumPath = varPath.clone();
@@ -367,10 +367,10 @@ auto CodeGeneratorMonoMir::emitConstructorEnum(const Span& sp, const HIRGenericP
 
 auto CodeGeneratorMonoMir::emitConstructorStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) -> void {
     TRACE_FUNCTION_F(p);
-    HIRTypeRef tmp;
+    const HIRTypeData* tmp;
     MonomorphStatePtr ms(crate.types, nullptr, &p.params, nullptr);
     auto monomorph = [&](const auto& x) {
-        return resolve_.monomorphExpandOpt(sp, tmp, x, ms);
+        return resolve_.monomorphExpandOpt(sp, x, ms);
     };
     const auto& e = item.data.as_Tuple();
     of << StringView("/* ") << p << StringView(" */\n");
@@ -401,11 +401,11 @@ auto CodeGeneratorMonoMir::emitUnion(const Span& sp, const HIRGenericPath& p, co
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("union ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
     TRACE_FUNCTION_F(p);
-    HIRTypeRef ty = crate.types.path(p.clone(), &item);
+    const HIRTypeData* ty = crate.types.path(p.clone(), &item);
 
     bool hasDropGlue = resolve_.typeNeedsDropGlue(sp, ty);
     auto dropGluePath = HIRPath(ty, "#drop_glue");
@@ -428,10 +428,10 @@ auto CodeGeneratorMonoMir::emitEnum(const Span& sp, const HIRGenericPath& p, con
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("enum ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
-    HIRTypeRef ty = crate.types.path(p.clone(), &item);
+    const HIRTypeData* ty = crate.types.path(p.clone(), &item);
 
     bool hasDropGlue = resolve_.typeNeedsDropGlue(sp, ty);
     auto dropGluePath = HIRPath(ty, "#drop_glue");
@@ -542,7 +542,7 @@ auto CodeGeneratorMonoMir::emitStaticLocal(const HIRPath& p, const HIRStatic& it
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("static ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
     TRACE_FUNCTION_F(p);
@@ -574,12 +574,12 @@ auto CodeGeneratorMonoMir::emitFunctionExt(const HIRPath& p, const HIRFunction& 
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("extern fn ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
     if (item.linkage.name != "") {
-        HIRTypeRef retTypeTmp;
-        const auto& retType = monomorphiseFcnReturn(retTypeTmp, item, params);
+        const HIRTypeData* retTypeTmp;
+        const auto& retType = monomorphiseFcnReturn(item, params);
 
         of << StringView("/* ") << p << StringView(" */\n");
         of << StringView("fn ") << fmt(p) << StringView("(");
@@ -602,8 +602,8 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
         argTypes.push_back(std::make_pair(HIRPattern{}, params.monomorph(resolve_, ent.second)));
     }
 
-    HIRTypeRef retTypeTmp;
-    const auto& retType = monomorphiseFcnReturn(retTypeTmp, item, params);
+    const HIRTypeData* retTypeTmp;
+    const auto& retType = monomorphiseFcnReturn(item, params);
 
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << p;
@@ -1145,28 +1145,26 @@ auto CodeGeneratorMonoMir::emitGlobalAsm(const HIRGlobalAssembly&) -> void {
     TODO(Span(), StringView("global_asm! codegen"));
 }
 
-auto CodeGeneratorMonoMir::monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunction& item, const TransParams& params) -> const HIRTypeData* {
+auto CodeGeneratorMonoMir::monomorphiseFcnReturn(const HIRFunction& item, const TransParams& params) -> const HIRTypeData* {
     bool hasErased = visitTyWith(item.returnType, [&](const auto& x) {
         return x->is_ErasedType();
     });
 
     if (hasErased || monomorphiseTypeNeeded(item.returnType)) {
         if (hasErased) {
-            tmp = cloneTyWith(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
+            auto result = cloneTyWith(crate.types, sp, item.returnType, [&](const auto* x) -> const HIRTypeData* {
                 if (const auto* te = x->opt_ErasedType()) {
                     if (const auto* e = te->inner.opt_Fcn()) {
-                        out = item.code.erasedTypes[e->index];
-                        return true;
+                        return item.code.erasedTypes[e->index];
                     }
                 }
-                return false;
+                return nullptr;
             });
-            tmp = params.monomorphType(Span(), tmp);
+            result = params.monomorphType(Span(), result);
+            return resolve_.expandAssociatedTypes(Span(), result);
         } else {
-            tmp = params.monomorphType(Span(), item.returnType);
+            return resolve_.expandAssociatedTypes(Span(), params.monomorphType(Span(), item.returnType));
         }
-        resolve_.expandAssociatedTypes(Span(), tmp);
-        return tmp;
     } else {
         return item.returnType;
     }
@@ -1191,7 +1189,7 @@ void stl::output<ZeroCopyOutput, Fmt<HIRSimplePath>>(ZeroCopyOutput& os, Fmt<HIR
 }
 
 template <>
-void stl::output<ZeroCopyOutput, Fmt<HIRTypeRef>>(ZeroCopyOutput& os, Fmt<HIRTypeRef> x) {
+void stl::output<ZeroCopyOutput, Fmt<const HIRTypeData*>>(ZeroCopyOutput& os, Fmt<const HIRTypeData*> x) {
     {
         auto& tuMatch = (*x.e);
         switch (tuMatch.tag()) {

@@ -55,7 +55,7 @@ namespace {
 
         void visitPathParams(HIRPathParams& pp) override;
 
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
 
         void visitGenericPath(HIRGenericPath& p, PathContext pc) override;
 
@@ -255,7 +255,7 @@ auto TypecheckVisitor::checkParameters(const Span& sp, const HIRSimplePath& used
     }
 
     for (unsigned int i = 0; i < paramVals.types.size(); i++) {
-        if (paramVals.types[i] == HIRTypeRef()) {
+        if (paramVals.types[i] == nullptr) {
             // TODO: Why is this pulling in the default? Why not just leave it as-is
 
             // TODO: Monomorphise?
@@ -308,7 +308,7 @@ auto TypecheckVisitor::visitPathParams(HIRPathParams& pp) -> void {
     HIRVisitor::visitPathParams(pp);
 }
 
-[[nodiscard]] auto TypecheckVisitor::visitType(HIRTypeRef ty) -> HIRTypeRef {
+[[nodiscard]] auto TypecheckVisitor::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
     Span _sp;
     const Span& sp = _sp;
 
@@ -461,12 +461,12 @@ auto TypecheckVisitor::visitPathParams(HIRPathParams& pp) -> void {
             }
             case HIRPath::Data::TAG_UfcsInherent: {
                 TRACE_FUNCTION_FR(StringView("UfcsInherent - ") << ty, ty);
-                resolve_.expandAssociatedTypes(sp, ty);
+                ty = resolve_.expandAssociatedTypes(sp, ty);
                 break;
             }
             case HIRPath::Data::TAG_UfcsKnown: {
                 TRACE_FUNCTION_FR(StringView("UfcsKnown - ") << ty, ty);
-                resolve_.expandAssociatedTypes(sp, ty);
+                ty = resolve_.expandAssociatedTypes(sp, ty);
                 break;
             }
         }
@@ -856,11 +856,11 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
             auto fcnParams = traitFcn.params.makeNopParams(crate.types, 1);
             MonomorphStatePtr ms{crate.types, impl.type, &impl.traitArgs, &fcnParams};
             ms.setConstevalState(resolve_.board(), HIRItemPath(traitPath));
-            HIRTypeRef tmp;
+            const HIRTypeData* tmp;
             auto maybeMonomorph = [&](const HIRTypeData* ty) -> const HIRTypeData* {
                 if (monomorphiseTypeNeeded(ty)) {
                     tmp = ms.monomorphType(sp, ty);
-                    resolve_.expandAssociatedTypes(sp, tmp);
+                    tmp = resolve_.expandAssociatedTypes(sp, tmp);
                     return tmp;
                 } else {
                     return ty;
@@ -883,8 +883,8 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
             for (size_t i = 0; i < std::min(implFcn.args.size(), traitFcn.args.size()); i++) {
                 if (!(i == 0 && (traitFcn.receiver == HIRFunction::Receiver::Free || implFcn.receiver == HIRFunction::Receiver::Free))) {
                     const auto& expTy = maybeMonomorph(traitFcn.args[i].second);
-                    HIRTypeRef hasTy = implFcn.args[i].second;
-                    resolve_.expandAssociatedTypes(sp, hasTy);
+                    const HIRTypeData* hasTy = implFcn.args[i].second;
+                    hasTy = resolve_.expandAssociatedTypes(sp, hasTy);
 
                     if (expTy != hasTy && !expTy->equalsIgnoringRegions(hasTy)) {
                         failures.push_back(FMT(StringView("Argument ") << 1 + i << StringView(" mismatch - expected ") << expTy << StringView(", got ") << hasTy));
@@ -932,29 +932,27 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
 
             const auto& expRetTy1 = maybeMonomorph(traitFcn.returnType);
             auto implRetTy = implFcn.returnType;
-            resolve_.expandAssociatedTypes(sp, implRetTy);
+            implRetTy = resolve_.expandAssociatedTypes(sp, implRetTy);
             if (!expRetTy1->matchTestGenerics(sp, implRetTy, HIRResolvePlaceholdersNop(), matchCb)) {
                 failures.push_back(FMT(StringView("Mismatched return type:\n") << StringView("  Expected ") << expRetTy1 << StringView("\n") << StringView("  Found    ") << implRetTy));
             }
-            HIRTypeRef expRetTyReal;
-            const auto& expRetTy = matchCb.mapping.empty() && matchCb.rpitMapping.empty() ? expRetTy1 : (expRetTyReal = cloneTyWith(crate.types, sp, expRetTy1, [&](const HIRTypeData* ref, HIRTypeRef& out) -> bool {
+            const HIRTypeData* expRetTyReal;
+            const auto& expRetTy = matchCb.mapping.empty() && matchCb.rpitMapping.empty() ? expRetTy1 : (expRetTyReal = cloneTyWith(crate.types, sp, expRetTy1, [&](const HIRTypeData* ref) -> const HIRTypeData* {
                 if (const auto* erased = ref->opt_ErasedType(); erased && erased->inner.is_Fcn()) {
                     const auto it = matchCb.rpitMapping.find(erased->inner.as_Fcn().index);
                     if (it != matchCb.rpitMapping.end()) {
-                        out = it->second;
-                        return true;
+                        return it->second;
                     }
                 }
                 if (const auto* tyP = ref->opt_Path()) {
                     if (const auto* pathP = tyP->path.data.opt_UfcsKnown()) {
                         auto it = matchCb.mapping.find(pathP->item);
                         if (it != matchCb.mapping.end()) {
-                            out = it->second;
-                            return true;
+                            return it->second;
                         }
                     }
                 }
-                return false;
+                return nullptr;
             }));
 
             if (!failures.empty()) {
@@ -998,7 +996,7 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
                 implFcn.traitReturnType = expRetTy1;
                 for (const auto& mapping : matchCb.rpitMapping) {
                     const auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << e.first << StringView("_") << mapping.first));
-                    impl.types.insert(std::make_pair(name, HIRTraitImpl::ImplEnt<HIRTypeRef>{e.second.isSpecialisable, mapping.second}));
+                    impl.types.insert(std::make_pair(name, HIRTraitImpl::ImplEnt<const HIRTypeData*>{e.second.isSpecialisable, mapping.second}));
                 }
             }
             implFcn.returnType = expRetTy;

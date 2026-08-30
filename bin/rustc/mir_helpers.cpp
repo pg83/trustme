@@ -167,8 +167,8 @@ namespace {
                 , visitedStatements()
             {
                 visitedStatements.zero(lifetimes.stmtBitmap.length());
-                HIRTypeRef tmp;
-                isCopy = mirRes.resolve.typeIsCopy(localMirRes.sp, mirRes.getLvalueType(tmp, lv));
+                const HIRTypeData* tmp;
+                isCopy = mirRes.resolve.typeIsCopy(localMirRes.sp, mirRes.getLvalueType(lv));
             }
 
             void runBlock(size_t bbIdx, size_t stmtIdx, State state) {
@@ -528,25 +528,22 @@ const MIRBasicBlock& MIRTypeResolve::getBlock(MIRBasicBlockId id) const {
     return fcn.blocks[id];
 }
 
-const HIRTypeData* MIRTypeResolve::getStaticType(HIRTypeRef& tmp, const HIRPath& path) const {
+const HIRTypeData* MIRTypeResolve::getStaticType(const HIRPath& path) const {
     if (path.data.is_UfcsInherent() && path.data.as_UfcsInherent().item == "#type_id") {
-        tmp = crate.types.unit();
-        return tmp;
+        return crate.types.unit();
     }
     MonomorphState ms(crate.types);
     auto v = resolve.getValue(this->sp, path, ms, /*signature_only*/ true);
     MIR_ASSERT(*this, v.is_Static(), StringView("LValue::Static not a static - ") << path << StringView(" : ") << v.tagStr());
     MIR_ASSERT(*this, v.as_Static(), StringView("LValue::Static is null? - ") << path << StringView(" : ") << v.tagStr());
     if (ms.hasTypes()) {
-        tmp = ms.monomorphType(sp, v.as_Static()->type);
-        resolve.expandAssociatedTypes(this->sp, tmp);
-        return tmp;
+        return resolve.expandAssociatedTypes(this->sp, ms.monomorphType(sp, v.as_Static()->type));
     } else {
         return v.as_Static()->type;
     }
 }
 
-const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValue& val, unsigned wrapperSkipCount /*=0*/) const {
+const HIRTypeData* MIRTypeResolve::getLvalueType(const MIRLValue& val, unsigned wrapperSkipCount /*=0*/) const {
     const HIRTypeData* rv = nullptr;
     switch (val.root.tag()) {
         case MIRLValue::Storage::TAG_Return: {
@@ -567,7 +564,7 @@ const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValu
         }
         case MIRLValue::Storage::TAG_Static: {
             decltype(val.root.as_Static()) e = val.root.as_Static();
-            rv = getStaticType(tmp, e);
+            rv = getStaticType(e);
             break;
         }
     }
@@ -578,7 +575,7 @@ const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValu
             if (&w == stopWrapper) {
                 break;
             }
-            rv = this->getUnwrappedType(tmp, w, rv);
+            rv = this->getUnwrappedType(w, rv);
         }
     } else {
         BUG_ASSERT(wrapperSkipCount == 0);
@@ -586,7 +583,7 @@ const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValu
     return rv;
 }
 
-const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLValue::Wrapper& w, const HIRTypeData* ty) const {
+const HIRTypeData* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, const HIRTypeData* ty) const {
     switch (w.tag()) {
         case MIRLValue::Wrapper::TAG_Field: {
             decltype(w.as_Field()) fieldIndex = w.as_Field();
@@ -613,7 +610,7 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
                     if (const auto* tep = te.binding.opt_Struct()) {
                         const auto& str = **tep;
                         auto maybeMonomorph = [&](const auto& fieldType) {
-                            return resolve.monomorphExpandOpt(sp, tmp, fieldType, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
+                            return resolve.monomorphExpandOpt(sp, fieldType, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                         };
                         switch (str.data.tag()) {
                             case HIRStructData::TAG_Unit: {
@@ -636,7 +633,7 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
                     } else if (const auto* tep = te.binding.opt_Union()) {
                         const auto& unm = **tep;
                         auto maybeMonomorph = [&](const HIRTypeData* t) -> const HIRTypeData* {
-                            return resolve.monomorphExpandOpt(sp, tmp, t, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
+                            return resolve.monomorphExpandOpt(sp, t, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                         };
                         MIR_ASSERT(*this, fieldIndex < unm.variants.size(), StringView("Field index out of range for union"));
                         return maybeMonomorph(unm.variants.at(fieldIndex).ty);
@@ -705,14 +702,14 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
                         const auto& variant = variants[variantIndex];
 
                         const auto& varTy = variant.type;
-                        return resolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
+                        return resolve.monomorphExpandOpt(sp, varTy, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                     } else {
                         const auto& unm = *te.binding.as_Union();
                         MIR_ASSERT(*this, variantIndex < unm.variants.size(), StringView("Variant index out of range"));
                         const auto& variant = unm.variants[variantIndex];
                         const auto& varTy = variant.ty;
 
-                        return resolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
+                        return resolve.monomorphExpandOpt(sp, varTy, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                     }
                     break;
                 }
@@ -723,26 +720,25 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
     UNREACHABLE();
 }
 
-const HIRTypeData* MIRTypeResolve::getParamType(HIRTypeRef& tmp, const MIRParam& val) const {
+const HIRTypeData* MIRTypeResolve::getParamType(const MIRParam& val) const {
     switch (val.tag()) {
         case MIRParam::TAG_LValue: {
             auto& e = val.as_LValue();
-            return getLvalueType(tmp, e);
+            return getLvalueType(e);
         }
         case MIRParam::TAG_Constant: {
             auto& e = val.as_Constant();
-            return tmp = getConstType(e);
+            return getConstType(e);
         }
         case MIRParam::TAG_Borrow: {
             auto& e = val.as_Borrow();
-            HIRTypeRef tmp2;
-            return tmp = crate.types.borrow(e.type, getLvalueType(tmp2, e.val));
+            return crate.types.borrow(e.type, getLvalueType(e.val));
         }
     }
     UNREACHABLE();
 }
 
-HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
+const HIRTypeData* MIRTypeResolve::getConstType(const MIRConstant& c) const {
     switch (c.tag()) {
         case MIRConstant::TAG_Int: {
             auto& e = c.as_Int();
@@ -778,7 +774,7 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                 const auto& ty = (*ve)->type;
                 if (monomorphiseTypeNeeded(ty)) {
                     auto rv = p.monomorphType(this->sp, ty);
-                    resolve.expandAssociatedTypes(this->sp, rv);
+                    rv = resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 } else {
                     return ty;
@@ -833,7 +829,7 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                     if (e->data.is_UfcsKnown()) {
                         const auto& pe = e->data.as_UfcsKnown();
                         if (pe.item == "vtable#" && pe.trait.path == HIRSimplePath()) {
-                            Vector<HIRTypeRef> fields;
+                            Vector<const HIRTypeData*> fields;
                             fields.pushBack(crate.types.primitive(HIRCoreType::Usize));
                             fields.pushBack(crate.types.primitive(HIRCoreType::Usize));
                             fields.pushBack(crate.types.primitive(HIRCoreType::Usize));
@@ -846,10 +842,10 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                 case TypeckValuePtr::TAG_Constant: {
                     auto& ve = v.as_Constant();
                     const auto& ty = ve->type;
-                    HIRTypeRef rv;
+                    const HIRTypeData* rv;
                     if (monomorphiseTypeNeeded(ty)) {
                         rv = p.monomorphType(this->sp, ty);
-                        resolve.expandAssociatedTypes(this->sp, rv);
+                        rv = resolve.expandAssociatedTypes(this->sp, rv);
                     } else {
                         rv = ty;
                     }
@@ -858,10 +854,10 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                 case TypeckValuePtr::TAG_Static: {
                     auto& ve = v.as_Static();
                     const auto& ty = ve->type;
-                    HIRTypeRef rv;
+                    const HIRTypeData* rv;
                     if (monomorphiseTypeNeeded(ty)) {
                         rv = p.monomorphType(this->sp, ty);
-                        resolve.expandAssociatedTypes(this->sp, rv);
+                        rv = resolve.expandAssociatedTypes(this->sp, rv);
                     } else {
                         rv = ty;
                     }
@@ -870,7 +866,7 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                 case TypeckValuePtr::TAG_Function: {
                     auto& ve = v.as_Function();
                     auto rv = crate.types.function((HIRTypeData::Data_NamedFunction{e->clone(), ve}).decay(crate.types, this->sp));
-                    resolve.expandAssociatedTypes(this->sp, rv);
+                    rv = resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
                 case TypeckValuePtr::TAG_EnumValue: {
@@ -880,7 +876,7 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                 case TypeckValuePtr::TAG_EnumConstructor: {
                     auto& ve = v.as_EnumConstructor();
                     auto rv = crate.types.function((HIRTypeData::Data_NamedFunction{e->clone(), HIRTypeDataNamedFunctionTy::make_EnumConstructor({ve.e, ve.v})}).decay(crate.types, this->sp));
-                    resolve.expandAssociatedTypes(this->sp, rv);
+                    rv = resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
                 case TypeckValuePtr::TAG_StructConstant: {
@@ -890,7 +886,7 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                 case TypeckValuePtr::TAG_StructConstructor: {
                     auto& ve = v.as_StructConstructor();
                     auto rv = crate.types.function((HIRTypeData::Data_NamedFunction{e->clone(), ve.s}).decay(crate.types, this->sp));
-                    resolve.expandAssociatedTypes(this->sp, rv);
+                    rv = resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
             }
@@ -901,8 +897,8 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
 }
 
 bool MIRTypeResolve::lvalueIsCopy(const MIRLValue& val) const {
-    HIRTypeRef tmp;
-    return resolve.typeIsCopy(this->sp, getLvalueType(tmp, val));
+    const HIRTypeData* tmp;
+    return resolve.typeIsCopy(this->sp, getLvalueType(val));
 }
 
 const HIRTypeData* MIRTypeResolve::isTypeOwnedBox(const HIRTypeData* ty) const {

@@ -11,7 +11,6 @@ struct HIRSimplePath;
 class HIRGenericPath;
 class HIRPath;
 class HIRTypeData;
-using HIRTypeRef = const HIRTypeData*;
 
 void TransCreateManglingContext(WireBoard& wb, stl::ObjPool& pool);
 RcString TransMangle(const WireBoard& wb, const HIRSimplePath& path);

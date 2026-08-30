@@ -366,8 +366,8 @@ bool HIRSimplePath::startsWith(const HIRSimplePath& x, bool skipLast /*=false*/)
 HIRPathParams::HIRPathParams() {
 }
 
-HIRPathParams::HIRPathParams(HIRTypeRef ty0) {
-    types = ThinVector<HIRTypeRef>(1);
+HIRPathParams::HIRPathParams(const HIRTypeData* ty0) {
+    types = ThinVector<const HIRTypeData*>(1);
     types[0] = std::move(ty0);
 }
 
@@ -492,12 +492,12 @@ HIRPath::HIRPath(HIRSimplePath sp)
 {
 }
 
-HIRPath::HIRPath(HIRTypeRef ty, RcString item, HIRPathParams itemParams)
+HIRPath::HIRPath(const HIRTypeData* ty, RcString item, HIRPathParams itemParams)
     : data(Data::make_UfcsInherent({mv$(ty), mv$(item), mv$(itemParams)}))
 {
 }
 
-HIRPath::HIRPath(HIRTypeRef ty, HIRGenericPath trait, RcString item, HIRPathParams itemParams)
+HIRPath::HIRPath(const HIRTypeData* ty, HIRGenericPath trait, RcString item, HIRPathParams itemParams)
     : data(Data::make_UfcsKnown({mv$(ty), mv$(trait), mv$(item), mv$(itemParams)}))
 {
 }

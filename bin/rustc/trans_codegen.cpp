@@ -56,7 +56,7 @@ namespace {
 
         void addDependency(FunctionOrderNode& source, const HIRPath& path);
 
-        void addDropDependency(FunctionOrderNode& source, HIRTypeRef type);
+        void addDropDependency(FunctionOrderNode& source, const HIRTypeData* type);
 
         void collectDependencies(FunctionOrderNode& source);
 
@@ -338,7 +338,7 @@ auto FunctionOrder::addDependency(FunctionOrderNode& source, const HIRPath& path
     source.selfEdge = source.selfEdge || target == &source;
 }
 
-auto FunctionOrder::addDropDependency(FunctionOrderNode& source, HIRTypeRef type) -> void {
+auto FunctionOrder::addDropDependency(FunctionOrderNode& source, const HIRTypeData* type) -> void {
     if (!resolve.typeNeedsDropGlue(sp, type)) {
         return;
     }
@@ -403,13 +403,14 @@ auto FunctionOrder::collectDependencies(FunctionOrderNode& source) -> void {
         {
         }
 
-        void visitType(HIRTypeRef type) override {
-            visitTyWith(type, [&](HIRTypeRef nested) {
+        const HIRTypeData* visitType(const HIRTypeData* type) override {
+            visitTyWith(type, [&](const HIRTypeData* nested) {
                 if (const auto* function = nested->opt_NamedFunction()) {
                     order.addDependency(source, function->path);
                 }
                 return false;
             });
+            return type;
         }
 
         void visitPath(const HIRPath& path) override {
@@ -419,8 +420,8 @@ auto FunctionOrder::collectDependencies(FunctionOrderNode& source) -> void {
 
         bool visitTerminator(const MIRTerminator& terminator) override {
             if (const auto* drop = terminator.opt_Drop()) {
-                HIRTypeRef tmp;
-                order.addDropDependency(source, mirResolve.getLvalueType(tmp, drop->slot));
+                const HIRTypeData* tmp;
+                order.addDropDependency(source, mirResolve.getLvalueType(drop->slot));
             }
             const MIRCallTarget* callTarget = nullptr;
             if (const auto* call = terminator.opt_Call()) {

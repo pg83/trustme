@@ -10,7 +10,6 @@
 #include <cstdint>
 
 class HIRTypeData;
-using HIRTypeRef = const HIRTypeData*;
 class HIRTypeInterner;
 class HIRMatchGenerics;
 
@@ -24,9 +23,9 @@ struct HIRTypeUidOrder {
     }
 };
 
-using HIRTypeRefSet = std::set<HIRTypeRef, HIRTypeUidOrder>;
+using HIRTypeRefSet = std::set<const HIRTypeData*, HIRTypeUidOrder>;
 template <typename V>
-using HIRTypeRefMap = std::map<HIRTypeRef, V, HIRTypeUidOrder>;
+using HIRTypeRefMap = std::map<const HIRTypeData*, V, HIRTypeUidOrder>;
 
 struct HIRGenericRef;
 struct HIRSimplePath;

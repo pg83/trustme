@@ -27,7 +27,7 @@ namespace {
 
         void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override;
 
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
 
         void visitGlobalAssembly(HIRGlobalAssembly& item) override;
 
@@ -257,7 +257,7 @@ auto OuterVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl
     ms.popTraits(mod);
 }
 
-[[nodiscard]] auto OuterVisitor::visitType(HIRTypeRef ty) -> HIRTypeRef {
+[[nodiscard]] auto OuterVisitor::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
     if (ty->is_Array()) {
         auto data = ty->cloneData();
         auto& e = data.as_Array();

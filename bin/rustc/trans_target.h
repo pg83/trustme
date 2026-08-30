@@ -116,7 +116,7 @@ struct TypeRepr {
 
     struct Field {
         size_t offset;
-        HIRTypeRef ty;
+        const HIRTypeData* ty;
     };
 
     std::vector<Field> fields;

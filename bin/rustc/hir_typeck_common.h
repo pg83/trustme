@@ -31,10 +31,10 @@ public:
 
     void setConstevalState(const WireBoard& wb, HIRItemPath ip);
 
-    virtual HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const = 0;
+    virtual const HIRTypeData* getType(const Span& sp, const HIRGenericRef& g) const = 0;
     virtual HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const = 0;
 
-    virtual HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const;
+    virtual const HIRTypeData* monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const;
     HIRPath monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer = true) const;
     HIRTraitPath monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer) const;
     HIRTraitPath::AtyEqual monomorphTpAtyEqual(const Span& sp, const HIRTraitPath::AtyEqual& tpl, bool allowInfer) const;
@@ -44,7 +44,7 @@ public:
     virtual HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const;
     HIRArraySize monomorphArraysize(const Span& sp, const HIRArraySize& tpl) const;
 
-    const HIRTypeData* maybeMonomorphType(const Span& sp, HIRTypeRef& tmp, const HIRTypeData* ty, bool allowInfer = true) const;
+    const HIRTypeData* maybeMonomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const;
 };
 
 class MonomorphiserPP: public Monomorphiser {
@@ -56,7 +56,7 @@ public:
     virtual const HIRPathParams* getMethodParams() const = 0;
     virtual const HIRPathParams* getHrbParams() const = 0;
 
-    HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override;
+    const HIRTypeData* getType(const Span& sp, const HIRGenericRef& ty) const override;
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
 };
 
@@ -110,7 +110,7 @@ bool visitPathTysWith(const HIRPath& path, F f) {
 }
 
 struct HIRTypeRewriteCallback {
-    virtual bool rewrite(HIRTypeRef& rewritten, HIRTypeData& data) = 0;
+    virtual const HIRTypeData* rewrite(const HIRTypeData* type, HIRTypeData& data) = 0;
 };
 
 template <typename F>
@@ -122,28 +122,28 @@ struct HIRTypeRewriteCb final: HIRTypeRewriteCallback {
     {
     }
 
-    bool rewrite(HIRTypeRef& rewritten, HIRTypeData& data) override {
-        return f(rewritten, data);
+    const HIRTypeData* rewrite(const HIRTypeData* type, HIRTypeData& data) override {
+        return f(type, data);
     }
 };
 
-bool rewriteTyWithCb(HIRTypeInterner& types, HIRTypeRef& ty, HIRTypeRewriteCallback& callback);
-bool rewritePathTysWithCb(HIRTypeInterner& types, HIRPath& path, HIRTypeRewriteCallback& callback);
+const HIRTypeData* rewriteTyWithCb(HIRTypeInterner& types, const HIRTypeData* ty, HIRTypeRewriteCallback& callback);
+void rewritePathTysWithCb(HIRTypeInterner& types, HIRPath& path, HIRTypeRewriteCallback& callback);
 
 template <typename F>
-bool rewriteTyWith(HIRTypeInterner& types, HIRTypeRef& ty, F f) {
+const HIRTypeData* rewriteTyWith(HIRTypeInterner& types, const HIRTypeData* ty, F f) {
     HIRTypeRewriteCb<F> cb(f);
     return rewriteTyWithCb(types, ty, cb);
 }
 
 template <typename F>
-bool rewritePathTysWith(HIRTypeInterner& types, HIRPath& path, F f) {
+void rewritePathTysWith(HIRTypeInterner& types, HIRPath& path, F f) {
     HIRTypeRewriteCb<F> cb(f);
-    return rewritePathTysWithCb(types, path, cb);
+    rewritePathTysWithCb(types, path, cb);
 }
 
 struct HIRTypeCloneCallback {
-    virtual bool clone(const HIRTypeData* type, HIRTypeRef& replacement) = 0;
+    virtual const HIRTypeData* clone(const HIRTypeData* type) = 0;
 };
 
 template <typename F>
@@ -155,16 +155,16 @@ struct HIRTypeCloneCb final: HIRTypeCloneCallback {
     {
     }
 
-    bool clone(const HIRTypeData* type, HIRTypeRef& replacement) override {
-        return f(type, replacement);
+    const HIRTypeData* clone(const HIRTypeData* type) override {
+        return f(type);
     }
 };
 
-HIRTypeRef cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, HIRTypeCloneCallback& callback);
+const HIRTypeData* cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, HIRTypeCloneCallback& callback);
 HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, HIRTypeCloneCallback& callback);
 
 template <typename F>
-HIRTypeRef cloneTyWith(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, F f) {
+const HIRTypeData* cloneTyWith(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, F f) {
     HIRTypeCloneCb<F> cb(f);
     return cloneTyWithCb(types, sp, tpl, cb);
 }

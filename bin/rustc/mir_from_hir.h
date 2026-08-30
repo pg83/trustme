@@ -389,7 +389,7 @@ private:
     void completeScope(ScopeDef& sd);
 
 public:
-    HIRTypeRef valType(const Span& sp, const MIRLValue& val, const MIRLValue::Wrapper* stopWrapper = nullptr) const;
+    const HIRTypeData* valType(const Span& sp, const MIRLValue& val, const MIRLValue::Wrapper* stopWrapper = nullptr) const;
     bool lvalueIsCopy(const Span& sp, const MIRLValue& lv) const;
 
     MIRLValue getPtrToDst(const Span& sp, const MIRLValue& lv) const;
@@ -453,12 +453,11 @@ public:
 void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const stl::Vector<unsigned>& letElseInitializerTemps);
 void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRPattern& pat, MIRLValue val, const HIRExprNode* elseNode);
 
-void MIRLowerHIRGetTypeValueForPath(
+const HIRTypeData* MIRLowerHIRGetTypeValueForPath(
     const Span& sp,
     MirBuilder& builder,
     const HIRTypeData* topTy,
     const MIRLValue& topVal,
     const fieldPathT& fieldPath,
-    /*Out ->*/ HIRTypeRef& outTy,
     MIRLValue& outVal
 );

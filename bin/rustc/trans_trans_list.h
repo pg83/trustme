@@ -19,7 +19,7 @@ struct TransParams: public MonomorphiserPP {
     const HIRGenericParams* gdefImpl;
     HIRPathParams ppMethod;
     HIRPathParams ppImpl;
-    HIRTypeRef selfType;
+    const HIRTypeData* selfType;
     bool forceMonomorphisation;
 
     explicit TransParams(HIRTypeInterner& types);
@@ -33,11 +33,11 @@ struct TransParams: public MonomorphiserPP {
     TransParams(const TransParams&) = delete;
     TransParams& operator=(const TransParams&) = delete;
 
-    static TransParams newImpl(HIRTypeInterner& types, Span sp, HIRTypeRef ty, HIRPathParams implParams);
+    static TransParams newImpl(HIRTypeInterner& types, Span sp, const HIRTypeData* ty, HIRPathParams implParams);
 
-    const HIRTypeData* maybeMonomorph(const ::StaticTraitResolve& resolve, HIRTypeRef& tmp, const HIRTypeData* p) const;
+    const HIRTypeData* maybeMonomorph(const ::StaticTraitResolve& resolve, const HIRTypeData* p) const;
 
-    HIRTypeRef monomorph(const ::StaticTraitResolve& resolve, const HIRTypeData* p) const;
+    const HIRTypeData* monomorph(const ::StaticTraitResolve& resolve, const HIRTypeData* p) const;
     HIRPath monomorph(const ::StaticTraitResolve& resolve, const HIRPath& p) const;
     HIRGenericPath monomorph(const ::StaticTraitResolve& resolve, const HIRGenericPath& p) const;
     HIRPathParams monomorph(const ::StaticTraitResolve& resolve, const HIRPathParams& p) const;
@@ -56,7 +56,7 @@ struct TransParams: public MonomorphiserPP {
 };
 
 struct CachedFunction {
-    HIRTypeRef retTy;
+    const HIRTypeData* retTy;
     HIRFunction::argsT argTys;
     MIRFunctionPointer code;
 };
@@ -94,7 +94,7 @@ class TransList {
     std::unordered_map<std::string, HIRPath> staticSymbols;
 
     struct TypeEmissionState {
-        HIRTypeRef canonical;
+        const HIRTypeData* canonical;
         bool hasPrototype;
         bool hasDefinition;
     };
@@ -139,15 +139,15 @@ public:
     std::vector<std::unique_ptr<HIRStatic>> autoStatics;
     std::vector<std::unique_ptr<HIRFunction>> autoFunctions;
 
-    std::vector<std::pair<HIRTypeRef, bool>> types;
+    std::vector<std::pair<const HIRTypeData*, bool>> types;
 
     TransListFunction* addFunction(HIRTypeInterner& types, HIRPath p);
     TransListStatic* addStatic(HIRTypeInterner& types, HIRPath p);
     TransListConst* addConst(HIRTypeInterner& types, HIRPath p);
     TransListFunction* findFunction(const HIRPath& p);
     const TransListFunction* findFunction(const HIRPath& p) const;
-    bool hasType(HIRTypeRef type, bool shallow) const;
-    bool addType(HIRTypeRef type, bool shallow);
+    bool hasType(const HIRTypeData* type, bool shallow) const;
+    bool addType(const HIRTypeData* type, bool shallow);
     void clearTypes();
 
     bool addVtable(HIRPath p, TransParams pp) {

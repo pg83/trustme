@@ -83,7 +83,7 @@ namespace {
         HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
         HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds = false, ASTBoundConstness constness = ASTBoundConstness::Never);
         HIRPath LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
-        HIRTypeRef LowerHIRType(::ASTType* ty);
+        const HIRTypeData* LowerHIRType(::ASTType* ty);
         HIRTypeAlias LowerHIRTypeAlias(const HIRItemPath& p, const ASTTypeAlias& ta);
         tStructFields LowerHIRStructFields(HIRItemPath path, const HIRGenericParams& params, const std::vector<ASTStructItem>& inFields, HIRModule& outMod);
         HIRStruct LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStruct& ent, const ASTAttributeList& attrs, HIRModule& outMod);
@@ -204,7 +204,7 @@ namespace {
 
         DefaultFieldParamRebase(HIRTypeInterner& types, const HIRPathParams& itemArgs);
 
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override;
+        const HIRTypeData* getType(const Span& sp, const HIRGenericRef& generic) const override;
 
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
     };
@@ -214,7 +214,7 @@ namespace {
 
         explicit RebaseDefaultFieldParams(const Monomorphiser& monomorph);
 
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
+        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* type) override;
 
         void visitPathParams(HIRPathParams& params) override;
 
@@ -226,7 +226,7 @@ namespace {
 
         explicit RebaseDefaultFieldExpr(const Monomorphiser& monomorph);
 
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
+        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* type) override;
 
         void visitPathParams(HIRPathParams& params) override;
 
@@ -241,7 +241,7 @@ namespace {
 
         RpititTypeCollector(HIRTypeInterner& types, F callback);
 
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
     };
 
     template <typename F>
@@ -251,7 +251,7 @@ namespace {
 
         RpititNestedRewrite(HIRTypeInterner& types, const HIRTypeRefMap<size_t>& indices, F projection);
 
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
     };
 
     struct IndexVisitor: public HIRVisitor {
@@ -583,7 +583,7 @@ namespace {
     }
 
     void collectUsedTypeParams(HIRTypeInterner& types, const Span& sp, const HIRTypeData* ty, std::set<unsigned>& used, bool& opaque) {
-        cloneTyWith(types, sp, ty, [&](const HIRTypeData* tpl, HIRTypeRef&) {
+        cloneTyWith(types, sp, ty, [&](const HIRTypeData* tpl) -> const HIRTypeData* {
             if (const auto* ge = tpl->opt_Generic()) {
                 if (ge->isSelf()) {
                     opaque = true;
@@ -601,7 +601,7 @@ namespace {
                     opaque = true;
                 }
             }
-            return false;
+            return nullptr;
         });
     }
 
@@ -1569,7 +1569,7 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
     UNREACHABLE();
 }
 
-HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
+const HIRTypeData* AST2HIR::LowerHIRType(::ASTType* ty) {
     switch (ty->data.tag()) {
         case TypeData::TAG_None: {
             BUG(ty->span(), StringView("TypeData::None"));
@@ -1869,7 +1869,7 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
         }
         case TypeData::TAG_Function: {
             auto& e = ty->data.as_Function();
-            Vector<HIRTypeRef> args;
+            Vector<const HIRTypeData*> args;
             for (const auto& arg : e.info.argTypes) {
                 args.pushBack(LowerHIRType(arg));
             }
@@ -2382,8 +2382,8 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
             case ASTItem::TAG_Function: {
                 auto& i = item.data.as_Function();
                 auto fcn = LowerHIRFunction(itemPath, traitPath.parent(), item.attrs, i, crate->types.self());
-                Vector<HIRTypeRef> erasedTypes;
-                auto _discard = RpititTypeCollector(crate->types, [&](HIRTypeRef type) {
+                Vector<const HIRTypeData*> erasedTypes;
+                auto _discard = RpititTypeCollector(crate->types, [&](const HIRTypeData* type) {
                     erasedTypes.pushBack(type);
                 }).visitType(fcn.returnType);
                 (void)_discard;
@@ -2497,7 +2497,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     TRACE_FUNCTION_F(p);
     auto defineOpaque = LowerHIRDefineOpaque(p, sourceModule, attrs);
 
-    std::vector<std::pair<HIRPattern, HIRTypeRef>> args;
+    std::vector<std::pair<HIRPattern, const HIRTypeData*>> args;
     for (size_t i = 0; i < f.args().size(); i++) {
         const auto& arg = f.args()[i];
         if (const auto* value = arg.pat.data().opt_Value()) {
@@ -2508,7 +2508,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         if (!f.code().isValid() && !(arg.pat.data().is_Any() || arg.pat.data().is_MaybeBind())) {
             ERROR(arg.pat.span(), E0000, StringView("patterns aren't allowed in functions without bodies"));
         }
-        HIRTypeRef type;
+        const HIRTypeData* type;
         if (f.hasNamedVariadic() && i + 1 == f.args().size()) {
             const auto& path = crate->getLangItemPath(arg.pat.span(), "va_list");
             const auto& str = crate->getStructByPath(arg.pat.span(), path);
@@ -2565,12 +2565,11 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                 return nullptr;
             }
 
-            bool isValidCustomReceiver(HIRTypeRef& ty) {
+            const HIRTypeData* validCustomReceiver(const HIRTypeData* ty) {
                 if (ty == ctx.crate->types.self()) {
-                    return true;
+                    return ty;
                 } else if (ty == realSelfType) {
-                    ty = ctx.crate->types.self();
-                    return true;
+                    return ctx.crate->types.self();
                 } else if (ty->is_Path()) {
                     auto data = ty->cloneData();
                     auto& e = data.as_Path();
@@ -2578,51 +2577,52 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                         const auto* item = findTypeItem(pe->path);
                         if (item && item->is_TypeAlias()) {
                             if (std::find(aliasStack.begin(), aliasStack.end(), pe->path) != aliasStack.end()) {
-                                return false;
+                                return nullptr;
                             }
                             aliasStack.push_back(pe->path);
                             auto expanded = ConvertHIRExpandTypeAlias(sp, *ctx.crate, *pe, false);
-                            auto valid = isValidCustomReceiver(expanded);
+                            auto valid = validCustomReceiver(expanded);
                             aliasStack.pop_back();
                             if (valid) {
-                                ty = expanded;
-                                return true;
+                                return valid;
                             }
-                            return false;
+                            return nullptr;
                         }
                         if (pe->params.types.size() == 0) {
-                            return true;
+                            return ty;
                         }
                         //   TODO(sp, StringView("Receiver types with more than one param - ") << arg_self_ty);
 
                         // TODO: Allow if the type parm is a valid receiver it type too
 
-                        if (isValidCustomReceiver(pe->params.types[0])) {
-                            ty = ctx.crate->types.intern(mv$(data));
-                            return true;
+                        if (const auto* inner = validCustomReceiver(pe->params.types[0])) {
+                            pe->params.types[0] = inner;
+                            return ctx.crate->types.intern(mv$(data));
                         }
                     }
-                    return false;
+                    return nullptr;
                 } else if (ty->is_Borrow()) {
                     const auto& e = ty->as_Borrow();
                     auto inner = e.inner;
-                    if (!isValidCustomReceiver(inner)) {
-                        return false;
+                    if (const auto* valid = validCustomReceiver(inner)) {
+                        inner = valid;
+                    } else {
+                        return nullptr;
                     }
-                    ty = ctx.crate->types.borrow(e.type, inner);
-                    return true;
+                    return ctx.crate->types.borrow(e.type, inner);
                 } else if (ty->is_Pointer()) {
                     const auto& e = ty->as_Pointer();
                     auto inner = e.inner;
-                    if (!isValidCustomReceiver(inner)) {
-                        return false;
+                    if (const auto* valid = validCustomReceiver(inner)) {
+                        inner = valid;
+                    } else {
+                        return nullptr;
                     }
-                    ty = ctx.crate->types.pointer(e.type, inner);
-                    return true;
+                    return ctx.crate->types.pointer(e.type, inner);
                 } else if (ty->is_Generic()) {
-                    return true;
+                    return ty;
                 } else {
-                    return false;
+                    return nullptr;
                 }
             }
         } ivcr(*this, sp, realSelfType);
@@ -2647,7 +2647,8 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                 }
             } else {
                 auto inner = e->inner;
-                if (ivcr.isValidCustomReceiver(inner)) {
+                if (const auto* valid = ivcr.validCustomReceiver(inner)) {
+                    inner = valid;
                     argSelfTy = crate->types.borrow(e->type, inner);
                     receiver = HIRFunction::Receiver::Custom;
                 }
@@ -2667,7 +2668,8 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                 }
                 // TODO: for other types, support arbitary structs/paths.
                 if (receiver == HIRFunction::Receiver::Free) {
-                    if (ivcr.isValidCustomReceiver(argSelfTy)) {
+                    if (const auto* valid = ivcr.validCustomReceiver(argSelfTy)) {
+                        argSelfTy = valid;
                         receiver = HIRFunction::Receiver::Custom;
                     }
                 }
@@ -2676,7 +2678,8 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
             }
         } else if (argSelfTy->is_Generic()) {
             receiver = HIRFunction::Receiver::Custom;
-        } else if (ivcr.isValidCustomReceiver(argSelfTy)) {
+        } else if (const auto* valid = ivcr.validCustomReceiver(argSelfTy)) {
+            argSelfTy = valid;
             receiver = HIRFunction::Receiver::Custom;
         } else {
         }
@@ -3127,7 +3130,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
             }
             case ASTItem::TAG_Function: {
                 auto& e = item.data.as_Function();
-                _add_mod_val_item(*crate->pool, mod, item.name, getVis(item.vis), HIRValueItem(crate->pool->make<HIRFunction>(LowerHIRFunction(itemPath, modPath, item.attrs, e, HIRTypeRef{}))));
+                _add_mod_val_item(*crate->pool, mod, item.name, getVis(item.vis), HIRValueItem(crate->pool->make<HIRFunction>(LowerHIRFunction(itemPath, modPath, item.attrs, e, nullptr))));
                 break;
             }
             case ASTItem::TAG_Static: {
@@ -3320,7 +3323,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 DEBUG(StringView("path = ") << path);
                 std::map<RcString, HIRTraitImpl::ImplEnt<HIRFunction>> methods;
                 std::map<RcString, HIRTraitImpl::ImplEnt<HIRConstant>> constants;
-                std::map<RcString, HIRTraitImpl::ImplEnt<HIRTypeRef>> types;
+                std::map<RcString, HIRTraitImpl::ImplEnt<const HIRTypeData*>> types;
 
                 for (const auto& item : impl.items()) {
                     HIRItemPath itemPath(path, item.name.c_str());
@@ -3356,7 +3359,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                             HIRItemPath ip2(ip1, name2.c_str());
                             implTraitSource = ImplTraitSource(&ip2, &params, &atyParams);
 
-                            types.insert(std::make_pair(item.name, HIRTraitImpl::ImplEnt<HIRTypeRef>{item.isSpecialisable, LowerHIRType(e.type())}));
+                            types.insert(std::make_pair(item.name, HIRTraitImpl::ImplEnt<const HIRTypeData*>{item.isSpecialisable, LowerHIRType(e.type())}));
 
                             implTraitSource = ImplTraitSource();
                             break;
@@ -3703,7 +3706,7 @@ HIRExprPtr AST2HIR::LowerHIRExprNode(const ASTExprNode& e) {
             node->visit(*this);
         }
 
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override {
             return ty;
         }
     } initialise(crate->types);
@@ -4154,7 +4157,7 @@ DefaultFieldParamRebase::DefaultFieldParamRebase(HIRTypeInterner& types, const H
 {
 }
 
-auto DefaultFieldParamRebase::getType(const Span& sp, const HIRGenericRef& generic) const -> HIRTypeRef {
+auto DefaultFieldParamRebase::getType(const Span& sp, const HIRGenericRef& generic) const -> const HIRTypeData* {
     if (generic.group() != GENERICImpl) {
         return MonomorphiserNop::getType(sp, generic);
     }
@@ -4176,7 +4179,7 @@ RebaseDefaultFieldParams::RebaseDefaultFieldParams(const Monomorphiser& monomorp
 {
 }
 
-[[nodiscard]] auto RebaseDefaultFieldParams::visitType(HIRTypeRef type) -> HIRTypeRef {
+[[nodiscard]] auto RebaseDefaultFieldParams::visitType(const HIRTypeData* type) -> const HIRTypeData* {
     return monomorph.monomorphType(Span(), type);
 }
 
@@ -4194,7 +4197,7 @@ RebaseDefaultFieldExpr::RebaseDefaultFieldExpr(const Monomorphiser& monomorph)
 {
 }
 
-[[nodiscard]] auto RebaseDefaultFieldExpr::visitType(HIRTypeRef type) -> HIRTypeRef {
+[[nodiscard]] auto RebaseDefaultFieldExpr::visitType(const HIRTypeData* type) -> const HIRTypeData* {
     return monomorph.monomorphType(Span(), type);
 }
 
@@ -4221,7 +4224,7 @@ RpititTypeCollector<F>::RpititTypeCollector(HIRTypeInterner& types, F callback)
 }
 
 template <typename F>
-[[nodiscard]] auto RpititTypeCollector<F>::visitType(HIRTypeRef ty) -> HIRTypeRef {
+[[nodiscard]] auto RpititTypeCollector<F>::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
     const auto* erased = ty->opt_ErasedType();
     if (erased && erased->inner.is_Fcn()) {
         callback(ty);
@@ -4238,7 +4241,7 @@ RpititNestedRewrite<F>::RpititNestedRewrite(HIRTypeInterner& types, const HIRTyp
 }
 
 template <typename F>
-[[nodiscard]] auto RpititNestedRewrite<F>::visitType(HIRTypeRef ty) -> HIRTypeRef {
+[[nodiscard]] auto RpititNestedRewrite<F>::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
     const auto index = indices.find(ty);
     if (index != indices.end()) {
         return projection(index->second);

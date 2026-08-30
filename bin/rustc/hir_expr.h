@@ -31,7 +31,7 @@ class HIRExprVisitor;
 class HIRExprNode {
 public:
     Span span_;
-    HIRTypeRef resType; // TODO: Replace this with an index into an ivar table
+    const HIRTypeData* resType; // TODO: Replace this with an index into an ivar table
 
     bool diverges = false;
     HIRValueUsage usage = HIRValueUsage::Unknown;
@@ -191,11 +191,11 @@ struct HIRExprNodeLoopControl: public HIRExprNode {
 
 struct HIRExprNodeLet: public HIRExprNode {
     HIRPattern pattern;
-    HIRTypeRef type;
+    const HIRTypeData* type;
     HIRExprNodeP value;
     bool isSuper;
 
-    HIRExprNodeLet(Span sp, HIRPattern pat, HIRTypeRef ty, HIRExprNodeP val, bool isSuper = false);
+    HIRExprNodeLet(Span sp, HIRPattern pat, const HIRTypeData* ty, HIRExprNodeP val, bool isSuper = false);
 
     static constexpr unsigned int kind = 10;
     unsigned int nodeKind() const override;
@@ -339,9 +339,9 @@ struct HIRExprNodeRawBorrow: public HIRExprNode {
 
 struct HIRExprNodeCast: public HIRExprNode {
     HIRExprNodeP value;
-    HIRTypeRef dstType;
+    const HIRTypeData* dstType;
 
-    HIRExprNodeCast(Span sp, HIRExprNodeP value, HIRTypeRef dstType);
+    HIRExprNodeCast(Span sp, HIRExprNodeP value, const HIRTypeData* dstType);
 
     static constexpr unsigned int kind = 17;
     unsigned int nodeKind() const override;
@@ -350,10 +350,10 @@ struct HIRExprNodeCast: public HIRExprNode {
 
 struct HIRExprNodeUnsize: public HIRExprNode {
     HIRExprNodeP value;
-    HIRTypeRef dstType;
+    const HIRTypeData* dstType;
     bool isArrayToSliceAdjustment = false;
 
-    HIRExprNodeUnsize(Span sp, HIRExprNodeP value, HIRTypeRef dstType);
+    HIRExprNodeUnsize(Span sp, HIRExprNodeP value, const HIRTypeData* dstType);
 
     static constexpr unsigned int kind = 18;
     unsigned int nodeKind() const override;
@@ -365,7 +365,7 @@ struct HIRExprNodeIndex: public HIRExprNode {
     HIRExprNodeP index;
 
     struct {
-        HIRTypeRef indexTy;
+        const HIRTypeData* indexTy;
     } cache;
 
     HIRExprNodeIndex(Span sp, HIRExprNodeP val, HIRExprNodeP index);
@@ -415,7 +415,7 @@ struct HIRExprNodeTupleVariant: public HIRExprNode {
     bool isStruct;
     std::vector<HIRExprNodeP> args;
 
-    stl::Vector<HIRTypeRef> argTypes;
+    stl::Vector<const HIRTypeData*> argTypes;
 
     HIRExprNodeTupleVariant(Span sp, HIRGenericPath path, bool isStruct, std::vector<HIRExprNodeP> args);
 
@@ -425,7 +425,7 @@ struct HIRExprNodeTupleVariant: public HIRExprNode {
 };
 
 struct HIRExprCallCache {
-    stl::Vector<HIRTypeRef> argTypes;
+    stl::Vector<const HIRTypeData*> argTypes;
     const HIRGenericParams* fcnParams;
     const HIRGenericParams* topParams;
     const HIRFunction* fcn;
@@ -450,9 +450,9 @@ struct HIRExprNodeCallValue: public HIRExprNode {
     HIRExprNodeP value;
     std::vector<HIRExprNodeP> args;
 
-    stl::Vector<HIRTypeRef> argIvars;
+    stl::Vector<const HIRTypeData*> argIvars;
 
-    stl::Vector<HIRTypeRef> argTypes;
+    stl::Vector<const HIRTypeData*> argTypes;
 
     enum class TraitUsed {
         Unknown,
@@ -580,7 +580,7 @@ struct HIRExprNodeConstParam: public HIRExprNode {
 struct HIRExprNodeStructLiteral: public HIRExprNode {
     typedef std::vector<std::pair<RcString, HIRExprNodeP>> tValues;
 
-    HIRTypeRef type;
+    const HIRTypeData* type;
     bool isStruct;
 
     bool useDefaults;
@@ -590,11 +590,11 @@ struct HIRExprNodeStructLiteral: public HIRExprNode {
 
     HIRGenericPath realPath;
 
-    stl::Vector<HIRTypeRef> valueTypes;
+    stl::Vector<const HIRTypeData*> valueTypes;
 
-    HIRExprNodeStructLiteral(Span sp, HIRTypeRef ty, bool isStruct, HIRExprNodeP baseValue, tValues values);
+    HIRExprNodeStructLiteral(Span sp, const HIRTypeData* ty, bool isStruct, HIRExprNodeP baseValue, tValues values);
 
-    HIRExprNodeStructLiteral(Span sp, HIRTypeRef ty, bool isStruct, bool, tValues values);
+    HIRExprNodeStructLiteral(Span sp, const HIRTypeData* ty, bool isStruct, bool, tValues values);
 
     static constexpr unsigned int kind = 32;
     unsigned int nodeKind() const override;
@@ -635,10 +635,10 @@ struct HIRExprNodeArraySized: public HIRExprNode {
 };
 
 struct HIRExprNodeClosure: public HIRExprNode {
-    typedef std::vector<std::pair<HIRPattern, HIRTypeRef>> argsT;
+    typedef std::vector<std::pair<HIRPattern, const HIRTypeData*>> argsT;
 
     argsT args;
-    HIRTypeRef returnType;
+    const HIRTypeData* returnType;
     HIRExprNodeP code;
     bool isMove = false;
     bool isUse = false;
@@ -671,7 +671,7 @@ struct HIRExprNodeClosure: public HIRExprNode {
     HIRGenericPath objPath;
     std::vector<HIRExprNodeP> captures;
 
-    HIRExprNodeClosure(Span sp, argsT args, HIRTypeRef rv, HIRExprNodeP code, bool isMove, bool isUse);
+    HIRExprNodeClosure(Span sp, argsT args, const HIRTypeData* rv, HIRExprNodeP code, bool isMove, bool isUse);
 
     static constexpr unsigned int kind = 36;
     unsigned int nodeKind() const override;
@@ -679,11 +679,11 @@ struct HIRExprNodeClosure: public HIRExprNode {
 };
 
 struct HIRExprNodeGenerator: public HIRExprNode {
-    HIRTypeRef returnType;
-    HIRTypeRef resumeTy;
+    const HIRTypeData* returnType;
+    const HIRTypeData* resumeTy;
     HIRPattern resumePattern;
     bool hasResumePattern;
-    HIRTypeRef yieldTy;
+    const HIRTypeData* yieldTy;
     HIRExprNodeP code;
     bool isMove;
     bool isPinned;
@@ -702,9 +702,9 @@ struct HIRExprNodeGenerator: public HIRExprNode {
 
     std::vector<HIRExprNodeP> captures;
 
-    HIRTypeRef stateDataType;
+    const HIRTypeData* stateDataType;
 
-    HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef resumeTy, HIRPattern resumePattern, bool hasResumePattern, HIRTypeRef yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody);
+    HIRExprNodeGenerator(Span sp, const HIRTypeData* rv, const HIRTypeData* resumeTy, HIRPattern resumePattern, bool hasResumePattern, const HIRTypeData* yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody);
 
     static constexpr unsigned int kind = 37;
     unsigned int nodeKind() const override;
@@ -715,21 +715,21 @@ struct HIRExprNodeGeneratorWrapper: public HIRExprNode {
     bool isFuture;
 
     bool isAsyncGen = false;
-    HIRTypeRef returnType;
-    HIRTypeRef yieldTy;
+    const HIRTypeData* returnType;
+    const HIRTypeData* yieldTy;
     HIRExprNodeP code;
 
     const HIRStruct* objPtr = nullptr;
     HIRGenericPath objPath;
 
-    HIRTypeRef stateDataType;
+    const HIRTypeData* stateDataType;
     HIRSimplePath stateIdxEnum;
 
     HIRFunction* dropFcnPtr = nullptr;
 
     stl::Vector<HIRValueUsage> captureUsages;
 
-    HIRExprNodeGeneratorWrapper(Span sp, HIRTypeRef rv, HIRTypeRef yieldTy, HIRExprNodeP code, bool isFuture);
+    HIRExprNodeGeneratorWrapper(Span sp, const HIRTypeData* rv, const HIRTypeData* yieldTy, HIRExprNodeP code, bool isFuture);
 
     static constexpr unsigned int kind = 38;
     unsigned int nodeKind() const override;
@@ -737,13 +737,13 @@ struct HIRExprNodeGeneratorWrapper: public HIRExprNode {
 };
 
 struct HIRExprNodeAsyncBlock: public HIRExprNode {
-    HIRTypeRef returnType;
+    const HIRTypeData* returnType;
     HIRExprNodeP code;
     bool isMove;
     bool isUse;
 
     bool isAsyncGen = false;
-    HIRTypeRef yieldTy;
+    const HIRTypeData* yieldTy;
 
     HIRExprNodeGenerator::AvuCache avuCache;
 
@@ -753,9 +753,9 @@ struct HIRExprNodeAsyncBlock: public HIRExprNode {
 
     std::vector<HIRExprNodeP> captures;
 
-    HIRTypeRef stateDataType;
+    const HIRTypeData* stateDataType;
 
-    HIRExprNodeAsyncBlock(Span sp, HIRTypeRef returnType, HIRExprNodeP code, bool isMove, bool isUse);
+    HIRExprNodeAsyncBlock(Span sp, const HIRTypeData* returnType, HIRExprNodeP code, bool isMove, bool isUse);
 
     static constexpr unsigned int kind = 39;
     unsigned int nodeKind() const override;
@@ -881,11 +881,7 @@ public:
 
     virtual void visitPattern(const Span& sp, HIRPattern& pat);
 
-    [[nodiscard]] virtual HIRTypeRef visitType(HIRTypeRef ty);
-
-    void updateType(HIRTypeRef& ty) {
-        ty = visitType(ty);
-    }
+    [[nodiscard]] virtual const HIRTypeData* visitType(const HIRTypeData* ty);
 
     virtual void visitTraitPath(HIRTraitPath& p);
     virtual void visitPathParams(HIRPathParams& ty);

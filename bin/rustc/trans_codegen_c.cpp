@@ -170,7 +170,7 @@ namespace {
         HIRTypeRefSet emittedFnTypes;
         std::set<HIRPath> trackedFunctions;
         std::set<const TypeRepr*> embeddedTags;
-        HIRTypeRefMap<HIRTypeRef> normalizedCtypes;
+        HIRTypeRefMap<const HIRTypeData*> normalizedCtypes;
 
         struct PromotedNode {
             PromotedNode* next;
@@ -407,7 +407,7 @@ namespace {
 
         void emitReifiedFunctionName(const HIRPath& path, bool preserveTrackCaller = false);
 
-        const HIRTypeData* monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunction& item, const TransParams& params);
+        const HIRTypeData* monomorphiseFcnReturn(const HIRFunction& item, const TransParams& params);
 
         bool argumentIsPassed(const RcString& abi, const HIRTypeData* ty);
 
@@ -491,7 +491,7 @@ namespace {
 
         void emitCtypeCb(const HIRTypeData* ty, CTypeCallback& inner, bool isExternC = false);
 
-        HIRTypeRef getInnerUnsizedType(const HIRTypeData* ty);
+        const HIRTypeData* getInnerUnsizedType(const HIRTypeData* ty);
 
         bool isExternUnsizedType(const HIRTypeData* ty) const;
 
@@ -1696,7 +1696,7 @@ auto CodeGeneratorC::emitType(const HIRTypeData* ty) -> void {
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("type ") << ty;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
     TRACE_FUNCTION_F(ty);
@@ -1780,7 +1780,7 @@ auto CodeGeneratorC::emitStruct(const Span& sp, const HIRGenericPath& p, const H
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("struct ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
     // TODO: repr(transparent) and repr(align(foo))
 
@@ -1805,7 +1805,7 @@ auto CodeGeneratorC::emitUnion(const Span& sp, const HIRGenericPath& p, const HI
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("union ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
     TRACE_FUNCTION_F(p);
@@ -1899,7 +1899,7 @@ auto CodeGeneratorC::emitEnum(const Span& sp, const HIRGenericPath& p, const HIR
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("enum ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
     TRACE_FUNCTION_F(p);
@@ -2021,9 +2021,9 @@ auto CodeGeneratorC::emitConstructorEnum(const Span& sp, const HIRGenericPath& p
     auto ty = crate.types.path(p.clone(), HIRTypePathBinding::make_Enum(&item));
 
     MonomorphStatePtr ms(crate.types, nullptr, &path.params, nullptr);
-    HIRTypeRef tmp;
+    const HIRTypeData* tmp;
     auto monomorph = [&](const auto& x) {
-        return resolve_.monomorphExpandOpt(sp, tmp, x, ms);
+        return resolve_.monomorphExpandOpt(sp, x, ms);
     };
 
     ASSERT_BUG(sp, item.data.is_Data(), StringView(""));
@@ -2070,10 +2070,10 @@ auto CodeGeneratorC::emitConstructorEnum(const Span& sp, const HIRGenericPath& p
 
 auto CodeGeneratorC::emitConstructorStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) -> void {
     TRACE_FUNCTION_F(p);
-    HIRTypeRef tmp;
+    const HIRTypeData* tmp;
     MonomorphStatePtr ms(crate.types, nullptr, &p.params, nullptr);
     auto monomorph = [&](const auto& x) {
-        return resolve_.monomorphExpandOpt(sp, tmp, x, ms);
+        return resolve_.monomorphExpandOpt(sp, x, ms);
     };
 
     const auto& e = item.data.as_Tuple();
@@ -2141,7 +2141,7 @@ auto CodeGeneratorC::emitStaticExt(const HIRPath& p, const HIRStatic& item, cons
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("extern static ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
     auto type = params.monomorph(resolve_, item.type);
 
@@ -2186,7 +2186,7 @@ auto CodeGeneratorC::emitStaticProto(const HIRPath& p, const HIRStatic& item, co
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("static ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
     auto type = params.monomorph(resolve_, item.type);
@@ -2285,7 +2285,7 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("static ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
     TRACE_FUNCTION_F(p);
@@ -2474,7 +2474,7 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("extern fn ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
     TRACE_FUNCTION_F(p);
     const bool tracksCaller = crate.functionTracksCaller(sp, p, item);
@@ -2816,7 +2816,7 @@ auto CodeGeneratorC::emitFunctionProto(const HIRPath& p, const HIRFunction& item
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("/*proto*/ fn ") << p;
     });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
     TRACE_FUNCTION_F(p);
@@ -2845,8 +2845,8 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
         argTypes.push_back(std::make_pair(HIRPattern{}, params.monomorph(resolve_, ent.second)));
     }
 
-    HIRTypeRef retTypeTmp;
-    const auto& retType = monomorphiseFcnReturn(retTypeTmp, item, params);
+    const HIRTypeData* retTypeTmp;
+    const auto& retType = monomorphiseFcnReturn(item, params);
 
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << p;
@@ -3079,8 +3079,8 @@ auto CodeGeneratorC::dropOperationIsNoOp(const MIRTypeResolve& localMirRes, cons
     if (drop.kind != MIRDropKind::DEEP) {
         return false;
     }
-    HIRTypeRef tmp;
-    const auto& ty = localMirRes.getLvalueType(tmp, drop.slot);
+    const HIRTypeData* tmp;
+    const auto& ty = localMirRes.getLvalueType(drop.slot);
     return !resolve_.typeNeedsDropGlue(localMirRes.sp, ty);
 }
 
@@ -3675,8 +3675,8 @@ auto CodeGeneratorC::typeIsBadZst(const HIRTypeData* ty) const -> bool {
 
 auto CodeGeneratorC::lvalueIsBadZst(const MIRLValue& lv) const -> bool {
     if (options.disallowEmptyStructs) {
-        HIRTypeRef tmp;
-        return typeIsBadZst(mirRes->getLvalueType(tmp, lv));
+        const HIRTypeData* tmp;
+        return typeIsBadZst(mirRes->getLvalueType(lv));
     } else {
         return false;
     }
@@ -3684,8 +3684,8 @@ auto CodeGeneratorC::lvalueIsBadZst(const MIRLValue& lv) const -> bool {
 
 auto CodeGeneratorC::lvalueRootIsBadZst(const MIRLValue& lv) const -> bool {
     if (options.disallowEmptyStructs) {
-        HIRTypeRef tmp;
-        return typeIsBadZst(mirRes->getLvalueType(tmp, lv, lv.wrappers.size()));
+        const HIRTypeData* tmp;
+        return typeIsBadZst(mirRes->getLvalueType(lv, lv.wrappers.size()));
     } else {
         return false;
     }
@@ -3695,8 +3695,8 @@ auto CodeGeneratorC::lvalueZstIndexBacking(const MIRLValue& lv) const -> MIRLVal
     auto rv = lv.clone();
     while (MIRLValue::CRef(rv).is_Index()) {
         auto inner = MIRLValue::CRef(rv).innerRef();
-        HIRTypeRef tmp;
-        if (!this->typeIsBadZst(mirRes->getLvalueType(tmp, inner))) {
+        const HIRTypeData* tmp;
+        if (!this->typeIsBadZst(mirRes->getLvalueType(inner))) {
             break;
         }
         rv.wrappers.pop_back();
@@ -3705,8 +3705,8 @@ auto CodeGeneratorC::lvalueZstIndexBacking(const MIRLValue& lv) const -> MIRLVal
 }
 
 auto CodeGeneratorC::emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType bt, const MIRLValue& val) -> void {
-    HIRTypeRef tmp;
-    const auto& ty = localMirRes.getLvalueType(tmp, val);
+    const HIRTypeData* tmp;
+    const auto& ty = localMirRes.getLvalueType(val);
 
     if (this->typeIsBadZst(ty) && this->lvalueRootIsBadZst(val)) {
         size_t alignment = 0;
@@ -3735,8 +3735,8 @@ auto CodeGeneratorC::emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType
     auto valRef = MIRLValue::CRef(val);
     if (!special && options.disallowEmptyStructs && valRef.is_Index() && this->typeIsBadZst(ty)) {
         auto inner = valRef.innerRef();
-        HIRTypeRef tmp;
-        const auto& parentTy = localMirRes.getLvalueType(tmp, inner);
+        const HIRTypeData* tmp;
+        const auto& parentTy = localMirRes.getLvalueType(inner);
         const HIRTypeData* elementTy = nullptr;
         if (const auto* array = parentTy->opt_Array()) {
             elementTy = array->inner;
@@ -3766,8 +3766,8 @@ auto CodeGeneratorC::emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType
         auto valFp = zstField;
         BUG_ASSERT(valFp.is_Field());
         while (valFp.innerRef().is_Field()) {
-            HIRTypeRef tmp;
-            const auto& ty = localMirRes.getLvalueType(tmp, valFp.innerRef());
+            const HIRTypeData* tmp;
+            const auto& ty = localMirRes.getLvalueType(valFp.innerRef());
             if (!this->typeIsBadZst(ty)) {
                 break;
             }
@@ -3780,8 +3780,8 @@ auto CodeGeneratorC::emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType
             of << StringView("(void*)& ");
             emitLvalue(fieldInner.innerRef());
         } else if (valFp.as_Field() == 0) {
-            HIRTypeRef tmp;
-            const auto& parentTy = localMirRes.getLvalueType(tmp, fieldInner);
+            const HIRTypeData* tmp;
+            const auto& parentTy = localMirRes.getLvalueType(fieldInner);
             if (parentTy->is_Slice()) {
                 of << StringView("(void*)");
                 emitDstLvaluePointer(fieldInner);
@@ -3791,8 +3791,8 @@ auto CodeGeneratorC::emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType
                 emitLvalue(fieldInner);
             }
         } else {
-            HIRTypeRef tmp;
-            const auto& parentTy = localMirRes.getLvalueType(tmp, fieldInner);
+            const HIRTypeData* tmp;
+            const auto& parentTy = localMirRes.getLvalueType(fieldInner);
             const HIRTypeData* elementTy = nullptr;
             if (const auto* array = parentTy->opt_Array()) {
                 elementTy = array->inner;
@@ -3856,8 +3856,8 @@ auto CodeGeneratorC::emitCompositeAssignCb(const MIRTypeResolve& localMirRes, CS
     bool hasEmitted = prependNewline;
     for (unsigned int j = 0; j < vals.size(); j++) {
         if (options.disallowEmptyStructs) {
-            HIRTypeRef tmp;
-            const auto& ty = localMirRes.getParamType(tmp, vals[j]);
+            const HIRTypeData* tmp;
+            const auto& ty = localMirRes.getParamType(vals[j]);
 
             if (vals[j].is_LValue() && resolve_.isTypePhantomData(ty)) {
                 continue;
@@ -3887,8 +3887,8 @@ auto CodeGeneratorC::emitCompositeAssign(const MIRTypeResolve& localMirRes, F f,
 
 auto CodeGeneratorC::emitDropOperation(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_Drop& e, unsigned indentLevel) -> void {
     auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
-    HIRTypeRef tmp;
-    const auto& ty = localMirRes.getLvalueType(tmp, e.slot);
+    const HIRTypeData* tmp;
+    const auto& ty = localMirRes.getLvalueType(e.slot);
     if (e.flagIdx != ~0u) {
         of << indent << StringView("if( df") << e.flagIdx << StringView(" ) {\n");
     }
@@ -3954,8 +3954,8 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
             const auto& e = stmt.as_Assign();
 
             DEBUG(StringView("- ") << e.dst << StringView(" = ") << e.src);
-            HIRTypeRef tmp;
-            const auto& ty = localMirRes.getLvalueType(tmp, e.dst);
+            const HIRTypeData* tmp;
+            const auto& ty = localMirRes.getLvalueType(e.dst);
             if (/*(e.dst.is_Deref() || e.dst.is_Field()) &&*/ this->typeIsBadZst(ty)) {
                 break;
             }
@@ -3964,8 +3964,8 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
             switch (e.src.tag()) {
                 case MIRRValue::TAG_Use: {
                     auto& ve = e.src.as_Use();
-                    HIRTypeRef tmp;
-                    const auto& ty = localMirRes.getLvalueType(tmp, ve);
+                    const HIRTypeData* tmp;
+                    const auto& ty = localMirRes.getLvalueType(ve);
                     if (ty == crate.types.diverge()) {
                         of << StringView("abort()");
                         break;
@@ -4044,9 +4044,9 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                     auto& ve = e.src.as_BinOp();
                     emitLvalue(e.dst);
                     of << StringView(" = ");
-                    HIRTypeRef tmp, tmpR;
-                    const auto& ty = localMirRes.getParamType(tmp, ve.valL);
-                    const auto& tyR = localMirRes.getParamType(tmpR, ve.valR);
+                    const HIRTypeData* tmp, tmpR;
+                    const auto& ty = localMirRes.getParamType(ve.valL);
+                    const auto& tyR = localMirRes.getParamType(ve.valR);
                     if (ty->is_Borrow()) {
                         of << StringView("(slice_cmp(");
                         emitParam(ve.valL);
@@ -4373,8 +4373,8 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                 }
                 case MIRRValue::TAG_UniOp: {
                     auto& ve = e.src.as_UniOp();
-                    HIRTypeRef tmp;
-                    const auto& ty = localMirRes.getLvalueType(tmp, e.dst);
+                    const HIRTypeData* tmp;
+                    const auto& ty = localMirRes.getLvalueType(e.dst);
 
                     if (typeIsEmulatedI128(ty)) {
                         switch (ve.op) {
@@ -4512,7 +4512,7 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                 case MIRRValue::TAG_UnionVariant: {
                     auto& ve = e.src.as_UnionVariant();
                     MIR_ASSERT(localMirRes, crate.getTypeitemByPath(sp, ve.path.path).is_Union(), StringView(""));
-                    if (!this->typeIsBadZst(mirRes->getParamType(tmp, ve.val))) {
+                    if (!this->typeIsBadZst(mirRes->getParamType(ve.val))) {
                         emitLvalue(e.dst);
                         of << StringView(".var_") << ve.index << StringView(" = ");
                         emitParam(ve.val);
@@ -4525,8 +4525,8 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                     MIR_ASSERT(localMirRes, tyi.is_Enum(), StringView(""));
                     const auto* enmP = &tyi.as_Enum();
 
-                    HIRTypeRef tmp;
-                    const auto& ty = localMirRes.getLvalueType(tmp, e.dst);
+                    const HIRTypeData* tmp;
+                    const auto& ty = localMirRes.getLvalueType(e.dst);
                     auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
 
                     switch (repr->variants.tag()) {
@@ -4643,8 +4643,8 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
         return;
     }
 
-    HIRTypeRef tmp;
-    const auto& ty = localMirRes.getLvalueType(tmp, ve.val);
+    const HIRTypeData* tmp;
+    const auto& ty = localMirRes.getLvalueType(ve.val);
 
     if ((ve.type->is_Pointer() && isDst(ve.type->as_Pointer().inner)) || (ve.type->is_Borrow() && isDst(ve.type->as_Borrow().inner)) || ve.type == ty) {
         emitLvalue(dst);
@@ -4796,8 +4796,8 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
         return;
     }
 
-    HIRTypeRef dstTmp;
-    const auto& dstTy = localMirRes.getLvalueType(dstTmp, dst);
+    const HIRTypeData* dstTmp;
+    const auto& dstTy = localMirRes.getLvalueType(dst);
     const auto* dstPrimitive = ve.type->opt_Primitive();
     if (dstPrimitive && isInteger(*dstPrimitive) && (ty->is_NamedFunction() || ty->is_Function() || ty->is_Pointer())) {
         emitLvalue(dst);
@@ -4847,8 +4847,8 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
 auto CodeGeneratorC::emitTermSwitchCb(const MIRTypeResolve& localMirRes, const MIRLValue& val, size_t nArms, unsigned indentLevel, CSwitchArmCallback& cb, size_t oddArm) -> void {
     auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
 
-    HIRTypeRef tmp;
-    const auto& ty = localMirRes.getLvalueType(tmp, val);
+    const HIRTypeData* tmp;
+    const auto& ty = localMirRes.getLvalueType(val);
     MIR_ASSERT(localMirRes, ty->is_Path(), StringView("Switch over non-Path type"));
     MIR_ASSERT(localMirRes, ty->as_Path().binding.is_Enum(), StringView("Switch over non-enum"));
     const auto* repr = TargetGetTypeRepr(localMirRes.sp, resolve_, ty);
@@ -5098,8 +5098,8 @@ auto CodeGeneratorC::emitTermSwitch(const MIRTypeResolve& localMirRes, const MIR
 auto CodeGeneratorC::emitTermSwitchvalueCb(const MIRTypeResolve& localMirRes, const MIRLValue& val, const MIRSwitchValues& values, unsigned indentLevel, CSwitchArmCallback& cb) -> void {
     auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
 
-    HIRTypeRef tmp;
-    const auto& ty = localMirRes.getLvalueType(tmp, val);
+    const HIRTypeData* tmp;
+    const auto& ty = localMirRes.getLvalueType(val);
     if (const auto* ve = values.opt_String()) {
         of << indent << StringView("{ static SLICE_PTR switch_strings[] = {");
         for (const auto& v : *ve) {
@@ -5128,8 +5128,8 @@ auto CodeGeneratorC::emitTermSwitchvalueCb(const MIRTypeResolve& localMirRes, co
             of << StringView(",") << v.length() << StringView("},");
         }
         of << StringView(" {0,0} };\n");
-        HIRTypeRef tmp;
-        const auto& ty = localMirRes.getLvalueType(tmp, val);
+        const HIRTypeData* tmp;
+        const auto& ty = localMirRes.getLvalueType(val);
         of << indent << StringView("switch( trustme_string_search_linear(");
         if (const auto* a = ty->as_Borrow().inner->opt_Array()) {
             auto len = a->size.as_Known();
@@ -5221,8 +5221,8 @@ auto CodeGeneratorC::calleeAbi(const MIRTypeResolve& localMirRes, const MIRCallT
             return (**f).abi;
         }
     } else if (const auto* valP = fcn.opt_Value()) {
-        HIRTypeRef tmp;
-        const auto& ty = localMirRes.getLvalueType(tmp, *valP);
+        const HIRTypeData* tmp;
+        const auto& ty = localMirRes.getLvalueType(*valP);
         if (const auto* ft = ty->opt_Function()) {
             return ft->abi;
         }
@@ -5261,8 +5261,8 @@ auto CodeGeneratorC::emitTermCall(const MIRTypeResolve& localMirRes, const MIRTe
     const auto calleeAbi = this->calleeAbi(localMirRes, e.fcn);
     bool hasZst = false;
     for (unsigned int j = 0; j < e.args.size(); j++) {
-        HIRTypeRef tmp;
-        const auto& ty = mirRes->getParamType(tmp, e.args[j]);
+        const HIRTypeData* tmp;
+        const auto& ty = mirRes->getParamType(e.args[j]);
         if (!argumentIsPassed(calleeAbi, ty)) {
             continue;
         }
@@ -5285,12 +5285,12 @@ auto CodeGeneratorC::emitTermCall(const MIRTypeResolve& localMirRes, const MIRTe
     bool omitAssign = tailCall;
 
     {
-        HIRTypeRef tmp;
-        if (mirRes->getLvalueType(tmp, e.retVal) == crate.types.unit()) {
+        const HIRTypeData* tmp;
+        if (mirRes->getLvalueType(e.retVal) == crate.types.unit()) {
             omitAssign = true;
         }
 
-        if (this->typeIsBadZst(mirRes->getLvalueType(tmp, e.retVal))) {
+        if (this->typeIsBadZst(mirRes->getLvalueType(e.retVal))) {
             omitAssign = true;
         }
     }
@@ -5306,8 +5306,8 @@ auto CodeGeneratorC::emitTermCall(const MIRTypeResolve& localMirRes, const MIRTe
         case MIRCallTarget::TAG_Value: {
             auto& e2 = e.fcn.as_Value();
             {
-                HIRTypeRef tmp;
-                const auto& ty = localMirRes.getLvalueType(tmp, e2);
+                const HIRTypeData* tmp;
+                const auto& ty = localMirRes.getLvalueType(e2);
                 MIR_ASSERT(localMirRes, ty->is_Function(), StringView("Call::Value on non-function - ") << ty);
 
                 const auto& retTy = ty->as_Function().rettype;
@@ -5390,8 +5390,8 @@ auto CodeGeneratorC::emitTermCall(const MIRTypeResolve& localMirRes, const MIRTe
     of << StringView("(");
     bool firstCallArgument = true;
     for (unsigned int j = 0; j < e.args.size(); j++) {
-        HIRTypeRef tmp;
-        const auto& ty = mirRes->getParamType(tmp, e.args[j]);
+        const HIRTypeData* tmp;
+        const auto& ty = mirRes->getParamType(e.args[j]);
         if (!argumentIsPassed(calleeAbi, ty)) {
             continue;
         }
@@ -5800,8 +5800,8 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
             if (!regClass || (*regClass != AsmRegisterClass::x86Xmm && *regClass != AsmRegisterClass::x86Ymm && *regClass != AsmRegisterClass::x86Zmm)) {
                 continue;
             }
-            HIRTypeRef tmp;
-            const auto* opTy = pe->input ? mirRes->getParamType(tmp, *pe->input) : mirRes->getLvalueType(tmp, *pe->output);
+            const HIRTypeData* tmp;
+            const auto* opTy = pe->input ? mirRes->getParamType(*pe->input) : mirRes->getLvalueType(*pe->output);
             if (opTy->is_Primitive() || opTy->is_Pointer() || opTy->is_Borrow()) {
                 continue;
             }
@@ -6169,9 +6169,9 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                         of << indent;
                         emitLvalue(*pe->output);
                         of << StringView(" = ");
-                        HIRTypeRef tmp;
+                        const HIRTypeData* tmp;
                         of << StringView("(");
-                        emitCtype(mirRes->getLvalueType(tmp, *pe->output));
+                        emitCtype(mirRes->getLvalueType(*pe->output));
                         of << StringView(")");
                         of << StringView("asm_") << *regnameP << StringView(";\n");
                     }
@@ -6301,29 +6301,27 @@ auto CodeGeneratorC::emitReifiedFunctionName(const HIRPath& path, bool preserveT
     }
 }
 
-auto CodeGeneratorC::monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunction& item, const TransParams& params) -> const HIRTypeData* {
+auto CodeGeneratorC::monomorphiseFcnReturn(const HIRFunction& item, const TransParams& params) -> const HIRTypeData* {
     bool hasErased = visitTyWith(item.returnType, [&](const auto& x) {
         return x->is_ErasedType();
     });
 
     if (hasErased || monomorphiseTypeNeeded(item.returnType)) {
         if (hasErased) {
-            tmp = cloneTyWith(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
+            auto result = cloneTyWith(crate.types, sp, item.returnType, [&](const auto* x) -> const HIRTypeData* {
                 if (const auto* te = x->opt_ErasedType()) {
                     if (const auto* e = te->inner.opt_Fcn()) {
                         BUG_ASSERT(e->index < item.code.erasedTypes.length());
-                        out = item.code.erasedTypes[e->index];
-                        return true;
+                        return item.code.erasedTypes[e->index];
                     }
                 }
-                return false;
+                return nullptr;
             });
-            tmp = params.monomorphType(Span(), tmp);
+            result = params.monomorphType(Span(), result);
+            return resolve_.expandAssociatedTypes(Span(), result);
         } else {
-            tmp = params.monomorphType(Span(), item.returnType);
+            return resolve_.expandAssociatedTypes(Span(), params.monomorphType(Span(), item.returnType));
         }
-        resolve_.expandAssociatedTypes(Span(), tmp);
-        return tmp;
     } else {
         return item.returnType;
     }
@@ -6338,8 +6336,8 @@ auto CodeGeneratorC::argumentIsPassed(const RcString& abi, const HIRTypeData* ty
 }
 
 auto CodeGeneratorC::emitFunctionHeader(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool includeCallerLocation, const char* nameSuffix) -> void {
-    HIRTypeRef tmp;
-    const auto& retTy = monomorphiseFcnReturn(tmp, item, params);
+    const HIRTypeData* tmp;
+    const auto& retTy = monomorphiseFcnReturn(item, params);
     const bool hasCallerLocation = includeCallerLocation && crate.functionTracksCaller(sp, p, item);
     unsigned int passedCount = 0;
     unsigned int parameterCount = item.variadic + hasCallerLocation;
@@ -6426,8 +6424,8 @@ auto CodeGeneratorC::emitTrackCallerReifyWrapper(const HIRPath& p, const HIRFunc
     of << StringView(" {\n");
     of << StringView("\t");
 
-    HIRTypeRef returnTypeTmp;
-    const auto& returnType = monomorphiseFcnReturn(returnTypeTmp, item, params);
+    const HIRTypeData* returnTypeTmp;
+    const auto& returnType = monomorphiseFcnReturn(item, params);
     if (returnType != crate.types.unit()) {
         of << StringView("return ");
     }
@@ -6706,7 +6704,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         } else {
             emitLvalue(e.retVal);
             of << StringView(" = ");
-            if (innerTy == HIRTypeRef()) {
+            if (innerTy == nullptr) {
                 size_t size = 0;
                 MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, resolve_, ty, size), StringView("Can't get size of ") << ty);
                 of << size;
@@ -6742,7 +6740,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         } else {
             emitLvalue(e.retVal);
             of << StringView(" = ");
-            if (innerTy == HIRTypeRef()) {
+            if (innerTy == nullptr) {
                 size_t alignment = 0;
                 MIR_ASSERT(localMirRes, TargetGetAlignOf(sp, resolve_, ty, alignment), StringView("Can't get alignment of ") << ty);
                 of << alignment;
@@ -7043,8 +7041,8 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         MIR_ASSERT(localMirRes, currentFunctionTracksCaller, StringView("`caller_location` used outside a #[track_caller] function"));
         emitLvalue(e.retVal);
         of << StringView(" = (");
-        HIRTypeRef callerTypeTmp;
-        emitCtype(localMirRes.getLvalueType(callerTypeTmp, e.retVal));
+        const HIRTypeData* callerTypeTmp;
+        emitCtype(localMirRes.getLvalueType(e.retVal));
         of << StringView(")trustme_caller");
     } else if (name == "offset") {
         emitLvalue(e.retVal);
@@ -7059,8 +7057,8 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         of << StringView(" + ");
         emitParam(e.args.at(1));
     } else if (name == "ptr_mask") {
-        HIRTypeRef tmp;
-        const auto& returnType = localMirRes.getLvalueType(tmp, e.retVal);
+        const HIRTypeData* tmp;
+        const auto& returnType = localMirRes.getLvalueType(e.retVal);
         MIR_ASSERT(localMirRes, returnType->is_Pointer(), StringView("ptr_mask returned ") << returnType);
         emitLvalue(e.retVal);
         of << StringView(" = (");
@@ -7628,8 +7626,8 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             emitParam(e.args.at(0));
             of << StringView(", ");
             emitParam(e.args.at(1));
-            HIRTypeRef tmp;
-            const auto& shiftTy = localMirRes.getParamType(tmp, e.args.at(1));
+            const HIRTypeData* tmp;
+            const auto& shiftTy = localMirRes.getParamType(e.args.at(1));
             if (shiftTy == HIRCoreType::I128 || shiftTy == HIRCoreType::U128) {
                 of << StringView(".lo");
             }
@@ -7651,8 +7649,8 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             emitParam(e.args.at(0));
             of << StringView(", ");
             emitParam(e.args.at(1));
-            HIRTypeRef tmp;
-            const auto& shiftTy = localMirRes.getParamType(tmp, e.args.at(1));
+            const HIRTypeData* tmp;
+            const auto& shiftTy = localMirRes.getParamType(e.args.at(1));
             if (shiftTy == HIRCoreType::I128 || shiftTy == HIRCoreType::U128) {
                 of << StringView(".lo");
             }
@@ -9029,8 +9027,8 @@ auto CodeGeneratorC::fieldIsUnderaligned(const MIRLValue& slot, const HIRTypeDat
     while (ref.is_Field() || ref.is_Downcast()) {
         auto inner = ref.innerRef();
         if (ref.is_Field()) {
-            HIRTypeRef tmp;
-            const auto* outerTy = mirRes->getLvalueType(tmp, inner);
+            const HIRTypeData* tmp;
+            const auto* outerTy = mirRes->getLvalueType(inner);
             if (const auto* te = outerTy->opt_Path()) {
                 if (const auto* str = te->binding.opt_Struct()) {
                     const unsigned packedTo = (**str).maxFieldAlignment;
@@ -9107,8 +9105,8 @@ auto CodeGeneratorC::emitDestructorCall(const MIRLValue& slot, const HIRTypeData
                         of << StringView(");\n");
                     } else if (this->typeIsBadZst(ty) && (slot.is_Field() || slot.is_Downcast())) {
                         auto v = MIRLValue::CRef(slot).innerRef();
-                        HIRTypeRef tmp;
-                        while (this->typeIsBadZst(mirRes->getLvalueType(tmp, v)) && (v.is_Field() || v.is_Downcast())) {
+                        const HIRTypeData* tmp;
+                        while (this->typeIsBadZst(mirRes->getLvalueType(v)) && (v.is_Field() || v.is_Downcast())) {
                             v = v.innerRef();
                         }
                         of << indent << TransMangleValue(p) << StringView("((");
@@ -9258,10 +9256,10 @@ auto CodeGeneratorC::emitLvalue(const MIRLValue::CRef& val) -> void {
         case MIRLValue::RefCommon::TAG_Argument: {
             decltype(val.as_Argument()) e = val.as_Argument();
             if (currentFunctionRealignsArguments) {
-                HIRTypeRef tmp;
+                const HIRTypeData* tmp;
                 size_t size = 0;
                 size_t alignment = 0;
-                const auto& ty = mirRes->getLvalueType(tmp, val);
+                const auto& ty = mirRes->getLvalueType(val);
                 if (TargetGetSizeAndAlignOf(sp, resolve_, ty, size, alignment) && size > 0 && alignment > maxCTypeAlignment) {
                     of << StringView("arg") << e << StringView("_aligned");
                     break;
@@ -9287,9 +9285,9 @@ auto CodeGeneratorC::emitLvalue(const MIRLValue::CRef& val) -> void {
         }
         case MIRLValue::RefCommon::TAG_Field: {
             decltype(val.as_Field()) fieldIndex = val.as_Field();
-            HIRTypeRef tmp;
+            const HIRTypeData* tmp;
             auto inner = val.innerRef();
-            const auto& ty = mirRes->getLvalueType(tmp, inner);
+            const auto& ty = mirRes->getLvalueType(inner);
             if (ty->is_Slice()) {
                 if (inner.is_Deref() || isIndirectDstLvalue(inner)) {
                     of << StringView("((");
@@ -9332,8 +9330,8 @@ auto CodeGeneratorC::emitLvalue(const MIRLValue::CRef& val) -> void {
         }
         case MIRLValue::RefCommon::TAG_Deref: {
             auto inner = val.innerRef();
-            HIRTypeRef tmp;
-            const auto& ty = mirRes->getLvalueType(tmp, val);
+            const HIRTypeData* tmp;
+            const auto& ty = mirRes->getLvalueType(val);
             auto dstType = metadataType(ty);
             if (dstType != MetadataType::None) {
                 of << StringView("(*(");
@@ -9351,8 +9349,8 @@ auto CodeGeneratorC::emitLvalue(const MIRLValue::CRef& val) -> void {
         case MIRLValue::RefCommon::TAG_Index: {
             decltype(val.as_Index()) indexLocal = val.as_Index();
             auto inner = val.innerRef();
-            HIRTypeRef tmp;
-            const auto& ty = mirRes->getLvalueType(tmp, inner);
+            const HIRTypeData* tmp;
+            const auto& ty = mirRes->getLvalueType(inner);
             of << StringView("(");
             if (ty->is_Slice()) {
                 if (inner.is_Deref() || isIndirectDstLvalue(inner)) {
@@ -9382,8 +9380,8 @@ auto CodeGeneratorC::emitLvalue(const MIRLValue::CRef& val) -> void {
         case MIRLValue::RefCommon::TAG_Downcast: {
             decltype(val.as_Downcast()) variantIndex = val.as_Downcast();
             auto inner = val.innerRef();
-            HIRTypeRef tmp;
-            const auto& ty = mirRes->getLvalueType(tmp, inner);
+            const HIRTypeData* tmp;
+            const auto& ty = mirRes->getLvalueType(inner);
             emitLvalue(inner);
             MIR_ASSERT(*mirRes, ty->is_Path(), StringView("Downcast on non-Path type - ") << ty);
             if (ty->as_Path().binding.is_Enum()) {
@@ -9661,9 +9659,9 @@ auto CodeGeneratorC::emitParam(const MIRParam& p, bool typeBytes) -> void {
         case MIRParam::TAG_Constant: {
             auto& e = p.as_Constant();
             if (typeBytes && e.is_Bytes()) {
-                HIRTypeRef tmp;
+                const HIRTypeData* tmp;
                 of << StringView("(");
-                emitCtype(mirRes->getParamType(tmp, p));
+                emitCtype(mirRes->getParamType(p));
                 of << StringView(")");
                 emitConstant(e);
             } else {
@@ -9675,8 +9673,8 @@ auto CodeGeneratorC::emitParam(const MIRParam& p, bool typeBytes) -> void {
 }
 
 auto CodeGeneratorC::emitTraitMetadataParam(const MIRTypeResolve& localMirRes, const MIRParam& param) -> void {
-    HIRTypeRef tmp;
-    const auto& ty = localMirRes.getParamType(tmp, param);
+    const HIRTypeData* tmp;
+    const auto& ty = localMirRes.getParamType(param);
     emitParam(param);
     if (const auto* te = ty->opt_Path()) {
         if (te->path.data.is_Generic() && te->path.data.as_Generic().path == resolve_.langDynMetadata()) {
@@ -9699,8 +9697,8 @@ auto CodeGeneratorC::emitCtype(const HIRTypeData* ty, F inner, bool isExternC) -
 auto CodeGeneratorC::emitCtypeCb(const HIRTypeData* ty, CTypeCallback& inner, bool isExternC) -> void {
     auto normalizedIt = normalizedCtypes.find(ty);
     if (normalizedIt == normalizedCtypes.end()) {
-        HIRTypeRef normalized = ty;
-        resolve_.expandAssociatedTypes(sp, normalized);
+        const HIRTypeData* normalized = ty;
+        normalized = resolve_.expandAssociatedTypes(sp, normalized);
         normalizedIt = normalizedCtypes.emplace(ty, mv$(normalized)).first;
     }
     if (normalizedIt->second != ty) {
@@ -9893,7 +9891,7 @@ auto CodeGeneratorC::emitCtypeCb(const HIRTypeData* ty, CTypeCallback& inner, bo
     }
 }
 
-auto CodeGeneratorC::getInnerUnsizedType(const HIRTypeData* ty) -> HIRTypeRef {
+auto CodeGeneratorC::getInnerUnsizedType(const HIRTypeData* ty) -> const HIRTypeData* {
     if (ty == HIRCoreType::Str || ty->is_Slice()) {
         return ty;
     } else if (ty->is_TraitObject()) {
@@ -9912,7 +9910,7 @@ auto CodeGeneratorC::getInnerUnsizedType(const HIRTypeData* ty) -> HIRTypeRef {
                     auto& tpb = tuMatch.as_Struct();
                     switch (tpb->structMarkings.dstType) {
                         case HIRStructMarkings::DstType::None:
-                            return HIRTypeRef();
+                            return nullptr;
                         case HIRStructMarkings::DstType::Slice:
                         case HIRStructMarkings::DstType::TraitObject:
                         case HIRStructMarkings::DstType::Possible:
@@ -9943,16 +9941,16 @@ auto CodeGeneratorC::getInnerUnsizedType(const HIRTypeData* ty) -> HIRTypeRef {
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    return HIRTypeRef();
+                    return nullptr;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    return HIRTypeRef();
+                    return nullptr;
                 }
             }
         }
         UNREACHABLE();
     } else {
-        return HIRTypeRef();
+        return nullptr;
     }
 }
 
@@ -10106,8 +10104,8 @@ auto CodeGeneratorC::emitUnsizedArgumentLocal(const HIRTypeData* ty, unsigned in
 }
 
 auto CodeGeneratorC::isIndirectDstLvalue(const MIRLValue::CRef& value) -> bool {
-    HIRTypeRef tmp;
-    if (!this->isDst(mirRes->getLvalueType(tmp, value))) {
+    const HIRTypeData* tmp;
+    if (!this->isDst(mirRes->getLvalueType(value))) {
         return false;
     }
     auto base = value;
@@ -10118,8 +10116,8 @@ auto CodeGeneratorC::isIndirectDstLvalue(const MIRLValue::CRef& value) -> bool {
 }
 
 auto CodeGeneratorC::emitDstLvaluePointer(const MIRLValue::CRef& value) -> void {
-    HIRTypeRef valueTmp;
-    const auto& valueTy = mirRes->getLvalueType(valueTmp, value);
+    const HIRTypeData* valueTmp;
+    const auto& valueTy = mirRes->getLvalueType(value);
     const auto valueMeta = this->metadataType(valueTy);
     MIR_ASSERT(*mirRes, valueMeta == MetadataType::Slice || valueMeta == MetadataType::TraitObject, StringView("Expected an indirect DST lvalue - ") << value);
 
@@ -10132,8 +10130,8 @@ auto CodeGeneratorC::emitDstLvaluePointer(const MIRLValue::CRef& value) -> void 
     if (base.is_Deref()) {
         basePointer = base.innerRef();
     } else {
-        HIRTypeRef baseTmp;
-        const auto& baseTy = mirRes->getLvalueType(baseTmp, base);
+        const HIRTypeData* baseTmp;
+        const auto& baseTy = mirRes->getLvalueType(base);
         MIR_ASSERT(*mirRes, base.is_Argument() && this->isDst(baseTy), StringView("DST access must be through a pointer or an unsized argument - ") << value);
     }
 
@@ -10152,8 +10150,8 @@ auto CodeGeneratorC::emitDstLvaluePointer(const MIRLValue::CRef& value) -> void 
         const auto& wrapper = value.lv().wrappers[i];
         MIR_ASSERT(*mirRes, wrapper.is_Field(), StringView("Unexpected DST projection in ") << value);
 
-        HIRTypeRef parentTmp;
-        const auto& parentTy = mirRes->getLvalueType(parentTmp, MIRLValue::CRef(value.lv(), i));
+        const HIRTypeData* parentTmp;
+        const auto& parentTy = mirRes->getLvalueType(MIRLValue::CRef(value.lv(), i));
         const auto* repr = TargetGetTypeRepr(sp, resolve_, parentTy);
         MIR_ASSERT(*mirRes, repr && wrapper.as_Field() < repr->fields.size(), StringView("Invalid DST field ") << wrapper.as_Field() << StringView(" on ") << parentTy);
         const auto& field = repr->fields[wrapper.as_Field()];

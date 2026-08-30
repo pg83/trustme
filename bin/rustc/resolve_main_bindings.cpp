@@ -2690,7 +2690,7 @@ namespace {
         UNREACHABLE();
     }
 
-    ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type);
+    ASTType* HIRTypeToAST(Context& context, const Span& span, const HIRTypeData* type);
 
     ASTPathParams HIRPathParamsToAST(Context& context, const Span& span, const HIRPathParams& params) {
         ASTPathParams rv;
@@ -2735,7 +2735,7 @@ namespace {
         UNREACHABLE();
     }
 
-    ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
+    ASTType* HIRTypeToAST(Context& context, const Span& span, const HIRTypeData* type) {
         auto& pool = context.typePool();
         switch ((*type).tag()) {
             case HIRTypeData::TAG_Infer: {

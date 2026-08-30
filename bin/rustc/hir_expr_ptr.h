@@ -13,7 +13,6 @@ namespace stl {
 }
 
 class HIRTypeData;
-using HIRTypeRef = const HIRTypeData*;
 class HIRSimplePath;
 class HIRExprNode;
 class HIRCrate;
@@ -97,8 +96,8 @@ class HIRExprPtr {
     HIRExprNodeP node;
 
 public:
-    stl::Vector<HIRTypeRef> bindings;
-    stl::Vector<HIRTypeRef> erasedTypes;
+    stl::Vector<const HIRTypeData*> bindings;
+    stl::Vector<const HIRTypeData*> erasedTypes;
     std::vector<HIRSimplePath> defineOpaque;
 
     MIRFunctionPointer mir;
