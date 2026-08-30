@@ -32,13 +32,13 @@ void TraitResolveCommon::prepIndexes(const Span& sp) {
     DEBUG(traitBounds.size() << StringView(" trait bounds"));
 }
 
-void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, const HIRTypeData* longTy, const HIRTypeData* shortTy) {
+void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, const HIRType* longTy, const HIRType* shortTy) {
     DEBUG(StringView("ADD ") << longTy << StringView(" => ") << shortTy);
     // TODO: Sort the two types by "complexity" (most of the time long >= short)
     this->typeEqualities.insert(std::make_pair(mv$(longTy), CachedEquality{mv$(shortTy)}));
 }
 
-void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const HIRTypeData* type, HIRTraitPath traitPath, bool addParents /*=true*/) {
+void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const HIRType* type, HIRTraitPath traitPath, bool addParents /*=true*/) {
     TRACE_FUNCTION_F(type << StringView(" : ") << traitPath);
     const auto boundConstness = traitPath.constness;
     auto getOrAddTraitBound = [&](const HIRGenericPath& genericPath) -> CachedBound& {
@@ -127,7 +127,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const HIRTypeD
     }
 }
 
-const HIRTypeData* TraitResolveCommon::getConstParamType(const Span& sp, unsigned binding) const {
+const HIRType* TraitResolveCommon::getConstParamType(const Span& sp, unsigned binding) const {
     const HIRGenericParams* p;
     switch (binding >> 8) {
         case 0:
@@ -195,11 +195,11 @@ void stl::output<ZeroCopyOutput, TraitResolveCommon::CachedEquality>(ZeroCopyOut
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::pair<const HIRTypeData* const, TraitResolveCommon::CachedEquality>>(ZeroCopyOutput& out, std::pair<const HIRTypeData* const, TraitResolveCommon::CachedEquality> value) {
+void stl::output<ZeroCopyOutput, std::pair<const HIRType* const, TraitResolveCommon::CachedEquality>>(ZeroCopyOutput& out, std::pair<const HIRType* const, TraitResolveCommon::CachedEquality> value) {
     out << value.first << StringView(": ") << value.second;
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::map<const HIRTypeData*, TraitResolveCommon::CachedEquality, HIRTypeUidOrder>>(ZeroCopyOutput& out, const std::map<const HIRTypeData*, TraitResolveCommon::CachedEquality, HIRTypeUidOrder>& values) {
+void stl::output<ZeroCopyOutput, std::map<const HIRType*, TraitResolveCommon::CachedEquality, HIRTypeUidOrder>>(ZeroCopyOutput& out, const std::map<const HIRType*, TraitResolveCommon::CachedEquality, HIRTypeUidOrder>& values) {
     outCont(out, values);
 }

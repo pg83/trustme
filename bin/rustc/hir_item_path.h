@@ -5,7 +5,7 @@
 class HIRItemPath {
 public:
     const HIRItemPath* parent = nullptr;
-    const HIRTypeData* ty = nullptr;
+    const HIRType* ty = nullptr;
     const HIRSimplePath* trait = nullptr;
     const HIRPathParams* traitParams = nullptr;
     const char* name = nullptr;
@@ -22,9 +22,9 @@ public:
 
     HIRItemPath(const HIRPath& p);
 
-    HIRItemPath(const HIRTypeData* type);
+    HIRItemPath(const HIRType* type);
 
-    HIRItemPath(const HIRTypeData* type, const HIRSimplePath& path, const HIRPathParams& params);
+    HIRItemPath(const HIRType* type, const HIRSimplePath& path, const HIRPathParams& params);
 
     HIRItemPath(const HIRSimplePath& path);
 

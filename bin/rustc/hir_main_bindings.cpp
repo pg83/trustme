@@ -22,7 +22,7 @@ namespace {
 
     struct HirDeserialiser {
         RcString crateName;
-        Vector<const HIRTypeData*> types;
+        Vector<const HIRType*> types;
         HIRSerialiseReader& in;
         HIRTypeInterner& typeInterner;
         u32& id;
@@ -97,7 +97,7 @@ namespace {
 
         HIRArraySize deserialiseArraysize();
         HIRGenericRef deserialiseGenericref();
-        const HIRTypeData* deserialiseType();
+        const HIRType* deserialiseType();
         HIRSimplePath deserialiseSimplepath();
         HIRPathParams deserialisePathparams();
         HIRGenericPath deserialiseGenericpath();
@@ -191,7 +191,7 @@ namespace {
 
         HIRFunction::Markings deserialiseFunctionMarkings();
 
-        std::vector<std::pair<HIRPattern, const HIRTypeData*>> deserialiseFcnargs();
+        std::vector<std::pair<HIRPattern, const HIRType*>> deserialiseFcnargs();
 
         HIRConstant deserialiseConstant();
 
@@ -249,7 +249,7 @@ namespace {
     DEF_D(HIRVisEnt<T>, return d.deserialiseVisent<T>();)
 
     template <>
-    DEF_D(const HIRTypeData*, return d.deserialiseType();)
+    DEF_D(const HIRType*, return d.deserialiseType();)
     template <>
     DEF_D(HIRSimplePath, return d.deserialiseSimplepath();)
     template <>
@@ -533,7 +533,7 @@ namespace {
 
         void serialiseArraysize(const HIRArraySize& as);
 
-        void serialiseType(const HIRTypeData* ty);
+        void serialiseType(const HIRType* ty);
 
         void serialiseSimplepath(const HIRSimplePath& path);
 
@@ -582,7 +582,7 @@ namespace {
 
         void serialise(const HIRMarkerImpl& impl);
 
-        void serialise(const HIRTypeData* ty);
+        void serialise(const HIRType* ty);
 
         void serialise(const HIRSimplePath& p);
 
@@ -742,8 +742,8 @@ HIRArraySize HirDeserialiser::deserialiseArraysize() {
     }
 }
 
-const HIRTypeData* HirDeserialiser::deserialiseType() {
-    const HIRTypeData* rv;
+const HIRType* HirDeserialiser::deserialiseType() {
+    const HIRType* rv;
 
     TRACE_FUNCTION_FR(StringView(""), rv);
     auto idx = in.readCount();
@@ -757,8 +757,8 @@ const HIRTypeData* HirDeserialiser::deserialiseType() {
 
     switch (auto tag = in.readTag()) {
 #define _(x, ...)                                                     \
-    case HIRTypeData::TAG_##x:                                        \
-        rv = typeInterner.intern(HIRTypeData::make_##x(__VA_ARGS__)); \
+    case HIRType::TAG_##x:                                        \
+        rv = typeInterner.intern(HIRType::make_##x(__VA_ARGS__)); \
         break;
         _(Infer, {~0u, HIRInferClass::None})
         _(Diverge, {})
@@ -766,16 +766,16 @@ const HIRTypeData* HirDeserialiser::deserialiseType() {
         _(Path, {deserialisePath(), {}})
         _(Generic, deserialiseGenericref())
         _(TraitObject, {deserialiseTraitpath(), deserialiseVec<HIRGenericPath>(), in.readIstring(), in.readBool()})
-        case HIRTypeData::TAG_ErasedType:
+        case HIRType::TAG_ErasedType:
             TODO(Span(), StringView("ErasedType"));
             _(Array, {deserialiseType(), deserialiseArraysize()})
             _(Slice, {deserialiseType()})
-            _(Tuple, deserialiseVector<const HIRTypeData*>())
+            _(Tuple, deserialiseVector<const HIRType*>())
             _(Borrow, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(Pointer, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(NamedFunction, {deserialisePath()})
-            _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVector<const HIRTypeData*>(), in.readBool(), in.readIstring(), in.readBool()})
-        case HIRTypeData::TAG_Pattern: {
+            _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVector<const HIRType*>(), in.readBool(), in.readIstring(), in.readBool()})
+        case HIRType::TAG_Pattern: {
             auto inner = deserialiseType();
             HIRTypePattern pattern;
             auto count = in.readCount();
@@ -793,7 +793,7 @@ const HIRTypeData* HirDeserialiser::deserialiseType() {
                 range.endInclusive = in.readBool();
                 pattern.alternatives.push_back(mv$(range));
             }
-            rv = typeInterner.intern(HIRTypeData::make_Pattern({inner, mv$(pattern)}));
+            rv = typeInterner.intern(HIRType::make_Pattern({inner, mv$(pattern)}));
             break;
         }
 #undef _
@@ -819,7 +819,7 @@ HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
 HIRPathParams HirDeserialiser::deserialisePathparams() {
     HIRPathParams rv;
     TRACE_FUNCTION_FR(StringView(""), rv);
-    rv.types = deserialiseThinvec<const HIRTypeData*>();
+    rv.types = deserialiseThinvec<const HIRType*>();
     rv.values = deserialiseThinvec<HIRConstGeneric>();
     return rv;
 }
@@ -979,7 +979,7 @@ HIRStruct HirDeserialiser::deserialiseStruct() {
             break;
         case HIRStruct::Data::TAG_Tuple:
             DEBUG(StringView("Tuple"));
-            data = HIRStruct::Data(deserialiseVec<HIRVisEnt<const HIRTypeData*>>());
+            data = HIRStruct::Data(deserialiseVec<HIRVisEnt<const HIRType*>>());
             break;
         case HIRStruct::Data::TAG_Named:
             DEBUG(StringView("Named"));
@@ -1082,7 +1082,7 @@ MIRFunctionPointer HirDeserialiser::deserialiseMir() {
     TRACE_FUNCTION;
     MIRFunction rv;
 
-    rv.locals = deserialiseVector<const HIRTypeData*>();
+    rv.locals = deserialiseVector<const HIRType*>();
     rv.dropFlags = deserialiseVector<bool>();
     rv.blocks = deserialiseVec<MIRBasicBlock>();
 
@@ -1696,7 +1696,7 @@ auto HirDeserialiser::deserialiseTraitimpl() -> HIRTraitImpl {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
         DEBUG((isSpec ? "default " : "") << StringView("type ") << name);
-        rv.types.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<const HIRTypeData*>{isSpec, deserialiseType()}));
+        rv.types.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<const HIRType*>{isSpec, deserialiseType()}));
     }
 
     return rv;
@@ -1900,7 +1900,7 @@ auto HirDeserialiser::deserialiseExprptr() -> HIRExprPtr {
     if (in.readBool()) {
         rv.mir = deserialiseMir();
     }
-    rv.erasedTypes = deserialiseVector<const HIRTypeData*>();
+    rv.erasedTypes = deserialiseVector<const HIRType*>();
     return rv;
 }
 
@@ -2110,9 +2110,9 @@ auto HirDeserialiser::deserialiseFunctionMarkings() -> HIRFunction::Markings {
     return rv;
 }
 
-auto HirDeserialiser::deserialiseFcnargs() -> std::vector<std::pair<HIRPattern, const HIRTypeData*>> {
+auto HirDeserialiser::deserialiseFcnargs() -> std::vector<std::pair<HIRPattern, const HIRType*>> {
     size_t n = in.readCount();
-    std::vector<std::pair<HIRPattern, const HIRTypeData*>> rv;
+    std::vector<std::pair<HIRPattern, const HIRType*>> rv;
     rv.reserve(n);
     for (size_t i = 0; i < n; i++) {
         rv.push_back(std::make_pair(HIRPattern{}, deserialiseType()));
@@ -3283,7 +3283,7 @@ auto HirSerialiser::serialiseArraysize(const HIRArraySize& as) -> void {
     }
 }
 
-auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
+auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
     auto tyStr = FMT(ty);
     if (tyStr[0] == '{') {
         auto p = tyStr.find('}');
@@ -3302,28 +3302,28 @@ auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
     auto _ = out.openObject("HIR::TypeData");
     out.writeTag(ty->tag());
     switch ((*ty).tag()) {
-        case HIRTypeData::TAG_Infer: {
+        case HIRType::TAG_Infer: {
             break;
         }
-        case HIRTypeData::TAG_Diverge: {
+        case HIRType::TAG_Diverge: {
             break;
         }
-        case HIRTypeData::TAG_Primitive: {
+        case HIRType::TAG_Primitive: {
             auto& e = (*ty).as_Primitive();
             out.writeTag(static_cast<int>(e));
             break;
         }
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& e = (*ty).as_Path();
             serialisePath(e.path);
             break;
         }
-        case HIRTypeData::TAG_Generic: {
+        case HIRType::TAG_Generic: {
             auto& e = (*ty).as_Generic();
             serialise(e);
             break;
         }
-        case HIRTypeData::TAG_TraitObject: {
+        case HIRType::TAG_TraitObject: {
             auto& e = (*ty).as_TraitObject();
             serialiseTraitpath(e.trait);
             serialiseVec(e.markers);
@@ -3331,7 +3331,7 @@ auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
             out.writeBool(e.lifetimeIdentityHasFree);
             break;
         }
-        case HIRTypeData::TAG_ErasedType: {
+        case HIRType::TAG_ErasedType: {
             auto& e = (*ty).as_ErasedType();
             TODO(Span(), StringView("Serialse ErasedType?"));
 
@@ -3340,40 +3340,40 @@ auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
             serialisePathparams(e.use);
             break;
         }
-        case HIRTypeData::TAG_Array: {
+        case HIRType::TAG_Array: {
             auto& e = (*ty).as_Array();
             serialiseType(e.inner);
             serialiseArraysize(e.size);
             break;
         }
-        case HIRTypeData::TAG_Slice: {
+        case HIRType::TAG_Slice: {
             auto& e = (*ty).as_Slice();
             serialiseType(e.inner);
             break;
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             auto& e = (*ty).as_Tuple();
             serialiseVec(e);
             break;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto& e = (*ty).as_Borrow();
             out.writeTag(static_cast<int>(e.type));
             serialiseType(e.inner);
             break;
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             auto& e = (*ty).as_Pointer();
             out.writeTag(static_cast<int>(e.type));
             serialiseType(e.inner);
             break;
         }
-        case HIRTypeData::TAG_NamedFunction: {
+        case HIRType::TAG_NamedFunction: {
             auto& e = (*ty).as_NamedFunction();
             serialisePath(e.path);
             break;
         }
-        case HIRTypeData::TAG_Function: {
+        case HIRType::TAG_Function: {
             auto& e = (*ty).as_Function();
             out.writeBool(e.isUnsafe);
             out.writeBool(e.isVariadic);
@@ -3385,7 +3385,7 @@ auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
             out.writeBool(e.lifetimeIdentityHasFree);
             break;
         }
-        case HIRTypeData::TAG_Pattern: {
+        case HIRType::TAG_Pattern: {
             auto& e = (*ty).as_Pattern();
             serialiseType(e.inner);
             out.writeCount(e.pattern.alternatives.size());
@@ -3402,7 +3402,7 @@ auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
             }
             break;
         } break;
-        case HIRTypeData::TAG_NodeType:
+        case HIRType::TAG_NodeType:
             BUG(Span(), StringView("Encountered invalid type when serialising - ") << ty);
             break;
     }
@@ -3699,7 +3699,7 @@ auto HirSerialiser::serialise(const HIRMarkerImpl& impl) -> void {
     serialiseMarkerimpl(impl);
 }
 
-auto HirSerialiser::serialise(const HIRTypeData* ty) -> void {
+auto HirSerialiser::serialise(const HIRType* ty) -> void {
     serialiseType(ty);
 }
 

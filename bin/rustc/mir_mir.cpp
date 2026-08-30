@@ -858,7 +858,7 @@ bool MIRSwitchValues::operator==(const MIRSwitchValues& x) const {
     return true;
 }
 
-const HIRTypeData* MIRCloner::valueGenericType(HIRGenericRef ce) const {
+const HIRType* MIRCloner::valueGenericType(HIRGenericRef ce) const {
     TODO(sp, StringView("`value_generic_type` not implemented, shouldn't be called unless `monomorpiser` has been overridden"));
 }
 
@@ -874,7 +874,7 @@ const Monomorphiser& MIRCloner::monomorphiser() const {
     return *nop;
 }
 
-const HIRTypeData* MIRCloner::monomorph(const HIRTypeData* ty) const {
+const HIRType* MIRCloner::monomorph(const HIRType* ty) const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorphType(sp, ty);
     if (auto* r = resolve()) {

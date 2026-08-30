@@ -11,7 +11,7 @@ MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types)
 {
 }
 
-MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types, const HIRTypeData* selfTy, const HIRPathParams* paramsI, const HIRPathParams* paramsM, const HIRPathParams* paramsP, const HIRPathParams* paramsH)
+MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types, const HIRType* selfTy, const HIRPathParams* paramsI, const HIRPathParams* paramsM, const HIRPathParams* paramsP, const HIRPathParams* paramsH)
     : MonomorphiserPP(types)
     , selfTy(selfTy)
     , ppImpl(paramsI)
@@ -74,7 +74,7 @@ void MonomorphState::setImplParams(HIRPathParams pp) {
     ppImplData = std::move(pp);
 }
 
-const HIRTypeData* MonomorphiserNop::getType(const Span& sp, const HIRGenericRef& ty) const {
+const HIRType* MonomorphiserNop::getType(const Span& sp, const HIRGenericRef& ty) const {
     return types.generic(ty);
 }
 
@@ -89,7 +89,7 @@ OpaqueAliasParamMonomorph::OpaqueAliasParamMonomorph(HIRTypeInterner& types, con
 {
 }
 
-const HIRTypeData* OpaqueAliasParamMonomorph::getType(const Span& sp, const HIRGenericRef& generic) const {
+const HIRType* OpaqueAliasParamMonomorph::getType(const Span& sp, const HIRGenericRef& generic) const {
     auto type = MonomorphiserNop::getType(sp, generic);
     for (size_t i = 0; i < params.types.size(); i++) {
         if (params.types[i] == type) {
@@ -111,7 +111,7 @@ HIRConstGeneric OpaqueAliasParamMonomorph::getValue(const Span& sp, const HIRGen
     return MonomorphiserNop::getValue(sp, generic);
 }
 
-const HIRTypeData* MonomorphStatePtr::getSelfType() const {
+const HIRType* MonomorphStatePtr::getSelfType() const {
     return selfTy;
 }
 
@@ -127,7 +127,7 @@ const HIRPathParams* MonomorphStatePtr::getHrbParams() const {
     return ppHrb;
 }
 
-const HIRTypeData* MonomorphState::getSelfType() const {
+const HIRType* MonomorphState::getSelfType() const {
     return selfTy;
 }
 

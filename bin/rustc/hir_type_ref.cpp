@@ -4,7 +4,7 @@
 
 using namespace stl;
 
-const HIRTypeData* HIRResolvePlaceholdersNop::getType(const Span&, const HIRTypeData* ty) const {
+const HIRType* HIRResolvePlaceholdersNop::getType(const Span&, const HIRType* ty) const {
     return ty;
 }
 

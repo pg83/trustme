@@ -603,20 +603,20 @@ void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
     }
 }
 
-const HIRTypeData* HIRExprVisitorDef::visitType(const HIRTypeData* ty) {
+const HIRType* HIRExprVisitorDef::visitType(const HIRType* ty) {
     switch (ty->tag()) {
-        case HIRTypeData::TAG_Infer:
-        case HIRTypeData::TAG_Diverge:
-        case HIRTypeData::TAG_Primitive:
-        case HIRTypeData::TAG_Generic:
-        case HIRTypeData::TAG_NodeType:
+        case HIRType::TAG_Infer:
+        case HIRType::TAG_Diverge:
+        case HIRType::TAG_Primitive:
+        case HIRType::TAG_Generic:
+        case HIRType::TAG_NodeType:
             return ty;
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto data = ty->cloneData();
             this->visitPath(HIRVisitor::PathContext::TYPE, data.as_Path().path);
             return types.intern(std::move(data));
         }
-        case HIRTypeData::TAG_TraitObject: {
+        case HIRType::TAG_TraitObject: {
             auto data = ty->cloneData();
             auto& e = data.as_TraitObject();
             this->visitTraitPath(e.trait);
@@ -625,7 +625,7 @@ const HIRTypeData* HIRExprVisitorDef::visitType(const HIRTypeData* ty) {
             }
             return types.intern(std::move(data));
         }
-        case HIRTypeData::TAG_ErasedType: {
+        case HIRType::TAG_ErasedType: {
             auto data = ty->cloneData();
             auto& e = data.as_ErasedType();
             for (auto& trait : e.traits) {
@@ -646,12 +646,12 @@ const HIRTypeData* HIRExprVisitorDef::visitType(const HIRTypeData* ty) {
             }
             return types.intern(std::move(data));
         }
-        case HIRTypeData::TAG_NamedFunction: {
+        case HIRType::TAG_NamedFunction: {
             auto data = ty->cloneData();
             this->visitPath(HIRVisitor::PathContext::VALUE, data.as_NamedFunction().path);
             return types.intern(std::move(data));
         }
-        case HIRTypeData::TAG_Array: {
+        case HIRType::TAG_Array: {
             auto ninner = visitType(ty->as_Array().inner);
             if (ninner == ty->as_Array().inner) {
                 return ty;
@@ -660,7 +660,7 @@ const HIRTypeData* HIRExprVisitorDef::visitType(const HIRTypeData* ty) {
             data.as_Array().inner = ninner;
             return types.intern(std::move(data));
         }
-        case HIRTypeData::TAG_Slice: {
+        case HIRType::TAG_Slice: {
             auto ninner = visitType(ty->as_Slice().inner);
             if (ninner == ty->as_Slice().inner) {
                 return ty;
@@ -669,7 +669,7 @@ const HIRTypeData* HIRExprVisitorDef::visitType(const HIRTypeData* ty) {
             data.as_Slice().inner = ninner;
             return types.intern(std::move(data));
         }
-        case HIRTypeData::TAG_Pattern: {
+        case HIRType::TAG_Pattern: {
             auto ninner = visitType(ty->as_Pattern().inner);
             if (ninner == ty->as_Pattern().inner) {
                 return ty;
@@ -678,7 +678,7 @@ const HIRTypeData* HIRExprVisitorDef::visitType(const HIRTypeData* ty) {
             data.as_Pattern().inner = ninner;
             return types.intern(std::move(data));
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto ninner = visitType(ty->as_Borrow().inner);
             if (ninner == ty->as_Borrow().inner) {
                 return ty;
@@ -687,7 +687,7 @@ const HIRTypeData* HIRExprVisitorDef::visitType(const HIRTypeData* ty) {
             data.as_Borrow().inner = ninner;
             return types.intern(std::move(data));
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             auto ninner = visitType(ty->as_Pointer().inner);
             if (ninner == ty->as_Pointer().inner) {
                 return ty;
@@ -696,7 +696,7 @@ const HIRTypeData* HIRExprVisitorDef::visitType(const HIRTypeData* ty) {
             data.as_Pointer().inner = ninner;
             return types.intern(std::move(data));
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             const auto& e = ty->as_Tuple();
             for (size_t i = 0; i < e.length(); i++) {
                 auto nt = visitType(e[i]);
@@ -712,11 +712,11 @@ const HIRTypeData* HIRExprVisitorDef::visitType(const HIRTypeData* ty) {
             }
             return ty;
         }
-        case HIRTypeData::TAG_Function: {
+        case HIRType::TAG_Function: {
             const auto& e = ty->as_Function();
             auto nret = visitType(e.rettype);
             size_t argIdx = e.argTypes.length();
-            const HIRTypeData* narg = nullptr;
+            const HIRType* narg = nullptr;
             for (size_t i = 0; i < e.argTypes.length(); i++) {
                 narg = visitType(e.argTypes[i]);
                 if (narg != e.argTypes[i]) {
@@ -869,7 +869,7 @@ HIRExprNodeLoopControl::HIRExprNodeLoopControl(Span sp, RcString label, bool con
 {
 }
 
-HIRExprNodeLet::HIRExprNodeLet(Span sp, HIRPattern pat, const HIRTypeData* ty, HIRExprNodeP val, bool isSuper)
+HIRExprNodeLet::HIRExprNodeLet(Span sp, HIRPattern pat, const HIRType* ty, HIRExprNodeP val, bool isSuper)
     : HIRExprNode(mv$(sp))
     , pattern(mv$(pat))
     , type(mv$(ty))
@@ -1010,14 +1010,14 @@ HIRExprNodeRawBorrow::HIRExprNodeRawBorrow(Span sp, HIRBorrowType bt, HIRExprNod
 {
 }
 
-HIRExprNodeCast::HIRExprNodeCast(Span sp, HIRExprNodeP value, const HIRTypeData* dstType)
+HIRExprNodeCast::HIRExprNodeCast(Span sp, HIRExprNodeP value, const HIRType* dstType)
     : HIRExprNode(mv$(sp))
     , value(mv$(value))
     , dstType(mv$(dstType))
 {
 }
 
-HIRExprNodeUnsize::HIRExprNodeUnsize(Span sp, HIRExprNodeP value, const HIRTypeData* dstType)
+HIRExprNodeUnsize::HIRExprNodeUnsize(Span sp, HIRExprNodeP value, const HIRType* dstType)
     : HIRExprNode(mv$(sp))
     , value(mv$(value))
     , dstType(mv$(dstType))
@@ -1123,7 +1123,7 @@ HIRExprNodeConstParam::HIRExprNodeConstParam(Span sp, RcString name, unsigned in
 {
 }
 
-HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, const HIRTypeData* ty, bool isStruct, HIRExprNodeP baseValue, tValues values)
+HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, const HIRType* ty, bool isStruct, HIRExprNodeP baseValue, tValues values)
     : HIRExprNode(mv$(sp))
     , type(mv$(ty))
     , isStruct(isStruct)
@@ -1132,7 +1132,7 @@ HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, const HIRTypeData* t
 {
 }
 
-HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, const HIRTypeData* ty, bool isStruct, bool, tValues values)
+HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, const HIRType* ty, bool isStruct, bool, tValues values)
     : HIRExprNode(mv$(sp))
     , type(mv$(ty))
     , isStruct(isStruct)
@@ -1167,7 +1167,7 @@ HIRExprNodeArraySized::HIRExprNodeArraySized(Span sp, HIRExprNodeP val, HIRArray
 {
 }
 
-HIRExprNodeClosure::HIRExprNodeClosure(Span sp, argsT args, const HIRTypeData* rv, HIRExprNodeP code, bool isMove, bool isUse)
+HIRExprNodeClosure::HIRExprNodeClosure(Span sp, argsT args, const HIRType* rv, HIRExprNodeP code, bool isMove, bool isUse)
     : HIRExprNode(mv$(sp))
     , args(std::move(args))
     , returnType(std::move(rv))
@@ -1177,7 +1177,7 @@ HIRExprNodeClosure::HIRExprNodeClosure(Span sp, argsT args, const HIRTypeData* r
 {
 }
 
-HIRExprNodeGenerator::HIRExprNodeGenerator(Span sp, const HIRTypeData* rv, const HIRTypeData* resumeTy, HIRPattern resumePattern, bool hasResumePattern, const HIRTypeData* yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody)
+HIRExprNodeGenerator::HIRExprNodeGenerator(Span sp, const HIRType* rv, const HIRType* resumeTy, HIRPattern resumePattern, bool hasResumePattern, const HIRType* yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody)
     : HIRExprNode(mv$(sp))
     , returnType(std::move(rv))
     , resumeTy(resumeTy)
@@ -1191,7 +1191,7 @@ HIRExprNodeGenerator::HIRExprNodeGenerator(Span sp, const HIRTypeData* rv, const
 {
 }
 
-HIRExprNodeGeneratorWrapper::HIRExprNodeGeneratorWrapper(Span sp, const HIRTypeData* rv, const HIRTypeData* yieldTy, HIRExprNodeP code, bool isFuture)
+HIRExprNodeGeneratorWrapper::HIRExprNodeGeneratorWrapper(Span sp, const HIRType* rv, const HIRType* yieldTy, HIRExprNodeP code, bool isFuture)
     : HIRExprNode(mv$(sp))
     , isFuture(isFuture)
     , returnType(rv)
@@ -1200,7 +1200,7 @@ HIRExprNodeGeneratorWrapper::HIRExprNodeGeneratorWrapper(Span sp, const HIRTypeD
 {
 }
 
-HIRExprNodeAsyncBlock::HIRExprNodeAsyncBlock(Span sp, const HIRTypeData* returnType, HIRExprNodeP code, bool isMove, bool isUse)
+HIRExprNodeAsyncBlock::HIRExprNodeAsyncBlock(Span sp, const HIRType* returnType, HIRExprNodeP code, bool isMove, bool isUse)
     : HIRExprNode(mv$(sp))
     , returnType(returnType)
     , code(std::move(code))

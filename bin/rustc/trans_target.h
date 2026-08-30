@@ -116,7 +116,7 @@ struct TypeRepr {
 
     struct Field {
         size_t offset;
-        const HIRTypeData* ty;
+        const HIRType* ty;
     };
 
     std::vector<Field> fields;
@@ -136,16 +136,16 @@ static inline unsigned TargetGetPointerBits() {
     return 64;
 }
 
-bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize);
-bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outAlign);
-bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
+bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t& outSize);
+bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t& outAlign);
+bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t& outSize, size_t& outAlign);
 
 bool TargetCapsMemberAlignment();
 
-bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty);
+bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty);
 
-const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty);
+const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty);
 
-bool TargetTypesAreTransmutable(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* src, const HIRTypeData* dst, bool assumeAlignment, bool assumeLifetimes, bool assumeSafety, bool assumeValidity);
+bool TargetTypesAreTransmutable(const Span& sp, const StaticTraitResolve& resolve, const HIRType* src, const HIRType* dst, bool assumeAlignment, bool assumeLifetimes, bool assumeSafety, bool assumeValidity);
 
-const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const stl::Vector<size_t>& subFields = {}, size_t ofs = 0);
+const HIRType* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const stl::Vector<size_t>& subFields = {}, size_t ofs = 0);

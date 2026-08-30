@@ -5,7 +5,7 @@
 class HIRCrate;
 class HIRPath;
 class HIRSimplePath;
-class HIRTypeData;
+class HIRType;
 
 enum class AllocatorDataTy {
     Unit,
@@ -35,4 +35,4 @@ extern const char GLOBAL_ALLOCATOR_LANG_ITEM[];
 HIRSimplePath TransAllocatorTraitPath(const HIRCrate& crate);
 const HIRSimplePath& TransAllocatorLayoutPath(const HIRCrate& crate);
 HIRPath TransAllocatorLayoutCtorPath(const HIRCrate& crate);
-HIRPath TransAllocatorMethodPath(const HIRCrate& crate, const HIRTypeData* allocatorType, const AllocatorMethod& method);
+HIRPath TransAllocatorMethodPath(const HIRCrate& crate, const HIRType* allocatorType, const AllocatorMethod& method);

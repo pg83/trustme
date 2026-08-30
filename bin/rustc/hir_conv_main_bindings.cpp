@@ -45,7 +45,7 @@ namespace {
 
         unsigned inExpr;
         bool inImplTraitBinding = false;
-        const HIRTypeData* selfType = nullptr;
+        const HIRType* selfType = nullptr;
 
         HIRItemPath* fcnPath = nullptr;
         HIRFunction* fcnPtr = nullptr;
@@ -74,11 +74,11 @@ namespace {
 
         bool traitRequiresSizedSelf(const HIRTrait& trait) const;
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
 
-        [[nodiscard]] const HIRTypeData* visitTypeInner(const HIRTypeData* ty, bool doBind = true);
+        [[nodiscard]] const HIRType* visitTypeInner(const HIRType* ty, bool doBind = true);
 
-        static void checkImplParamsConstrained(const HIRGenericParams& params, const HIRTypeData* selfTy, const HIRPathParams* traitArgs);
+        static void checkImplParamsConstrained(const HIRGenericParams& params, const HIRType* selfTy, const HIRPathParams* traitArgs);
 
         void visitTypeImpl(HIRTypeImpl& impl) override;
 
@@ -126,9 +126,9 @@ namespace {
 
         void visitModule(HIRItemPath p, HIRModule& mod) override;
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
 
-        [[nodiscard]] const HIRTypeData* visitTypeInner(const HIRTypeData* ty, bool doBind = true);
+        [[nodiscard]] const HIRType* visitTypeInner(const HIRType* ty, bool doBind = true);
 
         void visitTypeImpl(HIRTypeImpl& impl) override;
 
@@ -160,9 +160,9 @@ namespace {
     struct ReceiverValidator {
         HIRCrate& crate;
         StaticTraitResolve resolve;
-        const HIRTypeData* implType = nullptr;
+        const HIRType* implType = nullptr;
 
-        const HIRTypeData* replaceImplTypeWithSelf(const HIRTypeData* ty);
+        const HIRType* replaceImplTypeWithSelf(const HIRType* ty);
 
         bool needsProjectionValidation(const HIRFunction& item) const;
 
@@ -193,7 +193,7 @@ namespace {
 
         void visitStruct(HIRItemPath ip, HIRStruct& str) override;
 
-        HIRStructMarkings::DstType getFieldDstType(const HIRTypeData* ty, const HIRGenericParams& innerDef, const HIRGenericParams& paramsDef, const HIRPathParams* params);
+        HIRStructMarkings::DstType getFieldDstType(const HIRType* ty, const HIRGenericParams& innerDef, const HIRGenericParams& paramsDef, const HIRPathParams* params);
 
         HIRStructMarkings::DstType getStructDstType(const HIRStruct& str, const HIRGenericParams& def, const HIRPathParams* params);
 
@@ -205,7 +205,7 @@ namespace {
 
         explicit Visitor2(const WireBoard& wb);
 
-        size_t getUnsizeParamIdx(const Span& sp, const HIRTypeData* pointee) const;
+        size_t getUnsizeParamIdx(const Span& sp, const HIRType* pointee) const;
 
         HIRStructMarkings::Coerce getCoerceType(const Span& sp, HIRItemPath ip, const HIRStruct& str, size_t& outParamIdx) const;
 
@@ -216,17 +216,17 @@ namespace {
         const WireBoard& wb;
         const HIRCrate& crate;
         bool inExpr = false;
-        const HIRTypeData* implType = nullptr;
+        const HIRType* implType = nullptr;
 
         struct ActiveTypeAlias {
             const HIRTypeAlias* alias;
-            const HIRTypeData* recursiveReference;
+            const HIRType* recursiveReference;
             const ActiveTypeAlias* parent;
         };
 
         const ActiveTypeAlias* activeTypeAliases = nullptr;
 
-        const HIRTypeAlias* typeAlias(const Span& sp, const HIRTypeData* type) const;
+        const HIRTypeAlias* typeAlias(const Span& sp, const HIRType* type) const;
 
         const ActiveTypeAlias* activeTypeAlias(const HIRTypeAlias* alias) const;
 
@@ -241,13 +241,13 @@ namespace {
 
         static bool hasBound(const GenericBounds& bounds, const HIRGenericBound& candidate);
 
-        void collectTraitAliasBounds(const Span& sp, const HIRTraitPath& aliasPath, const HIRTypeData* selfType, GenericBounds& out, const ActiveTraitAlias* active = nullptr);
+        void collectTraitAliasBounds(const Span& sp, const HIRTraitPath& aliasPath, const HIRType* selfType, GenericBounds& out, const ActiveTraitAlias* active = nullptr);
 
         HIRTypeInterner& interner() const;
 
         void expandTraitList(const Span& sp, std::vector<HIRTraitPath>& list);
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
 
         void visitTraitPath(HIRTraitPath& tp) override;
 
@@ -276,14 +276,14 @@ namespace {
 
     struct ExpanderSelf: public HIRVisitor {
         const HIRCrate& crate;
-        const HIRTypeData* implType = nullptr;
+        const HIRType* implType = nullptr;
         bool inExpr = false;
 
-        ExpanderSelf(const HIRCrate& crate, const HIRTypeData* implType = nullptr);
+        ExpanderSelf(const HIRCrate& crate, const HIRType* implType = nullptr);
 
         HIRTypeInterner& interner() const;
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
 
         void visitExpr(HIRExprPtr& expr) override;
 
@@ -314,7 +314,7 @@ namespace {
 
         void visitConstgeneric(HIRConstGeneric& value) override;
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
 
         void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override;
 
@@ -331,7 +331,7 @@ namespace {
 
         StaticTraitResolve resolve_;
         bool inTraitDef_ = false;
-        const HIRTypeData* currentType_ = nullptr;
+        const HIRType* currentType_ = nullptr;
         const HIRTrait* currentTrait = nullptr;
         const HIRItemPath* currentTraitPath_ = nullptr;
         const HIRSimplePath* definingOpaqueAliases_ = nullptr;
@@ -403,7 +403,7 @@ namespace {
 
         void visitExpr(HIRExprPtr& expr) override;
 
-        bool locateTraitItemInBounds(HIRVisitor::PathContext pc, const HIRTypeData* tr, const HIRGenericParams& params, HIRPath::Data& pd);
+        bool locateTraitItemInBounds(HIRVisitor::PathContext pc, const HIRType* tr, const HIRGenericParams& params, HIRPath::Data& pd);
 
         HIRPath::Data getUfcsKnown(HIRVisitor::PathContext pc, HIRPath::Data::Data_UfcsUnknown e, HIRGenericPath traitPathReal, const HIRTrait& trait) const;
 
@@ -421,7 +421,7 @@ namespace {
 
         bool resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathContext pc, HIRPath::Data& pd);
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
 
         void visitConstgeneric(HIRConstGeneric& val) override;
 
@@ -485,7 +485,7 @@ namespace {
         }
     }
 
-    void fixParamCount(HIRTypeInterner& types, const Span& sp, const HIRGenericPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params, bool fillInfer = true, const HIRTypeData* selfTy = nullptr) {
+    void fixParamCount(HIRTypeInterner& types, const Span& sp, const HIRGenericPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params, bool fillInfer = true, const HIRType* selfTy = nullptr) {
         TRACE_FUNCTION_FR(paramDefs.fmtArgs() << StringView(" -> ") << params << StringView(" (fill_infer=") << fillInfer << StringView(")"), params);
         if (params.types.size() != paramDefs.types.size()) {
             TRACE_FUNCTION_FR(path, params);
@@ -537,7 +537,7 @@ namespace {
         }
     }
 
-    const HIRTypeData* ConvertHIRExpandAliasesGetExpansion(const HIRCrate& crate, const HIRPath& path, bool isExpr) {
+    const HIRType* ConvertHIRExpandAliasesGetExpansion(const HIRCrate& crate, const HIRPath& path, bool isExpr) {
         Span sp;
         switch (path.data.tag()) {
             case HIRPath::Data::TAG_Generic: {
@@ -793,14 +793,14 @@ HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& 
     return pp;
 }
 
-const HIRTypeData* ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr) {
+const HIRType* ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr) {
     const auto& ti = crate.getTypeitemByPath(sp, path.path);
     if (const auto* ep = ti.opt_TypeAlias()) {
         const auto& ta = *ep;
         DEBUG(path << StringView(" -> type ") << ta.params.fmtArgs() << StringView(" = ") << ta.type);
         auto pp = ConvertHIRCompleteAliasParams(crate.types, sp, ta.params, path, isExpr);
         auto ms = MonomorphStatePtr(crate.types, nullptr, &pp, nullptr);
-        const HIRTypeData* rv = ms.monomorphType(sp, ta.type);
+        const HIRType* rv = ms.monomorphType(sp, ta.type);
         DEBUG(path << StringView(" -> ") << path.path << pp << StringView(" -> ") << rv);
         return rv;
     }
@@ -822,7 +822,7 @@ void ConvertHIRExpandAliasesSelf(HIRCrate& crate) {
     exp.visitCrate(crate);
 }
 
-const HIRTypeData* ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRTypeData* implType, std::vector<std::pair<HIRPattern, const HIRTypeData*>>& args, const HIRTypeData* retTy, HIRExprPtr& expr) {
+const HIRType* ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRType* implType, std::vector<std::pair<HIRPattern, const HIRType*>>& args, const HIRType* retTy, HIRExprPtr& expr) {
     ExpanderSelf exp{crate, implType};
     for (auto& arg : args) {
         exp.visitPattern(arg.first);
@@ -1088,7 +1088,7 @@ auto BindVisitor::visitParams(HIRGenericParams& params) -> void {
 auto BindVisitor::visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) -> void {
     Span sp;
     HIRVisitor::visitAssociatedtype(p, item);
-    const HIRTypeData* ty = crate.types.path(p.getFullPath(), {});
+    const HIRType* ty = crate.types.path(p.getFullPath(), {});
     for (auto& bound : item.traitBounds) {
         const auto& trait = crate.getTraitByPath(sp, bound.path.path);
         fixParamCount(crate.types, sp, bound.path, trait.params, bound.path.params, /*fill_infer=*/false, ty);
@@ -1112,11 +1112,11 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
     return false;
 }
 
-[[nodiscard]] auto BindVisitor::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
+[[nodiscard]] auto BindVisitor::visitType(const HIRType* ty) -> const HIRType* {
     return visitTypeInner(ty);
 }
 
-[[nodiscard]] auto BindVisitor::visitTypeInner(const HIRTypeData* ty, bool doBind) -> const HIRTypeData* {
+[[nodiscard]] auto BindVisitor::visitTypeInner(const HIRType* ty, bool doBind) -> const HIRType* {
     Span sp;
     if (!ty->is_Path() && !ty->is_TraitObject() && !ty->is_ErasedType()) {
         return visitTypeDefaultViaHooks(ty);
@@ -1163,7 +1163,7 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                     }
                     case HIRTypeItem::TAG_Trait: {
                         // TODO: Should this reassign instead?
-                        data = HIRTypeData::make_TraitObject({HIRTraitPath{mv$(pe), {}, {}}, {}});
+                        data = HIRType::make_TraitObject({HIRTraitPath{mv$(pe), {}, {}}, {}});
                         break;
                     }
                     default: {
@@ -1197,7 +1197,7 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
             }
         }
     } else if (auto* te = data.opt_ErasedType()) {
-        const HIRTypeData* tyEself = crate.types.generic("ErasedSelf", GENERICErasedSelf);
+        const HIRType* tyEself = crate.types.generic("ErasedSelf", GENERICErasedSelf);
         for (auto& t : te->traits) {
             const auto& trait = crate.getTraitByPath(sp, t.path.path);
             fixParamCount(crate.types, sp, t.path, trait.params, t.path.params, /*fill_infer=*/inExpr, tyEself);
@@ -1250,15 +1250,15 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                 fcnPtr->params.paramKinds.pushBack(HIRGenericParamKind::Type);
                 for (auto& trait : te->traits) {
                     struct M: MonomorphiserNop {
-                        const HIRTypeData* newTy;
+                        const HIRType* newTy;
 
-                        M(HIRTypeInterner& types, const HIRTypeData* ty)
+                        M(HIRTypeInterner& types, const HIRType* ty)
                             : MonomorphiserNop(types)
                             , newTy(ty)
                         {
                         }
 
-                        const HIRTypeData* getType(const Span& sp, const HIRGenericRef& ty) const override {
+                        const HIRType* getType(const Span& sp, const HIRGenericRef& ty) const override {
                             if (ty.binding == GENERICErasedSelf) {
                                 return newTy;
                             }
@@ -1299,13 +1299,13 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
     return crate.types.intern(mv$(data));
 }
 
-auto BindVisitor::checkImplParamsConstrained(const HIRGenericParams& params, const HIRTypeData* selfTy, const HIRPathParams* traitArgs) -> void {
+auto BindVisitor::checkImplParamsConstrained(const HIRGenericParams& params, const HIRType* selfTy, const HIRPathParams* traitArgs) -> void {
     const size_t n = params.types.size();
     if (n == 0 || n > 64) {
         return;
     }
     uint64_t used = 0;
-    auto mark = [&](const HIRTypeData* t) {
+    auto mark = [&](const HIRType* t) {
         if (const auto* g = t->opt_Generic()) {
             if (g->group() == GENERICImpl && g->idx() < 64) {
                 used |= uint64_t(1) << g->idx();
@@ -1316,7 +1316,7 @@ auto BindVisitor::checkImplParamsConstrained(const HIRGenericParams& params, con
     auto usesOnly = [&](uint64_t mask) {
         return (mask & ~used) == 0;
     };
-    auto collect = [&](const HIRTypeData* t) {
+    auto collect = [&](const HIRType* t) {
         uint64_t saved = used;
         used = 0;
         visitTyWith(t, mark);
@@ -1532,7 +1532,7 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
             upperVisitor.visitGenericPath(p, pc);
         }
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override {
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override {
             return upperVisitor.visitTypeInner(ty, true);
         }
 
@@ -1669,7 +1669,7 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
             {
             }
 
-            const HIRTypeData* visitType(const HIRTypeData* type) override {
+            const HIRType* visitType(const HIRType* type) override {
                 return upperVisitor.visitType(type);
             }
 
@@ -1710,11 +1710,11 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
     struct Enumerate {
         HIRTypeInterner& types;
         const Span& sp;
-        const HIRTypeData* tySelf;
+        const HIRType* tySelf;
         std::vector<HIRTraitPath> supertraits;
         Vector<const HIRTraitPath*> tpStack;
 
-        Enumerate(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tySelf)
+        Enumerate(HIRTypeInterner& types, const Span& sp, const HIRType* tySelf)
             : types(types)
             , sp(sp)
             , tySelf(tySelf)
@@ -1785,7 +1785,7 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
             const HIRTrait& tr = *outPath.traitPtr;
             for (const auto& ty : tr.types) {
                 if (outPath.typeBounds.count(ty.first) == 0) {
-                    const HIRTypeData* found = nullptr;
+                    const HIRType* found = nullptr;
 
                     for (size_t i = tpStack.length(); i > 0; i--) {
                         const auto* outer = tpStack[i - 1];
@@ -1864,7 +1864,7 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
                 for (auto& e : it->typeBounds) {
                     auto have = prev->typeBounds.find(e.first);
                     if (have != prev->typeBounds.end() && have->second.type != e.second.type) {
-                        auto isProjection = [](const HIRTypeData* t) {
+                        auto isProjection = [](const HIRType* t) {
                             return t->is_Path() && !t->as_Path().path.data.is_Generic();
                         };
                         if (isProjection(have->second.type) && !isProjection(e.second.type)) {
@@ -1911,11 +1911,11 @@ auto VisitorPost::visitModule(HIRItemPath p, HIRModule& mod) -> void {
     ms.popTraits(mod);
 }
 
-[[nodiscard]] auto VisitorPost::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
+[[nodiscard]] auto VisitorPost::visitType(const HIRType* ty) -> const HIRType* {
     return visitTypeInner(ty);
 }
 
-[[nodiscard]] auto VisitorPost::visitTypeInner(const HIRTypeData* ty, bool doBind) -> const HIRTypeData* {
+[[nodiscard]] auto VisitorPost::visitTypeInner(const HIRType* ty, bool doBind) -> const HIRType* {
     Span sp;
 
     if (!ty->is_NamedFunction()) {
@@ -2054,7 +2054,7 @@ auto VisitorPost::visitExpr(HIRExprPtr& expr) -> void {
             upperVisitor.visitGenericPath(p, pc);
         }
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override {
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override {
             return upperVisitor.visitTypeInner(ty, true);
         }
 
@@ -2141,7 +2141,7 @@ auto VisitorPost::visitExpr(HIRExprPtr& expr) -> void {
             {
             }
 
-            const HIRTypeData* visitType(const HIRTypeData* type) override {
+            const HIRType* visitType(const HIRType* type) override {
                 return upperVisitor.visitType(type);
             }
 
@@ -2168,7 +2168,7 @@ auto VisitorPost::visitExpr(HIRExprPtr& expr) -> void {
     }
 }
 
-auto Expander::typeAlias(const Span& sp, const HIRTypeData* type) const -> const HIRTypeAlias* {
+auto Expander::typeAlias(const Span& sp, const HIRType* type) const -> const HIRTypeAlias* {
     const auto* path = type->opt_Path();
     if (!path || !path->path.data.is_Generic()) {
         return nullptr;
@@ -2198,7 +2198,7 @@ auto Expander::hasBound(const GenericBounds& bounds, const HIRGenericBound& cand
     });
 }
 
-auto Expander::collectTraitAliasBounds(const Span& sp, const HIRTraitPath& aliasPath, const HIRTypeData* selfType, GenericBounds& out, const ActiveTraitAlias* active) -> void {
+auto Expander::collectTraitAliasBounds(const Span& sp, const HIRTraitPath& aliasPath, const HIRType* selfType, GenericBounds& out, const ActiveTraitAlias* active) -> void {
     const auto* alias = crate.getTypeitemByPath(sp, aliasPath.path.path).opt_TraitAlias();
     if (!alias) {
         return;
@@ -2253,7 +2253,7 @@ auto Expander::expandTraitList(const Span& sp, std::vector<HIRTraitPath>& list) 
     }
 }
 
-[[nodiscard]] auto Expander::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
+[[nodiscard]] auto Expander::visitType(const HIRType* ty) -> const HIRType* {
     Span sp;
 
     const auto* alias = typeAlias(sp, ty);
@@ -2302,8 +2302,8 @@ auto Expander::expandTraitList(const Span& sp, std::vector<HIRTraitPath>& list) 
     ty = HIRVisitor::visitType(ty);
 
     if (const auto* e = ty->opt_Path()) {
-        const HIRTypeData* newType = ConvertHIRExpandAliasesGetExpansion(crate, e->path, inExpr);
-        const HIRTypeData* recursiveReference = ty;
+        const HIRType* newType = ConvertHIRExpandAliasesGetExpansion(crate, e->path, inExpr);
+        const HIRType* recursiveReference = ty;
         if (alias && newType->is_ErasedType()) {
             auto referenceData = newType->cloneData();
             referenceData.as_ErasedType().traits.clear();
@@ -2573,7 +2573,7 @@ auto Expander::visitExpr(HIRExprPtr& expr) -> void {
         {
         }
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override {
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override {
             return upperVisitor.visitType(ty);
         }
 
@@ -2604,7 +2604,7 @@ auto Expander::visitExpr(HIRExprPtr& expr) -> void {
 auto Expander::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     size_t erasedIndex = item.params.types.size();
     for (const auto& arg : item.args) {
-        visitTyWith(arg.second, [&](const HIRTypeData* type) {
+        visitTyWith(arg.second, [&](const HIRType* type) {
             const auto* erased = type->opt_ErasedType();
             if (!erased || !erased->inner.is_Fcn()) {
                 return false;
@@ -2657,7 +2657,7 @@ auto Expander::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl
     implType = nullptr;
 }
 
-ExpanderSelf::ExpanderSelf(const HIRCrate& crate, const HIRTypeData* implType)
+ExpanderSelf::ExpanderSelf(const HIRCrate& crate, const HIRType* implType)
     : HIRVisitor(nullptr, crate.types)
     , crate(crate)
     , implType(implType)
@@ -2668,7 +2668,7 @@ auto ExpanderSelf::interner() const -> HIRTypeInterner& {
     return crate.types;
 }
 
-[[nodiscard]] auto ExpanderSelf::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
+[[nodiscard]] auto ExpanderSelf::visitType(const HIRType* ty) -> const HIRType* {
     ty = HIRVisitor::visitType(ty);
 
     if (const auto* te = ty->opt_Generic()) {
@@ -2694,7 +2694,7 @@ auto ExpanderSelf::visitExpr(HIRExprPtr& expr) -> void {
         {
         }
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override {
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override {
             return upperVisitor.visitType(ty);
         }
 
@@ -2723,14 +2723,14 @@ auto ExpanderSelf::visitExpr(HIRExprPtr& expr) -> void {
 }
 
 auto ExpanderSelf::visitEnum(HIRItemPath p, HIREnum& enm) -> void {
-    const HIRTypeData* ty = crate.types.path(HIRGenericPath(p.getSimplePath(), enm.params.makeNopParams(crate.types, 0)), &enm);
+    const HIRType* ty = crate.types.path(HIRGenericPath(p.getSimplePath(), enm.params.makeNopParams(crate.types, 0)), &enm);
     implType = ty;
     HIRVisitor::visitEnum(p, enm);
     implType = nullptr;
 }
 
 auto ExpanderSelf::visitStruct(HIRItemPath p, HIRStruct& str) -> void {
-    const HIRTypeData* ty = crate.types.path(HIRGenericPath(p.getSimplePath(), str.params.makeNopParams(crate.types, 0)), &str);
+    const HIRType* ty = crate.types.path(HIRGenericPath(p.getSimplePath(), str.params.makeNopParams(crate.types, 0)), &str);
     for (const auto* separator = p.name; *separator; separator++) {
         if (*separator != '#') {
             continue;
@@ -2749,7 +2749,7 @@ auto ExpanderSelf::visitStruct(HIRItemPath p, HIRStruct& str) -> void {
 }
 
 auto ExpanderSelf::visitUnion(HIRItemPath p, HIRUnion& unn) -> void {
-    const HIRTypeData* ty = crate.types.path(HIRGenericPath(p.getSimplePath(), unn.params.makeNopParams(crate.types, 0)), &unn);
+    const HIRType* ty = crate.types.path(HIRGenericPath(p.getSimplePath(), unn.params.makeNopParams(crate.types, 0)), &unn);
     implType = ty;
     HIRVisitor::visitUnion(p, unn);
     implType = nullptr;
@@ -2782,7 +2782,7 @@ auto AliasConstGenericParamBinder::visitConstgeneric(HIRConstGeneric& value) -> 
     HIRVisitor::visitConstgeneric(value);
 }
 
-[[nodiscard]] auto AliasConstGenericParamBinder::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
+[[nodiscard]] auto AliasConstGenericParamBinder::visitType(const HIRType* ty) -> const HIRType* {
     return visitTypeDefaultViaHooks(ty);
 }
 
@@ -2807,7 +2807,7 @@ AliasConstGenericParamBinder::Guard::~Guard() {
     binder.implParams = old;
 }
 
-auto ReceiverValidator::replaceImplTypeWithSelf(const HIRTypeData* ty) -> const HIRTypeData* {
+auto ReceiverValidator::replaceImplTypeWithSelf(const HIRType* ty) -> const HIRType* {
     if (ty == crate.types.self()) {
         return ty;
     }
@@ -2860,7 +2860,7 @@ auto ReceiverValidator::needsProjectionValidation(const HIRFunction& item) const
         return false;
     }
     ASSERT_BUG(Span(), item.receiverType, StringView("Custom receiver without a receiver type"));
-    return visitTyWith(*item.receiverType, [](const HIRTypeData* ty) {
+    return visitTyWith(*item.receiverType, [](const HIRType* ty) {
         const auto* path = ty->opt_Path();
         return path && path->path.data.is_UfcsKnown();
     });
@@ -3014,7 +3014,7 @@ auto MarkingsVisitor::visitStruct(HIRItemPath ip, HIRStruct& str) -> void {
     }
 }
 
-auto MarkingsVisitor::getFieldDstType(const HIRTypeData* ty, const HIRGenericParams& innerDef, const HIRGenericParams& paramsDef, const HIRPathParams* params) -> HIRStructMarkings::DstType {
+auto MarkingsVisitor::getFieldDstType(const HIRType* ty, const HIRGenericParams& innerDef, const HIRGenericParams& paramsDef, const HIRPathParams* params) -> HIRStructMarkings::DstType {
     if (const auto* te = ty->opt_Generic()) {
         if (innerDef.types.at(te->binding).isSized == true) {
             return HIRStructMarkings::DstType::None;
@@ -3195,7 +3195,7 @@ Visitor2::Visitor2(const WireBoard& wb)
 {
 }
 
-auto Visitor2::getUnsizeParamIdx(const Span& sp, const HIRTypeData* pointee) const -> size_t {
+auto Visitor2::getUnsizeParamIdx(const Span& sp, const HIRType* pointee) const -> size_t {
     if (const auto* te = pointee->opt_Generic()) {
         return te->binding;
     } else if (const auto* te = pointee->opt_Path()) {
@@ -3218,7 +3218,7 @@ auto Visitor2::getCoerceType(const Span& sp, HIRItemPath ip, const HIRStruct& st
         return str.structMarkings.coerceUnsized;
     }
 
-    const HIRTypeData* fieldTy = nullptr;
+    const HIRType* fieldTy = nullptr;
     switch (str.data.tag()) {
         case HIRStructData::TAG_Unit: {
             break;
@@ -3235,7 +3235,7 @@ auto Visitor2::getCoerceType(const Span& sp, HIRItemPath ip, const HIRStruct& st
         }
     }
     BUG_ASSERT(fieldTy);
-    const HIRTypeData* normalizedFieldTy;
+    const HIRType* normalizedFieldTy;
 tryAgain:
     normalizedFieldTy = fieldTy;
     normalizedFieldTy = resolve_.expandAssociatedTypes(sp, normalizedFieldTy);
@@ -3477,7 +3477,7 @@ auto UfcsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
 
     // TODO: Handle resolution of all items in m_resolve.m_type_equalities
 
-    resolve_.forEachTypeEquality([&](const HIRTypeData* ty) {
+    resolve_.forEachTypeEquality([&](const HIRType* ty) {
         return visitType(ty);
     });
 
@@ -3499,7 +3499,7 @@ auto UfcsVisitor::visitExpr(HIRExprPtr& expr) -> void {
         {
         }
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override {
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override {
             return upperVisitor.visitType(ty);
         }
 
@@ -3639,7 +3639,7 @@ auto UfcsVisitor::visitExpr(HIRExprPtr& expr) -> void {
     }
 }
 
-auto UfcsVisitor::locateTraitItemInBounds(HIRVisitor::PathContext pc, const HIRTypeData* tr, const HIRGenericParams& params, HIRPath::Data& pd) -> bool {
+auto UfcsVisitor::locateTraitItemInBounds(HIRVisitor::PathContext pc, const HIRType* tr, const HIRGenericParams& params, HIRPath::Data& pd) -> bool {
     Span sp;
     for (const auto& b : params.bounds) {
         if (const auto* e = b.opt_TraitBound()) {
@@ -3762,7 +3762,7 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
             {
             }
 
-            const HIRTypeData* getType(const Span& sp, const HIRGenericRef& ty) const override {
+            const HIRType* getType(const Span& sp, const HIRGenericRef& ty) const override {
                 if (ty.isPlaceholder()) {
                     return types.infer();
                 }
@@ -3929,22 +3929,22 @@ auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathCo
     return false;
 }
 
-[[nodiscard]] auto UfcsVisitor::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
+[[nodiscard]] auto UfcsVisitor::visitType(const HIRType* ty) -> const HIRType* {
     // TODO: Add a span parameter.
     Span sp;
 
-    const bool definesContainedOpaque = inExpr && definingOpaqueAliasCount_ > 0 && ty->is_Path() && ty->as_Path().path.data.is_UfcsKnown() && visitTyWith(ty, [&](const HIRTypeData* inner) {
+    const bool definesContainedOpaque = inExpr && definingOpaqueAliasCount_ > 0 && ty->is_Path() && ty->as_Path().path.data.is_UfcsKnown() && visitTyWith(ty, [&](const HIRType* inner) {
         const auto* erased = inner->opt_ErasedType();
         const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
         return alias && crate.isOpaqueAliasNamedBy(*alias->inner, definingOpaqueAliases_, definingOpaqueAliasCount_);
     });
     switch (ty->tag()) {
-        case HIRTypeData::TAG_Path:
-        case HIRTypeData::TAG_TraitObject:
-        case HIRTypeData::TAG_ErasedType:
-        case HIRTypeData::TAG_Array:
-        case HIRTypeData::TAG_Pattern:
-        case HIRTypeData::TAG_NamedFunction: {
+        case HIRType::TAG_Path:
+        case HIRType::TAG_TraitObject:
+        case HIRType::TAG_ErasedType:
+        case HIRType::TAG_Array:
+        case HIRType::TAG_Pattern:
+        case HIRType::TAG_NamedFunction: {
             auto data = ty->cloneData();
             visitTypeDataChildren(data);
             ty = crate.types.intern(mv$(data));
@@ -3969,7 +3969,7 @@ auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathCo
 
     if (runEat && (!preserveDeclaredProjections_ || inExpr) && !definesContainedOpaque) {
         TRACE_FUNCTION_FR(ty, ty);
-        Vector<const HIRTypeData*> stack;
+        Vector<const HIRType*> stack;
         if (ty->is_Path()) {
             stack.pushBack(ty);
         }
@@ -3990,7 +3990,7 @@ auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathCo
                 stack.pushBack(ty);
             }
             DEBUG(StringView("counter = ") << stack.length());
-            ty = rewriteTyWith(crate.types, ty, [&](const HIRTypeData*, HIRTypeData& data) -> const HIRTypeData* {
+            ty = rewriteTyWith(crate.types, ty, [&](const HIRType*, HIRType& data) -> const HIRType* {
                 if ((data.is_Generic() && (data.as_Generic().isPlaceholder()))) {
                     return crate.types.infer();
                 }
@@ -4052,7 +4052,7 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
         }
 
         if (currentType_) {
-            rewritePathTysWith(crate.types, p, [&](const HIRTypeData*, HIRTypeData& data) -> const HIRTypeData* {
+            rewritePathTysWith(crate.types, p, [&](const HIRType*, HIRType& data) -> const HIRType* {
                 if (data.is_Generic() && data.as_Generic().binding == GENERICSelf) {
                     return currentType_;
                 }

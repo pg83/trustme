@@ -67,7 +67,7 @@ namespace {
 
         // - TraitObject: 'D' <data:GenericPath> <nmarker> [markers: <GenericPath> ...] <naty> [<ASTType*> ...]    TODO: Does this need to include the ATY name?
 
-        void fmtType(const HIRTypeData* ty);
+        void fmtType(const HIRType* ty);
     };
 
     StringBuilder& operator<<(StringBuilder& sb, char c) {
@@ -106,7 +106,7 @@ namespace {
         return RcString::newInterned(symbol, sizeof(symbol));
     }
 
-    RcString transMangleType(ManglingContext& context, const HIRTypeData* v, bool includeLifetimeIdentity) {
+    RcString transMangleType(ManglingContext& context, const HIRType* v, bool includeLifetimeIdentity) {
         auto& cache = includeLifetimeIdentity ? context.typeIdCache : context.ordinaryTypeCache;
         if (const auto* hit = cache.find(reinterpret_cast<uintptr_t>(v))) {
             return *hit;
@@ -167,11 +167,11 @@ RcString TransMangleValue(const WireBoard& wb, const HIRPath& p) {
     return mangleFinish(sb);
 }
 
-RcString TransMangle(const WireBoard& wb, const HIRTypeData* v) {
+RcString TransMangle(const WireBoard& wb, const HIRType* v) {
     return transMangleType(*wb.mangling, v, false);
 }
 
-RcString TransMangleTypeId(const WireBoard& wb, const HIRTypeData* v) {
+RcString TransMangleTypeId(const WireBoard& wb, const HIRType* v) {
     return transMangleType(*wb.mangling, v, true);
 }
 
@@ -376,14 +376,14 @@ auto Mangler::fmtPath(const HIRPath& p) -> void {
     }
 }
 
-auto Mangler::fmtType(const HIRTypeData* ty) -> void {
+auto Mangler::fmtType(const HIRType* ty) -> void {
     switch ((*ty).tag()) {
-        case HIRTypeData::TAG_Infer:
-        case HIRTypeData::TAG_Generic:
-        case HIRTypeData::TAG_ErasedType:
-        case HIRTypeData::TAG_NodeType:
+        case HIRType::TAG_Infer:
+        case HIRType::TAG_Generic:
+        case HIRType::TAG_ErasedType:
+        case HIRType::TAG_NodeType:
             BUG(Span(), StringView("Non-encodable type ") << ty);
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             auto& e = (*ty).as_Tuple();
             os << StringView("T") << e.length();
             for (const auto& sty : e) {
@@ -391,24 +391,24 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
             }
             break;
         }
-        case HIRTypeData::TAG_Slice: {
+        case HIRType::TAG_Slice: {
             auto& e = (*ty).as_Slice();
             os << StringView("S");
             this->fmtType(e.inner);
             break;
         }
-        case HIRTypeData::TAG_Array: {
+        case HIRType::TAG_Array: {
             auto& e = (*ty).as_Array();
             os << StringView("A") << e.size.as_Known();
             this->fmtType(e.inner);
             break;
         }
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& e = (*ty).as_Path();
             this->fmtPath(e.path);
             break;
         }
-        case HIRTypeData::TAG_TraitObject: {
+        case HIRType::TAG_TraitObject: {
             auto& e = (*ty).as_TraitObject();
             os << StringView("D");
             this->fmtGenericPath(e.trait.path);
@@ -427,13 +427,13 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
             }
             break;
         }
-        case HIRTypeData::TAG_NamedFunction: {
+        case HIRType::TAG_NamedFunction: {
             auto& e = (*ty).as_NamedFunction();
             os << StringView("f");
             this->fmtPath(e.path);
             break;
         }
-        case HIRTypeData::TAG_Function: {
+        case HIRType::TAG_Function: {
             auto& e = (*ty).as_Function();
             os << StringView("F");
             os << (e.isUnsafe ? "u" : "");
@@ -453,7 +453,7 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
             }
             break;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto& e = (*ty).as_Borrow();
             os << StringView("B");
             switch (e.type) {
@@ -470,7 +470,7 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
             this->fmtType(e.inner);
             break;
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             auto& e = (*ty).as_Pointer();
             os << StringView("P");
             switch (e.type) {
@@ -487,7 +487,7 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
             this->fmtType(e.inner);
             break;
         }
-        case HIRTypeData::TAG_Primitive: {
+        case HIRType::TAG_Primitive: {
             auto& e = (*ty).as_Primitive();
             switch (e) {
                 case HIRCoreType::U8:
@@ -550,11 +550,11 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
             }
             break;
         }
-        case HIRTypeData::TAG_Diverge: {
+        case HIRType::TAG_Diverge: {
             os << 'C' << 'z';
             break;
         }
-        case HIRTypeData::TAG_Pattern: {
+        case HIRType::TAG_Pattern: {
             auto& e = (*ty).as_Pattern();
             os << StringView("Q");
             this->fmtType(e.inner);

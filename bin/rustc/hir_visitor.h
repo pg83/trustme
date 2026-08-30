@@ -55,24 +55,24 @@ public:
         VALUE,
     };
 
-    [[nodiscard]] virtual const HIRTypeData* visitType(const HIRTypeData* ty);
+    [[nodiscard]] virtual const HIRType* visitType(const HIRType* ty);
 
-    void visitTypeDataChildren(HIRTypeData& data);
+    void visitTypeDataChildren(HIRType& data);
 
-    [[nodiscard]] const HIRTypeData* visitTypeViaHooks(const HIRTypeData* ty) {
+    [[nodiscard]] const HIRType* visitTypeViaHooks(const HIRType* ty) {
         auto data = ty->cloneData();
         visitTypeDataChildren(data);
         return typeInterner().intern(mv$(data));
     }
 
-    [[nodiscard]] const HIRTypeData* visitTypeDefaultViaHooks(const HIRTypeData* ty) {
+    [[nodiscard]] const HIRType* visitTypeDefaultViaHooks(const HIRType* ty) {
         switch (ty->tag()) {
-            case HIRTypeData::TAG_Path:
-            case HIRTypeData::TAG_TraitObject:
-            case HIRTypeData::TAG_ErasedType:
-            case HIRTypeData::TAG_Array:
-            case HIRTypeData::TAG_Pattern:
-            case HIRTypeData::TAG_NamedFunction:
+            case HIRType::TAG_Path:
+            case HIRType::TAG_TraitObject:
+            case HIRType::TAG_ErasedType:
+            case HIRType::TAG_Array:
+            case HIRType::TAG_Pattern:
+            case HIRType::TAG_NamedFunction:
                 return visitTypeViaHooks(ty);
             default:
                 return HIRVisitor::visitType(ty);

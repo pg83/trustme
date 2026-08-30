@@ -1,10 +1,10 @@
 # Third hir_type.h include point: the type-data unions, after every payload
-# struct is complete.  HIRTypeData stays in place deliberately: instances are
+# struct is complete.  HIRType stays in place deliberately: instances are
 # interned into the pool by HIRTypeInterner, and pointer storage would put a
 # heap hop between the pool node and the data.
 
 generate(
-    name="HIRTypeData",
+    name="HIRType",
     default="Diverge",
     clone=False,
     output=True,
@@ -17,24 +17,24 @@ generate(
         v("TraitObject", "HIRTypeDataTraitObject", copy=False),
         v("ErasedType", "HIRTypeDataErasedType", copy=False),
         v("Array", fields=[
-            ("const HIRTypeData*", "inner"),
+            ("const HIRType*", "inner"),
             ("HIRArraySize", "size"),
         ], copy=False),
-        v("Slice", fields=[("const HIRTypeData*", "inner")]),
-        v("Tuple", "stl::Vector<const HIRTypeData*>"),
+        v("Slice", fields=[("const HIRType*", "inner")]),
+        v("Tuple", "stl::Vector<const HIRType*>"),
         v("Borrow", fields=[
             ("HIRBorrowType", "type"),
-            ("const HIRTypeData*", "inner"),
+            ("const HIRType*", "inner"),
         ]),
         v("Pointer", fields=[
             ("HIRBorrowType", "type"),
-            ("const HIRTypeData*", "inner"),
+            ("const HIRType*", "inner"),
         ]),
         v("NamedFunction", "HIRTypeDataNamedFunction", copy=False),
         v("Function", "HIRTypeDataFunctionPointer", copy=False),
         v("NodeType", "HIRTypeDataNodeType", copy=False),
         v("Pattern", fields=[
-            ("const HIRTypeData*", "inner"),
+            ("const HIRType*", "inner"),
             ("HIRTypePattern", "pattern"),
         ], copy=False),
     ],
@@ -42,7 +42,7 @@ generate(
         ("u32", "flags", "0"),
         # Assigned by HIRTypeInterner::intern in creation order; 0 means
         # "not interned". The deterministic ordering key for interned types
-        # (see ord(const HIRTypeData*, const HIRTypeData*)).
+        # (see ord(const HIRType*, const HIRType*)).
         ("u32", "uid", "0"),
     ],
     extra="""
@@ -64,15 +64,15 @@ generate(
             return flags & (HAS_ASSOCIATED_TYPE | HAS_TYPE_INFER);
         }
 
-        HIRTypeData cloneData() const;
+        HIRType cloneData() const;
         void fmt(stl::ZeroCopyOutput& os) const;
 
         // Deliberately semantic relations. Plain ASTType* equality is pointer identity.
-        bool equalsIgnoringRegions(const HIRTypeData* x) const;
-        Ordering ordIgnoringRegions(const HIRTypeData* x) const;
-        bool matchTestGenerics(const Span& sp, const HIRTypeData* x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const;
-        HIRCompare matchTestGenericsFuzz(const Span& sp, const HIRTypeData* x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const;
-        HIRCompare compareWithPlaceholders(const Span& sp, const HIRTypeData* x, tCbResolveType resolvePlaceholder) const;
+        bool equalsIgnoringRegions(const HIRType* x) const;
+        Ordering ordIgnoringRegions(const HIRType* x) const;
+        bool matchTestGenerics(const Span& sp, const HIRType* x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const;
+        HIRCompare matchTestGenericsFuzz(const Span& sp, const HIRType* x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const;
+        HIRCompare compareWithPlaceholders(const Span& sp, const HIRType* x, tCbResolveType resolvePlaceholder) const;
         const HIRSimplePath* getSortPath() const;
     """,
 )

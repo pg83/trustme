@@ -21,7 +21,7 @@ namespace {
             listT generic;
 
             void insert(const Span& sp, const HIRTypeImpl& impl);
-            void iterate(const HIRTypeData* ty, Callback& cb) const;
+            void iterate(const HIRType* ty, Callback& cb) const;
         };
 
         struct Inner {
@@ -35,14 +35,14 @@ namespace {
             std::map<HIRSimplePath, Inner> path;
             std::map<HIRSimplePath, Lowest::listT> concrete;
 
-            void insert(const Span& sp, const HIRTypeData* receiver, const HIRTypeImpl& impl);
-            void find(const Span& sp, const HIRTypeData* curTy, tCbResolveType tyRes, Callback& cb) const;
+            void insert(const Span& sp, const HIRType* receiver, const HIRTypeImpl& impl);
+            void find(const Span& sp, const HIRType* curTy, tCbResolveType tyRes, Callback& cb) const;
         };
 
         std::map<RcString, Inner> items;
 
         void insertAll(const Span& sp, const HIRTypeImpl& impl, const HIRSimplePath& langBox) override;
-        void findWith(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, Callback& cb) const override;
+        void findWith(const Span& sp, const RcString& name, const HIRType* ty, tCbResolveType tyRes, Callback& cb) const override;
     };
 }
 
@@ -57,7 +57,7 @@ void InherentCacheImpl::Lowest::insert(const Span& sp, const HIRTypeImpl& impl) 
     }
 }
 
-void InherentCacheImpl::Lowest::iterate(const HIRTypeData* type, Callback& cb) const {
+void InherentCacheImpl::Lowest::iterate(const HIRType* type, Callback& cb) const {
     auto visit = [&](const listT& l) {
         for (const HIRTypeImpl* implPtr : l) {
             cb.visit(type, *implPtr);
@@ -82,9 +82,9 @@ void InherentCacheImpl::Lowest::iterate(const HIRTypeData* type, Callback& cb) c
     }
 }
 
-void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, const HIRTypeImpl& impl) {
+void InherentCacheImpl::Inner::insert(const Span& sp, const HIRType* curTy, const HIRTypeImpl& impl) {
     struct H {
-        static void insertInner(const Span& sp, const HIRTypeData* innerTy, const HIRTypeImpl& impl, std::unique_ptr<Inner>& slot) {
+        static void insertInner(const Span& sp, const HIRType* innerTy, const HIRTypeImpl& impl, std::unique_ptr<Inner>& slot) {
             if (!slot) {
                 slot = std::make_unique<Inner>();
             }
@@ -95,7 +95,7 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
     switch ((*curTy).tag()) {
         default:
             BUG(sp, StringView("Unknown receiver type - ") << curTy);
-        case HIRTypeData::TAG_Generic: {
+        case HIRType::TAG_Generic: {
             auto& te = (*curTy).as_Generic();
             if (te.isSelf()) {
                 byvalue.insert(sp, impl);
@@ -104,7 +104,7 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
             }
             break;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto& te = (*curTy).as_Borrow();
             switch (te.type) {
                 case HIRBorrowType::Shared:
@@ -119,7 +119,7 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
             }
             break;
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             auto& te = (*curTy).as_Pointer();
             switch (te.type) {
                 case HIRBorrowType::Shared:
@@ -134,7 +134,7 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
             }
             break;
         }
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& te = (*curTy).as_Path();
             ASSERT_BUG(sp, te.path.data.is_Generic(), StringView("Receiver path not a generic path - ") << curTy);
             const auto& gp = te.path.data.as_Generic();
@@ -150,17 +150,17 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
     }
 }
 
-void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct, tCbResolveType tyRes, Callback& cb) const {
+void InherentCacheImpl::Inner::find(const Span& sp, const HIRType* curTyAct, tCbResolveType tyRes, Callback& cb) const {
     const auto& curTy = tyRes.getType(sp, curTyAct);
     TRACE_FUNCTION_F(StringView("[Inner] ") << curTy);
     byvalue.iterate(curTy, cb);
 
     const Inner* inner = nullptr;
-    const HIRTypeData* innerTy = nullptr;
+    const HIRType* innerTy = nullptr;
     switch ((*curTy).tag()) {
         default:
             break;
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto& te = (*curTy).as_Borrow();
             innerTy = te.inner;
             switch (te.type) {
@@ -176,7 +176,7 @@ void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct,
             }
             break;
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             auto& te = (*curTy).as_Pointer();
             innerTy = te.inner;
             switch (te.type) {
@@ -192,7 +192,7 @@ void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct,
             }
             break;
         }
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& te = (*curTy).as_Path();
             if (te.path.data.is_Generic()) {
                 const auto& gp = te.path.data.as_Generic();
@@ -263,17 +263,17 @@ void InherentCacheImpl::insertAll(const Span& sp, const HIRTypeImpl& impl, const
     }
 }
 
-void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, Callback& cb) const {
+void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIRType* ty, tCbResolveType tyRes, Callback& cb) const {
     TRACE_FUNCTION_F(name << StringView(", ") << ty);
 
     struct FilterCallback final: Callback {
         const Span& sp;
         const RcString& name;
-        const HIRTypeData* ty;
+        const HIRType* ty;
         tCbResolveType tyRes;
         Callback& output;
 
-        FilterCallback(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, Callback& output)
+        FilterCallback(const Span& sp, const RcString& name, const HIRType* ty, tCbResolveType tyRes, Callback& output)
             : sp(sp)
             , name(name)
             , ty(ty)
@@ -282,19 +282,19 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
         {
         }
 
-        void visit(const HIRTypeData* roughSelfTy, const HIRTypeImpl& impl) override {
+        void visit(const HIRType* roughSelfTy, const HIRTypeImpl& impl) override {
             DEBUG(StringView("- ") << roughSelfTy);
             const HIRFunction& fcn = impl.methods.at(name).data;
 
             struct GetSelf: public HIRMatchGenerics {
-                std::optional<const HIRTypeData*> detectedSelfTy;
+                std::optional<const HIRType*> detectedSelfTy;
 
                 GetSelf()
                     : HIRMatchGenerics(BorrowMatchedValues{})
                 {
                 }
 
-                HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override {
+                HIRCompare matchTy(const HIRGenericRef& g, const HIRType* ty, tCbResolveType _resolve_cb) override {
                     if (g.isSelf()) {
                         detectedSelfTy = ty;
                     }

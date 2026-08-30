@@ -67,7 +67,7 @@ class StaticTraitResolve: public TraitResolveCommon {
     mutable HIRTypeRefMap<bool> cloneCache;
     mutable HIRTypeRefMap<bool> dropCache;
 
-    mutable HIRTypeRefMap<const HIRTypeData*> atyCache;
+    mutable HIRTypeRefMap<const HIRType*> atyCache;
 
     OpaqueReveal reveal_ = OpaqueReveal::UserFacing;
 
@@ -84,9 +84,9 @@ public:
 
     NullOnDrop<const HIRGenericParams> setImplGenerics(MetadataType selfMetaType, const HIRGenericParams& gps);
 
-    NullOnDrop<const HIRGenericParams> setImplGenerics(const HIRTypeData* selfTy, const HIRGenericParams& gps);
+    NullOnDrop<const HIRGenericParams> setImplGenerics(const HIRType* selfTy, const HIRGenericParams& gps);
 
-    void updateImplSelfMetadata(const HIRTypeData* selfTy);
+    void updateImplSelfMetadata(const HIRType* selfTy);
 
     NullOnDrop<const HIRGenericParams> setItemGenerics(const HIRGenericParams& gps);
 
@@ -106,62 +106,62 @@ public:
         TraitResolveCommon::prepIndexes(sp);
     }
 
-    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRTypeData* type, SolverResponseCallback& foundCb) const {
+    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRType* type, SolverResponseCallback& foundCb) const {
         return this->findImplCb(sp, traitPath, &traitParams, type, foundCb);
     }
 
-    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, SolverResponseCallback& foundCb) const;
+    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRType* type, SolverResponseCallback& foundCb) const;
 
     template <typename F>
-    bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRTypeData* type, F f) const {
+    bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRType* type, F f) const {
         SolverResponseCb<F> cb(f);
         return findImplCb(sp, traitPath, traitParams, type, cb);
     }
 
     template <typename F>
-    bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, F f) const {
+    bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRType* type, F f) const {
         SolverResponseCb<F> cb(f);
         return findImplCb(sp, traitPath, traitParams, type, cb);
     }
 
 private:
-    bool typeNeedsAsyncDropInner(const Span& sp, const HIRTypeData* ty, HIRTypeRefSet& stack) const;
+    bool typeNeedsAsyncDropInner(const Span& sp, const HIRType* ty, HIRTypeRefSet& stack) const;
 
 public:
-    const HIRTypeData* fixTraitDefaultReturn(const Span& sp, const HIRItemPath& p, const HIRTypeData* tpl) const;
+    const HIRType* fixTraitDefaultReturn(const Span& sp, const HIRItemPath& p, const HIRType* tpl) const;
 
-    const HIRTypeData* expandAssociatedTypes(const Span& sp, const HIRTypeData* input) const;
-    const HIRTypeData* revealOpaqueTypes(const Span& sp, const HIRTypeData* input) const;
+    const HIRType* expandAssociatedTypes(const Span& sp, const HIRType* input) const;
+    const HIRType* revealOpaqueTypes(const Span& sp, const HIRType* input) const;
 
-    const HIRTypeData* revealOpaqueTypesShallow(const Span& sp, const HIRTypeData* input) const;
+    const HIRType* revealOpaqueTypesShallow(const Span& sp, const HIRType* input) const;
     void revealOpaqueTypesPath(const Span& sp, HIRPath& input) const;
     void expandAssociatedTypesPath(const Span& sp, HIRPath& input) const;
     void evaluateArraySize(const Span& sp, HIRArraySize& size) const;
     void evaluateConstGeneric(const Span& sp, HIRConstGeneric& value) const;
     void evaluatePathParams(const Span& sp, HIRPathParams& params) const;
-    const HIRTypeData* expandAssociatedTypesSingle(const Span& sp, const HIRTypeData* input) const;
-    bool typesEqualResolvingOpaque(const Span& sp, const HIRTypeData* left, const HIRTypeData* right) const;
+    const HIRType* expandAssociatedTypesSingle(const Span& sp, const HIRType* input) const;
+    bool typesEqualResolvingOpaque(const Span& sp, const HIRType* left, const HIRType* right) const;
 
-    const HIRTypeData* monomorphExpandOpt(const Span& sp, const HIRTypeData* input, const Monomorphiser& m) const;
+    const HIRType* monomorphExpandOpt(const Span& sp, const HIRType* input, const Monomorphiser& m) const;
 
-    const HIRTypeData* monomorphExpand(const Span& sp, const HIRTypeData* input, const Monomorphiser& m) const;
+    const HIRType* monomorphExpand(const Span& sp, const HIRType* input, const Monomorphiser& m) const;
 
     void expandAssociatedTypesTp(const Span& sp, HIRTraitPath& input) const;
 
 private:
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& input) const;
-    [[nodiscard]] const HIRTypeData* expandAssociatedTypesInner(const Span& sp, const HIRTypeData* input) const;
-    const HIRTypeData* expandAssociatedTypesUfcsInherent(const Span& sp, const HIRTypeData* input) const;
-    const HIRTypeData* expandAssociatedTypesUfcsKnown(const Span& sp, const HIRTypeData* input, bool recurse = true) const;
+    [[nodiscard]] const HIRType* expandAssociatedTypesInner(const Span& sp, const HIRType* input) const;
+    const HIRType* expandAssociatedTypesUfcsInherent(const Span& sp, const HIRType* input) const;
+    const HIRType* expandAssociatedTypesUfcsKnown(const Span& sp, const HIRType* input, bool recurse = true) const;
 
 protected:
-    virtual const HIRTypeData* replaceEqualities(const HIRTypeData* input) const;
+    virtual const HIRType* replaceEqualities(const HIRType* input) const;
 
 public:
-    bool findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, StaticNamedTraitCallback& callback) const;
+    bool findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRType* selfType, StaticNamedTraitCallback& callback) const;
 
     template <typename F>
-    bool findNamedTraitInTrait(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, F f) const {
+    bool findNamedTraitInTrait(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRType* selfType, F f) const {
         StaticNamedTraitCb<F> cb(f);
         return findNamedTraitInTraitCb(sp, des, params, traitPtr, traitPath, pp, selfType, cb);
     }
@@ -175,31 +175,31 @@ public:
         return iterateAtyBoundsCb(sp, pe, cb);
     }
 
-    bool typeIsCopy(const Span& sp, const HIRTypeData* ty) const;
-    bool typeIsClone(const Span& sp, const HIRTypeData* ty) const;
-    bool typeIsSized(const Span& sp, const HIRTypeData* ty) const;
-    bool typeIsImpossible(const Span& sp, const HIRTypeData* ty) const;
-    bool canUnsize(const Span& sp, const HIRTypeData* dst, const HIRTypeData* src) const;
+    bool typeIsCopy(const Span& sp, const HIRType* ty) const;
+    bool typeIsClone(const Span& sp, const HIRType* ty) const;
+    bool typeIsSized(const Span& sp, const HIRType* ty) const;
+    bool typeIsImpossible(const Span& sp, const HIRType* ty) const;
+    bool canUnsize(const Span& sp, const HIRType* dst, const HIRType* src) const;
 
-    HIRCompare typeIsInteriorMutable(const Span& sp, const HIRTypeData* ty) const;
+    HIRCompare typeIsInteriorMutable(const Span& sp, const HIRType* ty) const;
 
-    MetadataType metadataType(const Span& sp, const HIRTypeData* ty, bool errOnUnknown = false) const;
+    MetadataType metadataType(const Span& sp, const HIRType* ty, bool errOnUnknown = false) const;
 
-    bool typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty) const;
+    bool typeNeedsDropGlue(const Span& sp, const HIRType* ty) const;
 
-    const HIRTypeData* findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path) const;
+    const HIRType* findAsyncDrop(const Span& sp, const HIRType* ty, HIRPath& path) const;
 
-    bool typeNeedsAsyncDrop(const Span& sp, const HIRTypeData* ty) const;
+    bool typeNeedsAsyncDrop(const Span& sp, const HIRType* ty) const;
 
-    const HIRTypeData* isTypeOwnedBox(const HIRTypeData* ty) const;
-    const HIRTypeData* isTypePhantomData(const HIRTypeData* ty) const;
+    const HIRType* isTypeOwnedBox(const HIRType* ty) const;
+    const HIRType* isTypePhantomData(const HIRType* ty) const;
 
-    const HIRTypeData* getFieldType(const Span& sp, const HIRTypeData* ty, const RcString& name) const;
+    const HIRType* getFieldType(const Span& sp, const HIRType* ty, const RcString& name) const;
 
     using ValuePtr = TypeckValuePtr;
 
     struct ResolvedTraitImplPath {
-        const HIRTypeData* type;
+        const HIRType* type;
         HIRPathParams traitParams;
     };
 

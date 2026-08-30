@@ -12,7 +12,7 @@ namespace stl {
     class ObjPool;
 }
 
-class HIRTypeData;
+class HIRType;
 class HIRSimplePath;
 class HIRExprNode;
 class HIRCrate;
@@ -96,8 +96,8 @@ class HIRExprPtr {
     HIRExprNodeP node;
 
 public:
-    stl::Vector<const HIRTypeData*> bindings;
-    stl::Vector<const HIRTypeData*> erasedTypes;
+    stl::Vector<const HIRType*> bindings;
+    stl::Vector<const HIRType*> erasedTypes;
     std::vector<HIRSimplePath> defineOpaque;
 
     MIRFunctionPointer mir;

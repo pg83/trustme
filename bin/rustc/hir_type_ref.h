@@ -9,7 +9,7 @@
 #include <vector>
 #include <cstdint>
 
-class HIRTypeData;
+class HIRType;
 class HIRTypeInterner;
 class HIRMatchGenerics;
 
@@ -18,14 +18,14 @@ namespace stl {
 }
 
 struct HIRTypeUidOrder {
-    bool operator()(const HIRTypeData* a, const HIRTypeData* b) const {
+    bool operator()(const HIRType* a, const HIRType* b) const {
         return ord(a, b) == OrdLess;
     }
 };
 
-using HIRTypeRefSet = std::set<const HIRTypeData*, HIRTypeUidOrder>;
+using HIRTypeRefSet = std::set<const HIRType*, HIRTypeUidOrder>;
 template <typename V>
-using HIRTypeRefMap = std::map<const HIRTypeData*, V, HIRTypeUidOrder>;
+using HIRTypeRefMap = std::map<const HIRType*, V, HIRTypeUidOrder>;
 
 struct HIRGenericRef;
 struct HIRSimplePath;
@@ -46,12 +46,12 @@ enum HIRCompare {
 
 class HIRResolvePlaceholders {
 public:
-    virtual const HIRTypeData* getType(const Span& sp, const HIRTypeData* ty) const = 0;
+    virtual const HIRType* getType(const Span& sp, const HIRType* ty) const = 0;
     virtual const HIRConstGeneric& getVal(const Span& sp, const HIRConstGeneric& v) const = 0;
 };
 
 class HIRResolvePlaceholdersNop: public HIRResolvePlaceholders {
-    const HIRTypeData* getType(const Span&, const HIRTypeData* ty) const override;
+    const HIRType* getType(const Span&, const HIRType* ty) const override;
 
     const HIRConstGeneric& getVal(const Span&, const HIRConstGeneric& v) const override;
 };

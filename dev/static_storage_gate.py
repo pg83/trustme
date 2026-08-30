@@ -52,7 +52,7 @@ ALLOWED_IMMUTABLE = frozenset((
      "11char_traitsIcEENS0_9allocatorIcEEEEbE7aliases", "d"),
     ("hir_typeck_expr_cs.cpp.o",
      "_ZZN12_GLOBAL__N_123TypeRestrictiveOrdering14getOrderingPtrERK4SpanRK7"
-     "ContextPK11HIRTypeDataS9_RbbE11tagOrdering", "r"),
+     "ContextPK7HIRTypeS9_RbbE11tagOrdering", "r"),
     ("hir_typeck_helpers.cpp.o",
      "_ZZNK15TraitResolution22NextTraitGoalEvaluator20literalClassCanMatchERK"
      "13HIRSimplePathRK13HIRPathParams13HIRInferClassE8intPrims", "r"),

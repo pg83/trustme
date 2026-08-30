@@ -8,7 +8,7 @@
 bool monomorphisePathparamsNeeded(const HIRPathParams& tpl);
 bool monomorphisePathNeeded(const HIRPath& tpl);
 bool monomorphiseTraitpathNeeded(const HIRTraitPath& tpl);
-bool monomorphiseTypeNeeded(const HIRTypeData* tpl);
+bool monomorphiseTypeNeeded(const HIRType* tpl);
 
 struct WireBoard;
 
@@ -31,10 +31,10 @@ public:
 
     void setConstevalState(const WireBoard& wb, HIRItemPath ip);
 
-    virtual const HIRTypeData* getType(const Span& sp, const HIRGenericRef& g) const = 0;
+    virtual const HIRType* getType(const Span& sp, const HIRGenericRef& g) const = 0;
     virtual HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const = 0;
 
-    virtual const HIRTypeData* monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const;
+    virtual const HIRType* monomorphType(const Span& sp, const HIRType* ty, bool allowInfer = true) const;
     HIRPath monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer = true) const;
     HIRTraitPath monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer) const;
     HIRTraitPath::AtyEqual monomorphTpAtyEqual(const Span& sp, const HIRTraitPath::AtyEqual& tpl, bool allowInfer) const;
@@ -44,19 +44,19 @@ public:
     virtual HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const;
     HIRArraySize monomorphArraysize(const Span& sp, const HIRArraySize& tpl) const;
 
-    const HIRTypeData* maybeMonomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const;
+    const HIRType* maybeMonomorphType(const Span& sp, const HIRType* ty, bool allowInfer = true) const;
 };
 
 class MonomorphiserPP: public Monomorphiser {
 public:
     explicit MonomorphiserPP(HIRTypeInterner& types);
 
-    virtual const HIRTypeData* getSelfType() const = 0;
+    virtual const HIRType* getSelfType() const = 0;
     virtual const HIRPathParams* getImplParams() const = 0;
     virtual const HIRPathParams* getMethodParams() const = 0;
     virtual const HIRPathParams* getHrbParams() const = 0;
 
-    const HIRTypeData* getType(const Span& sp, const HIRGenericRef& ty) const override;
+    const HIRType* getType(const Span& sp, const HIRGenericRef& ty) const override;
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
 };
 
@@ -67,7 +67,7 @@ enum class SolverCertainty : u8 {
 };
 
 struct HIRTypeVisitorCallback {
-    virtual bool visit(const HIRTypeData* type) = 0;
+    virtual bool visit(const HIRType* type) = 0;
 };
 
 template <typename F>
@@ -79,20 +79,20 @@ struct HIRTypeVisitorCb final: HIRTypeVisitorCallback {
     {
     }
 
-    bool visit(const HIRTypeData* type) override {
+    bool visit(const HIRType* type) override {
         return f(type);
     }
 };
 
-bool visitTyWithCb(const HIRTypeData*, HIRTypeVisitorCallback& callback);
+bool visitTyWithCb(const HIRType*, HIRTypeVisitorCallback& callback);
 bool visitTraitPathTysWithCb(const HIRTraitPath&, HIRTypeVisitorCallback& callback);
 bool visitPathTysWithCb(const HIRPath&, HIRTypeVisitorCallback& callback);
 
-bool typeContainsGenericGroup(const HIRTypeData*, HIRGenericGroup group);
+bool typeContainsGenericGroup(const HIRType*, HIRGenericGroup group);
 bool pathParamsContainGenericGroup(const HIRPathParams&, HIRGenericGroup group);
 
 template <typename F>
-bool visitTyWith(const HIRTypeData* type, F f) {
+bool visitTyWith(const HIRType* type, F f) {
     HIRTypeVisitorCb<F> cb(f);
     return visitTyWithCb(type, cb);
 }
@@ -110,7 +110,7 @@ bool visitPathTysWith(const HIRPath& path, F f) {
 }
 
 struct HIRTypeRewriteCallback {
-    virtual const HIRTypeData* rewrite(const HIRTypeData* type, HIRTypeData& data) = 0;
+    virtual const HIRType* rewrite(const HIRType* type, HIRType& data) = 0;
 };
 
 template <typename F>
@@ -122,16 +122,16 @@ struct HIRTypeRewriteCb final: HIRTypeRewriteCallback {
     {
     }
 
-    const HIRTypeData* rewrite(const HIRTypeData* type, HIRTypeData& data) override {
+    const HIRType* rewrite(const HIRType* type, HIRType& data) override {
         return f(type, data);
     }
 };
 
-const HIRTypeData* rewriteTyWithCb(HIRTypeInterner& types, const HIRTypeData* ty, HIRTypeRewriteCallback& callback);
+const HIRType* rewriteTyWithCb(HIRTypeInterner& types, const HIRType* ty, HIRTypeRewriteCallback& callback);
 void rewritePathTysWithCb(HIRTypeInterner& types, HIRPath& path, HIRTypeRewriteCallback& callback);
 
 template <typename F>
-const HIRTypeData* rewriteTyWith(HIRTypeInterner& types, const HIRTypeData* ty, F f) {
+const HIRType* rewriteTyWith(HIRTypeInterner& types, const HIRType* ty, F f) {
     HIRTypeRewriteCb<F> cb(f);
     return rewriteTyWithCb(types, ty, cb);
 }
@@ -143,7 +143,7 @@ void rewritePathTysWith(HIRTypeInterner& types, HIRPath& path, F f) {
 }
 
 struct HIRTypeCloneCallback {
-    virtual const HIRTypeData* clone(const HIRTypeData* type) = 0;
+    virtual const HIRType* clone(const HIRType* type) = 0;
 };
 
 template <typename F>
@@ -155,16 +155,16 @@ struct HIRTypeCloneCb final: HIRTypeCloneCallback {
     {
     }
 
-    const HIRTypeData* clone(const HIRTypeData* type) override {
+    const HIRType* clone(const HIRType* type) override {
         return f(type);
     }
 };
 
-const HIRTypeData* cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, HIRTypeCloneCallback& callback);
+const HIRType* cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRType* tpl, HIRTypeCloneCallback& callback);
 HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, HIRTypeCloneCallback& callback);
 
 template <typename F>
-const HIRTypeData* cloneTyWith(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, F f) {
+const HIRType* cloneTyWith(HIRTypeInterner& types, const Span& sp, const HIRType* tpl, F f) {
     HIRTypeCloneCb<F> cb(f);
     return cloneTyWithCb(types, sp, tpl, cb);
 }
@@ -175,7 +175,7 @@ HIRPathParams clonePathParamsWith(HIRTypeInterner& types, const Span& sp, const 
     return clonePathParamsWithCb(types, sp, tpl, cb);
 }
 
-void checkTypeClassPrimitive(const Span& sp, const HIRTypeData* type, HIRInferClass ic, HIRCoreType ct);
+void checkTypeClassPrimitive(const Span& sp, const HIRType* type, HIRInferClass ic, HIRCoreType ct);
 
 bool typeClassPrimitiveCompatible(HIRInferClass ic, HIRCoreType ct);
 
@@ -210,12 +210,12 @@ enum class TypeckPrimitiveOperator {
     ShrAssign,
 };
 
-bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRTypeData* left, const HIRTypeData* right);
+bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRType* left, const HIRType* right);
 
-bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const HIRTypeData* left);
+bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const HIRType* left);
 
-bool primitiveOperatorHasLanguageCandidate(TypeckPrimitiveOperator op, const HIRTypeData* left, const HIRTypeData* right);
+bool primitiveOperatorHasLanguageCandidate(TypeckPrimitiveOperator op, const HIRType* left, const HIRType* right);
 
-bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRTypeData* value);
+bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRType* value);
 
 class StaticTraitResolve;

@@ -3,7 +3,7 @@
 #include "trans_trans_list.h"
 #include "trans_main_bindings.h"
 
-class HIRTypeData;
+class HIRType;
 class HIRPath;
 class HIRGenericPath;
 
@@ -19,11 +19,11 @@ public:
 
     virtual void finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile);
 
-    virtual void emitTypeProto(const HIRTypeData*);
+    virtual void emitTypeProto(const HIRType*);
 
-    virtual void emitType(const HIRTypeData*);
+    virtual void emitType(const HIRType*);
 
-    virtual void emitTypeId(const HIRTypeData*);
+    virtual void emitTypeId(const HIRType*);
 
     virtual void emitStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) = 0;
     virtual void emitUnion(const Span& sp, const HIRGenericPath& p, const HIRUnion& item) = 0;

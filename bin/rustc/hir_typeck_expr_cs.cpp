@@ -32,7 +32,7 @@ namespace {
     struct MonomorphEraseHrls: public Monomorphiser {
         explicit MonomorphEraseHrls(HIRTypeInterner& types);
 
-        const HIRTypeData* getType(const Span& sp, const HIRGenericRef& g) const override;
+        const HIRType* getType(const Span& sp, const HIRGenericRef& g) const override;
 
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
     };
@@ -41,11 +41,11 @@ namespace {
         Context& context;
         bool completed;
         bool isFallback;
-        const Vector<const HIRTypeData*>* passStartIvars;
+        const Vector<const HIRType*>* passStartIvars;
 
         bool nodeDiverges(const HIRExprNode& node) const;
 
-        ExprVisitorRevisit(Context& context, bool fallback = false, const Vector<const HIRTypeData*>* passStartIvars = nullptr);
+        ExprVisitorRevisit(Context& context, bool fallback = false, const Vector<const HIRType*>* passStartIvars = nullptr);
 
         bool nodeCompleted() const;
 
@@ -83,7 +83,7 @@ namespace {
 
         void visit(HIRExprNodeRawBorrow& node) override;
 
-        void bad_cast(const Span& sp, const HIRTypeData* srcTy, const HIRTypeData* tgtTy, const char* where);
+        void bad_cast(const Span& sp, const HIRType* srcTy, const HIRType* tgtTy, const char* where);
 
         void equateFunctionSignature(const Span& sp, const HIRTypeDataFunctionPointer& dst, const HIRTypeDataFunctionPointer& src);
 
@@ -109,7 +109,7 @@ namespace {
             Proven,
         };
 
-        AsyncCallResult callAsyncCallable(HIRExprNodeCallValue& node, const HIRTypeData* ty, const HIRPathParams& traitPp);
+        AsyncCallResult callAsyncCallable(HIRExprNodeCallValue& node, const HIRType* ty, const HIRPathParams& traitPp);
 
         void visit(HIRExprNodeCallValue& node) override;
 
@@ -194,21 +194,21 @@ namespace {
 
         void visit(HIRExprNodeUnsize& node) override;
 
-        const HIRTypeData* checkTypeResolvedTop(const Span& sp, const HIRTypeData* ty) const;
+        const HIRType* checkTypeResolvedTop(const Span& sp, const HIRType* ty) const;
 
-        void checkTypeResolvedConstgeneric(const Span& sp, HIRConstGeneric& v, const HIRTypeData* topType) const;
+        void checkTypeResolvedConstgeneric(const Span& sp, HIRConstGeneric& v, const HIRType* topType) const;
 
-        void checkTypeResolvedPp(const Span& sp, HIRPathParams& pp, const HIRTypeData* topType) const;
+        void checkTypeResolvedPp(const Span& sp, HIRPathParams& pp, const HIRType* topType) const;
 
         void checkTypeResolvedPath(const Span& sp, HIRPath& path) const;
 
-        void checkTypeResolvedPath(const Span& sp, HIRPath& path, const HIRTypeData* topType) const;
+        void checkTypeResolvedPath(const Span& sp, HIRPath& path, const HIRType* topType) const;
 
         void checkTypeResolvedGenericpath(const Span& sp, HIRGenericPath& path) const;
 
-        const HIRTypeData* checkTypeResolved(const Span& sp, const HIRTypeData* ty, const HIRTypeData* topType) const;
+        const HIRType* checkTypeResolved(const Span& sp, const HIRType* ty, const HIRType* topType) const;
 
-        void checkTypesEqual(const Span& sp, const HIRTypeData* l, const HIRTypeData* r) const;
+        void checkTypesEqual(const Span& sp, const HIRType* l, const HIRType* r) const;
         void visit(HIRExprNodeArraySized& node) override;
     };
 
@@ -333,11 +333,11 @@ namespace {
     struct AssociatedStallCollector {
         Context& context;
         Vector<Context::Associated::StallDependency>& dependencies;
-        Vector<const HIRTypeData*> pending;
-        Vector<const HIRTypeData*> visited;
+        Vector<const HIRType*> pending;
+        Vector<const HIRType*> visited;
         bool hasRawInfer = false;
 
-        void addType(const HIRTypeData* type);
+        void addType(const HIRType* type);
 
         void collect();
     };
@@ -347,7 +347,7 @@ namespace {
         std::vector<Vector<unsigned int>> associatedTargets;
         std::vector<Vector<unsigned int>> possibilityTargets;
 
-        static void collectDirectIvars(const HIRTypeData* type, Vector<unsigned int>& out);
+        static void collectDirectIvars(const HIRType* type, Vector<unsigned int>& out);
 
         static void deduplicate(Vector<unsigned int>& values);
 
@@ -364,7 +364,7 @@ namespace {
         const Context& context;
         std::vector<IvarCoercionRefs> refs;
 
-        void collectIvars(const HIRTypeData* root, Vector<unsigned int>& out) const;
+        void collectIvars(const HIRType* root, Vector<unsigned int>& out) const;
 
         template <typename T>
         void addRefs(const Vector<unsigned int>& dependencies, Vector<T> IvarCoercionRefs::* member, T value);
@@ -394,9 +394,9 @@ namespace {
             Removed,
         } state;
 
-        const HIRTypeData* ty;
+        const HIRType* ty;
 
-        static PossibleType concrete(decltype(cls) cls, const HIRTypeData* ty);
+        static PossibleType concrete(decltype(cls) cls, const HIRType* ty);
 
         static PossibleType barrier(decltype(cls) cls);
 
@@ -432,13 +432,13 @@ namespace {
     };
 
     struct TypeRestrictiveOrdering {
-        static const HIRTypeData* matchAndExtractPtrTy(const HIRTypeData* ptrTpl, const HIRTypeData* ty);
+        static const HIRType* matchAndExtractPtrTy(const HIRType* ptrTpl, const HIRType* ty);
 
-        static Ordering getOrderingInfer(const Span& sp, const HIRTypeData* r);
+        static Ordering getOrderingInfer(const Span& sp, const HIRType* r);
 
-        static Ordering getOrderingTy(const Span& sp, const Context& context, const HIRTypeData* l, const HIRTypeData* r, bool& outUnordered);
+        static Ordering getOrderingTy(const Span& sp, const Context& context, const HIRType* l, const HIRType* r, bool& outUnordered);
 
-        static Ordering getOrderingPtr(const Span& sp, const Context& context, const HIRTypeData* l, const HIRTypeData* r, bool& outUnordered, bool deep = true);
+        static Ordering getOrderingPtr(const Span& sp, const Context& context, const HIRType* l, const HIRType* r, bool& outUnordered, bool deep = true);
     };
 
     struct InfoOrdering {
@@ -449,26 +449,26 @@ namespace {
             More,
         };
 
-        static bool isInfer(const HIRTypeData* ty);
+        static bool isInfer(const HIRType* ty);
 
-        static bool compareScore(int& score, const HIRTypeData* tyL, const HIRTypeData* tyR);
+        static bool compareScore(int& score, const HIRType* tyL, const HIRType* tyR);
 
-        static eInfoOrdering compare(const HIRTypeData* tyL, const HIRTypeData* tyR);
+        static eInfoOrdering compare(const HIRType* tyL, const HIRType* tyR);
 
-        static eInfoOrdering compareTop(const Context& context, const HIRTypeData* tyL, const HIRTypeData* tyR, bool shouldDeref);
+        static eInfoOrdering compareTop(const Context& context, const HIRType* tyL, const HIRType* tyR, bool shouldDeref);
     };
 
     struct RpitOriginMonomorph: public HIRMatchGenerics, public Monomorphiser {
-        std::map<u32, const HIRTypeData*> typeBindings;
+        std::map<u32, const HIRType*> typeBindings;
         std::map<u32, HIRConstGeneric> valueBindings;
 
         explicit RpitOriginMonomorph(HIRTypeInterner& types);
 
-        HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override;
+        HIRCompare matchTy(const HIRGenericRef& generic, const HIRType* type, tCbResolveType resolve) override;
 
         HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override;
 
-        const HIRTypeData* getType(const Span&, const HIRGenericRef& generic) const override;
+        const HIRType* getType(const Span&, const HIRGenericRef& generic) const override;
 
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
     };
@@ -486,7 +486,7 @@ namespace {
 
         explicit ExprVisitorTagStaleIvars(HIRTypeInterner& types);
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* type) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* type) override;
 
         void visitPathParams(HIRPathParams& params) override;
     };
@@ -496,40 +496,40 @@ namespace {
 
         struct LocalImplTraitLowering: Monomorphiser {
             Context& context;
-            mutable const HIRTypeData* curSelf = nullptr;
+            mutable const HIRType* curSelf = nullptr;
 
             explicit LocalImplTraitLowering(Context& context);
 
-            const HIRTypeData* getType(const Span& sp, const HIRGenericRef& generic) const override;
+            const HIRType* getType(const Span& sp, const HIRGenericRef& generic) const override;
 
             HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
 
-            const HIRTypeData* monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override;
+            const HIRType* monomorphType(const Span& sp, const HIRType* type, bool allowInfer = true) const override;
         };
 
         ExprVisitorAddIvars(Context& context);
 
-        const HIRTypeData* innerVisitType(const HIRTypeData* ty);
+        const HIRType* innerVisitType(const HIRType* ty);
 
         void visitPathParams(HIRPathParams& pp) override;
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
 
         void visit(HIRExprNodeLet& node) override;
     };
 
     struct ExprVisitorEnum: public HIRExprVisitor {
         Context& context;
-        const HIRTypeData* retType;
+        const HIRType* retType;
 
         struct RetTarget {
-            const HIRTypeData* retType;
-            const HIRTypeData* resumeType;
-            const HIRTypeData* yieldType;
+            const HIRType* retType;
+            const HIRType* resumeType;
+            const HIRType* yieldType;
 
-            RetTarget(const HIRTypeData* retType);
+            RetTarget(const HIRType* retType);
 
-            RetTarget(const HIRTypeData* retType, const HIRTypeData* resumeType, const HIRTypeData* yieldType);
+            RetTarget(const HIRType* retType, const HIRType* resumeType, const HIRType* yieldType);
         };
 
         Vector<RetTarget> closureRetTypes;
@@ -552,7 +552,7 @@ namespace {
             bool revisit(Context& context, bool isFallback);
         };
 
-        ExprVisitorEnum(Context& context, tTraitList baseTraits, const HIRTypeData* retType);
+        ExprVisitorEnum(Context& context, tTraitList baseTraits, const HIRType* retType);
 
         void visit(HIRExprNodeBlock& node) override;
 
@@ -602,7 +602,7 @@ namespace {
 
         void addIvarsPath(const Span& sp, HIRPath& path);
 
-        const HIRTypeData* getStructenumTy(const Span& sp, bool isStruct, HIRGenericPath& gp);
+        const HIRType* getStructenumTy(const Span& sp, bool isStruct, HIRGenericPath& gp);
 
         void visit(HIRExprNodeTupleVariant& node) override;
 
@@ -668,10 +668,10 @@ namespace {
 
         bool canCoerceInnerResult() const;
 
-        void equateTypesInnerCoerce(const Span& sp, const HIRTypeData* target, HIRExprNodeP& node);
+        void equateTypesInnerCoerce(const Span& sp, const HIRType* target, HIRExprNodeP& node);
     };
 
-    inline HIRExprNodeP mkExprnodep(HIRExprNode* en, const HIRTypeData* ty) {
+    inline HIRExprNodeP mkExprnodep(HIRExprNode* en, const HIRType* ty) {
         en->resType = mv$(ty);
         return HIRExprNodeP(en);
     }
@@ -684,7 +684,7 @@ namespace {
         return HIRGenericPath(getParentPath(gp.path), gp.params.clone());
     }
 
-    bool typeContainsImplPlaceholder(HIRTypeInterner& types, const HIRTypeData* t) {
+    bool typeContainsImplPlaceholder(HIRTypeInterner& types, const HIRType* t) {
         struct V: public HIRVisitor {
             bool found = false;
 
@@ -706,7 +706,7 @@ namespace {
                 HIRVisitor::visitPathParams(pp);
             }
 
-            [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override {
+            [[nodiscard]] const HIRType* visitType(const HIRType* ty) override {
                 if (ty->is_Generic() && ty->as_Generic().isPlaceholder()) {
                     found = true;
                 }
@@ -845,7 +845,7 @@ namespace {
     }
 
     template <typename F>
-    void addCoerceBorrow(Context& context, HIRExprNodeP& origNodePtr, const HIRTypeData* desBorrowInner, F cb) {
+    void addCoerceBorrow(Context& context, HIRExprNodeP& origNodePtr, const HIRType* desBorrowInner, F cb) {
         auto borrowType = context.ivars.getType(origNodePtr->resType)->as_Borrow().type;
 
         HIRExprNodeP* nodePtrPtr = &origNodePtr;
@@ -895,7 +895,7 @@ namespace {
     };
 
     // TODO: Add a (two?) callback(s) that handle type equalities (and possible equalities) so this function doesn't have to mutate the context
-    CoerceResult checkUnsizeTys(const Context& context, const Span& sp, const HIRTypeData* dstRaw, const HIRTypeData* srcRaw, Context* contextMut, HIRExprNodeP* nodePtrPtr = nullptr) {
+    CoerceResult checkUnsizeTys(const Context& context, const Span& sp, const HIRType* dstRaw, const HIRType* srcRaw, Context* contextMut, HIRExprNodeP* nodePtrPtr = nullptr) {
         const auto& dst = context.ivars.getType(dstRaw);
         const auto& src = context.ivars.getType(srcRaw);
 
@@ -982,10 +982,10 @@ namespace {
 
         if (nodePtrPtr) {
             DEBUG(StringView("-- Deref coercions"));
-            const HIRTypeData* tmpTy;
-            const HIRTypeData* outTyP = src;
+            const HIRType* tmpTy;
+            const HIRType* outTyP = src;
             unsigned int count = 0;
-            Vector<const HIRTypeData*> types;
+            Vector<const HIRType*> types;
             while ((outTyP = context.resolve.autoderef(sp, outTyP))) {
                 const auto& outTy = context.ivars.getType(outTyP);
                 DEBUG(StringView("From? ") << outTy);
@@ -998,8 +998,8 @@ namespace {
                 if (const auto* sep = outTy->opt_Infer()) {
                     if (!sep->isLit()) {
                         if (contextMut) {
-                            const HIRTypeData* tmpTy2;
-                            const HIRTypeData* dTyP = dst;
+                            const HIRType* tmpTy2;
+                            const HIRType* dTyP = dst;
                             for (unsigned int i = 0; (dTyP = context.resolve.autoderef(sp, dTyP)) && i < count - 1; i++) {
                             }
                             if (dTyP) {
@@ -1083,7 +1083,7 @@ namespace {
                 struct ProjectionMatcher: public HIRMatchGenerics {
                     const Context& context;
 
-                    bool isDefiningOpaque(const HIRTypeData* type) const {
+                    bool isDefiningOpaque(const HIRType* type) const {
                         const auto* erased = type->opt_ErasedType();
                         const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
                         if (alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner)) {
@@ -1099,7 +1099,7 @@ namespace {
                     {
                     }
 
-                    HIRCompare cmpType(const Span& sp, const HIRTypeData* left, const HIRTypeData* right, tCbResolveType resolve) override {
+                    HIRCompare cmpType(const Span& sp, const HIRType* left, const HIRType* right, tCbResolveType resolve) override {
                         const auto* resolvedLeft = left->is_Infer() ? resolve.getType(sp, left) : left;
                         const auto* resolvedRight = right->is_Infer() ? resolve.getType(sp, right) : right;
                         if (isDefiningOpaque(resolvedLeft) || isDefiningOpaque(resolvedRight)) {
@@ -1108,7 +1108,7 @@ namespace {
                         return HIRMatchGenerics::cmpType(sp, left, right, resolve);
                     }
 
-                    HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override {
+                    HIRCompare matchTy(const HIRGenericRef& generic, const HIRType* type, tCbResolveType resolve) override {
                         const auto* resolved = type->is_Infer() ? resolve.getType(Span(), type) : type;
                         if (isDefiningOpaque(resolved) || resolved->is_Infer() || (resolved->is_Path() && resolved->as_Path().binding.is_Unbound())) {
                             return HIRCompare::Fuzzy;
@@ -1135,7 +1135,7 @@ namespace {
                     }
                 } matcher{context};
 
-                auto compareType = [&](const HIRTypeData* left, const HIRTypeData* right) {
+                auto compareType = [&](const HIRType* left, const HIRType* right) {
                     return left->matchTestGenericsFuzz(sp, right, context.ivars.callbackResolveInfer(), matcher);
                 };
                 auto compareParams = [&](const HIRPathParams& left, const HIRPathParams& right) {
@@ -1305,7 +1305,7 @@ namespace {
         }
 
         struct H {
-            static bool typeIsBounded(const HIRTypeData* ty) {
+            static bool typeIsBounded(const HIRType* ty) {
                 if (ty->is_Generic()) {
                     return true;
                 } else if (((*ty).is_Path() && ((*ty).as_Path().binding.is_Opaque()))) {
@@ -1350,7 +1350,7 @@ namespace {
             switch ((*src).tag()) {
                 default:
                     return CoerceResult::Equality;
-                case HIRTypeData::TAG_Path: {
+                case HIRType::TAG_Path: {
                     auto& se = (*src).as_Path();
                     auto& de = (*dst).as_Path();
                     if (se.binding.tag() == de.binding.tag()) {
@@ -1394,15 +1394,15 @@ namespace {
                                         DEBUG(StringView("Possible DST"));
                                         const auto& pSrc = se.path.data.as_Generic().params;
                                         const auto& pDst = de.path.data.as_Generic().params;
-                                        const HIRTypeData* srcTail;
-                                        const HIRTypeData* dstTail;
-                                        const HIRTypeData* isrc;
-                                        const HIRTypeData* idst;
+                                        const HIRType* srcTail;
+                                        const HIRType* dstTail;
+                                        const HIRType* isrc;
+                                        const HIRType* idst;
                                         if (sm.dstType == HIRStructMarkings::DstType::Possible) {
                                             isrc = pSrc.types.at(sm.unsizedParam);
                                             idst = pDst.types.at(sm.unsizedParam);
                                         } else {
-                                            const HIRTypeData* tailTpl = nullptr;
+                                            const HIRType* tailTpl = nullptr;
                                             switch (sbe->data.tag()) {
                                                 case HIRStructData::TAG_Unit:
                                                     BUG(sp, StringView("Potentially-unsized unit struct ") << src);
@@ -1435,7 +1435,7 @@ namespace {
                                                             contextMut->equateValues(sp, pDst.values.at(i), pSrc.values[i]);
                                                         }
                                                     } else {
-                                                        auto equateField = [&](const HIRTypeData* fieldTpl) {
+                                                        auto equateField = [&](const HIRType* fieldTpl) {
                                                             auto srcField = context.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, src, &pSrc, nullptr).monomorphType(sp, fieldTpl));
                                                             auto dstField = context.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, dst, &pDst, nullptr).monomorphType(sp, fieldTpl));
                                                             contextMut->equateTypes(sp, dstField, srcField);
@@ -1490,7 +1490,7 @@ namespace {
         return CoerceResult::Equality;
     }
 
-    CoerceResult checkCoerceTys(const Context& context, const Span& sp, const HIRTypeData* dst, const HIRTypeData* srcR, Context* contextMut = nullptr, HIRExprNodeP* nodePtrPtr = nullptr) {
+    CoerceResult checkCoerceTys(const Context& context, const Span& sp, const HIRType* dst, const HIRType* srcR, Context* contextMut = nullptr, HIRExprNodeP* nodePtrPtr = nullptr) {
         auto src = srcR;
         TRACE_FUNCTION_F(dst << StringView(" := ") << src);
         if (context.ivars.typesEqual(dst, src)) {
@@ -1519,7 +1519,7 @@ namespace {
         }
 
         struct H {
-            static bool typeIsBounded(const HIRTypeData* ty) {
+            static bool typeIsBounded(const HIRType* ty) {
                 if (ty->is_Generic()) {
                     return true;
                 } else if (ty->is_Path() && (monomorphiseTypeNeeded(ty) || ty->as_Path().binding.is_Opaque())) {
@@ -1529,7 +1529,7 @@ namespace {
                 }
             }
 
-            static const HIRTypeData* makePruned(Context& context, const HIRTypeData* ty) {
+            static const HIRType* makePruned(Context& context, const HIRType* ty) {
                 const auto& binding = ty->as_Path().binding;
                 const auto& sm = binding.as_Struct()->structMarkings;
                 HIRGenericPath gp = ty->as_Path().path.data.as_Generic().clone();
@@ -1618,7 +1618,7 @@ namespace {
                 }
 
                 HIRCompare fieldsCmp = HIRCompare::Equal;
-                auto relateField = [&](const HIRTypeData* fieldTpl) {
+                auto relateField = [&](const HIRType* fieldTpl) {
                     auto srcField = context.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, src, &ppSrc, nullptr).monomorphType(sp, fieldTpl));
                     auto dstField = context.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, dst, &ppDst, nullptr).monomorphType(sp, fieldTpl));
                     fieldsCmp &= dstField->compareWithPlaceholders(sp, srcField, context.ivars.callbackResolveInfer());
@@ -1991,15 +1991,15 @@ namespace {
         } else if (src->is_NodeType() && src->as_NodeType().is_Closure()) {
             const auto* nodeP = src->as_NodeType().as_Closure();
             if (dst->is_ErasedType()) {
-                Vector<const HIRTypeData*> closureArgs;
+                Vector<const HIRType*> closureArgs;
                 closureArgs.grow(nodeP->args.size());
                 for (const auto& arg : nodeP->args) {
                     closureArgs.pushBack(arg.second);
                 }
                 HIRPathParams desiredParams{context.crate.types.tuple(mv$(closureArgs))};
 
-                Vector<const HIRTypeData*> expectedArgs;
-                const HIRTypeData* expectedOutput;
+                Vector<const HIRType*> expectedArgs;
+                const HIRType* expectedOutput;
                 const auto inspectExpectation = [&](const SolverImpl& impl) {
                     auto params = impl.getTraitParams(context.crate.types);
                     if (params.types.size() != 1 || !params.types.front()->is_Tuple()) {
@@ -2015,7 +2015,7 @@ namespace {
                     }
 
                     bool hasExpectation = false;
-                    Vector<const HIRTypeData*> concreteArgs;
+                    Vector<const HIRType*> concreteArgs;
                     concreteArgs.grow(args.length());
                     for (const auto& arg : args) {
                         if (typeContainsImplPlaceholder(context.crate.types, arg)) {
@@ -2199,7 +2199,7 @@ namespace {
             {
             }
 
-            bool sameUnresolvedIvar(const HIRTypeData* left, const HIRTypeData* right) const {
+            bool sameUnresolvedIvar(const HIRType* left, const HIRType* right) const {
                 left = context.ivars.getType(left);
                 right = context.ivars.getType(right);
                 const auto* leftInfer = left->opt_Infer();
@@ -2308,9 +2308,9 @@ namespace {
         Ambiguous,
     };
 
-    bool typeNeedsFurtherInference(const Context& context, const HIRTypeData* type) {
+    bool typeNeedsFurtherInference(const Context& context, const HIRType* type) {
         bool pending = false;
-        visitTyWith(type, [&](const HIRTypeData* inner) {
+        visitTyWith(type, [&](const HIRType* inner) {
             const auto* resolved = context.getType(inner);
             if (resolved != inner) {
                 pending = typeNeedsFurtherInference(context, resolved);
@@ -2362,14 +2362,14 @@ namespace {
             }
         }
 
-        std::optional<const HIRTypeData*> outputType;
+        std::optional<const HIRType*> outputType;
 
         struct H {
-            static bool typeIsNum(const HIRTypeData* t) {
+            static bool typeIsNum(const HIRType* t) {
                 switch ((*t).tag()) {
                     default:
                         return false;
-                    case HIRTypeData::TAG_Primitive: {
+                    case HIRType::TAG_Primitive: {
                         auto& e = (*t).as_Primitive();
                         switch (e) {
                             case HIRCoreType::Str:
@@ -2380,7 +2380,7 @@ namespace {
                         }
                         break;
                     }
-                    case HIRTypeData::TAG_Infer: {
+                    case HIRType::TAG_Infer: {
                         auto& e = (*t).as_Infer();
                         return e.isLit();
                     }
@@ -2388,7 +2388,7 @@ namespace {
                 UNREACHABLE();
             }
 
-            static bool unaryCanUseExpected(TypeckPrimitiveOperator op, const HIRTypeData* type) {
+            static bool unaryCanUseExpected(TypeckPrimitiveOperator op, const HIRType* type) {
                 if (primitiveOperatorHasBuiltin(op, type)) {
                     return true;
                 }
@@ -2400,10 +2400,10 @@ namespace {
             }
         };
 
-        const auto concreteCoercionSource = [&](const HIRTypeData* type) {
+        const auto concreteCoercionSource = [&](const HIRType* type) {
             const auto* infer = context.getType(type)->opt_Infer();
             if (!infer || infer->index == ~0u || infer->index >= context.possibleIvarVals.size()) {
-                return static_cast<const HIRTypeData*>(nullptr);
+                return static_cast<const HIRType*>(nullptr);
             }
             const auto& possible = context.possibleIvarVals[infer->index];
             for (const auto& source : possible.typesCoerceFrom) {
@@ -2412,7 +2412,7 @@ namespace {
                     return sourceType;
                 }
             }
-            return static_cast<const HIRTypeData*>(nullptr);
+            return static_cast<const HIRType*>(nullptr);
         };
 
         bool hasSemanticOperatorImpl = false;
@@ -2558,7 +2558,7 @@ namespace {
         };
 
         ThinVector<SolverCoercionConstraint> coercionGoals;
-        const auto appendCoercionGoals = [&](const HIRTypeData* rawInput, unsigned typeIndex, bool isSelf) {
+        const auto appendCoercionGoals = [&](const HIRType* rawInput, unsigned typeIndex, bool isSelf) {
             const auto* input = context.getType(rawInput);
             const auto* infer = input->opt_Infer();
             if (!infer || infer->index == ~0u || infer->index >= context.possibleIvarVals.size()) {
@@ -2696,8 +2696,8 @@ namespace {
     bool setAssociatedStall(Context& context, Context::Associated& rule) {
         rule.stalledOn.clear();
 
-        const auto typeCanStall = [](const HIRTypeData* type) {
-            return (type->flags & (HIRTypeData::HAS_UNEVALUATED_CONST | HIRTypeData::HAS_DEFERRED_CONST)) == 0;
+        const auto typeCanStall = [](const HIRType* type) {
+            return (type->flags & (HIRType::HAS_UNEVALUATED_CONST | HIRType::HAS_DEFERRED_CONST)) == 0;
         };
         if (!typeCanStall(rule.implTy) || (rule.name != "" && !typeCanStall(rule.leftTy)) || pathParamsHaveUntrackedConst(rule.params) || pathParamsHaveUntrackedConst(rule.atyPp)) {
             return false;
@@ -2755,7 +2755,7 @@ namespace {
         }
     }
 
-    bool typeHasIndependentUnresolvedIvar(const Context& context, const HIRTypeData* type, unsigned int exceptIndex, const ActiveOperatorOutput* active = nullptr);
+    bool typeHasIndependentUnresolvedIvar(const Context& context, const HIRType* type, unsigned int exceptIndex, const ActiveOperatorOutput* active = nullptr);
 
     bool operatorOutputHasIndependentInput(const Context& context, unsigned int index, unsigned int exceptIndex, const ActiveOperatorOutput* active) {
         for (auto* entry = active; entry; entry = entry->parent) {
@@ -2784,9 +2784,9 @@ namespace {
         return true;
     }
 
-    bool typeHasIndependentUnresolvedIvar(const Context& context, const HIRTypeData* type, unsigned int exceptIndex, const ActiveOperatorOutput* active) {
+    bool typeHasIndependentUnresolvedIvar(const Context& context, const HIRType* type, unsigned int exceptIndex, const ActiveOperatorOutput* active) {
         bool found = false;
-        visitTyWith(type, [&](const HIRTypeData* inner) {
+        visitTyWith(type, [&](const HIRType* inner) {
             if (found) {
                 return true;
             }
@@ -2803,9 +2803,9 @@ namespace {
         return found;
     }
 
-    bool typeDependsOnIvar(const Context& context, const HIRTypeData* type, unsigned int index) {
+    bool typeDependsOnIvar(const Context& context, const HIRType* type, unsigned int index) {
         bool found = false;
-        visitTyWith(type, [&](const HIRTypeData* inner) {
+        visitTyWith(type, [&](const HIRType* inner) {
             const auto* resolved = context.getType(inner);
             if (const auto* infer = resolved->opt_Infer(); infer && infer->index == index) {
                 found = true;
@@ -2847,7 +2847,7 @@ namespace {
         return false;
     }
 
-    bool coercionCandidateIsInvalid(const Span& sp, Context& context, const IvarCoercionRefs& coercionRefs, const HIRTypeData* tyL, const HIRTypeData* newTy) {
+    bool coercionCandidateIsInvalid(const Span& sp, Context& context, const IvarCoercionRefs& coercionRefs, const HIRType* tyL, const HIRType* newTy) {
         TRACE_FUNCTION_F(tyL << StringView(" <- ") << newTy);
         const auto ivarIdx = tyL->as_Infer().index;
         bool usedTy = false;
@@ -2857,9 +2857,9 @@ namespace {
             const Span& sp;
             const Context& context;
             unsigned int ivarIdx;
-            const HIRTypeData* newTy;
+            const HIRType* newTy;
 
-            Cb(bool& usedTy, const Span& sp, const Context& context, unsigned int ivarIdx, const HIRTypeData* newTy)
+            Cb(bool& usedTy, const Span& sp, const Context& context, unsigned int ivarIdx, const HIRType* newTy)
                 : usedTy(usedTy)
                 , sp(sp)
                 , context(context)
@@ -2868,7 +2868,7 @@ namespace {
             {
             }
 
-            const HIRTypeData* operator()(const HIRTypeData* ty) {
+            const HIRType* operator()(const HIRType* ty) {
                 const auto* e = ty->opt_Infer();
                 if (!e) {
                     return nullptr;
@@ -3117,7 +3117,7 @@ namespace {
                     tyP = context.crate.types.unit();
                 }
                 if (possibleTys[0].isUnsize()) {
-                    const HIRTypeData* tmpTy;
+                    const HIRType* tmpTy;
 
                     do {
                         if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, tyP)) {
@@ -3226,7 +3226,7 @@ namespace {
 
             // TODO: Do the oposite for the destination types (least permissive pointer, pick any Sized type)
             if (nSrcIvars == 0 || fallbackTy == IvarPossFallbackType::Assume) {
-                const HIRTypeData* ptrTy = nullptr;
+                const HIRType* ptrTy = nullptr;
                 if (std::any_of(possibleTys.begin(), possibleTys.end(), [&](const auto& ent) {
                     return ent.cls == PossibleType::CoerceFrom;
                 })) {
@@ -3249,7 +3249,7 @@ namespace {
                     if (!ent.isSource()) {
                         continue;
                     }
-                    const HIRTypeData* innerTy = (ptrTy ? TypeRestrictiveOrdering::matchAndExtractPtrTy(ptrTy, ent.ty) : ent.ty);
+                    const HIRType* innerTy = (ptrTy ? TypeRestrictiveOrdering::matchAndExtractPtrTy(ptrTy, ent.ty) : ent.ty);
                     if (!innerTy) {
                         continue;
                     }
@@ -3297,7 +3297,7 @@ namespace {
                     }
                 }
                 bool isUnordered = false;
-                const HIRTypeData* destType = nullptr;
+                const HIRType* destType = nullptr;
                 for (const auto& ent : possibleTys) {
                     if (ent.isDest()) {
                         continue;
@@ -3355,7 +3355,7 @@ namespace {
                     }
                 }
                 bool isUnordered = false;
-                const HIRTypeData* destType = nullptr;
+                const HIRType* destType = nullptr;
                 for (const auto& ent : possibleTys) {
                     if (ent.isSource()) {
                         continue;
@@ -3431,11 +3431,11 @@ namespace {
 
             if (fallbackTy == IvarPossFallbackType::Assume) {
                 if (std::all_of(possibleTys.begin(), possibleTys.end(), PossibleType::isCoerceS) && nIvars == 0) {
-                    const HIRTypeData* destType = nullptr;
+                    const HIRType* destType = nullptr;
                     bool anyIvarPresent = false;
                     bool isUnordered = false;
                     for (const auto& ent : possibleTys) {
-                        if (visitTyWith(ent.ty, [](const HIRTypeData* t) {
+                        if (visitTyWith(ent.ty, [](const HIRType* t) {
                             return t->is_Infer();
                         })) {
                             anyIvarPresent = true;
@@ -3523,7 +3523,7 @@ namespace {
                 bool removeOption = false;
                 if (it->isSource() && !(it->ty)->is_Infer()) {
                     DEBUG(StringView("> ") << *it);
-                    const HIRTypeData* tmp, tmp2;
+                    const HIRType* tmp, tmp2;
                     const auto* dty = it->ty;
                     auto srcBty = HIRBorrowType::Shared;
                     if (it->isCoerce()) {
@@ -3598,7 +3598,7 @@ namespace {
 
             for (const auto& e : possibleTys) {
                 if (e.cls == PossibleType::CoerceFrom) {
-                    const HIRTypeData* tmp;
+                    const HIRType* tmp;
                     const auto* dty = context.resolve.autoderef(sp, e.ty);
                     if (dty && !(dty)->is_Infer()) {
                         for (const auto& e2 : possibleTys) {
@@ -3666,7 +3666,7 @@ namespace {
         }
 
         if (mayUseRawPointerFallback && fallbackTy == IvarPossFallbackType::FinalOption) {
-            const HIRTypeData* selected = nullptr;
+            const HIRType* selected = nullptr;
             bool conflicting = false;
             for (const auto& candidate : ivarEnt.rawPointerFallbacks) {
                 const auto* type = context.getType(candidate);
@@ -3716,7 +3716,7 @@ namespace {
     }
 
     template <typename T>
-    void fix_param_count_(const Span& sp, Context& context, const HIRTypeData* selfTy, bool useDefaults, const T& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
+    void fix_param_count_(const Span& sp, Context& context, const HIRType* selfTy, bool useDefaults, const T& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
         if (params.types.size() == paramDefs.types.size()) {
         } else if (params.types.size() > paramDefs.types.size()) {
             while (params.types.size() > paramDefs.types.size() && params.values.size() < paramDefs.values.size() && params.types.back()->is_Infer()) {
@@ -3757,15 +3757,15 @@ namespace {
         }
     }
 
-    void fixParamCount(const Span& sp, Context& context, const HIRTypeData* selfTy, bool useDefaults, const HIRPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
+    void fixParamCount(const Span& sp, Context& context, const HIRType* selfTy, bool useDefaults, const HIRPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
         fix_param_count_(sp, context, selfTy, useDefaults, path, paramDefs, params);
     }
 
-    void fixParamCount(const Span& sp, Context& context, const HIRTypeData* selfTy, bool useDefaults, const HIRGenericPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
+    void fixParamCount(const Span& sp, Context& context, const HIRType* selfTy, bool useDefaults, const HIRGenericPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
         fix_param_count_(sp, context, selfTy, useDefaults, path, paramDefs, params);
     }
 
-    void applyBoundsAsRulesTrait(Context& context, const Span& sp, const HIRTypeData* realType, const HIRTraitPath& traitPath) {
+    void applyBoundsAsRulesTrait(Context& context, const Span& sp, const HIRType* realType, const HIRTraitPath& traitPath) {
         if (traitPath.typeBounds.size() == 0) {
             context.addTraitBound(sp, realType, traitPath.path.path, traitPath.path.params.clone());
         }
@@ -3806,7 +3806,7 @@ namespace {
 
         for (size_t i = 0; i < paramsDef.types.size(); i++) {
             if (paramsDef.types[i].isSized) {
-                const HIRTypeData* ty = context.crate.types.generic("", (isImplLevel ? 0 : 256) + i);
+                const HIRType* ty = context.crate.types.generic("", (isImplLevel ? 0 : 256) + i);
                 context.requireSized(sp, ms.getType(Span(), ty->as_Generic()));
             }
         }
@@ -3853,7 +3853,7 @@ namespace {
         applyBoundsAsRules(context, sp, implPtr->params, *cache.monomorph, /*is_impl_level=*/true);
 
         {
-            const HIRTypeData* tmp;
+            const HIRType* tmp;
             const auto* implTyM = cache.monomorph->maybeMonomorphType(sp, implPtr->type);
 
             context.equateTypes(sp, e.type, implTyM);
@@ -3905,10 +3905,10 @@ namespace {
 
         if (function) {
             applyBoundsAsRules(context, sp, function->params, monomorph, false);
-            auto type = context.crate.types.intern(HIRTypeData::make_NamedFunction({path.clone(), function}));
+            auto type = context.crate.types.intern(HIRType::make_NamedFunction({path.clone(), function}));
             context.equateTypes(sp, node.resType, type);
         } else {
-            const HIRTypeData* temporary;
+            const HIRType* temporary;
             const auto* type = monomorph.maybeMonomorphType(sp, constant->type);
             applyBoundsAsRules(context, sp, constant->params, monomorph, false);
             context.equateTypes(sp, node.resType, type);
@@ -3917,7 +3917,7 @@ namespace {
     }
 }
 
-void Context::equateTypes(const Span& sp, const HIRTypeData* li, const HIRTypeData* ri) {
+void Context::equateTypes(const Span& sp, const HIRType* li, const HIRType* ri) {
     const auto& liRes = this->ivars.getType(li);
     const auto& riRes = this->ivars.getType(ri);
     if (li == ri || liRes == riRes || liRes->equalsIgnoringRegions(riRes)) {
@@ -3941,7 +3941,7 @@ void Context::equateTypes(const Span& sp, const HIRTypeData* li, const HIRTypeDa
     equateTypesInner(sp, lT, rT);
 }
 
-void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRTypeData* ri) {
+void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType* ri) {
     const auto& liRes = this->ivars.getType(li);
     const auto& riRes = this->ivars.getType(ri);
     if (li == ri || liRes == riRes || liRes->equalsIgnoringRegions(riRes)) {
@@ -3960,7 +3960,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
     const auto* rProjection = rPath ? rPath->path.data.opt_UfcsKnown() : nullptr;
     const bool lRigidProjection = lPath && (lPath->binding.is_Unbound() || lPath->binding.is_Opaque());
     const bool rRigidProjection = rPath && (rPath->binding.is_Unbound() || rPath->binding.is_Opaque());
-    const auto typesMayRelate = [&](const HIRTypeData* left, const HIRTypeData* right) {
+    const auto typesMayRelate = [&](const HIRType* left, const HIRType* right) {
         if (left == right || left->equalsIgnoringRegions(right)) {
             return true;
         }
@@ -3985,12 +3985,12 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
     if (lRigidProjection && rRigidProjection && lProjection && rProjection && lProjection->trait.path == rProjection->trait.path && lProjection->item == rProjection->item && (this->ivars.getType(lProjection->type)->is_Infer() || this->ivars.getType(rProjection->type)->is_Infer()) && typesMayRelate(lProjection->type, rProjection->type) && paramsMayRelate(lProjection->trait.params, rProjection->trait.params) && paramsMayRelate(lProjection->params, rProjection->params)) {
         struct DeferredRigidProjectionSelf final: Revisitor {
             Span sp;
-            const HIRTypeData* leftAlias;
-            const HIRTypeData* rightAlias;
-            const HIRTypeData* leftSelf;
-            const HIRTypeData* rightSelf;
+            const HIRType* leftAlias;
+            const HIRType* rightAlias;
+            const HIRType* leftSelf;
+            const HIRType* rightSelf;
 
-            DeferredRigidProjectionSelf(Span sp, const HIRTypeData* leftAlias, const HIRTypeData* rightAlias, const HIRTypeData* leftSelf, const HIRTypeData* rightSelf)
+            DeferredRigidProjectionSelf(Span sp, const HIRType* leftAlias, const HIRType* rightAlias, const HIRType* leftSelf, const HIRType* rightSelf)
                 : sp(mv$(sp))
                 , leftAlias(leftAlias)
                 , rightAlias(rightAlias)
@@ -4026,9 +4026,9 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
         return;
     }
 
-    auto bindInferToAlias = [&](const HIRTypeData* infer, const HIRTypeData* alias) {
+    auto bindInferToAlias = [&](const HIRType* infer, const HIRType* alias) {
         const auto* inferData = infer->opt_Infer();
-        if (!inferData || inferData->isLit() || this->resolve.typeContainsIvars(alias) || visitTyWith(alias, [&](const HIRTypeData* inner) {
+        if (!inferData || inferData->isLit() || this->resolve.typeContainsIvars(alias) || visitTyWith(alias, [&](const HIRType* inner) {
             return inner == infer;
         })) {
             return false;
@@ -4082,7 +4082,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
         }
     }
 
-    auto equateErasedAlias = [&](const HIRTypeDataErasedType& erased, const auto& alias, const HIRTypeData* hiddenType) {
+    auto equateErasedAlias = [&](const HIRTypeDataErasedType& erased, const auto& alias, const HIRType* hiddenType) {
         if (!resolve.isOpaqueAliasDefiningScope(*alias.inner)) {
             return false;
         }
@@ -4094,15 +4094,15 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
         }
 
         struct MonomorphErasedSelf: MonomorphiserNop {
-            const HIRTypeData* hiddenType;
+            const HIRType* hiddenType;
 
-            MonomorphErasedSelf(HIRTypeInterner& types, const HIRTypeData* hiddenType)
+            MonomorphErasedSelf(HIRTypeInterner& types, const HIRType* hiddenType)
                 : MonomorphiserNop(types)
                 , hiddenType(hiddenType)
             {
             }
 
-            const HIRTypeData* getType(const Span&, const HIRGenericRef& type) const override {
+            const HIRType* getType(const Span&, const HIRGenericRef& type) const override {
                 if (type.binding == GENERICErasedSelf) {
                     return hiddenType;
                 }
@@ -4145,17 +4145,17 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
         return;
     }
 
-    auto setIvar = [&](const HIRTypeData* dst, const HIRTypeData* src) {
+    auto setIvar = [&](const HIRType* dst, const HIRType* src) {
         auto ivarIdx = dst->as_Infer().index;
         if (ivarIdx < ivarsSized.length() && ivarsSized[ivarIdx]) {
             this->requireSized(sp, src);
         }
-        if (visitTyWith(src, [&](const HIRTypeData* ity) {
+        if (visitTyWith(src, [&](const HIRType* ity) {
             return ity == dst;
         })) {
-            auto newSrc = cloneTyWith(crate.types, sp, src, [&](const HIRTypeData* tpl) -> const HIRTypeData* {
+            auto newSrc = cloneTyWith(crate.types, sp, src, [&](const HIRType* tpl) -> const HIRType* {
                 if (tpl->is_Path() && tpl->as_Path().binding.is_Unbound()) {
-                    if (visitTyWith(src, [&](const HIRTypeData* ity) {
+                    if (visitTyWith(src, [&](const HIRType* ity) {
                         return ity == dst;
                     })) {
                         const auto& pe = tpl->as_Path().path.data.as_UfcsKnown();
@@ -4171,7 +4171,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                 sp,
                 !visitTyWith(
                     newSrc,
-                    [&](const HIRTypeData* ity) {
+                    [&](const HIRType* ity) {
                 return ity == dst;
             }
                 ),
@@ -4281,13 +4281,13 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                 ERROR(sp, E0000, StringView("Type mismatch between ") << this->ivars.fmtType(lT) << StringView(" and ") << this->ivars.fmtType(rT));
             }
             switch ((*lT).tag()) {
-                case HIRTypeData::TAG_Infer: {
+                case HIRType::TAG_Infer: {
                     UNREACHABLE();
                 }
-                case HIRTypeData::TAG_Diverge: {
+                case HIRType::TAG_Diverge: {
                     break;
                 }
-                case HIRTypeData::TAG_Primitive: {
+                case HIRType::TAG_Primitive: {
                     auto& lE = (*lT).as_Primitive();
                     auto& rE = (*rT).as_Primitive();
                     if (lE != rE) {
@@ -4295,7 +4295,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Path: {
+                case HIRType::TAG_Path: {
                     auto& lE = (*lT).as_Path();
                     auto& rE = (*rT).as_Path();
                     if (!equalityPath(lE.path, rE.path)) {
@@ -4303,7 +4303,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Generic: {
+                case HIRType::TAG_Generic: {
                     auto& lE = (*lT).as_Generic();
                     auto& rE = (*rT).as_Generic();
                     if (lE.binding != rE.binding) {
@@ -4311,7 +4311,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     }
                     break;
                 }
-                case HIRTypeData::TAG_TraitObject: {
+                case HIRType::TAG_TraitObject: {
                     auto& lE = (*lT).as_TraitObject();
                     auto& rE = (*rT).as_TraitObject();
                     if (lE.trait.path.path != rE.trait.path.path) {
@@ -4338,7 +4338,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     }
                     break;
                 }
-                case HIRTypeData::TAG_ErasedType: {
+                case HIRType::TAG_ErasedType: {
                     auto& lE = (*lT).as_ErasedType();
                     auto& rE = (*rT).as_ErasedType();
                     if (lE.inner.tag() != rE.inner.tag()) {
@@ -4373,7 +4373,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Array: {
+                case HIRType::TAG_Array: {
                     auto& lE = (*lT).as_Array();
                     auto& rE = (*rT).as_Array();
                     this->equateTypesInner(sp, lE.inner, rE.inner);
@@ -4396,13 +4396,13 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Slice: {
+                case HIRType::TAG_Slice: {
                     auto& lE = (*lT).as_Slice();
                     auto& rE = (*rT).as_Slice();
                     this->equateTypesInner(sp, lE.inner, rE.inner);
                     break;
                 }
-                case HIRTypeData::TAG_Pattern: {
+                case HIRType::TAG_Pattern: {
                     auto& lE = (*lT).as_Pattern();
                     auto& rE = (*rT).as_Pattern();
                     if (lE.pattern.alternatives.size() != rE.pattern.alternatives.size()) {
@@ -4424,7 +4424,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     this->equateTypesInner(sp, lE.inner, rE.inner);
                     break;
                 }
-                case HIRTypeData::TAG_Tuple: {
+                case HIRType::TAG_Tuple: {
                     auto& lE = (*lT).as_Tuple();
                     auto& rE = (*rT).as_Tuple();
                     if (lE.length() != rE.length()) {
@@ -4435,7 +4435,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Borrow: {
+                case HIRType::TAG_Borrow: {
                     auto& lE = (*lT).as_Borrow();
                     auto& rE = (*rT).as_Borrow();
                     if (lE.type != rE.type) {
@@ -4444,7 +4444,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     this->equateTypesInner(sp, lE.inner, rE.inner);
                     break;
                 }
-                case HIRTypeData::TAG_Pointer: {
+                case HIRType::TAG_Pointer: {
                     auto& lE = (*lT).as_Pointer();
                     auto& rE = (*rT).as_Pointer();
                     if (lE.type != rE.type) {
@@ -4453,7 +4453,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     this->equateTypesInner(sp, lE.inner, rE.inner);
                     break;
                 }
-                case HIRTypeData::TAG_NamedFunction: {
+                case HIRType::TAG_NamedFunction: {
                     auto& lE = (*lT).as_NamedFunction();
                     auto& rE = (*rT).as_NamedFunction();
                     if (!equalityPath(lE.path, rE.path)) {
@@ -4461,7 +4461,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Function: {
+                case HIRType::TAG_Function: {
                     auto& lE = (*lT).as_Function();
                     auto& rE = (*rT).as_Function();
                     if (lE.isUnsafe != rE.isUnsafe || lE.isVariadic != rE.isVariadic || lE.trackCaller != rE.trackCaller || lE.abi != rE.abi || lE.argTypes.length() != rE.argTypes.length()) {
@@ -4474,7 +4474,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     }
                     break;
                 }
-                case HIRTypeData::TAG_NodeType: {
+                case HIRType::TAG_NodeType: {
                     auto& lE = (*lT).as_NodeType();
                     auto& rE = (*rT).as_NodeType();
                     if (lE != rE) {
@@ -4524,7 +4524,7 @@ void Context::equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRC
                         HIRVisitor::visitConstgeneric(value);
                     }
 
-                    [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* type) override {
+                    [[nodiscard]] const HIRType* visitType(const HIRType* type) override {
                         if (type->is_Infer()) {
                             const auto resolved = context.ivars.getType(type);
                             if (resolved != type) {
@@ -4557,7 +4557,7 @@ void Context::equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRC
     }
 }
 
-void Context::addBindingInner(const Span& sp, const HIRPatternBinding& pb, const HIRTypeData* type) {
+void Context::addBindingInner(const Span& sp, const HIRPatternBinding& pb, const HIRType* type) {
     BUG_ASSERT(pb.isValid());
     switch (pb.type) {
         case HIRPatternBinding::Type::Move:
@@ -4572,7 +4572,7 @@ void Context::addBindingInner(const Span& sp, const HIRPatternBinding& pb, const
     }
 }
 
-void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* type, bool isIrrefutable /*=false*/) {
+void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type, bool isIrrefutable /*=false*/) {
     TRACE_FUNCTION_F(StringView("pat = ") << pat << StringView(", type = ") << type);
     fixupPatternValuePaths(*this, sp, pat);
 
@@ -4588,15 +4588,15 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
         struct MatchErgonomicsRevisit: public Revisitor {
             Span sp;
             bool isIrrefutable;
-            const HIRTypeData* outerTy;
+            const HIRType* outerTy;
             HIRPattern& pattern;
             HIRPatternBinding::Type outerMode;
 
-            mutable Vector<const HIRTypeData*> tempIvars;
-            mutable std::optional<const HIRTypeData*> possibleType;
+            mutable Vector<const HIRType*> tempIvars;
+            mutable std::optional<const HIRType*> possibleType;
             mutable const HIRPattern* possibleTypePattern = nullptr;
 
-            MatchErgonomicsRevisit(Span sp, bool isIrrefutable, const HIRTypeData* outer, HIRPattern& pat, HIRPatternBinding::Type bindingMode = HIRPatternBinding::Type::Move)
+            MatchErgonomicsRevisit(Span sp, bool isIrrefutable, const HIRType* outer, HIRPattern& pat, HIRPatternBinding::Type bindingMode = HIRPatternBinding::Type::Move)
                 : sp(mv$(sp))
                 , isIrrefutable(isIrrefutable)
                 , outerTy(mv$(outer))
@@ -4621,7 +4621,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
 
             // TODO: Recurse into inner patterns, creating new revisitors?
 
-            bool revisitInner(Context& context, HIRPattern& pattern, const HIRTypeData* type, HIRPatternBinding::Type bindingMode) const {
+            bool revisitInner(Context& context, HIRPattern& pattern, const HIRType* type, HIRPatternBinding::Type bindingMode) const {
                 if (!revisitInnerReal(context, pattern, type, bindingMode, false)) {
                     DEBUG(StringView("Add revisit for ") << pattern << StringView(" : ") << type << StringView("(mode = ") << (int)bindingMode << StringView(")"));
                     context.addRevisitAdv(box$((MatchErgonomicsRevisit{sp, isIrrefutable, type, pattern, bindingMode})));
@@ -4629,7 +4629,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 return true;
             }
 
-            std::optional<const HIRTypeData*> getPossibleTypeVal(Context& context, HIRPattern::Value& pv) const {
+            std::optional<const HIRType*> getPossibleTypeVal(Context& context, HIRPattern::Value& pv) const {
                 switch (pv.tag()) {
                     case HIRPatternValue::TAG_Integer: {
                         auto& ve = pv.as_Integer();
@@ -4673,8 +4673,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 UNREACHABLE();
             }
 
-            std::optional<const HIRTypeData*> getPossibleTypeInner(Context& context, HIRPattern& pattern) const {
-                std::optional<const HIRTypeData*> possibleType;
+            std::optional<const HIRType*> getPossibleTypeInner(Context& context, HIRPattern& pattern) const {
+                std::optional<const HIRType*> possibleType;
                 switch (pattern.data.tag()) {
                     case HIRPatternData::TAG_Any: {
                         break;
@@ -4854,7 +4854,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 return possibleType;
             }
 
-            const std::optional<const HIRTypeData*>& getPossibleType(Context& context, HIRPattern& pattern) const {
+            const std::optional<const HIRType*>& getPossibleType(Context& context, HIRPattern& pattern) const {
                 if (!possibleType || possibleTypePattern != &pattern) {
                     possibleType = getPossibleTypeInner(context, pattern);
                     possibleTypePattern = &pattern;
@@ -4985,7 +4985,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 UNREACHABLE();
             }
 
-            static bool directlyMatches(const HIRPattern& pattern, const HIRTypeData* type) {
+            static bool directlyMatches(const HIRPattern& pattern, const HIRType* type) {
                 auto matchesPath = [&](const HIRPath& patternPath, const HIRPattern::PathBinding& binding) {
                     const auto* actual = type->opt_Path();
                     if (!actual || !actual->path.data.is_Generic() || !patternPath.data.is_Generic()) {
@@ -5059,7 +5059,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 UNREACHABLE();
             }
 
-            bool revisitInnerReal(Context& context, HIRPattern& pattern, const HIRTypeData* type, HIRPatternBinding::Type bindingMode, bool isFallback) const {
+            bool revisitInnerReal(Context& context, HIRPattern& pattern, const HIRType* type, HIRPatternBinding::Type bindingMode, bool isFallback) const {
                 type = context.expandAssociatedTypes(sp, context.getType(type));
 
                 TRACE_FUNCTION_F(pattern << StringView(" : ") << type);
@@ -5070,8 +5070,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     if (pb.type == HIRPatternBinding::Type::Move && (!pb.isMutable || context.crate.edition >= ASTEdition::Rust2024)) {
                         pb.type = bindingMode;
                     }
-                    const HIRTypeData* tmp;
-                    const HIRTypeData* bindingType = nullptr;
+                    const HIRType* tmp;
+                    const HIRType* bindingType = nullptr;
                     switch (pb.type) {
                         case HIRPatternBinding::Type::Move:
                             bindingType = type;
@@ -5153,7 +5153,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     const auto& possibleType = getPossibleType(context, pattern);
                     if (possibleType) {
                         DEBUG(StringView("n_deref = ") << nDeref << StringView(", possible_type = ") << *possibleType);
-                        const HIRTypeData* possibleTypeP = *possibleType;
+                        const HIRType* possibleTypeP = *possibleType;
                         for (size_t i = 0; i < nDeref && possibleTypeP; i++) {
                             if (const auto* te = possibleTypeP->opt_Borrow()) {
                                 possibleTypeP = te->inner;
@@ -5209,7 +5209,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
 
                 if (!pattern.data.is_Deref() && !directlyMatches(pattern, ty)) {
                     HIRPattern::DerefKind derefKind;
-                    const HIRTypeData* target;
+                    const HIRType* target;
                     if (const auto* inner = context.resolve.typeIsOwnedBox(sp, ty)) {
                         derefKind = HIRPattern::DerefKind::Box;
                         target = inner;
@@ -5357,7 +5357,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     }
                     case HIRPatternData::TAG_Slice: {
                         auto& e = pattern.data.as_Slice();
-                        const HIRTypeData* sliceInner;
+                        const HIRType* sliceInner;
                         if (const auto* te = ty->opt_Slice()) {
                             sliceInner = te->inner;
                         } else if (const auto* te = ty->opt_Array()) {
@@ -5374,7 +5374,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     }
                     case HIRPatternData::TAG_SplitSlice: {
                         auto& pe = pattern.data.as_SplitSlice();
-                        const HIRTypeData* sliceInner;
+                        const HIRType* sliceInner;
                         if (const auto* te = ty->opt_Slice()) {
                             sliceInner = te->inner;
                         } else if (const auto* te = ty->opt_Array()) {
@@ -5387,14 +5387,14 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             rv |= this->revisitInner(context, sub, sliceInner, bindingMode);
                         }
                         if (pe.extraBind.isValid()) {
-                            const HIRTypeData* bindingTyInner = context.crate.types.slice(sliceInner);
+                            const HIRType* bindingTyInner = context.crate.types.slice(sliceInner);
                             // TODO: Do arrays get bound as arrays?
                             if (ty->is_Array()) {
                                 size_t sizeSub = pe.leading.size() + pe.trailing.size();
                                 bindingTyInner = context.crate.types.array(sliceInner, ty->as_Array().size.as_Known() - sizeSub);
                                 //TODO(sp, StringView("SplitSlice extra bind with array: ") << pe.extra_bind << " on " << ty);
                             }
-                            const HIRTypeData* bindingTy;
+                            const HIRType* bindingTy;
                             if (pe.extraBind.type == HIRPatternBinding::Type::Move) {
                                 pe.extraBind.type = bindingMode;
                             }
@@ -5460,8 +5460,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         const auto& sd = patternGetTuple(sp, e.path, e.binding);
 
                         auto ms = MonomorphStatePtr(context.crate.types, nullptr, &e.path.data.as_Generic().params, nullptr);
-                        const HIRTypeData* tmp;
-                        auto maybeMonomorph = [&](const HIRTypeData* fieldType) -> const HIRTypeData* {
+                        const HIRType* tmp;
+                        auto maybeMonomorph = [&](const HIRType* fieldType) -> const HIRType* {
                             return (monomorphiseTypeNeeded(fieldType) ? (tmp = context.expandAssociatedTypes(sp, ms.monomorphType(sp, fieldType))) : fieldType);
                         };
 
@@ -5493,8 +5493,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             const auto& sd = patternGetNamed(sp, e.path, e.binding);
 
                             auto ms = MonomorphStatePtr(context.crate.types, nullptr, &e.path.data.as_Generic().params, nullptr);
-                            const HIRTypeData* tmp;
-                            auto maybeMonomorph = [&](const HIRTypeData* fieldType) -> const HIRTypeData* {
+                            const HIRType* tmp;
+                            auto maybeMonomorph = [&](const HIRType* fieldType) -> const HIRType* {
                                 return (monomorphiseTypeNeeded(fieldType) ? (tmp = context.expandAssociatedTypes(sp, ms.monomorphType(sp, fieldType))) : fieldType);
                             };
 
@@ -5506,7 +5506,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                                 if (fIdx == sd.size()) {
                                     ERROR(sp, E0000, StringView("Struct ") << e.path << StringView(" doesn't have a field ") << fieldPat.first);
                                 }
-                                const HIRTypeData* fieldType = maybeMonomorph(sd[fIdx].ty);
+                                const HIRType* fieldType = maybeMonomorph(sd[fIdx].ty);
                                 rv &= this->revisitInner(context, fieldPat.second, fieldType, bindingMode);
                             }
                         }
@@ -5725,14 +5725,14 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
     this->handlePatternDirectInner(sp, pat, type);
 }
 
-void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HIRTypeData* type) {
+void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HIRType* type) {
     TRACE_FUNCTION_F(StringView("pat = ") << pat << StringView(", type = ") << type);
     for (const auto& pb : pat.bindings) {
         this->addBindingInner(sp, pb, type);
     }
 
     struct H {
-        static void handleValue(Context& context, const Span& sp, const HIRTypeData* type, HIRPattern::Value& val) {
+        static void handleValue(Context& context, const Span& sp, const HIRType* type, HIRPattern::Value& val) {
             switch (val.tag()) {
                 case HIRPattern::Value::TAG_Integer: {
                     auto& v = val.as_Integer();
@@ -5772,7 +5772,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
             }
         }
 
-        static const HIRTypeData* getPathType(Context& context, const Span& sp, HIRPath& path, const HIRPattern::PathBinding& binding) {
+        static const HIRType* getPathType(Context& context, const Span& sp, HIRPath& path, const HIRPattern::PathBinding& binding) {
             switch (binding.tag()) {
                 case HIRPatternPathBinding::TAG_Unbound: {
                     auto& _ = binding.as_Unbound();
@@ -5894,7 +5894,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     this->handlePatternDirectInner(sp, e.subPatterns[i], te[i]);
                 }
             } else {
-                Vector<const HIRTypeData*> subTypes;
+                Vector<const HIRType*> subTypes;
                 for (unsigned int i = 0; i < e.subPatterns.size(); i++) {
                     subTypes.pushBack(this->ivars.newIvarTr());
                     this->handlePatternDirectInner(sp, e.subPatterns[i], subTypes[i]);
@@ -5927,13 +5927,13 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     ERROR(sp, E0000, StringView("Tuple pattern on non-tuple"));
                 }
 
-                Vector<const HIRTypeData*> leadingTys;
+                Vector<const HIRType*> leadingTys;
                 leadingTys.grow(e.leading.size());
                 for (auto& subpat : e.leading) {
                     leadingTys.pushBack(this->ivars.newIvarTr());
                     this->handlePatternDirectInner(sp, subpat, leadingTys.back());
                 }
-                Vector<const HIRTypeData*> trailingTys;
+                Vector<const HIRType*> trailingTys;
                 for (auto& subpat : e.trailing) {
                     trailingTys.pushBack(this->ivars.newIvarTr());
                     this->handlePatternDirectInner(sp, subpat, trailingTys.back());
@@ -5941,12 +5941,12 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
 
                 struct SplitTuplePatRevisit: public Revisitor {
                     Span sp;
-                    const HIRTypeData* outerTy;
-                    Vector<const HIRTypeData*> leadingTys;
-                    Vector<const HIRTypeData*> trailingTys;
+                    const HIRType* outerTy;
+                    Vector<const HIRType*> leadingTys;
+                    Vector<const HIRType*> trailingTys;
                     unsigned int& patTotalSize;
 
-                    SplitTuplePatRevisit(Span sp, const HIRTypeData* outer, Vector<const HIRTypeData*> leading, Vector<const HIRTypeData*> trailing, unsigned int& patTotalSize)
+                    SplitTuplePatRevisit(Span sp, const HIRType* outer, Vector<const HIRType*> leading, Vector<const HIRType*> trailing, unsigned int& patTotalSize)
                         : sp(mv$(sp))
                         , outerTy(mv$(outer))
                         , leadingTys(mv$(leading))
@@ -5997,21 +5997,21 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
             switch ((*ty).tag()) {
                 default:
                     ERROR(sp, E0000, StringView("Slice pattern on non-array/-slice - ") << ty);
-                case HIRTypeData::TAG_Slice: {
+                case HIRType::TAG_Slice: {
                     auto& te = (*ty).as_Slice();
                     for (auto& sub : e.subPatterns) {
                         this->handlePatternDirectInner(sp, sub, te.inner);
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Array: {
+                case HIRType::TAG_Array: {
                     auto& te = (*ty).as_Array();
                     for (auto& sub : e.subPatterns) {
                         this->handlePatternDirectInner(sp, sub, te.inner);
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Infer: {
+                case HIRType::TAG_Infer: {
                     auto inner = this->ivars.newIvarTr();
                     for (auto& sub : e.subPatterns) {
                         this->handlePatternDirectInner(sp, sub, inner);
@@ -6019,11 +6019,11 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
 
                     struct SlicePatRevisit: public Revisitor {
                         Span sp;
-                        const HIRTypeData* inner;
-                        const HIRTypeData* type;
+                        const HIRType* inner;
+                        const HIRType* type;
                         unsigned int size;
 
-                        SlicePatRevisit(Span sp, const HIRTypeData* inner, const HIRTypeData* type, unsigned int size)
+                        SlicePatRevisit(Span sp, const HIRType* inner, const HIRType* type, unsigned int size)
                             : sp(mv$(sp))
                             , inner(mv$(inner))
                             , type(mv$(type))
@@ -6044,15 +6044,15 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                             switch ((*ty).tag()) {
                                 default:
                                     ERROR(sp, E0000, StringView("Slice pattern on non-array/-slice - ") << ty);
-                                case HIRTypeData::TAG_Infer: {
+                                case HIRType::TAG_Infer: {
                                     return false;
                                 }
-                                case HIRTypeData::TAG_Slice: {
+                                case HIRType::TAG_Slice: {
                                     auto& te = (*ty).as_Slice();
                                     context.equateTypes(sp, te.inner, inner);
                                     return true;
                                 }
-                                case HIRTypeData::TAG_Array: {
+                                case HIRType::TAG_Array: {
                                     auto& te = (*ty).as_Array();
                                     if (te.size.as_Known() != size) {
                                         ERROR(sp, E0000, StringView("Slice pattern on an array if differing size"));
@@ -6073,13 +6073,13 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
         }
         case HIRPatternData::TAG_SplitSlice: {
             auto& e = pat.data.as_SplitSlice();
-            const HIRTypeData* inner;
+            const HIRType* inner;
             unsigned int minLen = e.leading.size() + e.trailing.size();
             const auto& ty = this->getType(type);
             switch ((*ty).tag()) {
                 default:
                     ERROR(sp, E0000, StringView("SplitSlice pattern on non-array/-slice - ") << ty);
-                case HIRTypeData::TAG_Slice: {
+                case HIRType::TAG_Slice: {
                     auto& te = (*ty).as_Slice();
 
                     // - TODO: Better new variable handling.
@@ -6089,7 +6089,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Array: {
+                case HIRType::TAG_Array: {
                     auto& te = (*ty).as_Array();
                     inner = te.inner;
                     if (te.size.as_Known() < minLen) {
@@ -6102,9 +6102,9 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Infer: {
+                case HIRType::TAG_Infer: {
                     inner = this->ivars.newIvarTr();
-                    const HIRTypeData* varTy;
+                    const HIRType* varTy;
                     if (e.extraBind.isValid()) {
                         varTy = this->ivars.newIvarTr();
                         this->addBindingInner(sp, e.extraBind, varTy);
@@ -6112,12 +6112,12 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
 
                     struct SplitSlicePatRevisit: public Revisitor {
                         Span sp;
-                        const HIRTypeData* inner;
-                        const HIRTypeData* type;
-                        const HIRTypeData* varTy;
+                        const HIRType* inner;
+                        const HIRType* type;
+                        const HIRType* varTy;
                         unsigned int minSize;
 
-                        SplitSlicePatRevisit(Span sp, const HIRTypeData* inner, const HIRTypeData* type, const HIRTypeData* varTy, unsigned int size)
+                        SplitSlicePatRevisit(Span sp, const HIRType* inner, const HIRType* type, const HIRType* varTy, unsigned int size)
                             : sp(mv$(sp))
                             , inner(mv$(inner))
                             , type(mv$(type))
@@ -6139,10 +6139,10 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                             switch ((*ty).tag()) {
                                 default:
                                     ERROR(sp, E0000, StringView("Slice pattern on non-array/-slice - ") << ty);
-                                case HIRTypeData::TAG_Infer: {
+                                case HIRType::TAG_Infer: {
                                     return false;
                                 }
-                                case HIRTypeData::TAG_Slice: {
+                                case HIRType::TAG_Slice: {
                                     auto& te = (*ty).as_Slice();
                                     context.equateTypes(this->sp, this->inner, te.inner);
                                     if (this->varTy != nullptr) {
@@ -6150,7 +6150,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                                     }
                                     break;
                                 }
-                                case HIRTypeData::TAG_Array: {
+                                case HIRType::TAG_Array: {
                                     auto& te = (*ty).as_Array();
                                     context.equateTypes(this->sp, this->inner, te.inner);
                                     if (te.size.as_Known() < this->minSize) {
@@ -6220,8 +6220,8 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
             const auto& sd = patternGetTuple(sp, e.path, e.binding);
 
             auto ms = MonomorphStatePtr(crate.types, nullptr, &e.path.data.as_Generic().params, nullptr);
-            const HIRTypeData* tmp;
-            auto maybeMonomorph = [&](const HIRTypeData* ty) -> const HIRTypeData* {
+            const HIRType* tmp;
+            auto maybeMonomorph = [&](const HIRType* ty) -> const HIRType* {
                 if (monomorphiseTypeNeeded(ty)) {
                     return (tmp = ms.monomorphType(sp, ty));
                 } else {
@@ -6265,7 +6265,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                 if (fIdx == sd.size()) {
                     ERROR(sp, E0000, StringView("Struct ") << e.path << StringView(" doesn't have a field ") << fieldPat.first);
                 }
-                const HIRTypeData* fieldType = sd[fIdx].ty;
+                const HIRType* fieldType = sd[fIdx].ty;
                 if (monomorphiseTypeNeeded(fieldType)) {
                     auto fieldTypeMono = ms.monomorphType(sp, fieldType);
                     this->handlePatternDirectInner(sp, fieldPat.second, fieldTypeMono);
@@ -6285,7 +6285,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
     }
 }
 
-void Context::recordCoercionHint(const HIRTypeData* type, HIRExprNodeP& nodePtr) {
+void Context::recordCoercionHint(const HIRType* type, HIRExprNodeP& nodePtr) {
     auto* hintNode = nodePtr.get();
     while (const auto* block = cast<const HIRExprNodeBlock>(hintNode)) {
         if (!block->valueNode) {
@@ -6298,7 +6298,7 @@ void Context::recordCoercionHint(const HIRTypeData* type, HIRExprNodeP& nodePtr)
     }
 }
 
-void Context::equateTypesCoerce(const Span& sp, const HIRTypeData* l, HIRExprNodeP& nodePtr) {
+void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr) {
     this->ivars.getType(l);
     this->recordCoercionHint(l, nodePtr);
     this->linkCoerce.push_back(std::make_unique<Coercion>(Coercion{this->nextRuleIdx++, l, &nodePtr}));
@@ -6306,14 +6306,14 @@ void Context::equateTypesCoerce(const Span& sp, const HIRTypeData* l, HIRExprNod
     this->ivars.markChange();
 }
 
-void Context::possibleEquateTypeUnknown(const Span& sp, const HIRTypeData* ty, Context::IvarUnknownType src) {
+void Context::possibleEquateTypeUnknown(const Span& sp, const HIRType* ty, Context::IvarUnknownType src) {
     {
         auto& tuMatch = (*this->getType(ty));
         switch (tuMatch.tag()) {
             default:
                 // TODO: Shadow sub-types too
                 break;
-            case HIRTypeData::TAG_Path: {
+            case HIRType::TAG_Path: {
                 auto& e = tuMatch.as_Path();
                 switch (e.path.data.tag()) {
                     default:
@@ -6329,29 +6329,29 @@ void Context::possibleEquateTypeUnknown(const Span& sp, const HIRTypeData* ty, C
                 }
                 break;
             }
-            case HIRTypeData::TAG_Tuple: {
+            case HIRType::TAG_Tuple: {
                 auto& e = tuMatch.as_Tuple();
                 for (const auto& sty : e) {
                     this->possibleEquateTypeUnknown(sp, sty, src);
                 }
                 break;
             }
-            case HIRTypeData::TAG_Borrow: {
+            case HIRType::TAG_Borrow: {
                 auto& e = tuMatch.as_Borrow();
                 this->possibleEquateTypeUnknown(sp, e.inner, src);
                 break;
             }
-            case HIRTypeData::TAG_Array: {
+            case HIRType::TAG_Array: {
                 auto& e = tuMatch.as_Array();
                 this->possibleEquateTypeUnknown(sp, e.inner, src);
                 break;
             }
-            case HIRTypeData::TAG_Slice: {
+            case HIRType::TAG_Slice: {
                 auto& e = tuMatch.as_Slice();
                 this->possibleEquateTypeUnknown(sp, e.inner, src);
                 break;
             }
-            case HIRTypeData::TAG_NodeType: {
+            case HIRType::TAG_NodeType: {
                 auto& e = tuMatch.as_NodeType();
                 if (e.is_Closure()) {
                     auto* nodeP = e.as_Closure();
@@ -6362,7 +6362,7 @@ void Context::possibleEquateTypeUnknown(const Span& sp, const HIRTypeData* ty, C
                 }
                 break;
             }
-            case HIRTypeData::TAG_Infer: {
+            case HIRType::TAG_Infer: {
                 auto& e = tuMatch.as_Infer();
                 this->possibleEquateIvarUnknown(sp, e.index, src);
                 break;
@@ -6371,7 +6371,7 @@ void Context::possibleEquateTypeUnknown(const Span& sp, const HIRTypeData* ty, C
     }
 }
 
-void Context::equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSimplePath& trait, HIRPathParams pp, const HIRTypeData* implTy, const char* name, const HIRPathParams& atyPp, bool isOp, TypeckPrimitiveOperator operatorKind) {
+void Context::equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimplePath& trait, HIRPathParams pp, const HIRType* implTy, const char* name, const HIRPathParams& atyPp, bool isOp, TypeckPrimitiveOperator operatorKind) {
     const auto& traitDef = crate.getTraitByPath(sp, trait);
     auto monomorph = MonomorphStatePtr(crate.types, implTy, &pp, nullptr);
     while (pp.types.size() < traitDef.params.types.size()) {
@@ -6421,7 +6421,7 @@ void Context::equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSi
             return;
         }
     }
-    visitTyWith(implTy, [&](const HIRTypeData* ty) {
+    visitTyWith(implTy, [&](const HIRType* ty) {
         if (const auto* path = ty->opt_Path()) {
             if (const auto* projection = path->path.data.opt_UfcsKnown()) {
                 this->addTraitBound(sp, projection->type, projection->trait.path, projection->trait.params.clone());
@@ -6435,7 +6435,7 @@ void Context::equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSi
     this->ivars.markChange();
 }
 
-u64 Context::associatedIndexKey(const HIRTypeData* leftTy, const HIRSimplePath& trait, const HIRTypeData* implTy, RcString name, bool isOperator, TypeckPrimitiveOperator operatorKind) {
+u64 Context::associatedIndexKey(const HIRType* leftTy, const HIRSimplePath& trait, const HIRType* implTy, RcString name, bool isOperator, TypeckPrimitiveOperator operatorKind) {
     return mix(leftTy, implTy, trait.rawData()) ^ (static_cast<u64>(name.rawId()) << 8) ^ (static_cast<u64>(operatorKind) << 1) ^ isOperator;
 }
 
@@ -6482,7 +6482,7 @@ void Context::removeAssociated(unsigned index, u64 oldKey) {
     const auto& removed = linkAssoc[index];
     const bool unblocksCoercion = removed.operatorKind == TypeckPrimitiveOperator::Deref && std::any_of(linkCoerce.begin(), linkCoerce.end(), [&](const auto& coercion) {
         const auto* source = ivars.getType((*coercion->rightNodePtr)->resType);
-        return visitTyWith(source, [&](const HIRTypeData* inner) {
+        return visitTyWith(source, [&](const HIRType* inner) {
             return ivars.typesEqual(removed.leftTy, inner);
         });
     });
@@ -6500,8 +6500,8 @@ void Context::removeAssociated(unsigned index, u64 oldKey) {
     }
 }
 
-void Context::selectWellFormed(const Span& sp, const HIRTypeData* type) {
-    visitTyWith(type, [&](const HIRTypeData* inner) {
+void Context::selectWellFormed(const Span& sp, const HIRType* type) {
+    visitTyWith(type, [&](const HIRType* inner) {
         const auto* path = inner->opt_Path();
         const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
         if (!projection) {
@@ -6536,7 +6536,7 @@ void Context::addRevisitAdv(std::unique_ptr<Revisitor> entPtr) {
     this->advRevisits.push_back(mv$(entPtr));
 }
 
-void Context::requireSized(const Span& sp, const HIRTypeData* ty_) {
+void Context::requireSized(const Span& sp, const HIRType* ty_) {
     const auto& ty = ivars.getType(ty_);
     TRACE_FUNCTION_F(ty_ << StringView(" -> ") << ty);
     const auto sized = resolve.typeIsSized(sp, ty);
@@ -6594,7 +6594,7 @@ void Context::requireSized(const Span& sp, const HIRTypeData* ty_) {
                         }
                         break;
                     case HIRStructMarkings::DstType::Projection: {
-                        const HIRTypeData* tailTpl = nullptr;
+                        const HIRType* tailTpl = nullptr;
                         switch (pb->data.tag()) {
                             case HIRStructData::TAG_Unit:
                                 BUG(sp, StringView("Potentially-unsized unit struct ") << ty);
@@ -6668,7 +6668,7 @@ Context::IVarPossible* Context::getPossibleIvarSink(unsigned index) {
     return &possibleIvarVals[index];
 }
 
-void Context::possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRTypeData* rawT, PossibleTypeSource src) {
+void Context::possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRType* rawT, PossibleTypeSource src) {
     const auto& t = this->ivars.getType(rawT);
     DEBUG(ivarIndex << StringView(" ") << src << StringView(" ") << rawT << StringView(" ") << t);
     auto* entp = getIvarPossibilities(sp, ivarIndex);
@@ -6706,7 +6706,7 @@ void Context::possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const H
     }
 }
 
-void Context::possibleEquateIvarRawPointerFallback(const Span& sp, unsigned int ivarIndex, const HIRTypeData* rawType) {
+void Context::possibleEquateIvarRawPointerFallback(const Span& sp, unsigned int ivarIndex, const HIRType* rawType) {
     auto* possibilities = getIvarPossibilities(sp, ivarIndex);
     if (!possibilities) {
         return;
@@ -6738,7 +6738,7 @@ void Context::possibleEquateIvarUnknown(const Span& sp, unsigned int ivarIndex, 
     }
 }
 
-void Context::addVar(const Span& sp, unsigned int index, const RcString& name, const HIRTypeData* type) {
+void Context::addVar(const Span& sp, unsigned int index, const RcString& name, const HIRType* type) {
     DEBUG(StringView("(") << index << StringView(" ") << name << StringView(" : ") << type << StringView(")"));
     BUG_ASSERT(index != ~0u);
     ASSERT_BUG(sp, type != nullptr, StringView("Unset ivar in variable type"));
@@ -6757,7 +6757,7 @@ void Context::addVar(const Span& sp, unsigned int index, const RcString& name, c
     }
 }
 
-const HIRTypeData* Context::getVar(const Span& sp, unsigned int idx) const {
+const HIRType* Context::getVar(const Span& sp, unsigned int idx) const {
     if (idx < this->bindings.size()) {
         ASSERT_BUG(sp, this->bindings[idx].ty != nullptr, StringView("Local #") << idx << StringView(" `") << this->bindings[idx].name << StringView("` with no populated type"));
         return this->bindings[idx].ty;
@@ -6766,7 +6766,7 @@ const HIRTypeData* Context::getVar(const Span& sp, unsigned int idx) const {
     }
 }
 
-HIRExprNodeP Context::createAutoderef(HIRExprNodeP valNode, const HIRTypeData* tyDst) const {
+HIRExprNodeP Context::createAutoderef(HIRExprNodeP valNode, const HIRType* tyDst) const {
     const auto& span = valNode->span();
     const auto& tySrc = valNode->resType;
     if (getType(tySrc)->is_Array()) {
@@ -6791,7 +6791,7 @@ HIRExprNodeP Context::createAutoderef(HIRExprNodeP valNode, const HIRTypeData* t
     return valNode;
 }
 
-void Context::registerSolverObligation(const Span& sp, const HIRTypeData* type, HIRTraitPath trait) {
+void Context::registerSolverObligation(const Span& sp, const HIRType* type, HIRTraitPath trait) {
     if (trait.typeBounds.empty()) {
         addTraitBound(sp, type, trait.path.path, std::move(trait.path.params));
         return;
@@ -6801,7 +6801,7 @@ void Context::registerSolverObligation(const Span& sp, const HIRTypeData* type, 
     }
 }
 
-void Context::registerClosureReturnObligation(const Span& sp, const HIRExprNodeClosure* closure, const HIRTypeData* expected) {
+void Context::registerClosureReturnObligation(const Span& sp, const HIRExprNodeClosure* closure, const HIRType* expected) {
     for (auto& obligation : closureReturnObligations) {
         if (obligation.closure != closure) {
             continue;
@@ -6813,7 +6813,7 @@ void Context::registerClosureReturnObligation(const Span& sp, const HIRExprNodeC
     ivars.markChange();
 }
 
-const HIRTypeData* Context::closureReturnExpectation(const HIRExprNodeClosure* closure) const {
+const HIRType* Context::closureReturnExpectation(const HIRExprNodeClosure* closure) const {
     for (const auto& obligation : closureReturnObligations) {
         if (obligation.closure == closure) {
             return getType(obligation.expected);
@@ -6825,8 +6825,8 @@ const HIRTypeData* Context::closureReturnExpectation(const HIRExprNodeClosure* c
 void Context::applySolverResponse(const Span& sp, const SolverResponse& response) {
     ASSERT_BUG(sp, response.slots.typeInputs.size() == response.slots.types.size(), StringView("solver type slot response is malformed"));
     ASSERT_BUG(sp, response.slots.valueInputs.size() == response.slots.values.size(), StringView("solver value slot response is malformed"));
-    const auto applyTypeEquality = [&](const HIRTypeData* left, const HIRTypeData* right) {
-        const auto bindProvenProjection = [&](const HIRTypeData* candidate, const HIRTypeData* projection) {
+    const auto applyTypeEquality = [&](const HIRType* left, const HIRType* right) {
+        const auto bindProvenProjection = [&](const HIRType* candidate, const HIRType* projection) {
             if (response.certainty != SolverCertainty::Proven) {
                 return false;
             }
@@ -6835,7 +6835,7 @@ void Context::applySolverResponse(const Span& sp, const SolverResponse& response
             if (!infer || !infer->isLit() || !path || !path->path.data.is_UfcsKnown()) {
                 return false;
             }
-            if (visitTyWith(projection, [&](const HIRTypeData* inner) {
+            if (visitTyWith(projection, [&](const HIRType* inner) {
                 return inner == candidate;
             })) {
                 return false;
@@ -6873,7 +6873,7 @@ void Context::applySolverResponse(const Span& sp, const SolverResponse& response
     }
 }
 
-const HIRTypeData* Context::expandAssociatedTypes(const Span& sp, const HIRTypeData* input) const {
+const HIRType* Context::expandAssociatedTypes(const Span& sp, const HIRType* input) const {
     auto& context = const_cast<Context&>(*this);
     auto effects = makeCallable<SolverResponseCb>([&](SolverResponse response) {
         context.applySolverResponse(sp, response);
@@ -6899,13 +6899,13 @@ void Context::compactIvars(const Span& sp) {
     resolve.compactIvars(ivars, &effects);
 }
 
-void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr) {
+void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* resultType, HIRExprPtr& expr) {
     TRACE_FUNCTION;
     HIRExprNodeP rootPtr(expr.get());
     BUG_ASSERT(!ms.modPaths.empty());
     Context context{ms.wb, ms.implGenerics, ms.itemGenerics, ms.modPaths.back(), ms.currentTrait, ms.currentTraitImpl};
     if (resultType) {
-        visitTyWith(resultType, [&](const HIRTypeData* inner) {
+        visitTyWith(resultType, [&](const HIRType* inner) {
             if (const auto* erased = inner->opt_ErasedType()) {
                 if (const auto* fcn = erased->inner.opt_Fcn()) {
                     context.resolve.addDefiningFcnOrigin(fcn->origin);
@@ -7016,7 +7016,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
             }
         }
         if (!context.ivars.peekChanged()) {
-            Vector<const HIRTypeData*> passStartIvars;
+            Vector<const HIRType*> passStartIvars;
             passStartIvars.grow(context.ivars.ivars.size());
             for (unsigned int i = 0; i < context.ivars.ivars.size(); i++) {
                 passStartIvars.pushBack(context.ivars.getType(i));
@@ -7472,13 +7472,13 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
 
     struct Monomorph: public Monomorphiser {
         Context& context;
-        const HIRTypeData* selfTy;
+        const HIRType* selfTy;
         HIRPathParams implParams;
         bool hasImplParams;
         const HIRPathParams& fcnParams;
         const HIRPathParams hrlParams;
 
-        Monomorph(Context& context, const HIRTypeData* selfTy, const HIRPathParams* implParams, const HIRPathParams& fcnParams, HIRPathParams hrlParams)
+        Monomorph(Context& context, const HIRType* selfTy, const HIRPathParams* implParams, const HIRPathParams& fcnParams, HIRPathParams hrlParams)
             : Monomorphiser(context.crate.types)
             , context(context)
             , selfTy(selfTy)
@@ -7489,7 +7489,7 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
         {
         }
 
-        const HIRTypeData* getType(const Span& sp, const HIRGenericRef& e) const override {
+        const HIRType* getType(const Span& sp, const HIRGenericRef& e) const override {
             if (e.name == "Self" || e.isSelf()) {
                 if (selfTy) {
                     return selfTy;
@@ -7637,7 +7637,7 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
     return true;
 }
 
-void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr, HIRExprNodeP& rootPtr) {
+void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const HIRType* resultType, HIRExprPtr& expr, HIRExprNodeP& rootPtr) {
     TRACE_FUNCTION;
     const Span& sp = rootPtr->span();
 
@@ -7652,7 +7652,7 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
     struct M: public Monomorphiser {
         Context& context;
         HIRExprPtr& expr;
-        mutable const HIRTypeData* curSelf;
+        mutable const HIRType* curSelf;
         mutable const HIRPathParams* hrls;
 
         M(Context& context, HIRExprPtr& expr)
@@ -7664,7 +7664,7 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
         {
         }
 
-        const HIRTypeData* getType(const Span& sp, const HIRGenericRef& g) const override {
+        const HIRType* getType(const Span& sp, const HIRGenericRef& g) const override {
             if (g.binding == GENERICErasedSelf && curSelf) {
                 return curSelf;
             }
@@ -7675,7 +7675,7 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
             return g;
         }
 
-        const HIRTypeData* monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer = true) const override {
+        const HIRType* monomorphType(const Span& sp, const HIRType* tpl, bool allowInfer = true) const override {
             if (const auto* e = tpl->opt_ErasedType()) {
                 if (const auto* ee = e->inner.opt_Fcn()) {
                     while (expr.erasedTypes.length() <= ee->index) {
@@ -7717,7 +7717,7 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
         }
     };
 
-    const HIRTypeData* newResTy = resultType ? M(context, expr).monomorphType(sp, resultType) : context.ivars.newIvarTr();
+    const HIRType* newResTy = resultType ? M(context, expr).monomorphType(sp, resultType) : context.ivars.newIvarTr();
     for (size_t i = 0; i < expr.erasedTypes.length(); i++) {
         ASSERT_BUG(sp, expr.erasedTypes[i] != nullptr, StringView("Non-visited erased type #") << i);
     }
@@ -7739,7 +7739,7 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
     context.equateTypesCoerce(sp, newResTy, rootPtr);
 }
 
-Context::IVarPossible::CoerceTy::CoerceTy(const HIRTypeData* ty, bool isCoerce)
+Context::IVarPossible::CoerceTy::CoerceTy(const HIRType* ty, bool isCoerce)
     : op(isCoerce ? Coercion : Unsizing)
     , ty(ty)
 {
@@ -7791,7 +7791,7 @@ void Context::IVarPossible::mergeFrom(const IVarPossible& source) {
     rawPointerFallbacks.insert(source.rawPointerFallbacks.begin(), source.rawPointerFallbacks.end());
 }
 
-Context::TaitEntry::TaitEntry(const HIRPathParams& p, const HIRTypeData* t)
+Context::TaitEntry::TaitEntry(const HIRPathParams& p, const HIRType* t)
     : params(p.clone())
     , ourType(std::move(t))
 {
@@ -7809,7 +7809,7 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
 {
     if (currentTraitImpl) {
         for (const auto& entry : currentTraitImpl->types) {
-            visitTyWith(entry.second.data, [&](const HIRTypeData* type) {
+            visitTyWith(entry.second.data, [&](const HIRType* type) {
                 const auto* erased = type->opt_ErasedType();
                 const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
                 if (alias && alias->inner->path.components().back().c_str()[0] == '#') {
@@ -7821,11 +7821,11 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
     }
 }
 
-const HIRTypeData* Context::revealOpaqueType(const HIRTypeData* type) const {
+const HIRType* Context::revealOpaqueType(const HIRType* type) const {
     type = ivars.getType(type);
     const size_t maxDepth = 1 + erasedTypeAliases.size() + rpitTypes.size() + crate.opaqueTypeDefiners.size();
     for (size_t depth = 0; depth < maxDepth; depth++) {
-        const HIRTypeData* hiddenType = nullptr;
+        const HIRType* hiddenType = nullptr;
         auto revealRpit = [&](const HIRPath& origin, unsigned int index) {
             for (const auto& entry : rpitTypes) {
                 if (entry.index != index) {
@@ -7886,7 +7886,7 @@ const HIRTypeData* Context::revealOpaqueType(const HIRTypeData* type) const {
     return type;
 }
 
-const HIRTypeData* Context::revealOpaqueTypes(const HIRTypeData* type) const {
+const HIRType* Context::revealOpaqueTypes(const HIRType* type) const {
     struct Visitor: HIRVisitor {
         const Context& context;
 
@@ -7896,7 +7896,7 @@ const HIRTypeData* Context::revealOpaqueTypes(const HIRTypeData* type) const {
         {
         }
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* type) override {
+        [[nodiscard]] const HIRType* visitType(const HIRType* type) override {
             return HIRVisitor::visitType(context.revealOpaqueType(type));
         }
     } visitor{*this};
@@ -7904,7 +7904,7 @@ const HIRTypeData* Context::revealOpaqueTypes(const HIRTypeData* type) const {
     return visitor.visitType(type);
 }
 
-void Context::addRpitType(const HIRPath& origin, unsigned int index, const HIRTypeData* type) {
+void Context::addRpitType(const HIRPath& origin, unsigned int index, const HIRType* type) {
     for (const auto& entry : rpitTypes) {
         if (entry.index == index && *entry.origin == origin) {
             ASSERT_BUG(Span(), entry.ourType == type, StringView("RPIT hidden type registered twice for ") << origin << StringView("#") << index);
@@ -7914,8 +7914,8 @@ void Context::addRpitType(const HIRPath& origin, unsigned int index, const HIRTy
     rpitTypes.push_back(RpitEntry{&origin, index, type, false});
 }
 
-void Context::noteRpitSelfReferences(const HIRTypeData* type) {
-    visitTyWith(type, [this](const HIRTypeData* inner) {
+void Context::noteRpitSelfReferences(const HIRType* type) {
+    visitTyWith(type, [this](const HIRType* inner) {
         const auto* erased = inner->opt_ErasedType();
         const auto* origin = erased ? erased->inner.opt_Fcn() : nullptr;
         if (!origin) {
@@ -7948,7 +7948,7 @@ bool Context::fallbackUnresolvedRpitType(const Span& sp) {
     return false;
 }
 
-const HIRTypeData* Context::coercionHint(const HIRExprNode& node) const {
+const HIRType* Context::coercionHint(const HIRExprNode& node) const {
     const auto it = coercionHints.find(&node);
     return it == coercionHints.end() ? nullptr : it->second;
 }
@@ -7958,7 +7958,7 @@ MonomorphEraseHrls::MonomorphEraseHrls(HIRTypeInterner& types)
 {
 }
 
-auto MonomorphEraseHrls::getType(const Span& sp, const HIRGenericRef& g) const -> const HIRTypeData* {
+auto MonomorphEraseHrls::getType(const Span& sp, const HIRGenericRef& g) const -> const HIRType* {
     return types.generic(g.name, g.binding);
 }
 
@@ -7970,7 +7970,7 @@ auto ExprVisitorRevisit::nodeDiverges(const HIRExprNode& node) const -> bool {
     return node.diverges || this->context.getType(node.resType)->is_Diverge();
 }
 
-ExprVisitorRevisit::ExprVisitorRevisit(Context& context, bool fallback, const Vector<const HIRTypeData*>* passStartIvars)
+ExprVisitorRevisit::ExprVisitorRevisit(Context& context, bool fallback, const Vector<const HIRType*>* passStartIvars)
     : context(context)
     , completed(false)
     , isFallback(fallback)
@@ -8096,7 +8096,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeRawBorrow& node) -> void {
     noRevisit(node);
 }
 
-auto ExprVisitorRevisit::bad_cast(const Span& sp, const HIRTypeData* srcTy, const HIRTypeData* tgtTy, const char* where) -> void {
+auto ExprVisitorRevisit::bad_cast(const Span& sp, const HIRType* srcTy, const HIRType* tgtTy, const char* where) -> void {
     ERROR(sp, E0000, StringView("Invalid cast [") << where << StringView("]:\n") << StringView("from ") << this->context.ivars.fmtType(srcTy) << StringView("\n") << StringView(" to  ") << this->context.ivars.fmtType(tgtTy));
 }
 
@@ -8119,15 +8119,15 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
     }
 
     switch ((*tgtTy).tag()) {
-        case HIRTypeData::TAG_Infer: {
+        case HIRType::TAG_Infer: {
             DEBUG(StringView("- Target type is still _"));
             break;
         }
-        case HIRTypeData::TAG_Diverge: {
+        case HIRType::TAG_Diverge: {
             BUG(sp, StringView(""));
             break;
         }
-        case HIRTypeData::TAG_Primitive: {
+        case HIRType::TAG_Primitive: {
             auto& e = (*tgtTy).as_Primitive();
             if (e == HIRCoreType::Char) {
                 if (this->isFallback) {
@@ -8142,41 +8142,41 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
             }
             break;
         }
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             this->context.equateTypesCoerce(sp, tgtTy, node.value);
             this->completed = true;
             return;
         }
-        case HIRTypeData::TAG_Generic: {
+        case HIRType::TAG_Generic: {
             TODO(sp, StringView("_Cast Generic"));
             break;
         }
-        case HIRTypeData::TAG_TraitObject: {
+        case HIRType::TAG_TraitObject: {
             bad_cast(sp, srcTy, tgtTy, "dst");
             break;
         }
-        case HIRTypeData::TAG_ErasedType: {
+        case HIRType::TAG_ErasedType: {
             bad_cast(sp, srcTy, tgtTy, "dst");
             break;
         }
-        case HIRTypeData::TAG_Array: {
+        case HIRType::TAG_Array: {
             this->context.equateTypesCoerce(sp, tgtTy, node.value);
             this->completed = true;
             return;
         }
-        case HIRTypeData::TAG_Slice: {
+        case HIRType::TAG_Slice: {
             bad_cast(sp, srcTy, tgtTy, "dst");
             break;
         }
-        case HIRTypeData::TAG_Pattern: {
+        case HIRType::TAG_Pattern: {
             bad_cast(sp, srcTy, tgtTy, "dst");
             break;
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             bad_cast(sp, srcTy, tgtTy, "dst");
             break;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             if (!this->isFallback && (srcTy->is_Infer() || (srcTy->is_Borrow() && this->context.getType(srcTy->as_Borrow().inner)->is_Infer()))) {
                 return;
             }
@@ -8184,14 +8184,14 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
             this->completed = true;
             return;
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             auto& e = (*tgtTy).as_Pointer();
             const auto& ity = this->context.getType(e.inner);
             switch ((*srcTy).tag()) {
                 default:
                     ERROR(sp, E0000, StringView("Invalid cast to pointer from ") << srcTy);
-                case HIRTypeData::TAG_Function:
-                case HIRTypeData::TAG_NamedFunction:
+                case HIRType::TAG_Function:
+                case HIRType::TAG_NamedFunction:
                     // TODO: What is the valid set? *const () and *const u8 at least are allowed
                     if (ity == context.crate.types.unit() || ity == HIRCoreType::U8 || ity == HIRCoreType::I8) {
                         this->completed = true;
@@ -8201,7 +8201,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                         this->completed = true;
                     }
                     break;
-                case HIRTypeData::TAG_Primitive: {
+                case HIRType::TAG_Primitive: {
                     auto& sE = (*srcTy).as_Primitive();
                     switch (sE) {
                         case HIRCoreType::Bool:
@@ -8216,7 +8216,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                     this->completed = true;
                     break;
                 }
-                case HIRTypeData::TAG_Infer: {
+                case HIRType::TAG_Infer: {
                     auto& sE = (*srcTy).as_Infer();
                     switch (sE.tyClass) {
                         case HIRInferClass::Float:
@@ -8230,7 +8230,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Borrow: {
+                case HIRType::TAG_Borrow: {
                     auto& sE = (*srcTy).as_Borrow();
                     if (!(sE.type >= e.type)) {
                         ERROR(sp, E0000, StringView("Invalid cast from ") << srcTy << StringView(" to ") << tgtTy);
@@ -8276,7 +8276,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Pointer: {
+                case HIRType::TAG_Pointer: {
                     auto& sE = (*srcTy).as_Pointer();
 
                     // TODO: In some rare cases, this ivar could be completely
@@ -8307,12 +8307,12 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
             }
             break;
         }
-        case HIRTypeData::TAG_Function: {
+        case HIRType::TAG_Function: {
             auto& e = (*tgtTy).as_Function();
             switch ((*srcTy).tag()) {
                 default:
                     bad_cast(sp, srcTy, tgtTy, "fcn src");
-                case HIRTypeData::TAG_Infer: {
+                case HIRType::TAG_Infer: {
                     auto& sE = (*srcTy).as_Infer();
                     if (sE.tyClass != HIRInferClass::None) {
                         bad_cast(sp, srcTy, tgtTy, "fcn src");
@@ -8323,7 +8323,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                     }
                     break;
                 }
-                case HIRTypeData::TAG_NodeType: {
+                case HIRType::TAG_NodeType: {
                     auto& sE = (*srcTy).as_NodeType();
                     if (const auto* const* snPp = sE.opt_Closure()) {
                         if ((*snPp)->args.size() != e.argTypes.length()) {
@@ -8339,7 +8339,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                     }
                     break;
                 }
-                case HIRTypeData::TAG_Function: {
+                case HIRType::TAG_Function: {
                     auto& sE = (*srcTy).as_Function();
                     if (sE.abi != e.abi || (sE.isUnsafe && sE.isUnsafe != e.isUnsafe) || sE.argTypes.length() != e.argTypes.length()) {
                         bad_cast(sp, srcTy, tgtTy, "fcn nargs");
@@ -8348,7 +8348,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                     this->completed = true;
                     break;
                 }
-                case HIRTypeData::TAG_NamedFunction: {
+                case HIRType::TAG_NamedFunction: {
                     auto& f = (*srcTy).as_NamedFunction();
                     auto ft = context.expandAssociatedTypes(sp, context.crate.types.function(f.decay(context.crate.types, sp)));
                     const auto& sE = ft->as_Function();
@@ -8362,11 +8362,11 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
             }
             break;
         }
-        case HIRTypeData::TAG_NamedFunction: {
+        case HIRType::TAG_NamedFunction: {
             BUG(sp, StringView("Attempting to cast to a named-function type - impossible"));
             break;
         }
-        case HIRTypeData::TAG_NodeType: {
+        case HIRType::TAG_NodeType: {
             BUG(sp, StringView("Attempting to cast to a magic type type - impossible"));
             break;
         }
@@ -8386,9 +8386,9 @@ auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
     this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::From);
 
     unsigned int derefCount = 0;
-    const HIRTypeData* tmpType;
+    const HIRType* tmpType;
     const auto* currentTy = node.value->resType;
-    Vector<const HIRTypeData*> derefResTypes;
+    Vector<const HIRType*> derefResTypes;
 
     // TODO: (CHECK) rustc doesn't use the index value type when finding the indexable item, trustme does.
     HIRPathParams traitPp;
@@ -8456,7 +8456,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeDeref& node) -> void {
 
     TRACE_FUNCTION_F(StringView("Deref: ty=") << ty);
     const auto& opTrait = this->context.crate.getLangItemPathOpt("deref");
-    auto useBuiltin = [&](const HIRTypeData* inner) {
+    auto useBuiltin = [&](const HIRType* inner) {
         node.traitUsed = HIRExprNodeDeref::TraitUsed::Builtin;
         this->context.equateTypes(node.span(), node.resType, inner);
     };
@@ -8474,16 +8474,16 @@ auto ExprVisitorRevisit::visit(HIRExprNodeDeref& node) -> void {
                 useTrait();
             }
         } break;
-        case HIRTypeData::TAG_Infer: {
+        case HIRType::TAG_Infer: {
             this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::From);
             return;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto& e = (*ty).as_Borrow();
             useBuiltin(e.inner);
             break;
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             auto& e = (*ty).as_Pointer();
             // TODO: Figure out if this node is in an unsafe block.
             useBuiltin(e.inner);
@@ -8547,7 +8547,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallPath& node) -> void {
     this->completed = true;
 }
 
-auto ExprVisitorRevisit::callAsyncCallable(HIRExprNodeCallValue& node, const HIRTypeData* ty, const HIRPathParams& traitPp) -> AsyncCallResult {
+auto ExprVisitorRevisit::callAsyncCallable(HIRExprNodeCallValue& node, const HIRType* ty, const HIRPathParams& traitPp) -> AsyncCallResult {
     struct Candidate {
         const HIRSimplePath& trait;
         const char* future;
@@ -8563,7 +8563,7 @@ auto ExprVisitorRevisit::callAsyncCallable(HIRExprNodeCallValue& node, const HIR
         if (candidate.trait.components().empty()) {
             continue;
         }
-        const HIRTypeData* fcnArgsTup;
+        const HIRType* fcnArgsTup;
         const auto inspectImpl = [&](const SolverImpl& impl) {
             auto tup = impl.getTraitTyParam(context.crate.types, 0);
             if (!tup->is_Tuple()) {
@@ -8633,7 +8633,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
 
     HIRPathParams traitPp;
     {
-        Vector<const HIRTypeData*> argTypes;
+        Vector<const HIRType*> argTypes;
         for (const auto& argTy : node.argIvars) {
             argTypes.pushBack(this->context.getType(argTy));
         }
@@ -8641,7 +8641,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
     }
 
     unsigned int derefCount = 0;
-    const HIRTypeData* tmpType;
+    const HIRType* tmpType;
     const auto* ty = tyO;
 
     bool keepLooping = false;
@@ -8657,7 +8657,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
             node.argTypes.pushBack(nodeP->returnType);
             node.traitUsed = HIRExprNodeCallValue::TraitUsed::Unknown;
         } else if (ty->is_Function() || ty->is_NamedFunction()) {
-            const HIRTypeData* tmpFt;
+            const HIRType* tmpFt;
             const auto* e = ty->opt_Function();
             if (!e) {
                 tmpFt = context.crate.types.function(ty->as_NamedFunction().decay(context.crate.types, node.span()));
@@ -8685,8 +8685,8 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
         }
         // TODO: If autoderef is possible, do it and continue. Only look for impls once autoderef fails
         else {
-            const HIRTypeData* fcnArgsTup;
-            const HIRTypeData* fcnRet;
+            const HIRType* fcnArgsTup;
+            const HIRType* fcnRet;
 
             // TODO: Use `find_trait_impls` instead of two different calls
 
@@ -8797,12 +8797,12 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
     if (!this->isFallback) {
         bool hasPendingReceiverCoercion = false;
         if (this->passStartIvars) {
-            hasPendingReceiverCoercion = visitTyWith(ty, [&](const HIRTypeData* inner) {
+            hasPendingReceiverCoercion = visitTyWith(ty, [&](const HIRType* inner) {
                 const auto* infer = inner->opt_Infer();
                 return infer && infer->index < this->passStartIvars->length() && (*this->passStartIvars)[infer->index] != this->context.getType(inner);
             });
         }
-        visitTyWith(ty, [&](const HIRTypeData* inner) {
+        visitTyWith(ty, [&](const HIRType* inner) {
             if (hasPendingReceiverCoercion) {
                 return true;
             }
@@ -8816,8 +8816,8 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
                 hasPendingReceiverCoercion = !possible.typesCoerceTo.empty() || !possible.typesCoerceFrom.empty();
             }
             for (const auto& coercion : this->context.linkCoerce) {
-                auto containsReceiverIvar = [&](const HIRTypeData* type) {
-                    return visitTyWith(this->context.getType(type), [&](const HIRTypeData* candidate) {
+                auto containsReceiverIvar = [&](const HIRType* type) {
+                    return visitTyWith(this->context.getType(type), [&](const HIRType* candidate) {
                         const auto* candidateInfer = this->context.getType(candidate)->opt_Infer();
                         return candidateInfer && candidateInfer->index == infer->index;
                     });
@@ -8837,7 +8837,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
 
     // TODO: Obtain a list of avaliable methods at that level?
     const auto* resultType = this->context.getType(node.resType);
-    const HIRTypeData* expectedMethodResult = resultType;
+    const HIRType* expectedMethodResult = resultType;
     if (const auto* infer = resultType->opt_Infer(); infer && !infer->isLit()) {
         if (const auto* hint = this->context.coercionHint(node)) {
             const auto* resolvedHint = this->context.getType(hint);
@@ -8846,7 +8846,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
             }
         }
     }
-    ThinVector<const HIRTypeData*> methodArgumentTypes;
+    ThinVector<const HIRType*> methodArgumentTypes;
     methodArgumentTypes.reserve(node.args.size());
     for (const auto& argument : node.args) {
         methodArgumentTypes.push_back(argument->resType);
@@ -8939,7 +8939,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
         if (derefCount > 0) {
             BUG_ASSERT(derefCount < (1 << 16));
             auto& nodePtr = node.value;
-            const HIRTypeData* curTy = nodePtr->resType;
+            const HIRType* curTy = nodePtr->resType;
             while (derefCount--) {
                 auto span = nodePtr->span();
                 auto sourceTy = curTy;
@@ -9005,12 +9005,12 @@ auto ExprVisitorRevisit::visit(HIRExprNodeField& node) -> void {
     TRACE_FUNCTION_F(StringView("(Field) name=") << fieldName << StringView(", ty = ") << this->context.ivars.fmtType(node.value->resType));
     this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::Bound);
 
-    const HIRTypeData* outType;
+    const HIRType* outType;
 
     unsigned int derefCount = 0;
-    const HIRTypeData* tmpType;
+    const HIRType* tmpType;
     const auto* currentTy = node.value->resType;
-    Vector<const HIRTypeData*> derefResTypes;
+    Vector<const HIRType*> derefResTypes;
 
     // TODO: autoderef_find_field?
     do {
@@ -9338,7 +9338,7 @@ auto ExprVisitorApply::visit(HIRExprNodeCallValue& node) -> void {
         } else {
             HIRPathParams traitPp;
             {
-                Vector<const HIRTypeData*> argTypes;
+                Vector<const HIRType*> argTypes;
                 for (const auto& argTy : node.argIvars) {
                     argTypes.pushBack(this->context.getType(argTy));
                 }
@@ -9457,7 +9457,7 @@ auto ExprVisitorApply::visit(HIRExprNodeTupleVariant& node) -> void {
 }
 
 auto ExprVisitorApply::visit(HIRExprNodeLiteral& node) -> void {
-    const HIRTypeData* literalType = node.resType;
+    const HIRType* literalType = node.resType;
     if (const auto* pattern = literalType->opt_Pattern()) {
         literalType = pattern->inner;
     }
@@ -9499,14 +9499,14 @@ auto ExprVisitorApply::visit(HIRExprNodeUnsize& node) -> void {
     HIRExprVisitorDef::visit(node);
 }
 
-auto ExprVisitorApply::checkTypeResolvedTop(const Span& sp, const HIRTypeData* ty) const -> const HIRTypeData* {
+auto ExprVisitorApply::checkTypeResolvedTop(const Span& sp, const HIRType* ty) const -> const HIRType* {
     ty = checkTypeResolved(sp, ty, ty);
     ty = this->context.expandAssociatedTypes(sp, mv$(ty));
     DEBUG(ty);
     return ty;
 }
 
-auto ExprVisitorApply::checkTypeResolvedConstgeneric(const Span& sp, HIRConstGeneric& v, const HIRTypeData* topType) const -> void {
+auto ExprVisitorApply::checkTypeResolvedConstgeneric(const Span& sp, HIRConstGeneric& v, const HIRType* topType) const -> void {
     if (v.is_Infer()) {
         auto val = ivars.getValue(v).clone();
         ASSERT_BUG(sp, !val.is_Infer(), StringView("Failure to infer ") << v << StringView(" in ") << topType);
@@ -9514,7 +9514,7 @@ auto ExprVisitorApply::checkTypeResolvedConstgeneric(const Span& sp, HIRConstGen
     }
 }
 
-auto ExprVisitorApply::checkTypeResolvedPp(const Span& sp, HIRPathParams& pp, const HIRTypeData* topType) const -> void {
+auto ExprVisitorApply::checkTypeResolvedPp(const Span& sp, HIRPathParams& pp, const HIRType* topType) const -> void {
     for (auto& ty : pp.types) {
         ty = checkTypeResolved(sp, ty, topType);
     }
@@ -9562,7 +9562,7 @@ auto ExprVisitorApply::checkTypeResolvedPath(const Span& sp, HIRPath& path) cons
     }
 }
 
-auto ExprVisitorApply::checkTypeResolvedPath(const Span& sp, HIRPath& path, const HIRTypeData* topType) const -> void {
+auto ExprVisitorApply::checkTypeResolvedPath(const Span& sp, HIRPath& path, const HIRType* topType) const -> void {
     switch (path.data.tag()) {
         case HIRPath::Data::TAG_Generic: {
             auto& pe = path.data.as_Generic();
@@ -9595,19 +9595,19 @@ auto ExprVisitorApply::checkTypeResolvedGenericpath(const Span& sp, HIRGenericPa
     checkTypeResolvedPp(sp, path.params, tmp);
 }
 
-auto ExprVisitorApply::checkTypeResolved(const Span& sp, const HIRTypeData* ty, const HIRTypeData* topType) const -> const HIRTypeData* {
+auto ExprVisitorApply::checkTypeResolved(const Span& sp, const HIRType* ty, const HIRType* topType) const -> const HIRType* {
     struct InnerVisitor: public HIRVisitor {
         struct ActiveType {
-            const HIRTypeData* type;
+            const HIRType* type;
             const ActiveType* parent;
         };
 
         const ExprVisitorApply& parent;
         const Span& sp;
-        const HIRTypeData* topType;
+        const HIRType* topType;
         const ActiveType* activeTypes = nullptr;
 
-        InnerVisitor(const ExprVisitorApply& parent, const Span& sp, const HIRTypeData* topType)
+        InnerVisitor(const ExprVisitorApply& parent, const Span& sp, const HIRType* topType)
             : HIRVisitor(nullptr, parent.context.crate.types)
             , parent(parent)
             , sp(sp)
@@ -9631,7 +9631,7 @@ auto ExprVisitorApply::checkTypeResolved(const Span& sp, const HIRTypeData* ty, 
             HIRVisitor::visitConstgeneric(v);
         }
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override {
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override {
             if (ty->is_Infer()) {
                 auto newTy = parent.ivars.getType(ty);
                 DEBUG(ty << StringView(" -> ") << newTy);
@@ -9670,7 +9670,7 @@ auto ExprVisitorApply::checkTypeResolved(const Span& sp, const HIRTypeData* ty, 
     return v.visitType(ty);
 }
 
-auto ExprVisitorApply::checkTypesEqual(const Span& sp, const HIRTypeData* l, const HIRTypeData* r) const -> void {
+auto ExprVisitorApply::checkTypesEqual(const Span& sp, const HIRType* l, const HIRType* r) const -> void {
     DEBUG(sp << StringView(" - ") << l << StringView(" == ") << r);
     if (r->is_Diverge()) {
     } else if (l != r && !l->equalsIgnoringRegions(r)) {
@@ -10206,7 +10206,7 @@ auto ConstExprEquate::equate(const HIRConstGenericUnevaluated& left, const HIRCo
     return equateNode(left, **left.expr, right, **right.expr);
 }
 
-auto AssociatedStallCollector::addType(const HIRTypeData* type) -> void {
+auto AssociatedStallCollector::addType(const HIRType* type) -> void {
     if (type->hasTypeInfer()) {
         pending.pushBack(type);
     }
@@ -10221,7 +10221,7 @@ auto AssociatedStallCollector::collect() -> void {
         }
         visited.pushBack(type);
 
-        visitTyWith(type, [&](const HIRTypeData* inner) {
+        visitTyWith(type, [&](const HIRType* inner) {
             const auto* infer = inner->opt_Infer();
             if (!infer) {
                 return false;
@@ -10251,8 +10251,8 @@ auto AssociatedStallCollector::collect() -> void {
     }
 }
 
-auto IvarDependencyIndex::collectDirectIvars(const HIRTypeData* type, Vector<unsigned int>& out) -> void {
-    visitTyWith(type, [&](const HIRTypeData* inner) {
+auto IvarDependencyIndex::collectDirectIvars(const HIRType* type, Vector<unsigned int>& out) -> void {
+    visitTyWith(type, [&](const HIRType* inner) {
         if (const auto* infer = inner->opt_Infer()) {
             out.pushBack(infer->index);
         }
@@ -10349,10 +10349,10 @@ auto IvarDependencyIndex::disableDependents(unsigned int source) -> void {
     }
 }
 
-auto IvarCoercionIndex::collectIvars(const HIRTypeData* root, Vector<unsigned int>& out) const -> void {
-    Vector<const HIRTypeData*> pending;
+auto IvarCoercionIndex::collectIvars(const HIRType* root, Vector<unsigned int>& out) const -> void {
+    Vector<const HIRType*> pending;
     pending.pushBack(root);
-    Vector<const HIRTypeData*> visited;
+    Vector<const HIRType*> visited;
     while (!pending.empty()) {
         const auto type = pending.back();
         pending.popBack();
@@ -10360,7 +10360,7 @@ auto IvarCoercionIndex::collectIvars(const HIRTypeData* root, Vector<unsigned in
             continue;
         }
         visited.pushBack(type);
-        visitTyWith(type, [&](const HIRTypeData* inner) {
+        visitTyWith(type, [&](const HIRType* inner) {
             if (const auto* infer = inner->opt_Infer()) {
                 out.pushBack(infer->index);
                 const auto& resolved = context.getType(inner);
@@ -10400,7 +10400,7 @@ auto IvarCoercionIndex::operator[](unsigned int index) const -> const IvarCoerci
     return refs.at(index);
 }
 
-auto PossibleType::concrete(decltype(cls) cls, const HIRTypeData* ty) -> PossibleType {
+auto PossibleType::concrete(decltype(cls) cls, const HIRType* ty) -> PossibleType {
     return PossibleType{cls, State::Concrete, ty};
 }
 
@@ -10503,26 +10503,26 @@ auto PossibleType::isUnsizeS(const PossibleType& self) -> bool {
     return self.isUnsize();
 }
 
-auto TypeRestrictiveOrdering::matchAndExtractPtrTy(const HIRTypeData* ptrTpl, const HIRTypeData* ty) -> const HIRTypeData* {
+auto TypeRestrictiveOrdering::matchAndExtractPtrTy(const HIRType* ptrTpl, const HIRType* ty) -> const HIRType* {
     if (ty->tag() != ptrTpl->tag()) {
         return nullptr;
     }
     switch ((*ty).tag()) {
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto& te = (*ty).as_Borrow();
             if (te.type == ptrTpl->as_Borrow().type) {
                 return te.inner;
             }
             break;
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             auto& te = (*ty).as_Pointer();
             if (te.type == ptrTpl->as_Pointer().type) {
                 return te.inner;
             }
             break;
         }
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& te = (*ty).as_Path();
             if (te.binding == ptrTpl->as_Path().binding) {
                 // TODO: Get inner
@@ -10535,11 +10535,11 @@ auto TypeRestrictiveOrdering::matchAndExtractPtrTy(const HIRTypeData* ptrTpl, co
     return nullptr;
 }
 
-auto TypeRestrictiveOrdering::getOrderingInfer(const Span& sp, const HIRTypeData* r) -> Ordering {
+auto TypeRestrictiveOrdering::getOrderingInfer(const Span& sp, const HIRType* r) -> Ordering {
     switch ((*r).tag()) {
         default:
             return OrdLess;
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& te = (*r).as_Path();
             if (te.binding.is_Opaque()) {
                 return OrdLess;
@@ -10550,15 +10550,15 @@ auto TypeRestrictiveOrdering::getOrderingInfer(const Span& sp, const HIRTypeData
             // TODO: Check if the type is concrete? (Check an unsizing param if present)
             return OrdLess;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto& _ = (*r).as_Borrow();
             return OrdEqual;
         }
-        case HIRTypeData::TAG_Infer: {
+        case HIRType::TAG_Infer: {
             auto& _ = (*r).as_Infer();
             return OrdEqual;
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             auto& _ = (*r).as_Pointer();
             return OrdEqual;
         }
@@ -10566,7 +10566,7 @@ auto TypeRestrictiveOrdering::getOrderingInfer(const Span& sp, const HIRTypeData
     UNREACHABLE();
 }
 
-auto TypeRestrictiveOrdering::getOrderingTy(const Span& sp, const Context& context, const HIRTypeData* l, const HIRTypeData* r, bool& outUnordered) -> Ordering {
+auto TypeRestrictiveOrdering::getOrderingTy(const Span& sp, const Context& context, const HIRType* l, const HIRType* r, bool& outUnordered) -> Ordering {
     if (l == r) {
         return OrdEqual;
     }
@@ -10593,10 +10593,10 @@ auto TypeRestrictiveOrdering::getOrderingTy(const Span& sp, const Context& conte
                 outUnordered = true;
                 return OrdEqual;
             //TODO(sp, l << " with " << r << " - LHS is Path, RHS is " << r->tag_str());
-            case HIRTypeData::TAG_Slice: {
+            case HIRType::TAG_Slice: {
                 return OrdGreater;
             }
-            case HIRTypeData::TAG_Path: {
+            case HIRType::TAG_Path: {
                 auto& teR = (*r).as_Path();
                 if (teL.binding.is_Unbound() && teR.binding.is_Unbound()) {
                     return OrdEqual;
@@ -10651,20 +10651,20 @@ auto TypeRestrictiveOrdering::getOrderingTy(const Span& sp, const Context& conte
     }
 }
 
-auto TypeRestrictiveOrdering::getOrderingPtr(const Span& sp, const Context& context, const HIRTypeData* l, const HIRTypeData* r, bool& outUnordered, bool deep) -> Ordering {
+auto TypeRestrictiveOrdering::getOrderingPtr(const Span& sp, const Context& context, const HIRType* l, const HIRType* r, bool& outUnordered, bool deep) -> Ordering {
     Ordering cmp;
     TRACE_FUNCTION_FR(l << StringView(" , ") << r, cmp);
-    static const HIRTypeData::Tag tagOrdering[] = {
-        HIRTypeData::TAG_Pointer,
-        HIRTypeData::TAG_Borrow,
-        HIRTypeData::TAG_Path,
-        HIRTypeData::TAG_Generic,
-        HIRTypeData::TAG_ErasedType,
-        HIRTypeData::TAG_Function,
-        HIRTypeData::TAG_NamedFunction,
-        HIRTypeData::TAG_NodeType,
+    static const HIRType::Tag tagOrdering[] = {
+        HIRType::TAG_Pointer,
+        HIRType::TAG_Borrow,
+        HIRType::TAG_Path,
+        HIRType::TAG_Generic,
+        HIRType::TAG_ErasedType,
+        HIRType::TAG_Function,
+        HIRType::TAG_NamedFunction,
+        HIRType::TAG_NodeType,
     };
-    static const HIRTypeData::Tag* tagOrderingEnd = &tagOrdering[sizeof(tagOrdering) / sizeof(tagOrdering[0])];
+    static const HIRType::Tag* tagOrderingEnd = &tagOrdering[sizeof(tagOrdering) / sizeof(tagOrdering[0])];
     if (l->tag() != r->tag()) {
         auto pL = std::find(tagOrdering, tagOrderingEnd, l->tag());
         auto pR = std::find(tagOrdering, tagOrderingEnd, r->tag());
@@ -10683,27 +10683,27 @@ auto TypeRestrictiveOrdering::getOrderingPtr(const Span& sp, const Context& cont
             default:
                 BUG(sp, StringView("Unexpected type class ") << l << StringView(" in get_ordering_ty (") << r << StringView(")"));
                 break;
-            case HIRTypeData::TAG_Generic: {
+            case HIRType::TAG_Generic: {
                 cmp = OrdEqual;
                 break;
             }
-            case HIRTypeData::TAG_NamedFunction: {
+            case HIRType::TAG_NamedFunction: {
                 cmp = OrdEqual;
                 break;
             }
-            case HIRTypeData::TAG_Path: {
+            case HIRType::TAG_Path: {
                 // TODO: Prevent this rule from applying?
                 return OrdEqual;
             }
-            case HIRTypeData::TAG_NodeType: {
+            case HIRType::TAG_NodeType: {
                 outUnordered = true;
                 return OrdEqual;
             }
-            case HIRTypeData::TAG_ErasedType: {
+            case HIRType::TAG_ErasedType: {
                 outUnordered = true;
                 return OrdEqual;
             }
-            case HIRTypeData::TAG_Borrow: {
+            case HIRType::TAG_Borrow: {
                 auto& teL = (*l).as_Borrow();
                 const auto& teR = r->as_Borrow();
                 cmp = ord((int)teL.type, (int)teR.type);
@@ -10712,7 +10712,7 @@ auto TypeRestrictiveOrdering::getOrderingPtr(const Span& sp, const Context& cont
                 }
                 break;
             }
-            case HIRTypeData::TAG_Pointer: {
+            case HIRType::TAG_Pointer: {
                 auto& teL = (*l).as_Pointer();
                 const auto& teR = r->as_Pointer();
                 cmp = ord((int)teR.type, (int)teL.type);
@@ -10726,7 +10726,7 @@ auto TypeRestrictiveOrdering::getOrderingPtr(const Span& sp, const Context& cont
     return cmp;
 }
 
-auto InfoOrdering::isInfer(const HIRTypeData* ty) -> bool {
+auto InfoOrdering::isInfer(const HIRType* ty) -> bool {
     if (ty->is_Infer()) {
         return true;
     }
@@ -10736,7 +10736,7 @@ auto InfoOrdering::isInfer(const HIRTypeData* ty) -> bool {
     return false;
 }
 
-auto InfoOrdering::compareScore(int& score, const HIRTypeData* tyL, const HIRTypeData* tyR) -> bool {
+auto InfoOrdering::compareScore(int& score, const HIRType* tyL, const HIRType* tyR) -> bool {
     auto rv = compare(tyL, tyR);
     switch (rv) {
         case Incompatible:
@@ -10753,7 +10753,7 @@ auto InfoOrdering::compareScore(int& score, const HIRTypeData* tyL, const HIRTyp
     return rv;
 }
 
-auto InfoOrdering::compare(const HIRTypeData* tyL, const HIRTypeData* tyR) -> eInfoOrdering {
+auto InfoOrdering::compare(const HIRType* tyL, const HIRType* tyR) -> eInfoOrdering {
     if (isInfer(tyL)) {
         if (isInfer(tyR)) {
             return Same;
@@ -10770,7 +10770,7 @@ auto InfoOrdering::compare(const HIRTypeData* tyL, const HIRTypeData* tyR) -> eI
     switch ((*tyL).tag()) {
         default:
             return Incompatible;
-        case HIRTypeData::TAG_NodeType: {
+        case HIRType::TAG_NodeType: {
             auto& le = (*tyL).as_NodeType();
             auto& re = (*tyR).as_NodeType();
             if (le != re) {
@@ -10778,7 +10778,7 @@ auto InfoOrdering::compare(const HIRTypeData* tyL, const HIRTypeData* tyR) -> eI
             }
             return Same;
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             auto& le = (*tyL).as_Tuple();
             auto& re = (*tyR).as_Tuple();
             if (le.length() != re.length()) {
@@ -10796,7 +10796,7 @@ auto InfoOrdering::compare(const HIRTypeData* tyL, const HIRTypeData* tyR) -> eI
     UNREACHABLE();
 }
 
-auto InfoOrdering::compareTop(const Context& context, const HIRTypeData* tyL, const HIRTypeData* tyR, bool shouldDeref) -> eInfoOrdering {
+auto InfoOrdering::compareTop(const Context& context, const HIRType* tyL, const HIRType* tyR, bool shouldDeref) -> eInfoOrdering {
     if (context.ivars.typesEqual(tyL, tyR)) {
         return Same;
     }
@@ -10862,7 +10862,7 @@ ExprVisitorTagStaleIvars::ExprVisitorTagStaleIvars(HIRTypeInterner& types)
 {
 }
 
-[[nodiscard]] auto ExprVisitorTagStaleIvars::visitType(const HIRTypeData* type) -> const HIRTypeData* {
+[[nodiscard]] auto ExprVisitorTagStaleIvars::visitType(const HIRType* type) -> const HIRType* {
     return mapper_.monomorphType(Span(), type, true);
 }
 
@@ -10894,8 +10894,8 @@ ExprVisitorAddIvars::ExprVisitorAddIvars(Context& context)
 {
 }
 
-auto ExprVisitorAddIvars::innerVisitType(const HIRTypeData* ty) -> const HIRTypeData* {
-    return rewriteTyWith(context.crate.types, ty, [this](const HIRTypeData*, HIRTypeData& data) -> const HIRTypeData* {
+auto ExprVisitorAddIvars::innerVisitType(const HIRType* ty) -> const HIRType* {
+    return rewriteTyWith(context.crate.types, ty, [this](const HIRType*, HIRType& data) -> const HIRType* {
         if (auto* te = data.opt_Path()) {
             if (te->path.data.is_Generic()) {
                 auto& params = te->path.data.as_Generic().params;
@@ -10942,10 +10942,10 @@ auto ExprVisitorAddIvars::visitPathParams(HIRPathParams& pp) -> void {
     }
 }
 
-[[nodiscard]] auto ExprVisitorAddIvars::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
+[[nodiscard]] auto ExprVisitorAddIvars::visitType(const HIRType* ty) -> const HIRType* {
     ty = this->context.addIvars(ty);
     ty = innerVisitType(ty);
-    visitTyWith(ty, [&](const HIRTypeData* inner) {
+    visitTyWith(ty, [&](const HIRType* inner) {
         if (const auto* path = inner->opt_Path()) {
             if (const auto* projection = path->path.data.opt_UfcsKnown()) {
                 context.addTraitBound(Span(), projection->type, projection->trait.path, projection->trait.params.clone());
@@ -10970,7 +10970,7 @@ ExprVisitorAddIvars::LocalImplTraitLowering::LocalImplTraitLowering(Context& con
 {
 }
 
-auto ExprVisitorAddIvars::LocalImplTraitLowering::getType(const Span& sp, const HIRGenericRef& generic) const -> const HIRTypeData* {
+auto ExprVisitorAddIvars::LocalImplTraitLowering::getType(const Span& sp, const HIRGenericRef& generic) const -> const HIRType* {
     if (generic.binding == GENERICErasedSelf && curSelf) {
         return curSelf;
     }
@@ -10981,7 +10981,7 @@ auto ExprVisitorAddIvars::LocalImplTraitLowering::getValue(const Span& sp, const
     return generic;
 }
 
-auto ExprVisitorAddIvars::LocalImplTraitLowering::monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer) const -> const HIRTypeData* {
+auto ExprVisitorAddIvars::LocalImplTraitLowering::monomorphType(const Span& sp, const HIRType* type, bool allowInfer) const -> const HIRType* {
     if (const auto* erased = type->opt_ErasedType()) {
         if (const auto* fcn = erased->inner.opt_Fcn(); fcn && fcn->origin == HIRSimplePath()) {
             auto result = context.ivars.newIvarTr();
@@ -11009,7 +11009,7 @@ auto ExprVisitorAddIvars::LocalImplTraitLowering::monomorphType(const Span& sp, 
     return Monomorphiser::monomorphType(sp, type, allowInfer);
 }
 
-ExprVisitorEnum::ExprVisitorEnum(Context& context, tTraitList baseTraits, const HIRTypeData* retType)
+ExprVisitorEnum::ExprVisitorEnum(Context& context, tTraitList baseTraits, const HIRType* retType)
     : context(context)
     , retType(retType)
     , traits(mv$(baseTraits))
@@ -11480,7 +11480,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
     node.right->resType = this->context.addIvars(node.right->resType);
 
     const auto& leftTy = node.left->resType;
-    const HIRTypeData* rightTyInner = this->context.ivars.newIvarTr();
+    const HIRType* rightTyInner = this->context.ivars.newIvarTr();
     const auto& rightTy = rightTyInner;
     this->context.equateTypesCoerce(node.span(), rightTyInner, node.right);
 
@@ -11494,7 +11494,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
     const bool rightDiverges = this->nodeDiverges(*node.right);
     const bool diverges = leftDiverges || (rightDiverges && node.op != HIRExprNodeBinOp::Op::BoolAnd && node.op != HIRExprNodeBinOp::Op::BoolOr);
     node.diverges = diverges;
-    const HIRTypeData* operatorResultType = node.resType;
+    const HIRType* operatorResultType = node.resType;
     if (diverges) {
         operatorResultType = this->context.ivars.newIvarTr();
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
@@ -11651,9 +11651,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeUniOp& node) -> void {
             break;
     }
     BUG_ASSERT(itemName);
-    const HIRTypeData* inputType = node.value->resType;
+    const HIRType* inputType = node.value->resType;
     if (this->context.getType(inputType)->is_Diverge()) {
-        const HIRTypeData* expectedType = this->context.coercionHint(node);
+        const HIRType* expectedType = this->context.coercionHint(node);
         if (!expectedType) {
             expectedType = node.resType;
         }
@@ -11738,7 +11738,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeDeref& node) -> void {
     this->inheritDivergence(node, *node.value);
 
     const auto& ty = this->context.getType(node.value->resType);
-    const HIRTypeData* inner = nullptr;
+    const HIRType* inner = nullptr;
     if (const auto* e = ty->opt_Borrow()) {
         inner = e->inner;
     } else if (const auto* e = ty->opt_Pointer()) {
@@ -11807,7 +11807,7 @@ auto ExprVisitorEnum::addIvarsPath(const Span& sp, HIRPath& path) -> void {
     }
 }
 
-auto ExprVisitorEnum::getStructenumTy(const Span& sp, bool isStruct, HIRGenericPath& gp) -> const HIRTypeData* {
+auto ExprVisitorEnum::getStructenumTy(const Span& sp, bool isStruct, HIRGenericPath& gp) -> const HIRType* {
     if (isStruct) {
         const auto& e = this->context.crate.getTypeitemByPath(sp, gp.path);
         if (e.is_Struct()) {
@@ -12301,7 +12301,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeTuple& node) -> void {
                 ERROR(node.span(), E0000, StringView("Tuple literal node count mismatches with return type"));
             }
         } else if (ty->is_Infer()) {
-            Vector<const HIRTypeData*> tupleTys;
+            Vector<const HIRType*> tupleTys;
             for (const auto& val : node.vals) {
                 tupleTys.pushBack(this->context.ivars.newIvarTr());
             }
@@ -12316,7 +12316,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeTuple& node) -> void {
             this->context.equateTypesCoerce(node.span(), innerTys[i], node.vals[i]);
         }
     } else {
-        Vector<const HIRTypeData*> tupleTys;
+        Vector<const HIRType*> tupleTys;
         for (const auto& val : node.vals) {
             tupleTys.pushBack(val->resType);
         }
@@ -12371,7 +12371,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeArraySized& node) -> void {
 }
 
 auto ExprVisitorEnum::visit(HIRExprNodeLiteral& node) -> void {
-    const HIRTypeData* ty;
+    const HIRType* ty;
     switch (node.data.tag()) {
         case HIRExprLiteral::TAG_Integer: {
             auto& e = node.data.as_Integer();
@@ -12442,7 +12442,7 @@ auto ExprVisitorEnum::visit(HIRExprNodePathValue& node) -> void {
                     fixParamCount(sp, this->context, nullptr, false, e, f.params, e.params);
 
                     auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, nullptr, &e.params);
-                    auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), &f}));
+                    auto ty = this->context.crate.types.intern(HIRType::make_NamedFunction({node.path.clone(), &f}));
 
                     applyBoundsAsRules(this->context, sp, f.params, ms, /*is_impl_level=*/false);
 
@@ -12454,7 +12454,7 @@ auto ExprVisitorEnum::visit(HIRExprNodePathValue& node) -> void {
                     fixParamCount(sp, this->context, nullptr, false, e, s.params, e.params);
 
                     auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, &e.params, nullptr);
-                    auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), &s}));
+                    auto ty = this->context.crate.types.intern(HIRType::make_NamedFunction({node.path.clone(), &s}));
 
                     applyBoundsAsRules(this->context, sp, s.params, ms, /*is_impl_level=*/true);
                     this->context.equateTypes(sp, node.resType, ty);
@@ -12469,7 +12469,7 @@ auto ExprVisitorEnum::visit(HIRExprNodePathValue& node) -> void {
                     ASSERT_BUG(sp, enm.data.is_Data(), StringView("Enum ") << enumPath << StringView(" isn't a data-holding enum"));
 
                     auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, &e.params, nullptr);
-                    auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), HIRTypeDataNamedFunctionTy::make_EnumConstructor({&enm, idx})}));
+                    auto ty = this->context.crate.types.intern(HIRType::make_NamedFunction({node.path.clone(), HIRTypeDataNamedFunctionTy::make_EnumConstructor({&enm, idx})}));
                     applyBoundsAsRules(this->context, sp, enm.params, ms, /*is_impl_level=*/true);
                     this->context.equateTypes(sp, node.resType, ty);
                 } break;
@@ -12486,7 +12486,7 @@ auto ExprVisitorEnum::visit(HIRExprNodePathValue& node) -> void {
                     auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, nullptr, &e.params);
                     applyBoundsAsRules(this->context, sp, v.params, ms, /*is_impl_level=*/false);
 
-                    const HIRTypeData* tmp;
+                    const HIRType* tmp;
                     const auto* ty = ms.maybeMonomorphType(sp, v.type);
                     this->context.equateTypes(sp, node.resType, ty);
                 } break;
@@ -12516,7 +12516,7 @@ auto ExprVisitorEnum::visit(HIRExprNodePathValue& node) -> void {
                     auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.params, &e.params);
                     applyBoundsAsRules(this->context, sp, ie.params, ms, /*is_impl_level=*/false);
 
-                    const HIRTypeData* tmp;
+                    const HIRType* tmp;
                     const auto* ty = ms.maybeMonomorphType(sp, ie.type);
                     this->context.equateTypes(sp, node.resType, ty);
                     break;
@@ -12533,7 +12533,7 @@ auto ExprVisitorEnum::visit(HIRExprNodePathValue& node) -> void {
                     auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.params, &e.params);
                     applyBoundsAsRules(this->context, sp, ie.params, ms, /*is_impl_level=*/false);
 
-                    auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), &ie}));
+                    auto ty = this->context.crate.types.intern(HIRType::make_NamedFunction({node.path.clone(), &ie}));
                     this->context.equateTypes(node.span(), node.resType, ty);
                     break;
                 }
@@ -12568,7 +12568,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeClosure& node) -> void {
     node.returnType = this->context.addIvars(node.returnType);
     node.code->resType = this->context.addIvars(node.code->resType);
 
-    Vector<const HIRTypeData*> argTypes;
+    Vector<const HIRType*> argTypes;
     for (auto& arg : node.args) {
         argTypes.pushBack(arg.second);
     }
@@ -12705,7 +12705,7 @@ auto ExprVisitorEnum::canCoerceInnerResult() const -> bool {
     }
 }
 
-auto ExprVisitorEnum::equateTypesInnerCoerce(const Span& sp, const HIRTypeData* target, HIRExprNodeP& node) -> void {
+auto ExprVisitorEnum::equateTypesInnerCoerce(const Span& sp, const HIRType* target, HIRExprNodeP& node) -> void {
     DEBUG(StringView("can_coerce_inner_result() = ") << canCoerceInnerResult());
     if (canCoerceInnerResult()) {
         this->context.equateTypesCoerce(sp, target, node);
@@ -12714,14 +12714,14 @@ auto ExprVisitorEnum::equateTypesInnerCoerce(const Span& sp, const HIRTypeData* 
     }
 }
 
-ExprVisitorEnum::RetTarget::RetTarget(const HIRTypeData* retType)
+ExprVisitorEnum::RetTarget::RetTarget(const HIRType* retType)
     : retType(retType)
     , resumeType(nullptr)
     , yieldType(nullptr)
 {
 }
 
-ExprVisitorEnum::RetTarget::RetTarget(const HIRTypeData* retType, const HIRTypeData* resumeType, const HIRTypeData* yieldType)
+ExprVisitorEnum::RetTarget::RetTarget(const HIRType* retType, const HIRType* resumeType, const HIRType* yieldType)
     : retType(retType)
     , resumeType(resumeType)
     , yieldType(yieldType)
@@ -12778,7 +12778,7 @@ RpitOriginMonomorph::RpitOriginMonomorph(HIRTypeInterner& types)
 {
 }
 
-auto RpitOriginMonomorph::matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) -> HIRCompare {
+auto RpitOriginMonomorph::matchTy(const HIRGenericRef& generic, const HIRType* type, tCbResolveType resolve) -> HIRCompare {
     type = resolve.getType(Span(), type);
     auto inserted = typeBindings.emplace(generic.binding, type);
     if (inserted.second) {
@@ -12792,7 +12792,7 @@ auto RpitOriginMonomorph::matchVal(const HIRGenericRef& generic, const HIRConstG
     return inserted.second || inserted.first->second == value ? HIRCompare::Equal : HIRCompare::Unequal;
 }
 
-auto RpitOriginMonomorph::getType(const Span&, const HIRGenericRef& generic) const -> const HIRTypeData* {
+auto RpitOriginMonomorph::getType(const Span&, const HIRGenericRef& generic) const -> const HIRType* {
     const auto it = typeBindings.find(generic.binding);
     return it == typeBindings.end() ? types.generic(generic.name, generic.binding) : it->second;
 }

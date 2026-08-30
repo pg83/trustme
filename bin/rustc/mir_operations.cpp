@@ -49,11 +49,11 @@ namespace {
 
         void updateState(MIRTypeResolve& state);
 
-        MIRLValue newTemporary(const HIRTypeData* ty);
+        MIRLValue newTemporary(const HIRType* ty);
 
         void pushStatement(MIRStatement stmt);
 
-        MIRLValue inTemporary(const HIRTypeData* ty, MIRRValue val);
+        MIRLValue inTemporary(const HIRType* ty, MIRRValue val);
 
         decltype(newStatements.begin()) flushStmt();
 
@@ -85,7 +85,7 @@ namespace {
     struct ParamsSet: public MonomorphiserPP {
         HIRPathParams implParams;
         const HIRPathParams* fcnParams;
-        const HIRTypeData* selfTy;
+        const HIRType* selfTy;
         const HIRGenericParams* implParamsDef;
         const HIRGenericParams* fcnParamsDef;
 
@@ -93,7 +93,7 @@ namespace {
 
         explicit ParamsSet(HIRTypeInterner& types);
 
-        const HIRTypeData* getSelfType() const override;
+        const HIRType* getSelfType() const override;
 
         const HIRPathParams* getImplParams() const override;
 
@@ -173,7 +173,7 @@ namespace {
         return *state.resolve.board().mirOperations;
     }
 
-    const HIRTypeData* getMetadataType(const MIRTypeResolve& state, const HIRTypeData* unsizedTy) {
+    const HIRType* getMetadataType(const MIRTypeResolve& state, const HIRType* unsizedTy) {
         Span sp;
         auto& types = state.crate.types;
         if (const auto* tep = unsizedTy->opt_TraitObject()) {
@@ -239,13 +239,13 @@ namespace {
 
     void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& lval);
 
-    const HIRTypeData* getVtableType(const Span& sp, const ::StaticTraitResolve& resolve, const HIRTypeData::Data_TraitObject& te) {
+    const HIRType* getVtableType(const Span& sp, const ::StaticTraitResolve& resolve, const HIRType::Data_TraitObject& te) {
         return te.trait.traitPtr->getVtableType(sp, resolve.hirCrate(), te);
     }
 
     struct ConstantValue {
         const EncodedLiteral* literal;
-        const HIRTypeData* type;
+        const HIRType* type;
     };
 
     ConstantValue MIRCleanupGetConstant(const MIRTypeResolve& state, const HIRPath& path, MonomorphState& params) {
@@ -294,7 +294,7 @@ namespace {
         }
     }
 
-    bool typeAcceptsAllBitPatterns(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+    bool typeAcceptsAllBitPatterns(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty) {
         if (const auto* primitive = ty->opt_Primitive()) {
             return *primitive != HIRCoreType::Bool && *primitive != HIRCoreType::Char && *primitive != HIRCoreType::Str;
         }
@@ -316,12 +316,12 @@ namespace {
         return false;
     }
 
-    MIRConstant createVtable(const HIRTypeData* ty, const HIRTraitPath& trait, const RcString& vtableName) {
+    MIRConstant createVtable(const HIRType* ty, const HIRTraitPath& trait, const RcString& vtableName) {
         auto vtablePath = HIRPath(mv$(ty), trait.path.clone(), vtableName);
         return MIRConstant::make_ItemAddr(box$(vtablePath));
     }
 
-    MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mutator, EncodedLiteralSlice lit, const HIRTypeData* ty, const MonomorphState& params, HIRPath path) {
+    MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mutator, EncodedLiteralSlice lit, const HIRType* ty, const MonomorphState& params, HIRPath path) {
         TRACE_FUNCTION_F(ty << StringView(" <= ") << lit);
         switch ((*ty).tag()) {
             default:
@@ -330,7 +330,7 @@ namespace {
                 }
                 DEBUG(StringView("Unknown type ") << ty << StringView(", but a path was provided - Return ItemAddr ") << path);
                 return MIRConstant::make_ItemAddr(box$(path));
-            case HIRTypeData::TAG_Tuple: {
+            case HIRType::TAG_Tuple: {
                 auto* repr = TargetGetTypeRepr(state.sp, state.resolve, ty);
                 MIR_ASSERT(state, repr, StringView("No type repr, but encoded value available? ") << ty);
 
@@ -344,7 +344,7 @@ namespace {
 
                 return MIRRValue::make_Tuple({mv$(lvals)});
             }
-            case HIRTypeData::TAG_Array: {
+            case HIRType::TAG_Array: {
                 auto& te = (*ty).as_Array();
                 size_t size = 0;
                 MIR_ASSERT(state, TargetGetSizeOf(state.sp, state.resolve, te.inner, size), StringView("No size, but encoded value available? ") << ty);
@@ -386,7 +386,7 @@ namespace {
                 }
                 break;
             }
-            case HIRTypeData::TAG_Path: {
+            case HIRType::TAG_Path: {
                 auto& te = (*ty).as_Path();
                 auto* repr = TargetGetTypeRepr(state.sp, state.resolve, ty);
                 MIR_ASSERT(state, repr, StringView("No type repr, but encoded value available? ") << ty);
@@ -517,7 +517,7 @@ namespace {
                 }
                 break;
             }
-            case HIRTypeData::TAG_Primitive: {
+            case HIRType::TAG_Primitive: {
                 auto& te = (*ty).as_Primitive();
                 switch (te) {
                     case HIRCoreType::Char:
@@ -564,11 +564,11 @@ namespace {
                 }
                 UNREACHABLE();
             }
-            case HIRTypeData::TAG_Pattern: {
+            case HIRType::TAG_Pattern: {
                 auto& te = (*ty).as_Pattern();
                 return MIRCleanupLiteralToRValue(state, mutator, lit, te.inner, params, mv$(path));
             }
-            case HIRTypeData::TAG_Pointer: {
+            case HIRType::TAG_Pointer: {
                 auto& te = (*ty).as_Pointer();
                 if (lit.getReloc()) {
                     const auto* reloc = lit.getReloc();
@@ -608,14 +608,14 @@ namespace {
                 }
                 break;
             }
-            case HIRTypeData::TAG_Borrow: {
+            case HIRType::TAG_Borrow: {
                 auto& te = (*ty).as_Borrow();
                 const auto* dataReloc = lit.getReloc();
                 const auto data_ptr = lit.readUint(TargetGetPointerBits() / 8);
                 MIR_ASSERT(state, dataReloc ? data_ptr >= EncodedLiteral::PTR_BASE : data_ptr != 0, StringView("Bad pointer value - 0x") << formatHex(data_ptr));
 
                 if (!dataReloc) {
-                    const HIRTypeData* ptrInner;
+                    const HIRType* ptrInner;
                     const auto metadataType = state.resolve.metadataType(state.sp, te.inner);
                     if (metadataType == MetadataType::Slice) {
                         if (const auto* slice = te.inner->opt_Slice()) {
@@ -652,7 +652,7 @@ namespace {
                     const auto& path = *dataReloc->p;
                     auto ptrVal = MIRConstant::make_ItemAddr({box$(params.monomorphPath(state.sp, path)), ofs});
                     DEBUG(StringView("ptr_val = ") << ptrVal);
-                    const HIRTypeData* tmp;
+                    const HIRType* tmp;
                     const auto& srcTy = state.getStaticType(path);
 
                     auto metaTy = state.resolve.metadataType(state.sp, te.inner);
@@ -727,11 +727,11 @@ namespace {
                 }
                 break;
             }
-            case HIRTypeData::TAG_NamedFunction: {
+            case HIRType::TAG_NamedFunction: {
                 auto& te = (*ty).as_NamedFunction();
                 return MIRConstant::make_Function({box$(te.path.clone())});
             }
-            case HIRTypeData::TAG_Function: {
+            case HIRType::TAG_Function: {
                 const auto* dataReloc = lit.getReloc();
                 MIR_ASSERT(state, dataReloc, StringView("Function with no relocation?!"));
                 MIR_ASSERT(state, dataReloc->p, StringView(""));
@@ -744,7 +744,7 @@ namespace {
     MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& receiverLvp, const HIRPath::Data::Data_UfcsKnown& pe) {
         TRACE_FUNCTION_F(StringView("<") << pe.type << StringView(" as ") << pe.trait << StringView(">::") << pe.item << pe.params);
         BUG_ASSERT(pe.type->is_TraitObject());
-        const HIRTypeData::Data_TraitObject& te = pe.type->as_TraitObject();
+        const HIRType::Data_TraitObject& te = pe.type->as_TraitObject();
         BUG_ASSERT(te.trait.traitPtr);
         const auto& trait = *te.trait.traitPtr;
 
@@ -763,19 +763,19 @@ namespace {
 
         auto vtableLv = mutator.newTemporary(mv$(vtableTy));
         auto fcnLval = MIRLValue::newField(MIRLValue::newDeref(vtableLv.clone()), vtableIdx);
-        const HIRTypeData* tmp;
+        const HIRType* tmp;
         const auto& ty = state.getLvalueType(fcnLval);
         DEBUG(StringView("callable type ") << ty);
         auto receiver = ty->as_Function().argTypes[0];
 
         struct H {
-            static MIRLValue getUnitPtr(const MIRTypeResolve& state, MirMutator& mutator, const HIRTypeData* ty, MIRLValue lv, MIRLValue& outInnerPtr) {
+            static MIRLValue getUnitPtr(const MIRTypeResolve& state, MirMutator& mutator, const HIRType* ty, MIRLValue lv, MIRLValue& outInnerPtr) {
                 if (ty->is_Path()) {
                     const auto& te = ty->as_Path();
                     MIR_ASSERT(state, te.binding.is_Struct(), StringView(""));
                     const auto& tyPath = te.path.data.as_Generic();
                     const auto& str = *te.binding.as_Struct();
-                    const HIRTypeData* tmp;
+                    const HIRType* tmp;
                     auto monomorph = [&](const auto& t) {
                         return MonomorphStatePtr(state.crate.types, ty, &tyPath.params, nullptr).monomorphType(state.sp, t);
                     };
@@ -845,16 +845,16 @@ namespace {
         return fcnLval;
     }
 
-    const HIRTypeData* MIRCleanupUnsizeGetMetadata(const MIRTypeResolve& state, MirMutator& mutator, const HIRTypeData* dstTy, const HIRTypeData* srcTy, const MIRLValue& ptrValue, MIRParam& outMetaVal, bool& outSrcIsDst) {
+    const HIRType* MIRCleanupUnsizeGetMetadata(const MIRTypeResolve& state, MirMutator& mutator, const HIRType* dstTy, const HIRType* srcTy, const MIRLValue& ptrValue, MIRParam& outMetaVal, bool& outSrcIsDst) {
         switch ((*dstTy).tag()) {
             default:
                 MIR_TODO(state, StringView("Obtain metadata converting to ") << dstTy);
                 break;
-            case HIRTypeData::TAG_Generic: {
+            case HIRType::TAG_Generic: {
                 // TODO: What should be returned to indicate "no conversion"
                 return nullptr;
             }
-            case HIRTypeData::TAG_Path: {
+            case HIRType::TAG_Path: {
                 auto& de = (*dstTy).as_Path();
                 if (de.binding.is_Opaque()) {
                     return nullptr;
@@ -870,7 +870,7 @@ namespace {
 
                 auto monomorphCbD = MonomorphStatePtr(state.crate.types, dstTy, &de.path.data.as_Generic().params, nullptr);
                 auto monomorphCbS = MonomorphStatePtr(state.crate.types, srcTy, &se.path.data.as_Generic().params, nullptr);
-                auto monomorphField = [&](const MonomorphStatePtr& monomorph, const HIRTypeData* fieldTpl) {
+                auto monomorphField = [&](const MonomorphStatePtr& monomorph, const HIRType* fieldTpl) {
                     auto fieldTy = monomorph.monomorphType(state.sp, fieldTpl, false);
                     fieldTy = state.resolve.expandAssociatedTypes(state.sp, fieldTy);
                     return fieldTy;
@@ -900,7 +900,7 @@ namespace {
                 }
                 UNREACHABLE();
             }
-            case HIRTypeData::TAG_Slice: {
+            case HIRType::TAG_Slice: {
                 if (srcTy->is_Array()) {
                     const auto& inArray = srcTy->as_Array();
                     if (!inArray.size.is_Known()) {
@@ -917,7 +917,7 @@ namespace {
                 }
                 break;
             }
-            case HIRTypeData::TAG_TraitObject: {
+            case HIRType::TAG_TraitObject: {
                 auto& de = (*dstTy).as_TraitObject();
                 auto vtableTy = de.trait.path != HIRSimplePath() ? de.trait.traitPtr->getVtableType(state.sp, state.crate, de) : state.crate.types.unit();
                 const auto* outMetaTy = state.crate.types.pointer(HIRBorrowType::Shared, vtableTy);
@@ -949,10 +949,10 @@ namespace {
         UNREACHABLE();
     }
 
-    MIRRValue MIRCleanupUnsize(const MIRTypeResolve& state, MirMutator& mutator, const HIRTypeData* dstTy, const HIRTypeData* srcTyInner, MIRLValue ptrValue) {
+    MIRRValue MIRCleanupUnsize(const MIRTypeResolve& state, MirMutator& mutator, const HIRType* dstTy, const HIRType* srcTyInner, MIRLValue ptrValue) {
         const auto& dstTyInner = (dstTy->is_Borrow() ? dstTy->as_Borrow().inner : dstTy->as_Pointer().inner);
 
-        const HIRTypeData* metaType;
+        const HIRType* metaType;
         MIRParam metaValue;
         bool sourceIsDst = false;
         if ((metaType = MIRCleanupUnsizeGetMetadata(state, mutator, dstTyInner, srcTyInner, ptrValue, metaValue, sourceIsDst))) {
@@ -969,7 +969,7 @@ namespace {
         }
     }
 
-    MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutator, const HIRTypeData* dstTy, const HIRTypeData* srcTy, MIRLValue value) {
+    MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutator, const HIRType* dstTy, const HIRType* srcTy, MIRLValue value) {
         TRACE_FUNCTION_F(dstTy << StringView(" <- ") << srcTy << StringView(" ( ") << value << StringView(" )"));
         if (dstTy == srcTy) {
             return MIRRValue::make_Use(mv$(value));
@@ -1102,7 +1102,7 @@ namespace {
                 continue;
             }
 
-            const HIRTypeData* tmp;
+            const HIRType* tmp;
             const auto& ty = state.getLvalueType(lval, lval.wrappers.size() - i);
             if (state.resolve.isTypeOwnedBox(ty)) {
                 unsigned numInjectedFldZeros = 0;
@@ -1112,7 +1112,7 @@ namespace {
                     const auto& te = typ->as_Path();
                     MIR_ASSERT(state, te.binding.is_Struct(), StringView("Box contained a non-struct"));
                     const auto& str = *te.binding.as_Struct();
-                    const HIRTypeData* tyTpl = nullptr;
+                    const HIRType* tyTpl = nullptr;
                     switch (str.data.tag()) {
                         case HIRStructData::TAG_Unit: {
                             MIR_BUG(state, StringView("Box contained a unit-like struct"));
@@ -1231,7 +1231,7 @@ namespace {
     bool MIROptimiseGarbageCollectPartial(MIRTypeResolve& state, MIRFunction& fcn);
     bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn);
 
-    bool MIROptimiseInline(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType, const TransList& list, unsigned optLevel) {
+    bool MIROptimiseInline(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRType* retType, const TransList& list, unsigned optLevel) {
         Span sp;
         bool rv = false;
         TRACE_FUNCTION_FR(path, rv);
@@ -2177,7 +2177,7 @@ namespace {
                 return this->dfBase + f;
             }
 
-            const HIRTypeData* valueGenericType(HIRGenericRef ce) const override {
+            const HIRType* valueGenericType(HIRGenericRef ce) const override {
                 const HIRGenericParams* p;
                 switch (ce.group()) {
                     case 0:
@@ -2303,7 +2303,7 @@ namespace {
                 {
                     cloner.retval = MIRLValue::newLocal(fcn.locals.length());
                     DEBUG(StringView("- Storing return value in ") << cloner.retval);
-                    const HIRTypeData* tmpTy;
+                    const HIRType* tmpTy;
                     fcn.locals.pushBack(state.getLvalueType(te->retVal));
                 }
 
@@ -2334,7 +2334,7 @@ namespace {
 
                 DEBUG(StringView("- Insert argument lval assignments"));
                 for (auto& val : cloner.constAssignments) {
-                    const HIRTypeData* tmp;
+                    const HIRType* tmp;
                     auto ty = val.is_Constant() ? state.getConstType(val.as_Constant()) : state.getLvalueType(val.as_LValue());
                     auto lv = MIRLValue::newLocal(static_cast<unsigned>(fcn.locals.length()));
                     fcn.locals.pushBack(ty);
@@ -4031,7 +4031,7 @@ namespace {
                             // TODO: This value _must_ be Copy for this optimisation to work.
 
                             DEBUG(state << StringView("Locating origin of ") << lv);
-                            const HIRTypeData* tmp;
+                            const HIRType* tmp;
                             if (!state.resolve.typeIsCopy(state.sp, state.getLvalueType(innerLv))) {
                                 DEBUG(state << StringView("- not Copy, can't optimise"));
                                 return false;
@@ -4147,7 +4147,7 @@ namespace {
                 changed = true;
             } else if (tef.name == "needs_drop") {
                 const auto& ty = tef.params.types.at(0);
-                if (!visitTyWith(ty, [](const HIRTypeData* ty) -> bool {
+                if (!visitTyWith(ty, [](const HIRType* ty) -> bool {
                     return ty->is_Generic() || ((*ty).is_Path() && ((*ty).as_Path().binding.is_Unbound()));
                 })) {
                     bool needsDrop = state.resolve.typeNeedsDropGlue(state.sp, ty);
@@ -4441,7 +4441,7 @@ namespace {
                                 auto variantIdx = knownValuesVar.at(se.val);
                                 MIR_ASSERT(state, se.type->is_Primitive(), StringView("Casting enum to non-primitive - ") << se.type);
 
-                                const HIRTypeData* tmp;
+                                const HIRType* tmp;
                                 const auto& srcTy = state.getLvalueType(se.val);
                                 const HIREnum& enm = *srcTy->as_Path().binding.as_Enum();
 
@@ -5456,7 +5456,7 @@ namespace {
             p.second.replacements.zero(vals.size());
             for (size_t i = 0; i < vals.size(); i++) {
                 auto newLocal = static_cast<unsigned>(newLocalBase + i);
-                const HIRTypeData* tmp;
+                const HIRType* tmp;
                 fcn.locals.pushBack(state.getParamType(vals[i]));
                 p.second.replacements.mut(i) = newLocal;
                 block.statements[stmtIdx + i] = MIRStatement::make_Assign({MIRLValue::newLocal(newLocal), paramToRvalue(mv$(vals[i]))});
@@ -6241,7 +6241,7 @@ namespace {
         bool changed = false;
 
         TRACE_FUNCTION_FR(StringView(""), changed);
-        const HIRTypeData* tmpTy;
+        const HIRType* tmpTy;
         for (auto& bb : fcn.blocks) {
             for (auto it = bb.statements.begin(); it != bb.statements.end(); ++it) {
                 state.setCurStmt(&bb - fcn.blocks.data(), it - bb.statements.begin());
@@ -6251,7 +6251,7 @@ namespace {
                     for (auto it2 = it + 1; it2 != bb.statements.end(); ++it2) {
                         if (it2->is_Assign() && it2->as_Assign().src.is_Cast() && it2->as_Assign().src.as_Cast().val == dstLv) {
                             const auto& dstTy = it2->as_Assign().src.as_Cast().type;
-                            const HIRTypeData* tmp;
+                            const HIRType* tmp;
                             const auto& origTy = state.getLvalueType(srcLv);
                             if (origTy == dstTy) {
                                 DEBUG(state << StringView("Reborrow and cast back - ") << *it << StringView(" and ") << *it2);
@@ -6271,7 +6271,7 @@ namespace {
                     for (auto it2 = it + 1; it2 != bb.statements.end(); ++it2) {
                         if (it2->is_Assign() && it2->as_Assign().src.is_Cast() && it2->as_Assign().src.as_Cast().val == dstLv) {
                             const auto& dstTy = it2->as_Assign().src.as_Cast().type;
-                            const HIRTypeData* tmp;
+                            const HIRType* tmp;
                             const auto& origTy = state.getLvalueType(srcLv);
                             if (origTy == dstTy) {
                                 DEBUG(state << StringView("Round-trip pointer cast - ") << *it << StringView(" and ") << *it2);
@@ -6814,7 +6814,7 @@ void MIRCreateOperationsContext(WireBoard& wb, ObjPool& pool) {
     wb.mirOperations = pool.make<MirOperationsContext>();
 }
 
-void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
+void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRType* retType) {
     Span sp;
     TRACE_FUNCTION_F(path);
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
@@ -6828,7 +6828,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
             mutator.updateState(state);
             auto& stmt = *it;
 
-            const HIRTypeData* tmp;
+            const HIRType* tmp;
             if ((stmt.is_Assign() && (stmt.as_Assign().src.is_Borrow())) && state.getLvalueType(stmt.as_Assign().src.as_Borrow().val)->is_Diverge()) {
                 DEBUG(state << StringView("Not killing block due to use of `!`, it's being borrowed"));
             } else {
@@ -6939,7 +6939,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         }
                         case MIRRValue::TAG_DstMeta: {
                             auto& re = se.src.as_DstMeta();
-                            const HIRTypeData* tmp;
+                            const HIRType* tmp;
                             const auto& ty = state.getLvalueType(re.val);
 
                             if (const auto* array = ty->opt_Array()) {
@@ -6961,9 +6961,9 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             MIRCleanupLValue(state, mutator, re.val);
                             re.val.wrappers.pop_back();
 
-                            const HIRTypeData* cleanedTmp;
+                            const HIRType* cleanedTmp;
                             const auto* cleanedTy = state.getLvalueType(re.val);
-                            const HIRTypeData* ityP;
+                            const HIRType* ityP;
                             if (const auto* te = cleanedTy->opt_Borrow()) {
                                 ityP = te->inner;
                             } else if (const auto* te = cleanedTy->opt_Pointer()) {
@@ -6979,7 +6979,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         }
                         case MIRRValue::TAG_DstPtr: {
                             auto& re = se.src.as_DstPtr();
-                            const HIRTypeData* tmp;
+                            const HIRType* tmp;
                             const auto& ty = state.getLvalueType(re.val);
                             if (!state.resolve.typeIsSized(state.sp, ty)) {
                                 MIRCleanupLValue(state, mutator, re.val);
@@ -6990,9 +6990,9 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             MIRCleanupLValue(state, mutator, re.val);
                             re.val.wrappers.pop_back();
 
-                            const HIRTypeData* cleanedTmp;
+                            const HIRType* cleanedTmp;
                             const auto* cleanedTy = state.getLvalueType(re.val);
-                            const HIRTypeData* ityP;
+                            const HIRType* ityP;
                             if (const auto* te = cleanedTy->opt_Borrow()) {
                                 ityP = te->inner;
                             } else if (const auto* te = cleanedTy->opt_Pointer()) {
@@ -7074,7 +7074,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
 
                 if (auto* e = se.src.opt_MakeDst()) {
                     if ((e->metaVal.is_Constant() && e->metaVal.as_Constant().is_ItemAddr() && e->metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
-                        const HIRTypeData* tmp, tmp2;
+                        const HIRType* tmp, tmp2;
                         const auto& srcTy = state.getParamType(e->ptrVal);
                         const auto& dstTy = state.getLvalueType(se.dst);
                         MIR_ASSERT(state, e->ptrVal.is_LValue(), StringView("BUG: MakeDst with no metadata should be LValue"));
@@ -7086,7 +7086,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     if ((e->metaVal.is_Constant() && e->metaVal.as_Constant().is_ItemAddr() && e->metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
                         // TODO: Check the validity?
 
-                        const HIRTypeData* tmp;
+                        const HIRType* tmp;
                         const auto& srcTy = state.getParamType(e->ptrVal);
                         MIR_ASSERT(state, monomorphiseTypeNeeded(srcTy), StringView("MakeDst Unsize with known source - ") << srcTy);
                     }
@@ -7338,7 +7338,7 @@ void MIRCleanupCrate(const WireBoard& wb, HIRCrate& crate) {
     ov.visitCrate(crate);
 }
 
-void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
+void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRType* retType) {
     Span sp;
     TRACE_FUNCTION_F(path);
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
@@ -7359,7 +7359,7 @@ void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, 
     return;
 }
 
-void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType, unsigned optLevel, bool doInline /*=true*/, bool validate /*=true*/) {
+void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRType* retType, unsigned optLevel, bool doInline /*=true*/, bool validate /*=true*/) {
     Span sp;
     BUG_ASSERT(optLevel > 0);
     TRACE_FUNCTION_F(path);
@@ -7695,7 +7695,7 @@ auto MirMutator::updateState(MIRTypeResolve& state) -> void {
     }
 }
 
-auto MirMutator::newTemporary(const HIRTypeData* ty) -> MIRLValue {
+auto MirMutator::newTemporary(const HIRType* ty) -> MIRLValue {
     auto rv = MIRLValue::newLocal(static_cast<unsigned int>(fcn.locals.length()));
     fcn.locals.pushBack(ty);
     return rv;
@@ -7705,7 +7705,7 @@ auto MirMutator::pushStatement(MIRStatement stmt) -> void {
     newStatements.push_back(mv$(stmt));
 }
 
-auto MirMutator::inTemporary(const HIRTypeData* ty, MIRRValue val) -> MIRLValue {
+auto MirMutator::inTemporary(const HIRType* ty, MIRRValue val) -> MIRLValue {
     auto rv = this->newTemporary(mv$(ty));
     pushStatement(MIRStatement::make_Assign({rv.clone(), mv$(val)}));
     return rv;
@@ -7759,7 +7759,7 @@ ParamsSet::ParamsSet(HIRTypeInterner& types)
 {
 }
 
-auto ParamsSet::getSelfType() const -> const HIRTypeData* {
+auto ParamsSet::getSelfType() const -> const HIRType* {
     return selfTy;
 }
 

@@ -48,7 +48,7 @@ TransListFunction* TransList::findFunction(const HIRPath& p) {
     return const_cast<TransListFunction*>(static_cast<const TransList&>(*this).findFunction(p));
 }
 
-bool TransList::hasType(const HIRTypeData* type, bool shallow) const {
+bool TransList::hasType(const HIRType* type, bool shallow) const {
     BUG_ASSERT(wb_);
     const auto symbol = FMT(TransMangle(*wb_, type));
     const auto existing = typeSymbols.find(symbol);
@@ -59,7 +59,7 @@ bool TransList::hasType(const HIRTypeData* type, bool shallow) const {
     return existing->second.hasDefinition || (shallow && existing->second.hasPrototype);
 }
 
-bool TransList::addType(const HIRTypeData* type, bool shallow) {
+bool TransList::addType(const HIRType* type, bool shallow) {
     BUG_ASSERT(wb_);
     auto symbol = FMT(TransMangle(*wb_, type));
     auto existing = typeSymbols.find(symbol);
@@ -171,7 +171,7 @@ HIRPathParams TransParams::monomorph(const ::StaticTraitResolve& resolve, const 
     return rv;
 }
 
-const HIRTypeData* TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRTypeData* ty) const {
+const HIRType* TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRType* ty) const {
     return resolve.monomorphExpand(sp, ty, *this);
 }
 
@@ -206,14 +206,14 @@ TransParams& TransParams::operator=(TransParams&& x) {
     return *this;
 }
 
-TransParams TransParams::newImpl(HIRTypeInterner& types, Span sp, const HIRTypeData* ty, HIRPathParams implParams) {
+TransParams TransParams::newImpl(HIRTypeInterner& types, Span sp, const HIRType* ty, HIRPathParams implParams) {
     TransParams tp(types, sp);
     tp.selfType = std::move(ty);
     tp.ppImpl = std::move(implParams);
     return tp;
 }
 
-const HIRTypeData* TransParams::maybeMonomorph(const ::StaticTraitResolve& resolve, const HIRTypeData* p) const {
+const HIRType* TransParams::maybeMonomorph(const ::StaticTraitResolve& resolve, const HIRType* p) const {
     if (monomorphiseTypeNeeded(p)) {
         return this->monomorph(resolve, p);
     } else {
@@ -241,7 +241,7 @@ TransListConst::TransListConst(HIRTypeInterner& types)
 {
 }
 
-const HIRTypeData* TransParams::getSelfType() const {
+const HIRType* TransParams::getSelfType() const {
     return selfType;
 }
 

@@ -13,7 +13,7 @@ class MonomorphiserNop: public Monomorphiser {
 public:
     using Monomorphiser::Monomorphiser;
 
-    const HIRTypeData* getType(const Span& sp, const HIRGenericRef& ty) const override;
+    const HIRType* getType(const Span& sp, const HIRGenericRef& ty) const override;
 
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
 };
@@ -25,11 +25,11 @@ class OpaqueAliasParamMonomorph: public MonomorphiserNop {
 public:
     OpaqueAliasParamMonomorph(HIRTypeInterner& types, const HIRTypeDataErasedTypeAliasInner& alias, const HIRPathParams& params);
 
-    const HIRTypeData* getType(const Span& sp, const HIRGenericRef& generic) const override;
+    const HIRType* getType(const Span& sp, const HIRGenericRef& generic) const override;
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
 };
 
-static inline const HIRTypeData* monomorphiseTypeWithOpt(const Span& sp, const HIRTypeData* tpl, const Monomorphiser& mono, bool allowInfer = true) {
+static inline const HIRType* monomorphiseTypeWithOpt(const Span& sp, const HIRType* tpl, const Monomorphiser& mono, bool allowInfer = true) {
     return monomorphiseTypeNeeded(tpl) ? mono.monomorphType(sp, tpl, allowInfer) : tpl;
 }
 
@@ -50,7 +50,7 @@ static inline const HIRPathParams& monomorphisePathparamsWithOpt(const Span& sp,
 }
 
 struct MonomorphStatePtr: public MonomorphiserPP {
-    const HIRTypeData* selfTy;
+    const HIRType* selfTy;
     const HIRPathParams* ppImpl;
     const HIRPathParams* ppMethod;
 
@@ -58,7 +58,7 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 
     explicit MonomorphStatePtr(HIRTypeInterner& types);
 
-    MonomorphStatePtr(HIRTypeInterner& types, const HIRTypeData* selfTy, const HIRPathParams* paramsI, const HIRPathParams* paramsM, const HIRPathParams* paramsP = nullptr, const HIRPathParams* paramsH = nullptr);
+    MonomorphStatePtr(HIRTypeInterner& types, const HIRType* selfTy, const HIRPathParams* paramsI, const HIRPathParams* paramsM, const HIRPathParams* paramsP = nullptr, const HIRPathParams* paramsH = nullptr);
 
     MonomorphStatePtr(MonomorphStatePtr&& x);
 
@@ -66,7 +66,7 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 
     MonomorphStatePtr& operator=(MonomorphStatePtr&& x);
 
-    const HIRTypeData* getSelfType() const override;
+    const HIRType* getSelfType() const override;
 
     const HIRPathParams* getImplParams() const override;
 
@@ -76,7 +76,7 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 };
 
 struct MonomorphState: public MonomorphiserPP {
-    const HIRTypeData* selfTy;
+    const HIRType* selfTy;
     const HIRPathParams* ppImpl;
     const HIRPathParams* ppMethod;
 
@@ -96,7 +96,7 @@ struct MonomorphState: public MonomorphiserPP {
         return (ppMethod && ppMethod->hasParams()) || (ppImpl && ppImpl->hasParams());
     }
 
-    const HIRTypeData* getSelfType() const override;
+    const HIRType* getSelfType() const override;
 
     const HIRPathParams* getImplParams() const override;
 

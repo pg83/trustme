@@ -18,8 +18,8 @@ namespace {
     struct AsyncDropPollBuilder {
         const Span& sp;
         const StaticTraitResolve& resolve;
-        const HIRTypeData* dropeeTy;
-        const HIRTypeData* outerTy;
+        const HIRType* dropeeTy;
+        const HIRType* outerTy;
         MIRFunction output;
         unsigned statePtrLocal;
         unsigned nextPhase = 3;
@@ -53,7 +53,7 @@ namespace {
 
         MIRBasicBlockId newBlock();
 
-        unsigned newLocal(const HIRTypeData* ty);
+        unsigned newLocal(const HIRType* ty);
 
         MIRLValue outerValue() const;
 
@@ -63,25 +63,25 @@ namespace {
 
         MIRStatement setState(unsigned state) const;
 
-        bool hasDropImpl(const HIRTypeData* ty) const;
+        bool hasDropImpl(const HIRType* ty) const;
 
-        MIRBasicBlockId buildSyncDestructor(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next);
+        MIRBasicBlockId buildSyncDestructor(const HIRType* ty, MIRLValue value, MIRBasicBlockId next);
 
-        MIRBasicBlockId buildAsyncDestructor(const HIRTypeData* ty, MIRLValue value, HIRPath dropPath, const HIRTypeData* futureTy, MIRBasicBlockId next);
+        MIRBasicBlockId buildAsyncDestructor(const HIRType* ty, MIRLValue value, HIRPath dropPath, const HIRType* futureTy, MIRBasicBlockId next);
 
         MIRBasicBlockId buildDeepDrop(MIRLValue value, MIRBasicBlockId next);
 
-        MIRBasicBlockId buildField(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next);
+        MIRBasicBlockId buildField(const HIRType* ty, MIRLValue value, MIRBasicBlockId next);
 
-        MIRBasicBlockId buildStructFields(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next);
+        MIRBasicBlockId buildStructFields(const HIRType* ty, MIRLValue value, MIRBasicBlockId next);
 
-        MIRBasicBlockId buildFields(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next);
+        MIRBasicBlockId buildFields(const HIRType* ty, MIRLValue value, MIRBasicBlockId next);
 
-        MIRBasicBlockId buildCoroutineDrop(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next);
+        MIRBasicBlockId buildCoroutineDrop(const HIRType* ty, MIRLValue value, MIRBasicBlockId next);
 
-        MIRBasicBlockId buildType(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next);
+        MIRBasicBlockId buildType(const HIRType* ty, MIRLValue value, MIRBasicBlockId next);
 
-        AsyncDropPollBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* dropeeTy, const HIRTypeData* outerTy);
+        AsyncDropPollBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRType* dropeeTy, const HIRType* outerTy);
 
         MIRFunctionPointer build();
     };
@@ -92,7 +92,7 @@ namespace {
 
         Cloner(const Span& sp, const ::StaticTraitResolve& resolve, const TransParams& params);
 
-        const HIRTypeData* valueGenericType(HIRGenericRef g) const override;
+        const HIRType* valueGenericType(HIRGenericRef g) const override;
 
         const Monomorphiser& monomorphiser() const override;
 
@@ -183,7 +183,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         {
         }
 
-        HIRPath newStatic(const HIRTypeData* type, EncodedLiteral value, size_t alignment) override {
+        HIRPath newStatic(const HIRType* type, EncodedLiteral value, size_t alignment) override {
             out.addType(type, false);
             auto name = RcString::newInterned(FMT(StringView("ConstEvalMonomorph#") << count));
             count++;
@@ -352,7 +352,7 @@ auto AsyncDropPollBuilder::newBlock() -> MIRBasicBlockId {
     return static_cast<MIRBasicBlockId>(output.blocks.size() - 1);
 }
 
-auto AsyncDropPollBuilder::newLocal(const HIRTypeData* ty) -> unsigned {
+auto AsyncDropPollBuilder::newLocal(const HIRType* ty) -> unsigned {
     const auto rv = static_cast<unsigned>(output.locals.length());
     output.locals.pushBack(std::move(ty));
     return rv;
@@ -379,14 +379,14 @@ auto AsyncDropPollBuilder::setState(unsigned state) const -> MIRStatement {
     });
 }
 
-auto AsyncDropPollBuilder::hasDropImpl(const HIRTypeData* ty) const -> bool {
+auto AsyncDropPollBuilder::hasDropImpl(const HIRType* ty) const -> bool {
     const auto& trait = resolve.langDrop();
     return !trait.components().empty() && resolve.findImpl(sp, trait, HIRPathParams{}, ty, [](SolverResponse response) {
         return response.certainty == SolverCertainty::Proven && response.impl && response.impl->traitImpl;
     });
 }
 
-auto AsyncDropPollBuilder::buildSyncDestructor(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
+auto AsyncDropPollBuilder::buildSyncDestructor(const HIRType* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
     auto& types = resolve.hirCrate().types;
     const auto refLocal = newLocal(types.borrow(HIRBorrowType::Unique, ty));
     const auto resultLocal = newLocal(types.unit());
@@ -407,7 +407,7 @@ auto AsyncDropPollBuilder::buildSyncDestructor(const HIRTypeData* ty, MIRLValue 
     return entry;
 }
 
-auto AsyncDropPollBuilder::buildAsyncDestructor(const HIRTypeData* ty, MIRLValue value, HIRPath dropPath, const HIRTypeData* futureTy, MIRBasicBlockId next) -> MIRBasicBlockId {
+auto AsyncDropPollBuilder::buildAsyncDestructor(const HIRType* ty, MIRLValue value, HIRPath dropPath, const HIRType* futureTy, MIRBasicBlockId next) -> MIRBasicBlockId {
     auto& types = resolve.hirCrate().types;
     const auto& pinPath = resolve.hirCrate().getLangItemPathOpt("pin");
     const auto& pollPath = resolve.hirCrate().getLangItemPathOpt("Poll");
@@ -528,14 +528,14 @@ auto AsyncDropPollBuilder::buildDeepDrop(MIRLValue value, MIRBasicBlockId next) 
     return entry;
 }
 
-auto AsyncDropPollBuilder::buildField(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
+auto AsyncDropPollBuilder::buildField(const HIRType* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
     if (resolve.typeNeedsAsyncDrop(sp, ty)) {
         return buildType(ty, std::move(value), next);
     }
     return resolve.typeNeedsDropGlue(sp, ty) ? buildDeepDrop(std::move(value), next) : next;
 }
 
-auto AsyncDropPollBuilder::buildStructFields(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
+auto AsyncDropPollBuilder::buildStructFields(const HIRType* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
     if (const auto* tuple = ty->opt_Tuple()) {
         for (size_t i = tuple->length(); i > 0; i--) {
             next = buildField((*tuple)[i - 1], MIRLValue::newField(value.clone(), static_cast<unsigned>(i - 1)), next);
@@ -577,7 +577,7 @@ auto AsyncDropPollBuilder::buildStructFields(const HIRTypeData* ty, MIRLValue va
     return next;
 }
 
-auto AsyncDropPollBuilder::buildFields(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
+auto AsyncDropPollBuilder::buildFields(const HIRType* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
     if (const auto* array = ty->opt_Array()) {
         ASSERT_BUG(sp, array->size.is_Known(), StringView("async drop of an array with unevaluated length: ") << ty);
         for (size_t i = array->size.as_Known(); i > 0; i--) {
@@ -606,7 +606,7 @@ auto AsyncDropPollBuilder::buildFields(const HIRTypeData* ty, MIRLValue value, M
     return buildStructFields(ty, std::move(value), next);
 }
 
-auto AsyncDropPollBuilder::buildCoroutineDrop(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
+auto AsyncDropPollBuilder::buildCoroutineDrop(const HIRType* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
     auto& types = resolve.hirCrate().types;
     auto dropPath = HIRPath(ty, HIRGenericPath(resolve.langDrop()), RcString::newInterned("drop"), HIRPathParams{});
     MonomorphState monomorph(types);
@@ -653,7 +653,7 @@ auto AsyncDropPollBuilder::buildCoroutineDrop(const HIRTypeData* ty, MIRLValue v
         }
 
         sourceTypes.setCurStmtTerm(static_cast<unsigned>(i));
-        const HIRTypeData* slotTyTmp;
+        const HIRType* slotTyTmp;
         auto slotTy = cloner.monomorph(sourceTypes.getLvalueType(drop->slot));
         if (!resolve.typeNeedsAsyncDrop(sp, slotTy)) {
             output.blocks[targetIdx].terminator = cloner.cloneTerm(sourceBlock.terminator);
@@ -690,13 +690,13 @@ auto AsyncDropPollBuilder::buildCoroutineDrop(const HIRTypeData* ty, MIRLValue v
     return bbBase;
 }
 
-auto AsyncDropPollBuilder::buildType(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
+auto AsyncDropPollBuilder::buildType(const HIRType* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
     if (const auto* pathTy = ty->opt_Path(); pathTy && (pathTy->isFuture() || pathTy->isGenerator())) {
         return buildCoroutineDrop(ty, std::move(value), next);
     }
     const auto fields = buildFields(ty, value.clone(), next);
     HIRPath dropPath{HIRSimplePath()};
-    const HIRTypeData* futureTy;
+    const HIRType* futureTy;
     if ((futureTy = resolve.findAsyncDrop(sp, ty, dropPath))) {
         return buildAsyncDestructor(ty, std::move(value), std::move(dropPath), std::move(futureTy), fields);
     }
@@ -706,7 +706,7 @@ auto AsyncDropPollBuilder::buildType(const HIRTypeData* ty, MIRLValue value, MIR
     return fields;
 }
 
-AsyncDropPollBuilder::AsyncDropPollBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* dropeeTy, const HIRTypeData* outerTy)
+AsyncDropPollBuilder::AsyncDropPollBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRType* dropeeTy, const HIRType* outerTy)
     : sp(sp)
     , resolve(resolve)
     , dropeeTy(dropeeTy)
@@ -839,7 +839,7 @@ Cloner::Cloner(const Span& sp, const ::StaticTraitResolve& resolve, const TransP
 {
 }
 
-auto Cloner::valueGenericType(HIRGenericRef g) const -> const HIRTypeData* {
+auto Cloner::valueGenericType(HIRGenericRef g) const -> const HIRType* {
     switch (g.group()) {
         case 0:
             ASSERT_BUG(sp, g.idx() < resolve_.implGenerics().values.size(), StringView("Value generic ") << g << StringView(" out of bounds in impl: ") << resolve_.implGenerics().values.size());

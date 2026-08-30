@@ -56,10 +56,10 @@ namespace {
 
         void finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile) override;
 
-        void emitType(const HIRTypeData* ty) override;
+        void emitType(const HIRType* ty) override;
 
         // TODO: Move this to a more common location
-        MetadataType metadataType(const HIRTypeData* ty) const;
+        MetadataType metadataType(const HIRType* ty) const;
 
         void emitStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override;
 
@@ -81,7 +81,7 @@ namespace {
 
         void emitGlobalAsm(const HIRGlobalAssembly&) override;
 
-        const HIRTypeData* monomorphiseFcnReturn(const HIRFunction& item, const TransParams& params);
+        const HIRType* monomorphiseFcnReturn(const HIRFunction& item, const TransParams& params);
     };
 
     template <typename T>
@@ -176,7 +176,7 @@ auto CodeGeneratorMonoMir::finalise(const TransOptions& opt, CodegenOutput outTy
     }
 }
 
-auto CodeGeneratorMonoMir::emitType(const HIRTypeData* ty) -> void {
+auto CodeGeneratorMonoMir::emitType(const HIRType* ty) -> void {
     MIRFunction emptyFcn;
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
         os << StringView("type ") << ty;
@@ -208,7 +208,7 @@ auto CodeGeneratorMonoMir::emitType(const HIRTypeData* ty) -> void {
     mirRes = nullptr;
 }
 
-auto CodeGeneratorMonoMir::metadataType(const HIRTypeData* ty) const -> MetadataType {
+auto CodeGeneratorMonoMir::metadataType(const HIRType* ty) const -> MetadataType {
     if ((ty->is_Primitive() && ty->as_Primitive() == HIRCoreType::Str) || ty->is_Slice()) {
         return MetadataType::Slice;
     } else if (ty->is_TraitObject()) {
@@ -281,10 +281,10 @@ auto CodeGeneratorMonoMir::emitStruct(const Span& sp, const HIRGenericPath& p, c
     auto dropGluePath = HIRPath(crate.types.path(p.clone(), &item), "#drop_glue");
 
     TRACE_FUNCTION_F(p);
-    const HIRTypeData* ty = crate.types.path(p.clone(), &item);
+    const HIRType* ty = crate.types.path(p.clone(), &item);
 
     struct H {
-        static const HIRTypeData* getMetadataType(const Span& sp, const ::StaticTraitResolve& resolve, const TypeRepr& r) {
+        static const HIRType* getMetadataType(const Span& sp, const ::StaticTraitResolve& resolve, const TypeRepr& r) {
             ASSERT_BUG(sp, r.fields.size() > 0, StringView(""));
             auto& t = r.fields.back().ty;
             if (t->is_Primitive() && t->as_Primitive() == HIRCoreType::Str) {
@@ -331,7 +331,7 @@ auto CodeGeneratorMonoMir::emitStruct(const Span& sp, const HIRGenericPath& p, c
 
 auto CodeGeneratorMonoMir::emitConstructorEnum(const Span& sp, const HIRGenericPath& varPath, const HIREnum& item, size_t varIdx) -> void {
     TRACE_FUNCTION_F(varPath);
-    const HIRTypeData* tmp;
+    const HIRType* tmp;
     MonomorphStatePtr ms(crate.types, nullptr, &varPath.params, nullptr);
     auto monomorph = [&](const auto& x) {
         return resolve_.monomorphExpandOpt(sp, x, ms);
@@ -367,7 +367,7 @@ auto CodeGeneratorMonoMir::emitConstructorEnum(const Span& sp, const HIRGenericP
 
 auto CodeGeneratorMonoMir::emitConstructorStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) -> void {
     TRACE_FUNCTION_F(p);
-    const HIRTypeData* tmp;
+    const HIRType* tmp;
     MonomorphStatePtr ms(crate.types, nullptr, &p.params, nullptr);
     auto monomorph = [&](const auto& x) {
         return resolve_.monomorphExpandOpt(sp, x, ms);
@@ -405,7 +405,7 @@ auto CodeGeneratorMonoMir::emitUnion(const Span& sp, const HIRGenericPath& p, co
     mirRes = &topMirRes;
 
     TRACE_FUNCTION_F(p);
-    const HIRTypeData* ty = crate.types.path(p.clone(), &item);
+    const HIRType* ty = crate.types.path(p.clone(), &item);
 
     bool hasDropGlue = resolve_.typeNeedsDropGlue(sp, ty);
     auto dropGluePath = HIRPath(ty, "#drop_glue");
@@ -431,7 +431,7 @@ auto CodeGeneratorMonoMir::emitEnum(const Span& sp, const HIRGenericPath& p, con
     MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
     mirRes = &topMirRes;
 
-    const HIRTypeData* ty = crate.types.path(p.clone(), &item);
+    const HIRType* ty = crate.types.path(p.clone(), &item);
 
     bool hasDropGlue = resolve_.typeNeedsDropGlue(sp, ty);
     auto dropGluePath = HIRPath(ty, "#drop_glue");
@@ -578,7 +578,7 @@ auto CodeGeneratorMonoMir::emitFunctionExt(const HIRPath& p, const HIRFunction& 
     mirRes = &topMirRes;
 
     if (item.linkage.name != "") {
-        const HIRTypeData* retTypeTmp;
+        const HIRType* retTypeTmp;
         const auto& retType = monomorphiseFcnReturn(item, params);
 
         of << StringView("/* ") << p << StringView(" */\n");
@@ -602,7 +602,7 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
         argTypes.push_back(std::make_pair(HIRPattern{}, params.monomorph(resolve_, ent.second)));
     }
 
-    const HIRTypeData* retTypeTmp;
+    const HIRType* retTypeTmp;
     const auto& retType = monomorphiseFcnReturn(item, params);
 
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
@@ -1145,14 +1145,14 @@ auto CodeGeneratorMonoMir::emitGlobalAsm(const HIRGlobalAssembly&) -> void {
     TODO(Span(), StringView("global_asm! codegen"));
 }
 
-auto CodeGeneratorMonoMir::monomorphiseFcnReturn(const HIRFunction& item, const TransParams& params) -> const HIRTypeData* {
+auto CodeGeneratorMonoMir::monomorphiseFcnReturn(const HIRFunction& item, const TransParams& params) -> const HIRType* {
     bool hasErased = visitTyWith(item.returnType, [&](const auto& x) {
         return x->is_ErasedType();
     });
 
     if (hasErased || monomorphiseTypeNeeded(item.returnType)) {
         if (hasErased) {
-            auto result = cloneTyWith(crate.types, sp, item.returnType, [&](const auto* x) -> const HIRTypeData* {
+            auto result = cloneTyWith(crate.types, sp, item.returnType, [&](const auto* x) -> const HIRType* {
                 if (const auto* te = x->opt_ErasedType()) {
                     if (const auto* e = te->inner.opt_Fcn()) {
                         return item.code.erasedTypes[e->index];
@@ -1189,58 +1189,58 @@ void stl::output<ZeroCopyOutput, Fmt<HIRSimplePath>>(ZeroCopyOutput& os, Fmt<HIR
 }
 
 template <>
-void stl::output<ZeroCopyOutput, Fmt<const HIRTypeData*>>(ZeroCopyOutput& os, Fmt<const HIRTypeData*> x) {
+void stl::output<ZeroCopyOutput, Fmt<const HIRType*>>(ZeroCopyOutput& os, Fmt<const HIRType*> x) {
     {
         auto& tuMatch = (*x.e);
         switch (tuMatch.tag()) {
-            case HIRTypeData::TAG_Infer: {
+            case HIRType::TAG_Infer: {
                 BUG(Span(), StringView("") << x.e);
                 break;
             }
-            case HIRTypeData::TAG_Diverge: {
+            case HIRType::TAG_Diverge: {
                 os << StringView("!");
                 break;
             }
-            case HIRTypeData::TAG_Primitive: {
+            case HIRType::TAG_Primitive: {
                 auto& te = tuMatch.as_Primitive();
                 os << te;
                 break;
             }
-            case HIRTypeData::TAG_Path: {
+            case HIRType::TAG_Path: {
                 auto& te = tuMatch.as_Path();
                 os << TransMangle(x.wb, te.path);
                 break;
             }
-            case HIRTypeData::TAG_Generic: {
+            case HIRType::TAG_Generic: {
                 BUG(Span(), StringView("") << x.e);
                 break;
             }
-            case HIRTypeData::TAG_TraitObject: {
+            case HIRType::TAG_TraitObject: {
                 auto& te = tuMatch.as_TraitObject();
                 auto path = te.trait.path.clone();
                 os << StringView("dyn ") << TransMangle(x.wb, path);
                 break;
             }
-            case HIRTypeData::TAG_ErasedType: {
+            case HIRType::TAG_ErasedType: {
                 BUG(Span(), StringView("") << x.e);
                 break;
             }
-            case HIRTypeData::TAG_Array: {
+            case HIRType::TAG_Array: {
                 auto& te = tuMatch.as_Array();
                 os << StringView("[") << fmt(x.wb, te.inner) << StringView("; ") << te.size << StringView("]");
                 break;
             }
-            case HIRTypeData::TAG_Slice: {
+            case HIRType::TAG_Slice: {
                 auto& te = tuMatch.as_Slice();
                 os << StringView("[") << fmt(x.wb, te.inner) << StringView("]");
                 break;
             }
-            case HIRTypeData::TAG_Pattern: {
+            case HIRType::TAG_Pattern: {
                 auto& te = tuMatch.as_Pattern();
                 os << fmt(x.wb, te.inner);
                 break;
             }
-            case HIRTypeData::TAG_Tuple: {
+            case HIRType::TAG_Tuple: {
                 auto& te = tuMatch.as_Tuple();
                 if (te.empty()) {
                     os << StringView("()");
@@ -1249,7 +1249,7 @@ void stl::output<ZeroCopyOutput, Fmt<const HIRTypeData*>>(ZeroCopyOutput& os, Fm
                 }
                 break;
             }
-            case HIRTypeData::TAG_Borrow: {
+            case HIRType::TAG_Borrow: {
                 auto& te = tuMatch.as_Borrow();
                 switch (te.type) {
                     case HIRBorrowType::Shared:
@@ -1265,7 +1265,7 @@ void stl::output<ZeroCopyOutput, Fmt<const HIRTypeData*>>(ZeroCopyOutput& os, Fm
                 os << fmt(x.wb, te.inner);
                 break;
             }
-            case HIRTypeData::TAG_Pointer: {
+            case HIRType::TAG_Pointer: {
                 auto& te = tuMatch.as_Pointer();
                 switch (te.type) {
                     case HIRBorrowType::Shared:
@@ -1281,12 +1281,12 @@ void stl::output<ZeroCopyOutput, Fmt<const HIRTypeData*>>(ZeroCopyOutput& os, Fm
                 os << fmt(x.wb, te.inner);
                 break;
             }
-            case HIRTypeData::TAG_NamedFunction: {
+            case HIRType::TAG_NamedFunction: {
                 auto& te = tuMatch.as_NamedFunction();
                 os << StringView("fn ") << TransMangle(x.wb, te.path);
                 break;
             }
-            case HIRTypeData::TAG_Function: {
+            case HIRType::TAG_Function: {
                 auto& e = tuMatch.as_Function();
                 if (e.isUnsafe) {
                     os << StringView("unsafe ");
@@ -1301,7 +1301,7 @@ void stl::output<ZeroCopyOutput, Fmt<const HIRTypeData*>>(ZeroCopyOutput& os, Fm
                 os << StringView(") -> ") << fmt(x.wb, e.rettype);
                 break;
             } break;
-            case HIRTypeData::TAG_NodeType:
+            case HIRType::TAG_NodeType:
                 BUG(Span(), StringView("Unexpected type in trans: ") << x.e);
                 break;
         }

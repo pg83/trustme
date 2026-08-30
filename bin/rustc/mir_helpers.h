@@ -11,7 +11,7 @@
 #include <type_traits>
 
 class HIRCrate;
-class HIRTypeData;
+class HIRType;
 struct HIRPattern;
 struct HIRSimplePath;
 
@@ -71,7 +71,7 @@ struct MIRPathCb final: MIRPathCallback {
 
 class MIRTypeResolve {
 public:
-    typedef std::vector<std::pair<HIRPattern, const HIRTypeData*>> argsT;
+    typedef std::vector<std::pair<HIRPattern, const HIRType*>> argsT;
     using TypeNameString = std::string;
 
 private:
@@ -86,12 +86,12 @@ private:
     const MIRPathCallback& path_;
 
 public:
-    const HIRTypeData* retType;
+    const HIRType* retType;
     const argsT& args;
     const MIRFunction& fcn;
 
-    const HIRTypeData* monomorphedRettype;
-    const stl::Vector<const HIRTypeData*>* monomorphedLocals;
+    const HIRType* monomorphedRettype;
+    const stl::Vector<const HIRType*>* monomorphedLocals;
 
 private:
     const HIRSimplePath* langBox_ = nullptr;
@@ -102,10 +102,10 @@ private:
     TypeNameString typeNameForSimplePath(const HIRSimplePath& path) const;
     TypeNameString typeNameForPathArgs(const HIRPathParams& params, const HIRTraitPath::assocListT* typeBounds, bool genericPlaceholders) const;
     TypeNameString typeNameForItemPath(const HIRPath& path, bool genericPlaceholders) const;
-    TypeNameString intrinsicTypeNameImpl(const HIRTypeData* ty, bool genericPlaceholders) const;
+    TypeNameString intrinsicTypeNameImpl(const HIRType* ty, bool genericPlaceholders) const;
 
 public:
-    MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, const MIRPathCallback& path, const HIRTypeData* retType, const argsT& args, const MIRFunction& fcn);
+    MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, const MIRPathCallback& path, const HIRType* retType, const argsT& args, const MIRFunction& fcn);
 
     void setCurStmt(const MIRBasicBlock& bb, const MIRStatement& stmt);
 
@@ -141,28 +141,28 @@ public:
 
     const MIRBasicBlock& getBlock(MIRBasicBlockId id) const;
 
-    const HIRTypeData* getStaticType(const HIRPath& path) const;
-    const HIRTypeData* getLvalueType(const MIRLValue& val, unsigned wrapperSkipCount = 0) const;
+    const HIRType* getStaticType(const HIRPath& path) const;
+    const HIRType* getLvalueType(const MIRLValue& val, unsigned wrapperSkipCount = 0) const;
 
-    const HIRTypeData* getLvalueType(const MIRLValue::CRef& val) const {
+    const HIRType* getLvalueType(const MIRLValue::CRef& val) const {
         return getLvalueType(val.lv(), val.lv().wrappers.size() - val.wrapperCount());
     }
 
-    const HIRTypeData* getLvalueType(const MIRLValue::MRef& val) const {
+    const HIRType* getLvalueType(const MIRLValue::MRef& val) const {
         return getLvalueType(val.lv(), val.lv().wrappers.size() - val.wrapperCount());
     }
 
-    const HIRTypeData* getUnwrappedType(const MIRLValue::Wrapper& w, const HIRTypeData* ty) const;
-    const HIRTypeData* getParamType(const MIRParam& val) const;
+    const HIRType* getUnwrappedType(const MIRLValue::Wrapper& w, const HIRType* ty) const;
+    const HIRType* getParamType(const MIRParam& val) const;
 
-    const HIRTypeData* getConstType(const MIRConstant& c) const;
+    const HIRType* getConstType(const MIRConstant& c) const;
 
     bool lvalueIsCopy(const MIRLValue& val) const;
-    const HIRTypeData* isTypeOwnedBox(const HIRTypeData* ty) const;
+    const HIRType* isTypeOwnedBox(const HIRType* ty) const;
 
-    size_t intrinsicOffsetOf(const HIRTypeData* ty, const std::vector<MIRParam>& params) const;
+    size_t intrinsicOffsetOf(const HIRType* ty, const std::vector<MIRParam>& params) const;
 
-    TypeNameString intrinsicTypeName(const HIRTypeData* ty) const;
+    TypeNameString intrinsicTypeName(const HIRType* ty) const;
 };
 
 class MIRValueLifetime {
@@ -278,7 +278,7 @@ public:
 template <template <typename> class Dec>
 class MIRVisitorBase {
 public:
-    virtual const HIRTypeData* visitType(const HIRTypeData* type) {
+    virtual const HIRType* visitType(const HIRType* type) {
         return type;
     }
 

@@ -30,12 +30,12 @@ HIRItemPath::HIRItemPath(const HIRPath& p)
 {
 }
 
-HIRItemPath::HIRItemPath(const HIRTypeData* type)
+HIRItemPath::HIRItemPath(const HIRType* type)
     : ty(type)
 {
 }
 
-HIRItemPath::HIRItemPath(const HIRTypeData* type, const HIRSimplePath& path, const HIRPathParams& params)
+HIRItemPath::HIRItemPath(const HIRType* type, const HIRSimplePath& path, const HIRPathParams& params)
     : ty(type)
     , trait(&path)
     , traitParams(&params)

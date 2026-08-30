@@ -11,19 +11,19 @@ generate(
     variants=[
         v("Generic", "HIRGenericPath", copy=False),
         v("UfcsInherent", fields=[
-            ("const HIRTypeData*", "type"),
+            ("const HIRType*", "type"),
             ("RcString", "item"),
             ("HIRPathParams", "params"),
             ("HIRPathParams", "implParams"),
         ], copy=False),
         v("UfcsKnown", fields=[
-            ("const HIRTypeData*", "type"),
+            ("const HIRType*", "type"),
             ("HIRGenericPath", "trait"),
             ("RcString", "item"),
             ("HIRPathParams", "params"),
         ], copy=False),
         v("UfcsUnknown", fields=[
-            ("const HIRTypeData*", "type"),
+            ("const HIRType*", "type"),
             ("RcString", "item"),
             ("HIRPathParams", "params"),
         ], copy=False),

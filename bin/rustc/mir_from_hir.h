@@ -12,7 +12,7 @@
 class MirBuilder;
 
 void HIRGenerateMIR(const WireBoard& wb, HIRCrate& crate);
-void HIRGenerateMIRExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, const HIRFunction::argsT& args, const HIRTypeData* resTy);
+void HIRGenerateMIRExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, const HIRFunction::argsT& args, const HIRType* resTy);
 
 struct MIRDropEmitter {
     virtual bool emitDeepDrop(const Span& sp, const MIRLValue& value, unsigned int flag) = 0;
@@ -122,7 +122,7 @@ class MirBuilder {
 
     const Span& rootSpan;
     const StaticTraitResolve& resolve_;
-    const HIRTypeData* retTy;
+    const HIRType* retTy;
     const HIRFunction::argsT& args_;
     MIRFunction& output;
 
@@ -172,7 +172,7 @@ class MirBuilder {
     MIRDropEmitter* dropEmitter = nullptr;
 
 public:
-    MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* retTy, const HIRFunction::argsT& args, MIRFunction& output);
+    MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRType* retTy, const HIRFunction::argsT& args, MIRFunction& output);
 
     void finalCleanup();
 
@@ -188,7 +188,7 @@ public:
         return resolve_;
     }
 
-    const HIRTypeData* isTypeOwnedBox(const HIRTypeData* ty) const;
+    const HIRType* isTypeOwnedBox(const HIRType* ty) const;
 
     class SavedAliases {
         friend class MirBuilder;
@@ -206,10 +206,10 @@ public:
 
     MIRLValue getVariable(const Span& sp, unsigned idx) const;
 
-    MIRLValue newTemporary(const HIRTypeData* ty);
+    MIRLValue newTemporary(const HIRType* ty);
 
     void emitArrayElementDropLoop(const Span& sp, const MIRLValue& arrLv, size_t start, size_t end, unsigned int dropFlag);
-    MIRLValue lvalueOrTemp(const Span& sp, const HIRTypeData* ty, MIRRValue val);
+    MIRLValue lvalueOrTemp(const Span& sp, const HIRType* ty, MIRRValue val);
 
     size_t localCount() const {
         return output.locals.length();
@@ -224,9 +224,9 @@ public:
 
     MIRLValue getResultUnwrapLvalue(const Span& sp);
 
-    MIRLValue getResultInLvalue(const Span& sp, const HIRTypeData* ty, bool allowMissingValue = false);
+    MIRLValue getResultInLvalue(const Span& sp, const HIRType* ty, bool allowMissingValue = false);
 
-    MIRParam getResultInParam(const Span& sp, const HIRTypeData* ty, bool allowMissingValue = false);
+    MIRParam getResultInParam(const Span& sp, const HIRType* ty, bool allowMissingValue = false);
 
     MIRLValue getIfCond() const {
         return ifCondLval.clone();
@@ -389,7 +389,7 @@ private:
     void completeScope(ScopeDef& sd);
 
 public:
-    const HIRTypeData* valType(const Span& sp, const MIRLValue& val, const MIRLValue::Wrapper* stopWrapper = nullptr) const;
+    const HIRType* valType(const Span& sp, const MIRLValue& val, const MIRLValue::Wrapper* stopWrapper = nullptr) const;
     bool lvalueIsCopy(const Span& sp, const MIRLValue& lv) const;
 
     MIRLValue getPtrToDst(const Span& sp, const MIRLValue& lv) const;
@@ -443,9 +443,9 @@ public:
     virtual void registerPatternVariables(const Span& sp, const HIRPattern& pat, PatternDropOrder order) = 0;
     virtual void scheduleRegisteredPatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) = 0;
 
-    virtual void destructureFromList(const Span& sp, const HIRTypeData* ty, MIRLValue lval, const std::vector<PatternBinding>& bindings, bool updateStates = true) = 0;
-    virtual MIRLValue getValueForBindingPath(const Span& sp, const HIRTypeData* outerTy, const MIRLValue& outerLval, const PatternBinding& b) = 0;
-    virtual const HIRTypeData* getBindingType(const Span& sp, unsigned index) const = 0;
+    virtual void destructureFromList(const Span& sp, const HIRType* ty, MIRLValue lval, const std::vector<PatternBinding>& bindings, bool updateStates = true) = 0;
+    virtual MIRLValue getValueForBindingPath(const Span& sp, const HIRType* outerTy, const MIRLValue& outerLval, const PatternBinding& b) = 0;
+    virtual const HIRType* getBindingType(const Span& sp, unsigned index) const = 0;
 
     virtual SaveAndEditVal<const ScopeHandle*> disableBorrowExtension() = 0;
 };
@@ -453,10 +453,10 @@ public:
 void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const stl::Vector<unsigned>& letElseInitializerTemps);
 void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRPattern& pat, MIRLValue val, const HIRExprNode* elseNode);
 
-const HIRTypeData* MIRLowerHIRGetTypeValueForPath(
+const HIRType* MIRLowerHIRGetTypeValueForPath(
     const Span& sp,
     MirBuilder& builder,
-    const HIRTypeData* topTy,
+    const HIRType* topTy,
     const MIRLValue& topVal,
     const fieldPathT& fieldPath,
     MIRLValue& outVal

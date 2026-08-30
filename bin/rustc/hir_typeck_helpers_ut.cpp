@@ -209,7 +209,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto b = table.newIvar();
         Unifier unifier(sp, table);
 
-        Vector<const HIRTypeData*> pairTypes(2);
+        Vector<const HIRType*> pairTypes(2);
         pairTypes.pushBack(types.primitive(HIRCoreType::I32));
         pairTypes.pushBack(types.infer(b));
         const auto pairTy = types.tuple(std::move(pairTypes));
@@ -229,11 +229,11 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto a = table.newIvar();
         Unifier unifier(sp, table);
 
-        Vector<const HIRTypeData*> leftTypes(2);
+        Vector<const HIRType*> leftTypes(2);
         leftTypes.pushBack(types.infer(a));
         leftTypes.pushBack(types.primitive(HIRCoreType::I32));
         const auto leftTy = types.tuple(std::move(leftTypes));
-        Vector<const HIRTypeData*> rightTypes(2);
+        Vector<const HIRType*> rightTypes(2);
         rightTypes.pushBack(types.primitive(HIRCoreType::U8));
         rightTypes.pushBack(types.primitive(HIRCoreType::U16));
         const auto rightTy = types.tuple(std::move(rightTypes));
@@ -251,7 +251,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto a = table.newIvar();
         Unifier unifier(sp, table);
 
-        Vector<const HIRTypeData*> recursiveTypes(1);
+        Vector<const HIRType*> recursiveTypes(1);
         recursiveTypes.pushBack(types.infer(a));
         const auto recursive = types.tuple(std::move(recursiveTypes));
         STD_INSIST(unifier.unify(types.infer(a), recursive) == Unifier::Outcome::Mismatch);
@@ -404,7 +404,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         HMTypeInferrence table(types);
         Span sp;
 
-        const auto projection = [&](const HIRTypeData* input) {
+        const auto projection = [&](const HIRType* input) {
             HIRGenericPath trait;
             trait.params.types.push_back(input);
             return types.path(HIRPath(types.primitive(HIRCoreType::U8), ::std::move(trait), RcString::newInterned("Output")), HIRTypePathBinding::make_Opaque({}));

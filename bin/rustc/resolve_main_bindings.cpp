@@ -2690,7 +2690,7 @@ namespace {
         UNREACHABLE();
     }
 
-    ASTType* HIRTypeToAST(Context& context, const Span& span, const HIRTypeData* type);
+    ASTType* HIRTypeToAST(Context& context, const Span& span, const HIRType* type);
 
     ASTPathParams HIRPathParamsToAST(Context& context, const Span& span, const HIRPathParams& params) {
         ASTPathParams rv;
@@ -2735,29 +2735,29 @@ namespace {
         UNREACHABLE();
     }
 
-    ASTType* HIRTypeToAST(Context& context, const Span& span, const HIRTypeData* type) {
+    ASTType* HIRTypeToAST(Context& context, const Span& span, const HIRType* type) {
         auto& pool = context.typePool();
         switch ((*type).tag()) {
-            case HIRTypeData::TAG_Infer: {
+            case HIRType::TAG_Infer: {
                 return mkType(pool, span);
             }
-            case HIRTypeData::TAG_Diverge: {
+            case HIRType::TAG_Diverge: {
                 return mkType(pool, span, TypeData::make_Bang({}));
             }
-            case HIRTypeData::TAG_Primitive: {
+            case HIRType::TAG_Primitive: {
                 auto& e = (*type).as_Primitive();
                 return mkType(pool, span, HIRCoreTypeToAST(e));
             }
-            case HIRTypeData::TAG_Path: {
+            case HIRType::TAG_Path: {
                 auto& e = (*type).as_Path();
                 return mkType(pool, span, HIRPathToAST(context, span, e.path));
             }
-            case HIRTypeData::TAG_Generic: {
+            case HIRType::TAG_Generic: {
                 auto& e = (*type).as_Generic();
                 const auto name = e.binding != GENERICSelf && e.group() == GENERICItem ? RcString::newInterned(FMT(StringView("#hir-item-") << e.idx())) : e.name;
                 return mkType(pool, span, name, e.binding);
             }
-            case HIRTypeData::TAG_TraitObject: {
+            case HIRType::TAG_TraitObject: {
                 auto& e = (*type).as_TraitObject();
                 std::vector<TypeTraitPath> traits;
                 traits.push_back(TypeTraitPath({}, HIRTraitPathToAST(context, span, e.trait), HIRConstnessToAST(e.trait.constness)));
@@ -2766,23 +2766,23 @@ namespace {
                 }
                 return mkType(pool, span, mv$(traits), {});
             }
-            case HIRTypeData::TAG_ErasedType: {
+            case HIRType::TAG_ErasedType: {
                 BUG(span, StringView("Erased type in an external delegation signature"));
                 break;
             }
-            case HIRTypeData::TAG_Array: {
+            case HIRType::TAG_Array: {
                 BUG(span, StringView("Array in an external delegation signature"));
                 break;
             }
-            case HIRTypeData::TAG_Slice: {
+            case HIRType::TAG_Slice: {
                 auto& e = (*type).as_Slice();
                 return mkType(pool, ASTTypeTags::UnsizedArray(), span, HIRTypeToAST(context, span, e.inner));
             }
-            case HIRTypeData::TAG_Pattern: {
+            case HIRType::TAG_Pattern: {
                 BUG(span, StringView("Pattern type in an external delegation signature"));
                 break;
             }
-            case HIRTypeData::TAG_Tuple: {
+            case HIRType::TAG_Tuple: {
                 auto& e = (*type).as_Tuple();
                 Vector<ASTType*> types;
                 for (const auto& inner : e) {
@@ -2790,19 +2790,19 @@ namespace {
                 }
                 return mkType(pool, ASTTypeTags::Tuple(), span, mv$(types));
             }
-            case HIRTypeData::TAG_Borrow: {
+            case HIRType::TAG_Borrow: {
                 auto& e = (*type).as_Borrow();
                 return mkType(pool, ASTTypeTags::Reference(), span, ASTLifetimeRef(), e.type == HIRBorrowType::Unique, HIRTypeToAST(context, span, e.inner));
             }
-            case HIRTypeData::TAG_Pointer: {
+            case HIRType::TAG_Pointer: {
                 auto& e = (*type).as_Pointer();
                 return mkType(pool, ASTTypeTags::Pointer(), span, e.type == HIRBorrowType::Unique, HIRTypeToAST(context, span, e.inner));
             }
-            case HIRTypeData::TAG_NamedFunction: {
+            case HIRType::TAG_NamedFunction: {
                 BUG(span, StringView("Named function type in an external delegation signature"));
                 break;
             }
-            case HIRTypeData::TAG_Function: {
+            case HIRType::TAG_Function: {
                 auto& e = (*type).as_Function();
                 Vector<ASTType*> args;
                 for (const auto& arg : e.argTypes) {
@@ -2810,7 +2810,7 @@ namespace {
                 }
                 return mkType(pool, ASTTypeTags::Function(), span, {}, e.isUnsafe, e.abi.c_str(), mv$(args), e.isVariadic, HIRTypeToAST(context, span, e.rettype));
             }
-            case HIRTypeData::TAG_NodeType: {
+            case HIRType::TAG_NodeType: {
                 BUG(span, StringView("Node type in an external delegation signature"));
                 break;
             }

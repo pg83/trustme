@@ -5,7 +5,7 @@ struct WireBoard;
 #include "hir_typeck_static.h"
 
 struct MIRExprCallback {
-    virtual void visit(const StaticTraitResolve& resolve, const HIRItemPath& ip, HIRExprPtr& expr, const HIRFunction::argsT& args, const HIRTypeData* retType) = 0;
+    virtual void visit(const StaticTraitResolve& resolve, const HIRItemPath& ip, HIRExprPtr& expr, const HIRFunction::argsT& args, const HIRType* retType) = 0;
 };
 
 template <typename F>
@@ -17,7 +17,7 @@ struct MIRExprCb final: MIRExprCallback {
     {
     }
 
-    void visit(const StaticTraitResolve& resolve, const HIRItemPath& ip, HIRExprPtr& expr, const HIRFunction::argsT& args, const HIRTypeData* retType) override {
+    void visit(const StaticTraitResolve& resolve, const HIRItemPath& ip, HIRExprPtr& expr, const HIRFunction::argsT& args, const HIRType* retType) override {
         f(resolve, ip, expr, args, retType);
     }
 };
@@ -32,7 +32,7 @@ public:
 
     void visitExpr(HIRExprPtr& exp) override;
 
-    [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
+    [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
     void visitConstgeneric(HIRConstGeneric& value) override;
 
     void visitFunction(HIRItemPath p, HIRFunction& item) override;

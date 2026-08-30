@@ -153,9 +153,9 @@ auto makeCallable(F f) {
     return T<F>(f);
 }
 
-class HIRTypeData;
+class HIRType;
 
-Ordering ord(const HIRTypeData* l, const HIRTypeData* r);
+Ordering ord(const HIRType* l, const HIRType* r);
 
 template <typename T>
 Ordering ord(T* const& l, T* const& r) {

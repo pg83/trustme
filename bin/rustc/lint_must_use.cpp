@@ -53,7 +53,7 @@ namespace {
         return node;
     }
 
-    bool typeIsMustUse(const HIRTypeData* ty) {
+    bool typeIsMustUse(const HIRType* ty) {
         if (const auto* pe = ty->opt_Path()) {
             switch (pe->binding.tag()) {
                 default:
@@ -75,7 +75,7 @@ namespace {
         return false;
     }
 
-    bool traitIsMustUse(const HIRCrate& crate, const HIRTypeData* ty) {
+    bool traitIsMustUse(const HIRCrate& crate, const HIRType* ty) {
         auto check = [&](const HIRSimplePath& path) {
             return crate.getTraitByPath(Span(), path).mustUse;
         };

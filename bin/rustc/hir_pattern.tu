@@ -12,7 +12,7 @@ generate(
         ], copy=False),
         v("Deref", fields=[
             ("HIRPatternDerefKind", "kind"),
-            ("const HIRTypeData*", "targetType"),
+            ("const HIRType*", "targetType"),
             ("std::unique_ptr<HIRPattern>", "sub"),
         ], copy=False),
         v("Ref", fields=[

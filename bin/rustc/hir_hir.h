@@ -105,7 +105,7 @@ public:
 
     HIRLinkage linkage;
     bool isMut;
-    const HIRTypeData* type;
+    const HIRType* type;
 
     size_t explicitAlignment = 0;
 
@@ -122,14 +122,14 @@ public:
 
     mutable std::map<HIRPath, EncodedLiteral> monomorphCache;
 
-    HIRStatic(HIRLinkage linkage, bool isMut, const HIRTypeData* type, HIRExprPtr value);
+    HIRStatic(HIRLinkage linkage, bool isMut, const HIRType* type, HIRExprPtr value);
 };
 
 class HIRConstant {
 public:
     HIRGenericParams params;
 
-    const HIRTypeData* type;
+    const HIRType* type;
     HIRExprPtr value;
 
     EncodedLiteral valueRes;
@@ -146,7 +146,7 @@ public:
 
     HIRConstant();
 
-    HIRConstant(HIRGenericParams params, const HIRTypeData* type, HIRExprPtr value);
+    HIRConstant(HIRGenericParams params, const HIRType* type, HIRExprPtr value);
 };
 
 class HIRFunction {
@@ -162,13 +162,13 @@ public:
         Custom,
     };
 
-    typedef std::vector<std::pair<HIRPattern, const HIRTypeData*>> argsT;
+    typedef std::vector<std::pair<HIRPattern, const HIRType*>> argsT;
 
     bool saveCode = false;
     HIRLinkage linkage;
 
     Receiver receiver = Receiver::Free;
-    std::optional<const HIRTypeData*> receiverType;
+    std::optional<const HIRType*> receiverType;
     RcString abi = RcString::newInterned(ABI_RUST);
     bool unsafe = false;
     bool isConst = false;
@@ -178,9 +178,9 @@ public:
     argsT args;
     bool variadic = false;
     bool hasNamedVariadic = false;
-    const HIRTypeData* returnType;
+    const HIRType* returnType;
 
-    std::optional<const HIRTypeData*> traitReturnType;
+    std::optional<const HIRType*> traitReturnType;
 
     SourceLocation source;
     HIRExprPtr code;
@@ -211,19 +211,19 @@ public:
 
     HIRFunction();
 
-    HIRFunction(Receiver receiver, HIRGenericParams params, argsT args, const HIRTypeData* retTy, HIRExprPtr code);
+    HIRFunction(Receiver receiver, HIRGenericParams params, argsT args, const HIRType* retTy, HIRExprPtr code);
 
     size_t fixedArgCount() const {
         BUG_ASSERT(!hasNamedVariadic || (variadic && !args.empty()));
         return args.size() - hasNamedVariadic;
     }
 
-    const HIRTypeData* makePtrTy(const Span& sp, const Monomorphiser& ms) const;
+    const HIRType* makePtrTy(const Span& sp, const Monomorphiser& ms) const;
 };
 
 struct HIRTypeAlias {
     HIRGenericParams params;
-    const HIRTypeData* type;
+    const HIRType* type;
 };
 
 struct HIRTraitAlias {
@@ -231,19 +231,19 @@ struct HIRTraitAlias {
     std::vector<HIRTraitPath> traits;
 };
 
-typedef std::vector<HIRVisEnt<const HIRTypeData*>> tTupleFields;
+typedef std::vector<HIRVisEnt<const HIRType*>> tTupleFields;
 
 struct HIRStructField {
     RcString name;
     HIRPublicity vis;
-    const HIRTypeData* ty;
+    const HIRType* ty;
 
     std::unique_ptr<HIRGenericPath> defaultValue;
 };
 
 typedef std::vector<HIRStructField> tStructFields;
 
-const HIRTypeData* fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, const HIRTypeData* retTy, const tTupleFields& types);
+const HIRType* fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, const HIRType* retTy, const tTupleFields& types);
 
 struct HIRTraitMarkings {
     bool hasADeref = false;
@@ -255,7 +255,7 @@ struct HIRTraitMarkings {
     bool isCopy = false;
 
     struct AutoMarking {
-        stl::Vector<const HIRTypeData*> conditions;
+        stl::Vector<const HIRType*> conditions;
 
         bool isImpled;
     };
@@ -309,7 +309,7 @@ public:
 struct HIREnumDataVariant {
     RcString name;
     bool isStruct;
-    const HIRTypeData* type;
+    const HIRType* type;
 
     HIRExprPtr discriminantExpr;
 
@@ -444,9 +444,9 @@ struct HIRAssociatedType {
     bool isSized;
     std::vector<HIRTraitPath> traitBounds;
     bool hasDefault;
-    const HIRTypeData* defaultValue;
+    const HIRType* defaultValue;
 
-    HIRAssociatedType(HIRGenericParams generics, bool isSized, std::vector<HIRTraitPath> traitBounds, const HIRTypeData* defaultType);
+    HIRAssociatedType(HIRGenericParams generics, bool isSized, std::vector<HIRTraitPath> traitBounds, const HIRType* defaultType);
 };
 
 #include "hir_hir_trait_value_tu.h"
@@ -483,7 +483,7 @@ public:
 
     HIRTrait(HIRGenericParams gps, std::vector<HIRTraitPath> parents);
 
-    const HIRTypeData* getVtableType(const Span& sp, const HIRCrate& crate, const HIRTypeData::Data_TraitObject& te) const;
+    const HIRType* getVtableType(const Span& sp, const HIRCrate& crate, const HIRType::Data_TraitObject& te) const;
     unsigned getVtableValueIndex(const HIRGenericPath& traitPath, const RcString& name) const;
     unsigned getVtableParentIndex(HIRTypeInterner& types, const Span& sp, const HIRPathParams& thisParams, const HIRGenericPath& traitPath) const;
     std::pair<const HIRAssociatedType*, const HIRPathParams*> getAtyDef(const RcString& name) const;
@@ -558,7 +558,7 @@ public:
     };
 
     HIRGenericParams params;
-    const HIRTypeData* type;
+    const HIRType* type;
 
     std::map<RcString, VisImplEnt<HIRFunction>> methods;
     std::map<RcString, VisImplEnt<HIRConstant>> constants;
@@ -566,13 +566,13 @@ public:
 
     HIRSimplePath srcModule;
 
-    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
+    bool matchesType(const HIRType* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 
-    bool matchesType(const HIRTypeData* tr) const {
+    bool matchesType(const HIRType* tr) const {
         return matchesType(tr, HIRResolvePlaceholdersNop());
     }
 
-    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes) const;
+    bool matchesType(const HIRType* tr, tCbResolveType tyRes) const;
 };
 
 class HIRTraitImpl {
@@ -585,26 +585,26 @@ public:
 
     HIRGenericParams params;
     HIRPathParams traitArgs;
-    const HIRTypeData* type;
+    const HIRType* type;
 
     std::map<RcString, ImplEnt<HIRFunction>> methods;
     std::map<RcString, ImplEnt<HIRConstant>> constants;
     std::map<RcString, ImplEnt<HIRStatic>> statics;
 
-    std::map<RcString, ImplEnt<const HIRTypeData*>> types;
+    std::map<RcString, ImplEnt<const HIRType*>> types;
 
     HIRSimplePath srcModule;
     bool isConst = false;
 
     bool isReservation = false;
 
-    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
+    bool matchesType(const HIRType* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 
-    bool matchesType(const HIRTypeData* tr) const {
+    bool matchesType(const HIRType* tr) const {
         return matchesType(tr, HIRResolvePlaceholdersNop());
     }
 
-    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes) const;
+    bool matchesType(const HIRType* tr, tCbResolveType tyRes) const;
 
     bool moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& x) const;
 };
@@ -614,22 +614,22 @@ public:
     HIRGenericParams params;
     HIRPathParams traitArgs;
     bool isPositive;
-    const HIRTypeData* type;
+    const HIRType* type;
 
     HIRSimplePath srcModule;
 
-    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
+    bool matchesType(const HIRType* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 
-    bool matchesType(const HIRTypeData* tr) const {
+    bool matchesType(const HIRType* tr) const {
         return matchesType(tr, HIRResolvePlaceholdersNop());
     }
 
-    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes) const;
+    bool matchesType(const HIRType* tr, tCbResolveType tyRes) const;
 };
 
 class HIRImplMatcherScratch {
 public:
-    stl::Vector<const HIRTypeData*> buffers[8];
+    stl::Vector<const HIRType*> buffers[8];
     unsigned depth = 0;
 };
 
@@ -752,7 +752,7 @@ public:
         listT nonNamed; // TODO: use a map of HIR::ASTType*::Data::Tag
         listT generic;
 
-        const listT* getListForType(const HIRTypeData* ty) const {
+        const listT* getListForType(const HIRType* ty) const {
             if (const auto* p = ty->getSortPath()) {
                 auto it = named.find(*p);
                 if (it != named.end()) {
@@ -766,7 +766,7 @@ public:
             }
         }
 
-        listT& getListForTypeMut(const HIRTypeData* ty) {
+        listT& getListForTypeMut(const HIRType* ty) {
             if (const auto* p = ty->getSortPath()) {
                 return named[*p];
             } else {
@@ -828,38 +828,38 @@ public:
 
     const HIRConstant& getConstantByPath(const Span& sp, const HIRSimplePath& path) const;
 
-    bool findTraitImplsCb(const HIRSimplePath& path, const HIRTypeData* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) const;
-    bool findAutoTraitImplsCb(const HIRSimplePath& path, const HIRTypeData* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) const;
-    bool findTypeImplsCb(const HIRTypeData* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) const;
+    bool findTraitImplsCb(const HIRSimplePath& path, const HIRType* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) const;
+    bool findAutoTraitImplsCb(const HIRSimplePath& path, const HIRType* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) const;
+    bool findTypeImplsCb(const HIRType* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) const;
 
     template <typename F>
-    bool findTraitImpls(const HIRSimplePath& path, const HIRTypeData* type, tCbResolveType tyRes, F f) const {
+    bool findTraitImpls(const HIRSimplePath& path, const HIRType* type, tCbResolveType tyRes, F f) const {
         HIRTraitImplCb<F> cb(f);
         return findTraitImplsCb(path, type, tyRes, cb);
     }
 
     template <typename F>
-    bool findAutoTraitImpls(const HIRSimplePath& path, const HIRTypeData* type, tCbResolveType tyRes, F f) const {
+    bool findAutoTraitImpls(const HIRSimplePath& path, const HIRType* type, tCbResolveType tyRes, F f) const {
         HIRMarkerImplCb<F> cb(f);
         return findAutoTraitImplsCb(path, type, tyRes, cb);
     }
 
     template <typename F>
-    bool findTypeImpls(const HIRTypeData* type, tCbResolveType tyRes, F f) const {
+    bool findTypeImpls(const HIRType* type, tCbResolveType tyRes, F f) const {
         HIRTypeImplCb<F> cb(f);
         return findTypeImplsCb(type, tyRes, cb);
     }
 
     struct MirResult {
         const MIRFunction* mir;
-        const HIRTypeData* type;
+        const HIRType* type;
     };
 
-    MirResult getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, const HIRTypeData* retTy) const;
+    MirResult getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, const HIRType* retTy) const;
 
     const MIRFunction* getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRFunction& fcn) const;
 
-    MirResult getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRTypeData* expTy) const;
+    MirResult getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRType* expTy) const;
 };
 
 const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIRPattern::PathBinding& binding, bool isTuple);

@@ -12,7 +12,7 @@ class HIRExprPtr;
 struct HIRPattern;
 class HIREnum;
 class HIRConstant;
-class HIRTypeData;
+class HIRType;
 class HIRTypeInterner;
 struct HIRSimplePath;
 struct HIRGenericPath;
@@ -26,8 +26,8 @@ HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& 
 void ConvertHIRExpandAliases(const WireBoard& wb, HIRCrate& crate);
 void ConvertHIRValidateReceivers(const WireBoard& wb, HIRCrate& crate);
 void ConvertHIRExpandAliasesSelf(HIRCrate& crate);
-const HIRTypeData* ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRTypeData* implType, std::vector<std::pair<HIRPattern, const HIRTypeData*>>& args, const HIRTypeData* retTy, HIRExprPtr& expr);
-const HIRTypeData* ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr);
+const HIRType* ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRType* implType, std::vector<std::pair<HIRPattern, const HIRType*>>& args, const HIRType* retTy, HIRExprPtr& expr);
+const HIRType* ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr);
 void ConvertHIRBind(const WireBoard& wb, HIRCrate& crate);
 void ConvertHIRResolveUFCSSortImpls(WireBoard& wb, HIRCrate& crate);
 

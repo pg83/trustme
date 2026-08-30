@@ -82,7 +82,7 @@ namespace {
         HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
         HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds = false, ASTBoundConstness constness = ASTBoundConstness::Never);
         HIRPath LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
-        const HIRTypeData* LowerHIRType(::ASTType* ty);
+        const HIRType* LowerHIRType(::ASTType* ty);
         HIRTypeAlias LowerHIRTypeAlias(const HIRItemPath& p, const ASTTypeAlias& ta);
         tStructFields LowerHIRStructFields(HIRItemPath path, const HIRGenericParams& params, const std::vector<ASTStructItem>& inFields, HIRModule& outMod);
         HIRStruct LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStruct& ent, const ASTAttributeList& attrs, HIRModule& outMod);
@@ -91,7 +91,7 @@ namespace {
         HIRTrait LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttributeList& attrs);
         HIRTraitAlias LowerHIRTraitAlias(const Span& sp, HIRItemPath p, const ASTTraitAlias& f);
         std::vector<HIRSimplePath> LowerHIRDefineOpaque(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs);
-        HIRFunction LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRTypeData* realSelfType);
+        HIRFunction LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRType* realSelfType);
         HIRValueItem LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attrs, const ASTStatic& e, const Span& sp, const RcString& name);
         HIRModule LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std::vector<HIRSimplePath> traits = {});
         void LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate);
@@ -165,7 +165,7 @@ namespace {
     struct TraitObjectLowering {
         AST2HIR& ctx_;
         const Span& span_;
-        HIRTypeData::Data_TraitObject& out;
+        HIRType::Data_TraitObject& out;
         std::unordered_set<const void*> activeAliases;
 
         bool hasPrincipal() const;
@@ -193,7 +193,7 @@ namespace {
 
         void expandHirAlias(HIRTraitPath aliasPath, const HIRTraitAlias& alias);
 
-        TraitObjectLowering(AST2HIR& ctx, const Span& span, HIRTypeData::Data_TraitObject& out);
+        TraitObjectLowering(AST2HIR& ctx, const Span& span, HIRType::Data_TraitObject& out);
 
         void add(const ::TypeTraitPath& bound);
     };
@@ -203,7 +203,7 @@ namespace {
 
         DefaultFieldParamRebase(HIRTypeInterner& types, const HIRPathParams& itemArgs);
 
-        const HIRTypeData* getType(const Span& sp, const HIRGenericRef& generic) const override;
+        const HIRType* getType(const Span& sp, const HIRGenericRef& generic) const override;
 
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
     };
@@ -213,7 +213,7 @@ namespace {
 
         explicit RebaseDefaultFieldParams(const Monomorphiser& monomorph);
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* type) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* type) override;
 
         void visitPathParams(HIRPathParams& params) override;
 
@@ -225,7 +225,7 @@ namespace {
 
         explicit RebaseDefaultFieldExpr(const Monomorphiser& monomorph);
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* type) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* type) override;
 
         void visitPathParams(HIRPathParams& params) override;
 
@@ -240,7 +240,7 @@ namespace {
 
         RpititTypeCollector(HIRTypeInterner& types, F callback);
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
     };
 
     template <typename F>
@@ -250,7 +250,7 @@ namespace {
 
         RpititNestedRewrite(HIRTypeInterner& types, const HIRTypeRefMap<size_t>& indices, F projection);
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
     };
 
     struct IndexVisitor: public HIRVisitor {
@@ -581,8 +581,8 @@ namespace {
         return parentIp->getSimplePath();
     }
 
-    void collectUsedTypeParams(HIRTypeInterner& types, const Span& sp, const HIRTypeData* ty, std::set<unsigned>& used, bool& opaque) {
-        cloneTyWith(types, sp, ty, [&](const HIRTypeData* tpl) -> const HIRTypeData* {
+    void collectUsedTypeParams(HIRTypeInterner& types, const Span& sp, const HIRType* ty, std::set<unsigned>& used, bool& opaque) {
+        cloneTyWith(types, sp, ty, [&](const HIRType* tpl) -> const HIRType* {
             if (const auto* ge = tpl->opt_Generic()) {
                 if (ge->isSelf()) {
                     opaque = true;
@@ -1560,7 +1560,7 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
     UNREACHABLE();
 }
 
-const HIRTypeData* AST2HIR::LowerHIRType(::ASTType* ty) {
+const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
     switch (ty->data.tag()) {
         case TypeData::TAG_None: {
             BUG(ty->span(), StringView("TypeData::None"));
@@ -1632,7 +1632,7 @@ const HIRTypeData* AST2HIR::LowerHIRType(::ASTType* ty) {
         }
         case TypeData::TAG_Tuple: {
             auto& e = ty->data.as_Tuple();
-            HIRTypeData::Data_Tuple v;
+            HIRType::Data_Tuple v;
             for (const auto& st : e.innerTypes) {
                 v.pushBack(LowerHIRType(st));
             }
@@ -1784,7 +1784,7 @@ const HIRTypeData* AST2HIR::LowerHIRType(::ASTType* ty) {
                 }
             };
             lowerPattern(*e.pattern);
-            return crate->types.intern(HIRTypeData::make_Pattern({LowerHIRType(e.inner), mv$(pattern)}));
+            return crate->types.intern(HIRType::make_Pattern({LowerHIRType(e.inner), mv$(pattern)}));
         }
         case TypeData::TAG_Path: {
             auto& e = ty->data.as_Path();
@@ -1805,7 +1805,7 @@ const HIRTypeData* AST2HIR::LowerHIRType(::ASTType* ty) {
         }
         case TypeData::TAG_TraitObject: {
             auto& e = ty->data.as_TraitObject();
-            HIRTypeData::Data_TraitObject v;
+            HIRType::Data_TraitObject v;
             LifetimeIdentity identity;
             v.lifetimeIdentity = identity.make(*ty);
             v.lifetimeIdentityHasFree = identity.hasFree();
@@ -1816,7 +1816,7 @@ const HIRTypeData* AST2HIR::LowerHIRType(::ASTType* ty) {
             }
             std::sort(v.markers.begin(), v.markers.end());
             v.markers.erase(std::unique(v.markers.begin(), v.markers.end()), v.markers.end());
-            return crate->types.intern(HIRTypeData::make_TraitObject(mv$(v)));
+            return crate->types.intern(HIRType::make_TraitObject(mv$(v)));
         }
         case TypeData::TAG_ErasedType: {
             auto& e = ty->data.as_ErasedType();
@@ -1856,11 +1856,11 @@ const HIRTypeData* AST2HIR::LowerHIRType(::ASTType* ty) {
             } else {
                 inner = TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0};
             }
-            return crate->types.intern(HIRTypeData::make_ErasedType({isSized, mv$(traits), mv$(inner), e->use ? LowerHIRPathParams(ty->span(), *e->use, false) : HIRPathParams(), e->use ? HIRTypeDataErasedType::Use::Present : (e->isEdition2024OrLater ? HIRTypeDataErasedType::Use::Omitted2024 : HIRTypeDataErasedType::Use::OmittedOld)}));
+            return crate->types.intern(HIRType::make_ErasedType({isSized, mv$(traits), mv$(inner), e->use ? LowerHIRPathParams(ty->span(), *e->use, false) : HIRPathParams(), e->use ? HIRTypeDataErasedType::Use::Present : (e->isEdition2024OrLater ? HIRTypeDataErasedType::Use::Omitted2024 : HIRTypeDataErasedType::Use::OmittedOld)}));
         }
         case TypeData::TAG_Function: {
             auto& e = ty->data.as_Function();
-            Vector<const HIRTypeData*> args;
+            Vector<const HIRType*> args;
             for (const auto& arg : e.info.argTypes) {
                 args.pushBack(LowerHIRType(arg));
             }
@@ -2015,8 +2015,8 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
     }
     // TODO: Store the scalar valid range information for downstream
     if (ent.markings.scalarValidStartSet || ent.markings.scalarValidEndSet) {
-        const HIRTypeData* ty = nullptr;
-        const HIRTypeData* ty2 = nullptr;
+        const HIRType* ty = nullptr;
+        const HIRType* ty2 = nullptr;
         if (const auto* d = rv.data.opt_Named()) {
             switch (d->size()) {
                 case 2:
@@ -2373,8 +2373,8 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
             case ASTItem::TAG_Function: {
                 auto& i = item.data.as_Function();
                 auto fcn = LowerHIRFunction(itemPath, traitPath.parent(), item.attrs, i, crate->types.self());
-                Vector<const HIRTypeData*> erasedTypes;
-                auto _discard = RpititTypeCollector(crate->types, [&](const HIRTypeData* type) {
+                Vector<const HIRType*> erasedTypes;
+                auto _discard = RpititTypeCollector(crate->types, [&](const HIRType* type) {
                     erasedTypes.pushBack(type);
                 }).visitType(fcn.returnType);
                 (void)_discard;
@@ -2482,13 +2482,13 @@ std::vector<HIRSimplePath> AST2HIR::LowerHIRDefineOpaque(HIRItemPath p, const HI
     return defineOpaque;
 }
 
-HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRTypeData* realSelfType) {
+HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRType* realSelfType) {
     Span sp;
 
     TRACE_FUNCTION_F(p);
     auto defineOpaque = LowerHIRDefineOpaque(p, sourceModule, attrs);
 
-    std::vector<std::pair<HIRPattern, const HIRTypeData*>> args;
+    std::vector<std::pair<HIRPattern, const HIRType*>> args;
     for (size_t i = 0; i < f.args().size(); i++) {
         const auto& arg = f.args()[i];
         if (const auto* value = arg.pat.data().opt_Value()) {
@@ -2499,7 +2499,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     if (!f.code() && !(arg.pat.data().is_Any() || arg.pat.data().is_MaybeBind())) {
             ERROR(arg.pat.span(), E0000, StringView("patterns aren't allowed in functions without bodies"));
         }
-        const HIRTypeData* type;
+        const HIRType* type;
         if (f.hasNamedVariadic() && i + 1 == f.args().size()) {
             const auto& path = crate->getLangItemPath(arg.pat.span(), "va_list");
             const auto& str = crate->getStructByPath(arg.pat.span(), path);
@@ -2519,10 +2519,10 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         struct Ivcr {
             AST2HIR& ctx;
             const Span& sp;
-            const HIRTypeData* realSelfType;
+            const HIRType* realSelfType;
             std::vector<HIRSimplePath> aliasStack;
 
-            Ivcr(AST2HIR& ctx, const Span& sp, const HIRTypeData* realSelfType)
+            Ivcr(AST2HIR& ctx, const Span& sp, const HIRType* realSelfType)
                 : ctx(ctx)
                 , sp(sp)
                 , realSelfType(realSelfType)
@@ -2556,7 +2556,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                 return nullptr;
             }
 
-            const HIRTypeData* validCustomReceiver(const HIRTypeData* ty) {
+            const HIRType* validCustomReceiver(const HIRType* ty) {
                 if (ty == ctx.crate->types.self()) {
                     return ty;
                 } else if (ty == realSelfType) {
@@ -2675,7 +2675,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         } else {
         }
 
-        if (receiver == HIRFunction::Receiver::Free && visitTyWith(argSelfTy, [](const HIRTypeData* ty) {
+        if (receiver == HIRFunction::Receiver::Free && visitTyWith(argSelfTy, [](const HIRType* ty) {
             const auto* path = ty->opt_Path();
             return path && path->path.data.is_UfcsKnown();
         })) {
@@ -2848,7 +2848,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         HIRTraitPath iteratorPath;
         iteratorPath.path.path = crate->getLangItemPath(sp, "async_iterator");
         iteratorPath.typeBounds.insert(std::make_pair(RcString::newInterned("Item"), HIRTraitPath::AtyEqual{iteratorPath.path.clone(), {}, itemType}));
-        rv.returnType = crate->types.intern(HIRTypeData::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(iteratorPath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
+        rv.returnType = crate->types.intern(HIRType::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(iteratorPath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
         return rv;
     }
 
@@ -2866,7 +2866,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         HIRTraitPath iteratorPath;
         iteratorPath.path.path = crate->getLangItemPath(sp, "iterator");
         iteratorPath.typeBounds.insert(std::make_pair(RcString::newInterned("Item"), HIRTraitPath::AtyEqual{iteratorPath.path.clone(), {}, std::move(rv.returnType)}));
-        rv.returnType = crate->types.intern(HIRTypeData::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(iteratorPath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
+        rv.returnType = crate->types.intern(HIRType::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(iteratorPath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
     }
 
     if (f.isAsync()) {
@@ -2878,7 +2878,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         HIRTraitPath futurePath;
         futurePath.path.path = crate->getLangItemPath(sp, "future_trait");
         futurePath.typeBounds.insert(std::make_pair(RcString::newInterned("Output"), HIRTraitPath::AtyEqual{futurePath.path.clone(), {}, std::move(rv.returnType)}));
-        rv.returnType = crate->types.intern(HIRTypeData::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(futurePath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
+        rv.returnType = crate->types.intern(HIRType::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(futurePath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
     }
 
     return rv;
@@ -3314,7 +3314,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 DEBUG(StringView("path = ") << path);
                 std::map<RcString, HIRTraitImpl::ImplEnt<HIRFunction>> methods;
                 std::map<RcString, HIRTraitImpl::ImplEnt<HIRConstant>> constants;
-                std::map<RcString, HIRTraitImpl::ImplEnt<const HIRTypeData*>> types;
+                std::map<RcString, HIRTraitImpl::ImplEnt<const HIRType*>> types;
 
                 for (const auto& item : impl.items()) {
                     HIRItemPath itemPath(path, item.name.c_str());
@@ -3350,7 +3350,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                             HIRItemPath ip2(ip1, name2.c_str());
                             implTraitSource = ImplTraitSource(&ip2, &params, &atyParams);
 
-                            types.insert(std::make_pair(item.name, HIRTraitImpl::ImplEnt<const HIRTypeData*>{item.isSpecialisable, LowerHIRType(e.type())}));
+                            types.insert(std::make_pair(item.name, HIRTraitImpl::ImplEnt<const HIRType*>{item.isSpecialisable, LowerHIRType(e.type())}));
 
                             implTraitSource = ImplTraitSource();
                             break;
@@ -3697,7 +3697,7 @@ HIRExprPtr AST2HIR::LowerHIRExprNode(const ASTExprNode& e) {
             node->visit(*this);
         }
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override {
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override {
             return ty;
         }
     } initialise(crate->types);
@@ -4126,7 +4126,7 @@ auto TraitObjectLowering::expandHirAlias(HIRTraitPath aliasPath, const HIRTraitA
     applyAliasBounds(aliasPath, hadPrincipal);
 }
 
-TraitObjectLowering::TraitObjectLowering(AST2HIR& ctx, const Span& span, HIRTypeData::Data_TraitObject& out)
+TraitObjectLowering::TraitObjectLowering(AST2HIR& ctx, const Span& span, HIRType::Data_TraitObject& out)
     : ctx_(ctx)
     , span_(span)
     , out(out)
@@ -4148,7 +4148,7 @@ DefaultFieldParamRebase::DefaultFieldParamRebase(HIRTypeInterner& types, const H
 {
 }
 
-auto DefaultFieldParamRebase::getType(const Span& sp, const HIRGenericRef& generic) const -> const HIRTypeData* {
+auto DefaultFieldParamRebase::getType(const Span& sp, const HIRGenericRef& generic) const -> const HIRType* {
     if (generic.group() != GENERICImpl) {
         return MonomorphiserNop::getType(sp, generic);
     }
@@ -4170,7 +4170,7 @@ RebaseDefaultFieldParams::RebaseDefaultFieldParams(const Monomorphiser& monomorp
 {
 }
 
-[[nodiscard]] auto RebaseDefaultFieldParams::visitType(const HIRTypeData* type) -> const HIRTypeData* {
+[[nodiscard]] auto RebaseDefaultFieldParams::visitType(const HIRType* type) -> const HIRType* {
     return monomorph.monomorphType(Span(), type);
 }
 
@@ -4188,7 +4188,7 @@ RebaseDefaultFieldExpr::RebaseDefaultFieldExpr(const Monomorphiser& monomorph)
 {
 }
 
-[[nodiscard]] auto RebaseDefaultFieldExpr::visitType(const HIRTypeData* type) -> const HIRTypeData* {
+[[nodiscard]] auto RebaseDefaultFieldExpr::visitType(const HIRType* type) -> const HIRType* {
     return monomorph.monomorphType(Span(), type);
 }
 
@@ -4215,7 +4215,7 @@ RpititTypeCollector<F>::RpititTypeCollector(HIRTypeInterner& types, F callback)
 }
 
 template <typename F>
-[[nodiscard]] auto RpititTypeCollector<F>::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
+[[nodiscard]] auto RpititTypeCollector<F>::visitType(const HIRType* ty) -> const HIRType* {
     const auto* erased = ty->opt_ErasedType();
     if (erased && erased->inner.is_Fcn()) {
         callback(ty);
@@ -4232,7 +4232,7 @@ RpititNestedRewrite<F>::RpititNestedRewrite(HIRTypeInterner& types, const HIRTyp
 }
 
 template <typename F>
-[[nodiscard]] auto RpititNestedRewrite<F>::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
+[[nodiscard]] auto RpititNestedRewrite<F>::visitType(const HIRType* ty) -> const HIRType* {
     const auto index = indices.find(ty);
     if (index != indices.end()) {
         return projection(index->second);

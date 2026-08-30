@@ -51,8 +51,8 @@ struct TypeckModuleState {
     void popTraits(const HIRModule& mod);
 };
 
-typedef std::vector<std::pair<HIRPattern, const HIRTypeData*>> tArgs;
+typedef std::vector<std::pair<HIRPattern, const HIRType*>> tArgs;
 
-void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);
-void TypecheckCodeSimple(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);
+void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const HIRType* resultType, HIRExprPtr& expr);
+void TypecheckCodeSimple(const TypeckModuleState& ms, tArgs& args, const HIRType* resultType, HIRExprPtr& expr);
 void TypecheckExpressions(const WireBoard& wb, HIRCrate& crate);

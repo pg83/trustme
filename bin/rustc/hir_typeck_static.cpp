@@ -19,8 +19,8 @@
 using namespace stl;
 
 namespace {
-    bool specializationLookupNeedsResolution(const HIRTypeData* type, const HIRPathParams& params) {
-        auto typeNeedsResolution = [](const HIRTypeData* inner) {
+    bool specializationLookupNeedsResolution(const HIRType* type, const HIRPathParams& params) {
+        auto typeNeedsResolution = [](const HIRType* inner) {
             return inner->hasTypeInfer() || inner->needsMonomorphisation() || inner->mayHaveAssociatedType();
         };
 
@@ -45,23 +45,23 @@ struct StaticTraitResolve::NextSolverBridge {
 
     explicit NextSolverBridge(const WireBoard& wb);
 
-    bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, SolverResponseCallback& callback);
+    bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRType* type, SolverResponseCallback& callback);
 
-    bool findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const char* valueName, SolverResponseCallback& callback);
+    bool findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const char* valueName, SolverResponseCallback& callback);
 
-    const HIRTypeData* normalize(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* projection);
+    const HIRType* normalize(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* projection);
 
-    bool typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* type);
+    bool typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* type);
 
-    InherentImplSelection selectInherentImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams = nullptr);
+    InherentImplSelection selectInherentImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams = nullptr);
 };
 
-bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, SolverResponseCallback& foundCb) const {
+bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRType* type, SolverResponseCallback& foundCb) const {
     if (traitPath.components().empty()) {
         return false;
     }
     if (const auto* path = type->opt_Path(); path && path->path.data.is_UfcsKnown()) {
-        const HIRTypeData* normalizedType = type;
+        const HIRType* normalizedType = type;
         normalizedType = this->expandAssociatedTypes(sp, normalizedType);
         if (normalizedType != type) {
             return this->findImplCb(sp, traitPath, traitParams, normalizedType, foundCb);
@@ -75,12 +75,12 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
     return nextSolver->findImpl(sp, implGenerics_, itemGenerics_, traitPath, traitParams, type, foundCb);
 }
 
-const HIRTypeData* StaticTraitResolve::fixTraitDefaultReturn(const Span& sp, const HIRItemPath& path, const HIRTypeData* tpl) const {
+const HIRType* StaticTraitResolve::fixTraitDefaultReturn(const Span& sp, const HIRItemPath& path, const HIRType* tpl) const {
     const auto& topIp = path.getTopIp();
     if (topIp.ty && topIp.trait && topIp.ty == crate.types.self()) {
         auto prefix = FMT(ATY_PREFIX_ERASED << path.name << StringView("_"));
         const auto& trait = crate.getTraitByPath(sp, *topIp.trait);
-        const auto* result = cloneTyWith(crate.types, sp, tpl, [&](const HIRTypeData* inner) -> const HIRTypeData* {
+        const auto* result = cloneTyWith(crate.types, sp, tpl, [&](const HIRType* inner) -> const HIRType* {
             if (const auto* typePath = inner->opt_Path()) {
                 if (const auto* projection = typePath->path.data.opt_UfcsKnown()) {
                     if (projection->type == topIp.ty && projection->trait.path == *topIp.trait && std::strncmp(projection->item.c_str(), prefix.c_str(), prefix.size()) == 0) {
@@ -99,10 +99,10 @@ const HIRTypeData* StaticTraitResolve::fixTraitDefaultReturn(const Span& sp, con
     return tpl;
 }
 
-const HIRTypeData* StaticTraitResolve::expandAssociatedTypes(const Span& sp, const HIRTypeData* input) const {
+const HIRType* StaticTraitResolve::expandAssociatedTypes(const Span& sp, const HIRType* input) const {
     TRACE_FUNCTION_FR(input, input);
     input = this->expandAssociatedTypesInner(sp, input);
-    while (reveal_ == OpaqueReveal::All && visitTyWith(input, [](const HIRTypeData* inner) {
+    while (reveal_ == OpaqueReveal::All && visitTyWith(input, [](const HIRType* inner) {
         return inner->is_ErasedType();
     })) {
         input = this->revealOpaqueTypesShallow(sp, input);
@@ -111,15 +111,15 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypes(const Span& sp, con
     return input;
 }
 
-const HIRTypeData* StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, const HIRTypeData* input) const {
+const HIRType* StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, const HIRType* input) const {
     struct Visitor: public HIRVisitor {
         const Span& sp;
         const StaticTraitResolve& resolve;
         bool clearOpaque = false;
 
-        const HIRTypeData* revealOpaqueType(const HIRTypeData* type) {
+        const HIRType* revealOpaqueType(const HIRType* type) {
             const auto& erased = type->as_ErasedType();
-            const HIRTypeData* revealed;
+            const HIRType* revealed;
 
             switch (erased.inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Fcn: {
@@ -179,7 +179,7 @@ const HIRTypeData* StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, 
         {
         }
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* type) override {
+        [[nodiscard]] const HIRType* visitType(const HIRType* type) override {
             auto savedClearOpaque = clearOpaque;
             clearOpaque = false;
             if (type->is_ErasedType()) {
@@ -202,9 +202,9 @@ const HIRTypeData* StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, 
     return visitor.visitType(input);
 }
 
-const HIRTypeData* StaticTraitResolve::revealOpaqueTypes(const Span& sp, const HIRTypeData* input) const {
+const HIRType* StaticTraitResolve::revealOpaqueTypes(const Span& sp, const HIRType* input) const {
     input = this->expandAssociatedTypes(sp, input);
-    while (visitTyWith(input, [](const HIRTypeData* inner) {
+    while (visitTyWith(input, [](const HIRType* inner) {
         return inner->is_ErasedType();
     })) {
         input = this->revealOpaqueTypesShallow(sp, input);
@@ -294,7 +294,7 @@ void StaticTraitResolve::expandAssociatedTypesPath(const Span& sp, HIRPath& inpu
     }
 }
 
-const HIRTypeData* StaticTraitResolve::expandAssociatedTypesSingle(const Span& sp, const HIRTypeData* input) const {
+const HIRType* StaticTraitResolve::expandAssociatedTypesSingle(const Span& sp, const HIRType* input) const {
     TRACE_FUNCTION_F(input);
     if (input->is_Path()) {
         if (input->as_Path().path.data.is_UfcsInherent()) {
@@ -309,11 +309,11 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesSingle(const Span& s
     return input;
 }
 
-bool StaticTraitResolve::typesEqualResolvingOpaque(const Span& sp, const HIRTypeData* left, const HIRTypeData* right) const {
-    auto reveal = [&](const HIRTypeData* type) {
+bool StaticTraitResolve::typesEqualResolvingOpaque(const Span& sp, const HIRType* left, const HIRType* right) const {
+    auto reveal = [&](const HIRType* type) {
         for (unsigned depth = 0; depth < 64; depth++) {
             bool replaced = false;
-            auto next = cloneTyWith(crate.types, sp, type, [&](const HIRTypeData* candidate) -> const HIRTypeData* {
+            auto next = cloneTyWith(crate.types, sp, type, [&](const HIRType* candidate) -> const HIRType* {
                 const auto* erased = candidate->opt_ErasedType();
                 const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
                 if (!alias || !alias->inner->type) {
@@ -355,15 +355,15 @@ void StaticTraitResolve::expandAssociatedTypesTp(const Span& sp, HIRTraitPath& i
     }
 }
 
-const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, const HIRTypeData* input) const {
+const HIRType* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, const HIRType* input) const {
     switch (input->tag()) {
-        case HIRTypeData::TAG_Infer:
-        case HIRTypeData::TAG_Diverge:
-        case HIRTypeData::TAG_Primitive:
-        case HIRTypeData::TAG_Generic:
-        case HIRTypeData::TAG_NodeType:
+        case HIRType::TAG_Infer:
+        case HIRType::TAG_Diverge:
+        case HIRType::TAG_Primitive:
+        case HIRType::TAG_Generic:
+        case HIRType::TAG_NodeType:
             return input;
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             const auto& e = input->as_Path();
             switch (e.path.data.tag()) {
                 case HIRPathData::TAG_Generic: {
@@ -376,7 +376,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp
                         }
                     }
                     size_t tyIdx = e2.params.types.size();
-                    const HIRTypeData* nty = nullptr;
+                    const HIRType* nty = nullptr;
                     for (size_t i = 0; i < e2.params.types.size(); i++) {
                         nty = expandAssociatedTypesInner(sp, e2.params.types[i]);
                         if (nty != e2.params.types[i]) {
@@ -453,7 +453,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp
             }
             return input;
         }
-        case HIRTypeData::TAG_TraitObject: {
+        case HIRType::TAG_TraitObject: {
             auto data = input->cloneData();
             auto& e = data.as_TraitObject();
             expandAssociatedTypesTp(sp, e.trait);
@@ -462,7 +462,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp
             }
             return crate.types.intern(mv$(data));
         }
-        case HIRTypeData::TAG_ErasedType: {
+        case HIRType::TAG_ErasedType: {
             auto data = input->cloneData();
             auto& e = data.as_ErasedType();
             for (auto& trait : e.traits) {
@@ -488,7 +488,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp
             }
             return crate.types.intern(mv$(data));
         }
-        case HIRTypeData::TAG_Array: {
+        case HIRType::TAG_Array: {
             const auto& e = input->as_Array();
             auto ninner = expandAssociatedTypesInner(sp, e.inner);
             bool sizeWork = e.size.is_Unevaluated();
@@ -503,7 +503,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp
             }
             return crate.types.intern(mv$(data));
         }
-        case HIRTypeData::TAG_Slice: {
+        case HIRType::TAG_Slice: {
             auto ninner = expandAssociatedTypesInner(sp, input->as_Slice().inner);
             if (ninner == input->as_Slice().inner) {
                 return input;
@@ -512,7 +512,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp
             data.as_Slice().inner = ninner;
             return crate.types.intern(mv$(data));
         }
-        case HIRTypeData::TAG_Pattern: {
+        case HIRType::TAG_Pattern: {
             const auto& e = input->as_Pattern();
             auto ninner = expandAssociatedTypesInner(sp, e.inner);
             bool rangeWork = false;
@@ -538,7 +538,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp
             }
             return crate.types.intern(mv$(data));
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             const auto& e = input->as_Tuple();
             for (size_t i = 0; i < e.length(); i++) {
                 auto nt = expandAssociatedTypesInner(sp, e[i]);
@@ -554,7 +554,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp
             }
             return input;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto ninner = expandAssociatedTypesInner(sp, input->as_Borrow().inner);
             if (ninner == input->as_Borrow().inner) {
                 return input;
@@ -563,7 +563,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp
             data.as_Borrow().inner = ninner;
             return crate.types.intern(mv$(data));
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             auto ninner = expandAssociatedTypesInner(sp, input->as_Pointer().inner);
             if (ninner == input->as_Pointer().inner) {
                 return input;
@@ -572,7 +572,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp
             data.as_Pointer().inner = ninner;
             return crate.types.intern(mv$(data));
         }
-        case HIRTypeData::TAG_NamedFunction: {
+        case HIRType::TAG_NamedFunction: {
             auto data = input->cloneData();
             auto& e = data.as_NamedFunction();
             switch (e.path.data.tag()) {
@@ -607,11 +607,11 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp
             }
             return crate.types.intern(mv$(data));
         }
-        case HIRTypeData::TAG_Function: {
+        case HIRType::TAG_Function: {
             const auto& e = input->as_Function();
             auto nret = expandAssociatedTypesInner(sp, e.rettype);
             size_t argIdx = e.argTypes.length();
-            const HIRTypeData* narg = nullptr;
+            const HIRType* narg = nullptr;
             for (size_t i = 0; i < e.argTypes.length(); i++) {
                 narg = expandAssociatedTypesInner(sp, e.argTypes[i]);
                 if (narg != e.argTypes[i]) {
@@ -637,12 +637,12 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp
     return input;
 }
 
-const HIRTypeData* StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, const HIRTypeData* input) const {
+const HIRType* StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, const HIRType* input) const {
     TRACE_FUNCTION_FR(input, input);
     ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsInherent(), input);
 
     const auto& pe = input->as_Path().path.data.as_UfcsInherent();
-    if (visitTyWith(pe.type, [](const HIRTypeData* type) {
+    if (visitTyWith(pe.type, [](const HIRType* type) {
         const auto* erased = type->opt_ErasedType();
         const auto* opaque = erased ? erased->inner.opt_Alias() : nullptr;
         return opaque && !opaque->inner->type;
@@ -673,7 +673,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesUfcsInherent(const S
     return MonomorphStatePtr(crate.types, pe.type, &implParams, &itemParams).monomorphType(sp, alias.type);
 }
 
-const HIRTypeData* StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, const HIRTypeData* input, bool recurse /*=true*/) const {
+const HIRType* StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, const HIRType* input, bool recurse /*=true*/) const {
     TRACE_FUNCTION_FR(input, input);
     ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsKnown(), input);
 
@@ -691,7 +691,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span
     input = crate.types.intern(std::move(data));
 
     {
-        const HIRTypeData* root = input;
+        const HIRType* root = input;
         while (const auto* path = root->opt_Path()) {
             const auto* known = path->path.data.opt_UfcsKnown();
             if (!known) {
@@ -730,7 +730,7 @@ const HIRTypeData* StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span
     return crate.types.intern(std::move(opaque));
 }
 
-const HIRTypeData* StaticTraitResolve::replaceEqualities(const HIRTypeData* input) const {
+const HIRType* StaticTraitResolve::replaceEqualities(const HIRType* input) const {
     const Span sp;
     TRACE_FUNCTION_F(StringView("input=") << input);
     DEBUG(StringView("m_type_equalities = {") << typeEqualities << StringView("}"));
@@ -787,7 +787,7 @@ bool StaticTraitResolve::iterateAtyBoundsCb(const Span& sp, const HIRPath::Data:
     return false;
 }
 
-bool StaticTraitResolve::findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& desParams, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* targetType, StaticNamedTraitCallback& callback) const {
+bool StaticTraitResolve::findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& desParams, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRType* targetType, StaticNamedTraitCallback& callback) const {
     TRACE_FUNCTION_F(des << desParams << StringView(" from ") << traitPath << pp);
     if (pp.types.size() != traitPtr.params.types.size()) {
         BUG(sp, StringView("Incorrect number of parameters for trait - ") << traitPath << pp);
@@ -839,7 +839,7 @@ bool StaticTraitResolve::traitContainsType(const Span& sp, const HIRGenericPath&
     return false;
 }
 
-bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* type) const {
+bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRType* type) const {
     if (const auto it = copyCache.find(type); it != copyCache.end()) {
         return it->second;
     }
@@ -853,7 +853,7 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* type) con
     return proven;
 }
 
-bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* type) const {
+bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRType* type) const {
     if (const auto it = cloneCache.find(type); it != cloneCache.end()) {
         return it->second;
     }
@@ -868,7 +868,7 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* type) co
     return proven;
 }
 
-bool StaticTraitResolve::typeIsSized(const Span& sp, const HIRTypeData* type) const {
+bool StaticTraitResolve::typeIsSized(const Span& sp, const HIRType* type) const {
     HIRPathParams params;
     bool proven = false;
     this->findImpl(sp, langSized(), &params, type, [&](SolverResponse response) {
@@ -878,15 +878,15 @@ bool StaticTraitResolve::typeIsSized(const Span& sp, const HIRTypeData* type) co
     return proven;
 }
 
-bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRTypeData* ty) const {
+bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRType* ty) const {
     switch ((*ty).tag()) {
         break;
         default:
             return false;
-        case HIRTypeData::TAG_Diverge: {
+        case HIRType::TAG_Diverge: {
             return true;
         }
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& e = (*ty).as_Path();
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
@@ -908,7 +908,7 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRTypeData* ty)
                         case HIRStructData::TAG_Tuple: {
                             auto& e = str.data.as_Tuple();
                             for (const auto& fld : e) {
-                                const HIRTypeData* tmp;
+                                const HIRType* tmp;
                                 const auto& fieldTy = this->monomorphExpandOpt(sp, fld.ent, MonomorphStatePtr(crate.types, ty, &params, nullptr));
                                 if (typeIsImpossible(sp, fieldTy)) {
                                     return true;
@@ -919,7 +919,7 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRTypeData* ty)
                         case HIRStructData::TAG_Named: {
                             auto& e = str.data.as_Named();
                             for (const auto& fld : e) {
-                                const HIRTypeData* tmp;
+                                const HIRType* tmp;
                                 const auto& fieldTy = this->monomorphExpandOpt(sp, fld.ty, MonomorphStatePtr(crate.types, ty, &params, nullptr));
                                 if (typeIsImpossible(sp, fieldTy)) {
                                     return true;
@@ -942,7 +942,7 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRTypeData* ty)
                             auto& e = pbe->data.as_Data();
                             for (const auto& fld : e) {
                                 const auto& tpl = fld.type;
-                                const HIRTypeData* tmp;
+                                const HIRType* tmp;
                                 const auto& fieldTy = this->monomorphExpandOpt(sp, tpl, MonomorphStatePtr(crate.types, ty, &params, nullptr));
                                 if (!typeIsImpossible(sp, fieldTy)) {
                                     return false;
@@ -965,30 +965,30 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRTypeData* ty)
             }
             return true;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto& e = (*ty).as_Borrow();
             return typeIsImpossible(sp, e.inner);
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             return false;
         }
-        case HIRTypeData::TAG_Function: {
+        case HIRType::TAG_Function: {
             // TODO: Check all arguments?
             return true;
         }
-        case HIRTypeData::TAG_Array: {
+        case HIRType::TAG_Array: {
             auto& e = (*ty).as_Array();
             return typeIsImpossible(sp, e.inner);
         }
-        case HIRTypeData::TAG_Slice: {
+        case HIRType::TAG_Slice: {
             auto& e = (*ty).as_Slice();
             return typeIsImpossible(sp, e.inner);
         }
-        case HIRTypeData::TAG_Pattern: {
+        case HIRType::TAG_Pattern: {
             auto& e = (*ty).as_Pattern();
             return typeIsImpossible(sp, e.inner);
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             auto& e = (*ty).as_Tuple();
             for (const auto& ty : e) {
                 if (typeIsImpossible(sp, ty)) {
@@ -1001,7 +1001,7 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRTypeData* ty)
     UNREACHABLE();
 }
 
-bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, const HIRTypeData* srcTy) const {
+bool StaticTraitResolve::canUnsize(const Span& sp, const HIRType* dstTy, const HIRType* srcTy) const {
     TRACE_FUNCTION_F(dstTy << StringView(" <- ") << srcTy);
     ASSERT_BUG(sp, !dstTy->is_Infer(), StringView("_ seen after inferrence - ") << dstTy);
     ASSERT_BUG(sp, !srcTy->is_Infer(), StringView("_ seen after inferrence - ") << srcTy);
@@ -1010,23 +1010,23 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
     });
 }
 
-HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTypeData* ty) const {
+HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRType* ty) const {
     switch ((*ty).tag()) {
-        case HIRTypeData::TAG_Infer: {
+        case HIRType::TAG_Infer: {
             // Is this a bug?
             return HIRCompare::Fuzzy;
         }
-        case HIRTypeData::TAG_Diverge: {
+        case HIRType::TAG_Diverge: {
             return HIRCompare::Unequal;
         }
-        case HIRTypeData::TAG_Primitive: {
+        case HIRType::TAG_Primitive: {
             return HIRCompare::Unequal;
         }
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& e = (*ty).as_Path();
             auto monomorphCb = MonomorphStatePtr(crate.types, nullptr, e.path.data.is_Generic() ? &e.path.data.as_Generic().params : nullptr, nullptr);
-            const HIRTypeData* tmpTy;
-            auto monomorph = [&](const auto& tpl) -> const HIRTypeData* {
+            const HIRType* tmpTy;
+            auto monomorph = [&](const auto& tpl) -> const HIRType* {
                 return this->monomorphExpandOpt(sp, tpl, monomorphCb);
             };
             switch (e.binding.tag()) {
@@ -1123,28 +1123,28 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             }
             break;
         }
-        case HIRTypeData::TAG_Generic: {
+        case HIRType::TAG_Generic: {
             return HIRCompare::Fuzzy;
         }
-        case HIRTypeData::TAG_TraitObject: {
+        case HIRType::TAG_TraitObject: {
             return HIRCompare::Fuzzy;
         }
-        case HIRTypeData::TAG_ErasedType: {
+        case HIRType::TAG_ErasedType: {
             return HIRCompare::Fuzzy;
         }
-        case HIRTypeData::TAG_Array: {
+        case HIRType::TAG_Array: {
             auto& e = (*ty).as_Array();
             return this->typeIsInteriorMutable(sp, e.inner);
         }
-        case HIRTypeData::TAG_Slice: {
+        case HIRType::TAG_Slice: {
             auto& e = (*ty).as_Slice();
             return this->typeIsInteriorMutable(sp, e.inner);
         }
-        case HIRTypeData::TAG_Pattern: {
+        case HIRType::TAG_Pattern: {
             auto& e = (*ty).as_Pattern();
             return this->typeIsInteriorMutable(sp, e.inner);
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             auto& e = (*ty).as_Tuple();
             for (const auto& t : e) {
                 auto rv = this->typeIsInteriorMutable(sp, t);
@@ -1154,7 +1154,7 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             }
             return HIRCompare::Unequal;
         }
-        case HIRTypeData::TAG_NodeType: {
+        case HIRType::TAG_NodeType: {
             auto& e = (*ty).as_NodeType();
             switch (e.tag()) {
                 case HIRTypeDataNodeType::TAG_Closure: {
@@ -1190,27 +1190,27 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             }
             break;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             return HIRCompare::Unequal;
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             return HIRCompare::Unequal;
         }
-        case HIRTypeData::TAG_NamedFunction: {
+        case HIRType::TAG_NamedFunction: {
             return HIRCompare::Unequal;
         }
-        case HIRTypeData::TAG_Function: {
+        case HIRType::TAG_Function: {
             return HIRCompare::Unequal;
         }
     }
     return HIRCompare::Fuzzy;
 }
 
-MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData* ty, bool errOnUnknown /*=false*/) const {
+MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRType* ty, bool errOnUnknown /*=false*/) const {
     switch ((*ty).tag()) {
         default:
             return MetadataType::None;
-        case HIRTypeData::TAG_Generic: {
+        case HIRType::TAG_Generic: {
             auto& e = (*ty).as_Generic();
             if (this->typeIsSized(sp, ty)) {
                 return MetadataType::None;
@@ -1243,7 +1243,7 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
             }
             break;
         }
-        case HIRTypeData::TAG_ErasedType: {
+        case HIRType::TAG_ErasedType: {
             auto& e = (*ty).as_ErasedType();
             if (e.isSized) {
                 return MetadataType::None;
@@ -1252,7 +1252,7 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
             }
             break;
         }
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& e = (*ty).as_Path();
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
@@ -1313,13 +1313,13 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
             }
             return MetadataType::None;
         }
-        case HIRTypeData::TAG_Infer: {
+        case HIRType::TAG_Infer: {
             return MetadataType::Unknown;
         }
-        case HIRTypeData::TAG_Diverge: {
+        case HIRType::TAG_Diverge: {
             return MetadataType::None;
         }
-        case HIRTypeData::TAG_Primitive: {
+        case HIRType::TAG_Primitive: {
             auto& e = (*ty).as_Primitive();
             if (e == HIRCoreType::Str) {
                 return MetadataType::Slice;
@@ -1328,17 +1328,17 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
             }
             break;
         }
-        case HIRTypeData::TAG_Slice: {
+        case HIRType::TAG_Slice: {
             return MetadataType::Slice;
         }
-        case HIRTypeData::TAG_Pattern: {
+        case HIRType::TAG_Pattern: {
             auto& e = (*ty).as_Pattern();
             return this->metadataType(sp, e.inner, errOnUnknown);
         }
-        case HIRTypeData::TAG_TraitObject: {
+        case HIRType::TAG_TraitObject: {
             return MetadataType::TraitObject;
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             auto& e = (*ty).as_Tuple();
             return e.empty() ? MetadataType::None : this->metadataType(sp, e.back(), errOnUnknown);
         }
@@ -1346,7 +1346,7 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
     UNREACHABLE();
 }
 
-bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty) const {
+bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) const {
     if (langDrop().components().empty()) {
         return false;
     }
@@ -1356,11 +1356,11 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
     }
 
     switch ((*ty).tag()) {
-        case HIRTypeData::TAG_Generic: {
+        case HIRType::TAG_Generic: {
             // TODO: Is this an error?
             return true;
         }
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& e = (*ty).as_Path();
             if (e.binding.is_Opaque()) {
                 return true;
@@ -1384,10 +1384,10 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
                 return true;
             }
 
-            const HIRTypeData* tmpTy;
+            const HIRType* tmpTy;
             const auto& pe = e.path.data.as_Generic();
             auto monomorphCb = MonomorphStatePtr(crate.types, ty, &pe.params, nullptr);
-            auto monomorph = [&](const auto& tpl) -> const HIRTypeData* {
+            auto monomorph = [&](const auto& tpl) -> const HIRType* {
                 return this->monomorphExpandOpt(sp, tpl, monomorphCb);
             };
             bool needsDropGlue = false;
@@ -1453,54 +1453,54 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             dropCache.insert(std::make_pair(ty, needsDropGlue));
             return needsDropGlue;
         }
-        case HIRTypeData::TAG_Diverge: {
+        case HIRType::TAG_Diverge: {
             return false;
         }
-        case HIRTypeData::TAG_NodeType: {
+        case HIRType::TAG_NodeType: {
             return true;
         }
-        case HIRTypeData::TAG_Infer: {
+        case HIRType::TAG_Infer: {
             BUG(sp, StringView("type_needs_drop_glue on _"));
             return false;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto& e = (*ty).as_Borrow();
             if (e.type != HIRBorrowType::Owned) {
                 return false;
             }
             return typeNeedsDropGlue(sp, e.inner);
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             return false;
         }
-        case HIRTypeData::TAG_NamedFunction: {
+        case HIRType::TAG_NamedFunction: {
             return false;
         }
-        case HIRTypeData::TAG_Function: {
+        case HIRType::TAG_Function: {
             return false;
         }
-        case HIRTypeData::TAG_Primitive: {
+        case HIRType::TAG_Primitive: {
             return false;
         }
-        case HIRTypeData::TAG_Array: {
+        case HIRType::TAG_Array: {
             auto& e = (*ty).as_Array();
             return typeNeedsDropGlue(sp, e.inner);
         }
-        case HIRTypeData::TAG_Slice: {
+        case HIRType::TAG_Slice: {
             auto& e = (*ty).as_Slice();
             return typeNeedsDropGlue(sp, e.inner);
         }
-        case HIRTypeData::TAG_Pattern: {
+        case HIRType::TAG_Pattern: {
             auto& e = (*ty).as_Pattern();
             return typeNeedsDropGlue(sp, e.inner);
         }
-        case HIRTypeData::TAG_TraitObject: {
+        case HIRType::TAG_TraitObject: {
             return true;
         }
-        case HIRTypeData::TAG_ErasedType: {
+        case HIRType::TAG_ErasedType: {
             return true;
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             auto& e = (*ty).as_Tuple();
             for (const auto& ty : e) {
                 if (typeNeedsDropGlue(sp, ty)) {
@@ -1514,7 +1514,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
     UNREACHABLE();
 }
 
-const HIRTypeData* StaticTraitResolve::findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path) const {
+const HIRType* StaticTraitResolve::findAsyncDrop(const Span& sp, const HIRType* ty, HIRPath& path) const {
     const auto& trait = crate.getLangItemPathOpt("async_drop");
     if (trait.components().empty() || monomorphiseTypeNeeded(ty)) {
         return nullptr;
@@ -1540,7 +1540,7 @@ const HIRTypeData* StaticTraitResolve::findAsyncDrop(const Span& sp, const HIRTy
     return expandAssociatedTypes(sp, params.monomorphType(sp, (*function)->returnType));
 }
 
-bool StaticTraitResolve::typeNeedsAsyncDropInner(const Span& sp, const HIRTypeData* ty, HIRTypeRefSet& stack) const {
+bool StaticTraitResolve::typeNeedsAsyncDropInner(const Span& sp, const HIRType* ty, HIRTypeRefSet& stack) const {
     HIRPath path{HIRSimplePath()};
     if (findAsyncDrop(sp, ty, path)) {
         return true;
@@ -1625,12 +1625,12 @@ bool StaticTraitResolve::typeNeedsAsyncDropInner(const Span& sp, const HIRTypeDa
     return rv;
 }
 
-bool StaticTraitResolve::typeNeedsAsyncDrop(const Span& sp, const HIRTypeData* ty) const {
+bool StaticTraitResolve::typeNeedsAsyncDrop(const Span& sp, const HIRType* ty) const {
     HIRTypeRefSet stack;
     return typeNeedsAsyncDropInner(sp, ty, stack);
 }
 
-const HIRTypeData* StaticTraitResolve::isTypeOwnedBox(const HIRTypeData* ty) const {
+const HIRType* StaticTraitResolve::isTypeOwnedBox(const HIRType* ty) const {
     if (!ty->is_Path()) {
         return nullptr;
     }
@@ -1648,7 +1648,7 @@ const HIRTypeData* StaticTraitResolve::isTypeOwnedBox(const HIRTypeData* ty) con
     return pe.params.types.at(0);
 }
 
-const HIRTypeData* StaticTraitResolve::isTypePhantomData(const HIRTypeData* ty) const {
+const HIRType* StaticTraitResolve::isTypePhantomData(const HIRType* ty) const {
     if (!ty->is_Path()) {
         return nullptr;
     }
@@ -1666,16 +1666,16 @@ const HIRTypeData* StaticTraitResolve::isTypePhantomData(const HIRTypeData* ty) 
     return pe.params.types.at(0);
 }
 
-const HIRTypeData* StaticTraitResolve::getFieldType(const Span& sp, const HIRTypeData* ty, const RcString& name) const {
+const HIRType* StaticTraitResolve::getFieldType(const Span& sp, const HIRType* ty, const RcString& name) const {
     switch ((*ty).tag()) {
         default:
             TODO(sp, StringView("") << ty << StringView(" ") << name);
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto& te = (*ty).as_Borrow();
             ASSERT_BUG(sp, name == RcString(), StringView("get_field_type: Deref with non-empty field (`") << name << StringView("`)"));
             return te.inner;
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             auto& te = (*ty).as_Tuple();
             std::stringstream ss{name.c_str()};
             int idx = -1;
@@ -1684,7 +1684,7 @@ const HIRTypeData* StaticTraitResolve::getFieldType(const Span& sp, const HIRTyp
             ASSERT_BUG(sp, size_t(idx) < te.length(), StringView("Tuple index out of bounds"));
             return te[idx];
         }
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& te = (*ty).as_Path();
             switch (te.binding.tag()) {
                 default:
@@ -2031,13 +2031,13 @@ NullOnDrop<const HIRGenericParams> StaticTraitResolve::setImplGenerics(MetadataT
     return NullOnDrop<const HIRGenericParams>(implGenerics_);
 }
 
-NullOnDrop<const HIRGenericParams> StaticTraitResolve::setImplGenerics(const HIRTypeData* selfTy, const HIRGenericParams& gps) {
+NullOnDrop<const HIRGenericParams> StaticTraitResolve::setImplGenerics(const HIRType* selfTy, const HIRGenericParams& gps) {
     setImplGenericsRaw(MetadataType::Unknown, gps);
     selfMetadata = metadataType(Span(), selfTy);
     return NullOnDrop<const HIRGenericParams>(implGenerics_);
 }
 
-void StaticTraitResolve::updateImplSelfMetadata(const HIRTypeData* selfTy) {
+void StaticTraitResolve::updateImplSelfMetadata(const HIRType* selfTy) {
     BUG_ASSERT(implGenerics_);
     selfMetadata = metadataType(Span(), selfTy);
 }
@@ -2086,7 +2086,7 @@ void StaticTraitResolve::clearBothGenerics() {
     prepIndexes();
 }
 
-const HIRTypeData* StaticTraitResolve::monomorphExpandOpt(const Span& sp, const HIRTypeData* input, const Monomorphiser& m) const {
+const HIRType* StaticTraitResolve::monomorphExpandOpt(const Span& sp, const HIRType* input, const Monomorphiser& m) const {
     if (monomorphiseTypeNeeded(input)) {
         return monomorphExpand(sp, input, m);
     } else {
@@ -2094,7 +2094,7 @@ const HIRTypeData* StaticTraitResolve::monomorphExpandOpt(const Span& sp, const 
     }
 }
 
-const HIRTypeData* StaticTraitResolve::monomorphExpand(const Span& sp, const HIRTypeData* input, const Monomorphiser& m) const {
+const HIRType* StaticTraitResolve::monomorphExpand(const Span& sp, const HIRType* input, const Monomorphiser& m) const {
     auto rv = m.monomorphType(sp, input);
     rv = expandAssociatedTypes(sp, rv);
     return rv;
@@ -2107,7 +2107,7 @@ StaticTraitResolve::NextSolverBridge::NextSolverBridge(const WireBoard& wb)
 {
 }
 
-auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, SolverResponseCallback& callback) -> bool {
+auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRType* type, SolverResponseCallback& callback) -> bool {
     resolve_.setGenericContext(implGenerics, itemGenerics);
 
     HIRPathParams inferredParams;
@@ -2122,7 +2122,7 @@ auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGen
     }, {.ambiguity = SolverAmbiguityPolicy::Report});
 }
 
-auto StaticTraitResolve::NextSolverBridge::findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const char* valueName, SolverResponseCallback& callback) -> bool {
+auto StaticTraitResolve::NextSolverBridge::findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const char* valueName, SolverResponseCallback& callback) -> bool {
     resolve_.setGenericContext(implGenerics, itemGenerics);
     return resolve_.solveTraitGoal(sp, trait, params, type, [&](SolverResponse response) {
         if (!response.impl) {
@@ -2132,9 +2132,9 @@ auto StaticTraitResolve::NextSolverBridge::findValue(const Span& sp, const HIRGe
     }, {.valueName = valueName});
 }
 
-auto StaticTraitResolve::NextSolverBridge::normalize(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* projection) -> const HIRTypeData* {
+auto StaticTraitResolve::NextSolverBridge::normalize(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* projection) -> const HIRType* {
     resolve_.setGenericContext(implGenerics, itemGenerics);
-    const HIRTypeData* output = nullptr;
+    const HIRType* output = nullptr;
     resolve_.solveNormalizesTo(sp, NormalizesTo{projection}, [&](NormalizesToResponse response) {
         if (response.output != nullptr && response.output != projection) {
             output = std::move(response.output);
@@ -2144,12 +2144,12 @@ auto StaticTraitResolve::NextSolverBridge::normalize(const Span& sp, const HIRGe
     return output;
 }
 
-auto StaticTraitResolve::NextSolverBridge::typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* type) -> bool {
+auto StaticTraitResolve::NextSolverBridge::typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* type) -> bool {
     resolve_.setGenericContext(implGenerics, itemGenerics);
     return resolve_.typeIsCopy(sp, type) == HIRCompare::Equal;
 }
 
-auto StaticTraitResolve::NextSolverBridge::selectInherentImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams) -> InherentImplSelection {
+auto StaticTraitResolve::NextSolverBridge::selectInherentImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams) -> InherentImplSelection {
     resolve_.setGenericContext(implGenerics, itemGenerics);
     return resolve_.selectInherentImpl(sp, receiver, item, kind, initialParams);
 }

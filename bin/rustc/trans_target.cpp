@@ -29,7 +29,7 @@
 
 using namespace stl;
 
-static void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, std::unique_ptr<TypeRepr> repr);
+static void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRType* ty, std::unique_ptr<TypeRepr> repr);
 
 namespace {
     constexpr size_t TRANSMUTE_BYTE_VALUES = 257;
@@ -54,7 +54,7 @@ namespace {
         unsigned int field;
         size_t size;
         size_t align;
-        const HIRTypeData* ty;
+        const HIRType* ty;
         bool userAlign = false;
     };
 
@@ -71,7 +71,7 @@ namespace {
 
     struct TransmuteReference {
         bool isMutable;
-        const HIRTypeData* referent;
+        const HIRType* referent;
         size_t referentSize;
         size_t referentAlign;
     };
@@ -162,9 +162,9 @@ namespace {
 
         Built taggedVariant(const TypeRepr& repr, unsigned variant, size_t tagOffset, size_t tagSize, U128 tag, bool skipSyntheticTag);
 
-        Built enumLayout(const HIRTypeData* ty, const TypeRepr& repr, const HIREnum& enm);
+        Built enumLayout(const HIRType* ty, const TypeRepr& repr, const HIREnum& enm);
 
-        Built build(const HIRTypeData* ty);
+        Built build(const HIRType* ty);
 
         Vector<unsigned> epsilonClosure(Vector<unsigned> states) const;
 
@@ -172,7 +172,7 @@ namespace {
 
         TransmuteLayoutBuilder(const Span& sp, const StaticTraitResolve& resolve, bool destination, bool assumeSafety);
 
-        bool makeDfa(const HIRTypeData* ty, TransmuteDfa& out);
+        bool makeDfa(const HIRType* ty, TransmuteDfa& out);
     };
 
     struct TransmuteTypeChecker {
@@ -181,11 +181,11 @@ namespace {
         bool assumeAlignment;
         bool assumeSafety;
         bool assumeValidity;
-        std::map<std::pair<const HIRTypeData*, const HIRTypeData*>, int> cache;
+        std::map<std::pair<const HIRType*, const HIRType*>, int> cache;
 
         TransmuteTypeChecker(const Span& sp, const StaticTraitResolve& resolve, bool assumeAlignment, bool assumeSafety, bool assumeValidity);
 
-        bool check(const HIRTypeData* sourceType, const HIRTypeData* destinationType);
+        bool check(const HIRType* sourceType, const HIRType* destinationType);
 
         bool referencesCompatible(const TransmuteReference& source, const TransmuteReference& destination);
 
@@ -562,7 +562,7 @@ namespace {
         });
     }
 
-    bool makeFieldEnt(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, const HIRTypeData* ty, Ent& out) {
+    bool makeFieldEnt(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, const HIRType* ty, Ent& out) {
         size_t size, align;
         if (!TargetGetSizeAndAlignOf(sp, resolve, ty, size, align)) {
             DEBUG(StringView("Can't get size/align of ") << ty);
@@ -574,7 +574,7 @@ namespace {
         return true;
     }
 
-    bool structEnumerateFields(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, std::vector<Ent>& ents) {
+    bool structEnumerateFields(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, std::vector<Ent>& ents) {
         const auto& te = ty->as_Path();
         const auto& str = *te.binding.as_Struct();
         auto monomorphCb = MonomorphStatePtr(resolve.hirCrate().types, ty, &te.path.data.as_Generic().params, nullptr);
@@ -627,7 +627,7 @@ namespace {
         return (offset + align - 1) / align * align;
     }
 
-    const HIRTypeData* asyncDropGlueType(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* dropeeTy) {
+    const HIRType* asyncDropGlueType(const Span& sp, const StaticTraitResolve& resolve, const HIRType* outerTy, const HIRType* dropeeTy) {
         const auto* outerPath = outerTy->opt_Path();
         ASSERT_BUG(sp, outerPath && outerPath->binding.is_Struct() && outerPath->path.data.is_Generic(), StringView("invalid async-drop glue type ") << outerTy);
         auto path = outerPath->path.data.as_Generic().clone();
@@ -636,7 +636,7 @@ namespace {
         return resolve.hirCrate().types.path(std::move(path), outerPath->binding.as_Struct());
     }
 
-    bool addAsyncDropFieldLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* fieldTy, AsyncDropFieldLayout& out) {
+    bool addAsyncDropFieldLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRType* outerTy, const HIRType* fieldTy, AsyncDropFieldLayout& out) {
         if (!resolve.typeNeedsAsyncDrop(sp, fieldTy)) {
             return true;
         }
@@ -650,7 +650,7 @@ namespace {
         return true;
     }
 
-    bool asyncDropStructFieldsLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* ty, AsyncDropFieldLayout& out) {
+    bool asyncDropStructFieldsLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRType* outerTy, const HIRType* ty, AsyncDropFieldLayout& out) {
         if (const auto* tuple = ty->opt_Tuple()) {
             for (const auto& fieldTy : *tuple) {
                 if (!addAsyncDropFieldLayout(sp, resolve, outerTy, fieldTy, out)) {
@@ -694,7 +694,7 @@ namespace {
         return true;
     }
 
-    bool addAsyncDropCoroutineStateFieldLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* fieldTy, AsyncDropFieldLayout& out) {
+    bool addAsyncDropCoroutineStateFieldLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRType* outerTy, const HIRType* fieldTy, AsyncDropFieldLayout& out) {
         const auto* path = fieldTy->opt_Path();
         if (!path || !path->binding.is_Union() || !path->path.data.is_Generic()) {
             return addAsyncDropFieldLayout(sp, resolve, outerTy, fieldTy, out);
@@ -711,7 +711,7 @@ namespace {
         return true;
     }
 
-    bool asyncDropCoroutineStateLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* stateTy, AsyncDropFieldLayout& out) {
+    bool asyncDropCoroutineStateLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRType* outerTy, const HIRType* stateTy, AsyncDropFieldLayout& out) {
         const auto* path = stateTy->opt_Path();
         ASSERT_BUG(sp, path && path->binding.is_Struct() && path->path.data.is_Generic(), StringView("invalid coroutine state type ") << stateTy);
         const auto& generic = path->path.data.as_Generic();
@@ -740,7 +740,7 @@ namespace {
         return true;
     }
 
-    bool asyncDropCoroutineFieldsLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* ty, AsyncDropFieldLayout& out) {
+    bool asyncDropCoroutineFieldsLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRType* outerTy, const HIRType* ty, AsyncDropFieldLayout& out) {
         const auto& pathTy = ty->as_Path();
         ASSERT_BUG(sp, (pathTy.isFuture() || pathTy.isGenerator()) && pathTy.binding.is_Struct() && pathTy.path.data.is_Generic(), StringView("invalid coroutine type ") << ty);
         const auto* fields = pathTy.binding.as_Struct()->data.opt_Tuple();
@@ -779,14 +779,14 @@ namespace {
         return offset;
     }
 
-    bool extendAsyncDropGlueRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, TypeRepr& repr) {
+    bool extendAsyncDropGlueRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, TypeRepr& repr) {
         const auto& pathTy = ty->as_Path();
         const auto& path = pathTy.path.data.as_Generic();
         ASSERT_BUG(sp, !path.params.types.empty(), StringView("async-drop glue type without its dropee argument: ") << ty);
         const auto* dropeeTy = path.params.types[0];
 
         HIRPath dropPath{HIRSimplePath()};
-        const HIRTypeData* customFutureTy;
+        const HIRType* customFutureTy;
         const bool hasCustom = (customFutureTy = resolve.findAsyncDrop(sp, dropeeTy, dropPath));
         size_t customSize = 0;
         size_t customAlign = 1;
@@ -897,7 +897,7 @@ namespace {
         return a.align != b.align ? a.align < b.align : a.size < b.size;
     }
 
-    std::unique_ptr<TypeRepr> makeTypeReprStructInner(const Span& sp, const HIRTypeData* ty, std::vector<Ent>& ents, StructSorting sorting, unsigned forcedAlignment, unsigned maxAlignment) {
+    std::unique_ptr<TypeRepr> makeTypeReprStructInner(const Span& sp, const HIRType* ty, std::vector<Ent>& ents, StructSorting sorting, unsigned forcedAlignment, unsigned maxAlignment) {
         if (ents.size() > 0) {
             auto sortFields = [&](auto first, auto last) {
                 std::stable_sort(first, last, [&](const Ent& a, const Ent& b) {
@@ -984,7 +984,7 @@ namespace {
         return box$(rv);
     }
 
-    std::unique_ptr<TypeRepr> makeTypeReprStruct(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+    std::unique_ptr<TypeRepr> makeTypeReprStruct(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty) {
         TRACE_FUNCTION_F(ty);
         std::vector<Ent> ents;
         StructSorting sorting;
@@ -1045,7 +1045,7 @@ namespace {
         return repr;
     }
 
-    bool boundedMaxIsFullRange(const HIRTypeData* ty, U128 boundedMax) {
+    bool boundedMaxIsFullRange(const HIRType* ty, U128 boundedMax) {
         if (const auto* primitive = ty->opt_Primitive()) {
             switch (*primitive) {
                 case HIRCoreType::U8:
@@ -1076,7 +1076,7 @@ namespace {
         return false;
     }
 
-    bool getPatternValidRanges(const HIRTypeData::Data_Pattern& pattern, size_t& scalarSize, std::vector<std::pair<size_t, size_t>>& ranges) {
+    bool getPatternValidRanges(const HIRType::Data_Pattern& pattern, size_t& scalarSize, std::vector<std::pair<size_t, size_t>>& ranges) {
         const auto* primitive = pattern.inner->opt_Primitive();
         if (!primitive) {
             return false;
@@ -1177,10 +1177,10 @@ namespace {
         return true;
     }
 
-    bool getNonzeroPath(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, TypeRepr::FieldPath& outPath) {
+    bool getNonzeroPath(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, TypeRepr::FieldPath& outPath) {
         switch (ty->tag()) {
             break;
-            case HIRTypeData::TAG_Tuple: {
+            case HIRType::TAG_Tuple: {
                 const TypeRepr* repr = TargetGetTypeRepr(sp, resolve, ty);
                 if (!repr) {
                     return false;
@@ -1193,7 +1193,7 @@ namespace {
                 }
             } break;
                 break;
-            case HIRTypeData::TAG_Array: {
+            case HIRType::TAG_Array: {
                 auto& te = (*ty).as_Array();
                 if (te.size.is_Known() && te.size.as_Known() > 0 && getNonzeroPath(sp, resolve, te.inner, outPath)) {
                     outPath.subFields.pushBack(TypeRepr::FieldPath::ARRAY_ELEMENT);
@@ -1201,7 +1201,7 @@ namespace {
                 }
             } break;
                 break;
-            case HIRTypeData::TAG_Path: {
+            case HIRType::TAG_Path: {
                 auto& te = (*ty).as_Path();
                 if (te.isGenerator() || te.isFuture()) {
                     return false;
@@ -1249,20 +1249,20 @@ namespace {
                 }
             } break;
                 break;
-            case HIRTypeData::TAG_Borrow: {
+            case HIRType::TAG_Borrow: {
                 // TODO: Only return a single-pointer size
                 outPath.size = TargetGetPointerBits() / 8;
                 return true;
             } break;
                 break;
-            case HIRTypeData::TAG_Function: {
+            case HIRType::TAG_Function: {
                 auto& _te = (*ty).as_Function();
                 (void)_te;
             }
                 TargetGetSizeOf(sp, resolve, ty, outPath.size);
                 return true;
                 break;
-            case HIRTypeData::TAG_Pattern: {
+            case HIRType::TAG_Pattern: {
                 auto& te = (*ty).as_Pattern();
                 std::vector<std::pair<size_t, size_t>> ranges;
                 if (getPatternValidRanges(te, outPath.size, ranges) && ranges.front().first != 0) {
@@ -1275,7 +1275,7 @@ namespace {
         return false;
     }
 
-    size_t getSizeOrZero(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+    size_t getSizeOrZero(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty) {
         size_t size = 0;
         TargetGetSizeOf(sp, resolve, ty, size);
         return size;
@@ -1302,11 +1302,11 @@ namespace {
         return ofs;
     }
 
-    bool getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t minOffset, size_t maxOffset, size_t requiredCount, TypeRepr::FieldPath& outPath, size_t& nicheStart) {
+    bool getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t minOffset, size_t maxOffset, size_t requiredCount, TypeRepr::FieldPath& outPath, size_t& nicheStart) {
         TRACE_FUNCTION_F(ty << StringView(" min_offset=") << minOffset << StringView(" max_offset=") << maxOffset << StringView(" required_count=") << requiredCount);
         switch (ty->tag()) {
             break;
-            case HIRTypeData::TAG_Tuple: {
+            case HIRType::TAG_Tuple: {
                 const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
                 if (!r) {
                     return false;
@@ -1326,14 +1326,14 @@ namespace {
                     }
                 }
             } break;
-            case HIRTypeData::TAG_Array: {
+            case HIRType::TAG_Array: {
                 auto& te = (*ty).as_Array();
                 if (te.size.is_Known() && te.size.as_Known() > 0 && getVariantNichePath(sp, resolve, te.inner, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
                     outPath.subFields.pushBack(TypeRepr::FieldPath::ARRAY_ELEMENT);
                     return true;
                 }
             } break;
-            case HIRTypeData::TAG_Path: {
+            case HIRType::TAG_Path: {
                 auto& te = (*ty).as_Path();
                 if (te.isGenerator() || te.isFuture()) {
                     return false;
@@ -1518,7 +1518,7 @@ namespace {
                 }
             } break;
                 break;
-            case HIRTypeData::TAG_Primitive: {
+            case HIRType::TAG_Primitive: {
                 auto& te = (*ty).as_Primitive();
                 switch (te) {
                     case HIRCoreType::Char:
@@ -1539,7 +1539,7 @@ namespace {
                         break;
                 }
             } break;
-            case HIRTypeData::TAG_Pattern: {
+            case HIRType::TAG_Pattern: {
                 auto& te = (*ty).as_Pattern();
                 size_t scalarSize;
                 std::vector<std::pair<size_t, size_t>> ranges;
@@ -1569,14 +1569,14 @@ namespace {
                 }
                 return false;
             } break;
-            case HIRTypeData::TAG_Borrow: {
+            case HIRType::TAG_Borrow: {
                 if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
                     outPath.size = TargetGetPointerBits() / 8;
                     nicheStart = 0;
                     return true;
                 }
             } break;
-            case HIRTypeData::TAG_Function: {
+            case HIRType::TAG_Function: {
                 if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
                     outPath.size = TargetGetPointerBits() / 8;
                     nicheStart = 0;
@@ -1589,7 +1589,7 @@ namespace {
         return false;
     }
 
-    std::unique_ptr<TypeRepr> makeTypeReprEnum(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+    std::unique_ptr<TypeRepr> makeTypeReprEnum(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty) {
         TRACE_FUNCTION_F(ty);
         const auto& te = ty->as_Path();
         const auto& enm = *te.binding.as_Enum();
@@ -1666,7 +1666,7 @@ namespace {
                     }
                 } else {
                     struct Variant {
-                        const HIRTypeData* type;
+                        const HIRType* type;
                         std::vector<Ent> ents;
                         unsigned forcedAlignment;
                     };
@@ -1819,7 +1819,7 @@ namespace {
                             if (!rv.variants.is_None()) {
                                 const auto& nichePath = rv.variants.as_Linear().field;
 
-                                const HIRTypeData* nicheTy;
+                                const HIRType* nicheTy;
                                 switch (nichePath.size) {
                                     case 1:
                                         nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U8);
@@ -1927,7 +1927,7 @@ namespace {
                     }
 
                     if (rv.variants.is_None()) {
-                        const HIRTypeData* tagTy;
+                        const HIRType* tagTy;
                         if (enm.tagRepr != HIREnum::Repr::Auto) {
                             tagTy = resolve.hirCrate().types.primitive(enm.getReprType(enm.tagRepr));
                         } else {
@@ -2090,7 +2090,7 @@ namespace {
         return box$(rv);
     }
 
-    std::unique_ptr<TypeRepr> makeTypeReprUnion(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+    std::unique_ptr<TypeRepr> makeTypeReprUnion(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty) {
         const auto& te = ty->as_Path();
         const auto& unn = *te.binding.as_Union();
 
@@ -2129,11 +2129,11 @@ namespace {
         return box$(rv);
     }
 
-    std::unique_ptr<TypeRepr> make_type_repr_(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+    std::unique_ptr<TypeRepr> make_type_repr_(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty) {
         switch (ty->tag()) {
-            case HIRTypeData::TAG_Tuple:
+            case HIRType::TAG_Tuple:
                 return makeTypeReprStruct(sp, resolve, ty);
-            case HIRTypeData::TAG_Path:
+            case HIRType::TAG_Path:
                 switch (ty->as_Path().binding.tag()) {
                     case HIRTypePathBinding::TAG_Struct:
                         return makeTypeReprStruct(sp, resolve, ty);
@@ -2149,7 +2149,7 @@ namespace {
                         BUG(sp, StringView("Encountered invalid type in make_type_repr - ") << ty);
                 }
                 UNREACHABLE();
-            case HIRTypeData::TAG_NodeType:
+            case HIRType::TAG_NodeType:
                 if (const auto* closure = ty->as_NodeType().opt_Closure(); closure && closureHasNoCaptures(resolve, **closure)) {
                     auto repr = box$(TypeRepr());
                     repr->align = 1;
@@ -2157,28 +2157,28 @@ namespace {
                 }
                 TODO(sp, StringView("Type repr for ") << ty);
             // TODO: Why is `make_type_repr` being called on these?
-            case HIRTypeData::TAG_Primitive:
-            case HIRTypeData::TAG_Borrow:
-            case HIRTypeData::TAG_Pointer:
-            case HIRTypeData::TAG_Pattern:
+            case HIRType::TAG_Primitive:
+            case HIRType::TAG_Borrow:
+            case HIRType::TAG_Pointer:
+            case HIRType::TAG_Pattern:
                 return nullptr;
             default:
                 TODO(sp, StringView("Type repr for ") << ty);
         }
     }
 
-    std::unique_ptr<TypeRepr> makeTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+    std::unique_ptr<TypeRepr> makeTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty) {
         std::unique_ptr<TypeRepr> rv;
         TRACE_FUNCTION_FR(ty, ty << StringView(" ") << FMT_CB(ss, if (rv) { ss << StringView("size=") << rv->size << StringView(", align=") << rv->align; } else { ss << StringView("NONE"); }));
         rv = make_type_repr_(sp, resolve, ty);
         return rv;
     }
 
-    bool hasAbiIdentity(const HIRTypeData* ty) {
+    bool hasAbiIdentity(const HIRType* ty) {
         return !monomorphiseTypeNeeded(ty) && !ty->is_Infer() && !ty->is_ErasedType() && !ty->is_NodeType();
     }
 
-    bool TransmuteTypeChecker::check(const HIRTypeData* sourceType, const HIRTypeData* destinationType) {
+    bool TransmuteTypeChecker::check(const HIRType* sourceType, const HIRType* destinationType) {
         const auto key = std::make_pair(sourceType, destinationType);
         auto existing = cache.find(key);
         if (existing != cache.end()) {
@@ -2208,16 +2208,16 @@ namespace {
 
 struct WireBoard::TargetLayoutContext {
     struct CachedTypeRepr {
-        const HIRTypeData* canonical;
+        const HIRType* canonical;
         std::unique_ptr<TypeRepr> repr;
     };
 
     std::unordered_map<std::string, CachedTypeRepr> encoded;
-    std::unordered_map<const HIRTypeData*, std::unique_ptr<TypeRepr>> unencoded;
-    std::unordered_map<const HIRTypeData*, const TypeRepr*> exact;
+    std::unordered_map<const HIRType*, std::unique_ptr<TypeRepr>> unencoded;
+    std::unordered_map<const HIRType*, const TypeRepr*> exact;
 };
 
-static void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, std::unique_ptr<TypeRepr> repr) {
+static void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRType* ty, std::unique_ptr<TypeRepr> repr) {
     auto& cache = *resolve.board().targetLayouts;
     if (!hasAbiIdentity(ty)) {
         const auto* reprPtr = repr.get();
@@ -2234,7 +2234,7 @@ static void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const
     DEBUG(StringView("Set repr for ") << ty);
 }
 
-bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
+bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t& outSize, size_t& outAlign);
 
 void TargetCreateLayoutContext(WireBoard& wb, ObjPool& pool) {
     wb.targetLayouts = pool.make<TargetLayoutContext>();
@@ -2342,17 +2342,17 @@ void TargetSetCfg(WireBoard& wb, const std::string& targetName) {
     });
 }
 
-bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign) {
+bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t& outSize, size_t& outAlign) {
     switch ((*ty).tag()) {
-        case HIRTypeData::TAG_Infer: {
+        case HIRType::TAG_Infer: {
             return false;
         }
-        case HIRTypeData::TAG_Diverge: {
+        case HIRType::TAG_Diverge: {
             outSize = 0;
             outAlign = 1;
             return true;
         }
-        case HIRTypeData::TAG_Primitive: {
+        case HIRType::TAG_Primitive: {
             auto& te = (*ty).as_Primitive();
             switch (te) {
                 case HIRCoreType::Bool:
@@ -2416,7 +2416,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             }
             break;
         }
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& te = (*ty).as_Path();
             if (te.binding.is_Opaque()) {
                 return false;
@@ -2436,21 +2436,21 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             outAlign = repr->align;
             return true;
         }
-        case HIRTypeData::TAG_Generic: {
+        case HIRType::TAG_Generic: {
             DEBUG(StringView("No repr for Generic - ") << ty);
             return false;
         }
-        case HIRTypeData::TAG_TraitObject: {
+        case HIRType::TAG_TraitObject: {
             outAlign = 0;
             outSize = SIZE_MAX;
             DEBUG(StringView("sizeof on a trait object - unsized"));
             return true;
         }
-        case HIRTypeData::TAG_ErasedType: {
+        case HIRType::TAG_ErasedType: {
             BUG(sp, StringView("sizeof on an erased type - shouldn't exist"));
             break;
         }
-        case HIRTypeData::TAG_Array: {
+        case HIRType::TAG_Array: {
             auto& te = (*ty).as_Array();
             if (!TargetGetSizeAndAlignOf(sp, resolve, te.inner, outSize, outAlign)) {
                 return false;
@@ -2472,7 +2472,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             }
             return true;
         }
-        case HIRTypeData::TAG_Slice: {
+        case HIRType::TAG_Slice: {
             auto& te = (*ty).as_Slice();
             if (!TargetGetAlignOf(sp, resolve, te.inner, outAlign)) {
                 return false;
@@ -2481,7 +2481,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             DEBUG(StringView("sizeof on a slice - unsized"));
             return true;
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
             if (!repr) {
                 DEBUG(StringView("Cannot get type repr for ") << ty);
@@ -2491,7 +2491,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             outAlign = repr->align;
             return true;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto& te = (*ty).as_Borrow();
             outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
 
@@ -2510,7 +2510,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             }
             return true;
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             auto& te = (*ty).as_Pointer();
             outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             switch (resolve.metadataType(sp, te.inner)) {
@@ -2527,17 +2527,17 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             }
             return true;
         }
-        case HIRTypeData::TAG_NamedFunction: {
+        case HIRType::TAG_NamedFunction: {
             outSize = 0;
             outAlign = 1;
             return true;
         }
-        case HIRTypeData::TAG_Function: {
+        case HIRType::TAG_Function: {
             outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             return true;
         }
-        case HIRTypeData::TAG_NodeType: {
+        case HIRType::TAG_NodeType: {
             auto& te = (*ty).as_NodeType();
             if (const auto* closure = te.opt_Closure(); closure && closureHasNoCaptures(resolve, **closure)) {
                 outSize = 0;
@@ -2546,7 +2546,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             }
             return false;
         }
-        case HIRTypeData::TAG_Pattern: {
+        case HIRType::TAG_Pattern: {
             auto& te = (*ty).as_Pattern();
             return TargetGetSizeAndAlignOf(sp, resolve, te.inner, outSize, outAlign);
         }
@@ -2554,7 +2554,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
     return false;
 }
 
-bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize) {
+bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t& outSize) {
     size_t ignoreAlign;
     bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, outSize, ignoreAlign);
     if (rv && outSize == SIZE_MAX) {
@@ -2563,7 +2563,7 @@ bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HI
     return rv;
 }
 
-bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outAlign) {
+bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t& outAlign) {
     size_t ignoreSize;
     bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, ignoreSize, outAlign);
     if (rv && ignoreSize == SIZE_MAX) {
@@ -2576,7 +2576,7 @@ bool TargetCapsMemberAlignment() {
     return false;
 }
 
-bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty) {
     if (const auto* te = ty->opt_Array()) {
         return TargetTypeHasUserAlignment(sp, resolve, te->inner);
     }
@@ -2593,17 +2593,17 @@ bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolv
     return false;
 }
 
-const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty) {
     auto& cache = *resolve.board().targetLayouts;
     auto exact = cache.exact.find(ty);
     if (exact != cache.exact.end()) {
         return exact->second;
     }
 
-    if (visitTyWith(ty, [](const HIRTypeData* inner) {
+    if (visitTyWith(ty, [](const HIRType* inner) {
         return inner->is_ErasedType();
     })) {
-        const HIRTypeData* revealed = ty;
+        const HIRType* revealed = ty;
         revealed = resolve.revealOpaqueTypes(sp, revealed);
         if (revealed != ty) {
             const auto* repr = TargetGetTypeRepr(sp, resolve, revealed);
@@ -2640,7 +2640,7 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     return rv;
 }
 
-const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const Vector<size_t>& subFields, size_t ofs) {
+const HIRType* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const Vector<size_t>& subFields, size_t ofs) {
     const auto* ty = &repr.fields.at(idx).ty;
     while (ofs < subFields.length()) {
         const auto field = subFields[ofs++];
@@ -2765,7 +2765,7 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
     return std::make_pair(varIdx, subHasTag);
 }
 
-bool TargetTypesAreTransmutable(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* src, const HIRTypeData* dst, bool assumeAlignment, bool assumeLifetimes, bool assumeSafety, bool assumeValidity) {
+bool TargetTypesAreTransmutable(const Span& sp, const StaticTraitResolve& resolve, const HIRType* src, const HIRType* dst, bool assumeAlignment, bool assumeLifetimes, bool assumeSafety, bool assumeValidity) {
     return TransmuteTypeChecker(sp, resolve, assumeAlignment, assumeSafety, assumeValidity).check(src, dst);
 }
 
@@ -2982,7 +2982,7 @@ auto TransmuteLayoutBuilder::taggedVariant(const TypeRepr& repr, unsigned varian
     return combine(std::move(segments), repr.size);
 }
 
-auto TransmuteLayoutBuilder::enumLayout(const HIRTypeData* ty, const TypeRepr& repr, const HIREnum& enm) -> Built {
+auto TransmuteLayoutBuilder::enumLayout(const HIRType* ty, const TypeRepr& repr, const HIREnum& enm) -> Built {
     if (enm.numVariants() == 0) {
         return {nfa.uninhabited(), repr.size};
     }
@@ -3032,7 +3032,7 @@ auto TransmuteLayoutBuilder::enumLayout(const HIRTypeData* ty, const TypeRepr& r
     return {nfa.alternative(std::move(alternatives)), repr.size};
 }
 
-auto TransmuteLayoutBuilder::build(const HIRTypeData* ty) -> Built {
+auto TransmuteLayoutBuilder::build(const HIRType* ty) -> Built {
     if (ty->is_Diverge()) {
         return {nfa.uninhabited(), 0};
     }
@@ -3156,7 +3156,7 @@ TransmuteLayoutBuilder::TransmuteLayoutBuilder(const Span& sp, const StaticTrait
 {
 }
 
-auto TransmuteLayoutBuilder::makeDfa(const HIRTypeData* ty, TransmuteDfa& out) -> bool {
+auto TransmuteLayoutBuilder::makeDfa(const HIRType* ty, TransmuteDfa& out) -> bool {
     auto root = build(ty);
     if (!supported) {
         return false;

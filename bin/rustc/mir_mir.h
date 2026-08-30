@@ -550,7 +550,7 @@ public:
         }
     };
 
-    stl::Vector<const HIRTypeData*> locals;
+    stl::Vector<const HIRType*> locals;
 
     stl::Vector<bool> dropFlags;
 
@@ -574,7 +574,7 @@ public:
 
     virtual unsigned mapDropFlag(unsigned f) const;
 
-    virtual const HIRTypeData* valueGenericType(HIRGenericRef ce) const;
+    virtual const HIRType* valueGenericType(HIRGenericRef ce) const;
     virtual const Monomorphiser& monomorphiser() const;
 
     virtual const StaticTraitResolve* resolve() const;
@@ -592,7 +592,7 @@ public:
     std::vector<MIRParam> cloneParamVec(const std::vector<MIRParam>& src) const;
     std::vector<MIRLValue> cloneLvalVec(const std::vector<MIRLValue>& src) const;
 
-    const HIRTypeData* monomorph(const HIRTypeData* x) const;
+    const HIRType* monomorph(const HIRType* x) const;
     HIRGenericPath monomorph(const HIRGenericPath& x) const;
     HIRPath monomorph(const HIRPath& x) const;
     HIRPathParams monomorph(const HIRPathParams& x) const;

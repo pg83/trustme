@@ -11,7 +11,7 @@
 
 struct HIRTypeParamDef {
     RcString name;
-    const HIRTypeData* defaultValue;
+    const HIRType* defaultValue;
     bool isSized;
 
     Ordering ord(const HIRTypeParamDef& x) const;
@@ -19,7 +19,7 @@ struct HIRTypeParamDef {
 
 struct HIRValueParamDef {
     RcString name;
-    const HIRTypeData* type;
+    const HIRType* type;
     HIRConstGeneric defaultValue;
 
     Ordering ord(const HIRValueParamDef& x) const;

@@ -56,7 +56,7 @@ namespace {
 
         void addDependency(FunctionOrderNode& source, const HIRPath& path);
 
-        void addDropDependency(FunctionOrderNode& source, const HIRTypeData* type);
+        void addDropDependency(FunctionOrderNode& source, const HIRType* type);
 
         void collectDependencies(FunctionOrderNode& source);
 
@@ -274,13 +274,13 @@ CodeGenerator::~CodeGenerator() {
 void CodeGenerator::finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile) {
 }
 
-void CodeGenerator::emitTypeProto(const HIRTypeData*) {
+void CodeGenerator::emitTypeProto(const HIRType*) {
 }
 
-void CodeGenerator::emitType(const HIRTypeData*) {
+void CodeGenerator::emitType(const HIRType*) {
 }
 
-void CodeGenerator::emitTypeId(const HIRTypeData*) {
+void CodeGenerator::emitTypeId(const HIRType*) {
 }
 
 void CodeGenerator::emitStaticExt(const HIRPath& p, const HIRStatic& item, const TransParams& params) {
@@ -338,45 +338,45 @@ auto FunctionOrder::addDependency(FunctionOrderNode& source, const HIRPath& path
     source.selfEdge = source.selfEdge || target == &source;
 }
 
-auto FunctionOrder::addDropDependency(FunctionOrderNode& source, const HIRTypeData* type) -> void {
+auto FunctionOrder::addDropDependency(FunctionOrderNode& source, const HIRType* type) -> void {
     if (!resolve.typeNeedsDropGlue(sp, type)) {
         return;
     }
     switch (type->tag()) {
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             const auto& borrow = type->as_Borrow();
             if (borrow.type == HIRBorrowType::Owned) {
                 addDropDependency(source, borrow.inner);
             }
             break;
         }
-        case HIRTypeData::TAG_Path:
+        case HIRType::TAG_Path:
             addDependency(source, HIRPath(type, "#drop_glue"));
             break;
-        case HIRTypeData::TAG_Array:
+        case HIRType::TAG_Array:
             addDropDependency(source, type->as_Array().inner);
             break;
-        case HIRTypeData::TAG_Tuple:
+        case HIRType::TAG_Tuple:
             for (const auto& field : type->as_Tuple()) {
                 addDropDependency(source, field);
             }
             break;
-        case HIRTypeData::TAG_Slice:
+        case HIRType::TAG_Slice:
             addDropDependency(source, type->as_Slice().inner);
             break;
-        case HIRTypeData::TAG_Pattern:
+        case HIRType::TAG_Pattern:
             addDropDependency(source, type->as_Pattern().inner);
             break;
-        case HIRTypeData::TAG_Diverge:
-        case HIRTypeData::TAG_Infer:
-        case HIRTypeData::TAG_ErasedType:
-        case HIRTypeData::TAG_NodeType:
-        case HIRTypeData::TAG_Generic:
-        case HIRTypeData::TAG_Primitive:
-        case HIRTypeData::TAG_Pointer:
-        case HIRTypeData::TAG_NamedFunction:
-        case HIRTypeData::TAG_Function:
-        case HIRTypeData::TAG_TraitObject:
+        case HIRType::TAG_Diverge:
+        case HIRType::TAG_Infer:
+        case HIRType::TAG_ErasedType:
+        case HIRType::TAG_NodeType:
+        case HIRType::TAG_Generic:
+        case HIRType::TAG_Primitive:
+        case HIRType::TAG_Pointer:
+        case HIRType::TAG_NamedFunction:
+        case HIRType::TAG_Function:
+        case HIRType::TAG_TraitObject:
             break;
     }
 }
@@ -403,8 +403,8 @@ auto FunctionOrder::collectDependencies(FunctionOrderNode& source) -> void {
         {
         }
 
-        const HIRTypeData* visitType(const HIRTypeData* type) override {
-            visitTyWith(type, [&](const HIRTypeData* nested) {
+        const HIRType* visitType(const HIRType* type) override {
+            visitTyWith(type, [&](const HIRType* nested) {
                 if (const auto* function = nested->opt_NamedFunction()) {
                     order.addDependency(source, function->path);
                 }
@@ -420,7 +420,7 @@ auto FunctionOrder::collectDependencies(FunctionOrderNode& source) -> void {
 
         bool visitTerminator(const MIRTerminator& terminator) override {
             if (const auto* drop = terminator.opt_Drop()) {
-                const HIRTypeData* tmp;
+                const HIRType* tmp;
                 order.addDropDependency(source, mirResolve.getLvalueType(drop->slot));
             }
             const MIRCallTarget* callTarget = nullptr;

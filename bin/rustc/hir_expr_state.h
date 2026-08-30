@@ -13,7 +13,7 @@ public:
 
     HIRSimplePath currentTraitPath;
     const HIRTraitImpl* currentTraitImpl;
-    const HIRTypeData* currentSelfType;
+    const HIRType* currentSelfType;
 
     std::vector<std::pair<const HIRSimplePath*, const HIRTrait*>> traits;
     std::vector<HIRSimplePath> defineOpaque;

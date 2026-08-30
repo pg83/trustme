@@ -17,7 +17,7 @@ void ConvertHIRConstantEvaluateEnum(const WireBoard& wb, const HIRCrate& crate, 
 void ConvertHIRConstantEvaluateEnumVariant(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, const HIREnum& enm, size_t idx);
 void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRConstant& e);
 void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* paramsDef, HIRPathParams& params);
-void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRTypeData* ty, HIRConstGeneric& cg);
+void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRType* ty, HIRConstGeneric& cg);
 void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, HIRConstGeneric& cg);
 void ConvertHIRConstantEvaluateArraySize(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRSimplePath& path, HIRArraySize& size);
 
@@ -28,7 +28,7 @@ struct HIREvaluator {
 
     class Newval {
     public:
-        virtual HIRPath newStatic(const HIRTypeData* type, EncodedLiteral value, size_t alignment) = 0;
+        virtual HIRPath newStatic(const HIRType* type, EncodedLiteral value, size_t alignment) = 0;
     };
 
     class CsePtr {
@@ -71,8 +71,8 @@ public:
     HIREvaluator(HIREvaluator&&) = default;
     HIREvaluator(const HIREvaluator&) = delete;
 
-    EncodedLiteral evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, const HIRTypeData* exp);
-    EncodedLiteral evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, const HIRTypeData* exp, MonomorphState ms);
+    EncodedLiteral evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, const HIRType* exp);
+    EncodedLiteral evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, const HIRType* exp, MonomorphState ms);
 
     void setRequireConstCalls() {
         requireConstCalls = true;
@@ -83,15 +83,15 @@ public:
     }
 
 private:
-    void pushStackEntry(HIRItemPath printPath, const MIRFunction& fcn, MonomorphState ms, const HIRTypeData* exp, HIRFunction::argsT argDefs, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller);
+    void pushStackEntry(HIRItemPath printPath, const MIRFunction& fcn, MonomorphState ms, const HIRType* exp, HIRFunction::argsT argDefs, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller);
 
     MIREvalAllocationPtr runUntilStackEmpty();
     void runStatement(MIREvalCallStackEntry& localState, const MIRStatement& stmt);
 
     unsigned runTerminator(MIREvalCallStackEntry& localState, const MIRTerminator& stmt);
     bool callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, HIRPath* path, std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect);
-    void callConstDestructor(MIREvalCallStackEntry& localState, const HIRTypeData* ty, const MIRLValue& slot);
-    void runConstDrop(MIREvalCallStackEntry& localState, const HIRTypeData* ty, const MIRLValue& slot);
+    void callConstDestructor(MIREvalCallStackEntry& localState, const HIRType* ty, const MIRLValue& slot);
+    void runConstDrop(MIREvalCallStackEntry& localState, const HIRType* ty, const MIRLValue& slot);
 
-    EncodedLiteral allocationToEncoded(const HIRTypeData* ty, const MIREvalAllocation& a);
+    EncodedLiteral allocationToEncoded(const HIRType* ty, const MIREvalAllocation& a);
 };

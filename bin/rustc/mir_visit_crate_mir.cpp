@@ -9,7 +9,7 @@ void MIROuterVisitor::visitExpr(HIRExprPtr& exp) {
     BUG(Span(), StringView("visit_expr hit in OuterVisitor"));
 }
 
-const HIRTypeData* MIROuterVisitor::visitType(const HIRTypeData* ty) {
+const HIRType* MIROuterVisitor::visitType(const HIRType* ty) {
     if (ty->is_Array()) {
         auto data = ty->cloneData();
         auto* e = data.opt_Array();
@@ -36,7 +36,7 @@ void MIROuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
     auto _ = this->resolve_.setItemGenerics(item.params);
     if (item.code || item.code.mir) {
         DEBUG(StringView("Function code ") << p);
-        const HIRTypeData* tmp;
+        const HIRType* tmp;
         const auto& sp = item.code ? item.code->span() : Span();
         const auto* retTy = resolve_.fixTraitDefaultReturn(sp, p, item.returnType);
         cb.visit(resolve_, p, item.code, item.args, retTy);

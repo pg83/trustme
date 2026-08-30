@@ -12,7 +12,7 @@
 #include <memory>
 
 struct HIRTypeEqualityCallback {
-    virtual const HIRTypeData* visit(const HIRTypeData* type) = 0;
+    virtual const HIRType* visit(const HIRType* type) = 0;
 };
 
 template <typename F>
@@ -24,7 +24,7 @@ struct HIRTypeEqualityCb final: HIRTypeEqualityCallback {
     {
     }
 
-    const HIRTypeData* visit(const HIRTypeData* type) override {
+    const HIRType* visit(const HIRType* type) override {
         return f(type);
     }
 };
@@ -171,7 +171,7 @@ struct TraitResolveCommon {
     HIRGenericParams emptyGenerics_;
 
     struct CachedEquality {
-        const HIRTypeData* ty;
+        const HIRType* ty;
     };
 
     HIRTypeRefMap<CachedEquality> typeEqualities;
@@ -183,9 +183,9 @@ struct TraitResolveCommon {
     };
 
     struct CachedBoundCmp {
-        typedef std::pair<const HIRTypeData*, HIRGenericPath> keyT;
-        typedef std::pair<const HIRTypeData*, const HIRGenericPath&> refT;
-        typedef std::pair<const HIRTypeData*, const HIRSimplePath&> refSpT;
+        typedef std::pair<const HIRType*, HIRGenericPath> keyT;
+        typedef std::pair<const HIRType*, const HIRGenericPath&> refT;
+        typedef std::pair<const HIRType*, const HIRSimplePath&> refSpT;
 
         Ordering ord(const keyT& a, const keyT& b) const {
             return ::ord(a, b);
@@ -216,7 +216,7 @@ struct TraitResolveCommon {
         }
     };
 
-    typedef RangeVecMap<std::pair<const HIRTypeData*, HIRGenericPath>, CachedBound, CachedBoundCmp> cachedBoundsT;
+    typedef RangeVecMap<std::pair<const HIRType*, HIRGenericPath>, CachedBound, CachedBoundCmp> cachedBoundsT;
     cachedBoundsT traitBounds;
 
     TraitResolveCommon(const WireBoard& wb);
@@ -229,13 +229,13 @@ struct TraitResolveCommon {
 
     const HIRGenericParams& itemGenerics() const;
 
-    const HIRTypeData* getConstParamType(const Span& sp, unsigned binding) const;
+    const HIRType* getConstParamType(const Span& sp, unsigned binding) const;
 
     void prepIndexes(const Span& sp);
 
 protected:
-    void prepIndexesAddEquality(const Span& sp, const HIRTypeData* longTy, const HIRTypeData* shortTy);
-    void prepIndexesAddTraitBound(const Span& sp, const HIRTypeData* type, HIRTraitPath traitPath, bool addParents = true);
+    void prepIndexesAddEquality(const Span& sp, const HIRType* longTy, const HIRType* shortTy);
+    void prepIndexesAddTraitBound(const Span& sp, const HIRType* type, HIRTraitPath traitPath, bool addParents = true);
 
     bool iterateBoundsCb(HIRGenericBoundCallback& cb) const;
 

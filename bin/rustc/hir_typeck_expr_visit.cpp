@@ -27,7 +27,7 @@ namespace {
 
         void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override;
 
-        [[nodiscard]] const HIRTypeData* visitType(const HIRTypeData* ty) override;
+        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
 
         void visitGlobalAssembly(HIRGlobalAssembly& item) override;
 
@@ -41,7 +41,7 @@ namespace {
     };
 }
 
-void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr) {
+void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const HIRType* resultType, HIRExprPtr& expr) {
     if (expr.state->stage < HIRExprState::Stage::Typecheck) {
         TypecheckCodeCS(ms, args, resultType, expr);
         expr.state->stage = HIRExprState::Stage::Typecheck;
@@ -257,7 +257,7 @@ auto OuterVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl
     ms.popTraits(mod);
 }
 
-[[nodiscard]] auto OuterVisitor::visitType(const HIRTypeData* ty) -> const HIRTypeData* {
+[[nodiscard]] auto OuterVisitor::visitType(const HIRType* ty) -> const HIRType* {
     if (ty->is_Array()) {
         auto data = ty->cloneData();
         auto& e = data.as_Array();

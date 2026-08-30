@@ -24,12 +24,12 @@ struct Context {
 
     struct Binding {
         RcString name;
-        const HIRTypeData* ty;
+        const HIRType* ty;
     };
 
     struct Coercion {
         unsigned ruleIdx;
-        const HIRTypeData* leftTy;
+        const HIRType* leftTy;
         HIRExprNodeP* rightNodePtr;
     };
 
@@ -40,9 +40,9 @@ struct Context {
                 Unsizing,
             } op;
 
-            const HIRTypeData* ty;
+            const HIRType* ty;
 
-            CoerceTy(const HIRTypeData* ty, bool isCoerce);
+            CoerceTy(const HIRType* ty, bool isCoerce);
         };
 
         bool forceDisable = false;
@@ -67,7 +67,7 @@ struct Context {
     struct Associated {
         struct StallDependency {
             unsigned index;
-            const HIRTypeData* resolved;
+            const HIRType* resolved;
         };
 
         struct CapturedIvarPossible {
@@ -77,11 +77,11 @@ struct Context {
 
         unsigned ruleIdx;
         Span span;
-        const HIRTypeData* leftTy;
+        const HIRType* leftTy;
 
         HIRSimplePath trait;
         HIRPathParams params;
-        const HIRTypeData* implTy;
+        const HIRType* implTy;
         RcString name;
         HIRPathParams atyPp;
 
@@ -105,7 +105,7 @@ struct Context {
 
     std::vector<std::unique_ptr<Coercion>> linkCoerce;
 
-    std::unordered_map<const HIRExprNode*, const HIRTypeData*> coercionHints;
+    std::unordered_map<const HIRExprNode*, const HIRType*> coercionHints;
     std::vector<Associated> linkAssoc;
     stl::ObjPool::Ref linkAssocIndexPool;
     stl::IntMap<stl::Vector<unsigned>> linkAssocIndex;
@@ -116,7 +116,7 @@ struct Context {
 
     struct ClosureReturnObligation {
         const HIRExprNodeClosure* closure;
-        const HIRTypeData* expected;
+        const HIRType* expected;
     };
 
     stl::Vector<ClosureReturnObligation> closureReturnObligations;
@@ -130,9 +130,9 @@ struct Context {
 
     struct TaitEntry {
         HIRPathParams params;
-        const HIRTypeData* ourType;
+        const HIRType* ourType;
 
-        TaitEntry(const HIRPathParams& p, const HIRTypeData* t);
+        TaitEntry(const HIRPathParams& p, const HIRType* t);
     };
 
     std::map<HIRTypeDataErasedTypeAliasInner*, TaitEntry> erasedTypeAliases;
@@ -140,7 +140,7 @@ struct Context {
     struct RpitEntry {
         const HIRPath* origin;
         unsigned int index;
-        const HIRTypeData* ourType;
+        const HIRType* ourType;
         bool selfReferenced;
     };
 
@@ -158,44 +158,44 @@ struct Context {
         return !(linkCoerce.empty() && linkAssoc.empty() && toVisit.empty() && advRevisits.empty());
     }
 
-    inline const HIRTypeData* addIvars(const HIRTypeData* ty) {
+    inline const HIRType* addIvars(const HIRType* ty) {
         return ivars.addIvars(ty);
     }
 
-    void equateTypes(const Span& sp, const HIRTypeData* l, const HIRTypeData* r);
-    void equateTypesInner(const Span& sp, const HIRTypeData* l, const HIRTypeData* r);
+    void equateTypes(const Span& sp, const HIRType* l, const HIRType* r);
+    void equateTypesInner(const Span& sp, const HIRType* l, const HIRType* r);
 
     void applySolverResponse(const Span& sp, const SolverResponse& response);
-    void registerSolverObligation(const Span& sp, const HIRTypeData* type, HIRTraitPath trait);
-    void registerClosureReturnObligation(const Span& sp, const HIRExprNodeClosure* closure, const HIRTypeData* expected);
-    const HIRTypeData* closureReturnExpectation(const HIRExprNodeClosure* closure) const;
-    const HIRTypeData* expandAssociatedTypes(const Span& sp, const HIRTypeData* input) const;
+    void registerSolverObligation(const Span& sp, const HIRType* type, HIRTraitPath trait);
+    void registerClosureReturnObligation(const Span& sp, const HIRExprNodeClosure* closure, const HIRType* expected);
+    const HIRType* closureReturnExpectation(const HIRExprNodeClosure* closure) const;
+    const HIRType* expandAssociatedTypes(const Span& sp, const HIRType* input) const;
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const;
     void compactIvars(const Span& sp);
 
-    void equateTypesCoerce(const Span& sp, const HIRTypeData* l, HIRExprNodeP& nodePtr);
-    void recordCoercionHint(const HIRTypeData* type, HIRExprNodeP& nodePtr);
+    void equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr);
+    void recordCoercionHint(const HIRType* type, HIRExprNodeP& nodePtr);
 
-    const HIRTypeData* coercionHint(const HIRExprNode& node) const;
+    const HIRType* coercionHint(const HIRExprNode& node) const;
 
-    void equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSimplePath& trait, HIRPathParams params, const HIRTypeData* implTy, const char* name, const HIRPathParams& atyPp, bool isOp = false, TypeckPrimitiveOperator operatorKind = TypeckPrimitiveOperator::None);
+    void equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimplePath& trait, HIRPathParams params, const HIRType* implTy, const char* name, const HIRPathParams& atyPp, bool isOp = false, TypeckPrimitiveOperator operatorKind = TypeckPrimitiveOperator::None);
 
     void equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRConstGeneric& rr);
 
-    static u64 associatedIndexKey(const HIRTypeData* leftTy, const HIRSimplePath& trait, const HIRTypeData* implTy, RcString name, bool isOperator, TypeckPrimitiveOperator operatorKind);
+    static u64 associatedIndexKey(const HIRType* leftTy, const HIRSimplePath& trait, const HIRType* implTy, RcString name, bool isOperator, TypeckPrimitiveOperator operatorKind);
     static u64 associatedIndexKey(const Associated& rule);
     void indexAssociated(unsigned index);
     void unindexAssociated(unsigned index, u64 key);
     void storeAssociated(unsigned index, Associated rule, u64 oldKey);
     void removeAssociated(unsigned index, u64 oldKey);
 
-    void requireSized(const Span& sp, const HIRTypeData* ty);
+    void requireSized(const Span& sp, const HIRType* ty);
 
-    void addTraitBound(const Span& sp, const HIRTypeData* implTy, const HIRSimplePath& trait, HIRPathParams params) {
+    void addTraitBound(const Span& sp, const HIRType* implTy, const HIRSimplePath& trait, HIRPathParams params) {
         equateTypesAssoc(sp, crate.types.infer(), trait, mv$(params), implTy, "", {}, false);
     }
 
-    void selectWellFormed(const Span& sp, const HIRTypeData* type);
+    void selectWellFormed(const Span& sp, const HIRType* type);
 
     IVarPossible* getIvarPossibilities(const Span& sp, unsigned int ivarIndex);
 
@@ -207,9 +207,9 @@ struct Context {
         Bound,
     };
 
-    void possibleEquateTypeUnknown(const Span& sp, const HIRTypeData* ty, IvarUnknownType srcTy);
+    void possibleEquateTypeUnknown(const Span& sp, const HIRType* ty, IvarUnknownType srcTy);
 
-    void possibleEquateTypeBounds(const Span& sp, const HIRTypeData* ty, stl::Vector<const HIRTypeData*> t);
+    void possibleEquateTypeBounds(const Span& sp, const HIRType* ty, stl::Vector<const HIRType*> t);
 
     enum class PossibleTypeSource {
         CoerceTo,
@@ -218,34 +218,34 @@ struct Context {
         UnsizeFrom,
     };
 
-    void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRTypeData* t, PossibleTypeSource srcTy);
+    void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRType* t, PossibleTypeSource srcTy);
 
-    void possibleEquateIvarRawPointerFallback(const Span& sp, unsigned int ivarIndex, const HIRTypeData* type);
+    void possibleEquateIvarRawPointerFallback(const Span& sp, unsigned int ivarIndex, const HIRType* type);
 
     void possibleEquateIvarUnknown(const Span& sp, unsigned int ivarIndex, IvarUnknownType srcTy);
 
-    void handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* type, bool isIrrefutable = false);
-    void handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HIRTypeData* type);
-    void addBindingInner(const Span& sp, const HIRPatternBinding& pb, const HIRTypeData* type);
+    void handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type, bool isIrrefutable = false);
+    void handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HIRType* type);
+    void addBindingInner(const Span& sp, const HIRPatternBinding& pb, const HIRType* type);
 
-    void addVar(const Span& sp, unsigned int index, const RcString& name, const HIRTypeData* type);
-    const HIRTypeData* getVar(const Span& sp, unsigned int idx) const;
+    void addVar(const Span& sp, unsigned int index, const RcString& name, const HIRType* type);
+    const HIRType* getVar(const Span& sp, unsigned int idx) const;
 
     void addRevisit(HIRExprNode& node);
     void addRevisitAdv(std::unique_ptr<Revisitor> ent);
 
-    const HIRTypeData* getType(const HIRTypeData* ty) const {
+    const HIRType* getType(const HIRType* ty) const {
         return ivars.getType(ty);
     }
 
-    const HIRTypeData* revealOpaqueType(const HIRTypeData* type) const;
-    const HIRTypeData* revealOpaqueTypes(const HIRTypeData* type) const;
+    const HIRType* revealOpaqueType(const HIRType* type) const;
+    const HIRType* revealOpaqueTypes(const HIRType* type) const;
 
-    void addRpitType(const HIRPath& origin, unsigned int index, const HIRTypeData* type);
-    void noteRpitSelfReferences(const HIRTypeData* type);
+    void addRpitType(const HIRPath& origin, unsigned int index, const HIRType* type);
+    void noteRpitSelfReferences(const HIRType* type);
     bool fallbackUnresolvedRpitType(const Span& sp);
 
-    HIRExprNodeP createAutoderef(HIRExprNodeP valNode, const HIRTypeData* tyDst) const;
+    HIRExprNodeP createAutoderef(HIRExprNodeP valNode, const HIRType* tyDst) const;
 
 private:
     void addIvarsParams(HIRPathParams& params) {
@@ -255,5 +255,5 @@ private:
 
 bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) __attribute__((warn_unused_result));
 
-void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);
-void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr, HIRExprNodeP& rootPtr);
+void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* resultType, HIRExprPtr& expr);
+void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const HIRType* resultType, HIRExprPtr& expr, HIRExprNodeP& rootPtr);

@@ -479,7 +479,7 @@ void HIRVisitor::visitTrait(HIRItemPath p, HIRTrait& item) {
     }
     auto traitSp = p.getSimplePath();
     auto traitPp = item.params.makeNopParams(typeInterner(), 0);
-    const HIRTypeData* tySelf = typeInterner().self();
+    const HIRType* tySelf = typeInterner().self();
     HIRItemPath traitIp(tySelf, traitSp, traitPp);
 
     TRACE_FUNCTION;
@@ -809,16 +809,16 @@ void HIRVisitor::visitPatternVal(HIRPattern::Value& val) {
     }
 }
 
-const HIRTypeData* HIRVisitor::visitType(const HIRTypeData* ty) {
+const HIRType* HIRVisitor::visitType(const HIRType* ty) {
     BUG_ASSERT(ty);
     switch (ty->tag()) {
-        case HIRTypeData::TAG_Infer:
-        case HIRTypeData::TAG_Diverge:
-        case HIRTypeData::TAG_Primitive:
-        case HIRTypeData::TAG_Generic:
-        case HIRTypeData::TAG_NodeType:
+        case HIRType::TAG_Infer:
+        case HIRType::TAG_Diverge:
+        case HIRType::TAG_Primitive:
+        case HIRType::TAG_Generic:
+        case HIRType::TAG_NodeType:
             return ty;
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             const auto& e = ty->as_Path();
             auto np = HIRPath(HIRSimplePath());
             if (!walkTypesInPath(*this, e.path, np)) {
@@ -828,7 +828,7 @@ const HIRTypeData* HIRVisitor::visitType(const HIRTypeData* ty) {
             data.as_Path().path = mv$(np);
             return typeInterner().intern(mv$(data));
         }
-        case HIRTypeData::TAG_TraitObject: {
+        case HIRType::TAG_TraitObject: {
             const auto& e = ty->as_TraitObject();
             HIRTraitPath ntrait;
             bool ctrait = e.trait.path != HIRSimplePath() && walkTypesInTraitPath(*this, e.trait, ntrait);
@@ -859,10 +859,10 @@ const HIRTypeData* HIRVisitor::visitType(const HIRTypeData* ty) {
             }
             return typeInterner().intern(mv$(data));
         }
-        case HIRTypeData::TAG_ErasedType: {
+        case HIRType::TAG_ErasedType: {
             const auto& e = ty->as_ErasedType();
             bool cinner = false;
-            const HIRTypeData* ninner = nullptr;
+            const HIRType* ninner = nullptr;
             HIRPathParams naliasParams;
             auto norigin = HIRPath(HIRSimplePath());
             switch (e.inner.tag()) {
@@ -925,7 +925,7 @@ const HIRTypeData* HIRVisitor::visitType(const HIRTypeData* ty) {
             }
             return typeInterner().intern(mv$(data));
         }
-        case HIRTypeData::TAG_Array: {
+        case HIRType::TAG_Array: {
             const auto& e = ty->as_Array();
             auto ninner = visitType(e.inner);
             HIRConstGeneric nsize;
@@ -942,7 +942,7 @@ const HIRTypeData* HIRVisitor::visitType(const HIRTypeData* ty) {
             }
             return typeInterner().intern(mv$(data));
         }
-        case HIRTypeData::TAG_Slice: {
+        case HIRType::TAG_Slice: {
             auto ninner = visitType(ty->as_Slice().inner);
             if (ninner == ty->as_Slice().inner) {
                 return ty;
@@ -951,7 +951,7 @@ const HIRTypeData* HIRVisitor::visitType(const HIRTypeData* ty) {
             data.as_Slice().inner = ninner;
             return typeInterner().intern(mv$(data));
         }
-        case HIRTypeData::TAG_Pattern: {
+        case HIRType::TAG_Pattern: {
             const auto& e = ty->as_Pattern();
             auto ninner = visitType(e.inner);
             HIRConstGeneric nc;
@@ -991,7 +991,7 @@ const HIRTypeData* HIRVisitor::visitType(const HIRTypeData* ty) {
             }
             return typeInterner().intern(mv$(data));
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             const auto& e = ty->as_Tuple();
             for (size_t i = 0; i < e.length(); i++) {
                 auto nt = visitType(e[i]);
@@ -1007,7 +1007,7 @@ const HIRTypeData* HIRVisitor::visitType(const HIRTypeData* ty) {
             }
             return ty;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             auto ninner = visitType(ty->as_Borrow().inner);
             if (ninner == ty->as_Borrow().inner) {
                 return ty;
@@ -1016,7 +1016,7 @@ const HIRTypeData* HIRVisitor::visitType(const HIRTypeData* ty) {
             data.as_Borrow().inner = ninner;
             return typeInterner().intern(mv$(data));
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             auto ninner = visitType(ty->as_Pointer().inner);
             if (ninner == ty->as_Pointer().inner) {
                 return ty;
@@ -1025,7 +1025,7 @@ const HIRTypeData* HIRVisitor::visitType(const HIRTypeData* ty) {
             data.as_Pointer().inner = ninner;
             return typeInterner().intern(mv$(data));
         }
-        case HIRTypeData::TAG_NamedFunction: {
+        case HIRType::TAG_NamedFunction: {
             const auto& e = ty->as_NamedFunction();
             auto np = HIRPath(HIRSimplePath());
             if (!walkTypesInPath(*this, e.path, np)) {
@@ -1035,11 +1035,11 @@ const HIRTypeData* HIRVisitor::visitType(const HIRTypeData* ty) {
             data.as_NamedFunction().path = mv$(np);
             return typeInterner().intern(mv$(data));
         }
-        case HIRTypeData::TAG_Function: {
+        case HIRType::TAG_Function: {
             const auto& e = ty->as_Function();
             auto nret = visitType(e.rettype);
             size_t argIdx = e.argTypes.length();
-            const HIRTypeData* narg = nullptr;
+            const HIRType* narg = nullptr;
             for (size_t i = 0; i < e.argTypes.length(); i++) {
                 narg = visitType(e.argTypes[i]);
                 if (narg != e.argTypes[i]) {
@@ -1065,20 +1065,20 @@ const HIRTypeData* HIRVisitor::visitType(const HIRTypeData* ty) {
     return ty;
 }
 
-void HIRVisitor::visitTypeDataChildren(HIRTypeData& data) {
+void HIRVisitor::visitTypeDataChildren(HIRType& data) {
     switch (data.tag()) {
-        case HIRTypeData::TAG_Infer:
-        case HIRTypeData::TAG_Diverge:
-        case HIRTypeData::TAG_Primitive:
-        case HIRTypeData::TAG_Generic:
-        case HIRTypeData::TAG_NodeType:
+        case HIRType::TAG_Infer:
+        case HIRType::TAG_Diverge:
+        case HIRType::TAG_Primitive:
+        case HIRType::TAG_Generic:
+        case HIRType::TAG_NodeType:
             break;
-        case HIRTypeData::TAG_Path: {
+        case HIRType::TAG_Path: {
             auto& e = data.as_Path();
             this->visitPath(e.path, HIRVisitor::PathContext::TYPE);
             break;
         }
-        case HIRTypeData::TAG_TraitObject: {
+        case HIRType::TAG_TraitObject: {
             auto& e = data.as_TraitObject();
             if (e.trait.path != HIRSimplePath()) {
                 this->visitTraitPath(e.trait);
@@ -1088,7 +1088,7 @@ void HIRVisitor::visitTypeDataChildren(HIRTypeData& data) {
             }
             break;
         }
-        case HIRTypeData::TAG_ErasedType: {
+        case HIRType::TAG_ErasedType: {
             auto& e = data.as_ErasedType();
             switch (e.inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Known: {
@@ -1113,7 +1113,7 @@ void HIRVisitor::visitTypeDataChildren(HIRTypeData& data) {
             }
             break;
         }
-        case HIRTypeData::TAG_Array: {
+        case HIRType::TAG_Array: {
             auto& e = data.as_Array();
             e.inner = visitType(e.inner);
             if (auto* se = e.size.opt_Unevaluated()) {
@@ -1121,11 +1121,11 @@ void HIRVisitor::visitTypeDataChildren(HIRTypeData& data) {
             }
             break;
         }
-        case HIRTypeData::TAG_Slice: {
+        case HIRType::TAG_Slice: {
             data.as_Slice().inner = visitType(data.as_Slice().inner);
             break;
         }
-        case HIRTypeData::TAG_Pattern: {
+        case HIRType::TAG_Pattern: {
             auto& e = data.as_Pattern();
             e.inner = visitType(e.inner);
             for (auto& range : e.pattern.alternatives) {
@@ -1138,27 +1138,27 @@ void HIRVisitor::visitTypeDataChildren(HIRTypeData& data) {
             }
             break;
         }
-        case HIRTypeData::TAG_Tuple: {
+        case HIRType::TAG_Tuple: {
             auto& tuple = data.as_Tuple();
             for (auto& type : mutRange(tuple)) {
                 type = visitType(type);
             }
             break;
         }
-        case HIRTypeData::TAG_Borrow: {
+        case HIRType::TAG_Borrow: {
             data.as_Borrow().inner = visitType(data.as_Borrow().inner);
             break;
         }
-        case HIRTypeData::TAG_Pointer: {
+        case HIRType::TAG_Pointer: {
             data.as_Pointer().inner = visitType(data.as_Pointer().inner);
             break;
         }
-        case HIRTypeData::TAG_NamedFunction: {
+        case HIRType::TAG_NamedFunction: {
             auto& e = data.as_NamedFunction();
             this->visitPath(e.path, HIRVisitor::PathContext::VALUE);
             break;
         }
-        case HIRTypeData::TAG_Function: {
+        case HIRType::TAG_Function: {
             auto& e = data.as_Function();
             for (auto& type : mutRange(e.argTypes)) {
                 type = visitType(type);

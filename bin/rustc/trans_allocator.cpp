@@ -31,7 +31,7 @@ HIRPath TransAllocatorLayoutCtorPath(const HIRCrate& crate) {
     return HIRPath(layoutType, RcString::newInterned("from_size_align_unchecked"));
 }
 
-HIRPath TransAllocatorMethodPath(const HIRCrate& crate, const HIRTypeData* allocatorType, const AllocatorMethod& method) {
+HIRPath TransAllocatorMethodPath(const HIRCrate& crate, const HIRType* allocatorType, const AllocatorMethod& method) {
     const auto traitPath = TransAllocatorTraitPath(crate);
     const auto& trait = crate.getTraitByPath(Span(), traitPath);
     const auto& function = trait.values.at(method.name).as_Function();

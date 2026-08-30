@@ -95,7 +95,7 @@ struct HIRTypeDataTraitObject {
 struct HIRTypeDataErasedTypeAliasInner {
     HIRGenericParams generics;
     HIRSimplePath path;
-    const HIRTypeData* type;
+    const HIRType* type;
 
     HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& paramsOuter, const HIRGenericParams* paramsInner = nullptr);
     bool isLocalTo(const HIRSimplePath& p) const;
@@ -133,8 +133,8 @@ struct HIRTypeDataFunctionPointer {
     bool isUnsafe;
     bool isVariadic;
     RcString abi;
-    const HIRTypeData* rettype;
-    stl::Vector<const HIRTypeData*> argTypes;
+    const HIRType* rettype;
+    stl::Vector<const HIRType*> argTypes;
 
     bool trackCaller = false;
 
@@ -207,9 +207,9 @@ protected:
 
 public:
     HIRCompare cmpPath(const Span& sp, const HIRPath& tyL, const HIRPath& tyR, tCbResolveType resolveCb);
-    virtual HIRCompare cmpType(const Span& sp, const HIRTypeData* tyL, const HIRTypeData* tyR, tCbResolveType resolveCb);
+    virtual HIRCompare cmpType(const Span& sp, const HIRType* tyL, const HIRType* tyR, tCbResolveType resolveCb);
 
-    virtual HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) = 0;
+    virtual HIRCompare matchTy(const HIRGenericRef& g, const HIRType* ty, tCbResolveType resolveCb) = 0;
     virtual HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) = 0;
 
 private:
@@ -219,7 +219,7 @@ private:
 class HIRTypeInterner {
     stl::ObjPool& pool;
     u32& id;
-    std::unordered_multimap<size_t, const HIRTypeData*> nodes;
+    std::unordered_multimap<size_t, const HIRType*> nodes;
 
 public:
     HIRTypeInterner(stl::ObjPool& pool, u32& id);
@@ -228,33 +228,33 @@ public:
         return pool;
     }
 
-    const HIRTypeData* intern(HIRTypeData data);
-    const HIRTypeData* infer(unsigned int idx = ~0u, HIRInferClass tyClass = HIRInferClass::None);
+    const HIRType* intern(HIRType data);
+    const HIRType* infer(unsigned int idx = ~0u, HIRInferClass tyClass = HIRInferClass::None);
     unsigned newAliasInputInfer();
-    const HIRTypeData* primitive(HIRCoreType ct);
-    const HIRTypeData* generic(HIRGenericRef generic);
-    const HIRTypeData* generic(RcString name, unsigned int slot);
-    const HIRTypeData* self();
-    const HIRTypeData* unit();
-    const HIRTypeData* diverge();
-    const HIRTypeData* borrow(HIRBorrowType bt, const HIRTypeData* inner);
-    const HIRTypeData* pointer(HIRBorrowType bt, const HIRTypeData* inner);
-    const HIRTypeData* tuple(stl::Vector<const HIRTypeData*> types);
-    const HIRTypeData* slice(const HIRTypeData* inner);
-    const HIRTypeData* array(const HIRTypeData* inner, HIRArraySize size);
-    const HIRTypeData* array(const HIRTypeData* inner, u64 size);
-    const HIRTypeData* array(const HIRTypeData* inner, HIRConstGeneric size);
-    const HIRTypeData* path(HIRPath path, HIRTypePathBinding binding);
-    const HIRTypeData* function(HIRTypeDataFunctionPointer ft);
-    const HIRTypeData* closure(HIRExprNodeClosure* node);
-    const HIRTypeData* generator(HIRExprNodeGenerator* node);
-    const HIRTypeData* asyncBlock(HIRExprNodeAsyncBlock* node);
+    const HIRType* primitive(HIRCoreType ct);
+    const HIRType* generic(HIRGenericRef generic);
+    const HIRType* generic(RcString name, unsigned int slot);
+    const HIRType* self();
+    const HIRType* unit();
+    const HIRType* diverge();
+    const HIRType* borrow(HIRBorrowType bt, const HIRType* inner);
+    const HIRType* pointer(HIRBorrowType bt, const HIRType* inner);
+    const HIRType* tuple(stl::Vector<const HIRType*> types);
+    const HIRType* slice(const HIRType* inner);
+    const HIRType* array(const HIRType* inner, HIRArraySize size);
+    const HIRType* array(const HIRType* inner, u64 size);
+    const HIRType* array(const HIRType* inner, HIRConstGeneric size);
+    const HIRType* path(HIRPath path, HIRTypePathBinding binding);
+    const HIRType* function(HIRTypeDataFunctionPointer ft);
+    const HIRType* closure(HIRExprNodeClosure* node);
+    const HIRType* generator(HIRExprNodeGenerator* node);
+    const HIRType* asyncBlock(HIRExprNodeAsyncBlock* node);
 };
 
-inline bool operator==(const HIRTypeData* ty, HIRCoreType ct) {
+inline bool operator==(const HIRType* ty, HIRCoreType ct) {
     return ty && ty->is_Primitive() && ty->as_Primitive() == ct;
 }
 
-inline bool operator!=(const HIRTypeData* ty, HIRCoreType ct) {
+inline bool operator!=(const HIRType* ty, HIRCoreType ct) {
     return !(ty == ct);
 }
