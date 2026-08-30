@@ -1,10 +1,13 @@
 #include "unicode_nfc.h"
 
 #include <std/sys/types.h>
+#include <std/lib/vector.h>
 
 #include <vector>
 #include <cstdint>
 #include <algorithm>
+
+using namespace stl;
 
 namespace {
     struct UnicodeCombining {
@@ -68,13 +71,13 @@ namespace {
         return 0;
     }
 
-    void decomposeInto(u32 codepoint, std::vector<u32>& out) {
+    void decomposeInto(u32 codepoint, Vector<u32>& out) {
         if (HANGUL_S_BASE <= codepoint && codepoint < HANGUL_S_BASE + HANGUL_S_COUNT) {
             const u32 index = codepoint - HANGUL_S_BASE;
-            out.push_back(HANGUL_L_BASE + index / HANGUL_N_COUNT);
-            out.push_back(HANGUL_V_BASE + (index % HANGUL_N_COUNT) / HANGUL_T_COUNT);
+            out.pushBack(HANGUL_L_BASE + index / HANGUL_N_COUNT);
+            out.pushBack(HANGUL_V_BASE + (index % HANGUL_N_COUNT) / HANGUL_T_COUNT);
             if (index % HANGUL_T_COUNT != 0) {
-                out.push_back(HANGUL_T_BASE + index % HANGUL_T_COUNT);
+                out.pushBack(HANGUL_T_BASE + index % HANGUL_T_COUNT);
             }
             return;
         }
@@ -85,11 +88,11 @@ namespace {
             }
             return;
         }
-        out.push_back(codepoint);
+        out.pushBack(codepoint);
     }
 
-    void orderCanonically(std::vector<u32>& text) {
-        for (size_t i = 1; i < text.size(); i++) {
+    void orderCanonically(Vector<u32>& text) {
+        for (size_t i = 1; i < text.length(); i++) {
             const auto cls = combiningClass(text[i]);
             if (cls == 0) {
                 continue;
@@ -100,24 +103,24 @@ namespace {
                 if (previous == 0 || previous <= cls) {
                     break;
                 }
-                std::swap(text[j - 1], text[j]);
+                std::swap(text.mut(j - 1), text.mut(j));
                 j--;
             }
         }
     }
 
-    void compose(std::vector<u32>& text) {
+    void compose(Vector<u32>& text) {
         if (text.empty()) {
             return;
         }
         size_t starter = 0;
         u8 lastClass = combiningClass(text[0]) == 0 ? 0 : 255;
         size_t out = 1;
-        for (size_t i = 1; i < text.size(); i++) {
+        for (size_t i = 1; i < text.length(); i++) {
             const auto cls = combiningClass(text[i]);
             if (lastClass < cls || (lastClass == 0 && cls == 0)) {
                 if (const auto composed = composedPair(text[starter], text[i])) {
-                    text[starter] = composed;
+                    text.mut(starter) = composed;
                     continue;
                 }
             }
@@ -125,9 +128,11 @@ namespace {
                 starter = out;
             }
             lastClass = cls;
-            text[out++] = text[i];
+            text.mut(out++) = text[i];
         }
-        text.resize(out);
+        while (text.length() > out) {
+            text.popBack();
+        }
     }
 
     void appendUtf8(std::string& out, u32 codepoint) {
@@ -148,9 +153,9 @@ namespace {
         }
     }
 
-    std::vector<u32> decodeUtf8(const std::string& text) {
-        std::vector<u32> out;
-        out.reserve(text.size());
+    Vector<u32> decodeUtf8(const std::string& text) {
+        Vector<u32> out;
+        out.grow(text.size());
         for (size_t i = 0; i < text.size();) {
             const auto lead = static_cast<u8>(text[i]);
             size_t length = 1;
@@ -166,7 +171,7 @@ namespace {
                 codepoint = lead & 0x07;
             }
             if (i + length > text.size()) {
-                out.push_back(lead);
+                out.pushBack(lead);
                 i++;
                 continue;
             }
@@ -180,11 +185,11 @@ namespace {
                 codepoint = (codepoint << 6) | (next & 0x3F);
             }
             if (!valid) {
-                out.push_back(lead);
+                out.pushBack(lead);
                 i++;
                 continue;
             }
-            out.push_back(codepoint);
+            out.pushBack(codepoint);
             i += length;
         }
         return out;
@@ -206,8 +211,8 @@ std::string unicodeNormaliseNfc(const std::string& text) {
     }
 
     auto codepoints = decodeUtf8(text);
-    std::vector<u32> decomposed;
-    decomposed.reserve(codepoints.size() * 2);
+    Vector<u32> decomposed;
+    decomposed.grow(codepoints.length() * 2);
     for (const auto codepoint : codepoints) {
         decomposeInto(codepoint, decomposed);
     }

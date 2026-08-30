@@ -106,7 +106,7 @@ namespace {
     }
 
     ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ThinVector<HIRTypeRef>& left, const ThinVector<HIRTypeRef>& right);
-    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const std::vector<HIRTypeRef>& left, const std::vector<HIRTypeRef>& right);
+    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const Vector<HIRTypeRef>& left, const Vector<HIRTypeRef>& right);
 
     ::Ordering arraySizeOrdSpecific(const Span& sp, const HIRArraySize& left, const HIRArraySize& right) {
         if (left == right) {
@@ -323,10 +323,10 @@ namespace {
         return rv;
     }
 
-    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const std::vector<HIRTypeRef>& le, const std::vector<HIRTypeRef>& re) {
+    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const Vector<HIRTypeRef>& le, const Vector<HIRTypeRef>& re) {
         auto rv = ::OrdEqual;
-        BUG_ASSERT(le.size() == re.size());
-        for (unsigned int i = 0; i < le.size(); i++) {
+        BUG_ASSERT(le.length() == re.length());
+        for (unsigned int i = 0; i < le.length(); i++) {
             auto a = typeOrdSpecific(context, sp, le[i], re[i]);
             if (a != ::OrdEqual) {
                 if (rv != ::OrdEqual && a != rv) {
@@ -591,9 +591,9 @@ HIRTypeRef HIRFunction::makePtrTy(const Span& sp, const Monomorphiser& ms) const
     ft.isVariadic = this->variadic;
     ft.abi = this->abi;
     ft.rettype = ms.monomorphType(sp, this->returnType);
-    ft.argTypes.reserve(this->fixedArgCount());
+    ft.argTypes.grow(this->fixedArgCount());
     for (size_t i = 0; i < this->fixedArgCount(); i++) {
-        ft.argTypes.push_back(ms.monomorphType(sp, this->args[i].second));
+        ft.argTypes.pushBack(ms.monomorphType(sp, this->args[i].second));
     }
     return ms.typeInterner().function(std::move(ft));
 }
@@ -604,9 +604,9 @@ HIRTypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIRTyp
     ft.isVariadic = false;
     ft.abi = RcString::newInterned(ABI_RUST);
     ft.rettype = std::move(retTy);
-    ft.argTypes.reserve(fields.size());
+    ft.argTypes.grow(fields.size());
     for (const auto& fld : fields) {
-        ft.argTypes.push_back(ms.monomorphType(sp, fld.ent));
+        ft.argTypes.pushBack(ms.monomorphType(sp, fld.ent));
     }
     return ms.typeInterner().function(std::move(ft));
 }

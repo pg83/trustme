@@ -1,9 +1,10 @@
 #pragma once
 
 #include "output.h"
-
 #include "ast_expr_ptr.h"
 #include "parse_tokentree.h"
+
+#include <std/lib/vector.h>
 
 class ASTCrate;
 struct WireBoard;
@@ -28,6 +29,7 @@ struct ASTAttributeIdentCb final: ASTAttributeIdentCallback {
 };
 
 class ASTAttribute;
+
 class ASTAttributeList {
 public:
     std::vector<ASTAttribute> items;
@@ -55,34 +57,32 @@ public:
     bool has(const char* name) const {
         return get(name) != 0;
     }
-
 };
 
 struct ASTAttributeName {
     bool hasLeading = false;
-    std::vector<RcString> elems;
+    stl::Vector<RcString> elems;
 
     bool isTrivial() const {
-        return elems.size() == 1;
+        return elems.length() == 1;
     }
 
     const RcString& asTrivial() const {
-        return elems.at(0);
+        return elems[0];
     }
 
     bool operator==(const char* s) const {
-        return elems.size() == 1 && elems[0] == s;
+        return elems.length() == 1 && elems[0] == s;
     }
 
     bool operator==(const RcString& x) const {
-        return elems.size() == 1 && elems[0] == x;
+        return elems.length() == 1 && elems[0] == x;
     }
 
     template <typename T>
     bool operator!=(const T& x) const {
         return !(*this == x);
     }
-
 };
 
 class ASTAttribute {
@@ -138,7 +138,6 @@ public:
         ASTAttributeIdentCb<F> cb(f);
         parseParenIdentListCb(cb);
     }
-
 };
 
 #include "ast_attrs_tu.h"

@@ -2,6 +2,7 @@
 #include "thin_vector.h"
 
 #include <std/tst/ut.h>
+#include <std/lib/vector.h>
 #include <std/str/builder.h>
 
 #include <string>
@@ -68,8 +69,11 @@ STD_TEST_SUITE(ThinVectorBasics) {
     }
 
     STD_TEST(fromVectorAndRange) {
-        std::vector<int> src{10, 20, 30};
-        ThinVector<int> v(src);
+        Vector<int> src;
+        src.pushBack(10);
+        src.pushBack(20);
+        src.pushBack(30);
+        ThinVector<int> v(src.begin(), src.end());
         STD_INSIST(v.size() == 3);
         STD_INSIST(v[0] == 10 && v[1] == 20 && v[2] == 30);
 
@@ -212,10 +216,16 @@ STD_TEST_SUITE(ThinVectorAccessAndOrder) {
     }
 
     STD_TEST(ordComparesLexicographicallyThenLength) {
-        ThinVector<int> a(std::vector<int>{1, 2, 3});
-        ThinVector<int> b(std::vector<int>{1, 2, 3});
-        ThinVector<int> c(std::vector<int>{1, 2, 4});
-        ThinVector<int> shorter(std::vector<int>{1, 2});
+        ThinVector<int> a;
+        a.push_back(1);
+        a.push_back(2);
+        a.push_back(3);
+        ThinVector<int> b(a);
+        ThinVector<int> c(a);
+        c.back() = 4;
+        ThinVector<int> shorter;
+        shorter.push_back(1);
+        shorter.push_back(2);
 
         STD_INSIST(a.ord(b) == OrdEqual);
         STD_INSIST(a.ord(c) == OrdLess);
@@ -225,7 +235,10 @@ STD_TEST_SUITE(ThinVectorAccessAndOrder) {
     }
 
     STD_TEST(streamInsertion) {
-        ThinVector<int> v(std::vector<int>{1, 2, 3});
+        ThinVector<int> v;
+        v.push_back(1);
+        v.push_back(2);
+        v.push_back(3);
         StringBuilder os;
         os << v;
         STD_INSIST(std::string(static_cast<const char*>(os.data()), os.length()) == "1, 2, 3");

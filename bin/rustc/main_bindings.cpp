@@ -37,6 +37,7 @@
 #include "hir_typeck_main_bindings.h"
 #include "hir_conv_constant_evaluation.h"
 
+#include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
 #include <set>
@@ -53,6 +54,15 @@ using namespace stl;
 #define NEWNODE(ty, ...) makeAstExprNode<ASTExprNode##ty>(*crate.pool __VA_OPT__(, ) __VA_ARGS__)
 
 namespace {
+    Vector<RcString> pathNodes(const char* first, const char* second = nullptr) {
+        Vector<RcString> nodes(second ? 2 : 1);
+        nodes.pushBack(RcString(first));
+        if (second) {
+            nodes.pushBack(RcString(second));
+        }
+        return nodes;
+    }
+
     struct ProgramParams {
         enum eLastStage {
             STAGE_PARSE,
@@ -100,7 +110,7 @@ namespace {
         std::vector<std::string> crateSearchDirs;
         std::vector<std::string> nativeLibSearchDirs;
         std::vector<std::string> frameworkSearchDirs;
-        std::vector<const char*> libraries;
+        Vector<const char*> libraries;
         std::set<std::string> features;
 
         struct {
@@ -385,7 +395,7 @@ namespace {
                     }
 
                     if (!crate.noMain) {
-                        crate.langItems.insert(std::make_pair(std::string("trustme-main"), ASTAbsolutePath("", {"main"})));
+                        crate.langItems.insert(std::make_pair(std::string("trustme-main"), ASTAbsolutePath("", pathNodes("main"))));
                     }
                 }
             }
@@ -837,7 +847,7 @@ void ExpandTestHarness(ASTCrate& crate) {
     }
     auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mv$(listItemTy), makeAstExprNode<ASTExprNodeInteger>(*crate.pool, U128(testCount), CORETYPE_UINT).release()), ASTExpr(mv$(testsArray))};
 
-    auto newmod = ASTModule{ASTAbsolutePath("", {"test#"})};
+    auto newmod = ASTModule{ASTAbsolutePath("", pathNodes("test#"))};
     auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
     // - TODO: These need to be loaded too.
 
@@ -845,7 +855,7 @@ void ExpandTestHarness(ASTCrate& crate) {
     newmod.addItem(Span(), visPrivate, "TESTS", mv$(testsList), {});
 
     crate.rootModule_.addItem(Span(), visPrivate, "test#", mv$(newmod), {});
-    crate.langItems["trustme-main"] = ASTAbsolutePath("", {"test#", "main"});
+    crate.langItems["trustme-main"] = ASTAbsolutePath("", pathNodes("test#", "main"));
 }
 
 #undef NEWNODE
@@ -948,9 +958,9 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             sysE << StringView("Option ") << arg << StringView(" requires an argument") << endL;
                             exit(1);
                         }
-                        this->libraries.push_back(argv[++i]);
+                        this->libraries.pushBack(argv[++i]);
                     } else {
-                        this->libraries.push_back(arg + 1);
+                        this->libraries.pushBack(arg + 1);
                     }
                     continue;
                 case 'A':

@@ -3,6 +3,8 @@
 #include "hir_type.h"
 #include "hir_typeck_static.h"
 
+#include <std/lib/vector.h>
+
 #include <cstddef>
 
 struct Settings;
@@ -63,7 +65,7 @@ struct TypeReprFieldPath {
 
     size_t index;
     size_t size;
-    std::vector<size_t> subFields;
+    stl::Vector<size_t> subFields;
 };
 
 struct TypeReprVariantLinear {
@@ -92,7 +94,7 @@ struct TypeReprVariantLinear {
 
 struct TypeReprVariantValues {
     TypeReprFieldPath field;
-    std::vector<U128> values;
+    stl::Vector<U128> values;
 
     bool isTag(unsigned varIdx) const {
         return varIdx == field.index;
@@ -146,4 +148,4 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
 
 bool TargetTypesAreTransmutable(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* src, const HIRTypeData* dst, bool assumeAlignment, bool assumeLifetimes, bool assumeSafety, bool assumeValidity);
 
-const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const std::vector<size_t>& subFields = {}, size_t ofs = 0);
+const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const stl::Vector<size_t>& subFields = {}, size_t ofs = 0);

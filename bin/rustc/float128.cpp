@@ -3,6 +3,9 @@
 #include "output.h"
 #include "compile_error.h"
 
+#include <std/alg/range.h>
+#include <std/lib/vector.h>
+
 #include <string>
 #include <vector>
 #include <cstring>
@@ -35,9 +38,11 @@ namespace {
     };
 
     struct BigUint {
-        std::vector<u64> limbs_; // escape: existing storage type exposed by declaration reordering
+        Vector<u64> limbs_; // escape: existing storage type exposed by declaration reordering
 
         void trim();
+
+        void resize(size_t size);
 
         BigUint() = default;
 
@@ -1021,16 +1026,25 @@ Float128 Float128::parseDecimal(const char* text) {
 
 auto BigUint::trim() -> void {
     while (!limbs_.empty() && limbs_.back() == 0) {
-        limbs_.pop_back();
+        limbs_.popBack();
+    }
+}
+
+auto BigUint::resize(size_t size) -> void {
+    while (limbs_.length() < size) {
+        limbs_.pushBack(0);
+    }
+    while (limbs_.length() > size) {
+        limbs_.popBack();
     }
 }
 
 auto BigUint::fromU128(u128 v) -> BigUint {
     BigUint r;
     if (v != 0) {
-        r.limbs_.push_back(static_cast<u64>(v));
+        r.limbs_.pushBack(static_cast<u64>(v));
         if ((v >> 64) != 0) {
-            r.limbs_.push_back(static_cast<u64>(v >> 64));
+            r.limbs_.pushBack(static_cast<u64>(v >> 64));
         }
     }
     return r;
@@ -1042,13 +1056,13 @@ auto BigUint::isZero() const -> bool {
 
 auto BigUint::multiplyAddSmall(u64 factor, u64 addend) -> void {
     u128 carry = addend;
-    for (auto& limb : limbs_) {
+    for (auto& limb : mutRange(limbs_)) {
         const u128 v = u128(limb) * factor + carry;
         limb = static_cast<u64>(v);
         carry = v >> 64;
     }
     while (carry != 0) {
-        limbs_.push_back(static_cast<u64>(carry));
+        limbs_.pushBack(static_cast<u64>(carry));
         carry >>= 64;
     }
     trim();
@@ -1057,9 +1071,9 @@ auto BigUint::multiplyAddSmall(u64 factor, u64 addend) -> void {
 auto BigUint::divideSmall(u64 divisor) -> u64 {
     BUG_ASSERT(divisor != 0);
     u128 remainder = 0;
-    for (size_t i = limbs_.size(); i-- > 0;) {
+    for (size_t i = limbs_.length(); i-- > 0;) {
         const u128 cur = (remainder << 64) | limbs_[i];
-        limbs_[i] = static_cast<u64>(cur / divisor);
+        limbs_.mut(i) = static_cast<u64>(cur / divisor);
         remainder = cur % divisor;
     }
     trim();
@@ -1072,22 +1086,22 @@ auto BigUint::shiftLeft(size_t bits) -> void {
     }
     const size_t whole = bits / 64;
     const unsigned rest = bits % 64;
-    const size_t oldSize = limbs_.size();
-    limbs_.resize(oldSize + whole + (rest != 0 ? 1 : 0), 0);
+    const size_t oldSize = limbs_.length();
+    resize(oldSize + whole + (rest != 0 ? 1 : 0));
     for (size_t i = oldSize; i-- > 0;) {
         const u64 limb = limbs_[i];
         if (rest != 0) {
-            limbs_[i + whole + 1] |= limb >> (64 - rest);
-            limbs_[i + whole] = limb << rest;
+            limbs_.mut(i + whole + 1) |= limb >> (64 - rest);
+            limbs_.mut(i + whole) = limb << rest;
         } else {
-            limbs_[i + whole] = limb;
+            limbs_.mut(i + whole) = limb;
         }
         if (i < whole) {
-            limbs_[i] = 0;
+            limbs_.mut(i) = 0;
         }
     }
     for (size_t i = 0; i < whole && i < oldSize; i++) {
-        limbs_[i] = 0;
+        limbs_.mut(i) = 0;
     }
     trim();
 }
@@ -1098,7 +1112,7 @@ auto BigUint::shiftRightSticky(size_t bits, bool& sticky) -> void {
     }
     const size_t whole = bits / 64;
     const unsigned rest = bits % 64;
-    if (whole >= limbs_.size()) {
+    if (whole >= limbs_.length()) {
         sticky |= !isZero();
         limbs_.clear();
         return;
@@ -1109,15 +1123,15 @@ auto BigUint::shiftRightSticky(size_t bits, bool& sticky) -> void {
     if (rest != 0) {
         sticky |= (limbs_[whole] & ((u64(1) << rest) - 1)) != 0;
     }
-    const size_t newSize = limbs_.size() - whole;
+    const size_t newSize = limbs_.length() - whole;
     for (size_t i = 0; i < newSize; i++) {
         u64 v = limbs_[i + whole] >> rest;
-        if (rest != 0 && i + whole + 1 < limbs_.size()) {
+        if (rest != 0 && i + whole + 1 < limbs_.length()) {
             v |= limbs_[i + whole + 1] << (64 - rest);
         }
-        limbs_[i] = v;
+        limbs_.mut(i) = v;
     }
-    limbs_.resize(newSize);
+    resize(newSize);
     trim();
 }
 
@@ -1125,7 +1139,7 @@ auto BigUint::bitLength() const -> size_t {
     if (limbs_.empty()) {
         return 0;
     }
-    return limbs_.size() * 64 - static_cast<size_t>(__builtin_clzll(limbs_.back()));
+    return limbs_.length() * 64 - static_cast<size_t>(__builtin_clzll(limbs_.back()));
 }
 
 auto BigUint::topBits(size_t bits, bool& sticky) const -> u128 {
@@ -1136,7 +1150,7 @@ auto BigUint::topBits(size_t bits, bool& sticky) const -> u128 {
         copy.shiftRightSticky(length - bits, sticky);
     }
     u128 v = 0;
-    for (size_t i = copy.limbs_.size(); i-- > 0;) {
+    for (size_t i = copy.limbs_.length(); i-- > 0;) {
         v = (v << 64) | copy.limbs_[i];
     }
     return v;

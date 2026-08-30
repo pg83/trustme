@@ -486,7 +486,7 @@ auto ResolveState::getModuleHir(const HIRModule& startMod, const ASTPath& path, 
             ti = &extCrate.getTypeitemByPath(sp, imp->path, /*ignore_crate*/ true, /*ignore_last*/ false);
         } else {
             if (outPath) {
-                outPath->nodes.push_back(name);
+                outPath->nodes.pushBack(name);
             }
         }
         switch ((*ti).tag()) {
@@ -588,7 +588,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
             if (i.name == name) {
                 DEBUG(StringView("Found in ast (macro)"));
                 if (outPath) {
-                    outPath->nodes.push_back(name);
+                    outPath->nodes.pushBack(name);
                 }
                 return ResolveItemRef::make_Macro(&*i.data);
             }
@@ -638,7 +638,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
         }
         if (matchingNamespace(i->data, ns) && i->name == name) {
             if (outPath) {
-                outPath->nodes.push_back(name);
+                outPath->nodes.pushBack(name);
             }
             DEBUG(StringView("Found in ast (") << i->data.tagStr() << StringView(")"));
             switch (ns) {
@@ -674,7 +674,8 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                         if (ns == ResolveNamespace::Macro) {
                             if (outPath) {
                                 outPath->crate = pe.crate;
-                                outPath->nodes = makeVec1<RcString>(RcString(pe.nodes.front().name()));
+                                outPath->nodes.clear();
+                                outPath->nodes.pushBack(RcString(pe.nodes.front().name()));
                             }
                             return ResolveItemRefMacro(ExpandFindProcMacro(crate.wb, pe.nodes.front().name()));
                         }
@@ -799,7 +800,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
     if (mod.isAnon()) {
         DEBUG(StringView("Recurse to parent"));
         const ASTModule* m = &crate.rootModule_;
-        for (size_t i = 0; i < mod.path().nodes.size() - 1; i++) {
+        for (size_t i = 0; i < mod.path().nodes.length() - 1; i++) {
             auto& tgtName = mod.path().nodes[i];
             if (tgtName.c_str()[0] == '#') {
                 auto idx = strtol(tgtName.c_str() + 1, nullptr, 10);
@@ -849,7 +850,7 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                     ti = &extCrate.getTypeitemByPath(sp, p->path, true);
                 } else {
                     if (outPath) {
-                        outPath->nodes.push_back(itemName);
+                        outPath->nodes.pushBack(itemName);
                     }
                     ti = &it->second->ent;
                 }
@@ -869,7 +870,7 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                     vi = &H::getCrate(sp, crate, p->path).getValitemByPath(sp, p->path, true);
                 } else {
                     if (outPath) {
-                        outPath->nodes.push_back(itemName);
+                        outPath->nodes.pushBack(itemName);
                     }
                     vi = &it->second->ent;
                 }
@@ -924,7 +925,7 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                 } else {
                     mi = &it->second->ent;
                     if (outPath) {
-                        outPath->nodes.push_back(itemName);
+                        outPath->nodes.pushBack(itemName);
                     }
                 }
                 switch ((*mi).tag()) {

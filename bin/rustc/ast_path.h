@@ -1,13 +1,14 @@
 #pragma once
 
-#include "output.h"
-
 #include "span.h"
 #include "ident.h"
 #include "common.h"
+#include "output.h"
 #include "ast_types.h"
 #include "ast_expr_ptr.h"
 #include "ast_lifetime_ref.h"
+
+#include <std/lib/vector.h>
 
 #include <string>
 #include <string>
@@ -41,11 +42,11 @@ class ASTExternCrate;
 
 struct ASTAbsolutePath {
     RcString crate;
-    std::vector<RcString> nodes;
+    stl::Vector<RcString> nodes;
 
     ASTAbsolutePath();
 
-    ASTAbsolutePath(RcString crate, std::vector<RcString> nodes);
+    ASTAbsolutePath(RcString crate, stl::Vector<RcString> nodes);
 
     ASTAbsolutePath operator+(RcString n) const;
 
@@ -91,7 +92,6 @@ struct ASTPathBinding {
     ASTPathBinding<T> clone() const {
         return ASTPathBinding(path, binding.clone());
     }
-
 };
 
 class ASTPathParamEnt;
@@ -114,7 +114,6 @@ struct ASTPathParams {
     }
 
     Ordering ord(const ASTPathParams& x) const;
-
 };
 
 class ASTPathNode {
@@ -150,7 +149,6 @@ public:
     bool operator==(const ASTPathNode& x) const {
         return ord(x) == OrdEqual;
     }
-
 };
 
 #include "ast_path_class_tu.h"
@@ -297,6 +295,7 @@ public:
     }
 
     void printPretty(stl::ZeroCopyOutput& os, bool isTypeContext, bool isDebug = false) const;
+
 private:
     void checkParamCounts(const ASTGenericParams& params, bool expectParams, ASTPathNode& node);
 

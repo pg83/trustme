@@ -8,6 +8,8 @@
 #include "hir_generic_ref.h"
 #include "hir_generic_params.h"
 
+#include <std/lib/vector.h>
+
 #include <memory>
 #include <unordered_map>
 
@@ -132,7 +134,7 @@ struct HIRTypeDataFunctionPointer {
     bool isVariadic;
     RcString abi;
     HIRTypeRef rettype;
-    std::vector<HIRTypeRef> argTypes;
+    stl::Vector<HIRTypeRef> argTypes;
 
     bool trackCaller = false;
 
@@ -237,7 +239,7 @@ public:
     HIRTypeRef diverge();
     HIRTypeRef borrow(HIRBorrowType bt, HIRTypeRef inner);
     HIRTypeRef pointer(HIRBorrowType bt, HIRTypeRef inner);
-    HIRTypeRef tuple(std::vector<HIRTypeRef> types);
+    HIRTypeRef tuple(stl::Vector<HIRTypeRef> types);
     HIRTypeRef slice(HIRTypeRef inner);
     HIRTypeRef array(HIRTypeRef inner, HIRArraySize size);
     HIRTypeRef array(HIRTypeRef inner, u64 size);

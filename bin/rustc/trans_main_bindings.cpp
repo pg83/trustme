@@ -19,6 +19,7 @@
 #include "hir_conv_constant_evaluation.h"
 
 #include <std/alg/defer.h>
+#include <std/lib/vector.h>
 
 #include <deque>
 #include <algorithm>
@@ -42,7 +43,7 @@ namespace {
     };
 
     struct CloneCleanupState {
-        std::vector<MIRBasicBlockId> calls;
+        Vector<MIRBasicBlockId> calls;
         std::vector<std::pair<MIRLValue, unsigned>> values;
     };
 
@@ -89,7 +90,7 @@ namespace {
         const TransList* origList;
 
         std::deque<TransListFunction*> fcnQueue;
-        std::vector<TransListFunction*> fcnsToTypeVisit;
+        Vector<TransListFunction*> fcnsToTypeVisit;
 
         std::set<std::string> emittedFunctions;
         std::set<HIRPath> activePaths;
@@ -183,12 +184,12 @@ namespace {
             return std::move(fldLvalue);
         } else {
             const auto& langClone = state.resolve.hirCrate().getLangItemPath(sp, "clone");
-            auto borrowLv = MIRLValue::newLocal(mirFcn.locals.size());
-            mirFcn.locals.push_back(state.crate.types.borrow(HIRBorrowType::Shared, subty));
-            auto resLv = MIRLValue::newLocal(mirFcn.locals.size());
-            mirFcn.locals.push_back(subty);
-            const auto dropFlag = static_cast<unsigned>(mirFcn.dropFlags.size());
-            mirFcn.dropFlags.push_back(false);
+            auto borrowLv = MIRLValue::newLocal(mirFcn.locals.length());
+            mirFcn.locals.pushBack(state.crate.types.borrow(HIRBorrowType::Shared, subty));
+            auto resLv = MIRLValue::newLocal(mirFcn.locals.length());
+            mirFcn.locals.pushBack(subty);
+            const auto dropFlag = static_cast<unsigned>(mirFcn.dropFlags.length());
+            mirFcn.dropFlags.pushBack(false);
 
             auto& bb = cloneOpenBlock(mirFcn);
             bb.statements.push_back(MIRStatement::make_Assign({borrowLv.clone(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, mv$(fldLvalue)})}));
@@ -196,7 +197,7 @@ namespace {
             const auto callBlock = static_cast<MIRBasicBlockId>(mirFcn.blocks.size() - 1);
             const auto retBlock = static_cast<MIRBasicBlockId>(mirFcn.blocks.size());
             bb.terminator = MIRTerminator::make_Call({retBlock, MIRUnwindAction::make_Continue({}), resLv.clone(), MIRCallTarget(HIRPath(subty, langClone, "clone", std::move(pp))), ::makeVec1<MIRParam>(std::move(borrowLv))});
-            cleanup.calls.push_back(callBlock);
+            cleanup.calls.pushBack(callBlock);
             cleanup.values.push_back(std::make_pair(resLv.clone(), dropFlag));
 
             mirFcn.blocks.push_back(MIRBasicBlock());
@@ -293,11 +294,11 @@ namespace {
                 }
                 case HIRTypeData::TAG_Tuple: {
                     auto& te = (*ty).as_Tuple();
-                    BUG_ASSERT(te.size() > 0);
+                    BUG_ASSERT(te.length() > 0);
 
                     CloneCleanupState cleanup;
                     std::vector<MIRParam> values;
-                    values.reserve(te.size());
+                    values.reserve(te.length());
                     for (const auto& subty : te) {
                         auto fldLvalue = MIRLValue::newField(MIRLValue::newDeref(MIRLValue::newArgument(0)), static_cast<unsigned>(values.size()));
                         values.push_back(cloneField(state, sp, mirFcn, cleanup, subty, mv$(fldLvalue)));
@@ -335,8 +336,8 @@ namespace {
                 fromMir.blocks.push_back(mv$(bb));
             } else {
                 const auto& langClone = state.resolve.hirCrate().getLangItemPath(sp, "clone");
-                auto cloned = MIRLValue::newLocal(fromMir.locals.size());
-                fromMir.locals.push_back(ty);
+                auto cloned = MIRLValue::newLocal(fromMir.locals.length());
+                fromMir.locals.pushBack(ty);
 
                 MIRBasicBlock call;
                 call.terminator = MIRTerminator::make_Call({
@@ -966,7 +967,7 @@ static void TransEnumerateTypes(EnumState& state) {
     size_t constructorsVisited = 0;
     bool constructorsAdded;
     do {
-        for (unsigned int i = 0; i < state.fcnsToTypeVisit.size(); i++) {
+        for (unsigned int i = 0; i < state.fcnsToTypeVisit.length(); i++) {
             auto* p = state.fcnsToTypeVisit[i];
             BUG_ASSERT(p->path);
             BUG_ASSERT(p->ptr);
@@ -1001,10 +1002,10 @@ static void TransEnumerateTypes(EnumState& state) {
             const auto& ty = ent.first.data.as_UfcsKnown().type;
             const auto& gpath = ent.first.data.as_UfcsKnown().trait;
             if (gpath.path == HIRSimplePath()) {
-                std::vector<HIRTypeRef> tupleTys;
-                tupleTys.push_back(state.crate.types.primitive(HIRCoreType::Usize));
-                tupleTys.push_back(state.crate.types.primitive(HIRCoreType::Usize));
-                tupleTys.push_back(state.crate.types.primitive(HIRCoreType::Usize));
+                Vector<HIRTypeRef> tupleTys;
+                tupleTys.pushBack(state.crate.types.primitive(HIRCoreType::Usize));
+                tupleTys.pushBack(state.crate.types.primitive(HIRCoreType::Usize));
+                tupleTys.pushBack(state.crate.types.primitive(HIRCoreType::Usize));
                 auto vtableTy = state.crate.types.tuple(std::move(tupleTys));
                 tv.visitType(ty);
                 tv.visitType(vtableTy);
@@ -2175,9 +2176,9 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     if (e) {
                         auto ft = te->decay(crate.types, sp);
 
-                        std::vector<HIRTypeRef> argTys;
+                        Vector<HIRTypeRef> argTys;
                         for (auto& ty : ft.argTypes) {
-                            argTys.push_back(ty);
+                            argTys.pushBack(ty);
                         }
                         auto argTy = crate.types.tuple(mv$(argTys));
                         state.resolve.expandAssociatedTypes(sp, argTy);
@@ -2192,7 +2193,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         Builder builder(state, *fcn.code.mir);
 
                         std::vector<MIRParam> argParams;
-                        for (size_t i = 0; i < ft.argTypes.size(); i++) {
+                        for (size_t i = 0; i < ft.argTypes.length(); i++) {
                             argParams.push_back(MIRLValue::newField(MIRLValue::newArgument(1), i));
                         }
                         builder.terminateCall(MIRLValue::newReturn(), te->path.clone(), mv$(argParams), 1, 2);
@@ -2217,9 +2218,9 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
                     auto* e = transList.addFunction(crate.types, mv$(fcnP));
                     if (e) {
-                        std::vector<HIRTypeRef> argTys;
+                        Vector<HIRTypeRef> argTys;
                         for (const auto& ty : te->argTypes) {
-                            argTys.push_back(ty);
+                            argTys.pushBack(ty);
                         }
                         auto argTy = crate.types.tuple(mv$(argTys));
 
@@ -2232,7 +2233,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         Builder builder(state, *fcn.code.mir);
 
                         std::vector<MIRParam> argParams;
-                        for (size_t i = 0; i < te->argTypes.size(); i++) {
+                        for (size_t i = 0; i < te->argTypes.length(); i++) {
                             argParams.push_back(MIRLValue::newField(MIRLValue::newArgument(1), i));
                         }
                         builder.terminateCall(MIRLValue::newReturn(), !isByValue ? MIRLValue::newDeref(MIRLValue::newArgument(0)) : MIRLValue::newArgument(0), mv$(argParams), 1, 2);
@@ -2257,10 +2258,10 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             }
 
             DEBUG(StringView("VTABLE <empty> for ") << type);
-            std::vector<HIRTypeRef> tupleTys;
-            tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize));
-            tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize));
-            tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize));
+            Vector<HIRTypeRef> tupleTys;
+            tupleTys.pushBack(crate.types.primitive(HIRCoreType::Usize));
+            tupleTys.pushBack(crate.types.primitive(HIRCoreType::Usize));
+            tupleTys.pushBack(crate.types.primitive(HIRCoreType::Usize));
             auto vtableTy = crate.types.tuple(std::move(tupleTys));
 
             const auto* repr = TargetGetTypeRepr(sp, state.resolve, vtableTy);
@@ -2271,14 +2272,14 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             HIRStatic vtableStatic(std::move(linkage), /*is_mut*/ false, mv$(vtableTy), {});
             auto& vtableData = vtableStatic.valueRes;
             const auto ptrBytes = TargetGetPointerBits() / 8;
-            vtableData.bytes.resize(repr->size);
+            vtableData.bytes.zero(repr->size);
             size_t ofs = 0;
             auto pushPtr = [&vtableData, &ofs, ptrBytes](HIRPath p, bool preserveTrackCaller = false) {
-                BUG_ASSERT(ofs + ptrBytes <= vtableData.bytes.size());
+                BUG_ASSERT(ofs + ptrBytes <= vtableData.bytes.length());
                 vtableData.relocations.push_back(Reloc::newNamed(ofs, ptrBytes, mv$(p), preserveTrackCaller));
                 vtableData.writeUint(ofs, ptrBytes, EncodedLiteral::PTR_BASE);
                 ofs += ptrBytes;
-                BUG_ASSERT(ofs <= vtableData.bytes.size());
+                BUG_ASSERT(ofs <= vtableData.bytes.length());
             };
             transList.dropGlue.insert(type);
             pushPtr(HIRPath(type, "#drop_glue"));
@@ -2290,7 +2291,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 vtableData.writeUint(ofs, ptrBytes, align);
                 ofs += ptrBytes;
             }
-            BUG_ASSERT(ofs == vtableData.bytes.size());
+            BUG_ASSERT(ofs == vtableData.bytes.length());
             vtableStatic.valueGenerated = true;
 
             transList.autoStatics.push_back(box$(vtableStatic));
@@ -2335,14 +2336,14 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             HIRStatic vtableStatic(std::move(linkage), /*is_mut*/ false, mv$(vtableTy), {});
             auto& vtableData = vtableStatic.valueRes;
             const auto ptrBytes = TargetGetPointerBits() / 8;
-            vtableData.bytes.resize(repr->size);
+            vtableData.bytes.zero(repr->size);
             size_t ofs = 0;
             auto pushPtr = [&vtableData, &ofs, ptrBytes](HIRPath p, bool preserveTrackCaller = false) {
-                BUG_ASSERT(ofs + ptrBytes <= vtableData.bytes.size());
+                BUG_ASSERT(ofs + ptrBytes <= vtableData.bytes.length());
                 vtableData.relocations.push_back(Reloc::newNamed(ofs, ptrBytes, mv$(p), preserveTrackCaller));
                 vtableData.writeUint(ofs, ptrBytes, EncodedLiteral::PTR_BASE);
                 ofs += ptrBytes;
-                BUG_ASSERT(ofs <= vtableData.bytes.size());
+                BUG_ASSERT(ofs <= vtableData.bytes.length());
             };
             transList.dropGlue.insert(type);
             pushPtr(HIRPath(type, "#drop_glue"));
@@ -2429,7 +2430,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     pushPtr(mv$(ptVtablePath));
                 }
             }
-            BUG_ASSERT(ofs == vtableData.bytes.size());
+            BUG_ASSERT(ofs == vtableData.bytes.length());
             vtableStatic.valueGenerated = true;
 
             transList.autoStatics.push_back(box$(vtableStatic));
@@ -2541,7 +2542,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         auto self = MIRLValue::newDeref(builder.self.clone());
                         auto fldLv = MIRLValue::newField(mv$(self), 0);
                         std::vector<MIRLValue> fields;
-                        for (size_t i = 0; i < te.size(); i++) {
+                        for (size_t i = 0; i < te.length(); i++) {
                             if (state.resolve.typeNeedsDropGlue(sp, te[i])) {
                                 fields.push_back(fldLv.clone());
                             }
@@ -2631,12 +2632,12 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                         const auto switchBlock = builder.mir.blocks.size() - 1;
                                         builder.terminateBlock(MIRTerminator::make_Switch(mv$(sw)));
 
-                                        std::vector<MIRBasicBlockId> targets;
-                                        targets.reserve(variants.size());
+                                        Vector<MIRBasicBlockId> targets;
+                                        targets.grow(variants.size());
                                         auto fldLv = MIRLValue::newDowncast(mv$(self), 0);
                                         for (size_t idx = 0; idx < variants.size(); idx++) {
                                             builder.ensureOpen();
-                                            targets.push_back(builder.mir.blocks.size() - 1);
+                                            targets.pushBack(builder.mir.blocks.size() - 1);
                                             // TODO: Monomorphise and check
 
                                             {
@@ -2658,11 +2659,11 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                             builder.mir.blocks.push_back(mv$(switchCleanupBlock));
 
                                             const auto resume = static_cast<MIRBasicBlockId>(builder.mir.blocks.size() + variants.size());
-                                            std::vector<MIRBasicBlockId> cleanupTargets;
-                                            cleanupTargets.reserve(variants.size());
+                                            Vector<MIRBasicBlockId> cleanupTargets;
+                                            cleanupTargets.grow(variants.size());
                                             auto cleanupField = MIRLValue::newDowncast(MIRLValue::newDeref(builder.self.clone()), 0);
                                             for (size_t idx = 0; idx < variants.size(); idx++) {
-                                                cleanupTargets.push_back(builder.mir.blocks.size());
+                                                cleanupTargets.pushBack(builder.mir.blocks.size());
                                                 MIRBasicBlock block;
                                                 block.isCleanup = true;
                                                 block.terminator = MIRTerminator::make_Drop({
@@ -3194,8 +3195,8 @@ Builder::Builder(const State& state, MIRFunction& mir)
 }
 
 auto Builder::addLocal(HIRTypeRef ty) -> MIRLValue {
-    auto rv = mir.locals.size();
-    mir.locals.push_back(mv$(ty));
+    auto rv = mir.locals.length();
+    mir.locals.pushBack(mv$(ty));
     return MIRLValue::newLocal(rv);
 }
 
@@ -3376,7 +3377,7 @@ auto EnumState::enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp) -> vo
         auto name = FMT(TransMangleValue(resolve.board(), *e->path));
         auto inserted = emittedFunctions.insert(name).second;
         ASSERT_BUG(Span(), inserted, StringView("Duplicated mangled name - ") << *e->path);
-        fcnsToTypeVisit.push_back(e);
+        fcnsToTypeVisit.pushBack(e);
         e->ptr = &fcn;
         e->pp = mv$(pp);
         DEBUG(*e->path << StringView(" w/ ") << e->pp.ppImpl << StringView(" and ") << e->pp.ppMethod);
@@ -3789,7 +3790,8 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
             retTy = cloneTyWith(crate.types, sp, fcn.returnType, [&](const auto& x, auto& out) {
                 if (const auto* te = x->opt_ErasedType()) {
                     if (const auto* e = te->inner.opt_Fcn()) {
-                        out = fcn.code.erasedTypes.at(e->index);
+                        BUG_ASSERT(e->index < fcn.code.erasedTypes.length());
+                        out = fcn.code.erasedTypes[e->index];
                         return true;
                     }
                 }

@@ -1,5 +1,4 @@
 #include "synext_macro.h"
-#include "synext_macro.h"
 
 #include "common.h"
 #include "synext.h"
@@ -18,6 +17,8 @@
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"
 #include "parse_interpolated_fragment.h"
+
+#include <std/lib/vector.h>
 
 #include <cctype>
 #include <sstream>
@@ -925,7 +926,7 @@ namespace {
         }
         for (auto ent : il) {
             // TODO: This could be slow (looking up the interned string), but most of these are repeated a LOT
-            ap.nodes.push_back(RcString::newInterned(ent));
+            ap.nodes.pushBack(RcString::newInterned(ent));
         }
         toks.push_back(Token(InterpolatedFragment(std::move(ap))));
     }
@@ -1540,7 +1541,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
     } while (lex.lookahead(0) == TOK_STRING || lex.lookahead(0) == TOK_HASH);
 
     std::vector<ASTExprNodeAsm2::Param> params;
-    std::vector<RcString> names;
+    Vector<RcString> names;
     std::vector<std::string> clobberAbis;
     AsmOptions options;
     while (tok.type() == TOK_COMMA) {
@@ -1709,7 +1710,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             }
         }
 
-        names.push_back(bindingName);
+        names.pushBack(bindingName);
         params.push_back(std::move(paramSpec));
 
         GET_TOK(tok, lex);
@@ -1808,7 +1809,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                 if (explicitOutputs.count(canonical) || !added.insert(canonical).second) {
                     continue;
                 }
-                names.push_back({});
+                names.pushBack(RcString());
                 params.push_back(ASTExprNodeAsm2::Param::make_Reg({AsmDirection::LateOut, AsmRegisterSpec::make_Explicit(mv$(reg)), nullptr, nullptr}));
             }
         }
@@ -2166,7 +2167,10 @@ auto GenericAssertCaptureVisitor::visit(ASTExprNodeTuple& node) -> void {
 }
 
 auto GenericAssertCaptureVisitor::makeTryCapture(RcString captureName, RcString localBindName, const Span& sp) const -> ASTExprNodeP {
-    auto wrapper = makeAstExprNode<ASTExprNodeCallPath>(pool, ASTPath(ASTAbsolutePath(coreCrate, {RcString::newInterned("asserting"), RcString::newInterned("Wrapper")})), makeVec1(makeGeneratedValue(localBindName, sp)));
+    Vector<RcString> wrapperPath;
+    wrapperPath.pushBack(RcString::newInterned("asserting"));
+    wrapperPath.pushBack(RcString::newInterned("Wrapper"));
+    auto wrapper = makeAstExprNode<ASTExprNodeCallPath>(pool, ASTPath(ASTAbsolutePath(coreCrate, mv$(wrapperPath))), makeVec1(makeGeneratedValue(localBindName, sp)));
     wrapper->setSpan(sp);
 
     auto wrapperRef = makeAstExprNode<ASTExprNodeUniOp>(pool, ASTExprNodeUniOp::REF, std::move(wrapper));
@@ -2259,10 +2263,16 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
             closeOuterBlock = true;
 
             toks.push_back(Token(TOK_RWORD_USE));
-            toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, {RcString::newInterned("asserting"), RcString::newInterned("TryCaptureGeneric")})))));
+            Vector<RcString> genericPath;
+            genericPath.pushBack(RcString::newInterned("asserting"));
+            genericPath.pushBack(RcString::newInterned("TryCaptureGeneric"));
+            toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, mv$(genericPath))))));
             toks.push_back(Token(TOK_SEMICOLON));
             toks.push_back(Token(TOK_RWORD_USE));
-            toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, {RcString::newInterned("asserting"), RcString::newInterned("TryCapturePrintable")})))));
+            Vector<RcString> printablePath;
+            printablePath.pushBack(RcString::newInterned("asserting"));
+            printablePath.pushBack(RcString::newInterned("TryCapturePrintable"));
+            toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, mv$(printablePath))))));
             toks.push_back(Token(TOK_SEMICOLON));
 
             for (size_t i = 0; i < captureVisitor.captures.size(); i++) {
@@ -2271,7 +2281,11 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
                 toks.push_back(Token(TOK_RWORD_MUT));
                 toks.push_back(Token(TOK_IDENT, capture.captureName));
                 toks.push_back(Token(TOK_EQUAL));
-                toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, {RcString::newInterned("asserting"), RcString::newInterned("Capture"), RcString::newInterned("new")})))));
+                Vector<RcString> capturePath;
+                capturePath.pushBack(RcString::newInterned("asserting"));
+                capturePath.pushBack(RcString::newInterned("Capture"));
+                capturePath.pushBack(RcString::newInterned("new"));
+                toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, mv$(capturePath))))));
                 toks.push_back(Token(TOK_PAREN_OPEN));
                 toks.push_back(Token(TOK_PAREN_CLOSE));
                 toks.push_back(Token(TOK_SEMICOLON));

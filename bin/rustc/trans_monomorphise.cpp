@@ -127,10 +127,10 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
 
     MIRFunction output;
 
-    output.locals.reserve(tpl->locals.size());
+    output.locals.grow(tpl->locals.length());
     for (const auto& var : tpl->locals) {
-        DEBUG(StringView("- _") << output.locals.size() << StringView(" (") << var << StringView(")"));
-        output.locals.push_back(params.monomorph(resolve, var));
+        DEBUG(StringView("- _") << output.locals.length() << StringView(" (") << var << StringView(")"));
+        output.locals.pushBack(params.monomorph(resolve, var));
         DEBUG(StringView(" = ") << output.locals.back());
     }
     output.dropFlags = tpl->dropFlags;
@@ -353,8 +353,8 @@ auto AsyncDropPollBuilder::newBlock() -> MIRBasicBlockId {
 }
 
 auto AsyncDropPollBuilder::newLocal(HIRTypeRef ty) -> unsigned {
-    const auto rv = static_cast<unsigned>(output.locals.size());
-    output.locals.push_back(std::move(ty));
+    const auto rv = static_cast<unsigned>(output.locals.length());
+    output.locals.pushBack(std::move(ty));
     return rv;
 }
 
@@ -500,7 +500,10 @@ auto AsyncDropPollBuilder::buildAsyncDestructor(const HIRTypeData* ty, MIRLValue
         HIRPath(futureTy, resolve.langFuture(), "poll"),
         ::makeVec2<MIRParam>(MIRLValue::newLocal(futurePinLocal), MIRParam::make_Borrow({HIRBorrowType::Unique, MIRLValue::newDeref(MIRLValue::newArgument(1))})),
     });
-    output.blocks[inspect].terminator = MIRTerminator::make_Switch({MIRLValue::newLocal(pollLocal), ::makeVec2(ready, pending)});
+    auto inspectTargets = Vector<MIRBasicBlockId>();
+    inspectTargets.pushBack(ready);
+    inspectTargets.pushBack(pending);
+    output.blocks[inspect].terminator = MIRTerminator::make_Switch({MIRLValue::newLocal(pollLocal), std::move(inspectTargets)});
     output.blocks[pending].statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), pollResult(1)}));
     output.blocks[pending].terminator = MIRTerminator::make_Return({});
     output.blocks[ready].terminator = MIRTerminator::make_Drop({
@@ -534,8 +537,8 @@ auto AsyncDropPollBuilder::buildField(const HIRTypeData* ty, MIRLValue value, MI
 
 auto AsyncDropPollBuilder::buildStructFields(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) -> MIRBasicBlockId {
     if (const auto* tuple = ty->opt_Tuple()) {
-        for (size_t i = tuple->size(); i > 0; i--) {
-            next = buildField(tuple->at(i - 1), MIRLValue::newField(value.clone(), static_cast<unsigned>(i - 1)), next);
+        for (size_t i = tuple->length(); i > 0; i--) {
+            next = buildField((*tuple)[i - 1], MIRLValue::newField(value.clone(), static_cast<unsigned>(i - 1)), next);
         }
         return next;
     }
@@ -590,11 +593,11 @@ auto AsyncDropPollBuilder::buildFields(const HIRTypeData* ty, MIRLValue value, M
             return next;
         }
         auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, ty, &pathTy->path.data.as_Generic().params, nullptr);
-        auto targets = std::vector<MIRBasicBlockId>();
-        targets.reserve(variants->size());
+        auto targets = Vector<MIRBasicBlockId>();
+        targets.grow(variants->size());
         for (size_t i = 0; i < variants->size(); i++) {
             auto variantTy = resolve.monomorphExpand(sp, variants->at(i).type, monomorph);
-            targets.push_back(buildStructFields(variantTy, MIRLValue::newDowncast(value.clone(), static_cast<unsigned>(i)), next));
+            targets.pushBack(buildStructFields(variantTy, MIRLValue::newDowncast(value.clone(), static_cast<unsigned>(i)), next));
         }
         const auto entry = newBlock();
         output.blocks[entry].terminator = MIRTerminator::make_Switch({std::move(value), std::move(targets)});
@@ -613,12 +616,12 @@ auto AsyncDropPollBuilder::buildCoroutineDrop(const HIRTypeData* ty, MIRLValue v
     const auto* function = *functionPtr;
     const auto& source = *function->code.mir;
 
-    const auto localBase = static_cast<unsigned>(output.locals.size());
+    const auto localBase = static_cast<unsigned>(output.locals.length());
     for (const auto* localTy : source.locals) {
-        output.locals.push_back(resolve.monomorphExpand(sp, localTy, monomorph));
+        output.locals.pushBack(resolve.monomorphExpand(sp, localTy, monomorph));
     }
-    const auto dropFlagBase = static_cast<unsigned>(output.dropFlags.size());
-    output.dropFlags.insert(output.dropFlags.end(), source.dropFlags.begin(), source.dropFlags.end());
+    const auto dropFlagBase = static_cast<unsigned>(output.dropFlags.length());
+    output.dropFlags.append(source.dropFlags.begin(), source.dropFlags.end());
     const auto returnLocal = newLocal(types.unit());
     const auto bbBase = static_cast<unsigned>(output.blocks.size());
     for (size_t i = 0; i < source.blocks.size(); i++) {
@@ -674,9 +677,12 @@ auto AsyncDropPollBuilder::buildCoroutineDrop(const HIRTypeData* ty, MIRLValue v
                 MIRRValue::make_EnumVariant({conditionTy->as_Path().path.data.as_Generic().clone(), 1, {}}),
             })
         );
+        auto asyncTargets = Vector<MIRBasicBlockId>();
+        asyncTargets.pushBack(asyncTarget);
+        asyncTargets.pushBack(asyncTarget);
         output.blocks[targetIdx].terminator = MIRTerminator::make_Switch({
             MIRLValue::newLocal(conditionLocal),
-            ::makeVec2(asyncTarget, asyncTarget),
+            std::move(asyncTargets),
             cloner.mapDropFlag(drop->flagIdx),
             normalTarget,
         });
@@ -737,11 +743,17 @@ auto AsyncDropPollBuilder::build() -> MIRFunctionPointer {
         ::makeVec1<MIRParam>(MIRParam::make_Borrow({HIRBorrowType::Unique, outerValue()})),
     });
 
-    auto values = ::makeVec3<u64>(0, 1, 2);
-    auto targets = ::makeVec3<MIRBasicBlockId>(start, returned, poisoned);
+    auto values = Vector<u64>();
+    values.pushBack(0);
+    values.pushBack(1);
+    values.pushBack(2);
+    auto targets = Vector<MIRBasicBlockId>();
+    targets.pushBack(start);
+    targets.pushBack(returned);
+    targets.pushBack(poisoned);
     for (const auto& target : resumeTargets) {
-        values.push_back(target.first);
-        targets.push_back(target.second);
+        values.pushBack(target.first);
+        targets.pushBack(target.second);
     }
     output.blocks[dispatch].terminator = MIRTerminator::make_SwitchValue({
         stateValue(),

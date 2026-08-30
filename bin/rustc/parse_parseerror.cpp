@@ -1,5 +1,6 @@
 #include "parse_parseerror.h"
 
+#include <initializer_list>
 
 using namespace stl;
 
@@ -17,7 +18,7 @@ void parseErrorUnexpected(const TokenStream& lex, const Token& tok, Token exp) {
     ERROR(pos, E0000, StringView("Unexpected token ") << tok << StringView(", expected ") << exp);
 }
 
-void parseErrorUnexpected(const TokenStream& lex, const Token& tok, std::vector<eTokenType> exp) {
+void parseErrorUnexpected(const TokenStream& lex, const Token& tok, std::initializer_list<eTokenType> exp) {
     Span pos = tok.getPos().filename != "" ? lex.subSpan(tok.getPos()) : lex.pointSpan();
     ERROR(pos, E0000, StringView("Unexpected token ") << tok << StringView(", expected one of ") << FMT_CB(os, {
                           bool f = true;

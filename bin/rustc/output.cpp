@@ -1,5 +1,7 @@
 #include "output.h"
 
+#include <std/lib/vector.h>
+
 #include <string>
 #include <vector>
 
@@ -62,11 +64,6 @@ void stl::output<ZeroCopyOutput, const void*>(ZeroCopyOutput& out, const void* v
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::vector<bool>::const_reference>(ZeroCopyOutput& out, std::vector<bool>::const_reference value) {
-    out << static_cast<bool>(value);
-}
-
-template <>
-void stl::output<ZeroCopyOutput, std::vector<char8_t>>(ZeroCopyOutput& out, const std::vector<char8_t>& values) {
+void stl::output<ZeroCopyOutput, Vector<char8_t>>(ZeroCopyOutput& out, const Vector<char8_t>& values) {
     outCont(out, values);
 }

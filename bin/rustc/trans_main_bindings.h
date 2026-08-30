@@ -3,6 +3,8 @@
 #include "mir_mir.h"
 #include "trans_trans_list.h"
 
+#include <std/lib/vector.h>
+
 class HIRCrate;
 class MIRFunction;
 struct WireBoard;

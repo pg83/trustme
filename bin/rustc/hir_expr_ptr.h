@@ -2,6 +2,8 @@
 
 #include "mir_mir_ptr.h"
 
+#include <std/lib/vector.h>
+
 #include <vector>
 
 struct Span;
@@ -95,8 +97,8 @@ class HIRExprPtr {
     HIRExprNodeP node;
 
 public:
-    std::vector<HIRTypeRef> bindings;
-    std::vector<HIRTypeRef> erasedTypes;
+    stl::Vector<HIRTypeRef> bindings;
+    stl::Vector<HIRTypeRef> erasedTypes;
     std::vector<HIRSimplePath> defineOpaque;
 
     MIRFunctionPointer mir;

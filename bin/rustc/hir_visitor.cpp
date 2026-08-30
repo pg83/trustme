@@ -3,6 +3,8 @@
 #include "hir_hir.h"
 #include "hir_typeck_static.h"
 
+#include <std/alg/range.h>
+
 using namespace stl;
 
 HIRVisitor::~HIRVisitor() {
@@ -991,14 +993,14 @@ HIRTypeRef HIRVisitor::visitType(HIRTypeRef ty) {
         }
         case HIRTypeData::TAG_Tuple: {
             const auto& e = ty->as_Tuple();
-            for (size_t i = 0; i < e.size(); i++) {
+            for (size_t i = 0; i < e.length(); i++) {
                 auto nt = visitType(e[i]);
                 if (nt != e[i]) {
                     auto data = ty->cloneData();
                     auto& ne = data.as_Tuple();
-                    ne[i] = nt;
-                    for (size_t j = i + 1; j < ne.size(); j++) {
-                        ne[j] = visitType(ne[j]);
+                    ne.mut(i) = nt;
+                    for (size_t j = i + 1; j < ne.length(); j++) {
+                        ne.mut(j) = visitType(ne[j]);
                     }
                     return typeInterner().intern(mv$(data));
                 }
@@ -1036,25 +1038,25 @@ HIRTypeRef HIRVisitor::visitType(HIRTypeRef ty) {
         case HIRTypeData::TAG_Function: {
             const auto& e = ty->as_Function();
             auto nret = visitType(e.rettype);
-            size_t argIdx = e.argTypes.size();
+            size_t argIdx = e.argTypes.length();
             HIRTypeRef narg = nullptr;
-            for (size_t i = 0; i < e.argTypes.size(); i++) {
+            for (size_t i = 0; i < e.argTypes.length(); i++) {
                 narg = visitType(e.argTypes[i]);
                 if (narg != e.argTypes[i]) {
                     argIdx = i;
                     break;
                 }
             }
-            if (nret == e.rettype && argIdx == e.argTypes.size()) {
+            if (nret == e.rettype && argIdx == e.argTypes.length()) {
                 return ty;
             }
             auto data = ty->cloneData();
             auto& ne = data.as_Function();
             ne.rettype = nret;
-            if (argIdx < ne.argTypes.size()) {
-                ne.argTypes[argIdx] = narg;
-                for (size_t j = argIdx + 1; j < ne.argTypes.size(); j++) {
-                    ne.argTypes[j] = visitType(ne.argTypes[j]);
+            if (argIdx < ne.argTypes.length()) {
+                ne.argTypes.mut(argIdx) = narg;
+                for (size_t j = argIdx + 1; j < ne.argTypes.length(); j++) {
+                    ne.argTypes.mut(j) = visitType(ne.argTypes[j]);
                 }
             }
             return typeInterner().intern(mv$(data));
@@ -1137,8 +1139,9 @@ void HIRVisitor::visitTypeDataChildren(HIRTypeData& data) {
             break;
         }
         case HIRTypeData::TAG_Tuple: {
-            for (auto& t : data.as_Tuple()) {
-                updateType(t);
+            auto& tuple = data.as_Tuple();
+            for (auto& type : mutRange(tuple)) {
+                updateType(type);
             }
             break;
         }
@@ -1157,8 +1160,8 @@ void HIRVisitor::visitTypeDataChildren(HIRTypeData& data) {
         }
         case HIRTypeData::TAG_Function: {
             auto& e = data.as_Function();
-            for (auto& t : e.argTypes) {
-                updateType(t);
+            for (auto& type : mutRange(e.argTypes)) {
+                updateType(type);
             }
             updateType(e.rettype);
             break;
@@ -1237,11 +1240,11 @@ void HIRVisitor::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext /*p
 }
 
 void HIRVisitor::visitExpr(HIRExprPtr& exp) {
-    for (auto& t : exp.erasedTypes) {
-        updateType(t);
+    for (auto& type : mutRange(exp.erasedTypes)) {
+        updateType(type);
     }
-    for (auto& t : exp.bindings) {
-        updateType(t);
+    for (auto& type : mutRange(exp.bindings)) {
+        updateType(type);
     }
 }
 

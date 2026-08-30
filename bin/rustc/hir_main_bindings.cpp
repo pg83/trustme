@@ -9,6 +9,7 @@
 #include "hir_serialise_lowlevel.h"
 #include "macro_rules_macro_rules.h"
 
+#include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
 #include <typeinfo>
@@ -21,7 +22,7 @@ namespace {
 
     struct HirDeserialiser {
         RcString crateName;
-        std::vector<HIRTypeRef> types;
+        Vector<HIRTypeRef> types;
         HIRSerialiseReader& in;
         HIRTypeInterner& typeInterner;
         u32& id;
@@ -70,6 +71,12 @@ namespace {
 
         template <typename T>
         std::vector<T> deserialiseVec();
+
+        template <typename T, typename F>
+        Vector<T> deserialiseVectorC(F cb);
+
+        template <typename T>
+        Vector<T> deserialiseVector();
 
         template <typename T, typename F>
         ThinVector<T> deserialiseThinvecC(F cb);
@@ -231,6 +238,8 @@ namespace {
 
     template <typename T>
     DEF_D(std::vector<T>, return d.deserialiseVec<T>();)
+    template <typename T>
+    DEF_D(Vector<T>, return d.deserialiseVector<T>();)
     template <typename T, typename U>
     struct D<std::pair<T, U>> {
         static std::pair<T, U> des(HirDeserialiser& d);
@@ -474,7 +483,13 @@ namespace {
         void serialiseVec(const std::vector<T>& vec);
 
         template <typename T>
+        void serialiseVec(const Vector<T>& vec);
+
+        template <typename T>
         void serialise(const std::vector<T>& vec);
+
+        template <typename T>
+        void serialise(const Vector<T>& vec);
 
         template <typename T>
         void serialise(const std::set<T>& s);
@@ -734,9 +749,9 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
     auto idx = in.readCount();
     if (idx != ~0u) {
         DEBUG(StringView("#") << idx << StringView(""));
-        rv = types.at(idx);
+        rv = types[idx];
         return rv;
-        DEBUG(StringView("Fresh (=") << types.size() << StringView(")"));
+        DEBUG(StringView("Fresh (=") << types.length() << StringView(")"));
     }
     auto _ = in.openObject("HIR::TypeData");
 
@@ -755,11 +770,11 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
             TODO(Span(), StringView("ErasedType"));
             _(Array, {deserialiseType(), deserialiseArraysize()})
             _(Slice, {deserialiseType()})
-            _(Tuple, deserialiseVec<HIRTypeRef>())
+            _(Tuple, deserialiseVector<HIRTypeRef>())
             _(Borrow, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(Pointer, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(NamedFunction, {deserialisePath()})
-            _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVec<HIRTypeRef>(), in.readBool(), in.readIstring(), in.readBool()})
+            _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVector<HIRTypeRef>(), in.readBool(), in.readIstring(), in.readBool()})
         case HIRTypeData::TAG_Pattern: {
             auto inner = deserialiseType();
             HIRTypePattern pattern;
@@ -785,7 +800,7 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
         default:
             BUG(Span(), StringView("Bad tag for HIR::ASTType* - ") << tag);
     }
-    types.push_back(rv);
+    types.pushBack(rv);
     return rv;
 }
 
@@ -1041,7 +1056,7 @@ HIRConstGeneric HirDeserialiser::deserialiseConstgeneric() {
 
 EncodedLiteral HirDeserialiser::deserialiseEncodedliteral() {
     EncodedLiteral rv;
-    rv.bytes = deserialiseVec<u8>();
+    rv.bytes = deserialiseVector<u8>();
 
     auto nreloc = in.readCount();
     rv.relocations.reserve(nreloc);
@@ -1067,8 +1082,8 @@ MIRFunctionPointer HirDeserialiser::deserialiseMir() {
     TRACE_FUNCTION;
     MIRFunction rv;
 
-    rv.locals = deserialiseVec<HIRTypeRef>();
-    rv.dropFlags = deserialiseVec<bool>();
+    rv.locals = deserialiseVector<HIRTypeRef>();
+    rv.dropFlags = deserialiseVector<bool>();
     rv.blocks = deserialiseVec<MIRBasicBlock>();
 
     return MIRFunctionPointer(new MIRFunction(mv$(rv)));
@@ -1163,7 +1178,7 @@ MIRStatement HirDeserialiser::deserialiseMirStatement() {
             rv = MIRStatement::make_SetDropFlag(sdf);
         } break;
         case 4:
-            rv = MIRStatement::make_ScopeEnd({deserialiseVec<unsigned int>()});
+            rv = MIRStatement::make_ScopeEnd({deserialiseVector<unsigned int>()});
             break;
         case 5:
             rv = MIRStatement::make_Asm2({deserialiseAsmOptions(), deserialiseVec<AsmLine>(), deserialiseVec<MIRAsmParam>()});
@@ -1201,7 +1216,7 @@ MIRTerminator HirDeserialiser::deserialise_mir_terminator_() {
         _(If, {deserialiseMirLvalue(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount())})
         _(Switch,
           {deserialiseMirLvalue(),
-           deserialiseVecC<unsigned int>([&]() {
+           deserialiseVectorC<unsigned int>([&]() {
             return static_cast<unsigned int>(in.readCount());
         }),
            static_cast<unsigned int>(in.readCount()),
@@ -1209,7 +1224,7 @@ MIRTerminator HirDeserialiser::deserialise_mir_terminator_() {
         _(SwitchValue,
           {deserialiseMirLvalue(),
            static_cast<unsigned int>(in.readCount()),
-           deserialiseVecC<unsigned int>([&]() {
+           deserialiseVectorC<unsigned int>([&]() {
             return static_cast<unsigned int>(in.readCount());
         }),
            deserialiseMirSwitchvalues()})
@@ -1244,14 +1259,14 @@ MIRSwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
 #define _(x, ...)                  \
     case MIRSwitchValues::TAG_##x: \
         return MIRSwitchValues::make_##x(__VA_ARGS__);
-        _(Unsigned, deserialiseVecC<u64>([&]() {
+        _(Unsigned, deserialiseVectorC<u64>([&]() {
             return in.readU64c();
         }))
-        _(Signed, deserialiseVecC<i64>([&]() {
+        _(Signed, deserialiseVectorC<i64>([&]() {
             return in.readI64c();
         }))
         _(String, deserialiseVec<std::string>())
-        _(ByteString, deserialiseVec<std::vector<u8>>())
+        _(ByteString, deserialiseVec<Vector<u8>>())
 #undef _
         default:
             BUG(Span(), StringView("Bad tag for MIR::SwitchValues - ") << tag);
@@ -1308,7 +1323,7 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     rv.traitImpls = deserialisePathmap<HIRCrate::ImplGroup<std::unique_ptr<HIRTraitImpl>>>();
     rv.markerImpls = deserialisePathmap<HIRCrate::ImplGroup<std::unique_ptr<HIRMarkerImpl>>>();
 
-    rv.exportedMacroNames = deserialiseVec<::RcString>();
+    rv.exportedMacroNames = deserialiseVector<::RcString>();
     rv.langItems = deserialiseStrumap<HIRSimplePath>();
 
     {
@@ -1530,6 +1545,27 @@ auto HirDeserialiser::deserialiseVec() -> std::vector<T> {
 }
 
 template <typename T, typename F>
+auto HirDeserialiser::deserialiseVectorC(F cb) -> Vector<T> {
+    TRACE_FUNCTION_FR(StringView("<") << typeid(T).name() << StringView(">"), in.getPos());
+    auto _ = in.openObject(typeid(std::vector<T>).name());
+    size_t n = in.readCount();
+    DEBUG(StringView("n = ") << n);
+    Vector<T> rv;
+    rv.grow(n);
+    for (size_t i = 0; i < n; i++) {
+        rv.pushBack(cb());
+    }
+    return rv;
+}
+
+template <typename T>
+auto HirDeserialiser::deserialiseVector() -> Vector<T> {
+    return deserialiseVectorC<T>([&]() {
+        return D<T>::des(*this);
+    });
+}
+
+template <typename T, typename F>
 auto HirDeserialiser::deserialiseThinvecC(F cb) -> ThinVector<T> {
     TRACE_FUNCTION_FR(StringView("<") << typeid(T).name() << StringView(">"), in.getPos());
     auto _ = in.openObject(typeid(ThinVector<T>).name());
@@ -1681,7 +1717,7 @@ auto HirDeserialiser::deserialiseHygine() -> Ident::Hygiene {
     if (hasModPath) {
         Ident::ModPath mp;
         mp.crate = in.readIstring();
-        mp.ents = deserialiseVec<RcString>();
+        mp.ents = deserialiseVector<RcString>();
 
         if (mp.crate == "") {
             BUG_ASSERT(crateName != "");
@@ -1775,7 +1811,7 @@ auto HirDeserialiser::deserialiseMacropatent() -> ::MacroPatEnt {
 
 auto HirDeserialiser::deserialiseMacrorulesarm() -> ::MacroRulesArm {
     ::MacroRulesArm rv;
-    rv.paramNames = deserialiseVec<RcString>();
+    rv.paramNames = deserialiseVector<RcString>();
     rv.pattern = deserialiseVecC<::SimplePatEnt>([&]() {
         return deserialiseSimplepatent();
     });
@@ -1864,7 +1900,7 @@ auto HirDeserialiser::deserialiseExprptr() -> HIRExprPtr {
     if (in.readBool()) {
         rv.mir = deserialiseMir();
     }
-    rv.erasedTypes = deserialiseVec<HIRTypeRef>();
+    rv.erasedTypes = deserialiseVector<HIRTypeRef>();
     return rv;
 }
 
@@ -1936,9 +1972,9 @@ auto HirDeserialiser::deserialiseMirConstant() -> MIRConstant {
         _(Float, {in.readFloatValue(), static_cast<HIRCoreType>(in.readTag())})
         _(Bool, {in.readBool()})
         case MIRConstant::TAG_Bytes: {
-            std::vector<u8> bytes;
-            bytes.resize(in.readCount());
-            in.read(bytes.data(), bytes.size());
+            Vector<u8> bytes;
+            bytes.zero(in.readCount());
+            in.read(bytes.mutData(), bytes.length());
             return MIRConstant::make_Bytes(mv$(bytes));
         }
             _(StaticString, in.readString())
@@ -2064,7 +2100,7 @@ auto HirDeserialiser::deserialiseFunction() -> HIRFunction {
 auto HirDeserialiser::deserialiseFunctionMarkings() -> HIRFunction::Markings {
     auto _ = in.openObject("HIR::Function::Markings");
     HIRFunction::Markings rv;
-    rv.rustcLegacyConstGenerics = deserialiseVec<unsigned>();
+    rv.rustcLegacyConstGenerics = deserialiseVector<unsigned>();
     rv.trackCaller = in.readBool();
     rv.isRustcIntrinsic = in.readBool();
     rv.isRustcPromotable = in.readBool();
@@ -3137,7 +3173,22 @@ auto HirSerialiser::serialiseVec(const std::vector<T>& vec) -> void {
 }
 
 template <typename T>
+auto HirSerialiser::serialiseVec(const Vector<T>& vec) -> void {
+    TRACE_FUNCTION_F(StringView("<") << typeid(T).name() << StringView("> size=") << vec.length());
+    auto _ = out.openObject(typeid(std::vector<T>).name());
+    out.writeCount(vec.length());
+    for (const auto& i : vec) {
+        serialise(i);
+    }
+}
+
+template <typename T>
 auto HirSerialiser::serialise(const std::vector<T>& vec) -> void {
+    serialiseVec(vec);
+}
+
+template <typename T>
+auto HirSerialiser::serialise(const Vector<T>& vec) -> void {
     serialiseVec(vec);
 }
 
@@ -4371,8 +4422,8 @@ auto HirSerialiser::serialise(const MIRConstant& v) -> void {
         }
         case MIRConstant::TAG_Bytes: {
             auto& e = v.as_Bytes();
-            out.writeCount(e.size());
-            out.write(e.data(), e.size());
+            out.writeCount(e.length());
+            out.write(e.data(), e.length());
             break;
         }
         case MIRConstant::TAG_StaticString: {

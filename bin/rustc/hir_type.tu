@@ -21,7 +21,7 @@ generate(
             ("HIRArraySize", "size"),
         ], copy=False),
         v("Slice", fields=[("HIRTypeRef", "inner")]),
-        v("Tuple", "std::vector<HIRTypeRef>"),
+        v("Tuple", "stl::Vector<HIRTypeRef>"),
         v("Borrow", fields=[
             ("HIRBorrowType", "type"),
             ("HIRTypeRef", "inner"),

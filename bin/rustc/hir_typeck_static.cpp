@@ -133,10 +133,10 @@ void StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, HIRTypeRef& in
                     } else {
                         ASSERT_BUG(sp, value.is_Function(), StringView("ErasedType with Fcn type doesn't point at a function: ") << functionOpaque.origin << StringView(": ") << value.tagStr());
                         const auto& function = *value.as_Function();
-                        if (functionOpaque.index >= function.code.erasedTypes.size()) {
+                        if (functionOpaque.index >= function.code.erasedTypes.length()) {
                             resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(functionOpaque.origin), function);
                         }
-                        ASSERT_BUG(sp, functionOpaque.index < function.code.erasedTypes.size(), StringView("Erased type index out of range for ") << functionOpaque.origin << StringView(" - ") << functionOpaque.index << StringView(" >= ") << function.code.erasedTypes.size());
+                        ASSERT_BUG(sp, functionOpaque.index < function.code.erasedTypes.length(), StringView("Erased type index out of range for ") << functionOpaque.origin << StringView(" - ") << functionOpaque.index << StringView(" >= ") << function.code.erasedTypes.length());
                         revealed = monomorph.monomorphType(sp, function.code.erasedTypes[functionOpaque.index]);
                     }
                     break;
@@ -538,14 +538,14 @@ HIRTypeRef StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTyp
         }
         case HIRTypeData::TAG_Tuple: {
             const auto& e = input->as_Tuple();
-            for (size_t i = 0; i < e.size(); i++) {
+            for (size_t i = 0; i < e.length(); i++) {
                 auto nt = expandAssociatedTypesInner(sp, e[i]);
                 if (nt != e[i]) {
                     auto data = input->cloneData();
                     auto& ne = data.as_Tuple();
-                    ne[i] = nt;
-                    for (size_t j = i + 1; j < ne.size(); j++) {
-                        ne[j] = expandAssociatedTypesInner(sp, ne[j]);
+                    ne.mut(i) = nt;
+                    for (size_t j = i + 1; j < ne.length(); j++) {
+                        ne.mut(j) = expandAssociatedTypesInner(sp, ne[j]);
                     }
                     return crate.types.intern(mv$(data));
                 }
@@ -608,25 +608,25 @@ HIRTypeRef StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTyp
         case HIRTypeData::TAG_Function: {
             const auto& e = input->as_Function();
             auto nret = expandAssociatedTypesInner(sp, e.rettype);
-            size_t argIdx = e.argTypes.size();
+            size_t argIdx = e.argTypes.length();
             HIRTypeRef narg = nullptr;
-            for (size_t i = 0; i < e.argTypes.size(); i++) {
+            for (size_t i = 0; i < e.argTypes.length(); i++) {
                 narg = expandAssociatedTypesInner(sp, e.argTypes[i]);
                 if (narg != e.argTypes[i]) {
                     argIdx = i;
                     break;
                 }
             }
-            if (nret == e.rettype && argIdx == e.argTypes.size()) {
+            if (nret == e.rettype && argIdx == e.argTypes.length()) {
                 return input;
             }
             auto data = input->cloneData();
             auto& ne = data.as_Function();
             ne.rettype = nret;
-            if (argIdx < ne.argTypes.size()) {
-                ne.argTypes[argIdx] = narg;
-                for (size_t j = argIdx + 1; j < ne.argTypes.size(); j++) {
-                    ne.argTypes[j] = expandAssociatedTypesInner(sp, ne.argTypes[j]);
+            if (argIdx < ne.argTypes.length()) {
+                ne.argTypes.mut(argIdx) = narg;
+                for (size_t j = argIdx + 1; j < ne.argTypes.length(); j++) {
+                    ne.argTypes.mut(j) = expandAssociatedTypesInner(sp, ne.argTypes[j]);
                 }
             }
             return crate.types.intern(mv$(data));
@@ -1685,8 +1685,8 @@ HIRTypeRef StaticTraitResolve::getFieldType(const Span& sp, const HIRTypeData* t
             int idx = -1;
             ss >> idx;
             ASSERT_BUG(sp, idx >= 0, StringView("Malformed tuple index field name - `") << name << StringView("`"));
-            ASSERT_BUG(sp, size_t(idx) < te.size(), StringView("Tuple index out of bounds"));
-            return te.at(idx);
+            ASSERT_BUG(sp, size_t(idx) < te.length(), StringView("Tuple index out of bounds"));
+            return te[idx];
         }
         case HIRTypeData::TAG_Path: {
             auto& te = (*ty).as_Path();

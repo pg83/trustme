@@ -8,6 +8,8 @@
 #include "hir_encoded_literal.h"
 #include "hir_typeck_monomorph.h"
 
+#include <std/lib/vector.h>
+
 #include <algorithm>
 
 using namespace stl;
@@ -22,34 +24,34 @@ namespace {
     };
 
     struct ValueLifetime {
-        std::vector<bool> stmtBitmap;
+        Vector<bool> stmtBitmap;
 
         ValueLifetime(size_t stmtCount);
 
-        void fill(const std::vector<size_t>& blockOffsets, size_t bb, size_t firstStmt, size_t lastStmt);
+        void fill(const Vector<size_t>& blockOffsets, size_t bb, size_t firstStmt, size_t lastStmt);
 
-        void dumpDebug(const char* suffix, unsigned i, const std::vector<size_t>& blockOffsets);
+        void dumpDebug(const char* suffix, unsigned i, const Vector<size_t>& blockOffsets);
     };
 
-    void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& state, const MIRFunction& fcn, size_t bbIdx, size_t stmtIdx, const MIRLValue& lv, const std::vector<size_t>& blockOffsets, const std::vector<bool>& useBitmap, ValueLifetime& vl);
+    void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& state, const MIRFunction& fcn, size_t bbIdx, size_t stmtIdx, const MIRLValue& lv, const Vector<size_t>& blockOffsets, const Vector<bool>& useBitmap, ValueLifetime& vl);
 
-    void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& localMirRes, const MIRFunction& fcn, size_t bbIdx, size_t stmtIdx, const MIRLValue& lv, const std::vector<size_t>& blockOffsets, const std::vector<bool>& useBitmap, ValueLifetime& vl) {
+    void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& localMirRes, const MIRFunction& fcn, size_t bbIdx, size_t stmtIdx, const MIRLValue& lv, const Vector<size_t>& blockOffsets, const Vector<bool>& useBitmap, ValueLifetime& vl) {
         struct State {
-            const std::vector<size_t>& blockOffsets;
+            const Vector<size_t>& blockOffsets;
             ValueLifetime& outVl;
 
-            std::vector<unsigned int> bbHistory;
+            Vector<unsigned int> bbHistory;
             size_t lastReadOfs;
             bool isBorrowed_;
 
-            State(const std::vector<size_t>& blockOffsets, ValueLifetime& vl, size_t initBbIdx, size_t initStmtIdx)
+            State(const Vector<size_t>& blockOffsets, ValueLifetime& vl, size_t initBbIdx, size_t initStmtIdx)
                 : blockOffsets(blockOffsets)
                 , outVl(vl)
                 , bbHistory()
                 , lastReadOfs(initStmtIdx)
                 , isBorrowed_(false)
             {
-                bbHistory.push_back(initBbIdx);
+                bbHistory.pushBack(initBbIdx);
             }
 
             State(State&& x)
@@ -98,7 +100,7 @@ namespace {
             }
 
             void fmt(ZeroCopyOutput& os) const {
-                os << StringView("BB") << bbHistory.front() << StringView("/") << lastReadOfs << StringView("--");
+                os << StringView("BB") << bbHistory[0] << StringView("/") << lastReadOfs << StringView("--");
                 os << StringView("[") << bbHistory << StringView("]");
             }
 
@@ -113,17 +115,17 @@ namespace {
             void fillTo(size_t stmtIdx) {
                 TRACE_FUNCTION_F(FMT_CB(ss, this->fmt(ss);));
                 BUG_ASSERT(!isBorrowed_);
-                BUG_ASSERT(bbHistory.size() > 0);
-                if (bbHistory.size() == 1) {
+                BUG_ASSERT(bbHistory.length() > 0);
+                if (bbHistory.length() == 1) {
                     outVl.fill(blockOffsets, bbHistory[0], lastReadOfs, stmtIdx);
                 } else {
                     auto initBbIdx = bbHistory[0];
                     auto limit0 = blockOffsets[initBbIdx + 1] - blockOffsets[initBbIdx] - 1;
                     outVl.fill(blockOffsets, initBbIdx, lastReadOfs, limit0);
 
-                    for (size_t i = 1; i < bbHistory.size() - 1; i++) {
+                    for (size_t i = 1; i < bbHistory.length() - 1; i++) {
                         size_t bbIdx = bbHistory[i];
-                        BUG_ASSERT(bbIdx + 1 < blockOffsets.size());
+                        BUG_ASSERT(bbIdx + 1 < blockOffsets.length());
                         size_t limit = blockOffsets[bbIdx + 1] - blockOffsets[bbIdx] - 1;
                         outVl.fill(blockOffsets, bbIdx, 0, limit);
                     }
@@ -136,7 +138,7 @@ namespace {
 
                 auto cur = this->bbHistory.back();
                 this->bbHistory.clear();
-                this->bbHistory.push_back(cur);
+                this->bbHistory.pushBack(cur);
             }
         };
 
@@ -146,15 +148,15 @@ namespace {
             size_t initBbIdx;
             size_t initStmtIdx;
             const MIRLValue& lv;
-            const std::vector<size_t>& blockOffsets;
+            const Vector<size_t>& blockOffsets;
             ValueLifetime& lifetimes;
             bool isCopy;
 
-            std::vector<bool> visitedStatements;
+            Vector<bool> visitedStatements;
 
             std::vector<std::pair<size_t, State>> statesToDo;
 
-            Runner(MIRTypeResolve& localMirRes, const MIRFunction& fcn, size_t initBbIdx, size_t initStmtIdx, const MIRLValue& lv, const std::vector<size_t>& blockOffsets, ValueLifetime& vl)
+            Runner(MIRTypeResolve& localMirRes, const MIRFunction& fcn, size_t initBbIdx, size_t initStmtIdx, const MIRLValue& lv, const Vector<size_t>& blockOffsets, ValueLifetime& vl)
                 : mirRes(localMirRes)
                 , fcn(fcn)
                 , initBbIdx(initBbIdx)
@@ -162,8 +164,9 @@ namespace {
                 , lv(lv)
                 , blockOffsets(blockOffsets)
                 , lifetimes(vl)
-                , visitedStatements(lifetimes.stmtBitmap.size())
+                , visitedStatements()
             {
+                visitedStatements.zero(lifetimes.stmtBitmap.length());
                 HIRTypeRef tmp;
                 isCopy = mirRes.resolve.typeIsCopy(localMirRes.sp, mirRes.getLvalueType(tmp, lv));
             }
@@ -215,7 +218,7 @@ namespace {
                 for (; stmtIdx < bb.statements.size(); stmtIdx++) {
                     const auto& stmt = bb.statements[stmtIdx];
                     mirRes.setCurStmt(bbIdx, stmtIdx);
-                    visitedStatements[blockOffsets.at(bbIdx) + stmtIdx] = true;
+                    visitedStatements.mut(blockOffsets[bbIdx] + stmtIdx) = true;
 
                     wasUpdated = false;
                     visitMirLvalues(stmt, visitCb);
@@ -292,7 +295,7 @@ namespace {
                     }
                 }
                 mirRes.setCurStmtTerm(bbIdx);
-                visitedStatements[blockOffsets.at(bbIdx) + stmtIdx] = true;
+                visitedStatements.mut(blockOffsets[bbIdx] + stmtIdx) = true;
 
                 wasUpdated = false;
                 visitMirLvalues(bb.terminator, visitCb);
@@ -344,7 +347,7 @@ namespace {
                     }
                     case MIRTerminator::TAG_Switch: {
                         auto& te = bb.terminator.as_Switch();
-                        for (size_t i = 0; i < te.targets.size(); i++) {
+                        for (size_t i = 0; i < te.targets.length(); i++) {
                             statesToDo.push_back(std::make_pair(te.targets[i], state.clone()));
                         }
                         if (te.validFlag != ~0u) {
@@ -354,7 +357,7 @@ namespace {
                     }
                     case MIRTerminator::TAG_SwitchValue: {
                         auto& te = bb.terminator.as_SwitchValue();
-                        for (size_t i = 0; i < te.targets.size(); i++) {
+                        for (size_t i = 0; i < te.targets.length(); i++) {
                             statesToDo.push_back(std::make_pair(te.targets[i], state.clone()));
                         }
                         statesToDo.push_back(std::make_pair(te.defTarget, mv$(state)));
@@ -436,10 +439,10 @@ namespace {
             runner.statesToDo.pop_back();
 
             DEBUG(StringView("state.bb_history=[") << state.bbHistory << StringView("], -> BB") << bbIdx);
-            state.bbHistory.push_back(bbIdx);
+            state.bbHistory.pushBack(bbIdx);
 
-            if (runner.visitedStatements.at(blockOffsets.at(bbIdx) + 0)) {
-                if (vl.stmtBitmap.at(blockOffsets.at(bbIdx) + 0)) {
+            if (runner.visitedStatements[blockOffsets[bbIdx]]) {
+                if (vl.stmtBitmap[blockOffsets[bbIdx]]) {
                     DEBUG(StringView("Looped (to already valid)"));
                     state.markRead(0);
                     state.finalise(0);
@@ -456,7 +459,7 @@ namespace {
                 }
             }
 
-            if (vl.stmtBitmap.at(blockOffsets.at(bbIdx) + 0)) {
+            if (vl.stmtBitmap[blockOffsets[bbIdx]]) {
                 DEBUG(StringView("Already valid in BB") << bbIdx);
                 state.markRead(0);
                 state.finalise(0);
@@ -471,7 +474,7 @@ namespace {
             for (auto it = postCheckList.begin(); it != postCheckList.end();) {
                 auto bbIdx = it->first;
                 auto& state = it->second;
-                if (vl.stmtBitmap.at(blockOffsets.at(bbIdx) + 0)) {
+                if (vl.stmtBitmap[blockOffsets[bbIdx]]) {
                     change = true;
                     DEBUG(StringView("Looped (now valid)"));
                     state.markRead(0);
@@ -558,8 +561,8 @@ const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValu
         }
         case MIRLValue::Storage::TAG_Local: {
             decltype(val.root.as_Local()) e = val.root.as_Local();
-            MIR_ASSERT(*this, e < fcn.locals.size(), StringView("Local ") << val << StringView(" out of range (") << fcn.locals.size() << StringView(")"));
-            rv = monomorphedLocals ? monomorphedLocals->at(e) : fcn.locals.at(e);
+            MIR_ASSERT(*this, e < fcn.locals.length(), StringView("Local ") << val << StringView(" out of range (") << fcn.locals.length() << StringView(")"));
+            rv = monomorphedLocals ? (*monomorphedLocals)[e] : fcn.locals[e];
             break;
         }
         case MIRLValue::Storage::TAG_Static: {
@@ -601,7 +604,7 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
                 }
                 case HIRTypeData::TAG_Tuple: {
                     auto& te = (*ty).as_Tuple();
-                    MIR_ASSERT(*this, fieldIndex < te.size(), StringView("Field index out of range in tuple ") << fieldIndex << StringView(" >= ") << te.size());
+                    MIR_ASSERT(*this, fieldIndex < te.length(), StringView("Field index out of range in tuple ") << fieldIndex << StringView(" >= ") << te.length());
                     return te[fieldIndex];
                 }
                 case HIRTypeData::TAG_Path: {
@@ -758,7 +761,7 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
         }
         case MIRConstant::TAG_Bytes: {
             auto& e = c.as_Bytes();
-            return crate.types.borrow(HIRBorrowType::Shared, crate.types.array(crate.types.primitive(HIRCoreType::U8), e.size()));
+            return crate.types.borrow(HIRBorrowType::Shared, crate.types.array(crate.types.primitive(HIRCoreType::U8), e.length()));
         }
         case MIRConstant::TAG_StaticString: {
             return crate.types.borrow(HIRBorrowType::Shared, crate.types.primitive(HIRCoreType::Str));
@@ -830,10 +833,10 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                     if (e->data.is_UfcsKnown()) {
                         const auto& pe = e->data.as_UfcsKnown();
                         if (pe.item == "vtable#" && pe.trait.path == HIRSimplePath()) {
-                            std::vector<HIRTypeRef> fields;
-                            fields.push_back(crate.types.primitive(HIRCoreType::Usize));
-                            fields.push_back(crate.types.primitive(HIRCoreType::Usize));
-                            fields.push_back(crate.types.primitive(HIRCoreType::Usize));
+                            Vector<HIRTypeRef> fields;
+                            fields.pushBack(crate.types.primitive(HIRCoreType::Usize));
+                            fields.pushBack(crate.types.primitive(HIRCoreType::Usize));
+                            fields.pushBack(crate.types.primitive(HIRCoreType::Usize));
                             return crate.types.borrow(HIRBorrowType::Shared, crate.types.tuple(mv$(fields)));
                         }
                     }
@@ -1121,7 +1124,7 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTy
 
     if (const auto* te = ty->opt_Tuple()) {
         auto rv = FMT(StringView("("));
-        for (size_t i = 0; i < te->size(); i++) {
+        for (size_t i = 0; i < te->length(); i++) {
             if (i > 0) {
                 rv += ", ";
             }
@@ -1150,7 +1153,7 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTy
             rv += FMT(StringView("extern \"") << te->abi << StringView("\" "));
         }
         rv += "fn(";
-        for (size_t i = 0; i < te->argTypes.size(); i++) {
+        for (size_t i = 0; i < te->argTypes.length(); i++) {
             if (i > 0) {
                 rv += ", ";
             }
@@ -1181,7 +1184,7 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTy
             if ((last == "Fn" || last == "FnMut" || last == "FnOnce") && params.types.size() == 1 && params.types[0]->is_Tuple()) {
                 principal += "(";
                 const auto& args = params.types[0]->as_Tuple();
-                for (size_t i = 0; i < args.size(); i++) {
+                for (size_t i = 0; i < args.length(); i++) {
                     if (i > 0) {
                         principal += ", ";
                     }
@@ -1277,34 +1280,34 @@ void visitTerminatorTarget(const MIRTerminator& term, MIRTargetVisitor& cb) {
 
 // TODO: Improved algorithm
 
-MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const std::vector<bool>* mask /*=nullptr*/) {
+MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const Vector<bool>* mask /*=nullptr*/) {
     TRACE_FUNCTION_F(state);
     size_t statementCount = 0;
-    std::vector<size_t> blockOffsets;
-    blockOffsets.reserve(fcn.blocks.size());
+    Vector<size_t> blockOffsets;
+    blockOffsets.grow(fcn.blocks.size());
     for (const auto& bb : fcn.blocks) {
-        blockOffsets.push_back(statementCount);
+        blockOffsets.pushBack(statementCount);
         statementCount += bb.statements.size() + 1;
     }
-    blockOffsets.push_back(statementCount);
+    blockOffsets.pushBack(statementCount);
 
-    std::vector<ValueLifetime> slotLifetimes(fcn.locals.size(), ValueLifetime(statementCount));
+    std::vector<ValueLifetime> slotLifetimes(fcn.locals.length(), ValueLifetime(statementCount));
 
-    std::vector<std::vector<bool>> slotReadBitmaps(fcn.locals.size());
+    std::vector<Vector<bool>> slotReadBitmaps(fcn.locals.length());
     {
         for (auto& b : slotReadBitmaps) {
-            b.resize(statementCount);
+            b.zero(statementCount);
         }
         size_t pos = 0;
         auto useCb = [&](const MIRLValue& tlv, MIRValUsage vu) {
             if (tlv.root.is_Local()) {
                 if (vu != MIRValUsage::Write) {
-                    slotReadBitmaps[tlv.root.as_Local()][pos] = true;
+                    slotReadBitmaps[tlv.root.as_Local()].mut(pos) = true;
                 }
             }
             for (const auto& w : tlv.wrappers) {
                 if (w.is_Index()) {
-                    slotReadBitmaps[w.as_Index()][pos] = true;
+                    slotReadBitmaps[w.as_Index()].mut(pos) = true;
                 }
             }
             return false;
@@ -1323,7 +1326,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         auto assignedLvalue = [&](size_t bbIdx, size_t stmtIdx, const MIRLValue& lv) {
             if (lv.is_Local()) {
                 auto de = lv.root.as_Local();
-                if (!mask || mask->at(de)) {
+                if (!mask || (*mask)[de]) {
                     MIRHelperGetLifetimesDetermineValueLifetime(state, fcn, bbIdx, stmtIdx, lv, blockOffsets, slotReadBitmaps[de], slotLifetimes[de]);
                     slotLifetimes[de].fill(blockOffsets, bbIdx, stmtIdx, stmtIdx);
                 }
@@ -1400,8 +1403,8 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 
     struct State {
         unsigned int index = 0;
-        std::vector<unsigned int> blockPath;
-        std::vector<unsigned int> blockChangeIdx;
+        Vector<unsigned int> blockPath;
+        Vector<unsigned int> blockChangeIdx;
         unsigned int curChangeIdx = 0;
 
         std::vector<ProtoLifetime> tmpEnds;
@@ -1423,10 +1426,10 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
     NEXT_INDEX = 0;
 
     size_t statementCount = 0;
-    std::vector<size_t> blockOffsets;
-    blockOffsets.reserve(fcn.blocks.size());
+    Vector<size_t> blockOffsets;
+    blockOffsets.grow(fcn.blocks.size());
     for (const auto& bb : fcn.blocks) {
-        blockOffsets.push_back(statementCount);
+        blockOffsets.pushBack(statementCount);
         statementCount += bb.statements.size() + 1;
     }
 
@@ -1435,11 +1438,11 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 
     struct BlockSeenLifetimes {
         bool hasState = false;
-        const std::vector<size_t>& blockOffsets;
-        std::vector<std::vector<unsigned int>> tmp;
-        std::vector<std::vector<unsigned int>> var;
+        const Vector<size_t>& blockOffsets;
+        std::vector<Vector<unsigned int>> tmp;
+        std::vector<Vector<unsigned int>> var;
 
-        BlockSeenLifetimes(const std::vector<size_t>& blockOffsets, const MIRFunction& fcn)
+        BlockSeenLifetimes(const Vector<size_t>& blockOffsets, const MIRFunction& fcn)
             : blockOffsets(blockOffsets)
             , tmp(fcn.temporaries.size())
             , var(fcn.namedVariables.size())
@@ -1453,7 +1456,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         bool tryMerge(const State& valState) const {
             // TODO: This logic isn't quite correct. Just becase a value's existing end is already marked as valid,
 
-            auto tryMergeLft = [&](const ProtoLifetime& lft, const std::vector<unsigned int>& seen) -> bool {
+            auto tryMergeLft = [&](const ProtoLifetime& lft, const Vector<unsigned int>& seen) -> bool {
                 if (lft.isEmpty()) {
                     return false;
                 }
@@ -1461,7 +1464,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                 if (lft.isBorrowed()) {
                     return false;
                 }
-                auto endIdx = blockOffsets.at(valState.blockPath.at(lft.end.pathIndex)) + lft.end.stmtIdx;
+                auto endIdx = blockOffsets[valState.blockPath.at(lft.end.pathIndex)] + lft.end.stmtIdx;
 
                 auto it = std::find(seen.begin(), seen.end(), endIdx);
                 return (it == seen.end());
@@ -1481,7 +1484,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 
         bool merge(const State& valState) {
             bool rv = false;
-            auto mergeLft = [&](const ProtoLifetime& lft, std::vector<unsigned int>& seen) -> bool {
+            auto mergeLft = [&](const ProtoLifetime& lft, Vector<unsigned int>& seen) -> bool {
                 if (lft.isEmpty()) {
                     return false;
                 }
@@ -1489,7 +1492,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                 if (lft.end == Position{~0u, ~0u}) {
                     return false;
                 }
-                auto endIdx = blockOffsets.at(valState.blockPath.at(lft.end.pathIndex)) + lft.end.stmtIdx;
+                auto endIdx = blockOffsets[valState.blockPath.at(lft.end.pathIndex)] + lft.end.stmtIdx;
 
                 auto it = std::find(seen.begin(), seen.end(), endIdx);
                 if (it == seen.end()) {
@@ -1548,12 +1551,12 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                 auto bbIdx = valState.blockPath.at(i);
                 const auto& bb = fcn.blocks[bbIdx];
                 MIR_ASSERT(state, j <= bb.statements.size(), StringView(""));
-                MIR_ASSERT(state, bbIdx < blockOffsets.size(), StringView(""));
+                MIR_ASSERT(state, bbIdx < blockOffsets.length(), StringView(""));
 
-                auto blockBase = blockOffsets.at(bbIdx);
+                auto blockBase = blockOffsets[bbIdx];
                 auto idx = blockBase + j;
-                if (!lft->stmtBitmap.at(idx)) {
-                    lft->stmtBitmap[idx] = true;
+                if (!lft->stmtBitmap[idx]) {
+                    lft->stmtBitmap.mut(idx) = true;
                     didSet = true;
                 }
 
@@ -1877,7 +1880,7 @@ void MIRTypeResolve::setCurStmtTerm(unsigned int bbIdx) {
     this->stmtIdx = STMT_TERM;
 }
 
-MIRValueLifetime::MIRValueLifetime(std::vector<bool> stmts)
+MIRValueLifetime::MIRValueLifetime(Vector<bool> stmts)
     : statements(mv$(stmts))
 {
 }
@@ -1892,8 +1895,8 @@ bool MIRValueLifetime::isUsed() const {
 }
 
 bool MIRValueLifetime::overlaps(const MIRValueLifetime& x) const {
-    BUG_ASSERT(statements.size() == x.statements.size());
-    for (unsigned int i = 0; i < statements.size(); i++) {
+    BUG_ASSERT(statements.length() == x.statements.length());
+    for (unsigned int i = 0; i < statements.length(); i++) {
         if (statements[i] && x.statements[i]) {
             return true;
         }
@@ -1902,10 +1905,10 @@ bool MIRValueLifetime::overlaps(const MIRValueLifetime& x) const {
 }
 
 void MIRValueLifetime::unify(const MIRValueLifetime& x) {
-    BUG_ASSERT(statements.size() == x.statements.size());
-    for (unsigned int i = 0; i < statements.size(); i++) {
+    BUG_ASSERT(statements.length() == x.statements.length());
+    for (unsigned int i = 0; i < statements.length(); i++) {
         if (x.statements[i]) {
-            statements[i] = true;
+            statements.mut(i) = true;
         }
     }
 }
@@ -1956,26 +1959,27 @@ auto LValueCbVisitor::visitLvalue(const MIRLValue& lv, MIRValUsage u) -> bool {
 }
 
 ValueLifetime::ValueLifetime(size_t stmtCount)
-    : stmtBitmap(stmtCount)
+    : stmtBitmap()
 {
+    stmtBitmap.zero(stmtCount);
 }
 
-auto ValueLifetime::fill(const std::vector<size_t>& blockOffsets, size_t bb, size_t firstStmt, size_t lastStmt) -> void {
+auto ValueLifetime::fill(const Vector<size_t>& blockOffsets, size_t bb, size_t firstStmt, size_t lastStmt) -> void {
     size_t limit = blockOffsets[bb + 1] - blockOffsets[bb] - 1;
     DEBUG(StringView("bb") << bb << StringView(" : ") << firstStmt << StringView("--") << lastStmt);
     BUG_ASSERT(firstStmt <= limit);
     BUG_ASSERT(lastStmt <= limit);
     for (size_t stmt = firstStmt; stmt <= lastStmt; stmt++) {
-        stmtBitmap[blockOffsets[bb] + stmt] = true;
+        stmtBitmap.mut(blockOffsets[bb] + stmt) = true;
     }
 }
 
-auto ValueLifetime::dumpDebug(const char* suffix, unsigned i, const std::vector<size_t>& blockOffsets) -> void {
+auto ValueLifetime::dumpDebug(const char* suffix, unsigned i, const Vector<size_t>& blockOffsets) -> void {
     std::string name = FMT(suffix << StringView("$") << i);
     while (name.size() < 3 + 1 + 3) {
         name += " ";
     }
-    DEBUG(name << StringView(" : ") << FMT_CB(os, for (unsigned int j = 0; j < this->stmtBitmap.size(); j++) {
+    DEBUG(name << StringView(" : ") << FMT_CB(os, for (unsigned int j = 0; j < this->stmtBitmap.length(); j++) {
               if (j != 0 && find(blockOffsets.begin(), blockOffsets.end(), j) != blockOffsets.end()) {
                   os << StringView("|");
               }

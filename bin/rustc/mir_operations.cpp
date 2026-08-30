@@ -1,5 +1,4 @@
 #include "mir_operations.h"
-#include "mir_operations.h"
 
 #include "output.h"
 #include "mir_mir.h"
@@ -17,6 +16,9 @@
 #include "hir_conv_constant_evaluation.h"
 
 #include <std/alg/defer.h>
+#include <std/alg/qsort.h>
+#include <std/alg/range.h>
+#include <std/lib/vector.h>
 
 #include <cmath>
 #include <limits>
@@ -28,9 +30,9 @@ using namespace stl;
 
 struct WireBoard::MirOperationsContext {
     const RcString vtableName = RcString::newInterned("vtable#");
-    std::vector<bool> visitedBlocks;
-    std::vector<MIRBasicBlockId> pendingBlocks;
-    std::vector<std::vector<unsigned>> blockPredecessors;
+    Vector<bool> visitedBlocks;
+    Vector<MIRBasicBlockId> pendingBlocks;
+    std::vector<Vector<unsigned>> blockPredecessors;
     bool visitingBlocks = false;
 };
 
@@ -690,27 +692,27 @@ namespace {
                     auto e = dataReloc->bytes.end();
 
                     if (te.inner->is_Slice() && te.inner->as_Slice().inner == HIRCoreType::U8) {
-                        std::vector<u8> bytestr;
+                        Vector<u8> bytestr;
                         for (auto it = s; it != e; ++it) {
-                            bytestr.push_back(static_cast<u8>(*it));
+                            bytestr.pushBack(static_cast<u8>(*it));
                         }
-                        auto size = MIRConstant::make_Uint({U128(bytestr.size()), HIRCoreType::Usize});
+                        auto size = MIRConstant::make_Uint({U128(bytestr.length()), HIRCoreType::Usize});
                         return MIRRValue::make_MakeDst({MIRConstant(mv$(bytestr)), std::move(size)});
                     } else if (te.inner->is_Array() && te.inner->as_Array().inner == HIRCoreType::U8) {
                         // TODO: How does this differ at codegen to the above?
-                        std::vector<u8> bytestr;
+                        Vector<u8> bytestr;
                         for (auto it = s; it != e; ++it) {
-                            bytestr.push_back(static_cast<u8>(*it));
+                            bytestr.pushBack(static_cast<u8>(*it));
                         }
                         return MIRConstant(mv$(bytestr));
                     } else if (te.inner == HIRCoreType::Str) {
                         return MIRConstant::make_StaticString(std::string(s, e));
                     } else {
-                        std::vector<u8> bytestr;
+                        Vector<u8> bytestr;
                         for (auto it = s; it != e; ++it) {
-                            bytestr.push_back(static_cast<u8>(*it));
+                            bytestr.pushBack(static_cast<u8>(*it));
                         }
-                        auto size = MIRConstant::make_Uint({U128(bytestr.size()), HIRCoreType::Usize});
+                        auto size = MIRConstant::make_Uint({U128(bytestr.length()), HIRCoreType::Usize});
                         auto ptr1 = MIRRValue::make_MakeDst({MIRConstant(mv$(bytestr)), std::move(size)});
                         auto lval = mutator.inTemporary(state.crate.types.pointer(HIRBorrowType::Shared, state.crate.types.slice(state.crate.types.primitive(HIRCoreType::U8))), mv$(ptr1));
                         auto rawPtrTy = state.crate.types.pointer(HIRBorrowType::Shared, te.inner);
@@ -759,7 +761,7 @@ namespace {
         HIRTypeRef tmp;
         const auto& ty = state.getLvalueType(tmp, fcnLval);
         DEBUG(StringView("callable type ") << ty);
-        auto receiver = ty->as_Function().argTypes.at(0);
+        auto receiver = ty->as_Function().argTypes[0];
 
         struct H {
             static MIRLValue getUnitPtr(const MIRTypeResolve& state, MirMutator& mutator, HIRTypeRef ty, MIRLValue lv, MIRLValue& outInnerPtr) {
@@ -1664,25 +1666,25 @@ namespace {
         STD_DEFER {
             context.visitingBlocks = false;
         };
-        visited.assign(fcn.blocks.size(), false);
+        visited.zero(fcn.blocks.size());
         toVisit.clear();
-        toVisit.push_back(0);
-        while (toVisit.size() > 0) {
+        toVisit.pushBack(0);
+        while (toVisit.length() > 0) {
             auto bb = toVisit.back();
-            toVisit.pop_back();
+            toVisit.popBack();
             if (visited[bb]) {
                 continue;
             }
-            visited[bb] = true;
+            visited.mut(bb) = true;
             auto& block = fcn.blocks[bb];
 
             cb.run(bb, block);
 
             struct QueueUnvisited final: public MIRTargetVisitor {
-                const std::vector<bool>& visited;
-                std::vector<MIRBasicBlockId>& toVisit;
+                const Vector<bool>& visited;
+                Vector<MIRBasicBlockId>& toVisit;
 
-                QueueUnvisited(const std::vector<bool>& visited, std::vector<MIRBasicBlockId>& toVisit)
+                QueueUnvisited(const Vector<bool>& visited, Vector<MIRBasicBlockId>& toVisit)
                     : visited(visited)
                     , toVisit(toVisit)
                 {
@@ -1690,7 +1692,7 @@ namespace {
 
                 void visitTarget(const MIRBasicBlockId& target) override {
                     if (!visited[target]) {
-                        toVisit.push_back(target);
+                        toVisit.pushBack(target);
                     }
                 }
             } queueUnvisited{visited, toVisit};
@@ -1779,8 +1781,8 @@ namespace {
                 if (te->validFlag != ~0u) {
                     continue;
                 }
-                for (auto& t : te->targets) {
-                    auto idx = &t - &te->targets.front();
+                size_t idx = 0;
+                for (auto& t : mutRange(te->targets)) {
                     if (fcn.blocks[t].statements.empty() && fcn.blocks[t].terminator.is_Switch()) {
                         const auto& nTe = fcn.blocks[t].terminator.as_Switch();
                         if (nTe.validFlag == ~0u && nTe.val == te->val) {
@@ -1789,6 +1791,7 @@ namespace {
                             changed = true;
                         }
                     }
+                    idx++;
                 }
             }
         }
@@ -1801,9 +1804,9 @@ namespace {
                         const auto& src = it->as_ScopeEnd();
                         DEBUG(StringView("Unify ") << *(it - 1) << StringView(" and ") << *it);
                         for (auto v : src.slots) {
-                            dst.slots.push_back(v);
+                            dst.slots.pushBack(v);
                         }
-                        std::sort(dst.slots.begin(), dst.slots.end());
+                        std::sort(dst.slots.mutBegin(), dst.slots.mutEnd());
                         it = block.statements.erase(it);
                         changed = true;
                     } else {
@@ -1814,26 +1817,28 @@ namespace {
         }
 
         {
-            std::vector<bool> visited(fcn.blocks.size());
-            std::vector<unsigned int> uses(fcn.blocks.size());
-            std::vector<MIRBasicBlockId> toVisit;
-            toVisit.push_back(0);
-            uses[0]++;
-            while (toVisit.size() > 0) {
+            Vector<bool> visited;
+            visited.zero(fcn.blocks.size());
+            Vector<unsigned int> uses;
+            uses.zero(fcn.blocks.size());
+            Vector<MIRBasicBlockId> toVisit;
+            toVisit.pushBack(0);
+            uses.mut(0)++;
+            while (toVisit.length() > 0) {
                 auto bb = toVisit.back();
-                toVisit.pop_back();
+                toVisit.popBack();
                 if (visited[bb]) {
                     continue;
                 }
-                visited[bb] = true;
+                visited.mut(bb) = true;
                 const auto& block = fcn.blocks[bb];
 
                 struct CountUses final: public MIRTargetVisitor {
-                    const std::vector<bool>& visited;
-                    std::vector<MIRBasicBlockId>& toVisit;
-                    std::vector<unsigned>& uses;
+                    const Vector<bool>& visited;
+                    Vector<MIRBasicBlockId>& toVisit;
+                    Vector<unsigned>& uses;
 
-                    CountUses(const std::vector<bool>& visited, std::vector<MIRBasicBlockId>& toVisit, std::vector<unsigned>& uses)
+                    CountUses(const Vector<bool>& visited, Vector<MIRBasicBlockId>& toVisit, Vector<unsigned>& uses)
                         : visited(visited)
                         , toVisit(toVisit)
                         , uses(uses)
@@ -1842,9 +1847,9 @@ namespace {
 
                     void visitTarget(const MIRBasicBlockId& target) override {
                         if (!visited[target]) {
-                            toVisit.push_back(target);
+                            toVisit.pushBack(target);
                         }
-                        uses[target]++;
+                        uses.mut(target)++;
                     }
                 } countUses{visited, toVisit, uses};
 
@@ -1915,7 +1920,7 @@ namespace {
 
         struct InlineEvent {
             HIRPath path;
-            std::vector<size_t> bbList;
+            Vector<size_t> bbList;
 
             InlineEvent(HIRPath p)
                 : path(std::move(p))
@@ -1928,7 +1933,7 @@ namespace {
 
             void addRange(size_t start, size_t count) {
                 for (size_t j = 0; j < count; j++) {
-                    this->bbList.push_back(start + j);
+                    this->bbList.pushBack(start + j);
                 }
             }
         };
@@ -2063,7 +2068,7 @@ namespace {
                     return false;
                 }
                 const auto& teSwitch = fcn.blocks[0].terminator.as_Switch();
-                if (fcn.blocks.size() != teSwitch.targets.size() + 3) {
+                if (fcn.blocks.size() != teSwitch.targets.length() + 3) {
                     return false;
                 }
                 if (!valueIsConst(fcn, 0, fcn.blocks[0].statements.size(), teSwitch.val, params)) {
@@ -2096,7 +2101,7 @@ namespace {
                     return false;
                 }
                 const auto& teSwitch = fcn.blocks[0].terminator.as_SwitchValue();
-                if (fcn.blocks.size() != teSwitch.targets.size() + 1 + 3) {
+                if (fcn.blocks.size() != teSwitch.targets.length() + 1 + 3) {
                     return false;
                 }
                 if (!valueIsConst(fcn, 0, fcn.blocks[0].statements.size(), teSwitch.val, params)) {
@@ -2131,7 +2136,7 @@ namespace {
         struct Cloner: public MIRCloner {
             const ::StaticTraitResolve& resolve_;
             const MIRTerminator::Data_Call& te;
-            std::vector<unsigned> copyArgs;
+            Vector<unsigned> copyArgs;
             ParamsSet params;
             unsigned int bbBase = ~0u;
             unsigned int varBase = ~0u;
@@ -2147,8 +2152,11 @@ namespace {
                 , resolve_(resolve)
                 , te(te)
                 , params(resolve.hirCrate().types)
-                , copyArgs(te.args.size(), ~0u)
+                , copyArgs()
             {
+                while (copyArgs.length() < te.args.size()) {
+                    copyArgs.pushBack(~0u);
+                }
             }
 
             MIRBasicBlockId mapBbIdx(MIRBasicBlockId idx) const override {
@@ -2287,26 +2295,26 @@ namespace {
 
                 TRACE_FUNCTION_F(StringView("Inline ") << path);
                 {
-                    cloner.retval = MIRLValue::newLocal(fcn.locals.size());
+                    cloner.retval = MIRLValue::newLocal(fcn.locals.length());
                     DEBUG(StringView("- Storing return value in ") << cloner.retval);
                     HIRTypeRef tmpTy;
-                    fcn.locals.push_back(state.getLvalueType(tmpTy, te->retVal));
+                    fcn.locals.pushBack(state.getLvalueType(tmpTy, te->retVal));
                 }
 
-                cloner.varBase = fcn.locals.size();
+                cloner.varBase = fcn.locals.length();
                 for (const auto& ty : calledMir->locals) {
-                    fcn.locals.push_back(cloner.monomorph(ty));
+                    fcn.locals.pushBack(cloner.monomorph(ty));
                 }
-                cloner.tmpEnd = fcn.locals.size();
+                cloner.tmpEnd = fcn.locals.length();
 
-                cloner.dfBase = fcn.dropFlags.size();
-                fcn.dropFlags.insert(fcn.dropFlags.end(), calledMir->dropFlags.begin(), calledMir->dropFlags.end());
+                cloner.dfBase = fcn.dropFlags.length();
+                fcn.dropFlags.append(calledMir->dropFlags.begin(), calledMir->dropFlags.end());
                 cloner.bbBase = fcn.blocks.size();
 
                 for (size_t i = 0; i < te->args.size(); i++) {
                     const auto& a = te->args[i];
                     if (!a.is_LValue() || state.lvalueIsCopy(a.as_LValue())) {
-                        cloner.copyArgs[i] = cloner.tmpEnd + cloner.constAssignments.size();
+                        cloner.copyArgs.mut(i) = cloner.tmpEnd + cloner.constAssignments.size();
                         cloner.constAssignments.push_back(a.clone());
                         DEBUG(StringView("- Taking a copy of arg ") << i << StringView(" (") << a << StringView(") in Local(") << cloner.copyArgs[i] << StringView(")"));
                     }
@@ -2322,8 +2330,8 @@ namespace {
                 for (auto& val : cloner.constAssignments) {
                     HIRTypeRef tmp;
                     auto ty = val.is_Constant() ? state.getConstType(val.as_Constant()) : state.getLvalueType(tmp, val.as_LValue());
-                    auto lv = MIRLValue::newLocal(static_cast<unsigned>(fcn.locals.size()));
-                    fcn.locals.push_back(mv$(ty));
+                    auto lv = MIRLValue::newLocal(static_cast<unsigned>(fcn.locals.length()));
+                    fcn.locals.pushBack(ty);
                     auto rval = val.is_Constant() ? MIRRValue(mv$(val.as_Constant())) : MIRRValue(mv$(val.as_LValue()));
                     auto stmt = MIRStatement::make_Assign({mv$(lv), mv$(rval)});
                     DEBUG(StringView("++ ") << stmt);
@@ -2445,7 +2453,7 @@ namespace {
             }
         };
 
-        std::vector<LocalUsage> usageInfo(fcn.locals.size());
+        std::vector<LocalUsage> usageInfo(fcn.locals.length());
 
         {
             struct CountUsage final: public LvalueVisitor {
@@ -2497,7 +2505,7 @@ namespace {
             optVisitMirLvalues(state, fcn, visitCb);
         }
 
-        for (size_t varIdx = 0; varIdx < fcn.locals.size(); varIdx++) {
+        for (size_t varIdx = 0; varIdx < fcn.locals.length(); varIdx++) {
             const auto& slot = usageInfo[varIdx];
             auto thisVar = MIRLValue::newLocal(varIdx);
             DEBUG(StringView("_") << varIdx << StringView(": ") << slot.nWrite << StringView(",") << slot.nRead << StringView(",") << slot.nBorrow);
@@ -2716,7 +2724,7 @@ namespace {
             unsigned nOtherRead;
             unsigned nDerefRead;
             OptimiseStmtRef setLoc;
-            std::vector<OptimiseStmtRef> dropLocs;
+            Vector<OptimiseStmtRef> dropLocs;
 
             LocalUsage()
                 : nWrite(0)
@@ -2726,8 +2734,8 @@ namespace {
             }
         };
 
-        std::vector<LocalUsage> usageInfo(fcn.locals.size());
-        for (size_t i = 0; i < fcn.locals.size(); i++) {
+        std::vector<LocalUsage> usageInfo(fcn.locals.length());
+        for (size_t i = 0; i < fcn.locals.length(); i++) {
             auto& u = usageInfo[i];
             u.nWrite = 0;
             u.nOtherRead = 0;
@@ -2775,13 +2783,13 @@ namespace {
             auto curLoc = OptimiseStmtRef(&bb - &fcn.blocks.front(), bb.statements.size());
             visitCb.curLoc = curLoc;
             if (const auto* drop = bb.terminator.opt_Drop(); drop && drop->slot.root.is_Local() && drop->slot.wrappers.empty()) {
-                usageInfo[drop->slot.root.as_Local()].dropLocs.push_back(curLoc);
+                usageInfo[drop->slot.root.as_Local()].dropLocs.pushBack(curLoc);
             } else {
                 optVisitMirLvalues(bb.terminator, visitCb);
             }
         }
 
-        for (size_t varIdx = 0; varIdx < fcn.locals.size(); varIdx++) {
+        for (size_t varIdx = 0; varIdx < fcn.locals.length(); varIdx++) {
             const auto& slot = usageInfo[varIdx];
             auto thisVar = MIRLValue::newLocal(varIdx);
 
@@ -2983,44 +2991,45 @@ namespace {
             return false;
         }
         {
-            std::vector<unsigned int> incomingEdges(fcn.blocks.size());
+            Vector<unsigned int> incomingEdges;
+            incomingEdges.zero(fcn.blocks.size());
             for (const auto& block : fcn.blocks) {
                 struct CountIncoming final: public MIRTargetVisitor {
-                    std::vector<unsigned int>& incomingEdges;
+                    Vector<unsigned int>& incomingEdges;
 
-                    explicit CountIncoming(std::vector<unsigned int>& incomingEdges)
+                    explicit CountIncoming(Vector<unsigned int>& incomingEdges)
                         : incomingEdges(incomingEdges)
                     {
                     }
 
                     void visitTarget(const MIRBasicBlockId& target) override {
-                        incomingEdges[target]++;
+                        incomingEdges.mut(target)++;
                     }
                 } countIncoming{incomingEdges};
 
                 visitTerminatorTarget(block.terminator, countIncoming);
             }
-            std::vector<unsigned int> acyclicBlocks;
-            acyclicBlocks.reserve(fcn.blocks.size());
-            for (unsigned int i = 0; i < incomingEdges.size(); i++) {
+            Vector<unsigned int> acyclicBlocks;
+            acyclicBlocks.grow(fcn.blocks.size());
+            for (unsigned int i = 0; i < incomingEdges.length(); i++) {
                 if (incomingEdges[i] == 0) {
-                    acyclicBlocks.push_back(i);
+                    acyclicBlocks.pushBack(i);
                 }
             }
-            for (size_t i = 0; i < acyclicBlocks.size(); i++) {
+            for (size_t i = 0; i < acyclicBlocks.length(); i++) {
                 struct PeelAcyclic final: public MIRTargetVisitor {
-                    std::vector<unsigned int>& incomingEdges;
-                    std::vector<unsigned int>& acyclicBlocks;
+                    Vector<unsigned int>& incomingEdges;
+                    Vector<unsigned int>& acyclicBlocks;
 
-                    PeelAcyclic(std::vector<unsigned int>& incomingEdges, std::vector<unsigned int>& acyclicBlocks)
+                    PeelAcyclic(Vector<unsigned int>& incomingEdges, Vector<unsigned int>& acyclicBlocks)
                         : incomingEdges(incomingEdges)
                         , acyclicBlocks(acyclicBlocks)
                     {
                     }
 
                     void visitTarget(const MIRBasicBlockId& target) override {
-                        if (--incomingEdges[target] == 0) {
-                            acyclicBlocks.push_back(target);
+                        if (--incomingEdges.mut(target) == 0) {
+                            acyclicBlocks.pushBack(target);
                         }
                     }
                 } peelAcyclic{incomingEdges, acyclicBlocks};
@@ -3028,27 +3037,33 @@ namespace {
                 visitTerminatorTarget(fcn.blocks[acyclicBlocks[i]].terminator, peelAcyclic);
             }
 
-            if (acyclicBlocks.size() != fcn.blocks.size()) {
-                std::vector<bool> loops(fcn.blocks.size(), false);
+            if (acyclicBlocks.length() != fcn.blocks.size()) {
+                Vector<bool> loops;
+                loops.zero(fcn.blocks.size());
                 {
                     const size_t nBlocks = fcn.blocks.size();
-                    std::vector<unsigned> index(nBlocks, ~0u);
-                    std::vector<unsigned> lowlink(nBlocks, 0);
-                    std::vector<bool> onStack(nBlocks, false);
-                    std::vector<unsigned> sccStack;
+                    Vector<unsigned> index;
+                    while (index.length() < nBlocks) {
+                        index.pushBack(~0u);
+                    }
+                    Vector<unsigned> lowlink;
+                    lowlink.zero(nBlocks);
+                    Vector<bool> onStack;
+                    onStack.zero(nBlocks);
+                    Vector<unsigned> sccStack;
                     unsigned nextIndex = 0;
 
-                    std::vector<std::vector<unsigned>> succs(nBlocks);
+                    std::vector<Vector<unsigned>> succs(nBlocks);
                     for (const auto& block : fcn.blocks) {
                         unsigned bbIdx = &block - fcn.blocks.data();
 
                         struct CollectSuccs final: public MIRTargetVisitor {
                             size_t nBlocks;
                             unsigned bbIdx;
-                            std::vector<std::vector<unsigned>>& succs;
-                            std::vector<bool>& loops;
+                            std::vector<Vector<unsigned>>& succs;
+                            Vector<bool>& loops;
 
-                            CollectSuccs(size_t nBlocks, unsigned bbIdx, std::vector<std::vector<unsigned>>& succs, std::vector<bool>& loops)
+                            CollectSuccs(size_t nBlocks, unsigned bbIdx, std::vector<Vector<unsigned>>& succs, Vector<bool>& loops)
                                 : nBlocks(nBlocks)
                                 , bbIdx(bbIdx)
                                 , succs(succs)
@@ -3058,9 +3073,9 @@ namespace {
 
                             void visitTarget(const MIRBasicBlockId& target) override {
                                 if (target < nBlocks) {
-                                    succs[bbIdx].push_back(target);
+                                    succs[bbIdx].pushBack(target);
                                     if (target == bbIdx) {
-                                        loops[bbIdx] = true;
+                                        loops.mut(bbIdx) = true;
                                     }
                                 }
                             }
@@ -3080,44 +3095,48 @@ namespace {
                             continue;
                         }
                         callStack.push_back({root, 0});
-                        index[root] = lowlink[root] = nextIndex++;
-                        sccStack.push_back(root);
-                        onStack[root] = true;
+                        index.mut(root) = nextIndex;
+                        lowlink.mut(root) = nextIndex++;
+                        sccStack.pushBack(root);
+                        onStack.mut(root) = true;
                         while (!callStack.empty()) {
                             auto& fr = callStack.back();
-                            if (fr.next < succs[fr.bb].size()) {
+                            if (fr.next < succs[fr.bb].length()) {
                                 unsigned w = succs[fr.bb][fr.next++];
                                 if (index[w] == ~0u) {
-                                    index[w] = lowlink[w] = nextIndex++;
-                                    sccStack.push_back(w);
-                                    onStack[w] = true;
+                                    index.mut(w) = nextIndex;
+                                    lowlink.mut(w) = nextIndex++;
+                                    sccStack.pushBack(w);
+                                    onStack.mut(w) = true;
                                     callStack.push_back({w, 0});
                                 } else if (onStack[w]) {
-                                    lowlink[fr.bb] = std::min(lowlink[fr.bb], index[w]);
+                                    lowlink.mut(fr.bb) = std::min(lowlink[fr.bb], index[w]);
                                 }
                             } else {
                                 unsigned v = fr.bb;
                                 callStack.pop_back();
                                 if (!callStack.empty()) {
                                     auto& parent = callStack.back();
-                                    lowlink[parent.bb] = std::min(lowlink[parent.bb], lowlink[v]);
+                                    lowlink.mut(parent.bb) = std::min(lowlink[parent.bb], lowlink[v]);
                                 }
                                 if (lowlink[v] == index[v]) {
-                                    size_t vPos = sccStack.size();
+                                    size_t vPos = sccStack.length();
                                     while (vPos > 0 && sccStack[vPos - 1] != v) {
                                         vPos--;
                                     }
                                     BUG_ASSERT(vPos > 0);
                                     vPos--;
-                                    bool multi = (sccStack.size() - vPos) > 1;
-                                    for (size_t i = vPos; i < sccStack.size(); i++) {
+                                    bool multi = (sccStack.length() - vPos) > 1;
+                                    for (size_t i = vPos; i < sccStack.length(); i++) {
                                         unsigned m = sccStack[i];
-                                        onStack[m] = false;
+                                        onStack.mut(m) = false;
                                         if (multi) {
-                                            loops[m] = true;
+                                            loops.mut(m) = true;
                                         }
                                     }
-                                    sccStack.resize(vPos);
+                                    while (sccStack.length() > vPos) {
+                                        sccStack.popBack();
+                                    }
                                 }
                             }
                         }
@@ -3129,9 +3148,9 @@ namespace {
             }
         }
 
-        std::unordered_map<uintptr_t, std::vector<size_t>> possibleBySource;
+        std::unordered_map<uintptr_t, Vector<size_t>> possibleBySource;
         for (size_t i = 0; i < possible.size(); i++) {
-            possibleBySource[possible[i].slot.getInner()].push_back(i);
+            possibleBySource[possible[i].slot.getInner()].pushBack(i);
         }
 
         struct MarkUsed final: public LvalueVisitor {
@@ -3260,7 +3279,7 @@ namespace {
             auto& bb = fcn.blocks[bbIdx];
             std::map<unsigned, unsigned> localAssignments;
             // TODO: Keep track of what variables would invalidate a local (and compound on assignment)
-            std::vector<unsigned> statementsToRemove;
+            Vector<unsigned> statementsToRemove;
 
             struct CheckInvalidate final: public LvalueVisitor {
                 MIRTypeResolve& state;
@@ -3368,7 +3387,7 @@ namespace {
                                 // TODO: DstMeta/DstPtr _doesn't_ move, so shouldn't trigger this.
                                 topLv = newVal.clone();
                                 DEBUG(state << StringView("> Replace (and remove) Local(") << it->first << StringView(") with ") << newVal);
-                                statementsToRemove.push_back(it->second);
+                                statementsToRemove.pushBack(it->second);
                                 localAssignments.erase(it);
                                 changed = true;
                             } else {
@@ -3423,13 +3442,13 @@ namespace {
                 optVisitMirLvaluesMut(bb.terminator, cbApplyReplacements);
             }
 
-            std::sort(statementsToRemove.begin(), statementsToRemove.end());
+            std::sort(statementsToRemove.mutBegin(), statementsToRemove.mutEnd());
             while (!statementsToRemove.empty()) {
                 // TODO: Handle partial moves here?
                 // TODO: Is there some edge case I'm missing where the assignment shouldn't be removed?
 
                 bb.statements.erase(bb.statements.begin() + statementsToRemove.back());
-                statementsToRemove.pop_back();
+                statementsToRemove.popBack();
 
                 changed = true;
             }
@@ -3446,7 +3465,7 @@ namespace {
             state.setCurStmt(bbIdx, 0);
 
             bool skip = false;
-            std::vector<size_t> sources;
+            Vector<size_t> sources;
             for (size_t bb2Idx = 0; bb2Idx < fcn.blocks.size() && !skip; bb2Idx++) {
                 const auto& blk = fcn.blocks[bb2Idx];
                 // TODO: Handle non-Goto branches? (e.g. calls)
@@ -3457,13 +3476,13 @@ namespace {
                         break;
                     }
                     if (!sources.empty()) {
-                        if (blk.statements.back() != fcn.blocks[sources.front()].statements.back()) {
-                            DEBUG(state << StringView(" BB") << bb2Idx << StringView(" doesn't end with ") << fcn.blocks[sources.front()].statements.back() << StringView(" instead ") << blk.statements.back());
+                        if (blk.statements.back() != fcn.blocks[sources[0]].statements.back()) {
+                            DEBUG(state << StringView(" BB") << bb2Idx << StringView(" doesn't end with ") << fcn.blocks[sources[0]].statements.back() << StringView(" instead ") << blk.statements.back());
                             skip = true;
                             break;
                         }
                     }
-                    sources.push_back(bb2Idx);
+                    sources.pushBack(bb2Idx);
                 } else {
                     struct CheckPointsBack final: public MIRTargetVisitor {
                         const MIRTypeResolve& state;
@@ -3493,10 +3512,10 @@ namespace {
                 }
             }
 
-            if (!skip && sources.size() > 1) {
+            if (!skip && sources.length() > 1) {
                 // TODO: Should this search for any common statements?
 
-                auto stmt = std::move(fcn.blocks[sources.front()].statements.back());
+                auto stmt = std::move(fcn.blocks[sources[0]].statements.back());
                 for (auto idx : sources) {
                     fcn.blocks[idx].statements.pop_back();
                 }
@@ -3509,20 +3528,21 @@ namespace {
     bool MIROptimiseUnifyTemporaries(MIRTypeResolve& state, MIRFunction& fcn) {
         bool replacementNeeded = false;
         TRACE_FUNCTION_FR(StringView(""), replacementNeeded);
-        std::vector<bool> replacable(fcn.locals.size());
+        Vector<bool> replacable;
+        replacable.zero(fcn.locals.length());
         {
             unsigned int nFound = 0;
-            for (unsigned int tmpidx = 0; tmpidx < fcn.locals.size(); tmpidx++) {
+            for (unsigned int tmpidx = 0; tmpidx < fcn.locals.length(); tmpidx++) {
                 if (replacable[tmpidx]) {
                     continue;
                 }
-                for (unsigned int i = tmpidx + 1; i < fcn.locals.size(); i++) {
+                for (unsigned int i = tmpidx + 1; i < fcn.locals.length(); i++) {
                     if (replacable[i]) {
                         continue;
                     }
                     if (fcn.locals[i] == fcn.locals[tmpidx]) {
-                        replacable[i] = true;
-                        replacable[tmpidx] = true;
+                        replacable.mut(i) = true;
+                        replacable.mut(tmpidx) = true;
                         nFound++;
                     }
                 }
@@ -3537,8 +3557,9 @@ namespace {
         std::vector<MIRValueLifetime> slotLifetimes = mv$(lifetimes.slots);
 
         std::map<unsigned int, unsigned int> replacements;
-        std::vector<bool> visited(fcn.locals.size());
-        for (unsigned int localIdx = 0; localIdx < fcn.locals.size(); localIdx++) {
+        Vector<bool> visited;
+        visited.zero(fcn.locals.length());
+        for (unsigned int localIdx = 0; localIdx < fcn.locals.length(); localIdx++) {
             if (!replacable[localIdx]) {
                 continue;
             }
@@ -3548,9 +3569,9 @@ namespace {
             if (!slotLifetimes[localIdx].isUsed()) {
                 continue;
             }
-            visited[localIdx] = true;
+            visited.mut(localIdx) = true;
 
-            for (unsigned int i = localIdx + 1; i < fcn.locals.size(); i++) {
+            for (unsigned int i = localIdx + 1; i < fcn.locals.length(); i++) {
                 if (!replacable[i]) {
                     continue;
                 }
@@ -3566,7 +3587,7 @@ namespace {
                 slotLifetimes[localIdx].unify(slotLifetimes[i]);
                 replacements[i] = localIdx;
                 replacementNeeded = true;
-                visited[i] = true;
+                visited.mut(i) = true;
             }
         }
 
@@ -3741,7 +3762,7 @@ namespace {
                             case MIRStatement::TAG_ScopeEnd: {
                                 auto& ae = tuMatch.as_ScopeEnd();
                                 auto& be = tuMatch2.as_ScopeEnd();
-                                if (ae.slots != be.slots) {
+                                if (ae.slots.length() != be.slots.length() || !std::equal(ae.slots.begin(), ae.slots.end(), be.slots.begin())) {
                                     return false;
                                 }
                                 break;
@@ -3848,30 +3869,35 @@ namespace {
     bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
         bool changeHappend = false;
         TRACE_FUNCTION_FR(StringView(""), changeHappend);
-        std::vector<size_t> blockOrigins(fcn.blocks.size(), SIZE_MAX);
+        Vector<size_t> blockOrigins;
+        while (blockOrigins.length() < fcn.blocks.size()) {
+            blockOrigins.pushBack(SIZE_MAX);
+        }
         {
-            std::vector<unsigned int> blockUses(fcn.blocks.size());
-            std::vector<bool> visited(fcn.blocks.size());
-            std::vector<MIRBasicBlockId> toVisit;
-            toVisit.push_back(0);
-            blockUses[0]++;
-            while (toVisit.size() > 0) {
+            Vector<unsigned int> blockUses;
+            blockUses.zero(fcn.blocks.size());
+            Vector<bool> visited;
+            visited.zero(fcn.blocks.size());
+            Vector<MIRBasicBlockId> toVisit;
+            toVisit.pushBack(0);
+            blockUses.mut(0)++;
+            while (toVisit.length() > 0) {
                 auto bb = toVisit.back();
-                toVisit.pop_back();
+                toVisit.popBack();
                 if (visited[bb]) {
                     continue;
                 }
-                visited[bb] = true;
+                visited.mut(bb) = true;
                 const auto& block = fcn.blocks[bb];
 
                 struct RecordOrigins final: public MIRTargetVisitor {
-                    const std::vector<bool>& visited;
-                    std::vector<MIRBasicBlockId>& toVisit;
-                    std::vector<unsigned int>& blockUses;
-                    std::vector<size_t>& blockOrigins;
+                    const Vector<bool>& visited;
+                    Vector<MIRBasicBlockId>& toVisit;
+                    Vector<unsigned int>& blockUses;
+                    Vector<size_t>& blockOrigins;
                     MIRBasicBlockId bb;
 
-                    RecordOrigins(const std::vector<bool>& visited, std::vector<MIRBasicBlockId>& toVisit, std::vector<unsigned int>& blockUses, std::vector<size_t>& blockOrigins, MIRBasicBlockId bb)
+                    RecordOrigins(const Vector<bool>& visited, Vector<MIRBasicBlockId>& toVisit, Vector<unsigned int>& blockUses, Vector<size_t>& blockOrigins, MIRBasicBlockId bb)
                         : visited(visited)
                         , toVisit(toVisit)
                         , blockUses(blockUses)
@@ -3882,14 +3908,14 @@ namespace {
 
                     void visitTarget(const MIRBasicBlockId& idx) override {
                         if (!visited[idx]) {
-                            toVisit.push_back(idx);
+                            toVisit.pushBack(idx);
                         }
                         if (blockUses[idx] == 0) {
-                            blockOrigins[idx] = bb;
+                            blockOrigins.mut(idx) = bb;
                         } else {
-                            blockOrigins[idx] = SIZE_MAX;
+                            blockOrigins.mut(idx) = SIZE_MAX;
                         }
-                        blockUses[idx]++;
+                        blockUses.mut(idx)++;
                     }
                 } recordOrigins{visited, toVisit, blockUses, blockOrigins, bb};
 
@@ -5169,8 +5195,8 @@ namespace {
                     auto& te = bb.terminator.as_Switch();
                     auto it = knownValuesVar.find(te.val);
                     if (it != knownValuesVar.end()) {
-                        MIR_ASSERT(state, it->second < te.targets.size(), StringView("Terminator::Switch with known variant index out of bounds") << StringView(" (#") << it->second << StringView(" with ") << bb.terminator << StringView(")"));
-                        auto newBb = te.targets.at(it->second);
+                        MIR_ASSERT(state, it->second < te.targets.length(), StringView("Terminator::Switch with known variant index out of bounds") << StringView(" (#") << it->second << StringView(" with ") << bb.terminator << StringView(")"));
+                        auto newBb = te.targets[it->second];
                         DEBUG(state << StringView("Convert ") << bb.terminator << StringView(" into Goto(") << newBb << StringView(") because variant known to be #") << it->second);
                         bb.terminator = MIRTerminator::make_Goto(newBb);
 
@@ -5281,7 +5307,7 @@ namespace {
 
             bool isDirectUsed;
             unsigned nWrite;
-            std::vector<unsigned> replacements;
+            Vector<unsigned> replacements;
 
             Potential(size_t srcBbIdx, size_t srcStmtIdx, unsigned variantIdx = ~0u)
                 : srcBbIdx(srcBbIdx)
@@ -5419,14 +5445,14 @@ namespace {
                 std::move_backward(block.statements.begin() + stmtIdx + 1, block.statements.end() - offset, block.statements.end());
             }
 
-            auto newLocalBase = fcn.locals.size();
-            fcn.locals.resize(fcn.locals.size() + vals.size());
-            p.second.replacements.resize(vals.size());
+            auto newLocalBase = fcn.locals.length();
+            fcn.locals.grow(newLocalBase + vals.size());
+            p.second.replacements.zero(vals.size());
             for (size_t i = 0; i < vals.size(); i++) {
                 auto newLocal = static_cast<unsigned>(newLocalBase + i);
                 HIRTypeRef tmp;
-                fcn.locals[newLocal] = state.getParamType(tmp, vals[i]);
-                p.second.replacements[i] = newLocal;
+                fcn.locals.pushBack(state.getParamType(tmp, vals[i]));
+                p.second.replacements.mut(i) = newLocal;
                 block.statements[stmtIdx + i] = MIRStatement::make_Assign({MIRLValue::newLocal(newLocal), paramToRvalue(mv$(vals[i]))});
                 DEBUG(StringView("+ BB") << bbIdx << StringView("/") << (stmtIdx + i) << StringView(": ") << block.statements[stmtIdx + i]);
             }
@@ -5466,7 +5492,7 @@ namespace {
                             ndel = 2;
                         }
                         auto newWrappers = std::vector<MIRLValue::Wrapper>(lv.wrappers.begin() + ndel, lv.wrappers.end());
-                        auto newRoot = MIRLValue::Storage::newLocal(it->second.replacements.at(fieldIdx));
+                        auto newRoot = MIRLValue::Storage::newLocal(it->second.replacements[fieldIdx]);
                         auto newLv = MIRLValue(mv$(newRoot), mv$(newWrappers));
                         DEBUG(state << StringView(" ") << lv << StringView(" -> ") << newLv);
                         lv = mv$(newLv);
@@ -5496,16 +5522,16 @@ namespace {
         };
 
         struct {
-            std::vector<ValUse> localUses;
+            Vector<ValUse> localUses;
 
             void useLvalue(const MIRLValue& lv, MIRValUsage ut) {
                 for (const auto& w : lv.wrappers) {
                     if (w.is_Index()) {
-                        localUses[w.as_Index()].borrow += 1;
+                        localUses.mut(w.as_Index()).borrow += 1;
                     }
                 }
                 if (lv.root.is_Local()) {
-                    auto& vu = localUses[lv.root.as_Local()];
+                    auto& vu = localUses.mut(lv.root.as_Local());
                     switch (ut) {
                         case MIRValUsage::Move:
                         case MIRValUsage::Read:
@@ -5520,7 +5546,9 @@ namespace {
                     }
                 }
             }
-        } valUses = {std::vector<ValUse>(fcn.locals.size())};
+        } valUses;
+
+        valUses.localUses.zero(fcn.locals.length());
 
         struct CollectValUses final: public LvalueVisitor {
             decltype(valUses)& valUses;
@@ -6037,38 +6065,40 @@ namespace {
     bool MIROptimiseDeadDropFlags(MIRTypeResolve& state, MIRFunction& fcn) {
         bool removedStatement = false;
         TRACE_FUNCTION_FR(StringView(""), removedStatement);
-        std::vector<bool> usedDropFlags(fcn.dropFlags.size());
+        Vector<bool> usedDropFlags;
+        usedDropFlags.zero(fcn.dropFlags.length());
         {
-            std::vector<bool> readDropFlags(fcn.dropFlags.size());
+            Vector<bool> readDropFlags;
+            readDropFlags.zero(fcn.dropFlags.length());
             visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&readDropFlags, &usedDropFlags](auto, const MIRBasicBlock& block) {
                 for (const auto& stmt : block.statements) {
                     if (const auto* e = stmt.opt_SetDropFlag()) {
                         if (e->other != ~0u) {
-                            readDropFlags[e->other] = true;
-                            usedDropFlags[e->other] = true;
+                            readDropFlags.mut(e->other) = true;
+                            usedDropFlags.mut(e->other) = true;
                         }
-                        usedDropFlags[e->idx] = true;
+                        usedDropFlags.mut(e->idx) = true;
                     } else if (const auto* e = stmt.opt_SaveDropFlag()) {
-                        readDropFlags[e->idx] = true;
-                        usedDropFlags[e->idx] = true;
+                        readDropFlags.mut(e->idx) = true;
+                        usedDropFlags.mut(e->idx) = true;
                     } else if (const auto* e = stmt.opt_LoadDropFlag()) {
-                        usedDropFlags[e->idx] = true;
+                        usedDropFlags.mut(e->idx) = true;
                     }
                 }
                 if (const auto* e = block.terminator.opt_Drop()) {
                     if (e->flagIdx != ~0u) {
-                        readDropFlags[e->flagIdx] = true;
-                        usedDropFlags[e->flagIdx] = true;
+                        readDropFlags.mut(e->flagIdx) = true;
+                        usedDropFlags.mut(e->flagIdx) = true;
                     }
                 }
                 if (const auto* e = block.terminator.opt_Switch()) {
                     if (e->validFlag != ~0u) {
-                        readDropFlags[e->validFlag] = true;
-                        usedDropFlags[e->validFlag] = true;
+                        readDropFlags.mut(e->validFlag) = true;
+                        usedDropFlags.mut(e->validFlag) = true;
                     }
                 }
             }));
-            DEBUG(StringView("Un-read drop flags:") << FMT_CB(ss, for (size_t i = 0; i < readDropFlags.size(); i++) if (!readDropFlags[i] && usedDropFlags[i]) ss << StringView(" ") << i;));
+            DEBUG(StringView("Un-read drop flags:") << FMT_CB(ss, for (size_t i = 0; i < readDropFlags.length(); i++) if (!readDropFlags[i] && usedDropFlags[i]) ss << StringView(" ") << i;));
             visitBlocksMut(state, fcn, makeCallable<MIRBlockCb>([&readDropFlags, &removedStatement](auto _id, auto& block) {
                 for (auto it = block.statements.begin(); it != block.statements.end();) {
                     if (it->is_SetDropFlag() && !readDropFlags[it->as_SetDropFlag().idx]) {
@@ -6085,20 +6115,21 @@ namespace {
         }
 
         {
-            std::vector<bool> editedDropFlags(fcn.dropFlags.size());
+            Vector<bool> editedDropFlags;
+            editedDropFlags.zero(fcn.dropFlags.length());
             visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&editedDropFlags, &fcn](auto, const MIRBasicBlock& block) {
                 for (const auto& stmt : block.statements) {
                     if (const auto* e = stmt.opt_SetDropFlag()) {
                         if (e->other != ~0u) {
-                            editedDropFlags[e->idx] = true;
+                            editedDropFlags.mut(e->idx) = true;
                         } else if (e->newVal != fcn.dropFlags[e->idx]) {
-                            editedDropFlags[e->idx] = true;
+                            editedDropFlags.mut(e->idx) = true;
                         } else {
                         }
                     }
                 }
             }));
-            DEBUG(StringView("Un-edited drop flags:") << FMT_CB(ss, for (size_t i = 0; i < editedDropFlags.size(); i++) if (!editedDropFlags[i] && usedDropFlags[i]) ss << StringView(" ") << i;));
+            DEBUG(StringView("Un-edited drop flags:") << FMT_CB(ss, for (size_t i = 0; i < editedDropFlags.length(); i++) if (!editedDropFlags[i] && usedDropFlags[i]) ss << StringView(" ") << i;));
             visitBlocksMut(state, fcn, makeCallable<MIRBlockCb>([&editedDropFlags, &removedStatement, &fcn](auto _id, auto& block) {
                 for (auto it = block.statements.begin(); it != block.statements.end();) {
                     if (const auto* e = it->opt_SetDropFlag()) {
@@ -6123,8 +6154,10 @@ namespace {
         bool changed = false;
 
         TRACE_FUNCTION_FR(StringView(""), changed);
-        std::vector<bool> readLocals(fcn.locals.size());
-        std::vector<bool> droppedLocals(fcn.locals.size());
+        Vector<bool> readLocals;
+        readLocals.zero(fcn.locals.length());
+        Vector<bool> droppedLocals;
+        droppedLocals.zero(fcn.locals.length());
 
         struct RecordReads final: public LvalueVisitor {
             decltype(readLocals)& readLocals;
@@ -6136,11 +6169,11 @@ namespace {
 
             bool visitLvalue(const MIRLValue& lv, MIRValUsage /*vu*/) override {
                 if (lv.root.is_Local()) {
-                    readLocals[lv.root.as_Local()] = true;
+                    readLocals.mut(lv.root.as_Local()) = true;
                 }
                 for (const auto& w : lv.wrappers) {
                     if (w.is_Index()) {
-                        readLocals[w.as_Index()] = true;
+                        readLocals.mut(w.as_Index()) = true;
                     }
                 }
                 return false;
@@ -6156,7 +6189,7 @@ namespace {
                 }
             }
             if (const auto* drop = bb.terminator.opt_Drop(); drop && drop->slot.is_Local()) {
-                droppedLocals[drop->slot.as_Local()] = true;
+                droppedLocals.mut(drop->slot.as_Local()) = true;
             } else {
                 optVisitMirLvalues(bb.terminator, cb);
             }
@@ -6322,10 +6355,10 @@ namespace {
             unsigned srcIdx = &srcBb - fcn.blocks.data();
 
             struct CollectPreds final: public MIRTargetVisitor {
-                std::vector<std::vector<unsigned>>& blockPreds;
+                std::vector<Vector<unsigned>>& blockPreds;
                 unsigned srcIdx;
 
-                CollectPreds(std::vector<std::vector<unsigned>>& blockPreds, unsigned srcIdx)
+                CollectPreds(std::vector<Vector<unsigned>>& blockPreds, unsigned srcIdx)
                     : blockPreds(blockPreds)
                     , srcIdx(srcIdx)
                 {
@@ -6333,7 +6366,7 @@ namespace {
 
                 void visitTarget(const MIRBasicBlockId& target) override {
                     if (target < blockPreds.size()) {
-                        blockPreds[target].push_back(srcIdx);
+                        blockPreds[target].pushBack(srcIdx);
                     }
                 }
             } collectPreds{blockPreds, srcIdx};
@@ -6341,8 +6374,10 @@ namespace {
             visitTerminatorTarget(srcBb.terminator, collectPreds);
         }
 
-        std::vector<unsigned> localReads(fcn.locals.size(), 0);
-        std::vector<unsigned> localBorrows(fcn.locals.size(), 0);
+        Vector<unsigned> localReads;
+        localReads.zero(fcn.locals.length());
+        Vector<unsigned> localBorrows;
+        localBorrows.zero(fcn.locals.length());
 
         struct CountLocalUses final: public LvalueVisitor {
             decltype(localReads)& localReads;
@@ -6359,10 +6394,10 @@ namespace {
                     switch (vu) {
                         case MIRValUsage::Read:
                         case MIRValUsage::Move:
-                            localReads[lv.root.as_Local()]++;
+                            localReads.mut(lv.root.as_Local())++;
                             break;
                         case MIRValUsage::Borrow:
-                            localBorrows[lv.root.as_Local()]++;
+                            localBorrows.mut(lv.root.as_Local())++;
                             break;
                         case MIRValUsage::Write:
                             break;
@@ -6370,7 +6405,7 @@ namespace {
                 }
                 for (const auto& w : lv.wrappers) {
                     if (w.is_Index()) {
-                        localReads[w.as_Index()]++;
+                        localReads.mut(w.as_Index())++;
                     }
                 }
                 return true;
@@ -6409,13 +6444,13 @@ namespace {
             }
 
             DEBUG(state << StringView("Eligible assignment (") << stmt << StringView(")"));
-            std::vector<unsigned> sources;
+            Vector<unsigned> sources;
             unsigned numUsed = 0;
             const auto& preds = blockPreds[state.getCurBlock()];
-            for (size_t predI = 0; predI < preds.size(); predI++) {
+            for (size_t predI = 0; predI < preds.length(); predI++) {
                 unsigned bbIdx = preds[predI];
                 const auto& srcBb = fcn.blocks[bbIdx];
-                sources.push_back(bbIdx);
+                sources.pushBack(bbIdx);
                 if (predI > 0 && preds[predI - 1] == bbIdx) {
                     continue;
                 }
@@ -6444,7 +6479,7 @@ namespace {
 
             // TODO: Allow if one arm doesn't update?
 
-            if (numUsed < sources.size()) {
+            if (numUsed < sources.length()) {
                 DEBUG(state << StringView("- Not all sources set the value"));
                 continue;
             }
@@ -6494,12 +6529,13 @@ namespace {
     bool MIROptimiseGarbageCollectPartial(MIRTypeResolve& state, MIRFunction& fcn) {
         bool rv = false;
         TRACE_FUNCTION_FR(StringView(""), rv);
-        std::vector<bool> visited(fcn.blocks.size());
+        Vector<bool> visited;
+        visited.zero(fcn.blocks.size());
         visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&visited](auto bb, const auto& /*block*/) {
             BUG_ASSERT(!visited[bb]);
-            visited[bb] = true;
+            visited.mut(bb) = true;
         }));
-        for (unsigned int i = 0; i < visited.size(); i++) {
+        for (unsigned int i = 0; i < visited.length(); i++) {
             auto& blk = fcn.blocks[i];
             if (!(blk.terminator.is_Incomplete() && blk.statements.empty()) && !visited[i]) {
                 DEBUG(StringView("CLEAR bb") << i);
@@ -6512,12 +6548,15 @@ namespace {
     }
 
     bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
-        std::vector<bool> usedLocals(fcn.locals.size());
-        std::vector<bool> usedDfs(fcn.dropFlags.size());
-        std::vector<bool> visited(fcn.blocks.size());
+        Vector<bool> usedLocals;
+        usedLocals.zero(fcn.locals.length());
+        Vector<bool> usedDfs;
+        usedDfs.zero(fcn.dropFlags.length());
+        Vector<bool> visited;
+        visited.zero(fcn.blocks.size());
 
         visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&](auto bb, const auto& block) {
-            visited[bb] = true;
+            visited.mut(bb) = true;
 
             auto assignedLval = [&](const MIRLValue& lv) {
                 // TODO: Consume through indexing/field accesses
@@ -6528,7 +6567,7 @@ namespace {
                     }
                 }
                 if (lv.root.is_Local()) {
-                    usedLocals[lv.root.as_Local()] = true;
+                    usedLocals.mut(lv.root.as_Local()) = true;
                 }
             };
 
@@ -6548,11 +6587,11 @@ namespace {
                     }
                 } else if (const auto* e = stmt.opt_SetDropFlag()) {
                     if (e->other != ~0u) {
-                        usedDfs.at(e->other) = true;
+                        usedDfs.mut(e->other) = true;
                     }
-                    usedDfs.at(e->idx) = true;
+                    usedDfs.mut(e->idx) = true;
                 } else if (const auto* e = stmt.opt_LoadDropFlag()) {
-                    usedDfs.at(e->idx) = true;
+                    usedDfs.mut(e->idx) = true;
                 }
             }
 
@@ -6560,23 +6599,28 @@ namespace {
                 assignedLval(te->retVal);
             } else if (const auto* te = block.terminator.opt_Drop()) {
                 if (te->flagIdx != ~0u) {
-                    usedDfs.at(te->flagIdx) = true;
+                    usedDfs.mut(te->flagIdx) = true;
                 }
             } else if (const auto* te = block.terminator.opt_Switch()) {
                 if (te->validFlag != ~0u) {
-                    usedDfs.at(te->validFlag) = true;
+                    usedDfs.mut(te->validFlag) = true;
                 }
             }
         }));
 
-        std::vector<unsigned int> localRewriteTable;
-        unsigned int nLocals = fcn.locals.size();
-        for (unsigned int i = 0, j = 0; i < nLocals; i++) {
+        Vector<unsigned int> localRewriteTable;
+        unsigned int nLocals = fcn.locals.length();
+        unsigned int keptLocals = 0;
+        for (unsigned int i = 0; i < nLocals; i++) {
             if (!usedLocals[i]) {
-                fcn.locals.erase(fcn.locals.begin() + j);
-                DEBUG(StringView("_") << i << StringView(" => _") << j);
+                DEBUG(StringView("_") << i << StringView(" => _") << keptLocals);
+            } else {
+                fcn.locals.mut(keptLocals) = fcn.locals[i];
             }
-            localRewriteTable.push_back(usedLocals[i] ? j++ : ~0u);
+            localRewriteTable.pushBack(usedLocals[i] ? keptLocals++ : ~0u);
+        }
+        while (fcn.locals.length() > keptLocals) {
+            fcn.locals.popBack();
         }
         DEBUG(StringView("Deleted Locals:") << FMT_CB(ss, for (auto run : runs(usedLocals)) if (!usedLocals[run.first]) {
                   ss << StringView(" ") << run.first;
@@ -6584,14 +6628,14 @@ namespace {
                       ss << StringView("-") << run.second;
                   }
               }));
-        std::vector<unsigned int> dfRewriteTable;
-        unsigned int nDf = fcn.dropFlags.size();
+        Vector<unsigned int> dfRewriteTable;
+        unsigned int nDf = fcn.dropFlags.length();
         for (unsigned int i = 0, j = 0; i < nDf; i++) {
-            dfRewriteTable.push_back(usedDfs[i] ? j++ : ~0u);
+            dfRewriteTable.pushBack(usedDfs[i] ? j++ : ~0u);
         }
 
         auto it = fcn.blocks.begin();
-        for (unsigned int i = 0; i < visited.size(); i++) {
+        for (unsigned int i = 0; i < visited.length(); i++) {
             if (visited[i]) {
                 struct RewriteLocals final: public LvalueVisitorMut {
                     MIRTypeResolve& state;
@@ -6606,34 +6650,35 @@ namespace {
                     bool visitLvalue(MIRLValue& lv, MIRValUsage /*vu*/) override {
                         if (lv.root.is_Local()) {
                             auto e = lv.root.as_Local();
-                            MIR_ASSERT(state, e < localRewriteTable.size(), StringView("Variable out of range - ") << lv);
-                            MIR_ASSERT(state, localRewriteTable.at(e) != ~0u, StringView("LValue ") << lv << StringView(" incorrectly marked as unused"));
-                            lv.root = MIRLValue::Storage::newLocal(localRewriteTable.at(e));
+                            MIR_ASSERT(state, e < localRewriteTable.length(), StringView("Variable out of range - ") << lv);
+                            MIR_ASSERT(state, localRewriteTable[e] != ~0u, StringView("LValue ") << lv << StringView(" incorrectly marked as unused"));
+                            lv.root = MIRLValue::Storage::newLocal(localRewriteTable[e]);
                         }
                         for (auto& w : lv.wrappers) {
                             if (w.is_Index()) {
-                                w = MIRLValue::Wrapper::newIndex(localRewriteTable.at(w.as_Index()));
+                                w = MIRLValue::Wrapper::newIndex(localRewriteTable[w.as_Index()]);
                             }
                         }
                         return false;
                     }
                 } lvalueCb{state, localRewriteTable};
 
-                std::vector<bool> toRemoveStatements(it->statements.size());
+                Vector<bool> toRemoveStatements;
+                toRemoveStatements.zero(it->statements.size());
                 for (auto& stmt : it->statements) {
                     auto stmtIdx = &stmt - &it->statements.front();
                     state.setCurStmt(i, stmtIdx);
 
                     if (stmt == MIRStatement()) {
                         DEBUG(state << StringView("Remove ") << stmt << StringView(" - Pure default"));
-                        toRemoveStatements[stmtIdx] = true;
+                        toRemoveStatements.mut(stmtIdx) = true;
                         continue;
                     }
 
                     optVisitMirLvaluesMut(stmt, lvalueCb);
                     if (auto* se = stmt.opt_SetDropFlag()) {
                         if (dfRewriteTable[se->idx] == ~0u) {
-                            toRemoveStatements[stmtIdx] = true;
+                            toRemoveStatements.mut(stmtIdx) = true;
                             continue;
                         }
                         se->idx = dfRewriteTable[se->idx];
@@ -6645,18 +6690,20 @@ namespace {
                     } else if (auto* se = stmt.opt_SaveDropFlag()) {
                         se->idx = dfRewriteTable[se->idx];
                     } else if (auto* se = stmt.opt_ScopeEnd()) {
-                        for (auto it = se->slots.begin(); it != se->slots.end();) {
-                            if (localRewriteTable.at(*it) == ~0u) {
-                                it = se->slots.erase(it);
-                            } else {
-                                *it = localRewriteTable.at(*it);
-                                ++it;
+                        size_t write = 0;
+                        for (size_t read = 0; read < se->slots.length(); read++) {
+                            const auto rewritten = localRewriteTable[se->slots[read]];
+                            if (rewritten != ~0u) {
+                                se->slots.mut(write++) = rewritten;
                             }
+                        }
+                        while (se->slots.length() > write) {
+                            se->slots.popBack();
                         }
 
                         if (se->slots.empty()) {
                             DEBUG(state << StringView("Delete ScopeEnd (now empty)"));
-                            toRemoveStatements[stmtIdx] = true;
+                            toRemoveStatements.mut(stmtIdx) = true;
                             continue;
                         }
                     }
@@ -6665,7 +6712,7 @@ namespace {
                 if (auto* drop = it->terminator.opt_Drop()) {
                     bool removeDrop = false;
                     if (drop->flagIdx != ~0u && dfRewriteTable[drop->flagIdx] == ~0u) {
-                        if (fcn.dropFlags.at(drop->flagIdx)) {
+                        if (fcn.dropFlags[drop->flagIdx]) {
                             drop->flagIdx = ~0u;
                         } else {
                             removeDrop = true;
@@ -6690,7 +6737,7 @@ namespace {
                     }
                 }
 
-                BUG_ASSERT(it->statements.size() == toRemoveStatements.size());
+                BUG_ASSERT(it->statements.size() == toRemoveStatements.length());
                 auto newEnd = std::remove_if(it->statements.begin(), it->statements.end(), [&](const auto& s) {
                     size_t stmtIdx = (&s - &it->statements.front());
                     return toRemoveStatements[stmtIdx];
@@ -6700,14 +6747,14 @@ namespace {
             ++it;
         }
 
-        visited.assign(fcn.blocks.size(), false);
+        visited.zero(fcn.blocks.size());
         visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&](auto bb, const auto&) {
-            visited[bb] = true;
+            visited.mut(bb) = true;
         }));
 
-        std::vector<unsigned int> blockRewriteTable;
+        Vector<unsigned int> blockRewriteTable;
         for (unsigned int i = 0, j = 0; i < fcn.blocks.size(); i++) {
-            blockRewriteTable.push_back(visited[i] ? j++ : ~0u);
+            blockRewriteTable.pushBack(visited[i] ? j++ : ~0u);
         }
         for (unsigned int i = 0; i < fcn.blocks.size(); i++) {
             if (!visited[i]) {
@@ -6716,16 +6763,16 @@ namespace {
 
             struct ApplyRewriteTable final: public MIRTargetVisitorMut {
                 const MIRTypeResolve& state;
-                const std::vector<unsigned int>& blockRewriteTable;
+                const Vector<unsigned int>& blockRewriteTable;
 
-                ApplyRewriteTable(const MIRTypeResolve& state, const std::vector<unsigned int>& blockRewriteTable)
+                ApplyRewriteTable(const MIRTypeResolve& state, const Vector<unsigned int>& blockRewriteTable)
                     : state(state)
                     , blockRewriteTable(blockRewriteTable)
                 {
                 }
 
                 void visitTarget(MIRBasicBlockId& target) override {
-                    MIR_ASSERT(state, target < blockRewriteTable.size(), StringView("Block target out of range - bb") << target);
+                    MIR_ASSERT(state, target < blockRewriteTable.length(), StringView("Block target out of range - bb") << target);
                     MIR_ASSERT(state, blockRewriteTable[target] != ~0u, StringView("Reachable block targets unreachable bb") << target);
                     target = blockRewriteTable[target];
                 }
@@ -6740,13 +6787,16 @@ namespace {
         });
         fcn.blocks.erase(newBlocksEnd, fcn.blocks.end());
 
-        for (unsigned int i = 0, j = 0; i < nDf; i++) {
+        unsigned int keptDf = 0;
+        for (unsigned int i = 0; i < nDf; i++) {
             if (!usedDfs[i]) {
                 DEBUG(StringView("GC df") << i);
-                fcn.dropFlags.erase(fcn.dropFlags.begin() + j);
             } else {
-                j++;
+                fcn.dropFlags.mut(keptDf++) = fcn.dropFlags[i];
             }
+        }
+        while (fcn.dropFlags.length() > keptDf) {
+            fcn.dropFlags.popBack();
         }
 
         // TODO: Detect if any optimisations happened, and return true in that case
@@ -7146,8 +7196,8 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
 
                         DEBUG(StringView("Convert function pointer call"));
                         e.args.clear();
-                        e.args.reserve(fcnTy.argTypes.size());
-                        for (unsigned int i = 0; i < fcnTy.argTypes.size(); i++) {
+                        e.args.reserve(fcnTy.argTypes.length());
+                        for (unsigned int i = 0; i < fcnTy.argTypes.length(); i++) {
                             e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
                         }
                         if (pe.trait.path == resolve.langFnOnce()) {
@@ -7160,7 +7210,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     const auto& pe = path.data.as_UfcsKnown();
                     const auto& fcnTy = pe.type->as_NamedFunction();
                     if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
-                        auto nArgs = fcnTy.decay(state.crate.types, state.sp).argTypes.size();
+                        auto nArgs = fcnTy.decay(state.crate.types, state.sp).argTypes.length();
                         MIR_ASSERT(state, e.args.size() == 2, StringView("Fn* call requires two arguments"));
                         auto fcnLvalue = mv$(e.args[0].as_LValue());
                         auto argsLvalue = mv$(e.args[1].as_LValue());
@@ -7227,8 +7277,8 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         auto fcnLvalue = mv$(e.args[0].as_LValue());
                         auto argsLvalue = mv$(e.args[1].as_LValue());
                         e.args.clear();
-                        e.args.reserve(fcnTy.argTypes.size());
-                        for (unsigned int i = 0; i < fcnTy.argTypes.size(); i++) {
+                        e.args.reserve(fcnTy.argTypes.length());
+                        for (unsigned int i = 0; i < fcnTy.argTypes.length(); i++) {
                             e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
                         }
                         e.fcn = pe.trait.path == resolve.langFnOnce() ? mv$(fcnLvalue) : MIRLValue::newDeref(mv$(fcnLvalue));
@@ -7237,7 +7287,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     const auto& pe = path.data.as_UfcsKnown();
                     const auto& fcnTy = pe.type->as_NamedFunction();
                     if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
-                        auto nArgs = fcnTy.decay(state.crate.types, state.sp).argTypes.size();
+                        auto nArgs = fcnTy.decay(state.crate.types, state.sp).argTypes.length();
                         MIR_ASSERT(state, e.args.size() == 2, StringView("Named function tail call requires two arguments"));
                         auto argsLvalue = mv$(e.args[1].as_LValue());
                         e.args.clear();
@@ -7389,7 +7439,8 @@ void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIR
 }
 
 void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn) {
-    std::vector<bool> visited(fcn.blocks.size());
+    Vector<bool> visited;
+    visited.zero(fcn.blocks.size());
     std::vector<std::pair<unsigned, unsigned>> depths(fcn.blocks.size());
 
     struct Todo {
@@ -7409,7 +7460,7 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
             continue;
         }
 
-        visited[info.bbIdx] = true;
+        visited.mut(info.bbIdx) = true;
         depths[info.bbIdx] = std::make_pair(info.branchCount, info.level);
         const auto& bb = fcn.blocks[info.bbIdx];
 
@@ -7494,12 +7545,12 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
         }
     }
 
-    std::vector<size_t> idxes;
-    idxes.reserve(fcn.blocks.size());
+    Vector<size_t> idxes;
+    idxes.grow(fcn.blocks.size());
     for (size_t i = 0; i < fcn.blocks.size(); i++) {
-        idxes.push_back(i);
+        idxes.pushBack(i);
     }
-    std::sort(idxes.begin(), idxes.end(), [&](auto a, auto b) {
+    quickSort(mutRange(idxes), [&](auto a, auto b) {
         return depths.at(a) < depths.at(b);
     });
 
@@ -7568,7 +7619,7 @@ void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransL
             for (auto& block : fcn.blocks) {
                 if (auto* te = block.terminator.opt_Call()) {
                     if (te->fcn.is_Intrinsic() && te->fcn.as_Intrinsic().name == "const_eval_select") {
-                        size_t nArgs = te->fcn.as_Intrinsic().params.types.at(0)->as_Tuple().size();
+                        size_t nArgs = te->fcn.as_Intrinsic().params.types.at(0)->as_Tuple().length();
                         const MIRLValue arg = te->args.at(0).as_LValue().clone();
                         const HIRPath& fcnPath = *te->args.at(2).as_Constant().as_Function().p;
 
@@ -7638,8 +7689,8 @@ auto MirMutator::updateState(MIRTypeResolve& state) -> void {
 }
 
 auto MirMutator::newTemporary(HIRTypeRef ty) -> MIRLValue {
-    auto rv = MIRLValue::newLocal(static_cast<unsigned int>(fcn.locals.size()));
-    fcn.locals.push_back(mv$(ty));
+    auto rv = MIRLValue::newLocal(static_cast<unsigned int>(fcn.locals.length()));
+    fcn.locals.pushBack(ty);
     return rv;
 }
 
@@ -7842,6 +7893,6 @@ void stl::output<ZeroCopyOutput, OptimiseStmtRef>(ZeroCopyOutput& os, OptimiseSt
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::vector<OptimiseStmtRef>>(ZeroCopyOutput& out, const std::vector<OptimiseStmtRef>& values) {
+void stl::output<ZeroCopyOutput, Vector<OptimiseStmtRef>>(ZeroCopyOutput& out, const Vector<OptimiseStmtRef>& values) {
     outCont(out, values);
 }

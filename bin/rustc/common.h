@@ -2,8 +2,9 @@
 
 #include "output.h"
 
-#include <std/str/builder.h>
 #include <std/sys/types.h>
+#include <std/lib/vector.h>
+#include <std/str/builder.h>
 
 #include <map>
 #include <set>
@@ -11,11 +12,11 @@
 #include <vector>
 #include <utility>
 
-#define FMT(ss)                                                                                                        \
-    ([&] {                                                                                                             \
-        ::stl::StringBuilder fmtOut;                                                                                   \
-        fmtOut << ss;                                                                                                  \
-        return std::string(static_cast<const char*>(fmtOut.data()), fmtOut.length());                                  \
+#define FMT(ss)                                                                       \
+    ([&] {                                                                            \
+        ::stl::StringBuilder fmtOut;                                                  \
+        fmtOut << ss;                                                                 \
+        return std::string(static_cast<const char*>(fmtOut.data()), fmtOut.length()); \
     }())
 
 #define mv$(...) std::move(__VA_ARGS__)
@@ -30,11 +31,11 @@ struct RepeatLitStr {
     int n;
 };
 
-#define FMT_CB(os, ...)                                                                                                 \
-    ([&] {                                                                                                              \
-        ::stl::StringBuilder os;                                                                                        \
-        __VA_ARGS__;                                                                                                    \
-        return std::string(static_cast<const char*>(os.data()), os.length());                                           \
+#define FMT_CB(os, ...)                                                       \
+    ([&] {                                                                    \
+        ::stl::StringBuilder os;                                              \
+        __VA_ARGS__;                                                          \
+        return std::string(static_cast<const char*>(os.data()), os.length()); \
     }())
 
 template <typename Y, typename X>
@@ -197,6 +198,25 @@ Ordering ord(const std::vector<T>& l, const std::vector<T>& r) {
         return OrdLess;
     }
     return OrdEqual;
+}
+
+template <typename T>
+Ordering ord(const stl::Vector<T>& l, const stl::Vector<T>& r) {
+    size_t i = 0;
+    for (const auto& item : l) {
+        if (i >= r.length()) {
+            return OrdGreater;
+        }
+
+        auto result = ::ord(item, r[i]);
+        if (result != OrdEqual) {
+            return result;
+        }
+
+        ++i;
+    }
+
+    return i < r.length() ? OrdLess : OrdEqual;
 }
 
 template <typename T, typename U>

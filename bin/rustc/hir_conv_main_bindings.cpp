@@ -1,5 +1,4 @@
 #include "hir_conv_main_bindings.h"
-#include "hir_conv_main_bindings.h"
 
 #include "hir_hir.h"
 #include "mir_mir.h"
@@ -14,6 +13,8 @@
 #include "hir_typeck_monomorph.h"
 #include "hir_typeck_expr_visit.h"
 
+#include <std/alg/range.h>
+#include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
 #include <algorithm>
@@ -1576,7 +1577,7 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
                 auto& fcn = upperVisitor.crate.getFunctionByPath(node.span(), e->path);
                 if (!fcn.markings.rustcLegacyConstGenerics.empty()) {
                     if (node.args.size() == fcn.args.size()) {
-                    } else if (node.args.size() == fcn.args.size() + fcn.markings.rustcLegacyConstGenerics.size()) {
+                    } else if (node.args.size() == fcn.args.size() + fcn.markings.rustcLegacyConstGenerics.length()) {
                         for (auto idx : fcn.markings.rustcLegacyConstGenerics) {
                             auto& argNode = node.args.at(idx);
                             BUG_ASSERT(argNode);
@@ -1625,8 +1626,8 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
         }
     };
 
-    for (auto& ty : expr.erasedTypes) {
-        ty = visitType(ty);
+    for (auto& type : mutRange(expr.erasedTypes)) {
+        type = visitType(type);
     }
 
     if (!expr.state) {
@@ -1655,8 +1656,8 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
 
         this->inExpr--;
     } else if (auto* mir = expr.getExtMirMut()) {
-        for (auto& ty : mir->locals) {
-            updateType(ty);
+        for (auto& type : mutRange(mir->locals)) {
+            updateType(type);
         }
 
         struct MirVisitor: public MIRVisitorMut {
@@ -1710,7 +1711,7 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
         const Span& sp;
         HIRTypeRef tySelf;
         std::vector<HIRTraitPath> supertraits;
-        std::vector<const HIRTraitPath*> tpStack;
+        Vector<const HIRTraitPath*> tpStack;
 
         Enumerate(HIRTypeInterner& types, const Span& sp, HIRTypeRef tySelf)
             : types(types)
@@ -1721,7 +1722,7 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
 
         void enumSupertraitsIn(const HIRTrait& tr, HIRTraitPath path) {
             TRACE_FUNCTION_F(path);
-            tpStack.push_back(&path);
+            tpStack.pushBack(&path);
             auto& params = path.path.params;
 
             fixParamCount(types, sp, path.path, tr.params, path.path.params, false, tySelf);
@@ -1776,7 +1777,7 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
                     }
                 }
             }
-            tpStack.pop_back();
+            tpStack.popBack();
         }
 
         void fillTypeAliases(HIRTraitPath& outPath) const {
@@ -1785,9 +1786,10 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
                 if (outPath.typeBounds.count(ty.first) == 0) {
                     const HIRTypeData* found = nullptr;
 
-                    for (auto oit = tpStack.rbegin(); oit != tpStack.rend(); ++oit) {
-                        auto it = (*oit)->typeBounds.find(ty.first);
-                        if (it != (*oit)->typeBounds.end()) {
+                    for (size_t i = tpStack.length(); i > 0; i--) {
+                        const auto* outer = tpStack[i - 1];
+                        auto it = outer->typeBounds.find(ty.first);
+                        if (it != outer->typeBounds.end()) {
                             // TODO: Check the source trait
                             found = it->second.type;
                             break;
@@ -1803,9 +1805,10 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
 
                 if (outPath.traitBounds.count(ty.first) == 0) {
                     std::vector<HIRTraitPath> traits;
-                    for (auto oit = tpStack.rbegin(); oit != tpStack.rend(); ++oit) {
-                        auto it = (*oit)->traitBounds.find(ty.first);
-                        if (it != (*oit)->traitBounds.end()) {
+                    for (size_t i = tpStack.length(); i > 0; i--) {
+                        const auto* outer = tpStack[i - 1];
+                        auto it = outer->traitBounds.find(ty.first);
+                        if (it != outer->traitBounds.end()) {
                             // TODO: Check the source trait
                             for (const auto& t : it->second.traits) {
                                 traits.push_back(t.clone());
@@ -2117,16 +2120,16 @@ auto VisitorPost::visitExpr(HIRExprPtr& expr) -> void {
         }
     };
 
-    for (auto& ty : expr.erasedTypes) {
-        ty = visitType(ty);
+    for (auto& type : mutRange(expr.erasedTypes)) {
+        type = visitType(type);
     }
 
     if (expr.get() != nullptr) {
         ExprVisitor v{*this};
         (*expr).visit(v);
     } else if (auto* mir = expr.getExtMirMut()) {
-        for (auto& ty : mir->locals) {
-            updateType(ty);
+        for (auto& type : mutRange(mir->locals)) {
+            updateType(type);
         }
 
         struct MirVisitor: public MIRVisitorMut {
@@ -3961,29 +3964,29 @@ auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathCo
 
     if (runEat && (!preserveDeclaredProjections_ || inExpr) && !definesContainedOpaque) {
         TRACE_FUNCTION_FR(ty, ty);
-        std::vector<HIRTypeRef> stack;
+        Vector<HIRTypeRef> stack;
         if (ty->is_Path()) {
-            stack.push_back(ty);
+            stack.pushBack(ty);
         }
         while (resolve_.expandAssociatedTypesSingle(sp, ty)) {
             if (std::find(stack.begin(), stack.end(), ty) != stack.end()) {
-                std::sort(stack.begin(), stack.end());
+                std::sort(stack.mutBegin(), stack.mutEnd());
                 DEBUG(StringView("Loop detected, picking ") << ty);
                 ty = std::move(stack[0]);
                 ty = HIRVisitor::visitType(ty);
                 break;
             }
             if (ty->is_Path()) {
-                stack.push_back(ty);
+                stack.pushBack(ty);
             }
-            DEBUG(StringView("counter = ") << stack.size());
+            DEBUG(StringView("counter = ") << stack.length());
             rewriteTyWith(crate.types, ty, [&](HIRTypeRef& rewritten, HIRTypeData& data) -> bool {
                 if ((data.is_Generic() && (data.as_Generic().isPlaceholder()))) {
                     rewritten = crate.types.infer();
                 }
                 return false;
             });
-            ASSERT_BUG(sp, stack.size() < 20, StringView("Sanity limit exceeded when resolving UFCS in type ") << ty);
+            ASSERT_BUG(sp, stack.length() < 20, StringView("Sanity limit exceeded when resolving UFCS in type ") << ty);
             ty = HIRVisitor::visitType(ty);
         }
     }

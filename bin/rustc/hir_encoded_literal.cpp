@@ -8,7 +8,7 @@ using namespace stl;
 
 EncodedLiteral EncodedLiteral::makeUsize(u64 v) {
     EncodedLiteral rv;
-    rv.bytes.resize(8);
+    rv.bytes.zero(8);
     rv.writeUsize(0, v);
     return rv;
 }
@@ -28,12 +28,12 @@ EncodedLiteral EncodedLiteral::clone() const {
 }
 
 void EncodedLiteral::writeUint(size_t ofs, size_t size, u64 v) {
-    BUG_ASSERT(ofs + size <= bytes.size());
+    BUG_ASSERT(ofs + size <= bytes.length());
     for (size_t i = 0; i < size; i++) {
         size_t bit = i * 8;
         if (bit < 64) {
             auto b = static_cast<u8>(v >> bit);
-            bytes[ofs + i] = b;
+            bytes.mut(ofs + i) = b;
         }
     }
 }
@@ -215,7 +215,7 @@ Ordering EncodedLiteral::ord(const EncodedLiteral& x) const {
 EncodedLiteralSlice::EncodedLiteralSlice(const EncodedLiteral& base)
     : base(base)
     , ofs(0)
-    , size(base.bytes.size())
+    , size(base.bytes.length())
 {
 }
 
@@ -250,10 +250,10 @@ void stl::output<ZeroCopyOutput, Reloc>(ZeroCopyOutput& os, const Reloc& x) {
 
 template <>
 void stl::output<ZeroCopyOutput, EncodedLiteral>(ZeroCopyOutput& os, const EncodedLiteral& x) {
-    for (size_t i = 0; i < x.bytes.size(); i++) {
+    for (size_t i = 0; i < x.bytes.length(); i++) {
         const char* HEX = "0123456789ABCDEF";
         os << HEX[x.bytes[i] >> 4] << HEX[x.bytes[i] & 0xF];
-        if ((i + 1) % 8 == 0 && i + 1 < x.bytes.size()) {
+        if ((i + 1) % 8 == 0 && i + 1 < x.bytes.length()) {
             os << StringView(" ");
         }
     }

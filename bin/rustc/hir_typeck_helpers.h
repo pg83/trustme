@@ -1,7 +1,6 @@
 #pragma once
 
 #include "output.h"
-
 #include "hir_hir.h"
 #include "hir_expr.h"
 #include "thin_vector.h"
@@ -41,7 +40,6 @@ struct SolverImpl {
     bool moreSpecificThan(HIRTypeInterner& types, const SolverImpl& other) const;
     HIRTypeRef monomorphImplType(HIRTypeInterner& types, const Span& sp, const HIRTypeData* type, const HIRPathParams& methodParams = {}) const;
     HIRTraitPath monomorphImplTraitPath(HIRTypeInterner& types, const Span& sp, const HIRTraitPath& traitPath, const HIRPathParams& methodParams = {}) const;
-
 };
 
 struct SolverSlotValues {
@@ -99,7 +97,8 @@ struct NextSolverCrateCache {
 
     NextSolverCrateCache()
         : pool(stl::ObjPool::fromMemory())
-        , index(pool.mutPtr()) {
+        , index(pool.mutPtr())
+    {
     }
 
     Entry* find(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) const {
@@ -136,7 +135,6 @@ public:
         const HIRTypeData* ty;
 
         FmtType(const HMTypeInferrence& ctxt, const HIRTypeData* ty);
-
     };
 
     struct FmtPP {
@@ -144,7 +142,6 @@ public:
         const HIRPathParams& pps;
 
         FmtPP(const HMTypeInferrence& ctxt, const HIRPathParams& pps);
-
     };
 
 public:
@@ -178,7 +175,7 @@ public:
     bool hasChanged;
 
     u64 mutationGeneration = 0;
-    std::vector<HIRTypeRef> expandStack;
+    stl::Vector<HIRTypeRef> expandStack;
     stl::ObjPool::Ref aliasIvarPool;
     stl::IntMap<HIRTypeRef> aliasTypeIvars;
     stl::IntMap<HIRConstGeneric> aliasValueIvars;
@@ -453,7 +450,8 @@ struct TraitBoundCb final: TraitBoundCallback {
     F f;
 
     explicit TraitBoundCb(F f)
-        : f(f) {
+        : f(f)
+    {
     }
 
     bool visit(HIRCompare cmp, const HIRTypeData* type, const HIRGenericPath& traitPath, const TraitResolveCommon::CachedBound& info) override {
@@ -470,7 +468,8 @@ struct TraitPathCb final: TraitPathCallback {
     F f;
 
     explicit TraitPathCb(F f)
-        : f(f) {
+        : f(f)
+    {
     }
 
     bool visit(const HIRTraitPath& trait) override {
@@ -495,7 +494,8 @@ struct SolverResponseCb final: SolverResponseCallback {
     F f;
 
     explicit SolverResponseCb(F f)
-        : f(f) {
+        : f(f)
+    {
     }
 
     bool visit(SolverResponse response) override {
@@ -508,7 +508,8 @@ struct NormalizesToCb final: NormalizesToCallback {
     F f;
 
     explicit NormalizesToCb(F f)
-        : f(f) {
+        : f(f)
+    {
     }
 
     bool visit(NormalizesToResponse response) override {
@@ -521,7 +522,8 @@ struct AssembledImplCb final: AssembledImplCallback {
     F f;
 
     explicit AssembledImplCb(F f)
-        : f(f) {
+        : f(f)
+    {
     }
 
     bool visit(SolverImpl impl, SolverCertainty certainty) override {
@@ -553,6 +555,7 @@ private:
 
     mutable stl::ObjPool::Ref eatCachePool;
     mutable stl::IntMap<EatCacheEntry> eatCache;
+
     struct SolverExistentials {
         const HIRGenericParams* definition;
         HIRPathParams params;
@@ -728,17 +731,17 @@ public:
 
         PinShared,
     };
+
     struct MethodCandidate {
         AutoderefBorrow borrow;
         HIRPath path;
         const HIRTypeImpl* inherentImpl;
-
     };
 
     unsigned int autoderefFindMethod(
         const Span& sp,
         const tTraitList& traits,
-        const std::vector<unsigned>& ivars,
+        const stl::Vector<unsigned>& ivars,
         unsigned int typeIvarCount,
         const HIRTypeData* topTy,
         const RcString& methodName,
@@ -779,7 +782,7 @@ public:
         Value,
         Box,
     };
-    bool findMethod(const Span& sp, const tTraitList& traits, const std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const ThinVector<HIRTypeRef>& argumentTypes, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
+    bool findMethod(const Span& sp, const tTraitList& traits, const stl::Vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const ThinVector<HIRTypeRef>& argumentTypes, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
 
     const HIRFunction* traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const;
     bool traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const;

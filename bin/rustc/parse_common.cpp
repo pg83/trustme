@@ -16,6 +16,7 @@
 #include "macro_rules_macro_rules.h"
 #include "parse_interpolated_fragment.h"
 
+#include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
 #include <fstream>
@@ -1739,7 +1740,7 @@ namespace {
     static ASTAbsolutePath VisibilityModulePath(TokenStream& lex) {
         auto path = lex.parseState().getCurrentMod().path();
         while (!path.nodes.empty() && path.nodes.back().c_str()[0] == '#') {
-            path.nodes.pop_back();
+            path.nodes.popBack();
         }
         return path;
     }
@@ -1773,7 +1774,7 @@ namespace {
 
         if (lex.lookahead(0) == TOK_COMMA || lex.lookahead(0) == TOK_BRACE_OPEN || lex.lookahead(0) == TOK_SEMICOLON) {
             if (retainBareType) {
-                ret.bareBoundTypes.push_back(mv$(checkedType));
+                ret.bareBoundTypes.pushBack(mv$(checkedType));
             }
             return;
         }
@@ -3031,7 +3032,7 @@ namespace {
                     const auto binder = ParseHRB(lex);
                     const auto savedErased = lex.parseState().erasedLifetimes;
                     for (const auto& lifetime : binder.lifetimes) {
-                        lex.parseState().erasedLifetimes.push_back(lifetime.name().name);
+                        lex.parseState().erasedLifetimes.pushBack(lifetime.name().name);
                     }
                     auto* inner = ParseTypeInt(lex, allowTraitList);
                     lex.parseState().erasedLifetimes = savedErased;
@@ -3159,15 +3160,15 @@ namespace {
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return inner;
                 } else {
-                    std::vector<ASTType*> types;
-                    types.push_back(mv$(inner));
+                    Vector<ASTType*> types;
+                    types.pushBack(mv$(inner));
                     while (GET_TOK(tok, lex) == TOK_COMMA) {
                         if (GET_TOK(tok, lex) == TOK_PAREN_CLOSE) {
                             break;
                         } else {
                             PUTBACK(tok, lex);
                         }
-                        types.push_back(ParseType(lex));
+                        types.pushBack(ParseType(lex));
                     }
                     CHECK_TOK(tok, TOK_PAREN_CLOSE);
                     return mkType(lex.typePool(), ASTTypeTags::Tuple(), lex.endSpan(ps), mv$(types));
@@ -3207,7 +3208,7 @@ namespace {
         }
         CHECK_TOK(tok, TOK_RWORD_FN);
 
-        std::vector<ASTType*> args;
+        Vector<ASTType*> args;
         bool isVariadic = false;
         GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
         while (LOOK_AHEAD(lex) != TOK_PAREN_CLOSE) {
@@ -3239,9 +3240,9 @@ namespace {
                         GET_TOK(tok, lex);
                     }
                     if (lex.getTokenIf(TOK_COLON)) {
-                        args.push_back(ParseType(lex));
+                        args.pushBack(ParseType(lex));
                     } else {
-                        args.push_back(mkType(lex.typePool(), lex.pointSpan(), RcString::newInterned("Self"), 0xFFFF));
+                        args.pushBack(mkType(lex.typePool(), lex.pointSpan(), RcString::newInterned("Self"), 0xFFFF));
                     }
                     if (GET_TOK(tok, lex) != TOK_COMMA) {
                         PUTBACK(tok, lex);
@@ -3253,7 +3254,7 @@ namespace {
             {
                 auto* argTy = ParseType(lex);
                 if (keepArg) {
-                    args.push_back(argTy);
+                    args.pushBack(argTy);
                 }
             }
             if (GET_TOK(tok, lex) != TOK_COMMA) {
@@ -3286,14 +3287,14 @@ namespace {
             return mkType(lex.typePool(), ASTTypeTags::Path(), lex.endSpan(ps), mv$(path));
         } else {
             std::vector<TypeTraitPath> traits;
-            std::vector<ASTLifetimeRef> lifetimes;
+            Vector<ASTLifetimeRef> lifetimes;
 
             traits.push_back(TypeTraitPath{mv$(hrbs), mv$(path)});
 
             if (allowTraitList) {
                 while (lex.getTokenIf(TOK_PLUS)) {
                     if (lex.getTokenIf(TOK_LIFETIME, tok)) {
-                        lifetimes.push_back(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
+                        lifetimes.pushBack(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
                     } else {
                         if (lex.lookahead(0) == TOK_RWORD_FOR) {
                             hrbs = ParseHRB(lex);
@@ -3303,9 +3304,9 @@ namespace {
                 }
             }
 
-            if (!traits[0].hrbs.empty() || traits.size() > 1 || lifetimes.size() > 0) {
+            if (!traits[0].hrbs.empty() || traits.size() > 1 || !lifetimes.empty()) {
                 if (lifetimes.empty()) {
-                    lifetimes.push_back(ASTLifetimeRef());
+                    lifetimes.pushBack(ASTLifetimeRef());
                 }
                 return mkType(lex.typePool(), lex.endSpan(ps), mv$(traits), mv$(lifetimes));
             } else {
@@ -3319,7 +3320,7 @@ namespace {
         auto ps = lex.startSpan();
 
         std::vector<TypeTraitPath> traits;
-        std::vector<ASTLifetimeRef> lifetimes;
+        Vector<ASTLifetimeRef> lifetimes;
 
         for (;;) {
             bool isFirst = traits.empty() && lifetimes.empty();
@@ -3330,7 +3331,7 @@ namespace {
                     // TODO: Error
                 }
 
-                lifetimes.push_back(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
+                lifetimes.pushBack(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
             } else {
                 auto constness = ParseBoundConstness(lex);
                 if (lex.getTokenIf(TOK_RWORD_FOR)) {
@@ -3375,7 +3376,7 @@ namespace {
     boundsDone:
 
         if (lifetimes.empty()) {
-            lifetimes.push_back(ASTLifetimeRef());
+            lifetimes.pushBack(ASTLifetimeRef());
         }
         return mkType(lex.typePool(), lex.endSpan(ps), mv$(traits), mv$(lifetimes));
     }
@@ -3388,7 +3389,7 @@ namespace {
         rvData.isEdition2024OrLater = lex.editionAfter(ASTEdition::Rust2024);
         do {
             if (lex.getTokenIf(TOK_LIFETIME, tok)) {
-                rvData.lifetimes.push_back(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
+                rvData.lifetimes.pushBack(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
             } else if (lex.getTokenIf(TOK_QMARK)) {
                 ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
                 rvData.maybeTraits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
@@ -4201,13 +4202,13 @@ std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode 
                     DEBUG(StringView("return-type notation (..)"));
                 } else {
                     DEBUG(StringView("Fn() parenthesized arguments"));
-                    std::vector<ASTType*> args;
+                    Vector<ASTType*> args;
                     do {
                         if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
                             GET_TOK(tok, lex);
                             break;
                         }
-                        args.push_back(ParseType(lex));
+                        args.pushBack(ParseType(lex));
                     } while (GET_TOK(tok, lex) == TOK_COMMA);
                     CHECK_TOK(tok, TOK_PAREN_CLOSE);
 
@@ -4432,7 +4433,7 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                 case TOK_RWORD_SUPER:
                     path = VisibilityModulePath(lex);
                     if (!path.nodes.empty()) {
-                        path.nodes.pop_back();
+                        path.nodes.popBack();
                     }
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return ASTVisibility::makeRestricted(ASTVisibility::Ty::PubSuper, std::move(path));
@@ -4447,7 +4448,7 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                         case TOK_IDENT:
                             astPath = ASTPath::newRelative({}, {});
                             astPath.nodes().push_back(tok.ident().name);
-                            path.nodes.push_back(tok.ident().name);
+                            path.nodes.pushBack(tok.ident().name);
                             break;
                         case TOK_RWORD_CRATE:
                             astPath = ASTPath("", {});
@@ -4459,11 +4460,11 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                         case TOK_RWORD_SUPER:
                             astPath = ASTPath::newSuper(1, {});
                             path = VisibilityModulePath(lex);
-                            path.nodes.pop_back();
+                            path.nodes.popBack();
                             while (lex.lookahead(0) == TOK_DOUBLE_COLON && lex.lookahead(1) == TOK_RWORD_SUPER) {
                                 GET_TOK(tok, lex);
                                 GET_TOK(tok, lex);
-                                path.nodes.pop_back();
+                                path.nodes.popBack();
                                 astPath.cls.as_Super().count += 1;
                             }
                             break;
@@ -4475,7 +4476,7 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                             if (path.nodes.empty()) {
                                 ERROR(lex.pointSpan(), E0000, StringView("Too many `super` components in a visibility path"));
                             }
-                            path.nodes.pop_back();
+                            path.nodes.popBack();
                             if (astPath.cls.is_Super()) {
                                 astPath.cls.as_Super().count += 1;
                             } else {
@@ -4484,7 +4485,7 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                             continue;
                         }
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                        path.nodes.push_back(tok.ident().name);
+                        path.nodes.pushBack(tok.ident().name);
                         astPath.nodes().push_back(tok.ident().name);
                     }
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
@@ -4523,7 +4524,7 @@ ASTHigherRankedBounds ParseHRB(TokenStream& lex) {
                 }
                 break;
             case TOK_IDENT:
-                rv.types.push_back(tok.ident().name);
+                rv.types.pushBack(tok.ident().name);
                 if (lex.getTokenIf(TOK_EQUAL)) {
                     ParseType(lex);
                 }
@@ -4750,7 +4751,7 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
     } else {
         name.hasLeading = lex.getTokenIf(TOK_DOUBLE_COLON);
         do {
-            name.elems.push_back(getTokIdentRword(lex));
+            name.elems.pushBack(getTokIdentRword(lex));
         } while (GET_TOK(tok, lex) == TOK_DOUBLE_COLON);
     }
     DEBUG(StringView("name = ") << name);
@@ -5530,7 +5531,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         itemData = ASTItem();
                         break;
                     } else if (pathAttr.size() == 0 && !modFileinfo.controlsDir) {
-                        ASSERT_BUG(lex.pointSpan(), modPath.nodes.size() >= 1, StringView("Crate root should control its directory?"));
+                        ASSERT_BUG(lex.pointSpan(), modPath.nodes.length() >= 1, StringView("Crate root should control its directory?"));
                         std::string newpathFileDirect = dirname(modFileinfo.path) / modPath.nodes.back().c_str() / name.c_str() + ".rs";
                         std::string newpathFileMod = dirname(modFileinfo.path) / modPath.nodes.back().c_str() / name.c_str() / "mod.rs";
 

@@ -10,8 +10,8 @@ generate(
     variants=[
         v("Owning", fields=[
             ("bool", "isTemporary"),
-            ("std::vector<unsigned int>", "slots"),
-            ("std::vector<ScopeDropSlot>", "dropSlots"),
+            ("stl::Vector<unsigned int>", "slots"),
+            ("stl::Vector<ScopeDropSlot>", "dropSlots"),
         ], doc="slots are the locals whose state is owned by this scope;"
                " dropSlots the locals and arguments in scheduled drop order"),
         v("Split", fields=[
@@ -26,7 +26,7 @@ generate(
             ("bool", "exitStateValid"),
             ("SplitEnd", "exitState"),
             ("MIRBasicBlockId", "entryBb"),
-            ("std::vector<unsigned>", "dropFlags"),
+            ("stl::Vector<unsigned>", "dropFlags"),
         ], copy=False, doc="changedSlots/changedArgs hold the original state"
                            " for variables changed after exitStateValid is"
                            " true. Any drop flags allocated in the loop must"

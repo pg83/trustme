@@ -5,6 +5,8 @@
 #include "hir_path.h"
 #include "hir_type.h"
 
+#include <std/lib/vector.h>
+
 #include <memory>
 #include <vector>
 
@@ -34,7 +36,6 @@ struct HIRPatternBinding {
     HIRPatternBinding();
 
     HIRPatternBinding(bool mut, Type type, RcString name, unsigned int slot);
-
 };
 
 enum class HIRPatternBindingOrder {
@@ -94,11 +95,10 @@ struct HIRPattern {
     HIRPattern& operator=(HIRPattern&&) = default;
 
     HIRPattern clone() const;
-
 };
 
 inline bool HIRPatternPathNamedData::isWildcard() const {
     return subPatterns.empty() && !isExhaustive;
 }
 
-std::vector<unsigned> patternBindingSlots(const HIRPattern& pattern, HIRPatternBindingOrder order);
+stl::Vector<unsigned> patternBindingSlots(const HIRPattern& pattern, HIRPatternBindingOrder order);

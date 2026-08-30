@@ -1,12 +1,13 @@
 #pragma once
 
-#include "output.h"
-
 #include "floats.h"
 #include "int128.h"
+#include "output.h"
 #include "hir_asm.h"
 #include "hir_type.h"
 #include "hir_encoded_literal.h"
+
+#include <std/lib/vector.h>
 
 #include <memory>
 #include <string>
@@ -384,7 +385,6 @@ struct MIRLValue {
         MRef innerRef();
 
         void replace(MIRLValue x);
-
     };
 
     Ordering ord(const MIRLValue::CRef& x) const;
@@ -550,9 +550,9 @@ public:
         }
     };
 
-    std::vector<HIRTypeRef> locals;
+    stl::Vector<HIRTypeRef> locals;
 
-    std::vector<bool> dropFlags;
+    stl::Vector<bool> dropFlags;
 
     std::vector<MIRBasicBlock> blocks;
 

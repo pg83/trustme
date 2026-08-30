@@ -1,7 +1,6 @@
 #pragma once
 
 #include "output.h"
-
 #include "hir_asm.h"
 #include "ast_item.h"
 #include "settings.h"
@@ -16,6 +15,8 @@
 #include "target_version.h"
 #include "parse_tokentree.h"
 #include "macro_rules_macro_rules_ptr.h"
+
+#include <std/lib/vector.h>
 
 #include <map>
 #include <memory>
@@ -226,7 +227,7 @@ public:
         bool isNaked = false;
 
         u64 alignment = 0;
-        std::vector<unsigned> rustcLegacyConstGenerics;
+        stl::Vector<unsigned> rustcLegacyConstGenerics;
 
         std::string linkName;
         std::string linkSection;
@@ -428,7 +429,6 @@ struct ASTEnumVariant {
     ASTEnumVariant(ASTAttributeList attrs, RcString name, std::vector<ASTTupleItem> subTypes);
 
     ASTEnumVariant(ASTAttributeList attrs, RcString name, std::vector<ASTStructItem> fields);
-
 };
 
 class ASTEnum {
@@ -605,7 +605,6 @@ public:
     ASTType*& type() {
         return type_;
     }
-
 };
 
 class ASTImpl {
@@ -803,7 +802,7 @@ public:
     ASTModule& operator=(ASTModule&&);
 
     bool isAnon() const {
-        return myPath.nodes.size() > 0 && myPath.nodes.back().c_str()[0] == '#';
+        return myPath.nodes.length() > 0 && myPath.nodes.back().c_str()[0] == '#';
     }
 
     std::shared_ptr<ASTModule> addAnon();

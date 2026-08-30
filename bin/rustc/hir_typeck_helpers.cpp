@@ -11,6 +11,7 @@
 #include "hir_conv_constant_evaluation.h"
 
 #include <std/alg/defer.h>
+#include <std/alg/range.h>
 #include <std/sym/i_map.h>
 #include <std/lib/vector.h>
 #include <std/mem/obj_list.h>
@@ -156,12 +157,12 @@ namespace {
         return generic.isPlaceholder() && !generic.isSolverExistential() ? types.generic(instantiatePlaceholderName(generic.name), generic.binding) : types.generic(generic);
     }
 
-    bool typeListEqual(const HMTypeInferrence& context, const std::vector<HIRTypeRef>& l, const std::vector<HIRTypeRef>& r) {
-        if (l.size() != r.size()) {
+    bool typeListEqual(const HMTypeInferrence& context, const Vector<HIRTypeRef>& l, const Vector<HIRTypeRef>& r) {
+        if (l.length() != r.length()) {
             return false;
         }
 
-        for (unsigned int i = 0; i < l.size(); i++) {
+        for (unsigned int i = 0; i < l.length(); i++) {
             if (!context.typesEqual(l[i], r[i])) {
                 return false;
             }
@@ -295,8 +296,8 @@ struct TraitResolution::NextTraitGoalEvaluator {
     };
 
     struct CandidateFrame {
-        std::vector<Candidate*> candidates;
-        std::vector<Candidate*> viable;
+        Vector<Candidate*> candidates;
+        Vector<Candidate*> viable;
         size_t availableDepth = 0;
         bool encounteredOverflow = false;
 
@@ -345,12 +346,12 @@ struct TraitResolution::NextTraitGoalEvaluator {
     IntMap<ThinVector<ImplExistentials>> implExistentials_;
 
     ObjList<Candidate> candidateNodes;
-    std::vector<CandidateFrame*> frames;
+    Vector<CandidateFrame*> frames;
     size_t frameDepth = 0;
     ObjList<GoalKey> activeGoalNodes;
     ObjList<CachedGoal> cachedGoalNodes;
-    std::vector<GoalKey*> goalStack;
-    std::vector<CachedGoal*> goalCache;
+    Vector<GoalKey*> goalStack;
+    Vector<CachedGoal*> goalCache;
     std::unordered_multimap<size_t, GoalKey*> activeGoalIndex;
     std::unordered_multimap<size_t, CachedGoal*> goalCacheIndex;
 
@@ -1059,10 +1060,10 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
     if (std::find(expandStack.begin(), expandStack.end(), type) != expandStack.end()) {
         return;
     }
-    expandStack.push_back(type);
+    expandStack.pushBack(type);
 
     STD_DEFER {
-        expandStack.pop_back();
+        expandStack.popBack();
     };
 
     if (type->is_Infer()) {
@@ -1183,8 +1184,8 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
         }
         case HIRTypeData::TAG_Tuple: {
             auto& e = data.as_Tuple();
-            for (auto& ty : e) {
-                this->expandIvars(ty);
+            for (auto& type : mutRange(e)) {
+                this->expandIvars(type);
             }
             break;
         }
@@ -1206,8 +1207,8 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
         case HIRTypeData::TAG_Function: {
             auto& e = data.as_Function();
             this->expandIvars(e.rettype);
-            for (auto& ty : e.argTypes) {
-                this->expandIvars(ty);
+            for (auto& type : mutRange(e.argTypes)) {
+                this->expandIvars(type);
             }
             break;
         }
@@ -1377,8 +1378,8 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
         }
         case HIRTypeData::TAG_Tuple: {
             auto& e = data.as_Tuple();
-            for (auto& ty : e) {
-                addIvars(ty);
+            for (auto& type : mutRange(e)) {
+                addIvars(type);
             }
             break;
         }
@@ -1398,8 +1399,8 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
         case HIRTypeData::TAG_Function: {
             auto& e = data.as_Function();
             addIvars(e.rettype);
-            for (auto& ty : e.argTypes) {
-                addIvars(ty);
+            for (auto& type : mutRange(e.argTypes)) {
+                addIvars(type);
             }
             break;
         }
@@ -2450,10 +2451,10 @@ Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTyp
         case HIRTypeData::TAG_Tuple: {
             const auto& le = left->as_Tuple();
             const auto& re = right->as_Tuple();
-            if (le.size() != re.size()) {
+            if (le.length() != re.length()) {
                 return Outcome::Mismatch;
             }
-            for (size_t i = 0; i < le.size(); i++) {
+            for (size_t i = 0; i < le.length(); i++) {
                 if (this->unifyResolved(le[i], re[i]) == Outcome::Mismatch) {
                     return Outcome::Mismatch;
                 }
@@ -2463,10 +2464,10 @@ Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTyp
         case HIRTypeData::TAG_Function: {
             const auto& le = left->as_Function();
             const auto& re = right->as_Function();
-            if (le.isUnsafe != re.isUnsafe || le.abi != re.abi || le.isVariadic != re.isVariadic || le.trackCaller != re.trackCaller || le.argTypes.size() != re.argTypes.size()) {
+            if (le.isUnsafe != re.isUnsafe || le.abi != re.abi || le.isVariadic != re.isVariadic || le.trackCaller != re.trackCaller || le.argTypes.length() != re.argTypes.length()) {
                 return Outcome::Mismatch;
             }
-            for (size_t i = 0; i < le.argTypes.size(); i++) {
+            for (size_t i = 0; i < le.argTypes.length(); i++) {
                 if (this->unifyResolved(le.argTypes[i], re.argTypes[i]) == Outcome::Mismatch) {
                     return Outcome::Mismatch;
                 }
@@ -2888,7 +2889,7 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         }
 
         const auto& assume = *assumeValue.as_Evaluated();
-        if (!assume.relocations.empty() || assume.bytes.size() != 4) {
+        if (!assume.relocations.empty() || assume.bytes.length() != 4) {
             return false;
         }
         StaticTraitResolve targetResolve(this->board());
@@ -3089,7 +3090,7 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
 bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, AssembledImplCallback& callback) const {
     type = this->ivars.getType(type);
     const bool isAsyncCallableTrait = trait == langAsyncFn() || trait == langAsyncFnMut() || trait == langAsyncFnOnce();
-    auto findAsyncCallable = [&](const std::vector<HIRTypeRef>& inputTypes, const HIRTypeData* futureType, bool supportsShared, bool supportsMutable) {
+    auto findAsyncCallable = [&](const Vector<HIRTypeRef>& inputTypes, const HIRTypeData* futureType, bool supportsShared, bool supportsMutable) {
         if (!isAsyncCallableTrait || (trait == langAsyncFn() && !supportsShared) || (trait == langAsyncFnMut() && !supportsMutable)) {
             return false;
         }
@@ -3098,12 +3099,12 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
         }
 
         const auto& desiredInputs = params.types.front()->as_Tuple();
-        if (desiredInputs.size() != inputTypes.size()) {
+        if (desiredInputs.length() != inputTypes.length()) {
             return false;
         }
 
         HIRCompare cmp = HIRCompare::Equal;
-        for (size_t i = 0; i < inputTypes.size(); i++) {
+        for (size_t i = 0; i < inputTypes.length(); i++) {
             cmp &= inputTypes[i]->compareWithPlaceholders(sp, desiredInputs[i], this->ivars.callbackResolveInfer());
         }
         if (cmp == HIRCompare::Unequal) {
@@ -3154,10 +3155,10 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                         } else if (nodeP->cls == HIRExprNodeClosure::Class::Mut) {
                             supportsShared = false;
                         }
-                        std::vector<HIRTypeRef> inputs;
-                        inputs.reserve(nodeP->args.size());
+                        Vector<HIRTypeRef> inputs;
+                        inputs.grow(nodeP->args.size());
                         for (const auto& arg : nodeP->args) {
-                            inputs.push_back(arg.second);
+                            inputs.pushBack(arg.second);
                         }
                         return findAsyncCallable(inputs, nodeP->returnType, supportsShared, supportsMutable);
                     }
@@ -3166,13 +3167,13 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                         const HIRTypeData* wanted = params.types.size() == 1 && params.types[0]->is_Tuple() ? params.types[0] : nullptr;
 
                         auto cmp = wanted ? HIRCompare::Equal : HIRCompare::Fuzzy;
-                        std::vector<HIRTypeRef> args;
-                        if (wanted && wanted->as_Tuple().size() != nodeP->args.size()) {
+                        Vector<HIRTypeRef> args;
+                        if (wanted && wanted->as_Tuple().length() != nodeP->args.size()) {
                             return false;
                         }
                         for (unsigned int i = 0; i < nodeP->args.size(); i++) {
                             const auto& at = nodeP->args[i].second;
-                            args.push_back(at);
+                            args.pushBack(at);
                             if (!wanted) {
                                 continue;
                             }
@@ -3276,7 +3277,7 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                     BUG(sp, StringView("Fn* traits require a single tuple argument"));
                 }
                 const auto& argsDes = params.types[0]->as_Tuple();
-                if (argsDes.size() != e.argTypes.size()) {
+                if (argsDes.length() != e.argTypes.length()) {
                     return false;
                 }
 
@@ -3286,10 +3287,10 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                 }
 
                 DEBUG(StringView("- Magic impl of Fn* for ") << type);
-                std::vector<HIRTypeRef> args;
-                for (unsigned int i = 0; i < e.argTypes.size(); i++) {
+                Vector<HIRTypeRef> args;
+                for (unsigned int i = 0; i < e.argTypes.length(); i++) {
                     const auto& at = e.argTypes[i];
-                    args.push_back(at);
+                    args.pushBack(at);
                 }
 
                 HIRPathParams pp;
@@ -3321,7 +3322,7 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                 auto e = realE.decay(crate.types, sp);
                 DEBUG(StringView("> ") << e.rettype << StringView(" - ") << e.argTypes);
                 const auto& argsDes = params.types[0]->as_Tuple();
-                if (argsDes.size() != e.argTypes.size()) {
+                if (argsDes.length() != e.argTypes.length()) {
                     return false;
                 }
 
@@ -3335,10 +3336,10 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                 }
 
                 DEBUG(StringView("- Magic impl of Fn* for ") << type);
-                std::vector<HIRTypeRef> args;
-                for (unsigned int i = 0; i < e.argTypes.size(); i++) {
+                Vector<HIRTypeRef> args;
+                for (unsigned int i = 0; i < e.argTypes.length(); i++) {
                     const auto& at = e.argTypes[i];
-                    args.push_back(at);
+                    args.pushBack(at);
                 }
 
                 HIRPathParams pp;
@@ -4119,8 +4120,8 @@ void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& i
         }
         case HIRTypeData::TAG_Tuple: {
             auto& e = data.as_Tuple();
-            for (auto& sub : e) {
-                expandAssociatedTypesInplace(sp, sub, effects);
+            for (auto& type : mutRange(e)) {
+                expandAssociatedTypesInplace(sp, type, effects);
             }
             break;
         }
@@ -4167,8 +4168,8 @@ void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& i
         }
         case HIRTypeData::TAG_Function: {
             auto& e = data.as_Function();
-            for (auto& ty : e.argTypes) {
-                expandAssociatedTypesInplace(sp, ty, effects);
+            for (auto& type : mutRange(e.argTypes)) {
+                expandAssociatedTypesInplace(sp, type, effects);
             }
             expandAssociatedTypesInplace(sp, e.rettype, effects);
             break;
@@ -5548,7 +5549,7 @@ const HIRTypeData* TraitResolution::autoderef(const Span& sp, const HIRTypeData*
 unsigned int TraitResolution::autoderefFindMethod(
     const Span& sp,
     const tTraitList& traits,
-    const std::vector<unsigned>& ivars,
+    const Vector<unsigned>& ivars,
     unsigned int typeIvarCount,
     const HIRTypeData* topTy,
     const RcString& methodName,
@@ -5589,9 +5590,9 @@ unsigned int TraitResolution::autoderefFindMethod(
         };
         auto canonicalizeTraitCandidates = [&]() {
             auto sharedParams = [&](const HIRPathParams& shape) {
-                ASSERT_BUG(sp, typeIvarCount <= ivars.size(), StringView("Invalid method ivar split"));
+                ASSERT_BUG(sp, typeIvarCount <= ivars.length(), StringView("Invalid method ivar split"));
                 ASSERT_BUG(sp, shape.types.size() <= typeIvarCount, StringView("Not enough type ivars for method candidate"));
-                ASSERT_BUG(sp, shape.values.size() <= ivars.size() - typeIvarCount, StringView("Not enough value ivars for method candidate"));
+                ASSERT_BUG(sp, shape.values.size() <= ivars.length() - typeIvarCount, StringView("Not enough value ivars for method candidate"));
 
                 HIRPathParams params;
                 params.types.reserve(shape.types.size());
@@ -5853,13 +5854,13 @@ std::optional<HIRTypeRef> TraitResolution::checkMethodReceiver(const Span& sp, c
     return std::nullopt;
 }
 
-bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const ThinVector<HIRTypeRef>& argumentTypes, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided) const {
+bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const Vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const ThinVector<HIRTypeRef>& argumentTypes, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided) const {
     bool rv = false;
 
     TRACE_FUNCTION_FR(StringView("ty=") << ty << StringView(", name=") << methodName << StringView(", access=") << access, rv << StringView(" ") << possibilities);
     auto getIvaredParams = [&](const HIRGenericParams& tpl) -> HIRPathParams {
         unsigned int nParams = tpl.types.size();
-        ASSERT_BUG(sp, typeIvarCount <= ivars.size(), StringView("Invalid method ivar split: ") << typeIvarCount << StringView(" type ivars in a pool of ") << ivars.size());
+        ASSERT_BUG(sp, typeIvarCount <= ivars.length(), StringView("Invalid method ivar split: ") << typeIvarCount << StringView(" type ivars in a pool of ") << ivars.length());
         ASSERT_BUG(sp, nParams <= typeIvarCount, StringView("Not enough type ivars allocated for method: ") << nParams << StringView(" needed but ") << typeIvarCount << StringView(" allocated by caller\ntpl = ") << tpl.fmtArgs());
         HIRPathParams traitParams;
         traitParams.types.reserve(nParams);
@@ -5868,7 +5869,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
             ASSERT_BUG(sp, this->ivars.getType(traitParams.types.back())->as_Infer().index == ivars[i], StringView("A method selection ivar was bound"));
         }
         const unsigned int nValues = tpl.values.size();
-        ASSERT_BUG(sp, nValues <= ivars.size() - typeIvarCount, StringView("Not enough value ivars allocated for method: ") << nValues << StringView(" needed but ") << ivars.size() - typeIvarCount << StringView(" allocated by caller\ntpl = ") << tpl.fmtArgs());
+        ASSERT_BUG(sp, nValues <= ivars.length() - typeIvarCount, StringView("Not enough value ivars allocated for method: ") << nValues << StringView(" needed but ") << ivars.length() - typeIvarCount << StringView(" allocated by caller\ntpl = ") << tpl.fmtArgs());
         traitParams.values.reserve(nValues);
         for (unsigned int i = 0; i < nValues; i++) {
             traitParams.values.push_back(HIRConstGeneric::make_Infer({ivars[typeIvarCount + i]}));
@@ -6577,7 +6578,7 @@ bool TraitResolution::findField(const Span& sp, const HIRTypeData* ty, const RcS
             }
         }
     } else if (const auto* e = ty->opt_Tuple()) {
-        for (unsigned int i = 0; i < e->size(); i++) {
+        for (unsigned int i = 0; i < e->length(); i++) {
             if (FMT(i) == name) {
                 fieldTy = (*e)[i];
                 return true;
@@ -7175,10 +7176,10 @@ auto CorrelateSolverResponseSlots::correlateType(const HIRTypeData* input, const
     }
     if (const auto* left = input->opt_Tuple()) {
         const auto* right = response->opt_Tuple();
-        if (!right || left->size() != right->size()) {
+        if (!right || left->length() != right->length()) {
             return;
         }
-        for (size_t i = 0; i < left->size(); i++) {
+        for (size_t i = 0; i < left->length(); i++) {
             correlateType((*left)[i], (*right)[i]);
         }
         return;
@@ -7246,10 +7247,10 @@ auto CorrelateSolverResponseSlots::correlateType(const HIRTypeData* input, const
     }
     if (const auto* left = input->opt_Function()) {
         const auto* right = response->opt_Function();
-        if (!right || left->argTypes.size() != right->argTypes.size()) {
+        if (!right || left->argTypes.length() != right->argTypes.length()) {
             return;
         }
-        for (size_t i = 0; i < left->argTypes.size(); i++) {
+        for (size_t i = 0; i < left->argTypes.length(); i++) {
             correlateType(left->argTypes[i], right->argTypes[i]);
         }
         correlateType(left->rettype, right->rettype);
@@ -7897,7 +7898,7 @@ auto NextTraitGoalEvaluator::hashType(const HIRTypeData* type) -> size_t {
         return hashMix(0x40, infer->index);
     }
     if (const auto* tuple = type->opt_Tuple()) {
-        size_t result = hashMix(0x50, tuple->size());
+        size_t result = hashMix(0x50, tuple->length());
         for (const auto& field : *tuple) {
             result = hashMix(result, hashType(field));
         }
@@ -8447,7 +8448,7 @@ auto NextTraitGoalEvaluator::findActiveGoal(size_t hash, const HIRSimplePath& tr
 
 auto NextTraitGoalEvaluator::pushActiveGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) -> GoalKey* {
     auto* goal = activeGoalNodes.make(hash, trait, params, type, associated);
-    goalStack.push_back(goal);
+    goalStack.pushBack(goal);
     activeGoalIndex.emplace(hash, goal);
     return goal;
 }
@@ -8458,7 +8459,7 @@ auto NextTraitGoalEvaluator::popActiveGoal(GoalKey* goal) -> void {
     for (auto it = range.first; it != range.second; ++it) {
         if (it->second == goal) {
             activeGoalIndex.erase(it);
-            goalStack.pop_back();
+            goalStack.popBack();
             activeGoalNodes.release(goal);
             return;
         }
@@ -8470,7 +8471,7 @@ auto NextTraitGoalEvaluator::popActiveGoal(GoalKey* goal) -> void {
 auto NextTraitGoalEvaluator::cacheGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, Certainty certainty, bool persistent) -> Certainty {
     auto* goal = cachedGoalNodes.make(hash, trait, params, type, associated, certainty);
     goal->persistent = persistent;
-    goalCache.push_back(goal);
+    goalCache.pushBack(goal);
     goalCacheIndex.emplace(hash, goal);
     return certainty;
 }
@@ -8481,7 +8482,7 @@ auto NextTraitGoalEvaluator::cacheResponse(size_t hash, const HIRSimplePath& tra
     const auto certainty = response->certainty;
     if (!cached) {
         cached = cachedGoalNodes.make(hash, trait, params, type, associated, certainty);
-        goalCache.push_back(cached);
+        goalCache.pushBack(cached);
         goalCacheIndex.emplace(hash, cached);
     }
     cached->certainty = certainty;
@@ -8495,13 +8496,15 @@ auto NextTraitGoalEvaluator::clearGoalCache() -> void {
     size_t kept = 0;
     for (auto* goal : goalCache) {
         if (goal->persistent) {
-            goalCache[kept++] = goal;
+            goalCache.mut(kept++) = goal;
             goalCacheIndex.emplace(goal->goal.hash, goal);
         } else {
             cachedGoalNodes.release(goal);
         }
     }
-    goalCache.resize(kept);
+    while (goalCache.length() > kept) {
+        goalCache.popBack();
+    }
 }
 
 auto NextTraitGoalEvaluator::canonicalGoalIsRigid(const CanonicalGoal& canonical) -> bool {
@@ -8609,7 +8612,7 @@ auto NextTraitGoalEvaluator::paramEnvCandidateIsNonGlobal(const Candidate& candi
 
 auto NextTraitGoalEvaluator::pushCandidate(size_t frameIndex, SolverImpl impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool headNormalizationAmbiguity, ThinVector<SolverTypeEquality> headEqualities, ThinVector<SolverValueEquality> headValueEqualities) -> void {
     auto& candidates = frames[frameIndex]->candidates;
-    for (size_t i = 0; i < candidates.size(); i++) {
+    for (size_t i = 0; i < candidates.length(); i++) {
         const bool sameSource = candidates[i]->markerImpl == markerImpl && candidates[i]->autoBuiltin == autoBuiltin && candidates[i]->source == source;
         const bool same = markerImpl ? sameSource && candidates[i]->markerImplParams == markerImplParams : sameSource && isSameImpl(candidates[i]->impl, impl);
         if (same) {
@@ -8627,7 +8630,7 @@ auto NextTraitGoalEvaluator::pushCandidate(size_t frameIndex, SolverImpl impl, b
             return;
         }
     }
-    candidates.push_back(candidateNodes.make(std::move(impl), headExact, headRelation, markerImpl, std::move(markerImplParams), autoBuiltin, source, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities)));
+    candidates.pushBack(candidateNodes.make(std::move(impl), headExact, headRelation, markerImpl, std::move(markerImplParams), autoBuiltin, source, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities)));
 }
 
 auto NextTraitGoalEvaluator::relateAssembledHead(CandidateSource source, const HIRPathParams& goalParams, const HIRTypeData* goalType, SolverImpl& impl, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities) const -> Certainty {
@@ -10485,8 +10488,8 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     };
 
     const size_t frameIndex = frameDepth++;
-    if (frameIndex == frames.size()) {
-        frames.push_back(crate.pool->make<CandidateFrame>());
+    if (frameIndex == frames.length()) {
+        frames.pushBack(crate.pool->make<CandidateFrame>());
     }
     frames[frameIndex]->clear(candidateNodes);
     frames[frameIndex]->availableDepth = *availableDepth;
@@ -10508,7 +10511,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     bool negativeProven = false;
     bool negativeAmbiguous = false;
     Certainty autoBuiltinResult = Certainty::NoSolution;
-    const size_t candidateCount = frames[frameIndex]->candidates.size();
+    const size_t candidateCount = frames[frameIndex]->candidates.length();
     for (size_t i = 0; i < candidateCount; i++) {
         const auto result = evaluateCandidate(frameIndex, i, trait, canonicalAssociated);
         auto* candidate = frames[frameIndex]->candidates[i];
@@ -10814,9 +10817,9 @@ NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, c
     , activeGoalNodes(crate.pool)
     , cachedGoalNodes(crate.pool)
 {
-    frames.reserve(16);
-    goalStack.reserve(16);
-    goalCache.reserve(64);
+    frames.grow(16);
+    goalStack.grow(16);
+    goalCache.grow(64);
     activeGoalIndex.reserve(32);
     goalCacheIndex.reserve(128);
 }
@@ -10873,8 +10876,8 @@ auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const
     }
 
     const size_t frameIndex = frameDepth++;
-    if (frameIndex == frames.size()) {
-        frames.push_back(crate.pool->make<CandidateFrame>());
+    if (frameIndex == frames.length()) {
+        frames.pushBack(crate.pool->make<CandidateFrame>());
     }
     frames[frameIndex]->clear(candidateNodes);
     frames[frameIndex]->availableDepth = ROOT_DEPTH;
@@ -10894,7 +10897,7 @@ auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const
     pushCandidate(frameIndex, SolverImpl(std::move(rightParams), traitDef, trait, right), rightRelation == Certainty::Proven, rightRelation, nullptr, {}, false, CandidateSource::TraitImpl, rightHeadNormalizationAmbiguity, std::move(rightHeadEqualities), std::move(rightHeadValueEqualities));
 
     const auto& candidates = frames[frameIndex]->candidates;
-    ASSERT_BUG(callSpan, candidates.size() == 2, StringView("coherence probe lost an impl candidate"));
+    ASSERT_BUG(callSpan, candidates.length() == 2, StringView("coherence probe lost an impl candidate"));
     const auto leftResult = evaluateCandidate(frameIndex, 0, trait, nullptr);
     if (leftResult == Certainty::NoSolution) {
         return false;
@@ -11126,8 +11129,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 case HIRTypeData::TAG_Tuple: {
                     const auto& left = lhs->as_Tuple();
                     const auto& right = rhs->as_Tuple();
-                    if (left.size() == right.size()) {
-                        for (size_t i = 0; i < left.size(); i++) {
+                    if (left.length() == right.length()) {
+                        for (size_t i = 0; i < left.length(); i++) {
                             self(self, left[i], right[i]);
                         }
                     }
@@ -11470,8 +11473,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     };
 
     const size_t frameIndex = frameDepth++;
-    if (frameIndex == frames.size()) {
-        frames.push_back(crate.pool->make<CandidateFrame>());
+    if (frameIndex == frames.length()) {
+        frames.pushBack(crate.pool->make<CandidateFrame>());
     }
     frames[frameIndex]->clear(candidateNodes);
     frames[frameIndex]->availableDepth = ROOT_DEPTH;
@@ -11528,7 +11531,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
     }
     auto& frame = *frames[frameIndex];
-    const size_t candidateCount = frame.candidates.size();
+    const size_t candidateCount = frame.candidates.length();
 
     DEBUG(StringView("next-solver assembled ") << candidateCount << StringView(" candidate(s) for ") << type << StringView(": ") << trait << params);
     bool suppressAutoBuiltin = false;
@@ -11581,7 +11584,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         suppressAutoBuiltin |= candidate->isPositiveMarkerImpl() && certainty != Certainty::NoSolution;
         if (certainty != Certainty::NoSolution) {
-            frame.viable.push_back(candidate);
+            frame.viable.pushBack(candidate);
         }
         return !hasCoercionGoals && candidate->traitCertainty == Certainty::Proven && paramEnvCandidateIsNonGlobal(*candidate);
     };
@@ -11603,16 +11606,15 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     }
     if (suppressAutoBuiltin || negativeProven) {
         auto& viable = frame.viable;
-        viable.erase(
-            std::remove_if(
-                viable.begin(),
-                viable.end(),
-                [&](Candidate* candidate) {
-            return candidate->autoBuiltin;
+        size_t kept = 0;
+        for (auto* candidate : viable) {
+            if (!candidate->autoBuiltin) {
+                viable.mut(kept++) = candidate;
+            }
         }
-            ),
-            viable.end()
-        );
+        while (viable.length() > kept) {
+            viable.popBack();
+        }
     } else if (negativeAmbiguous) {
         for (auto* candidate : frame.viable) {
             if (candidate->autoBuiltin && candidate->certainty == Certainty::Proven) {
@@ -11671,16 +11673,15 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 }
             }
         }
-        frame.viable.erase(
-            std::remove_if(
-                frame.viable.begin(),
-                frame.viable.end(),
-                [](const Candidate* candidate) {
-            return candidate->discarded;
+        size_t kept = 0;
+        for (auto* candidate : frame.viable) {
+            if (!candidate->discarded) {
+                frame.viable.mut(kept++) = candidate;
+            }
         }
-            ),
-            frame.viable.end()
-        );
+        while (frame.viable.length() > kept) {
+            frame.viable.popBack();
+        }
     }
 
     if (frame.viable.empty()) {
@@ -11704,16 +11705,15 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     });
     if (hasNonGlobalParamEnv) {
         auto& viable = frame.viable;
-        viable.erase(
-            std::remove_if(
-                viable.begin(),
-                viable.end(),
-                [](const Candidate* candidate) {
-            return candidate->source != CandidateSource::ParamEnv && candidate->source != CandidateSource::AliasBound;
+        size_t kept = 0;
+        for (auto* candidate : viable) {
+            if (candidate->source == CandidateSource::ParamEnv || candidate->source == CandidateSource::AliasBound) {
+                viable.mut(kept++) = candidate;
+            }
         }
-            ),
-            viable.end()
-        );
+        while (viable.length() > kept) {
+            viable.popBack();
+        }
     }
 
     bool hasPreferredNonImpl = false;
@@ -11722,16 +11722,15 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     }
     if (hasPreferredNonImpl) {
         auto& viable = frame.viable;
-        viable.erase(
-            std::remove_if(
-                viable.begin(),
-                viable.end(),
-                [&](Candidate* candidate) {
-            return !isEnvironmentOrBuiltin(candidate->impl);
+        size_t kept = 0;
+        for (auto* candidate : viable) {
+            if (isEnvironmentOrBuiltin(candidate->impl)) {
+                viable.mut(kept++) = candidate;
+            }
         }
-            ),
-            viable.end()
-        );
+        while (viable.length() > kept) {
+            viable.popBack();
+        }
     }
 
     const bool hasNonParamEnv = std::any_of(frame.viable.begin(), frame.viable.end(), [](const Candidate* candidate) {
@@ -11739,16 +11738,15 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     });
     if (hasNonParamEnv) {
         auto& viable = frame.viable;
-        viable.erase(
-            std::remove_if(
-                viable.begin(),
-                viable.end(),
-                [&](const Candidate* candidate) {
-            return candidate->source == CandidateSource::ParamEnv && !paramEnvCandidateIsNonGlobal(*candidate);
+        size_t kept = 0;
+        for (auto* candidate : viable) {
+            if (candidate->source != CandidateSource::ParamEnv || paramEnvCandidateIsNonGlobal(*candidate)) {
+                viable.mut(kept++) = candidate;
+            }
         }
-            ),
-            viable.end()
-        );
+        while (viable.length() > kept) {
+            viable.popBack();
+        }
     }
 
     const bool hasExactEnvironment = std::any_of(frame.viable.begin(), frame.viable.end(), [&](const Candidate* candidate) {
@@ -11756,16 +11754,15 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     });
     if (hasExactEnvironment) {
         auto& viable = frame.viable;
-        viable.erase(
-            std::remove_if(
-                viable.begin(),
-                viable.end(),
-                [&](const Candidate* candidate) {
-            return isEnvironmentOrBuiltin(candidate->impl) && !candidate->headExact;
+        size_t kept = 0;
+        for (auto* candidate : viable) {
+            if (!isEnvironmentOrBuiltin(candidate->impl) || candidate->headExact) {
+                viable.mut(kept++) = candidate;
+            }
         }
-            ),
-            viable.end()
-        );
+        while (viable.length() > kept) {
+            viable.popBack();
+        }
     }
 
     for (auto* candidate : frame.viable) {
@@ -11780,11 +11777,11 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             winner->specializationItemSource = shadowed;
         }
     };
-    for (size_t i = 0; i < frame.viable.size(); i++) {
+    for (size_t i = 0; i < frame.viable.length(); i++) {
         if (frame.viable[i]->discarded) {
             continue;
         }
-        for (size_t j = i + 1; j < frame.viable.size(); j++) {
+        for (size_t j = i + 1; j < frame.viable.length(); j++) {
             if (frame.viable[j]->discarded) {
                 continue;
             }
@@ -11827,21 +11824,22 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
         }
     }
-    frame.viable.erase(
-        std::remove_if(
-            frame.viable.begin(),
-            frame.viable.end(),
-            [](const Candidate* candidate) {
-        return candidate->discarded;
+    {
+        size_t kept = 0;
+        for (auto* candidate : frame.viable) {
+            if (!candidate->discarded) {
+                frame.viable.mut(kept++) = candidate;
+            }
+        }
+        while (frame.viable.length() > kept) {
+            frame.viable.popBack();
+        }
     }
-        ),
-        frame.viable.end()
-    );
 
     bool sameResponse = true;
     bool oneResponse = true;
-    for (size_t i = 1; i < frame.viable.size(); i++) {
-        if (!responsesEqual(frame.viable.front()->impl, frame.viable[i]->impl, assocName, canonicalAssocParams, valueName)) {
+    for (size_t i = 1; i < frame.viable.length(); i++) {
+        if (!responsesEqual(frame.viable[0]->impl, frame.viable[i]->impl, assocName, canonicalAssocParams, valueName)) {
             sameResponse = false;
             oneResponse = false;
             break;
@@ -12045,8 +12043,8 @@ auto NextTraitGoalEvaluator::Candidate::isPositiveMarkerImpl() const -> bool {
 }
 
 NextTraitGoalEvaluator::CandidateFrame::CandidateFrame() {
-    candidates.reserve(32);
-    viable.reserve(32);
+    candidates.grow(32);
+    viable.grow(32);
 }
 
 auto NextTraitGoalEvaluator::CandidateFrame::clear(ObjList<Candidate>& nodes) -> void {

@@ -133,7 +133,7 @@ void stl::output<ZeroCopyOutput, ASTAttributeName>(ZeroCopyOutput& out, const AS
         return;
     }
     for (const auto& item : value.elems) {
-        if (&item != &value.elems.front()) {
+        if (&item != value.elems.begin()) {
             out << StringView("::");
         }
         out << item;

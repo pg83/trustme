@@ -185,7 +185,7 @@ auto CodeGeneratorMonoMir::emitType(const HIRTypeData* ty) -> void {
     mirRes = &topMirRes;
 
     if (const auto* te = ty->opt_Tuple()) {
-        if (te->size() > 0) {
+        if (te->length() > 0) {
             const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
             MIR_ASSERT(*mirRes, repr, StringView("No repr for tuple ") << ty);
 
@@ -485,7 +485,7 @@ auto CodeGeneratorMonoMir::emitEnum(const Span& sp, const HIRGenericPath& p, con
         case TypeReprVariantMode::TAG_Values: {
             auto& e = repr->variants.as_Values();
             of << StringView("\t@[") << e.field.index << StringView(", ") << e.field.subFields << StringView("] = {\n");
-            for (size_t idx = 0; idx < e.values.size(); idx++) {
+            for (size_t idx = 0; idx < e.values.length(); idx++) {
                 of << StringView("\t\t");
                 emitValue(e.field, e.values[idx]);
                 if (!item.isValue()) {
@@ -624,11 +624,11 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
         of << StringView(" = \"") << item.linkage.name << StringView("\":\"") << item.abi << StringView("\"");
     }
     of << StringView(" {\n");
-    for (unsigned int i = 0; i < code->locals.size(); i++) {
+    for (unsigned int i = 0; i < code->locals.length(); i++) {
         DEBUG(StringView("var") << i << StringView(" : ") << code->locals[i]);
         of << StringView("\tlet var") << i << StringView(": ") << fmt(code->locals[i]) << StringView(";\n");
     }
-    for (unsigned int i = 0; i < code->dropFlags.size(); i++) {
+    for (unsigned int i = 0; i < code->dropFlags.length(); i++) {
         of << StringView("\tlet df") << i << StringView(" = ") << code->dropFlags[i] << StringView(";\n");
     }
 
@@ -1007,7 +1007,7 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                         auto& ve = e.values.as_ByteString();
                         for (size_t j = 0; j < ve.size(); j++) {
                             of << StringView("b\"");
-                            for (size_t i = 0; i < ve[j].size(); i++) {
+                            for (size_t i = 0; i < ve[j].length(); i++) {
                                 auto b = ve[j][i];
                                 switch (b) {
                                     case '\\':
@@ -1033,14 +1033,14 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                         break;
                     case MIRSwitchValues::TAG_Unsigned: {
                         auto& ve = e.values.as_Unsigned();
-                        for (size_t i = 0; i < ve.size(); i++) {
+                        for (size_t i = 0; i < ve.length(); i++) {
                             of << ve[i] << StringView(" = ") << e.targets[i] << StringView(",");
                         }
                         break;
                     } break;
                     case MIRSwitchValues::TAG_Signed: {
                         auto& ve = e.values.as_Signed();
-                        for (size_t i = 0; i < ve.size(); i++) {
+                        for (size_t i = 0; i < ve.length(); i++) {
                             of << (ve[i] < 0 ? "" : "+") << ve[i] << StringView(" = ") << e.targets[i] << StringView(",");
                         }
                         break;
@@ -1155,7 +1155,7 @@ auto CodeGeneratorMonoMir::monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunct
             tmp = cloneTyWith(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
                 if (const auto* te = x->opt_ErasedType()) {
                     if (const auto* e = te->inner.opt_Fcn()) {
-                        out = item.code.erasedTypes.at(e->index);
+                        out = item.code.erasedTypes[e->index];
                         return true;
                     }
                 }

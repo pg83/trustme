@@ -2,6 +2,8 @@
 
 #include "rc_string.h"
 
+#include <std/lib/vector.h>
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -15,7 +17,7 @@ struct Ident {
     // TODO: Use AST::AbsolutePath instead
     struct ModPath {
         RcString crate;
-        std::vector<RcString> ents;
+        stl::Vector<RcString> ents;
     };
 
     // TODO: make this a reference-counted pointer instead (so it's cheaper to copy)
@@ -23,9 +25,9 @@ struct Ident {
     class Hygiene {
     public:
         struct Inner {
-            std::vector<unsigned int> contexts;
+            stl::Vector<unsigned int> contexts;
 
-            std::vector<unsigned int> macroDefinitions;
+            stl::Vector<unsigned int> macroDefinitions;
             std::shared_ptr<ModPath> searchModule;
         };
 
@@ -84,7 +86,6 @@ struct Ident {
         bool operator<(const Hygiene& x) const {
             return ord(x) == OrdLess;
         }
-
     };
 
     Hygiene hygiene;
@@ -132,5 +133,4 @@ struct Ident {
     }
 
     bool operator<(const Ident& x) const;
-
 };

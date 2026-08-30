@@ -15,7 +15,7 @@ generate(
         v("Float", fields=[("FloatValue", "v"), ("HIRCoreType", "t")]),
         v("Bool", fields=[("bool", "v")],
           doc="The dedicated struct is defensive: it prevents implicit casts"),
-        v("Bytes", "std::vector<u8>", doc="Byte string"),
+        v("Bytes", "stl::Vector<u8>", doc="Byte string"),
         v("StaticString", "std::string", doc="String"),
         v("Const", fields=[("std::unique_ptr<HIRPath>", "p")], copy=False,
           doc="`const`. Behind a pointer to save inline space (HIRPath is ~11"
@@ -169,10 +169,10 @@ generate(
     clone=False,
     output=True,
     variants=[
-        v("Unsigned", "std::vector<u64>"),
-        v("Signed", "std::vector<i64>"),
+        v("Unsigned", "stl::Vector<u64>"),
+        v("Signed", "stl::Vector<i64>"),
         v("String", "std::vector<std::string>"),
-        v("ByteString", "std::vector<std::vector<u8>>"),
+        v("ByteString", "std::vector<stl::Vector<u8>>"),
     ],
     extra="""
         MIRSwitchValues clone() const;
@@ -233,14 +233,14 @@ generate(
         ], copy=False),
         v("Switch", fields=[
             ("MIRLValue", "val"),
-            ("std::vector<MIRBasicBlockId>", "targets"),
+            ("stl::Vector<MIRBasicBlockId>", "targets"),
             ("unsigned int", "validFlag", "~0u"),
             ("MIRBasicBlockId", "invalidTarget", "~0u"),
         ], copy=False),
         v("SwitchValue", fields=[
             ("MIRLValue", "val"),
             ("MIRBasicBlockId", "defTarget"),
-            ("std::vector<MIRBasicBlockId>", "targets"),
+            ("stl::Vector<MIRBasicBlockId>", "targets"),
             ("MIRSwitchValues", "values"),
         ], copy=False),
         v("Drop", fields=[
@@ -317,6 +317,6 @@ generate(
             ("unsigned int", "bitIndex"),
         ], copy=False, doc="Load drop flag `idx` from bit `bitIndex` of the"
                            " bit-set array `slot` (nominally `u8`s)"),
-        v("ScopeEnd", fields=[("std::vector<unsigned>", "slots")]),
+        v("ScopeEnd", fields=[("stl::Vector<unsigned>", "slots")]),
     ],
 )

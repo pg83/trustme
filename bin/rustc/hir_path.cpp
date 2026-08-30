@@ -7,6 +7,7 @@
 #include "hir_main_bindings.h"
 
 #include <std/sym/i_map.h>
+#include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 #include <std/rng/split_mix_64.h>
 
@@ -76,7 +77,7 @@ namespace {
             case HIRExprLiteral::TAG_ByteString: {
                 auto& l = left.data.as_ByteString();
                 auto& r = right.data.as_ByteString();
-                return l == r;
+                return ::ord(l, r) == OrdEqual;
             }
         }
         UNREACHABLE();
@@ -829,7 +830,7 @@ HIRSimplePath::HIRSimplePath(RcString crate)
 {
 }
 
-HIRSimplePath::HIRSimplePath(RcString crate, std::vector<RcString> components)
+HIRSimplePath::HIRSimplePath(RcString crate, Vector<RcString> components)
     : HIRSimplePath(crate, std::span<const RcString>(components))
 {
 }
@@ -874,9 +875,11 @@ RcString HIRSimplePath::crateName() const {
     return p ? p->members.front() : RcString();
 }
 
-std::vector<RcString> HIRSimplePath::componentsVec() const {
+Vector<RcString> HIRSimplePath::componentsVec() const {
     const auto values = components();
-    return {values.begin(), values.end()};
+    Vector<RcString> result;
+    result.append(values.data(), values.size());
+    return result;
 }
 
 Ordering HIRPathParams::ord(const HIRPathParams& x) const {

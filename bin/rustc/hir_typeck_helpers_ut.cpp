@@ -1,5 +1,5 @@
-#include "hir_typeck_helpers.h"
 #include "hir_typeck_expr_cs.h"
+#include "hir_typeck_helpers.h"
 
 #include <std/tst/ut.h>
 #include <std/mem/obj_pool.h>
@@ -209,7 +209,10 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto b = table.newIvar();
         Unifier unifier(sp, table);
 
-        const auto pairTy = types.tuple({types.primitive(HIRCoreType::I32), types.infer(b)});
+        Vector<HIRTypeRef> pairTypes(2);
+        pairTypes.pushBack(types.primitive(HIRCoreType::I32));
+        pairTypes.pushBack(types.infer(b));
+        const auto pairTy = types.tuple(std::move(pairTypes));
         STD_INSIST(unifier.unify(types.infer(a), pairTy) == Unifier::Outcome::Proven);
         STD_INSIST(unifier.unify(types.infer(b), types.primitive(HIRCoreType::U8)) == Unifier::Outcome::Proven);
         STD_INSIST(table.getType(b)->is_Primitive());
@@ -226,8 +229,14 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto a = table.newIvar();
         Unifier unifier(sp, table);
 
-        const auto leftTy = types.tuple({types.infer(a), types.primitive(HIRCoreType::I32)});
-        const auto rightTy = types.tuple({types.primitive(HIRCoreType::U8), types.primitive(HIRCoreType::U16)});
+        Vector<HIRTypeRef> leftTypes(2);
+        leftTypes.pushBack(types.infer(a));
+        leftTypes.pushBack(types.primitive(HIRCoreType::I32));
+        const auto leftTy = types.tuple(std::move(leftTypes));
+        Vector<HIRTypeRef> rightTypes(2);
+        rightTypes.pushBack(types.primitive(HIRCoreType::U8));
+        rightTypes.pushBack(types.primitive(HIRCoreType::U16));
+        const auto rightTy = types.tuple(std::move(rightTypes));
         STD_INSIST(unifier.unify(leftTy, rightTy) == Unifier::Outcome::Mismatch);
         STD_INSIST(table.getType(a)->is_Infer());
     }
@@ -242,7 +251,9 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto a = table.newIvar();
         Unifier unifier(sp, table);
 
-        const auto recursive = types.tuple({types.infer(a)});
+        Vector<HIRTypeRef> recursiveTypes(1);
+        recursiveTypes.pushBack(types.infer(a));
+        const auto recursive = types.tuple(std::move(recursiveTypes));
         STD_INSIST(unifier.unify(types.infer(a), recursive) == Unifier::Outcome::Mismatch);
         STD_INSIST(table.getType(a)->is_Infer());
     }

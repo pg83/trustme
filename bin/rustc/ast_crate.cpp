@@ -287,7 +287,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
             }
         }
     }
-    externCratesOrd.push_back(realName);
+    externCratesOrd.pushBack(realName);
 
     if (extCrate.shortName == "core") {
         if (this->extCratenameCore == "") {

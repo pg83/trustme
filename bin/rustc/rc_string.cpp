@@ -187,7 +187,7 @@ void stl::output<ZeroCopyOutput, RcString>(ZeroCopyOutput& os, RcString x) {
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::vector<RcString>>(ZeroCopyOutput& out, const std::vector<RcString>& values) {
+void stl::output<ZeroCopyOutput, Vector<RcString>>(ZeroCopyOutput& out, const Vector<RcString>& values) {
     outCont(out, values);
 }
 

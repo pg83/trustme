@@ -1,9 +1,11 @@
 #pragma once
 
 #include "output.h"
-
 #include "mir_mir.h"
 #include "hir_typeck_static.h"
+
+#include <std/alg/range.h>
+#include <std/lib/vector.h>
 
 #include <vector>
 #include <type_traits>
@@ -45,27 +47,27 @@ struct MIRPathCb final: MIRPathCallback {
     }
 };
 
-#define MIR_BUG(state, ...)                      \
-    do {                                         \
-        const char* __fcn = __FUNCTION__;        \
-        (state).printBug([&](auto& _os) {        \
+#define MIR_BUG(state, ...)                                       \
+    do {                                                          \
+        const char* __fcn = __FUNCTION__;                         \
+        (state).printBug([&](auto& _os) {                         \
             _os << __fcn << stl::StringView(": ") << __VA_ARGS__; \
-        });                                      \
-        UNREACHABLE();                           \
+        });                                                       \
+        UNREACHABLE();                                            \
     } while (0)
-#define MIR_ASSERT(state, cnd, ...)                                                                \
-    do {                                                                                           \
-        if (!(cnd))                                                                                \
-            (state).printBug([&](auto& _os) {                                                      \
+#define MIR_ASSERT(state, cnd, ...)                                                                                                                   \
+    do {                                                                                                                                              \
+        if (!(cnd))                                                                                                                                   \
+            (state).printBug([&](auto& _os) {                                                                                                         \
                 _os << stl::StringView(__FILE__) << stl::StringView(":") << __LINE__ << stl::StringView(" ASSERT " #cnd " failed - ") << __VA_ARGS__; \
-            });                                                                                    \
+            });                                                                                                                                       \
     } while (0)
-#define MIR_TODO(state, ...)                                           \
-    do {                                                               \
-        (state).printTodo([&](auto& _os) {                             \
+#define MIR_TODO(state, ...)                                                                                              \
+    do {                                                                                                                  \
+        (state).printTodo([&](auto& _os) {                                                                                \
             _os << stl::StringView(__FILE__) << stl::StringView(":") << __LINE__ << stl::StringView(": ") << __VA_ARGS__; \
-        });                                                            \
-        UNREACHABLE();                                                 \
+        });                                                                                                               \
+        UNREACHABLE();                                                                                                    \
     } while (0)
 
 class MIRTypeResolve {
@@ -90,7 +92,7 @@ public:
     const MIRFunction& fcn;
 
     const HIRTypeData* monomorphedRettype;
-    const std::vector<HIRTypeRef>* monomorphedLocals;
+    const stl::Vector<HIRTypeRef>* monomorphedLocals;
 
 private:
     const HIRSimplePath* langBox_ = nullptr;
@@ -162,17 +164,16 @@ public:
     size_t intrinsicOffsetOf(const HIRTypeData* ty, const std::vector<MIRParam>& params) const;
 
     TypeNameString intrinsicTypeName(const HIRTypeData* ty) const;
-
 };
 
 class MIRValueLifetime {
-    std::vector<bool> statements;
+    stl::Vector<bool> statements;
 
 public:
-    MIRValueLifetime(std::vector<bool> stmts);
+    MIRValueLifetime(stl::Vector<bool> stmts);
 
     bool validAt(size_t ofs) const {
-        return statements.at(ofs);
+        return statements[ofs];
     }
 
     bool isUsed() const;
@@ -183,7 +184,7 @@ public:
 };
 
 struct MIRValueLifetimes {
-    std::vector<size_t> blockOffsets;
+    stl::Vector<size_t> blockOffsets;
     std::vector<MIRValueLifetime> slots;
 
     bool slotValid(unsigned idx, unsigned bbIdx, unsigned stmtIdx) const {
@@ -568,8 +569,14 @@ public:
             case MIRTerminator::TAG_Switch: {
                 auto& e = term.as_Switch();
                 rv |= visitLvalue(e.val, MIRValUsage::Read);
-                for (auto& target : e.targets) {
-                    rv |= visitBlockId(target);
+                if constexpr (std::is_const_v<typename Dec<MIRTerminator>::Type>) {
+                    for (const auto& target : e.targets) {
+                        rv |= visitBlockId(target);
+                    }
+                } else {
+                    for (auto& target : stl::mutRange(e.targets)) {
+                        rv |= visitBlockId(target);
+                    }
                 }
                 if (e.validFlag != ~0u) {
                     rv |= visitBlockId(e.invalidTarget);
@@ -579,8 +586,14 @@ public:
             case MIRTerminator::TAG_SwitchValue: {
                 auto& e = term.as_SwitchValue();
                 rv |= visitLvalue(e.val, MIRValUsage::Read);
-                for (auto& target : e.targets) {
-                    rv |= visitBlockId(target);
+                if constexpr (std::is_const_v<typename Dec<MIRTerminator>::Type>) {
+                    for (const auto& target : e.targets) {
+                        rv |= visitBlockId(target);
+                    }
+                } else {
+                    for (auto& target : stl::mutRange(e.targets)) {
+                        rv |= visitBlockId(target);
+                    }
                 }
                 rv |= visitBlockId(e.defTarget);
                 break;
@@ -690,8 +703,14 @@ public:
     }
 
     virtual void visitFunction(MIRTypeResolve& state, typename Dec<MIRFunction>::Type& fcn) {
-        for (auto& t : fcn.locals) {
-            visitType(t);
+        if constexpr (std::is_const_v<typename Dec<MIRFunction>::Type>) {
+            for (const auto& type : fcn.locals) {
+                visitType(type);
+            }
+        } else {
+            for (auto& type : stl::mutRange(fcn.locals)) {
+                visitType(type);
+            }
         }
 
         for (unsigned int blockIdx = 0; blockIdx < fcn.blocks.size(); blockIdx++) {
@@ -719,4 +738,4 @@ public:
     virtual bool visitLvalue(MIRLValue& lv, MIRValUsage u) override;
 };
 
-MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const std::vector<bool>* mask = nullptr);
+MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const stl::Vector<bool>* mask = nullptr);

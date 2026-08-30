@@ -5,6 +5,8 @@
 #include "int128.h"
 #include "hir_type.h"
 
+#include <std/lib/vector.h>
+
 struct Reloc {
     size_t ofs;
     size_t len;
@@ -30,7 +32,7 @@ struct Reloc {
 struct EncodedLiteral {
     inline static const unsigned PTR_BASE = 0x1000;
 
-    std::vector<u8> bytes;
+    stl::Vector<u8> bytes;
     std::vector<Reloc> relocations;
 
     static EncodedLiteral makeUsize(u64 v);
@@ -71,5 +73,4 @@ struct EncodedLiteralSlice {
     }
 
     Ordering ord(const EncodedLiteralSlice& x) const;
-
 };

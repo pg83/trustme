@@ -2,6 +2,8 @@
 
 #include "output.h"
 
+#include <std/lib/vector.h>
+
 using namespace stl;
 
 U128::U128()
@@ -479,6 +481,6 @@ void stl::output<ZeroCopyOutput, FormattedU128Hex>(ZeroCopyOutput& os, Formatted
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::vector<U128>>(ZeroCopyOutput& out, const std::vector<U128>& values) {
+void stl::output<ZeroCopyOutput, Vector<U128>>(ZeroCopyOutput& out, const Vector<U128>& values) {
     outCont(out, values);
 }

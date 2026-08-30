@@ -3,6 +3,7 @@
 #include "hir_hir.h"
 #include "hir_type.h"
 
+#include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
 #include <map>
@@ -14,7 +15,7 @@ using namespace stl;
 namespace {
     struct InherentCacheImpl final: public HIRInherentCache {
         struct Lowest {
-            typedef std::vector<const HIRTypeImpl*> listT;
+            typedef Vector<const HIRTypeImpl*> listT;
             std::map<HIRSimplePath, listT> named;
             listT nonNamed; // TODO: use a map of HIR::ASTType*::Data::Tag
             listT generic;
@@ -48,11 +49,11 @@ namespace {
 void InherentCacheImpl::Lowest::insert(const Span& sp, const HIRTypeImpl& impl) {
     const auto& type = impl.type;
     if (const auto* path = type->getSortPath()) {
-        this->named[*path].push_back(&impl);
+        this->named[*path].pushBack(&impl);
     } else if (type->is_Path() || type->is_Generic()) {
-        this->generic.push_back(&impl);
+        this->generic.pushBack(&impl);
     } else {
-        this->nonNamed.push_back(&impl);
+        this->nonNamed.pushBack(&impl);
     }
 }
 
@@ -139,7 +140,7 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
             const auto& gp = te.path.data.as_Generic();
             if (gp.params.types.empty()) {
                 DEBUG(StringView("m_concrete[") << gp.path << StringView("] += impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);
-                concrete[gp.path].push_back(&impl);
+                concrete[gp.path].pushBack(&impl);
                 return;
             }
             DEBUG(StringView("m_path[") << gp.path << StringView("] += ") << gp.params.types.at(0) << StringView(" impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);

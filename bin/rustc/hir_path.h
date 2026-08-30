@@ -1,13 +1,14 @@
 #pragma once
 
-#include "output.h"
-
 #include "span.h"
 #include "common.h"
+#include "output.h"
 #include "thin_vector.h"
 #include "hir_expr_ptr.h"
 #include "hir_type_ref.h"
 #include "hir_generic_ref.h"
+
+#include <std/lib/vector.h>
 
 #include <span>
 
@@ -64,7 +65,7 @@ public:
 
     HIRSimplePath(RcString crate);
 
-    HIRSimplePath(RcString crate, std::vector<RcString> components);
+    HIRSimplePath(RcString crate, stl::Vector<RcString> components);
 
     HIRSimplePath(RcString crate, std::span<RcString> components);
 
@@ -92,7 +93,7 @@ public:
         return m.empty() ? std::span<const RcString>() : std::span<const RcString>(m.begin() + 1, m.end());
     }
 
-    std::vector<RcString> componentsVec() const;
+    stl::Vector<RcString> componentsVec() const;
 
     HIRSimplePath operator+(const RcString& s) const;
 
@@ -163,7 +164,6 @@ struct HIRPathParams {
     }
 
     Ordering ord(const HIRPathParams& x) const;
-
 };
 
 class HIRGenericPath {
@@ -192,7 +192,6 @@ public:
     }
 
     Ordering ord(const HIRGenericPath& x) const;
-
 };
 
 class HIRTraitPath {
@@ -208,7 +207,6 @@ public:
         AtyEqual clone() const {
             return AtyEqual{sourceTrait.clone(), atyParams.clone(), type};
         }
-
     };
 
     struct AtyBound {
@@ -253,7 +251,6 @@ public:
     }
 
     Ordering ord(const HIRTraitPath& x) const;
-
 };
 
 #include "hir_path_data_tu.h"
@@ -287,7 +284,6 @@ public:
     bool operator<(const HIRPath& x) const {
         return ord(x) == OrdLess;
     }
-
 };
 
 struct HIRConstGenericUnevaluated {

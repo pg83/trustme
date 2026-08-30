@@ -2,6 +2,8 @@
 
 #include "output.h"
 
+#include <std/lib/vector.h>
+
 using namespace stl;
 
 template <>
@@ -15,7 +17,7 @@ void stl::output<ZeroCopyOutput, std::vector<std::string>>(ZeroCopyOutput& out, 
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::vector<size_t>>(ZeroCopyOutput& out, const std::vector<size_t>& values) {
+void stl::output<ZeroCopyOutput, Vector<size_t>>(ZeroCopyOutput& out, const Vector<size_t>& values) {
     outCont(out, values);
 }
 
@@ -25,7 +27,7 @@ void stl::output<ZeroCopyOutput, std::pair<size_t, size_t>>(ZeroCopyOutput& out,
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::vector<unsigned>>(ZeroCopyOutput& out, const std::vector<unsigned>& values) {
+void stl::output<ZeroCopyOutput, Vector<unsigned>>(ZeroCopyOutput& out, const Vector<unsigned>& values) {
     outCont(out, values);
 }
 

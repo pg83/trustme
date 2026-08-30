@@ -13,7 +13,7 @@ generate(
         v("Macro", fields=[("ASTMacroInvocation*", "inv")]),
         v("Primitive", fields=[("enum eCoreType", "coreType")]),
         v("Function", fields=[("TypeFunction", "info")]),
-        v("Tuple", fields=[("std::vector<ASTType*>", "innerTypes")]),
+        v("Tuple", fields=[("stl::Vector<ASTType*>", "innerTypes")]),
         v("Borrow", fields=[
             ("ASTLifetimeRef", "lifetime"),
             ("bool", "isMut"),
@@ -42,7 +42,7 @@ generate(
         v("Path", "ASTPath*"),
         v("TraitObject", fields=[
             ("std::vector<TypeTraitPath>", "traits"),
-            ("std::vector<ASTLifetimeRef>", "lifetimes"),
+            ("stl::Vector<ASTLifetimeRef>", "lifetimes"),
         ]),
         v("ErasedType", "TypeErasedType*"),
     ],

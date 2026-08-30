@@ -5,7 +5,6 @@
 #include "hir_visitor.h"
 #include "mir_operations.h"
 
-
 using namespace stl;
 
 namespace {
@@ -84,10 +83,10 @@ MirDumper::MirDumper(ZeroCopyOutput& os, unsigned int il)
 }
 
 auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
-    for (size_t i = 0; i < fcn.locals.size(); i++) {
+    for (size_t i = 0; i < fcn.locals.length(); i++) {
         os << indent() << StringView("let _$") << i << StringView(": ") << fcn.locals[i] << StringView(";\n");
     }
-    for (unsigned int i = 0; i < fcn.dropFlags.size(); i++) {
+    for (unsigned int i = 0; i < fcn.dropFlags.length(); i++) {
         os << indent() << StringView("let df$") << i << StringView(" = ") << fcn.dropFlags[i] << StringView(";\n");
     }
 
@@ -268,7 +267,7 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
             case MIRTerminator::TAG_Switch: {
                 auto& e = block.terminator.as_Switch();
                 os << StringView("switch ") << FMT_M(e.val) << StringView(" {");
-                for (unsigned int j = 0; j < e.targets.size(); j++) {
+                for (unsigned int j = 0; j < e.targets.length(); j++) {
                     os << j << StringView(" => bb") << e.targets[j] << StringView(", ");
                 }
                 os << StringView("}\n");
@@ -280,30 +279,30 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
                 switch (e.values.tag()) {
                     case MIRSwitchValues::TAG_Unsigned: {
                         auto& ve = e.values.as_Unsigned();
-                        for (unsigned int j = 0; j < e.targets.size(); j++) {
+                        for (unsigned int j = 0; j < e.targets.length(); j++) {
                             os << ve[j] << StringView(" => bb") << e.targets[j] << StringView(", ");
                         }
                         break;
                     }
                     case MIRSwitchValues::TAG_Signed: {
                         auto& ve = e.values.as_Signed();
-                        for (unsigned int j = 0; j < e.targets.size(); j++) {
+                        for (unsigned int j = 0; j < e.targets.length(); j++) {
                             os << (ve[j] >= 0 ? "+" : "") << ve[j] << StringView(" => bb") << e.targets[j] << StringView(", ");
                         }
                         break;
                     }
                     case MIRSwitchValues::TAG_String: {
                         auto& ve = e.values.as_String();
-                        for (unsigned int j = 0; j < e.targets.size(); j++) {
+                        for (unsigned int j = 0; j < e.targets.length(); j++) {
                             os << StringView("\"") << FmtEscaped(ve[j]) << StringView("\" => bb") << e.targets[j] << StringView(", ");
                         }
                         break;
                     }
                     case MIRSwitchValues::TAG_ByteString: {
                         auto& ve = e.values.as_ByteString();
-                        for (unsigned int j = 0; j < e.targets.size(); j++) {
+                        for (unsigned int j = 0; j < e.targets.length(); j++) {
                             os << StringView("b\"");
-                            for (size_t i = 0; i < ve[j].size(); i++) {
+                            for (size_t i = 0; i < ve[j].length(); i++) {
                                 auto b = ve[j][i];
                                 switch (b) {
                                     case '\\':

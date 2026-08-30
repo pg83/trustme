@@ -4,6 +4,8 @@
 #include "int128.h"
 #include "rc_string.h"
 
+#include <std/lib/vector.h>
+
 #include <map>
 #include <string>
 #include <vector>
@@ -98,7 +100,7 @@ class HIRSerialiseReader {
     class Inner;
 
     class Buffer {
-        std::vector<u8> backing;
+        stl::Vector<u8> backing;
         unsigned int ofs;
 
     public:
@@ -115,7 +117,7 @@ class HIRSerialiseReader {
     Inner* inner;
     Buffer buffer;
     size_t pos;
-    std::vector<RcString> strings;
+    stl::Vector<RcString> strings;
 
     std::vector<std::string> objnameCache;
 

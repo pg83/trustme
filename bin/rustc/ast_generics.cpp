@@ -63,9 +63,9 @@ ASTGenericParams ASTGenericParams::clone() const {
     for (auto& e : bounds) {
         rv.bounds.push_back(e.clone());
     }
-    rv.bareBoundTypes.reserve(bareBoundTypes.size());
+    rv.bareBoundTypes.grow(bareBoundTypes.length());
     for (const auto& e : bareBoundTypes) {
-        rv.bareBoundTypes.push_back(e->clone());
+        rv.bareBoundTypes.pushBack(e->clone());
     }
     return rv;
 }

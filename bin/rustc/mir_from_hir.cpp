@@ -20,7 +20,10 @@
 #include "hir_conv_constant_evaluation.h"
 
 #include <std/alg/defer.h>
+#include <std/alg/qsort.h>
+#include <std/alg/range.h>
 #include <std/sym/i_map.h>
+#include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
 #include <cctype>
@@ -37,10 +40,33 @@ namespace {
 
     const size_t PARTIAL_ARRAY_MIN = 32;
 
+    void eraseValue(Vector<unsigned>& values, const unsigned* at) {
+        auto index = static_cast<size_t>(at - values.begin());
+        for (size_t i = index + 1; i < values.length(); i++) {
+            values.mut(i - 1) = values[i];
+        }
+        values.popBack();
+    }
+
+    void eraseDropSlot(Vector<ScopeDropSlot>& values, const ScopeDropSlot* at) {
+        auto index = static_cast<size_t>(at - values.begin());
+        for (size_t i = index + 1; i < values.length(); i++) {
+            values.mut(i - 1) = values[i];
+        }
+        values.popBack();
+    }
+
+    Vector<MIRBasicBlockId> blockPair(MIRBasicBlockId first, MIRBasicBlockId second) {
+        Vector<MIRBasicBlockId> blocks(2);
+        blocks.pushBack(first);
+        blocks.pushBack(second);
+        return blocks;
+    }
+
     struct ExprVisitorConv: public MirConverter, public MIRDropEmitter {
         MirBuilder& builder;
 
-        const std::vector<HIRTypeRef>& variableTypes;
+        const Vector<HIRTypeRef>& variableTypes;
 
         bool isGenerator;
 
@@ -87,7 +113,7 @@ namespace {
             bool isAsyncGen = false;
         } generatorState;
 
-        ExprVisitorConv(MirBuilder& builder, const std::vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator);
+        ExprVisitorConv(MirBuilder& builder, const Vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator);
 
         bool findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path, HIRTypeRef& futureTy) const;
 
@@ -362,7 +388,7 @@ namespace {
             std::vector<PatternRule> rules;
             std::vector<PatternBinding> bindings;
             std::vector<PatternRuleset::Deref> derefs;
-            std::vector<unsigned> orPath;
+            Vector<unsigned> orPath;
 
             Ruleset();
 
@@ -419,7 +445,7 @@ namespace {
     struct tRulesSubset {
         std::vector<const std::vector<PatternRule>*> ruleSets;
         bool isArmIndexes;
-        std::vector<size_t> armIdxes;
+        Vector<size_t> armIdxes;
 
         static std::pair<size_t, size_t> decodeArmIdx(size_t v);
 
@@ -483,10 +509,10 @@ namespace {
         MatchGenGrouped(MirBuilder& builder, const Span& sp, const HIRTypeData* topTy, const MIRLValue& topVal, const std::vector<ArmCode>& armsCode, size_t fieldPathOfs);
 
         void genForSlice(tRulesSubset rules, size_t ofs, MIRBasicBlockId defaultArm);
-        void genDispatch(const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-        void genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-        void genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-        void genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+        void genDispatch(const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+        void genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+        void genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+        void genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
 
         void genDispatchRange(const fieldPathT& fieldPath, const MIRConstant& first, const MIRConstant& last, bool isInclusive, MIRBasicBlockId defBlk);
         void genDispatchSplitslice(const fieldPathT& fieldPath, const PatternRule::Data_SplitSlice& e, MIRBasicBlockId defBlk);
@@ -542,9 +568,9 @@ namespace {
         }
 
         MIRFunction fcn;
-        fcn.locals.reserve(ptr.bindings.size());
+        fcn.locals.grow(ptr.bindings.length());
         for (const auto& t : ptr.bindings) {
-            fcn.locals.push_back(t);
+            fcn.locals.pushBack(t);
         }
 
         {
@@ -568,7 +594,7 @@ namespace {
 
             if (auto* genNode = cast<HIRExprNodeGeneratorWrapper>(&rootNode)) {
                 std::map<unsigned, std::vector<MIRLValue::Wrapper>> mappings;
-                for (size_t i = 0; i < genNode->captureUsages.size(); i++) {
+                for (size_t i = 0; i < genNode->captureUsages.length(); i++) {
                     unsigned idx = args.size() + i;
                     builder.scheduleVariableDrop(idx);
                     switch (genNode->captureUsages[i]) {
@@ -608,7 +634,7 @@ namespace {
                 }
                 ASSERT_BUG(sp, valueVarIdx == 1, StringView("Assumption on MaybeUninit.value's variant index failed"));
                 auto& fields = stateTy.data.as_Tuple();
-                const auto firstStoredLocal = static_cast<unsigned>(1 + genNode->captureUsages.size());
+                const auto firstStoredLocal = static_cast<unsigned>(1 + genNode->captureUsages.length());
                 auto storagePool = ObjPool::fromMemory();
                 IntMap<unsigned> storageSlots{storagePool.mutPtr()};
                 IntMap<bool> compositeConflicts{storagePool.mutPtr()};
@@ -635,7 +661,7 @@ namespace {
                     if (idx < firstStoredLocal) {
                         continue;
                     }
-                    ASSERT_BUG(sp, idx < fcn.locals.size(), idx << StringView(" >= ") << fcn.locals.size());
+                    ASSERT_BUG(sp, idx < fcn.locals.length(), idx << StringView(" >= ") << fcn.locals.length());
 
                     unsigned storageSlot = 0;
                     while (ev.generatorStorageSlotConflicts(idx, storageSlot, firstStoredLocal, storageSlots, compositeConflicts, storageLifetimes)) {
@@ -651,7 +677,7 @@ namespace {
 
                     auto& storageTy = const_cast<HIRUnion&>(*storageTypes[storageSlot]->as_Path().binding.as_Union());
                     auto storageVariant = static_cast<unsigned>(storageTy.variants.size());
-                    storageTy.variants.push_back(HIRStructField{RcString(), HIRPublicity::newNone(), fcn.locals.at(idx), {}});
+                    storageTy.variants.push_back(HIRStructField{RcString(), HIRPublicity::newNone(), fcn.locals[idx], {}});
                     mappings.insert(std::make_pair(idx, std::vector<MIRLValue::Wrapper>{MIRLValue::Wrapper::newField(0), MIRLValue::Wrapper::newDowncast(valueVarIdx), MIRLValue::Wrapper::newField(0), MIRLValue::Wrapper::newField(1 + storageSlot), MIRLValue::Wrapper::newDowncast(storageVariant)}));
                     DEBUG(StringView("Mapping _") << idx << StringView(" = ") << mappings.at(idx));
                 }
@@ -786,7 +812,7 @@ namespace {
                 {
                     TRACE_FUNCTION_F(StringView("Generating drop impl"));
                     MirBuilder dropBuilder(sp, resolve, resolve.hirCrate().types.unit(), genNode->dropFcnPtr->args, *dropImplBody);
-                    ev.generatorMakeDrop(sp, dropBuilder, genNode->captureUsages.size(), mappings, dropFlagsFieldIdx, dropFlagMapping);
+                    ev.generatorMakeDrop(sp, dropBuilder, genNode->captureUsages.length(), mappings, dropFlagsFieldIdx, dropFlagMapping);
                     dropBuilder.finalCleanup();
                 }
                 for (auto& bb : dropImplBody->blocks) {
@@ -950,18 +976,18 @@ namespace {
 
         if (const auto* ae = a.opt_Value(); ae && ae->is_Bytes()) {
             if (const auto* be = b.opt_Slice()) {
-                return ae->as_Bytes().size() == be->len;
+                return ae->as_Bytes().length() == be->len;
             }
             if (const auto* be = b.opt_SplitSlice()) {
-                return ae->as_Bytes().size() >= be->minLen;
+                return ae->as_Bytes().length() >= be->minLen;
             }
         }
         if (const auto* be = b.opt_Value(); be && be->is_Bytes()) {
             if (const auto* ae = a.opt_Slice()) {
-                return be->as_Bytes().size() == ae->len;
+                return be->as_Bytes().length() == ae->len;
             }
             if (const auto* ae = a.opt_SplitSlice()) {
-                return be->as_Bytes().size() >= ae->minLen;
+                return be->as_Bytes().length() >= ae->minLen;
             }
         }
 
@@ -1129,7 +1155,7 @@ namespace {
                 }
                 case HIRTypeData::TAG_Tuple: {
                     auto& e = (*curTy).as_Tuple();
-                    ASSERT_BUG(sp, idx < e.size(), StringView("Tuple index out of range"));
+                    ASSERT_BUG(sp, idx < e.length(), StringView("Tuple index out of range"));
                     lval = MIRLValue::newField(mv$(lval), idx);
                     curTy = e[idx];
                     break;
@@ -1715,8 +1741,12 @@ namespace {
                             auto nextBb = builder.newBbUnlinked();
                             auto varCount = pbe->numVariants();
 
-                            std::vector<MIRBasicBlockId> arms(varCount, failBb);
-                            arms[varIdx] = nextBb;
+                            Vector<MIRBasicBlockId> arms;
+                            arms.grow(varCount);
+                            for (size_t i = 0; i < varCount; i++) {
+                                arms.pushBack(failBb);
+                            }
+                            arms.mut(varIdx) = nextBb;
                             builder.endBlock(MIRTerminator::make_Switch({val.clone(), mv$(arms)}));
 
                             builder.setCurBlock(nextBb);
@@ -1757,7 +1787,7 @@ namespace {
                     if (rule.is_Value()) {
                         ASSERT_BUG(sp, te.inner == HIRCoreType::U8, StringView("Bytes pattern on non-&[u8]"));
                         auto clonedVal = MIRConstant(rule.as_Value().as_Bytes());
-                        auto sizeVal = MIRConstant::make_Uint({U128(rule.as_Value().as_Bytes().size()), HIRCoreType::Usize});
+                        auto sizeVal = MIRConstant::make_Uint({U128(rule.as_Value().as_Bytes().length()), HIRCoreType::Usize});
 
                         auto succBb = builder.newBbUnlinked();
 
@@ -2394,7 +2424,7 @@ void HIRGenerateMIR(const WireBoard& wb, HIRCrate& crate) {
     ov.visitCrate(crate);
 }
 
-void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
+void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const Vector<unsigned>& letElseInitializerTemps);
 
 void MIRLowerHIRGetTypeValueForPath(
     const Span& sp,
@@ -2468,7 +2498,7 @@ void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, con
     builder.setCurBlock(successNode);
 }
 
-void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const std::vector<unsigned>& letElseInitializerTemps) {
+void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const Vector<unsigned>& letElseInitializerTemps) {
     TRACE_FUNCTION;
     bool fallBackOnSimple = false;
 
@@ -2543,7 +2573,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 
             const auto& bindings0 = armRules[firstArmRuleIdx].bindings;
             auto aliases = builder.saveAliases();
-            std::vector<unsigned> bindingTemps;
+            Vector<unsigned> bindingTemps;
             for (const auto& b : bindings0) {
                 HIRTypeRef finalTy = conv.getBindingType(sp, b.binding->slot);
                 const Span& sp = arm.code->span();
@@ -2558,7 +2588,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 
                 auto tmp = builder.newTemporary(builder.resolve().crate.types.borrow(HIRBorrowType::Shared, finalTy));
 
-                bindingTemps.push_back(tmp.as_Local());
+                bindingTemps.pushBack(tmp.as_Local());
 
                 builder.pushStmtAssign(sp, tmp.clone(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, std::move(val)}));
 
@@ -2688,8 +2718,8 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 
                     auto entryBlock = builder.newBbUnlinked();
                     builder.setCurBlock(entryBlock);
-                    ASSERT_BUG(sp, bindingTemps.size() == armRules[i].bindings.size(), StringView("Mismatched guard bindings"));
-                    for (size_t j = 0; j < bindingTemps.size(); j++) {
+                    ASSERT_BUG(sp, bindingTemps.length() == armRules[i].bindings.size(), StringView("Mismatched guard bindings"));
+                    for (size_t j = 0; j < bindingTemps.length(); j++) {
                         const auto& b = armRules[i].bindings[j];
                         auto val = getPatternBindingValue(conv, sp, armRules[i], matchTy, matchVal, b);
                         if (b.binding->type != HIRPatternBinding::Type::Move) {
@@ -2766,8 +2796,8 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 
                 auto entryBlock = builder.newBbUnlinked();
                 builder.setCurBlock(entryBlock);
-                BUG_ASSERT(bindingTemps.size() == armRules[i].bindings.size());
-                for (size_t j = 0; j < bindingTemps.size(); j++) {
+                BUG_ASSERT(bindingTemps.length() == armRules[i].bindings.size());
+                for (size_t j = 0; j < bindingTemps.length(); j++) {
                     const auto& b = armRules[i].bindings[j];
                     auto val = getPatternBindingValue(conv, sp, armRules[i], matchTy, matchVal, b);
                     if (b.binding->type != HIRPatternBinding::Type::Move) {
@@ -2799,8 +2829,8 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
             builder.setCurBlock(armBodyBlock);
 
             if (node.isLetElse && armIdx + 1 == node.arms.size()) {
-                for (const auto temporary : ::reverse(letElseInitializerTemps)) {
-                    builder.dropLvalue(node.span(), MIRLValue::newLocal(temporary));
+                for (size_t i = letElseInitializerTemps.length(); i > 0; i--) {
+                    builder.dropLvalue(node.span(), MIRLValue::newLocal(letElseInitializerTemps[i - 1]));
                 }
             }
 
@@ -2849,27 +2879,30 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 
     if (!fallBackOnSimple && armRules[0].rules.size() > 1) {
         // TODO: Should columns be sorted within equal sub-arms too?
-        std::vector<unsigned> columnWeights(armRules[0].rules.size());
+        Vector<unsigned> columnWeights;
+        columnWeights.zero(armRules[0].rules.size());
         for (const auto& armRule : armRules) {
-            ASSERT_BUG(node.span(), columnWeights.size() == armRule.rules.size(), StringView("Arm ") << (&armRule - &armRules.front()) << StringView(" size doesn't match first (") << armRule.rules.size() << StringView(" != ") << columnWeights.size() << StringView(")"));
+            ASSERT_BUG(node.span(), columnWeights.length() == armRule.rules.size(), StringView("Arm ") << (&armRule - &armRules.front()) << StringView(" size doesn't match first (") << armRule.rules.size() << StringView(" != ") << columnWeights.length() << StringView(")"));
             for (unsigned int i = 0; i < armRule.rules.size(); i++) {
                 if (!armRule.rules[i].is_Any()) {
-                    columnWeights.at(i) += 1;
+                    columnWeights.mut(i) += 1;
                 }
             }
         }
 
         DEBUG(StringView("- Column weights = [") << columnWeights << StringView("]"));
-        std::vector<unsigned> columnsSorted(columnWeights.size());
-        std::iota(columnsSorted.begin(), columnsSorted.end(), 0);
-        std::sort(columnsSorted.begin(), columnsSorted.end(), [&](auto a, auto b) {
+        Vector<unsigned> columnsSorted(columnWeights.length());
+        for (unsigned i = 0; i < columnWeights.length(); i++) {
+            columnsSorted.pushBack(i);
+        }
+        quickSort(mutRange(columnsSorted), [&](auto a, auto b) {
             return columnWeights[a] > columnWeights[b];
         });
         DEBUG(StringView("- Sorted to = [") << columnsSorted << StringView("]"));
         for (auto& armRule : armRules) {
-            BUG_ASSERT(columnsSorted.size() == armRule.rules.size());
+            BUG_ASSERT(columnsSorted.length() == armRule.rules.size());
             std::vector<PatternRule> sorted;
-            sorted.reserve(columnsSorted.size());
+            sorted.reserve(columnsSorted.length());
             for (auto idx : columnsSorted) {
                 sorted.push_back(mv$(armRule.rules[idx]));
             }
@@ -3189,7 +3222,7 @@ void PatternRulesetBuilder::multiplyRulesetsWith(size_t n, PatternSubsetCallback
         this->subsetEnd += subsetSize;
         DEBUG(StringView("++ ") << i << StringView(" ") << this->subsetStart << StringView(" - ") << this->subsetEnd);
         for (size_t j = this->subsetStart; j < this->subsetEnd; j++) {
-            rulesets[j].orPath.push_back(static_cast<unsigned>(i));
+            rulesets[j].orPath.pushBack(static_cast<unsigned>(i));
         }
         cb.visitSubset(i);
         DEBUG(StringView("-- ") << i);
@@ -3199,7 +3232,7 @@ void PatternRulesetBuilder::multiplyRulesetsWith(size_t n, PatternSubsetCallback
     }
     this->subsetStart = savedStart;
     std::stable_sort(rulesets.begin() + this->subsetStart, rulesets.begin() + this->subsetEnd, [](const Ruleset& a, const Ruleset& b) {
-        return a.orPath < b.orPath;
+        return std::lexicographical_compare(a.orPath.begin(), a.orPath.end(), b.orPath.begin(), b.orPath.end());
     });
 }
 
@@ -3289,10 +3322,10 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             auto& e = (*ty).as_Tuple();
             auto* repr = TargetGetTypeRepr(sp, resolve, ty);
             ASSERT_BUG(sp, repr, StringView("Matching with generic constant type not valid - ") << ty);
-            ASSERT_BUG(sp, e.size() == repr->fields.size(), StringView("Matching tuple with mismatched literal size - ") << e.size() << StringView(" != ") << repr->fields.size());
+            ASSERT_BUG(sp, e.length() == repr->fields.size(), StringView("Matching tuple with mismatched literal size - ") << e.length() << StringView(" != ") << repr->fields.size());
 
             fieldPath.push_back(0);
-            for (unsigned int i = 0; i < e.size(); i++) {
+            for (unsigned int i = 0; i < e.length(); i++) {
                 this->appendFromLit(sp, lit.slice(repr->fields[i].offset), repr->fields[i].ty);
                 fieldPath.back()++;
             }
@@ -3446,19 +3479,24 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                     ASSERT_BUG(sp, s.valueGenerated, StringView("Reference pattern points to unresolved static ") << *relocation->p);
                     value = &s.valueRes;
                 } else {
-                    inlineValue.bytes.assign(relocation->bytes.begin(), relocation->bytes.end());
+                    inlineValue.bytes.grow(relocation->bytes.size());
+                    for (auto byte : relocation->bytes) {
+                        inlineValue.bytes.pushBack(static_cast<u8>(byte));
+                    }
                     value = &inlineValue;
                 }
             }
 
-            ASSERT_BUG(sp, valueOffset <= value->bytes.size(), StringView("Reference pattern offset is out of bounds"));
-            ASSERT_BUG(sp, valueSize <= value->bytes.size() - valueOffset, StringView("Reference pattern value is out of bounds"));
+            ASSERT_BUG(sp, valueOffset <= value->bytes.length(), StringView("Reference pattern offset is out of bounds"));
+            ASSERT_BUG(sp, valueSize <= value->bytes.length() - valueOffset, StringView("Reference pattern value is out of bounds"));
             auto valueLit = EncodedLiteralSlice(*value).slice(valueOffset, valueSize);
 
             if (e.inner == HIRCoreType::Str) {
                 this->pushRule(PatternRule::make_Value(std::string(value->bytes.begin() + valueOffset, value->bytes.begin() + valueOffset + sliceLen)));
             } else if (sliceInner == HIRCoreType::U8) {
-                this->pushRule(PatternRule::make_Value(std::vector<u8>(value->bytes.begin() + valueOffset, value->bytes.begin() + valueOffset + sliceLen)));
+                Vector<u8> bytes(sliceLen);
+                bytes.append(value->bytes.begin() + valueOffset, sliceLen);
+                this->pushRule(PatternRule::make_Value(mv$(bytes)));
             } else if (sliceInner) {
                 ASSERT_BUG(sp, sliceLen < FIELD_INDEX_MAX, StringView("Too many elements in constant slice pattern"));
                 size_t elementSize = 0;
@@ -3840,8 +3878,8 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
                 case HIRPattern::Data::TAG_Tuple: {
                     auto& pe = pat.data.as_Tuple();
-                    BUG_ASSERT(e.size() == pe.subPatterns.size());
-                    for (unsigned int i = 0; i < e.size(); i++) {
+                    BUG_ASSERT(e.length() == pe.subPatterns.size());
+                    for (unsigned int i = 0; i < e.length(); i++) {
                         this->appendFrom(sp, pe.subPatterns[i], e[i]);
                         fieldPath.back()++;
                     }
@@ -3849,9 +3887,9 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
                 case HIRPattern::Data::TAG_SplitTuple: {
                     auto& pe = pat.data.as_SplitTuple();
-                    BUG_ASSERT(e.size() >= pe.leading.size() + pe.trailing.size());
-                    unsigned trailingStart = e.size() - pe.trailing.size();
-                    for (unsigned int i = 0; i < e.size(); i++) {
+                    BUG_ASSERT(e.length() >= pe.leading.size() + pe.trailing.size());
+                    unsigned trailingStart = e.length() - pe.trailing.size();
+                    for (unsigned int i = 0; i < e.length(); i++) {
                         if (i < pe.leading.size()) {
                             this->appendFrom(sp, pe.leading[i], e[i]);
                         } else if (i < trailingStart) {
@@ -4314,10 +4352,10 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 case HIRPatternData::TAG_Value: {
                     auto& pe = pat.data.as_Value();
                     ASSERT_BUG(sp, pe.val.is_ByteString() && e.inner == HIRCoreType::U8, StringView("Matching slice with non-byte-string value pattern - ") << pat);
-                    std::vector<u8> data;
-                    data.reserve(pe.val.as_ByteString().v.size());
+                    Vector<u8> data;
+                    data.grow(pe.val.as_ByteString().v.size());
                     for (auto byte : pe.val.as_ByteString().v) {
-                        data.push_back(static_cast<u8>(byte));
+                        data.pushBack(static_cast<u8>(byte));
                     }
                     this->pushRule(PatternRule::make_Value(mv$(data)));
                     break;
@@ -4434,10 +4472,10 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                             }
                             fieldPath.pop_back();
                         } else {
-                            std::vector<u8> data;
-                            data.reserve(s.size());
+                            Vector<u8> data;
+                            data.grow(s.size());
                             for (auto c : s) {
-                                data.push_back(c);
+                                data.pushBack(c);
                             }
 
                             this->pushRule(PatternRule::make_Value(mv$(data)));
@@ -4583,8 +4621,8 @@ void MatchGenGrouped::genForSlice(tRulesSubset armRules, size_t ofs, MIRBasicBlo
             }
             slices.push_back(armRules.subSlice(curTest, firstAny - curTest));
             DEBUG(StringView("- ") << slices.size() << StringView(" groupings"));
-            std::vector<MIRBasicBlockId> armBlocks;
-            armBlocks.reserve(slices.size());
+            Vector<MIRBasicBlockId> armBlocks;
+            armBlocks.grow(slices.size());
 
             auto curBlk = builder.pauseCurBlock();
             std::sort(slices.begin(), slices.end(), [&](const auto& a, const auto& b) {
@@ -4600,7 +4638,7 @@ void MatchGenGrouped::genForSlice(tRulesSubset armRules, size_t ofs, MIRBasicBlo
                     if (j > 0) {
                         ASSERT_BUG(sp, slices[i][0][ofs] == slices[i][j][ofs], StringView("Mismatched rules - ") << slices[i][0][ofs] << StringView(" and ") << slices[i][j][ofs]);
                     }
-                    armBlocks.push_back(curBlock);
+                    armBlocks.pushBack(curBlock);
                 }
 
                 this->genForSlice(slices[i], ofs + 1, next);
@@ -4650,7 +4688,7 @@ void MatchGenGrouped::genForSlice(tRulesSubset armRules, size_t ofs, MIRBasicBlo
     ASSERT_BUG(sp, !builder.blockActive(), StringView("Block left active after match group"));
 }
 
-void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     const auto& fieldPath = rules[0][0][ofs].fieldPath;
 
     TRACE_FUNCTION_F(StringView("rules=[") << rules << StringView("], ofs=") << ofs << StringView(", field_path=") << fieldPath);
@@ -4662,7 +4700,7 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
                 n++;
             }
         }
-        ASSERT_BUG(sp, armTargets.size() == n, StringView("Arm target count mismatch - ") << n << StringView(" != ") << armTargets.size());
+        ASSERT_BUG(sp, armTargets.length() == n, StringView("Arm target count mismatch - ") << n << StringView(" != ") << armTargets.length());
     }
 
     MIRLValue val;
@@ -4751,8 +4789,8 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
             ASSERT_BUG(sp, !val.wrappers.empty() && val.wrappers.back().is_Deref(), StringView("&[T; N] match on non-Deref lvalue - ") << val);
             val.wrappers.pop_back();
 
-            std::vector<MIRBasicBlockId> targets;
-            std::vector<std::vector<u8>> values;
+            Vector<MIRBasicBlockId> targets;
+            std::vector<Vector<u8>> values;
             size_t tgtOfs = 0;
             for (size_t i = 0; i < rules.size(); i++) {
                 for (size_t j = 1; j < rules[i].size(); j++) {
@@ -4766,7 +4804,7 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
                     TODO(sp, StringView("Handle Constant::Const in match"));
                 }
 
-                targets.push_back(armTargets[tgtOfs]);
+                targets.pushBack(armTargets[tgtOfs]);
                 values.push_back(re.as_Bytes());
 
                 tgtOfs += rules[i].size();
@@ -4808,7 +4846,7 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
     }
 }
 
-void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     auto te = ty->as_Primitive();
     switch (te) {
         case HIRCoreType::Bool: {
@@ -4839,8 +4877,8 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const s
                 // TODO: If there are Constant::Const values in the list, they need to come first! (with equality checks)
 
                 std::vector<std::pair<MIRConstant, MIRBasicBlockId>> largeValues;
-                std::vector<u64> values;
-                std::vector<MIRBasicBlockId> targets;
+                Vector<u64> values;
+                Vector<MIRBasicBlockId> targets;
                 size_t tgtOfs = 0;
                 for (size_t i = 0; i < rules.size(); i++) {
                     for (size_t j = 1; j < rules[i].size(); j++) {
@@ -4857,8 +4895,8 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const s
                     } else if (re.as_Uint().v > U128(UINT64_MAX)) {
                         largeValues.push_back(std::make_pair(re.clone(), armTargets[tgtOfs]));
                     } else {
-                        values.push_back(re.as_Uint().v.truncateU64());
-                        targets.push_back(armTargets[tgtOfs]);
+                        values.pushBack(re.as_Uint().v.truncateU64());
+                        targets.pushBack(armTargets[tgtOfs]);
                     }
 
                     tgtOfs += rules[i].size();
@@ -4893,8 +4931,8 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const s
             } else {
                 // TODO: If there are Constant::Const values in the list, they need to come first! (with equality checks)
 
-                std::vector<i64> values;
-                std::vector<MIRBasicBlockId> targets;
+                Vector<i64> values;
+                Vector<MIRBasicBlockId> targets;
                 size_t tgtOfs = 0;
                 for (size_t i = 0; i < rules.size(); i++) {
                     for (size_t j = 1; j < rules[i].size(); j++) {
@@ -4911,8 +4949,8 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const s
                     if (re.as_Int().v > S128(INT64_MAX) || re.as_Int().v < S128(INT64_MIN)) {
                         TODO(sp, StringView("Handle 128-bit values in SwitchValue"));
                     }
-                    values.push_back(re.as_Int().v.truncateI64());
-                    targets.push_back(armTargets[tgtOfs]);
+                    values.pushBack(re.as_Int().v.truncateI64());
+                    targets.pushBack(armTargets[tgtOfs]);
 
                     tgtOfs += rules[i].size();
                 }
@@ -4960,7 +4998,7 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const s
             ASSERT_BUG(sp, !val.wrappers.empty() && val.wrappers.back().is_Deref(), StringView("&str match on non-Deref lvalue - ") << val);
             val.wrappers.pop_back();
 
-            std::vector<MIRBasicBlockId> targets;
+            Vector<MIRBasicBlockId> targets;
             std::vector<std::string> values;
             size_t tgtOfs = 0;
             for (size_t i = 0; i < rules.size(); i++) {
@@ -4975,7 +5013,7 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const s
                     TODO(sp, StringView("Handle Constant::Const in match"));
                 }
 
-                targets.push_back(armTargets[tgtOfs]);
+                targets.pushBack(armTargets[tgtOfs]);
                 values.push_back(re.as_StaticString());
 
                 tgtOfs += rules[i].size();
@@ -4985,7 +5023,7 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const s
     }
 }
 
-void MatchGenGrouped::genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     TRACE_FUNCTION;
     auto& te = ty->as_Path();
     const auto& pbe = te.binding.as_Enum();
@@ -4993,7 +5031,11 @@ void MatchGenGrouped::genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::v
     auto decisonArm = builder.pauseCurBlock();
 
     auto varCount = pbe->numVariants();
-    std::vector<MIRBasicBlockId> arms(varCount, defBlk);
+    Vector<MIRBasicBlockId> arms;
+    arms.grow(varCount);
+    for (size_t i = 0; i < varCount; i++) {
+        arms.pushBack(defBlk);
+    }
     size_t armIdx = 0;
     for (size_t i = 0; i < rules.size(); i++) {
         ASSERT_BUG(sp, rules[i][0][ofs].is_Variant(), StringView("Rule for enum isn't Any or Variant - ") << rules[i][0][ofs].tagStr());
@@ -5003,7 +5045,7 @@ void MatchGenGrouped::genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::v
         DEBUG(StringView("Variant ") << varIdx);
         ASSERT_BUG(sp, re.subRules.size() == 0, StringView("Sub-rules in MatchGenGrouped"));
 
-        arms[varIdx] = armTargets[armIdx];
+        arms.mut(varIdx) = armTargets[armIdx];
         for (size_t j = 0; j < rules[i].size(); j++) {
             BUG_ASSERT(arms[varIdx] == armTargets[armIdx]);
             armIdx++;
@@ -5014,7 +5056,7 @@ void MatchGenGrouped::genDispatchEnum(HIRTypeRef ty, MIRLValue val, const std::v
     builder.endBlock(MIRTerminator::make_Switch({mv$(val), mv$(arms)}));
 }
 
-void MatchGenGrouped::genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::vector<tRulesSubset>& rules, size_t ofs, const Vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     auto valLen = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, val)}));
 
     // TODO: Re-sort the rules list to interleve Constant::Bytes and Slice
@@ -5047,7 +5089,7 @@ void MatchGenGrouped::genDispatchSlice(HIRTypeRef ty, MIRLValue val, const std::
             ASSERT_BUG(sp, re->is_Bytes(), StringView("Slice with non-Bytes value - ") << *re);
             const auto& b = re->as_Bytes();
 
-            auto valTstLen = MIRConstant::make_Uint({U128(b.size()), HIRCoreType::Usize});
+            auto valTstLen = MIRConstant::make_Uint({U128(b.length()), HIRCoreType::Usize});
 
             {
                 auto nextCmpBlk = builder.newBbUnlinked();
@@ -5203,17 +5245,17 @@ MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const 
 
     setCurBlock(newBbUnlinked());
     scopes.push_back(ScopeDef{sp, ScopeType::make_Owning({false, {}, {}})});
-    scopeStack.push_back(0);
+    scopeStack.pushBack(0);
 
     scopes.push_back(ScopeDef{sp, ScopeType::make_Owning({true, {}, {}})});
-    scopeStack.push_back(1);
+    scopeStack.pushBack(1);
 
     argStates.reserve(args.size());
     for (size_t i = 0; i < args.size(); i++) {
         argStates.push_back(VarState::make_Valid({}));
     }
-    slotStates.resize(output.locals.size());
-    firstTempIdx = output.locals.size();
+    slotStates.resize(output.locals.length());
+    firstTempIdx = output.locals.length();
 
     DEBUG(StringView("First temporary will be ") << firstTempIdx);
     ifCondLval = this->newTemporary(resolve_.hirCrate().types.primitive(HIRCoreType::Bool));
@@ -5226,7 +5268,7 @@ MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const 
         }
     }
 
-    variableAliases.resize(output.locals.size());
+    variableAliases.resize(output.locals.length());
 }
 
 void MirBuilder::finalCleanup() {
@@ -5254,12 +5296,12 @@ void MirBuilder::finalCleanup() {
         bool added = false;
         for (auto& a : dropFlagAliases) {
             auto& mappedFlags = a.second;
-            for (size_t i = 0; i < mappedFlags.size(); i++) {
+            for (size_t i = 0; i < mappedFlags.length(); i++) {
                 auto it2 = dropFlagAliases.find(mappedFlags[i]);
                 if (it2 != dropFlagAliases.end()) {
                     for (unsigned otherFlag : it2->second) {
                         if (std::find(mappedFlags.begin(), mappedFlags.end(), otherFlag) == mappedFlags.end()) {
-                            mappedFlags.push_back(otherFlag);
+                            mappedFlags.pushBack(otherFlag);
                             added = true;
                         }
                     }
@@ -5315,8 +5357,9 @@ void MirBuilder::scheduleVariableDrop(unsigned int idx) {
 }
 
 void MirBuilder::registerVariableState(unsigned int idx) {
-    DEBUG(StringView("REGISTER STATE (var) _") << idx << StringView(": ") << output.locals.at(idx));
-    for (auto scopeIdx : ::reverse(scopeStack)) {
+    DEBUG(StringView("REGISTER STATE (var) _") << idx << StringView(": ") << output.locals[idx]);
+    for (size_t stackI = scopeStack.length(); stackI > 0; stackI--) {
+        auto scopeIdx = scopeStack[stackI - 1];
         auto& scopeDef = scopes.at(scopeIdx);
         switch (scopeDef.data.tag()) {
             case ScopeType::TAG_Owning: {
@@ -5324,7 +5367,7 @@ void MirBuilder::registerVariableState(unsigned int idx) {
                 if (!e.isTemporary) {
                     auto it = std::find(e.slots.begin(), e.slots.end(), idx);
                     BUG_ASSERT(it == e.slots.end());
-                    e.slots.push_back(idx);
+                    e.slots.pushBack(idx);
                     return;
                 }
                 break;
@@ -5342,8 +5385,9 @@ void MirBuilder::registerVariableState(unsigned int idx) {
 }
 
 void MirBuilder::scheduleRegisteredVariableDrop(unsigned int idx) {
-    DEBUG(StringView("SCHEDULE DROP (var) _") << idx << StringView(": ") << output.locals.at(idx));
-    for (auto scopeIdx : ::reverse(scopeStack)) {
+    DEBUG(StringView("SCHEDULE DROP (var) _") << idx << StringView(": ") << output.locals[idx]);
+    for (size_t stackI = scopeStack.length(); stackI > 0; stackI--) {
+        auto scopeIdx = scopeStack[stackI - 1];
         auto& scopeDef = scopes.at(scopeIdx);
         switch (scopeDef.data.tag()) {
             case ScopeType::TAG_Owning: {
@@ -5355,7 +5399,7 @@ void MirBuilder::scheduleRegisteredVariableDrop(unsigned int idx) {
                         return !slot.isArgument && slot.index == idx;
                     });
                     BUG_ASSERT(dropIt == e.dropSlots.end());
-                    e.dropSlots.push_back(ScopeDropSlot{false, idx});
+                    e.dropSlots.pushBack(ScopeDropSlot{false, idx});
                     return;
                 }
                 break;
@@ -5374,7 +5418,8 @@ void MirBuilder::scheduleRegisteredVariableDrop(unsigned int idx) {
 
 void MirBuilder::scheduleArgumentDrop(unsigned int idx) {
     DEBUG(StringView("SCHEDULE DROP (arg) a") << idx << StringView(": ") << args_.at(idx).second);
-    for (auto scopeIdx : ::reverse(scopeStack)) {
+    for (size_t stackI = scopeStack.length(); stackI > 0; stackI--) {
+        auto scopeIdx = scopeStack[stackI - 1];
         auto& scopeDef = scopes.at(scopeIdx);
         switch (scopeDef.data.tag()) {
             case ScopeType::TAG_Owning: {
@@ -5384,7 +5429,7 @@ void MirBuilder::scheduleArgumentDrop(unsigned int idx) {
                         return slot.isArgument && slot.index == idx;
                     });
                     BUG_ASSERT(it == e.dropSlots.end());
-                    e.dropSlots.push_back(ScopeDropSlot{true, idx});
+                    e.dropSlots.pushBack(ScopeDropSlot{true, idx});
                     return;
                 }
                 break;
@@ -5425,7 +5470,8 @@ void MirBuilder::moveTemporaryDropToVariableScope(const Span& sp, const MIRLValu
     ASSERT_BUG(sp, sourceStateIt != sourceOwning.slots.end(), StringView("Missing state owner for ") << value);
 
     bool sourceSeen = false;
-    for (auto scopeIdx : ::reverse(scopeStack)) {
+    for (size_t stackI = scopeStack.length(); stackI > 0; stackI--) {
+        auto scopeIdx = scopeStack[stackI - 1];
         if (scopeIdx == source.idx) {
             sourceSeen = true;
             continue;
@@ -5438,10 +5484,10 @@ void MirBuilder::moveTemporaryDropToVariableScope(const Span& sp, const MIRLValu
             if (!owning->isTemporary) {
                 auto targetStateIt = std::find(owning->slots.begin(), owning->slots.end(), idx);
                 ASSERT_BUG(sp, targetStateIt == owning->slots.end(), StringView("Duplicate state owner for ") << value);
-                sourceOwning.slots.erase(sourceStateIt);
-                sourceDrops.erase(sourceIt);
-                owning->slots.push_back(idx);
-                owning->dropSlots.push_back(ScopeDropSlot{false, idx});
+                eraseValue(sourceOwning.slots, sourceStateIt);
+                eraseDropSlot(sourceDrops, sourceIt);
+                owning->slots.pushBack(idx);
+                owning->dropSlots.pushBack(ScopeDropSlot{false, idx});
                 DEBUG(StringView("MOVE DROP ") << value << StringView(" from scope ") << source.idx << StringView(" to scope ") << scopeIdx);
                 return;
             }
@@ -5456,7 +5502,8 @@ void MirBuilder::moveVariableToScope(const Span& sp, unsigned int idx, const Sco
     ASSERT_BUG(sp, targetScope.data.is_Owning(), StringView("`super let` target is not an owning scope: ") << target);
 
     ScopeType::Data_Owning* source = nullptr;
-    for (auto scopeIdx : ::reverse(scopeStack)) {
+    for (size_t stackI = scopeStack.length(); stackI > 0; stackI--) {
+        auto scopeIdx = scopeStack[stackI - 1];
         auto* owning = scopes.at(scopeIdx).data.opt_Owning();
         if (!owning) {
             continue;
@@ -5468,7 +5515,7 @@ void MirBuilder::moveVariableToScope(const Span& sp, unsigned int idx, const Sco
             }
             ASSERT_BUG(sp, !owning->isTemporary, StringView("`super let` binding is already in a temporary scope"));
             source = owning;
-            owning->slots.erase(stateIt);
+            eraseValue(owning->slots, stateIt);
             break;
         }
     }
@@ -5478,12 +5525,12 @@ void MirBuilder::moveVariableToScope(const Span& sp, unsigned int idx, const Sco
         return !slot.isArgument && slot.index == idx;
     });
     ASSERT_BUG(sp, dropIt != source->dropSlots.end(), StringView("`super let` binding _") << idx << StringView(" has no scheduled drop"));
-    source->dropSlots.erase(dropIt);
+    eraseDropSlot(source->dropSlots, dropIt);
 
     auto& targetOwning = targetScope.data.as_Owning();
     ASSERT_BUG(sp, std::find(targetOwning.slots.begin(), targetOwning.slots.end(), idx) == targetOwning.slots.end(), StringView("Duplicate `super let` state owner for _") << idx);
-    targetOwning.slots.push_back(idx);
-    targetOwning.dropSlots.push_back(ScopeDropSlot{false, idx});
+    targetOwning.slots.pushBack(idx);
+    targetOwning.dropSlots.pushBack(ScopeDropSlot{false, idx});
 }
 
 void MirBuilder::dropLvalue(const Span& sp, const MIRLValue& value) {
@@ -5493,16 +5540,16 @@ void MirBuilder::dropLvalue(const Span& sp, const MIRLValue& value) {
 }
 
 MIRLValue MirBuilder::newTemporary(const HIRTypeData* ty) {
-    unsigned int rv = output.locals.size();
+    unsigned int rv = output.locals.length();
 
     DEBUG(StringView("DEFINE (temp) _") << rv << StringView(": ") << ty);
-    BUG_ASSERT(output.locals.size() == slotStates.size());
-    output.locals.push_back(ty);
+    BUG_ASSERT(output.locals.length() == slotStates.size());
+    output.locals.pushBack(ty);
     slotStates.push_back(VarState::make_Invalid(InvalidType::Uninit));
-    BUG_ASSERT(output.locals.size() == slotStates.size());
+    BUG_ASSERT(output.locals.length() == slotStates.size());
 
     ScopeDef* topScope = nullptr;
-    for (unsigned int i = scopeStack.size(); i--;) {
+    for (unsigned int i = scopeStack.length(); i--;) {
         auto idx = scopeStack[i];
         if (const auto* e = scopes.at(idx).data.opt_Owning()) {
             if (e->isTemporary) {
@@ -5519,8 +5566,8 @@ MIRLValue MirBuilder::newTemporary(const HIRTypeData* ty) {
     BUG_ASSERT(topScope);
     auto& tmpScope = topScope->data.as_Owning();
     BUG_ASSERT(tmpScope.isTemporary);
-    tmpScope.slots.push_back(rv);
-    tmpScope.dropSlots.push_back(ScopeDropSlot{false, rv});
+    tmpScope.slots.pushBack(rv);
+    tmpScope.dropSlots.pushBack(ScopeDropSlot{false, rv});
     return MIRLValue::newLocal(rv);
 }
 
@@ -5842,22 +5889,26 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRLValue& val, const Sc
     const auto idx = val.root.as_Local();
     bool isTemp = (idx >= firstTempIdx);
 
-    auto scopeIt = scopeStack.rbegin();
-    while (scopeIt != scopeStack.rend()) {
-        auto& scopeDef = scopes.at(*scopeIt);
+    size_t sourcePos = scopeStack.length();
+    bool sourceFound = false;
+    while (sourcePos > 0) {
+        sourcePos--;
+        auto scopeIdx = scopeStack[sourcePos];
+        auto& scopeDef = scopes.at(scopeIdx);
 
         if (scopeDef.data.is_Owning()) {
             auto& e = scopeDef.data.as_Owning();
             if (e.isTemporary == isTemp) {
                 auto tmpIt = std::find(e.slots.begin(), e.slots.end(), idx);
                 if (tmpIt != e.slots.end()) {
-                    e.slots.erase(tmpIt);
+                    eraseValue(e.slots, tmpIt);
                     auto dropIt = std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
                         return !slot.isArgument && slot.index == idx;
                     });
                     ASSERT_BUG(sp, dropIt != e.dropSlots.end(), StringView("Missing drop schedule for ") << val);
-                    e.dropSlots.erase(dropIt);
-                    DEBUG(StringView("Raise slot ") << idx << StringView(" from ") << *scopeIt);
+                    eraseDropSlot(e.dropSlots, dropIt);
+                    DEBUG(StringView("Raise slot ") << idx << StringView(" from ") << scopeIdx);
+                    sourceFound = true;
                     break;
                 }
             } else {
@@ -5866,34 +5917,31 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRLValue& val, const Sc
         } else {
             // TODO: Does this need to handle this value being set in the
         }
-        if (*scopeIt == scope.idx) {
+        if (scopeIdx == scope.idx) {
             DEBUG(StringView("Value ") << val << StringView(" is defined above the target (scope ") << scope << StringView(")"));
             return;
         }
-        ++scopeIt;
     }
-    if (scopeIt == scopeStack.rend()) {
+    if (!sourceFound) {
         BUG(sp, val << StringView(" wasn't defined in a visible scope"));
         return;
     }
 
     bool targetSeen = false;
-    if (*scopeIt == scope.idx) {
-        if (toAbove) {
-            ++scopeIt;
-        } else {
-        }
-
+    size_t scanEnd = sourcePos;
+    if (scopeStack[sourcePos] == scope.idx) {
         targetSeen = true;
-    } else {
-        ++scopeIt;
+        if (!toAbove) {
+            scanEnd++;
+        }
     }
 
-    for (; scopeIt != scopeStack.rend(); ++scopeIt) {
-        auto& scopeDef = scopes.at(*scopeIt);
+    while (scanEnd > 0) {
+        auto scopeIdx = scopeStack[--scanEnd];
+        auto& scopeDef = scopes.at(scopeIdx);
 
-        DEBUG(StringView("> Cross ") << *scopeIt << StringView(" - ") << scopeDef.data.tagStr());
-        if (*scopeIt == scope.idx) {
+        DEBUG(StringView("> Cross ") << scopeIdx << StringView(" - ") << scopeDef.data.tagStr());
+        if (scopeIdx == scope.idx) {
             targetSeen = true;
         }
 
@@ -5901,9 +5949,9 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRLValue& val, const Sc
             case ScopeType::TAG_Owning: {
                 auto& e = scopeDef.data.as_Owning();
                 if (targetSeen && e.isTemporary == isTemp) {
-                    e.slots.push_back(idx);
-                    e.dropSlots.push_back(ScopeDropSlot{false, idx});
-                    DEBUG(StringView("- to ") << *scopeIt);
+                    e.slots.pushBack(idx);
+                    e.dropSlots.pushBack(ScopeDropSlot{false, idx});
+                    DEBUG(StringView("- to ") << scopeIdx);
                     return;
                 }
                 break;
@@ -6087,7 +6135,7 @@ void MirBuilder::insertCloned(const Span& sp, const SavedCode& c, CloneMapper& m
         for (auto bbIdx : c.blocks) {
             cloner.newBlockMap.insert(std::make_pair(bbIdx, newBbUnlinked()));
         }
-        endBlock(MIRTerminator::make_Goto({cloner.newBlockMap[c.blocks.front()]}));
+        endBlock(MIRTerminator::make_Goto({cloner.newBlockMap[c.blocks[0]]}));
 
         DEBUG(StringView("c.blocks = [") << c.blocks << StringView("]"));
         DEBUG(StringView("new_block_map = {") << cloner.newBlockMap << StringView("}"));
@@ -6110,7 +6158,7 @@ void MirBuilder::setCurBlock(unsigned int newBlock) {
     ASSERT_BUG(Span(), output.blocks[newBlock].terminator.is_Incomplete(), StringView("Attempting to resume a completed block - BB") << newBlock);
     for (auto& v : codeSaveStack) {
         if (std::find(v.blocks.begin(), v.blocks.end(), newBlock) == v.blocks.end()) {
-            v.blocks.push_back(newBlock);
+            v.blocks.pushBack(newBlock);
         }
     }
     DEBUG(StringView("BB") << newBlock << StringView(" START"));
@@ -6165,11 +6213,11 @@ MIRBasicBlockId MirBuilder::newBbUnlinked() {
 }
 
 unsigned int MirBuilder::newDropFlag(bool defaultState) {
-    auto rv = output.dropFlags.size();
-    output.dropFlags.push_back(defaultState);
-    for (size_t i = scopeStack.size(); i--;) {
+    auto rv = output.dropFlags.length();
+    output.dropFlags.pushBack(defaultState);
+    for (size_t i = scopeStack.length(); i--;) {
         if (auto* e = scopes.at(scopeStack[i]).data.opt_Loop()) {
-            e->dropFlags.push_back(rv);
+            e->dropFlags.pushBack(rv);
             break;
         }
     }
@@ -6184,17 +6232,17 @@ unsigned int MirBuilder::newDropFlagAndSet(const Span& sp, bool setState) {
 }
 
 bool MirBuilder::getDropFlagDefault(const Span& sp, unsigned int idx) {
-    return output.dropFlags.at(idx);
+    return output.dropFlags[idx];
 }
 
 void MirBuilder::dropFlagAlias(unsigned int oldIdx, unsigned int newIdx) {
-    dropFlagAliases[oldIdx].push_back(newIdx);
+    dropFlagAliases[oldIdx].pushBack(newIdx);
 }
 
 ScopeHandle MirBuilder::newScopeVar(const Span& sp) {
     unsigned int idx = scopes.size();
     scopes.push_back(ScopeDef{sp, ScopeType::make_Owning({false, {}, {}})});
-    scopeStack.push_back(idx);
+    scopeStack.pushBack(idx);
     DEBUG(StringView("START (var) scope ") << idx);
     return ScopeHandle{*this, idx};
 }
@@ -6203,7 +6251,7 @@ ScopeHandle MirBuilder::newScopeTemp(const Span& sp) {
     unsigned int idx = scopes.size();
 
     scopes.push_back(ScopeDef{sp, ScopeType::make_Owning({true, {}, {}})});
-    scopeStack.push_back(idx);
+    scopeStack.pushBack(idx);
     DEBUG(StringView("START (temp) scope ") << idx);
     return ScopeHandle{*this, idx};
 }
@@ -6212,7 +6260,7 @@ ScopeHandle MirBuilder::newScopeSplit(const Span& sp) {
     unsigned int idx = scopes.size();
     scopes.push_back(ScopeDef{sp, ScopeType::make_Split({})});
     scopes.back().data.as_Split().arms.push_back({});
-    scopeStack.push_back(idx);
+    scopeStack.pushBack(idx);
     DEBUG(StringView("START (split) scope ") << idx);
     return ScopeHandle{*this, idx};
 }
@@ -6221,7 +6269,7 @@ ScopeHandle MirBuilder::newScopeLoop(const Span& sp) {
     unsigned int idx = scopes.size();
     scopes.push_back(ScopeDef{sp, ScopeType::make_Loop({})});
     scopes.back().data.as_Loop().entryBb = currentBlock;
-    scopeStack.push_back(idx);
+    scopeStack.pushBack(idx);
     DEBUG(StringView("START (loop) scope ") << idx);
     return ScopeHandle{*this, idx};
 }
@@ -6229,7 +6277,7 @@ ScopeHandle MirBuilder::newScopeLoop(const Span& sp) {
 ScopeHandle MirBuilder::newScopeFreeze(const Span& sp) {
     unsigned int idx = scopes.size();
     scopes.push_back(ScopeDef{sp, ScopeType::make_Freeze({})});
-    scopeStack.push_back(idx);
+    scopeStack.pushBack(idx);
     DEBUG(StringView("START (freeze) scope ") << idx);
     return ScopeHandle{*this, idx};
 }
@@ -6251,7 +6299,7 @@ void MirBuilder::terminateScope(const Span& sp, ScopeHandle scope, bool emitClea
         dropScopeValues(scopeDef);
     }
 
-    scopeStack.pop_back();
+    scopeStack.popBack();
 
     completeScope(scopeDef);
 }
@@ -6276,11 +6324,15 @@ void MirBuilder::raiseAll(const Span& sp, ScopeHandle source, const ScopeHandle&
         BUG_ASSERT(idx >= firstTempIdx);
     }
 
-    auto it = scopeStack.rbegin() + 1;
-    for (; it != scopeStack.rend() && *it != target.idx; ++it) {
-        auto& scopeDef = scopes.at(*it);
+    size_t stackPos = scopeStack.length() - 1;
+    while (stackPos > 0) {
+        auto scopeIdx = scopeStack[--stackPos];
+        if (scopeIdx == target.idx) {
+            break;
+        }
+        auto& scopeDef = scopes.at(scopeIdx);
 
-        DEBUG(StringView("Through S") << *it << StringView(": ") << scopeDef.data.tagStr());
+        DEBUG(StringView("Through S") << scopeIdx << StringView(": ") << scopeDef.data.tagStr());
         if (auto* sdLoop = scopeDef.data.opt_Loop()) {
             if (sdLoop->exitStateValid) {
                 DEBUG(StringView("Crossing loop with existing end state"));
@@ -6316,7 +6368,7 @@ void MirBuilder::raiseAll(const Span& sp, ScopeHandle source, const ScopeHandle&
             }
         }
     }
-    if (it == scopeStack.rend()) {
+    if (scopeStack[stackPos] != target.idx) {
         BUG(sp, StringView("Moving values to a scope not on the stack - scope ") << target.idx);
     }
     auto& tgtScopeDef = scopes.at(target.idx);
@@ -6325,12 +6377,12 @@ void MirBuilder::raiseAll(const Span& sp, ScopeHandle source, const ScopeHandle&
     ASSERT_BUG(sp, tgtScopeDef.data.as_Owning().isTemporary, StringView("Rasising scopes can only be done on temporaries (target)"));
 
     auto& tgtList = tgtScopeDef.data.as_Owning().slots;
-    tgtList.insert(tgtList.end(), srcList.begin(), srcList.end());
+    tgtList.append(srcList.begin(), srcList.end());
     auto& srcDropList = srcScopeDef.data.as_Owning().dropSlots;
     auto& tgtDropList = tgtScopeDef.data.as_Owning().dropSlots;
-    tgtDropList.insert(tgtDropList.end(), srcDropList.begin(), srcDropList.end());
+    tgtDropList.append(srcDropList.begin(), srcDropList.end());
 
-    scopeStack.pop_back();
+    scopeStack.popBack();
     srcScopeDef.complete = true;
 }
 
@@ -6343,7 +6395,7 @@ void MirBuilder::terminateScopeEarly(const Span& sp, const ScopeHandle& scope, b
     unsigned int slot = it - scopeStack.begin();
 
     bool useFrozenExitState = false;
-    for (unsigned int i = scopeStack.size(); i-- > slot;) {
+    for (unsigned int i = scopeStack.length(); i-- > slot;) {
         const auto& data = scopes.at(scopeStack[i]).data;
         const auto* freeze = data.opt_Freeze();
         useFrozenExitState |= freeze && !freeze->unfrozen;
@@ -6357,7 +6409,7 @@ void MirBuilder::terminateScopeEarly(const Span& sp, const ScopeHandle& scope, b
     }
 
     bool isConditional = false;
-    for (unsigned int i = scopeStack.size(); i-- > slot;) {
+    for (unsigned int i = scopeStack.length(); i-- > slot;) {
         auto idx = scopeStack[i];
         auto& scopeDef = scopes.at(idx);
 
@@ -6449,7 +6501,8 @@ void MirBuilder::endSplitArm(const Span& sp, const ScopeHandle& handle, bool rea
     auto& sdSplit = sd.data.as_Split();
     ASSERT_BUG(sp, !sdSplit.arms.empty(), StringView("Split arm list is empty (impossible)"));
 
-    for (auto v : ::reverse(scopeStack)) {
+    for (size_t stackI = scopeStack.length(); stackI > 0; stackI--) {
+        auto v = scopeStack[stackI - 1];
         if (v == handle.idx) {
             break;
         }
@@ -6519,7 +6572,7 @@ void MirBuilder::endSplitArm(const Span& sp, const ScopeHandle& handle, bool rea
 
 void MirBuilder::endSplitArmEarly(const Span& sp) {
     TRACE_FUNCTION_F(StringView(""));
-    size_t i = scopeStack.size();
+    size_t i = scopeStack.length();
     while (i-- && scopes.at(scopeStack[i]).data.is_Owning()) {
         auto& scopeDef = scopes[scopeStack[i]];
         DEBUG(StringView("Complete scope ") << scopeStack[i]);
@@ -6527,7 +6580,7 @@ void MirBuilder::endSplitArmEarly(const Span& sp) {
         completeScope(scopeDef);
     }
 
-    if (i < scopeStack.size()) {
+    if (i < scopeStack.length()) {
         if (scopes.at(scopeStack[i]).data.is_Split()) {
             DEBUG(StringView("Early terminate split scope ") << scopeStack.back());
             auto& sd = scopes[scopeStack[i]];
@@ -6609,7 +6662,7 @@ void MirBuilder::completeScope(ScopeDef& sd) {
             auto& stmts = output.blocks.at(e.entryBb).statements;
             for (auto idx : e.dropFlags) {
                 DEBUG(StringView("Reset df$") << idx);
-                stmts.insert(stmts.begin(), MIRStatement::make_SetDropFlag({idx, output.dropFlags.at(idx), ~0u}));
+                stmts.insert(stmts.begin(), MIRStatement::make_SetDropFlag({idx, output.dropFlags[idx], ~0u}));
             }
             break;
         }
@@ -6646,7 +6699,7 @@ HIRTypeRef MirBuilder::valType(const Span& sp, const MIRLValue& val, const MIRLV
         }
         case MIRLValue::Storage::TAG_Local: {
             decltype(val.root.as_Local()) e = val.root.as_Local();
-            ty = output.locals.at(e);
+            ty = output.locals[e];
             break;
         }
         case MIRLValue::Storage::TAG_Static: {
@@ -6741,7 +6794,7 @@ HIRTypeRef MirBuilder::valType(const Span& sp, const MIRLValue& val, const MIRLV
                     }
                     case HIRTypeData::TAG_Tuple: {
                         auto& te = (*currentTy).as_Tuple();
-                        ASSERT_BUG(sp, fieldIndex < te.size(), StringView("Field index out of range in tuple ") << fieldIndex << StringView(" >= ") << te.size());
+                        ASSERT_BUG(sp, fieldIndex < te.length(), StringView("Field index out of range in tuple ") << fieldIndex << StringView(" >= ") << te.length());
                         ty = te[fieldIndex];
                         break;
                     }
@@ -6843,7 +6896,8 @@ const VarState& MirBuilder::getSlotState(const Span& sp, unsigned int idx, SlotT
         }
     }
 
-    for (auto scopeIdx : ::reverse(scopeStack)) {
+    for (size_t stackI = scopeStack.length(); stackI > 0; stackI--) {
+        auto scopeIdx = scopeStack[stackI - 1];
         if (aboveScope) {
             if (scopeIdx == aboveScope->idx) {
                 aboveScope = nullptr;
@@ -6909,7 +6963,8 @@ VarState& MirBuilder::getSlotStateMut(const Span& sp, unsigned int idx, SlotType
     }
 
     VarState* ret = nullptr;
-    for (auto scopeIdx : ::reverse(scopeStack)) {
+    for (size_t stackI = scopeStack.length(); stackI > 0; stackI--) {
+        auto scopeIdx = scopeStack[stackI - 1];
         auto& scopeDef = scopes.at(scopeIdx);
         switch (scopeDef.data.tag()) {
             case ScopeType::TAG_Owning: {
@@ -7059,7 +7114,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                                 }
                             }
                         } else if (const auto* e = ty->opt_Tuple()) {
-                            nFlds = e->size();
+                            nFlds = e->length();
                         } else if (const auto* e = ty->opt_Array()) {
                             ASSERT_BUG(sp, e->size.is_Known(), StringView("Array size not known"));
                             nFlds = e->size.as_Known();
@@ -7165,8 +7220,8 @@ void MirBuilder::emitArrayElementDropLoop(const Span& sp, const MIRLValue& arrLv
     const auto* usizeTy = resolve_.hirCrate().types.primitive(HIRCoreType::Usize);
     const auto* boolTy = resolve_.hirCrate().types.primitive(HIRCoreType::Bool);
     const auto newUnscopedLocal = [&](const HIRTypeData* ty) -> unsigned {
-        const auto rv = static_cast<unsigned>(output.locals.size());
-        output.locals.push_back(ty);
+        const auto rv = static_cast<unsigned>(output.locals.length());
+        output.locals.pushBack(ty);
         slotStates.push_back(VarState::make_Valid({}));
         return rv;
     };
@@ -7240,14 +7295,14 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
                 }
 
                 const auto nextBb = newBbUnlinked();
-                std::vector<MIRBasicBlockId> arms;
-                std::vector<MIRBasicBlockId> cleanupBlocks;
-                arms.reserve(partial.innerStates.size());
-                cleanupBlocks.reserve(partial.innerStates.size());
+                Vector<MIRBasicBlockId> arms;
+                Vector<MIRBasicBlockId> cleanupBlocks;
+                arms.grow(partial.innerStates.size());
+                cleanupBlocks.grow(partial.innerStates.size());
                 for (const auto& state : partial.innerStates) {
                     const auto cleanupBb = state.is_Invalid() ? nextBb : newBbUnlinked();
-                    arms.push_back(cleanupBb);
-                    cleanupBlocks.push_back(cleanupBb);
+                    arms.pushBack(cleanupBb);
+                    cleanupBlocks.pushBack(cleanupBb);
                 }
                 endBlock(MIRTerminator::make_Switch({lv.clone(), mv$(arms), outerFlag, outerFlag == ~0u ? ~0u : nextBb}));
 
@@ -7319,7 +7374,8 @@ void MirBuilder::dropScopeValues(ScopeDef& sd, bool preserveStates /*=false*/) {
         case ScopeType::TAG_Owning: {
             auto& e = sd.data.as_Owning();
             const auto dropSlots = e.dropSlots;
-            for (const auto& slot : ::reverse(dropSlots)) {
+            for (size_t i = dropSlots.length(); i > 0; i--) {
+                const auto& slot = dropSlots[i - 1];
                 const auto slotType = slot.isArgument ? SlotType::Argument : SlotType::Local;
                 auto lvalue = slot.isArgument ? MIRLValue::newArgument(slot.index) : MIRLValue::newLocal(slot.index);
                 if (buildingCleanup) {
@@ -7418,8 +7474,8 @@ void MirBuilder::emitUnwindCleanup(const Span& sp) {
     const auto wasBuildingCleanup = buildingCleanup;
     buildingCleanup = true;
     output.blocks.at(currentBlock).isCleanup = true;
-    for (auto it = scopeStack.rbegin(); it != scopeStack.rend(); ++it) {
-        dropScopeValues(scopes.at(*it));
+    for (size_t stackI = scopeStack.length(); stackI > 0; stackI--) {
+        dropScopeValues(scopes.at(scopeStack[stackI - 1]));
     }
     buildingCleanup = wasBuildingCleanup;
 }
@@ -7635,16 +7691,16 @@ MirBuilder::ScopeDef::ScopeDef(const Span& span, ScopeType data)
 
 MirBuilder::SavedAliases MirBuilder::saveAliases() const {
     SavedAliases rv;
-    rv.setAliases.reserve(variableAliases.size());
+    rv.setAliases.grow(variableAliases.size());
     for (const auto& v : variableAliases) {
-        rv.setAliases.push_back(v.second != MIRLValue());
+        rv.setAliases.pushBack(v.second != MIRLValue());
     }
     return rv;
 }
 
 void MirBuilder::restoreAliases(SavedAliases a) {
-    BUG_ASSERT(a.setAliases.size() == variableAliases.size());
-    for (size_t i = 0; i < a.setAliases.size(); i++) {
+    BUG_ASSERT(a.setAliases.length() == variableAliases.size());
+    for (size_t i = 0; i < a.setAliases.length(); i++) {
         if (!a.setAliases[i]) {
             variableAliases.at(i).second = MIRLValue();
         }
@@ -7687,7 +7743,7 @@ MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
 
 #include "mir_from_hir_pattern_tu.cpp"
 
-ExprVisitorConv::ExprVisitorConv(MirBuilder& builder, const std::vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator)
+ExprVisitorConv::ExprVisitorConv(MirBuilder& builder, const Vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator)
     : builder(builder)
     , variableTypes(varTypes)
     , isGenerator(isGenerator != nullptr)
@@ -7781,7 +7837,7 @@ auto ExprVisitorConv::awaitFuture(const Span& sp, const HIRTypeData* futureTy, M
     const auto bbReady = builder.newBbUnlinked();
     ASSERT_BUG(sp, typePoll->as_Path().binding.as_Enum()->findVariant("Ready") == 0, StringView(""));
     ASSERT_BUG(sp, typePoll->as_Path().binding.as_Enum()->findVariant("Pending") == 1, StringView(""));
-    builder.endBlock(MIRTerminator::make_Switch({lvPoll.clone(), makeVec2(bbReady, bbPending)}));
+    builder.endBlock(MIRTerminator::make_Switch({lvPoll.clone(), blockPair(bbReady, bbPending)}));
     builder.setCurBlock(bbPending);
 
     HIRGenericPath returnPollPath = builder.valType(sp, MIRLValue::newReturn())->as_Path().path.data.as_Generic().clone();
@@ -7808,9 +7864,9 @@ auto ExprVisitorConv::emitDropFields(const Span& sp, const HIRTypeData* ty, cons
         return;
     }
     if (const auto* tuple = ty->opt_Tuple()) {
-        for (size_t i = 0; i < tuple->size(); i++) {
+        for (size_t i = 0; i < tuple->length(); i++) {
             auto field = MIRLValue::newField(value.clone(), static_cast<unsigned int>(i));
-            if (!emitAsyncDrop(sp, field.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, tuple->at(i))) {
+            if (!emitAsyncDrop(sp, field.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, (*tuple)[i])) {
                 builder.pushStmtDropRaw(sp, std::move(field));
             }
         }
@@ -7914,7 +7970,7 @@ auto ExprVisitorConv::emitAsyncDrop(const Span& sp, MIRLValue value, unsigned in
         builder.pushStmtAssign(sp, condition.clone(), MIRRValue::make_EnumVariant({conditionTy->as_Path().path.data.as_Generic().clone(), 1, {}}));
         auto dropBb = builder.newBbUnlinked();
         auto nextBb = builder.newBbUnlinked();
-        builder.endBlock(MIRTerminator::make_Switch({std::move(condition), std::vector<MIRBasicBlockId>{dropBb, dropBb}, flag, nextBb}));
+        builder.endBlock(MIRTerminator::make_Switch({std::move(condition), blockPair(dropBb, dropBb), flag, nextBb}));
         builder.setCurBlock(dropBb);
         const bool emitted = emitAsyncDrop(sp, value.clone(), ~0u);
         ASSERT_BUG(sp, emitted, StringView("conditional async drop stopped being async for ") << ty);
@@ -7990,7 +8046,7 @@ auto ExprVisitorConv::emitAsyncBoxShallowDrop(const Span& sp, MIRLValue value, u
         builder.pushStmtAssign(sp, condition.clone(), MIRRValue::make_EnumVariant({conditionTy->as_Path().path.data.as_Generic().clone(), 1, {}}));
         auto dropBb = builder.newBbUnlinked();
         auto nextBb = builder.newBbUnlinked();
-        builder.endBlock(MIRTerminator::make_Switch({std::move(condition), std::vector<MIRBasicBlockId>{dropBb, dropBb}, flag, nextBb}));
+        builder.endBlock(MIRTerminator::make_Switch({std::move(condition), blockPair(dropBb, dropBb), flag, nextBb}));
         builder.setCurBlock(dropBb);
         const bool emitted = emitAsyncBoxShallowDrop(sp, value.clone(), ~0u);
         ASSERT_BUG(sp, emitted, StringView("conditional shallow Box drop stopped being async for ") << ty);
@@ -8181,7 +8237,7 @@ auto ExprVisitorConv::generatorPruneInactiveLocals(const Span& sp, const StaticT
 
         for (auto saved = state.saved.begin(); saved != state.saved.end();) {
             const auto local = saved->first;
-            ASSERT_BUG(sp, local < fcn.locals.size(), StringView("Saved coroutine local ") << local << StringView(" is out of range"));
+            ASSERT_BUG(sp, local < fcn.locals.length(), StringView("Saved coroutine local ") << local << StringView(" is out of range"));
             const bool liveAcrossSuspension = lifetimes.slotValid(local, state.suspensionBlock, block.statements.size());
             if (!liveAcrossSuspension && !resolve.typeNeedsDropGlue(sp, fcn.locals[local])) {
                 saved = state.saved.erase(saved);
@@ -8195,17 +8251,17 @@ auto ExprVisitorConv::generatorPruneInactiveLocals(const Span& sp, const StaticT
 
 auto ExprVisitorConv::generatorFinalise(const Span& sp, HIREnum& stateEnm) -> std::set<unsigned> {
     std::set<unsigned> usedVars;
-    std::vector<MIRBasicBlockId> armTargets;
-    armTargets.reserve(generatorState.states.size() + 2);
+    Vector<MIRBasicBlockId> armTargets;
+    armTargets.grow(generatorState.states.size() + 2);
     std::vector<HIREnum::ValueVariant> enumVariants;
     enumVariants.reserve(generatorState.states.size() + 2);
 
     auto addStateArm = [&](const GeneratorState::State& state, RcString name) {
-        armTargets.push_back(builder.newBbUnlinked());
+        armTargets.pushBack(builder.newBbUnlinked());
         builder.setCurBlock(armTargets.back());
         builder.pushStmtAssign(sp, generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath, GeneratorState::POISONED, {}}));
         builder.endBlock(MIRTerminator::make_Goto(state.entrypoint));
-        enumVariants.push_back(HIREnum::ValueVariant{mv$(name), HIRExprPtr(), U128(armTargets.size() - 1)});
+        enumVariants.push_back(HIREnum::ValueVariant{mv$(name), HIRExprPtr(), U128(armTargets.length() - 1)});
         for (const auto& e : state.saved) {
             usedVars.insert(e.first);
         }
@@ -8213,7 +8269,7 @@ auto ExprVisitorConv::generatorFinalise(const Span& sp, HIREnum& stateEnm) -> st
 
     addStateArm(generatorState.states.front(), RcString::newInterned("UNRESUMED"));
 
-    armTargets.push_back(builder.newBbUnlinked());
+    armTargets.pushBack(builder.newBbUnlinked());
     builder.setCurBlock(armTargets.back());
     if (generatorState.isAsyncGen) {
         asyncGenPollReady(sp, "None", {});
@@ -8223,7 +8279,7 @@ auto ExprVisitorConv::generatorFinalise(const Span& sp, HIREnum& stateEnm) -> st
     }
     enumVariants.push_back(HIREnum::ValueVariant{RcString::newInterned("RETURNED"), HIRExprPtr(), U128(GeneratorState::RETURNED)});
 
-    armTargets.push_back(builder.newBbUnlinked());
+    armTargets.pushBack(builder.newBbUnlinked());
     builder.setCurBlock(armTargets.back());
     builder.endBlock(MIRTerminator::make_Unreachable({}));
     enumVariants.push_back(HIREnum::ValueVariant{RcString::newInterned("POISONED"), HIRExprPtr(), U128(GeneratorState::POISONED)});
@@ -8244,8 +8300,8 @@ auto ExprVisitorConv::generatorMakeDrop(const Span& sp, MirBuilder& outBuilder, 
     MIRLValue self = MIRLValue::newDeref(MIRLValue::newArgument(0));
 
     BUG_ASSERT(generatorState.states.size() > 0);
-    std::vector<MIRBasicBlockId> arms;
-    arms.reserve(generatorState.states.size() + 2);
+    Vector<MIRBasicBlockId> arms;
+    arms.grow(generatorState.states.size() + 2);
 
     if (!dropFlagMapping.empty()) {
         auto slot = MIRLValue::newArgument(0);
@@ -8269,7 +8325,7 @@ auto ExprVisitorConv::generatorMakeDrop(const Span& sp, MirBuilder& outBuilder, 
     }
 
     auto entryBlock = outBuilder.pauseCurBlock();
-    arms.push_back(outBuilder.newBbUnlinked());
+    arms.pushBack(outBuilder.newBbUnlinked());
     outBuilder.setCurBlock(arms.back());
     size_t argCount = 2;
     for (size_t i = 0; i < nCaptures; i++) {
@@ -8290,13 +8346,13 @@ auto ExprVisitorConv::generatorMakeDrop(const Span& sp, MirBuilder& outBuilder, 
     };
 
     for (unsigned i = GeneratorState::RETURNED; i <= GeneratorState::POISONED; i++) {
-        arms.push_back(outBuilder.newBbUnlinked());
+        arms.pushBack(outBuilder.newBbUnlinked());
         outBuilder.setCurBlock(arms.back());
         outBuilder.endBlock(MIRTerminator::make_Return({}));
     }
 
     for (size_t i = 0; i + 1 < generatorState.states.size(); i++) {
-        arms.push_back(outBuilder.newBbUnlinked());
+        arms.pushBack(outBuilder.newBbUnlinked());
         outBuilder.setCurBlock(arms.back());
         for (const auto& v : generatorState.states[i].saved) {
             if (v.first == 0) {
@@ -8431,7 +8487,7 @@ auto ExprVisitorConv::destructureFromList(const Span& sp, const HIRTypeData* out
 }
 
 auto ExprVisitorConv::getBindingType(const Span& sp, unsigned index) const -> const HIRTypeData* {
-    return variableTypes.at(index);
+    return variableTypes[index];
 }
 
 auto ExprVisitorConv::emitUnwind(const Span& sp) -> void {
@@ -9029,7 +9085,7 @@ auto ExprVisitorConv::visit(HIRExprNodeLoopControl& node) -> void {
 
 auto ExprVisitorConv::visit(HIRExprNodeMatch& node) -> void {
     TRACE_FUNCTION_FR(StringView("_Match"), StringView("_Match"));
-    std::vector<unsigned> letElseInitializerTemps;
+    Vector<unsigned> letElseInitializerTemps;
     size_t letElseFirstTemporary = 0;
     if (node.isLetElse) {
         ASSERT_BUG(node.span(), borrowRaiseTarget, StringView("let-else match has no remainder temporary scope"));
@@ -9045,9 +9101,9 @@ auto ExprVisitorConv::visit(HIRExprNodeMatch& node) -> void {
     auto matchVal = builder.getResultInLvalue(node.value->span(), node.value->resType);
     if (node.isLetElse) {
         const auto endTemporary = builder.localCount();
-        letElseInitializerTemps.reserve(endTemporary - letElseFirstTemporary);
+        letElseInitializerTemps.grow(endTemporary - letElseFirstTemporary);
         for (auto temporary = letElseFirstTemporary; temporary < endTemporary; ++temporary) {
-            letElseInitializerTemps.push_back(temporary);
+            letElseInitializerTemps.pushBack(temporary);
         }
     }
 
@@ -9266,10 +9322,10 @@ auto ExprVisitorConv::panicIf(const Span& sp, MIRLValue condition, bool whenTrue
 }
 
 auto ExprVisitorConv::generateOverflowingArithmetic(const Span& sp, MIRLValue resSlot, const char* intrinsic, const char* panicLangItem, MIRParam valL, const HIRTypeData* tyL, MIRParam valR, bool updateDestState) -> void {
-    const auto tupleType = builder.resolve().crate.types.tuple({
-        tyL,
-        builder.resolve().crate.types.primitive(HIRCoreType::Bool),
-    });
+    Vector<HIRTypeRef> tupleTypes(2);
+    tupleTypes.pushBack(tyL);
+    tupleTypes.pushBack(builder.resolve().crate.types.primitive(HIRCoreType::Bool));
+    const auto tupleType = builder.resolve().crate.types.tuple(mv$(tupleTypes));
     auto checked = builder.newTemporary(tupleType);
     auto callReturn = builder.newBbUnlinked();
     builder.endBlock(
@@ -9860,7 +9916,8 @@ auto ExprVisitorConv::visit(HIRExprNodeCast& node) -> void {
             case HIRTypeData::TAG_Function: {
                 auto& de = (*tyOut).as_Function();
                 if (tyIn->is_Function()) {
-                    ASSERT_BUG(node.span(), de.argTypes == tyIn->as_Function().argTypes, tyIn);
+                    const auto& sourceArgs = tyIn->as_Function().argTypes;
+                    ASSERT_BUG(node.span(), de.argTypes.length() == sourceArgs.length() && std::equal(de.argTypes.begin(), de.argTypes.end(), sourceArgs.begin()), tyIn);
                 } else if (tyIn->is_NamedFunction()) {
                     // TODO: Extra checks?
                 } else {
@@ -10726,7 +10783,8 @@ auto ExprVisitorConv::visit(HIRExprNodeLiteral& node) -> void {
         }
         case HIRExprLiteral::TAG_ByteString: {
             auto& e = node.data.as_ByteString();
-            std::vector<u8> v(e.begin(), e.end());
+            Vector<u8> v(e.length());
+            v.append((const u8*)e.data(), e.length());
             builder.setResult(node.span(), MIRRValue::make_Constant(MIRConstant(mv$(v))));
             break;
         }
@@ -10887,10 +10945,10 @@ auto ExprVisitorConv::visitSlInner(HIRExprNodeStructLiteral& node, const HIRStru
     ASSERT_BUG(sp, str.data.is_Named(), StringView(""));
     const tStructFields& fields = str.data.as_Named();
 
-    std::vector<bool> valuesSet;
+    Vector<bool> valuesSet;
     std::vector<MIRParam> values;
     values.resize(fields.size());
-    valuesSet.resize(fields.size());
+    valuesSet.zero(fields.size());
 
     for (auto& ent : node.values) {
         auto& valnode = ent.second;
@@ -10898,7 +10956,7 @@ auto ExprVisitorConv::visitSlInner(HIRExprNodeStructLiteral& node, const HIRStru
             return x.name == ent.first;
         }) - fields.begin();
         BUG_ASSERT(!valuesSet[idx]);
-        valuesSet[idx] = true;
+        valuesSet.mut(idx) = true;
         DEBUG(StringView("_StructLiteral - fld '") << ent.first << StringView("' (idx ") << idx << StringView(")"));
         this->visitNodePtr(valnode);
         if (!builder.blockActive()) {
@@ -11292,7 +11350,7 @@ tRulesSubset::tRulesSubset(size_t exp, bool isArmIndexes)
     : isArmIndexes(isArmIndexes)
 {
     ruleSets.reserve(exp);
-    armIdxes.reserve(exp);
+    armIdxes.grow(exp);
 }
 
 auto tRulesSubset::size() const -> size_t {
@@ -11309,22 +11367,24 @@ auto tRulesSubset::isArm() const -> bool {
 
 auto tRulesSubset::armIdx(size_t n) const -> ArmIdxes {
     BUG_ASSERT(isArmIndexes);
-    auto v = decodeArmIdx(armIdxes.at(n));
+    auto v = decodeArmIdx(armIdxes[n]);
     return ArmIdxes{v.first, v.second};
 }
 
 auto tRulesSubset::bbIdx(size_t n) const -> MIRBasicBlockId {
     BUG_ASSERT(!isArmIndexes);
-    return armIdxes.at(n);
+    return armIdxes[n];
 }
 
 auto tRulesSubset::subSort(size_t ofs, size_t start, size_t n) -> void {
-    std::vector<size_t> v;
+    Vector<size_t> v;
+    v.grow(n);
     for (size_t i = 0; i < n; i++) {
-        v.push_back(start + i);
+        v.pushBack(start + i);
     }
-    std::stable_sort(v.begin(), v.end(), [&](auto a, auto b) {
-        return ordRuleCompatible((*ruleSets[a])[ofs], (*ruleSets[b])[ofs]) == OrdLess;
+    quickSort(mutRange(v), [&](auto a, auto b) {
+        auto ordering = ordRuleCompatible((*ruleSets[a])[ofs], (*ruleSets[b])[ofs]);
+        return ordering == OrdLess || (ordering == OrdEqual && a < b);
     });
 
     {
@@ -11336,10 +11396,13 @@ auto tRulesSubset::subSort(size_t ofs, size_t start, size_t n) -> void {
     }
     {
         decltype(this->armIdxes) tmp;
+        tmp.grow(v.length());
         for (auto i : v) {
-            tmp.push_back(armIdxes[i]);
+            tmp.pushBack(armIdxes[i]);
         }
-        std::copy(tmp.begin(), tmp.end(), armIdxes.begin() + start);
+        for (size_t i = 0; i < tmp.length(); i++) {
+            armIdxes.mut(start + i) = tmp[i];
+        }
     }
 }
 
@@ -11348,7 +11411,7 @@ auto tRulesSubset::subSlice(size_t ofs, size_t n) -> tRulesSubset {
     rv.ruleSets.reserve(n);
     for (size_t i = 0; i < n; i++) {
         rv.ruleSets.push_back(this->ruleSets[ofs + i]);
-        rv.armIdxes.push_back(this->armIdxes[ofs + i]);
+        rv.armIdxes.pushBack(this->armIdxes[ofs + i]);
     }
     return rv;
 }
@@ -11356,13 +11419,13 @@ auto tRulesSubset::subSlice(size_t ofs, size_t n) -> tRulesSubset {
 auto tRulesSubset::pushArm(const std::vector<PatternRule>& x, size_t armIdx, size_t patIdx) -> void {
     BUG_ASSERT(isArmIndexes);
     ruleSets.push_back(&x);
-    armIdxes.push_back(encodeArmIdx(armIdx, patIdx));
+    armIdxes.pushBack(encodeArmIdx(armIdx, patIdx));
 }
 
 auto tRulesSubset::pushBb(const std::vector<PatternRule>& x, MIRBasicBlockId bb) -> void {
     BUG_ASSERT(!isArmIndexes);
     ruleSets.push_back(&x);
-    armIdxes.push_back(bb);
+    armIdxes.pushBack(bb);
 }
 
 MatchGenGrouped::MatchGenGrouped(MirBuilder& builder, const Span& sp, const HIRTypeData* topTy, const MIRLValue& topVal, const std::vector<ArmCode>& armsCode, size_t fieldPathOfs)

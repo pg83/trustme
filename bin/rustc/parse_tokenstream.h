@@ -5,6 +5,8 @@
 #include "ast_edition.h"
 #include "parse_token.h"
 
+#include <std/lib/vector.h>
+
 #include <vector>
 #include <algorithm>
 
@@ -27,7 +29,7 @@ public:
 
     bool noExpandMacros = false;
 
-    std::vector<RcString> erasedLifetimes;
+    stl::Vector<RcString> erasedLifetimes;
 
     bool lifetimeIsErased(const RcString& name) const {
         return std::find(erasedLifetimes.begin(), erasedLifetimes.end(), name) != erasedLifetimes.end();
@@ -39,7 +41,6 @@ public:
     ASTAttributeList* parentAttrs = nullptr;
 
     ASTModule& getCurrentMod();
-
 };
 
 class TokenStream {

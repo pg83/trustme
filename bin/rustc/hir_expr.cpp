@@ -2,6 +2,8 @@
 
 #include "output.h"
 
+#include <std/alg/range.h>
+
 using namespace stl;
 
 HIRExprNode::~HIRExprNode() {
@@ -359,7 +361,7 @@ DEF_VISIT_H(HIRExprNodeTupleVariant, node) {
     TRACE_FUNCTION_F(StringView("_TupleVariant: ") << node.path);
     visitGenericPath(HIRVisitor::PathContext::VALUE, node.path);
 
-    for (auto& ty : node.argTypes) {
+    for (auto& ty : mutRange(node.argTypes)) {
         if (ty != HIRTypeRef()) {
             updateType(ty);
         }
@@ -372,8 +374,8 @@ DEF_VISIT_H(HIRExprNodeTupleVariant, node) {
 
 DEF_VISIT_H(HIRExprNodeCallPath, node) {
     TRACE_FUNCTION_F(StringView("_CallPath: ") << node.path);
-    for (auto& ty : node.cache.argTypes) {
-        updateType(ty);
+    for (auto& type : mutRange(node.cache.argTypes)) {
+        updateType(type);
     }
 
     visitPath(HIRVisitor::PathContext::VALUE, node.path);
@@ -384,8 +386,8 @@ DEF_VISIT_H(HIRExprNodeCallPath, node) {
 
 DEF_VISIT_H(HIRExprNodeCallValue, node) {
     TRACE_FUNCTION_F(StringView("_CallValue:"));
-    for (auto& ty : node.argTypes) {
-        updateType(ty);
+    for (auto& type : mutRange(node.argTypes)) {
+        updateType(type);
     }
 
     visitNodePtr(node.value);
@@ -397,8 +399,8 @@ DEF_VISIT_H(HIRExprNodeCallValue, node) {
 DEF_VISIT_H(HIRExprNodeCallMethod, node) {
     TRACE_FUNCTION_FR(StringView("_CallMethod: ") << node.method, StringView("_CallMethod: ") << node.method);
     visitPathParams(node.params);
-    for (auto& ty : node.cache.argTypes) {
-        updateType(ty);
+    for (auto& type : mutRange(node.cache.argTypes)) {
+        updateType(type);
     }
 
     visitPath(HIRVisitor::PathContext::VALUE, node.methodPath);
@@ -696,14 +698,14 @@ HIRTypeRef HIRExprVisitorDef::visitType(HIRTypeRef ty) {
         }
         case HIRTypeData::TAG_Tuple: {
             const auto& e = ty->as_Tuple();
-            for (size_t i = 0; i < e.size(); i++) {
+            for (size_t i = 0; i < e.length(); i++) {
                 auto nt = visitType(e[i]);
                 if (nt != e[i]) {
                     auto data = ty->cloneData();
                     auto& ne = data.as_Tuple();
-                    ne[i] = nt;
-                    for (size_t j = i + 1; j < ne.size(); j++) {
-                        ne[j] = visitType(ne[j]);
+                    ne.mut(i) = nt;
+                    for (size_t j = i + 1; j < ne.length(); j++) {
+                        ne.mut(j) = visitType(ne[j]);
                     }
                     return types.intern(std::move(data));
                 }
@@ -713,25 +715,25 @@ HIRTypeRef HIRExprVisitorDef::visitType(HIRTypeRef ty) {
         case HIRTypeData::TAG_Function: {
             const auto& e = ty->as_Function();
             auto nret = visitType(e.rettype);
-            size_t argIdx = e.argTypes.size();
+            size_t argIdx = e.argTypes.length();
             HIRTypeRef narg = nullptr;
-            for (size_t i = 0; i < e.argTypes.size(); i++) {
+            for (size_t i = 0; i < e.argTypes.length(); i++) {
                 narg = visitType(e.argTypes[i]);
                 if (narg != e.argTypes[i]) {
                     argIdx = i;
                     break;
                 }
             }
-            if (nret == e.rettype && argIdx == e.argTypes.size()) {
+            if (nret == e.rettype && argIdx == e.argTypes.length()) {
                 return ty;
             }
             auto data = ty->cloneData();
             auto& ne = data.as_Function();
             ne.rettype = nret;
-            if (argIdx < ne.argTypes.size()) {
-                ne.argTypes[argIdx] = narg;
-                for (size_t j = argIdx + 1; j < ne.argTypes.size(); j++) {
-                    ne.argTypes[j] = visitType(ne.argTypes[j]);
+            if (argIdx < ne.argTypes.length()) {
+                ne.argTypes.mut(argIdx) = narg;
+                for (size_t j = argIdx + 1; j < ne.argTypes.length(); j++) {
+                    ne.argTypes.mut(j) = visitType(ne.argTypes[j]);
                 }
             }
             return types.intern(std::move(data));

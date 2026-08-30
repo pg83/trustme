@@ -2,12 +2,14 @@
 
 #include "output.h"
 
+#include <std/lib/vector.h>
+
 using namespace stl;
 
 namespace {
-    void visitPatternDeclarationSlots(const HIRPattern& pattern, std::vector<unsigned>& slots) {
+    void visitPatternDeclarationSlots(const HIRPattern& pattern, Vector<unsigned>& slots) {
         for (const auto& binding : pattern.bindings) {
-            slots.push_back(binding.slot);
+            slots.pushBack(binding.slot);
         }
 
         switch (pattern.data.tag()) {
@@ -85,7 +87,7 @@ namespace {
                     visitPatternDeclarationSlots(subpattern, slots);
                 }
                 if (e.extraBind.isValid()) {
-                    slots.push_back(e.extraBind.slot);
+                    slots.pushBack(e.extraBind.slot);
                 }
                 for (const auto& subpattern : e.trailing) {
                     visitPatternDeclarationSlots(subpattern, slots);
@@ -101,8 +103,8 @@ namespace {
         }
     }
 
-    void visitPatternCandidateSlots(const HIRPattern& pattern, bool useLastAlternative, std::vector<unsigned>& slots) {
-        std::vector<const HIRPattern*> deferredOrPatterns;
+    void visitPatternCandidateSlots(const HIRPattern& pattern, bool useLastAlternative, Vector<unsigned>& slots) {
+        Vector<const HIRPattern*> deferredOrPatterns;
         auto visitImmediate = [&](this auto& visitImmediate, const HIRPattern& current) -> void {
             switch (current.data.tag()) {
                 case HIRPatternData::TAG_Any: {
@@ -179,7 +181,7 @@ namespace {
                         visitImmediate(subpattern);
                     }
                     if (e.extraBind.isValid()) {
-                        slots.push_back(e.extraBind.slot);
+                        slots.pushBack(e.extraBind.slot);
                     }
                     for (auto it = e.trailing.rbegin(); it != e.trailing.rend(); ++it) {
                         visitImmediate(*it);
@@ -188,13 +190,13 @@ namespace {
                 }
                 case HIRPatternData::TAG_Or: {
                     BUG_ASSERT(!current.data.as_Or().empty());
-                    deferredOrPatterns.push_back(&current);
+                    deferredOrPatterns.pushBack(&current);
                     break;
                 }
             }
 
             for (auto it = current.bindings.rbegin(); it != current.bindings.rend(); ++it) {
-                slots.push_back(it->slot);
+                slots.pushBack(it->slot);
             }
         };
 
@@ -314,8 +316,8 @@ namespace {
     }
 }
 
-std::vector<unsigned> patternBindingSlots(const HIRPattern& pattern, HIRPatternBindingOrder order) {
-    std::vector<unsigned> slots;
+Vector<unsigned> patternBindingSlots(const HIRPattern& pattern, HIRPatternBindingOrder order) {
+    Vector<unsigned> slots;
     switch (order) {
         case HIRPatternBindingOrder::Declaration:
             visitPatternDeclarationSlots(pattern, slots);

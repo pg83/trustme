@@ -21,19 +21,19 @@ struct Codepoint {
     bool isdigit() const;
     bool isxdigit() const;
 
-    bool operator==(char x) {
+    bool operator==(char x) const {
         return v == static_cast<u32>(x);
     }
 
-    bool operator!=(char x) {
+    bool operator!=(char x) const {
         return v != static_cast<u32>(x);
     }
 
-    bool operator==(Codepoint x) {
+    bool operator==(Codepoint x) const {
         return v == x.v;
     }
 
-    bool operator!=(Codepoint x) {
+    bool operator!=(Codepoint x) const {
         return v != x.v;
     }
 };
@@ -58,7 +58,7 @@ class Lexer: public TokenStream {
     bool initialShebangChecked;
     bool initialFrontmatterAllowed;
     bool initialFrontmatterPrecededByWhitespace;
-    std::vector<Codepoint> replayChars;
+    stl::Vector<Codepoint> replayChars;
     size_t replayCharOffset;
     std::vector<Token> nextTokens;
 

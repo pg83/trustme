@@ -4,6 +4,8 @@
 #include "ast_attrs.h"
 #include "ast_types.h"
 
+#include <std/lib/vector.h>
+
 #include <string>
 
 class ASTTypeParam {
@@ -42,7 +44,6 @@ public:
     ASTType*& getDefault() {
         return defaultValue_;
     }
-
 };
 
 class ASTLifetimeParam {
@@ -68,7 +69,6 @@ public:
     const Ident& name() const {
         return name_;
     }
-
 };
 
 class ASTValueParam {
@@ -113,7 +113,6 @@ public:
     ASTExpr& defaultValue() {
         return defaultValue_;
     }
-
 };
 
 #include "ast_generics_tu.h"
@@ -123,7 +122,7 @@ public:
     std::vector<GenericParam> params;
     std::vector<ASTGenericBound> bounds;
 
-    std::vector<ASTType*> bareBoundTypes;
+    stl::Vector<ASTType*> bareBoundTypes;
 
     ASTGenericParams();
 
@@ -160,5 +159,4 @@ public:
     }
 
     int findName(const char* name) const;
-
 };

@@ -14,6 +14,8 @@
 #include "hir_conv_main_bindings.h"
 #include "hir_conv_constant_evaluation.h"
 
+#include <std/alg/qsort.h>
+#include <std/alg/range.h>
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
@@ -31,9 +33,22 @@ static void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const
 
 namespace {
     constexpr size_t TRANSMUTE_BYTE_VALUES = 257;
+
+    struct VectorLess {
+        bool operator()(const Vector<unsigned>& left, const Vector<unsigned>& right) const {
+            return std::lexicographical_compare(left.begin(), left.end(), right.begin(), right.end());
+        }
+    };
+
     constexpr size_t TRANSMUTE_UNINITIALISED = 256;
 
     using TransmuteByteSet = std::bitset<TRANSMUTE_BYTE_VALUES>;
+
+    void appendReverse(Vector<size_t>& output, const Vector<size_t>& input) {
+        for (size_t i = input.length(); i > 0; i--) {
+            output.pushBack(input[i - 1]);
+        }
+    }
 
     struct Ent {
         unsigned int field;
@@ -73,9 +88,9 @@ namespace {
         };
 
         struct State {
-            std::vector<unsigned> epsilon;
-            std::vector<ByteEdge> bytes;
-            std::vector<ReferenceEdge> references;
+            Vector<unsigned> epsilon;
+            Vector<ByteEdge> bytes;
+            Vector<ReferenceEdge> references;
         };
 
         struct Fragment {
@@ -97,7 +112,7 @@ namespace {
 
         Fragment then(Fragment left, Fragment right);
 
-        Fragment alternative(std::vector<Fragment> alternatives);
+        Fragment alternative(Vector<Fragment> alternatives);
     };
 
     struct TransmuteDfa {
@@ -105,7 +120,7 @@ namespace {
 
         std::vector<Transitions> transitions;
         std::vector<std::vector<std::pair<TransmuteReference, unsigned>>> references;
-        std::vector<bool> accepting;
+        Vector<bool> accepting;
 
         bool inhabited() const;
     };
@@ -151,7 +166,7 @@ namespace {
 
         Built build(const HIRTypeData* ty);
 
-        std::vector<unsigned> epsilonClosure(std::vector<unsigned> states) const;
+        Vector<unsigned> epsilonClosure(Vector<unsigned> states) const;
 
         TransmuteNfa nfa;
 
@@ -513,8 +528,8 @@ namespace {
         }
 
         struct CaptureVisitor: HIRExprVisitorDef {
-            std::vector<unsigned int> definitions;
-            std::vector<unsigned int> uses;
+            Vector<unsigned int> definitions;
+            Vector<unsigned int> uses;
 
             explicit CaptureVisitor(HIRTypeInterner& types)
                 : HIRExprVisitorDef(types)
@@ -523,22 +538,25 @@ namespace {
 
             void visitPattern(const Span& sp, HIRPattern& pattern) override {
                 for (const auto& binding : pattern.bindings) {
-                    definitions.push_back(binding.slot);
+                    definitions.pushBack(binding.slot);
                 }
                 if (const auto* split = pattern.data.opt_SplitSlice(); split && split->extraBind.isValid()) {
-                    definitions.push_back(split->extraBind.slot);
+                    definitions.pushBack(split->extraBind.slot);
                 }
                 HIRExprVisitorDef::visitPattern(sp, pattern);
             }
 
             void visit(HIRExprNodeVariable& node) override {
-                uses.push_back(node.slot);
+                uses.pushBack(node.slot);
             }
         } visitor(resolve.hirCrate().types);
 
         const_cast<HIRExprNodeClosure&>(closure).visit(visitor);
-        std::sort(visitor.definitions.begin(), visitor.definitions.end());
-        visitor.definitions.erase(std::unique(visitor.definitions.begin(), visitor.definitions.end()), visitor.definitions.end());
+        std::sort(visitor.definitions.mutBegin(), visitor.definitions.mutEnd());
+        const auto* uniqueEnd = std::unique(visitor.definitions.mutBegin(), visitor.definitions.mutEnd());
+        while (visitor.definitions.end() != uniqueEnd) {
+            visitor.definitions.popBack();
+        }
         return std::all_of(visitor.uses.begin(), visitor.uses.end(), [&](unsigned int slot) {
             return std::binary_search(visitor.definitions.begin(), visitor.definitions.end(), slot);
         });
@@ -1169,7 +1187,7 @@ namespace {
                 }
                 for (size_t i = 0; i < repr->fields.size(); i++) {
                     if (getNonzeroPath(sp, resolve, repr->fields[i].ty, outPath)) {
-                        outPath.subFields.push_back(i);
+                        outPath.subFields.pushBack(i);
                         return true;
                     }
                 }
@@ -1178,7 +1196,7 @@ namespace {
             case HIRTypeData::TAG_Array: {
                 auto& te = (*ty).as_Array();
                 if (te.size.is_Known() && te.size.as_Known() > 0 && getNonzeroPath(sp, resolve, te.inner, outPath)) {
-                    outPath.subFields.push_back(TypeRepr::FieldPath::ARRAY_ELEMENT);
+                    outPath.subFields.pushBack(TypeRepr::FieldPath::ARRAY_ELEMENT);
                     return true;
                 }
             } break;
@@ -1202,13 +1220,13 @@ namespace {
                     }
                     for (size_t i = 0; i < r->fields.size(); i++) {
                         if (getNonzeroPath(sp, resolve, r->fields[i].ty, outPath)) {
-                            outPath.subFields.push_back(i);
+                            outPath.subFields.pushBack(i);
                             return true;
                         }
                     }
                     if (str->structMarkings.isNonzero) {
                         DEBUG(ty << StringView(" tagged NonZero"));
-                        outPath.subFields.push_back(0);
+                        outPath.subFields.pushBack(0);
                         outPath.size = r->size;
                         if ((r->fields[0].ty->is_Pointer() || r->fields[0].ty->is_Borrow()) && outPath.size > TargetGetPointerBits() / 8) {
                             outPath.size = TargetGetPointerBits() / 8;
@@ -1222,8 +1240,8 @@ namespace {
                     }
                     if (const auto* values = repr->variants.opt_Values()) {
                         if (std::find(values->values.begin(), values->values.end(), 0) == values->values.end()) {
-                            outPath.subFields.insert(outPath.subFields.end(), values->field.subFields.rbegin(), values->field.subFields.rend());
-                            outPath.subFields.push_back(values->field.index);
+                            appendReverse(outPath.subFields, values->field.subFields);
+                            outPath.subFields.pushBack(values->field.index);
                             outPath.size = values->field.size;
                             return true;
                         }
@@ -1302,7 +1320,7 @@ namespace {
                         continue;
                     } else if (f.offset + size > minOffset) {
                         if (getVariantNichePath(sp, resolve, f.ty, (f.offset < minOffset ? minOffset - f.offset : 0), maxOffset - f.offset, requiredCount, outPath, nicheStart)) {
-                            outPath.subFields.push_back(i);
+                            outPath.subFields.pushBack(i);
                             return true;
                         }
                     }
@@ -1311,7 +1329,7 @@ namespace {
             case HIRTypeData::TAG_Array: {
                 auto& te = (*ty).as_Array();
                 if (te.size.is_Known() && te.size.as_Known() > 0 && getVariantNichePath(sp, resolve, te.inner, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
-                    outPath.subFields.push_back(TypeRepr::FieldPath::ARRAY_ELEMENT);
+                    outPath.subFields.pushBack(TypeRepr::FieldPath::ARRAY_ELEMENT);
                     return true;
                 }
             } break;
@@ -1338,7 +1356,7 @@ namespace {
                             size = TargetGetPointerBits() / 8;
                         }
                         if (size <= maxOffset) {
-                            outPath.subFields.push_back(0);
+                            outPath.subFields.pushBack(0);
                             outPath.size = size;
                             nicheStart = 0;
                             return true;
@@ -1353,7 +1371,7 @@ namespace {
                             const size_t scalarMax = size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (size * 8)) - 1;
                             const auto boundedMax = str->structMarkings.boundedMaxValue.truncateU64();
                             if (boundedMax < scalarMax && requiredCount <= scalarMax - boundedMax) {
-                                outPath.subFields.push_back(0);
+                                outPath.subFields.pushBack(0);
                                 outPath.size = size;
                                 nicheStart = boundedMax + 1;
                                 return true;
@@ -1369,7 +1387,7 @@ namespace {
                             continue;
                         } else if (f.offset + size > minOffset) {
                             if (getVariantNichePath(sp, resolve, f.ty, (f.offset < minOffset ? minOffset - f.offset : 0), maxOffset - f.offset, requiredCount, outPath, nicheStart)) {
-                                outPath.subFields.push_back(i);
+                                outPath.subFields.pushBack(i);
                                 return true;
                             }
                         }
@@ -1386,7 +1404,7 @@ namespace {
                                 return false;
                             } else {
                                 if (getVariantNichePath(sp, resolve, r->fields[0].ty, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
-                                    outPath.subFields.push_back(0);
+                                    outPath.subFields.pushBack(0);
                                     return true;
                                 }
                                 return false;
@@ -1405,8 +1423,8 @@ namespace {
                                         size_t candidateStart = 0;
                                         if (getVariantNichePath(sp, resolve, field.ty, field.offset < minOffset ? minOffset - field.offset : 0, maxOffset - field.offset, requiredCount + occupiedCount, candidate, candidateStart)) {
                                             auto candidateSubFields = candidate.subFields;
-                                            std::reverse(candidateSubFields.begin(), candidateSubFields.end());
-                                            const bool sameScalar = candidate.size == ve.field.size && candidateSubFields == ve.field.subFields;
+                                            std::reverse(candidateSubFields.mutBegin(), candidateSubFields.mutEnd());
+                                            const bool sameScalar = candidate.size == ve.field.size && ::ord(candidateSubFields, ve.field.subFields) == OrdEqual;
                                             if (!sameScalar) {
                                                 return false;
                                             }
@@ -1424,7 +1442,7 @@ namespace {
                                                     return false;
                                                 }
                                             }
-                                            candidate.subFields.push_back(ve.field.index);
+                                            candidate.subFields.pushBack(ve.field.index);
                                             outPath = std::move(candidate);
                                             nicheStart = candidateStart;
                                             return true;
@@ -1443,8 +1461,8 @@ namespace {
                                 }
                                 outPath.size = ve.field.size;
                                 outPath.subFields.clear();
-                                outPath.subFields.insert(outPath.subFields.begin(), ve.field.subFields.rbegin(), ve.field.subFields.rend());
-                                outPath.subFields.push_back(ve.field.index);
+                                appendReverse(outPath.subFields, ve.field.subFields);
+                                outPath.subFields.pushBack(ve.field.index);
                                 nicheStart = validEnd + 1;
                                 return true;
                             }
@@ -1456,17 +1474,20 @@ namespace {
                             DEBUG(StringView("Values - Tag offset: ") << ofs);
                             if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t) && !ve.values.empty()) {
                                 const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
-                                std::vector<size_t> values;
-                                values.reserve(ve.values.size());
+                                Vector<size_t> values;
+                                values.grow(ve.values.length());
                                 for (const auto& value : ve.values) {
-                                    values.push_back(value.truncateU64() & scalarMax);
+                                    values.pushBack(value.truncateU64() & scalarMax);
                                 }
-                                std::sort(values.begin(), values.end());
-                                values.erase(std::unique(values.begin(), values.end()), values.end());
+                                quickSort(mutRange(values));
+                                const auto* uniqueEnd = std::unique(values.mutBegin(), values.mutEnd());
+                                while (values.end() != uniqueEnd) {
+                                    values.popBack();
+                                }
 
                                 size_t bestStart = 0;
-                                size_t bestCount = values.front();
-                                for (size_t i = 1; i < values.size(); i++) {
+                                size_t bestCount = values[0];
+                                for (size_t i = 1; i < values.length(); i++) {
                                     const size_t count = values[i] - values[i - 1] - 1;
                                     if (count > bestCount) {
                                         bestStart = values[i - 1] + 1;
@@ -1481,8 +1502,8 @@ namespace {
                                 if (requiredCount <= bestCount) {
                                     outPath.size = ve.field.size;
                                     outPath.subFields.clear();
-                                    outPath.subFields.insert(outPath.subFields.begin(), ve.field.subFields.rbegin(), ve.field.subFields.rend());
-                                    outPath.subFields.push_back(ve.field.index);
+                                    appendReverse(outPath.subFields, ve.field.subFields);
+                                    outPath.subFields.pushBack(ve.field.index);
                                     nicheStart = bestStart;
                                     return true;
                                 }
@@ -1690,9 +1711,9 @@ namespace {
                                 for (size_t i = 0; i < variants[nzVar].ents.size(); i++) {
                                     TypeRepr::FieldPath nzPath;
                                     if (getNonzeroPath(sp, resolve, variants[nzVar].ents[i].ty, nzPath)) {
-                                        nzPath.subFields.push_back(i);
+                                        nzPath.subFields.pushBack(i);
                                         nzPath.index = nzVar;
-                                        std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                        std::reverse(nzPath.subFields.mutBegin(), nzPath.subFields.mutEnd());
 
                                         DEBUG(StringView("nz_path = ") << nzPath.subFields);
                                         size_t size0, size1;
@@ -1748,13 +1769,13 @@ namespace {
                                     size_t nicheStart = 0;
                                     if (getVariantNichePath(sp, resolve, fld.ty, (minOffset > fld.offset ? minOffset - fld.offset : 0), maxVarSize - fld.offset, requiredNicheCount, nzPath, nicheStart)) {
                                         nzPath.index = i;
-                                        std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                        std::reverse(nzPath.subFields.mutBegin(), nzPath.subFields.mutEnd());
                                         nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
-                                        std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                        std::reverse(nzPath.subFields.mutBegin(), nzPath.subFields.mutEnd());
 
-                                        nzPath.subFields.push_back(i);
+                                        nzPath.subFields.pushBack(i);
                                         nzPath.index = biggestVar;
-                                        std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                        std::reverse(nzPath.subFields.mutBegin(), nzPath.subFields.mutEnd());
                                         DEBUG(StringView("Niche optimisation (trailing): value offset=") << nicheStart << StringView(" path=") << nzPath << StringView(" (@") << nicheOffset << StringView(")"));
 
                                         BUG_ASSERT(rv.variants.is_None());
@@ -1767,17 +1788,17 @@ namespace {
                                         size_t nicheStart = 0;
                                         if (getVariantNichePath(sp, resolve, fld.ty, 0, maxVarSize - minOffset, requiredNicheCount, nzPath, nicheStart)) {
                                             nzPath.index = i;
-                                            std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                            std::reverse(nzPath.subFields.mutBegin(), nzPath.subFields.mutEnd());
                                             nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
                                             if (nicheOffset != 0) {
                                                 DEBUG(StringView("Ignore niche not at the start of the struture"));
                                                 continue;
                                             }
-                                            std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                            std::reverse(nzPath.subFields.mutBegin(), nzPath.subFields.mutEnd());
 
-                                            nzPath.subFields.push_back(i);
+                                            nzPath.subFields.pushBack(i);
                                             nzPath.index = biggestVar;
-                                            std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                            std::reverse(nzPath.subFields.mutBegin(), nzPath.subFields.mutEnd());
 
                                             DEBUG(StringView("Niche optimisation (leading): linear offset=") << nicheStart << StringView(" path=") << nzPath << StringView(" @byte ") << nicheOffset);
                                             nicheBeforeData = true;
@@ -1959,9 +1980,9 @@ namespace {
                         rv.align = maxAlign;
 
                         if (hasExplcitValue) {
-                            std::vector<U128> vals;
+                            Vector<U128> vals;
                             for (const auto& v : e) {
-                                vals.push_back(v.discriminantValue);
+                                vals.pushBack(v.discriminantValue);
                             }
                             DEBUG(StringView("vals = ") << vals);
                             rv.variants = TypeRepr::VariantMode::make_Values({{e.size(), tagSize, {}}, std::move(vals)});
@@ -2020,9 +2041,9 @@ namespace {
                 if (rv.fields.size() > 0) {
                     TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, rv.size, rv.align);
 
-                    std::vector<U128> vals;
+                    Vector<U128> vals;
                     for (const auto& v : e.variants) {
-                        vals.push_back(v.val);
+                        vals.pushBack(v.val);
                     }
                     DEBUG(StringView("vals = ") << vals);
                     rv.variants = TypeRepr::VariantMode::make_Values({{0, static_cast<u8>(rv.size), {}}, std::move(vals)});
@@ -2619,9 +2640,9 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     return rv;
 }
 
-const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const std::vector<size_t>& subFields, size_t ofs) {
+const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const Vector<size_t>& subFields, size_t ofs) {
     const auto* ty = &repr.fields.at(idx).ty;
-    while (ofs < subFields.size()) {
+    while (ofs < subFields.length()) {
         const auto field = subFields[ofs++];
         if (field == TypeRepr::FieldPath::ARRAY_ELEMENT) {
             const auto* array = (*ty)->opt_Array();
@@ -2789,34 +2810,34 @@ auto TransmuteNfa::uninhabited() -> Fragment {
 auto TransmuteNfa::byte(const TransmuteByteSet& values) -> Fragment {
     auto start = addState();
     auto accept = addState();
-    states[start].bytes.push_back({values, accept});
+    states[start].bytes.pushBack({values, accept});
     return {start, accept};
 }
 
 auto TransmuteNfa::reference(TransmuteReference reference) -> Fragment {
     auto start = addState();
     auto accept = addState();
-    states[start].references.push_back({reference, accept});
+    states[start].references.pushBack({reference, accept});
     return {start, accept};
 }
 
 auto TransmuteNfa::then(Fragment left, Fragment right) -> Fragment {
-    states[left.accept].epsilon.push_back(right.start);
+    states[left.accept].epsilon.pushBack(right.start);
     return {left.start, right.accept};
 }
 
-auto TransmuteNfa::alternative(std::vector<Fragment> alternatives) -> Fragment {
+auto TransmuteNfa::alternative(Vector<Fragment> alternatives) -> Fragment {
     if (alternatives.empty()) {
         return uninhabited();
     }
-    if (alternatives.size() == 1) {
-        return alternatives.front();
+    if (alternatives.length() == 1) {
+        return alternatives[0];
     }
     auto start = addState();
     auto accept = addState();
     for (const auto& alternative : alternatives) {
-        states[start].epsilon.push_back(alternative.start);
-        states[alternative.accept].epsilon.push_back(accept);
+        states[start].epsilon.pushBack(alternative.start);
+        states[alternative.accept].epsilon.pushBack(accept);
     }
     return {start, accept};
 }
@@ -2877,10 +2898,10 @@ auto TransmuteLayoutBuilder::character() -> Built {
         }
         return rv;
     };
-    std::vector<TransmuteNfa::Fragment> alternatives;
-    alternatives.push_back(make({any, byteRange(0x00, 0xD7), zero, zero}));
-    alternatives.push_back(make({any, byteRange(0xE0, 0xFF), zero, zero}));
-    alternatives.push_back(make({any, any, byteRange(0x01, 0x10), zero}));
+    Vector<TransmuteNfa::Fragment> alternatives;
+    alternatives.pushBack(make({any, byteRange(0x00, 0xD7), zero, zero}));
+    alternatives.pushBack(make({any, byteRange(0xE0, 0xFF), zero, zero}));
+    alternatives.pushBack(make({any, any, byteRange(0x01, 0x10), zero}));
     return {nfa.alternative(std::move(alternatives)), 4};
 }
 
@@ -2973,7 +2994,7 @@ auto TransmuteLayoutBuilder::enumLayout(const HIRTypeData* ty, const TypeRepr& r
         return combine({Segment{repr.fields[0].offset, build(repr.fields[0].ty)}}, repr.size);
     }
 
-    std::vector<TransmuteNfa::Fragment> alternatives;
+    Vector<TransmuteNfa::Fragment> alternatives;
     if (const auto* linear = repr.variants.opt_Linear()) {
         const auto tagOffset = repr.getOffset(sp, resolve, linear->field);
         for (unsigned variant = 0; variant < linear->numVariants; variant++) {
@@ -2984,13 +3005,13 @@ auto TransmuteLayoutBuilder::enumLayout(const HIRTypeData* ty, const TypeRepr& r
             } else {
                 value = taggedVariant(repr, variant, tagOffset, linear->field.size, U128(linear->tagValue(variant)), true);
             }
-            alternatives.push_back(value.fragment);
+            alternatives.pushBack(value.fragment);
         }
     } else if (const auto* values = repr.variants.opt_Values()) {
         const auto tagOffset = repr.getOffset(sp, resolve, values->field);
-        for (unsigned variant = 0; variant < values->values.size(); variant++) {
+        for (unsigned variant = 0; variant < values->values.length(); variant++) {
             auto value = enm.data.is_Value() ? combine({Segment{tagOffset, exact(values->values[variant], values->field.size)}}, repr.size) : taggedVariant(repr, variant, tagOffset, values->field.size, values->values[variant], true);
-            alternatives.push_back(value.fragment);
+            alternatives.pushBack(value.fragment);
         }
     } else if (const auto* nonzero = repr.variants.opt_NonZero()) {
         const auto tagOffset = repr.getOffset(sp, resolve, nonzero->field);
@@ -3003,7 +3024,7 @@ auto TransmuteLayoutBuilder::enumLayout(const HIRTypeData* ty, const TypeRepr& r
             } else {
                 value = combine({Segment{tagOffset, exact(U128(0), nonzero->field.size)}}, repr.size);
             }
-            alternatives.push_back(value.fragment);
+            alternatives.pushBack(value.fragment);
         }
     } else {
         BUG(sp, StringView("Unhandled enum representation for ") << ty);
@@ -3093,9 +3114,9 @@ auto TransmuteLayoutBuilder::build(const HIRTypeData* ty) -> Built {
             return aggregate(*repr);
         }
         if (path->binding.is_Union()) {
-            std::vector<TransmuteNfa::Fragment> alternatives;
+            Vector<TransmuteNfa::Fragment> alternatives;
             for (const auto& field : repr->fields) {
-                alternatives.push_back(combine({Segment{0, build(field.ty)}}, repr->size).fragment);
+                alternatives.pushBack(combine({Segment{0, build(field.ty)}}, repr->size).fragment);
             }
             return {nfa.alternative(std::move(alternatives)), repr->size};
         }
@@ -3109,20 +3130,21 @@ auto TransmuteLayoutBuilder::build(const HIRTypeData* ty) -> Built {
     return {nfa.uninhabited(), 0};
 }
 
-auto TransmuteLayoutBuilder::epsilonClosure(std::vector<unsigned> states) const -> std::vector<unsigned> {
-    std::vector<bool> seen(nfa.states.size(), false);
+auto TransmuteLayoutBuilder::epsilonClosure(Vector<unsigned> states) const -> Vector<unsigned> {
+    Vector<bool> seen;
+    seen.zero(nfa.states.size());
     for (auto state : states) {
-        seen.at(state) = true;
+        seen.mut(state) = true;
     }
-    for (size_t i = 0; i < states.size(); i++) {
+    for (size_t i = 0; i < states.length(); i++) {
         for (auto next : nfa.states[states[i]].epsilon) {
             if (!seen[next]) {
-                seen[next] = true;
-                states.push_back(next);
+                seen.mut(next) = true;
+                states.pushBack(next);
             }
         }
     }
-    std::sort(states.begin(), states.end());
+    quickSort(mutRange(states));
     return states;
 }
 
@@ -3140,9 +3162,9 @@ auto TransmuteLayoutBuilder::makeDfa(const HIRTypeData* ty, TransmuteDfa& out) -
         return false;
     }
 
-    std::map<std::vector<unsigned>, unsigned> indexes;
-    std::vector<std::vector<unsigned>> states;
-    auto intern = [&](std::vector<unsigned> state) {
+    std::map<Vector<unsigned>, unsigned, VectorLess> indexes;
+    std::vector<Vector<unsigned>> states;
+    auto intern = [&](Vector<unsigned> state) {
         auto result = indexes.emplace(state, indexes.size());
         if (result.second) {
             states.push_back(std::move(state));
@@ -3150,7 +3172,7 @@ auto TransmuteLayoutBuilder::makeDfa(const HIRTypeData* ty, TransmuteDfa& out) -
             transitions.fill(-1);
             out.transitions.push_back(transitions);
             out.references.push_back({});
-            out.accepting.push_back(false);
+            out.accepting.pushBack(false);
         }
         return result.first->second;
     };
@@ -3158,14 +3180,14 @@ auto TransmuteLayoutBuilder::makeDfa(const HIRTypeData* ty, TransmuteDfa& out) -
     intern(epsilonClosure({root.fragment.start}));
     for (size_t stateIndex = 0; stateIndex < states.size(); stateIndex++) {
         const auto state = states[stateIndex];
-        out.accepting[stateIndex] = std::binary_search(state.begin(), state.end(), root.fragment.accept);
+        out.accepting.mut(stateIndex) = std::binary_search(state.begin(), state.end(), root.fragment.accept);
 
-        std::array<std::vector<unsigned>, TRANSMUTE_BYTE_VALUES> destinations;
+        std::array<Vector<unsigned>, TRANSMUTE_BYTE_VALUES> destinations;
         for (auto nfaState : state) {
             for (const auto& edge : nfa.states[nfaState].bytes) {
                 for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES; value++) {
                     if (edge.values[value]) {
-                        destinations[value].push_back(edge.destination);
+                        destinations[value].pushBack(edge.destination);
                     }
                 }
             }
@@ -3175,8 +3197,16 @@ auto TransmuteLayoutBuilder::makeDfa(const HIRTypeData* ty, TransmuteDfa& out) -
             if (destination.empty()) {
                 continue;
             }
-            std::sort(destination.begin(), destination.end());
-            destination.erase(std::unique(destination.begin(), destination.end()), destination.end());
+            quickSort(mutRange(destination));
+            size_t uniqueLength = 1;
+            for (size_t i = 1; i < destination.length(); i++) {
+                if (destination[i] != destination[uniqueLength - 1]) {
+                    destination.mut(uniqueLength++) = destination[i];
+                }
+            }
+            while (destination.length() > uniqueLength) {
+                destination.popBack();
+            }
             out.transitions[stateIndex][value] = intern(epsilonClosure(std::move(destination)));
         }
         for (auto nfaState : state) {

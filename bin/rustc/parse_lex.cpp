@@ -373,12 +373,12 @@ void Lexer::checkInitialShebang() {
 
     const auto initialLine = line;
     const auto initialLineOfs = lineOfs;
-    std::vector<Codepoint> consumed;
+    Vector<Codepoint> consumed;
     bool eof = false;
     auto read = [&]() {
         try {
             auto ch = this->getc();
-            consumed.push_back(ch);
+            consumed.pushBack(ch);
             return ch;
         } catch (const Lexer::EndOfFile&) {
             eof = true;
@@ -403,7 +403,7 @@ void Lexer::checkInitialShebang() {
         this->ungetc();
         return;
     }
-    consumed.push_back(first);
+    consumed.pushBack(first);
     if (read() != '!' || eof) {
         restore(0);
         return;
@@ -430,7 +430,7 @@ void Lexer::checkInitialShebang() {
             break;
         }
 
-        const auto commentStart = consumed.size() - 1;
+        const auto commentStart = consumed.length() - 1;
         ch = read();
         if (eof || (ch != '/' && ch != '*')) {
             break;
@@ -470,11 +470,11 @@ void Lexer::checkInitialShebang() {
         size_t index = commentStart + 2;
         while (depth > 0 && !eof) {
             Codepoint current;
-            if (index < consumed.size()) {
+            if (index < consumed.length()) {
                 current = consumed[index++];
             } else {
                 current = read();
-                index = consumed.size();
+                index = consumed.length();
             }
             if (eof) {
                 break;
@@ -496,9 +496,9 @@ void Lexer::checkInitialShebang() {
         return;
     }
 
-    auto replayStart = consumed.size();
+    auto replayStart = consumed.length();
     bool foundNewline = false;
-    for (size_t i = 0; i < consumed.size(); i += 1) {
+    for (size_t i = 0; i < consumed.length(); i += 1) {
         if (consumed[i] == '\n' || consumed[i] == '\r') {
             replayStart = i;
             foundNewline = true;
@@ -508,12 +508,12 @@ void Lexer::checkInitialShebang() {
     while (!foundNewline && !eof) {
         auto ch = read();
         if (!eof && (ch == '\n' || ch == '\r')) {
-            replayStart = consumed.size() - 1;
+            replayStart = consumed.length() - 1;
             foundNewline = true;
         }
     }
     if (!foundNewline) {
-        replayStart = consumed.size();
+        replayStart = consumed.length();
     }
     restore(replayStart);
 }
@@ -525,12 +525,12 @@ bool Lexer::trySkipInitialFrontmatter() {
 
     const auto initialLine = line;
     const auto initialLineOfs = lineOfs;
-    std::vector<Codepoint> consumed;
+    Vector<Codepoint> consumed;
     bool eof = false;
     auto read = [&]() {
         try {
             auto ch = this->getc();
-            consumed.push_back(ch);
+            consumed.pushBack(ch);
             return ch;
         } catch (const Lexer::EndOfFile&) {
             eof = true;
@@ -1476,7 +1476,7 @@ Codepoint Lexer::getc() {
 #ifdef TRACE_CHARS
         sysO << StringView("getc(): U+") << formatHex(lastChar.v) << StringView(" (cached)") << endL;
 #endif
-    } else if (replayCharOffset < replayChars.size()) {
+    } else if (replayCharOffset < replayChars.length()) {
         lastChar = replayChars[replayCharOffset++];
         if (lastChar == '\n') {
             line += 1;

@@ -90,7 +90,7 @@ struct Context {
         TypeckPrimitiveOperator operatorKind;
         bool isAmbiguous = false;
 
-        std::vector<StallDependency> stalledOn;
+        stl::Vector<StallDependency> stalledOn;
         std::vector<CapturedIvarPossible> stalledPossibilities;
     };
 
@@ -110,7 +110,7 @@ struct Context {
     stl::ObjPool::Ref linkAssocIndexPool;
     stl::IntMap<stl::Vector<unsigned>> linkAssocIndex;
 
-    std::vector<HIRExprNode*> toVisit;
+    stl::Vector<HIRExprNode*> toVisit;
 
     std::vector<std::unique_ptr<Revisitor>> advRevisits;
 
@@ -122,7 +122,7 @@ struct Context {
     stl::Vector<ClosureReturnObligation> closureReturnObligations;
 
     HIRGenericParams emptyGenericParams;
-    std::vector<bool> ivarsSized;
+    stl::Vector<bool> ivarsSized;
     std::vector<IVarPossible> possibleIvarVals;
     std::vector<Associated::CapturedIvarPossible>* possibleIvarSink = nullptr;
 
@@ -210,7 +210,7 @@ struct Context {
 
     void possibleEquateTypeUnknown(const Span& sp, const HIRTypeData* ty, IvarUnknownType srcTy);
 
-    void possibleEquateTypeBounds(const Span& sp, const HIRTypeData* ty, std::vector<HIRTypeRef> t);
+    void possibleEquateTypeBounds(const Span& sp, const HIRTypeData* ty, stl::Vector<HIRTypeRef> t);
 
     enum class PossibleTypeSource {
         CoerceTo,

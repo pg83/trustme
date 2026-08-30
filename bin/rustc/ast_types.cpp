@@ -6,6 +6,7 @@
 #include "ast_crate.h"
 #include "ast_pattern.h"
 
+#include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
 using namespace stl;
@@ -22,7 +23,7 @@ bool ASTHigherRankedBounds::empty() const {
 
 TypeFunction::TypeFunction() = default;
 
-TypeFunction::TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, ASTType* ret, std::vector<ASTType*> args, bool isVariadic)
+TypeFunction::TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, ASTType* ret, Vector<ASTType*> args, bool isVariadic)
     : hrbs(mv$(hrbs))
     , isUnsafe(isUnsafe)
     , abi(mv$(abi))
@@ -43,7 +44,7 @@ TypeFunction::TypeFunction(const TypeFunction& other)
     , isVariadic(other.isVariadic)
 {
     for (const auto& at : other.argTypes) {
-        argTypes.push_back(at->clone());
+        argTypes.pushBack(at->clone());
     }
 }
 
@@ -63,11 +64,11 @@ Ordering TypeFunction::ord(const TypeFunction& x) const {
 
 ASTType* ASTType::clone() const {
     struct H {
-        static std::vector<::ASTType*> cloneTyVec(const std::vector<ASTType*>& x) {
-            std::vector<ASTType*> rv;
-            rv.reserve(x.size());
+        static Vector<::ASTType*> cloneTyVec(const Vector<ASTType*>& x) {
+            Vector<ASTType*> rv;
+            rv.grow(x.length());
             for (const auto& t : x) {
-                rv.push_back(t->clone());
+                rv.pushBack(t->clone());
             }
             return rv;
         }
@@ -414,11 +415,11 @@ ASTType* mkType(ObjPool& pool, Span sp, enum eCoreType type) {
     return mkType(pool, sp, TypeData::make_Primitive({type}));
 }
 
-ASTType* mkType(ObjPool& pool, ASTTypeTags::Tuple, Span sp, std::vector<ASTType*> innerTypes) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Tuple, Span sp, Vector<ASTType*> innerTypes) {
     return mkType(pool, sp, TypeData::make_Tuple({mv$(innerTypes)}));
 }
 
-ASTType* mkType(ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, std::vector<ASTType*> args, bool isVariadic, ASTType* ret) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, Vector<ASTType*> args, bool isVariadic, ASTType* ret) {
     return mkType(pool, sp, TypeData::make_Function({TypeFunction(mv$(hrbs), isUnsafe, abi, ret, mv$(args), isVariadic)}));
 }
 
@@ -454,7 +455,7 @@ ASTType* mkType(ObjPool& pool, Span sp, ASTPath path) {
     return mkType(pool, ASTTypeTags::Path(), sp, mv$(path));
 }
 
-ASTType* mkType(ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, std::vector<ASTLifetimeRef> lifetimes) {
+ASTType* mkType(ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, Vector<ASTLifetimeRef> lifetimes) {
     return mkType(pool, sp, TypeData::make_TraitObject({mv$(traits), mv$(lifetimes)}));
 }
 
@@ -524,6 +525,6 @@ void stl::output<ZeroCopyOutput, ASTHigherRankedBounds>(ZeroCopyOutput& out, con
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::vector<ASTType*>>(ZeroCopyOutput& out, const std::vector<ASTType*>& values) {
+void stl::output<ZeroCopyOutput, Vector<ASTType*>>(ZeroCopyOutput& out, const Vector<ASTType*>& values) {
     outCont(out, values);
 }

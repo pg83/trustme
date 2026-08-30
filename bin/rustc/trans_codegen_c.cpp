@@ -14,6 +14,8 @@
 #include "hir_typeck_static.h"
 #include "hir_typeck_monomorph.h"
 
+#include <std/alg/qsort.h>
+#include <std/alg/range.h>
 #include <std/sym/i_map.h>
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
@@ -45,18 +47,18 @@ namespace {
 
     struct StringList {
         std::vector<std::string> cached;
-        std::vector<const char*> strings;
+        Vector<const char*> strings;
 
         StringList();
 
         StringList(const StringList&) = delete;
         StringList(StringList&&) = default;
 
-        const std::vector<const char*>& getVec() const;
+        const Vector<const char*>& getVec() const;
 
-        std::vector<const char*>::const_iterator begin() const;
+        const char* const* begin() const;
 
-        std::vector<const char*>::const_iterator end() const;
+        const char* const* end() const;
 
         void push_back(std::string s);
 
@@ -271,7 +273,7 @@ namespace {
 
         void printEscapedString(const std::string& s);
 
-        void printEscapedString(const std::vector<u8>& s);
+        void printEscapedString(const Vector<u8>& s);
 
         void printEscapedStringInner(const char* start, const char* end);
 
@@ -554,22 +556,22 @@ FmtGccAsm::FmtGccAsm(const std::string& s, bool escapePercent) // escape: existi
 StringList::StringList() {
 }
 
-auto StringList::getVec() const -> const std::vector<const char*>& { // escape: existing container interface exposed by declaration reordering
+auto StringList::getVec() const -> const Vector<const char*>& { // escape: existing container interface exposed by declaration reordering
     return strings;
 }
 
-auto StringList::begin() const -> std::vector<const char*>::const_iterator { // escape: existing container interface exposed by declaration reordering
+auto StringList::begin() const -> const char* const* { // escape: existing container interface exposed by declaration reordering
     return strings.begin();
 }
 
-auto StringList::end() const -> std::vector<const char*>::const_iterator { // escape: existing container interface exposed by declaration reordering
+auto StringList::end() const -> const char* const* { // escape: existing container interface exposed by declaration reordering
     return strings.end();
 }
 
 auto StringList::push_back(std::string s) -> void { // escape: existing container interface exposed by declaration reordering
     if (cached.capacity() == cached.size()) {
-        std::vector<bool> b; // escape: existing temporary exposed by declaration reordering
-        b.reserve(strings.size());
+        Vector<bool> b; // escape: existing temporary exposed by declaration reordering
+        b.grow(strings.length());
         size_t j = 0;
         for (const auto* s : strings) {
             if (j == cached.size()) {
@@ -577,27 +579,27 @@ auto StringList::push_back(std::string s) -> void { // escape: existing containe
             }
             if (s == cached[j].c_str()) {
                 j++;
-                b.push_back(true);
+                b.pushBack(true);
             } else {
-                b.push_back(false);
+                b.pushBack(false);
             }
         }
 
         cached.push_back(std::move(s));
         j = 0;
-        for (size_t i = 0; i < b.size(); i++) {
+        for (size_t i = 0; i < b.length(); i++) {
             if (b[i]) {
-                strings[i] = cached.at(j++).c_str();
+                strings.mut(i) = cached.at(j++).c_str();
             }
         }
     } else {
         cached.push_back(std::move(s));
     }
-    strings.push_back(cached.back().c_str());
+    strings.pushBack(cached.back().c_str());
 }
 
 auto StringList::push_back(const char* s) -> void {
-    strings.push_back(s);
+    strings.pushBack(s);
 }
 
 template <typename F>
@@ -667,8 +669,8 @@ auto CodeGeneratorC::exceedsBackendOptimizationBudget(const HIRFunction& item, c
     auto charge = [&](size_t amount) {
         remaining = amount >= remaining ? 0 : remaining - amount;
     };
-    charge(code.locals.size());
-    charge(code.dropFlags.size());
+    charge(code.locals.length());
+    charge(code.dropFlags.length());
     charge(code.blocks.size());
     for (const auto& block : code.blocks) {
         charge(block.statements.size());
@@ -707,8 +709,8 @@ auto CodeGeneratorC::appendLiteralBlob(const EncodedLiteral& encoded) -> size_t 
         ASSERT_BUG(Span(), literalBlob, StringView("Failed to open `") << path << StringView("` for writing"));
     }
     const size_t offset = literalBlobSize;
-    const size_t written = fwrite(encoded.bytes.data(), 1, encoded.bytes.size(), literalBlob);
-    ASSERT_BUG(Span(), written == encoded.bytes.size(), StringView("Failed to write literal blob for `") << outfilePath << StringView("`"));
+    const size_t written = fwrite(encoded.bytes.data(), 1, encoded.bytes.length(), literalBlob);
+    ASSERT_BUG(Span(), written == encoded.bytes.length(), StringView("Failed to write literal blob for `") << outfilePath << StringView("`"));
     literalBlobSize += written;
     return offset;
 }
@@ -781,20 +783,20 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
             const HIRStatic* globalAllocator = hasGlobalAllocator ? &crate.getStaticByPath(Span(), allocatorIt->second) : nullptr;
             for (size_t i = 0; i < NUM_ALLOCATOR_METHODS; i++) {
                 struct H {
-                    static void tyArgs(std::vector<const char*>& out, AllocatorDataTy t) {
+                    static void tyArgs(Vector<const char*>& out, AllocatorDataTy t) {
                         switch (t) {
                             case AllocatorDataTy::Unit:
                             case AllocatorDataTy::ResultPtr:
                                 UNREACHABLE();
                             case AllocatorDataTy::Layout:
-                                out.push_back("uintptr_t");
-                                out.push_back("uintptr_t");
+                                out.pushBack("uintptr_t");
+                                out.pushBack("uintptr_t");
                                 break;
                             case AllocatorDataTy::Ptr:
-                                out.push_back("i8*");
+                                out.pushBack("i8*");
                                 break;
                             case AllocatorDataTy::Usize:
-                                out.push_back("uintptr_t");
+                                out.pushBack("uintptr_t");
                                 break;
                         }
                     }
@@ -813,9 +815,9 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                         UNREACHABLE();
                     }
 
-                    static void emitProto(ZeroCopyOutput& os, const AllocatorMethod& method, const char* namePrefix, const std::vector<const char*>& args) {
+                    static void emitProto(ZeroCopyOutput& os, const AllocatorMethod& method, const char* namePrefix, const Vector<const char*>& args) {
                         os << H::tyRet(method.ret) << StringView(" ") << namePrefix << method.name << StringView("(");
-                        for (size_t j = 0; j < args.size(); j++) {
+                        for (size_t j = 0; j < args.length(); j++) {
                             if (j != 0) {
                                 os << StringView(", ");
                             }
@@ -826,7 +828,7 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                 };
 
                 const auto& method = ALLOCATOR_METHODS[i];
-                std::vector<const char*> args;
+                Vector<const char*> args;
                 for (size_t j = 0; j < method.nArgs; j++) {
                     H::tyArgs(args, method.args[j]);
                 }
@@ -842,7 +844,7 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                         of << StringView("return ");
                     }
                     of << allocPrefix << method.name << StringView("(");
-                    for (size_t j = 0; j < args.size(); j++) {
+                    for (size_t j = 0; j < args.length(); j++) {
                         if (j != 0) {
                             of << StringView(", ");
                         }
@@ -1027,7 +1029,7 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
         }
 
         iterator end() const {
-            return iterator(*this, this->getVec().size());
+            return iterator(*this, this->getVec().length());
         }
     };
 
@@ -1174,7 +1176,7 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
             args.push_back("g++");
         }
     }
-    argFileStart = args.getVec().size();
+    argFileStart = args.getVec().length();
     args.push_back("-std=gnu++20");
     args.push_back("-fexceptions");
     args.push_back("-fwrapv");
@@ -1457,7 +1459,7 @@ auto CodeGeneratorC::emitTypeProto(const HIRTypeData* ty) -> void {
             break;
         case HIRTypeData::TAG_Tuple: {
             auto& te = (*ty).as_Tuple();
-            if (te.size() > 0) {
+            if (!te.empty()) {
                 of << StringView("struct ");
                 emitCtype(ty);
                 of << StringView(";\n");
@@ -1537,7 +1539,7 @@ auto CodeGeneratorC::emitTypeFn(const HIRTypeData* ty) -> void {
     if (te.argTypes.empty() && !te.trackCaller) {
         of << StringView("void)");
     } else {
-        for (unsigned int i = 0; i < te.argTypes.size(); i++) {
+        for (unsigned int i = 0; i < te.argTypes.length(); i++) {
             if (i != 0) {
                 of << StringView(",");
             }
@@ -1560,10 +1562,10 @@ auto CodeGeneratorC::emitTypeFn(const HIRTypeData* ty) -> void {
 }
 
 auto CodeGeneratorC::emitStructInner(const HIRTypeData* ty, const TypeRepr* repr, unsigned packingMaxAlign) -> void {
-    std::vector<unsigned> fields;
-    fields.reserve(repr->fields.size());
-    std::vector<bool> zsts;
-    zsts.reserve(repr->fields.size());
+    Vector<unsigned> fields;
+    fields.grow(repr->fields.size());
+    Vector<bool> zsts;
+    zsts.grow(repr->fields.size());
     size_t maxAlign = 0;
     size_t cMaxAlign = 0;
     bool hasManualAlign = false;
@@ -1584,8 +1586,8 @@ auto CodeGeneratorC::emitStructInner(const HIRTypeData* ty, const TypeRepr* repr
             cMaxAlign = std::max(cMaxAlign, alC);
         }
 
-        fields.push_back(fields.size());
-        zsts.push_back(sz == 0);
+        fields.pushBack(fields.length());
+        zsts.pushBack(sz == 0);
     }
     const auto emittedAlignment = cTypeAlignment(repr->size, repr->align);
     if (packingMaxAlign == 0 && cMaxAlign != emittedAlignment /*&& repr->size > 0*/) {
@@ -1594,7 +1596,7 @@ auto CodeGeneratorC::emitStructInner(const HIRTypeData* ty, const TypeRepr* repr
     if (packingMaxAlign == 0 && !hasManualAlign && repr->align == 1 && repr->size > 1) {
         packingMaxAlign = 1;
     }
-    std::sort(fields.begin(), fields.end(), [&](auto a, auto b) {
+    quickSort(mutRange(fields), [&](auto a, auto b) {
         if (repr->fields[a].offset == repr->fields[b].offset) {
             return !zsts[a] < !zsts[b];
         }
@@ -1703,7 +1705,7 @@ auto CodeGeneratorC::emitType(const HIRTypeData* ty) -> void {
             break;
         case HIRTypeData::TAG_Tuple: {
             auto& te = (*ty).as_Tuple();
-            if (te.size() > 0) {
+            if (!te.empty()) {
                 const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
 
                 emitStructInner(ty, repr, /*packing_max_align=*/0);
@@ -1908,14 +1910,18 @@ auto CodeGeneratorC::emitEnum(const Span& sp, const HIRGenericPath& p, const HIR
 
     const bool hasSeparateTag = repr->fields.size() >= 2 && isEnumTag(repr, repr->fields.size() - 1) && repr->fields.back().offset != repr->fields[0].offset;
     const size_t dataFieldCount = repr->fields.size() - (hasSeparateTag ? 1 : 0);
-    std::vector<unsigned> unionFields;
+    Vector<unsigned> unionFields;
     for (size_t i = 1; i < dataFieldCount; i++) {
         if (repr->fields[i].offset == repr->fields[0].offset) {
-            unionFields.push_back(i);
+            unionFields.pushBack(i);
         }
     }
-    if (unionFields.size() > 0 || (hasSeparateTag && dataFieldCount == 1)) {
-        unionFields.insert(unionFields.begin(), 0);
+    if (!unionFields.empty() || (hasSeparateTag && dataFieldCount == 1)) {
+        Vector<unsigned> fieldsWithTag;
+        fieldsWithTag.grow(unionFields.length() + 1);
+        fieldsWithTag.pushBack(0);
+        fieldsWithTag.append(unionFields.begin(), unionFields.end());
+        unionFields = mv$(fieldsWithTag);
     }
 
     of << StringView("struct e_") << TransMangle(p) << StringView(" {\n");
@@ -1941,10 +1947,10 @@ auto CodeGeneratorC::emitEnum(const Span& sp, const HIRGenericPath& p, const HIR
             of << StringView(";\n");
             of << StringView("\t} DATA;\n");
         }
-    } else if (unionFields.size() > 0) {
-        if (unionFields.size() == repr->fields.size()) {
+    } else if (!unionFields.empty()) {
+        if (unionFields.length() == repr->fields.size()) {
         } else {
-            BUG_ASSERT(unionFields.size() + 1 == repr->fields.size());
+            BUG_ASSERT(unionFields.length() + 1 == repr->fields.size());
             BUG_ASSERT(isEnumTag(repr, repr->fields.size() - 1));
 
             BUG_ASSERT(repr->fields.back().offset == 0);
@@ -2287,11 +2293,11 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
     const bool isZero = isZeroLiteral(type, encoded, params);
 
     const bool blobLinkage = item.linkage.type == HIRLinkage::Type::Auto || item.linkage.type == HIRLinkage::Type::Weak;
-    if (!isZero && encoded.bytes.size() >= 64 * 1024 && encoded.relocations.empty() && TargetGetCurSpec(wb_).osName == "linux" && blobLinkage && item.linkage.name.empty() && item.linkage.section.empty() && literalBlobPathIsSafe()) {
+    if (!isZero && encoded.bytes.length() >= 64 * 1024 && encoded.relocations.empty() && TargetGetCurSpec(wb_).osName == "linux" && blobLinkage && item.linkage.name.empty() && item.linkage.section.empty() && literalBlobPathIsSafe()) {
         size_t size = 0;
         size_t align = 0;
         MIR_ASSERT(topMirRes, TargetGetSizeAndAlignOf(sp, resolve_, type, size, align), StringView("Unsized static ") << p);
-        MIR_ASSERT(topMirRes, size == encoded.bytes.size(), StringView("Static size differs from its encoded value: ") << size << StringView(" != ") << encoded.bytes.size());
+        MIR_ASSERT(topMirRes, size == encoded.bytes.length(), StringView("Static size differs from its encoded value: ") << size << StringView(" != ") << encoded.bytes.length());
         if (align < item.explicitAlignment) {
             align = item.explicitAlignment;
         }
@@ -2304,7 +2310,7 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
         of << StringView("\".") << (weak ? "weak " : "globl ") << TransMangleValue(p) << StringView("\\n\"\n");
         of << StringView("\".type ") << TransMangleValue(p) << StringView(",@object\\n\"\n");
         of << StringView("\"") << TransMangleValue(p) << StringView(":\\n\"\n");
-        of << StringView("\".incbin \\\"") << outfilePath << StringView(".blob\\\", ") << blobOffset << StringView(", ") << encoded.bytes.size() << StringView("\\n\"\n");
+        of << StringView("\".incbin \\\"") << outfilePath << StringView(".blob\\\", ") << blobOffset << StringView(", ") << encoded.bytes.length() << StringView("\\n\"\n");
         of << StringView("\".size ") << TransMangleValue(p) << StringView(",") << size << StringView("\\n\"\n");
         of << StringView("\".popsection\\n\");\n");
         mirRes = nullptr;
@@ -2329,9 +2335,9 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
             DEBUG(StringView("encoded.relocations = ") << encoded.relocations);
             auto relocIt = encoded.relocations.begin();
             auto ptrSize = TargetGetPointerBits() / 8;
-            for (size_t i = 0; i < encoded.bytes.size(); i += ptrSize) {
+            for (size_t i = 0; i < encoded.bytes.length(); i += ptrSize) {
                 u64 v = 0;
-                for (size_t o = 0; o < ptrSize && i + o < encoded.bytes.size(); o++) {
+                for (size_t o = 0; o < ptrSize && i + o < encoded.bytes.length(); o++) {
                     v |= static_cast<u64>(encoded.bytes[i + o]) << (o * 8);
                 }
 
@@ -2409,9 +2415,9 @@ auto CodeGeneratorC::printEscapedString(const std::string& s) -> void {
     printEscapedStringInner(s.c_str(), s.c_str() + s.size());
 }
 
-auto CodeGeneratorC::printEscapedString(const std::vector<u8>& s) -> void {
+auto CodeGeneratorC::printEscapedString(const Vector<u8>& s) -> void {
     const char* start = reinterpret_cast<const char*>(s.data());
-    printEscapedStringInner(start, start + s.size());
+    printEscapedStringInner(start, start + s.length());
 }
 
 auto CodeGeneratorC::printEscapedStringInner(const char* start, const char* end) -> void {
@@ -2951,7 +2957,7 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
         emitCtype(retType, FMT_CB(ss, ss << StringView("rv");));
         of << StringView(";\n");
     }
-    for (size_t i = code->locals.size(); i-- > 0;) {
+    for (size_t i = code->locals.length(); i-- > 0;) {
         if (this->typeIsBadZst(code->locals[i])) {
             continue;
         }
@@ -2970,7 +2976,7 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
             of << StringView(";\n");
         }
     }
-    for (unsigned int i = 0; i < code->dropFlags.size(); i++) {
+    for (unsigned int i = 0; i < code->dropFlags.length(); i++) {
         of << StringView("\tbool df") << i << StringView(" = ") << code->dropFlags[i] << StringView(";\n");
     }
 
@@ -3524,7 +3530,7 @@ auto CodeGeneratorC::emitBlockTerminator(MIRTypeResolve& localMirRes, const MIRT
             size_t secondTargetIndex = SIZE_MAX;
             bool hasSecondTarget = false;
             bool hasThirdTarget = false;
-            for (size_t idx = 0; idx < e.targets.size(); idx++) {
+            for (size_t idx = 0; idx < e.targets.length(); idx++) {
                 const auto target = e.targets[idx];
                 if (target == firstTarget) {
                     firstTargetCount++;
@@ -3553,7 +3559,7 @@ auto CodeGeneratorC::emitBlockTerminator(MIRTypeResolve& localMirRes, const MIRT
                     oddArm = secondTargetIndex;
                 }
             }
-            emitTermSwitch(localMirRes, e.val, e.targets.size(), indentLevel, [&](size_t idx) {
+            emitTermSwitch(localMirRes, e.val, e.targets.length(), indentLevel, [&](size_t idx) {
                 emitTargetBody(e.targets[idx]);
                 of << StringView(";");
             }, oddArm);
@@ -5099,7 +5105,7 @@ auto CodeGeneratorC::emitTermSwitchvalueCb(const MIRTypeResolve& localMirRes, co
         for (const auto& v : *ve) {
             of << StringView(" {(void*)");
             this->printEscapedString(v);
-            of << StringView(",") << v.size() << StringView("},");
+            of << StringView(",") << v.length() << StringView("},");
         }
         of << StringView(" {0,0} };\n");
         of << indent << StringView("switch( trustme_string_search_linear(");
@@ -5119,7 +5125,7 @@ auto CodeGeneratorC::emitTermSwitchvalueCb(const MIRTypeResolve& localMirRes, co
         for (const auto& v : *ve) {
             of << StringView(" {(void*)");
             this->printEscapedString(v);
-            of << StringView(",") << v.size() << StringView("},");
+            of << StringView(",") << v.length() << StringView("},");
         }
         of << StringView(" {0,0} };\n");
         HIRTypeRef tmp;
@@ -5158,7 +5164,7 @@ auto CodeGeneratorC::emitTermSwitchvalueCb(const MIRTypeResolve& localMirRes, co
             of << StringView(".lo");
         }
         of << StringView(") {\n");
-        for (size_t i = 0; i < ve->size(); i++) {
+        for (size_t i = 0; i < ve->length(); i++) {
             of << indent << StringView("\tcase ") << (*ve)[i] << StringView("ull: ");
             cb.emit(i);
             of << StringView(" break;\n");
@@ -5187,7 +5193,7 @@ auto CodeGeneratorC::emitTermSwitchvalueCb(const MIRTypeResolve& localMirRes, co
             of << StringView(".lo");
         }
         of << StringView(") {\n");
-        for (size_t i = 0; i < ve->size(); i++) {
+        for (size_t i = 0; i < ve->length(); i++) {
             of << indent << StringView("\tcase ");
             if ((*ve)[i] == INT64_MIN) {
                 of << StringView("INT64_MIN");
@@ -5751,13 +5757,17 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         of << StringView("abort();\n");
         return;
     } else {
-        std::vector<unsigned> argMappings(asmParams.size(), UINT_MAX);
+        Vector<unsigned> argMappings;
+        argMappings.grow(asmParams.size());
+        for (size_t i = 0; i < asmParams.size(); i++) {
+            argMappings.pushBack(UINT_MAX);
+        }
         bool blockOpen = false;
         for (size_t i = 0; i < asmParams.size(); i++) {
             if (const auto* pe = asmParams[i].opt_Reg()) {
                 if (!pe->input && !pe->output) {
                 } else if (const auto* regnameP = pe->spec.opt_Explicit()) {
-                    argMappings[i] = UINT_MAX - 1;
+                    argMappings.mut(i) = UINT_MAX - 1;
                     if (!blockOpen) {
                         blockOpen = true;
                         of << indent << StringView("{\n");
@@ -5813,49 +5823,49 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
             }
         }
 
-        std::vector<const MIRAsmParam::Data_Reg*> outputs;
+        Vector<const MIRAsmParam::Data_Reg*> outputs;
         for (size_t i = 0; i < asmParams.size(); i++) {
             if (const auto* pe = asmParams[i].opt_Reg()) {
                 if (pe->spec.is_Explicit()) {
                     if (pe->output) {
-                        outputs.push_back(pe);
+                        outputs.pushBack(pe);
                     }
                 } else if (!pe->output && !pe->input) {
                     if (!blockOpen) {
                         blockOpen = true;
                         of << indent << StringView("{\n");
                     }
-                    of << indent << StringView("uintptr_t asm_anon_") << outputs.size() << StringView(" = 0;\n");
+                    of << indent << StringView("uintptr_t asm_anon_") << outputs.length() << StringView(" = 0;\n");
 
-                    argMappings[i] = outputs.size();
-                    outputs.push_back(pe);
+                    argMappings.mut(i) = outputs.length();
+                    outputs.pushBack(pe);
                 } else if (pe->output) {
-                    argMappings[i] = outputs.size();
-                    outputs.push_back(pe);
+                    argMappings.mut(i) = outputs.length();
+                    outputs.pushBack(pe);
                 }
             }
         }
-        std::vector<const MIRAsmParam*> inputs;
+        Vector<const MIRAsmParam*> inputs;
         for (size_t i = 0; i < asmParams.size(); i++) {
             if (const auto* pe = asmParams[i].opt_Reg()) {
                 if (pe->spec.opt_Explicit()) {
                     if (pe->input && !pe->output) {
-                        inputs.push_back(&asmParams[i]);
+                        inputs.pushBack(&asmParams[i]);
                     }
                 } else if (pe->input) {
                     if (!pe->output) {
-                        argMappings[i] = outputs.size() + inputs.size();
+                        argMappings.mut(i) = outputs.length() + inputs.length();
                     }
-                    inputs.push_back(&asmParams[i]);
+                    inputs.pushBack(&asmParams[i]);
                 }
             }
         }
-        std::vector<const char*> clobbers;
+        Vector<const char*> clobbers;
         for (size_t i = 0; i < asmParams.size(); i++) {
             if (const auto* pe = asmParams[i].opt_Reg()) {
                 if (!pe->input && !pe->output && pe->spec.is_Explicit()) {
                     const auto& regname = pe->spec.as_Explicit();
-                    clobbers.push_back(regname.c_str());
+                    clobbers.pushBack(regname.c_str());
                 }
             }
         }
@@ -5892,12 +5902,12 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                     of << StringView("%l[bb") << param.as_Label() << StringView("]");
                     continue;
                 }
-                MIR_ASSERT(localMirRes, argMappings.at(f.index) != UINT_MAX, StringView("Invalid asm operand mapping"));
+                MIR_ASSERT(localMirRes, argMappings[f.index] != UINT_MAX, StringView("Invalid asm operand mapping"));
                 if (emitAttSyntax) {
                     of << StringView("%%");
                 }
                 of << StringView("%");
-                if (argMappings.at(f.index) == UINT_MAX - 1) {
+                if (argMappings[f.index] == UINT_MAX - 1) {
                     of << asmParams[f.index].as_Reg().spec.as_Explicit();
                     continue;
                 }
@@ -5947,7 +5957,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                     default:
                         MIR_TODO(localMirRes, StringView("Asm2 GCC: modifier ") << f.modifier);
                 }
-                of << argMappings.at(f.index);
+                of << argMappings[f.index];
             }
             of << FmtGccAsm(l.trailing, escapePercent);
             of << StringView(";\\n ");
@@ -5962,7 +5972,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
             return;
         }
         of << StringView(" :");
-        for (size_t i = 0; i < outputs.size(); i++) {
+        for (size_t i = 0; i < outputs.length(); i++) {
             const auto& p = *outputs[i];
             if (i != 0) {
                 of << StringView(",");
@@ -6039,7 +6049,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
             of << StringView(")");
         }
         of << StringView(" :");
-        for (size_t i = 0; i < inputs.size(); i++) {
+        for (size_t i = 0; i < inputs.length(); i++) {
             const auto& p = *inputs[i];
             if (i != 0) {
                 of << StringView(",");
@@ -6122,7 +6132,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
             }
         }
         of << StringView(" :");
-        for (size_t i = 0; i < clobbers.size(); i++) {
+        for (size_t i = 0; i < clobbers.length(); i++) {
             if (i > 0) {
                 of << StringView(",");
             }
@@ -6301,7 +6311,8 @@ auto CodeGeneratorC::monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunction& i
             tmp = cloneTyWith(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
                 if (const auto* te = x->opt_ErasedType()) {
                     if (const auto* e = te->inner.opt_Fcn()) {
-                        out = item.code.erasedTypes.at(e->index);
+                        BUG_ASSERT(e->index < item.code.erasedTypes.length());
+                        out = item.code.erasedTypes[e->index];
                         return true;
                     }
                 }
@@ -6769,8 +6780,8 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         const auto& fcnPath = *e.args.at(2).as_Constant().as_Function().p;
 
         std::vector<MIRParam> args;
-        args.reserve(argTyTuple.size());
-        for (size_t i = 0; i < argTyTuple.size(); i++) {
+        args.reserve(argTyTuple.length());
+        for (size_t i = 0; i < argTyTuple.length(); i++) {
             args.push_back(MIRLValue::newField(arg.clone(), i));
         }
         auto pseudoTerm = MIRTerminator::Data_Call{e.retBlock, MIRUnwindAction::make_Continue({}), e.retVal.clone(), MIRCallTarget::make_Path(fcnPath.clone()), std::move(args)};
@@ -8971,14 +8982,14 @@ auto CodeGeneratorC::emitDestructorLoop(const MIRLValue& slot, const HIRTypeData
 
 auto CodeGeneratorC::emitTupleDestructor(const MIRLValue& slot, const HIRTypeData::Data_Tuple& tuple, bool unsizedValid, unsigned indentLevel) -> void {
     std::vector<MIRLValue> fields;
-    std::vector<const HIRTypeData*> fieldTypes;
-    std::vector<bool> fieldUnsized;
+    Vector<const HIRTypeData*> fieldTypes;
+    Vector<bool> fieldUnsized;
     auto field = MIRLValue::newField(slot.clone(), 0);
-    for (size_t i = 0; i < tuple.size(); i++) {
+    for (size_t i = 0; i < tuple.length(); i++) {
         if (resolve_.typeNeedsDropGlue(sp, tuple[i])) {
             fields.push_back(field.clone());
-            fieldTypes.push_back(tuple[i]);
-            fieldUnsized.push_back(unsizedValid && i == tuple.size() - 1);
+            fieldTypes.pushBack(tuple[i]);
+            fieldUnsized.pushBack(unsizedValid && i == tuple.length() - 1);
         }
         field.incField();
     }
@@ -9409,9 +9420,9 @@ auto CodeGeneratorC::emitEncodedConstant(const HIRTypeData* type, const EncodedL
     if (pointerAligned) {
         const auto pointerSize = TargetGetPointerBits() / 8;
         auto relocation = encoded.relocations.begin();
-        for (size_t i = 0; i < encoded.bytes.size(); i += pointerSize) {
+        for (size_t i = 0; i < encoded.bytes.length(); i += pointerSize) {
             u64 word = 0;
-            for (size_t byte = 0; byte < pointerSize && i + byte < encoded.bytes.size(); byte++) {
+            for (size_t byte = 0; byte < pointerSize && i + byte < encoded.bytes.length(); byte++) {
                 word |= static_cast<u64>(encoded.bytes[i + byte]) << (byte * 8);
             }
             if (i > 0) {
@@ -9443,7 +9454,7 @@ auto CodeGeneratorC::emitEncodedConstant(const HIRTypeData* type, const EncodedL
         MIR_ASSERT(*mirRes, relocation == encoded.relocations.end(), StringView("Relocation outside encoded constant"));
     } else {
         MIR_ASSERT(*mirRes, encoded.relocations.empty(), StringView("Non-pointer-aligned encoded constant has relocations"));
-        for (size_t i = 0; i < encoded.bytes.size(); i++) {
+        for (size_t i = 0; i < encoded.bytes.length(); i++) {
             if (i > 0) {
                 of << StringView(",");
             }
@@ -9834,10 +9845,10 @@ auto CodeGeneratorC::emitCtypeCb(const HIRTypeData* ty, CTypeCallback& inner, bo
         }
         case HIRTypeData::TAG_Tuple: {
             auto& te = (*ty).as_Tuple();
-            if (te.size() == 0) {
+            if (te.empty()) {
                 of << StringView("tUNIT");
             } else {
-                of << StringView("TUP_") << te.size();
+                of << StringView("TUP_") << te.length();
                 for (const auto& t : te) {
                     of << StringView("_") << TransMangle(t);
                 }

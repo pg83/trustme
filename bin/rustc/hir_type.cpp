@@ -5,6 +5,7 @@
 #include "hir_expr.h"
 #include "hir_typeck_monomorph.h"
 
+#include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
 #include <cstdint>
@@ -320,7 +321,7 @@ namespace {
             case HIRTypeData::TAG_Tuple: {
                 auto& ae = a.as_Tuple();
                 auto& be = b.as_Tuple();
-                return ae == be;
+                return ord(ae, be) == OrdEqual;
             }
             case HIRTypeData::TAG_Borrow: {
                 auto& ae = a.as_Borrow();
@@ -360,7 +361,7 @@ namespace {
             case HIRTypeData::TAG_Function: {
                 auto& ae = a.as_Function();
                 auto& be = b.as_Function();
-                return ae.isUnsafe == be.isUnsafe && ae.isVariadic == be.isVariadic && ae.abi == be.abi && ae.rettype == be.rettype && ae.argTypes == be.argTypes && ae.trackCaller == be.trackCaller && ae.lifetimeIdentity == be.lifetimeIdentity && ae.lifetimeIdentityHasFree == be.lifetimeIdentityHasFree;
+                return ae.isUnsafe == be.isUnsafe && ae.isVariadic == be.isVariadic && ae.abi == be.abi && ae.rettype == be.rettype && ord(ae.argTypes, be.argTypes) == OrdEqual && ae.trackCaller == be.trackCaller && ae.lifetimeIdentity == be.lifetimeIdentity && ae.lifetimeIdentityHasFree == be.lifetimeIdentityHasFree;
             }
             case HIRTypeData::TAG_NodeType: {
                 auto& ae = a.as_NodeType();
@@ -1123,7 +1124,7 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
             const auto& f = *fp;
             HIRTypeDataFunctionPointer ft{f.unsafe, f.variadic, f.abi, ms.monomorphType(sp, f.returnType), {}};
             for (size_t i = 0; i < f.fixedArgCount(); i++) {
-                ft.argTypes.push_back(ms.monomorphType(sp, f.args[i].second));
+                ft.argTypes.pushBack(ms.monomorphType(sp, f.args[i].second));
             }
             return mv$(ft);
         }
@@ -1140,7 +1141,7 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
 
             HIRTypeDataFunctionPointer ft{false, false, RcString::newInterned(ABI_RUST), types.path(HIRPath(HIRGenericPath(mv$(enumPath), e.params.clone())), HIRTypePathBinding::make_Enum(&enm)), {}};
             for (const auto& arg : varData) {
-                ft.argTypes.push_back(ms.monomorphType(sp, arg.ent));
+                ft.argTypes.pushBack(ms.monomorphType(sp, arg.ent));
             }
             return ft;
         }
@@ -1150,7 +1151,7 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
             MonomorphStatePtr ms{types, nullptr, &e.params, nullptr};
             HIRTypeDataFunctionPointer ft{false, false, RcString::newInterned(ABI_RUST), types.path(this->path.clone(), HIRTypePathBinding::make_Struct(p)), {}};
             for (const auto& arg : p->data.as_Tuple()) {
-                ft.argTypes.push_back(ms.monomorphType(sp, arg.ent));
+                ft.argTypes.pushBack(ms.monomorphType(sp, arg.ent));
             }
             return ft;
         }
@@ -1490,7 +1491,7 @@ HIRTypeRef HIRTypeInterner::pointer(HIRBorrowType bt, HIRTypeRef inner) {
     return intern(HIRTypeData::make_Pointer({bt, inner}));
 }
 
-HIRTypeRef HIRTypeInterner::tuple(std::vector<HIRTypeRef> types) {
+HIRTypeRef HIRTypeInterner::tuple(Vector<HIRTypeRef> types) {
     return intern(HIRTypeData::make_Tuple(mv$(types)));
 }
 
@@ -1621,10 +1622,10 @@ bool HIRTypeData::equalsIgnoringRegions(HIRTypeRef x) const {
         case HIRTypeData::TAG_Tuple: {
             auto& te = (*this).as_Tuple();
             auto& xe = (*x).as_Tuple();
-            if (te.size() != xe.size()) {
+            if (te.length() != xe.length()) {
                 return false;
             }
-            for (unsigned int i = 0; i < te.size(); i++) {
+            for (unsigned int i = 0; i < te.length(); i++) {
                 if (!te[i]->equalsIgnoringRegions(xe[i])) {
                     return false;
                 }
@@ -1661,10 +1662,10 @@ bool HIRTypeData::equalsIgnoringRegions(HIRTypeRef x) const {
             if (te.abi != xe.abi) {
                 return false;
             }
-            if (te.argTypes.size() != xe.argTypes.size()) {
+            if (te.argTypes.length() != xe.argTypes.length()) {
                 return false;
             }
-            for (unsigned int i = 0; i < te.argTypes.size(); i++) {
+            for (unsigned int i = 0; i < te.argTypes.length(); i++) {
                 if (!te.argTypes[i]->equalsIgnoringRegions(xe.argTypes[i])) {
                     return false;
                 }
@@ -2184,11 +2185,11 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         case HIRTypeData::TAG_Tuple: {
             auto& te = (*v).as_Tuple();
             auto& xe = (*x).as_Tuple();
-            if (te.size() != xe.size()) {
+            if (te.length() != xe.length()) {
                 return HIRCompare::Unequal;
             }
             auto rv = HIRCompare::Equal;
-            for (unsigned int i = 0; i < te.size(); i++) {
+            for (unsigned int i = 0; i < te.length(); i++) {
                 rv &= this->cmpType(sp, te[i], xe[i], resolvePlaceholder);
                 if (rv == HIRCompare::Unequal) {
                     return HIRCompare::Unequal;
@@ -2228,11 +2229,11 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             if (te.abi != xe.abi) {
                 return HIRCompare::Unequal;
             }
-            if (te.argTypes.size() != xe.argTypes.size()) {
+            if (te.argTypes.length() != xe.argTypes.length()) {
                 return HIRCompare::Unequal;
             }
             auto rv = HIRCompare::Equal;
-            for (unsigned int i = 0; i < te.argTypes.size(); i++) {
+            for (unsigned int i = 0; i < te.argTypes.length(); i++) {
                 rv &= this->cmpType(sp, te.argTypes[i], xe.argTypes[i], resolvePlaceholder);
                 if (rv == HIRCompare::Unequal) {
                     return rv;
@@ -2484,9 +2485,9 @@ HIRTypeData HIRTypeData::cloneData() const {
         }
         case HIRTypeData::TAG_Tuple: {
             auto& e = (*this).as_Tuple();
-            std::vector<HIRTypeRef> types;
+            Vector<HIRTypeRef> types;
             for (const auto& t : e) {
-                types.push_back(t);
+                types.pushBack(t);
             }
             return HIRTypeData::make_Tuple(mv$(types));
         }
@@ -2508,7 +2509,7 @@ HIRTypeData HIRTypeData::cloneData() const {
             ft.lifetimeIdentity = e.lifetimeIdentity;
             ft.lifetimeIdentityHasFree = e.lifetimeIdentityHasFree;
             for (const auto& a : e.argTypes) {
-                ft.argTypes.push_back(a);
+                ft.argTypes.pushBack(a);
             }
             return HIRTypeData::make_Function(mv$(ft));
         }
@@ -2838,11 +2839,11 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
         case HIRTypeData::TAG_Tuple: {
             auto& le = (*left).as_Tuple();
             auto& re = (*right).as_Tuple();
-            if (le.size() != re.size()) {
+            if (le.length() != re.length()) {
                 return HIRCompare::Unequal;
             }
             auto rv = HIRCompare::Equal;
-            for (unsigned int i = 0; i < le.size(); i++) {
+            for (unsigned int i = 0; i < le.length(); i++) {
                 auto rv2 = le[i]->compareWithPlaceholders(sp, re[i], resolvePlaceholder);
                 if (rv2 == HIRCompare::Unequal) {
                     return HIRCompare::Unequal;
@@ -2880,11 +2881,11 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
             if (le.abi != re.abi || le.isUnsafe != re.isUnsafe || le.isVariadic != re.isVariadic || le.trackCaller != re.trackCaller) {
                 return HIRCompare::Unequal;
             }
-            if (le.argTypes.size() != re.argTypes.size()) {
+            if (le.argTypes.length() != re.argTypes.length()) {
                 return HIRCompare::Unequal;
             }
             auto rv = HIRCompare::Equal;
-            for (unsigned int i = 0; i < le.argTypes.size(); i++) {
+            for (unsigned int i = 0; i < le.argTypes.length(); i++) {
                 rv &= le.argTypes[i]->compareWithPlaceholders(sp, re.argTypes[i], resolvePlaceholder);
                 if (rv == HIRCompare::Unequal) {
                     return HIRCompare::Unequal;
@@ -3084,6 +3085,6 @@ void stl::output<ZeroCopyOutput, HIRBorrowType>(ZeroCopyOutput& os, HIRBorrowTyp
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::vector<HIRTypeRef>>(ZeroCopyOutput& out, const std::vector<HIRTypeRef>& values) {
+void stl::output<ZeroCopyOutput, Vector<HIRTypeRef>>(ZeroCopyOutput& out, const Vector<HIRTypeRef>& values) {
     outCont(out, values);
 }

@@ -5,6 +5,8 @@
 #include "hir_type.h"
 #include "hir_typeck_static.h"
 
+#include <std/lib/vector.h>
+
 #include <map>
 
 class MirBuilder;
@@ -71,26 +73,26 @@ struct ScopeDropSlot {
 #define FIELD_INDEX_MAX 0x8000
 
 struct fieldPathT {
-    std::vector<u16> data;
+    stl::Vector<u16> data;
 
     size_t size() const {
-        return data.size();
+        return data.length();
     }
 
     void push_back(u16 v) {
-        data.push_back(v);
+        data.pushBack(v);
     }
 
     void pop_back() {
-        data.pop_back();
+        data.popBack();
     }
 
     u16& back() {
-        return data.back();
+        return data.mutBack();
     }
 
     bool operator==(const fieldPathT& x) const {
-        return data == x.data;
+        return ::ord(data, x.data) == OrdEqual;
     }
 
     Ordering ord(const fieldPathT& x) const {
@@ -146,7 +148,7 @@ class MirBuilder {
 
     std::map<unsigned, unsigned> varArgMappings;
 
-    std::map<unsigned, std::vector<unsigned>> dropFlagAliases;
+    std::map<unsigned, stl::Vector<unsigned>> dropFlagAliases;
 
     struct ScopeDef {
         const Span& span;
@@ -159,7 +161,7 @@ class MirBuilder {
     };
 
     std::vector<ScopeDef> scopes;
-    std::vector<unsigned int> scopeStack;
+    stl::Vector<unsigned int> scopeStack;
     ScopeHandle fcnScope_;
 
     typedef std::pair<HIRPatternBinding::Type, MIRLValue> varAliasT;
@@ -191,7 +193,7 @@ public:
     class SavedAliases {
         friend class MirBuilder;
 
-        std::vector<bool> setAliases;
+        stl::Vector<bool> setAliases;
     };
 
     SavedAliases saveAliases() const;
@@ -210,7 +212,7 @@ public:
     MIRLValue lvalueOrTemp(const Span& sp, const HIRTypeData* ty, MIRRValue val);
 
     size_t localCount() const {
-        return output.locals.size();
+        return output.locals.length();
     }
 
     bool hasResult() const {
@@ -279,7 +281,7 @@ public:
 
     class SavedCode {
         friend class MirBuilder;
-        std::vector<unsigned> blocks;
+        stl::Vector<unsigned> blocks;
     };
 
     SavedCode codeSaveEnd(SaveCodeProto h);
@@ -298,7 +300,7 @@ private:
     struct CodeSaveStackEnt {
         size_t index;
 
-        std::vector<unsigned> blocks;
+        stl::Vector<unsigned> blocks;
     };
 
     std::vector<CodeSaveStackEnt> codeSaveStack;
@@ -448,7 +450,7 @@ public:
     virtual SaveAndEditVal<const ScopeHandle*> disableBorrowExtension() = 0;
 };
 
-void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
+void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const stl::Vector<unsigned>& letElseInitializerTemps);
 void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRPattern& pat, MIRLValue val, const HIRExprNode* elseNode);
 
 void MIRLowerHIRGetTypeValueForPath(

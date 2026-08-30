@@ -1,5 +1,4 @@
 #include "hir_typeck_main_bindings.h"
-#include "hir_typeck_main_bindings.h"
 
 #include "hir_hir.h"
 #include "hir_expr.h"
@@ -7,6 +6,9 @@
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"
 #include "hir_typeck_monomorph.h"
+
+#include <std/alg/range.h>
+#include <std/lib/vector.h>
 
 #include <algorithm>
 
@@ -29,7 +31,7 @@ namespace {
         bool checkingFunctionSignature = false;
         bool checkingTypeDeclarationParams = false;
 
-        std::vector<const HIRTypeData*> selfTypes;
+        Vector<const HIRTypeData*> selfTypes;
 
         typedef std::vector<std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitImports;
         tTraitImports traits;
@@ -315,7 +317,7 @@ auto TypecheckVisitor::visitPathParams(HIRPathParams& pp) -> void {
 
     auto self = crate.types.self();
     if (data.is_ErasedType()) {
-        selfTypes.push_back(self);
+        selfTypes.pushBack(self);
     }
 
     auto savedParams = std::make_pair(curParams, curParamsLevel);
@@ -406,8 +408,8 @@ auto TypecheckVisitor::visitPathParams(HIRPathParams& pp) -> void {
         }
         case HIRTypeData::TAG_Tuple: {
             auto& e = data.as_Tuple();
-            for (auto& inner : e) {
-                inner = this->visitType(inner);
+            for (auto& type : mutRange(e)) {
+                type = this->visitType(type);
             }
             break;
         }
@@ -428,8 +430,8 @@ auto TypecheckVisitor::visitPathParams(HIRPathParams& pp) -> void {
         }
         case HIRTypeData::TAG_Function: {
             auto& e = data.as_Function();
-            for (auto& arg : e.argTypes) {
-                arg = this->visitType(arg);
+            for (auto& type : mutRange(e.argTypes)) {
+                type = this->visitType(type);
             }
             e.rettype = this->visitType(e.rettype);
             break;
@@ -443,7 +445,7 @@ auto TypecheckVisitor::visitPathParams(HIRPathParams& pp) -> void {
     curParamsLevel = savedParams.second;
 
     if (data.is_ErasedType()) {
-        selfTypes.pop_back();
+        selfTypes.popBack();
     }
 
     return crate.types.intern(mv$(data));
@@ -681,9 +683,9 @@ auto TypecheckVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void
         case HIRPath::Data::TAG_UfcsKnown: {
             auto& e = p.data.as_UfcsKnown();
             e.type = this->visitType(e.type);
-            selfTypes.push_back(e.type);
+            selfTypes.pushBack(e.type);
             this->visitGenericPath(e.trait, HIRVisitor::PathContext::TRAIT);
-            selfTypes.pop_back();
+            selfTypes.popBack();
             // TODO: Locate impl block and check parameters
             break;
         }
@@ -711,9 +713,9 @@ auto TypecheckVisitor::visitParams(HIRGenericParams& params) -> void {
             case HIRGenericBound::TAG_TraitBound: {
                 auto& e = bound.as_TraitBound();
                 e.type = this->visitType(e.type);
-                selfTypes.push_back(e.type);
+                selfTypes.pushBack(e.type);
                 this->visitTraitPath(e.trait);
-                selfTypes.pop_back();
+                selfTypes.popBack();
 
                 if (checkingTypeDeclarationParams && !crate.featureEnabled("trivial_bounds") && e.isTrivial) {
                     StaticTraitResolve bareResolve(resolve_.board());
@@ -744,9 +746,9 @@ auto TypecheckVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
 
     auto _ = resolve_.setImplGenerics(MetadataType::TraitObject, item.params);
     auto self = crate.types.self();
-    selfTypes.push_back(self);
+    selfTypes.pushBack(self);
     HIRVisitor::visitTrait(p, item);
-    selfTypes.pop_back();
+    selfTypes.popBack();
 
     currentTrait = nullptr;
 }
@@ -754,9 +756,9 @@ auto TypecheckVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
 auto TypecheckVisitor::visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) -> void {
     auto _ = resolve_.setImplGenerics(MetadataType::TraitObject, item.params);
     auto self = crate.types.self();
-    selfTypes.push_back(self);
+    selfTypes.pushBack(self);
     HIRVisitor::visitTraitAlias(p, item);
-    selfTypes.pop_back();
+    selfTypes.popBack();
 }
 
 auto TypecheckVisitor::visitStruct(HIRItemPath p, HIRStruct& item) -> void {
@@ -783,11 +785,11 @@ auto TypecheckVisitor::visitEnum(HIRItemPath p, HIREnum& item) -> void {
 auto TypecheckVisitor::visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) -> void {
     auto pathAty = HIRPath(crate.types.self(), this->getCurrentTraitGp(), p.getName());
     auto tyAty = crate.types.path(mv$(pathAty), HIRTypePathBinding::make_Opaque({}));
-    selfTypes.push_back(tyAty);
+    selfTypes.pushBack(tyAty);
 
     HIRVisitor::visitAssociatedtype(p, item);
 
-    selfTypes.pop_back();
+    selfTypes.popBack();
 }
 
 auto TypecheckVisitor::visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) -> void {
@@ -805,7 +807,7 @@ auto TypecheckVisitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) -> v
 
 auto TypecheckVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     auto _ = resolve_.setImplGenerics(impl.type, impl.params);
-    selfTypes.push_back(impl.type);
+    selfTypes.pushBack(impl.type);
 
     {
         curParams = &impl.params;
@@ -817,14 +819,14 @@ auto TypecheckVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     HIRVisitor::visitTypeImpl(impl);
     // TODO: Check that the type is valid
 
-    selfTypes.pop_back();
+    selfTypes.popBack();
 }
 
 auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
     Span sp;
     TRACE_FUNCTION_F(StringView("impl") << impl.params.fmtArgs() << StringView(" ") << traitPath << impl.traitArgs << StringView(" for ") << impl.type);
     auto _ = resolve_.setImplGenerics(impl.type, impl.params);
-    selfTypes.push_back(impl.type);
+    selfTypes.pushBack(impl.type);
 
     {
         curParams = &impl.params;
@@ -835,7 +837,7 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
     }
 
     HIRVisitor::visitTraitImpl(traitPath, impl);
-    selfTypes.pop_back();
+    selfTypes.popBack();
 
     // TODO: Check that the type+trait is valid
 
@@ -1039,7 +1041,7 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
 
 auto TypecheckVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) -> void {
     auto _ = resolve_.setImplGenerics(impl.type, impl.params);
-    selfTypes.push_back(impl.type);
+    selfTypes.pushBack(impl.type);
 
     {
         curParams = &impl.params;
@@ -1052,7 +1054,7 @@ auto TypecheckVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarker
     HIRVisitor::visitMarkerImpl(traitPath, impl);
     // TODO: Check that the type+trait is valid
 
-    selfTypes.pop_back();
+    selfTypes.popBack();
 }
 
 auto TypecheckVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {

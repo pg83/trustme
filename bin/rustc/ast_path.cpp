@@ -6,6 +6,8 @@
 #include "ast_types.h"
 #include "parse_parseerror.h"
 
+#include <std/lib/vector.h>
+
 #include <algorithm>
 
 using namespace stl;
@@ -479,7 +481,7 @@ void ASTPath::printPretty(ZeroCopyOutput& os, bool isTypeContext, bool isDebug) 
 ASTAbsolutePath::ASTAbsolutePath() {
 }
 
-ASTAbsolutePath::ASTAbsolutePath(RcString crate, std::vector<RcString> nodes)
+ASTAbsolutePath::ASTAbsolutePath(RcString crate, Vector<RcString> nodes)
     : crate(std::move(crate))
     , nodes(std::move(nodes))
 {
@@ -488,9 +490,9 @@ ASTAbsolutePath::ASTAbsolutePath(RcString crate, std::vector<RcString> nodes)
 ASTAbsolutePath ASTAbsolutePath::operator+(RcString n) const {
     ASTAbsolutePath rv;
     rv.crate = this->crate;
-    rv.nodes.reserve(this->nodes.size() + 1);
-    rv.nodes.insert(rv.nodes.end(), this->nodes.begin(), this->nodes.end());
-    rv.nodes.push_back(std::move(n));
+    rv.nodes.grow(this->nodes.length() + 1);
+    rv.nodes.append(this->nodes.begin(), this->nodes.end());
+    rv.nodes.pushBack(std::move(n));
     return rv;
 }
 
@@ -498,7 +500,7 @@ bool ASTAbsolutePath::operator==(const ASTAbsolutePath& x) const {
     if (this->crate != x.crate) {
         return false;
     }
-    if (this->nodes != x.nodes) {
+    if (::ord(this->nodes, x.nodes) != OrdEqual) {
         return false;
     }
     return true;
@@ -508,10 +510,10 @@ bool ASTAbsolutePath::isParentOf(const ASTAbsolutePath& other) const {
     if (this->crate != other.crate) {
         return false;
     }
-    if (this->nodes.size() > other.nodes.size()) {
+    if (this->nodes.length() > other.nodes.length()) {
         return false;
     }
-    for (size_t i = 0; i < this->nodes.size(); i++) {
+    for (size_t i = 0; i < this->nodes.length(); i++) {
         if (this->nodes[i] != other.nodes[i]) {
             return false;
         }
@@ -555,7 +557,7 @@ ASTPath::ASTPath(const ASTAbsolutePath& p)
     : cls(Class::make_Absolute({p.crate, {}}))
 {
     auto& n = cls.as_Absolute().nodes;
-    n.reserve(p.nodes.size());
+    n.reserve(p.nodes.length());
     for (const auto& v : p.nodes) {
         n.push_back(v);
     }

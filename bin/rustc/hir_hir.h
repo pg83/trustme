@@ -13,6 +13,8 @@
 #include "hir_encoded_literal.h"
 #include "macro_rules_macro_rules_ptr.h"
 
+#include <std/lib/vector.h>
+
 #include <set>
 #include <memory>
 #include <vector>
@@ -68,7 +70,6 @@ public:
     bool isVisible(const HIRSimplePath& p) const;
 
     void fmt(stl::ZeroCopyOutput& os) const;
-
 };
 
 enum class HIRConstEvalState {
@@ -187,7 +188,7 @@ public:
     std::vector<HIRSimplePath> defineOpaque;
 
     struct Markings {
-        std::vector<unsigned> rustcLegacyConstGenerics;
+        stl::Vector<unsigned> rustcLegacyConstGenerics;
         bool trackCaller = false;
 
         bool mustUse = false;
@@ -254,7 +255,7 @@ struct HIRTraitMarkings {
     bool isCopy = false;
 
     struct AutoMarking {
-        std::vector<HIRTypeRef> conditions;
+        stl::Vector<HIRTypeRef> conditions;
 
         bool isImpled;
     };
@@ -655,7 +656,8 @@ struct HIRTraitImplCb final: HIRTraitImplCallback {
     F f;
 
     explicit HIRTraitImplCb(F f)
-        : f(f) {
+        : f(f)
+    {
     }
 
     bool visit(const HIRTraitImpl& impl) override {
@@ -672,7 +674,8 @@ struct HIRMarkerImplCb final: HIRMarkerImplCallback {
     F f;
 
     explicit HIRMarkerImplCb(F f)
-        : f(f) {
+        : f(f)
+    {
     }
 
     bool visit(const HIRMarkerImpl& impl) override {
@@ -689,7 +692,8 @@ struct HIRTypeImplCb final: HIRTypeImplCallback {
     F f;
 
     explicit HIRTypeImplCb(F f)
-        : f(f) {
+        : f(f)
+    {
     }
 
     bool visit(const HIRTypeImpl& impl) override {
@@ -705,7 +709,8 @@ struct HIRLocalItemTypeNamePath {
     HIRLocalItemTypeNamePath(HIRSimplePath modulePath, const HIRPath* ownerPath, const HIRLocalItemTypeNamePath* next)
         : modulePath(modulePath)
         , ownerPath(ownerPath)
-        , next(next) {
+        , next(next)
+    {
     }
 };
 
@@ -780,11 +785,11 @@ public:
     std::map<HIRSimplePath, ImplGroup<const HIRTraitImpl*>> allTraitImpls;
     std::map<HIRSimplePath, ImplGroup<const HIRMarkerImpl*>> allMarkerImpls;
 
-    std::vector<RcString> exportedMacroNames;
+    stl::Vector<RcString> exportedMacroNames;
 
     std::unordered_map<std::string, HIRSimplePath> langItems;
 
-    std::vector<RcString> extCratesOrdered;
+    stl::Vector<RcString> extCratesOrdered;
 
     std::unordered_map<RcString, HIRExternCrate> extCrates;
 

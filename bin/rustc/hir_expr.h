@@ -8,6 +8,8 @@
 #include "hir_visitor.h"
 #include "hir_typeck_common.h"
 
+#include <std/lib/vector.h>
+
 #include <memory>
 
 typedef std::vector<std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitList;
@@ -413,7 +415,7 @@ struct HIRExprNodeTupleVariant: public HIRExprNode {
     bool isStruct;
     std::vector<HIRExprNodeP> args;
 
-    std::vector<HIRTypeRef> argTypes;
+    stl::Vector<HIRTypeRef> argTypes;
 
     HIRExprNodeTupleVariant(Span sp, HIRGenericPath path, bool isStruct, std::vector<HIRExprNodeP> args);
 
@@ -423,7 +425,7 @@ struct HIRExprNodeTupleVariant: public HIRExprNode {
 };
 
 struct HIRExprCallCache {
-    std::vector<HIRTypeRef> argTypes;
+    stl::Vector<HIRTypeRef> argTypes;
     const HIRGenericParams* fcnParams;
     const HIRGenericParams* topParams;
     const HIRFunction* fcn;
@@ -448,9 +450,9 @@ struct HIRExprNodeCallValue: public HIRExprNode {
     HIRExprNodeP value;
     std::vector<HIRExprNodeP> args;
 
-    std::vector<HIRTypeRef> argIvars;
+    stl::Vector<HIRTypeRef> argIvars;
 
-    std::vector<HIRTypeRef> argTypes;
+    stl::Vector<HIRTypeRef> argTypes;
 
     enum class TraitUsed {
         Unknown,
@@ -489,7 +491,7 @@ struct HIRExprNodeCallMethod: public HIRExprNode {
 
     tTraitList traits;
 
-    std::vector<unsigned int> traitParamIvars;
+    stl::Vector<unsigned int> traitParamIvars;
     unsigned int traitParamTypeIvars = 0;
 
     HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString methodName, HIRPathParams params, std::vector<HIRExprNodeP> args, RcString fallbackMethod = {});
@@ -588,7 +590,7 @@ struct HIRExprNodeStructLiteral: public HIRExprNode {
 
     HIRGenericPath realPath;
 
-    std::vector<HIRTypeRef> valueTypes;
+    stl::Vector<HIRTypeRef> valueTypes;
 
     HIRExprNodeStructLiteral(Span sp, HIRTypeRef ty, bool isStruct, HIRExprNodeP baseValue, tValues values);
 
@@ -652,12 +654,12 @@ struct HIRExprNodeClosure: public HIRExprNode {
     bool isCopy = true;
 
     struct AvuCache {
-        std::vector<unsigned int> localVars;
+        stl::Vector<unsigned int> localVars;
 
         struct Capture {
             unsigned int rootSlot;
 
-            std::vector<RcString> fields;
+            stl::Vector<RcString> fields;
             HIRValueUsage usage;
         };
 
@@ -690,8 +692,8 @@ struct HIRExprNodeGenerator: public HIRExprNode {
     bool isCoroutineClosureBody;
 
     struct AvuCache {
-        std::vector<unsigned int> localVars;
-        std::vector<std::pair<unsigned int, HIRValueUsage>> capturedVars;
+        stl::Vector<unsigned int> localVars;
+        stl::Vector<std::pair<unsigned int, HIRValueUsage>> capturedVars;
     } avuCache;
 
     const HIRStruct* objPtr = nullptr;
@@ -725,7 +727,7 @@ struct HIRExprNodeGeneratorWrapper: public HIRExprNode {
 
     HIRFunction* dropFcnPtr = nullptr;
 
-    std::vector<HIRValueUsage> captureUsages;
+    stl::Vector<HIRValueUsage> captureUsages;
 
     HIRExprNodeGeneratorWrapper(Span sp, HIRTypeRef rv, HIRTypeRef yieldTy, HIRExprNodeP code, bool isFuture);
 

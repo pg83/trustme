@@ -15,6 +15,7 @@
 #include "expand_proc_macro.h"
 #include "macro_rules_macro_rules.h"
 
+#include <std/alg/range.h>
 #include <std/lib/vector.h>
 
 using namespace stl;
@@ -73,7 +74,7 @@ namespace {
         ExpandState expandState;
         ASTExprNodeP replacement;
 
-        std::vector<RcString> tryStack;
+        Vector<RcString> tryStack;
         unsigned tryIndex = 0;
 
         ASTExprNodeBlock* currentBlock = nullptr;
@@ -224,9 +225,9 @@ namespace {
             a.markInert();
         };
         const RcString* builtinName = nullptr;
-        if (a.name().elems.size() == 1) {
+        if (a.name().elems.length() == 1) {
             builtinName = &a.name().elems[0];
-        } else if (a.name().elems.size() == 4 && a.name().elems[0] == "core" && a.name().elems[1] == "prelude" && a.name().elems[2] == "v1") {
+        } else if (a.name().elems.length() == 4 && a.name().elems[0] == "core" && a.name().elems[1] == "prelude" && a.name().elems[2] == "v1") {
             // HACK: Handle `::core::prelude::v1::<FOO>`.
             builtinName = &a.name().elems[3];
         }
@@ -241,7 +242,7 @@ namespace {
             }
         }
         if (!found) {
-            if (a.name().elems.size() == 1) {
+            if (a.name().elems.length() == 1) {
                 const auto& want = a.name().elems[0];
                 for (const auto* ll = &es.modstack; ll && !found; ll = ll->prev) {
                     if (!ll->item) {
@@ -285,7 +286,7 @@ namespace {
                 const auto* procMac = *procMacP;
 
                 struct ProcMacroDecorator: public ExpandDecorator {
-                    std::vector<RcString> macPath;
+                    Vector<RcString> macPath;
 
                     AttrStage stage() const override {
                         return AttrStage::Pre;
@@ -332,8 +333,10 @@ namespace {
 
                 if (stage == AttrStage::Pre) {
                     d.currentMod = es.currentMod;
-                    d.macPath.push_back(procMac->path.crateName());
-                    d.macPath.insert(d.macPath.end(), procMac->path.components().begin(), procMac->path.components().end());
+                    d.macPath.pushBack(procMac->path.crateName());
+                    for (const auto& component : procMac->path.components()) {
+                        d.macPath.pushBack(component);
+                    }
                     f.run(sp, d, a);
                     a.markInert();
                 }
@@ -476,9 +479,11 @@ namespace {
             }
             case MacroRef::TAG_ExternalProcMacro: {
                 auto& procMac = mac.as_ExternalProcMacro();
-                std::vector<RcString> macPath;
-                macPath.push_back(procMac->path.crateName());
-                macPath.insert(macPath.end(), procMac->path.components().begin(), procMac->path.components().end());
+                Vector<RcString> macPath;
+                macPath.pushBack(procMac->path.crateName());
+                for (const auto& component : procMac->path.components()) {
+                    macPath.pushBack(component);
+                }
                 rv = ProcMacroInvoke(miSpan, wb, crate, macPath, inputTt);
                 break;
             }
@@ -669,7 +674,10 @@ namespace {
             ERROR(Span(), E0000, StringView("`async` is only valid on the callable traits, not ") << *tp.path);
         }
         auto args = mv$(tp.path->nodes().back().args());
-        auto path = ASTPath(ASTAbsolutePath(es.crate.extCratenameCore, {RcString::newInterned("ops"), RcString::newInterned(replacement)}));
+        Vector<RcString> nodes;
+        nodes.pushBack(RcString::newInterned("ops"));
+        nodes.pushBack(RcString::newInterned(replacement));
+        auto path = ASTPath(ASTAbsolutePath(es.crate.extCratenameCore, mv$(nodes)));
         path.nodes().back().args() = mv$(args);
         *tp.path = mv$(path);
         tp.isAsync = false;
@@ -715,15 +723,15 @@ namespace {
                 auto& e = ty->data.as_Function();
                 TypeFunction& tf = e.info;
                 ExpandType(es, mod, tf.rettype);
-                for (auto& st : tf.argTypes) {
-                    ExpandType(es, mod, st);
+                for (auto& type : mutRange(tf.argTypes)) {
+                    ExpandType(es, mod, type);
                 }
                 break;
             }
             case TypeData::TAG_Tuple: {
                 auto& e = ty->data.as_Tuple();
-                for (auto& st : e.innerTypes) {
-                    ExpandType(es, mod, st);
+                for (auto& type : mutRange(e.innerTypes)) {
+                    ExpandType(es, mod, type);
                 }
                 break;
             }
@@ -732,7 +740,10 @@ namespace {
                 ExpandType(es, mod, e.inner);
                 if (e.isPin) {
                     auto reference = mkType(*es.crate.pool, ASTTypeTags::Reference(), ty->span(), e.lifetime, e.isMut, e.inner);
-                    auto path = ASTPath(ASTAbsolutePath(es.crate.extCratenameCore, {RcString::newInterned("pin"), RcString::newInterned("Pin")}));
+                    Vector<RcString> nodes;
+                    nodes.pushBack(RcString::newInterned("pin"));
+                    nodes.pushBack(RcString::newInterned("Pin"));
+                    auto path = ASTPath(ASTAbsolutePath(es.crate.extCratenameCore, mv$(nodes)));
                     path.nodes().back().args().entries.push_back(reference);
                     ty = mkType(*es.crate.pool, ASTTypeTags::Path(), ty->span(), mv$(path));
                 }
@@ -890,11 +901,18 @@ namespace {
     }
 
     static ASTPath getPath(const RcString& coreCrate, const char* c1, const char* c2) {
-        return ASTAbsolutePath(coreCrate, {RcString::newInterned(c1), RcString::newInterned(c2)});
+        Vector<RcString> nodes;
+        nodes.pushBack(RcString::newInterned(c1));
+        nodes.pushBack(RcString::newInterned(c2));
+        return ASTAbsolutePath(coreCrate, mv$(nodes));
     }
 
     static ASTPath getPath(const RcString& coreCrate, const char* c1, const char* c2, const char* c3) {
-        return ASTAbsolutePath(coreCrate, {RcString::newInterned(c1), RcString::newInterned(c2), RcString::newInterned(c3)});
+        Vector<RcString> nodes;
+        nodes.pushBack(RcString::newInterned(c1));
+        nodes.pushBack(RcString::newInterned(c2));
+        nodes.pushBack(RcString::newInterned(c3));
+        return ASTAbsolutePath(coreCrate, mv$(nodes));
     }
 
     void ExpandExpr(const ExpandState& es, ASTExprNodeP& node) {
@@ -981,8 +999,8 @@ namespace {
                 }
             }
         }
-        for (auto& t : params.bareBoundTypes) {
-            ExpandType(es, mod, t);
+        for (auto& type : mutRange(params.bareBoundTypes)) {
+            ExpandType(es, mod, type);
         }
     }
 
@@ -1025,7 +1043,10 @@ namespace {
             // TODO: Make a path from the impl definition? Requires having the impl def resolved to be correct
 
             // TODO: UFCS path, or different method
-            ASTAbsolutePath path("", {"", i.name});
+            Vector<RcString> pathNodes;
+            pathNodes.pushBack(RcString());
+            pathNodes.pushBack(i.name);
+            ASTAbsolutePath path("", mv$(pathNodes));
 
             auto attrs = mv$(i.attrs);
             ExpandAttrsCfgAttr(*es.wb.settings, attrs);
@@ -2013,7 +2034,7 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
         }
         ASTAttributeList attrs;
         ASTAttributeName name;
-        name.elems.push_back("macro_use");
+        name.elems.pushBack(RcString::newInterned("macro_use"));
         attrs.push_back(ASTAttribute(Span(), mv$(name), {}));
         crate.rootModule_.items.push_back(box$(ASTNamed<ASTItem>(Span(), mv$(attrs), ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, ASTAbsolutePath()), stdCrateShortname, ASTItem::make_Crate({stdCrateName}))));
         auto& i = *crate.rootModule_.items.back();
@@ -2043,11 +2064,11 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
     {
         auto& exportedMacros = crate.exportedMacros;
 
-        std::vector<ASTModule*> mods;
-        mods.push_back(&crate.rootModule_);
+        Vector<ASTModule*> mods;
+        mods.pushBack(&crate.rootModule_);
         do {
             auto& mod = *mods.back();
-            mods.pop_back();
+            mods.popBack();
 
             for (/*const*/ auto& mac : mod.macros()) {
                 if (mac.data->exported) {
@@ -2058,10 +2079,10 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
 
             for (auto& i : mod.items) {
                 if (i->data.is_Module()) {
-                    mods.push_back(&i->data.as_Module());
+                    mods.pushBack(&i->data.as_Module());
                 }
             }
-        } while (mods.size() > 0);
+        } while (!mods.empty());
 
         for (const auto& mac : crate.rootModule_.macroImports) {
             if (mac.isPub) {
@@ -2393,10 +2414,10 @@ auto CExpandExpr::visit(ASTExprNodeTry& node) -> void {
         return;
     }
 
-    tryStack.push_back(RcString::newInterned(FMT(StringView("#try") << tryIndex++)));
+    tryStack.pushBack(RcString::newInterned(FMT(StringView("#try") << tryIndex++)));
     this->visitNodelete(node, node.inner);
     auto loopName = mv$(tryStack.back());
-    tryStack.pop_back();
+    tryStack.popBack();
 
     auto coreCrate = crate.extCratenameCore;
     auto pathTry = getPath(coreCrate, "ops", "Try");

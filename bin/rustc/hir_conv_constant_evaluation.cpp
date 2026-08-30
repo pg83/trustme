@@ -19,6 +19,7 @@
 #include "hir_conv_main_bindings.h"
 
 #include <std/alg/defer.h>
+#include <std/lib/vector.h>
 
 #include <cmath>
 #include <cstdio>
@@ -793,9 +794,9 @@ struct HIREvaluator::MIREvalCallStackEntry {
 
     std::vector<MIREvalAllocationPtr> args;
 
-    std::vector<HIRTypeRef> localTypes;
+    Vector<HIRTypeRef> localTypes;
     std::vector<MIREvalAllocationPtr> locals;
-    std::vector<bool> dropFlags;
+    Vector<bool> dropFlags;
 
     MIREvalCallStackEntry(const MIREvalCallStackEntry&) = delete;
     MIREvalCallStackEntry(MIREvalCallStackEntry&&) = delete;
@@ -994,7 +995,10 @@ static u8 pointerGuaranteedCmp(const std::pair<u64, MIREvalRelocPtr>& left, cons
 }
 
 static std::pair<MIREvalValueRef, MIREvalValueRef> getTupleTBool(const MIREvalCallStackEntry& localState, MIREvalValueRef& src, const HIRTypeData* t) {
-    auto tupleT = localState.rootResolve.crate.types.tuple({t, localState.rootResolve.crate.types.primitive(HIRCoreType::Bool)});
+    Vector<HIRTypeRef> tupleTypes;
+    tupleTypes.pushBack(t);
+    tupleTypes.pushBack(localState.rootResolve.crate.types.primitive(HIRCoreType::Bool));
+    auto tupleT = localState.rootResolve.crate.types.tuple(std::move(tupleTypes));
     auto* repr = TargetGetTypeRepr(localState.state.sp, localState.rootResolve, tupleT);
     MIR_ASSERT(localState.state, repr, StringView("No repr for ") << tupleT);
     auto s = localState.sizeOfOrBug(t);
@@ -1465,9 +1469,9 @@ static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallS
             MIR_ASSERT(state, typeInfo.ty == TypeInfo::Signed || typeInfo.ty == TypeInfo::Unsigned, StringView("EnumVariant: Values not integer - ") << field.ty);
             auto tagDst = dst.slice(field.offset, (typeInfo.bits + 7) / 8);
             if (typeInfo.ty == TypeInfo::Signed) {
-                tagDst.writeSint(state, typeInfo.bits, S128(variant.values.at(index)));
+                tagDst.writeSint(state, typeInfo.bits, S128(variant.values[index]));
             } else {
-                tagDst.writeUint(state, typeInfo.bits, variant.values.at(index));
+                tagDst.writeUint(state, typeInfo.bits, variant.values[index]);
             }
             break;
         }
@@ -1617,12 +1621,12 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         }
         case MIRStatement::TAG_SetDropFlag: {
             auto& se = stmt.as_SetDropFlag();
-            MIR_ASSERT(state, se.idx < localState.dropFlags.size(), StringView("Drop flag ") << se.idx << StringView(" out of range"));
+            MIR_ASSERT(state, se.idx < localState.dropFlags.length(), StringView("Drop flag ") << se.idx << StringView(" out of range"));
             if (se.other == UINT_MAX) {
-                localState.dropFlags[se.idx] = se.newVal;
+                localState.dropFlags.mut(se.idx) = se.newVal;
             } else {
-                MIR_ASSERT(state, se.other < localState.dropFlags.size(), StringView("Drop flag ") << se.other << StringView(" out of range"));
-                localState.dropFlags[se.idx] = se.newVal != localState.dropFlags[se.other];
+                MIR_ASSERT(state, se.other < localState.dropFlags.length(), StringView("Drop flag ") << se.other << StringView(" out of range"));
+                localState.dropFlags.mut(se.idx) = se.newVal != localState.dropFlags[se.other];
             }
             return;
         }
@@ -2055,7 +2059,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
         }
         case MIRTerminator::TAG_Switch: {
             auto& e = terminator.as_Switch();
-            if (e.validFlag != ~0u && !localState.dropFlags.at(e.validFlag)) {
+            if (e.validFlag != ~0u && !localState.dropFlags[e.validFlag]) {
                 return e.invalidTarget;
             }
             HIRTypeRef tmp;
@@ -2063,7 +2067,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             auto lit = localState.getLval(e.val);
             auto varIdx = localState.readEnumVariant(ty, lit);
             DEBUG(state << StringView(" = ") << varIdx);
-            MIR_ASSERT(state, varIdx < e.targets.size(), StringView("Switch ") << varIdx << StringView(" out of range in target list (") << e.targets.size() << StringView(")"));
+            MIR_ASSERT(state, varIdx < e.targets.length(), StringView("Switch ") << varIdx << StringView(" out of range in target list (") << e.targets.length() << StringView(")"));
             return e.targets[varIdx];
         }
         case MIRTerminator::TAG_SwitchValue: {
@@ -2081,7 +2085,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 case MIRSwitchValues::TAG_Unsigned: {
                     auto& vals = e.values.as_Unsigned();
                     auto v = lit.readUint(state, ti.bits);
-                    for (size_t i = 0; i < vals.size(); i++) {
+                    for (size_t i = 0; i < vals.length(); i++) {
                         if (v == U128(vals[i])) {
                             targetIdx = i;
                             break;
@@ -2092,7 +2096,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 case MIRSwitchValues::TAG_Signed: {
                     auto& vals = e.values.as_Signed();
                     auto v = lit.readSint(state, ti.bits);
-                    for (size_t i = 0; i < vals.size(); i++) {
+                    for (size_t i = 0; i < vals.length(); i++) {
                         if (v == S128(vals[i])) {
                             targetIdx = i;
                             break;
@@ -2110,7 +2114,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
         }
         case MIRTerminator::TAG_Drop: {
             auto& e = terminator.as_Drop();
-            if (e.flagIdx != UINT_MAX && !localState.dropFlags.at(e.flagIdx)) {
+            if (e.flagIdx != UINT_MAX && !localState.dropFlags[e.flagIdx]) {
                 return e.target;
             }
 
@@ -3187,8 +3191,8 @@ void HIREvaluator::runConstDrop(MIREvalCallStackEntry& localState, HIRTypeRef ty
         }
         case HIRTypeData::TAG_Tuple: {
             auto& te = (*ty).as_Tuple();
-            for (size_t i = 0; i < te.size(); i++) {
-                this->runConstDrop(localState, te.at(i), MIRLValue::newField(slot.clone(), static_cast<unsigned>(i)));
+            for (size_t i = 0; i < te.length(); i++) {
+                this->runConstDrop(localState, te[i], MIRLValue::newField(slot.clone(), static_cast<unsigned>(i)));
             }
             break;
         }
@@ -3199,7 +3203,7 @@ EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MI
     const auto* aBytes = a.getBytes(0, a.size(), false);
     ASSERT_BUG(this->rootSpan, aBytes, StringView("Unable to get entire allocation - ") << FMT_CB(ss, a.fmt(ss, 0, a.size())));
     EncodedLiteral rv;
-    rv.bytes.insert(rv.bytes.begin(), aBytes, aBytes + a.size());
+    rv.bytes.append(aBytes, a.size());
     for (const auto& r : a.getRelocations()) {
         if (const auto* innerAlloc = r.ptr.asAllocation()) {
             if (innerAlloc->isConstHeapAllocation() || innerAlloc->isWritable()) {
@@ -4034,7 +4038,7 @@ MIREvalStaticRef::MIREvalStaticRef(ObjPool* pool, HIRPath p, const EncodedLitera
     , length(len)
     , valuePending(valuePending)
 {
-    BUG_ASSERT(!encoded || encoded->bytes.size() == length);
+    BUG_ASSERT(!encoded || encoded->bytes.length() == length);
 }
 
 auto MIREvalStaticRef::fmtIdent(ZeroCopyOutput& os) const -> void {
@@ -4060,10 +4064,10 @@ auto MIREvalStaticRef::hasValue() const -> bool {
 
 auto MIREvalStaticRef::getBytes(size_t ofs, size_t len, bool checkMask) const -> const u8* {
     if (encoded) {
-        BUG_ASSERT(ofs <= encoded->bytes.size());
-        BUG_ASSERT(len <= encoded->bytes.size());
-        BUG_ASSERT(ofs + len <= encoded->bytes.size());
-        if (encoded->bytes.size() == 0) {
+        BUG_ASSERT(ofs <= encoded->bytes.length());
+        BUG_ASSERT(len <= encoded->bytes.length());
+        BUG_ASSERT(ofs + len <= encoded->bytes.length());
+        if (encoded->bytes.length() == 0) {
             return reinterpret_cast<const u8*>("");
         }
         return encoded->bytes.data() + ofs;
@@ -4468,12 +4472,12 @@ MIREvalCallStackEntry::MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameI
     , dropFlags(fcn.dropFlags)
 {
     this->resolve.setBothGenericsRaw(implParamsDef, itemParamsDef);
-    localTypes.reserve(state.fcn.locals.size());
-    locals.reserve(state.fcn.locals.size());
-    for (size_t i = 0; i < state.fcn.locals.size(); i++) {
+    localTypes.grow(state.fcn.locals.length());
+    locals.reserve(state.fcn.locals.length());
+    for (size_t i = 0; i < state.fcn.locals.length(); i++) {
         auto localType = state.resolve.monomorphExpand(state.sp, state.fcn.locals[i], this->ms);
         state.resolve.revealOpaqueTypes(state.sp, localType);
-        localTypes.push_back(std::move(localType));
+        localTypes.pushBack(std::move(localType));
         locals.push_back(MIREvalAllocationPtr::allocate(valuePool, rootResolve, state, localTypes.back()));
     }
 
@@ -4779,7 +4783,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
             item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, staticTy, std::move(constMs));
             DEBUG(p << StringView(" = ") << item.valueRes);
         }
-        const auto* value = s.valueRes.bytes.size() == staticSize ? &s.valueRes : nullptr;
+        const auto* value = s.valueRes.bytes.length() == staticSize ? &s.valueRes : nullptr;
         return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), value, staticSize);
     } else {
         DEBUG(ent.tagStr() << StringView(" ") << p);
@@ -5050,7 +5054,7 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) cons
 }
 
 auto MIREvalCallStackEntry::writeEncoded(MIREvalValueRef dst, const EncodedLiteral& encoded) -> void {
-    dst.writeBytes(state, encoded.bytes.data(), encoded.bytes.size());
+    dst.writeBytes(state, encoded.bytes.data(), encoded.bytes.length());
     for (const auto& r : encoded.relocations) {
         MIREvalRelocPtr reloc;
         if (r.p) {
@@ -5086,7 +5090,7 @@ auto MIREvalCallStackEntry::writeConst(MIREvalValueRef dst, const MIRConstant& c
         }
         case MIRConstant::TAG_Bytes: {
             auto& e2 = c.as_Bytes();
-            dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalConstantPtr::allocate(valuePool, e2.data(), e2.size()));
+            dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalConstantPtr::allocate(valuePool, e2.data(), e2.length()));
             break;
         }
         case MIRConstant::TAG_StaticString: {

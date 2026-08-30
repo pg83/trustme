@@ -6,6 +6,8 @@
 #include "trans_main_bindings.h"
 #include "hir_typeck_monomorph.h"
 
+#include <std/lib/vector.h>
+
 #include <algorithm>
 
 using namespace stl;
@@ -381,7 +383,7 @@ bool operator==(const MIRTerminator& a, const MIRTerminator& b) {
             if (ae.val != be.val) {
                 return false;
             }
-            if (ae.targets != be.targets) {
+            if (::ord(ae.targets, be.targets) != OrdEqual) {
                 return false;
             }
             if (ae.validFlag != be.validFlag) {
@@ -398,7 +400,7 @@ bool operator==(const MIRTerminator& a, const MIRTerminator& b) {
             if (ae.val != be.val) {
                 return false;
             }
-            if (ae.targets != be.targets) {
+            if (::ord(ae.targets, be.targets) != OrdEqual) {
                 return false;
             }
             if (ae.defTarget != be.defTarget) {
@@ -616,7 +618,7 @@ bool operator==(const MIRStatement& a, const MIRStatement& b) {
         case MIRStatement::TAG_ScopeEnd: {
             auto& ae = a.as_ScopeEnd();
             auto& be = b.as_ScopeEnd();
-            return ae.slots == be.slots;
+            return ::ord(ae.slots, be.slots) == OrdEqual;
         }
     }
     UNREACHABLE();
@@ -818,7 +820,7 @@ bool MIRSwitchValues::operator==(const MIRSwitchValues& x) const {
         case MIRSwitchValues::TAG_Unsigned: {
             auto& ave = (*this).as_Unsigned();
             auto& bve = x.as_Unsigned();
-            if (ave != bve) {
+            if (::ord(ave, bve) != OrdEqual) {
                 return false;
             }
             break;
@@ -826,7 +828,7 @@ bool MIRSwitchValues::operator==(const MIRSwitchValues& x) const {
         case MIRSwitchValues::TAG_Signed: {
             auto& ave = (*this).as_Signed();
             auto& bve = x.as_Signed();
-            if (ave != bve) {
+            if (::ord(ave, bve) != OrdEqual) {
                 return false;
             }
             break;
@@ -842,8 +844,13 @@ bool MIRSwitchValues::operator==(const MIRSwitchValues& x) const {
         case MIRSwitchValues::TAG_ByteString: {
             auto& ave = (*this).as_ByteString();
             auto& bve = x.as_ByteString();
-            if (ave != bve) {
+            if (ave.size() != bve.size()) {
                 return false;
+            }
+            for (size_t i = 0; i < ave.size(); ++i) {
+                if (::ord(ave[i], bve[i]) != OrdEqual) {
+                    return false;
+                }
             }
             break;
         }
@@ -1007,9 +1014,9 @@ MIRStatement MIRCloner::cloneStmt(const MIRStatement& src) const {
         case MIRStatement::TAG_ScopeEnd: {
             auto& se = src.as_ScopeEnd();
             MIRStatement::Data_ScopeEnd newSe;
-            newSe.slots.reserve(se.slots.size());
+            newSe.slots.grow(se.slots.length());
             for (auto idx : se.slots) {
-                newSe.slots.push_back(mapLocal(idx));
+                newSe.slots.pushBack(mapLocal(idx));
             }
             return MIRStatement(mv$(newSe));
         }
@@ -1044,19 +1051,19 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
         }
         case MIRTerminator::TAG_Switch: {
             auto& se = src.as_Switch();
-            std::vector<MIRBasicBlockId> arms;
-            arms.reserve(se.targets.size());
+            Vector<MIRBasicBlockId> arms;
+            arms.grow(se.targets.length());
             for (const auto& bbi : se.targets) {
-                arms.push_back(mapBbIdx(bbi));
+                arms.pushBack(mapBbIdx(bbi));
             }
             return MIRTerminator::make_Switch({this->cloneLval(se.val), mv$(arms), se.validFlag == ~0u ? ~0u : mapDropFlag(se.validFlag), se.invalidTarget == ~0u ? ~0u : mapBbIdx(se.invalidTarget)});
         }
         case MIRTerminator::TAG_SwitchValue: {
             auto& se = src.as_SwitchValue();
-            std::vector<MIRBasicBlockId> arms;
-            arms.reserve(se.targets.size());
+            Vector<MIRBasicBlockId> arms;
+            arms.grow(se.targets.length());
             for (const auto& bbi : se.targets) {
-                arms.push_back(mapBbIdx(bbi));
+                arms.pushBack(mapBbIdx(bbi));
             }
             return MIRTerminator::make_SwitchValue({this->cloneLval(se.val), mapBbIdx(se.defTarget), mv$(arms), se.values.clone()});
         }
@@ -1273,7 +1280,7 @@ MIRConstant MIRCloner::cloneConstant(const MIRConstant& src) const {
                         case HIRCoreType::U32:
                         case HIRCoreType::U64:
                         case HIRCoreType::U128:
-                            return MIRConstant::make_Uint({v.readUint(ve->bytes.size()), ty->as_Primitive()});
+                            return MIRConstant::make_Uint({v.readUint(ve->bytes.length()), ty->as_Primitive()});
                         case HIRCoreType::Usize:
                             return MIRConstant::make_Uint({v.readUint(TargetGetPointerBits() / 8), ty->as_Primitive()});
                         case HIRCoreType::I8:
@@ -1281,14 +1288,14 @@ MIRConstant MIRCloner::cloneConstant(const MIRConstant& src) const {
                         case HIRCoreType::I32:
                         case HIRCoreType::I64:
                         case HIRCoreType::I128:
-                            return MIRConstant::make_Int({v.readSint(ve->bytes.size()), ty->as_Primitive()});
+                            return MIRConstant::make_Int({v.readSint(ve->bytes.length()), ty->as_Primitive()});
                         case HIRCoreType::Isize:
                             return MIRConstant::make_Int({v.readSint(TargetGetPointerBits() / 8), ty->as_Primitive()});
                         case HIRCoreType::F16:
                         case HIRCoreType::F32:
                         case HIRCoreType::F64:
                         case HIRCoreType::F128:
-                            return MIRConstant::make_Float({v.readFloat(ve->bytes.size()), ty->as_Primitive()});
+                            return MIRConstant::make_Float({v.readFloat(ve->bytes.length()), ty->as_Primitive()});
                         case HIRCoreType::Char:
                             return MIRConstant::make_Uint({v.readUint(4), ty->as_Primitive()});
                         case HIRCoreType::Str:
@@ -1875,12 +1882,12 @@ void stl::output<ZeroCopyOutput, MIRDropKind>(ZeroCopyOutput& out, MIRDropKind v
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::vector<i64>>(ZeroCopyOutput& out, const std::vector<i64>& values) {
+void stl::output<ZeroCopyOutput, Vector<i64>>(ZeroCopyOutput& out, const Vector<i64>& values) {
     outCont(out, values);
 }
 
 template <>
-void stl::output<ZeroCopyOutput, std::vector<std::vector<u8>>>(ZeroCopyOutput& out, const std::vector<std::vector<u8>>& values) {
+void stl::output<ZeroCopyOutput, std::vector<Vector<u8>>>(ZeroCopyOutput& out, const std::vector<Vector<u8>>& values) {
     outCont(out, values);
 }
 

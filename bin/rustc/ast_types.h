@@ -1,11 +1,12 @@
 #pragma once
 
-#include "output.h"
-
 #include "span.h"
 #include "common.h"
+#include "output.h"
 #include "coretypes.h"
 #include "ast_lifetime_ref.h"
+
+#include <std/lib/vector.h>
 
 #include <memory>
 #include <cstdint>
@@ -34,7 +35,7 @@ class ASTHigherRankedBounds {
 public:
     std::vector<ASTLifetimeParam> lifetimes;
 
-    std::vector<RcString> types;
+    stl::Vector<RcString> types;
 
     ASTHigherRankedBounds();
     ~ASTHigherRankedBounds();
@@ -43,7 +44,6 @@ public:
     ASTHigherRankedBounds(const ASTHigherRankedBounds&);
 
     bool empty() const;
-
 };
 
 class PrettyPrintType {
@@ -53,7 +53,6 @@ public:
     PrettyPrintType(const ASTType* ty);
 
     void print(stl::ZeroCopyOutput& os) const;
-
 };
 
 struct TypeFunction {
@@ -61,11 +60,11 @@ struct TypeFunction {
     bool isUnsafe;
     std::string abi;
     ASTType* rettype;
-    std::vector<ASTType*> argTypes;
+    stl::Vector<ASTType*> argTypes;
     bool isVariadic;
 
     TypeFunction();
-    TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, ASTType* ret, std::vector<ASTType*> args, bool isVariadic);
+    TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, ASTType* ret, stl::Vector<ASTType*> args, bool isVariadic);
     ~TypeFunction();
     TypeFunction(TypeFunction&& other);
     TypeFunction(const TypeFunction& other);
@@ -92,7 +91,7 @@ struct TypeTraitPath {
 struct TypeErasedType {
     std::vector<TypeTraitPath> traits;
     std::vector<TypeTraitPath> maybeTraits;
-    std::vector<ASTLifetimeRef> lifetimes;
+    stl::Vector<ASTLifetimeRef> lifetimes;
     std::unique_ptr<ASTPathParams> use;
 
     bool isEdition2024OrLater;
@@ -240,8 +239,8 @@ ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Macro, ASTMacroInvocation inv);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Unit, Span sp);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Primitive, Span sp, enum eCoreType type);
 ASTType* mkType(stl::ObjPool& pool, Span sp, enum eCoreType type);
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, std::vector<ASTType*> innerTypes);
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, std::vector<ASTType*> args, bool isVariadic, ASTType* ret);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, stl::Vector<ASTType*> innerTypes);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, stl::Vector<ASTType*> args, bool isVariadic, ASTType* ret);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType, bool isPin = false);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTType* innerType);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, ASTExprNode* size);
@@ -250,6 +249,6 @@ ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Arg, Span sp, RcString name, un
 ASTType* mkType(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding = ~0u);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Path, Span sp, ASTPath path);
 ASTType* mkType(stl::ObjPool& pool, Span sp, ASTPath path);
-ASTType* mkType(stl::ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, std::vector<ASTLifetimeRef> lifetimes);
+ASTType* mkType(stl::ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, stl::Vector<ASTLifetimeRef> lifetimes);
 
 Ordering ord(ASTType* a, ASTType* b);

@@ -1,10 +1,11 @@
 #include "memory_dump.h"
 
-#include "compile_error.h"
 #include "output.h"
+#include "compile_error.h"
 
 #include <std/ios/sys.h>
 #include <std/sys/types.h>
+#include <std/lib/vector.h>
 
 #include <vector>
 #include <cstdint>
@@ -128,8 +129,10 @@ void memoryDump(unsigned& sequence, const char* phase) {
             fwrite(&hdr, sizeof(hdr), 1, outFp);
             fwrite(r.name.c_str(), 1, r.name.size(), outFp);
         }
-        std::vector<unsigned char> zlibBuffer(16 * 1024);
-        std::vector<u8> buf(chunkSize);
+        Vector<unsigned char> zlibBuffer;
+        zlibBuffer.zero(16 * 1024);
+        Vector<u8> buf;
+        buf.zero(chunkSize);
         size_t chunkCountFlushed = 0;
         auto flushChunk = [&](u64 chunkAddr) {
     #if DEBUG_MEM_DUMP
@@ -147,11 +150,11 @@ void memoryDump(unsigned& sequence, const char* phase) {
             if (ret != Z_OK)
                 throw std::runtime_error("zlib init failure");
 
-            zstream.avail_out = zlibBuffer.size();
-            zstream.next_out = zlibBuffer.data();
+            zstream.avail_out = zlibBuffer.length();
+            zstream.next_out = zlibBuffer.mutData();
 
-            zstream.avail_in = buf.size();
-            zstream.next_in = reinterpret_cast<unsigned char*>(buf.data());
+            zstream.avail_in = buf.length();
+            zstream.next_in = reinterpret_cast<unsigned char*>(buf.mutData());
 
             while (zstream.avail_in > 0) {
                 BUG_ASSERT(zstream.avail_out != 0);
@@ -160,12 +163,12 @@ void memoryDump(unsigned& sequence, const char* phase) {
                 if (ret == Z_STREAM_ERROR)
                     throw std::runtime_error("zlib deflate stream error");
 
-                if (zstream.avail_out < zlibBuffer.size()) {
-                    size_t bytes = zlibBuffer.size() - zstream.avail_out;
+                if (zstream.avail_out < zlibBuffer.length()) {
+                    size_t bytes = zlibBuffer.length() - zstream.avail_out;
                     fwrite(zlibBuffer.data(), bytes, 1, outFp);
 
-                    zstream.avail_out = zlibBuffer.size();
-                    zstream.next_out = zlibBuffer.data();
+                    zstream.avail_out = zlibBuffer.length();
+                    zstream.next_out = zlibBuffer.mutData();
                 }
             }
 
@@ -175,16 +178,16 @@ void memoryDump(unsigned& sequence, const char* phase) {
                     sysE << StringView("ERROR: zlib deflate stream error (cleanup)");
                     abort();
                 }
-                if (zstream.avail_out != zlibBuffer.size()) {
-                    size_t bytes = zlibBuffer.size() - zstream.avail_out;
+                if (zstream.avail_out != zlibBuffer.length()) {
+                    size_t bytes = zlibBuffer.length() - zstream.avail_out;
                     fwrite(zlibBuffer.data(), bytes, 1, outFp);
 
-                    zstream.avail_out = zlibBuffer.size();
-                    zstream.next_out = zlibBuffer.data();
+                    zstream.avail_out = zlibBuffer.length();
+                    zstream.next_out = zlibBuffer.mutData();
                 }
             } while (ret == Z_OK);
             deflateEnd(&zstream);
-            memset(buf.data(), 0, buf.size());
+            memset(buf.mutData(), 0, buf.length());
         };
         u64 lastVaddr = 0;
         for (const auto& r : rangeEnts) {
@@ -201,23 +204,23 @@ void memoryDump(unsigned& sequence, const char* phase) {
                 sysO << chunkCountFlushed << StringView("/") << chunkCount << StringView(": ") << static_cast<const char*>(range) << StringView(" ") << static_cast<const char*>(r.flagsStr) << StringView(" : ") << r.name << endL;
     #endif
                 if (r.vStart / chunkSize == (r.vEnd - 1) / chunkSize) {
-                    memcpy(buf.data() + r.vStart % chunkSize, (const void*)r.vStart, r.vEnd - r.vStart);
+                    memcpy(buf.mutData() + r.vStart % chunkSize, (const void*)r.vStart, r.vEnd - r.vStart);
                     if (r.vEnd % chunkSize == 0) {
                         flushChunk(r.vStart / chunkSize * chunkSize);
                     }
                 } else {
                     const auto headSize = chunkSize - r.vStart % chunkSize;
-                    memcpy(buf.data() + r.vStart % chunkSize, (const void*)r.vStart, headSize);
+                    memcpy(buf.mutData() + r.vStart % chunkSize, (const void*)r.vStart, headSize);
                     flushChunk(r.vStart / chunkSize * chunkSize);
                     const auto tailSize = r.vEnd % chunkSize;
                     const auto tailPos = r.vEnd - tailSize;
                     u64 va = r.vStart + headSize;
                     while (va < tailPos) {
-                        memcpy(buf.data(), (const void*)va, chunkSize);
+                        memcpy(buf.mutData(), (const void*)va, chunkSize);
                         flushChunk(va / chunkSize * chunkSize);
                         va += chunkSize;
                     }
-                    memcpy(buf.data(), (const void*)tailPos, tailSize);
+                    memcpy(buf.mutData(), (const void*)tailPos, tailSize);
                 }
                 lastVaddr = r.vEnd;
             }

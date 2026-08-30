@@ -1643,7 +1643,7 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
             auto& e = ty->data.as_Tuple();
             HIRTypeData::Data_Tuple v;
             for (const auto& st : e.innerTypes) {
-                v.push_back(LowerHIRType(st));
+                v.pushBack(LowerHIRType(st));
             }
             return crate->types.tuple(mv$(v));
         }
@@ -1869,9 +1869,9 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
         }
         case TypeData::TAG_Function: {
             auto& e = ty->data.as_Function();
-            std::vector<HIRTypeRef> args;
+            Vector<HIRTypeRef> args;
             for (const auto& arg : e.info.argTypes) {
-                args.push_back(LowerHIRType(arg));
+                args.pushBack(LowerHIRType(arg));
             }
             HIRTypeDataFunctionPointer f{e.info.isUnsafe, e.info.isVariadic, RcString::newInterned(e.info.abi), LowerHIRType(e.info.rettype), mv$(args)};
             LifetimeIdentity identity;
@@ -2382,13 +2382,13 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
             case ASTItem::TAG_Function: {
                 auto& i = item.data.as_Function();
                 auto fcn = LowerHIRFunction(itemPath, traitPath.parent(), item.attrs, i, crate->types.self());
-                std::vector<HIRTypeRef> erasedTypes;
+                Vector<HIRTypeRef> erasedTypes;
                 auto _discard = RpititTypeCollector(crate->types, [&](HIRTypeRef type) {
-                    erasedTypes.push_back(type);
+                    erasedTypes.pushBack(type);
                 }).visitType(fcn.returnType);
                 (void)_discard;
                 HIRTypeRefMap<size_t> erasedIndices;
-                for (size_t index = 0; index < erasedTypes.size(); index++) {
+                for (size_t index = 0; index < erasedTypes.length(); index++) {
                     erasedIndices.insert(std::make_pair(erasedTypes[index], index));
                 }
                 auto erasedName = [&](size_t index) {
@@ -2397,7 +2397,7 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
                 RpititNestedRewrite rewrite{crate->types, erasedIndices, [&](size_t index) {
                     return crate->types.path(HIRPath(crate->types.self(), HIRGenericPath(traitPath, rv.params.makeNopParams(crate->types, 0)), erasedName(index), fcn.params.makeNopParams(crate->types, 1)), {});
                 }};
-                for (size_t index = 0; index < erasedTypes.size(); index++) {
+                for (size_t index = 0; index < erasedTypes.length(); index++) {
                     const auto& erased = erasedTypes[index]->as_ErasedType();
                     std::vector<HIRTraitPath> bounds;
                     for (const auto& bound : erased.traits) {
@@ -2472,7 +2472,9 @@ std::vector<HIRSimplePath> AST2HIR::LowerHIRDefineOpaque(HIRItemPath p, const HI
             } else if (const auto* path = opaquePath.cls.opt_Super()) {
                 ASSERT_BUG(attr->span(), path->count <= sourceModule.components().size(), StringView("Too many `super` components in #[define_opaque]"));
                 auto components = sourceModule.componentsVec();
-                components.resize(components.size() - path->count);
+                for (size_t i = 0; i < path->count; i++) {
+                    components.popBack();
+                }
                 aliasPath = appendNodes(HIRSimplePath(sourceModule.crateName(), components), path->nodes);
             } else {
                 ERROR(attr->span(), E0000, StringView("Unsupported path in #[define_opaque]: ") << opaquePath);
@@ -2711,8 +2713,8 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     }
 
     for (auto idx : f.markings.rustcLegacyConstGenerics) {
-        ASSERT_BUG(attrs.get("rustc_legacy_const_generics")->span(), idx < args.size() + f.markings.rustcLegacyConstGenerics.size(), StringView("#[rustc_legacy_const_generics(") << idx << StringView(")] out of range (0..") << args.size() + f.markings.rustcLegacyConstGenerics.size() << StringView(")"));
-        markings.rustcLegacyConstGenerics.push_back(idx);
+        ASSERT_BUG(attrs.get("rustc_legacy_const_generics")->span(), idx < args.size() + f.markings.rustcLegacyConstGenerics.length(), StringView("#[rustc_legacy_const_generics(") << idx << StringView(")] out of range (0..") << args.size() + f.markings.rustcLegacyConstGenerics.length() << StringView(")"));
+        markings.rustcLegacyConstGenerics.pushBack(idx);
     }
     if (attrs.get("track_caller")) {
         markings.trackCaller = true;
@@ -3490,11 +3492,11 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
 
     {
         TRACE_FUNCTION_FR(StringView("macros"), StringView("macros"));
-        std::vector<ASTModule*> mods;
-        mods.push_back(&crate.rootModule_);
+        Vector<ASTModule*> mods;
+        mods.pushBack(&crate.rootModule_);
         do {
             auto& mod = *mods.back();
-            mods.pop_back();
+            mods.popBack();
 
             for (/*const*/ auto& mac : mod.macros()) {
                 if (mac.data->exported) {
@@ -3505,7 +3507,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
                         BUG_ASSERT(mac.data);
                         BUG_ASSERT(!mac.data->rules.empty());
                         auto pc = mod.path().nodes;
-                        pc.push_back(mac.name);
+                        pc.pushBack(mac.name);
                         mi = HIRMacroItem::make_Import({HIRSimplePath(crateName, std::move(pc))});
                     }
                     ASSERT_BUG(Span(), macros.count(mac.name) == 0, StringView("Duplicate export of: ") << mac.name);
@@ -3513,7 +3515,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
                         auto res = macros.insert(std::make_pair(mac.name, mv$(mi)));
                         if (res.second) {
                             DEBUG(StringView("- Define ") << mac.name << StringView("!"));
-                            rv.exportedMacroNames.push_back(mac.name);
+                            rv.exportedMacroNames.pushBack(mac.name);
                         }
                         if (res.first->second.is_MacroRules()) {
                             ASSERT_BUG(Span(), !res.first->second.as_MacroRules()->rules.empty(), StringView("Empty macro? - ") << mac.name);
@@ -3531,10 +3533,10 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
 
             for (auto& i : mod.items) {
                 if (i->data.is_Module()) {
-                    mods.push_back(&i->data.as_Module());
+                    mods.pushBack(&i->data.as_Module());
                 }
             }
-        } while (mods.size() > 0);
+        } while (!mods.empty());
 
         for (const auto& mac : crate.rootModule_.macroImports) {
             if (mac.isPub || (mac.ref.is_MacroRules() && mac.ref.as_MacroRules()->exported)) {
@@ -3542,14 +3544,14 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
                 auto res = macros.insert(std::make_pair(mac.name, HIRMacroItem::make_Import({path})));
                 if (res.second) {
                     DEBUG(StringView("Re-export ") << mac.name << StringView("! = ") << path);
-                    rv.exportedMacroNames.push_back(mac.name);
+                    rv.exportedMacroNames.pushBack(mac.name);
                 }
             }
         }
 
         for (const auto& i : crate.rootModule_.macroItems) {
             if (i.second.vis.isGlobal()) {
-                rv.exportedMacroNames.push_back(i.first);
+                rv.exportedMacroNames.pushBack(i.first);
             }
         }
     }
@@ -3571,7 +3573,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
 
             HIRProcMacro::Ty ty = H::cvtMacroTy(ent.ty);
             macros.insert(std::make_pair(ent.name, HIRProcMacro{ty, ent.name, HIRSimplePath(RcString(""), {ent.name}), ent.attributes}));
-            rv.exportedMacroNames.push_back(ent.name);
+            rv.exportedMacroNames.pushBack(ent.name);
             DEBUG(StringView("Export proc_macro ") << ent.name);
         }
     } else if (!crate.testHarness) {
@@ -3939,7 +3941,7 @@ auto LifetimeIdentity::type(const ASTType& value) -> void {
             const auto& function = value.data.as_Function().info;
             Binder local{binder, function.hrbs};
             binder = &local;
-            appendNumber(function.argTypes.size());
+            appendNumber(function.argTypes.length());
             local.phase = Phase::Input;
             for (const auto* argument : function.argTypes) {
                 type(*argument);
@@ -4568,7 +4570,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeLetBinding& v) -> void {
         std::vector<HIRPattern> newPats;
         std::vector<HIRExprNodeP> tupleVals;
         const auto bindingSlots = patternBindingSlots(pat, HIRPatternBindingOrder::FirstCandidate);
-        ASSERT_BUG(v.span(), bindingSlots.size() == visitor.bindings.size(), StringView("let-else candidate omitted bindings"));
+        ASSERT_BUG(v.span(), bindingSlots.length() == visitor.bindings.size(), StringView("let-else candidate omitted bindings"));
         for (const auto slot : bindingSlots) {
             ASSERT_BUG(v.span(), base <= slot && slot - base < visitor.bindings.size(), StringView("Invalid temporary let-else binding ") << slot);
             auto& binding = visitor.bindings[slot - base];
@@ -5069,7 +5071,8 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeString& v) -> void {
 }
 
 auto LowerHIRExprNodeVisitor::visit(ASTExprNodeByteString& v) -> void {
-    std::vector<char> dat{v.value.begin(), v.value.end()};
+    Vector<char> dat(v.value.size());
+    dat.append(v.value.data(), v.value.size());
     rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_ByteString(mv$(dat))));
 }
 

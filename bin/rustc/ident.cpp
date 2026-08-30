@@ -16,8 +16,8 @@ namespace {
 }
 
 bool Ident::Hygiene::isVisible(const Hygiene& srcH) const {
-    const auto selfSize = inner ? inner->contexts.size() : 0;
-    const auto srcSize = srcH.inner ? srcH.inner->contexts.size() : 0;
+    const auto selfSize = inner ? inner->contexts.length() : 0;
+    const auto srcSize = srcH.inner ? srcH.inner->contexts.length() : 0;
     if (selfSize > srcSize) {
         return false;
     }
@@ -49,7 +49,7 @@ RcString Ident::Hygiene::applyToItemName(const RcString& name) const {
 
     StringBuilder os;
     os << name << StringView("#h");
-    for (size_t i = 0; i < h.contexts.size(); i++) {
+    for (size_t i = 0; i < h.contexts.length(); i++) {
         if ((h.macroDefinitions[i] & ITEM_OPAQUE) != 0) {
             os << StringView("_") << h.contexts[i];
         }
@@ -67,8 +67,8 @@ const Ident::Hygiene::Inner* Ident::Hygiene::store(ObjPool& pool, Inner v) {
 
 Ident::Hygiene Ident::Hygiene::newScope(u32& id, ObjPool& pool) {
     Inner v;
-    v.contexts.push_back(++id);
-    v.macroDefinitions.push_back(0);
+    v.contexts.pushBack(++id);
+    v.macroDefinitions.pushBack(0);
     return Hygiene(store(pool, std::move(v)));
 }
 
@@ -79,11 +79,9 @@ Ident::Hygiene Ident::Hygiene::newScopeChained(u32& id, ObjPool& pool, const Hyg
         v.contexts = parent.inner->contexts;
         v.macroDefinitions = parent.inner->macroDefinitions;
     }
-    v.contexts.reserve(v.contexts.size() + 1);
-    v.macroDefinitions.reserve(v.macroDefinitions.size() + 1);
-    v.contexts.push_back(++id);
+    v.contexts.pushBack(++id);
     BUG_ASSERT((macroDefinition & ITEM_OPAQUE) == 0);
-    v.macroDefinitions.push_back(macroDefinition | (itemOpaque ? ITEM_OPAQUE : 0));
+    v.macroDefinitions.pushBack(macroDefinition | (itemOpaque ? ITEM_OPAQUE : 0));
     return Hygiene(store(pool, std::move(v)));
 }
 
@@ -91,10 +89,10 @@ Ident::Hygiene Ident::Hygiene::withTailScope(ObjPool& pool, const Hygiene& scope
     BUG_ASSERT(scope.inner);
     const auto& s = *scope.inner;
     BUG_ASSERT(!s.contexts.empty());
-    BUG_ASSERT(s.contexts.size() == s.macroDefinitions.size());
+    BUG_ASSERT(s.contexts.length() == s.macroDefinitions.length());
     Inner v = clone();
-    v.contexts.push_back(s.contexts.back());
-    v.macroDefinitions.push_back(s.macroDefinitions.back());
+    v.contexts.pushBack(s.contexts.back());
+    v.macroDefinitions.pushBack(s.macroDefinitions.back());
     if (inheritModPath && s.searchModule) {
         v.searchModule = s.searchModule;
     }
@@ -105,8 +103,8 @@ Ident::Hygiene Ident::Hygiene::getParent(ObjPool& pool) const {
     BUG_ASSERT(inner);
     const auto& c = *inner;
     Inner v;
-    v.contexts.insert(v.contexts.begin(), c.contexts.begin(), c.contexts.end() - 1);
-    v.macroDefinitions.insert(v.macroDefinitions.begin(), c.macroDefinitions.begin(), c.macroDefinitions.end() - 1);
+    v.contexts.append(c.contexts.begin(), c.contexts.end() - 1);
+    v.macroDefinitions.append(c.macroDefinitions.begin(), c.macroDefinitions.end() - 1);
     return Hygiene(store(pool, std::move(v)));
 }
 
@@ -115,13 +113,13 @@ bool Ident::Hygiene::leaveMacroDefinition(ObjPool& pool, unsigned int definition
         return false;
     }
     const auto& c = *inner;
-    BUG_ASSERT(c.contexts.size() == c.macroDefinitions.size());
+    BUG_ASSERT(c.contexts.length() == c.macroDefinitions.length());
     if (c.macroDefinitions.empty() || macroDefinitionId(c.macroDefinitions.back()) != definition) {
         return false;
     }
     Inner v = clone();
-    v.contexts.pop_back();
-    v.macroDefinitions.pop_back();
+    v.contexts.popBack();
+    v.macroDefinitions.popBack();
     *this = Hygiene(store(pool, std::move(v)));
     if (*this == tokenContext) {
         *this = definitionContext;
@@ -188,7 +186,7 @@ bool Ident::operator<(const Ident& x) const {
 void Ident::Hygiene::fmt(ZeroCopyOutput& os) const {
     os << StringView("/*[");
     if (inner) {
-        for (size_t i = 0; i < inner->contexts.size(); i++) {
+        for (size_t i = 0; i < inner->contexts.length(); i++) {
             if (i != 0) {
                 os << StringView(", ");
             }

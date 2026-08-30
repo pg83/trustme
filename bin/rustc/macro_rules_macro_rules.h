@@ -1,5 +1,7 @@
 #pragma once
 
+#include <std/lib/vector.h>
+
 struct WireBoard;
 
 #include "common.h"
@@ -70,7 +72,6 @@ struct MacroPatEnt {
     MacroPatEnt(Span sp, RcString name, unsigned int nameIndex, Type type);
 
     MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, std::vector<MacroPatEnt> ents);
-
 };
 
 struct SimplePatIfCheck {
@@ -88,13 +89,12 @@ struct SimplePatIfCheck {
     bool operator==(const SimplePatIfCheck& x) const {
         return this->ty == x.ty && this->tok == x.tok;
     }
-
 };
 
 #include "macro_rules_macro_rules_tu.h"
 
 struct MacroRulesArm {
-    std::vector<RcString> paramNames;
+    stl::Vector<RcString> paramNames;
 
     std::vector<SimplePatEnt> pattern;
 

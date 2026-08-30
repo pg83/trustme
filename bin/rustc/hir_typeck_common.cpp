@@ -7,6 +7,8 @@
 #include "hir_conv_constant_evaluation.h"
 
 #include <std/alg/defer.h>
+#include <std/alg/range.h>
+#include <std/lib/vector.h>
 
 using namespace stl;
 
@@ -83,7 +85,7 @@ namespace {
     struct TyRewriter {
         HIRTypeInterner& types;
         HIRTypeRewriteCallback& callback;
-        std::vector<HIRTypeRef> stack;
+        Vector<HIRTypeRef> stack;
 
         bool rewritePathParams(HIRPathParams& params);
 
@@ -262,9 +264,9 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         }
         case HIRTypeData::TAG_Tuple: {
             auto& e = (*tpl).as_Tuple();
-            std::vector<HIRTypeRef> types;
+            Vector<HIRTypeRef> types;
             for (const auto& ty : e) {
-                types.push_back(this->monomorphType(sp, ty, allowInfer));
+                types.pushBack(this->monomorphType(sp, ty, allowInfer));
             }
             return this->types.tuple(mv$(types));
         }
@@ -291,7 +293,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
             ft.lifetimeIdentityHasFree = e.lifetimeIdentityHasFree;
             ft.rettype = this->monomorphType(sp, e.rettype, allowInfer);
             for (const auto& arg : e.argTypes) {
-                ft.argTypes.push_back(this->monomorphType(sp, arg, allowInfer));
+                ft.argTypes.pushBack(this->monomorphType(sp, arg, allowInfer));
             }
             return types.function(mv$(ft));
         }
@@ -998,7 +1000,7 @@ auto TyRewriter::rewriteType(HIRTypeRef& type) -> bool {
         return stop;
     }
 
-    stack.push_back(original);
+    stack.pushBack(original);
     bool childStop = false;
     if (!stop) {
         switch (data.tag()) {
@@ -1080,7 +1082,7 @@ auto TyRewriter::rewriteType(HIRTypeRef& type) -> bool {
             }
             case HIRTypeData::TAG_Tuple: {
                 auto& e = data.as_Tuple();
-                for (auto& inner : e) {
+                for (auto& inner : mutRange(e)) {
                     if (!childStop) {
                         childStop = rewriteType(inner);
                     }
@@ -1104,9 +1106,9 @@ auto TyRewriter::rewriteType(HIRTypeRef& type) -> bool {
             }
             case HIRTypeData::TAG_Function: {
                 auto& e = data.as_Function();
-                for (auto& arg : e.argTypes) {
+                for (auto& type : mutRange(e.argTypes)) {
                     if (!childStop) {
-                        childStop = rewriteType(arg);
+                        childStop = rewriteType(type);
                     }
                 }
                 if (!childStop) {
@@ -1119,7 +1121,7 @@ auto TyRewriter::rewriteType(HIRTypeRef& type) -> bool {
             }
         }
     }
-    stack.pop_back();
+    stack.popBack();
     type = types.intern(mv$(data));
     return stop || childStop;
 }

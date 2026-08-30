@@ -80,10 +80,10 @@ bool ASTVisibility::isVisible(const ASTAbsolutePath& fromMod) const {
     if (!visPath_) {
         return true;
     }
-    if (visPath_->crate != fromMod.crate || visPath_->nodes.size() > fromMod.nodes.size()) {
+    if (visPath_->crate != fromMod.crate || visPath_->nodes.length() > fromMod.nodes.length()) {
         return false;
     }
-    for (size_t i = 0; i < visPath_->nodes.size(); i++) {
+    for (size_t i = 0; i < visPath_->nodes.length(); i++) {
         if (visPath_->nodes[i] != fromMod.nodes[i]) {
             return false;
         }

@@ -1,6 +1,8 @@
 struct Settings;
 #pragma once
 
+#include <std/lib/vector.h>
+
 #include "ast_ast.h"
 #include "ast_types.h"
 #include "ast_edition.h"
@@ -63,7 +65,7 @@ public:
 public:
     ASTModule rootModule_;
 
-    std::vector<RcString> externCratesOrd;
+    stl::Vector<RcString> externCratesOrd;
     std::map<RcString, ASTExternCrate> externCrates;
 
     std::map<RcString, const MacroRules*> exportedMacros;

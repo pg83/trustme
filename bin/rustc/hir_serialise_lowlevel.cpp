@@ -3,6 +3,8 @@
 #include "common.h"
 #include "output_file.h"
 
+#include <std/lib/vector.h>
+
 #include <zlib.h>
 #include <fstream>
 #include <string.h>
@@ -13,7 +15,7 @@ using namespace stl;
 struct HIRSerialiseWriter::Inner {
     OutputFile backing;
     z_stream zstream;
-    std::vector<unsigned char> buffer;
+    Vector<unsigned char> buffer;
 
     unsigned int byteOutCount = 0;
     unsigned int byteInCount = 0;
@@ -26,7 +28,7 @@ struct HIRSerialiseWriter::Inner {
 struct HIRSerialiseReader::Inner {
     std::ifstream backing;
     z_stream zstream;
-    std::vector<unsigned char> buffer;
+    Vector<unsigned char> buffer;
 
     unsigned int byteOutCount = 0;
     unsigned int byteInCount = 0;
@@ -89,8 +91,9 @@ void HIRSerialiseWriter::writeString(const RcString& v) {
 HIRSerialiseWriter::Inner::Inner(const std::string& filename)
     : backing(filename)
     , zstream()
-    , buffer(16 * 1024)
+    , buffer()
 {
+    buffer.zero(16 * 1024);
     zstream.zalloc = Z_NULL;
     zstream.zfree = Z_NULL;
     zstream.opaque = Z_NULL;
@@ -101,8 +104,8 @@ HIRSerialiseWriter::Inner::Inner(const std::string& filename)
         throw std::runtime_error("zlib init failure");
     }
 
-    zstream.avail_out = buffer.size();
-    zstream.next_out = buffer.data();
+    zstream.avail_out = buffer.length();
+    zstream.next_out = buffer.mutData();
 }
 
 HIRSerialiseWriter::Inner::~Inner() {
@@ -115,13 +118,13 @@ HIRSerialiseWriter::Inner::~Inner() {
             sysE << StringView("ERROR: zlib deflate stream error (cleanup)");
             abort();
         }
-        if (zstream.avail_out != buffer.size()) {
-            size_t rem = buffer.size() - zstream.avail_out;
+        if (zstream.avail_out != buffer.length()) {
+            size_t rem = buffer.length() - zstream.avail_out;
             byteOutCount += rem;
             backing.write(buffer.data(), rem);
 
-            zstream.avail_out = buffer.size();
-            zstream.next_out = buffer.data();
+            zstream.avail_out = buffer.length();
+            zstream.next_out = buffer.mutData();
         }
     } while (ret == Z_OK);
     deflateEnd(&zstream);
@@ -146,22 +149,22 @@ void HIRSerialiseWriter::Inner::write(const void* buf, size_t len) {
         byteInCount += usedThisTime;
 
         if (zstream.avail_in > 0) {
-            size_t bytes = buffer.size() - zstream.avail_out;
+            size_t bytes = buffer.length() - zstream.avail_out;
             backing.write(buffer.data(), bytes);
             byteOutCount += bytes;
 
-            zstream.avail_out = buffer.size();
-            zstream.next_out = buffer.data();
+            zstream.avail_out = buffer.length();
+            zstream.next_out = buffer.mutData();
         }
     }
 
     while (zstream.avail_out == 0) {
-        size_t bytes = buffer.size() - zstream.avail_out;
+        size_t bytes = buffer.length() - zstream.avail_out;
         backing.write(buffer.data(), bytes);
         byteOutCount += bytes;
 
-        zstream.avail_out = buffer.size();
-        zstream.next_out = buffer.data();
+        zstream.avail_out = buffer.length();
+        zstream.next_out = buffer.mutData();
 
         int ret = deflate(&zstream, Z_NO_FLUSH);
         if (ret == Z_STREAM_ERROR) {
@@ -173,26 +176,28 @@ void HIRSerialiseWriter::Inner::write(const void* buf, size_t len) {
 HIRSerialiseReader::Buffer::Buffer(size_t cap)
     : ofs(0)
 {
-    backing.reserve(cap);
+    backing.zero(cap);
 }
 
 size_t HIRSerialiseReader::Buffer::read(void* dst, size_t len) {
-    size_t rem = backing.size() - ofs;
+    size_t rem = backing.length() - ofs;
     if (rem >= len) {
         memcpy(dst, backing.data() + ofs, len);
         ofs += len;
         return len;
     } else {
         memcpy(dst, backing.data() + ofs, rem);
-        ofs = backing.size();
+        ofs = backing.length();
         return rem;
     }
 }
 
 void HIRSerialiseReader::Buffer::populate(Inner& is) {
-    backing.resize(backing.capacity(), 0);
-    auto len = is.read(backing.data(), backing.size());
-    backing.resize(len);
+    backing.zero(backing.capacity());
+    auto len = is.read(backing.mutData(), backing.length());
+    while (backing.length() > len) {
+        backing.popBack();
+    }
     ofs = 0;
 }
 
@@ -202,11 +207,11 @@ HIRSerialiseReader::HIRSerialiseReader(const std::string& filename)
     , pos(0)
 {
     size_t nStrings = readCount();
-    strings.reserve(nStrings);
+    strings.grow(nStrings);
     DEBUG(StringView("n_strings = ") << nStrings);
     for (size_t i = 0; i < nStrings; i++) {
         auto s = readString();
-        strings.push_back(RcString::newInterned(s));
+        strings.pushBack(RcString::newInterned(s));
     }
 }
 
@@ -239,8 +244,9 @@ void HIRSerialiseReader::read(void* buf, size_t len) {
 HIRSerialiseReader::Inner::Inner(const std::string& filename)
     : backing(filename, std::ios_base::in | std::ios_base::binary)
     , zstream()
-    , buffer(16 * 1024)
+    , buffer()
 {
+    buffer.zero(16 * 1024);
     if (!backing.is_open()) {
         throw std::runtime_error("Unable to open " + filename);
     }
@@ -266,13 +272,13 @@ size_t HIRSerialiseReader::Inner::read(void* buf, size_t len) {
     zstream.next_out = reinterpret_cast<unsigned char*>(buf);
     do {
         if (zstream.avail_in == 0) {
-            backing.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+            backing.read(reinterpret_cast<char*>(buffer.mutData()), buffer.length());
             zstream.avail_in = backing.gcount();
             if (zstream.avail_in == 0) {
                 byteOutCount += len - zstream.avail_out;
                 return len - zstream.avail_out;
             }
-            zstream.next_in = const_cast<unsigned char*>(buffer.data());
+            zstream.next_in = buffer.mutData();
 
             byteInCount += zstream.avail_in;
         }
@@ -547,7 +553,7 @@ size_t HIRSerialiseReader::readCount() {
 
 RcString HIRSerialiseReader::readIstring() {
     size_t idx = readCount();
-    return strings.at(idx);
+    return strings[idx];
 }
 
 std::string HIRSerialiseReader::readString() {

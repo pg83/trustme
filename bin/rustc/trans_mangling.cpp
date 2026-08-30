@@ -316,7 +316,7 @@ auto Mangler::fmtConstGeneric(const HIRConstGeneric& value) -> void {
         BUG(Span(), StringView("Non-encodable const generic ") << value);
     }
     const auto& literal = **evaluated;
-    os << StringView("V") << literal.bytes.size() << StringView("_");
+    os << StringView("V") << literal.bytes.length() << StringView("_");
     for (const auto byte : literal.bytes) {
         os << StringView("0123456789abcdef")[byte >> 4];
         os << StringView("0123456789abcdef")[byte & 0xF];
@@ -385,7 +385,7 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
             BUG(Span(), StringView("Non-encodable type ") << ty);
         case HIRTypeData::TAG_Tuple: {
             auto& e = (*ty).as_Tuple();
-            os << StringView("T") << e.size();
+            os << StringView("T") << e.length();
             for (const auto& sty : e) {
                 this->fmtType(sty);
             }
@@ -442,7 +442,7 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
                 os << StringView("e");
                 this->fmtName(e.abi.c_str());
             }
-            os << e.argTypes.size();
+            os << e.argTypes.length();
             for (const auto& t : e.argTypes) {
                 this->fmtType(t);
             }

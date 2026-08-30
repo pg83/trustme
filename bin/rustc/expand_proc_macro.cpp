@@ -11,18 +11,18 @@
 #include "parse_lex.h"
 #include "expand_cfg.h"
 #include "wire_board.h"
-#include "main_bindings.h"
 #include "output_file.h"
+#include "main_bindings.h"
 #include "parse_ttstream.h"
 
 #include <std/str/view.h>
 #include <std/lib/vector.h>
 
 #include <spawn.h>
+#include <sstream>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <unordered_set>
-#include <sstream>
 
 using namespace stl;
 
@@ -242,9 +242,9 @@ namespace {
         void visitItem(const RcString& name, const ASTVisibility& vis, const ASTItem& item);
     };
 
-    ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath) {
+    ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath) {
         TRACE_FUNCTION_F(macPath);
-        const auto& crateName = macPath.front();
+        const auto& crateName = macPath[0];
         ASSERT_BUG(sp, crate.externCrates.count(crateName), StringView("Crate not loaded for macro: [") << macPath << StringView("]"));
         const auto& extCrate = crate.externCrates.at(crateName);
         // TODO: Ensure that this macro is in the listed crate.
@@ -255,7 +255,7 @@ namespace {
             }
             const auto& pm = mi.second->ent.as_ProcMacro();
             bool good = true;
-            for (size_t i = 0; i < std::min(macPath.size() - 1, pm.path.components().size()); i++) {
+            for (size_t i = 0; i < std::min(macPath.length() - 1, pm.path.components().size()); i++) {
                 if (macPath[1 + i] != pm.path.components()[i]) {
                     good = false;
                     break;
@@ -280,7 +280,7 @@ namespace {
     }
 
     template <typename F>
-    std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, const TokenTree* attrInput, F cb) {
+    std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const TokenTree* attrInput, F cb) {
         auto pmi = ProcMacroInvokeInt(sp, wb, crate, macPath);
         if (!pmi.checkGood()) {
             return std::unique_ptr<TokenStream>();
@@ -342,7 +342,9 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     size_t testCount = static_cast<ASTExprNodeArray&>(*testsArray).values.size();
     auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), makeAstExprNode<ASTExprNodeInteger>(*crate.pool, U128(testCount), CORETYPE_UINT).release()), ASTExpr(mv$(testsArray))};
 
-    auto newmod = ASTModule{ASTAbsolutePath("", {"proc_macro#"})};
+    Vector<RcString> modulePath;
+    modulePath.pushBack(RcString::newInterned("proc_macro#"));
+    auto newmod = ASTModule{ASTAbsolutePath("", mv$(modulePath))};
     // - TODO: These need to be loaded too.
 
     auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
@@ -352,10 +354,13 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     newmod.addItem(Span(), visPrivate, "MACROS", mv$(testsList), {});
 
     crate.rootModule_.addItem(Span(), visPrivate, "proc_macro#", mv$(newmod), {});
-    crate.langItems["trustme-main"] = ASTAbsolutePath("", {"proc_macro#", "main"});
+    Vector<RcString> mainPath;
+    mainPath.pushBack(RcString::newInterned("proc_macro#"));
+    mainPath.pushBack(RcString::newInterned("main"));
+    crate.langItems["trustme-main"] = ASTAbsolutePath("", mv$(mainPath));
 }
 
-std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         DEBUG(StringView("derive on struct"));
         v.skipDeriveAttrs = true;
@@ -364,7 +369,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
     });
 }
 
-std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTEnum& i) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTEnum& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         DEBUG(StringView("derive on enum"));
         v.skipDeriveAttrs = true;
@@ -373,7 +378,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
     });
 }
 
-std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTUnion& i) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTUnion& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         DEBUG(StringView("derive on union"));
         v.skipDeriveAttrs = true;
@@ -382,7 +387,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
     });
 }
 
-std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, const TokenTree& tt, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTItem& i) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const TokenTree& tt, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTItem& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, &tt, [&](ProcMacroVisitor& v) {
         v.emitAllAttrs = true;
         v.visitTopAttrs(attrs);
@@ -390,7 +395,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
     });
 }
 
-std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, const TokenTree& tt) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const TokenTree& tt) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         v.visitTokentree(tt);
     });
@@ -2186,7 +2191,7 @@ auto ProcMacroVisitor::visitMetaItem(const ASTAttribute& i) -> void {
         pmi.sendSymbol("::");
     }
     for (const auto& e : i.name().elems) {
-        if (&e != &i.name().elems.front()) {
+        if (&e != &i.name().elems[0]) {
             pmi.sendSymbol("::");
         }
         pmi.sendIdent(e.c_str());

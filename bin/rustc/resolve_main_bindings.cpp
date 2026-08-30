@@ -11,6 +11,9 @@
 #include "main_bindings.h"
 #include "macro_rules_macro_rules.h"
 
+#include <std/alg/range.h>
+#include <std/lib/vector.h>
+
 #include <span>
 #include <sstream>
 
@@ -19,6 +22,12 @@ using namespace stl;
 #define FLAG_CONST_GENERIC (1u << 31)
 
 namespace {
+    Vector<RcString> oneComponent(RcString component) {
+        Vector<RcString> components(1);
+        components.pushBack(std::move(component));
+        return components;
+    }
+
     enum class IndexName {
         Namespace,
         Type,
@@ -163,7 +172,7 @@ namespace {
     struct UseResolutionContext {
         const ActiveUseResolution* activeUse = nullptr;
         std::vector<std::pair<const ASTModule*, const char*>> moduleLookups;
-        std::vector<const ASTUseItem*> wildcardUses;
+        Vector<const ASTUseItem*> wildcardUses;
         std::vector<std::pair<const ASTModule*, RcString>> wildcardModules;
     };
 
@@ -612,7 +621,7 @@ namespace {
             if (it == hmod->modItems.end()) {
                 ERROR(sp, E0000, StringView("Couldn't find path component '") << n.name() << StringView("' of ") << path);
             }
-            resolvedPath.nodes.push_back(it->first);
+            resolvedPath.nodes.pushBack(it->first);
 
             switch (it->second->ent.tag()) {
                 case HIRTypeItem::TAG_Import: {
@@ -896,7 +905,7 @@ namespace {
         if (pathAbs.crate == "#intrinsics") {
             ASTAbsolutePath ap{pathAbs.crate, {}};
             for (const auto& n : path.nodes()) {
-                ap.nodes.push_back(n.name());
+                ap.nodes.pushBack(n.name());
             }
             path.bindings.value.set(std::move(ap), ASTPathBindingValue::make_Function({nullptr}));
             return;
@@ -1270,7 +1279,7 @@ namespace {
                 auto& e = path.cls.as_Self();
                 DEBUG(StringView("- Self"));
                 const auto& mpNodes = context.mod.path().nodes;
-                unsigned int startLen = mpNodes.size();
+                unsigned int startLen = mpNodes.length();
                 while (startLen > 0 && mpNodes[startLen - 1].c_str()[0] == '#') {
                     startLen--;
                 }
@@ -1308,7 +1317,7 @@ namespace {
                 const auto& mpNodes = context.mod.path().nodes;
                 BUG_ASSERT(e.count >= 1);
                 // TODO: The first super should ignore any anon modules.
-                unsigned int startLen = e.count > mpNodes.size() ? 0 : mpNodes.size() - e.count;
+                unsigned int startLen = e.count > mpNodes.length() ? 0 : mpNodes.length() - e.count;
                 while (startLen > 0 && mpNodes[startLen - 1].c_str()[0] == '#') {
                     startLen--;
                 }
@@ -1538,16 +1547,16 @@ namespace {
                 auto& e = type->data.as_Function();
                 context.push(e.info.hrbs);
                 ResolveAbsoluteType(context, e.info.rettype);
-                for (auto& t : e.info.argTypes) {
-                    ResolveAbsoluteType(context, t);
+                for (auto& type : mutRange(e.info.argTypes)) {
+                    ResolveAbsoluteType(context, type);
                 }
                 context.pop(e.info.hrbs);
                 break;
             }
             case TypeData::TAG_Tuple: {
                 auto& e = type->data.as_Tuple();
-                for (auto& t : e.innerTypes) {
-                    ResolveAbsoluteType(context, t);
+                for (auto& type : mutRange(e.innerTypes)) {
+                    ResolveAbsoluteType(context, type);
                 }
                 break;
             }
@@ -1619,7 +1628,7 @@ namespace {
                     ResolveAbsolutePath(context, type->span(), Context::LookupMode::Type, *trait.path);
                     context.pop(trait.hrbs);
                 }
-                for (auto& lft : e.lifetimes) {
+                for (auto& lft : mutRange(e.lifetimes)) {
                     ResolveAbsoluteLifetime(context, type->span(), lft);
                 }
                 break;
@@ -1636,7 +1645,7 @@ namespace {
                     ResolveAbsolutePath(context, type->span(), Context::LookupMode::Type, *trait.path);
                     context.pop(trait.hrbs);
                 }
-                for (auto& lft : e->lifetimes) {
+                for (auto& lft : mutRange(e->lifetimes)) {
                     ResolveAbsoluteLifetime(context, type->span(), lft);
                 }
                 if (e->use) {
@@ -1920,8 +1929,8 @@ namespace {
                 }
             }
         }
-        for (auto& t : params.bareBoundTypes) {
-            ResolveAbsoluteType(context, t);
+        for (auto& type : mutRange(params.bareBoundTypes)) {
+            ResolveAbsoluteType(context, type);
         }
     }
 
@@ -2214,21 +2223,21 @@ namespace {
                 hirTrait = binding->hir;
             }
 
-            std::vector<RcString> names;
+            Vector<RcString> names;
             if (astTrait) {
                 for (const auto& traitItem : astTrait->items()) {
                     if (traitItem.data.is_Function()) {
-                        names.push_back(traitItem.name);
+                        names.pushBack(traitItem.name);
                     }
                 }
             } else {
                 ASSERT_BUG(item.sp, hirTrait, StringView("Trait binding without AST or HIR data"));
                 for (const auto& traitItem : hirTrait->values) {
                     if (traitItem.second.is_Function()) {
-                        names.push_back(traitItem.first);
+                        names.pushBack(traitItem.first);
                     }
                 }
-                std::sort(names.begin(), names.end());
+                std::sort(names.mutBegin(), names.mutEnd());
             }
             if (names.empty()) {
                 ERROR(item.sp, E0000, StringView("Empty glob delegation is not supported"));
@@ -2402,8 +2411,8 @@ namespace {
         for (auto& bound : cloned.bounds) {
             destination.bounds.push_back(mv$(bound));
         }
-        for (auto*& type : cloned.bareBoundTypes) {
-            destination.bareBoundTypes.push_back(mv$(type));
+        for (auto* type : cloned.bareBoundTypes) {
+            destination.bareBoundTypes.pushBack(type);
         }
     }
 
@@ -2487,14 +2496,14 @@ namespace {
             case TypeData::TAG_Function: {
                 auto& e = type->data.as_Function();
                 ReplaceDelegatedSelf(e.info.rettype, replacementName);
-                for (auto*& arg : e.info.argTypes) {
+                for (auto*& arg : mutRange(e.info.argTypes)) {
                     ReplaceDelegatedSelf(arg, replacementName);
                 }
                 break;
             }
             case TypeData::TAG_Tuple: {
                 auto& e = type->data.as_Tuple();
-                for (auto*& inner : e.innerTypes) {
+                for (auto*& inner : mutRange(e.innerTypes)) {
                     ReplaceDelegatedSelf(inner, replacementName);
                 }
                 break;
@@ -2775,9 +2784,9 @@ namespace {
             }
             case HIRTypeData::TAG_Tuple: {
                 auto& e = (*type).as_Tuple();
-                std::vector<ASTType*> types;
+                Vector<ASTType*> types;
                 for (const auto& inner : e) {
-                    types.push_back(HIRTypeToAST(context, span, inner));
+                    types.pushBack(HIRTypeToAST(context, span, inner));
                 }
                 return mkType(pool, ASTTypeTags::Tuple(), span, mv$(types));
             }
@@ -2795,9 +2804,9 @@ namespace {
             }
             case HIRTypeData::TAG_Function: {
                 auto& e = (*type).as_Function();
-                std::vector<ASTType*> args;
+                Vector<ASTType*> args;
                 for (const auto& arg : e.argTypes) {
-                    args.push_back(HIRTypeToAST(context, span, arg));
+                    args.pushBack(HIRTypeToAST(context, span, arg));
                 }
                 return mkType(pool, ASTTypeTags::Function(), span, {}, e.isUnsafe, e.abi.c_str(), mv$(args), e.isVariadic, HIRTypeToAST(context, span, e.rettype));
             }
@@ -4346,10 +4355,14 @@ namespace {
         return false;
     }
 
-    void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, std::span<const ASTModule*> parentModules = {});
-    ASTPath::Bindings ResolveUseGetBinding(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTPath& path, std::span<const ASTModule*> parentModules, bool typesOnly = false, bool softFail = false);
+    std::span<const ASTModule* const> moduleSpan(const Vector<const ASTModule*>& modules) {
+        return {modules.data(), modules.length()};
+    }
 
-    ASTPath::Bindings ResolveUseGetBindingMod(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTModule& mod, const RcString& desItemName, std::span<const ASTModule*> parentModules, bool typesOnly = false, bool requireVisible = false);
+    void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, std::span<const ASTModule* const> parentModules = {});
+    ASTPath::Bindings ResolveUseGetBinding(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTPath& path, std::span<const ASTModule* const> parentModules, bool typesOnly = false, bool softFail = false);
+
+    ASTPath::Bindings ResolveUseGetBindingMod(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTModule& mod, const RcString& desItemName, std::span<const ASTModule* const> parentModules, bool typesOnly = false, bool requireVisible = false);
     ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& ec, const HIRModule& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap = {});
     ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTPath& path, const ASTExternCrate& ec, unsigned int start);
 
@@ -4388,7 +4401,9 @@ namespace {
                         DEBUG(StringView("Found builtin type for `use` - ") << path);
                         // TODO: only if the item doesn't already exist?
                         ASTPath rv{crateBuiltinsName(), path.nodes()};
-                        rv.bindings.type.set(ASTAbsolutePath(crateBuiltinsName(), {path.nodes().back().name()}), {});
+                        Vector<RcString> nodes;
+                        nodes.pushBack(path.nodes().back().name());
+                        rv.bindings.type.set(ASTAbsolutePath(crateBuiltinsName(), mv$(nodes)), {});
                         return rv;
                     }
                 }
@@ -4396,9 +4411,9 @@ namespace {
                 // EVIL HACK: If the current module is an anon module, refer to the parent
                 // TODO: Check if the desired item is in this module,
                 if (basePath.nodes().size() > 0 && basePath.nodes().back().name().c_str()[0] == '#') {
-                    std::vector<const ASTModule*> parentMods;
+                    Vector<const ASTModule*> parentMods;
                     const ASTModule* curMod = &crate.rootModule_;
-                    parentMods.push_back(curMod);
+                    parentMods.pushBack(curMod);
                     for (unsigned int i = 0; i < basePath.nodes().size(); i++) {
                         const auto& name = basePath.nodes()[i].name();
                         const ASTModule* nextMod = nullptr;
@@ -4424,20 +4439,20 @@ namespace {
                         if (name.c_str()[0] != '#') {
                             parentMods.clear();
                         }
-                        parentMods.push_back(curMod);
+                        parentMods.pushBack(curMod);
                     }
-                    parentMods.pop_back();
-                    DEBUG(StringView("parent_mods.size() = ") << parentMods.size());
+                    parentMods.popBack();
+                    DEBUG(StringView("parent_mods.size() = ") << parentMods.length());
                     ASSERT_BUG(span, !parentMods.empty(), StringView("Anon module with no named parent"));
-                    const ASTModule* sourceMod = parentMods.front();
+                    const ASTModule* sourceMod = parentMods[0];
 
                     for (;;) {
                         DEBUG(StringView("Module ") << curMod->path());
                         const auto& node = e.nodes.front();
                         const auto nodeName = node.hygienicName();
-                        auto binding = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceMod->path(), *curMod, nodeName, parentMods, /*types_only*/ e.nodes.size() > 1);
+                        auto binding = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceMod->path(), *curMod, nodeName, moduleSpan(parentMods), /*types_only*/ e.nodes.size() > 1);
                         if (!binding.hasBinding() && nodeName != node.name()) {
-                            binding = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceMod->path(), *curMod, node.name(), parentMods, /*types_only*/ e.nodes.size() > 1);
+                            binding = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceMod->path(), *curMod, node.name(), moduleSpan(parentMods), /*types_only*/ e.nodes.size() > 1);
                         }
                         if (binding.hasBinding()) {
                             break;
@@ -4446,12 +4461,12 @@ namespace {
                             ERROR(span, E0000, StringView("Unable to find ") << e.nodes.front().name());
                         }
                         curMod = parentMods.back();
-                        parentMods.pop_back();
+                        parentMods.popBack();
                     }
 
                     DEBUG(StringView("Found item in ") << curMod->path());
                     ASTPath np("", {});
-                    for (unsigned int i = 0; i < curMod->path().nodes.size(); i++) {
+                    for (unsigned int i = 0; i < curMod->path().nodes.length(); i++) {
                         np.nodes().push_back(curMod->path().nodes[i]);
                     }
                     np += path;
@@ -4528,7 +4543,7 @@ namespace {
         UNREACHABLE();
     }
 
-    void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, std::span<const ASTModule*> parentModules) {
+    void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, std::span<const ASTModule* const> parentModules) {
         TRACE_FUNCTION_F(StringView("path = ") << path);
         for (auto& useStmt : mod.items) {
             if (!useStmt->data.is_Use()) {
@@ -4586,26 +4601,26 @@ namespace {
             const Settings& settings;
             const ASTCrate& crate;
             UseResolutionContext& resolveContext;
-            std::vector<const ASTModule*> parentModules;
+            Vector<const ASTModule*> parentModules;
 
-            NV(UseResolutionContext& resolveContext, const Settings& settings, const ASTCrate& crate, const ASTModule& curModule, std::span<const ASTModule*> parentModules)
+            NV(UseResolutionContext& resolveContext, const Settings& settings, const ASTCrate& crate, const ASTModule& curModule, std::span<const ASTModule* const> parentModules)
                 : settings(settings)
                 , crate(crate)
                 , resolveContext(resolveContext)
-                , parentModules(parentModules.begin(), parentModules.end())
             {
-                this->parentModules.push_back(&curModule);
+                this->parentModules.append(parentModules.data(), parentModules.size());
+                this->parentModules.pushBack(&curModule);
             }
 
             void visit(ASTExprNodeBlock& node) override {
                 if (node.localMod) {
-                    ResolveUseMod(this->resolveContext, this->settings, this->crate, *node.localMod, node.localMod->path(), this->parentModules);
+                    ResolveUseMod(this->resolveContext, this->settings, this->crate, *node.localMod, node.localMod->path(), moduleSpan(this->parentModules));
 
-                    parentModules.push_back(&*node.localMod);
+                    parentModules.pushBack(&*node.localMod);
                 }
                 ASTNodeVisitorDef::visit(node);
                 if (node.localMod) {
-                    parentModules.pop_back();
+                    parentModules.popBack();
                 }
             }
         } exprIter(resolveContext, settings, crate, mod, parentModules);
@@ -4719,7 +4734,7 @@ namespace {
         }
     }
 
-    ASTPath::Bindings ResolveUseGetBindingMod(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTModule& mod, const RcString& desItemName, std::span<const ASTModule*> parentModules, bool typesOnly, bool requireVisible) {
+    ASTPath::Bindings ResolveUseGetBindingMod(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTModule& mod, const RcString& desItemName, std::span<const ASTModule* const> parentModules, bool typesOnly, bool requireVisible) {
         ASTPath::Bindings rv;
 
         TRACE_FUNCTION_F(mod.path() << StringView(", des_item_name=") << desItemName);
@@ -4860,9 +4875,9 @@ namespace {
             }
         }
         if (rv.macro.is_Unbound() && mod.path() == sourceModPath) {
-            std::vector<const ASTModule*> mods;
-            mods.push_back(&crate.rootModule());
-            for (size_t i = 0; i < mod.path().nodes.size(); i++) {
+            Vector<const ASTModule*> mods;
+            mods.pushBack(&crate.rootModule());
+            for (size_t i = 0; i < mod.path().nodes.length(); i++) {
                 const auto& n = mod.path().nodes[i];
                 const ASTModule* nm = nullptr;
                 if (n.c_str()[0] == '#') {
@@ -4882,9 +4897,9 @@ namespace {
                     }
                 }
                 ASSERT_BUG(span, nm, StringView("Failed to find `") << n << StringView(" in ") << mod.path());
-                mods.push_back(nm);
+                mods.pushBack(nm);
             }
-            for (size_t i = mods.size(); i--;) {
+            for (size_t i = mods.length(); i--;) {
                 const auto& checkMod = *mods[i];
                 for (const auto& mac : checkMod.macroImports) {
                     if (mac.name == desItemName) {
@@ -4988,16 +5003,16 @@ namespace {
                         DEBUG(StringView("Temp resolving wildcard ") << impE.path);
                         auto& resolveStackPtrs = resolveContext.wildcardUses;
                         if (std::find(resolveStackPtrs.begin(), resolveStackPtrs.end(), &impData) == resolveStackPtrs.end()) {
-                            resolveStackPtrs.push_back(&impData);
+                            resolveStackPtrs.pushBack(&impData);
                             bindings_ = ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path), parentModules, /*type_only=*/true, /*soft_fail=*/true);
                             if (bindings_.type.is_Unbound()) {
                                 DEBUG(StringView("Recursion detected, skipping ") << impE.path);
-                                resolveStackPtrs.pop_back();
+                                resolveStackPtrs.popBack();
                                 continue;
                             }
                             const_cast<ASTPath::Bindings&>(impE.path.bindings) = bindings_.clone();
                             bindings = &bindings_;
-                            resolveStackPtrs.pop_back();
+                            resolveStackPtrs.popBack();
                         } else {
                             DEBUG(StringView("Recursion detected (resolve_stack_ptrs), skipping ") << impE.path);
                             continue;
@@ -5107,7 +5122,7 @@ namespace {
             return rv;
         }
 
-        if (mod.path().nodes.size() > 0 && mod.path().nodes.back().c_str()[0] == '#') {
+        if (!mod.path().nodes.empty() && mod.path().nodes.back().c_str()[0] == '#') {
             ASSERT_BUG(span, parentModules.size() > 0, StringView("Anon module with no parent modules - ") << mod.path());
             return ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceModPath, *parentModules.back(), desItemName, parentModules.subspan(0, parentModules.size() - 1));
         } else {
@@ -5183,7 +5198,7 @@ namespace {
             if (it == hmod->modItems.end()) {
                 ERROR(span, E0000, StringView("Unable to find path component ") << nodes[i].name() << StringView(" in ") << path << StringView(" (") << ap << StringView(")"));
             }
-            ap.nodes.push_back(it->first);
+            ap.nodes.pushBack(it->first);
             DEBUG(i << StringView(" : ") << nodes[i].name() << StringView(" = ") << it->second->ent.tagStr());
             switch (it->second->ent.tag()) {
                 default:
@@ -5214,7 +5229,7 @@ namespace {
                             if (!isValue && !isType) {
                                 ERROR(span, E0000, StringView("Unable to find associated item ") << name << StringView(" of trait in ") << path);
                             }
-                            ap.nodes.push_back(name);
+                            ap.nodes.pushBack(name);
                             if (isValue) {
                                 rv.value.set(ap, ASTPathBindingValue::make_Static({nullptr, nullptr}));
                             }
@@ -5243,7 +5258,7 @@ namespace {
                         }
                         ap.crate = e.path.crateName();
                         ap.nodes = e.path.componentsVec();
-                        ap.nodes.push_back(name);
+                        ap.nodes.pushBack(name);
                         if (enm.data.is_Data() && enm.data.as_Data()[idx].isStruct) {
                             rv.type.set(ap, ASTPathBindingType::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &enm}));
                         } else {
@@ -5279,7 +5294,7 @@ namespace {
                     if (!isValue && !isType) {
                         ERROR(span, E0000, StringView("Unable to find associated item ") << name << StringView(" of trait in ") << path);
                     }
-                    ap.nodes.push_back(name);
+                    ap.nodes.pushBack(name);
                     if (isValue) {
                         rv.value.set(ap, ASTPathBindingValue::make_Static({nullptr, nullptr}));
                     }
@@ -5304,7 +5319,7 @@ namespace {
                     if (idx == SIZE_MAX) {
                         ERROR(span, E0000, StringView("Unable to find variant ") << path);
                     }
-                    ap.nodes.push_back(name);
+                    ap.nodes.pushBack(name);
                     if (e.data.is_Data() && e.data.as_Data()[idx].isStruct) {
                         rv.type.set(ap, ASTPathBindingType::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &e}));
                     } else {
@@ -5470,7 +5485,7 @@ namespace {
                 DEBUG(StringView("E : Macro ") << nodes.back().name() << StringView(" = ") << itemPtr->tagStr());
                 if (const auto* imp = itemPtr->opt_Import()) {
                     if (imp->path.crateName() == crateBuiltinsName()) {
-                        rv.macro.set(ASTAbsolutePath(crateBuiltinsName(), {nodes.back().name()}), ASTPathBindingMacro::make_MacroRules({nullptr}));
+                        rv.macro.set(ASTAbsolutePath(crateBuiltinsName(), oneComponent(nodes.back().name())), ASTPathBindingMacro::make_MacroRules({nullptr}));
                         return rv;
                     }
                     ASSERT_BUG(span, crate.externCrates.count(imp->path.crateName()) > 0, StringView("Unable to find crate for ") << imp->path);
@@ -5534,7 +5549,7 @@ namespace {
         const ASTCrate& crate,
         const ASTAbsolutePath& sourceModPath,
         const ASTPath& path,
-        std::span<const ASTModule*> parentModules,
+        std::span<const ASTModule* const> parentModules,
         bool typesOnly /*=false*/,
         bool softFail /*=false*/
     ) {
@@ -5545,9 +5560,9 @@ namespace {
                 ASTPath::Bindings rv;
                 ASSERT_BUG(span, !pathAbs.nodes.empty(), StringView(""));
                 if (coretypeFromstring(path.nodes()[0].name().c_str()) != CORETYPE_INVAL) {
-                    rv.type.set(ASTAbsolutePath(crateBuiltinsName(), {pathAbs.nodes.back().name()}), ASTPathBindingType::make_TypeAlias({nullptr}));
+                    rv.type.set(ASTAbsolutePath(crateBuiltinsName(), oneComponent(pathAbs.nodes.back().name())), ASTPathBindingType::make_TypeAlias({nullptr}));
                 } else {
-                    rv.macro.set(ASTAbsolutePath(crateBuiltinsName(), {pathAbs.nodes.back().name()}), ASTPathBindingMacro::make_MacroRules({nullptr}));
+                    rv.macro.set(ASTAbsolutePath(crateBuiltinsName(), oneComponent(pathAbs.nodes.back().name())), ASTPathBindingMacro::make_MacroRules({nullptr}));
                 }
                 return rv;
             }
@@ -5565,7 +5580,7 @@ namespace {
             return rv;
         }
 
-        std::vector<const ASTModule*> innerParentModules;
+        Vector<const ASTModule*> innerParentModules;
         for (unsigned int i = 0; i < nodes.size() - 1; i++) {
             DEBUG(StringView("Component ") << nodes.at(i).name());
             // TODO: If this came from an import, return the real path?
@@ -5738,7 +5753,7 @@ namespace {
                         BUG_ASSERT(e.hir.mod);
                         return ResolveUseGetBindingExt(span, crate, *e.hir.crate, *e.hir.mod, path, i + 1, b.type.path);
                     }
-                    innerParentModules.push_back(mod);
+                    innerParentModules.pushBack(mod);
                     mod = e.module_;
                     break;
                 }
@@ -5807,7 +5822,7 @@ auto Context::push(const ASTHigherRankedBounds& params) -> void {
     for (size_t i = 0; i < params.lifetimes.size(); i++) {
         data.lifetimes.push_back(NamedI<GenericSlot>{params.lifetimes[i].name(), GenericSlot{GenericSlot::Level::Hrb, static_cast<unsigned short>(i)}});
     }
-    for (size_t i = 0; i < params.types.size(); i++) {
+    for (size_t i = 0; i < params.types.length(); i++) {
         data.types.push_back(Named<GenericSlot>{params.types[i], GenericSlot{GenericSlot::Level::Hrb, static_cast<unsigned short>(i)}});
     }
 

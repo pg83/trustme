@@ -1,5 +1,4 @@
 #include "synext.h"
-#include "synext.h"
 
 #include "ast_ast.h"
 #include "hir_hir.h"
@@ -11,9 +10,17 @@
 #include "parse_ttstream.h"
 #include "macro_rules_macro_rules.h"
 
+#include <std/lib/vector.h>
+
 using namespace stl;
 
 namespace {
+    ASTAbsolutePath singleNodePath(RcString crate, RcString node) {
+        Vector<RcString> nodes;
+        nodes.pushBack(node);
+        return ASTAbsolutePath(std::move(crate), std::move(nodes));
+    }
+
     struct CMacroRulesExpander: public ExpandProcMacro {
         std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 
@@ -97,7 +104,7 @@ namespace {
         auto e = mv$(*it);
         mod.macros().erase(it);
 
-        mod.macroImports.push_back(ASTModule::MacroImport{false, name, ASTAbsolutePath("", {name}), &*e.data});
+        mod.macroImports.push_back(ASTModule::MacroImport{false, name, singleNodePath("", name), &*e.data});
 
         DEBUG(mod.path() << StringView(": macro_use Import ") << mod.macroImports.back().name << StringView(" = ") << mod.macroImports.back().path);
         if (localInnerMacros) {
@@ -153,13 +160,14 @@ auto CMacroUseHandler::runDuringIter() const -> bool {
 
 auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     TRACE_FUNCTION_F(StringView("[CMacroUseHandler] path=") << path);
-    std::vector<RcString> filter;
+    Vector<RcString> filter;
     if (mi.data().size() > 0) {
         mi.parseParenIdentList([&](const Span& sp, RcString ident) {
-            filter.push_back(ident);
+            filter.pushBack(ident);
         });
     }
-    std::vector<bool> filtersUsed(filter.size());
+    Vector<bool> filtersUsed;
+    filtersUsed.zero(filter.length());
 
     auto filterValid = [&](RcString name) -> bool {
         if (filter.empty()) {
@@ -168,7 +176,7 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
         auto it = std::find(filter.begin(), filter.end(), name);
         if (it != filter.end()) {
             auto i = it - filter.begin();
-            filtersUsed[i] = true;
+            filtersUsed.mut(i) = true;
             return true;
         } else {
             return false;
@@ -232,7 +240,7 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
                 continue;
             }
 
-            ASTAbsolutePath path{ecItem->name, {name}};
+            ASTAbsolutePath path = singleNodePath(ecItem->name, name);
             if (const auto* imp = e->ent.opt_Import()) {
                 if (imp->path.crateName() == CRATE_BUILTINS) {
                     DEBUG(StringView("Importing builtin (skip): ") << name);
@@ -286,7 +294,7 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
             DEBUG(StringView("Imported ") << mr.name);
             if (!exists(mr.name, &*mr.data)) {
                 auto path = submod.path();
-                path.nodes.push_back(mr.name);
+                path.nodes.pushBack(mr.name);
                 DEBUG(mod.path() << StringView(": Import macro ") << path);
                 mod.macroImports.push_back(ASTModule::MacroImport{false, mr.name, path, &*mr.data});
             }
@@ -305,7 +313,7 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
         return;
     }
 
-    for (size_t i = 0; i < filter.size(); i++) {
+    for (size_t i = 0; i < filter.length(); i++) {
         if (!filtersUsed[i]) {
             ERROR(sp, E0000, StringView("Couldn't find macro ") << filter[i]);
         }
@@ -332,7 +340,7 @@ auto CMacroExportHandler::handle(const Span& sp, const ASTAttribute& mi, const W
         }
         const auto& p = u->entries.back().path.cls.as_Absolute();
         const auto& name = p.nodes.front().name();
-        mod.macroImports.push_back(ASTModule::MacroImport{true, u->entries.front().name, ASTAbsolutePath(p.crate, {name}), {}});
+        mod.macroImports.push_back(ASTModule::MacroImport{true, u->entries.front().name, singleNodePath(p.crate, name), {}});
 
         crate.rootModule_.addItem(sp, ASTVisibility::makeGlobal(), name, i.clone(), {});
     } else if (i.is_MacroInv()) {
@@ -345,7 +353,7 @@ auto CMacroExportHandler::handle(const Span& sp, const ASTAttribute& mi, const W
         const auto& name = path.nodes.back();
         if (i.as_Macro()) {
             i.as_Macro()->exported = true;
-            ASSERT_BUG(sp, path.nodes.size() == 1, StringView(""));
+            ASSERT_BUG(sp, path.nodes.length() == 1, StringView(""));
             DEBUG(StringView("- Export macro (item) ") << name << StringView("!"));
         }
     } else {

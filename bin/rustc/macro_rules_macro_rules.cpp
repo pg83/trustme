@@ -1,5 +1,4 @@
 #include "macro_rules_macro_rules.h"
-#include "macro_rules_macro_rules.h"
 
 #include "common.h"
 #include "output.h"
@@ -14,13 +13,21 @@
 #include "macro_rules_pattern_checks.h"
 #include "parse_interpolated_fragment.h"
 
+#include <std/lib/vector.h>
+
 #include <sstream>
 #include <limits.h>
 
 using namespace stl;
 
 namespace {
-    typedef std::map<unsigned, std::map<std::vector<unsigned>, unsigned>> loopCountsT;
+    struct VectorLess {
+        bool operator()(const Vector<unsigned>& left, const Vector<unsigned>& right) const {
+            return std::lexicographical_compare(left.begin(), left.end(), right.begin(), right.end());
+        }
+    };
+
+    typedef std::map<unsigned, std::map<Vector<unsigned>, unsigned, VectorLess>> loopCountsT;
 
     struct CapturedVal {
         unsigned int numUses;
@@ -58,18 +65,18 @@ namespace {
 
         void setLoopCounts(loopCountsT loopCounts);
 
-        void insert(unsigned int nameIndex, const std::vector<unsigned int>& iterations, InterpolatedFragment data);
+        void insert(unsigned int nameIndex, const Vector<unsigned int>& iterations, InterpolatedFragment data);
 
-        InterpolatedFragment* get(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
+        InterpolatedFragment* get(const Span& sp, const Vector<unsigned int>& iterations, unsigned int nameIdx);
 
-        unsigned int getLoopRepeats(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int loopIdx) const;
+        unsigned int getLoopRepeats(const Span& sp, const Vector<unsigned int>& iterations, unsigned int loopIdx) const;
 
-        unsigned int getVariableCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth = 0) const;
+        unsigned int getVariableCount(const Span& sp, const Vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth = 0) const;
 
-        void incCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
-        bool decCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
+        void incCount(const Span& sp, const Vector<unsigned int>& iterations, unsigned int nameIdx);
+        bool decCount(const Span& sp, const Vector<unsigned int>& iterations, unsigned int nameIdx);
 
-        CapturedVal& getCap(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx);
+        CapturedVal& getCap(const Span& sp, const Vector<unsigned int>& iterations, unsigned int nameIdx);
     };
 
     struct MacroPatternStream {
@@ -79,20 +86,20 @@ namespace {
 
         bool lastWasCond;
         bool conditionMet;
-        std::vector<bool> conditionHistory;
+        Vector<bool> conditionHistory;
 
-        const std::vector<bool>* conditionReplay;
+        const Vector<bool>* conditionReplay;
         size_t conditionReplayPos;
 
-        std::vector<unsigned int> currentLoops;
-        std::vector<unsigned int> loopIterations;
+        Vector<unsigned int> currentLoops;
+        Vector<unsigned int> loopIterations;
 
         loopCountsT loopCounts;
 
         bool peekCacheValid = false;
         const SimplePatEnt* peekCache;
 
-        MacroPatternStream(const std::vector<SimplePatEnt>& ents, const std::vector<bool>* conditionReplay = nullptr);
+        MacroPatternStream(const std::vector<SimplePatEnt>& ents, const Vector<bool>* conditionReplay = nullptr);
 
         size_t curPos() const;
 
@@ -102,9 +109,9 @@ namespace {
 
         void ifSucceeded();
 
-        const std::vector<unsigned int>& getLoopIters() const;
+        const Vector<unsigned int>& getLoopIters() const;
 
-        std::vector<bool> takeHistory();
+        Vector<bool> takeHistory();
 
         loopCountsT takeLoopCounts();
     };
@@ -119,8 +126,8 @@ namespace {
             unsigned maxIndex;
         };
 
-        std::vector<tOffset> offsets;
-        std::vector<unsigned int> iterations_;
+        Vector<tOffset> offsets;
+        Vector<unsigned int> iterations_;
 
         const std::vector<MacroExpansionEnt>* curEnts;
 
@@ -128,7 +135,7 @@ namespace {
 
         const MacroExpansionEnt* nextEnt();
 
-        const std::vector<unsigned int> iterations() const;
+        const Vector<unsigned int> iterations() const;
 
         unsigned int loopIndexAt(unsigned int depth) const;
 
@@ -186,7 +193,7 @@ namespace {
     struct RuleParseState {
         struct NameState {
             unsigned idx;
-            std::vector<unsigned> loops;
+            Vector<unsigned> loops;
             Ident::Hygiene hygiene;
         };
 
@@ -194,7 +201,7 @@ namespace {
         unsigned nextNameIndex;
 
         unsigned nextLoopIndex;
-        std::vector<unsigned> loopStack;
+        Vector<unsigned> loopStack;
 
         RuleParseState();
 
@@ -208,10 +215,10 @@ namespace {
     };
 
     struct ContentLoopVariableUse {
-        std::vector<unsigned> loopStack;
+        Vector<unsigned> loopStack;
         bool isOptional;
 
-        ContentLoopVariableUse(std::vector<unsigned> loopStack);
+        ContentLoopVariableUse(Vector<unsigned> loopStack);
 
         friend ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const ContentLoopVariableUse& x) {
             return os << StringView("[") << x.loopStack << StringView("] ") << StringView(x.isOptional ? "optional" : "required");
@@ -220,7 +227,7 @@ namespace {
 
     struct TokenStreamRO {
         const TokenTree& tt;
-        std::vector<size_t> offsets;
+        Vector<size_t> offsets;
         size_t activeOffset;
 
         Token eofToken;
@@ -1818,8 +1825,8 @@ namespace {
 
         struct Match {
             size_t armIndex;
-            std::vector<bool> conditionHistory;
-            std::vector<bool> stmtIsItemHistory;
+            Vector<bool> conditionHistory;
+            Vector<bool> stmtIsItemHistory;
         };
 
         std::vector<Match> matches;
@@ -1827,7 +1834,7 @@ namespace {
         for (size_t i = 0; i < rules.rules.size(); i++) {
             auto lex = TokenStreamRO(input);
             auto armStream = MacroPatternStream(rules.rules[i].pattern);
-            std::vector<bool> stmtIsItemHistory;
+            Vector<bool> stmtIsItemHistory;
 
             bool fail = false;
             for (;;) {
@@ -1883,7 +1890,7 @@ namespace {
                         break;
                     }
                     if (e->type == MacroPatEnt::PAT_STMT) {
-                        stmtIsItemHistory.push_back(stmtIsItem);
+                        stmtIsItemHistory.pushBack(stmtIsItem);
                     }
                 } else {
                 }
@@ -1915,7 +1922,7 @@ namespace {
 
             struct Capture {
                 unsigned int bindingIdx;
-                std::vector<unsigned int> iterations;
+                Vector<unsigned int> iterations;
                 unsigned int capIdx;
             };
 
@@ -1941,7 +1948,7 @@ namespace {
                     DEBUG(i << StringView(" ExpectPat(") << e->type << StringView(" => $") << e->idx << StringView(")"));
                     bool stmtIsItem = false;
                     if (e->type == MacroPatEnt::PAT_STMT) {
-                        ASSERT_BUG(sp, stmtCaptureIndex < stmtIsItemHistory.size(), StringView("Missing statement fragment classification"));
+                        ASSERT_BUG(sp, stmtCaptureIndex < stmtIsItemHistory.length(), StringView("Missing statement fragment classification"));
                         stmtIsItem = stmtIsItemHistory[stmtCaptureIndex++];
                     }
                     auto cap = MacroHandlePatternCap(lex, e->type, stmtIsItem);
@@ -1952,7 +1959,7 @@ namespace {
                 } else {
                 }
             }
-            ASSERT_BUG(sp, stmtCaptureIndex == stmtIsItemHistory.size(), StringView("Unused statement fragment classification"));
+            ASSERT_BUG(sp, stmtCaptureIndex == stmtIsItemHistory.length(), StringView("Unused statement fragment classification"));
 
             for (const auto& cap : captureInfo) {
                 boundTts.insert(cap.bindingIdx, cap.iterations, mv$(captures[cap.capIdx]));
@@ -2238,7 +2245,7 @@ namespace {
 
                     std::set<unsigned> controllingLoops;
                     for (const auto& v : varUsage) {
-                        if (v.second.loopStack.size() != 0 && loopDepth < v.second.loopStack.size()) {
+                        if (!v.second.loopStack.empty() && loopDepth < v.second.loopStack.length()) {
                             controllingLoops.insert(v.second.loopStack[loopDepth]);
                         }
                     }
@@ -2329,8 +2336,8 @@ namespace {
                                         TODO(lex.pointSpan(), StringView("concat - unmapped name"));
                                     } else {
                                         DEBUG(StringView("CONCAT $") << name << StringView(" #") << ns->idx << StringView(" [") << ns->loops << StringView("]"));
-                                        if (loopDepth < ns->loops.size()) {
-                                            ERROR(lex.pointSpan(), E0000, StringView("Variable $") << name << StringView(" is still repeating at this depth (") << loopDepth << StringView(" < ") << ns->loops.size() << StringView(")"));
+                                        if (loopDepth < ns->loops.length()) {
+                                            ERROR(lex.pointSpan(), E0000, StringView("Variable $") << name << StringView(" is still repeating at this depth (") << loopDepth << StringView(" < ") << ns->loops.length() << StringView(")"));
                                         }
 
                                         if (varUsagePtr) {
@@ -2370,8 +2377,8 @@ namespace {
                         ret.push_back(MacroExpansionEnt(mv$(tok)));
                     } else {
                         DEBUG(StringView("$") << name << StringView(" #") << ns->idx << StringView(" [") << ns->loops << StringView("]"));
-                        if (loopDepth < ns->loops.size()) {
-                            ERROR(lex.pointSpan(), E0000, StringView("Variable $") << name << StringView(" is still repeating at this depth (") << loopDepth << StringView(" < ") << ns->loops.size() << StringView(")"));
+                        if (loopDepth < ns->loops.length()) {
+                            ERROR(lex.pointSpan(), E0000, StringView("Variable $") << name << StringView(" is still repeating at this depth (") << loopDepth << StringView(" < ") << ns->loops.length() << StringView(")"));
                         }
 
                         if (varUsagePtr) {
@@ -2443,7 +2450,7 @@ namespace {
         return rule;
     }
 
-    void enumerateNames(const std::vector<MacroPatEnt>& pats, std::vector<RcString>& names) {
+    void enumerateNames(const std::vector<MacroPatEnt>& pats, Vector<RcString>& names) {
         for (const auto& pat : pats) {
             if (pat.type == MacroPatEnt::PAT_LOOP) {
                 enumerateNames(pat.subpats, names);
@@ -2451,7 +2458,7 @@ namespace {
                 auto b = names.begin();
                 auto e = names.end();
                 if (std::find(b, e, pat.name) == e) {
-                    names.push_back(pat.name);
+                    names.pushBack(pat.name);
                 }
             }
         }
@@ -2829,14 +2836,14 @@ namespace {
     }
 }
 
-void ParameterMappings::insert(unsigned int nameIndex, const std::vector<unsigned int>& iterations, InterpolatedFragment data) {
+void ParameterMappings::insert(unsigned int nameIndex, const Vector<unsigned int>& iterations, InterpolatedFragment data) {
     DEBUG(StringView("index=") << nameIndex << StringView(", iterations=[") << iterations << StringView("], data=") << data);
     if (nameIndex >= mappings_.size()) {
         mappings_.resize(nameIndex + 1);
     }
     auto* layer = &mappings_[nameIndex].topLayer;
-    if (iterations.size() > 0) {
-        for (unsigned int i = 0; i < iterations.size() - 1; i++) {
+    if (!iterations.empty()) {
+        for (unsigned int i = 0; i < iterations.length() - 1; i++) {
             auto iter = iterations[i];
 
             if (layer->is_Vals()) {
@@ -2861,7 +2868,7 @@ void ParameterMappings::insert(unsigned int nameIndex, const std::vector<unsigne
     layer->as_Vals().push_back(CapturedVal{0, 0, mv$(data)});
 }
 
-CapturedVal& ParameterMappings::getCap(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+CapturedVal& ParameterMappings::getCap(const Span& sp, const Vector<unsigned int>& iterations, unsigned int nameIdx) {
     DEBUG(StringView("(iterations=[") << iterations << StringView("], name_idx=") << nameIdx << StringView(")"));
     auto& e = mappings_.at(nameIdx);
     auto* layer = &e.topLayer;
@@ -2891,17 +2898,17 @@ CapturedVal& ParameterMappings::getCap(const Span& sp, const std::vector<unsigne
         }
     }
 
-    ERROR(sp, E0000, StringView("Variable #") << nameIdx << StringView(" is still repeating at this level (") << iterations.size() << StringView(")"));
+    ERROR(sp, E0000, StringView("Variable #") << nameIdx << StringView(" is still repeating at this level (") << iterations.length() << StringView(")"));
 }
 
-InterpolatedFragment* ParameterMappings::get(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+InterpolatedFragment* ParameterMappings::get(const Span& sp, const Vector<unsigned int>& iterations, unsigned int nameIdx) {
     return &getCap(sp, iterations, nameIdx).frag;
 }
 
-unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int loopIdx) const {
+unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const Vector<unsigned int>& iterations, unsigned int loopIdx) const {
     const auto& list = loopCounts.at(loopIdx);
     for (const auto& e : list) {
-        ASSERT_BUG(Span(), e.first.size() <= iterations.size(), StringView("Loop ") << loopIdx << StringView(" iteration path [") << e.first << StringView("] larger than query path [") << iterations << StringView("]"));
+        ASSERT_BUG(Span(), e.first.length() <= iterations.length(), StringView("Loop ") << loopIdx << StringView(" iteration path [") << e.first << StringView("] larger than query path [") << iterations << StringView("]"));
         if (std::equal(e.first.begin(), e.first.end(), iterations.begin())) {
             return e.second;
         }
@@ -2909,7 +2916,7 @@ unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const std::vector
     BUG(sp, StringView("Loop ") << loopIdx << StringView(" cannot find an iteration count for path [") << iterations << StringView("]"));
 }
 
-unsigned int ParameterMappings::getVariableCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth) const {
+unsigned int ParameterMappings::getVariableCount(const Span& sp, const Vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth) const {
     DEBUG(StringView("(iterations=[") << iterations << StringView("], name_idx=") << nameIdx << StringView(")"));
     auto& e = mappings_.at(nameIdx);
     auto* layer = &e.topLayer;
@@ -2945,13 +2952,13 @@ unsigned int ParameterMappings::getVariableCount(const Span& sp, const std::vect
     return captureLayerNodesAt(*layer, levels - depth);
 }
 
-void ParameterMappings::incCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+void ParameterMappings::incCount(const Span& sp, const Vector<unsigned int>& iterations, unsigned int nameIdx) {
     auto& cap = getCap(sp, iterations, nameIdx);
     BUG_ASSERT(cap.numUsed == 0);
     cap.numUses += 1;
 }
 
-bool ParameterMappings::decCount(const Span& sp, const std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+bool ParameterMappings::decCount(const Span& sp, const Vector<unsigned int>& iterations, unsigned int nameIdx) {
     auto& cap = getCap(sp, iterations, nameIdx);
     BUG_ASSERT(cap.numUsed < cap.numUses);
     cap.numUsed += 1;
@@ -2966,7 +2973,7 @@ const SimplePatEnt& MacroPatternStream::next() {
 
     for (;;) {
         if (!conditionReplay && lastWasCond) {
-            conditionHistory.push_back(conditionMet);
+            conditionHistory.pushBack(conditionMet);
         }
         lastWasCond = false;
         if (curPos_ == simpleEnts.size()) {
@@ -3000,12 +3007,12 @@ const SimplePatEnt& MacroPatternStream::next() {
             }
             case SimplePatEnt::TAG_LoopStart: {
                 auto& e = curEnt.as_LoopStart();
-                currentLoops.push_back(e.index);
-                loopIterations.push_back(0);
+                currentLoops.pushBack(e.index);
+                loopIterations.pushBack(0);
                 break;
             }
             case SimplePatEnt::TAG_LoopNext: {
-                loopIterations.back() += 1;
+                loopIterations.mutBack() += 1;
                 break;
             }
             case SimplePatEnt::TAG_LoopEnd: {
@@ -3013,8 +3020,8 @@ const SimplePatEnt& MacroPatternStream::next() {
                 BUG_ASSERT(!currentLoops.empty());
                 auto loopIndex = currentLoops.back();
                 auto numIter = loopIterations.back();
-                loopIterations.pop_back();
-                currentLoops.pop_back();
+                loopIterations.popBack();
+                currentLoops.popBack();
 
                 if (conditionReplay) {
                     loopCounts[loopIndex].insert(std::make_pair(loopIterations, numIter));
@@ -3241,11 +3248,11 @@ Token MacroExpander::realGetToken() {
 }
 
 const MacroExpansionEnt* MacroExpandState::nextEnt() {
-    while (offsets.size() > 0) {
-        unsigned int layer = offsets.size() - 1;
+    while (!offsets.empty()) {
+        unsigned int layer = offsets.length() - 1;
         const auto& ents = *curEnts;
 
-        size_t idx = offsets.back().readPos++;
+        size_t idx = offsets.mutBack().readPos++;
 
         if (idx < ents.size()) {
             const auto& ent = ents[idx];
@@ -3276,8 +3283,8 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
                     }
                     DEBUG(StringView("Looping ") << numRepeats << StringView(" times based on {") << e.controllingInputLoops << StringView("}"));
                     if (numRepeats > 0) {
-                        offsets.push_back({0, 0, numRepeats});
-                        iterations_.push_back(0);
+                        offsets.pushBack({0, 0, numRepeats});
+                        iterations_.pushBack(0);
                         curEnts = getCurLayer();
                     }
                     break;
@@ -3285,10 +3292,10 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
             }
         } else if (layer > 0) {
             DEBUG(StringView("layer = ") << layer << StringView(", m_iterations = ") << iterations_);
-            auto& curOfs = offsets.back();
+            auto& curOfs = offsets.mutBack();
             DEBUG(StringView("Layer #") << layer << StringView(" Cur: ") << curOfs.loopIndex << StringView(", Max: ") << curOfs.maxIndex);
             if (curOfs.loopIndex + 1 < curOfs.maxIndex) {
-                iterations_.back()++;
+                iterations_.mutBack()++;
 
                 DEBUG(StringView("Restart layer"));
                 curOfs.readPos = 0;
@@ -3300,17 +3307,17 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
                     return &loopLayer;
                 }
             } else {
-                offsets.pop_back();
-                iterations_.pop_back();
-                if (offsets.size() == 0) {
+                offsets.popBack();
+                iterations_.popBack();
+                if (offsets.empty()) {
                     break;
                 }
                 curEnts = getCurLayer();
             }
         } else {
             DEBUG(StringView("Terminate evaluation"));
-            offsets.pop_back();
-            BUG_ASSERT(offsets.size() == 0);
+            offsets.popBack();
+            BUG_ASSERT(offsets.empty());
         }
     }
 
@@ -3318,21 +3325,21 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
 }
 
 const MacroExpansionEnt& MacroExpandState::getCurLayerEnt() const {
-    BUG_ASSERT(offsets.size() > 1);
+    BUG_ASSERT(offsets.length() > 1);
 
     const auto* ents = &rootContents;
-    for (unsigned int i = 0; i < offsets.size() - 2; i++) {
+    for (unsigned int i = 0; i < offsets.length() - 2; i++) {
         unsigned int ofs = offsets[i].readPos;
         BUG_ASSERT(ofs > 0 && ofs <= ents->size());
         ents = &(*ents)[ofs - 1].as_Loop().entries;
     }
-    return (*ents)[offsets[offsets.size() - 2].readPos - 1];
+    return (*ents)[offsets[offsets.length() - 2].readPos - 1];
 }
 
 const std::vector<MacroExpansionEnt>* MacroExpandState::getCurLayer() const {
-    BUG_ASSERT(offsets.size() > 0);
+    BUG_ASSERT(!offsets.empty());
     const auto* ents = &rootContents;
-    for (unsigned int i = 0; i < offsets.size() - 1; i++) {
+    for (unsigned int i = 0; i < offsets.length() - 1; i++) {
         unsigned int ofs = offsets[i].readPos;
         BUG_ASSERT(ofs > 0 && ofs <= ents->size());
         ents = &(*ents)[ofs - 1].as_Loop().entries;
@@ -3468,7 +3475,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansio
                 case TOK_INTERPOLATED_META: {
                     auto& meta = tok.fragMeta();
                     for (const auto& e : meta.name().elems) {
-                        if (&e != &meta.name().elems.front()) {
+                        if (&e != &meta.name().elems[0]) {
                             out.push_back(Token(TOK_DOUBLE_COLON));
                         }
                         out.push_back(Token(TOK_IDENT, e));
@@ -3629,7 +3636,7 @@ auto ParameterMappings::setLoopCounts(loopCountsT loopCounts) -> void {
     this->loopCounts = std::move(loopCounts);
 }
 
-MacroPatternStream::MacroPatternStream(const std::vector<SimplePatEnt>& ents, const std::vector<bool>* conditionReplay)
+MacroPatternStream::MacroPatternStream(const std::vector<SimplePatEnt>& ents, const Vector<bool>* conditionReplay)
     : simpleEnts(ents)
     , endEnt(SimplePatEnt::make_End({}))
     , curPos_(0)
@@ -3651,11 +3658,11 @@ auto MacroPatternStream::peek() -> const SimplePatEnt& {
     return *peekCache;
 }
 
-auto MacroPatternStream::getLoopIters() const -> const std::vector<unsigned int>& {
+auto MacroPatternStream::getLoopIters() const -> const Vector<unsigned int>& {
     return loopIterations;
 }
 
-auto MacroPatternStream::takeHistory() -> std::vector<bool> {
+auto MacroPatternStream::takeHistory() -> Vector<bool> {
     return std::move(conditionHistory);
 }
 
@@ -3666,27 +3673,27 @@ auto MacroPatternStream::takeLoopCounts() -> loopCountsT {
 MacroExpandState::MacroExpandState(const std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings)
     : rootContents(contents)
     , mappings_(mappings)
-    , offsets({{0, 0, 0}})
     , curEnts(&rootContents)
 {
+    offsets.pushBack({0, 0, 0});
 }
 
-auto MacroExpandState::iterations() const -> const std::vector<unsigned int> {
+auto MacroExpandState::iterations() const -> const Vector<unsigned int> {
     return iterations_;
 }
 
 auto MacroExpandState::loopIndexAt(unsigned int depth) const -> unsigned int {
-    if (depth >= iterations_.size()) {
+    if (depth >= iterations_.length()) {
         return ~0u;
     }
-    return iterations_[iterations_.size() - 1 - depth];
+    return iterations_[iterations_.length() - 1 - depth];
 }
 
 auto MacroExpandState::loopLengthAt(unsigned int depth) const -> unsigned int {
-    if (depth + 1 >= offsets.size()) {
+    if (depth + 1 >= offsets.length()) {
         return ~0u;
     }
-    return offsets[offsets.size() - 1 - depth].maxIndex;
+    return offsets[offsets.length() - 1 - depth].maxIndex;
 }
 
 auto MacroExpandState::topPos() const -> unsigned int {
@@ -3731,10 +3738,10 @@ TokenStreamRO::TokenStreamRO(const TokenTree& tt)
         const auto* curTree = &tt;
         while (!curTree->isToken()) {
             curTree = &(*curTree)[0];
-            offsets.push_back(0);
+            offsets.pushBack(0);
         }
-        BUG_ASSERT(offsets.size() > 0);
-        offsets.pop_back();
+        BUG_ASSERT(!offsets.empty());
+        offsets.popBack();
         activeOffset = 0;
         DEBUG(nextTok());
     }
@@ -3788,11 +3795,11 @@ auto TokenStreamRO::consume() -> void {
                 return;
             }
             activeOffset = offsets.back();
-            offsets.pop_back();
+            offsets.popBack();
         } else {
             while (!(*curTree)[activeOffset].isToken()) {
                 curTree = &(*curTree)[activeOffset];
-                offsets.push_back(activeOffset);
+                offsets.pushBack(activeOffset);
                 activeOffset = 0;
             }
             DEBUG(StringView("-> ") << nextTok());
@@ -3856,16 +3863,16 @@ auto RuleParseState::findName(const Ident& ident) const -> const NameState* {
 
 auto RuleParseState::openLoop() -> unsigned {
     auto rv = nextLoopIndex++;
-    loopStack.push_back(rv);
+    loopStack.pushBack(rv);
     return rv;
 }
 
 auto RuleParseState::closeLoop() -> void {
     BUG_ASSERT(!loopStack.empty());
-    loopStack.pop_back();
+    loopStack.popBack();
 }
 
-ContentLoopVariableUse::ContentLoopVariableUse(std::vector<unsigned> loopStack)
+ContentLoopVariableUse::ContentLoopVariableUse(Vector<unsigned> loopStack)
     : loopStack(std::move(loopStack))
     , isOptional(true)
 {

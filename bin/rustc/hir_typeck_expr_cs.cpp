@@ -17,6 +17,8 @@
 
 #include <std/rng/mix.h>
 #include <std/alg/defer.h>
+#include <std/alg/range.h>
+#include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
 #include <optional>
@@ -330,9 +332,9 @@ namespace {
 
     struct AssociatedStallCollector {
         Context& context;
-        std::vector<Context::Associated::StallDependency>& dependencies;
-        std::vector<HIRTypeRef> pending;
-        std::vector<HIRTypeRef> visited;
+        Vector<Context::Associated::StallDependency>& dependencies;
+        Vector<HIRTypeRef> pending;
+        Vector<HIRTypeRef> visited;
         bool hasRawInfer = false;
 
         void addType(HIRTypeRef type);
@@ -342,12 +344,12 @@ namespace {
 
     struct IvarDependencyIndex {
         Context& context;
-        std::vector<std::vector<unsigned int>> associatedTargets;
-        std::vector<std::vector<unsigned int>> possibilityTargets;
+        std::vector<Vector<unsigned int>> associatedTargets;
+        std::vector<Vector<unsigned int>> possibilityTargets;
 
-        static void collectDirectIvars(const HIRTypeData* type, std::vector<unsigned int>& out);
+        static void collectDirectIvars(const HIRTypeData* type, Vector<unsigned int>& out);
 
-        static void deduplicate(std::vector<unsigned int>& values);
+        static void deduplicate(Vector<unsigned int>& values);
 
         IvarDependencyIndex(Context& context);
 
@@ -355,17 +357,17 @@ namespace {
     };
 
     struct IvarCoercionRefs {
-        std::vector<const Context::Coercion*> coercions;
+        Vector<const Context::Coercion*> coercions;
     };
 
     struct IvarCoercionIndex {
         const Context& context;
         std::vector<IvarCoercionRefs> refs;
 
-        void collectIvars(const HIRTypeData* root, std::vector<unsigned int>& out) const;
+        void collectIvars(const HIRTypeData* root, Vector<unsigned int>& out) const;
 
         template <typename T>
-        void addRefs(const std::vector<unsigned int>& dependencies, std::vector<T> IvarCoercionRefs::* member, T value);
+        void addRefs(const Vector<unsigned int>& dependencies, Vector<T> IvarCoercionRefs::* member, T value);
 
         explicit IvarCoercionIndex(const Context& context);
 
@@ -530,11 +532,11 @@ namespace {
             RetTarget(const HIRTypeData* retType, const HIRTypeData* resumeType, const HIRTypeData* yieldType);
         };
 
-        std::vector<RetTarget> closureRetTypes;
+        Vector<RetTarget> closureRetTypes;
 
-        std::vector<bool> innerCoerceEnabledStack;
+        Vector<bool> innerCoerceEnabledStack;
 
-        std::vector<HIRExprNodeLoop*> loopBlocks;
+        Vector<HIRExprNodeLoop*> loopBlocks;
 
         tTraitList traits;
 
@@ -927,7 +929,7 @@ namespace {
                 DEBUG(StringView("Literal with primitive"));
                 return CoerceResult::Equality;
             }
-            if (dep->index < context.ivarsSized.size() && context.ivarsSized[dep->index]) {
+            if (dep->index < context.ivarsSized.length() && context.ivarsSized[dep->index]) {
                 return CoerceResult::Equality;
             }
             if (contextMut) {
@@ -983,7 +985,7 @@ namespace {
             HIRTypeRef tmpTy;
             const HIRTypeData* outTyP = src;
             unsigned int count = 0;
-            std::vector<HIRTypeRef> types;
+            Vector<HIRTypeRef> types;
             while ((outTyP = context.resolve.autoderef(sp, outTyP, tmpTy))) {
                 const auto& outTy = context.ivars.getType(outTyP);
                 DEBUG(StringView("From? ") << outTy);
@@ -1026,7 +1028,7 @@ namespace {
                     return CoerceResult::Unknown;
                 }
 
-                types.push_back(literalMatchesDestination ? dst : outTy);
+                types.pushBack(literalMatchesDestination ? dst : outTy);
 
                 if (!literalMatchesDestination && context.ivars.typesEqual(dst, outTy) == false) {
                     if (dst->tag() != outTy->tag()) {
@@ -1056,8 +1058,8 @@ namespace {
                 if (contextMut && nodePtrPtr) {
                     auto& nodePtr = *nodePtrPtr;
                     addCoerceBorrow(*contextMut, nodePtr, types.back(), [&](auto& nodePtr) -> void {
-                        BUG_ASSERT(count == types.size());
-                        for (unsigned int i = 0; i < types.size(); i++) {
+                        BUG_ASSERT(count == types.length());
+                        for (unsigned int i = 0; i < types.length(); i++) {
                             auto span = nodePtr->span();
                             // TODO: Replace with a call to context.create_autoderef to handle cases where the below assertion would fire.
                             ASSERT_BUG(span, !nodePtr->resType->is_Array(), StringView("Array->Slice shouldn't be in deref coercions"));
@@ -1883,12 +1885,12 @@ namespace {
             } else if (const auto* dep = dst->opt_Borrow()) {
                 if (dep->type == se.type && se.inner->is_Diverge() && contextMut && nodePtrPtr && *nodePtrPtr) {
                     HIRExprNodeP* borrowNodePtr = nodePtrPtr;
-                    std::vector<HIRExprNodeBlock*> blocks;
+                    Vector<HIRExprNodeBlock*> blocks;
                     while (auto* block = cast<HIRExprNodeBlock>(borrowNodePtr->get())) {
                         if (!block->valueNode) {
                             break;
                         }
-                        blocks.push_back(block);
+                        blocks.pushBack(block);
                         borrowNodePtr = &block->valueNode;
                     }
                     if (auto* borrow = cast<HIRExprNodeBorrow>(borrowNodePtr->get()); borrow && borrow->type == dep->type) {
@@ -1989,14 +1991,14 @@ namespace {
         } else if (src->is_NodeType() && src->as_NodeType().is_Closure()) {
             const auto* nodeP = src->as_NodeType().as_Closure();
             if (dst->is_ErasedType()) {
-                std::vector<HIRTypeRef> closureArgs;
-                closureArgs.reserve(nodeP->args.size());
+                Vector<HIRTypeRef> closureArgs;
+                closureArgs.grow(nodeP->args.size());
                 for (const auto& arg : nodeP->args) {
-                    closureArgs.push_back(arg.second);
+                    closureArgs.pushBack(arg.second);
                 }
                 HIRPathParams desiredParams{context.crate.types.tuple(mv$(closureArgs))};
 
-                std::vector<HIRTypeRef> expectedArgs;
+                Vector<HIRTypeRef> expectedArgs;
                 HIRTypeRef expectedOutput;
                 const auto inspectExpectation = [&](const SolverImpl& impl) {
                     auto params = impl.getTraitParams(context.crate.types);
@@ -2004,7 +2006,7 @@ namespace {
                         return false;
                     }
                     const auto& args = params.types.front()->as_Tuple();
-                    if (args.size() != nodeP->args.size()) {
+                    if (args.length() != nodeP->args.size()) {
                         return false;
                     }
                     auto output = impl.getType(context.crate.types, "Output", {});
@@ -2013,13 +2015,13 @@ namespace {
                     }
 
                     bool hasExpectation = false;
-                    std::vector<HIRTypeRef> concreteArgs;
-                    concreteArgs.reserve(args.size());
+                    Vector<HIRTypeRef> concreteArgs;
+                    concreteArgs.grow(args.length());
                     for (const auto& arg : args) {
                         if (typeContainsImplPlaceholder(context.crate.types, arg)) {
-                            concreteArgs.push_back(HIRTypeRef());
+                            concreteArgs.pushBack(HIRTypeRef());
                         } else {
-                            concreteArgs.push_back(arg);
+                            concreteArgs.pushBack(arg);
                             hasExpectation = true;
                         }
                     }
@@ -2053,7 +2055,7 @@ namespace {
                 const bool asyncExpectation = findExpectation(context.resolve.langAsyncFnOnce());
                 const bool foundExpectation = asyncExpectation || findExpectation(context.resolve.langFnOnce());
                 if (foundExpectation && contextMut) {
-                    for (size_t i = 0; i < expectedArgs.size(); i++) {
+                    for (size_t i = 0; i < expectedArgs.length(); i++) {
                         if (expectedArgs[i] != HIRTypeRef()) {
                             contextMut->equateTypes(sp, nodeP->args[i].second, expectedArgs[i]);
                         }
@@ -2085,11 +2087,11 @@ namespace {
                     if (de.abi != ABI_RUST) {
                         ERROR(span, E0000, StringView("Cannot use closure for extern function pointer"));
                     }
-                    if (de.argTypes.size() != nodeP->args.size()) {
+                    if (de.argTypes.length() != nodeP->args.size()) {
                         ERROR(span, E0000, StringView("Mismatched argument count coercing closure to fn(...)"));
                     }
                     if (contextMut) {
-                        for (size_t i = 0; i < de.argTypes.size(); i++) {
+                        for (size_t i = 0; i < de.argTypes.length(); i++) {
                             contextMut->equateTypes(sp, de.argTypes[i], nodeP->args[i].second);
                         }
                         contextMut->equateTypes(sp, de.rettype, nodeP->returnType);
@@ -2120,7 +2122,7 @@ namespace {
                 if (se->isUnsafe != de->isUnsafe && se->isUnsafe) {
                     return CoerceResult::Equality;
                 }
-                if (se->argTypes.size() != de->argTypes.size()) {
+                if (se->argTypes.length() != de->argTypes.length()) {
                     return CoerceResult::Equality;
                 }
 
@@ -2128,7 +2130,7 @@ namespace {
                     auto& nodePtr = *nodePtrPtr;
                     auto span = nodePtr->span();
 
-                    for (size_t i = 0; i < de->argTypes.size(); i++) {
+                    for (size_t i = 0; i < de->argTypes.length(); i++) {
                         contextMut->equateTypes(sp, de->argTypes[i], se->argTypes[i]);
                     }
                     contextMut->equateTypes(sp, de->rettype, se->rettype);
@@ -2155,11 +2157,11 @@ namespace {
                 if (se->isUnsafe != de->isUnsafe && se->isUnsafe) {
                     return CoerceResult::Equality;
                 }
-                if (de->argTypes.size() != se->argTypes.size()) {
+                if (de->argTypes.length() != se->argTypes.length()) {
                     return CoerceResult::Equality;
                 }
                 if (contextMut) {
-                    for (size_t i = 0; i < de->argTypes.size(); i++) {
+                    for (size_t i = 0; i < de->argTypes.length(); i++) {
                         contextMut->equateTypes(sp, de->argTypes[i], se->argTypes[i]);
                     }
                     contextMut->equateTypes(sp, de->rettype, se->rettype);
@@ -2921,7 +2923,7 @@ namespace {
             }
         }
 
-        if (ivarIdx < context.ivarsSized.size() && context.ivarsSized[ivarIdx]) {
+        if (ivarIdx < context.ivarsSized.length() && context.ivarsSized[ivarIdx]) {
             if (context.resolve.typeIsSized(sp, newTy) == HIRCompare::Unequal) {
                 DEBUG(StringView("Unsized type not valid here"));
                 return true;
@@ -3015,7 +3017,7 @@ namespace {
         bool mayUseRawPointerFallback = false;
 
         {
-            bool allowUnsized = !(i < context.ivarsSized.size() ? context.ivarsSized.at(i) : false);
+            bool allowUnsized = !(i < context.ivarsSized.length() ? context.ivarsSized[i] : false);
 
             std::vector<PossibleType> possibleTys;
             bool addPlaceholders = (fallbackTy < IvarPossFallbackType::IgnoreWeakDisable);
@@ -3205,7 +3207,7 @@ namespace {
                     } else if (const auto* closure = ((*possible.ty).is_NodeType() ? ((*possible.ty).as_NodeType().opt_Closure()) : nullptr)) {
                         candidate = HIRTypeDataFunctionPointer{false, false, RcString::newInterned(ABI_RUST), (*closure)->returnType, {}};
                         for (const auto& argument : (*closure)->args) {
-                            candidate.argTypes.push_back(argument.second);
+                            candidate.argTypes.pushBack(argument.second);
                         }
                     } else {
                         BUG(sp, StringView(""));
@@ -4038,7 +4040,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
             return false;
         }
         const auto ivarIdx = inferData->index;
-        if (ivarIdx < ivarsSized.size() && ivarsSized.at(ivarIdx)) {
+        if (ivarIdx < ivarsSized.length() && ivarsSized[ivarIdx]) {
             this->requireSized(sp, alias);
         }
         this->ivars.setIvarTo(ivarIdx, alias);
@@ -4151,7 +4153,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
 
     auto setIvar = [&](const HIRTypeData* dst, const HIRTypeData* src) {
         auto ivarIdx = dst->as_Infer().index;
-        if (ivarIdx < ivarsSized.size() && ivarsSized.at(ivarIdx)) {
+        if (ivarIdx < ivarsSized.length() && ivarsSized[ivarIdx]) {
             this->requireSized(sp, src);
         }
         if (visitTyWith(src, [&](const HIRTypeData* ity) {
@@ -4192,7 +4194,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
         if (const auto* lE = lT->opt_Infer()) {
             // TODO: Unify sized flags
 
-            if ((rE->index < ivarsSized.size() && ivarsSized.at(rE->index)) || (lE->index < ivarsSized.size() && ivarsSized.at(lE->index))) {
+            if ((rE->index < ivarsSized.length() && ivarsSized[rE->index]) || (lE->index < ivarsSized.length() && ivarsSized[lE->index])) {
                 this->requireSized(sp, lT);
                 this->requireSized(sp, rT);
             }
@@ -4431,10 +4433,10 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                 case HIRTypeData::TAG_Tuple: {
                     auto& lE = (*lT).as_Tuple();
                     auto& rE = (*rT).as_Tuple();
-                    if (lE.size() != rE.size()) {
+                    if (lE.length() != rE.length()) {
                         ERROR(sp, E0000, StringView("Type mismatch between ") << lT << StringView(" and ") << rT << StringView(" - Tuples are of different length"));
                     }
-                    for (unsigned int i = 0; i < lE.size(); i++) {
+                    for (unsigned int i = 0; i < lE.length(); i++) {
                         this->equateTypesInner(sp, lE[i], rE[i]);
                     }
                     break;
@@ -4468,12 +4470,12 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                 case HIRTypeData::TAG_Function: {
                     auto& lE = (*lT).as_Function();
                     auto& rE = (*rT).as_Function();
-                    if (lE.isUnsafe != rE.isUnsafe || lE.isVariadic != rE.isVariadic || lE.trackCaller != rE.trackCaller || lE.abi != rE.abi || lE.argTypes.size() != rE.argTypes.size()) {
+                    if (lE.isUnsafe != rE.isUnsafe || lE.isVariadic != rE.isVariadic || lE.trackCaller != rE.trackCaller || lE.abi != rE.abi || lE.argTypes.length() != rE.argTypes.length()) {
                         ERROR(sp, E0000, StringView("Type mismatch between ") << lT << StringView(" and ") << rT);
                     }
                     // TODO: HRLs
                     this->equateTypesInner(sp, lE.rettype, rE.rettype);
-                    for (unsigned int i = 0; i < lE.argTypes.size(); i++) {
+                    for (unsigned int i = 0; i < lE.argTypes.length(); i++) {
                         this->equateTypesInner(sp, lE.argTypes[i], rE.argTypes[i]);
                     }
                     break;
@@ -4596,7 +4598,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
             HIRPattern& pattern;
             HIRPatternBinding::Type outerMode;
 
-            mutable std::vector<HIRTypeRef> tempIvars;
+            mutable Vector<HIRTypeRef> tempIvars;
             mutable std::optional<HIRTypeRef> possibleType;
             mutable const HIRPattern* possibleTypePattern = nullptr;
 
@@ -4716,14 +4718,14 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     }
                     case HIRPatternData::TAG_Tuple: {
                         auto& e = pattern.data.as_Tuple();
-                        if (tempIvars.size() != e.subPatterns.size()) {
+                        if (tempIvars.length() != e.subPatterns.size()) {
                             for (size_t i = 0; i < e.subPatterns.size(); i++) {
-                                tempIvars.push_back(context.ivars.newIvarTr());
+                                tempIvars.pushBack(context.ivars.newIvarTr());
                             }
                         }
                         decltype(tempIvars) tuple;
                         for (const auto& ty : tempIvars) {
-                            tuple.push_back(ty);
+                            tuple.pushBack(ty);
                         }
                         possibleType = context.crate.types.tuple(std::move(tuple));
                         break;
@@ -5333,7 +5335,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             ERROR(sp, E0000, StringView("Matching a non-tuple with a tuple pattern - ") << ty);
                         }
                         const auto& te = ty->as_Tuple();
-                        if (e.subPatterns.size() != te.size()) {
+                        if (e.subPatterns.size() != te.length()) {
                             ERROR(sp, E0000, StringView("Tuple pattern with an incorrect number of fields, expected ") << e.subPatterns.size() << StringView("-tuple, got ") << ty);
                         }
 
@@ -5349,16 +5351,16 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             ERROR(sp, E0000, StringView("Matching a non-tuple with a tuple pattern - ") << ty);
                         }
                         const auto& te = ty->as_Tuple();
-                        if (pe.leading.size() + pe.trailing.size() > te.size()) {
-                            ERROR(sp, E0000, StringView("Split-tuple pattern with an incorrect number of fields, expected at most ") << (pe.leading.size() + pe.trailing.size()) << StringView("-tuple, got ") << te.size());
+                        if (pe.leading.size() + pe.trailing.size() > te.length()) {
+                            ERROR(sp, E0000, StringView("Split-tuple pattern with an incorrect number of fields, expected at most ") << (pe.leading.size() + pe.trailing.size()) << StringView("-tuple, got ") << te.length());
                         }
-                        pe.totalSize = te.size();
+                        pe.totalSize = te.length();
                         rv = true;
                         for (size_t i = 0; i < pe.leading.size(); i++) {
                             rv &= this->revisitInner(context, pe.leading[i], te[i], bindingMode);
                         }
                         for (size_t i = 0; i < pe.trailing.size(); i++) {
-                            rv &= this->revisitInner(context, pe.trailing[i], te[te.size() - pe.trailing.size() + i], bindingMode);
+                            rv &= this->revisitInner(context, pe.trailing[i], te[te.length() - pe.trailing.size() + i], bindingMode);
                         }
                         break;
                     }
@@ -5895,7 +5897,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
             const auto& ty = this->getType(type);
             if (const auto* tep = ty->opt_Tuple()) {
                 const auto& te = *tep;
-                if (e.subPatterns.size() != te.size()) {
+                if (e.subPatterns.size() != te.length()) {
                     ERROR(sp, E0000, StringView("Tuple pattern with an incorrect number of fields, expected ") << e.subPatterns.size() << StringView("-tuple, got ") << ty);
                 }
 
@@ -5903,9 +5905,9 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     this->handlePatternDirectInner(sp, e.subPatterns[i], te[i]);
                 }
             } else {
-                std::vector<HIRTypeRef> subTypes;
+                Vector<HIRTypeRef> subTypes;
                 for (unsigned int i = 0; i < e.subPatterns.size(); i++) {
-                    subTypes.push_back(this->ivars.newIvarTr());
+                    subTypes.pushBack(this->ivars.newIvarTr());
                     this->handlePatternDirectInner(sp, e.subPatterns[i], subTypes[i]);
                 }
                 this->equateTypes(sp, ty, crate.types.tuple(mv$(subTypes)));
@@ -5917,45 +5919,45 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
             const auto& ty = this->getType(type);
             if (const auto* tep = ty->opt_Tuple()) {
                 const auto& te = *tep;
-                ASSERT_BUG(sp, e.leading.size() + e.trailing.size() <= te.size(), StringView("Invalid field count for split tuple pattern"));
+                ASSERT_BUG(sp, e.leading.size() + e.trailing.size() <= te.length(), StringView("Invalid field count for split tuple pattern"));
 
                 unsigned int tupIdx = 0;
                 for (auto& subpat : e.leading) {
                     this->handlePatternDirectInner(sp, subpat, te[tupIdx++]);
                 }
-                tupIdx = te.size() - e.trailing.size();
+                tupIdx = te.length() - e.trailing.size();
                 for (auto& subpat : e.trailing) {
                     this->handlePatternDirectInner(sp, subpat, te[tupIdx++]);
                 }
 
                 // TODO: Should this replace the pattern with a non-split?
 
-                e.totalSize = te.size();
+                e.totalSize = te.length();
             } else {
                 if (!ty->is_Infer()) {
                     ERROR(sp, E0000, StringView("Tuple pattern on non-tuple"));
                 }
 
-                std::vector<HIRTypeRef> leadingTys;
-                leadingTys.reserve(e.leading.size());
+                Vector<HIRTypeRef> leadingTys;
+                leadingTys.grow(e.leading.size());
                 for (auto& subpat : e.leading) {
-                    leadingTys.push_back(this->ivars.newIvarTr());
+                    leadingTys.pushBack(this->ivars.newIvarTr());
                     this->handlePatternDirectInner(sp, subpat, leadingTys.back());
                 }
-                std::vector<HIRTypeRef> trailingTys;
+                Vector<HIRTypeRef> trailingTys;
                 for (auto& subpat : e.trailing) {
-                    trailingTys.push_back(this->ivars.newIvarTr());
+                    trailingTys.pushBack(this->ivars.newIvarTr());
                     this->handlePatternDirectInner(sp, subpat, trailingTys.back());
                 }
 
                 struct SplitTuplePatRevisit: public Revisitor {
                     Span sp;
                     HIRTypeRef outerTy;
-                    std::vector<HIRTypeRef> leadingTys;
-                    std::vector<HIRTypeRef> trailingTys;
+                    Vector<HIRTypeRef> leadingTys;
+                    Vector<HIRTypeRef> trailingTys;
                     unsigned int& patTotalSize;
 
-                    SplitTuplePatRevisit(Span sp, HIRTypeRef outer, std::vector<HIRTypeRef> leading, std::vector<HIRTypeRef> trailing, unsigned int& patTotalSize)
+                    SplitTuplePatRevisit(Span sp, HIRTypeRef outer, Vector<HIRTypeRef> leading, Vector<HIRTypeRef> trailing, unsigned int& patTotalSize)
                         : sp(mv$(sp))
                         , outerTy(mv$(outer))
                         , leadingTys(mv$(leading))
@@ -5978,17 +5980,17 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                             return false;
                         } else if (const auto* tep = ty->opt_Tuple()) {
                             const auto& te = *tep;
-                            if (te.size() < leadingTys.size() + trailingTys.size()) {
+                            if (te.length() < leadingTys.length() + trailingTys.length()) {
                                 ERROR(sp, E0000, StringView("Tuple pattern too large for tuple"));
                             }
-                            for (unsigned int i = 0; i < leadingTys.size(); i++) {
+                            for (unsigned int i = 0; i < leadingTys.length(); i++) {
                                 context.equateTypes(sp, te[i], leadingTys[i]);
                             }
-                            unsigned int ofs = te.size() - trailingTys.size();
-                            for (unsigned int i = 0; i < trailingTys.size(); i++) {
+                            unsigned int ofs = te.length() - trailingTys.length();
+                            for (unsigned int i = 0; i < trailingTys.length(); i++) {
                                 context.equateTypes(sp, te[ofs + i], trailingTys[i]);
                             }
-                            patTotalSize = te.size();
+                            patTotalSize = te.length();
                             return true;
                         } else {
                             ERROR(sp, E0000, StringView("Tuple pattern on non-tuple - ") << ty);
@@ -6212,7 +6214,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     if (const auto* ee = be.ptr->data.opt_Data()) {
                         ASSERT_BUG(sp, be.varIdx < ee->size(), StringView(""));
                         const auto& var = (*ee)[be.varIdx];
-                        if (var.type->is_Tuple() && var.type->as_Tuple().size() == 0) {
+                        if (var.type->is_Tuple() && var.type->as_Tuple().length() == 0) {
                         } else {
                             // TODO: Error here due to invalid variant type
                         }
@@ -6538,7 +6540,7 @@ void Context::selectWellFormed(const Span& sp, const HIRTypeData* type) {
 }
 
 void Context::addRevisit(HIRExprNode& node) {
-    this->toVisit.push_back(&node);
+    this->toVisit.pushBack(&node);
 }
 
 void Context::addRevisitAdv(std::unique_ptr<Revisitor> entPtr) {
@@ -6560,10 +6562,10 @@ void Context::requireSized(const Span& sp, const HIRTypeData* ty_) {
             default:
                 // TODO: Flag for future checking
                 ASSERT_BUG(sp, e->index != ~0u, StringView("Unbound ivar ") << ty);
-                if (e->index >= ivarsSized.size()) {
-                    ivarsSized.resize(e->index + 1);
+                while (e->index >= ivarsSized.length()) {
+                    ivarsSized.pushBack(false);
                 }
-                ivarsSized.at(e->index) = true;
+                ivarsSized.mut(e->index) = true;
                 break;
         }
     } else if (const auto* e = ty->opt_Path()) {
@@ -6849,7 +6851,7 @@ void Context::applySolverResponse(const Span& sp, const SolverResponse& response
             })) {
                 return false;
             }
-            if (infer->index < ivarsSized.size() && ivarsSized.at(infer->index)) {
+            if (infer->index < ivarsSized.length() && ivarsSized[infer->index]) {
                 requireSized(sp, projection);
             }
             ivars.setIvarTo(infer->index, projection, true);
@@ -7039,24 +7041,27 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
             for (unsigned int i = 0; i < context.ivars.ivars.size(); i++) {
                 passStartIvars.pushBack(context.ivars.getType(i));
             }
-            for (auto it = context.toVisit.begin(); it != context.toVisit.end();) {
-                HIRExprNode& node = **it;
+            for (size_t i = 0; i < context.toVisit.length();) {
+                HIRExprNode& node = *context.toVisit[i];
                 ExprVisitorRevisit visitor{context, false, &passStartIvars};
                 DEBUG(StringView("> ") << static_cast<const void*>(&node) << StringView(" ") << typeid(node).name() << StringView(" -> ") << context.ivars.fmtType(node.resType));
                 node.visit(visitor);
                 if (visitor.nodeCompleted()) {
-                    it = context.toVisit.erase(it);
+                    for (size_t j = i + 1; j < context.toVisit.length(); j++) {
+                        context.toVisit.mut(j - 1) = context.toVisit[j];
+                    }
+                    context.toVisit.popBack();
                 } else {
-                    ++it;
+                    i++;
                 }
             }
             {
-                std::vector<bool> advRevisitRemoveList;
+                Vector<bool> advRevisitRemoveList;
                 size_t len = context.advRevisits.size();
                 for (size_t i = 0; i < len; i++) {
                     auto& ent = *context.advRevisits[i];
                     DEBUG(StringView("> ") << FMT_CB(os, ent.fmt(os)));
-                    advRevisitRemoveList.push_back(ent.revisit(context, /*is_fallback=*/false));
+                    advRevisitRemoveList.pushBack(ent.revisit(context, /*is_fallback=*/false));
                 }
                 for (size_t i = len; i--;) {
                     if (advRevisitRemoveList[i]) {
@@ -7127,24 +7132,27 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
 
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Node revisits (fallback)"));
-            for (auto it = context.toVisit.begin(); it != context.toVisit.end();) {
-                HIRExprNode& node = **it;
+            for (size_t i = 0; i < context.toVisit.length();) {
+                HIRExprNode& node = *context.toVisit[i];
                 ExprVisitorRevisit visitor{context, true};
                 DEBUG(StringView("> ") << static_cast<const void*>(&node) << StringView(" ") << typeid(node).name() << StringView(" -> ") << context.ivars.fmtType(node.resType));
                 node.visit(visitor);
                 if (visitor.nodeCompleted()) {
-                    it = context.toVisit.erase(it);
+                    for (size_t j = i + 1; j < context.toVisit.length(); j++) {
+                        context.toVisit.mut(j - 1) = context.toVisit[j];
+                    }
+                    context.toVisit.popBack();
                 } else {
-                    ++it;
+                    i++;
                 }
             }
             {
-                std::vector<bool> advRevisitRemoveList;
+                Vector<bool> advRevisitRemoveList;
                 size_t len = context.advRevisits.size();
                 for (size_t i = 0; i < len; i++) {
                     auto& ent = *context.advRevisits[i];
                     DEBUG(StringView("> ") << FMT_CB(os, ent.fmt(os)));
-                    advRevisitRemoveList.push_back(ent.revisit(context, /*is_fallback=*/true));
+                    advRevisitRemoveList.pushBack(ent.revisit(context, /*is_fallback=*/true));
                 }
                 for (size_t i = len; i--;) {
                     if (advRevisitRemoveList[i]) {
@@ -7279,9 +7287,9 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
 
     DEBUG(StringView("root_ptr = ") << rootPtr->typeName() << StringView(" ") << rootPtr->resType);
     expr.reset(rootPtr.release());
-    expr.bindings.reserve(context.bindings.size());
+    expr.bindings.grow(context.bindings.size());
     for (auto& binding : context.bindings) {
-        expr.bindings.push_back(binding.ty);
+        expr.bindings.pushBack(binding.ty);
     }
 
     {
@@ -7478,7 +7486,7 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
 
 bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRTypeImpl* selectedInherentImpl) {
     TRACE_FUNCTION_FR(path, path);
-    BUG_ASSERT(cache.argTypes.size() == 0);
+    BUG_ASSERT(cache.argTypes.length() == 0);
 
     const HIRFunction* fcnPtr = nullptr;
 
@@ -7621,7 +7629,7 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
     for (size_t i = 0; i < fcn.fixedArgCount(); i++) {
         const auto& arg = fcn.args[i];
         TRACE_FUNCTION_FR(StringView("ARG ") << path << StringView(" - ") << arg.first << StringView(": ") << arg.second, StringView("Arg ") << arg.first << StringView(" : ") << cache.argTypes.back());
-        cache.argTypes.push_back(monomorph.monomorphType(sp, arg.second, false));
+        cache.argTypes.pushBack(monomorph.monomorphType(sp, arg.second, false));
     }
     {
         TRACE_FUNCTION_FR(StringView("RET ") << path << StringView(" - ") << fcn.returnType, StringView("Ret ") << cache.argTypes.back());
@@ -7638,7 +7646,7 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
                 }
             }
         }
-        cache.argTypes.push_back(std::move(returnType));
+        cache.argTypes.pushBack(std::move(returnType));
     }
 
     if (cache.topParams) {
@@ -7690,11 +7698,11 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer = true) const override {
             if (const auto* e = tpl->opt_ErasedType()) {
                 if (const auto* ee = e->inner.opt_Fcn()) {
-                    if (expr.erasedTypes.size() <= ee->index) {
-                        expr.erasedTypes.resize(ee->index + 1);
+                    while (expr.erasedTypes.length() <= ee->index) {
+                        expr.erasedTypes.pushBack(HIRTypeRef());
                     }
                     ASSERT_BUG(sp, expr.erasedTypes[ee->index] == HIRTypeRef(), StringView("Multiple-visits to erased type #") << ee->index);
-                    expr.erasedTypes[ee->index] = context.ivars.newIvarTr();
+                    expr.erasedTypes.mut(ee->index) = context.ivars.newIvarTr();
                     auto rv = expr.erasedTypes[ee->index];
                     context.addRpitType(ee->origin, ee->index, rv);
 
@@ -7730,7 +7738,7 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
     };
 
     HIRTypeRef newResTy = resultType ? M(context, expr).monomorphType(sp, resultType) : context.ivars.newIvarTr();
-    for (size_t i = 0; i < expr.erasedTypes.size(); i++) {
+    for (size_t i = 0; i < expr.erasedTypes.length(); i++) {
         ASSERT_BUG(sp, expr.erasedTypes[i] != HIRTypeRef(), StringView("Non-visited erased type #") << i);
     }
 
@@ -8114,7 +8122,7 @@ auto ExprVisitorRevisit::bad_cast(const Span& sp, const HIRTypeData* srcTy, cons
 
 auto ExprVisitorRevisit::equateFunctionSignature(const Span& sp, const HIRTypeDataFunctionPointer& dst, const HIRTypeDataFunctionPointer& src) -> void {
     this->context.equateTypes(sp, dst.rettype, src.rettype);
-    for (size_t i = 0; i < dst.argTypes.size(); i++) {
+    for (size_t i = 0; i < dst.argTypes.length(); i++) {
         this->context.equateTypes(sp, dst.argTypes[i], src.argTypes[i]);
     }
 }
@@ -8338,11 +8346,11 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                 case HIRTypeData::TAG_NodeType: {
                     auto& sE = (*srcTy).as_NodeType();
                     if (const auto* const* snPp = sE.opt_Closure()) {
-                        if ((*snPp)->args.size() != e.argTypes.size()) {
+                        if ((*snPp)->args.size() != e.argTypes.length()) {
                             bad_cast(sp, srcTy, tgtTy, "fcn nargs");
                         }
                         this->context.equateTypes(sp, e.rettype, (*snPp)->returnType);
-                        for (size_t i = 0; i < e.argTypes.size(); i++) {
+                        for (size_t i = 0; i < e.argTypes.length(); i++) {
                             this->context.equateTypes(sp, e.argTypes[i], (*snPp)->args[i].second);
                         }
                         this->completed = true;
@@ -8353,7 +8361,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                 }
                 case HIRTypeData::TAG_Function: {
                     auto& sE = (*srcTy).as_Function();
-                    if (sE.abi != e.abi || (sE.isUnsafe && sE.isUnsafe != e.isUnsafe) || sE.argTypes.size() != e.argTypes.size()) {
+                    if (sE.abi != e.abi || (sE.isUnsafe && sE.isUnsafe != e.isUnsafe) || sE.argTypes.length() != e.argTypes.length()) {
                         bad_cast(sp, srcTy, tgtTy, "fcn nargs");
                     }
                     equateFunctionSignature(sp, e, sE);
@@ -8364,7 +8372,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                     auto& f = (*srcTy).as_NamedFunction();
                     auto ft = context.expandAssociatedTypes(sp, context.crate.types.function(f.decay(context.crate.types, sp)));
                     const auto& sE = ft->as_Function();
-                    if (sE.abi != e.abi || (sE.isUnsafe && sE.isUnsafe != e.isUnsafe) || sE.argTypes.size() != e.argTypes.size()) {
+                    if (sE.abi != e.abi || (sE.isUnsafe && sE.isUnsafe != e.isUnsafe) || sE.argTypes.length() != e.argTypes.length()) {
                         bad_cast(sp, srcTy, tgtTy, "fcn nargs");
                     }
                     equateFunctionSignature(sp, e, sE);
@@ -8400,7 +8408,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
     unsigned int derefCount = 0;
     HIRTypeRef tmpType;
     const auto* currentTy = node.value->resType;
-    std::vector<HIRTypeRef> derefResTypes;
+    Vector<HIRTypeRef> derefResTypes;
 
     // TODO: (CHECK) rustc doesn't use the index value type when finding the indexable item, trustme does.
     HIRPathParams traitPp;
@@ -8445,14 +8453,14 @@ auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
         derefCount += 1;
         currentTy = this->context.resolve.autoderef(node.span(), ty, tmpType);
         if (currentTy) {
-            derefResTypes.push_back(currentTy);
+            derefResTypes.pushBack(currentTy);
         }
     } while (currentTy);
 
     if (currentTy) {
         DEBUG(StringView("Found impl on type ") << currentTy << StringView(" with ") << derefCount << StringView(" derefs"));
-        BUG_ASSERT(derefCount == derefResTypes.size());
-        for (auto& tyR : derefResTypes) {
+        BUG_ASSERT(derefCount == derefResTypes.length());
+        for (const auto& tyR : derefResTypes) {
             auto ty = mv$(tyR);
 
             node.value = this->context.createAutoderef(mv$(node.value), mv$(ty));
@@ -8543,15 +8551,15 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallPath& node) -> void {
         DEBUG(StringView("- CallPath still ambiguous - trying again later"));
         return;
     }
-    BUG_ASSERT(node.cache.argTypes.size() >= 1);
-    unsigned int expArgc = node.cache.argTypes.size() - 1;
+    BUG_ASSERT(node.cache.argTypes.length() >= 1);
+    unsigned int expArgc = node.cache.argTypes.length() - 1;
     if (node.args.size() != expArgc) {
         if (node.cache.fcn->variadic && node.args.size() > expArgc) {
         } else {
             ERROR(node.span(), E0000, StringView("Incorrect number of arguments to ") << node.path << StringView(" - exp ") << expArgc << StringView(" got ") << node.args.size());
         }
     }
-    for (unsigned int i = 0; i < node.cache.argTypes.size() - 1; i++) {
+    for (unsigned int i = 0; i < node.cache.argTypes.length() - 1; i++) {
         this->context.equateTypesCoerce(node.span(), node.cache.argTypes[i], node.args[i]);
     }
     this->context.equateTypes(node.span(), node.resType, node.cache.argTypes.back());
@@ -8616,7 +8624,7 @@ auto ExprVisitorRevisit::callAsyncCallable(HIRExprNodeCallValue& node, HIRTypeRe
         }
         DEBUG(StringView("-- Using ") << candidate.trait << StringView(" for ") << ty);
         node.argTypes = fcnArgsTup->as_Tuple();
-        node.argTypes.push_back(node.resType);
+        node.argTypes.pushBack(node.resType);
         node.traitUsed = candidate.used;
         return AsyncCallResult::Proven;
     }
@@ -8645,9 +8653,9 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
 
     HIRPathParams traitPp;
     {
-        std::vector<HIRTypeRef> argTypes;
+        Vector<HIRTypeRef> argTypes;
         for (const auto& argTy : node.argIvars) {
-            argTypes.push_back(this->context.getType(argTy));
+            argTypes.pushBack(this->context.getType(argTy));
         }
         traitPp.types.push_back(context.crate.types.tuple(mv$(argTypes)));
     }
@@ -8664,9 +8672,9 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
         if (ty->is_NodeType() && ty->as_NodeType().is_Closure()) {
             const auto* nodeP = ty->as_NodeType().as_Closure();
             for (const auto& arg : nodeP->args) {
-                node.argTypes.push_back(arg.second);
+                node.argTypes.pushBack(arg.second);
             }
-            node.argTypes.push_back(nodeP->returnType);
+            node.argTypes.pushBack(nodeP->returnType);
             node.traitUsed = HIRExprNodeCallValue::TraitUsed::Unknown;
         } else if (ty->is_Function() || ty->is_NamedFunction()) {
             HIRTypeRef tmpFt;
@@ -8677,14 +8685,14 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
                 e = &tmpFt->as_Function();
             }
             for (const auto& arg : e->argTypes) {
-                node.argTypes.push_back(arg);
+                node.argTypes.pushBack(arg);
             }
             if (e->isVariadic) {
-                for (size_t i = e->argTypes.size(); i < node.args.size(); i++) {
-                    node.argTypes.push_back(node.argIvars[i]);
+                for (size_t i = e->argTypes.length(); i < node.args.size(); i++) {
+                    node.argTypes.pushBack(node.argIvars[i]);
                 }
             }
-            node.argTypes.push_back(e->rettype);
+            node.argTypes.pushBack(e->rettype);
             node.traitUsed = HIRExprNodeCallValue::TraitUsed::Fn;
         } else if (ty->is_Infer()) {
             return;
@@ -8773,7 +8781,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
             }
 
             node.argTypes = fcnArgsTup->as_Tuple();
-            node.argTypes.push_back(mv$(fcnRet));
+            node.argTypes.pushBack(mv$(fcnRet));
         }
     } while (keepLooping);
 
@@ -8787,7 +8795,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
         }
     }
 
-    ASSERT_BUG(node.span(), node.argTypes.size() == node.args.size() + 1, StringView("Malformed cache in CallValue: ") << node.argTypes.size() << StringView(" != 1+") << node.args.size());
+    ASSERT_BUG(node.span(), node.argTypes.length() == node.args.size() + 1, StringView("Malformed cache in CallValue: ") << node.argTypes.length() << StringView(" != 1+") << node.args.size());
     for (unsigned int i = 0; i < node.args.size(); i++) {
         this->context.equateTypes(node.span(), node.argTypes[i], node.argIvars[i]);
     }
@@ -8934,10 +8942,10 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
 
         ASSERT_BUG(sp, visitCallPopulateCache(this->context, node.span(), node.methodPath, node.cache, selectedMethod.inherentImpl), StringView("Selected method became ambiguous while populating its cache: ") << node.methodPath);
         DEBUG(StringView("> m_method_path = ") << node.methodPath);
-        BUG_ASSERT(node.cache.argTypes.size() >= 1);
+        BUG_ASSERT(node.cache.argTypes.length() >= 1);
 
-        if (node.args.size() + 1 != node.cache.argTypes.size() - 1) {
-            ERROR(node.span(), E0000, StringView("Incorrect number of arguments to ") << node.methodPath << StringView(" - exp ") << node.cache.argTypes.size() - 2 << StringView(" got ") << node.args.size());
+        if (node.args.size() + 1 != node.cache.argTypes.length() - 1) {
+            ERROR(node.span(), E0000, StringView("Incorrect number of arguments to ") << node.methodPath << StringView(" - exp ") << node.cache.argTypes.length() - 2 << StringView(" got ") << node.args.size());
         }
 
         DEBUG(StringView("- fcn_path=") << node.methodPath);
@@ -9024,7 +9032,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeField& node) -> void {
     unsigned int derefCount = 0;
     HIRTypeRef tmpType;
     const auto* currentTy = node.value->resType;
-    std::vector<HIRTypeRef> derefResTypes;
+    Vector<HIRTypeRef> derefResTypes;
 
     // TODO: autoderef_find_field?
     do {
@@ -9045,7 +9053,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeField& node) -> void {
         derefCount += 1;
         currentTy = this->context.resolve.autoderef(node.span(), ty, tmpType);
         if (currentTy) {
-            derefResTypes.push_back(currentTy);
+            derefResTypes.pushBack(currentTy);
         }
     } while (currentTy);
 
@@ -9053,8 +9061,8 @@ auto ExprVisitorRevisit::visit(HIRExprNodeField& node) -> void {
         ERROR(node.span(), E0000, StringView("Couldn't find the field ") << fieldName << StringView(" in ") << this->context.ivars.fmtType(node.value->resType));
     }
 
-    BUG_ASSERT(derefCount == derefResTypes.size());
-    for (unsigned int i = 0; i < derefResTypes.size(); i++) {
+    BUG_ASSERT(derefCount == derefResTypes.length());
+    for (unsigned int i = 0; i < derefResTypes.length(); i++) {
         auto ty = mv$(derefResTypes[i]);
         DEBUG(StringView("- Deref ") << static_cast<const void*>(&*node.value) << StringView(" -> ") << ty);
         if (node.value->resType->is_Array()) {
@@ -9178,12 +9186,12 @@ auto ExprVisitorApply::visitNodePtr(HIRExprPtr& nodePtr) -> void {
     DEBUG(nodeTy << StringView(" : = ") << node.resType);
     nodePtr->visit(*this);
 
-    for (auto& ty : nodePtr.bindings) {
-        this->checkTypeResolvedTop(node.span(), ty);
+    for (auto& type : mutRange(nodePtr.bindings)) {
+        this->checkTypeResolvedTop(node.span(), type);
     }
 
-    for (auto& ty : nodePtr.erasedTypes) {
-        this->checkTypeResolvedTop(node.span(), ty);
+    for (auto& type : mutRange(nodePtr.erasedTypes)) {
+        this->checkTypeResolvedTop(node.span(), type);
     }
 
     for (auto& ent : context.erasedTypeAliases) {
@@ -9309,7 +9317,7 @@ auto ExprVisitorApply::visit(HIRExprNodeGeneratorWrapper& node) -> void {
 }
 
 auto ExprVisitorApply::visitCallcache(const Span& sp, HIRExprCallCache& cache) -> void {
-    for (auto& ty : cache.argTypes) {
+    for (auto& ty : mutRange(cache.argTypes)) {
         this->checkTypeResolvedTop(sp, ty);
     }
 }
@@ -9329,7 +9337,7 @@ auto ExprVisitorApply::visit(HIRExprNodeCallMethod& node) -> void {
 }
 
 auto ExprVisitorApply::visit(HIRExprNodeCallValue& node) -> void {
-    for (auto& ty : node.argTypes) {
+    for (auto& ty : mutRange(node.argTypes)) {
         this->checkTypeResolvedTop(node.span(), ty);
     }
 
@@ -9351,9 +9359,9 @@ auto ExprVisitorApply::visit(HIRExprNodeCallValue& node) -> void {
         } else {
             HIRPathParams traitPp;
             {
-                std::vector<HIRTypeRef> argTypes;
+                Vector<HIRTypeRef> argTypes;
                 for (const auto& argTy : node.argIvars) {
-                    argTypes.push_back(this->context.getType(argTy));
+                    argTypes.pushBack(this->context.getType(argTy));
                 }
                 traitPp.types.push_back(context.crate.types.tuple(mv$(argTypes)));
             }
@@ -9388,7 +9396,7 @@ auto ExprVisitorApply::visit(HIRExprNodeUnitVariant& node) -> void {
 
 auto ExprVisitorApply::visit(HIRExprNodeStructLiteral& node) -> void {
     this->checkTypeResolvedGenericpath(node.span(), node.realPath);
-    for (auto& ty : node.valueTypes) {
+    for (auto& ty : mutRange(node.valueTypes)) {
         if (ty != HIRTypeRef()) {
             this->checkTypeResolvedTop(node.span(), ty);
         }
@@ -9460,7 +9468,7 @@ auto ExprVisitorApply::visit(HIRExprNodeStructLiteral& node) -> void {
 
 auto ExprVisitorApply::visit(HIRExprNodeTupleVariant& node) -> void {
     this->checkTypeResolvedPp(node.span(), node.path.params, HIRTypeRef());
-    for (auto& ty : node.argTypes) {
+    for (auto& ty : mutRange(node.argTypes)) {
         if (ty != HIRTypeRef()) {
             this->checkTypeResolvedTop(node.span(), ty);
         }
@@ -9970,7 +9978,7 @@ auto ConstExprEquate::equateLiteral(const HIRExprNodeLiteral& left, const HIRExp
         case HIRExprLiteral::TAG_ByteString: {
             auto& l = left.data.as_ByteString();
             auto& r = right.data.as_ByteString();
-            return l == r;
+            return l.length() == r.length() && std::equal(l.begin(), l.end(), r.begin());
         }
     }
     UNREACHABLE();
@@ -10220,18 +10228,18 @@ auto ConstExprEquate::equate(const HIRConstGenericUnevaluated& left, const HIRCo
 
 auto AssociatedStallCollector::addType(HIRTypeRef type) -> void {
     if (type->hasTypeInfer()) {
-        pending.push_back(type);
+        pending.pushBack(type);
     }
 }
 
 auto AssociatedStallCollector::collect() -> void {
     while (!pending.empty() && !hasRawInfer) {
         const auto type = pending.back();
-        pending.pop_back();
+        pending.popBack();
         if (std::find(visited.begin(), visited.end(), type) != visited.end()) {
             continue;
         }
-        visited.push_back(type);
+        visited.pushBack(type);
 
         visitTyWith(type, [&](const HIRTypeData* inner) {
             const auto* infer = inner->opt_Infer();
@@ -10253,28 +10261,39 @@ auto AssociatedStallCollector::collect() -> void {
                     return dependency.index == resolvedInfer->index;
                 });
                 if (existing == dependencies.end()) {
-                    dependencies.push_back({resolvedInfer->index, resolved});
+                    dependencies.pushBack({resolvedInfer->index, resolved});
                 }
             } else if (resolved->hasTypeInfer()) {
-                pending.push_back(resolved);
+                pending.pushBack(resolved);
             }
             return false;
         });
     }
 }
 
-auto IvarDependencyIndex::collectDirectIvars(const HIRTypeData* type, std::vector<unsigned int>& out) -> void {
+auto IvarDependencyIndex::collectDirectIvars(const HIRTypeData* type, Vector<unsigned int>& out) -> void {
     visitTyWith(type, [&](const HIRTypeData* inner) {
         if (const auto* infer = inner->opt_Infer()) {
-            out.push_back(infer->index);
+            out.pushBack(infer->index);
         }
         return false;
     });
 }
 
-auto IvarDependencyIndex::deduplicate(std::vector<unsigned int>& values) -> void {
-    std::sort(values.begin(), values.end());
-    values.erase(std::unique(values.begin(), values.end()), values.end());
+auto IvarDependencyIndex::deduplicate(Vector<unsigned int>& values) -> void {
+    if (values.empty()) {
+        return;
+    }
+    std::sort(values.mutBegin(), values.mutEnd());
+    size_t write = 1;
+    for (size_t read = 1; read < values.length(); ++read) {
+        if (values[read] != values[write - 1]) {
+            values.mut(write++) = values[read];
+        }
+    }
+    while (values.length() > write) {
+        values.popBack();
+    }
 }
 
 IvarDependencyIndex::IvarDependencyIndex(Context& context)
@@ -10283,8 +10302,8 @@ IvarDependencyIndex::IvarDependencyIndex(Context& context)
     , possibilityTargets(context.possibleIvarVals.size())
 {
     for (const auto& rule : context.linkAssoc) {
-        std::vector<unsigned int> sources;
-        std::vector<unsigned int> targets;
+        Vector<unsigned int> sources;
+        Vector<unsigned int> targets;
         collectDirectIvars(rule.implTy, sources);
         if (rule.name != "") {
             collectDirectIvars(rule.leftTy, sources);
@@ -10298,14 +10317,14 @@ IvarDependencyIndex::IvarDependencyIndex(Context& context)
         deduplicate(targets);
         for (const auto source : sources) {
             if (source < associatedTargets.size()) {
-                associatedTargets[source].insert(associatedTargets[source].end(), targets.begin(), targets.end());
+                associatedTargets[source].append(targets.begin(), targets.end());
             }
         }
     }
 
     for (size_t target = 0; target < context.possibleIvarVals.size(); target++) {
         const auto& possible = context.possibleIvarVals[target];
-        std::vector<unsigned int> sources;
+        Vector<unsigned int> sources;
         for (const auto& type : possible.typesCoerceFrom) {
             collectDirectIvars(type.ty, sources);
         }
@@ -10318,7 +10337,7 @@ IvarDependencyIndex::IvarDependencyIndex(Context& context)
         deduplicate(sources);
         for (const auto source : sources) {
             if (source < possibilityTargets.size()) {
-                possibilityTargets[source].push_back(target);
+                possibilityTargets[source].pushBack(target);
             }
         }
     }
@@ -10350,22 +10369,23 @@ auto IvarDependencyIndex::disableDependents(unsigned int source) -> void {
     }
 }
 
-auto IvarCoercionIndex::collectIvars(const HIRTypeData* root, std::vector<unsigned int>& out) const -> void {
-    std::vector<HIRTypeRef> pending{root};
-    std::vector<HIRTypeRef> visited;
+auto IvarCoercionIndex::collectIvars(const HIRTypeData* root, Vector<unsigned int>& out) const -> void {
+    Vector<HIRTypeRef> pending;
+    pending.pushBack(root);
+    Vector<HIRTypeRef> visited;
     while (!pending.empty()) {
         const auto type = pending.back();
-        pending.pop_back();
+        pending.popBack();
         if (std::find(visited.begin(), visited.end(), type) != visited.end()) {
             continue;
         }
-        visited.push_back(type);
+        visited.pushBack(type);
         visitTyWith(type, [&](const HIRTypeData* inner) {
             if (const auto* infer = inner->opt_Infer()) {
-                out.push_back(infer->index);
+                out.pushBack(infer->index);
                 const auto& resolved = context.getType(inner);
                 if (resolved != inner) {
-                    pending.push_back(resolved);
+                    pending.pushBack(resolved);
                 }
             }
             return false;
@@ -10374,10 +10394,10 @@ auto IvarCoercionIndex::collectIvars(const HIRTypeData* root, std::vector<unsign
 }
 
 template <typename T>
-auto IvarCoercionIndex::addRefs(const std::vector<unsigned int>& dependencies, std::vector<T> IvarCoercionRefs::* member, T value) -> void {
+auto IvarCoercionIndex::addRefs(const Vector<unsigned int>& dependencies, Vector<T> IvarCoercionRefs::* member, T value) -> void {
     for (const auto index : dependencies) {
         if (index < refs.size()) {
-            (refs[index].*member).push_back(value);
+            (refs[index].*member).pushBack(value);
         }
     }
 }
@@ -10386,7 +10406,7 @@ IvarCoercionIndex::IvarCoercionIndex(const Context& context)
     : context(context)
     , refs(context.possibleIvarVals.size())
 {
-    std::vector<unsigned int> dependencies;
+    Vector<unsigned int> dependencies;
     for (const auto& bound : context.linkCoerce) {
         dependencies.clear();
         collectIvars(bound->leftTy, dependencies);
@@ -10781,11 +10801,11 @@ auto InfoOrdering::compare(const HIRTypeData* tyL, const HIRTypeData* tyR) -> eI
         case HIRTypeData::TAG_Tuple: {
             auto& le = (*tyL).as_Tuple();
             auto& re = (*tyR).as_Tuple();
-            if (le.size() != re.size()) {
+            if (le.length() != re.length()) {
                 return Incompatible;
             }
             int score = 0;
-            for (size_t i = 0; i < le.size(); i++) {
+            for (size_t i = 0; i < le.length(); i++) {
                 if (compareScore(score, le[i], re[i]) == Incompatible) {
                     return Incompatible;
                 }
@@ -11182,7 +11202,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeReturn& node) -> void {
     }
     this->context.addIvars(node.value->resType);
 
-    const auto* retTy = (this->closureRetTypes.size() > 0 ? this->closureRetTypes.back().retType : this->retType);
+    const auto* retTy = (!this->closureRetTypes.empty() ? this->closureRetTypes.back().retType : this->retType);
     this->context.equateTypesCoerce(node.span(), retTy, node.value);
 
     this->pushInnerCoerce(true);
@@ -11234,14 +11254,14 @@ auto ExprVisitorEnum::visit(HIRExprNodeUse& node) -> void {
 
 auto ExprVisitorEnum::visit(HIRExprNodeLoop& node) -> void {
     auto _ = this->pushInnerCoerceScoped(false);
-    this->loopBlocks.push_back(&node);
+    this->loopBlocks.pushBack(&node);
     node.diverges = true;
 
     this->context.addIvars(node.code->resType);
     this->context.equateTypes(node.span(), node.code->resType, this->context.crate.types.unit());
     node.code->visit(*this);
 
-    this->loopBlocks.pop_back();
+    this->loopBlocks.popBack();
 
     if (node.diverges) {
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
@@ -11253,18 +11273,21 @@ auto ExprVisitorEnum::visit(HIRExprNodeLoopControl& node) -> void {
     if (!node.isContinue) {
         HIRExprNodeLoop* loopNodePtr;
         if (node.label != "") {
-            auto it = std::find_if(this->loopBlocks.rbegin(), this->loopBlocks.rend(), [&](const auto& np) {
-                return np->label == node.label;
-            });
-            if (it == this->loopBlocks.rend()) {
+            loopNodePtr = nullptr;
+            for (size_t i = this->loopBlocks.length(); i-- > 0;) {
+                if (this->loopBlocks[i]->label == node.label) {
+                    loopNodePtr = this->loopBlocks[i];
+                    break;
+                }
+            }
+            if (!loopNodePtr) {
                 ERROR(node.span(), E0000, StringView("Could not find loop '") << node.label << StringView(" for break"));
             }
-            loopNodePtr = &**it;
         } else {
             loopNodePtr = nullptr;
-            for (auto it = this->loopBlocks.rbegin(); it != this->loopBlocks.rend(); ++it) {
-                if (!(*it)->requireLabel) {
-                    loopNodePtr = *it;
+            for (size_t i = this->loopBlocks.length(); i-- > 0;) {
+                if (!this->loopBlocks[i]->requireLabel) {
+                    loopNodePtr = this->loopBlocks[i];
                     break;
                 }
             }
@@ -11896,12 +11919,12 @@ auto ExprVisitorEnum::visit(HIRExprNodeTupleVariant& node) -> void {
 
     applyBoundsAsRules(this->context, sp, *generics, monomorphCb, /*is_impl_level=*/true);
 
-    node.argTypes.resize(node.args.size());
+    node.argTypes.zero(node.args.size());
     for (unsigned int i = 0; i < node.args.size(); i++) {
         const auto& desTyR = fields[i].ent;
         const auto* desTy = &desTyR;
         if (monomorphiseTypeNeeded(desTyR)) {
-            node.argTypes[i] = monomorphCb.monomorphType(sp, desTyR);
+            node.argTypes.mut(i) = monomorphCb.monomorphType(sp, desTyR);
             desTy = &node.argTypes[i];
         }
 
@@ -12045,7 +12068,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
 
     auto monomorphCb = MonomorphStatePtr(this->context.crate.types, ty, &tyPath.params, nullptr);
 
-    node.valueTypes.resize(fields.size());
+    node.valueTypes.zero(fields.size());
 
     for (auto& val : node.values) {
         const auto& name = val.first;
@@ -12054,7 +12077,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
         });
         ASSERT_BUG(node.span(), it != fields.end(), StringView("Field '") << name << StringView("' not found in struct ") << tyPath);
         const auto& desTyR = it->ty;
-        auto& desTyCache = node.valueTypes[it - fields.begin()];
+        auto& desTyCache = node.valueTypes.mut(it - fields.begin());
         const auto* desTy = &desTyR;
 
         DEBUG(name << StringView(" : ") << desTyR);
@@ -12129,8 +12152,8 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallPath& node) -> void {
 
     const bool cacheOk = visitCallPopulateCache(this->context, node.span(), node.path, node.cache);
     if (cacheOk) {
-        BUG_ASSERT(node.cache.argTypes.size() >= 1);
-        unsigned int expArgc = node.cache.argTypes.size() - 1;
+        BUG_ASSERT(node.cache.argTypes.length() >= 1);
+        unsigned int expArgc = node.cache.argTypes.length() - 1;
 
         if (node.args.size() != expArgc) {
             if (node.cache.fcn->variadic && node.args.size() > expArgc) {
@@ -12141,7 +12164,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallPath& node) -> void {
 
         // TODO: Figure out a way to disable coercions in desugared for loops (will speed up typecheck)
 
-        for (unsigned int i = 0; i < node.cache.argTypes.size() - 1; i++) {
+        for (unsigned int i = 0; i < node.cache.argTypes.length() - 1; i++) {
             this->context.equateTypesCoerce(node.span(), node.cache.argTypes[i], node.args[i]);
         }
         this->context.equateTypes(node.span(), node.resType, node.cache.argTypes.back());
@@ -12165,7 +12188,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallValue& node) -> void {
     this->context.addIvars(node.value->resType);
     for (auto& val : node.args) {
         this->context.addIvars(val->resType);
-        node.argIvars.push_back(this->context.ivars.newIvarTr());
+        node.argIvars.pushBack(this->context.ivars.newIvarTr());
     }
 
     {
@@ -12249,12 +12272,12 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallMethod& node) -> void {
     }
     node.traits = mv$(possibleTraits);
     node.traitParamTypeIvars = maxNumParams;
-    node.traitParamIvars.reserve(maxNumParams + maxNumValueParams);
+    node.traitParamIvars.grow(maxNumParams + maxNumValueParams);
     for (unsigned int i = 0; i < maxNumParams; i++) {
-        node.traitParamIvars.push_back(this->context.ivars.newIvar());
+        node.traitParamIvars.pushBack(this->context.ivars.newIvar());
     }
     for (unsigned int i = 0; i < maxNumValueParams; i++) {
-        node.traitParamIvars.push_back(this->context.ivars.newIvarVal());
+        node.traitParamIvars.pushBack(this->context.ivars.newIvarVal());
     }
 
     {
@@ -12294,28 +12317,28 @@ auto ExprVisitorEnum::visit(HIRExprNodeTuple& node) -> void {
         DEBUG(StringView("Tuple inner coerce"));
         const auto& ty = this->context.getType(node.resType);
         if (const auto* e = ty->opt_Tuple()) {
-            if (e->size() != node.vals.size()) {
+            if (e->length() != node.vals.size()) {
                 ERROR(node.span(), E0000, StringView("Tuple literal node count mismatches with return type"));
             }
         } else if (ty->is_Infer()) {
-            std::vector<HIRTypeRef> tupleTys;
+            Vector<HIRTypeRef> tupleTys;
             for (const auto& val : node.vals) {
-                tupleTys.push_back(this->context.ivars.newIvarTr());
+                tupleTys.pushBack(this->context.ivars.newIvarTr());
             }
             this->context.equateTypes(node.span(), node.resType, this->context.crate.types.tuple(mv$(tupleTys)));
         } else {
             ERROR(node.span(), E0000, StringView("Tuple literal used where a non-tuple expected - ") << ty);
         }
         const auto& innerTys = this->context.getType(node.resType)->as_Tuple();
-        BUG_ASSERT(innerTys.size() == node.vals.size());
+        BUG_ASSERT(innerTys.length() == node.vals.size());
 
-        for (unsigned int i = 0; i < innerTys.size(); i++) {
+        for (unsigned int i = 0; i < innerTys.length(); i++) {
             this->context.equateTypesCoerce(node.span(), innerTys[i], node.vals[i]);
         }
     } else {
-        std::vector<HIRTypeRef> tupleTys;
+        Vector<HIRTypeRef> tupleTys;
         for (const auto& val : node.vals) {
-            tupleTys.push_back(val->resType);
+            tupleTys.pushBack(val->resType);
         }
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.tuple(mv$(tupleTys)));
     }
@@ -12406,7 +12429,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeLiteral& node) -> void {
             auto& e = node.data.as_ByteString();
             // TODO: &'static
             DEBUG(StringView("_Literal (&[u8])"));
-            ty = this->context.crate.types.borrow(HIRBorrowType::Shared, this->context.crate.types.array(this->context.crate.types.primitive(HIRCoreType::U8), e.size()));
+            ty = this->context.crate.types.borrow(HIRBorrowType::Shared, this->context.crate.types.array(this->context.crate.types.primitive(HIRCoreType::U8), e.length()));
             break;
         }
         case HIRExprLiteral::TAG_CString: {
@@ -12565,9 +12588,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeClosure& node) -> void {
     this->context.addIvars(node.returnType);
     this->context.addIvars(node.code->resType);
 
-    std::vector<HIRTypeRef> argTypes;
+    Vector<HIRTypeRef> argTypes;
     for (auto& arg : node.args) {
-        argTypes.push_back(arg.second);
+        argTypes.pushBack(arg.second);
     }
     this->context.equateTypes(node.span(), node.resType, this->context.crate.types.closure(&node));
 
@@ -12576,9 +12599,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeClosure& node) -> void {
     auto savedLoops = std::move(this->loopBlocks);
 
     auto _ = this->pushInnerCoerceScoped(true);
-    this->closureRetTypes.push_back(RetTarget(node.returnType));
+    this->closureRetTypes.pushBack(RetTarget(node.returnType));
     node.code->visit(*this);
-    this->closureRetTypes.pop_back();
+    this->closureRetTypes.popBack();
 
     this->loopBlocks = std::move(savedLoops);
 }
@@ -12598,9 +12621,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeGenerator& node) -> void {
     this->context.equateTypesCoerce(node.span(), node.returnType, node.code);
     // TODO: Save/clear/restore loop labels
     auto _ = this->pushInnerCoerceScoped(true);
-    this->closureRetTypes.push_back(RetTarget(node.returnType, node.resumeTy, node.yieldTy));
+    this->closureRetTypes.pushBack(RetTarget(node.returnType, node.resumeTy, node.yieldTy));
     node.code->visit(*this);
-    this->closureRetTypes.pop_back();
+    this->closureRetTypes.popBack();
 }
 
 auto ExprVisitorEnum::visit(HIRExprNodeGeneratorWrapper& node) -> void {
@@ -12621,12 +12644,12 @@ auto ExprVisitorEnum::visit(HIRExprNodeAsyncBlock& node) -> void {
     auto _ = this->pushInnerCoerceScoped(true);
     if (node.isAsyncGen) {
         this->context.addIvars(node.yieldTy);
-        this->closureRetTypes.push_back(RetTarget(node.returnType, this->context.crate.types.unit(), node.yieldTy));
+        this->closureRetTypes.pushBack(RetTarget(node.returnType, this->context.crate.types.unit(), node.yieldTy));
     } else {
-        this->closureRetTypes.push_back(RetTarget(node.returnType));
+        this->closureRetTypes.pushBack(RetTarget(node.returnType));
     }
     node.code->visit(*this);
-    this->closureRetTypes.pop_back();
+    this->closureRetTypes.popBack();
 }
 
 auto ExprVisitorEnum::nodeDiverges(const HIRExprNode& node) const -> bool {
@@ -12679,23 +12702,23 @@ auto ExprVisitorEnum::visitPath(const Span& sp, HIRPath& path) -> void {
 
 auto ExprVisitorEnum::pushInnerCoerceScoped(bool val) -> InnerCoerceGuard {
     DEBUG(StringView("inner_coerce PUSH (S) ") << val);
-    this->innerCoerceEnabledStack.push_back(val);
+    this->innerCoerceEnabledStack.pushBack(val);
     return InnerCoerceGuard(*this);
 }
 
 auto ExprVisitorEnum::pushInnerCoerce(bool val) -> void {
     DEBUG(StringView("inner_coerce PUSH ") << val);
-    this->innerCoerceEnabledStack.push_back(val);
+    this->innerCoerceEnabledStack.pushBack(val);
 }
 
 auto ExprVisitorEnum::popInnerCoerce() -> void {
-    BUG_ASSERT(this->innerCoerceEnabledStack.size());
-    this->innerCoerceEnabledStack.pop_back();
+    BUG_ASSERT(this->innerCoerceEnabledStack.length());
+    this->innerCoerceEnabledStack.popBack();
     DEBUG(StringView("inner_coerce POP ") << canCoerceInnerResult());
 }
 
 auto ExprVisitorEnum::canCoerceInnerResult() const -> bool {
-    if (this->innerCoerceEnabledStack.size() == 0) {
+    if (this->innerCoerceEnabledStack.length() == 0) {
         return true;
     } else {
         return this->innerCoerceEnabledStack.back();
@@ -12765,7 +12788,7 @@ ExprVisitorEnum::InnerCoerceGuard::InnerCoerceGuard(ExprVisitorEnum& t)
 }
 
 ExprVisitorEnum::InnerCoerceGuard::~InnerCoerceGuard() {
-    t.innerCoerceEnabledStack.pop_back();
+    t.innerCoerceEnabledStack.popBack();
     DEBUG(StringView("inner_coerce POP (S) ") << t.canCoerceInnerResult());
 }
 
