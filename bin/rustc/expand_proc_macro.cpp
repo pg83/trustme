@@ -320,7 +320,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
         mainFn.setCode(mv$(callNode));
     }
 
-    std::vector<ASTExprNodeP> testNodes;
+    std::vector<ASTExprNode*> testNodes;
 
     for (const auto& desc : crate.procMacros) {
         const char* typeName = "SingleStream";
@@ -340,7 +340,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     auto testsArray = makeAstExprNode<ASTExprNodeArray>(*crate.pool, mv$(testNodes));
 
     size_t testCount = static_cast<ASTExprNodeArray&>(*testsArray).values.size();
-    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), makeAstExprNode<ASTExprNodeInteger>(*crate.pool, U128(testCount), CORETYPE_UINT).release()), ASTExpr(mv$(testsArray))};
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), makeAstExprNode<ASTExprNodeInteger>(*crate.pool, U128(testCount), CORETYPE_UINT)), ASTExpr(testsArray)};
 
     Vector<RcString> modulePath;
     modulePath.pushBack(RcString::newInterned("proc_macro#"));

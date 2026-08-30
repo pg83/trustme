@@ -342,7 +342,7 @@ namespace {
             case MacroPatEnt::PAT_TYPE:
                 return InterpolatedFragment(ParseType(lex));
             case MacroPatEnt::PAT_EXPR:
-                return InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release());
+                return InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex));
             case MacroPatEnt::PAT_STMT:
                 if (stmtIsItem) {
                     if (lex.lookahead(0) == TOK_INTERPOLATED_STMT_ITEM) {
@@ -357,7 +357,7 @@ namespace {
                     auto attrs = ParseItemAttrs(lex);
                     auto stmt = ParseStmt(lex);
                     stmt->setAttrs(mv$(attrs));
-                    return InterpolatedFragment(InterpolatedFragment::STMT, stmt.release());
+                    return InterpolatedFragment(InterpolatedFragment::STMT, stmt);
                 }
             case MacroPatEnt::PAT_PATH:
                 // HACK for `rustc-1.90.0-src/vendor/icu_locid_transform_data-1.5.0/data/macros.rs::23`
@@ -371,7 +371,7 @@ namespace {
                     return InterpolatedFragment(ParsePath(lex, PATH_GENERIC_TYPE), std::move(span));
                 }
             case MacroPatEnt::PAT_BLOCK:
-                return InterpolatedFragment(InterpolatedFragment::BLOCK, ParseExprBlockNode(lex).release());
+                return InterpolatedFragment(InterpolatedFragment::BLOCK, ParseExprBlockNode(lex));
             case MacroPatEnt::PAT_META:
                 return InterpolatedFragment(ParseMetaItem(lex));
             case MacroPatEnt::PAT_ITEM: {

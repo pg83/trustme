@@ -138,7 +138,7 @@ namespace {
 
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
+        ASTExprNode* handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const override;
     };
 
     struct CHandlerUnsafe: public ExpandDecorator {
@@ -228,13 +228,13 @@ namespace {
     };
 
     struct DeriverDebug: public Deriver {
-        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const;
 
         const char* traitName() const override;
 
-        static ASTExprNodeP callPath(ASTPath path, const char* method, std::vector<ASTExprNodeP> args);
+        static ASTExprNode* callPath(ASTPath path, const char* method, std::vector<ASTExprNode*> args);
 
-        static ASTExprNodeP builderRef(ASTType* type);
+        static ASTExprNode* builderRef(ASTType* type);
 
         static ASTPattern builderPattern(const Span& sp);
 
@@ -244,11 +244,11 @@ namespace {
     };
 
     struct DeriverInnerCompare: public Deriver {
-        virtual ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const = 0;
-        virtual ASTExprNodeP compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const = 0;
-        virtual ASTExprNodeP equalValue(ASTType* type, Span sp, const RcString& coreName) const = 0;
-        virtual ASTExprNodeP enumMismatch(ASTType* type, Span sp, const RcString& coreName) const = 0;
-        virtual ASTExprNodeP compareFieldlessEnum(ASTType* type, Span sp, const RcString& coreName) const;
+        virtual ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const = 0;
+        virtual ASTExprNode* compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNode* v1, ASTExprNode* v2) const = 0;
+        virtual ASTExprNode* equalValue(ASTType* type, Span sp, const RcString& coreName) const = 0;
+        virtual ASTExprNode* enumMismatch(ASTType* type, Span sp, const RcString& coreName) const = 0;
+        virtual ASTExprNode* compareFieldlessEnum(ASTType* type, Span sp, const RcString& coreName) const;
 
         ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
@@ -256,27 +256,27 @@ namespace {
     };
 
     struct DeriverPartialEq: public DeriverInnerCompare {
-        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const override;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const override;
 
-        ASTExprNodeP compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override;
+        ASTExprNode* compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNode* v1, ASTExprNode* v2) const override;
 
-        ASTExprNodeP equalValue(ASTType* type, Span sp, const RcString& coreName) const override;
+        ASTExprNode* equalValue(ASTType* type, Span sp, const RcString& coreName) const override;
 
-        ASTExprNodeP enumMismatch(ASTType* type, Span sp, const RcString& coreName) const override;
+        ASTExprNode* enumMismatch(ASTType* type, Span sp, const RcString& coreName) const override;
 
-        ASTExprNodeP compareFieldlessEnum(ASTType* type, Span sp, const RcString& coreName) const override;
+        ASTExprNode* compareFieldlessEnum(ASTType* type, Span sp, const RcString& coreName) const override;
 
         const char* traitName() const override;
     };
 
     struct DeriverPartialOrd: public DeriverInnerCompare {
-        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const override;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const override;
 
-        ASTExprNodeP compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override;
+        ASTExprNode* compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNode* v1, ASTExprNode* v2) const override;
 
-        ASTExprNodeP equalValue(ASTType* type, Span sp, const RcString& coreName) const override;
+        ASTExprNode* equalValue(ASTType* type, Span sp, const RcString& coreName) const override;
 
-        ASTExprNodeP enumMismatch(ASTType* type, Span sp, const RcString& coreName) const override;
+        ASTExprNode* enumMismatch(ASTType* type, Span sp, const RcString& coreName) const override;
 
         const char* traitName() const override;
     };
@@ -284,13 +284,13 @@ namespace {
     struct DeriverEq: public Deriver {
         ASTPath getTraitPath(const RcString& coreName) const;
 
-        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const;
 
-        ASTExprNodeP assertIsEq(const ASTPath& methodPath, ASTExprNodeP val) const;
+        ASTExprNode* assertIsEq(const ASTPath& methodPath, ASTExprNode* val) const;
 
-        ASTExprNodeP field(ObjPool& pool, const std::string& name) const;
+        ASTExprNode* field(ObjPool& pool, const std::string& name) const;
 
-        ASTExprNodeP field(ObjPool& pool, const RcString& name) const;
+        ASTExprNode* field(ObjPool& pool, const RcString& name) const;
 
         const char* traitName() const override;
 
@@ -302,13 +302,13 @@ namespace {
     };
 
     struct DeriverOrd: public DeriverInnerCompare {
-        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const override;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const override;
 
-        ASTExprNodeP compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override;
+        ASTExprNode* compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNode* v1, ASTExprNode* v2) const override;
 
-        ASTExprNodeP equalValue(ASTType* type, Span sp, const RcString& coreName) const override;
+        ASTExprNode* equalValue(ASTType* type, Span sp, const RcString& coreName) const override;
 
-        ASTExprNodeP enumMismatch(ASTType* type, Span sp, const RcString& coreName) const override;
+        ASTExprNode* enumMismatch(ASTType* type, Span sp, const RcString& coreName) const override;
 
         const char* traitName() const override;
     };
@@ -318,15 +318,15 @@ namespace {
 
         ASTPath getMethodPath(const RcString& coreName) const;
 
-        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const;
 
-        ASTExprNodeP cloneValRef(const RcString& coreName, ASTExprNodeP val) const;
+        ASTExprNode* cloneValRef(const RcString& coreName, ASTExprNode* val) const;
 
-        ASTExprNodeP cloneValDirect(const RcString& coreName, ASTExprNodeP val) const;
+        ASTExprNode* cloneValDirect(const RcString& coreName, ASTExprNode* val) const;
 
-        ASTExprNodeP field(ObjPool& pool, const RcString& name) const;
+        ASTExprNode* field(ObjPool& pool, const RcString& name) const;
 
-        ASTExprNodeP field(ObjPool& pool, const std::string& name) const;
+        ASTExprNode* field(ObjPool& pool, const std::string& name) const;
 
         const char* traitName() const override;
 
@@ -342,7 +342,7 @@ namespace {
     struct DeriverCopy: public Deriver {
         ASTPath getTraitPath(const RcString& coreName) const;
 
-        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const;
 
         const char* traitName() const override;
 
@@ -358,9 +358,9 @@ namespace {
 
         ASTPath getMethodPath(ObjPool& pool, const RcString& coreName) const;
 
-        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node, bool boundTypeParams = true) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node, bool boundTypeParams = true) const;
 
-        ASTExprNodeP defaultCall(ObjPool& pool, const RcString& coreName) const;
+        ASTExprNode* defaultCall(ObjPool& pool, const RcString& coreName) const;
 
         const char* traitName() const override;
 
@@ -376,15 +376,15 @@ namespace {
 
         ASTPath getMethodPath(const RcString& coreName) const;
 
-        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const;
 
-        ASTExprNodeP hashValRef(const RcString& coreName, ASTExprNodeP val) const;
+        ASTExprNode* hashValRef(const RcString& coreName, ASTExprNode* val) const;
 
-        ASTExprNodeP hashValDirect(const RcString& coreName, ASTExprNodeP val) const;
+        ASTExprNode* hashValDirect(const RcString& coreName, ASTExprNode* val) const;
 
-        ASTExprNodeP field(ObjPool& pool, const RcString& name) const;
+        ASTExprNode* field(ObjPool& pool, const RcString& name) const;
 
-        ASTExprNodeP field(ObjPool& pool, const std::string& name) const;
+        ASTExprNode* field(ObjPool& pool, const std::string& name) const;
 
         const char* traitName() const override;
 
@@ -402,19 +402,19 @@ namespace {
 
         ASTPath getMethodPath() const;
 
-        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const;
 
-        ASTExprNodeP encValDirect(ASTExprNodeP val) const;
+        ASTExprNode* encValDirect(ASTExprNode* val) const;
 
-        ASTExprNodeP encValRef(ASTExprNodeP val) const;
+        ASTExprNode* encValRef(ASTExprNode* val) const;
 
-        ASTExprNodeP field(ObjPool& pool, const RcString& name) const;
+        ASTExprNode* field(ObjPool& pool, const RcString& name) const;
 
-        ASTExprNodeP field(ObjPool& pool, std::string name) const;
+        ASTExprNode* field(ObjPool& pool, std::string name) const;
 
-        ASTExprNodeP encClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const;
+        ASTExprNode* encClosure(ObjPool& pool, Span sp, ASTExprNode* code) const;
 
-        ASTExprNodeP getValOk(ObjPool& pool, const RcString& coreName) const;
+        ASTExprNode* getValOk(ObjPool& pool, const RcString& coreName) const;
 
         const char* traitName() const override;
 
@@ -430,19 +430,19 @@ namespace {
 
         ASTPath getMethodPath() const;
 
-        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const;
+        ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const;
 
-        ASTExprNodeP decVal(ObjPool& pool) const;
+        ASTExprNode* decVal(ObjPool& pool) const;
 
-        ASTExprNodeP field(ObjPool& pool, const std::string& name) const;
+        ASTExprNode* field(ObjPool& pool, const std::string& name) const;
 
-        ASTExprNodeP decClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const;
+        ASTExprNode* decClosure(ObjPool& pool, Span sp, ASTExprNode* code) const;
 
-        ASTExprNodeP getValErrStr(ObjPool& pool, const RcString& coreName, std::string errStr) const;
+        ASTExprNode* getValErrStr(ObjPool& pool, const RcString& coreName, std::string errStr) const;
 
-        ASTExprNodeP getValOk(const RcString& coreName, ASTExprNodeP inner) const;
+        ASTExprNode* getValOk(const RcString& coreName, ASTExprNode* inner) const;
 
-        ASTExprNodeP getValOkUnit(ObjPool& pool, const RcString& coreName) const;
+        ASTExprNode* getValOkUnit(ObjPool& pool, const RcString& coreName) const;
 
         const char* traitName() const override;
 
@@ -623,7 +623,7 @@ namespace {
 
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
 
-        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
+        ASTExprNode* handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const override;
 
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override;
 
@@ -687,7 +687,7 @@ namespace {
 
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
+        ASTExprNode* handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const override;
     };
 
     struct CHandlerRustcOnUnimiplemented: public ExpandDecorator {
@@ -699,7 +699,7 @@ namespace {
     struct CHandlerRustBox: public ExpandDecorator {
         AttrStage stage() const override;
 
-        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
+        ASTExprNode* handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const override;
     };
 
     struct CMultiHandlerStability: public ExpandDecorator {
@@ -854,13 +854,13 @@ namespace {
 
     static ASTExprNodeBlock* newBlock(ObjPool& pool, const Span& sp) {
         auto node = makeAstExprNode<ASTExprNodeBlock>(pool);
-        auto* rv = static_cast<ASTExprNodeBlock*>(node.release());
+        auto* rv = static_cast<ASTExprNodeBlock*>(node);
         rv->setSpan(sp);
         return rv;
     }
 
-    static inline ASTExprNodeP mkExprnodep(ASTExprNode* en) {
-        return ASTExprNodeP(en);
+    static inline ASTExprNode* mkExprnodep(ASTExprNode* en) {
+        return en;
     }
 
 #define NEWNODE(nodeType, ...) makeAstExprNode<ASTExprNode##nodeType>(*type->pool __VA_OPT__(, ) __VA_ARGS__)
@@ -1852,8 +1852,9 @@ void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireB
     unexpected(sp, mi, "enum variant");
 }
 
-void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const {
+ASTExprNode* ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const {
     unexpected(sp, mi, "expression");
+    return expr;
 }
 
 void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const {
@@ -2167,7 +2168,7 @@ auto CHandlerRustcLayoutScalarValidRangeStart::handle(const Span& sp, const ASTA
         lex.parseState().wb = &wb;
         lex.getTokenCheck(TOK_PAREN_OPEN);
         auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
-        auto* np = cast<ASTExprNodeInteger>(n.get());
+        auto* np = cast<ASTExprNodeInteger>(n);
         ASSERT_BUG(n->span(), np, StringView("#[rustc_layout_scalar_valid_range_start] requires an integer - got ") << FMT_CB(ss, n->print(ss)));
         lex.getTokenCheck(TOK_PAREN_CLOSE);
         lex.getTokenCheck(TOK_EOF);
@@ -2191,7 +2192,7 @@ auto CHandlerRustcLayoutScalarValidRangeEnd::handle(const Span& sp, const ASTAtt
         lex.parseState().wb = &wb;
         lex.getTokenCheck(TOK_PAREN_OPEN);
         auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
-        auto* np = cast<ASTExprNodeInteger>(n.get());
+        auto* np = cast<ASTExprNodeInteger>(n);
         ASSERT_BUG(n->span(), np, StringView("#[rustc_layout_scalar_valid_range_end] requires an integer - got ") << FMT_CB(ss, n->print(ss)));
         lex.getTokenCheck(TOK_PAREN_CLOSE);
         lex.getTokenCheck(TOK_EOF);
@@ -2403,12 +2404,13 @@ auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const W
     }
 }
 
-auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
-    if (auto* n = cast<ASTExprNodeClosure>(expr.get())) {
+auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const -> ASTExprNode* {
+    if (auto* n = cast<ASTExprNodeClosure>(expr)) {
         n->trackCaller = true;
     } else {
         ERROR(sp, E0000, StringView("#[track_caller] on non-function"));
     }
+    return expr;
 }
 
 auto CHandlerUnsafe::stage() const -> AttrStage {
@@ -2831,7 +2833,7 @@ auto Deriver::addFieldBound(Vector<ASTType*>& outList, ASTType* type) const -> v
     outList.pushBack(type->clone());
 }
 
-auto DeriverDebug::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+auto DeriverDebug::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const -> ASTImpl {
     const ASTPath debugTrait = getPath(coreName, "fmt", "Debug");
 
     ASTFunction fcn(sp, mkType(*type->pool, sp, getPath(coreName, "fmt", "Result")), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("f")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, getPath(coreName, "fmt", "Formatter"))))));
@@ -2848,12 +2850,12 @@ auto DeriverDebug::traitName() const -> const char* {
     return "Debug";
 }
 
-auto DeriverDebug::callPath(ASTPath path, const char* method, std::vector<ASTExprNodeP> args) -> ASTExprNodeP {
+auto DeriverDebug::callPath(ASTPath path, const char* method, std::vector<ASTExprNode*> args) -> ASTExprNode* {
     auto& pool = args.front()->pool();
     return makeAstExprNode<ASTExprNodeCallPath>(pool, path + RcString::newInterned(method), mv$(args));
 }
 
-auto DeriverDebug::builderRef(ASTType* type) -> ASTExprNodeP {
+auto DeriverDebug::builderRef(ASTType* type) -> ASTExprNode* {
     return NEWNODE(UniOp, ASTExprNodeUniOp::REFMUT, NEWNODE(NamedValue, ASTPath(RcString::newInterned("s"))));
 }
 
@@ -2867,7 +2869,7 @@ auto DeriverDebug::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
     const ASTPath pathDebugStruct = getPath(opts.coreName, "fmt", "DebugStruct");
     const ASTPath pathDebugTuple = getPath(opts.coreName, "fmt", "DebugTuple");
 
-    ASTExprNodeP node;
+    ASTExprNode* node = nullptr;
     if (opts.fmtDebug != Settings::FmtDebug::Full) {
         const char* text = opts.fmtDebug == Settings::FmtDebug::Shallow ? name.c_str() : "";
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, std::string(text)))));
@@ -2917,7 +2919,7 @@ auto DeriverDebug::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
 
     std::vector<ASTExprNodeMatchArm> arms;
     for (const auto& v : enm.variants()) {
-        ASTExprNodeP code;
+        ASTExprNode* code = nullptr;
         ASTPattern patA;
 
         ASTPath variantPath = basePath + v.name;
@@ -2986,12 +2988,12 @@ auto DeriverDebug::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
 
         arms.push_back(ASTExprNodeMatchArm(mv$(pats), {}, mv$(code)));
     }
-    ASTExprNodeP node = NEWNODE(Match, NEWNODE(NamedValue, ASTPath(RcString("self"))), mv$(arms));
+    ASTExprNode* node = NEWNODE(Match, NEWNODE(NamedValue, ASTPath(RcString("self"))), mv$(arms));
 
     return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), mv$(node));
 }
 
-auto DeriverInnerCompare::compareFieldlessEnum(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNodeP {
+auto DeriverInnerCompare::compareFieldlessEnum(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNode* {
     return this->enumMismatch(type, sp, coreName);
 }
 
@@ -3036,7 +3038,7 @@ auto DeriverInnerCompare::handleItem(Span sp, const DeriveOpts& opts, const ASTG
     std::vector<ASTExprNodeMatchArm> arms;
 
     for (const auto& v : enm.variants()) {
-        ASTExprNodeP code;
+        ASTExprNode* code = nullptr;
         ASTPattern patA;
         ASTPattern patB;
         auto variantPath = basePath + v.name;
@@ -3097,13 +3099,13 @@ auto DeriverInnerCompare::handleItem(Span sp, const DeriveOpts& opts, const ASTG
         arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern()), {}, this->enumMismatch(type, sp, opts.coreName)));
     }
 
-    std::vector<ASTExprNodeP> vals;
+    std::vector<ASTExprNode*> vals;
     vals.push_back(NEWNODE(NamedValue, ASTPath(RcString("self"))));
     vals.push_back(NEWNODE(NamedValue, ASTPath(RcString("v"))));
     return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(Tuple, mv$(vals)), mv$(arms)));
 }
 
-auto DeriverPartialEq::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+auto DeriverPartialEq::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const -> ASTImpl {
     const ASTPath traitPath = getPath(coreName, "cmp", "PartialEq");
 
     ASTFunction fcn(sp, mkType(*type->pool, sp, CORETYPE_BOOL), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("v")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
@@ -3116,21 +3118,21 @@ auto DeriverPartialEq::makeRet(Span sp, const RcString& coreName, const ASTGener
     return mv$(rv);
 }
 
-auto DeriverPartialEq::compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const -> ASTExprNodeP {
+auto DeriverPartialEq::compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNode* v1, ASTExprNode* v2) const -> ASTExprNode* {
     std::vector<ASTExprNodeIf::Arm> arms;
     arms.push_back(ASTExprNodeIf::Arm{makeVec1(ASTIfLetCondition{{}, NEWNODE(BinOp, ASTExprNodeBinOp::CMPNEQU, mv$(v1), mv$(v2))}), NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(Bool, false))});
     return NEWNODE(If, std::move(arms), nullptr);
 }
 
-auto DeriverPartialEq::equalValue(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNodeP {
+auto DeriverPartialEq::equalValue(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNode* {
     return NEWNODE(Bool, true);
 }
 
-auto DeriverPartialEq::enumMismatch(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNodeP {
+auto DeriverPartialEq::enumMismatch(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNode* {
     return NEWNODE(Bool, false);
 }
 
-auto DeriverPartialEq::compareFieldlessEnum(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNodeP {
+auto DeriverPartialEq::compareFieldlessEnum(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNode* {
     auto discriminant = [&](const RcString& value) {
         return NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(value))));
     };
@@ -3141,7 +3143,7 @@ auto DeriverPartialEq::traitName() const -> const char* {
     return "PartialEq";
 }
 
-auto DeriverPartialOrd::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+auto DeriverPartialOrd::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const -> ASTImpl {
     const ASTPath traitPath = getPath(coreName, "cmp", "PartialOrd");
     const ASTPath pathOrdering = getPath(coreName, "cmp", "Ordering");
 
@@ -3158,15 +3160,15 @@ auto DeriverPartialOrd::makeRet(Span sp, const RcString& coreName, const ASTGene
     return mv$(rv);
 }
 
-auto DeriverPartialOrd::compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const -> ASTExprNodeP {
-    return NEWNODE(Match, NEWNODE(CallPath, getPath(coreName, "cmp", "PartialOrd", "partial_cmp"), ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v1)), NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v2)))), ::makeVec3(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), sp, getPath(coreName, "option", "Option", "None"))), {}, NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(NamedValue, getPath(coreName, "option", "Option", "None")))), ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), sp, getPath(coreName, "option", "Option", "Some"), ::makeVec1(ASTPattern(ASTPattern::TagValue(), sp, getPath(coreName, "cmp", "Ordering", "Equal"))))), {}, NEWNODE(Tuple, std::vector<ASTExprNodeP>())), ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), sp, RcString("res"))), {}, NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(NamedValue, ASTPath(RcString("res")))))));
+auto DeriverPartialOrd::compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNode* v1, ASTExprNode* v2) const -> ASTExprNode* {
+    return NEWNODE(Match, NEWNODE(CallPath, getPath(coreName, "cmp", "PartialOrd", "partial_cmp"), ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v1)), NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v2)))), ::makeVec3(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), sp, getPath(coreName, "option", "Option", "None"))), {}, NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(NamedValue, getPath(coreName, "option", "Option", "None")))), ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), sp, getPath(coreName, "option", "Option", "Some"), ::makeVec1(ASTPattern(ASTPattern::TagValue(), sp, getPath(coreName, "cmp", "Ordering", "Equal"))))), {}, NEWNODE(Tuple, std::vector<ASTExprNode*>())), ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), sp, RcString("res"))), {}, NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(NamedValue, ASTPath(RcString("res")))))));
 }
 
-auto DeriverPartialOrd::equalValue(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNodeP {
+auto DeriverPartialOrd::equalValue(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNode* {
     return NEWNODE(CallPath, getPath(coreName, "option", "Option", "Some"), ::makeVec1(NEWNODE(NamedValue, getPath(coreName, "cmp", "Ordering", "Equal"))));
 }
 
-auto DeriverPartialOrd::enumMismatch(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNodeP {
+auto DeriverPartialOrd::enumMismatch(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNode* {
     return NEWNODE(CallPath, getPath(coreName, "cmp", "PartialOrd", "partial_cmp"), ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(RcString("self")))))), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(RcString("v"))))))));
 }
 
@@ -3178,7 +3180,7 @@ auto DeriverEq::getTraitPath(const RcString& coreName) const -> ASTPath {
     return getPath(coreName, "cmp", "Eq");
 }
 
-auto DeriverEq::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+auto DeriverEq::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const -> ASTImpl {
     const ASTPath traitPath = this->getTraitPath(coreName);
 
     ASTFunction fcn(sp, mkType(*type->pool, ASTTypeTags::Unit(), sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
@@ -3191,16 +3193,16 @@ auto DeriverEq::makeRet(Span sp, const RcString& coreName, const ASTGenericParam
     return mv$(rv);
 }
 
-auto DeriverEq::assertIsEq(const ASTPath& methodPath, ASTExprNodeP val) const -> ASTExprNodeP {
+auto DeriverEq::assertIsEq(const ASTPath& methodPath, ASTExprNode* val) const -> ASTExprNode* {
     auto& pool = val->pool();
     return makeAstExprNode<ASTExprNodeCallPath>(pool, ASTPath(methodPath), vec$(makeAstExprNode<ASTExprNodeUniOp>(pool, ASTExprNodeUniOp::REF, mv$(val))));
 }
 
-auto DeriverEq::field(ObjPool& pool, const std::string& name) const -> ASTExprNodeP {
+auto DeriverEq::field(ObjPool& pool, const std::string& name) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeField>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("self"))), RcString::newInterned(name));
 }
 
-auto DeriverEq::field(ObjPool& pool, const RcString& name) const -> ASTExprNodeP {
+auto DeriverEq::field(ObjPool& pool, const RcString& name) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeField>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("self"))), name);
 }
 
@@ -3227,7 +3229,7 @@ auto DeriverEq::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericPara
     std::vector<ASTExprNodeMatchArm> arms;
 
     for (const auto& v : enm.variants()) {
-        ASTExprNodeP code;
+        ASTExprNode* code = nullptr;
         ASTPattern patA;
         auto variantPath = basePath + v.name;
 
@@ -3283,7 +3285,7 @@ auto DeriverEq::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericPara
     return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(unn), mkExprnodep(block));
 }
 
-auto DeriverOrd::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+auto DeriverOrd::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const -> ASTImpl {
     const ASTPath traitPath = getPath(coreName, "cmp", "Ord");
     const ASTPath pathOrdering = getPath(coreName, "cmp", "Ordering");
 
@@ -3297,7 +3299,7 @@ auto DeriverOrd::makeRet(Span sp, const RcString& coreName, const ASTGenericPara
     return mv$(rv);
 }
 
-auto DeriverOrd::compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const -> ASTExprNodeP {
+auto DeriverOrd::compareAndRet(ASTType* type, Span sp, const RcString& coreName, ASTExprNode* v1, ASTExprNode* v2) const -> ASTExprNode* {
     return NEWNODE(
         Match,
         NEWNODE(
@@ -3306,15 +3308,15 @@ auto DeriverOrd::compareAndRet(ASTType* type, Span sp, const RcString& coreName,
             // TODO: Optional Ref?
             ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v1)), NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v2)))
         ),
-        ::makeVec2(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), sp, getPath(coreName, "cmp", "Ordering", "Equal"))), {}, NEWNODE(Tuple, std::vector<ASTExprNodeP>())), ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), sp, RcString("res"))), {}, NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(NamedValue, ASTPath(RcString("res"))))))
+        ::makeVec2(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), sp, getPath(coreName, "cmp", "Ordering", "Equal"))), {}, NEWNODE(Tuple, std::vector<ASTExprNode*>())), ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), sp, RcString("res"))), {}, NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(NamedValue, ASTPath(RcString("res"))))))
     );
 }
 
-auto DeriverOrd::equalValue(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNodeP {
+auto DeriverOrd::equalValue(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNode* {
     return NEWNODE(NamedValue, getPath(coreName, "cmp", "Ordering", "Equal"));
 }
 
-auto DeriverOrd::enumMismatch(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNodeP {
+auto DeriverOrd::enumMismatch(ASTType* type, Span sp, const RcString& coreName) const -> ASTExprNode* {
     return NEWNODE(CallPath, getPath(coreName, "cmp", "Ord", "cmp"), ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(RcString("self")))))), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(RcString("v"))))))));
 }
 
@@ -3330,7 +3332,7 @@ auto DeriverClone::getMethodPath(const RcString& coreName) const -> ASTPath {
     return getTraitPath(coreName) + RcString("clone");
 }
 
-auto DeriverClone::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+auto DeriverClone::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const -> ASTImpl {
     const ASTPath traitPath = this->getTraitPath(coreName);
 
     ASTFunction fcn(sp, mktypeSelf(*type->pool, sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
@@ -3343,22 +3345,22 @@ auto DeriverClone::makeRet(Span sp, const RcString& coreName, const ASTGenericPa
     return mv$(rv);
 }
 
-auto DeriverClone::cloneValRef(const RcString& coreName, ASTExprNodeP val) const -> ASTExprNodeP {
+auto DeriverClone::cloneValRef(const RcString& coreName, ASTExprNode* val) const -> ASTExprNode* {
     // TODO: Hack for zero-sized arrays? (Not a 1.19 feature)
     auto& pool = val->pool();
     return makeAstExprNode<ASTExprNodeCallPath>(pool, this->getMethodPath(coreName), vec$(makeAstExprNode<ASTExprNodeUniOp>(pool, ASTExprNodeUniOp::REF, mv$(val))));
 }
 
-auto DeriverClone::cloneValDirect(const RcString& coreName, ASTExprNodeP val) const -> ASTExprNodeP {
+auto DeriverClone::cloneValDirect(const RcString& coreName, ASTExprNode* val) const -> ASTExprNode* {
     auto& pool = val->pool();
     return makeAstExprNode<ASTExprNodeCallPath>(pool, this->getMethodPath(coreName), vec$(mv$(val)));
 }
 
-auto DeriverClone::field(ObjPool& pool, const RcString& name) const -> ASTExprNodeP {
+auto DeriverClone::field(ObjPool& pool, const RcString& name) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeField>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("self"))), name);
 }
 
-auto DeriverClone::field(ObjPool& pool, const std::string& name) const -> ASTExprNodeP {
+auto DeriverClone::field(ObjPool& pool, const std::string& name) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeField>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("self"))), RcString::newInterned(name));
 }
 
@@ -3373,7 +3375,7 @@ auto DeriverClone::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(RcString("self"))))));
     }
 
-    ASTExprNodeP node;
+    ASTExprNode* node = nullptr;
     switch (str.data.tag()) {
         case ASTStructData::TAG_Unit: {
             node = NEWNODE(NamedValue, ASTPath(tyPath));
@@ -3390,7 +3392,7 @@ auto DeriverClone::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
         }
         case ASTStructData::TAG_Tuple: {
             auto& e = str.data.as_Tuple();
-            std::vector<ASTExprNodeP> vals;
+            std::vector<ASTExprNode*> vals;
             for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
                 vals.push_back(this->cloneValRef(opts.coreName, this->field(*type->pool, FMT(idx))));
             }
@@ -3411,7 +3413,7 @@ auto DeriverClone::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
     std::vector<ASTExprNodeMatchArm> arms;
 
     for (const auto& v : enm.variants()) {
-        ASTExprNodeP code;
+        ASTExprNode* code = nullptr;
         ASTPattern patA;
 
         switch (v.data.tag()) {
@@ -3423,7 +3425,7 @@ auto DeriverClone::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
             case ASTEnumVariantData::TAG_Tuple: {
                 auto& e = v.data.as_Tuple();
                 std::vector<ASTPattern> patsA;
-                std::vector<ASTExprNodeP> nodes;
+                std::vector<ASTExprNode*> nodes;
 
                 for (size_t idx = 0; idx < e.items.size(); idx++) {
                     auto nameA = RcString::newInterned(FMT(StringView("a") << idx));
@@ -3483,7 +3485,7 @@ auto DeriverCopy::getTraitPath(const RcString& coreName) const -> ASTPath {
     return getPath(coreName, "marker", "Copy");
 }
 
-auto DeriverCopy::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+auto DeriverCopy::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const -> ASTImpl {
     const ASTPath traitPath = this->getTraitPath(coreName);
 
     ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
@@ -3516,7 +3518,7 @@ auto DeriverDefault::getMethodPath(ObjPool& pool, const RcString& coreName) cons
     return ASTPath::newUfcsTrait(::mkType(pool, Span()), getTraitPath(coreName), {ASTPathNode(RcString::newInterned("default"), {})});
 }
 
-auto DeriverDefault::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node, bool boundTypeParams) const -> ASTImpl {
+auto DeriverDefault::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node, bool boundTypeParams) const -> ASTImpl {
     const ASTPath traitPath = this->getTraitPath(coreName);
 
     ASTFunction fcn(sp, mktypeSelf(*type->pool, sp), {});
@@ -3529,7 +3531,7 @@ auto DeriverDefault::makeRet(Span sp, const RcString& coreName, const ASTGeneric
     return mv$(rv);
 }
 
-auto DeriverDefault::defaultCall(ObjPool& pool, const RcString& coreName) const -> ASTExprNodeP {
+auto DeriverDefault::defaultCall(ObjPool& pool, const RcString& coreName) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeCallPath>(pool, this->getMethodPath(pool, coreName), decltype(ASTExprNodeCallPath::args)());
 }
 
@@ -3539,7 +3541,7 @@ auto DeriverDefault::traitName() const -> const char* {
 
 auto DeriverDefault::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
     const ASTPath& tyPath = *type->data.as_Path();
-    ASTExprNodeP node;
+    ASTExprNode* node = nullptr;
 
     switch (str.data.tag()) {
         case ASTStructData::TAG_Unit: {
@@ -3566,7 +3568,7 @@ auto DeriverDefault::handleItem(Span sp, const DeriveOpts& opts, const ASTGeneri
         }
         case ASTStructData::TAG_Tuple: {
             auto& e = str.data.as_Tuple();
-            std::vector<ASTExprNodeP> vals;
+            std::vector<ASTExprNode*> vals;
             for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
                 vals.push_back(this->defaultCall(*type->pool, opts.coreName));
             }
@@ -3595,7 +3597,7 @@ auto DeriverDefault::handleItem(Span sp, const DeriveOpts& opts, const ASTGeneri
     ASTPath varPath = *type->data.as_Path() + ASTPathNode(defaultVar->name);
 
     Vector<ASTType*> boundTys;
-    ASTExprNodeP node;
+    ASTExprNode* node = nullptr;
     switch (defaultVar->data.tag()) {
         case ASTEnumVariantData::TAG_Unit: {
             node = NEWNODE(NamedValue, std::move(varPath));
@@ -3603,7 +3605,7 @@ auto DeriverDefault::handleItem(Span sp, const DeriveOpts& opts, const ASTGeneri
         }
         case ASTEnumVariantData::TAG_Tuple: {
             auto& e = defaultVar->data.as_Tuple();
-            std::vector<ASTExprNodeP> vals;
+            std::vector<ASTExprNode*> vals;
             for (const auto& fld : e.items) {
                 addFieldBoundFromTy(enm.params(), boundTys, fld.type);
                 vals.push_back(this->defaultCall(*type->pool, opts.coreName));
@@ -3640,7 +3642,7 @@ auto DeriverHash::getMethodPath(const RcString& coreName) const -> ASTPath {
     return getTraitPath(coreName) + RcString::newInterned("hash");
 }
 
-auto DeriverHash::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+auto DeriverHash::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const -> ASTImpl {
     const ASTPath traitPath = this->getTraitPath(coreName);
 
     ASTFunction fcn(sp, mkType(*type->pool, ASTTypeTags::Unit(), sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("state")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, RcString("#H"), 0x100 | 0)))));
@@ -3655,21 +3657,21 @@ auto DeriverHash::makeRet(Span sp, const RcString& coreName, const ASTGenericPar
     return mv$(rv);
 }
 
-auto DeriverHash::hashValRef(const RcString& coreName, ASTExprNodeP val) const -> ASTExprNodeP {
+auto DeriverHash::hashValRef(const RcString& coreName, ASTExprNode* val) const -> ASTExprNode* {
     auto& pool = val->pool();
     return this->hashValDirect(coreName, makeAstExprNode<ASTExprNodeUniOp>(pool, ASTExprNodeUniOp::REF, mv$(val)));
 }
 
-auto DeriverHash::hashValDirect(const RcString& coreName, ASTExprNodeP val) const -> ASTExprNodeP {
+auto DeriverHash::hashValDirect(const RcString& coreName, ASTExprNode* val) const -> ASTExprNode* {
     auto& pool = val->pool();
     return makeAstExprNode<ASTExprNodeCallPath>(pool, this->getMethodPath(coreName), vec$(mv$(val), makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("state")))));
 }
 
-auto DeriverHash::field(ObjPool& pool, const RcString& name) const -> ASTExprNodeP {
+auto DeriverHash::field(ObjPool& pool, const RcString& name) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeField>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("self"))), name);
 }
 
-auto DeriverHash::field(ObjPool& pool, const std::string& name) const -> ASTExprNodeP {
+auto DeriverHash::field(ObjPool& pool, const std::string& name) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeField>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("self"))), RcString::newInterned(name));
 }
 
@@ -3795,7 +3797,7 @@ auto DeriverRustcEncodable::getMethodPath() const -> ASTPath {
     return getTraitPath() + "encode";
 }
 
-auto DeriverRustcEncodable::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+auto DeriverRustcEncodable::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const -> ASTImpl {
     const ASTPath traitPath = this->getTraitPath();
 
     ASTPath resultPath = getPath(coreName, "result", "Result");
@@ -3814,29 +3816,29 @@ auto DeriverRustcEncodable::makeRet(Span sp, const RcString& coreName, const AST
     return mv$(rv);
 }
 
-auto DeriverRustcEncodable::encValDirect(ASTExprNodeP val) const -> ASTExprNodeP {
+auto DeriverRustcEncodable::encValDirect(ASTExprNode* val) const -> ASTExprNode* {
     auto& pool = val->pool();
     return makeAstExprNode<ASTExprNodeCallPath>(pool, this->getMethodPath(), vec$(mv$(val), makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("s")))));
 }
 
-auto DeriverRustcEncodable::encValRef(ASTExprNodeP val) const -> ASTExprNodeP {
+auto DeriverRustcEncodable::encValRef(ASTExprNode* val) const -> ASTExprNode* {
     auto& pool = val->pool();
     return this->encValDirect(makeAstExprNode<ASTExprNodeUniOp>(pool, ASTExprNodeUniOp::REF, mv$(val)));
 }
 
-auto DeriverRustcEncodable::field(ObjPool& pool, const RcString& name) const -> ASTExprNodeP {
+auto DeriverRustcEncodable::field(ObjPool& pool, const RcString& name) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeField>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("self"))), name);
 }
 
-auto DeriverRustcEncodable::field(ObjPool& pool, std::string name) const -> ASTExprNodeP {
+auto DeriverRustcEncodable::field(ObjPool& pool, std::string name) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeField>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("self"))), RcString::newInterned(name));
 }
 
-auto DeriverRustcEncodable::encClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const -> ASTExprNodeP {
+auto DeriverRustcEncodable::encClosure(ObjPool& pool, Span sp, ASTExprNode* code) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeClosure>(pool, vec$(std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, RcString("s")), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false, false);
 }
 
-auto DeriverRustcEncodable::getValOk(ObjPool& pool, const RcString& coreName) const -> ASTExprNodeP {
+auto DeriverRustcEncodable::getValOk(ObjPool& pool, const RcString& coreName) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeCallPath>(pool, getPath(coreName, "result", "Result", "Ok"), vec$(makeAstExprNode<ASTExprNodeTuple>(pool, decltype(ASTExprNodeTuple::values)())));
 }
 
@@ -3873,7 +3875,7 @@ auto DeriverRustcEncodable::handleItem(Span sp, const DeriveOpts& opts, const AS
     block->pushTailExpr(this->getValOk(*type->pool, opts.coreName));
     auto closure = this->encClosure(*type->pool, sp, mkExprnodep(block));
 
-    ASTExprNodeP node;
+    ASTExprNode* node = nullptr;
     switch (str.data.tag()) {
         case ASTStructData::TAG_Unit: {
             node = getValOk(*type->pool, opts.coreName);
@@ -3903,7 +3905,7 @@ auto DeriverRustcEncodable::handleItem(Span sp, const DeriveOpts& opts, const AS
 
     for (unsigned int varIdx = 0; varIdx < enm.variants().size(); varIdx++) {
         const auto& v = enm.variants()[varIdx];
-        ASTExprNodeP code;
+        ASTExprNode* code = nullptr;
         ASTPattern patA;
 
         switch (v.data.tag()) {
@@ -3966,7 +3968,7 @@ auto DeriverRustcDecodable::getMethodPath() const -> ASTPath {
     return getTraitPath() + "decode";
 }
 
-auto DeriverRustcDecodable::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+auto DeriverRustcDecodable::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const -> ASTImpl {
     const ASTPath traitPath = this->getTraitPath();
 
     ASTPath resultPath = getPath(coreName, "result", "Result");
@@ -3985,28 +3987,28 @@ auto DeriverRustcDecodable::makeRet(Span sp, const RcString& coreName, const AST
     return mv$(rv);
 }
 
-auto DeriverRustcDecodable::decVal(ObjPool& pool) const -> ASTExprNodeP {
+auto DeriverRustcDecodable::decVal(ObjPool& pool) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeCallPath>(pool, this->getMethodPath(), vec$(makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath("d"))));
 }
 
-auto DeriverRustcDecodable::field(ObjPool& pool, const std::string& name) const -> ASTExprNodeP {
+auto DeriverRustcDecodable::field(ObjPool& pool, const std::string& name) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeField>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("self"))), RcString::newInterned(name));
 }
 
-auto DeriverRustcDecodable::decClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const -> ASTExprNodeP {
+auto DeriverRustcDecodable::decClosure(ObjPool& pool, Span sp, ASTExprNode* code) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeClosure>(pool, vec$(std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false, false);
 }
 
-auto DeriverRustcDecodable::getValErrStr(ObjPool& pool, const RcString& coreName, std::string errStr) const -> ASTExprNodeP {
+auto DeriverRustcDecodable::getValErrStr(ObjPool& pool, const RcString& coreName, std::string errStr) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeCallPath>(pool, getPath(coreName, "result", "Result", "Err"), vec$(makeAstExprNode<ASTExprNodeCallMethod>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath("d")), ASTPathNode("error"), vec$(makeAstExprNode<ASTExprNodeString>(pool, errStr)))));
 }
 
-auto DeriverRustcDecodable::getValOk(const RcString& coreName, ASTExprNodeP inner) const -> ASTExprNodeP {
+auto DeriverRustcDecodable::getValOk(const RcString& coreName, ASTExprNode* inner) const -> ASTExprNode* {
     auto& pool = inner->pool();
     return makeAstExprNode<ASTExprNodeCallPath>(pool, getPath(coreName, "result", "Result", "Ok"), vec$(mv$(inner)));
 }
 
-auto DeriverRustcDecodable::getValOkUnit(ObjPool& pool, const RcString& coreName) const -> ASTExprNodeP {
+auto DeriverRustcDecodable::getValOkUnit(ObjPool& pool, const RcString& coreName) const -> ASTExprNode* {
     return getValOk(coreName, makeAstExprNode<ASTExprNodeTuple>(pool, decltype(ASTExprNodeTuple::values)()));
 }
 
@@ -4018,7 +4020,7 @@ auto DeriverRustcDecodable::handleItem(Span sp, const DeriveOpts& opts, const AS
     ASTPath basePath = *type->data.as_Path();
     std::string structName = basePath.nodes().back().name().c_str();
 
-    ASTExprNodeP nodeV;
+    ASTExprNode* nodeV = nullptr;
     switch (str.data.tag()) {
         case ASTStructData::TAG_Unit: {
             break;
@@ -4036,7 +4038,7 @@ auto DeriverRustcDecodable::handleItem(Span sp, const DeriveOpts& opts, const AS
         }
         case ASTStructData::TAG_Tuple: {
             auto& e = str.data.as_Tuple();
-            std::vector<ASTExprNodeP> vals;
+            std::vector<ASTExprNode*> vals;
             for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
                 vals.push_back(NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathDecoder() + "read_tuple_struct_arg", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->decClosure(*type->pool, sp, this->decVal(*type->pool))))));
             }
@@ -4047,9 +4049,9 @@ auto DeriverRustcDecodable::handleItem(Span sp, const DeriveOpts& opts, const AS
 
     auto closure = this->decClosure(*type->pool, sp, this->getValOk(opts.coreName, mv$(nodeV)));
 
-    auto args = vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, structName), ASTExprNodeP(), mv$(closure));
+    auto args = vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, structName), static_cast<ASTExprNode*>(nullptr), closure);
 
-    ASTExprNodeP node;
+    ASTExprNode* node = nullptr;
     switch (str.data.tag()) {
         case ASTStructData::TAG_Unit: {
             node = this->getValOk(opts.coreName, NEWNODE(NamedValue, mv$(basePath)));
@@ -4079,11 +4081,11 @@ auto DeriverRustcDecodable::handleItem(Span sp, const DeriveOpts& opts, const AS
     basePath.nodes().back().args() = ASTPathParams();
     std::vector<ASTExprNodeMatchArm> arms;
 
-    std::vector<ASTExprNodeP> varNameStrs;
+    std::vector<ASTExprNode*> varNameStrs;
 
     for (unsigned int varIdx = 0; varIdx < enm.variants().size(); varIdx++) {
         const auto& v = enm.variants()[varIdx];
-        ASTExprNodeP code;
+        ASTExprNode* code = nullptr;
 
         switch (v.data.tag()) {
             case ASTEnumVariantData::TAG_Unit: {
@@ -4092,7 +4094,7 @@ auto DeriverRustcDecodable::handleItem(Span sp, const DeriveOpts& opts, const AS
             }
             case ASTEnumVariantData::TAG_Tuple: {
                 auto& e = v.data.as_Tuple();
-                std::vector<ASTExprNodeP> args;
+                std::vector<ASTExprNode*> args;
 
                 for (unsigned int idx = 0; idx < e.items.size(); idx++) {
                     args.push_back(NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum_variant_arg", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->decClosure(*type->pool, sp, this->decVal(*type->pool))))));
@@ -4584,7 +4586,8 @@ auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const Wir
 auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const -> void {
 }
 
-auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
+auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const -> ASTExprNode* {
+    return expr;
 }
 
 auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const -> void {
@@ -4669,7 +4672,8 @@ auto CHandlerRustcInheritOverflowChecks::handle(const Span& sp, const ASTAttribu
 auto CHandlerRustcInheritOverflowChecks::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
 }
 
-auto CHandlerRustcInheritOverflowChecks::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
+auto CHandlerRustcInheritOverflowChecks::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const -> ASTExprNode* {
+    return expr;
 }
 
 auto CHandlerRustcOnUnimiplemented::stage() const -> AttrStage {
@@ -4683,14 +4687,15 @@ auto CHandlerRustBox::stage() const -> AttrStage {
     return AttrStage::Post;
 }
 
-auto CHandlerRustBox::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
-    auto* n = cast<ASTExprNodeCallPath>(expr.get());
+auto CHandlerRustBox::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const -> ASTExprNode* {
+    auto* n = cast<ASTExprNodeCallPath>(expr);
     ASSERT_BUG(expr->span(), n, StringView(""));
     ASSERT_BUG(expr->span(), n->args.size() == 1, StringView(""));
     auto val = std::move(n->args[0]);
     auto span = n->span();
-    expr = makeAstExprNode<ASTExprNodeUniOp>(*crate.pool, ASTExprNodeUniOp::BOX, std::move(val));
-    expr->setSpan(span);
+    auto* result = makeAstExprNode<ASTExprNodeUniOp>(*crate.pool, ASTExprNodeUniOp::BOX, val);
+    result->setSpan(span);
+    return result;
 }
 
 auto CMultiHandlerStability::stage() const -> AttrStage {
@@ -4848,7 +4853,7 @@ auto CTestHandlerSP::handle(const Span& sp, const ASTAttribute& mi, const WireBo
                     if (auto* v = cast<ASTExprNodeString>(&*n)) {
                         td.expectedPanicMessage = v->value;
                     } else {
-                        parseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
+                        parseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n)), TOK_STRING);
                     }
                 };
                 if (lex.getTokenIf(TOK_EQUAL)) {

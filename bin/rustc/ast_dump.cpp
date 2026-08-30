@@ -121,10 +121,10 @@ namespace {
 
         virtual void visit(ASTExprNodeMacroDefinition& n) override;
 
-        void parenWrap(ASTExprNodeP& node);
+        void parenWrap(ASTExprNode* node);
 
         template <typename... T>
-        void visitWithParensIf(ASTExprNodeP& node);
+        void visitWithParensIf(ASTExprNode* node);
 
         void printAttrs(const ASTAttributeList& attrs);
         void printParams(const ASTGenericParams& params);
@@ -925,7 +925,7 @@ RustPrinter::RustPrinter(ZeroCopyOutput& os)
 }
 
 template <typename... T>
-void RustPrinter::visitWithParensIf(ASTExprNodeP& node) {
+void RustPrinter::visitWithParensIf(ASTExprNode* node) {
     if (isAny<T...>(*node)) {
         parenWrap(node);
     } else {
@@ -965,7 +965,7 @@ auto RustPrinter::visit(ASTExprNodeBlock& n) -> void {
         }
         os << indent();
         exprRoot = true;
-        if (!child.node.get()) {
+        if (!child.node) {
             os << StringView("/* nil */");
         } else {
             ASTNodeVisitor::visit(child.node);
@@ -1554,7 +1554,7 @@ auto RustPrinter::visit(ASTExprNodeStructLiteral& n) -> void {
         ASTNodeVisitor::visit(i.value);
         os << StringView(",\n");
     }
-    if (n.baseValue.get()) {
+    if (n.baseValue) {
         os << indent() << StringView(".. ");
         ASTNodeVisitor::visit(n.baseValue);
         os << StringView("\n");
@@ -1646,7 +1646,7 @@ auto RustPrinter::visit(ASTExprNodeTypeAnnotation& n) -> void {
 
 auto RustPrinter::visit(ASTExprNodeBinOp& n) -> void {
     exprRoot = false;
-    auto* leftBinop = cast<ASTExprNodeBinOp>(n.left.get());
+    auto* leftBinop = cast<ASTExprNodeBinOp>(n.left);
     if (!n.left) {
         os << StringView("/*null*/");
     } else if (leftBinop && leftBinop->type == n.type) {
@@ -1721,7 +1721,7 @@ auto RustPrinter::visit(ASTExprNodeBinOp& n) -> void {
             break;
     }
     os << StringView(" ");
-    auto* rightBinop = cast<ASTExprNodeBinOp>(n.right.get());
+    auto* rightBinop = cast<ASTExprNodeBinOp>(n.right);
     if (!n.right) {
         os << StringView("/*null*/");
     } else if (rightBinop && rightBinop->type != n.type) {
@@ -1799,7 +1799,7 @@ auto RustPrinter::visit(ASTExprNodeMacroDefinition& n) -> void {
     os << StringView("/* macro definition #") << n.definitionId << StringView(" */");
 }
 
-auto RustPrinter::parenWrap(ASTExprNodeP& node) -> void {
+auto RustPrinter::parenWrap(ASTExprNode* node) -> void {
     os << StringView("(");
     ASTNodeVisitor::visit(node);
     os << StringView(")");

@@ -294,11 +294,11 @@ namespace {
 
         RcString resolveLoopLabel(const Span& sp, const Ident& target) const;
 
-        HIRExprNodeP lower(ASTExprNodeP& ep);
+        HIRExprNodeP lower(ASTExprNode* ep);
 
-        HIRExprNodeP lowerOpt(ASTExprNodeP& ep);
+        HIRExprNodeP lowerOpt(ASTExprNode* ep);
 
-        HIRExprNodeP lowerIsolated(ASTExprNodeP& ep);
+        HIRExprNodeP lowerIsolated(ASTExprNode* ep);
 
         virtual void visit(ASTExprNodeBlock& v) override;
 
@@ -1297,7 +1297,7 @@ HIRConstGeneric AST2HIR::LowerHIRConstGeneric(const ASTExprNode& nodeRef) {
     const ASTExprNode* nodeP = &nodeRef;
     if (const auto* e = cast<const ASTExprNodeBlock>(nodeP)) {
         if (e->nodes.size() == 1 && !e->nodes.back().hasSemicolon) {
-            nodeP = e->nodes.back().node.get();
+            nodeP = e->nodes.back().node;
         }
     }
     // TODO: Explicitly handle each expected variant... or add a proper consteval expression
@@ -1667,7 +1667,7 @@ const HIRTypeData* AST2HIR::LowerHIRType(::ASTType* ty) {
                     if (!blk || blk->nodes.size() != 1 || blk->nodes.front().hasSemicolon || !blk->nodes.front().node) {
                         break;
                     }
-                    sizeInner = blk->nodes.front().node.get();
+                    sizeInner = blk->nodes.front().node;
                 }
                 if (const auto* ptr = cast<const ASTExprNodeInteger>(sizeInner)) {
                     if (ptr->datatype == CORETYPE_UINT || ptr->datatype == CORETYPE_ANY) {
@@ -4299,15 +4299,15 @@ auto LowerHIRExprNodeVisitor::resolveLoopLabel(const Span& sp, const Ident& targ
     ERROR(sp, E0000, StringView("Could not find loop label '") << target.name);
 }
 
-auto LowerHIRExprNodeVisitor::lower(ASTExprNodeP& ep) -> HIRExprNodeP {
+auto LowerHIRExprNodeVisitor::lower(ASTExprNode* ep) -> HIRExprNodeP {
     BUG_ASSERT(ep);
     ep->visit(*this);
-    ASSERT_BUG(ep->span(), rv, ep.typeName() << StringView(" - Yielded a nullptr HIR node"));
+    ASSERT_BUG(ep->span(), rv, ep->typeName() << StringView(" - Yielded a nullptr HIR node"));
     rv->resType = ctx.crate->types.infer();
     return std::move(rv);
 }
 
-auto LowerHIRExprNodeVisitor::lowerOpt(ASTExprNodeP& ep) -> HIRExprNodeP {
+auto LowerHIRExprNodeVisitor::lowerOpt(ASTExprNode* ep) -> HIRExprNodeP {
     if (ep) {
         return lower(ep);
     } else {
@@ -4315,7 +4315,7 @@ auto LowerHIRExprNodeVisitor::lowerOpt(ASTExprNodeP& ep) -> HIRExprNodeP {
     }
 }
 
-auto LowerHIRExprNodeVisitor::lowerIsolated(ASTExprNodeP& ep) -> HIRExprNodeP {
+auto LowerHIRExprNodeVisitor::lowerIsolated(ASTExprNode* ep) -> HIRExprNodeP {
     std::vector<LoopLabel> outerLabels;
     outerLabels.swap(loopLabels);
     auto rv = lower(ep);
@@ -4331,7 +4331,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeBlock& v) -> void {
     bool lastHasSemicolon = true;
     for (auto& n : v.nodes) {
         ASSERT_BUG(v.span(), n.node, StringView("NULL node encountered in block"));
-        if (const auto* definition = cast<ASTExprNodeMacroDefinition>(n.node.get())) {
+        if (const auto* definition = cast<ASTExprNodeMacroDefinition>(n.node)) {
             macroDefinitions.push_back(MacroDefinition{definition->definitionId, definition->tokenHygiene, definition->definitionHygiene});
             continue;
         }
@@ -4779,7 +4779,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeUniOp& v) -> void {
             if (0) {
                 case ASTExprNodeUniOp::NEGATE:
                     op = HIRExprNodeUniOp::Op::Negate;
-                    if (const auto* lit = cast<ASTExprNodeInteger>(v.value.get())) {
+                    if (const auto* lit = cast<ASTExprNodeInteger>(v.value)) {
                         unsigned bits = 0;
                         HIRCoreType type = HIRCoreType::I32;
                         switch (lit->datatype) {

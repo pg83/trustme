@@ -26,10 +26,10 @@ using namespace stl;
 #define NEWNODE(type, ...) mkExprnodep(lex, makeAstExprNode<type>(lex.typePool() __VA_OPT__(, ) __VA_ARGS__))
 
 #define LEFTASSOC(cur, _next, cases)                                                      \
-    ASTExprNodeP _next(TokenStream& lex);                                                 \
-    ASTExprNodeP cur(TokenStream& lex) {                                                  \
-        ASTExprNodeP (*next)(TokenStream&) = _next;                                       \
-        ASTExprNodeP rv = next(lex);                                                      \
+    ASTExprNode* _next(TokenStream& lex);                                                 \
+    ASTExprNode* cur(TokenStream& lex) {                                                  \
+        ASTExprNode* (*next)(TokenStream&) = _next;                                       \
+        ASTExprNode* rv = next(lex);                                                      \
         auto parseNext = [&lex, next]() {                                                 \
             return ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : next(lex); \
         };                                                                                \
@@ -49,50 +49,50 @@ using namespace stl;
 
 namespace {
     // TODO: Use a ProtoSpan instead of a point span?
-    static inline ASTExprNodeP mkExprnodep(const TokenStream& lex, ASTExprNodeP en) {
+    static inline ASTExprNode* mkExprnodep(const TokenStream& lex, ASTExprNode* en) {
         en->setSpan(lex.pointSpan());
         return en;
     }
 
-    ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty, Ident label = Ident(""));
+    ASTExprNode* ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty, Ident label = Ident(""));
 
-    ASTExprNodeP ParseExprBlockLineStmt(TokenStream& lex, bool& hasSemicolon);
+    ASTExprNode* ParseExprBlockLineStmt(TokenStream& lex, bool& hasSemicolon);
 
-    ASTExprNodeP ParseStmtLet(TokenStream& lex, bool isSuper = false);
+    ASTExprNode* ParseStmtLet(TokenStream& lex, bool isSuper = false);
 
-    ASTExprNodeP ParseExpr1e(TokenStream& lex);
+    ASTExprNode* ParseExpr1e(TokenStream& lex);
 
-    ASTExprNodeP ParseExpr3(TokenStream& lex);
+    ASTExprNode* ParseExpr3(TokenStream& lex);
 
-    ASTExprNodeP ParseIfStmt(TokenStream& lex);
+    ASTExprNode* ParseIfStmt(TokenStream& lex);
 
-    ASTExprNodeP ParseWhileStmt(TokenStream& lex, Ident lifetime);
+    ASTExprNode* ParseWhileStmt(TokenStream& lex, Ident lifetime);
 
-    ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime);
+    ASTExprNode* ParseForStmt(TokenStream& lex, Ident lifetime);
 
     std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStructLiteral = false);
 
     RcString getOptionalIdent(TokenStream& lex, RcString* sourceName = nullptr);
 
-    ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs = {});
+    ASTExprNode* ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs = {});
 
     bool ParseParamAttrsKeep(TokenStream& lex, ASTAttributeList* attrsOut = nullptr);
 
-    static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex);
+    static ASTExprNode* ParseExprValClosureBinder(TokenStream& lex);
 
-    ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee = ASTExprNodeP());
+    ASTExprNode* ParseExprMatch(TokenStream& lex, ASTExprNode* scrutinee = nullptr);
 
-    ASTExprNodeP ParseExpr1(TokenStream& lex);
+    ASTExprNode* ParseExpr1(TokenStream& lex);
 
-    ASTExprNodeP ParseExprFC(TokenStream& lex);
+    ASTExprNode* ParseExprFC(TokenStream& lex);
 
-    ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath tok, Span pathSpan);
+    ASTExprNode* ParseExprMacro(TokenStream& lex, ASTPath tok, Span pathSpan);
 
     ASTFunction ParseDelegationFunction(TokenStream& lex, RcString& itemName);
 
     std::vector<std::pair<RcString, ASTFunction>> SplitDelegationFunction(const ASTFunction& fcn);
 
-    ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty /*=Bare*/, Ident label /*=RcString()*/) {
+    ASTExprNode* ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty /*=Bare*/, Ident label /*=RcString()*/) {
         TRACE_FUNCTION;
         CLEAR_PARSE_FLAGS_EXPR(lex);
         Token tok;
@@ -109,7 +109,7 @@ namespace {
             auto node = tok.takeFragNode();
 
             if (ty != ASTExprNodeBlock::Type::Bare) {
-                if (auto* b = cast<ASTExprNodeBlock>(node.get())) {
+                if (auto* b = cast<ASTExprNodeBlock>(node)) {
                     b->blockType = ty;
                 }
             }
@@ -139,7 +139,7 @@ namespace {
             lex.parseState().module = origModule;
         }
         auto rv = makeAstExprNode<ASTExprNodeBlock>(lex.typePool(), ty, mv$(lines), mv$(localMod));
-        auto* rvBlk = static_cast<ASTExprNodeBlock*>(rv.get());
+        auto* rvBlk = static_cast<ASTExprNodeBlock*>(rv);
         rvBlk->label = label;
         rv->setSpan(lex.endSpan(ps));
         rv->setAttrs(mv$(attrs));
@@ -170,7 +170,7 @@ namespace {
 
     static bool exprIsBlockHeaded(ASTExprNode& node);
 
-    ASTExprNodeP ParseExprBlockLineStmt(TokenStream& lex, bool& hasSemicolon) {
+    ASTExprNode* ParseExprBlockLineStmt(TokenStream& lex, bool& hasSemicolon) {
         Token tok;
 
         bool isParen = lex.lookahead(0) == TOK_PAREN_OPEN;
@@ -208,7 +208,7 @@ namespace {
                 lex.getTokenIf(TOK_PIPE);
                 auto pat = ParsePattern(lex, AllowOrPattern::Yes);
                 GET_CHECK_TOK(tok, lex, TOK_EQUAL);
-                ASTExprNodeP val;
+                ASTExprNode* val = nullptr;
                 if (allowStructLiteral) {
                     val = ParseExpr3(lex);
                 } else {
@@ -218,7 +218,7 @@ namespace {
                 conditions.push_back(ASTIfLetCondition{box$(pat), std::move(val)});
                 hadPat = true;
             } else {
-                ASTExprNodeP val;
+                ASTExprNode* val = nullptr;
                 if (allowStructLiteral) {
                     val = ParseExpr3(lex);
                 } else {
@@ -251,12 +251,12 @@ namespace {
         return conditions;
     }
 
-    ASTExprNodeP ParseWhileStmt(TokenStream& lex, Ident lifetime) {
+    ASTExprNode* ParseWhileStmt(TokenStream& lex, Ident lifetime) {
         auto conditions = ParseIfLetChain(lex);
         return NEWNODE(ASTExprNodeWhile, lifetime, std::move(conditions), ParseExprBlockNode(lex));
     }
 
-    ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime) {
+    ASTExprNode* ParseForStmt(TokenStream& lex, Ident lifetime) {
         CLEAR_PARSE_FLAGS_EXPR(lex);
         Token tok;
 
@@ -264,7 +264,7 @@ namespace {
 
         auto pat = ParsePattern(lex, AllowOrPattern::Yes);
         GET_CHECK_TOK(tok, lex, TOK_RWORD_IN);
-        ASTExprNodeP val;
+        ASTExprNode* val = nullptr;
         {
             SET_PARSE_FLAG(lex, disallowStructLiteral);
             val = ParseExpr0(lex);
@@ -272,11 +272,11 @@ namespace {
         return NEWNODE(ASTExprNodeFor, lifetime, std::move(pat), std::move(val), ParseExprBlockNode(lex), isAwait);
     }
 
-    ASTExprNodeP ParseIfStmt(TokenStream& lex) {
+    ASTExprNode* ParseIfStmt(TokenStream& lex) {
         TRACE_FUNCTION;
         Token tok;
         std::vector<ASTExprNodeIf::Arm> arms;
-        ASTExprNodeP elseBlock;
+        ASTExprNode* elseBlock = nullptr;
         do {
             std::vector<ASTIfLetCondition> conditions;
 
@@ -285,7 +285,7 @@ namespace {
                 conditions = ParseIfLetChain(lex);
             }
 
-            ASTExprNodeP code = ParseExprBlockNode(lex);
+            ASTExprNode* code = ParseExprBlockNode(lex);
 
             arms.push_back(ASTExprNodeIf::Arm{std::move(conditions), std::move(code)});
 
@@ -301,13 +301,13 @@ namespace {
         return NEWNODE(ASTExprNodeIf, std::move(arms), std::move(elseBlock));
     }
 
-    ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee) {
+    ASTExprNode* ParseExprMatch(TokenStream& lex, ASTExprNode* scrutinee) {
         TRACE_FUNCTION;
         Token tok;
         ASTAttributeList nodeAttrs;
 
         CLEAR_PARSE_FLAGS_EXPR(lex);
-        ASTExprNodeP switchVal = std::move(scrutinee);
+        ASTExprNode* switchVal = std::move(scrutinee);
         if (!switchVal) {
             SET_PARSE_FLAG(lex, disallowStructLiteral);
             switchVal = ParseExpr1(lex);
@@ -369,14 +369,14 @@ namespace {
         return rv;
     }
 
-    ASTExprNodeP ParseExprTry(TokenStream& lex) {
+    ASTExprNode* ParseExprTry(TokenStream& lex) {
         TRACE_FUNCTION;
         auto inner = ParseExprBlockNode(lex);
         //TODO(lex.point_span(), StringView("do catch"));
         return NEWNODE(ASTExprNodeTry, std::move(inner));
     }
 
-    ASTExprNodeP ParseFlowControl(TokenStream& lex, ASTExprNodeFlow::Type type) {
+    ASTExprNode* ParseFlowControl(TokenStream& lex, ASTExprNodeFlow::Type type) {
         Token tok;
         Ident lifetime = Ident("");
         if (type == ASTExprNodeFlow::CONTINUE || type == ASTExprNodeFlow::BREAK) {
@@ -387,7 +387,7 @@ namespace {
         }
 
         // TODO: Should this prevent `continue value;`?
-        ASTExprNodeP val;
+        ASTExprNode* val = nullptr;
         if (type == ASTExprNodeFlow::BREAK && LOOK_AHEAD(lex) == TOK_BRACE_OPEN && CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
             return NEWNODE(ASTExprNodeFlow, type, std::move(lifetime), std::move(val));
         }
@@ -411,15 +411,15 @@ namespace {
         return cast<ASTExprNodeBlock>(&node) || cast<ASTExprNodeAsyncBlock>(&node) || cast<ASTExprNodeGeneratorBlock>(&node) || cast<ASTExprNodeTry>(&node) || cast<ASTExprNodeLoop>(&node) || cast<ASTExprNodeFor>(&node) || cast<ASTExprNodeWhile>(&node) || cast<ASTExprNodeMatch>(&node) || cast<ASTExprNodeIf>(&node);
     }
 
-    ASTExprNodeP ParseStmtLet(TokenStream& lex, bool isSuper) {
+    ASTExprNode* ParseStmtLet(TokenStream& lex, bool isSuper) {
         Token tok;
         ASTPattern pat = ParsePattern(lex, AllowOrPattern::Yes);
         ASTType* type = mkType(lex.typePool(), lex.pointSpan());
         if (lex.getTokenIf(TOK_COLON)) {
             type = ParseType(lex);
         }
-        ASTExprNodeP val;
-        ASTExprNodeP elseArm;
+        ASTExprNode* val = nullptr;
+        ASTExprNode* elseArm = nullptr;
         if (lex.getTokenIf(TOK_EQUAL)) {
             val = ParseExpr0(lex);
             if (lex.getTokenIf(TOK_RWORD_ELSE)) {
@@ -429,13 +429,13 @@ namespace {
         return NEWNODE(ASTExprNodeLetBinding, std::move(pat), mv$(type), std::move(val), std::move(elseArm), isSuper);
     }
 
-    std::vector<ASTExprNodeP> ParseParenList(TokenStream& lex) {
+    std::vector<ASTExprNode*> ParseParenList(TokenStream& lex) {
         TRACE_FUNCTION;
         Token tok;
 
         CLEAR_PARSE_FLAGS_EXPR(lex);
 
-        std::vector<ASTExprNodeP> rv;
+        std::vector<ASTExprNode*> rv;
         GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
         if (!lex.getTokenIf(TOK_PAREN_CLOSE)) {
             do {
@@ -453,11 +453,11 @@ namespace {
         return tokType == TOK_DOUBLE_DOT || tokType == TOK_DOUBLE_DOT_EQUAL || tokType == TOK_TRIPLE_DOT;
     }
 
-    ASTExprNodeP ParseExpr1a(TokenStream& lex);
+    ASTExprNode* ParseExpr1a(TokenStream& lex);
 
-    ASTExprNodeP ParseExpr1(TokenStream& lex) {
+    ASTExprNode* ParseExpr1(TokenStream& lex) {
         Token tok;
-        ASTExprNodeP (*next)(TokenStream&) = ParseExpr1a;
+        ASTExprNode* (*next)(TokenStream&) = ParseExpr1a;
 
         auto dest = next(lex);
         if (lex.lookahead(0) == TOK_THINARROW_LEFT) {
@@ -469,12 +469,13 @@ namespace {
         }
     }
 
-    ASTExprNodeP ParseExpr1b(TokenStream& lex);
+    ASTExprNode* ParseExpr1b(TokenStream& lex);
 
-    ASTExprNodeP ParseExpr1a(TokenStream& lex) {
+    ASTExprNode* ParseExpr1a(TokenStream& lex) {
         Token tok;
-        ASTExprNodeP (*next)(TokenStream&) = ParseExpr1b;
-        ASTExprNodeP left, right;
+        ASTExprNode* (*next)(TokenStream&) = ParseExpr1b;
+        ASTExprNode* left = nullptr;
+        ASTExprNode* right = nullptr;
 
         if (GET_TOK(tok, lex) == TOK_TRIPLE_DOT || tok.type() == TOK_DOUBLE_DOT_EQUAL) {
             right = ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : next(lex);
@@ -513,7 +514,7 @@ namespace {
     LEFTASSOC(ParseExpr10, ParseExpr11, case TOK_STAR : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::MULTIPLY, std::move(rv), parseNext()); break; case TOK_SLASH : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::DIVIDE, std::move(rv), parseNext()); break; case TOK_PERCENT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::MODULO, std::move(rv), parseNext()); break;)
     LEFTASSOC(ParseExpr11, ParseExpr12, case TOK_RWORD_AS : rv = NEWNODE(ASTExprNodeCast, std::move(rv), ParseType(lex, false)); break;)
 
-    ASTExprNodeP ParseExpr12(TokenStream& lex) {
+    ASTExprNode* ParseExpr12(TokenStream& lex) {
         Token tok;
         auto rv = ParseExpr13(lex);
         if (lex.getTokenIf(TOK_COLON)) {
@@ -522,12 +523,12 @@ namespace {
         return rv;
     }
 
-    ASTExprNodeP ParseExprUnaryOperand(TokenStream& lex) {
+    ASTExprNode* ParseExprUnaryOperand(TokenStream& lex) {
         return ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : ParseExpr12(lex);
     }
 
-    ASTExprNodeP ParseExprFC(TokenStream& lex) {
-        ASTExprNodeP val = ParseExprVal(lex);
+    ASTExprNode* ParseExprFC(TokenStream& lex) {
+        ASTExprNode* val = ParseExprVal(lex);
         while (true) {
             Token tok;
             switch (GET_TOK(tok, lex)) {
@@ -639,16 +640,16 @@ namespace {
         }
     }
 
-    ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
+    ASTExprNode* ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
         TRACE_FUNCTION;
         Token tok;
 
         if (LOOK_AHEAD(lex) == TOK_INTEGER) {
-            std::map<unsigned int, ASTExprNodeP> nodes;
+            std::map<unsigned int, ASTExprNode*> nodes;
             while (GET_TOK(tok, lex) == TOK_INTEGER) {
                 unsigned int ofs = static_cast<unsigned int>(tok.intval().truncateU64());
                 GET_CHECK_TOK(tok, lex, TOK_COLON);
-                ASTExprNodeP val = ParseStmt(lex);
+                ASTExprNode* val = ParseStmt(lex);
                 if (!nodes.insert(std::make_pair(ofs, mv$(val))).second) {
                     ERROR(lex.pointSpan(), E0000, StringView("Duplicate index"));
                 }
@@ -662,7 +663,7 @@ namespace {
                     break;
                 }
             }
-            ASTExprNodeP baseVal;
+            ASTExprNode* baseVal = nullptr;
             if (tok.type() == TOK_DOUBLE_DOT) {
                 baseVal = ParseExpr0(lex);
                 GET_TOK(tok, lex);
@@ -694,7 +695,7 @@ namespace {
             auto h = tok.ident().hygiene;
             auto name = tok.ident().name;
 
-            ASTExprNodeP val;
+            ASTExprNode* val = nullptr;
             if (lex.lookahead(0) != TOK_COLON) {
                 val = NEWNODE(ASTExprNodeNamedValue, ASTPath::newRelative(h, {ASTPathNode(h, name)}));
             } else {
@@ -708,7 +709,7 @@ namespace {
             }
             CHECK_TOK(tok, TOK_COMMA);
         }
-        ASTExprNodeP baseVal;
+        ASTExprNode* baseVal = nullptr;
         if (tok.type() == TOK_DOUBLE_DOT) {
             if (lex.getTokenIf(TOK_BRACE_CLOSE)) {
                 return NEWNODE(ASTExprNodeStructLiteralPattern, path, std::move(items));
@@ -733,13 +734,13 @@ namespace {
         return lex.lookahead(ofs) == TOK_PIPE || lex.lookahead(ofs) == TOK_DOUBLE_PIPE;
     }
 
-    static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex) {
+    static ASTExprNode* ParseExprValClosureBinder(TokenStream& lex) {
         auto hrbs = ParseHRBOpt(lex);
         const bool isAsync = lex.getTokenIf(TOK_RWORD_ASYNC);
         return ParseExprValClosure(lex, isAsync, std::move(hrbs));
     }
 
-    ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs) {
+    ASTExprNode* ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs) {
         TRACE_FUNCTION;
         Token tok;
 
@@ -809,7 +810,7 @@ namespace {
         return rv;
     }
 
-    ASTExprNodeP ParseExprValInner(TokenStream& lex) {
+    ASTExprNode* ParseExprValInner(TokenStream& lex) {
         TRACE_FUNCTION;
         Token tok;
         ASTPath path;
@@ -944,13 +945,13 @@ namespace {
                             if (tok.ident() == "offset_of") {
                                 GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
                                 auto ty = ParseType(lex);
-                                std::vector<ASTExprNodeP> args;
+                                std::vector<ASTExprNode*> args;
                                 do {
                                     GET_CHECK_TOK(tok, lex, TOK_COMMA);
                                     if (lex.lookahead(0) == TOK_INTERPOLATED_EXPR) {
                                         GET_CHECK_TOK(tok, lex, TOK_INTERPOLATED_EXPR);
                                         const auto* expr = &tok.fragNode();
-                                        std::vector<ASTExprNodeP> exprArgs;
+                                        std::vector<ASTExprNode*> exprArgs;
                                         for (;;) {
                                             if (const auto* n = cast<const ASTExprNodeNamedValue>(expr)) {
                                                 exprArgs.push_back(NEWNODE(ASTExprNodeString, n->path.asTrivial().c_str(), Ident::Hygiene()));
@@ -1070,13 +1071,13 @@ namespace {
             case TOK_PAREN_OPEN:
                 if (lex.getTokenIf(TOK_PAREN_CLOSE)) {
                     DEBUG(StringView("Unit"));
-                    return NEWNODE(ASTExprNodeTuple, std::vector<ASTExprNodeP>());
+                    return NEWNODE(ASTExprNodeTuple, std::vector<ASTExprNode*>());
                 } else {
                     CLEAR_PARSE_FLAGS_EXPR(lex);
 
-                    ASTExprNodeP rv = ParseExpr0(lex);
+                    ASTExprNode* rv = ParseExpr0(lex);
                     if (GET_TOK(tok, lex) == TOK_COMMA) {
-                        std::vector<ASTExprNodeP> ents;
+                        std::vector<ASTExprNode*> ents;
                         ents.push_back(std::move(rv));
                         do {
                             if (lex.getTokenIf(TOK_PAREN_CLOSE, tok)) {
@@ -1087,7 +1088,7 @@ namespace {
                         rv = NEWNODE(ASTExprNodeTuple, std::move(ents));
                     }
                     CHECK_TOK(tok, TOK_PAREN_CLOSE);
-                    if (auto* e = cast<ASTExprNodeBinOp>(rv.get())) {
+                    if (auto* e = cast<ASTExprNodeBinOp>(rv)) {
                         if (e->type == ASTExprNodeBinOp::RANGE && !e->left && !e->right) {
                             e->parenthesised = true;
                         }
@@ -1096,7 +1097,7 @@ namespace {
                 }
             case TOK_SQUARE_OPEN:
                 if (lex.getTokenIf(TOK_SQUARE_CLOSE)) {
-                    return NEWNODE(ASTExprNodeArray, std::vector<ASTExprNodeP>());
+                    return NEWNODE(ASTExprNodeArray, std::vector<ASTExprNode*>());
                 } else {
                     CLEAR_PARSE_FLAGS_EXPR(lex);
                     auto first = ParseExpr0(lex);
@@ -1105,7 +1106,7 @@ namespace {
                         GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
                         return NEWNODE(ASTExprNodeArray, std::move(first), std::move(count));
                     } else {
-                        std::vector<ASTExprNodeP> items;
+                        std::vector<ASTExprNode*> items;
                         items.push_back(std::move(first));
                         while (tok.type() == TOK_COMMA) {
                             if (GET_TOK(tok, lex) == TOK_SQUARE_CLOSE) {
@@ -1126,7 +1127,7 @@ namespace {
         }
     }
 
-    ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath path, Span pathSpan) {
+    ASTExprNode* ParseExprMacro(TokenStream& lex, ASTPath path, Span pathSpan) {
         Token tok;
         auto definitionHygiene = lex.getHygiene();
 
@@ -1353,22 +1354,22 @@ namespace {
             case TOK_INTERPOLATED_EXPR: {
                 auto e = tok.takeFragNode();
                 // TODO: Visitor?
-                if (auto* n = cast<ASTExprNodeString>(e.get())) {
+                if (auto* n = cast<ASTExprNodeString>(e)) {
                     return ASTPattern::Value::make_String(mv$(n->value));
-                } else if (auto* n = cast<ASTExprNodeByteString>(e.get())) {
+                } else if (auto* n = cast<ASTExprNodeByteString>(e)) {
                     return ASTPattern::Value::make_ByteString({mv$(n->value)});
-                } else if (auto* n = cast<ASTExprNodeBool>(e.get())) {
+                } else if (auto* n = cast<ASTExprNodeBool>(e)) {
                     return ASTPattern::Value::make_Integer({CORETYPE_BOOL, U128(n->value ? 1 : 0)});
-                } else if (auto* n = cast<ASTExprNodeInteger>(e.get())) {
+                } else if (auto* n = cast<ASTExprNodeInteger>(e)) {
                     return ASTPattern::Value::make_Integer({n->datatype, n->value});
-                } else if (auto* n = cast<ASTExprNodeFloat>(e.get())) {
+                } else if (auto* n = cast<ASTExprNodeFloat>(e)) {
                     return ASTPattern::Value::make_Float({n->datatype, n->value});
-                } else if (auto* n = cast<ASTExprNodeUniOp>(e.get())) {
+                } else if (auto* n = cast<ASTExprNodeUniOp>(e)) {
                     if (n->type == ASTExprNodeUniOp::NEGATE) {
-                        if (auto* v = cast<ASTExprNodeInteger>(n->value.get())) {
+                        if (auto* v = cast<ASTExprNodeInteger>(n->value)) {
                             return ASTPattern::Value::make_Integer({v->datatype, ~v->value + 1u});
                         }
-                        if (auto* v = cast<ASTExprNodeFloat>(n->value.get())) {
+                        if (auto* v = cast<ASTExprNodeFloat>(n->value)) {
                             return ASTPattern::Value::make_Float({v->datatype, -v->value});
                         }
                     }
@@ -3425,9 +3426,9 @@ void stl::output<ZeroCopyOutput, eParsePathGenericMode>(ZeroCopyOutput& out, ePa
     out << static_cast<unsigned>(value);
 }
 
-ASTExprNodeP ParseExpr0(TokenStream& lex);
+ASTExprNode* ParseExpr0(TokenStream& lex);
 
-ASTExprNodeP ParseExprVal(TokenStream& lex);
+ASTExprNode* ParseExprVal(TokenStream& lex);
 
 ASTExpr ParseExpr(TokenStream& lex) {
     return ASTExpr(ParseExpr0(lex));
@@ -3437,11 +3438,11 @@ ASTExpr ParseExprBlock(TokenStream& lex) {
     return ASTExpr(ParseExprBlockNode(lex));
 }
 
-ASTExprNodeP ParseExprBlockNode(TokenStream& lex) {
+ASTExprNode* ParseExprBlockNode(TokenStream& lex) {
     return ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare, RcString());
 }
 
-ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTModule>& localMod, bool& addSilenceIfEnd) {
+ASTExprNode* ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTModule>& localMod, bool& addSilenceIfEnd) {
     Token tok;
 
     auto itemAttrs = ParseItemAttrs(lex);
@@ -3458,7 +3459,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
             item.attrs.items.push_back(mv$(attr));
         }
         localMod->addItem(mv$(item));
-        return ASTExprNodeP();
+        return nullptr;
     }
 
     if (tok.type() == TOK_IDENT && tok.ident().name == "union" && lex.lookahead(0) == TOK_IDENT) {
@@ -3469,7 +3470,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
             lex.parseState().module = localMod.get();
         }
         ParseModItem(lex, *localMod, mv$(itemAttrs));
-        return ASTExprNodeP();
+        return nullptr;
     }
 
     if (tok.type() == TOK_IDENT && tok.ident().name == "reuse" && (lex.lookahead(0) == TOK_IDENT || lex.lookahead(0) == TOK_RWORD_SELF || lex.lookahead(0) == TOK_RWORD_SUPER || lex.lookahead(0) == TOK_RWORD_CRATE || lex.lookahead(0) == TOK_LT)) {
@@ -3479,7 +3480,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
             lex.parseState().module = localMod.get();
         }
         ParseModItem(lex, *localMod, mv$(itemAttrs));
-        return ASTExprNodeP();
+        return nullptr;
     }
 
     if (tok.type() == TOK_IDENT && tok.ident().name == "macro_rules" && lex.lookahead(0) == TOK_EXCLAM) {
@@ -3522,7 +3523,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
                 lex.parseState().module = localMod.get();
             }
             ParseModItem(lex, *localMod, mv$(itemAttrs));
-            return ASTExprNodeP();
+            return nullptr;
         case TOK_RWORD_ASYNC:
             if (lex.lookahead(0) == TOK_RWORD_FN || (lex.lookahead(0) == TOK_RWORD_UNSAFE && lex.lookahead(1) == TOK_RWORD_FN)) {
                 PUTBACK(tok, lex);
@@ -3532,7 +3533,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
                     lex.parseState().module = localMod.get();
                 }
                 ParseModItem(lex, *localMod, mv$(itemAttrs));
-                return ASTExprNodeP();
+                return nullptr;
             }
             break;
         case TOK_RWORD_CONST:
@@ -3544,7 +3545,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
                     lex.parseState().module = localMod.get();
                 }
                 ParseModItem(lex, *localMod, mv$(itemAttrs));
-                return ASTExprNodeP();
+                return nullptr;
             }
             break;
 
@@ -3557,7 +3558,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
                     lex.parseState().module = localMod.get();
                 }
                 ParseModItem(lex, *localMod, mv$(itemAttrs));
-                return ASTExprNodeP();
+                return nullptr;
             }
         case TOK_IDENT:
 
@@ -3569,7 +3570,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
                     lex.parseState().module = localMod.get();
                 }
                 ParseModItem(lex, *localMod, mv$(itemAttrs));
-                return ASTExprNodeP();
+                return nullptr;
             }
             break;
         default:
@@ -3586,18 +3587,18 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
     return rv;
 }
 
-ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
+ASTExprNode* ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
     TRACE_FUNCTION;
     Token tok;
-    ASTExprNodeP ret;
+    ASTExprNode* ret = nullptr;
     const bool isBlockLine = addSilence != nullptr;
     bool addSilenceIgnored = false;
     if (!addSilence) {
         addSilence = &addSilenceIgnored;
     }
-    const auto finishBlockExpression = [&](ASTExprNodeP ret) {
+    const auto finishBlockExpression = [&](ASTExprNode* ret) {
         if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
-            lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, ret.release())));
+            lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, ret)));
             return ParseExprBlockLineStmt(lex, *addSilence);
         }
         if (LOOK_AHEAD(lex) == TOK_SEMICOLON) {
@@ -3663,7 +3664,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                         GET_CHECK_TOK(tok, lex, TOK_EXCLAM);
                         auto rv = ParseExprMacro(lex, std::move(p), std::move(pathSpan));
                         if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
-                            lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())));
+                            lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, rv)));
                             return ParseExprBlockLineStmt(lex, *addSilence);
                         }
                         return isBlockLine ? finishBlockExpression(mv$(rv)) : mv$(rv);
@@ -3759,7 +3760,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
     }
 }
 
-ASTExprNodeP ParseStmt(TokenStream& lex) {
+ASTExprNode* ParseStmt(TokenStream& lex) {
     TRACE_FUNCTION;
     Token tok;
 
@@ -3794,7 +3795,7 @@ ASTExprNodeP ParseStmt(TokenStream& lex) {
             PUTBACK(tok, lex);
             auto block = ParseExprBlockNode(lex);
             if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
-                lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, block.release())));
+                lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, block)));
                 return ParseExpr0(lex);
             }
             return block;
@@ -3810,7 +3811,7 @@ ASTExprNodeP ParseStmt(TokenStream& lex) {
             }
             auto block = ParseExprVal(lex);
             if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
-                lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, block.release())));
+                lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, block)));
                 return ParseExpr0(lex);
             }
             return block;
@@ -3830,14 +3831,14 @@ ASTExprNodeP ParseStmt(TokenStream& lex) {
     }
 }
 
-ASTExprNodeP ParseExpr0(TokenStream& lex) {
+ASTExprNode* ParseExpr0(TokenStream& lex) {
     Token tok;
 
     CLEAR_PARSE_FLAG(lex, disallowCallOrIndex);
 
     auto exprAttrs = ParseItemAttrs(lex);
 
-    ASTExprNodeP rv = ParseExpr1(lex);
+    ASTExprNode* rv = ParseExpr1(lex);
     auto op = ASTExprNodeAssign::NONE;
     switch (GET_TOK(tok, lex)) {
         case TOK_PLUS_EQUAL:
@@ -3935,9 +3936,9 @@ bool ParseIsTokValue(eTokenType tokType) {
     }
 }
 
-ASTExprNodeP ParseExpr13(TokenStream& lex);
+ASTExprNode* ParseExpr13(TokenStream& lex);
 
-ASTExprNodeP ParseExpr13(TokenStream& lex) {
+ASTExprNode* ParseExpr13(TokenStream& lex) {
     Token tok;
     switch (GET_TOK(tok, lex)) {
         case TOK_DASH:
@@ -3949,7 +3950,7 @@ ASTExprNodeP ParseExpr13(TokenStream& lex) {
         case TOK_RWORD_BOX:
             return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::BOX, ParseExprUnaryOperand(lex));
         case TOK_RWORD_IN: {
-            ASTExprNodeP dest;
+            ASTExprNode* dest = nullptr;
             {
                 SET_PARSE_FLAG(lex, disallowStructLiteral);
                 dest = ParseExpr1(lex);
@@ -3995,9 +3996,9 @@ ASTExprNodeP ParseExpr13(TokenStream& lex) {
     }
 }
 
-ASTExprNodeP ParseExprVal(TokenStream& lex);
+ASTExprNode* ParseExprVal(TokenStream& lex);
 
-ASTExprNodeP ParseExprVal(TokenStream& lex) {
+ASTExprNode* ParseExprVal(TokenStream& lex) {
     auto attrs = ParseItemAttrs(lex);
     auto rv = ParseExprValInner(lex);
     rv->setAttrs(std::move(attrs));

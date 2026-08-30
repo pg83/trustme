@@ -166,7 +166,7 @@ namespace {
 
         GenericAssertCaptureVisitor(ObjPool& pool, RcString coreCrate, Ident::Hygiene hygiene);
 
-        void manage(ASTExprNodeP& node);
+        ASTExprNode* manage(ASTExprNode* node);
 
         void visit(ASTExprNodeArray& node) override;
 
@@ -228,15 +228,15 @@ namespace {
         NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeMacroDefinition);
 #undef NO_GENERIC_ASSERT_CAPTURE
 
-        ASTExprNodeP makeTryCapture(RcString captureName, RcString localBindName, const Span& sp) const;
+        ASTExprNode* makeTryCapture(RcString captureName, RcString localBindName, const Span& sp) const;
 
         ASTPath generatedPath(RcString name) const;
 
-        ASTExprNodeP makeGeneratedValue(RcString name, const Span& sp) const;
+        ASTExprNode* makeGeneratedValue(RcString name, const Span& sp) const;
 
         RcString coreCrate;
         Ident::Hygiene hygiene;
-        ASTExprNodeP* current = nullptr;
+        ASTExprNode* replacement = nullptr;
         bool consumed = true;
     };
 
@@ -562,7 +562,7 @@ namespace {
         if (lex.lookahead(0) != TOK_EOF) {
             ERROR(sp, E0000, StringView("Unexpected token after string literal - ") << lex.getToken());
         }
-        ExpandBareExpr(*lex.parseState().wb, crate, mod, n);
+        n = ExpandBareExpr(*lex.parseState().wb, crate, mod, n);
 
         auto* stringNp = cast<ASTExprNodeString>(&*n);
         if (!stringNp) {
@@ -952,7 +952,7 @@ namespace {
 
         auto formatStringNode = ParseExprVal(lex);
         ASSERT_BUG(sp, formatStringNode, StringView("No expression returned"));
-        ExpandBareExpr(*lex.parseState().wb, crate, lex.parseState().getCurrentMod(), formatStringNode);
+        formatStringNode = ExpandBareExpr(*lex.parseState().wb, crate, lex.parseState().getCurrentMod(), formatStringNode);
 
         auto* formatStringNp = cast<ASTExprNodeString>(&*formatStringNode);
         if (!formatStringNp) {
@@ -979,7 +979,7 @@ namespace {
                 DEBUG(StringView("Named `") << name << StringView("`"));
                 GET_CHECK_TOK(tok, lex, TOK_EQUAL);
 
-                auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
+                auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex))));
 
                 auto insRv = namedArgsIndex.insert(std::make_pair(mv$(name), static_cast<unsigned>(namedArgs.size())));
                 if (insRv.second == false) {
@@ -988,7 +988,7 @@ namespace {
                 namedArgs.push_back(mv$(exprTt));
             } else {
                 DEBUG(StringView("Free"));
-                auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
+                auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex))));
                 freeArgs.push_back(mv$(exprTt));
             }
         }
@@ -1265,7 +1265,7 @@ namespace {
         if (lex.lookahead(0) == TOK_COMMA) {
             lex.getToken();
         }
-        ExpandBareExpr(*lex.parseState().wb, crate, mod, n);
+        n = ExpandBareExpr(*lex.parseState().wb, crate, mod, n);
 
         auto* stringNp = cast<ASTExprNodeString>(&*n);
         if (!stringNp) {
@@ -1385,18 +1385,18 @@ auto CIterExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& 
     auto node = ParseExpr0(lex);
     GET_CHECK_TOK(tok, lex, TOK_EOF);
 
-    auto* closure = cast<ASTExprNodeClosure>(node.get());
-    if (!closure || closure->isPinned || cast<ASTExprNodeAsyncBlock>(closure->code.get())) {
+    auto* closure = cast<ASTExprNodeClosure>(node);
+    if (!closure || closure->isPinned || cast<ASTExprNodeAsyncBlock>(closure->code)) {
         ERROR(sp, E0000, StringView("iter! requires a plain closure"));
     }
 
     auto generatorNode = makeAstExprNode<ASTExprNodeGeneratorBlock>(*crate.pool, mv$(closure->code), closure->returnType, true, true);
-    auto* generator = static_cast<ASTExprNodeGeneratorBlock*>(generatorNode.get());
+    auto* generator = static_cast<ASTExprNodeGeneratorBlock*>(generatorNode);
     generator->setSpan(sp);
     closure->code = std::move(generatorNode);
     closure->returnType = mkType(*crate.pool, sp);
 
-    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node)))));
 }
 
 auto CLlvmAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
@@ -1515,7 +1515,7 @@ auto CLlvmAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrat
     }
 
     auto rv = makeAstExprNode<ASTExprNodeAsm>(*crate.pool, mv$(templateText), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags));
-    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv)))));
 }
 
 auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
@@ -1643,7 +1643,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             paramSpec = ASTExprNodeAsm2::Param::make_Sym(std::move(p));
         } else if (v == "label") {
             auto e = ParseExpr0(lex);
-            if (!cast<ASTExprNodeBlock>(e.get())) {
+            if (!cast<ASTExprNodeBlock>(e)) {
                 ERROR(sp, E0000, StringView("asm! label operand requires a block"));
             }
             paramSpec = ASTExprNodeAsm2::Param::make_Label({std::move(e)});
@@ -1959,14 +1959,14 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
     }
 
     auto rv = makeAstExprNode<ASTExprNodeAsm2>(*crate.pool, mv$(options), mv$(lines), mv$(params));
-    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv)))));
 }
 
 auto CGlobalAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
     auto o = CAsmExpander().expand(sp, wb, crate, tt, mod);
 
     auto node = o->getToken().takeFragNode();
-    auto* nodeAp = cast<ASTExprNodeAsm2>(node.get());
+    auto* nodeAp = cast<ASTExprNodeAsm2>(node);
     ASSERT_BUG(sp, nodeAp, StringView(""));
     auto& nodeA = *nodeAp;
 
@@ -2014,11 +2014,11 @@ auto CNakedAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCra
     auto o = CAsmExpander().expand(sp, wb, crate, tt, mod);
 
     auto node = o->getToken().takeFragNode();
-    auto* nodeAp = cast<ASTExprNodeAsm2>(node.get());
+    auto* nodeAp = cast<ASTExprNodeAsm2>(node);
     ASSERT_BUG(sp, nodeAp, StringView(""));
     nodeAp->options.naked = true;
 
-    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node)))));
 }
 
 GenericAssertCaptureVisitor::GenericAssertCaptureVisitor(ObjPool& pool, RcString coreCrate, Ident::Hygiene hygiene)
@@ -2028,20 +2028,22 @@ GenericAssertCaptureVisitor::GenericAssertCaptureVisitor(ObjPool& pool, RcString
 {
 }
 
-auto GenericAssertCaptureVisitor::manage(ASTExprNodeP& node) -> void {
+auto GenericAssertCaptureVisitor::manage(ASTExprNode* node) -> ASTExprNode* {
     if (!node) {
-        return;
+        return nullptr;
     }
-    auto* previous = current;
-    current = &node;
+    auto* previous = replacement;
+    replacement = nullptr;
     node->visit(*this);
-    current = previous;
+    auto* result = replacement ? replacement : node;
+    replacement = previous;
+    return result;
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeArray& node) -> void {
-    manage(node.size);
+    node.size = manage(node.size);
     for (auto& value : node.values) {
-        manage(value);
+        value = manage(value);
     }
 }
 
@@ -2062,66 +2064,66 @@ auto GenericAssertCaptureVisitor::visit(ASTExprNodeBinOp& node) -> void {
             consumed = true;
             break;
     }
-    manage(node.left);
-    manage(node.right);
+    node.left = manage(node.left);
+    node.right = manage(node.right);
     consumed = wasConsumed;
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeCallPath& node) -> void {
     for (auto& arg : node.args) {
-        manage(arg);
+        arg = manage(arg);
     }
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeCallMethod& node) -> void {
-    manage(node.val);
+    node.val = manage(node.val);
     for (auto& arg : node.args) {
-        manage(arg);
+        arg = manage(arg);
     }
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeCallObject& node) -> void {
     for (auto& arg : node.args) {
-        manage(arg);
+        arg = manage(arg);
     }
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeCast& node) -> void {
-    manage(node.value);
+    node.value = manage(node.value);
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeDeref& node) -> void {
     const bool wasConsumed = consumed;
     consumed = false;
-    manage(node.value);
+    node.value = manage(node.value);
     consumed = wasConsumed;
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeIf& node) -> void {
     for (auto& arm : node.arms) {
         for (auto& condition : arm.conditions) {
-            manage(condition.value);
+            condition.value = manage(condition.value);
         }
     }
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeIndex& node) -> void {
-    manage(node.obj);
-    manage(node.idx);
+    node.obj = manage(node.obj);
+    node.idx = manage(node.idx);
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeLetBinding& node) -> void {
-    manage(node.value);
+    node.value = manage(node.value);
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeMatch& node) -> void {
-    manage(node.val);
+    node.val = manage(node.val);
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeUniOp& node) -> void {
     const bool wasConsumed = consumed;
     consumed = node.type != ASTExprNodeUniOp::REF;
-    manage(node.value);
+    node.value = manage(node.value);
     consumed = wasConsumed;
 }
 
@@ -2146,27 +2148,27 @@ auto GenericAssertCaptureVisitor::visit(ASTExprNodeNamedValue& node) -> void {
         captureBlock->setSpan(node.span());
         static_cast<ASTExprNodeBlock&>(*captureBlock).pushStmt(makeTryCapture(captureName, localBindName, node.span()));
         static_cast<ASTExprNodeBlock&>(*captureBlock).pushTailExpr(makeGeneratedValue(localBindName, node.span()));
-        *current = makeAstExprNode<ASTExprNodeDeref>(pool, std::move(captureBlock));
+        replacement = makeAstExprNode<ASTExprNodeDeref>(pool, captureBlock);
     } else {
-        *current = makeAstExprNode<ASTExprNodeDeref>(pool, makeGeneratedValue(localBindName, node.span()));
+        replacement = makeAstExprNode<ASTExprNodeDeref>(pool, makeGeneratedValue(localBindName, node.span()));
     }
-    (*current)->setSpan(node.span());
+    replacement->setSpan(node.span());
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeStructLiteral& node) -> void {
     for (auto& value : node.values) {
-        manage(value.value);
+        value.value = manage(value.value);
     }
-    manage(node.baseValue);
+    node.baseValue = manage(node.baseValue);
 }
 
 auto GenericAssertCaptureVisitor::visit(ASTExprNodeTuple& node) -> void {
     for (auto& value : node.values) {
-        manage(value);
+        value = manage(value);
     }
 }
 
-auto GenericAssertCaptureVisitor::makeTryCapture(RcString captureName, RcString localBindName, const Span& sp) const -> ASTExprNodeP {
+auto GenericAssertCaptureVisitor::makeTryCapture(RcString captureName, RcString localBindName, const Span& sp) const -> ASTExprNode* {
     Vector<RcString> wrapperPath;
     wrapperPath.pushBack(RcString::newInterned("asserting"));
     wrapperPath.pushBack(RcString::newInterned("Wrapper"));
@@ -2186,7 +2188,7 @@ auto GenericAssertCaptureVisitor::generatedPath(RcString name) const -> ASTPath 
     return ASTPath::newRelative(hygiene, {ASTPathNode(hygiene, name)});
 }
 
-auto GenericAssertCaptureVisitor::makeGeneratedValue(RcString name, const Span& sp) const -> ASTExprNodeP {
+auto GenericAssertCaptureVisitor::makeGeneratedValue(RcString name, const Span& sp) const -> ASTExprNode* {
     auto value = makeAstExprNode<ASTExprNodeNamedValue>(pool, generatedPath(name));
     value->setSpan(sp);
     return value;
@@ -2214,7 +2216,7 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
     if (tok == TOK_COMMA) {
         toks.push_back(Token(TOK_RWORD_IF));
         toks.push_back(Token(TOK_EXCLAM));
-        toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
+        toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n)));
         toks.push_back(Token(TOK_BRACE_OPEN));
         toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
         toks.push_back(Token(TOK_EXCLAM));
@@ -2222,7 +2224,7 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
 
         auto fmt = ParseExpr0(lex);
         if (lex.getTokenIf(TOK_COMMA)) {
-            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, fmt.release())));
+            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, fmt)));
 
             while (lex.lookahead(0) != TOK_EOF) {
                 toks.push_back(TOK_COMMA);
@@ -2230,9 +2232,9 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
                 if ((lex.lookahead(0) == TOK_IDENT || Token::typeIsRword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
                     toks.push_back(lex.getToken());
                     toks.push_back(lex.getToken());
-                    toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
+                    toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex))));
                 } else {
-                    toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
+                    toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex))));
                 }
                 if (lex.lookahead(0) != TOK_COMMA) {
                     break;
@@ -2240,7 +2242,7 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
                 GET_CHECK_TOK(tok, lex, TOK_COMMA);
             }
         } else {
-            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, fmt.release())));
+            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, fmt)));
         }
 
         GET_CHECK_TOK(tok, lex, TOK_EOF);
@@ -2257,7 +2259,7 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
                 conditionText.pop_back();
             }
             GenericAssertCaptureVisitor captureVisitor(*crate.pool, crate.extCratenameCore, expansionHygiene);
-            captureVisitor.manage(n);
+            n = captureVisitor.manage(n);
 
             toks.push_back(Token(TOK_BRACE_OPEN));
             closeOuterBlock = true;
@@ -2300,7 +2302,7 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
 
             toks.push_back(Token(TOK_RWORD_IF));
             toks.push_back(Token(TOK_EXCLAM));
-            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
+            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n)));
             toks.push_back(Token(TOK_BRACE_OPEN));
 
             for (size_t i = 0; i < captureVisitor.captures.size(); i++) {
@@ -2308,7 +2310,7 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
                 if (!capture.deferred) {
                     continue;
                 }
-                toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, captureVisitor.makeTryCapture(capture.captureName, capture.localBindName, sp).release())));
+                toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, captureVisitor.makeTryCapture(capture.captureName, capture.localBindName, sp))));
                 toks.push_back(Token(TOK_SEMICOLON));
             }
 
@@ -2337,7 +2339,7 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
         } else {
             toks.push_back(Token(TOK_RWORD_IF));
             toks.push_back(Token(TOK_EXCLAM));
-            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
+            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n)));
             toks.push_back(Token(TOK_BRACE_OPEN));
             toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
             toks.push_back(Token(TOK_EXCLAM));
@@ -2378,23 +2380,23 @@ auto CConcatExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate
 
         auto v = ParseExpr0(lex);
         DEBUG(StringView("concat - v=") << *v);
-        ExpandBareExpr(wb, crate, mod, v);
+        v = ExpandBareExpr(wb, crate, mod, v);
         DEBUG(StringView("concat[pe] - v=") << *v);
         // TODO: Visitor instead
-        if (auto* vp = cast<ASTExprNodeString>(v.get())) {
+        if (auto* vp = cast<ASTExprNodeString>(v)) {
             rv += vp->value;
-        } else if (auto* vp = cast<ASTExprNodeInteger>(v.get())) {
+        } else if (auto* vp = cast<ASTExprNodeInteger>(v)) {
             if (vp->datatype == CORETYPE_CHAR) {
                 rv += Codepoint{static_cast<u32>(vp->value.truncateU64())};
             } else {
                 rv += FMT(vp->value);
             }
-        } else if (auto* vp = cast<ASTExprNodeFloat>(v.get())) {
+        } else if (auto* vp = cast<ASTExprNodeFloat>(v)) {
             rv += formatFloatValueForToken(vp->value);
-        } else if (auto* vp = cast<ASTExprNodeBool>(v.get())) {
+        } else if (auto* vp = cast<ASTExprNodeBool>(v)) {
             rv += (vp->value ? "true" : "false");
-        } else if (auto* vp = cast<ASTExprNodeUniOp>(v.get())) {
-            const auto* inner = vp->value.get();
+        } else if (auto* vp = cast<ASTExprNodeUniOp>(v)) {
+            const auto* inner = vp->value;
             if (vp->type != ASTExprNodeUniOp::NEGATE) {
                 ERROR(sp, E0000, StringView("Unexpected expression type in concat! argument"));
             } else if (const auto* iv = cast<const ASTExprNodeInteger>(inner)) {
@@ -2444,7 +2446,7 @@ auto CConcatBytesExpander::append(const Span& sp, std::string& output, const AST
             return;
         }
 
-        const auto* count = cast<const ASTExprNodeInteger>(value->size.get());
+        const auto* count = cast<const ASTExprNodeInteger>(value->size);
         if (!count || !count->value.isU64()) {
             ERROR(sp, E0000, StringView("concat_bytes! repeat count must be an integer literal"));
         }
@@ -2468,7 +2470,7 @@ auto CConcatBytesExpander::expand(const Span& sp, const WireBoard& wb, const AST
         }
 
         auto value = ParseExpr0(lex);
-        ExpandBareExpr(wb, crate, mod, value);
+        value = ExpandBareExpr(wb, crate, mod, value);
         append(sp, output, *value);
     } while (GET_TOK(tok, lex) == TOK_COMMA);
     if (tok.type() != TOK_EOF) {

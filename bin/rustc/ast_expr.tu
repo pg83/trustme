@@ -6,19 +6,19 @@ generate(
     default="Const",
     clone=False,
     variants=[
-        v("Const", "ASTExprNodeP", copy=False),
+        v("Const", "ASTExprNode*", copy=False),
         v("Sym", "ASTPath"),
-        v("Label", fields=[("ASTExprNodeP", "code")], copy=False),
+        v("Label", fields=[("ASTExprNode*", "code")], copy=False),
         v("RegSingle", fields=[
             ("AsmDirection", "dir"),
             ("AsmRegisterSpec", "spec"),
-            ("ASTExprNodeP", "val"),
+            ("ASTExprNode*", "val"),
         ], copy=False),
         v("Reg", fields=[
             ("AsmDirection", "dir"),
             ("AsmRegisterSpec", "spec"),
-            ("ASTExprNodeP", "valIn"),
-            ("ASTExprNodeP", "valOut"),
+            ("ASTExprNode*", "valIn"),
+            ("ASTExprNode*", "valOut"),
         ], copy=False),
     ],
 )

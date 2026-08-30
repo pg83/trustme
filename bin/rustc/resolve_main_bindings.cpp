@@ -246,7 +246,7 @@ namespace {
                         if (newPath == ASTPath()) {
                             auto newPath = context.lookupOpt(sp, p.nodes[0].name(), p.hygiene, Context::LookupMode::Constant);
                             if (newPath != ASTPath()) {
-                                ent = ASTPathParamEnt::make_Value(makeAstExprNode<ASTExprNodeNamedValue>(context.typePool(), std::move(newPath)).release());
+                                ent = ASTPathParamEnt::make_Value(makeAstExprNode<ASTExprNodeNamedValue>(context.typePool(), std::move(newPath)));
                                 auto _h = context.enterRootblock();
                                 ResolveAbsoluteExprNode(context, *ent.as_Value());
                             } else {
@@ -1683,7 +1683,7 @@ namespace {
                 }
                 this->context.pushBlock();
                 for (auto& line : node.nodes) {
-                    if (const auto* definition = cast<ASTExprNodeMacroDefinition>(line.node.get())) {
+                    if (const auto* definition = cast<ASTExprNodeMacroDefinition>(line.node)) {
                         this->context.pushMacroDefinition(definition->definitionId, definition->tokenHygiene, definition->definitionHygiene);
                     } else {
                         line.node->visit(*this);
@@ -2946,14 +2946,14 @@ namespace {
                 replacement.params() = mv$(merged);
             }
             const bool isMethod = hasParentSelf && !replacement.args().empty() && replacement.args().front().pat.bindings().size() == 1 && replacement.args().front().pat.bindings().front().name.name == "self";
-            std::vector<ASTExprNodeP> args;
+            std::vector<ASTExprNode*> args;
             for (size_t i = 0; i < replacement.args().size(); i++) {
                 auto name = isMethod && i == 0 ? RcString::newInterned("self") : RcString::newInterned(FMT(StringView("arg") << i));
                 replacement.args()[i].pat = ASTPattern(ASTPattern::TagBind(), fcn.sp(), name);
                 auto arg = makeAstExprNode<ASTExprNodeNamedValue>(itemContext.typePool(), ASTPath(name));
                 if (i == 0 && delegation->body.isValid()) {
                     arg = delegation->body.node().clone();
-                    if (auto* block = cast<ASTExprNodeBlock>(arg.get()); block && !block->localMod && block->nodes.size() == 1 && !block->nodes.front().hasSemicolon) {
+                    if (auto* block = cast<ASTExprNodeBlock>(arg); block && !block->localMod && block->nodes.size() == 1 && !block->nodes.front().hasSemicolon) {
                         auto unwrapped = mv$(block->nodes.front().node);
                         arg = mv$(unwrapped);
                     }

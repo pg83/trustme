@@ -86,7 +86,7 @@ std::string ASTAttribute::parseEqualsString(const WireBoard& wb, const ASTCrate&
     if (auto* value = cast<ASTExprNodeString>(&*node)) {
         result = value->value;
     } else {
-        parseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())), TOK_STRING);
+        parseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, node)), TOK_STRING);
     }
     lex.getTokenCheck(TOK_EOF);
     return result;

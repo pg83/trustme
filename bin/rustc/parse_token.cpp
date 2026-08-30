@@ -251,7 +251,7 @@ Token::Token(const InterpolatedFragment& frag) {
                     type_ = TOK_INTERPOLATED_BLOCK;
             }
 
-            data_ = reinterpret_cast<const ASTExprNode*>(frag.ptr)->clone().release();
+            data_ = reinterpret_cast<const ASTExprNode*>(frag.ptr)->clone();
             break;
         case InterpolatedFragment::META:
             type_ = TOK_INTERPOLATED_META;
@@ -410,13 +410,13 @@ Token Token::clone() const {
                     rv.data_ = new ASTPath(*reinterpret_cast<ASTPath*>(e));
                     break;
                 case TOK_INTERPOLATED_EXPR:
-                    rv.data_ = reinterpret_cast<ASTExprNode*>(e)->clone().release();
+                    rv.data_ = reinterpret_cast<ASTExprNode*>(e)->clone();
                     break;
                 case TOK_INTERPOLATED_STMT:
-                    rv.data_ = reinterpret_cast<ASTExprNode*>(e)->clone().release();
+                    rv.data_ = reinterpret_cast<ASTExprNode*>(e)->clone();
                     break;
                 case TOK_INTERPOLATED_BLOCK:
-                    rv.data_ = reinterpret_cast<ASTExprNode*>(e)->clone().release();
+                    rv.data_ = reinterpret_cast<ASTExprNode*>(e)->clone();
                     break;
                 case TOK_INTERPOLATED_META:
                     rv.data_ = new ASTAttribute(reinterpret_cast<ASTAttribute*>(e)->clone());
@@ -445,11 +445,11 @@ ASTExprNode& Token::fragNode() {
     return *reinterpret_cast<ASTExprNode*>(ptr);
 }
 
-ASTExprNodeP Token::takeFragNode() {
+ASTExprNode* Token::takeFragNode() {
     BUG_ASSERT(type_ == TOK_INTERPOLATED_EXPR || type_ == TOK_INTERPOLATED_STMT || type_ == TOK_INTERPOLATED_BLOCK);
     auto ptr = data_.as_Fragment();
     data_.as_Fragment() = nullptr;
-    return ASTExprNodeP(reinterpret_cast<ASTExprNode*>(ptr));
+    return reinterpret_cast<ASTExprNode*>(ptr);
 }
 
 ASTNamed<ASTItem> Token::takeFragItem() {

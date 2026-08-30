@@ -6,41 +6,6 @@
 
 using namespace stl;
 
-const char* ASTExprNodeP::typeName() const {
-    return typeid(*ptr).name();
-}
-
-ASTExprNodeP::ASTExprNodeP()
-    : ptr(nullptr)
-{
-}
-
-ASTExprNodeP::ASTExprNodeP(ASTExprNode* node)
-    : ptr(node)
-{
-}
-
-ASTExprNodeP& ASTExprNodeP::operator=(ASTExprNodeP&& x) {
-    this->ptr = x.ptr;
-    x.ptr = nullptr;
-    return *this;
-}
-
-ASTExprNode* ASTExprNodeP::release() {
-    auto rv = ptr;
-    ptr = nullptr;
-    return rv;
-}
-
-void ASTExprNodeP::reset(ASTExprNode* n) {
-    ptr = n;
-}
-
-ASTExpr::ASTExpr(ASTExprNodeP node)
-    : node_(node.release())
-{
-}
-
 ASTExpr::ASTExpr(ASTExprNode* node)
     : node_(node)
 {
@@ -52,9 +17,7 @@ ASTExpr::ASTExpr()
 }
 
 void ASTExpr::visitNodes(ASTNodeVisitor& visitor) {
-    if (node_) {
-        node_->visit(visitor);
-    }
+    node_ = visitor.visit(node_);
 }
 
 void ASTExpr::visitNodes(ASTNodeVisitor& visitor) const {

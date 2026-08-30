@@ -55,7 +55,7 @@ namespace {
 
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
+        ASTExprNode* handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const override;
 
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override;
 
@@ -125,7 +125,7 @@ namespace {
                 std::string val;
                 if (lex.lookahead(0) == TOK_INTERPOLATED_EXPR) {
                     auto n = lex.getTokenCheck(TOK_INTERPOLATED_EXPR).takeFragNode();
-                    const auto* np = cast<ASTExprNodeString>(n.get());
+                    const auto* np = cast<ASTExprNodeString>(n);
                     ASSERT_BUG(n->span(), np, StringView(""));
                     val = np->value;
                 } else {
@@ -554,11 +554,12 @@ auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard
     }
 }
 
-auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
+auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const -> ASTExprNode* {
     DEBUG(StringView("#[cfg] expr - ") << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
-        expr.reset();
+        return nullptr;
     }
+    return expr;
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const -> void {
@@ -592,6 +593,6 @@ auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& i) const -> void {
     DEBUG(StringView("#[cfg] struct lit - ") << mi);
     if (!checkCfg(*wb.settings, sp, mi)) {
-        i.value.reset();
+        i.value = nullptr;
     }
 }

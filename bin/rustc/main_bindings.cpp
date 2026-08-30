@@ -785,14 +785,14 @@ void ExpandTestHarness(ASTCrate& crate) {
         mainFn.setCode(mv$(callNode));
     }
 
-    std::vector<ASTExprNodeP> testNodes;
+    std::vector<ASTExprNode*> testNodes;
 
     for (const auto& test : crate.tests) {
         ASTExprNodeStructLiteral::tValues descVals;
         descVals.push_back({{}, "name", NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("StaticTestName")}), ::makeVec1(NEWNODE(String, test.name)))});
         descVals.push_back({{}, "ignore", NEWNODE(Bool, test.ignore)});
         {
-            ASTExprNodeP shouldPanicVal;
+            ASTExprNode* shouldPanicVal = nullptr;
             switch (test.panicType) {
                 case ASTTestDesc::ShouldPanic::No:
                     shouldPanicVal = NEWNODE(NamedValue, ASTPath(cTest, {ASTPathNode("ShouldPanic"), ASTPathNode("No")}));
@@ -845,7 +845,7 @@ void ExpandTestHarness(ASTCrate& crate) {
     {
         listItemTy = mkType(*crate.pool, ASTTypeTags::Reference(), Span(), ASTLifetimeRef::newStatic(), false, mv$(listItemTy));
     }
-    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mv$(listItemTy), makeAstExprNode<ASTExprNodeInteger>(*crate.pool, U128(testCount), CORETYPE_UINT).release()), ASTExpr(mv$(testsArray))};
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mv$(listItemTy), makeAstExprNode<ASTExprNodeInteger>(*crate.pool, U128(testCount), CORETYPE_UINT)), ASTExpr(testsArray)};
 
     auto newmod = ASTModule{ASTAbsolutePath("", pathNodes("test#"))};
     auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());

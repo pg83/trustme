@@ -28,8 +28,10 @@ public:
 
     virtual void visit(ASTNodeVisitor& nv) = 0;
     virtual void print(stl::ZeroCopyOutput& os) const = 0;
-    virtual ASTExprNodeP clone() const = 0;
+    virtual ASTExprNode* clone() const = 0;
     virtual unsigned int nodeKind() const = 0;
+
+    const char* typeName() const;
 
     void setPool(stl::ObjPool& pool) {
         pool_ = &pool;
@@ -55,10 +57,10 @@ public:
 };
 
 template <typename T, typename... Args>
-ASTExprNodeP makeAstExprNode(stl::ObjPool& pool, Args&&... args) {
+ASTExprNode* makeAstExprNode(stl::ObjPool& pool, Args&&... args) {
     auto* node = pool.make<T>(std::forward<Args>(args)...);
     node->setPool(pool);
-    return ASTExprNodeP(node);
+    return node;
 }
 
 struct ASTExprNodeBlock: public ASTExprNode {
@@ -73,48 +75,48 @@ struct ASTExprNodeBlock: public ASTExprNode {
 
     struct Line {
         bool hasSemicolon;
-        ASTExprNodeP node;
+        ASTExprNode* node = nullptr;
     };
 
     std::vector<Line> nodes;
 
     ASTExprNodeBlock(std::vector<Line> nodes = {});
 
-    ASTExprNodeBlock(ASTExprNodeP value);
+    ASTExprNodeBlock(ASTExprNode* value);
 
     ASTExprNodeBlock(Type type, std::vector<Line> nodes, std::shared_ptr<ASTModule> localMod);
 
-    void pushStmt(ASTExprNodeP node) {
-        nodes.push_back({true, std::move(node)});
+    void pushStmt(ASTExprNode* node) {
+        nodes.push_back({true, node});
     }
 
-    void pushTailExpr(ASTExprNodeP node) {
-        nodes.push_back({false, std::move(node)});
+    void pushTailExpr(ASTExprNode* node) {
+        nodes.push_back({false, node});
     }
 
     static constexpr unsigned int kind = 1;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeAsyncBlock: public ASTExprNode {
-    ASTExprNodeP inner;
+    ASTExprNode* inner = nullptr;
     bool isMove;
     bool isUse;
 
-    ASTExprNodeAsyncBlock(ASTExprNodeP inner, bool isMove, bool isUse);
+    ASTExprNodeAsyncBlock(ASTExprNode* inner, bool isMove, bool isUse);
 
     static constexpr unsigned int kind = 2;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeGeneratorBlock: public ASTExprNode {
-    ASTExprNodeP inner;
+    ASTExprNode* inner = nullptr;
     ASTType* returnType;
     bool isMove;
 
@@ -122,25 +124,25 @@ struct ASTExprNodeGeneratorBlock: public ASTExprNode {
 
     bool isAsync;
 
-    ASTExprNodeGeneratorBlock(ASTExprNodeP inner, ASTType* returnType, bool isMove, bool isCoroutineClosureBody, bool isAsync = false);
+    ASTExprNodeGeneratorBlock(ASTExprNode* inner, ASTType* returnType, bool isMove, bool isCoroutineClosureBody, bool isAsync = false);
 
     static constexpr unsigned int kind = 3;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeTry: public ASTExprNode {
-    ASTExprNodeP inner;
+    ASTExprNode* inner = nullptr;
 
-    ASTExprNodeTry(ASTExprNodeP inner);
+    ASTExprNodeTry(ASTExprNode* inner);
 
     static constexpr unsigned int kind = 4;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeMacro: public ASTExprNode {
@@ -156,13 +158,13 @@ struct ASTExprNodeMacro: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeAsm: public ASTExprNode {
     struct ValRef {
         std::string name;
-        ASTExprNodeP value;
+        ASTExprNode* value = nullptr;
     };
 
     std::string text;
@@ -177,7 +179,7 @@ struct ASTExprNodeAsm: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 #include "ast_expr_tu.h"
@@ -195,7 +197,7 @@ struct ASTExprNodeAsm2: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeFlow: public ASTExprNode {
@@ -210,33 +212,33 @@ struct ASTExprNodeFlow: public ASTExprNode {
     } type;
 
     Ident target;
-    ASTExprNodeP value;
+    ASTExprNode* value = nullptr;
 
-    ASTExprNodeFlow(Type type, Ident target, ASTExprNodeP value);
+    ASTExprNodeFlow(Type type, Ident target, ASTExprNode* value);
 
     static constexpr unsigned int kind = 8;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeLetBinding: public ASTExprNode {
     ASTPattern pat;
     ASTType* type;
-    ASTExprNodeP value;
-    ASTExprNodeP elseNode;
+    ASTExprNode* value = nullptr;
+    ASTExprNode* elseNode = nullptr;
     bool isSuper;
 
     std::pair<unsigned, unsigned> letelseSlots;
 
-    ASTExprNodeLetBinding(ASTPattern pat, ASTType* type, ASTExprNodeP value, ASTExprNodeP elseArm = {}, bool isSuper = false);
+    ASTExprNodeLetBinding(ASTPattern pat, ASTType* type, ASTExprNode* value, ASTExprNode* elseArm = {}, bool isSuper = false);
 
     static constexpr unsigned int kind = 9;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeAssign: public ASTExprNode {
@@ -254,109 +256,109 @@ struct ASTExprNodeAssign: public ASTExprNode {
         SHL,
     } op;
 
-    ASTExprNodeP slot;
-    ASTExprNodeP value;
+    ASTExprNode* slot = nullptr;
+    ASTExprNode* value = nullptr;
 
     ASTExprNodeAssign();
 
-    ASTExprNodeAssign(Operation op, ASTExprNodeP slot, ASTExprNodeP value);
+    ASTExprNodeAssign(Operation op, ASTExprNode* slot, ASTExprNode* value);
 
     static constexpr unsigned int kind = 10;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeCallPath: public ASTExprNode {
     ASTPath path;
-    std::vector<ASTExprNodeP> args;
+    std::vector<ASTExprNode*> args;
 
-    ASTExprNodeCallPath(ASTPath&& path, std::vector<ASTExprNodeP>&& args);
+    ASTExprNodeCallPath(ASTPath&& path, std::vector<ASTExprNode*>&& args);
 
     static constexpr unsigned int kind = 11;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeCallMethod: public ASTExprNode {
-    ASTExprNodeP val;
+    ASTExprNode* val = nullptr;
     ASTPathNode method;
-    std::vector<ASTExprNodeP> args;
+    std::vector<ASTExprNode*> args;
 
-    ASTExprNodeCallMethod(ASTExprNodeP obj, ASTPathNode method, std::vector<ASTExprNodeP> args);
+    ASTExprNodeCallMethod(ASTExprNode* obj, ASTPathNode method, std::vector<ASTExprNode*> args);
 
     static constexpr unsigned int kind = 12;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeCallObject: public ASTExprNode {
-    ASTExprNodeP val;
-    std::vector<ASTExprNodeP> args;
+    ASTExprNode* val = nullptr;
+    std::vector<ASTExprNode*> args;
 
-    ASTExprNodeCallObject(ASTExprNodeP val, std::vector<ASTExprNodeP>&& args);
+    ASTExprNodeCallObject(ASTExprNode* val, std::vector<ASTExprNode*>&& args);
 
     static constexpr unsigned int kind = 13;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeLoop: public ASTExprNode {
     Ident label;
-    ASTExprNodeP code;
+    ASTExprNode* code = nullptr;
 
     ASTExprNodeLoop();
 
-    ASTExprNodeLoop(Ident label, ASTExprNodeP code);
+    ASTExprNodeLoop(Ident label, ASTExprNode* code);
 
     static constexpr unsigned int kind = 14;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeFor: public ASTExprNode {
     Ident label;
     ASTPattern pattern;
-    ASTExprNodeP value;
-    ASTExprNodeP code;
+    ASTExprNode* value = nullptr;
+    ASTExprNode* code = nullptr;
 
     bool isAwait;
 
-    ASTExprNodeFor(Ident label, ASTPattern pattern, ASTExprNodeP val, ASTExprNodeP code, bool isAwait = false);
+    ASTExprNodeFor(Ident label, ASTPattern pattern, ASTExprNode* val, ASTExprNode* code, bool isAwait = false);
 
     static constexpr unsigned int kind = 15;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTIfLetCondition {
     std::unique_ptr<ASTPattern> optPat;
-    ASTExprNodeP value;
+    ASTExprNode* value = nullptr;
 };
 
 struct ASTExprNodeWhile: public ASTExprNode {
     Ident label;
     std::vector<ASTIfLetCondition> conditions;
-    ASTExprNodeP code;
+    ASTExprNode* code = nullptr;
 
-    ASTExprNodeWhile(Ident label, std::vector<ASTIfLetCondition> conditions, ASTExprNodeP code);
+    ASTExprNodeWhile(Ident label, std::vector<ASTIfLetCondition> conditions, ASTExprNode* code);
 
     static constexpr unsigned int kind = 16;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeMatchArm {
@@ -364,42 +366,45 @@ struct ASTExprNodeMatchArm {
     std::vector<ASTPattern> patterns;
     std::vector<ASTIfLetCondition> guard;
 
-    ASTExprNodeP code;
+    ASTExprNode* code = nullptr;
 
     ASTExprNodeMatchArm();
 
-    ASTExprNodeMatchArm(std::vector<ASTPattern> patterns, std::vector<ASTIfLetCondition> guard, ASTExprNodeP code);
+    ASTExprNodeMatchArm(std::vector<ASTPattern> patterns, std::vector<ASTIfLetCondition> guard, ASTExprNode* code);
+
+    ASTExprNodeMatchArm(ASTExprNodeMatchArm&&) noexcept = default;
+    ASTExprNodeMatchArm& operator=(ASTExprNodeMatchArm&&) noexcept = default;
 };
 
 struct ASTExprNodeMatch: public ASTExprNode {
-    ASTExprNodeP val;
+    ASTExprNode* val = nullptr;
     std::vector<ASTExprNodeMatchArm> arms;
 
-    ASTExprNodeMatch(ASTExprNodeP val, std::vector<ASTExprNodeMatchArm> arms);
+    ASTExprNodeMatch(ASTExprNode* val, std::vector<ASTExprNodeMatchArm> arms);
 
     static constexpr unsigned int kind = 17;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeIf: public ASTExprNode {
     struct Arm {
         std::vector<ASTIfLetCondition> conditions;
-        ASTExprNodeP body;
+        ASTExprNode* body = nullptr;
     };
 
     std::vector<Arm> arms;
-    ASTExprNodeP elseNode;
+    ASTExprNode* elseNode = nullptr;
 
-    ASTExprNodeIf(std::vector<Arm> arms, ASTExprNodeP elseCode);
+    ASTExprNodeIf(std::vector<Arm> arms, ASTExprNode* elseCode);
 
     static constexpr unsigned int kind = 18;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeWildcardPattern: public ASTExprNode {
@@ -407,7 +412,7 @@ struct ASTExprNodeWildcardPattern: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeInteger: public ASTExprNode {
@@ -420,7 +425,7 @@ struct ASTExprNodeInteger: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeFloat: public ASTExprNode {
@@ -433,7 +438,7 @@ struct ASTExprNodeFloat: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeBool: public ASTExprNode {
@@ -445,7 +450,7 @@ struct ASTExprNodeBool: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeString: public ASTExprNode {
@@ -459,7 +464,7 @@ struct ASTExprNodeString: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeByteString: public ASTExprNode {
@@ -471,7 +476,7 @@ struct ASTExprNodeByteString: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeCString: public ASTExprNode {
@@ -483,7 +488,7 @@ struct ASTExprNodeCString: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeSuffixedLiteral: public ASTExprNode {
@@ -495,7 +500,7 @@ struct ASTExprNodeSuffixedLiteral: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeClosure: public ASTExprNode {
@@ -503,7 +508,7 @@ struct ASTExprNodeClosure: public ASTExprNode {
 
     argsT args;
     ASTType* returnType;
-    ASTExprNodeP code;
+    ASTExprNode* code = nullptr;
     bool isMove;
     bool isUse;
     bool isPinned;
@@ -511,10 +516,10 @@ struct ASTExprNodeClosure: public ASTExprNode {
 
     ASTHigherRankedBounds hrbs;
 
-    ASTExprNodeClosure(argsT args, ASTType* rv, ASTExprNodeP code, bool isMove, bool isUse, bool isPinned, bool trackCaller = false)
+    ASTExprNodeClosure(argsT args, ASTType* rv, ASTExprNode* code, bool isMove, bool isUse, bool isPinned, bool trackCaller = false)
         : args(std::move(args))
-        , returnType(std::move(rv))
-        , code(std::move(code))
+        , returnType(rv)
+        , code(code)
         , isMove(isMove)
         , isUse(isUse)
         , isPinned(isPinned)
@@ -526,28 +531,28 @@ struct ASTExprNodeClosure: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeStructLiteral: public ASTExprNode {
     struct Ent {
         ASTAttributeList attrs;
         RcString name;
-        ASTExprNodeP value;
+        ASTExprNode* value = nullptr;
     };
 
     typedef std::vector<Ent> tValues;
     ASTPath path;
-    ASTExprNodeP baseValue;
+    ASTExprNode* baseValue = nullptr;
     tValues values;
 
-    ASTExprNodeStructLiteral(ASTPath path, ASTExprNodeP baseValue, tValues&& values);
+    ASTExprNodeStructLiteral(ASTPath path, ASTExprNode* baseValue, tValues&& values);
 
     static constexpr unsigned int kind = 27;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeStructLiteralPattern: public ASTExprNode {
@@ -561,34 +566,34 @@ struct ASTExprNodeStructLiteralPattern: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeArray: public ASTExprNode {
-    ASTExprNodeP size;
-    std::vector<ASTExprNodeP> values;
+    ASTExprNode* size = nullptr;
+    std::vector<ASTExprNode*> values;
 
-    ASTExprNodeArray(std::vector<ASTExprNodeP> vals);
+    ASTExprNodeArray(std::vector<ASTExprNode*> vals);
 
-    ASTExprNodeArray(ASTExprNodeP val, ASTExprNodeP size);
+    ASTExprNodeArray(ASTExprNode* val, ASTExprNode* size);
 
     static constexpr unsigned int kind = 29;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeTuple: public ASTExprNode {
-    std::vector<ASTExprNodeP> values;
+    std::vector<ASTExprNode*> values;
 
-    ASTExprNodeTuple(std::vector<ASTExprNodeP> vals);
+    ASTExprNodeTuple(std::vector<ASTExprNode*> vals);
 
     static constexpr unsigned int kind = 30;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeNamedValue: public ASTExprNode {
@@ -600,71 +605,71 @@ struct ASTExprNodeNamedValue: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeField: public ASTExprNode {
-    ASTExprNodeP obj;
+    ASTExprNode* obj = nullptr;
     RcString name;
 
-    ASTExprNodeField(ASTExprNodeP obj, RcString name);
+    ASTExprNodeField(ASTExprNode* obj, RcString name);
 
     static constexpr unsigned int kind = 32;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeIndex: public ASTExprNode {
-    ASTExprNodeP obj;
-    ASTExprNodeP idx;
+    ASTExprNode* obj = nullptr;
+    ASTExprNode* idx = nullptr;
 
-    ASTExprNodeIndex(ASTExprNodeP obj, ASTExprNodeP idx);
+    ASTExprNodeIndex(ASTExprNode* obj, ASTExprNode* idx);
 
     static constexpr unsigned int kind = 33;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeDeref: public ASTExprNode {
-    ASTExprNodeP value;
+    ASTExprNode* value = nullptr;
 
-    ASTExprNodeDeref(ASTExprNodeP value);
+    ASTExprNodeDeref(ASTExprNode* value);
 
     static constexpr unsigned int kind = 34;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeCast: public ASTExprNode {
-    ASTExprNodeP value;
+    ASTExprNode* value = nullptr;
     ASTType* type;
 
-    ASTExprNodeCast(ASTExprNodeP value, ASTType*&& dstType);
+    ASTExprNodeCast(ASTExprNode* value, ASTType*&& dstType);
 
     static constexpr unsigned int kind = 35;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeTypeAnnotation: public ASTExprNode {
-    ASTExprNodeP value;
+    ASTExprNode* value = nullptr;
     ASTType* type;
 
-    ASTExprNodeTypeAnnotation(ASTExprNodeP value, ASTType*&& dstType);
+    ASTExprNodeTypeAnnotation(ASTExprNode* value, ASTType*&& dstType);
 
     static constexpr unsigned int kind = 36;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeBinOp: public ASTExprNode {
@@ -698,18 +703,18 @@ struct ASTExprNodeBinOp: public ASTExprNode {
     };
 
     Type type;
-    ASTExprNodeP left;
-    ASTExprNodeP right;
+    ASTExprNode* left = nullptr;
+    ASTExprNode* right = nullptr;
 
     bool parenthesised = false;
 
-    ASTExprNodeBinOp(Type type, ASTExprNodeP left, ASTExprNodeP right);
+    ASTExprNodeBinOp(Type type, ASTExprNode* left, ASTExprNode* right);
 
     static constexpr unsigned int kind = 37;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeUniOp: public ASTExprNode {
@@ -732,15 +737,15 @@ struct ASTExprNodeUniOp: public ASTExprNode {
     };
 
     enum Type type;
-    ASTExprNodeP value;
+    ASTExprNode* value = nullptr;
 
-    ASTExprNodeUniOp(Type type, ASTExprNodeP value);
+    ASTExprNodeUniOp(Type type, ASTExprNode* value);
 
     static constexpr unsigned int kind = 38;
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 struct ASTExprNodeMacroDefinition: public ASTExprNode {
@@ -754,14 +759,14 @@ struct ASTExprNodeMacroDefinition: public ASTExprNode {
     unsigned int nodeKind() const override;
     void visit(ASTNodeVisitor& nv) override;
     void print(stl::ZeroCopyOutput& os) const override;
-    ASTExprNodeP clone() const override;
+    ASTExprNode* clone() const override;
 };
 
 class ASTNodeVisitor {
 public:
     virtual ~ASTNodeVisitor() = default;
 
-    void visit(ASTExprNodeP& cnode);
+    virtual ASTExprNode* visit(ASTExprNode* cnode);
 
     virtual bool isConst() const;
 
@@ -815,7 +820,7 @@ public:
 
 class ASTNodeVisitorDef: public ASTNodeVisitor {
 public:
-    void visit(ASTExprNodeP& cnode);
+    ASTExprNode* visit(ASTExprNode* cnode) override;
 
 #define NT(nt) \
     virtual void visit(nt& node) override; /* \

@@ -26,9 +26,9 @@ generate(
 generate(
     name="ASTGlobalAsmOperand",
     default="Const",
-    clone=False,  # ASTExprNodeP::clone() returns ASTExpr, not a new node ptr
+    clone=False,  # AST expression pointers require a deep clone
     variants=[
-        v("Const", "ASTExprNodeP", copy=False),
+        v("Const", "ASTExprNode*", copy=False),
         v("Sym", "ASTPath"),
     ],
 )

@@ -10,6 +10,10 @@ using namespace stl;
 ASTExprNode::~ASTExprNode() {
 }
 
+const char* ASTExprNode::typeName() const {
+    return typeid(*this).name();
+}
+
 unsigned int ASTExprNodeBlock::nodeKind() const {
     return ASTExprNodeBlock::kind;
 }
@@ -174,11 +178,11 @@ unsigned int ASTExprNodeMacroDefinition::nodeKind() const {
     void nodeType ::visit(ASTNodeVisitor& nv) { \
         nv.visit(*this);                        \
     }                                           \
-    void nodeType ::print(ZeroCopyOutput& os) const _print ASTExprNodeP nodeType ::clone() const _clone
-#define OPT_CLONE(node) (node.get() ? node->clone() : ASTExprNodeP())
+    void nodeType ::print(ZeroCopyOutput& os) const _print ASTExprNode* nodeType ::clone() const _clone
+#define OPT_CLONE(node) (node ? node->clone() : nullptr)
 
 namespace {
-    static inline ASTExprNodeP mkExprnodep(const Span& pos, ASTExprNodeP en) {
+    static inline ASTExprNode* mkExprnodep(const Span& pos, ASTExprNode* en) {
         en->setSpan(pos);
         return en;
     }
@@ -537,7 +541,7 @@ NODE(
         os << StringView(")");
     },
     {
-        std::vector<ASTExprNodeP> args;
+        std::vector<ASTExprNode*> args;
         for (const auto& a : this->args) {
             args.push_back(a->clone());
         }
@@ -555,7 +559,7 @@ NODE(
         os << StringView(")");
     },
     {
-        std::vector<ASTExprNodeP> args;
+        std::vector<ASTExprNode*> args;
         for (const auto& a : this->args) {
             args.push_back(a->clone());
         }
@@ -573,7 +577,7 @@ NODE(
         os << StringView(")");
     },
     {
-        std::vector<ASTExprNodeP> args;
+        std::vector<ASTExprNode*> args;
         for (const auto& a : this->args) {
             args.push_back(a->clone());
         }
@@ -792,7 +796,7 @@ NODE(
     ASTExprNodeArray,
     {
         os << StringView("[");
-        if (size.get()) {
+        if (size) {
             os << *values[0] << StringView("; ") << *size;
         } else {
             for (const auto& a : values) {
@@ -802,10 +806,10 @@ NODE(
         os << StringView("]");
     },
     {
-        if (size.get()) {
+        if (size) {
             return NEWNODE(ASTExprNodeArray, values[0]->clone(), size->clone());
         } else {
-            std::vector<ASTExprNodeP> nodes;
+            std::vector<ASTExprNode*> nodes;
             for (const auto& n : values) {
                 nodes.push_back(n->clone());
             }
@@ -824,7 +828,7 @@ NODE(
         os << StringView(")");
     },
     {
-        std::vector<ASTExprNodeP> nodes;
+        std::vector<ASTExprNode*> nodes;
         for (const auto& n : values) {
             nodes.push_back(n->clone());
         }
@@ -1000,19 +1004,19 @@ NODE(ASTExprNodeMacroDefinition, { os << StringView("/* macro definition #") << 
 
 NV(ASTExprNodeBlock, {
     for (auto& child : node.nodes) {
-        visit(child.node);
+        child.node = visit(child.node);
     }
 })
-NV(ASTExprNodeAsyncBlock, { visit(node.inner); })
-NV(ASTExprNodeGeneratorBlock, { visit(node.inner); })
-NV(ASTExprNodeTry, { visit(node.inner); })
+NV(ASTExprNodeAsyncBlock, { node.inner = visit(node.inner); })
+NV(ASTExprNodeGeneratorBlock, { node.inner = visit(node.inner); })
+NV(ASTExprNodeTry, { node.inner = visit(node.inner); })
 NV(ASTExprNodeMacro, { BUG(node.span(), StringView("Hit unexpanded macro in expression - ") << node); })
 NV(ASTExprNodeAsm, {
     for (auto& v : node.output) {
-        visit(v.value);
+        v.value = visit(v.value);
     }
     for (auto& v : node.input) {
-        visit(v.value);
+        v.value = visit(v.value);
     }
 })
 NV(ASTExprNodeAsm2, {
@@ -1020,7 +1024,7 @@ NV(ASTExprNodeAsm2, {
         switch (v.tag()) {
             case ASTAsmParam::TAG_Const: {
                 auto& e = v.as_Const();
-                visit(e);
+                e = visit(e);
                 break;
             }
             case ASTAsmParam::TAG_Sym: {
@@ -1028,78 +1032,78 @@ NV(ASTExprNodeAsm2, {
             }
             case ASTAsmParam::TAG_Label: {
                 auto& e = v.as_Label();
-                visit(e.code);
+                e.code = visit(e.code);
                 break;
             }
             case ASTAsmParam::TAG_RegSingle: {
                 auto& e = v.as_RegSingle();
-                visit(e.val);
+                e.val = visit(e.val);
                 break;
             }
             case ASTAsmParam::TAG_Reg: {
                 auto& e = v.as_Reg();
-                visit(e.valIn);
-                visit(e.valOut);
+                e.valIn = visit(e.valIn);
+                e.valOut = visit(e.valOut);
                 break;
             }
         }
     }
 })
-NV(ASTExprNodeFlow, { visit(node.value); })
+NV(ASTExprNodeFlow, { node.value = visit(node.value); })
 NV(ASTExprNodeLetBinding, {
     // TODO: Handle recurse into Let pattern?
-    visit(node.value);
-    visit(node.elseNode);
+    node.value = visit(node.value);
+    node.elseNode = visit(node.elseNode);
 })
 NV(ASTExprNodeAssign, {
-    visit(node.slot);
-    visit(node.value);
+    node.slot = visit(node.slot);
+    node.value = visit(node.value);
 })
 NV(ASTExprNodeCallPath, {
     for (auto& arg : node.args) {
-        visit(arg);
+        arg = visit(arg);
     }
 })
 NV(ASTExprNodeCallMethod, {
-    visit(node.val);
+    node.val = visit(node.val);
     for (auto& arg : node.args) {
-        visit(arg);
+        arg = visit(arg);
     }
 })
 NV(ASTExprNodeCallObject, {
-    visit(node.val);
+    node.val = visit(node.val);
     for (auto& arg : node.args) {
-        visit(arg);
+        arg = visit(arg);
     }
 })
-NV(ASTExprNodeLoop, { visit(node.code); })
+NV(ASTExprNodeLoop, { node.code = visit(node.code); })
 NV(ASTExprNodeFor, {
-    visit(node.value);
-    visit(node.code);
+    node.value = visit(node.value);
+    node.code = visit(node.code);
 })
 NV(ASTExprNodeWhile, {
     for (auto& c : node.conditions) {
-        visit(c.value);
+        c.value = visit(c.value);
     }
-    visit(node.code);
+    node.code = visit(node.code);
 })
 NV(ASTExprNodeMatch, {
-    visit(node.val);
+    node.val = visit(node.val);
     for (auto& arm : node.arms) {
         for (auto& c : arm.guard) {
-            visit(c.value);
+            c.value = visit(c.value);
         }
-        visit(arm.code);
+        arm.code = visit(arm.code);
     }
 })
 NV(ASTExprNodeIf, {
     for (auto& a : node.arms) {
         for (auto& c : a.conditions) {
-            visit(c.value);
+            c.value = visit(c.value);
         }
-        visit(a.body);
+        a.body = visit(a.body);
     }
-    visit(node.elseNode);
+    node.elseNode = visit(node.elseNode);
 })
 
 NV(ASTExprNodeWildcardPattern, { (void)node; })
@@ -1111,44 +1115,44 @@ NV(ASTExprNodeByteString, { (void)node; })
 NV(ASTExprNodeCString, { (void)node; })
 NV(ASTExprNodeSuffixedLiteral, { (void)node; })
 
-NV(ASTExprNodeClosure, { visit(node.code); });
+NV(ASTExprNodeClosure, { node.code = visit(node.code); });
 NV(ASTExprNodeStructLiteral, {
-    visit(node.baseValue);
+    node.baseValue = visit(node.baseValue);
     for (auto& val : node.values) {
-        visit(val.value);
+        val.value = visit(val.value);
     }
 })
 NV(ASTExprNodeStructLiteralPattern, {
     for (auto& val : node.values) {
-        visit(val.value);
+        val.value = visit(val.value);
     }
 })
 NV(ASTExprNodeArray, {
-    visit(node.size);
+    node.size = visit(node.size);
     for (auto& val : node.values) {
-        visit(val);
+        val = visit(val);
     }
 })
 NV(ASTExprNodeTuple, {
     for (auto& val : node.values) {
-        visit(val);
+        val = visit(val);
     }
 })
 NV(ASTExprNodeNamedValue, {})
 
-NV(ASTExprNodeField, { visit(node.obj); })
+NV(ASTExprNodeField, { node.obj = visit(node.obj); })
 NV(ASTExprNodeIndex, {
-    visit(node.obj);
-    visit(node.idx);
+    node.obj = visit(node.obj);
+    node.idx = visit(node.idx);
 })
-NV(ASTExprNodeDeref, { visit(node.value); })
-NV(ASTExprNodeCast, { visit(node.value); })
-NV(ASTExprNodeTypeAnnotation, { visit(node.value); })
+NV(ASTExprNodeDeref, { node.value = visit(node.value); })
+NV(ASTExprNodeCast, { node.value = visit(node.value); })
+NV(ASTExprNodeTypeAnnotation, { node.value = visit(node.value); })
 NV(ASTExprNodeBinOp, {
-    visit(node.left);
-    visit(node.right);
+    node.left = visit(node.left);
+    node.right = visit(node.right);
 })
-NV(ASTExprNodeUniOp, { visit(node.value); })
+NV(ASTExprNodeUniOp, { node.value = visit(node.value); })
 NV(ASTExprNodeMacroDefinition, {})
 #undef NV
 
@@ -1167,11 +1171,11 @@ ASTExprNodeBlock::ASTExprNodeBlock(std::vector<Line> nodes)
 {
 }
 
-ASTExprNodeBlock::ASTExprNodeBlock(ASTExprNodeP value)
+ASTExprNodeBlock::ASTExprNodeBlock(ASTExprNode* value)
     : ASTExprNodeBlock()
 {
     setSpan(value->span());
-    nodes.push_back({false, std::move(value)});
+    nodes.push_back({false, value});
 }
 
 ASTExprNodeBlock::ASTExprNodeBlock(Type type, std::vector<Line> nodes, std::shared_ptr<ASTModule> localMod)
@@ -1182,15 +1186,15 @@ ASTExprNodeBlock::ASTExprNodeBlock(Type type, std::vector<Line> nodes, std::shar
 {
 }
 
-ASTExprNodeAsyncBlock::ASTExprNodeAsyncBlock(ASTExprNodeP inner, bool isMove, bool isUse)
-    : inner(std::move(inner))
+ASTExprNodeAsyncBlock::ASTExprNodeAsyncBlock(ASTExprNode* inner, bool isMove, bool isUse)
+    : inner(inner)
     , isMove(isMove)
     , isUse(isUse)
 {
 }
 
-ASTExprNodeGeneratorBlock::ASTExprNodeGeneratorBlock(ASTExprNodeP inner, ASTType* returnType, bool isMove, bool isCoroutineClosureBody, bool isAsync)
-    : inner(std::move(inner))
+ASTExprNodeGeneratorBlock::ASTExprNodeGeneratorBlock(ASTExprNode* inner, ASTType* returnType, bool isMove, bool isCoroutineClosureBody, bool isAsync)
+    : inner(inner)
     , returnType(returnType)
     , isMove(isMove)
     , isCoroutineClosureBody(isCoroutineClosureBody)
@@ -1198,8 +1202,8 @@ ASTExprNodeGeneratorBlock::ASTExprNodeGeneratorBlock(ASTExprNodeP inner, ASTType
 {
 }
 
-ASTExprNodeTry::ASTExprNodeTry(ASTExprNodeP inner)
-    : inner(std::move(inner))
+ASTExprNodeTry::ASTExprNodeTry(ASTExprNode* inner)
+    : inner(inner)
 {
 }
 
@@ -1228,18 +1232,18 @@ ASTExprNodeAsm2::ASTExprNodeAsm2(AsmOptions options, std::vector<AsmLine> lines,
 {
 }
 
-ASTExprNodeFlow::ASTExprNodeFlow(Type type, Ident target, ASTExprNodeP value)
+ASTExprNodeFlow::ASTExprNodeFlow(Type type, Ident target, ASTExprNode* value)
     : type(type)
     , target(std::move(target))
-    , value(std::move(value))
+    , value(value)
 {
 }
 
-ASTExprNodeLetBinding::ASTExprNodeLetBinding(ASTPattern pat, ASTType* type, ASTExprNodeP value, ASTExprNodeP elseArm, bool isSuper)
+ASTExprNodeLetBinding::ASTExprNodeLetBinding(ASTPattern pat, ASTType* type, ASTExprNode* value, ASTExprNode* elseArm, bool isSuper)
     : pat(std::move(pat))
-    , type(std::move(type))
-    , value(std::move(value))
-    , elseNode(std::move(elseArm))
+    , type(type)
+    , value(value)
+    , elseNode(elseArm)
     , isSuper(isSuper)
 {
 }
@@ -1249,28 +1253,28 @@ ASTExprNodeAssign::ASTExprNodeAssign()
 {
 }
 
-ASTExprNodeAssign::ASTExprNodeAssign(Operation op, ASTExprNodeP slot, ASTExprNodeP value)
+ASTExprNodeAssign::ASTExprNodeAssign(Operation op, ASTExprNode* slot, ASTExprNode* value)
     : op(op)
-    , slot(std::move(slot))
-    , value(std::move(value))
+    , slot(slot)
+    , value(value)
 {
 }
 
-ASTExprNodeCallPath::ASTExprNodeCallPath(ASTPath&& path, std::vector<ASTExprNodeP>&& args)
+ASTExprNodeCallPath::ASTExprNodeCallPath(ASTPath&& path, std::vector<ASTExprNode*>&& args)
     : path(std::move(path))
     , args(std::move(args))
 {
 }
 
-ASTExprNodeCallMethod::ASTExprNodeCallMethod(ASTExprNodeP obj, ASTPathNode method, std::vector<ASTExprNodeP> args)
-    : val(std::move(obj))
+ASTExprNodeCallMethod::ASTExprNodeCallMethod(ASTExprNode* obj, ASTPathNode method, std::vector<ASTExprNode*> args)
+    : val(obj)
     , method(std::move(method))
     , args(std::move(args))
 {
 }
 
-ASTExprNodeCallObject::ASTExprNodeCallObject(ASTExprNodeP val, std::vector<ASTExprNodeP>&& args)
-    : val(std::move(val))
+ASTExprNodeCallObject::ASTExprNodeCallObject(ASTExprNode* val, std::vector<ASTExprNode*>&& args)
+    : val(val)
     , args(std::move(args))
 {
 }
@@ -1280,47 +1284,47 @@ ASTExprNodeLoop::ASTExprNodeLoop()
 {
 }
 
-ASTExprNodeLoop::ASTExprNodeLoop(Ident label, ASTExprNodeP code)
+ASTExprNodeLoop::ASTExprNodeLoop(Ident label, ASTExprNode* code)
     : label(std::move(label))
-    , code(std::move(code))
+    , code(code)
 {
 }
 
-ASTExprNodeFor::ASTExprNodeFor(Ident label, ASTPattern pattern, ASTExprNodeP val, ASTExprNodeP code, bool isAwait)
+ASTExprNodeFor::ASTExprNodeFor(Ident label, ASTPattern pattern, ASTExprNode* val, ASTExprNode* code, bool isAwait)
     : label(std::move(label))
     , pattern(std::move(pattern))
-    , value(std::move(val))
-    , code(std::move(code))
+    , value(val)
+    , code(code)
     , isAwait(isAwait)
 {
 }
 
-ASTExprNodeWhile::ASTExprNodeWhile(Ident label, std::vector<ASTIfLetCondition> conditions, ASTExprNodeP code)
+ASTExprNodeWhile::ASTExprNodeWhile(Ident label, std::vector<ASTIfLetCondition> conditions, ASTExprNode* code)
     : label(std::move(label))
     , conditions(std::move(conditions))
-    , code(std::move(code))
+    , code(code)
 {
 }
 
 ASTExprNodeMatchArm::ASTExprNodeMatchArm() {
 }
 
-ASTExprNodeMatchArm::ASTExprNodeMatchArm(std::vector<ASTPattern> patterns, std::vector<ASTIfLetCondition> guard, ASTExprNodeP code)
+ASTExprNodeMatchArm::ASTExprNodeMatchArm(std::vector<ASTPattern> patterns, std::vector<ASTIfLetCondition> guard, ASTExprNode* code)
     : patterns(mv$(patterns))
     , guard(mv$(guard))
-    , code(mv$(code))
+    , code(code)
 {
 }
 
-ASTExprNodeMatch::ASTExprNodeMatch(ASTExprNodeP val, std::vector<ASTExprNodeMatchArm> arms)
-    : val(std::move(val))
+ASTExprNodeMatch::ASTExprNodeMatch(ASTExprNode* val, std::vector<ASTExprNodeMatchArm> arms)
+    : val(val)
     , arms(std::move(arms))
 {
 }
 
-ASTExprNodeIf::ASTExprNodeIf(std::vector<Arm> arms, ASTExprNodeP elseCode)
+ASTExprNodeIf::ASTExprNodeIf(std::vector<Arm> arms, ASTExprNode* elseCode)
     : arms(std::move(arms))
-    , elseNode(std::move(elseCode))
+    , elseNode(elseCode)
 {
 }
 
@@ -1362,9 +1366,9 @@ ASTExprNodeSuffixedLiteral::ASTExprNodeSuffixedLiteral(std::string text)
 {
 }
 
-ASTExprNodeStructLiteral::ASTExprNodeStructLiteral(ASTPath path, ASTExprNodeP baseValue, tValues&& values)
+ASTExprNodeStructLiteral::ASTExprNodeStructLiteral(ASTPath path, ASTExprNode* baseValue, tValues&& values)
     : path(std::move(path))
-    , baseValue(std::move(baseValue))
+    , baseValue(baseValue)
     , values(std::move(values))
 {
 }
@@ -1375,18 +1379,18 @@ ASTExprNodeStructLiteralPattern::ASTExprNodeStructLiteralPattern(ASTPath path, t
 {
 }
 
-ASTExprNodeArray::ASTExprNodeArray(std::vector<ASTExprNodeP> vals)
+ASTExprNodeArray::ASTExprNodeArray(std::vector<ASTExprNode*> vals)
     : values(std::move(vals))
 {
 }
 
-ASTExprNodeArray::ASTExprNodeArray(ASTExprNodeP val, ASTExprNodeP size)
-    : size(std::move(size))
+ASTExprNodeArray::ASTExprNodeArray(ASTExprNode* val, ASTExprNode* size)
+    : size(size)
 {
-    values.push_back(std::move(val));
+    values.push_back(val);
 }
 
-ASTExprNodeTuple::ASTExprNodeTuple(std::vector<ASTExprNodeP> vals)
+ASTExprNodeTuple::ASTExprNodeTuple(std::vector<ASTExprNode*> vals)
     : values(std::move(vals))
 {
 }
@@ -1396,45 +1400,45 @@ ASTExprNodeNamedValue::ASTExprNodeNamedValue(ASTPath path)
 {
 }
 
-ASTExprNodeField::ASTExprNodeField(ASTExprNodeP obj, RcString name)
-    : obj(std::move(obj))
+ASTExprNodeField::ASTExprNodeField(ASTExprNode* obj, RcString name)
+    : obj(obj)
     , name(std::move(name))
 {
 }
 
-ASTExprNodeIndex::ASTExprNodeIndex(ASTExprNodeP obj, ASTExprNodeP idx)
-    : obj(std::move(obj))
-    , idx(std::move(idx))
+ASTExprNodeIndex::ASTExprNodeIndex(ASTExprNode* obj, ASTExprNode* idx)
+    : obj(obj)
+    , idx(idx)
 {
 }
 
-ASTExprNodeDeref::ASTExprNodeDeref(ASTExprNodeP value)
-    : value(std::move(value))
+ASTExprNodeDeref::ASTExprNodeDeref(ASTExprNode* value)
+    : value(value)
 {
 }
 
-ASTExprNodeCast::ASTExprNodeCast(ASTExprNodeP value, ASTType*&& dstType)
-    : value(std::move(value))
+ASTExprNodeCast::ASTExprNodeCast(ASTExprNode* value, ASTType*&& dstType)
+    : value(value)
     , type(std::move(dstType))
 {
 }
 
-ASTExprNodeTypeAnnotation::ASTExprNodeTypeAnnotation(ASTExprNodeP value, ASTType*&& dstType)
-    : value(std::move(value))
+ASTExprNodeTypeAnnotation::ASTExprNodeTypeAnnotation(ASTExprNode* value, ASTType*&& dstType)
+    : value(value)
     , type(std::move(dstType))
 {
 }
 
-ASTExprNodeBinOp::ASTExprNodeBinOp(Type type, ASTExprNodeP left, ASTExprNodeP right)
+ASTExprNodeBinOp::ASTExprNodeBinOp(Type type, ASTExprNode* left, ASTExprNode* right)
     : type(type)
-    , left(std::move(left))
-    , right(std::move(right))
+    , left(left)
+    , right(right)
 {
 }
 
-ASTExprNodeUniOp::ASTExprNodeUniOp(Type type, ASTExprNodeP value)
+ASTExprNodeUniOp::ASTExprNodeUniOp(Type type, ASTExprNode* value)
     : type(type)
-    , value(std::move(value))
+    , value(value)
 {
 }
 
@@ -1445,17 +1449,19 @@ ASTExprNodeMacroDefinition::ASTExprNodeMacroDefinition(unsigned int definitionId
 {
 }
 
-void ASTNodeVisitor::visit(ASTExprNodeP& cnode) {
-    if (cnode.get()) {
+ASTExprNode* ASTNodeVisitor::visit(ASTExprNode* cnode) {
+    if (cnode) {
         cnode->visit(*this);
     }
+    return cnode;
 }
 
-void ASTNodeVisitorDef::visit(ASTExprNodeP& cnode) {
-    if (cnode.isValid()) {
-        TRACE_FUNCTION_F(cnode.typeName());
+ASTExprNode* ASTNodeVisitorDef::visit(ASTExprNode* cnode) {
+    if (cnode) {
+        TRACE_FUNCTION_F(cnode->typeName());
         cnode->visit(*this);
     }
+    return cnode;
 }
 
 bool ASTNodeVisitor::isConst() const {

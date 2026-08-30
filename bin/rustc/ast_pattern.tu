@@ -43,7 +43,7 @@ generate(
         ], copy=False),
         v("Guard", fields=[
             ("unique_ptr<ASTPattern>", "sub"),
-            ("ASTExprNodeP", "cond"),
+            ("ASTExprNode*", "cond"),
         ], copy=False, doc="`pat if expr`, which matches only when the"
                            " expression holds. It is lifted into the arm's"
                            " guard before anything but expansion sees it."),

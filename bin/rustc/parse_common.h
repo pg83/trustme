@@ -57,13 +57,13 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
 
 ASTExpr ParseExpr(TokenStream& lex);
 ASTExpr ParseExprBlock(TokenStream& lex);
-ASTExprNodeP ParseExpr0(TokenStream& lex);
-ASTExprNodeP ParseExpr13(TokenStream& lex);
-ASTExprNodeP ParseExprVal(TokenStream& lex);
-ASTExprNodeP ParseExprBlockNode(TokenStream& lex);
-ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence);
-ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTModule>& localMod, bool& addSilenceIfEnd);
-ASTExprNodeP ParseStmt(TokenStream& lex);
+ASTExprNode* ParseExpr0(TokenStream& lex);
+ASTExprNode* ParseExpr13(TokenStream& lex);
+ASTExprNode* ParseExprVal(TokenStream& lex);
+ASTExprNode* ParseExprBlockNode(TokenStream& lex);
+ASTExprNode* ParseExprBlockLine(TokenStream& lex, bool* addSilence);
+ASTExprNode* ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTModule>& localMod, bool& addSilenceIfEnd);
+ASTExprNode* ParseStmt(TokenStream& lex);
 
 TokenTree ParseTT(TokenStream& lex, bool unwrapped);
 

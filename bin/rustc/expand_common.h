@@ -85,5 +85,5 @@ ExpandProcMacro* ExpandFindProcMacro(const WireBoard& wb, const RcString& name);
 ExpandDecorator* ExpandFindDecorator(const WireBoard& wb, const RcString& name);
 void ExpandInit(ExpandRegistry& registry);
 void Expand(const WireBoard& wb, ASTCrate& crate);
-ASTExprNodeP ExpandParseAndExpandExprVal(const ASTCrate& crate, const ASTModule& mod, TokenStream& lex);
-void ExpandBareExpr(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, ASTExprNodeP& node);
+ASTExprNode* ExpandParseAndExpandExprVal(const ASTCrate& crate, const ASTModule& mod, TokenStream& lex);
+ASTExprNode* ExpandBareExpr(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, ASTExprNode* node);

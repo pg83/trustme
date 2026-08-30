@@ -36,7 +36,7 @@ class ASTVisibility;
 class ASTPattern;
 class ASTPath;
 class ASTExprNode;
-class ASTExprNodeP;
+class ASTExprNode;
 class ASTAttribute;
 class ASTItem;
 
@@ -147,7 +147,7 @@ public:
 
     ASTExprNode& fragNode();
 
-    ASTExprNodeP takeFragNode();
+    ASTExprNode* takeFragNode();
     ASTNamed<ASTItem> takeFragItem();
     ASTNamed<ASTItem> takeFragStmtItem();
     ASTVisibility takeFragVis();

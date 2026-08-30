@@ -91,7 +91,7 @@ Ordering ASTPathParamEnt::ord(const ASTPathParamEnt& x) const {
         case ASTPathParamEnt::TAG_Value: {
             auto& v1 = (*this).as_Value();
             auto& v2 = x.as_Value();
-            return ::ord((uintptr_t)v1.get(), (uintptr_t)v2.get());
+            return ::ord((uintptr_t)v1, (uintptr_t)v2);
         }
         case ASTPathParamEnt::TAG_AssociatedTyEqual: {
             auto& v1 = (*this).as_AssociatedTyEqual();

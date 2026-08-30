@@ -3,10 +3,10 @@
 generate(
     name="ASTAttributeData",
     default="None",
-    clone=False,  # ASTExprNodeP::clone() returns ASTExpr, not a new node ptr
+    clone=False,  # AST expression pointers require a deep clone
     variants=[
         v("None"),
-        v("ValueUnexpanded", "ASTExprNodeP", copy=False),
+        v("ValueUnexpanded", "ASTExprNode*", copy=False),
         v("String", fields=[("std::string", "val")]),
         v("List", fields=[("std::vector<ASTAttribute>", "subItems")]),
     ],
