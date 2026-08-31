@@ -5484,10 +5484,44 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             }
             return isDefiningOpaque(pending.left) != isDefiningOpaque(pending.right);
         };
+        const auto pendingIsDeferredProjectionEquality = [&](const Unifier::PendingEquality& pending) {
+            const auto* leftPath = pending.left->opt_Path();
+            const auto* rightPath = pending.right->opt_Path();
+            const auto* leftProjection = leftPath ? leftPath->path.data.opt_UfcsKnown() : nullptr;
+            const auto* rightProjection = rightPath ? rightPath->path.data.opt_UfcsKnown() : nullptr;
+            const bool leftRigid = leftPath && (leftPath->binding.is_Unbound() || leftPath->binding.is_Opaque());
+            const bool rightRigid = rightPath && (rightPath->binding.is_Unbound() || rightPath->binding.is_Opaque());
+            if (!leftRigid || !rightRigid || !leftProjection || !rightProjection || leftProjection->trait.path != rightProjection->trait.path || leftProjection->item != rightProjection->item) {
+                return false;
+            }
+            const auto typesMayRelate = [&](const HIRType* left, const HIRType* right) {
+                return left == right || left->equalsIgnoringRegions(right) || ivars.getType(left)->is_Infer() || ivars.getType(right)->is_Infer();
+            };
+            const auto paramsMayRelate = [&](const HIRPathParams& left, const HIRPathParams& right) {
+                if (left.types.size() != right.types.size() || left.values.size() != right.values.size()) {
+                    return false;
+                }
+                for (size_t i = 0; i < left.types.size(); i++) {
+                    if (left.types[i] != right.types[i] && !left.types[i]->equalsIgnoringRegions(right.types[i])) {
+                        return false;
+                    }
+                }
+                for (size_t i = 0; i < left.values.size(); i++) {
+                    if (left.values[i] != right.values[i]) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+            return (ivars.getType(leftProjection->type)->is_Infer() || ivars.getType(rightProjection->type)->is_Infer())
+                && typesMayRelate(leftProjection->type, rightProjection->type)
+                && paramsMayRelate(leftProjection->trait.params, rightProjection->trait.params)
+                && paramsMayRelate(leftProjection->params, rightProjection->params);
+        };
 
         bool ambiguous = outcome == Unifier::Outcome::Ambiguous && unifier.pending().length() == 0 && unifier.pendingValues().empty();
         for (const auto& pending : unifier.pending()) {
-            if (!pendingIsResponseEquality(pending)) {
+            if (!pendingIsResponseEquality(pending) && !pendingIsDeferredProjectionEquality(pending)) {
                 ambiguous = true;
             }
         }
@@ -5511,7 +5545,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             appendEquality(binding.left, binding.right);
         }
         for (const auto& pending : unifier.pending()) {
-            if (pendingIsResponseEquality(pending)) {
+            if (pendingIsResponseEquality(pending) || pendingIsDeferredProjectionEquality(pending)) {
                 appendEquality(pending.left, pending.right);
             }
         }
