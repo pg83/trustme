@@ -43,11 +43,14 @@ static gate 0/0, libcore ≤ базлайна.
   следить за GENERICPlaceholder в следующих пунктах.
 
 ### 2. CoerceUnsized pointer-кандидат через compareWithPlaceholders
-- `hir_typeck_helpers.cpp:3229–3238`: `e->inner->compareWithPlaceholders(...)`,
-  `cmp != Unequal` → кандидат с `certaintyFromCompare(cmp)`. Fuzzy-сравнение
-  рождает кандидата; equality-констрейнт из сравнения не сохраняется как
-  typed effect (тот же класс бага, что чинили для array→slice).
-- Статус: ОТКРЫТ.
+- ЗАКРЫТ 2026-08-31, верифицирован гейтом. Кандидат предлагается только по
+  форме (оба Pointer, ослабление мутабельности); равенство inner-типов
+  устанавливает evaluator через `evaluateBuiltinCoerceUnsized` →
+  `relateTypes` (typed effect/equality в ответе). `certaintyFromCompare`
+  по bin/rustc: 0 вхождений.
+- Верификация: unit exit 0 (полный), static gate 0/0, libcore интерливленно
+  против HEAD-базлайна: 41.2–41.6 у базлайна, медиана 42.1 у пропатченного
+  (+2.2%, порог 43.3).
 
 ### 3. ParamEnv assoc-projection кандидаты через fuzzy-гейт
 - `hir_typeck_helpers.cpp:4948`: `iterateBoundsTraits(...)` — `cmp != Unequal`
@@ -59,27 +62,34 @@ static gate 0/0, libcore ≤ базлайна.
 - Статус: ОТКРЫТ (сначала аудит, потом замена).
 
 ### 4. Callable/Fn-семейство: сравнение входов через compareWithPlaceholders
-- `hir_typeck_helpers.cpp:3279` (`cmp &= inputTypes[i]->compareWithPlaceholders`),
-  `:3353` (`argCmp`). Первичный аудит 2026-08-31: cmp используется только как
-  гейт (`!= Unequal`), кандидат несёт фактические типы аргументов в params —
-  похоже на консервативный prefilter. НО: `unifyImplHead` вызывается только
-  для crate-impl кандидатов (`:10148`, `:10160`); проверить, проходят ли
-  magic/type-кандидаты (SolverImpl с готовыми pp) транзакционную унификацию
-  голов, или их params применяются без неё.
-- Статус: ОТКРЫТ (аудит).
+- ЗАКРЫТ 2026-08-31 аудитом (кода не требовалось): `relateAssembledHead`
+  (`:9448`, вызов из `collect(...)` в `assembleCandidates`) гоняет
+  транзакционный `Unifier` по goalType/goalParams против головы КАЖДОГО
+  кандидата assembly (Builtin/Other/ParamEnv/AliasBound), экспортируя
+  headEqualities, которые `evaluateCandidate` проверяет. Сравнения на
+  `:3292`/`:3366` (и `:9851`) — консервативные префильтры: отклоняют только
+  доказанный Unequal, ничего не доказывают. Инвариант, который обязан
+  сохраняться: префильтр не имеет права влиять на certainty.
 
 ### 5. comparePp-гейты на sourceTrait params
-- `hir_typeck_helpers.cpp:3565`, `:3596` — `comparePp(...) != Unequal`
-  решает, какой typeBounds-entry перекроет assoc-binding кандидата
-  (trait-object/erased supertrait пути): fuzzy-совпадение params выбирает
-  данные кандидата. `:10078` — то же при применении response; `:10052` —
-  `compareWithPlaceholders` на params ответа.
-- Статус: ОТКРЫТ (аудит).
+- Аудит 2026-08-31: fuzzy-`comparePp` решает, какой typeBounds-entry
+  перекроет assoc-binding кандидата — выбор ДАННЫХ кандидата до унификации.
+  Актуальные места (после закрытия п.1 строки сместились):
+  `hir_typeck_helpers.cpp:3578`, `:3609` (trait-object/erased supertrait
+  в assembleTypeCandidatesCb), `:9877` (assembleAliasBoundCandidates).
+  Голова кандидата потом унифицируется (`relateAssembledHead`), но
+  неверно выбранный override assoc-биндинга — это неверные typeBounds,
+  а не отклоняемая голова. Замена: не выбирать по fuzzy, а либо нести оба
+  варианта кандидатами, либо выражать override equality-обязательством.
+- Статус: ОТКРЫТ.
 
 ### 6. Builtin operator: выход через compareWithPlaceholders == Equal
-- `hir_typeck_helpers.cpp:12787`. Аудит: влияет ли на выбор builtin против
-  impl-кандидата.
-- Статус: ОТКРЫТ (аудит).
+- Актуальное место `hir_typeck_helpers.cpp:12759`
+  (`operatorImplHasBuiltinSignature`): строгий `== Equal`, fuzzy трактуется
+  как «семантический impl» для `SolverOperatorSummary`. Это классификация
+  для operator fallback, не доказательство; аудит потребителей summary —
+  влияет ли неверная классификация при fuzzy на выбор пути.
+- Статус: ОТКРЫТ (аудит, низкий приоритет).
 
 ### 7. Tri-state обёртки typeIsSized/typeIsCopy/typeIsClone в решениях тайпчека
 - Обёртки (`:5022`, `:5151`, `:5243`) зовут solver, но при `NoSolution`
