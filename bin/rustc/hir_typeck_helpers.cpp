@@ -666,6 +666,10 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     Certainty matchAssociatedTypes(const HIRSimplePath& trait, Candidate& candidate, const HIRTraitPath::assocListT* associated, const Monomorphiser* headBindings = nullptr);
 
+    Certainty evaluateBuiltinSizedCopyClone(Candidate* candidate, StructuralTrait builtin, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type);
+
+    Certainty evaluateStructuralTrait(const Span& callSpan, StructuralTrait trait, const HIRType* type);
+
     Certainty evaluateAutoBuiltin(const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type);
 
     Certainty evaluateCandidate(size_t frameIndex, size_t candidateIndex, const HIRSimplePath& trait, const HIRTraitPath::assocListT* associated);
@@ -3024,28 +3028,28 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
     const auto langFnPtr = this->crate.getLangItemPathOpt("fn_ptr_trait");
     const auto langTuple = this->crate.getLangItemPathOpt("tuple_trait");
     const auto langTransmute = this->crate.getLangItemPathOpt("transmute_trait");
-    const auto certaintyFromCompare = [](HIRCompare cmp) {
-        return cmp == HIRCompare::Equal ? SolverCertainty::Proven : SolverCertainty::Ambiguous;
-    };
 
     const auto& type = this->ivars.getType(ty);
 
     TRACE_FUNCTION_F(StringView("trait = ") << trait << params << StringView(", type = ") << type);
-    if (trait == langSized()) {
-        auto cmp = typeIsSizedBuiltin(sp, type);
-        if (cmp != HIRCompare::Unequal) {
-            return callback.visit(SolverImpl(type, nullptr, nullptr), certaintyFromCompare(cmp));
-        } else {
-            return false;
-        }
+    if (!langSized().components().empty() && trait == langSized()) {
+        return !type->is_Generic() && callback.visit(SolverImpl(type, nullptr, nullptr));
     }
 
-    if (trait == langCopy()) {
-        auto cmp = this->typeIsCopyBuiltin(sp, type);
-        if (cmp != HIRCompare::Unequal) {
-            return callback.visit(SolverImpl(type, nullptr, nullptr), certaintyFromCompare(cmp));
-        } else {
-            return false;
+    if (!langCopy().components().empty() && trait == langCopy()) {
+        switch ((*type).tag()) {
+            case HIRType::TAG_Infer:
+            case HIRType::TAG_Primitive:
+            case HIRType::TAG_Array:
+            case HIRType::TAG_Tuple:
+            case HIRType::TAG_Borrow:
+            case HIRType::TAG_Pointer:
+            case HIRType::TAG_NamedFunction:
+            case HIRType::TAG_Function:
+            case HIRType::TAG_NodeType:
+                return callback.visit(SolverImpl(type, nullptr, nullptr));
+            default:
+                return false;
         }
     }
 
@@ -3076,12 +3080,18 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         }
     }
 
-    if (trait == langClone() && (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || ((*type).is_Path() && ((*type).as_Path().isClosure())))) {
-        auto cmp = this->typeIsClone(sp, type);
-        if (cmp != HIRCompare::Unequal) {
-            return callback.visit(SolverImpl(type, nullptr, nullptr), certaintyFromCompare(cmp));
-        } else {
-            return false;
+    if (!langClone().components().empty() && trait == langClone()) {
+        switch ((*type).tag()) {
+            case HIRType::TAG_Array:
+            case HIRType::TAG_Tuple:
+            case HIRType::TAG_NamedFunction:
+            case HIRType::TAG_Function:
+            case HIRType::TAG_NodeType:
+                return callback.visit(SolverImpl(type, nullptr, nullptr));
+            case HIRType::TAG_Path:
+                return type->as_Path().isClosure() && callback.visit(SolverImpl(type, nullptr, nullptr));
+            default:
+                return false;
         }
     }
 
@@ -3222,6 +3232,9 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
             return true;
         }
 
+        const auto certaintyFromCompare = [](HIRCompare cmp) {
+            return cmp == HIRCompare::Equal ? SolverCertainty::Proven : SolverCertainty::Ambiguous;
+        };
         const auto& dstTy = params.types.at(0);
         if (const auto* e = type->opt_Pointer()) {
             if (const auto* de = dstTy->opt_Pointer()) {
@@ -3950,20 +3963,24 @@ bool TraitResolution::solveTraitGoalCb(const Span& sp, const HIRSimplePath& trai
     return nextSolver->evaluateTyped(sp, trait, params, type, callback, query, true);
 }
 
-SolverCertainty TraitResolution::solveNonBuiltinTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRType* type) const {
-    if (!nonBuiltinSolver) {
-        nonBuiltinSolver = eatCachePool->make<NextTraitGoalEvaluator>(*this, crate);
+SolverCertainty TraitResolution::solveTraitGoalCertainty(const Span& sp, const HIRSimplePath& trait, const HIRType* type) const {
+    if (!traitQuerySolver) {
+        traitQuerySolver = eatCachePool->make<NextTraitGoalEvaluator>(*this, crate);
     }
     SolverCertainty certainty = SolverCertainty::NoSolution;
     auto callback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-        if (!response.impl) {
-            return false;
-        }
         certainty = response.certainty;
         return true;
     });
-    nonBuiltinSolver->evaluateTyped(sp, trait, HIRPathParams{}, type, callback, {.allowInferInputs = true, .ambiguity = SolverAmbiguityPolicy::Report}, true, false);
+    traitQuerySolver->evaluateTyped(sp, trait, HIRPathParams{}, type, callback, {.allowInferInputs = true, .ambiguity = SolverAmbiguityPolicy::Report}, true);
     return certainty;
+}
+
+SolverCertainty TraitResolution::solveStructuralTraitGoalCertainty(const Span& sp, StructuralTrait trait, const HIRType* type) const {
+    if (!traitQuerySolver) {
+        traitQuerySolver = eatCachePool->make<NextTraitGoalEvaluator>(*this, crate);
+    }
+    return traitQuerySolver->evaluateStructuralTrait(sp, trait, type);
 }
 
 bool TraitResolution::solveNormalizesToCb(const Span& sp, const NormalizesTo& goal, NormalizesToCallback& callback) const {
@@ -4835,6 +4852,22 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
         return false;
     }
 
+    if (trait == langSized()) {
+        if (const auto* generic = type->opt_Generic()) {
+            const HIRGenericParams* definition = nullptr;
+            if (generic->group() == GENERICImpl) {
+                definition = implGenerics_;
+            } else if (generic->group() == GENERICItem) {
+                definition = itemGenerics_;
+            }
+            if (definition && generic->idx() < definition->types.size() && definition->types[generic->idx()].isSized) {
+                if (callback.visit(SolverImpl(type, nullptr, nullptr))) {
+                    return true;
+                }
+            }
+        }
+    }
+
     // TODO: A bound can imply something via its associated types. How deep can this go?
 
     for (const auto& bound : traitBounds) {
@@ -5021,221 +5054,48 @@ bool TraitResolution::traitContainsType(const Span& sp, const HIRGenericPath& tr
 
 HIRCompare TraitResolution::typeIsSized(const Span& sp, const HIRType* ty) const {
     const auto& type = this->ivars.getType(ty);
-    if (!langSized().components().empty()) {
-        switch (solveNonBuiltinTraitGoal(sp, langSized(), type)) {
+    if (langSized().components().empty()) {
+        switch (solveStructuralTraitGoalCertainty(sp, StructuralTrait::Sized, type)) {
             case SolverCertainty::Proven:
                 return HIRCompare::Equal;
             case SolverCertainty::Ambiguous:
                 return HIRCompare::Fuzzy;
             case SolverCertainty::NoSolution:
-                break;
-        }
-    }
-    return typeIsSizedBuiltin(sp, type);
-}
-
-HIRCompare TraitResolution::typeIsSizedBuiltin(const Span& sp, const HIRType* ty) const {
-    const auto& type = this->ivars.getType(ty);
-    switch ((*type).tag()) {
-        default:
-            break;
-        case HIRType::TAG_Infer: {
-            auto& e = (*type).as_Infer();
-            switch (e.tyClass) {
-                case HIRInferClass::Integer:
-                case HIRInferClass::Float:
-                    return HIRCompare::Equal;
-                default:
-                    return HIRCompare::Fuzzy;
-            }
-            break;
-        }
-        case HIRType::TAG_Primitive: {
-            auto& e = (*type).as_Primitive();
-            if (e == HIRCoreType::Str) {
                 return HIRCompare::Unequal;
-            }
-            break;
         }
-        case HIRType::TAG_Slice: {
-            return HIRCompare::Unequal;
-        }
-        case HIRType::TAG_Path: {
-            auto& e = (*type).as_Path();
-            // TODO: Check that only ?Sized parameters are !Sized
-            switch (e.binding.tag()) {
-                case HIRTypePathBinding::TAG_Unbound: {
-                    break;
-                }
-                case HIRTypePathBinding::TAG_Opaque: {
-                    if (const auto* pe = e.path.data.opt_UfcsKnown()) {
-                        const auto& trait = crate.getTraitByPath(sp, pe->trait.path);
-                        const auto* aty = trait.getAtyDef(pe->item).first;
-                        if (aty && !aty->isSized) {
-                            return HIRCompare::Unequal;
-                        }
-                    }
-                    break;
-                }
-                case HIRTypePathBinding::TAG_ExternType: {
-                    return HIRCompare::Unequal;
-                }
-                case HIRTypePathBinding::TAG_Enum: {
-                    break;
-                }
-                case HIRTypePathBinding::TAG_Union: {
-                    break;
-                }
-                case HIRTypePathBinding::TAG_Struct: {
-                    auto& pb = e.binding.as_Struct();
-                    switch (pb->structMarkings.dstType) {
-                        case HIRStructMarkings::DstType::None:
-                            break;
-                        case HIRStructMarkings::DstType::Possible:
-                            return typeIsSized(sp, e.path.data.as_Generic().params.types.at(pb->structMarkings.unsizedParam));
-                        case HIRStructMarkings::DstType::Projection: {
-                            const HIRType* tailTpl = nullptr;
-                            switch (pb->data.tag()) {
-                                case HIRStructData::TAG_Unit:
-                                    BUG(sp, StringView("Potentially-unsized unit struct ") << type);
-                                case HIRStructData::TAG_Tuple:
-                                    tailTpl = pb->data.as_Tuple().at(pb->structMarkings.unsizedField).ent;
-                                    break;
-                                case HIRStructData::TAG_Named:
-                                    tailTpl = pb->data.as_Named().at(pb->structMarkings.unsizedField).ty;
-                                    break;
-                            }
-                            const auto& params = e.path.data.as_Generic().params;
-                            auto tailTy = MonomorphStatePtr(crate.types, type, &params, nullptr).monomorphType(sp, tailTpl);
-                            tailTy = this->expandAssociatedTypes(sp, mv$(tailTy));
-                            return typeIsSized(sp, tailTy);
-                        }
-                        case HIRStructMarkings::DstType::Slice:
-                        case HIRStructMarkings::DstType::TraitObject:
-                            return HIRCompare::Unequal;
-                    }
-                    break;
-                }
-            }
-            break;
-        }
-        case HIRType::TAG_Generic: {
-            auto& e = (*type).as_Generic();
-            switch (e.group()) {
-                case 0:
-                    if (!this->implGenerics_) {
-                        return HIRCompare::Fuzzy;
-                    }
-                    return this->implGenerics_->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
-                case 1:
-                    if (!this->itemGenerics_) {
-                        return HIRCompare::Fuzzy;
-                    }
-                    return this->itemGenerics_->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
-                default:
-                    return HIRCompare::Equal;
-            }
-            break;
-        }
-        case HIRType::TAG_ErasedType: {
-            auto& e = (*type).as_ErasedType();
-            return e.isSized ? HIRCompare::Equal : HIRCompare::Unequal;
-        }
-        case HIRType::TAG_TraitObject: {
-            return HIRCompare::Unequal;
-        }
+        UNREACHABLE();
     }
-    return HIRCompare::Equal;
-}
-
-HIRCompare TraitResolution::typeIsCopy(const Span& sp, const HIRType* ty) const {
-    const auto& type = this->ivars.getType(ty);
-    if (langCopy().components().empty()) {
-        return typeIsCopyBuiltin(sp, type);
-    }
-    switch (solveNonBuiltinTraitGoal(sp, langCopy(), type)) {
+    switch (solveTraitGoalCertainty(sp, langSized(), type)) {
         case SolverCertainty::Proven:
             return HIRCompare::Equal;
         case SolverCertainty::Ambiguous:
             return HIRCompare::Fuzzy;
         case SolverCertainty::NoSolution:
-            break;
+            return HIRCompare::Unequal;
     }
-    if (type->is_Path() && type->as_Path().binding.is_Unbound()) {
-        return HIRCompare::Fuzzy;
-    }
-    return typeIsCopyBuiltin(sp, type);
+    UNREACHABLE();
 }
 
-HIRCompare TraitResolution::typeIsCopyBuiltin(const Span& sp, const HIRType* ty) const {
+HIRCompare TraitResolution::typeIsCopy(const Span& sp, const HIRType* ty) const {
     const auto& type = this->ivars.getType(ty);
-    switch ((*type).tag()) {
-        default: {
-            return HIRCompare::Unequal;
-        } break;
-        case HIRType::TAG_Infer: {
-            auto& e = (*type).as_Infer();
-            switch (e.tyClass) {
-                case HIRInferClass::Integer:
-                case HIRInferClass::Float:
-                    return HIRCompare::Equal;
-                default:
-                    return HIRCompare::Fuzzy;
-            }
-            break;
-        }
-        case HIRType::TAG_Generic: {
-            // TODO: Store this result - or even pre-calculate it.
-            return this->iterateBoundsTraits(
-                       sp,
-                       ty,
-                       langCopy(),
-                       [&](HIRCompare _cmp, const HIRType* beType, const HIRGenericPath& beTrait, const CachedBound& info) -> bool {
-                return true;
-            }
-                   )
-                       ? HIRCompare::Equal
-                       : HIRCompare::Unequal;
-            break;
-        }
-        case HIRType::TAG_Primitive: {
-            auto& e = (*type).as_Primitive();
-            if (e == HIRCoreType::Str) {
+    if (langCopy().components().empty()) {
+        switch (solveStructuralTraitGoalCertainty(sp, StructuralTrait::Copy, type)) {
+            case SolverCertainty::Proven:
+                return HIRCompare::Equal;
+            case SolverCertainty::Ambiguous:
+                return HIRCompare::Fuzzy;
+            case SolverCertainty::NoSolution:
                 return HIRCompare::Unequal;
-            }
+        }
+        UNREACHABLE();
+    }
+    switch (solveTraitGoalCertainty(sp, langCopy(), type)) {
+        case SolverCertainty::Proven:
             return HIRCompare::Equal;
-        }
-        case HIRType::TAG_Borrow: {
-            auto& e = (*type).as_Borrow();
-            return e.type == HIRBorrowType::Shared ? HIRCompare::Equal : HIRCompare::Unequal;
-        }
-        case HIRType::TAG_Pointer: {
-            return HIRCompare::Equal;
-        }
-        case HIRType::TAG_Tuple: {
-            auto& e = (*type).as_Tuple();
-            auto rv = HIRCompare::Equal;
-            for (const auto& sty : e) {
-                rv &= typeIsCopy(sp, sty);
-            }
-            return rv;
-        }
-        case HIRType::TAG_Slice: {
+        case SolverCertainty::Ambiguous:
+            return HIRCompare::Fuzzy;
+        case SolverCertainty::NoSolution:
             return HIRCompare::Unequal;
-        }
-        case HIRType::TAG_NamedFunction: {
-            return HIRCompare::Equal;
-        }
-        case HIRType::TAG_Function: {
-            return HIRCompare::Equal;
-        }
-        case HIRType::TAG_NodeType: {
-            return HIRCompare::Equal;
-        }
-        case HIRType::TAG_Array: {
-            auto& e = (*type).as_Array();
-            return typeIsCopy(sp, e.inner);
-        }
     }
     UNREACHABLE();
 }
@@ -5243,85 +5103,24 @@ HIRCompare TraitResolution::typeIsCopyBuiltin(const Span& sp, const HIRType* ty)
 HIRCompare TraitResolution::typeIsClone(const Span& sp, const HIRType* ty) const {
     TRACE_FUNCTION_F(ty);
     const auto& type = this->ivars.getType(ty);
-    switch ((*type).tag()) {
-        default: {
-            if (type->is_Path() && type->as_Path().isClosure()) {
+    if (langClone().components().empty()) {
+        switch (solveStructuralTraitGoalCertainty(sp, StructuralTrait::Clone, type)) {
+            case SolverCertainty::Proven:
                 return HIRCompare::Equal;
-            }
-            switch (solveNonBuiltinTraitGoal(sp, langClone(), ty)) {
-                case SolverCertainty::Proven:
-                    return HIRCompare::Equal;
-                case SolverCertainty::Ambiguous:
-                    return HIRCompare::Fuzzy;
-                case SolverCertainty::NoSolution:
-                    return HIRCompare::Unequal;
-            }
-            UNREACHABLE();
-        } break;
-        case HIRType::TAG_Infer: {
-            auto& e = (*type).as_Infer();
-            switch (e.tyClass) {
-                case HIRInferClass::Integer:
-                case HIRInferClass::Float:
-                    return HIRCompare::Equal;
-                default:
-                    return HIRCompare::Fuzzy;
-            }
-            break;
-        }
-        case HIRType::TAG_Generic: {
-            // TODO: Store this result - or even pre-calculate it.
-            return this->iterateBoundsTraits(
-                       sp,
-                       ty,
-                       langClone(),
-                       [&](HIRCompare _cmp, const HIRType* beType, const HIRGenericPath& beTrait, const CachedBound& info) -> bool {
-                return true;
-            }
-                   )
-                       ? HIRCompare::Equal
-                       : HIRCompare::Unequal;
-            break;
-        }
-        case HIRType::TAG_Primitive: {
-            auto& e = (*type).as_Primitive();
-            if (e == HIRCoreType::Str) {
+            case SolverCertainty::Ambiguous:
+                return HIRCompare::Fuzzy;
+            case SolverCertainty::NoSolution:
                 return HIRCompare::Unequal;
-            }
+        }
+        UNREACHABLE();
+    }
+    switch (solveTraitGoalCertainty(sp, langClone(), type)) {
+        case SolverCertainty::Proven:
             return HIRCompare::Equal;
-        }
-        case HIRType::TAG_Borrow: {
-            auto& e = (*type).as_Borrow();
-            return e.type == HIRBorrowType::Shared ? HIRCompare::Equal : HIRCompare::Unequal;
-        }
-        case HIRType::TAG_Pointer: {
-            return HIRCompare::Equal;
-        }
-        case HIRType::TAG_Tuple: {
-            auto& e = (*type).as_Tuple();
-            auto rv = HIRCompare::Equal;
-            for (const auto& sty : e) {
-                rv &= typeIsClone(sp, sty);
-            }
-            return rv;
-        }
-        case HIRType::TAG_Slice: {
+        case SolverCertainty::Ambiguous:
+            return HIRCompare::Fuzzy;
+        case SolverCertainty::NoSolution:
             return HIRCompare::Unequal;
-        }
-        case HIRType::TAG_NamedFunction: {
-            return HIRCompare::Equal;
-        }
-        case HIRType::TAG_Function: {
-            return HIRCompare::Equal;
-        }
-        case HIRType::TAG_NodeType: {
-            // TODO: Determine captures earlier and check captures here
-            return HIRCompare::Equal;
-        }
-        case HIRType::TAG_Array: {
-            auto& e = (*type).as_Array();
-            return typeIsClone(sp, e.inner);
-        }
     }
     UNREACHABLE();
 }
@@ -11044,6 +10843,163 @@ auto NextTraitGoalEvaluator::matchAssociatedTypes(const HIRSimplePath& trait, Ca
     return result;
 }
 
+auto NextTraitGoalEvaluator::evaluateBuiltinSizedCopyClone(Candidate* candidate, StructuralTrait builtin, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* rawType) -> Certainty {
+    const auto* type = resolve_.resolveType(rawType);
+    auto combine = [](Certainty& result, Certainty nested) {
+        if (nested == Certainty::NoSolution) {
+            result = Certainty::NoSolution;
+        } else if (nested == Certainty::Ambiguous && result == Certainty::Proven) {
+            result = Certainty::Ambiguous;
+        }
+    };
+    auto evaluateInner = [&](const HIRType* inner) {
+        const auto nested = trait.components().empty()
+            ? evaluateBuiltinSizedCopyClone(nullptr, builtin, trait, params, inner)
+            : solveGoal(trait, params, inner, nullptr);
+        if (candidate && nested == Certainty::Ambiguous) {
+            candidate->relationObligations.push_back(
+                SolverObligation{
+                    inner,
+                    HIRTraitPath(HIRGenericPath(trait, params.clone())),
+                }
+            );
+        }
+        return nested;
+    };
+    auto evaluateAll = [&](const auto& types, auto getType) {
+        Certainty result = Certainty::Proven;
+        for (const auto& entry : types) {
+            combine(result, evaluateInner(getType(entry)));
+            if (result == Certainty::NoSolution) {
+                break;
+            }
+        }
+        return result;
+    };
+
+    if (builtin == StructuralTrait::Sized) {
+        switch ((*type).tag()) {
+            case HIRType::TAG_Infer: {
+                const auto tyClass = type->as_Infer().tyClass;
+                return tyClass == HIRInferClass::Integer || tyClass == HIRInferClass::Float ? Certainty::Proven : Certainty::Ambiguous;
+            }
+            case HIRType::TAG_Primitive:
+                return type->as_Primitive() == HIRCoreType::Str ? Certainty::NoSolution : Certainty::Proven;
+            case HIRType::TAG_Slice:
+            case HIRType::TAG_TraitObject:
+                return Certainty::NoSolution;
+            case HIRType::TAG_Generic:
+                return Certainty::NoSolution;
+            case HIRType::TAG_ErasedType:
+                return type->as_ErasedType().isSized ? Certainty::Proven : Certainty::NoSolution;
+            case HIRType::TAG_Array:
+                return evaluateInner(type->as_Array().inner);
+            case HIRType::TAG_Tuple:
+                return evaluateAll(type->as_Tuple(), [](const HIRType* field) { return field; });
+            case HIRType::TAG_Path: {
+                const auto& path = type->as_Path();
+                switch (path.binding.tag()) {
+                    case HIRTypePathBinding::TAG_Unbound:
+                        return Certainty::Ambiguous;
+                    case HIRTypePathBinding::TAG_Opaque: {
+                        if (const auto* projection = path.path.data.opt_UfcsKnown()) {
+                            const auto& definition = crate.getTraitByPath(span(), projection->trait.path);
+                            const auto* associated = definition.getAtyDef(projection->item).first;
+                            if (associated && !associated->isSized) {
+                                return Certainty::NoSolution;
+                            }
+                        }
+                        return Certainty::Proven;
+                    }
+                    case HIRTypePathBinding::TAG_ExternType:
+                        return Certainty::NoSolution;
+                    case HIRTypePathBinding::TAG_Enum:
+                    case HIRTypePathBinding::TAG_Union:
+                        return Certainty::Proven;
+                    case HIRTypePathBinding::TAG_Struct: {
+                        const auto& structure = *path.binding.as_Struct();
+                        switch (structure.structMarkings.dstType) {
+                            case HIRStructMarkings::DstType::None:
+                                return Certainty::Proven;
+                            case HIRStructMarkings::DstType::Possible: {
+                                const auto* nominal = path.path.data.opt_Generic();
+                                if (!nominal) {
+                                    return Certainty::Ambiguous;
+                                }
+                                ASSERT_BUG(span(), structure.structMarkings.unsizedParam < nominal->params.types.size(), StringView("Malformed unsized struct markings"));
+                                return evaluateInner(nominal->params.types[structure.structMarkings.unsizedParam]);
+                            }
+                            case HIRStructMarkings::DstType::Projection: {
+                                const HIRType* tailTemplate = nullptr;
+                                switch (structure.data.tag()) {
+                                    case HIRStructData::TAG_Unit:
+                                        BUG(span(), StringView("Potentially-unsized unit struct ") << type);
+                                    case HIRStructData::TAG_Tuple:
+                                        tailTemplate = structure.data.as_Tuple().at(structure.structMarkings.unsizedField).ent;
+                                        break;
+                                    case HIRStructData::TAG_Named:
+                                        tailTemplate = structure.data.as_Named().at(structure.structMarkings.unsizedField).ty;
+                                        break;
+                                }
+                                const auto* nominal = path.path.data.opt_Generic();
+                                if (!nominal) {
+                                    return Certainty::Ambiguous;
+                                }
+                                auto tail = MonomorphStatePtr(crate.types, type, &nominal->params, nullptr).monomorphType(span(), tailTemplate);
+                                tail = resolve_.expandAssociatedTypes(span(), tail);
+                                return evaluateInner(tail);
+                            }
+                            case HIRStructMarkings::DstType::Slice:
+                            case HIRStructMarkings::DstType::TraitObject:
+                                return Certainty::NoSolution;
+                        }
+                    }
+                }
+                UNREACHABLE();
+            }
+            default:
+                return Certainty::Proven;
+        }
+    }
+
+    ASSERT_BUG(span(), builtin == StructuralTrait::Copy || builtin == StructuralTrait::Clone, StringView("Unexpected structural builtin trait ") << trait);
+    switch ((*type).tag()) {
+        case HIRType::TAG_Infer: {
+            const auto tyClass = type->as_Infer().tyClass;
+            return tyClass == HIRInferClass::Integer || tyClass == HIRInferClass::Float ? Certainty::Proven : Certainty::Ambiguous;
+        }
+        case HIRType::TAG_Primitive:
+            return type->as_Primitive() == HIRCoreType::Str ? Certainty::NoSolution : Certainty::Proven;
+        case HIRType::TAG_Borrow:
+            return type->as_Borrow().type == HIRBorrowType::Shared ? Certainty::Proven : Certainty::NoSolution;
+        case HIRType::TAG_Pointer:
+        case HIRType::TAG_NamedFunction:
+        case HIRType::TAG_Function:
+        case HIRType::TAG_NodeType:
+            return Certainty::Proven;
+        case HIRType::TAG_Tuple:
+            return evaluateAll(type->as_Tuple(), [](const HIRType* field) { return field; });
+        case HIRType::TAG_Array:
+            return evaluateInner(type->as_Array().inner);
+        case HIRType::TAG_Path:
+            return builtin == StructuralTrait::Clone && type->as_Path().isClosure() ? Certainty::Proven : Certainty::NoSolution;
+        default:
+            return Certainty::NoSolution;
+    }
+}
+
+auto NextTraitGoalEvaluator::evaluateStructuralTrait(const Span& callSpan, StructuralTrait trait, const HIRType* type) -> Certainty {
+    ASSERT_BUG(callSpan, !span_, StringView("nested structural trait evaluation"));
+    ASSERT_BUG(callSpan, goalStack.empty(), StringView("next-solver goal stack leaked between structural evaluations"));
+    ASSERT_BUG(callSpan, activeGoalIndex.empty(), StringView("next-solver active goal index leaked between structural evaluations"));
+    ASSERT_BUG(callSpan, frameDepth == 0, StringView("next-solver candidate frames leaked between structural evaluations"));
+    span_ = &callSpan;
+    STD_DEFER {
+        span_ = nullptr;
+    };
+    return evaluateBuiltinSizedCopyClone(nullptr, trait, HIRSimplePath(), HIRPathParams(), type);
+}
+
 auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type) -> Certainty {
     auto combine = [](Certainty& result, Certainty nested) {
         if (nested == Certainty::NoSolution) {
@@ -11314,6 +11270,22 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
     if (!candidate->headObligations.empty()) {
         candidate->ambiguityBeyondHead = true;
         candidate->nestedAmbiguity = true;
+    }
+
+    const bool sizedBuiltin = !resolve_.langSized().components().empty() && trait == resolve_.langSized();
+    const bool copyBuiltin = !resolve_.langCopy().components().empty() && trait == resolve_.langCopy();
+    const bool cloneBuiltin = !resolve_.langClone().components().empty() && trait == resolve_.langClone();
+    if (candidate->source == CandidateSource::Builtin && (sizedBuiltin || copyBuiltin || cloneBuiltin)) {
+        const auto builtin = sizedBuiltin ? StructuralTrait::Sized : copyBuiltin ? StructuralTrait::Copy : StructuralTrait::Clone;
+        const auto structural = evaluateBuiltinSizedCopyClone(candidate, builtin, trait, candidate->impl.traitArgs, candidate->impl.type);
+        if (structural == Certainty::NoSolution) {
+            return Certainty::NoSolution;
+        }
+        if (structural == Certainty::Ambiguous) {
+            candidate->ambiguityBeyondHead = true;
+            candidate->nestedAmbiguity = true;
+            result = Certainty::Ambiguous;
+        }
     }
 
     const bool autoBuiltin = candidate->autoBuiltin;

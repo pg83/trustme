@@ -631,7 +631,7 @@ private:
 
     mutable NextTraitGoalEvaluator* coherenceEvaluator = nullptr;
 
-    mutable NextTraitGoalEvaluator* nonBuiltinSolver = nullptr;
+    mutable NextTraitGoalEvaluator* traitQuerySolver = nullptr;
 
     mutable u64 solverEnvGeneration = 0;
     std::vector<HIRSimplePath> opaqueAliasScopes;
@@ -758,6 +758,12 @@ public:
     }
 
 private:
+    enum class StructuralTrait {
+        Sized,
+        Copy,
+        Clone,
+    };
+
     bool assembleMagicCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, AssembledImplCallback& callback) const;
     bool assembleTypeCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, AssembledImplCallback& callback) const;
     bool assembleOtherCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, AssembledImplCallback& callback) const;
@@ -783,9 +789,8 @@ private:
 
     HIRPathParams makeFreshImplParams(const HIRGenericParams& params) const;
     HIRPathParams materializeImplParams(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& inferenceParams, size_t externalTypeIvars, size_t externalValueIvars) const;
-    SolverCertainty solveNonBuiltinTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRType* type) const;
-    HIRCompare typeIsSizedBuiltin(const Span& sp, const HIRType* type) const;
-    HIRCompare typeIsCopyBuiltin(const Span& sp, const HIRType* type) const;
+    SolverCertainty solveTraitGoalCertainty(const Span& sp, const HIRSimplePath& trait, const HIRType* type) const;
+    SolverCertainty solveStructuralTraitGoalCertainty(const Span& sp, StructuralTrait trait, const HIRType* type) const;
     SolverCertainty evaluateCoercionConstraint(const Span& sp, const SolverCoercionConstraint& constraint, const HIRType* input, ThinVector<SolverTypeEquality>* equalities = nullptr, SolverResponse* effects = nullptr, ThinVector<SolverDeferredCoercion>* deferred = nullptr, bool* reachedAutoderefLimit = nullptr, SolverCoercionAdjustment* adjustment = nullptr, bool exportPlaceholderEqualities = false) const;
     SolverCertainty evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, u32 conditionalScope = 0, bool onlyBoundsConstrainingTraitParams = false) const;
     SolverCertainty evaluateInherentImplBounds(const Span& sp, const HIRTypeImpl& impl, const HIRPathParams& implParams) const;
