@@ -27,6 +27,46 @@ using namespace stl;
 namespace {
     constexpr u32 SOLVER_ALPHA_SCOPE_BASE = ~u32(255);
 
+    bool containsImplPlaceholder(HIRTypeInterner& types, const HIRType* type) {
+        struct Visitor: HIRVisitor {
+            bool found = false;
+
+            explicit Visitor(HIRTypeInterner& types)
+                : HIRVisitor(nullptr, types)
+            {
+            }
+
+            void visitConstgeneric(const HIRConstGeneric& value) {
+                if (value.is_Generic() && value.as_Generic().isPlaceholder()) {
+                    found = true;
+                }
+            }
+
+            void visitPathParams(HIRPathParams& params) override {
+                for (const auto& value : params.values) {
+                    visitConstgeneric(value);
+                }
+                HIRVisitor::visitPathParams(params);
+            }
+
+            [[nodiscard]] const HIRType* visitType(const HIRType* inner) override {
+                if (inner->is_Generic() && inner->as_Generic().isPlaceholder()) {
+                    found = true;
+                }
+                if (const auto* array = inner->opt_Array()) {
+                    if (const auto* size = array->size.opt_Unevaluated()) {
+                        visitConstgeneric(*size);
+                    }
+                }
+                return visitTypeDefaultViaHooks(inner);
+            }
+        } visitor(types);
+
+        const auto* ignored = visitor.visitType(type);
+        (void)ignored;
+        return visitor.found;
+    }
+
     struct CanonicalizeTraitGoal;
 
     using NextTraitGoalEvaluator = TraitResolution::NextTraitGoalEvaluator;
@@ -295,6 +335,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
         bool nestedAmbiguity = false;
         bool coercionsProven = true;
         bool coercionsEvaluated = false;
+        ThinVector<u8> coercionRanks;
         ThinVector<SolverTypeEquality> headEqualities;
         ThinVector<SolverValueEquality> headValueEqualities;
         ThinVector<SolverTypeEquality> coercionEqualities;
@@ -5338,7 +5379,8 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
         nullptr,
         &result.effects,
         &result.deferred,
-        &result.reachedAutoderefLimit
+        &result.reachedAutoderefLimit,
+        &result.adjustment
     );
     result.effects.certainty = coercionCertainty == SolverCertainty::NoSolution || normalizationCertainty == SolverCertainty::NoSolution
         ? SolverCertainty::NoSolution
@@ -5349,6 +5391,89 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
     const auto* resolvedSource = normalizedSource;
     const auto* object = resolvedDestination->opt_TraitObject();
     const auto* closure = resolvedSource->is_NodeType() ? resolvedSource->as_NodeType().opt_Closure() : nullptr;
+    const bool erasedClosureExpectation = closure && resolvedDestination->is_ErasedType();
+    if (erasedClosureExpectation && result.effects.certainty == SolverCertainty::Proven) {
+        Vector<const HIRType*> closureArgs;
+        closureArgs.grow((*closure)->args.size());
+        for (const auto& argument : (*closure)->args) {
+            closureArgs.pushBack(argument.second);
+        }
+        HIRPathParams desiredParams{crate.types.tuple(std::move(closureArgs))};
+
+        Vector<const HIRType*> expectedArgs;
+        const HIRType* expectedOutput = nullptr;
+        const auto inspectExpectation = [&](const SolverImpl& impl) {
+            auto params = impl.getTraitParams(crate.types);
+            if (params.types.size() != 1 || !params.types.front()->is_Tuple()) {
+                return false;
+            }
+            const auto& arguments = params.types.front()->as_Tuple();
+            if (arguments.length() != (*closure)->args.size()) {
+                return false;
+            }
+            auto output = impl.getType(crate.types, "Output", {});
+            if (output == nullptr) {
+                return false;
+            }
+
+            bool hasExpectation = false;
+            Vector<const HIRType*> concreteArgs;
+            concreteArgs.grow(arguments.length());
+            for (const auto* argument : arguments) {
+                if (containsImplPlaceholder(crate.types, argument)) {
+                    concreteArgs.pushBack(nullptr);
+                } else {
+                    concreteArgs.pushBack(argument);
+                    hasExpectation = true;
+                }
+            }
+            if (containsImplPlaceholder(crate.types, output)) {
+                output = nullptr;
+            } else {
+                hasExpectation = true;
+            }
+            if (!hasExpectation) {
+                return false;
+            }
+
+            expectedArgs = std::move(concreteArgs);
+            expectedOutput = output;
+            return true;
+        };
+        const auto findExpectation = [&](const HIRSimplePath& trait) {
+            return solveTraitGoal(
+                sp,
+                trait,
+                desiredParams,
+                resolvedDestination,
+                [&](SolverResponse response) {
+                return response.certainty == SolverCertainty::Proven && response.impl && inspectExpectation(*response.impl);
+            },
+                {
+                    .allowInferInputs = true,
+                }
+            );
+        };
+        const bool asyncExpectation = findExpectation(langAsyncFnOnce());
+        const bool foundExpectation = asyncExpectation || findExpectation(langFnOnce());
+        if (foundExpectation) {
+            for (size_t i = 0; i < expectedArgs.length(); i++) {
+                if (expectedArgs[i] != nullptr) {
+                    result.effects.equalities.push_back(SolverTypeEquality{(*closure)->args[i].second, expectedArgs[i]});
+                }
+            }
+            if (expectedOutput != nullptr) {
+                if (asyncExpectation) {
+                    HIRTraitPath::assocListT associated;
+                    auto future = HIRGenericPath(langFuture(), {});
+                    associated.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{future.clone(), {}, expectedOutput}));
+                    result.effects.obligations.push_back(SolverObligation{(*closure)->returnType, HIRTraitPath(std::move(future), std::move(associated), {})});
+                } else {
+                    result.effects.equalities.push_back(SolverTypeEquality{(*closure)->returnType, expectedOutput});
+                }
+            }
+        }
+    }
     if (object && closure && (object->trait.path.path == langFn() || object->trait.path.path == langFnMut() || object->trait.path.path == langFnOnce())) {
         const HIRType* expectedOutput = nullptr;
         for (const auto& associated : object->trait.typeBounds) {
@@ -5376,6 +5501,10 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
         }
     }
     if (result.effects.certainty == SolverCertainty::Proven) {
+        if (erasedClosureExpectation) {
+            result.relation = SolverCoercionRelation::Equality;
+            return result;
+        }
         if (op == SolverCoercionOp::Coercion && resolvedSource->is_Diverge()) {
             result.relation = SolverCoercionRelation::Coercion;
             return result;
@@ -5398,11 +5527,18 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
                 && sourcePath->binding.as_Struct()->structMarkings.coerceUnsized == HIRStructMarkings::Coerce::None;
             result.relation = structuralSubtype ? SolverCoercionRelation::Subtype : SolverCoercionRelation::Coercion;
         }
+        if (op == SolverCoercionOp::Coercion && result.adjustment.kind == SolverCoercionAdjustmentKind::None) {
+            if (result.relation == SolverCoercionRelation::Subtype) {
+                result.adjustment.kind = SolverCoercionAdjustmentKind::Retag;
+            } else if (result.relation == SolverCoercionRelation::Coercion) {
+                result.adjustment.kind = SolverCoercionAdjustmentKind::Unsize;
+            }
+        }
     }
     return result;
 }
 
-SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, const SolverCoercionConstraint& constraint, const HIRType* input, ThinVector<SolverTypeEquality>* equalities, SolverResponse* effects, ThinVector<SolverDeferredCoercion>* deferred, bool* reachedAutoderefLimit) const {
+SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, const SolverCoercionConstraint& constraint, const HIRType* input, ThinVector<SolverTypeEquality>* equalities, SolverResponse* effects, ThinVector<SolverDeferredCoercion>* deferred, bool* reachedAutoderefLimit, SolverCoercionAdjustment* adjustment, bool exportPlaceholderEqualities) const {
     const auto appendEffects = [](SolverResponse& destination, SolverResponse source) {
         for (size_t i = 0; i < source.slots.types.size(); i++) {
             destination.slots.typeInputs.push_back(std::move(source.slots.typeInputs[i]));
@@ -5500,6 +5636,12 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             if ((leftInfer && isSolverCanonicalInfer(leftInfer->index)) || (rightInfer && isSolverCanonicalInfer(rightInfer->index))) {
                 return true;
             }
+            const auto* leftGeneric = pending.left->opt_Generic();
+            const auto* rightGeneric = pending.right->opt_Generic();
+            if ((equalities || effects) && ((leftGeneric && (leftGeneric->isSolverExistential() || exportPlaceholderEqualities && leftGeneric->isPlaceholder()))
+                || (rightGeneric && (rightGeneric->isSolverExistential() || exportPlaceholderEqualities && rightGeneric->isPlaceholder())))) {
+                return true;
+            }
             return isDefiningOpaque(pending.left) != isDefiningOpaque(pending.right);
         };
         const auto pendingIsDeferredProjectionEquality = [&](const Unifier::PendingEquality& pending) {
@@ -5546,7 +5688,10 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         for (const auto& pending : unifier.pendingValues()) {
             const auto* leftInfer = pending.left.opt_Infer();
             const auto* rightInfer = pending.right.opt_Infer();
-            if (!((leftInfer && isSolverCanonicalInfer(leftInfer->index)) || (rightInfer && isSolverCanonicalInfer(rightInfer->index)))) {
+            const auto* leftGeneric = pending.left.opt_Generic();
+            const auto* rightGeneric = pending.right.opt_Generic();
+            if (!((leftInfer && isSolverCanonicalInfer(leftInfer->index)) || (rightInfer && isSolverCanonicalInfer(rightInfer->index))
+                || (effects && ((leftGeneric && leftGeneric->isSolverExistential()) || (rightGeneric && rightGeneric->isSolverExistential()))))) {
                 ambiguous = true;
             }
         }
@@ -5574,7 +5719,10 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             for (const auto& pending : unifier.pendingValues()) {
                 const auto* leftInfer = pending.left.opt_Infer();
                 const auto* rightInfer = pending.right.opt_Infer();
-                if ((leftInfer && isSolverCanonicalInfer(leftInfer->index)) || (rightInfer && isSolverCanonicalInfer(rightInfer->index))) {
+                const auto* leftGeneric = pending.left.opt_Generic();
+                const auto* rightGeneric = pending.right.opt_Generic();
+                if ((leftInfer && isSolverCanonicalInfer(leftInfer->index)) || (rightInfer && isSolverCanonicalInfer(rightInfer->index))
+                    || (leftGeneric && leftGeneric->isSolverExistential()) || (rightGeneric && rightGeneric->isSolverExistential())) {
                     effects->valueEqualities.push_back(SolverValueEquality{pending.left.clone(), pending.right.clone()});
                 }
             }
@@ -5715,20 +5863,29 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         return SolverCertainty::Proven;
     }
 
-    const auto unsize = [&](const HIRType* rawDestination, const HIRType* rawSource, bool hasAutoderefAlternative = false, unsigned alternativeGroup = 0) {
+    const auto unsize = [&](const HIRType* rawDestination, const HIRType* rawSource, bool hasAutoderefAlternative = false, unsigned alternativeGroup = 0, SolverCoercionRelation* relation = nullptr) {
         const auto* destination = resolveKnown(rawDestination);
         const auto* source = resolveKnown(rawSource);
+        if (relation) {
+            *relation = SolverCoercionRelation::None;
+        }
+        const auto related = [&](SolverCertainty certainty, SolverCoercionRelation provenRelation) {
+            if (relation && certainty == SolverCertainty::Proven) {
+                *relation = provenRelation;
+            }
+            return certainty;
+        };
         if (ivars.typesEqual(destination, source)) {
-            return SolverCertainty::Proven;
+            return related(SolverCertainty::Proven, SolverCoercionRelation::Equality);
         }
         const bool destinationLiteral = destination->is_Infer() && destination->as_Infer().isLit();
         const bool sourceLiteral = source->is_Infer() && source->as_Infer().isLit();
         if ((destinationLiteral && (sourceLiteral || source->is_Primitive())) || (sourceLiteral && destination->is_Primitive())) {
-            return relateEquality(destination, source);
+            return related(relateEquality(destination, source), SolverCoercionRelation::Equality);
         }
         if (destination->is_Infer() || (source->is_Infer() && !sourceLiteral)) {
             if (!hasAutoderefAlternative && !destination->is_Infer() && typeIsSized(sp, destination) == HIRCompare::Equal) {
-                return relateEquality(destination, source);
+                return related(relateEquality(destination, source), SolverCoercionRelation::Equality);
             }
             if (deferred) {
                 deferred->push_back(SolverDeferredCoercion{destination, source, SolverCoercionOp::Unsizing, alternativeGroup});
@@ -5736,12 +5893,12 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             return SolverCertainty::Ambiguous;
         }
         if (typeIsSized(sp, destination) == HIRCompare::Equal) {
-            return relateEquality(destination, source);
+            return related(relateEquality(destination, source), SolverCoercionRelation::Equality);
         }
         const bool structuralUnsizeWithOpenSource = isOpenStructuralUnsize(destination, source);
         const auto equality = structuralUnsizeWithOpenSource ? SolverCertainty::Ambiguous : relateEquality(destination, source);
         if (equality == SolverCertainty::Proven) {
-            return SolverCertainty::Proven;
+            return related(SolverCertainty::Proven, SolverCoercionRelation::Equality);
         }
         if ((destination->is_Path() && destination->as_Path().binding.is_Unbound()) || (source->is_Path() && source->as_Path().binding.is_Unbound())) {
             return SolverCertainty::Ambiguous;
@@ -5775,24 +5932,37 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         if (result == SolverCertainty::NoSolution && equality == SolverCertainty::Ambiguous) {
             return equality;
         }
-        return result;
+        return related(result, SolverCoercionRelation::Coercion);
     };
 
     if (constraint.op == SolverCoercionOp::Unsizing) {
         const bool hasAutoderefAlternative = constraint.direction == SolverCoercionConstraint::Direction::InputIsDestination || constraint.allowSourceAutoderef;
         const auto deferredStart = deferred ? deferred->size() : 0;
         const auto alternativeGroup = hasAutoderefAlternative && deferred ? static_cast<unsigned>(deferredStart + 1) : 0;
-        auto result = unsize(destination, source, hasAutoderefAlternative, alternativeGroup);
+        SolverCoercionRelation innerRelation = SolverCoercionRelation::None;
+        auto result = unsize(destination, source, hasAutoderefAlternative, alternativeGroup, &innerRelation);
         if (result == SolverCertainty::Proven) {
+            if (adjustment) {
+                adjustment->kind = SolverCoercionAdjustmentKind::Unsize;
+                adjustment->innerRelation = innerRelation;
+            }
             return result;
         }
         if (hasAutoderefAlternative) {
             const auto* dereferenced = source;
+            ThinVector<const HIRType*> sourceAutoderef;
             while ((dereferenced = autoderef(sp, dereferenced))) {
-                const auto dereferencedResult = unsize(destination, dereferenced, true, alternativeGroup);
+                sourceAutoderef.push_back(dereferenced);
+                SolverCoercionRelation dereferencedRelation = SolverCoercionRelation::None;
+                const auto dereferencedResult = unsize(destination, dereferenced, true, alternativeGroup, &dereferencedRelation);
                 if (dereferencedResult == SolverCertainty::Proven) {
                     if (deferred) {
                         deferred->resize(deferredStart);
+                    }
+                    if (adjustment) {
+                        adjustment->kind = SolverCoercionAdjustmentKind::SourceAutoderef;
+                        adjustment->innerRelation = dereferencedRelation;
+                        adjustment->sourceAutoderef = std::move(sourceAutoderef);
                     }
                     return dereferencedResult;
                 }
@@ -5811,6 +5981,9 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         if (destination->is_Infer() && deferred) {
             deferred->push_back(SolverDeferredCoercion{destination, source, SolverCoercionOp::Coercion});
             return SolverCertainty::Ambiguous;
+        }
+        if (adjustment) {
+            adjustment->kind = SolverCoercionAdjustmentKind::Never;
         }
         return SolverCertainty::Proven;
     }
@@ -5870,7 +6043,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             const auto& markings = sourceStruct->structMarkings;
             if (markings.coerceUnsized != HIRStructMarkings::Coerce::None) {
                 ASSERT_BUG(sp, markings.coerceParam < sourceParams.types.size() && sourceParams.types.size() == destinationParams.types.size(), StringView("Malformed CoerceUnsized struct markings"));
-                auto result = markings.coerceUnsized == HIRStructMarkings::Coerce::Passthrough ? evaluateCoercionConstraint(sp, SolverCoercionConstraint{markings.coerceParam, sourceParams.types[markings.coerceParam], SolverCoercionConstraint::Direction::InputIsDestination, SolverCoercionOp::Coercion}, destinationParams.types[markings.coerceParam], equalities, effects, deferred, reachedAutoderefLimit) : unsize(destinationParams.types[markings.coerceParam], sourceParams.types[markings.coerceParam]);
+                auto result = markings.coerceUnsized == HIRStructMarkings::Coerce::Passthrough ? evaluateCoercionConstraint(sp, SolverCoercionConstraint{markings.coerceParam, sourceParams.types[markings.coerceParam], SolverCoercionConstraint::Direction::InputIsDestination, SolverCoercionOp::Coercion}, destinationParams.types[markings.coerceParam], equalities, effects, deferred, reachedAutoderefLimit, nullptr, exportPlaceholderEqualities) : unsize(destinationParams.types[markings.coerceParam], sourceParams.types[markings.coerceParam]);
                 for (size_t i = 0; result != SolverCertainty::NoSolution && i < sourceParams.types.size(); i++) {
                     if (i == markings.coerceParam) {
                         continue;
@@ -5951,18 +6124,26 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
     };
     if (const auto* destinationFunction = destination->opt_Function()) {
         if (const auto* sourceFunction = source->opt_Function()) {
-            return relateFunctionSignature(*destinationFunction, *sourceFunction);
+            const auto result = relateFunctionSignature(*destinationFunction, *sourceFunction);
+            if (adjustment && result == SolverCertainty::Proven) {
+                adjustment->kind = SolverCoercionAdjustmentKind::FunctionPointer;
+            }
+            return result;
         }
         if (const auto* named = source->opt_NamedFunction()) {
             const auto sourceFunction = named->decay(crate.types, sp);
-            return relateFunctionSignature(*destinationFunction, sourceFunction);
+            const auto result = relateFunctionSignature(*destinationFunction, sourceFunction);
+            if (adjustment && result == SolverCertainty::Proven) {
+                adjustment->kind = SolverCoercionAdjustmentKind::FunctionPointer;
+            }
+            return result;
         }
         if (source->is_NodeType() && source->as_NodeType().is_Closure()) {
             const auto* closure = source->as_NodeType().as_Closure();
             if (destinationFunction->abi != ABI_RUST || destinationFunction->isVariadic || destinationFunction->argTypes.length() != closure->args.size()) {
                 return SolverCertainty::NoSolution;
             }
-            return relateUsing([&](Unifier& unifier) {
+            const auto result = relateUsing([&](Unifier& unifier) {
                 auto result = Unifier::Outcome::Proven;
                 for (size_t i = 0; i < destinationFunction->argTypes.length(); i++) {
                     const auto argument = unifier.unify(destinationFunction->argTypes[i], closure->args[i].second);
@@ -5981,6 +6162,10 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
                 }
                 return result;
             });
+            if (adjustment && result == SolverCertainty::Proven) {
+                adjustment->kind = SolverCoercionAdjustmentKind::FunctionPointer;
+            }
+            return result;
         }
     }
 
@@ -5989,14 +6174,30 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         if (!destinationPointer || destinationPointer->type > sourcePointer->type) {
             return relateEquality(destination, source);
         }
-        return unsize(destinationPointer->inner, sourcePointer->inner);
+        SolverCoercionRelation innerRelation = SolverCoercionRelation::None;
+        const auto result = unsize(destinationPointer->inner, sourcePointer->inner, false, 0, &innerRelation);
+        if (adjustment && result == SolverCertainty::Proven) {
+            adjustment->kind = SolverCoercionAdjustmentKind::RawPointer;
+            adjustment->innerRelation = innerRelation;
+            if (destinationPointer->type < sourcePointer->type) {
+                adjustment->intermediateType = crate.types.pointer(destinationPointer->type, sourcePointer->inner);
+            }
+        }
+        return result;
     }
     if (const auto* sourceBorrow = source->opt_Borrow()) {
         if (const auto* destinationPointer = destination->opt_Pointer()) {
             if (destinationPointer->type > sourceBorrow->type) {
                 return SolverCertainty::NoSolution;
             }
-            return unsize(destinationPointer->inner, sourceBorrow->inner);
+            SolverCoercionRelation innerRelation = SolverCoercionRelation::None;
+            const auto result = unsize(destinationPointer->inner, sourceBorrow->inner, false, 0, &innerRelation);
+            if (adjustment && result == SolverCertainty::Proven) {
+                adjustment->kind = SolverCoercionAdjustmentKind::BorrowToPointer;
+                adjustment->innerRelation = innerRelation;
+                adjustment->intermediateType = crate.types.borrow(sourceBorrow->type, destinationPointer->inner);
+            }
+            return result;
         }
         if (const auto* destinationBorrow = destination->opt_Borrow()) {
             if (destinationBorrow->type > sourceBorrow->type) {
@@ -6004,12 +6205,21 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             }
             const auto deferredStart = deferred ? deferred->size() : 0;
             const auto alternativeGroup = deferred ? static_cast<unsigned>(deferredStart + 1) : 0;
-            auto result = unsize(destinationBorrow->inner, sourceBorrow->inner, true, alternativeGroup);
+            SolverCoercionRelation innerRelation = SolverCoercionRelation::None;
+            auto result = unsize(destinationBorrow->inner, sourceBorrow->inner, true, alternativeGroup, &innerRelation);
             if (result == SolverCertainty::Proven) {
+                if (adjustment) {
+                    adjustment->kind = SolverCoercionAdjustmentKind::Borrow;
+                    adjustment->innerRelation = innerRelation;
+                    if (destinationBorrow->type < sourceBorrow->type) {
+                        adjustment->intermediateType = crate.types.borrow(destinationBorrow->type, sourceBorrow->inner);
+                    }
+                }
                 return result;
             }
 
             const HIRType* current = sourceBorrow->inner;
+            ThinVector<const HIRType*> sourceAutoderef;
             for (unsigned depth = 0; depth < board().settings->recursionLimit; depth++) {
                 auto step = autoderefStep(sp, current);
                 switch (step.result) {
@@ -6019,12 +6229,22 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
                         return SolverCertainty::Ambiguous;
                     case AutoderefResult::Match:
                         current = step.target;
+                        sourceAutoderef.push_back(current);
                         break;
                 }
-                const auto dereferenced = unsize(destinationBorrow->inner, current, true, alternativeGroup);
+                SolverCoercionRelation dereferencedRelation = SolverCoercionRelation::None;
+                const auto dereferenced = unsize(destinationBorrow->inner, current, true, alternativeGroup, &dereferencedRelation);
                 if (dereferenced == SolverCertainty::Proven) {
                     if (deferred) {
                         deferred->resize(deferredStart);
+                    }
+                    if (adjustment) {
+                        adjustment->kind = SolverCoercionAdjustmentKind::Borrow;
+                        adjustment->innerRelation = dereferencedRelation;
+                        adjustment->sourceAutoderef = std::move(sourceAutoderef);
+                        if (destinationBorrow->type < sourceBorrow->type) {
+                            adjustment->intermediateType = crate.types.borrow(destinationBorrow->type, sourceBorrow->inner);
+                        }
                     }
                     return dereferenced;
                 }
@@ -6040,47 +6260,6 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         return relateEquality(destination, source);
     }
     return relateEquality(destination, source);
-}
-
-Ordering TraitResolution::compareCoercionEndpoints(const Span& sp, const SolverCoercionConstraint& constraint, const HIRType* left, const HIRType* right) const {
-    left = ivars.getType(left);
-    right = ivars.getType(right);
-    if (constraint.direction == SolverCoercionConstraint::Direction::InputIsSource) {
-        const auto* destination = ivars.getType(constraint.other);
-        const bool leftExact = ivars.typesEqual(left, destination);
-        const bool rightExact = ivars.typesEqual(right, destination);
-        if (leftExact != rightExact) {
-            return leftExact ? OrdGreater : OrdLess;
-        }
-        if (left->is_Diverge() != right->is_Diverge()) {
-            return left->is_Diverge() ? OrdLess : OrdGreater;
-        }
-        return OrdEqual;
-    }
-    const auto* source = ivars.getType(constraint.other);
-    const bool leftExact = ivars.typesEqual(left, source);
-    const bool rightExact = ivars.typesEqual(right, source);
-    if (leftExact != rightExact) {
-        return leftExact ? OrdGreater : OrdLess;
-    }
-    const auto compatibleTarget = [&](const HIRType* leftInner, const HIRType* rightInner) {
-        return ivars.typesEqual(leftInner, rightInner) || leftInner->compareWithPlaceholders(sp, rightInner, ivars.callbackResolveInfer()) != HIRCompare::Unequal;
-    };
-    if (const auto* leftBorrow = left->opt_Borrow()) {
-        const auto* rightBorrow = right->opt_Borrow();
-        if (!rightBorrow || !compatibleTarget(leftBorrow->inner, rightBorrow->inner)) {
-            return OrdEqual;
-        }
-        return ord(static_cast<int>(leftBorrow->type), static_cast<int>(rightBorrow->type));
-    }
-    if (const auto* leftPointer = left->opt_Pointer()) {
-        const auto* rightPointer = right->opt_Pointer();
-        if (!rightPointer || !compatibleTarget(leftPointer->inner, rightPointer->inner)) {
-            return OrdEqual;
-        }
-        return ord(static_cast<int>(leftPointer->type), static_cast<int>(rightPointer->type));
-    }
-    return OrdEqual;
 }
 
 const HIRType* TraitResolution::typeIsOwnedBox(const Span& sp, const HIRType* ty) const {
@@ -12998,15 +13177,17 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             ASSERT_BUG(span(), constraint.isSelf || constraint.typeIndex < inputs.types.size(), StringView("coercion-constrained trait input is out of range"));
             auto result = Certainty::NoSolution;
             const SolverCoercionConstraint* selectedConstraint = nullptr;
+            const HIRType* selectedInput = nullptr;
             ThinVector<SolverTypeEquality> selectedEqualities;
             const auto evaluate = [&](const SolverCoercionConstraint& alternative) {
                 ASSERT_BUG(span(), alternative.isSelf || alternative.typeIndex < inputs.types.size(), StringView("coercion-constrained trait input is out of range"));
                 const auto* input = alternative.isSelf ? self : inputs.types[alternative.typeIndex];
                 ThinVector<SolverTypeEquality> alternativeEqualities;
-                const auto alternativeResult = resolve_.evaluateCoercionConstraint(span(), alternative, input, &alternativeEqualities);
+                const auto alternativeResult = resolve_.evaluateCoercionConstraint(span(), alternative, input, &alternativeEqualities, nullptr, nullptr, nullptr, nullptr, true);
                 if (alternativeResult == Certainty::Proven || (alternativeResult == Certainty::Ambiguous && result == Certainty::NoSolution)) {
                     result = alternativeResult;
                     selectedConstraint = &alternative;
+                    selectedInput = input;
                     selectedEqualities = std::move(alternativeEqualities);
                 }
                 return alternativeResult;
@@ -13028,6 +13209,24 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 candidate.discarded = true;
                 break;
             }
+            u8 coercionRank = 0;
+            if (result == Certainty::Proven) {
+                ASSERT_BUG(span(), selectedConstraint && selectedInput, StringView("Related candidate coercion has no selected constraint"));
+                const auto* input = resolve_.ivars.getType(selectedInput);
+                const auto* other = resolve_.ivars.getType(selectedConstraint->other);
+                if (resolve_.ivars.typesEqual(input, other)) {
+                    coercionRank = 8;
+                } else if (selectedConstraint->direction == SolverCoercionConstraint::Direction::InputIsSource) {
+                    coercionRank = input->is_Diverge() ? 1 : 4;
+                } else if (const auto* borrow = input->opt_Borrow()) {
+                    coercionRank = 4 + static_cast<u8>(borrow->type);
+                } else if (const auto* pointer = input->opt_Pointer()) {
+                    coercionRank = 4 + static_cast<u8>(pointer->type);
+                } else {
+                    coercionRank = 4;
+                }
+            }
+            candidate.coercionRanks.push_back(coercionRank);
             if (result == Certainty::Proven && selectedConstraint && selectedConstraint->bindInputToCandidate) {
                 if (selectedConstraint->isSelf) {
                     selfBoundByCoercion = true;
@@ -13139,17 +13338,13 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     if (coercionSelectsCandidate) {
         struct RelatedCandidate {
             Candidate* candidate;
-            const HIRType* self;
-            HIRPathParams inputs;
         };
 
         ThinVector<RelatedCandidate> related;
         for (auto* candidate : frame.viable) {
             evaluateCandidateCoercions(*candidate);
-            auto self = candidate->impl.getImplType(crate.types);
-            auto inputs = candidate->impl.getTraitParams(crate.types);
             if (!candidate->discarded) {
-                related.push_back(RelatedCandidate{candidate, std::move(self), std::move(inputs)});
+                related.push_back(RelatedCandidate{candidate});
             }
         }
 
@@ -13160,10 +13355,12 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 }
                 bool jBetter = false;
                 bool iBetter = false;
-                for (const auto& constraint : canonicalCoercions) {
-                    const auto ordering = resolve_.compareCoercionEndpoints(span(), constraint, constraint.isSelf ? related[j].self : related[j].inputs.types[constraint.typeIndex], constraint.isSelf ? related[i].self : related[i].inputs.types[constraint.typeIndex]);
-                    jBetter |= ordering == OrdGreater;
-                    iBetter |= ordering == OrdLess;
+                ASSERT_BUG(span(), related[j].candidate->coercionRanks.size() == related[i].candidate->coercionRanks.size(), StringView("Candidate coercion rank arity mismatch"));
+                for (size_t rank = 0; rank < related[i].candidate->coercionRanks.size(); rank++) {
+                    const auto left = related[j].candidate->coercionRanks[rank];
+                    const auto right = related[i].candidate->coercionRanks[rank];
+                    jBetter |= left > right;
+                    iBetter |= left < right;
                 }
                 if (jBetter && !iBetter) {
                     related[i].candidate->discarded = true;
