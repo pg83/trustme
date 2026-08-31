@@ -5626,6 +5626,18 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             && destinationStruct->structMarkings.canUnsize
             && ivars.typeContainsIvars(source, false);
     };
+    const auto isOpenStructuralCoercion = [&](const HIRType* rawDestination, const HIRType* rawSource) {
+        const auto* destination = resolveKnown(rawDestination);
+        const auto* source = resolveKnown(rawSource);
+        const auto* destinationPath = destination->opt_Path();
+        const auto* sourcePath = source->opt_Path();
+        const auto* destinationStruct = destinationPath && destinationPath->binding.is_Struct() ? destinationPath->binding.as_Struct() : nullptr;
+        const auto* sourceStruct = sourcePath && sourcePath->binding.is_Struct() ? sourcePath->binding.as_Struct() : nullptr;
+        return destinationStruct
+            && destinationStruct == sourceStruct
+            && destinationStruct->structMarkings.coerceUnsized != HIRStructMarkings::Coerce::None
+            && ivars.typeContainsIvars(source, false);
+    };
     const auto sourceCanCoerce = [&]() {
         if (source->is_Diverge() || source->is_Pointer() || source->is_Borrow() || source->is_NamedFunction() || source->is_Function() || source->is_TraitObject() || typeIsBounded(source)) {
             return true;
@@ -5653,7 +5665,11 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
                 const auto& destinationParams = destinationPath->path.data.as_Generic().params;
                 const auto& sourceParams = sourcePath->path.data.as_Generic().params;
                 ASSERT_BUG(sp, markings.coerceParam < destinationParams.types.size() && markings.coerceParam < sourceParams.types.size(), StringView("Malformed CoerceUnsized struct markings"));
-                openMarkedParameter = isRigidUnsized(isRigidUnsized, destinationParams.types[markings.coerceParam]) && (resolveKnown(destinationParams.types[markings.coerceParam])->is_Infer() || resolveKnown(sourceParams.types[markings.coerceParam])->is_Infer());
+                const auto* destinationParam = destinationParams.types[markings.coerceParam];
+                const auto* sourceParam = sourceParams.types[markings.coerceParam];
+                openMarkedParameter = !ivars.typesEqual(destinationParam, sourceParam)
+                    && (isOpenStructuralCoercion(destinationParam, sourceParam)
+                        || isRigidUnsized(isRigidUnsized, destinationParam) && (resolveKnown(destinationParam)->is_Infer() || resolveKnown(sourceParam)->is_Infer()));
             }
         }
         const HIRType* destinationInner = nullptr;
