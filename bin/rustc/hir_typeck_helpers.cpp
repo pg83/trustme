@@ -12163,9 +12163,29 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             return false;
         }
     }
+    const bool plainTraitGoal = (!assocName || !assocName[0]) && !associated && !valueName;
+    if (plainTraitGoal && resolvedType->is_Infer() && coercionSelectsCandidate) {
+        const auto coercionEntailsGoal = [&](const SolverCoercionConstraint& constraint) {
+            if (!constraint.isSelf || constraint.direction != SolverCoercionConstraint::Direction::InputIsSource) {
+                return false;
+            }
+            const auto* object = normalizeGoalInput(constraint.other)->opt_TraitObject();
+            return object
+                && object->trait.path.path == trait
+                && object->trait.path.params.equalsIgnoringRegions(goalParams);
+        };
+        if (std::any_of(query.coercions->begin(), query.coercions->end(), coercionEntailsGoal)) {
+            SolverResponse response;
+            response.certainty = Certainty::Proven;
+            return callback.visit(std::move(response));
+        }
+    }
     if (coercionSelectsCandidate) {
         auto guidedType = resolvedType;
         auto guidedParams = goalParams.clone();
+        bool selfGuided = false;
+        Vector<bool> guidedParam;
+        guidedParam.zero(guidedParams.types.size());
         bool hasGuidance = false;
         bool exactGuidance = true;
         for (const auto& constraint : *query.coercions) {
@@ -12184,8 +12204,13 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 exactGuidance = false;
                 break;
             }
-            if (resolvedInput->is_Infer() && constraint.bindInputToCandidate) {
+            if (resolvedInput->is_Infer()) {
                 input = guidedInput;
+                if (constraint.isSelf) {
+                    selfGuided = true;
+                } else {
+                    guidedParam.mut(constraint.typeIndex) = true;
+                }
                 hasGuidance = true;
                 continue;
             }
@@ -12205,13 +12230,31 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 return true;
             });
             evaluateTyped(callSpan, trait, guidedParams, guidedType, guidedCallback, guidedQuery, true, includeRootMagicCandidates);
-            if (hasGuidedResponse && guidedResponse.certainty == Certainty::Proven && guidedResponse.impl) {
-                const auto candidateType = guidedResponse.impl->getImplType(crate.types);
-                const auto candidateParams = guidedResponse.impl->getTraitParams(crate.types);
-                bool exactCandidate = candidateType == guidedType || candidateType->equalsIgnoringRegions(guidedType);
-                exactCandidate &= candidateParams.types.size() == guidedParams.types.size();
-                for (size_t i = 0; exactCandidate && i < candidateParams.types.size(); i++) {
-                    exactCandidate &= candidateParams.types[i] == guidedParams.types[i] || candidateParams.types[i]->equalsIgnoringRegions(guidedParams.types[i]);
+            if (hasGuidedResponse && guidedResponse.certainty != Certainty::NoSolution) {
+                auto candidateType = guidedType;
+                auto candidateParams = guidedParams.clone();
+                const auto exactType = [](const HIRType* left, const HIRType* right) {
+                    return left == right || left->equalsIgnoringRegions(right);
+                };
+                bool exactCandidate = true;
+                if (guidedResponse.impl) {
+                    candidateType = guidedResponse.impl->getImplType(crate.types);
+                    candidateParams = guidedResponse.impl->getTraitParams(crate.types);
+                    exactCandidate = (resolve_.typeContainsIvars(resolvedType) && !selfGuided) || exactType(candidateType, guidedType);
+                    exactCandidate &= candidateParams.types.size() == guidedParams.types.size() && candidateParams.values.size() == guidedParams.values.size();
+                    for (size_t i = 0; exactCandidate && i < candidateParams.types.size(); i++) {
+                        exactCandidate &= (resolve_.typeContainsIvars(goalParams.types[i]) && !guidedParam[i]) || exactType(candidateParams.types[i], guidedParams.types[i]);
+                    }
+                    for (size_t i = 0; exactCandidate && i < candidateParams.values.size(); i++) {
+                        exactCandidate &= goalParams.values[i].is_Infer() || candidateParams.values[i] == guidedParams.values[i];
+                    }
+                } else {
+                    exactCandidate = !resolvedType->is_Infer() || selfGuided || associatedConstrainsSelf;
+                    for (const auto& constraint : *query.coercions) {
+                        const bool inputGuided = constraint.isSelf ? selfGuided : guidedParam[constraint.typeIndex];
+                        const auto* originalInput = constraint.isSelf ? resolvedType : goalParams.types[constraint.typeIndex];
+                        exactCandidate &= inputGuided || !resolve_.typeContainsIvars(originalInput);
+                    }
                 }
                 if (exactCandidate) {
                     ThinVector<SolverTypeEquality> coercionEqualities;
@@ -12852,7 +12895,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
             assembleCandidates(frameIndex, trait, canonical.params, guidedSelf, includeRootMagicCandidates);
             if (selfGuidanceIsExact(constraint)) {
-                const HIRType* dereferencedStorage;
                 while ((guidedSelf = resolve_.autoderef(span(), guidedSelf))) {
                     assembleCandidates(frameIndex, trait, canonical.params, guidedSelf, includeRootMagicCandidates);
                 }
