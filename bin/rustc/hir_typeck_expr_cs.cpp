@@ -1838,17 +1838,24 @@ namespace {
         const bool hasSelfCoercionGoal = std::any_of(coercionGoals.begin(), coercionGoals.end(), [](const SolverCoercionConstraint& constraint) {
             return constraint.isSelf;
         });
-        bool lateClosureOutput = false;
-        if (v.name != "" && (v.trait == context.resolve.langFn() || v.trait == context.resolve.langFnMut() || v.trait == context.resolve.langFnOnce())) {
-            const auto* implType = context.getType(v.implTy);
+        const bool isFnAssociated = v.name != "" && (v.trait == context.resolve.langFn() || v.trait == context.resolve.langFnMut() || v.trait == context.resolve.langFnOnce());
+        const auto registerLateClosureOutput = [&](const HIRType* implType) {
+            if (!isFnAssociated) {
+                return static_cast<const HIRType*>(nullptr);
+            }
             const auto* closure = implType->is_NodeType() ? implType->as_NodeType().opt_Closure() : nullptr;
             const auto* expectedOutput = context.getType(v.leftTy);
-            if (closure && (*closure)->returnType->is_Infer() && context.getType((*closure)->returnType)->is_Diverge() && !expectedOutput->is_Diverge() && !context.ivars.typeContainsIvars(expectedOutput)) {
+            const bool divergingClosureOutput = closure
+                && (*closure)->returnType->is_Infer()
+                && (context.getType((*closure)->returnType)->is_Diverge() || context.usedNeverFallback((*closure)->returnType));
+            if (divergingClosureOutput && !expectedOutput->is_Diverge() && !context.ivars.typeContainsIvars(expectedOutput)) {
                 DEBUG(StringView("[check_associated] - apply late expected output ") << expectedOutput << StringView(" to diverging closure"));
                 context.registerClosureReturnObligation(sp, *closure, expectedOutput);
-                lateClosureOutput = true;
+                return (*closure)->returnType;
             }
-        }
+            return static_cast<const HIRType*>(nullptr);
+        };
+        const HIRType* lateClosureReturn = registerLateClosureOutput(context.getType(v.implTy));
 
         SolverResponse response;
         bool hasResponse = false;
@@ -1858,19 +1865,49 @@ namespace {
             v.params,
             v.implTy,
             [&](SolverResponse value) {
-            response = std::move(value);
-            hasResponse = true;
-            return true;
-        },
+                response = std::move(value);
+                hasResponse = true;
+                return true;
+            },
             {
                 .assocName = v.name.c_str(),
-                .assocType = v.name == "" || lateClosureOutput ? nullptr : v.leftTy,
+                .assocType = v.name == "" || lateClosureReturn ? nullptr : v.leftTy,
                 .assocParams = v.name == "" ? nullptr : &v.atyPp,
                 .allowInferInputs = true,
                 .excludedImpl = currentOperatorUsesLanguagePrimitive() ? context.currentTraitImpl : nullptr,
                 .coercions = coercionGoals.empty() ? nullptr : &coercionGoals,
             }
         );
+        if (!lateClosureReturn && hasResponse && response.impl) {
+            lateClosureReturn = registerLateClosureOutput(response.impl->getImplType(context.crate.types));
+            if (lateClosureReturn) {
+                const auto isLateOutputRelation = [&](const HIRType* left, const HIRType* right) {
+                    const auto matches = [&](const HIRType* actual, const HIRType* expected) {
+                        return actual == expected || context.ivars.typesEqual(context.getType(actual), context.getType(expected));
+                    };
+                    return (matches(left, v.leftTy) && matches(right, lateClosureReturn))
+                        || (matches(right, v.leftTy) && matches(left, lateClosureReturn));
+                };
+                SolverSlotValues retainedSlots;
+                for (size_t i = 0; i < response.slots.typeInputs.size(); i++) {
+                    if (!isLateOutputRelation(response.slots.typeInputs[i], response.slots.types[i])) {
+                        retainedSlots.typeInputs.push_back(response.slots.typeInputs[i]);
+                        retainedSlots.types.push_back(response.slots.types[i]);
+                    }
+                }
+                retainedSlots.valueInputs = std::move(response.slots.valueInputs);
+                retainedSlots.values = std::move(response.slots.values);
+                response.slots = std::move(retainedSlots);
+
+                ThinVector<SolverTypeEquality> retainedEqualities;
+                for (const auto& equality : response.equalities) {
+                    if (!isLateOutputRelation(equality.left, equality.right)) {
+                        retainedEqualities.push_back(equality);
+                    }
+                }
+                response.equalities = std::move(retainedEqualities);
+            }
+        }
 
 
         if (!hasResponse || !response.impl || v.operatorKind != TypeckPrimitiveOperator::None) {
@@ -2810,6 +2847,7 @@ namespace {
                     auto unit = context.crate.types.unit();
                     if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, unit)) {
                         DEBUG(StringView("Possibly `!` and no other options - never-type fallback to `()`"));
+                        context.recordNeverFallback(i);
                         context.equateTypes(sp, tyL, unit);
                         return true;
                     }
@@ -6069,6 +6107,31 @@ const HIRType* Context::closureReturnExpectation(const HIRExprNodeClosure* closu
         }
     }
     return nullptr;
+}
+
+void Context::recordNeverFallback(unsigned index) {
+    while (index >= neverFallbackIvars.length()) {
+        neverFallbackIvars.pushBack(false);
+    }
+    neverFallbackIvars.mut(index) = true;
+}
+
+bool Context::usedNeverFallback(const HIRType* type) const {
+    const auto* infer = type->opt_Infer();
+    if (!infer || infer->index == ~0u) {
+        return false;
+    }
+    unsigned index = infer->index;
+    for (size_t count = 0; count < ivars.ivars.size(); count++) {
+        if (index < neverFallbackIvars.length() && neverFallbackIvars[index]) {
+            return true;
+        }
+        if (index >= ivars.ivars.size() || !ivars.ivars[index].isAlias()) {
+            return false;
+        }
+        index = ivars.ivars[index].alias;
+    }
+    BUG(Span(), StringView("Loop detected while checking never fallback for ivar ") << infer->index);
 }
 
 void Context::applySolverResponse(const Span& sp, const SolverResponse& response) {

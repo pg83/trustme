@@ -124,6 +124,7 @@ struct Context {
 
     stl::Vector<ClosureReturnObligation> closureReturnObligations;
     ThinVector<SolverObligation> solverObligations;
+    stl::Vector<bool> neverFallbackIvars;
 
     HIRGenericParams emptyGenericParams;
     stl::Vector<bool> ivarsSized;
@@ -173,6 +174,8 @@ struct Context {
     void registerSolverObligation(const Span& sp, const HIRType* type, HIRTraitPath trait);
     void registerClosureReturnObligation(const Span& sp, const HIRExprNodeClosure* closure, const HIRType* expected);
     const HIRType* closureReturnExpectation(const HIRExprNodeClosure* closure) const;
+    void recordNeverFallback(unsigned index);
+    bool usedNeverFallback(const HIRType* type) const;
     const HIRType* expandAssociatedTypes(const Span& sp, const HIRType* input) const;
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const;
     void compactIvars(const Span& sp);
