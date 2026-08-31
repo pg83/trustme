@@ -591,7 +591,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
     template <typename Relate>
     CandidateBindingResult unifyCandidateParams(HIRPathParams& params, Relate relate);
 
-    CandidateBindingResult bindCandidatePlaceholders(Candidate& candidate, const HIRType* nestedType, const HIRTraitPath::assocListT& associated, bool useCandidateResponse = false);
+    CandidateBindingResult bindCandidatePlaceholders(Candidate& candidate, const HIRType* nestedType, const HIRTraitPath::assocListT& associated, bool useCandidateResponse = false, bool applyResponseBindings = false);
 
     CandidateBindingResult bindCandidateResponse(Candidate& candidate, const HIRType* nestedType, const HIRPathParams& nestedParams, const HIRTraitPath::assocListT& nestedAssociated, const SolverImpl& response);
 
@@ -10083,7 +10083,7 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(HIRPathParams& params, Relate 
     return changed ? CandidateBindingResult::Changed : CandidateBindingResult::Unchanged;
 }
 
-auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, const HIRType* nestedType, const HIRTraitPath::assocListT& associated, bool useCandidateResponse) -> CandidateBindingResult {
+auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, const HIRType* nestedType, const HIRTraitPath::assocListT& associated, bool useCandidateResponse, bool applyResponseBindings) -> CandidateBindingResult {
     HIRPathParams* candidateParams = nullptr;
     if (candidate.impl.traitImpl) {
         candidateParams = &candidate.impl.implParams;
@@ -10097,7 +10097,9 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
     bool changed = false;
     for (const auto& requirement : associated) {
         auto candidateOutput = useCandidateResponse ? candidate.impl.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams) : nullptr;
+        auto responseBinding = CandidateBindingResult::Unchanged;
         if (!useCandidateResponse) {
+            const bool constrainOutput = applyResponseBindings && !typeHasUnknown(requirement.second.type);
             auto nestedCallback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
                 if (response.certainty != Certainty::Proven || !response.impl) {
                     return false;
@@ -10106,10 +10108,40 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
                 if (output == nullptr) {
                     return false;
                 }
+                if (constrainOutput) {
+                    HIRTraitPath::assocListT responseAssociated;
+                    responseAssociated.insert({requirement.first, requirement.second.clone()});
+                    responseBinding = bindCandidateResponse(
+                        candidate,
+                        nestedType,
+                        requirement.second.sourceTrait.params,
+                        responseAssociated,
+                        *response.impl
+                    );
+                    if (responseBinding == CandidateBindingResult::Mismatch) {
+                        return false;
+                    }
+                    appendRelationEffects(candidate, std::move(response));
+                }
                 candidateOutput = std::move(output);
                 return true;
             });
-            evaluateTyped(span(), requirement.second.sourceTrait.path, requirement.second.sourceTrait.params, nestedType, nestedCallback, {.assocName = requirement.first.c_str(), .assocParams = &requirement.second.atyParams});
+            evaluateTyped(
+                span(),
+                requirement.second.sourceTrait.path,
+                requirement.second.sourceTrait.params,
+                nestedType,
+                nestedCallback,
+                {
+                    .assocName = requirement.first.c_str(),
+                    .assocType = constrainOutput ? requirement.second.type : nullptr,
+                    .assocParams = &requirement.second.atyParams,
+                }
+            );
+            if (responseBinding == CandidateBindingResult::Mismatch) {
+                return responseBinding;
+            }
+            changed |= responseBinding == CandidateBindingResult::Changed;
         }
         if (candidateOutput == nullptr) {
             candidateOutput = makeAssociatedProjection(nestedType, requirement.second.sourceTrait, requirement.first, requirement.second.atyParams);
@@ -10988,14 +11020,59 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         }
     }
 
-    const auto assocResult = matchAssociatedTypes(trait, *candidate, associated, &materializeHead);
-    if (assocResult == Certainty::NoSolution) {
-        return Certainty::NoSolution;
-    }
-    if (assocResult == Certainty::Ambiguous) {
-        DEBUG(StringView("candidate downgrade: assoc"));
-        candidate->ambiguityBeyondHead = true;
-        result = Certainty::Ambiguous;
+    struct ForwardedProjectionRequirement {
+        const HIRType* type;
+        HIRGenericPath trait;
+        RcString item;
+        HIRPathParams itemParams;
+        const HIRType* required;
+    };
+    ThinVector<ForwardedProjectionRequirement> forwardedProjectionRequirements;
+    if (associated) {
+        for (const auto& requirement : *associated) {
+            auto output = candidate->impl.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams);
+            if (output == nullptr) {
+                continue;
+            }
+            output = materializeHead.monomorphType(span(), output, true);
+            const auto required = materializeHead.monomorphType(span(), requirement.second.type, true);
+            if (typeHasUnknown(required)) {
+                continue;
+            }
+
+            const auto snapshot = resolve_.ivars.snapshot();
+            Unifier relation(span(), resolve_.ivars, &resolve_);
+            if (relation.unify(output, required) != Unifier::Outcome::Mismatch) {
+                for (const auto& pending : relation.pending()) {
+                    const auto append = [&](const HIRType* alias, const HIRType* other) {
+                        const auto* path = alias->opt_Path();
+                        const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
+                        if (!projection || !visitTyWith(output, [&](const HIRType* inner) { return inner == alias; })) {
+                            return;
+                        }
+                        for (const auto& existing : forwardedProjectionRequirements) {
+                            if (existing.type == projection->type && existing.trait.equalsIgnoringRegions(projection->trait) &&
+                                existing.item == projection->item && existing.itemParams.equalsIgnoringRegions(projection->params) &&
+                                existing.required == other) {
+                                return;
+                            }
+                        }
+                        forwardedProjectionRequirements.push_back(
+                            ForwardedProjectionRequirement{
+                                projection->type,
+                                projection->trait.clone(),
+                                projection->item,
+                                projection->params.clone(),
+                                other,
+                            }
+                        );
+                    };
+                    append(pending.left, pending.right);
+                    append(pending.right, pending.left);
+                }
+            }
+            resolve_.ivars.rollbackTo(snapshot);
+        }
     }
 
     if (candidate->source == CandidateSource::Builtin && trait == resolve_.langUnsize()) {
@@ -11028,6 +11105,97 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
     }
     const HIRPathParams* boundParams = markerImpl ? &candidate->markerImplParams : traitImpl ? &candidate->impl.implParams : &associatedProjection->params;
 
+    auto monomorphTraitBound = [&](const auto& traitBound, HIRSimplePath& nestedTrait, HIRPathParams& nestedParams, HIRTraitPath::assocListT& nestedAssociated) -> const HIRType* {
+        auto monomorphBound = [&](auto& ms) {
+            auto boundType = ms.monomorphType(span(), traitBound.type);
+            auto boundTrait = ms.monomorphTraitpath(span(), traitBound.trait, true);
+
+            nestedTrait = boundTrait.path.path;
+            nestedParams = boundTrait.path.params.clone();
+            for (const auto& aty : boundTrait.typeBounds) {
+                nestedAssociated.insert({aty.first, aty.second.clone()});
+            }
+            return boundType;
+        };
+        if (markerImpl) {
+            auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
+            return monomorphBound(ms);
+        } else if (traitImpl) {
+            auto nestedType = candidate->impl.monomorphImplType(crate.types, span(), traitBound.type);
+            auto boundTrait = candidate->impl.monomorphImplTraitPath(crate.types, span(), traitBound.trait);
+            nestedTrait = boundTrait.path.path;
+            nestedParams = boundTrait.path.params.clone();
+            for (const auto& aty : boundTrait.typeBounds) {
+                nestedAssociated.insert({aty.first, aty.second.clone()});
+            }
+            return nestedType;
+        } else {
+            auto ms = MonomorphStatePtr(crate.types, associatedProjection->type, &associatedProjection->trait.params, &associatedProjection->params);
+            return monomorphBound(ms);
+        }
+    };
+
+    const auto forwardProjectionRequirements = [&](const HIRType* nestedType, const HIRSimplePath& nestedTrait, const HIRPathParams& nestedParams, HIRTraitPath::assocListT& nestedAssociated) {
+        bool added = false;
+        for (const auto& requirement : forwardedProjectionRequirements) {
+            if (requirement.trait.path != nestedTrait || !requirement.trait.params.equalsIgnoringRegions(nestedParams) ||
+                (requirement.type != nestedType && !requirement.type->equalsIgnoringRegions(nestedType))) {
+                continue;
+            }
+            if (nestedAssociated.count(requirement.item)) {
+                continue;
+            }
+            nestedAssociated.insert(
+                {
+                    requirement.item,
+                    HIRTraitPath::AtyEqual{
+                        requirement.trait.clone(),
+                        requirement.itemParams.clone(),
+                        requirement.required,
+                    },
+                }
+            );
+            added = true;
+        }
+        return added;
+    };
+
+    struct PreparedTraitBound {
+        bool ready = false;
+        const HIRType* type = nullptr;
+        HIRSimplePath trait;
+        HIRPathParams params;
+        HIRTraitPath::assocListT associated;
+    };
+    ThinVector<PreparedTraitBound> preparedBounds(implParamsDef->bounds.size());
+    bool prebindingChanged = false;
+    for (size_t boundIndex = 0; boundIndex < implParamsDef->bounds.size(); boundIndex++) {
+        const auto& bound = implParamsDef->bounds[boundIndex];
+        const auto* traitBound = bound.opt_TraitBound();
+        if (!traitBound) {
+            continue;
+        }
+        auto& prepared = preparedBounds[boundIndex];
+        prepared.type = monomorphTraitBound(*traitBound, prepared.trait, prepared.params, prepared.associated);
+        const bool forwarded = forwardProjectionRequirements(prepared.type, prepared.trait, prepared.params, prepared.associated);
+        prepared.ready = true;
+        const auto binding = bindCandidatePlaceholders(*candidate, prepared.type, prepared.associated, false, forwarded);
+        if (binding == CandidateBindingResult::Mismatch) {
+            return Certainty::NoSolution;
+        }
+        prebindingChanged |= binding == CandidateBindingResult::Changed;
+    }
+
+    const auto assocResult = matchAssociatedTypes(trait, *candidate, associated, &materializeHead);
+    if (assocResult == Certainty::NoSolution) {
+        return Certainty::NoSolution;
+    }
+    if (assocResult == Certainty::Ambiguous) {
+        DEBUG(StringView("candidate downgrade: assoc"));
+        candidate->ambiguityBeyondHead = true;
+        result = Certainty::Ambiguous;
+    }
+
     {
         for (size_t i = 0; i < implParamsDef->types.size() && i < boundParams->types.size(); i++) {
             if (!implParamsDef->types[i].isSized) {
@@ -11059,61 +11227,6 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         }
     }
 
-    auto monomorphTraitBound = [&](const auto& traitBound, HIRSimplePath& nestedTrait, HIRPathParams& nestedParams, HIRTraitPath::assocListT& nestedAssociated) -> const HIRType* {
-        auto monomorphBound = [&](auto& ms) {
-            auto boundType = ms.monomorphType(span(), traitBound.type);
-            auto boundTrait = ms.monomorphTraitpath(span(), traitBound.trait, true);
-
-            nestedTrait = boundTrait.path.path;
-            nestedParams = boundTrait.path.params.clone();
-            for (const auto& aty : boundTrait.typeBounds) {
-                nestedAssociated.insert({aty.first, aty.second.clone()});
-            }
-            return boundType;
-        };
-        if (markerImpl) {
-            auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
-            return monomorphBound(ms);
-        } else if (traitImpl) {
-            auto nestedType = candidate->impl.monomorphImplType(crate.types, span(), traitBound.type);
-            auto boundTrait = candidate->impl.monomorphImplTraitPath(crate.types, span(), traitBound.trait);
-            nestedTrait = boundTrait.path.path;
-            nestedParams = boundTrait.path.params.clone();
-            for (const auto& aty : boundTrait.typeBounds) {
-                nestedAssociated.insert({aty.first, aty.second.clone()});
-            }
-            return nestedType;
-        } else {
-            auto ms = MonomorphStatePtr(crate.types, associatedProjection->type, &associatedProjection->trait.params, &associatedProjection->params);
-            return monomorphBound(ms);
-        }
-    };
-
-    struct PreparedTraitBound {
-        bool ready = false;
-        const HIRType* type = nullptr;
-        HIRSimplePath trait;
-        HIRPathParams params;
-        HIRTraitPath::assocListT associated;
-    };
-    ThinVector<PreparedTraitBound> preparedBounds(implParamsDef->bounds.size());
-    bool prebindingChanged = false;
-    for (size_t boundIndex = 0; boundIndex < implParamsDef->bounds.size(); boundIndex++) {
-        const auto& bound = implParamsDef->bounds[boundIndex];
-        const auto* traitBound = bound.opt_TraitBound();
-        if (!traitBound || traitBound->trait.typeBounds.empty()) {
-            continue;
-        }
-        auto& prepared = preparedBounds[boundIndex];
-        prepared.type = monomorphTraitBound(*traitBound, prepared.trait, prepared.params, prepared.associated);
-        prepared.ready = true;
-        const auto binding = bindCandidatePlaceholders(*candidate, prepared.type, prepared.associated);
-        if (binding == CandidateBindingResult::Mismatch) {
-            return Certainty::NoSolution;
-        }
-        prebindingChanged |= binding == CandidateBindingResult::Changed;
-    }
-
     for (size_t boundIndex = 0; boundIndex < implParamsDef->bounds.size(); boundIndex++) {
         const auto& bound = implParamsDef->bounds[boundIndex];
         if (const auto* be = bound.opt_TraitBound()) {
@@ -11130,13 +11243,15 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                 nestedAssociated = std::move(prepared.associated);
             } else {
                 nestedType = monomorphTraitBound(*be, nestedTrait, nestedParams, nestedAssociated);
-                const auto binding = bindCandidatePlaceholders(*candidate, nestedType, nestedAssociated);
+                const bool forwarded = forwardProjectionRequirements(nestedType, nestedTrait, nestedParams, nestedAssociated);
+                const auto binding = bindCandidatePlaceholders(*candidate, nestedType, nestedAssociated, false, forwarded);
                 if (binding == CandidateBindingResult::Mismatch) {
                     return Certainty::NoSolution;
                 }
                 if (binding == CandidateBindingResult::Changed) {
                     nestedAssociated.clear();
                     nestedType = monomorphTraitBound(*be, nestedTrait, nestedParams, nestedAssociated);
+                    forwardProjectionRequirements(nestedType, nestedTrait, nestedParams, nestedAssociated);
                 }
             }
 
