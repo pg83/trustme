@@ -1867,6 +1867,11 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                 const HIRType* tmp2;
                 const auto& dstTy = state.getLvalueType(sa.dst);
 
+                if (srcTy == dstTy) {
+                    localState.writeParam(dst, e.ptrVal);
+                    break;
+                }
+
                 switch ((*dstTy).tag()) {
                     default:
                         MIR_TODO(state, StringView("RValue::MakeDst Coerce to ") << dstTy);
