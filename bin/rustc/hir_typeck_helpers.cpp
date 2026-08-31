@@ -391,8 +391,14 @@ struct TraitResolution::NextTraitGoalEvaluator {
         EmptyRootGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const Vector<u32>& existentialEnvironment, bool includeMagicCandidates);
     };
 
+    struct CacheIndexBucket {
+        u64 generation = 0;
+        ThinVector<size_t> indexes;
+    };
+
     ThinVector<EmptyRootGoal> emptyRootGoals;
-    IntMap<ThinVector<size_t>> emptyRootGoalIndex;
+    IntMap<CacheIndexBucket> emptyRootGoalIndex;
+    u64 emptyRootGoalGeneration = 1;
 
     struct RawNestedNoEffectResponse {
         GoalKey goal;
@@ -405,7 +411,8 @@ struct TraitResolution::NextTraitGoalEvaluator {
     };
 
     ThinVector<RawNestedNoEffectResponse> rawNestedNoEffectResponses;
-    IntMap<ThinVector<size_t>> rawNestedNoEffectResponseIndex;
+    IntMap<CacheIndexBucket> rawNestedNoEffectResponseIndex;
+    u64 rawNestedNoEffectResponseGeneration = 1;
 
     struct CanonicalNestedNoEffectResponse {
         GoalKey goal;
@@ -418,7 +425,8 @@ struct TraitResolution::NextTraitGoalEvaluator {
     };
 
     ThinVector<CanonicalNestedNoEffectResponse> canonicalNestedNoEffectResponses;
-    IntMap<ThinVector<size_t>> canonicalNestedNoEffectResponseIndex;
+    IntMap<CacheIndexBucket> canonicalNestedNoEffectResponseIndex;
+    u64 canonicalNestedNoEffectResponseGeneration = 1;
 
     struct CanonicalGoal {
         HIRPathParams params;
@@ -9177,18 +9185,12 @@ auto NextTraitGoalEvaluator::cacheResponse(size_t hash, const HIRSimplePath& tra
 auto NextTraitGoalEvaluator::clearGoalCache(bool clearCanonicalNoEffectResponses) -> void {
     goalCacheIndex.clear();
     rawNestedNoEffectResponses.clear();
-    rawNestedNoEffectResponseIndex.visit([](auto& indexes) {
-        indexes.clear();
-    });
+    rawNestedNoEffectResponseGeneration++;
     if (clearCanonicalNoEffectResponses) {
         canonicalNestedNoEffectResponses.clear();
-        canonicalNestedNoEffectResponseIndex.visit([](auto& indexes) {
-            indexes.clear();
-        });
+        canonicalNestedNoEffectResponseGeneration++;
         emptyRootGoals.clear();
-        emptyRootGoalIndex.visit([](auto& indexes) {
-            indexes.clear();
-        });
+        emptyRootGoalGeneration++;
     }
     size_t kept = 0;
     for (auto* goal : goalCache) {
@@ -9205,11 +9207,11 @@ auto NextTraitGoalEvaluator::clearGoalCache(bool clearCanonicalNoEffectResponses
 }
 
 auto NextTraitGoalEvaluator::rootAssemblyKnownEmpty(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const Vector<u32>& existentialEnvironment, bool includeMagicCandidates) const -> bool {
-    const auto* indexes = emptyRootGoalIndex.find(hash);
-    if (!indexes) {
+    const auto* bucket = emptyRootGoalIndex.find(hash);
+    if (!bucket || bucket->generation != emptyRootGoalGeneration) {
         return false;
     }
-    for (const auto index : *indexes) {
+    for (const auto index : bucket->indexes) {
         const auto& cached = emptyRootGoals[index];
         if (cached.includeMagicCandidates == includeMagicCandidates && goalMatches(cached.goal, trait, params, type, nullptr, &existentialEnvironment)) {
             return true;
@@ -9221,11 +9223,15 @@ auto NextTraitGoalEvaluator::rootAssemblyKnownEmpty(size_t hash, const HIRSimple
 auto NextTraitGoalEvaluator::rememberEmptyRootAssembly(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const Vector<u32>& existentialEnvironment, bool includeMagicCandidates) -> void {
     const auto index = emptyRootGoals.size();
     emptyRootGoals.emplace_back(hash, trait, params, type, existentialEnvironment, includeMagicCandidates);
-    auto* indexes = emptyRootGoalIndex.find(hash);
-    if (!indexes) {
-        indexes = emptyRootGoalIndex.insert(hash);
+    auto* bucket = emptyRootGoalIndex.find(hash);
+    if (!bucket) {
+        bucket = emptyRootGoalIndex.insert(hash);
     }
-    indexes->push_back(index);
+    if (bucket->generation != emptyRootGoalGeneration) {
+        bucket->generation = emptyRootGoalGeneration;
+        bucket->indexes.clear();
+    }
+    bucket->indexes.push_back(index);
 }
 
 auto NextTraitGoalEvaluator::rawNestedNoEffectHash(const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Candidate& candidate) const -> size_t {
@@ -9242,12 +9248,12 @@ auto NextTraitGoalEvaluator::rawNestedNoEffectHash(const HIRSimplePath& trait, c
 
 auto NextTraitGoalEvaluator::findRawNestedNoEffectResponse(const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Candidate& candidate, Certainty& certainty) const -> bool {
     const auto hash = rawNestedNoEffectHash(trait, params, type, associated, candidate);
-    const auto* indexes = rawNestedNoEffectResponseIndex.find(hash);
-    if (!indexes) {
+    const auto* bucket = rawNestedNoEffectResponseIndex.find(hash);
+    if (!bucket || bucket->generation != rawNestedNoEffectResponseGeneration) {
         return false;
     }
     const auto& candidateParams = candidate.impl.traitImpl ? candidate.impl.implParams : candidate.markerImplParams;
-    for (const auto index : *indexes) {
+    for (const auto index : bucket->indexes) {
         const auto& cached = rawNestedNoEffectResponses[index];
         if (cached.traitImpl == candidate.impl.traitImpl && cached.markerImpl == candidate.markerImpl &&
             cached.candidateParams == candidateParams && goalMatches(cached.goal, trait, params, type, associated)) {
@@ -9265,11 +9271,15 @@ auto NextTraitGoalEvaluator::rememberRawNestedNoEffectResponse(const HIRSimplePa
     }
     const auto hash = rawNestedNoEffectHash(trait, params, type, associated, candidate);
     rawNestedNoEffectResponses.emplace_back(hash, trait, params, type, associated, candidate, certainty);
-    auto* indexes = rawNestedNoEffectResponseIndex.find(hash);
-    if (!indexes) {
-        indexes = rawNestedNoEffectResponseIndex.insert(hash);
+    auto* bucket = rawNestedNoEffectResponseIndex.find(hash);
+    if (!bucket) {
+        bucket = rawNestedNoEffectResponseIndex.insert(hash);
     }
-    indexes->push_back(rawNestedNoEffectResponses.size() - 1);
+    if (bucket->generation != rawNestedNoEffectResponseGeneration) {
+        bucket->generation = rawNestedNoEffectResponseGeneration;
+        bucket->indexes.clear();
+    }
+    bucket->indexes.push_back(rawNestedNoEffectResponses.size() - 1);
 }
 
 auto NextTraitGoalEvaluator::canonicalNestedNoEffectHash(size_t goalHash, const Candidate& candidate, const HIRPathParams& candidateParams) const -> size_t {
@@ -9284,11 +9294,11 @@ auto NextTraitGoalEvaluator::canonicalNestedNoEffectHash(size_t goalHash, const 
 
 auto NextTraitGoalEvaluator::findCanonicalNestedNoEffectResponse(size_t goalHash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Vector<u32>& existentialEnvironment, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty& certainty) const -> bool {
     const auto hash = canonicalNestedNoEffectHash(goalHash, candidate, candidateParams);
-    const auto* indexes = canonicalNestedNoEffectResponseIndex.find(hash);
-    if (!indexes) {
+    const auto* bucket = canonicalNestedNoEffectResponseIndex.find(hash);
+    if (!bucket || bucket->generation != canonicalNestedNoEffectResponseGeneration) {
         return false;
     }
-    for (const auto index : *indexes) {
+    for (const auto index : bucket->indexes) {
         const auto& cached = canonicalNestedNoEffectResponses[index];
         if (cached.traitImpl == candidate.impl.traitImpl && cached.markerImpl == candidate.markerImpl &&
             cached.candidateParams == candidateParams && goalMatches(cached.goal, trait, params, type, associated, &existentialEnvironment)) {
@@ -9310,11 +9320,15 @@ auto NextTraitGoalEvaluator::rememberCanonicalNestedNoEffectResponse(const GoalK
     }
     const auto hash = canonicalNestedNoEffectHash(goal.hash, candidate, candidateParams);
     canonicalNestedNoEffectResponses.emplace_back(hash, goal.trait, goal.params, goal.type, goal.associated.empty() ? nullptr : &goal.associated, existentialEnvironment, candidate, candidateParams, certainty);
-    auto* indexes = canonicalNestedNoEffectResponseIndex.find(hash);
-    if (!indexes) {
-        indexes = canonicalNestedNoEffectResponseIndex.insert(hash);
+    auto* bucket = canonicalNestedNoEffectResponseIndex.find(hash);
+    if (!bucket) {
+        bucket = canonicalNestedNoEffectResponseIndex.insert(hash);
     }
-    indexes->push_back(canonicalNestedNoEffectResponses.size() - 1);
+    if (bucket->generation != canonicalNestedNoEffectResponseGeneration) {
+        bucket->generation = canonicalNestedNoEffectResponseGeneration;
+        bucket->indexes.clear();
+    }
+    bucket->indexes.push_back(canonicalNestedNoEffectResponses.size() - 1);
 }
 
 auto NextTraitGoalEvaluator::canonicalGoalIsRigid(const CanonicalGoal& canonical) -> bool {
@@ -12147,6 +12161,81 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         if (infer->isLit() && goalParams.types.empty() && goalParams.values.empty() && !literalClassCanMatch(trait, goalParams, infer->tyClass)) {
             return false;
+        }
+    }
+    if (coercionSelectsCandidate) {
+        auto guidedType = resolvedType;
+        auto guidedParams = goalParams.clone();
+        bool hasGuidance = false;
+        bool exactGuidance = true;
+        for (const auto& constraint : *query.coercions) {
+            if (constraint.alternativeGroup != 0 && std::count_if(query.coercions->begin(), query.coercions->end(), [&](const SolverCoercionConstraint& alternative) {
+                return alternative.alternativeGroup == constraint.alternativeGroup;
+            }) != 1) {
+                exactGuidance = false;
+                break;
+            }
+            ASSERT_BUG(callSpan, constraint.isSelf || constraint.typeIndex < guidedParams.types.size(), StringView("coercion-constrained trait input is out of range"));
+            auto*& input = constraint.isSelf ? guidedType : guidedParams.types[constraint.typeIndex];
+            const auto* resolvedInput = resolve_.resolveType(input);
+            const auto* guidedInput = normalizeGoalInput(constraint.other);
+            const auto* guidedPath = guidedInput->opt_Path();
+            if (guidedInput->is_Infer() || (guidedPath && guidedPath->binding.is_Unbound())) {
+                exactGuidance = false;
+                break;
+            }
+            if (resolvedInput->is_Infer() && constraint.bindInputToCandidate) {
+                input = guidedInput;
+                hasGuidance = true;
+                continue;
+            }
+            if (resolvedInput != guidedInput && !resolvedInput->equalsIgnoringRegions(guidedInput)) {
+                exactGuidance = false;
+                break;
+            }
+        }
+        if (hasGuidance && exactGuidance) {
+            TraitGoalQuery guidedQuery = query;
+            guidedQuery.coercions = nullptr;
+            SolverResponse guidedResponse;
+            bool hasGuidedResponse = false;
+            auto guidedCallback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
+                guidedResponse = std::move(response);
+                hasGuidedResponse = true;
+                return true;
+            });
+            evaluateTyped(callSpan, trait, guidedParams, guidedType, guidedCallback, guidedQuery, true, includeRootMagicCandidates);
+            if (hasGuidedResponse && guidedResponse.certainty == Certainty::Proven && guidedResponse.impl) {
+                const auto candidateType = guidedResponse.impl->getImplType(crate.types);
+                const auto candidateParams = guidedResponse.impl->getTraitParams(crate.types);
+                bool exactCandidate = candidateType == guidedType || candidateType->equalsIgnoringRegions(guidedType);
+                exactCandidate &= candidateParams.types.size() == guidedParams.types.size();
+                for (size_t i = 0; exactCandidate && i < candidateParams.types.size(); i++) {
+                    exactCandidate &= candidateParams.types[i] == guidedParams.types[i] || candidateParams.types[i]->equalsIgnoringRegions(guidedParams.types[i]);
+                }
+                if (exactCandidate) {
+                    ThinVector<SolverTypeEquality> coercionEqualities;
+                    for (const auto& constraint : *query.coercions) {
+                        const auto* candidateInput = constraint.isSelf ? candidateType : candidateParams.types[constraint.typeIndex];
+                        if (resolve_.evaluateCoercionConstraint(callSpan, constraint, candidateInput, &coercionEqualities, &guidedResponse) != Certainty::Proven) {
+                            exactCandidate = false;
+                            break;
+                        }
+                        if (constraint.bindInputToCandidate) {
+                            const auto* originalInput = constraint.isSelf ? resolvedType : goalParams.types[constraint.typeIndex];
+                            if (originalInput != candidateInput) {
+                                guidedResponse.equalities.push_back(SolverTypeEquality{originalInput, candidateInput});
+                            }
+                        }
+                    }
+                    if (exactCandidate) {
+                        for (auto& equality : coercionEqualities) {
+                            guidedResponse.equalities.push_back(std::move(equality));
+                        }
+                        return callback.visit(std::move(guidedResponse));
+                    }
+                }
+            }
         }
     }
     const auto emitNoViable = [&]() {

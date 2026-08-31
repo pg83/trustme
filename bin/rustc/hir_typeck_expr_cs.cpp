@@ -1802,6 +1802,10 @@ namespace {
             return false;
         };
 
+        if (!hasSemanticOperatorImpl && primitiveTypesAreContextual && currentOperatorUsesLanguagePrimitive()) {
+            return AssociatedCheckResult::Complete;
+        }
+
         ThinVector<SolverCoercionConstraint> coercionGoals;
         const auto appendCoercionGoals = [&](const HIRType* rawInput, unsigned typeIndex, bool isSelf) {
             const auto* input = context.getType(rawInput);
