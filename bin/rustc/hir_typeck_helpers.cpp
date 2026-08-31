@@ -5640,6 +5640,9 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             }
             return SolverCertainty::Ambiguous;
         }
+        if (typeIsSized(sp, destination) == HIRCompare::Equal) {
+            return relateEquality(destination, source);
+        }
         const bool structuralUnsizeWithOpenSource = isOpenStructuralUnsize(destination, source);
         const auto equality = structuralUnsizeWithOpenSource ? SolverCertainty::Ambiguous : relateEquality(destination, source);
         if (equality == SolverCertainty::Proven) {
