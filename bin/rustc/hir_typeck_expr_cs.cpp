@@ -2801,8 +2801,11 @@ namespace {
                 it = (removeOption ? possibleTys.erase(it) : it + 1);
             }
 
-            DEBUG(StringView("possible_tys = {") << possibleTys << StringView("} (") << nSrcIvars << StringView(" src ivars, ") << nDstIvars << StringView(" dst ivars, possibly_diverge=") << possiblyDiverge << StringView(")"));
-            if (nSrcIvars == 0 && /*n_dst_ivars == 0 &&*/ possibleTys.empty() && possiblyDiverge && fallbackTy == IvarPossFallbackType::IgnoreWeakDisable) {
+            const bool hasDeferredDestination = std::any_of(ivarEnt.typesCoerceTo.begin(), ivarEnt.typesCoerceTo.end(), [&](const auto& edge) {
+                return !context.getType(edge.ty)->is_Infer();
+            });
+            DEBUG(StringView("possible_tys = {") << possibleTys << StringView("} (") << nSrcIvars << StringView(" src ivars, ") << nDstIvars << StringView(" dst ivars, possibly_diverge=") << possiblyDiverge << StringView(", deferred_destination=") << hasDeferredDestination << StringView(")"));
+            if (nSrcIvars == 0 && /*n_dst_ivars == 0 &&*/ possibleTys.empty() && possiblyDiverge && !hasDeferredDestination && fallbackTy == IvarPossFallbackType::IgnoreWeakDisable) {
                 if (context.crate.edition < ASTEdition::Rust2024) {
                     auto unit = context.crate.types.unit();
                     if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, unit)) {
@@ -6456,8 +6459,14 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Coercion consume"));
             if (!context.linkCoerce.empty()) {
-                auto ent = mv$(context.linkCoerce.front());
-                context.linkCoerce.erase(context.linkCoerce.begin());
+                auto selected = std::find_if(context.linkCoerce.begin(), context.linkCoerce.end(), [&](const auto& coercion) {
+                    return !context.getType((*coercion->rightNodePtr)->resType)->is_Diverge();
+                });
+                if (selected == context.linkCoerce.end()) {
+                    selected = context.linkCoerce.begin();
+                }
+                auto ent = mv$(*selected);
+                context.linkCoerce.erase(selected);
 
                 const auto& sp = (*ent->rightNodePtr)->span();
                 auto& srcTy = (*ent->rightNodePtr)->resType;
