@@ -5553,6 +5553,18 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
     const auto typeIsBounded = [](const HIRType* type) {
         return type->is_Generic() || (type->is_Path() && (monomorphiseTypeNeeded(type) || type->as_Path().binding.is_Opaque()));
     };
+    const auto isOpenStructuralUnsize = [&](const HIRType* rawDestination, const HIRType* rawSource) {
+        const auto* destination = resolveKnown(rawDestination);
+        const auto* source = resolveKnown(rawSource);
+        const auto* destinationPath = destination->opt_Path();
+        const auto* sourcePath = source->opt_Path();
+        const auto* destinationStruct = destinationPath && destinationPath->binding.is_Struct() ? destinationPath->binding.as_Struct() : nullptr;
+        const auto* sourceStruct = sourcePath && sourcePath->binding.is_Struct() ? sourcePath->binding.as_Struct() : nullptr;
+        return destinationStruct
+            && destinationStruct == sourceStruct
+            && destinationStruct->structMarkings.canUnsize
+            && ivars.typeContainsIvars(source, false);
+    };
     const auto sourceCanCoerce = [&]() {
         if (source->is_Diverge() || source->is_Pointer() || source->is_Borrow() || source->is_NamedFunction() || source->is_Function() || source->is_TraitObject() || typeIsBounded(source)) {
             return true;
@@ -5602,7 +5614,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         openPointerTarget = destinationInner
             && !ivars.typesEqual(destinationInner, sourceInner)
             && (isOpenInference(resolveKnown(destinationInner)) || isOpenInference(resolveKnown(sourceInner))
-                || (isRigidUnsized(isRigidUnsized, destinationInner) && ivars.typeContainsIvars(sourceInner, false)));
+                || isOpenStructuralUnsize(destinationInner, sourceInner));
     }
     if (!openEndpoint && !openMarkedParameter && !openPointerTarget && relateEquality(destination, source) == SolverCertainty::Proven) {
         return SolverCertainty::Proven;
@@ -5628,7 +5640,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             }
             return SolverCertainty::Ambiguous;
         }
-        const bool structuralUnsizeWithOpenSource = isRigidUnsized(isRigidUnsized, destination) && ivars.typeContainsIvars(source, false);
+        const bool structuralUnsizeWithOpenSource = isOpenStructuralUnsize(destination, source);
         const auto equality = structuralUnsizeWithOpenSource ? SolverCertainty::Ambiguous : relateEquality(destination, source);
         if (equality == SolverCertainty::Proven) {
             return SolverCertainty::Proven;
@@ -9580,7 +9592,8 @@ auto NextTraitGoalEvaluator::relateAssembledHead(CandidateSource source, const H
     headNormalizationAmbiguity = false;
     for (size_t i = 0; i < unifier.pending().length(); i++) {
         const auto& equality = unifier.pending()[i];
-        if (i >= selfTypePending && (isCanonicalTypeInput(equality.left) || isCanonicalTypeInput(equality.right))) {
+        const bool exportedDefiningOpaque = containsDefiningOpaque(equality.left) != containsDefiningOpaque(equality.right);
+        if (exportedDefiningOpaque || (i >= selfTypePending && (isCanonicalTypeInput(equality.left) || isCanonicalTypeInput(equality.right)))) {
             continue;
         }
         unresolved = true;
@@ -9710,7 +9723,8 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
     };
     bool unresolved = false;
     for (const auto& equality : unifier.pending()) {
-        const bool pendingUnresolved = !isCanonicalTypeInput(equality.left) && !isCanonicalTypeInput(equality.right);
+        const bool exportedDefiningOpaque = containsDefiningOpaque(equality.left) != containsDefiningOpaque(equality.right);
+        const bool pendingUnresolved = !exportedDefiningOpaque && !isCanonicalTypeInput(equality.left) && !isCanonicalTypeInput(equality.right);
         unresolved |= pendingUnresolved;
         headNormalizationAmbiguity |= pendingUnresolved && (resolve_.hasAssociatedType(equality.left) || resolve_.hasAssociatedType(equality.right));
         headEqualities.push_back(
