@@ -21,7 +21,7 @@ namespace {
 
     static auto allocHeader(size_t len) {
         if (len) {
-            auto flen = max<size_t>(clp2(len + sizeof(Buffer::Header)), 256);
+            auto flen = max<size_t>(clp2(len + sizeof(Buffer::Header)), 32);
             auto blen = flen - sizeof(Buffer::Header);
 
             return new (allocateMemory(flen)) Buffer::Header({

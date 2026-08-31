@@ -669,9 +669,19 @@ struct TraitResolution::NextTraitGoalEvaluator {
         const HIRTraitImpl* left;
         const HIRTraitImpl* right;
         bool overlaps;
+        OverlapEntry* next;
+
+        OverlapEntry(const HIRTraitImpl* left, const HIRTraitImpl* right, bool overlaps, OverlapEntry* next)
+            : left(left)
+            , right(right)
+            , overlaps(overlaps)
+            , next(next)
+        {
+        }
     };
 
-    IntMap<ThinVector<OverlapEntry>> overlapCache;
+    ObjList<OverlapEntry> overlapEntries;
+    IntMap<OverlapEntry*> overlapCache;
 
     bool evaluateOverlapUncached(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right);
 
@@ -11970,6 +11980,7 @@ NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, c
     , emptyRootGoalIndex(resolve.eatCachePool.mutPtr())
     , rawNestedNoEffectResponseIndex(resolve.eatCachePool.mutPtr())
     , canonicalNestedNoEffectResponseIndex(resolve.eatCachePool.mutPtr())
+    , overlapEntries(resolve.eatCachePool.mutPtr())
     , overlapCache(resolve.eatCachePool.mutPtr())
 {
     BUG_ASSERT(resolve.board().id < SOLVER_ALPHA_SCOPE_BASE);
@@ -11986,11 +11997,11 @@ NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, c
 
 auto NextTraitGoalEvaluator::evaluateOverlap(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right) -> bool {
     const auto key = splitMix64(reinterpret_cast<uintptr_t>(&left)) ^ splitMix64(~reinterpret_cast<uintptr_t>(&right));
-    auto* bucket = overlapCache.find(key);
+    auto** bucket = overlapCache.find(key);
     if (bucket) {
-        for (const auto& ent : *bucket) {
-            if (ent.left == &left && ent.right == &right) {
-                return ent.overlaps;
+        for (auto* ent = *bucket; ent; ent = ent->next) {
+            if (ent->left == &left && ent->right == &right) {
+                return ent->overlaps;
             }
         }
     }
@@ -11998,7 +12009,7 @@ auto NextTraitGoalEvaluator::evaluateOverlap(const Span& callSpan, const HIRSimp
     if (!bucket) {
         bucket = overlapCache.insert(key);
     }
-    bucket->push_back(OverlapEntry{&left, &right, rv});
+    *bucket = overlapEntries.make(&left, &right, rv, *bucket);
     return rv;
 }
 
@@ -12222,6 +12233,9 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (hasGuidance && exactGuidance) {
             TraitGoalQuery guidedQuery = query;
             guidedQuery.coercions = nullptr;
+            if (assocName && assocName[0] && assocType) {
+                guidedQuery.assocType = nullptr;
+            }
             SolverResponse guidedResponse;
             bool hasGuidedResponse = false;
             auto guidedCallback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
@@ -12256,6 +12270,15 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                         exactCandidate &= inputGuided || !resolve_.typeContainsIvars(originalInput);
                     }
                 }
+                if (exactCandidate && guidedResponse.impl && assocName && assocName[0] && assocType) {
+                    const HIRPathParams noParams;
+                    const auto* candidateOutput = guidedResponse.impl->getType(crate.types, assocName, assocParams ? *assocParams : noParams);
+                    if (!candidateOutput || unifyProbe(assocType, candidateOutput) == Certainty::NoSolution) {
+                        exactCandidate = false;
+                    } else if (assocType != candidateOutput) {
+                        guidedResponse.equalities.push_back(SolverTypeEquality{assocType, candidateOutput});
+                    }
+                }
                 if (exactCandidate) {
                     ThinVector<SolverTypeEquality> coercionEqualities;
                     for (const auto& constraint : *query.coercions) {
@@ -12275,7 +12298,23 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                         for (auto& equality : coercionEqualities) {
                             guidedResponse.equalities.push_back(std::move(equality));
                         }
-                        return callback.visit(std::move(guidedResponse));
+                        CanonicalizeTraitGoal responseCanonicalizer(crate.types, &resolve_.ivars, &implExistentialScopes_, alphaExistentialScopeBase_);
+                        const auto responseGoal = canonicalizeGoal(goalParams, resolvedType, associated, responseCanonicalizer);
+                        if (assocType) {
+                            responseCanonicalizer.monomorphType(span(), assocType, true);
+                        }
+                        if (assocParams) {
+                            responseCanonicalizer.monomorphPathParams(span(), *assocParams, true);
+                        }
+                        responseCanonicalizer.freeze();
+
+                        auto canonicalResponse = monomorphSolverResponse(guidedResponse, responseCanonicalizer);
+                        if (canonicalResponse.impl) {
+                            canonicalResponse.slots = extractSlotValues(responseGoal, *canonicalResponse.impl, responseCanonicalizer, canonicalResponse.certainty);
+                        }
+                        InstantiateTraitResponseForCaller instantiator(crate.types, resolve_.ivars, responseCanonicalizer.placeholderNames(), &responseCanonicalizer);
+                        auto callerResponse = monomorphSolverResponse(canonicalResponse, instantiator);
+                        return callback.visit(std::move(callerResponse));
                     }
                 }
             }

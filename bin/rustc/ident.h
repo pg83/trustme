@@ -25,9 +25,10 @@ struct Ident {
     class Hygiene {
     public:
         struct Inner {
-            stl::Vector<unsigned int> contexts;
-
-            stl::Vector<unsigned int> macroDefinitions;
+            const Inner* parent = nullptr;
+            unsigned int context = 0;
+            unsigned int macroDefinition = 0;
+            unsigned int depth = 0;
             std::shared_ptr<ModPath> searchModule;
         };
 
@@ -39,7 +40,6 @@ struct Ident {
         {
         }
 
-        Inner clone() const;
         static const Inner* store(stl::ObjPool& pool, Inner v);
 
     public:
