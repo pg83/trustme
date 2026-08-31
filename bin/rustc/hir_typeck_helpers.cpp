@@ -5436,11 +5436,31 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             return SolverCertainty::NoSolution;
         }
 
-        bool ambiguous = outcome == Unifier::Outcome::Ambiguous && unifier.pending().length() == 0 && unifier.pendingValues().empty();
-        for (const auto& pending : unifier.pending()) {
+        const auto isDefiningOpaque = [&](const HIRType* type) {
+            const auto* erased = type->opt_ErasedType();
+            if (!erased) {
+                return false;
+            }
+            if (const auto* alias = erased->inner.opt_Alias()) {
+                return this->isOpaqueAliasDefiningScope(*alias->inner);
+            }
+            if (const auto* function = erased->inner.opt_Fcn()) {
+                return this->isDefiningFcnOrigin(function->origin);
+            }
+            return false;
+        };
+        const auto pendingIsResponseEquality = [&](const Unifier::PendingEquality& pending) {
             const auto* leftInfer = pending.left->opt_Infer();
             const auto* rightInfer = pending.right->opt_Infer();
-            if (!((leftInfer && isSolverCanonicalInfer(leftInfer->index)) || (rightInfer && isSolverCanonicalInfer(rightInfer->index)))) {
+            if ((leftInfer && isSolverCanonicalInfer(leftInfer->index)) || (rightInfer && isSolverCanonicalInfer(rightInfer->index))) {
+                return true;
+            }
+            return isDefiningOpaque(pending.left) != isDefiningOpaque(pending.right);
+        };
+
+        bool ambiguous = outcome == Unifier::Outcome::Ambiguous && unifier.pending().length() == 0 && unifier.pendingValues().empty();
+        for (const auto& pending : unifier.pending()) {
+            if (!pendingIsResponseEquality(pending)) {
                 ambiguous = true;
             }
         }
@@ -5464,9 +5484,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             appendEquality(binding.left, binding.right);
         }
         for (const auto& pending : unifier.pending()) {
-            const auto* leftInfer = pending.left->opt_Infer();
-            const auto* rightInfer = pending.right->opt_Infer();
-            if ((leftInfer && isSolverCanonicalInfer(leftInfer->index)) || (rightInfer && isSolverCanonicalInfer(rightInfer->index))) {
+            if (pendingIsResponseEquality(pending)) {
                 appendEquality(pending.left, pending.right);
             }
         }
