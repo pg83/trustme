@@ -23,7 +23,12 @@ impl Thread {
 
 const DESTROYED: *mut () = core::ptr::without_provenance_mut(2);
 
+fn inferred_mut_to_const<T>(address: usize) -> *const T {
+    core::ptr::without_provenance_mut(address)
+}
+
 fn main() {
+    let _: *const u8 = inferred_mut_to_const(0);
     let current = CURRENT.get();
     if current > DESTROYED {
         unsafe {

@@ -2322,7 +2322,7 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
             auto attrs = std::move(it->node->attrs());
             ExpandAttrsCfgAttr(*expandState.wb.settings, attrs);
             ExpandAttrs(expandState, attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                d.handle(sp, a, this->expandState.wb, this->crate, it->node);
+                it->node = d.handle(sp, a, this->expandState.wb, this->crate, it->node);
             }));
             if (!it->node) {
                 it = node.nodes.erase(it);

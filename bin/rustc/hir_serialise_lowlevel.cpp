@@ -175,9 +175,9 @@ void HIRSerialiseWriter::Inner::write(const void* buf, size_t len) {
 }
 
 HIRSerialiseReader::Buffer::Buffer(size_t cap)
-    : ofs(0)
+    : backing(cap)
+    , ofs(0)
 {
-    backing.zero(cap);
 }
 
 size_t HIRSerialiseReader::Buffer::read(void* dst, size_t len) {

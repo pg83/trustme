@@ -1976,7 +1976,7 @@ auto ValueLifetime::dumpDebug(const char* suffix, unsigned i, const Vector<size_
         name += " ";
     }
     DEBUG(name << StringView(" : ") << FMT_CB(os, for (unsigned int j = 0; j < this->stmtBitmap.length(); j++) {
-              if (j != 0 && find(blockOffsets.begin(), blockOffsets.end(), j) != blockOffsets.end()) {
+              if (j != 0 && std::find(blockOffsets.begin(), blockOffsets.end(), j) != blockOffsets.end()) {
                   os << StringView("|");
               }
               os << StringView(this->stmtBitmap[j] ? "X" : " ");

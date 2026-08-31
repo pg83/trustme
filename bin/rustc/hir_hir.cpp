@@ -994,6 +994,18 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     TRACE_FUNCTION;
     TypeOrdContext ordContext;
 
+    Vector<const HIRType*> parentMappings;
+    ImplMatcher parentMatcher(parentMappings, other.params);
+    const bool parentMatchesChild = matchImplHead(sp, other, *this, parentMatcher);
+
+    Vector<const HIRType*> childMappings;
+    ImplMatcher childMatcher(childMappings, params);
+    const bool childMatchesParent = matchImplHead(sp, *this, other, childMatcher);
+
+    if (!parentMatchesChild && !childMatchesParent) {
+        return false;
+    }
+
     {
         auto ord = typelistOrdSpecific(ordContext, sp, this->traitArgs.types, other.traitArgs.types);
         if (ordContext.mixed) {
@@ -1013,14 +1025,6 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
             return ord == ::OrdGreater;
         }
     }
-
-    Vector<const HIRType*> parentMappings;
-    ImplMatcher parentMatcher(parentMappings, other.params);
-    const bool parentMatchesChild = matchImplHead(sp, other, *this, parentMatcher);
-
-    Vector<const HIRType*> childMappings;
-    ImplMatcher childMatcher(childMappings, params);
-    const bool childMatchesParent = matchImplHead(sp, *this, other, childMatcher);
 
     if (parentMatchesChild != childMatchesParent) {
         return parentMatchesChild && mappedBoundsImplied(sp, types, *this, other, parentMatcher) && mappedImplicitSizedImplied(*this, other, parentMatcher);

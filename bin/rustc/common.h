@@ -180,14 +180,14 @@ struct RunIterable {
     }
 
     void advance() {
-        if (ofs < list.size()) {
+        if (ofs < list.length()) {
             auto start = ofs;
-            while (ofs < list.size() && list[ofs] == list[start]) {
+            while (ofs < list.length() && list[ofs] == list[start]) {
                 ofs++;
             }
             cur = std::make_pair(start, ofs - 1);
         } else {
-            ofs = list.size() + 1;
+            ofs = list.length() + 1;
         }
     }
 
@@ -197,7 +197,7 @@ struct RunIterable {
 
     RunIterable<T> end() {
         auto rv = *this;
-        rv.ofs = list.size() + 1;
+        rv.ofs = list.length() + 1;
         return rv;
     }
 

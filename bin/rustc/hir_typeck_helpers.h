@@ -24,6 +24,10 @@ struct SolverImpl {
     HIRTraitPath::assocListT associated;
     HIRBoundConstness constness = HIRBoundConstness::Never;
 
+    mutable const HIRType* cachedImplType = nullptr;
+    mutable HIRPathParams cachedTraitParams;
+    mutable bool hasCachedTraitParams = false;
+
     SolverImpl(HIRPathParams implParams, const HIRTrait& trait, const HIRSimplePath& traitPath, const HIRTraitImpl& traitImpl);
     SolverImpl(const HIRType* type, const HIRPathParams* traitArgs, const HIRTraitPath::assocListT* associated, HIRBoundConstness constness = HIRBoundConstness::Never);
     SolverImpl(const HIRType* type, HIRPathParams traitArgs, HIRTraitPath::assocListT associated, HIRBoundConstness constness = HIRBoundConstness::Never);
@@ -33,6 +37,7 @@ struct SolverImpl {
     }
 
     const HIRType* getImplType(HIRTypeInterner& types) const;
+    const HIRPathParams& getTraitParamsRef(HIRTypeInterner& types) const;
     HIRPathParams getTraitParams(HIRTypeInterner& types) const;
     const HIRType* getTraitTyParam(HIRTypeInterner& types, unsigned index) const;
     const HIRType* getType(HIRTypeInterner& types, const char* name, const HIRPathParams& params) const;
@@ -78,6 +83,28 @@ struct SolverResponse {
     ThinVector<SolverValueEquality> valueEqualities;
     const SolverImpl* impl = nullptr;
     SolverOperatorSummary operatorSummary;
+};
+
+enum class SolverCoercionRelation : u8 {
+    None,
+    Equality,
+    Subtype,
+    Coercion,
+};
+
+enum class SolverCoercionOp : u8;
+
+struct SolverDeferredCoercion {
+    const HIRType* destination;
+    const HIRType* source;
+    SolverCoercionOp op;
+    unsigned alternativeGroup = 0;
+};
+
+struct SolverCoercionResponse {
+    SolverResponse effects;
+    ThinVector<SolverDeferredCoercion> deferred;
+    SolverCoercionRelation relation = SolverCoercionRelation::None;
 };
 
 struct NextSolverCrateCache {
@@ -263,6 +290,7 @@ public:
 
     bool pathparamsContainIvars(const HIRPathParams& pps, bool onlyUnbound) const;
     bool typeContainsIvars(const HIRType* ty, bool onlyUnbound = false) const;
+    bool wouldCreateIvarCycle(unsigned int slot, const HIRType* type) const;
     bool pathparamsEqual(const HIRPathParams& ppsL, const HIRPathParams& ppsR) const;
     bool typesEqual(const HIRType* l, const HIRType* r) const;
 
@@ -347,6 +375,14 @@ public:
         return pendingValues_;
     }
 
+    const stl::Vector<PendingEquality>& bindings() const {
+        return bindings_;
+    }
+
+    const ThinVector<PendingValueEquality>& valueBindings() const {
+        return valueBindings_;
+    }
+
 private:
     Outcome unifyResolved(const HIRType* left, const HIRType* right);
     Outcome unifyParams(const HIRPathParams& left, const HIRPathParams& right);
@@ -369,6 +405,8 @@ private:
     bool rigidProjectionsAreDistinct_;
     stl::Vector<PendingEquality> pending_;
     ThinVector<PendingValueEquality> pendingValues_;
+    stl::Vector<PendingEquality> bindings_;
+    ThinVector<PendingValueEquality> valueBindings_;
 };
 
 enum class SolverCoercionOp : u8 {
@@ -389,6 +427,10 @@ struct SolverCoercionConstraint {
     SolverCoercionOp op;
 
     bool isSelf = false;
+    bool inputRequiresSized = false;
+    bool allowSourceAutoderef = false;
+    bool bindInputToCandidate = true;
+    unsigned alternativeGroup = 0;
 };
 
 struct SolverOperatorGoal {
@@ -407,6 +449,7 @@ struct TraitGoalQuery {
     const char* assocName = nullptr;
     const HIRType* assocType = nullptr;
     const HIRPathParams* assocParams = nullptr;
+    const HIRTraitPath::assocListT* associated = nullptr;
 
     const char* valueName = nullptr;
 
@@ -674,6 +717,8 @@ public:
     SolverCertainty evaluateInherentImpl(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const;
     SolverCertainty probeInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const;
 
+    SolverCoercionResponse evaluateCoercionGoal(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op, bool allowSourceAutoderef = false) const;
+
     InherentImplSelection selectInherentImpl(const Span& sp, const HIRType* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams = nullptr) const;
 
     bool findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRType* selfType, TraitPathCallback& callback) const;
@@ -713,7 +758,7 @@ private:
     SolverCertainty solveNonBuiltinTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRType* type) const;
     HIRCompare typeIsSizedBuiltin(const Span& sp, const HIRType* type) const;
     HIRCompare typeIsCopyBuiltin(const Span& sp, const HIRType* type) const;
-    SolverCertainty evaluateCoercionGoal(const Span& sp, const SolverCoercionConstraint& constraint, const HIRType* input, ThinVector<SolverTypeEquality>* equalities = nullptr) const;
+    SolverCertainty evaluateCoercionConstraint(const Span& sp, const SolverCoercionConstraint& constraint, const HIRType* input, ThinVector<SolverTypeEquality>* equalities = nullptr, SolverResponse* effects = nullptr, ThinVector<SolverDeferredCoercion>* deferred = nullptr) const;
     Ordering compareCoercionEndpoints(const Span& sp, const SolverCoercionConstraint& constraint, const HIRType* left, const HIRType* right) const;
     SolverCertainty evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, u32 conditionalScope = 0, bool onlyBoundsConstrainingTraitParams = false) const;
     SolverCertainty evaluateInherentImplBounds(const Span& sp, const HIRTypeImpl& impl, const HIRPathParams& implParams) const;

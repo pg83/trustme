@@ -227,7 +227,7 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
     } else if (const auto* ecItem = i.opt_Crate()) {
         const auto& ec = crate.externCrates.at(ecItem->name);
 
-        DEBUG(ec.hir->exportedMacroNames.size() << StringView(" exported macros"));
+        DEBUG(ec.hir->exportedMacroNames.length() << StringView(" exported macros"));
         for (const auto& name : ec.hir->exportedMacroNames) {
             if (!filterValid(name)) {
                 DEBUG(StringView("Skip ") << name);

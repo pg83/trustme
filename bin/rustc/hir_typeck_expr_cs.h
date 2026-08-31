@@ -41,8 +41,10 @@ struct Context {
             } op;
 
             const HIRType* ty;
+            bool selectable;
+            unsigned alternativeGroup;
 
-            CoerceTy(const HIRType* ty, bool isCoerce);
+            CoerceTy(const HIRType* ty, bool isCoerce, bool selectable = true, unsigned alternativeGroup = 0);
         };
 
         bool forceDisable = false;
@@ -91,7 +93,7 @@ struct Context {
         bool isAmbiguous = false;
 
         stl::Vector<StallDependency> stalledOn;
-        std::vector<CapturedIvarPossible> stalledPossibilities;
+        ThinVector<CapturedIvarPossible> stalledPossibilities;
     };
 
     const HIRCrate& crate;
@@ -102,6 +104,7 @@ struct Context {
     TraitResolution resolve;
 
     unsigned nextRuleIdx;
+    unsigned nextCoercionAlternativeGroup = 1;
 
     std::vector<std::unique_ptr<Coercion>> linkCoerce;
 
@@ -120,11 +123,12 @@ struct Context {
     };
 
     stl::Vector<ClosureReturnObligation> closureReturnObligations;
+    ThinVector<SolverObligation> solverObligations;
 
     HIRGenericParams emptyGenericParams;
     stl::Vector<bool> ivarsSized;
     std::vector<IVarPossible> possibleIvarVals;
-    std::vector<Associated::CapturedIvarPossible>* possibleIvarSink = nullptr;
+    ThinVector<Associated::CapturedIvarPossible>* possibleIvarSink = nullptr;
 
     IVarPossible* getPossibleIvarSink(unsigned index);
 
@@ -218,7 +222,7 @@ struct Context {
         UnsizeFrom,
     };
 
-    void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRType* t, PossibleTypeSource srcTy);
+    void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRType* t, PossibleTypeSource srcTy, bool selectable = true, unsigned alternativeGroup = 0);
 
     void possibleEquateIvarRawPointerFallback(const Span& sp, unsigned int ivarIndex, const HIRType* type);
 
