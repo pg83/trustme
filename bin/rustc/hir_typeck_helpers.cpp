@@ -270,25 +270,6 @@ namespace {
         return false;
     }
 
-    HIRCompare compareValue(const Span& sp, const HIRConstGeneric& leftRaw, const HIRConstGeneric& rightRaw, const HMTypeInferrence& infer) {
-        const auto& left = infer.getValue(leftRaw);
-        const auto& right = infer.getValue(rightRaw);
-        if (left == right) {
-            return HIRCompare::Equal;
-        }
-        if (left.is_Infer() || right.is_Infer()) {
-            return HIRCompare::Fuzzy;
-        }
-        if (left.is_Generic() && left.as_Generic().isPlaceholder()) {
-            return HIRCompare::Fuzzy;
-        }
-        if (right.is_Generic() && right.as_Generic().isPlaceholder()) {
-            return HIRCompare::Fuzzy;
-        }
-        //TODO(sp, StringView("compare_value: ") << left << " == " << right);
-        return HIRCompare::Unequal;
-    }
-
     bool traitContainsMethodInner(const HIRTrait& traitPtr, const RcString& name, const HIRFunction*& outFcnPtr) {
         auto it = traitPtr.values.find(name);
         if (it != traitPtr.values.end() && it->second.is_Function()) {
@@ -3222,10 +3203,10 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
             return callback.visit(SolverImpl(type, HIRPathParams(), HIRTraitPath::assocListT()), SolverCertainty::Ambiguous);
         } else if (type->is_Generic() || (type->is_Path() && type->as_Path().binding.is_Opaque())) {
             const auto sized = typeIsSized(sp, type);
-            if (sized != HIRCompare::Unequal) {
+            if (sized != SolverCertainty::NoSolution) {
                 metaTy = crate.types.unit();
                 hasMetaTy = true;
-                if (sized == HIRCompare::Fuzzy) {
+                if (sized == SolverCertainty::Ambiguous) {
                     certainty = SolverCertainty::Ambiguous;
                 }
             } else {
@@ -4705,12 +4686,12 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
             continue;
         }
         switch (this->typeIsSized(sp, parameter)) {
-            case HIRCompare::Equal:
+            case SolverCertainty::Proven:
                 break;
-            case HIRCompare::Fuzzy:
+            case SolverCertainty::Ambiguous:
                 merge(SolverCertainty::Ambiguous);
                 break;
-            case HIRCompare::Unequal:
+            case SolverCertainty::NoSolution:
                 return SolverCertainty::NoSolution;
         }
     }
@@ -5105,77 +5086,29 @@ bool TraitResolution::traitContainsType(const Span& sp, const HIRGenericPath& tr
     return false;
 }
 
-HIRCompare TraitResolution::typeIsSized(const Span& sp, const HIRType* ty) const {
+SolverCertainty TraitResolution::typeIsSized(const Span& sp, const HIRType* ty) const {
     const auto& type = this->ivars.getType(ty);
     if (langSized().components().empty()) {
-        switch (solveStructuralTraitGoalCertainty(sp, StructuralTrait::Sized, type)) {
-            case SolverCertainty::Proven:
-                return HIRCompare::Equal;
-            case SolverCertainty::Ambiguous:
-                return HIRCompare::Fuzzy;
-            case SolverCertainty::NoSolution:
-                return HIRCompare::Unequal;
-        }
-        UNREACHABLE();
+        return solveStructuralTraitGoalCertainty(sp, StructuralTrait::Sized, type);
     }
-    switch (solveTraitGoalCertainty(sp, langSized(), type)) {
-        case SolverCertainty::Proven:
-            return HIRCompare::Equal;
-        case SolverCertainty::Ambiguous:
-            return HIRCompare::Fuzzy;
-        case SolverCertainty::NoSolution:
-            return HIRCompare::Unequal;
-    }
-    UNREACHABLE();
+    return solveTraitGoalCertainty(sp, langSized(), type);
 }
 
-HIRCompare TraitResolution::typeIsCopy(const Span& sp, const HIRType* ty) const {
+SolverCertainty TraitResolution::typeIsCopy(const Span& sp, const HIRType* ty) const {
     const auto& type = this->ivars.getType(ty);
     if (langCopy().components().empty()) {
-        switch (solveStructuralTraitGoalCertainty(sp, StructuralTrait::Copy, type)) {
-            case SolverCertainty::Proven:
-                return HIRCompare::Equal;
-            case SolverCertainty::Ambiguous:
-                return HIRCompare::Fuzzy;
-            case SolverCertainty::NoSolution:
-                return HIRCompare::Unequal;
-        }
-        UNREACHABLE();
+        return solveStructuralTraitGoalCertainty(sp, StructuralTrait::Copy, type);
     }
-    switch (solveTraitGoalCertainty(sp, langCopy(), type)) {
-        case SolverCertainty::Proven:
-            return HIRCompare::Equal;
-        case SolverCertainty::Ambiguous:
-            return HIRCompare::Fuzzy;
-        case SolverCertainty::NoSolution:
-            return HIRCompare::Unequal;
-    }
-    UNREACHABLE();
+    return solveTraitGoalCertainty(sp, langCopy(), type);
 }
 
-HIRCompare TraitResolution::typeIsClone(const Span& sp, const HIRType* ty) const {
+SolverCertainty TraitResolution::typeIsClone(const Span& sp, const HIRType* ty) const {
     TRACE_FUNCTION_F(ty);
     const auto& type = this->ivars.getType(ty);
     if (langClone().components().empty()) {
-        switch (solveStructuralTraitGoalCertainty(sp, StructuralTrait::Clone, type)) {
-            case SolverCertainty::Proven:
-                return HIRCompare::Equal;
-            case SolverCertainty::Ambiguous:
-                return HIRCompare::Fuzzy;
-            case SolverCertainty::NoSolution:
-                return HIRCompare::Unequal;
-        }
-        UNREACHABLE();
+        return solveStructuralTraitGoalCertainty(sp, StructuralTrait::Clone, type);
     }
-    switch (solveTraitGoalCertainty(sp, langClone(), type)) {
-        case SolverCertainty::Proven:
-            return HIRCompare::Equal;
-        case SolverCertainty::Ambiguous:
-            return HIRCompare::Fuzzy;
-        case SolverCertainty::NoSolution:
-            return HIRCompare::Unequal;
-    }
-    UNREACHABLE();
+    return solveTraitGoalCertainty(sp, langClone(), type);
 }
 
 SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op, bool allowSourceAutoderef) const {
@@ -5413,7 +5346,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
     const auto resolveKnown = [&](const HIRType* type) {
         return ivars.getType(type);
     };
-    if (constraint.inputRequiresSized && typeIsSized(sp, resolveKnown(input)) == HIRCompare::Unequal) {
+    if (constraint.inputRequiresSized && typeIsSized(sp, resolveKnown(input)) == SolverCertainty::NoSolution) {
         return SolverCertainty::NoSolution;
     }
     const auto isRigidUnsized = [&](const auto& self, const HIRType* rawType) -> bool {
@@ -5736,7 +5669,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             return related(relateEquality(destination, source), SolverCoercionRelation::Equality);
         }
         if (destination->is_Infer() || (source->is_Infer() && !sourceLiteral)) {
-            if (!hasAutoderefAlternative && !destination->is_Infer() && typeIsSized(sp, destination) == HIRCompare::Equal) {
+            if (!hasAutoderefAlternative && !destination->is_Infer() && typeIsSized(sp, destination) == SolverCertainty::Proven) {
                 return related(relateEquality(destination, source), SolverCoercionRelation::Equality);
             }
             if (deferred) {
@@ -5744,7 +5677,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             }
             return SolverCertainty::Ambiguous;
         }
-        if (typeIsSized(sp, destination) == HIRCompare::Equal) {
+        if (typeIsSized(sp, destination) == SolverCertainty::Proven) {
             return related(relateEquality(destination, source), SolverCoercionRelation::Equality);
         }
         const bool structuralUnsizeWithOpenSource = isOpenStructuralUnsize(destination, source);
@@ -11716,10 +11649,10 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                 continue;
             }
             const auto sized = resolve_.typeIsSized(span(), bound);
-            if (sized == HIRCompare::Unequal) {
+            if (sized == SolverCertainty::NoSolution) {
                 return Certainty::NoSolution;
             }
-            if (sized == HIRCompare::Fuzzy) {
+            if (sized == SolverCertainty::Ambiguous) {
                 DEBUG(StringView("candidate downgrade: implicit sized"));
                 candidate->headObligations.push_back(
                     SolverObligation{

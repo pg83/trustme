@@ -1083,7 +1083,7 @@ namespace {
         if (isMutable) {
             ERROR(borrow->span(), E0000, StringView("A mutable reference is not allowed in the final value of a constant"));
         }
-        if (resolve.typeIsInteriorMutable(borrow->span(), held->resType) == HIRCompare::Equal) {
+        if (resolve.typeIsInteriorMutable(borrow->span(), held->resType) == InteriorMutability::Yes) {
             ERROR(borrow->span(), E0000, StringView("A constant may not refer to interior mutable data - ") << held->resType);
         }
     }
@@ -5367,7 +5367,7 @@ auto StaticBorrowExprVisitorMark::candidateNeedsDrop(HIRExprNodeP& root) const -
 }
 
 auto StaticBorrowExprVisitorMark::isMaybeInteriorMut(const HIRExprNode& node) const -> bool {
-    return resolve_.typeIsInteriorMutable(node.span(), node.resType) != HIRCompare::Unequal;
+    return resolve_.typeIsInteriorMutable(node.span(), node.resType) != InteriorMutability::No;
 }
 
 StaticBorrowOuterVisitorMark::StaticBorrowOuterVisitorMark(const WireBoard& wb)
@@ -6009,7 +6009,7 @@ auto StaticBorrowOuterVisitor::visitStatic(HIRItemPath p, HIRStatic& item) -> vo
         StaticBorrowExprVisitorMutate ev(resolve_, selfType, *this, item.value);
         ev.visitNodePtr(item.value);
 
-        if (!item.isMut && resolve_.typeIsCopy(item.value->span(), item.type) && resolve_.typeIsInteriorMutable(item.value->span(), item.type) == HIRCompare::Unequal) {
+        if (!item.isMut && resolve_.typeIsCopy(item.value->span(), item.type) && resolve_.typeIsInteriorMutable(item.value->span(), item.type) == InteriorMutability::No) {
             item.saveLiteral = true;
         }
     }

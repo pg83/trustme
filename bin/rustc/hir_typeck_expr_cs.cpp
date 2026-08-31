@@ -1935,7 +1935,7 @@ namespace {
         }
 
         if (ivarIdx < context.ivarsSized.length() && context.ivarsSized[ivarIdx]) {
-            if (context.resolve.typeIsSized(sp, newTy) == HIRCompare::Unequal) {
+            if (context.resolve.typeIsSized(sp, newTy) == SolverCertainty::NoSolution) {
                 DEBUG(StringView("Unsized type not valid here"));
                 return true;
             }
@@ -2056,7 +2056,7 @@ namespace {
 
             if (!allowUnsized) {
                 const auto newEnd = std::remove_if(possibleTys.begin(), possibleTys.end(), [&](const PossibleType& candidate) {
-                    return candidate.hasType() && context.resolve.typeIsSized(sp, candidate.ty) == HIRCompare::Unequal;
+                    return candidate.hasType() && context.resolve.typeIsSized(sp, candidate.ty) == SolverCertainty::NoSolution;
                 });
                 DEBUG(i << StringView(": ") << (possibleTys.end() - newEnd) << StringView(" unsized possibilities"));
                 possibleTys.erase(newEnd, possibleTys.end());
@@ -5269,7 +5269,7 @@ void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& 
     const auto* destinationInfer = destination->opt_Infer();
     const bool destinationRequiresSized = destinationInfer
         ? destinationInfer->index < this->ivarsSized.length() && this->ivarsSized[destinationInfer->index]
-        : this->resolve.typeIsSized(sp, destination) == HIRCompare::Equal;
+        : this->resolve.typeIsSized(sp, destination) == SolverCertainty::Proven;
     if (destinationRequiresSized) {
         this->requireSized(sp, nodePtr->resType);
     }
@@ -5514,7 +5514,7 @@ void Context::requireSized(const Span& sp, const HIRType* ty_) {
     const auto& ty = ivars.getType(ty_);
     TRACE_FUNCTION_F(ty_ << StringView(" -> ") << ty);
     const auto sized = resolve.typeIsSized(sp, ty);
-    if (sized == HIRCompare::Unequal) {
+    if (sized == SolverCertainty::NoSolution) {
         ERROR(sp, E0000, StringView("Unsized type not valid here - ") << ty);
     }
     if (const auto* e = ty->opt_Infer()) {
@@ -5563,7 +5563,7 @@ void Context::requireSized(const Span& sp, const HIRType* ty_) {
 
                 switch (pb->structMarkings.dstType) {
                     case HIRStructMarkings::DstType::Possible:
-                        if (sized != HIRCompare::Equal) {
+                        if (sized != SolverCertainty::Proven) {
                             this->requireSized(sp, e->path.data.as_Generic().params.types.at(pb->structMarkings.unsizedParam));
                         }
                         break;
@@ -5582,7 +5582,7 @@ void Context::requireSized(const Span& sp, const HIRType* ty_) {
                         const auto& params = e->path.data.as_Generic().params;
                         auto tailTy = MonomorphStatePtr(crate.types, ty, &params, nullptr).monomorphType(sp, tailTpl);
                         tailTy = this->expandAssociatedTypes(sp, mv$(tailTy));
-                        if (sized != HIRCompare::Equal) {
+                        if (sized != SolverCertainty::Proven) {
                             this->requireSized(sp, tailTy);
                         }
                         break;

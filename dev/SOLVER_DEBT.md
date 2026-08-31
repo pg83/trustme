@@ -159,6 +159,20 @@ eatCache/ivars/solverEnv; никаких static). Гейт-замер интер
 - Статус: ОТКРЫТ.
 
 ### 9. Tri-state HIRCompare в интерфейсах тайпчека
+- ЗАКРЫТ 2026-09-01, верифицирован гейтом. `typeIsSized/Copy/Clone`
+  возвращают `SolverCertainty`; все потребители переведены 1:1
+  (Equal→Proven, Fuzzy→Ambiguous, Unequal→NoSolution), мост
+  `NextSolverBridge::typeIsCopy` — `== Proven`. `typeIsInteriorMutable`
+  (структурное свойство UnsafeCell, не солвер) — собственный enum
+  `InteriorMutability {No, Yes, Unknown}` по всем потребителям. Мёртвые
+  `compareTy`/`compareValue` удалены. `HIRCompare` в typeck-файлах —
+  только реализация интерфейса `HIRMatchGenerics` (matchTy/matchVal,
+  исключительно точные Equal/Unequal, Fuzzy не рождается и не
+  потребляется) — инфраструктура структурного матчера дженериков.
+- Верификация: unit exit 0, static gate 0/0, libcore интерливленно —
+  минимумы 41.03 (базлайн) против 40.79 (после), maxrss −6 МБ.
+
+(исходная формулировка ниже)
 - `typeIsSized/typeIsCopy/typeIsClone` возвращают `HIRCompare` —
   эквивалент SolverCertainty под legacy-именем; потребители сравнивают с
   Equal/Fuzzy/Unequal. Заменить тип на `SolverCertainty` по всем

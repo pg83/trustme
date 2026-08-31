@@ -59,6 +59,12 @@ enum class OpaqueReveal {
     All,
 };
 
+enum class InteriorMutability {
+    No,
+    Yes,
+    Unknown,
+};
+
 class StaticTraitResolve: public TraitResolveCommon {
     class NextSolverBridge;
 
@@ -181,7 +187,7 @@ public:
     bool typeIsImpossible(const Span& sp, const HIRType* ty) const;
     bool canUnsize(const Span& sp, const HIRType* dst, const HIRType* src) const;
 
-    HIRCompare typeIsInteriorMutable(const Span& sp, const HIRType* ty) const;
+    InteriorMutability typeIsInteriorMutable(const Span& sp, const HIRType* ty) const;
 
     MetadataType metadataType(const Span& sp, const HIRType* ty, bool errOnUnknown = false) const;
 

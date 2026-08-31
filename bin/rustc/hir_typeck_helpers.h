@@ -869,9 +869,9 @@ public:
     const HIRFunction* traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRType* self, const RcString& name, HIRGenericPath& outPath) const;
     bool traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const;
 
-    HIRCompare typeIsSized(const Span& sp, const HIRType* ty) const;
-    HIRCompare typeIsCopy(const Span& sp, const HIRType* ty) const;
-    HIRCompare typeIsClone(const Span& sp, const HIRType* ty) const;
+    SolverCertainty typeIsSized(const Span& sp, const HIRType* ty) const;
+    SolverCertainty typeIsCopy(const Span& sp, const HIRType* ty) const;
+    SolverCertainty typeIsClone(const Span& sp, const HIRType* ty) const;
 
     const HIRType* typeIsOwnedBox(const Span& sp, const HIRType* ty) const;
 

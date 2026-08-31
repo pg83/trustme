@@ -3245,7 +3245,7 @@ auto TransmuteTypeChecker::referencesCompatible(const TransmuteReference& source
     if (destination.isMutable) {
         return check(destination.referent, source.referent);
     }
-    return resolve.typeIsInteriorMutable(sp, destination.referent) == HIRCompare::Unequal;
+    return resolve.typeIsInteriorMutable(sp, destination.referent) == InteriorMutability::No;
 }
 
 auto TransmuteTypeChecker::validityIsAssumed() const -> bool {

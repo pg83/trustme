@@ -1085,17 +1085,17 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRType* dstTy, const H
     });
 }
 
-HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRType* ty) const {
+InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRType* ty) const {
     switch ((*ty).tag()) {
         case HIRType::TAG_Infer: {
             // Is this a bug?
-            return HIRCompare::Fuzzy;
+            return InteriorMutability::Unknown;
         }
         case HIRType::TAG_Diverge: {
-            return HIRCompare::Unequal;
+            return InteriorMutability::No;
         }
         case HIRType::TAG_Primitive: {
-            return HIRCompare::Unequal;
+            return InteriorMutability::No;
         }
         case HIRType::TAG_Path: {
             auto& e = (*ty).as_Path();
@@ -1106,53 +1106,53 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             };
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
-                    return HIRCompare::Fuzzy;
+                    return InteriorMutability::Unknown;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    return HIRCompare::Fuzzy;
+                    return InteriorMutability::Unknown;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    return HIRCompare::Unequal;
+                    return InteriorMutability::No;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
                     auto& pbe = e.binding.as_Struct();
                     const HIRGenericPath& p = e.path.data.as_Generic();
                     if (p.path == crate.getLangItemPath(sp, "unsafe_cell")) {
-                        return HIRCompare::Equal;
+                        return InteriorMutability::Yes;
                     }
                     // TODO: Cache this result?
                     switch (pbe->data.tag()) {
                         case HIRStructData::TAG_Unit: {
                             auto& _ = pbe->data.as_Unit();
-                            return HIRCompare::Unequal;
+                            return InteriorMutability::No;
                         }
                         case HIRStructData::TAG_Tuple: {
                             auto& e = pbe->data.as_Tuple();
                             for (const auto& v : e) {
                                 switch (this->typeIsInteriorMutable(sp, monomorph(v.ent))) {
-                                    case HIRCompare::Equal:
-                                        return HIRCompare::Equal;
-                                    case HIRCompare::Fuzzy:
-                                        return HIRCompare::Fuzzy;
+                                    case InteriorMutability::Yes:
+                                        return InteriorMutability::Yes;
+                                    case InteriorMutability::Unknown:
+                                        return InteriorMutability::Unknown;
                                     default:
                                         continue;
                                 }
                             }
-                            return HIRCompare::Unequal;
+                            return InteriorMutability::No;
                         }
                         case HIRStructData::TAG_Named: {
                             auto& e = pbe->data.as_Named();
                             for (const auto& v : e) {
                                 switch (this->typeIsInteriorMutable(sp, monomorph(v.ty))) {
-                                    case HIRCompare::Equal:
-                                        return HIRCompare::Equal;
-                                    case HIRCompare::Fuzzy:
-                                        return HIRCompare::Fuzzy;
+                                    case InteriorMutability::Yes:
+                                        return InteriorMutability::Yes;
+                                    case InteriorMutability::Unknown:
+                                        return InteriorMutability::Unknown;
                                     default:
                                         continue;
                                 }
                             }
-                            return HIRCompare::Unequal;
+                            return InteriorMutability::No;
                         }
                     }
                     break;
@@ -1162,21 +1162,21 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                     switch (pbe->data.tag()) {
                         case HIREnumClass::TAG_Value: {
                             auto& _ = pbe->data.as_Value();
-                            return HIRCompare::Unequal;
+                            return InteriorMutability::No;
                         }
                         case HIREnumClass::TAG_Data: {
                             auto& ee = pbe->data.as_Data();
                             for (const auto& var : ee) {
                                 switch (this->typeIsInteriorMutable(sp, monomorph(var.type))) {
-                                    case HIRCompare::Equal:
-                                        return HIRCompare::Equal;
-                                    case HIRCompare::Fuzzy:
-                                        return HIRCompare::Fuzzy;
+                                    case InteriorMutability::Yes:
+                                        return InteriorMutability::Yes;
+                                    case InteriorMutability::Unknown:
+                                        return InteriorMutability::Unknown;
                                     default:
                                         continue;
                                 }
                             }
-                            return HIRCompare::Unequal;
+                            return InteriorMutability::No;
                         }
                     }
                     break;
@@ -1185,27 +1185,27 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                     auto& pbe = e.binding.as_Union();
                     for (const auto& var : pbe->variants) {
                         switch (this->typeIsInteriorMutable(sp, monomorph(var.ty))) {
-                            case HIRCompare::Equal:
-                                return HIRCompare::Equal;
-                            case HIRCompare::Fuzzy:
-                                return HIRCompare::Fuzzy;
+                            case InteriorMutability::Yes:
+                                return InteriorMutability::Yes;
+                            case InteriorMutability::Unknown:
+                                return InteriorMutability::Unknown;
                             default:
                                 continue;
                         }
                     }
-                    return HIRCompare::Unequal;
+                    return InteriorMutability::No;
                 }
             }
             break;
         }
         case HIRType::TAG_Generic: {
-            return HIRCompare::Fuzzy;
+            return InteriorMutability::Unknown;
         }
         case HIRType::TAG_TraitObject: {
-            return HIRCompare::Fuzzy;
+            return InteriorMutability::Unknown;
         }
         case HIRType::TAG_ErasedType: {
-            return HIRCompare::Fuzzy;
+            return InteriorMutability::Unknown;
         }
         case HIRType::TAG_Array: {
             auto& e = (*ty).as_Array();
@@ -1223,11 +1223,11 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             auto& e = (*ty).as_Tuple();
             for (const auto& t : e) {
                 auto rv = this->typeIsInteriorMutable(sp, t);
-                if (rv != HIRCompare::Unequal) {
+                if (rv != InteriorMutability::No) {
                     return rv;
                 }
             }
-            return HIRCompare::Unequal;
+            return InteriorMutability::No;
         }
         case HIRType::TAG_NodeType: {
             auto& e = (*ty).as_NodeType();
@@ -1235,28 +1235,28 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                 case HIRTypeDataNodeType::TAG_Closure: {
                     auto& nodeP = e.as_Closure();
                     if (nodeP->cls == HIRExprNodeClosure::Class::Unknown) {
-                        return HIRCompare::Fuzzy;
+                        return InteriorMutability::Unknown;
                     }
                     if (nodeP->isCopy) {
-                        return HIRCompare::Unequal;
+                        return InteriorMutability::No;
                     }
                     for (const auto& c : nodeP->captures) {
                         auto rv = this->typeIsInteriorMutable(sp, c->resType);
-                        if (rv != HIRCompare::Unequal) {
+                        if (rv != InteriorMutability::No) {
                             return rv;
                         }
                     }
-                    return HIRCompare::Unequal;
+                    return InteriorMutability::No;
                 }
                 case HIRTypeDataNodeType::TAG_Generator: {
                     auto& nodeP = e.as_Generator();
                     for (const auto& c : nodeP->captures) {
                         auto rv = this->typeIsInteriorMutable(sp, c->resType);
-                        if (rv != HIRCompare::Unequal) {
+                        if (rv != InteriorMutability::No) {
                             return rv;
                         }
                     }
-                    return HIRCompare::Unequal;
+                    return InteriorMutability::No;
                 }
                 case HIRTypeDataNodeType::TAG_Async: {
                     TODO(sp, StringView("type_is_interior_mutable on async"));
@@ -1266,19 +1266,19 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             break;
         }
         case HIRType::TAG_Borrow: {
-            return HIRCompare::Unequal;
+            return InteriorMutability::No;
         }
         case HIRType::TAG_Pointer: {
-            return HIRCompare::Unequal;
+            return InteriorMutability::No;
         }
         case HIRType::TAG_NamedFunction: {
-            return HIRCompare::Unequal;
+            return InteriorMutability::No;
         }
         case HIRType::TAG_Function: {
-            return HIRCompare::Unequal;
+            return InteriorMutability::No;
         }
     }
-    return HIRCompare::Fuzzy;
+    return InteriorMutability::Unknown;
 }
 
 MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRType* ty, bool errOnUnknown /*=false*/) const {
@@ -2221,7 +2221,7 @@ auto StaticTraitResolve::NextSolverBridge::normalize(const Span& sp, const HIRGe
 
 auto StaticTraitResolve::NextSolverBridge::typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* type) -> bool {
     resolve_.setGenericContext(implGenerics, itemGenerics);
-    return resolve_.typeIsCopy(sp, type) == HIRCompare::Equal;
+    return resolve_.typeIsCopy(sp, type) == SolverCertainty::Proven;
 }
 
 auto StaticTraitResolve::NextSolverBridge::selectInherentImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams) -> InherentImplSelection {

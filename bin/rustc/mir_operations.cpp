@@ -4185,7 +4185,7 @@ namespace {
                     auto v = state.resolve.getValue(state.sp, lv.root.as_Static(), ms);
                     if (v.is_Static()) {
                         const auto& stat = *v.as_Static();
-                        if (stat.valueGenerated && !stat.isMut && state.resolve.typeIsInteriorMutable(state.sp, stat.type) == HIRCompare::Unequal) {
+                        if (stat.valueGenerated && !stat.isMut && state.resolve.typeIsInteriorMutable(state.sp, stat.type) == InteriorMutability::No) {
                             const auto el = EncodedLiteralSlice(stat.valueRes);
                             if (stat.type->is_Primitive()) {
                                 auto ty = stat.type->as_Primitive();
