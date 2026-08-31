@@ -2914,25 +2914,54 @@ Unifier::Outcome Unifier::unifyValuesResolved(const HIRConstGeneric& leftRaw, co
     return deferValue();
 }
 
-HIRCompare TraitResolution::comparePp(const Span& sp, const HIRPathParams& left, const HIRPathParams& right) const {
+SolverCertainty TraitResolution::probeTypeRelation(const Span& sp, const HIRType* left, const HIRType* right) const {
+    if (left == right) {
+        return SolverCertainty::Proven;
+    }
+
+    const auto snapshot = ivars.snapshot();
+    Unifier unifier(sp, ivars, this);
+    const auto outcome = unifier.unify(left, right);
+    const bool boundInference = ivars.mutationGeneration != snapshot.generation;
+    ivars.rollbackTo(snapshot);
+    if (outcome == Unifier::Outcome::Mismatch) {
+        return SolverCertainty::NoSolution;
+    }
+    if (boundInference || outcome == Unifier::Outcome::Ambiguous) {
+        return SolverCertainty::Ambiguous;
+    }
+    return SolverCertainty::Proven;
+}
+
+SolverCertainty TraitResolution::probeParamRelation(const Span& sp, const HIRPathParams& left, const HIRPathParams& right) const {
     ASSERT_BUG(sp, left.types.size() == right.types.size(), StringView("Parameter count mismatch - `") << left << StringView("` vs `") << right << StringView("`"));
     ASSERT_BUG(sp, left.values.size() == right.values.size(), StringView("Parameter count mismatch - `") << left << StringView("` vs `") << right << StringView("`"));
-    HIRCompare ord = HIRCompare::Equal;
-    for (unsigned int i = 0; i < left.types.size(); i++) {
-        // TODO: Should allow fuzzy matches using placeholders (match_test_generics_fuzz works for that)
+    if (left == right) {
+        return SolverCertainty::Proven;
+    }
 
-        ord &= left.types[i]->compareWithPlaceholders(sp, right.types[i], this->ivars.callbackResolveInfer());
-        if (ord == HIRCompare::Unequal) {
-            return ord;
+    const auto snapshot = ivars.snapshot();
+    STD_DEFER {
+        ivars.rollbackTo(snapshot);
+    };
+    Unifier unifier(sp, ivars, this);
+    auto outcome = Unifier::Outcome::Proven;
+    for (size_t i = 0; i < left.types.size(); i++) {
+        outcome = unifier.unify(left.types[i], right.types[i]);
+        if (outcome == Unifier::Outcome::Mismatch) {
+            return SolverCertainty::NoSolution;
         }
     }
-    for (unsigned int i = 0; i < left.values.size(); i++) {
-        ord &= compareValue(sp, left.values[i], right.values[i], this->ivars);
-        if (ord == HIRCompare::Unequal) {
-            return ord;
+    for (size_t i = 0; i < left.values.size(); i++) {
+        outcome = unifier.unifyValues(left.values[i], right.values[i]);
+        if (outcome == Unifier::Outcome::Mismatch) {
+            return SolverCertainty::NoSolution;
         }
     }
-    return ord;
+    const bool boundInference = ivars.mutationGeneration != snapshot.generation;
+    return boundInference || outcome == Unifier::Outcome::Ambiguous
+        ? SolverCertainty::Ambiguous
+        : SolverCertainty::Proven;
 }
 
 static void appendAssembledParamEqualities(const Span& sp, const HIRPathParams& left, const HIRPathParams& right, AssembledImplEffects& effects) {
@@ -2968,9 +2997,9 @@ bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type,
             continue;
         }
         const HIRType* boundType = b.first.first;
-        auto cmp = boundType->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
+        auto relation = probeTypeRelation(sp, boundType, type);
         const HIRType* normalizedBound;
-        if (cmp == HIRCompare::Unequal && this->hasAssociatedType(boundType) && !normalizingBoundType) {
+        if (relation == SolverCertainty::NoSolution && this->hasAssociatedType(boundType) && !normalizingBoundType) {
             normalizingBoundType = true;
             STD_DEFER {
                 normalizingBoundType = false;
@@ -2978,10 +3007,10 @@ bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type,
             normalizedBound = this->expandAssociatedTypes(sp, boundType);
             if (normalizedBound != boundType) {
                 boundType = normalizedBound;
-                cmp = boundType->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
+                relation = probeTypeRelation(sp, boundType, type);
             }
         }
-        if (cmp != HIRCompare::Unequal && cb.visit(cmp, boundType, b.first.second, b.second)) {
+        if (relation != SolverCertainty::NoSolution && cb.visit(boundType, b.first.second, b.second)) {
             return true;
         }
     }
@@ -2991,9 +3020,9 @@ bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type,
 bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type, TraitBoundCallback& cb) const {
     for (const auto& b : traitBounds) {
         const HIRType* boundType = b.first.first;
-        auto cmp = boundType->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
+        auto relation = probeTypeRelation(sp, boundType, type);
         const HIRType* normalizedBound;
-        if (cmp == HIRCompare::Unequal && this->hasAssociatedType(boundType) && !normalizingBoundType) {
+        if (relation == SolverCertainty::NoSolution && this->hasAssociatedType(boundType) && !normalizingBoundType) {
             normalizingBoundType = true;
             STD_DEFER {
                 normalizingBoundType = false;
@@ -3001,13 +3030,13 @@ bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type,
             normalizedBound = this->expandAssociatedTypes(sp, boundType);
             if (normalizedBound != boundType) {
                 boundType = normalizedBound;
-                cmp = boundType->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
+                relation = probeTypeRelation(sp, boundType, type);
             }
         }
-        if (cmp == HIRCompare::Unequal) {
+        if (relation == SolverCertainty::NoSolution) {
             continue;
         }
-        if (cb.visit(cmp, boundType, b.first.second, b.second)) {
+        if (cb.visit(boundType, b.first.second, b.second)) {
             return true;
         }
     }
@@ -3016,7 +3045,7 @@ bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type,
 
 bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, TraitBoundCallback& cb) const {
     for (const auto& b : traitBounds) {
-        if (cb.visit(HIRCompare::Equal, b.first.first, b.first.second, b.second)) {
+        if (cb.visit(b.first.first, b.first.second, b.second)) {
             return true;
         }
     }
@@ -3327,12 +3356,8 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
         if (desiredInputs.length() != inputTypes.length()) {
             return false;
         }
-
-        HIRCompare cmp = HIRCompare::Equal;
-        for (size_t i = 0; i < inputTypes.length(); i++) {
-            cmp &= inputTypes[i]->compareWithPlaceholders(sp, desiredInputs[i], this->ivars.callbackResolveInfer());
-        }
-        if (cmp == HIRCompare::Unequal) {
+        const auto* actualInputs = crate.types.tuple(inputTypes);
+        if (probeTypeRelation(sp, params.types.front(), actualInputs) == SolverCertainty::NoSolution) {
             return false;
         }
 
@@ -3354,7 +3379,7 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
             return false;
         }
         HIRPathParams actualParams;
-        actualParams.types.push_back(crate.types.tuple(inputTypes));
+        actualParams.types.push_back(actualInputs);
         HIRGenericPath oncePath(langAsyncFnOnce(), actualParams.clone());
         HIRTraitPath::assocListT assoc;
         assoc.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{oncePath.clone(), {}, outputType}));
@@ -3390,8 +3415,6 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                     DEBUG(StringView("Closure, ") << trait << StringView(" ?= Fn*"));
                     if (trait == langFn() || trait == langFnMut() || trait == langFnOnce()) {
                         const HIRType* wanted = params.types.size() == 1 && params.types[0]->is_Tuple() ? params.types[0] : nullptr;
-
-                        auto cmp = wanted ? HIRCompare::Equal : HIRCompare::Fuzzy;
                         Vector<const HIRType*> args;
                         if (wanted && wanted->as_Tuple().length() != nodeP->args.size()) {
                             return false;
@@ -3399,34 +3422,13 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                         for (unsigned int i = 0; i < nodeP->args.size(); i++) {
                             const auto& at = nodeP->args[i].second;
                             args.pushBack(at);
-                            if (!wanted) {
-                                continue;
-                            }
-                            const auto& argsDes = wanted->as_Tuple();
-                            DEBUG(at << StringView(" ?= ") << argsDes[i]);
-                            auto argCmp = at->compareWithPlaceholders(sp, argsDes[i], this->ivars.callbackResolveInfer());
-                            if (argCmp == HIRCompare::Unequal) {
-                                if (const auto* er = argsDes[i]->opt_ErasedType()) {
-                                    if (const auto* alias = er->inner.opt_Alias(); alias && isOpaqueAliasDefiningScope(*alias->inner)) {
-                                        DEBUG(StringView("- ") << argsDes[i] << StringView(" is an opaque this body defines"));
-                                        argCmp = HIRCompare::Fuzzy;
-                                    }
-                                }
-                            }
-                            cmp &= argCmp;
                         }
-                        if (cmp != HIRCompare::Unequal) {
-                            DEBUG(StringView("Closure Fn* impl - cmp = ") << cmp);
-                            HIRPathParams pp;
-                            pp.types.push_back(crate.types.tuple(mv$(args)));
-                            HIRTraitPath::assocListT types;
-                            const auto* returnType = closureReturnExpectation(nodeP);
-                            types.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, returnType ? returnType : nodeP->returnType}));
-                            return callback.visit(SolverImpl(type, mv$(pp), mv$(types)));
-                        } else {
-                            DEBUG(StringView("Closure Fn* impl - cmp = Compare::Unequal"));
-                            return false;
-                        }
+                        HIRPathParams pp;
+                        pp.types.push_back(crate.types.tuple(mv$(args)));
+                        HIRTraitPath::assocListT types;
+                        const auto* returnType = closureReturnExpectation(nodeP);
+                        types.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, returnType ? returnType : nodeP->returnType}));
+                        return callback.visit(SolverImpl(type, mv$(pp), mv$(types)));
                     }
                     break;
                 }
@@ -3620,13 +3622,13 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                         if (bound.second.sourceTrait.path != trait) {
                             continue;
                         }
-                        const auto comparison = comparePp(sp, bound.second.sourceTrait.params, iTp.path.params);
-                        if (comparison == HIRCompare::Unequal) {
+                        const auto relation = probeParamRelation(sp, bound.second.sourceTrait.params, iTp.path.params);
+                        if (relation == SolverCertainty::NoSolution) {
                             continue;
                         }
                         assocClone.erase(bound.first);
                         assocClone.insert(std::make_pair(bound.first, bound.second.clone()));
-                        if (comparison != HIRCompare::Equal) {
+                        if (relation != SolverCertainty::Proven) {
                             appendAssembledParamEqualities(sp, bound.second.sourceTrait.params, iTp.path.params, effects);
                         }
                     }
@@ -3660,13 +3662,13 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                         if (bound.second.sourceTrait.path != trait) {
                             continue;
                         }
-                        const auto comparison = comparePp(sp, bound.second.sourceTrait.params, iTp.path.params);
-                        if (comparison == HIRCompare::Unequal) {
+                        const auto relation = probeParamRelation(sp, bound.second.sourceTrait.params, iTp.path.params);
+                        if (relation == SolverCertainty::NoSolution) {
                             continue;
                         }
                         assocClone.erase(bound.first);
                         assocClone.insert(std::make_pair(bound.first, bound.second.clone()));
-                        if (comparison != HIRCompare::Equal) {
+                        if (relation != SolverCertainty::Proven) {
                             appendAssembledParamEqualities(sp, bound.second.sourceTrait.params, iTp.path.params, effects);
                         }
                     }
@@ -5033,11 +5035,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
     }
 
     if (assocInfo) {
-        bool rv = this->iterateBoundsTraits(sp, assocInfo->type, assocInfo->trait.path, [&](HIRCompare cmp, const HIRType* boundTy, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
-            if (cmp == HIRCompare::Unequal) {
-                return false;
-            }
-
+        bool rv = this->iterateBoundsTraits(sp, assocInfo->type, assocInfo->trait.path, [&](const HIRType* boundTy, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
             const auto& traitRef = *boundInfo.traitPtr;
             const auto& at = traitRef.types.at(assocInfo->item);
             for (const auto& bound : at.traitBounds) {
@@ -9908,28 +9906,25 @@ auto NextTraitGoalEvaluator::assembleAliasBoundCandidates(size_t frameIndex, con
     auto monomorph = MonomorphStatePtr(crate.types, projection->type, &declaringTrait.params, &projection->params);
 
     auto emit = [&](HIRTraitPath response, AssembledImplEffects* effects) {
-        auto match = response.path.params.compareWithPlaceholders(span(), params, resolve_.ivars.callbackResolveInfer());
-        if (match != HIRCompare::Unequal) {
-            auto impl = SolverImpl(type, std::move(response.path.params), std::move(response.typeBounds), response.constness);
-            bool headNormalizationAmbiguity = false;
-            ThinVector<SolverTypeEquality> headEqualities;
-            ThinVector<SolverValueEquality> headValueEqualities;
-            const auto relation = relateAssembledHead(CandidateSource::AliasBound, params, type, impl, headNormalizationAmbiguity, headEqualities, headValueEqualities);
-            if (relation == Certainty::NoSolution) {
-                return;
-            }
-            const bool preserveAssemblyCandidate = effects;
-            if (effects) {
-                for (auto& equality : effects->equalities) {
-                    headEqualities.push_back(std::move(equality));
-                }
-                for (auto& equality : effects->valueEqualities) {
-                    headValueEqualities.push_back(std::move(equality));
-                }
-            }
-            const bool headExact = assembledHeadIsExact(params, type, impl);
-            pushCandidate(frameIndex, std::move(impl), headExact, relation, nullptr, {}, false, CandidateSource::AliasBound, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities), preserveAssemblyCandidate);
+        auto impl = SolverImpl(type, std::move(response.path.params), std::move(response.typeBounds), response.constness);
+        bool headNormalizationAmbiguity = false;
+        ThinVector<SolverTypeEquality> headEqualities;
+        ThinVector<SolverValueEquality> headValueEqualities;
+        const auto relation = relateAssembledHead(CandidateSource::AliasBound, params, type, impl, headNormalizationAmbiguity, headEqualities, headValueEqualities);
+        if (relation == Certainty::NoSolution) {
+            return;
         }
+        const bool preserveAssemblyCandidate = effects;
+        if (effects) {
+            for (auto& equality : effects->equalities) {
+                headEqualities.push_back(std::move(equality));
+            }
+            for (auto& equality : effects->valueEqualities) {
+                headValueEqualities.push_back(std::move(equality));
+            }
+        }
+        const bool headExact = assembledHeadIsExact(params, type, impl);
+        pushCandidate(frameIndex, std::move(impl), headExact, relation, nullptr, {}, false, CandidateSource::AliasBound, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities), preserveAssemblyCandidate);
     };
 
     for (const auto& declaredBound : declaration.traitBounds) {
@@ -9947,13 +9942,13 @@ auto NextTraitGoalEvaluator::assembleAliasBoundCandidates(size_t frameIndex, con
                 if (associated.second.sourceTrait.path != trait) {
                     continue;
                 }
-                const auto comparison = resolve_.comparePp(span(), associated.second.sourceTrait.params, response.path.params);
-                if (comparison == HIRCompare::Unequal) {
+                const auto relation = resolve_.probeParamRelation(span(), associated.second.sourceTrait.params, response.path.params);
+                if (relation == Certainty::NoSolution) {
                     continue;
                 }
                 response.typeBounds.erase(associated.first);
                 response.typeBounds.insert({associated.first, associated.second.clone()});
-                if (comparison != HIRCompare::Equal) {
+                if (relation != Certainty::Proven) {
                     appendAssembledParamEqualities(span(), associated.second.sourceTrait.params, response.path.params, effects);
                 }
             }
@@ -10408,22 +10403,7 @@ auto NextTraitGoalEvaluator::bindCandidateResponse(Candidate& candidate, const H
 }
 
 auto NextTraitGoalEvaluator::unifyProbe(const HIRType* left, const HIRType* right) -> Certainty {
-    if (left == right) {
-        return Certainty::Proven;
-    }
-
-    const auto snapshot = resolve_.ivars.snapshot();
-    Unifier unifier(span(), resolve_.ivars, &resolve_);
-    const auto outcome = unifier.unify(left, right);
-    const bool boundInference = resolve_.ivars.mutationGeneration != snapshot.generation;
-    resolve_.ivars.rollbackTo(snapshot);
-    if (outcome == Unifier::Outcome::Mismatch) {
-        return Certainty::NoSolution;
-    }
-    if (boundInference || outcome == Unifier::Outcome::Ambiguous) {
-        return Certainty::Ambiguous;
-    }
-    return Certainty::Proven;
+    return resolve_.probeTypeRelation(span(), left, right);
 }
 
 auto NextTraitGoalEvaluator::unifyValueProbe(const HIRConstGeneric& left, const HIRConstGeneric& right) -> Certainty {
@@ -13003,7 +12983,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 return false;
             }
         }
-        return output->compareWithPlaceholders(span(), builtinOutput, resolve_.ivars.callbackResolveInfer()) == HIRCompare::Equal;
+        return resolve_.probeTypeRelation(span(), output, builtinOutput) == Certainty::Proven;
     };
 
     const auto classifyOperatorImpl = [&](SolverOperatorSummary& summary, const SolverImpl& impl) {

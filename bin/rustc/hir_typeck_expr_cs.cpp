@@ -6877,14 +6877,16 @@ const HIRType* Context::revealOpaqueType(const HIRType* type) const {
     for (size_t depth = 0; depth < maxDepth; depth++) {
         const HIRType* hiddenType = nullptr;
         auto revealRpit = [&](const HIRPath& origin, unsigned int index) {
+            bool matched = false;
             for (const auto& entry : rpitTypes) {
                 if (entry.index != index) {
                     continue;
                 }
                 RpitOriginMonomorph monomorph(crate.types);
-                if (monomorph.cmpPath(Span(), *entry.origin, origin, ivars.callbackResolveInfer()) != HIRCompare::Unequal) {
+                if (monomorph.cmpPath(Span(), *entry.origin, origin, ivars.callbackResolveInfer()) == HIRCompare::Equal) {
+                    ASSERT_BUG(Span(), !matched, StringView("Multiple RPIT origins match ") << origin << StringView(" at index ") << index);
+                    matched = true;
                     hiddenType = monomorph.monomorphType(Span(), ivars.getType(entry.ourType));
-                    break;
                 }
             }
         };
@@ -10881,7 +10883,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
         const auto* expected = this->context.getType(expectedHint);
         const auto* actualPath = ty->opt_Path();
         const auto* expectedPath = expected->opt_Path();
-        if (actualPath && expectedPath && actualPath->path.data.is_Generic() && expectedPath->path.data.is_Generic() && actualPath->path.data.as_Generic().path == expectedPath->path.data.as_Generic().path && ty->compareWithPlaceholders(sp, expected, this->context.ivars.callbackResolveInfer()) != HIRCompare::Unequal) {
+        if (actualPath && expectedPath && actualPath->path.data.is_Generic() && expectedPath->path.data.is_Generic() && actualPath->path.data.as_Generic().path == expectedPath->path.data.as_Generic().path && this->context.resolve.probeTypeRelation(sp, ty, expected) != SolverCertainty::NoSolution) {
             this->context.equateTypes(sp, ty, expected);
         }
     }
@@ -11718,7 +11720,8 @@ auto RpitOriginMonomorph::matchTy(const HIRGenericRef& generic, const HIRType* t
     if (inserted.second) {
         return HIRCompare::Equal;
     }
-    return inserted.first->second->compareWithPlaceholders(Span(), type, resolve);
+    const auto* existing = resolve.getType(Span(), inserted.first->second);
+    return existing == type ? HIRCompare::Equal : HIRCompare::Unequal;
 }
 
 auto RpitOriginMonomorph::matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) -> HIRCompare {

@@ -509,7 +509,7 @@ struct NormalizesToResponse {
 };
 
 struct TraitBoundCallback {
-    virtual bool visit(HIRCompare cmp, const HIRType* type, const HIRGenericPath& traitPath, const TraitResolveCommon::CachedBound& info) = 0;
+    virtual bool visit(const HIRType* type, const HIRGenericPath& traitPath, const TraitResolveCommon::CachedBound& info) = 0;
 };
 
 template <typename F>
@@ -521,8 +521,8 @@ struct TraitBoundCb final: TraitBoundCallback {
     {
     }
 
-    bool visit(HIRCompare cmp, const HIRType* type, const HIRGenericPath& traitPath, const TraitResolveCommon::CachedBound& info) override {
-        return f(cmp, type, traitPath, info);
+    bool visit(const HIRType* type, const HIRGenericPath& traitPath, const TraitResolveCommon::CachedBound& info) override {
+        return f(type, traitPath, info);
     }
 };
 
@@ -638,6 +638,8 @@ private:
 
     mutable NextTraitGoalEvaluator* traitQuerySolver = nullptr;
 
+    SolverCertainty probeParamRelation(const Span& sp, const HIRPathParams& left, const HIRPathParams& right) const;
+
     mutable u64 solverEnvGeneration = 0;
     std::vector<HIRSimplePath> opaqueAliasScopes;
     std::vector<HIRSimplePath> definingOpaqueAliases;
@@ -649,6 +651,8 @@ private:
     stl::Vector<ClosureReturnExpectation> closureReturnExpectations;
 
 public:
+    SolverCertainty probeTypeRelation(const Span& sp, const HIRType* left, const HIRType* right) const;
+
     TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait);
     ~TraitResolution();
 
@@ -670,14 +674,8 @@ public:
         return currentTraitPath_;
     }
 
-    HIRCompare comparePp(const Span& sp, const HIRPathParams& left, const HIRPathParams& right) const;
-
     const HIRType* resolveType(const HIRType* type) const {
         return ivars.getType(type);
-    }
-
-    HIRCompare compareTy(const Span& sp, const HIRType* left, const HIRType* right) const {
-        return left->compareWithPlaceholders(sp, right, ivars.callbackResolveInfer());
     }
 
     bool typeContainsIvars(const HIRType* type) const {

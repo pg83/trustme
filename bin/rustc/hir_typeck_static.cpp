@@ -19,6 +19,86 @@
 using namespace stl;
 
 namespace {
+    struct ProvenGenericParamMatcher final: HIRMatchGenerics {
+        struct TypeBinding {
+            u32 binding;
+            const HIRType* type;
+        };
+
+        struct ValueBinding {
+            u32 binding;
+            const HIRConstGeneric* value;
+        };
+
+        Vector<TypeBinding> typeBindings;
+        Vector<ValueBinding> valueBindings;
+
+        ProvenGenericParamMatcher()
+            : HIRMatchGenerics(BorrowMatchedValues{})
+        {
+        }
+
+        HIRCompare matchTy(const HIRGenericRef& generic, const HIRType* type, tCbResolveType resolve) override {
+            type = resolve.getType(Span(), type);
+            for (const auto& existing : typeBindings) {
+                if (existing.binding == generic.binding) {
+                    return existing.type == type ? HIRCompare::Equal : HIRCompare::Unequal;
+                }
+            }
+            typeBindings.pushBack({generic.binding, type});
+            return HIRCompare::Equal;
+        }
+
+        HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
+            for (const auto& existing : valueBindings) {
+                if (existing.binding == generic.binding) {
+                    return *existing.value == value ? HIRCompare::Equal : HIRCompare::Unequal;
+                }
+            }
+            valueBindings.pushBack({generic.binding, &value});
+            return HIRCompare::Equal;
+        }
+    };
+
+    bool paramsExactlyEqual(const HIRPathParams& left, const HIRPathParams& right) {
+        if (left.types.size() != right.types.size() || left.values.size() != right.values.size()) {
+            return false;
+        }
+        for (size_t i = 0; i < left.types.size(); i++) {
+            if (left.types[i] != right.types[i]) {
+                return false;
+            }
+        }
+        for (size_t i = 0; i < left.values.size(); i++) {
+            if (left.values[i] != right.values[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool paramsMatchProven(const Span& sp, const HIRPathParams& left, const HIRPathParams& right) {
+        if (paramsExactlyEqual(left, right)) {
+            return true;
+        }
+        if (left.types.size() != right.types.size() || left.values.size() != right.values.size()) {
+            return false;
+        }
+        if (monomorphisePathparamsNeeded(left)) {
+            ProvenGenericParamMatcher matcher;
+            if (left.matchTestGenericsFuzz(sp, right, HIRResolvePlaceholdersNop(), matcher) == HIRCompare::Equal) {
+                return true;
+            }
+        }
+        if (monomorphisePathparamsNeeded(right)) {
+            ProvenGenericParamMatcher matcher;
+            if (right.matchTestGenericsFuzz(sp, left, HIRResolvePlaceholdersNop(), matcher) == HIRCompare::Equal) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     bool specializationLookupNeedsResolution(const HIRType* type, const HIRPathParams& params) {
         auto typeNeedsResolution = [](const HIRType* inner) {
             return inner->hasTypeInfer() || inner->needsMonomorphisation() || inner->mayHaveAssociatedType();
@@ -794,8 +874,7 @@ bool StaticTraitResolve::findNamedTraitInTraitCb(const Span& sp, const HIRSimple
     }
 
     if (des == traitPath) {
-        auto cmp = pp.compareWithPlaceholders(sp, desParams, HIRResolvePlaceholdersNop());
-        if (cmp != HIRCompare::Unequal) {
+        if (paramsMatchProven(sp, pp, desParams)) {
             return callback.visit(pp, {});
         }
     }
@@ -806,13 +885,9 @@ bool StaticTraitResolve::findNamedTraitInTraitCb(const Span& sp, const HIRSimple
         this->expandAssociatedTypesTp(sp, ptMono);
 
         DEBUG(pt << StringView(" => ") << ptMono);
-        // TODO: When in pre-typecheck mode, this needs to be a fuzzy match (because there might be a UfcsUnknown in the
 
-        if (pt.path.path == des) {
-            auto cmp = ptMono.path.params.compareWithPlaceholders(sp, desParams, HIRResolvePlaceholdersNop());
-            if (cmp != HIRCompare::Unequal) {
-                return callback.visit(ptMono.path.params, mv$(ptMono.typeBounds));
-            }
+        if (pt.path.path == des && paramsMatchProven(sp, ptMono.path.params, desParams)) {
+            return callback.visit(ptMono.path.params, mv$(ptMono.typeBounds));
         }
     }
 

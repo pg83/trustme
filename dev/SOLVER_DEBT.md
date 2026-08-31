@@ -121,15 +121,51 @@ eatCache/ivars/solverEnv; никаких static). Гейт-замер интер
 40.95), maxrss 1 839 572 KiB против 1 844 900. Итог: быстрее и легче
 дорефакторингового базлайна.
 
-## Итог
+## Итог (ОТОЗВАН 2026-09-01)
 
-2026-09-01: инвентарь пуст. Все решающие tri-state пути удалены (пп. 1,
-2, 5 — кодом; пп. 3, 4, 6, 7 — аудитом признаны консервативными
-префильтрами/трансляциями). Финальный независимый deep-dive: legacy-имена
-0 вхождений, `certaintyFromCompare` 0, все потребители `Ambiguous`
-(coercion, associated, inherent, autoderef, getValue, мосты static/trans)
-консервативны — defer/stall/retry, выборов по неоднозначности нет.
-unit зелёный, static gate 0/0, libcore быстрее базлайна.
+Закрытия пп. 6 и 7 «аудитом» отозваны гейтом: они нарушали собственный
+критерий («эквивалент под любым именем — не удаление»). Переоткрыты как
+пп. 8–9, плюс п.10 — префильтры. Пп. 1, 2, 5 (код) и 3, 4 в части
+транзакционной унификации остаются в силе.
+
+## Открытые пункты (второй заход)
+
+### 8. Structural tri-state сравнения в решающих файлах солвера
+- ЗАКРЫТ 2026-09-01, верифицирован гейтом. `comparePp` удалён (заменён
+  `probeParamRelation`/`probeTypeRelation` — транзакционный Unifier со
+  snapshot/rollback); callable/closure префильтры — probe или удалены
+  (решает унификация головы); override assoc-биндингов — probe + typed
+  effects; operator-классификация — `probeTypeRelation == Proven`;
+  `iterateBoundsTraitsCb` — probe, `HIRCompare` удалён из
+  `TraitBoundCallback`; `findNamedTraitInTraitCb` (static) — точное
+  равенство интернированных params + match-generics только с `Equal`;
+  coercion hint в expr_cs — probe; RPIT reveal — только `Equal`, второй
+  матч = ASSERT_BUG; мёртвый `compareTy` удалён.
+  Grep `compareWithPlaceholders|comparePp` по helpers/static/expr_cs: 0.
+- Верификация: unit exit 0, static gate 0/0, libcore интерливленно —
+  минимумы 41.24 (базлайн) против 41.13 (после), maxrss ниже на ~6 МБ.
+
+(исходная формулировка ниже)
+- Остаточные `compareWithPlaceholders`/`comparePp` в
+  `hir_typeck_helpers.cpp`: `:3317`, `:3391` (callable-префильтры),
+  `:3607`, `:3647`, `:9938` (гейт override, Equal-ветка выбирает без
+  effects), `:9899` (alias-bound префильтр), `:12856`
+  (operator-классификация — fuzzy МЕНЯЕТ поведение инференса, это
+  решение), внутренность `iterateBoundsTraitsCb` (`:2947` и далее).
+- Требование: ноль structural tri-state сравнений в решающих путях.
+  Префильтры — либо убрать (головы и так унифицируются транзакционно),
+  либо заменить на transactional unification probe с идентичным исходом;
+  operator-классификация — на solver/унификатор.
+- Статус: ОТКРЫТ.
+
+### 9. Tri-state HIRCompare в интерфейсах тайпчека
+- `typeIsSized/typeIsCopy/typeIsClone` возвращают `HIRCompare` —
+  эквивалент SolverCertainty под legacy-именем; потребители сравнивают с
+  Equal/Fuzzy/Unequal. Заменить тип на `SolverCertainty` по всем
+  потребителям typeck (expr_cs, helpers, static-мост); post-monomorph
+  bool-мосты остаются bool. Цель: `HIRCompare` не упоминается в
+  hir_typeck_helpers.h интерфейсах решателя и его потребителях.
+- Статус: ОТКРЫТ.
 
 ## Закрытые пункты
 
