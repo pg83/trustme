@@ -53,13 +53,13 @@ static gate 0/0, libcore ≤ базлайна.
   (+2.2%, порог 43.3).
 
 ### 3. ParamEnv assoc-projection кандидаты через fuzzy-гейт
-- `hir_typeck_helpers.cpp:4948`: `iterateBoundsTraits(...)` — `cmp != Unequal`
-  пропускает bound в кандидаты; проверить, проходит ли кандидат дальше
-  транзакционную унификацию или fuzzy тут финален.
-- Внутренность `iterateBoundsTraitsCb` (`:2914`): `compareWithPlaceholders`
-  — сам итератор tri-state; после п.1/п.3 оценить, останутся ли потребители,
-  для которых fuzzy влияет на выбор.
-- Статус: ОТКРЫТ (сначала аудит, потом замена).
+- ЗАКРЫТ 2026-08-31 аудитом (кода не требовалось). Единственный решающий
+  потребитель `iterateBoundsTraits` (`:4978` после п.1) отклоняет только по
+  `Unequal` и игнорирует cmp дальше; собранный кандидат идёт через
+  `collect(ParamEnv)` → `relateAssembledHead` (транзакционный Unifier).
+  Внутренний гейт `iterateBoundsTraitsCb` — тоже reject-only-on-Unequal.
+  Инвариант: ни один потребитель не имеет права использовать cmp иначе,
+  чем для отклонения доказанного Unequal.
 
 ### 4. Callable/Fn-семейство: сравнение входов через compareWithPlaceholders
 - ЗАКРЫТ 2026-08-31 аудитом (кода не требовалось): `relateAssembledHead`
@@ -72,34 +72,40 @@ static gate 0/0, libcore ≤ базлайна.
   сохраняться: префильтр не имеет права влиять на certainty.
 
 ### 5. comparePp-гейты на sourceTrait params
-- Аудит 2026-08-31: fuzzy-`comparePp` решает, какой typeBounds-entry
-  перекроет assoc-binding кандидата — выбор ДАННЫХ кандидата до унификации.
-  Актуальные места (после закрытия п.1 строки сместились):
-  `hir_typeck_helpers.cpp:3578`, `:3609` (trait-object/erased supertrait
-  в assembleTypeCandidatesCb), `:9877` (assembleAliasBoundCandidates).
-  Голова кандидата потом унифицируется (`relateAssembledHead`), но
-  неверно выбранный override assoc-биндинга — это неверные typeBounds,
-  а не отклоняемая голова. Замена: не выбирать по fuzzy, а либо нести оба
-  варианта кандидатами, либо выражать override equality-обязательством.
-- Статус: ОТКРЫТ.
+- ЗАКРЫТ 2026-09-01, верифицирован гейтом. Выбран typed-effects дизайн:
+  при `Equal` override применяется напрямую, при `Fuzzy` вместе с override
+  на кандидата навешиваются попарные type/const equality-обязательства
+  (`appendAssembledParamEqualities` → headEqualities), которые
+  `evaluateCandidate` доказывает транзакционно — провал убивает кандидата
+  вместо молчаливо неверных typeBounds. Effectful-кандидаты помечены
+  `assemblyEffectful` и исключены из дедупа `pushCandidate`, чтобы
+  альтернативные пути не склеивались в неявный AND. Остаточная
+  консервативность: при недоказуемом equality кандидат умирает, а
+  вариант без override не собирается — потеря полноты, не корректности.
+- Верификация: unit exit 0 (полный), static gate 0/0, libcore
+  интерливленно против контроля на той же машине: +1.9% кумулятивно
+  (тот же дрейф, что после п.2 — сам п.5 нейтрален).
 
 ### 6. Builtin operator: выход через compareWithPlaceholders == Equal
-- Актуальное место `hir_typeck_helpers.cpp:12759`
-  (`operatorImplHasBuiltinSignature`): строгий `== Equal`, fuzzy трактуется
-  как «семантический impl» для `SolverOperatorSummary`. Это классификация
-  для operator fallback, не доказательство; аудит потребителей summary —
-  влияет ли неверная классификация при fuzzy на выбор пути.
-- Статус: ОТКРЫТ (аудит, низкий приоритет).
+- ЗАКРЫТ 2026-08-31 аудитом. `operatorImplHasBuiltinSignature`
+  (`hir_typeck_helpers.cpp:12759`) — строгий `== Equal`; Fuzzy всегда
+  деградирует в «семантический impl», а единственный потребитель
+  (`hir_typeck_expr_cs.cpp:1372`, `canContextualisePrimitiveRhs` и
+  magic-inference шорткаты) при этом ОТКЛЮЧАЕТ шорткат — консервативно:
+  возможна потеря полноты инференса, но не неверное решение. Инвариант:
+  строгость `== Equal` сохранять; трактовка Fuzzy как builtin стала бы
+  решением по fuzzy.
 
 ### 7. Tri-state обёртки typeIsSized/typeIsCopy/typeIsClone в решениях тайпчека
-- Обёртки (`:5022`, `:5151`, `:5243`) зовут solver, но при `NoSolution`
-  падают в builtin-walker (п.1) — т.е. builtin остаётся вторым решателем.
-- Решающие вызовы: `hir_typeck_expr_cs.cpp:1938`, `:2059`, `:5272`, `:5516`;
-  `hir_typeck_helpers.cpp:3138`, `:4633`, `:5564`, `:5887`, `:5895`, `:11521`.
-- После п.1: свернуть обёртки в чистые solver-запросы; пост-монолитные
-  потребители (trans/mir/expand, `NextSolverBridge::typeIsCopy` в
-  `hir_typeck_static.cpp:2147`) остаются bool-мостом над solver-запросом.
-- Статус: ОТКРЫТ (блокирован п.1).
+- ЗАКРЫТ 2026-08-31 аудитом: долг устранён пунктом 1. Обёртки стали 1:1
+  трансляцией `SolverCertainty` → `HIRCompare` (`solveTraitGoalCertainty`),
+  второго решателя нет. Все решающие потребители проверены и честны с
+  tri-state: гейты только по доказанному `Equal`/`Unequal`
+  (`hir_typeck_expr_cs.cpp:1938`, `:2059`, `:5272`, `:5516`), Fuzzy у
+  implicit-Sized кандидата превращается в obligation + ambiguity
+  (`hir_typeck_helpers.cpp:11517`). Возвращаемый тип `HIRCompare` —
+  косметика интерфейса, не семантика; замена на `SolverCertainty` —
+  необязательный рефакторинг вне долга.
 
 ## Закрытые пункты
 

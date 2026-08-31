@@ -69,6 +69,11 @@ struct SolverValueEquality {
     HIRConstGeneric right;
 };
 
+struct AssembledImplEffects {
+    ThinVector<SolverTypeEquality> equalities;
+    ThinVector<SolverValueEquality> valueEqualities;
+};
+
 struct SolverOperatorSummary {
     bool hasSemanticImpl = false;
     bool sawCurrentImpl = false;
@@ -540,7 +545,7 @@ struct TraitPathCb final: TraitPathCallback {
 };
 
 struct AssembledImplCallback {
-    virtual bool visit(SolverImpl impl, SolverCertainty certainty = SolverCertainty::Proven) = 0;
+    virtual bool visit(SolverImpl impl, SolverCertainty certainty = SolverCertainty::Proven, AssembledImplEffects* effects = nullptr) = 0;
 };
 
 struct SolverResponseCallback {
@@ -588,8 +593,8 @@ struct AssembledImplCb final: AssembledImplCallback {
     {
     }
 
-    bool visit(SolverImpl impl, SolverCertainty certainty) override {
-        return f(mv$(impl), certainty);
+    bool visit(SolverImpl impl, SolverCertainty certainty, AssembledImplEffects* effects) override {
+        return f(mv$(impl), certainty, effects);
     }
 };
 

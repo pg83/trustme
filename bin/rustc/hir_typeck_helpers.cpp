@@ -330,6 +330,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
         HIRPathParams markerImplParams;
         bool autoBuiltin;
         CandidateSource source;
+        bool assemblyEffectful;
         bool headNormalizationAmbiguity;
         bool ambiguityBeyondHead = false;
         bool nestedAmbiguity = false;
@@ -353,7 +354,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
         mutable bool responseAssociatedMaterialized = false;
         mutable const HIRType* responseAssociatedType = nullptr;
 
-        Candidate(SolverImpl impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {});
+        Candidate(SolverImpl impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool assemblyEffectful, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {});
 
         bool isNegative() const;
 
@@ -602,7 +603,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     bool paramEnvCandidateIsNonGlobal(const Candidate& candidate) const;
 
-    void pushCandidate(size_t frameIndex, SolverImpl impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl = nullptr, HIRPathParams markerImplParams = {}, bool autoBuiltin = false, CandidateSource source = CandidateSource::Other, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {});
+    void pushCandidate(size_t frameIndex, SolverImpl impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl = nullptr, HIRPathParams markerImplParams = {}, bool autoBuiltin = false, CandidateSource source = CandidateSource::Other, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {}, bool preserveAssemblyCandidate = false);
 
     Certainty relateAssembledHead(CandidateSource source, const HIRPathParams& goalParams, const HIRType* goalType, SolverImpl& impl, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities) const;
 
@@ -2918,6 +2919,33 @@ HIRCompare TraitResolution::comparePp(const Span& sp, const HIRPathParams& left,
     return ord;
 }
 
+static void appendAssembledParamEqualities(const Span& sp, const HIRPathParams& left, const HIRPathParams& right, AssembledImplEffects& effects) {
+    ASSERT_BUG(sp, left.types.size() == right.types.size(), StringView("Parameter count mismatch - `") << left << StringView("` vs `") << right << StringView("`"));
+    ASSERT_BUG(sp, left.values.size() == right.values.size(), StringView("Parameter count mismatch - `") << left << StringView("` vs `") << right << StringView("`"));
+    for (size_t i = 0; i < left.types.size(); i++) {
+        if (left.types[i] == right.types[i]) {
+            continue;
+        }
+        const bool exists = std::any_of(effects.equalities.begin(), effects.equalities.end(), [&](const auto& equality) {
+            return equality.left == left.types[i] && equality.right == right.types[i];
+        });
+        if (!exists) {
+            effects.equalities.push_back(SolverTypeEquality{left.types[i], right.types[i]});
+        }
+    }
+    for (size_t i = 0; i < left.values.size(); i++) {
+        if (left.values[i] == right.values[i]) {
+            continue;
+        }
+        const bool exists = std::any_of(effects.valueEqualities.begin(), effects.valueEqualities.end(), [&](const auto& equality) {
+            return equality.left == left.values[i] && equality.right == right.values[i];
+        });
+        if (!exists) {
+            effects.valueEqualities.push_back(SolverValueEquality{left.values[i].clone(), right.values[i].clone()});
+        }
+    }
+}
+
 bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type, const HIRSimplePath& trait, TraitBoundCallback& cb) const {
     for (const auto& b : traitBounds) {
         if (b.first.second.path != trait) {
@@ -3567,19 +3595,28 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                 bool rv = false;
                 bool isSupertrait = false;
                 this->findNamedTraitInTrait(sp, trait, params, *e.trait.traitPtr, e.trait.path.path, e.trait.path.params, type, [&](const HIRTraitPath& iTp) {
+                    AssembledImplEffects effects;
                     HIRTraitPath::assocListT assocClone;
                     for (const auto& entry : iTp.typeBounds) {
                         assocClone.insert(std::make_pair(entry.first, entry.second.clone()));
                     }
                     for (const auto& bound : e.trait.typeBounds) {
-                        if (bound.second.sourceTrait.path == trait && comparePp(sp, bound.second.sourceTrait.params, iTp.path.params) != HIRCompare::Unequal) {
-                            assocClone.erase(bound.first);
-                            assocClone.insert(std::make_pair(bound.first, bound.second.clone()));
+                        if (bound.second.sourceTrait.path != trait) {
+                            continue;
+                        }
+                        const auto comparison = comparePp(sp, bound.second.sourceTrait.params, iTp.path.params);
+                        if (comparison == HIRCompare::Unequal) {
+                            continue;
+                        }
+                        assocClone.erase(bound.first);
+                        assocClone.insert(std::make_pair(bound.first, bound.second.clone()));
+                        if (comparison != HIRCompare::Equal) {
+                            appendAssembledParamEqualities(sp, bound.second.sourceTrait.params, iTp.path.params, effects);
                         }
                     }
                     auto impl = SolverImpl(type, iTp.path.params.clone(), mv$(assocClone));
                     isSupertrait = true;
-                    rv = callback.visit(mv$(impl));
+                    rv = callback.visit(mv$(impl), SolverCertainty::Proven, effects.equalities.empty() && effects.valueEqualities.empty() ? nullptr : &effects);
                     return rv;
                 });
                 if (isSupertrait) {
@@ -3598,19 +3635,28 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                 bool rv = false;
                 bool isSupertrait = false;
                 this->findNamedTraitInTrait(sp, trait, params, *traitPath.traitPtr, traitPath.path.path, traitPath.path.params, type, [&](const HIRTraitPath& iTp) {
+                    AssembledImplEffects effects;
                     HIRTraitPath::assocListT assocClone;
                     for (const auto& entry : iTp.typeBounds) {
                         assocClone.insert(std::make_pair(entry.first, entry.second.clone()));
                     }
                     for (const auto& bound : traitPath.typeBounds) {
-                        if (bound.second.sourceTrait.path == trait && comparePp(sp, bound.second.sourceTrait.params, iTp.path.params) != HIRCompare::Unequal) {
-                            assocClone.erase(bound.first);
-                            assocClone.insert(std::make_pair(bound.first, bound.second.clone()));
+                        if (bound.second.sourceTrait.path != trait) {
+                            continue;
+                        }
+                        const auto comparison = comparePp(sp, bound.second.sourceTrait.params, iTp.path.params);
+                        if (comparison == HIRCompare::Unequal) {
+                            continue;
+                        }
+                        assocClone.erase(bound.first);
+                        assocClone.insert(std::make_pair(bound.first, bound.second.clone()));
+                        if (comparison != HIRCompare::Equal) {
+                            appendAssembledParamEqualities(sp, bound.second.sourceTrait.params, iTp.path.params, effects);
                         }
                     }
                     auto impl = SolverImpl(type, iTp.path.params.clone(), mv$(assocClone));
                     isSupertrait = true;
-                    rv = callback.visit(mv$(impl));
+                    rv = callback.visit(mv$(impl), SolverCertainty::Proven, effects.equalities.empty() && effects.valueEqualities.empty() ? nullptr : &effects);
                     return rv;
                 });
                 if (isSupertrait) {
@@ -9419,27 +9465,32 @@ auto NextTraitGoalEvaluator::paramEnvCandidateIsNonGlobal(const Candidate& candi
     return false;
 }
 
-auto NextTraitGoalEvaluator::pushCandidate(size_t frameIndex, SolverImpl impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool headNormalizationAmbiguity, ThinVector<SolverTypeEquality> headEqualities, ThinVector<SolverValueEquality> headValueEqualities) -> void {
+auto NextTraitGoalEvaluator::pushCandidate(size_t frameIndex, SolverImpl impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool headNormalizationAmbiguity, ThinVector<SolverTypeEquality> headEqualities, ThinVector<SolverValueEquality> headValueEqualities, bool preserveAssemblyCandidate) -> void {
     auto& candidates = frames[frameIndex]->candidates;
-    for (size_t i = 0; i < candidates.length(); i++) {
-        const bool sameSource = candidates[i]->markerImpl == markerImpl && candidates[i]->autoBuiltin == autoBuiltin && candidates[i]->source == source;
-        const bool same = markerImpl ? sameSource && candidates[i]->markerImplParams == markerImplParams : sameSource && isSameImpl(candidates[i]->impl, impl);
-        if (same) {
-            candidates[i]->headExact &= headExact;
-            if (headRelation != Certainty::Proven) {
-                candidates[i]->headRelation = Certainty::Ambiguous;
+    if (!preserveAssemblyCandidate) {
+        for (size_t i = 0; i < candidates.length(); i++) {
+            if (candidates[i]->assemblyEffectful) {
+                continue;
             }
-            candidates[i]->headNormalizationAmbiguity |= headNormalizationAmbiguity;
-            for (auto& equality : headEqualities) {
-                candidates[i]->headEqualities.push_back(std::move(equality));
+            const bool sameSource = candidates[i]->markerImpl == markerImpl && candidates[i]->autoBuiltin == autoBuiltin && candidates[i]->source == source;
+            const bool same = markerImpl ? sameSource && candidates[i]->markerImplParams == markerImplParams : sameSource && isSameImpl(candidates[i]->impl, impl);
+            if (same) {
+                candidates[i]->headExact &= headExact;
+                if (headRelation != Certainty::Proven) {
+                    candidates[i]->headRelation = Certainty::Ambiguous;
+                }
+                candidates[i]->headNormalizationAmbiguity |= headNormalizationAmbiguity;
+                for (auto& equality : headEqualities) {
+                    candidates[i]->headEqualities.push_back(std::move(equality));
+                }
+                for (auto& equality : headValueEqualities) {
+                    candidates[i]->headValueEqualities.push_back(std::move(equality));
+                }
+                return;
             }
-            for (auto& equality : headValueEqualities) {
-                candidates[i]->headValueEqualities.push_back(std::move(equality));
-            }
-            return;
         }
     }
-    candidates.pushBack(candidateNodes.make(std::move(impl), headExact, headRelation, markerImpl, std::move(markerImplParams), autoBuiltin, source, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities)));
+    candidates.pushBack(candidateNodes.make(std::move(impl), headExact, headRelation, markerImpl, std::move(markerImplParams), autoBuiltin, source, preserveAssemblyCandidate, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities)));
 }
 
 auto NextTraitGoalEvaluator::relateAssembledHead(CandidateSource source, const HIRPathParams& goalParams, const HIRType* goalType, SolverImpl& impl, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities) const -> Certainty {
@@ -9844,7 +9895,7 @@ auto NextTraitGoalEvaluator::assembleAliasBoundCandidates(size_t frameIndex, con
     const auto& declaration = crate.getTraitByPath(span(), declaringTrait.path).types.at(projection->item);
     auto monomorph = MonomorphStatePtr(crate.types, projection->type, &declaringTrait.params, &projection->params);
 
-    auto emit = [&](HIRTraitPath response) {
+    auto emit = [&](HIRTraitPath response, AssembledImplEffects* effects) {
         auto match = response.path.params.compareWithPlaceholders(span(), params, resolve_.ivars.callbackResolveInfer());
         if (match != HIRCompare::Unequal) {
             auto impl = SolverImpl(type, std::move(response.path.params), std::move(response.typeBounds), response.constness);
@@ -9855,29 +9906,46 @@ auto NextTraitGoalEvaluator::assembleAliasBoundCandidates(size_t frameIndex, con
             if (relation == Certainty::NoSolution) {
                 return;
             }
+            const bool preserveAssemblyCandidate = effects;
+            if (effects) {
+                for (auto& equality : effects->equalities) {
+                    headEqualities.push_back(std::move(equality));
+                }
+                for (auto& equality : effects->valueEqualities) {
+                    headValueEqualities.push_back(std::move(equality));
+                }
+            }
             const bool headExact = assembledHeadIsExact(params, type, impl);
-            pushCandidate(frameIndex, std::move(impl), headExact, relation, nullptr, {}, false, CandidateSource::AliasBound, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities));
+            pushCandidate(frameIndex, std::move(impl), headExact, relation, nullptr, {}, false, CandidateSource::AliasBound, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities), preserveAssemblyCandidate);
         }
     };
 
     for (const auto& declaredBound : declaration.traitBounds) {
         auto bound = monomorph.monomorphTraitpath(span(), declaredBound, false);
         if (bound.path.path == trait) {
-            emit(std::move(bound));
+            emit(std::move(bound), nullptr);
             continue;
         }
 
         const auto& boundDefinition = crate.getTraitByPath(span(), bound.path.path);
         resolve_.findNamedTraitInTrait(span(), trait, params, boundDefinition, bound.path.path, bound.path.params, type, [&](const HIRTraitPath& parent) {
             auto response = parent.clone();
+            AssembledImplEffects effects;
             for (const auto& associated : bound.typeBounds) {
-                if (associated.second.sourceTrait.path != trait || resolve_.comparePp(span(), associated.second.sourceTrait.params, response.path.params) == HIRCompare::Unequal) {
+                if (associated.second.sourceTrait.path != trait) {
+                    continue;
+                }
+                const auto comparison = resolve_.comparePp(span(), associated.second.sourceTrait.params, response.path.params);
+                if (comparison == HIRCompare::Unequal) {
                     continue;
                 }
                 response.typeBounds.erase(associated.first);
                 response.typeBounds.insert({associated.first, associated.second.clone()});
+                if (comparison != HIRCompare::Equal) {
+                    appendAssembledParamEqualities(span(), associated.second.sourceTrait.params, response.path.params, effects);
+                }
             }
-            emit(std::move(response));
+            emit(std::move(response), effects.equalities.empty() && effects.valueEqualities.empty() ? nullptr : &effects);
             return false;
         });
     }
@@ -9887,7 +9955,7 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
     const auto* selfPath = resolve_.resolveType(type)->opt_Path();
     const bool selfIsRigidProjection = selfPath && selfPath->binding.is_Opaque();
     auto collect = [&](CandidateSource source) {
-        return [&, source, selfIsRigidProjection](SolverImpl impl, Certainty assemblyCertainty) {
+        return [&, source, selfIsRigidProjection](SolverImpl impl, Certainty assemblyCertainty, AssembledImplEffects* assemblyEffects) {
             auto effectiveSource = source;
             if (source == CandidateSource::Other && selfIsRigidProjection && !impl.isTraitImpl()) {
                 effectiveSource = CandidateSource::ParamEnv;
@@ -9905,8 +9973,17 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
             if (assemblyCertainty == Certainty::Ambiguous) {
                 relation = Certainty::Ambiguous;
             }
+            const bool preserveAssemblyCandidate = assemblyEffects;
+            if (assemblyEffects) {
+                for (auto& equality : assemblyEffects->equalities) {
+                    headEqualities.push_back(std::move(equality));
+                }
+                for (auto& equality : assemblyEffects->valueEqualities) {
+                    headValueEqualities.push_back(std::move(equality));
+                }
+            }
             const bool headExact = assemblyCertainty == Certainty::Proven && assembledHeadIsExact(params, type, impl);
-            pushCandidate(frameIndex, std::move(impl), headExact, relation, nullptr, {}, false, effectiveSource, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities));
+            pushCandidate(frameIndex, std::move(impl), headExact, relation, nullptr, {}, false, effectiveSource, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities), preserveAssemblyCandidate);
             return false;
         };
     };
@@ -11874,7 +11951,7 @@ auto NextTraitGoalEvaluator::literalClassCanMatch(const HIRSimplePath& trait, co
     for (size_t i = 0; i < count; i++) {
         const auto prim = crate.types.primitive(prims[i]);
         bool matches = false;
-        auto probe = [&](SolverImpl, Certainty) {
+        auto probe = [&](SolverImpl, Certainty, AssembledImplEffects*) {
             matches = true;
             return true;
         };
@@ -13700,7 +13777,7 @@ auto NextTraitGoalEvaluator::evaluateNormalizesTo(const Span& callSpan, const No
     );
 }
 
-NextTraitGoalEvaluator::Candidate::Candidate(SolverImpl impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool headNormalizationAmbiguity, ThinVector<SolverTypeEquality> headEqualities, ThinVector<SolverValueEquality> headValueEqualities)
+NextTraitGoalEvaluator::Candidate::Candidate(SolverImpl impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool assemblyEffectful, bool headNormalizationAmbiguity, ThinVector<SolverTypeEquality> headEqualities, ThinVector<SolverValueEquality> headValueEqualities)
     : impl(std::move(impl))
     , headExact(headExact)
     , headRelation(headRelation)
@@ -13709,6 +13786,7 @@ NextTraitGoalEvaluator::Candidate::Candidate(SolverImpl impl, bool headExact, Ce
     , markerImplParams(std::move(markerImplParams))
     , autoBuiltin(autoBuiltin)
     , source(source)
+    , assemblyEffectful(assemblyEffectful)
     , headNormalizationAmbiguity(headNormalizationAmbiguity)
     , headEqualities(std::move(headEqualities))
     , headValueEqualities(std::move(headValueEqualities))
