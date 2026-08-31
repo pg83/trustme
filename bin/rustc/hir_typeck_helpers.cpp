@@ -12233,7 +12233,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (hasGuidance && exactGuidance) {
             TraitGoalQuery guidedQuery = query;
             guidedQuery.coercions = nullptr;
-            if (assocName && assocName[0] && assocType) {
+            const bool deferGuidedAssociated = assocName && assocName[0] && assocType;
+            if (deferGuidedAssociated) {
                 guidedQuery.assocType = nullptr;
             }
             SolverResponse guidedResponse;
@@ -12270,13 +12271,17 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                         exactCandidate &= inputGuided || !resolve_.typeContainsIvars(originalInput);
                     }
                 }
-                if (exactCandidate && guidedResponse.impl && assocName && assocName[0] && assocType) {
-                    const HIRPathParams noParams;
-                    const auto* candidateOutput = guidedResponse.impl->getType(crate.types, assocName, assocParams ? *assocParams : noParams);
-                    if (!candidateOutput || unifyProbe(assocType, candidateOutput) == Certainty::NoSolution) {
-                        exactCandidate = false;
-                    } else if (assocType != candidateOutput) {
-                        guidedResponse.equalities.push_back(SolverTypeEquality{assocType, candidateOutput});
+                if (exactCandidate && deferGuidedAssociated) {
+                    if (!guidedResponse.impl) {
+                        exactCandidate = typeHasUnknown(assocType);
+                    } else {
+                        const HIRPathParams noParams;
+                        const auto* candidateOutput = guidedResponse.impl->getType(crate.types, assocName, assocParams ? *assocParams : noParams);
+                        if (!candidateOutput || (!typeHasUnknown(assocType) && unifyProbe(assocType, candidateOutput) != Certainty::Proven)) {
+                            exactCandidate = false;
+                        } else if (assocType != candidateOutput) {
+                            guidedResponse.equalities.push_back(SolverTypeEquality{assocType, candidateOutput});
+                        }
                     }
                 }
                 if (exactCandidate) {
