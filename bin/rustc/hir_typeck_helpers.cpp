@@ -5696,6 +5696,10 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         return SolverCertainty::Proven;
     }
     if (source->is_Diverge()) {
+        if (destination->is_Infer() && deferred) {
+            deferred->push_back(SolverDeferredCoercion{destination, source, SolverCoercionOp::Coercion});
+            return SolverCertainty::Ambiguous;
+        }
         return SolverCertainty::Proven;
     }
     if ((destination->is_Infer() && destination->as_Infer().isLit()) || destination->is_Diverge() || (source->is_Infer() && source->as_Infer().isLit())) {
