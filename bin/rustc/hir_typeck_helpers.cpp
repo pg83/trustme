@@ -5635,8 +5635,12 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             return SolverCertainty::Ambiguous;
         }
 
+        const auto unsizeTrait = langUnsize();
+        if (unsizeTrait.components().empty()) {
+            return equality;
+        }
         SolverCertainty result = SolverCertainty::NoSolution;
-        solveTraitGoal(sp, langUnsize(), HIRPathParams(destination), source, [&](SolverResponse response) {
+        solveTraitGoal(sp, unsizeTrait, HIRPathParams(destination), source, [&](SolverResponse response) {
             if (!response.impl && response.certainty != SolverCertainty::Ambiguous) {
                 return false;
             }
@@ -12399,6 +12403,15 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             if (output != nullptr) {
                 output = normalizeGoalInput(std::move(output));
                 appendAssociatedEquality(solverResponse, canonicalAssocType, canonicalizer.monomorphType(span(), output, true));
+            }
+        }
+        if (exposeImpl && canonicalAssociated) {
+            for (const auto& requirement : *canonicalAssociated) {
+                auto output = canonicalResponse.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams);
+                if (output != nullptr) {
+                    output = normalizeGoalInput(std::move(output));
+                    appendAssociatedEquality(solverResponse, requirement.second.type, canonicalizer.monomorphType(span(), output, true));
+                }
             }
         }
         if (distinctViable.length() != 0) {
