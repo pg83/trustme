@@ -5319,7 +5319,8 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
         normalizedSource,
         nullptr,
         &result.effects,
-        &result.deferred
+        &result.deferred,
+        &result.reachedAutoderefLimit
     );
     result.effects.certainty = coercionCertainty == SolverCertainty::NoSolution || normalizationCertainty == SolverCertainty::NoSolution
         ? SolverCertainty::NoSolution
@@ -5383,7 +5384,7 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
     return result;
 }
 
-SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, const SolverCoercionConstraint& constraint, const HIRType* input, ThinVector<SolverTypeEquality>* equalities, SolverResponse* effects, ThinVector<SolverDeferredCoercion>* deferred) const {
+SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, const SolverCoercionConstraint& constraint, const HIRType* input, ThinVector<SolverTypeEquality>* equalities, SolverResponse* effects, ThinVector<SolverDeferredCoercion>* deferred, bool* reachedAutoderefLimit) const {
     const auto appendEffects = [](SolverResponse& destination, SolverResponse source) {
         for (size_t i = 0; i < source.slots.types.size(); i++) {
             destination.slots.typeInputs.push_back(std::move(source.slots.typeInputs[i]));
@@ -5801,7 +5802,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             const auto& markings = sourceStruct->structMarkings;
             if (markings.coerceUnsized != HIRStructMarkings::Coerce::None) {
                 ASSERT_BUG(sp, markings.coerceParam < sourceParams.types.size() && sourceParams.types.size() == destinationParams.types.size(), StringView("Malformed CoerceUnsized struct markings"));
-                auto result = markings.coerceUnsized == HIRStructMarkings::Coerce::Passthrough ? evaluateCoercionConstraint(sp, SolverCoercionConstraint{markings.coerceParam, sourceParams.types[markings.coerceParam], SolverCoercionConstraint::Direction::InputIsDestination, SolverCoercionOp::Coercion}, destinationParams.types[markings.coerceParam], equalities, effects, deferred) : unsize(destinationParams.types[markings.coerceParam], sourceParams.types[markings.coerceParam]);
+                auto result = markings.coerceUnsized == HIRStructMarkings::Coerce::Passthrough ? evaluateCoercionConstraint(sp, SolverCoercionConstraint{markings.coerceParam, sourceParams.types[markings.coerceParam], SolverCoercionConstraint::Direction::InputIsDestination, SolverCoercionOp::Coercion}, destinationParams.types[markings.coerceParam], equalities, effects, deferred, reachedAutoderefLimit) : unsize(destinationParams.types[markings.coerceParam], sourceParams.types[markings.coerceParam]);
                 for (size_t i = 0; result != SolverCertainty::NoSolution && i < sourceParams.types.size(); i++) {
                     if (i == markings.coerceParam) {
                         continue;
@@ -5962,6 +5963,9 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
                 if (dereferenced == SolverCertainty::Ambiguous) {
                     result = dereferenced;
                 }
+            }
+            if (reachedAutoderefLimit) {
+                *reachedAutoderefLimit = true;
             }
             return SolverCertainty::Ambiguous;
         }

@@ -923,6 +923,9 @@ namespace {
         }
 
         auto solverResponse = context.resolve.evaluateCoercionGoal(sp, dst, src, SolverCoercionOp::Unsizing);
+        if (nodePtrPtr && solverResponse.reachedAutoderefLimit) {
+            ERROR(sp, E0000, StringView("Reached the recursion limit while auto-dereferencing ") << src);
+        }
         if (solverResponse.effects.certainty == SolverCertainty::Proven) {
             if (contextMut) {
                 contextMut->applySolverResponse(sp, solverResponse.effects);
@@ -954,6 +957,9 @@ namespace {
 
                 types.pushBack(outTy);
                 auto dereferenced = context.resolve.evaluateCoercionGoal(sp, dst, outTy, SolverCoercionOp::Unsizing);
+                if (dereferenced.reachedAutoderefLimit) {
+                    ERROR(sp, E0000, StringView("Reached the recursion limit while auto-dereferencing ") << src);
+                }
                 if (dereferenced.effects.certainty == SolverCertainty::NoSolution) {
                     continue;
                 }
@@ -996,6 +1002,9 @@ namespace {
 
         const bool erasedClosureExpectation = src->is_NodeType() && src->as_NodeType().is_Closure() && dst->is_ErasedType();
         auto solverResponse = context.resolve.evaluateCoercionGoal(sp, dst, src, SolverCoercionOp::Coercion);
+        if (nodePtrPtr && solverResponse.reachedAutoderefLimit) {
+            ERROR(sp, E0000, StringView("Reached the recursion limit while auto-dereferencing ") << src);
+        }
         if (!erasedClosureExpectation) {
             if (solverResponse.effects.certainty == SolverCertainty::NoSolution) {
                 return CoerceResult::Equality;
