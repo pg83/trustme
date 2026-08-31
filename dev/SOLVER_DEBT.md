@@ -128,6 +128,28 @@ eatCache/ivars/solverEnv; никаких static). Гейт-замер интер
 пп. 8–9, плюс п.10 — префильтры. Пп. 1, 2, 5 (код) и 3, 4 в части
 транзакционной унификации остаются в силе.
 
+## Итог (второй заход, 2026-09-01)
+
+Инвентарь пуст, включая переоткрытые пп. 8–9. Финальная карта tri-state
+по bin/rustc:
+- `compareWithPlaceholders`/`comparePp`/`certaintyFromCompare` в решающих
+  путях солвера/тайпчека: 0. Решают транзакционные probes
+  (`probeTypeRelation`/`probeParamRelation`) и унификация голов.
+- `HIRCompare` остался только в: (а) hir_type/hir_path/hir_type_ref —
+  структурный компаратор (вырезан определением долга); (б) реализациях
+  интерфейса `HIRMatchGenerics` (RpitOriginMonomorph — точный,
+  GetSelf/MCB/inherent-cache/ProvenGenericParamMatcher — точные,
+  `ImplMatcher` в hir_hir.cpp — индексный префильтр crate-impl и матчер
+  голов specialization: отклоняет только доказанный Unequal, каждый
+  выживший impl проходит транзакционный `unifyImplHead`).
+- Solver-запросы (`typeIs*`) — `SolverCertainty`; структурное свойство
+  `typeIsInteriorMutable` — семантический `InteriorMutability`.
+Инварианты, которые обязаны сохраняться: префильтры отклоняют только
+доказанный Unequal и не влияют на certainty; matcher-инфраструктура не
+рождает решений из Fuzzy.
+Перф: интерливленные минимумы 41.03 (дорефакторинговый базлайн) против
+40.79 (итог), maxrss −6 МБ. unit зелёный, static gate 0/0.
+
 ## Открытые пункты (второй заход)
 
 ### 8. Structural tri-state сравнения в решающих файлах солвера
