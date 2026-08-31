@@ -12645,6 +12645,9 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 if (constraint.bindInputToCandidate) {
                     return false;
                 }
+                if (constraint.isSelf && associatedConstrainsSelf) {
+                    return false;
+                }
                 const auto* input = constraint.isSelf ? canonical.type : canonical.params.types.at(constraint.typeIndex);
                 return solverResponse.slots.typeInputs[i] == input;
             });
