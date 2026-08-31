@@ -3307,7 +3307,8 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                             HIRPathParams pp;
                             pp.types.push_back(crate.types.tuple(mv$(args)));
                             HIRTraitPath::assocListT types;
-                            types.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, nodeP->returnType}));
+                            const auto* returnType = closureReturnExpectation(nodeP);
+                            types.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, returnType ? returnType : nodeP->returnType}));
                             return callback.visit(SolverImpl(type, mv$(pp), mv$(types)));
                         } else {
                             DEBUG(StringView("Closure Fn* impl - cmp = Compare::Unequal"));
@@ -3693,6 +3694,31 @@ bool TraitResolution::isDefiningFcnOrigin(const HIRPath& origin) const {
         }
     }
     return false;
+}
+
+void TraitResolution::setClosureReturnExpectation(const HIRExprNodeClosure* closure, const HIRType* type) {
+    for (size_t i = 0; i < closureReturnExpectations.length(); i++) {
+        auto& expectation = closureReturnExpectations.mut(i);
+        if (expectation.closure != closure) {
+            continue;
+        }
+        if (expectation.type != type) {
+            expectation.type = type;
+            solverEnvGeneration++;
+        }
+        return;
+    }
+    closureReturnExpectations.pushBack(ClosureReturnExpectation{closure, type});
+    solverEnvGeneration++;
+}
+
+const HIRType* TraitResolution::closureReturnExpectation(const HIRExprNodeClosure* closure) const {
+    for (const auto& expectation : closureReturnExpectations) {
+        if (expectation.closure == closure) {
+            return expectation.type;
+        }
+    }
+    return nullptr;
 }
 
 void TraitResolution::addDefiningOpaqueAlias(const HIRSimplePath& path) {

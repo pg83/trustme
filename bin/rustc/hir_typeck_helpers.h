@@ -616,6 +616,11 @@ private:
     std::vector<HIRSimplePath> opaqueAliasScopes;
     std::vector<HIRSimplePath> definingOpaqueAliases;
     stl::Vector<const HIRPath*> definingFcnOrigins;
+    struct ClosureReturnExpectation {
+        const HIRExprNodeClosure* closure;
+        const HIRType* type;
+    };
+    stl::Vector<ClosureReturnExpectation> closureReturnExpectations;
 
 public:
     TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait);
@@ -629,6 +634,9 @@ public:
 
     void addDefiningFcnOrigin(const HIRPath& origin);
     bool isDefiningFcnOrigin(const HIRPath& origin) const;
+
+    void setClosureReturnExpectation(const HIRExprNodeClosure* closure, const HIRType* type);
+    const HIRType* closureReturnExpectation(const HIRExprNodeClosure* closure) const;
 
     bool isOpaqueAliasDefiningScope(const HIRTypeDataErasedTypeAliasInner& alias) const;
 

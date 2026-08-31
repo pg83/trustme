@@ -6094,9 +6094,11 @@ void Context::registerClosureReturnObligation(const Span& sp, const HIRExprNodeC
             continue;
         }
         equateTypes(sp, obligation.expected, expected);
+        resolve.setClosureReturnExpectation(closure, getType(obligation.expected));
         return;
     }
     closureReturnObligations.pushBack(ClosureReturnObligation{closure, std::move(expected)});
+    resolve.setClosureReturnExpectation(closure, getType(expected));
     ivars.markChange();
 }
 
