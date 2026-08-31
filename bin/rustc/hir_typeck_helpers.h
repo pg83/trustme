@@ -290,7 +290,6 @@ public:
 
     bool pathparamsContainIvars(const HIRPathParams& pps, bool onlyUnbound) const;
     bool typeContainsIvars(const HIRType* ty, bool onlyUnbound = false) const;
-    bool wouldCreateIvarCycle(unsigned int slot, const HIRType* type) const;
     bool pathparamsEqual(const HIRPathParams& ppsL, const HIRPathParams& ppsR) const;
     bool typesEqual(const HIRType* l, const HIRType* r) const;
 

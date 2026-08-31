@@ -2231,10 +2231,6 @@ bool HMTypeInferrence::containsLiveIvar(const HIRType* type, unsigned int rootIn
     });
 }
 
-bool HMTypeInferrence::wouldCreateIvarCycle(unsigned int slot, const HIRType* type) const {
-    return containsLiveIvar(type, rootIvarIndex(slot));
-}
-
 Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve)
     : Unifier(sp, table, resolve, {})
 {
@@ -12268,6 +12264,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noParams;
             auto output = canonicalResponse.getType(crate.types, assocName, itemParams);
             if (output != nullptr) {
+                output = normalizeGoalInput(std::move(output));
                 appendAssociatedEquality(solverResponse, canonicalAssocType, canonicalizer.monomorphType(span(), output, true));
             }
         }
@@ -12316,6 +12313,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                         }
                     }
                     if (output != nullptr) {
+                        output = normalizeGoalInput(std::move(output));
                         appendAssociatedEquality(effects, canonicalAssocType, std::move(output));
                     }
                 }

@@ -6081,7 +6081,9 @@ void Context::applySolverResponse(const Span& sp, const SolverResponse& response
             if (!infer || !infer->isLit() || !path || !path->path.data.is_UfcsKnown()) {
                 return false;
             }
-            if (ivars.wouldCreateIvarCycle(infer->index, projection)) {
+            if (visitTyWith(projection, [&](const HIRType* inner) {
+                return inner == candidate;
+            })) {
                 return false;
             }
             if (infer->index < ivarsSized.length() && ivarsSized[infer->index]) {
@@ -6093,17 +6095,14 @@ void Context::applySolverResponse(const Span& sp, const SolverResponse& response
 
         const auto* resolvedLeft = ivars.getType(left);
         const auto* resolvedRight = ivars.getType(right);
-        if (resolvedLeft == resolvedRight) {
+        if (ivars.typesEqual(resolvedLeft, resolvedRight)) {
+            return;
+        }
+        if (bindProvenProjection(resolvedLeft, resolvedRight) || bindProvenProjection(resolvedRight, resolvedLeft)) {
             return;
         }
         auto normalizedLeft = expandAssociatedTypes(sp, resolvedLeft);
         auto normalizedRight = expandAssociatedTypes(sp, resolvedRight);
-        if (normalizedLeft == normalizedRight) {
-            return;
-        }
-        if (bindProvenProjection(normalizedLeft, normalizedRight) || bindProvenProjection(normalizedRight, normalizedLeft)) {
-            return;
-        }
         equateTypes(sp, normalizedLeft, normalizedRight);
     };
     for (size_t i = 0; i < response.slots.types.size(); i++) {
