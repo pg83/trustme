@@ -417,6 +417,20 @@ struct TraitResolution::NextTraitGoalEvaluator {
     IntMap<u32> implExistentialScopes_;
     u32 alphaExistentialScopeBase_ = 0;
 
+    struct StructuralCertaintyCacheEntry {
+        u64 generation = 0;
+        u8 valid = 0;
+        Certainty sized = Certainty::NoSolution;
+        Certainty copy = Certainty::NoSolution;
+        Certainty clone = Certainty::NoSolution;
+    };
+
+    IntMap<StructuralCertaintyCacheEntry> structuralCertaintyCache_;
+    u64 structuralCacheGeneration_ = 1;
+    u64 structuralCacheEnvGeneration_ = ~0ull;
+    u64 structuralCacheIvarGeneration_ = ~0ull;
+    u64 structuralCacheSolverEnvGeneration_ = ~0ull;
+
     ObjList<Candidate> candidateNodes;
     Vector<CandidateFrame*> frames;
     size_t frameDepth = 0;
@@ -673,6 +687,8 @@ struct TraitResolution::NextTraitGoalEvaluator {
     Certainty evaluateBuiltinSizedCopyClone(Candidate* candidate, StructuralTrait builtin, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type);
 
     Certainty evaluateStructuralTrait(const Span& callSpan, StructuralTrait trait, const HIRType* type);
+
+    Certainty evaluateStructuralTraitCertainty(const Span& callSpan, StructuralTrait builtin, const HIRSimplePath& trait, const HIRType* type);
 
     Certainty evaluateAutoBuiltin(const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type);
 
@@ -4010,13 +4026,9 @@ SolverCertainty TraitResolution::solveTraitGoalCertainty(const Span& sp, const H
     if (!traitQuerySolver) {
         traitQuerySolver = eatCachePool->make<NextTraitGoalEvaluator>(*this, crate);
     }
-    SolverCertainty certainty = SolverCertainty::NoSolution;
-    auto callback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-        certainty = response.certainty;
-        return true;
-    });
-    traitQuerySolver->evaluateTyped(sp, trait, HIRPathParams{}, type, callback, {.allowInferInputs = true, .ambiguity = SolverAmbiguityPolicy::Report}, true);
-    return certainty;
+    ASSERT_BUG(sp, trait == langSized() || trait == langCopy() || trait == langClone(), StringView("certainty-only structural query for non-structural trait ") << trait);
+    const auto builtin = trait == langSized() ? StructuralTrait::Sized : trait == langCopy() ? StructuralTrait::Copy : StructuralTrait::Clone;
+    return traitQuerySolver->evaluateStructuralTraitCertainty(sp, builtin, trait, type);
 }
 
 SolverCertainty TraitResolution::solveStructuralTraitGoalCertainty(const Span& sp, StructuralTrait trait, const HIRType* type) const {
@@ -11083,6 +11095,143 @@ auto NextTraitGoalEvaluator::evaluateStructuralTrait(const Span& callSpan, Struc
     return evaluateBuiltinSizedCopyClone(nullptr, trait, HIRSimplePath(), HIRPathParams(), type);
 }
 
+auto NextTraitGoalEvaluator::evaluateStructuralTraitCertainty(const Span& callSpan, StructuralTrait builtin, const HIRSimplePath& trait, const HIRType* rawType) -> Certainty {
+    const auto* type = resolve_.resolveType(rawType);
+    if (builtin == StructuralTrait::Sized) {
+        switch (type->tag()) {
+            case HIRType::TAG_Infer: {
+                const auto tyClass = type->as_Infer().tyClass;
+                if (tyClass == HIRInferClass::Integer || tyClass == HIRInferClass::Float) {
+                    return Certainty::Proven;
+                }
+                break;
+            }
+            case HIRType::TAG_Primitive:
+                if (type->as_Primitive() != HIRCoreType::Str) {
+                    return Certainty::Proven;
+                }
+                break;
+            case HIRType::TAG_ErasedType:
+                if (type->as_ErasedType().isSized) {
+                    return Certainty::Proven;
+                }
+                break;
+            case HIRType::TAG_Path: {
+                const auto& path = type->as_Path();
+                switch (path.binding.tag()) {
+                    case HIRTypePathBinding::TAG_Opaque: {
+                        if (const auto* projection = path.path.data.opt_UfcsKnown()) {
+                            const auto& definition = crate.getTraitByPath(callSpan, projection->trait.path);
+                            const auto* associated = definition.getAtyDef(projection->item).first;
+                            if (associated && !associated->isSized) {
+                                break;
+                            }
+                        }
+                        return Certainty::Proven;
+                    }
+                    case HIRTypePathBinding::TAG_Enum:
+                    case HIRTypePathBinding::TAG_Union:
+                        return Certainty::Proven;
+                    case HIRTypePathBinding::TAG_Struct: {
+                        if (path.binding.as_Struct()->structMarkings.dstType == HIRStructMarkings::DstType::None) {
+                            return Certainty::Proven;
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
+                break;
+            }
+            case HIRType::TAG_Array:
+            case HIRType::TAG_Tuple:
+            case HIRType::TAG_Generic:
+                break;
+            case HIRType::TAG_Diverge:
+            case HIRType::TAG_Borrow:
+            case HIRType::TAG_Pointer:
+            case HIRType::TAG_NamedFunction:
+            case HIRType::TAG_Function:
+            case HIRType::TAG_NodeType:
+            case HIRType::TAG_Pattern:
+                return Certainty::Proven;
+            default:
+                break;
+        }
+        if (const auto* generic = type->opt_Generic()) {
+            const HIRGenericParams* definition = nullptr;
+            if (generic->group() == GENERICImpl) {
+                definition = resolve_.implGenerics_;
+            } else if (generic->group() == GENERICItem) {
+                definition = resolve_.itemGenerics_;
+            }
+            if (definition && generic->idx() < definition->types.size() && definition->types[generic->idx()].isSized) {
+                return Certainty::Proven;
+            }
+        }
+    }
+    const bool stableInput = !(type->flags & (HIRType::HAS_TYPE_INFER | HIRType::HAS_ASSOCIATED_TYPE | HIRType::HAS_UNEVALUATED_CONST | HIRType::HAS_DEFERRED_CONST));
+    if (structuralCacheEnvGeneration_ != resolve_.eatCacheGeneration ||
+        structuralCacheIvarGeneration_ != resolve_.ivars.mutationGeneration ||
+        structuralCacheSolverEnvGeneration_ != resolve_.solverEnvGeneration) {
+        structuralCacheGeneration_++;
+        structuralCacheEnvGeneration_ = resolve_.eatCacheGeneration;
+        structuralCacheIvarGeneration_ = resolve_.ivars.mutationGeneration;
+        structuralCacheSolverEnvGeneration_ = resolve_.solverEnvGeneration;
+    }
+
+    const u8 mask = 1u << static_cast<unsigned>(builtin);
+    StructuralCertaintyCacheEntry* cached = nullptr;
+    if (stableInput) {
+        cached = structuralCertaintyCache_.find(reinterpret_cast<uintptr_t>(type));
+        if (cached && cached->generation == structuralCacheGeneration_ && (cached->valid & mask)) {
+            switch (builtin) {
+                case StructuralTrait::Sized:
+                    return cached->sized;
+                case StructuralTrait::Copy:
+                    return cached->copy;
+                case StructuralTrait::Clone:
+                    return cached->clone;
+            }
+            UNREACHABLE();
+        }
+    }
+
+    Certainty certainty = Certainty::NoSolution;
+    bool effectFree = true;
+    auto callback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
+        certainty = response.certainty;
+        effectFree = response.equalities.empty() && response.valueEqualities.empty() && response.obligations.empty() &&
+            std::equal(response.slots.typeInputs.begin(), response.slots.typeInputs.end(), response.slots.types.begin(), response.slots.types.end()) &&
+            std::equal(response.slots.valueInputs.begin(), response.slots.valueInputs.end(), response.slots.values.begin(), response.slots.values.end());
+        return true;
+    });
+    evaluateTyped(callSpan, trait, HIRPathParams{}, type, callback, {.allowInferInputs = true, .ambiguity = SolverAmbiguityPolicy::Report}, true);
+
+    if (stableInput && effectFree && certainty != Certainty::Ambiguous) {
+        if (!cached) {
+            cached = structuralCertaintyCache_.insert(reinterpret_cast<uintptr_t>(type));
+        }
+        if (cached->generation != structuralCacheGeneration_) {
+            cached->generation = structuralCacheGeneration_;
+            cached->valid = 0;
+        }
+        cached->valid |= mask;
+        switch (builtin) {
+            case StructuralTrait::Sized:
+                cached->sized = certainty;
+                break;
+            case StructuralTrait::Copy:
+                cached->copy = certainty;
+                break;
+            case StructuralTrait::Clone:
+                cached->clone = certainty;
+                break;
+        }
+    }
+    return certainty;
+}
+
 auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type) -> Certainty {
     auto combine = [](Certainty& result, Certainty nested) {
         if (nested == Certainty::NoSolution) {
@@ -12222,6 +12371,7 @@ NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, c
     , langCoerceUnsized_(crate.getLangItemPathOpt("coerce_unsized"))
     , implExistentials_(resolve.eatCachePool.mutPtr())
     , implExistentialScopes_(resolve.eatCachePool.mutPtr())
+    , structuralCertaintyCache_(resolve.eatCachePool.mutPtr())
     , candidateNodes(resolve.eatCachePool.mutPtr())
     , activeGoalNodes(resolve.eatCachePool.mutPtr())
     , cachedGoalNodes(resolve.eatCachePool.mutPtr())
