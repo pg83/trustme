@@ -5618,7 +5618,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         if ((destinationLiteral && (sourceLiteral || source->is_Primitive())) || (sourceLiteral && destination->is_Primitive())) {
             return relateEquality(destination, source);
         }
-        if (destination->is_Infer() || source->is_Infer()) {
+        if (destination->is_Infer() || (source->is_Infer() && !sourceLiteral)) {
             if (!hasAutoderefAlternative && !destination->is_Infer() && typeIsSized(sp, destination) == HIRCompare::Equal) {
                 return relateEquality(destination, source);
             }
