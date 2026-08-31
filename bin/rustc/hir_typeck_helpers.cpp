@@ -5601,7 +5601,8 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         }
         openPointerTarget = destinationInner
             && !ivars.typesEqual(destinationInner, sourceInner)
-            && (isOpenInference(resolveKnown(destinationInner)) || isOpenInference(resolveKnown(sourceInner)));
+            && (isOpenInference(resolveKnown(destinationInner)) || isOpenInference(resolveKnown(sourceInner))
+                || (isRigidUnsized(isRigidUnsized, destinationInner) && ivars.typeContainsIvars(sourceInner, false)));
     }
     if (!openEndpoint && !openMarkedParameter && !openPointerTarget && relateEquality(destination, source) == SolverCertainty::Proven) {
         return SolverCertainty::Proven;
@@ -5627,7 +5628,8 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             }
             return SolverCertainty::Ambiguous;
         }
-        const auto equality = relateEquality(destination, source);
+        const bool structuralUnsizeWithOpenSource = isRigidUnsized(isRigidUnsized, destination) && ivars.typeContainsIvars(source, false);
+        const auto equality = structuralUnsizeWithOpenSource ? SolverCertainty::Ambiguous : relateEquality(destination, source);
         if (equality == SolverCertainty::Proven) {
             return SolverCertainty::Proven;
         }
