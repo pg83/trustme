@@ -1951,20 +1951,9 @@ namespace {
         return false;
     }
 
-    enum class IvarPossFallbackType {
-        None,
-        Backwards,
-        Assume,
-        IgnoreWeakDisable,
-        FinalOption,
-    };
-
-    // TODO: Split the below into a common portion, and a "run" portion (which uses the fallback)
-
-    bool checkIvarPoss(Context& context, const IvarCoercionIndex& coercionIndex, unsigned int i, Context::IVarPossible& ivarEnt, IvarPossFallbackType fallbackTy = IvarPossFallbackType::None) {
+    bool checkIvarPoss(Context& context, const IvarCoercionIndex& coercionIndex, unsigned int i, Context::IVarPossible& ivarEnt, bool tryJointUnification = false) {
         Span _span;
         const auto& sp = _span;
-        const bool honourDisable = (fallbackTy != IvarPossFallbackType::IgnoreWeakDisable);
 
         const auto* tyL = context.ivars.getType(i);
         const auto& coercionRefs = coercionIndex[i];
@@ -2000,24 +1989,20 @@ namespace {
                 }
             }
         }
-        if (ivarEnt.forceDisable && fallbackTy != IvarPossFallbackType::FinalOption) {
-            DEBUG(i << StringView(": forced unknown"));
-            return false;
-        }
-
         if (tyL->as_Infer().isLit()) {
             DEBUG(i << StringView(": Literal ") << tyL);
             return false;
         }
-
-        bool mayUseRawPointerFallback = false;
+        if (ivarEnt.forceDisable && !tryJointUnification) {
+            DEBUG(i << StringView(": forced unknown"));
+            return false;
+        }
 
         {
             bool allowUnsized = !(i < context.ivarsSized.length() ? context.ivarsSized[i] : false);
 
             std::vector<PossibleType> possibleTys;
-            bool addPlaceholders = (fallbackTy < IvarPossFallbackType::IgnoreWeakDisable);
-            if (addPlaceholders && ivarEnt.forceNoFrom) {
+            if (ivarEnt.forceNoFrom) {
                 possibleTys.push_back(PossibleType::barrier(PossibleType::UnsizeFrom));
             }
             for (const auto& newTy : ivarEnt.typesCoerceFrom) {
@@ -2025,7 +2010,7 @@ namespace {
                     possibleTys.push_back(PossibleType::concrete(newTy.op == Context::IVarPossible::CoerceTy::Coercion ? PossibleType::CoerceFrom : PossibleType::UnsizeFrom, newTy.ty));
                 }
             }
-            if (addPlaceholders && ivarEnt.forceNoTo) {
+            if (ivarEnt.forceNoTo) {
                 possibleTys.push_back(PossibleType::barrier(PossibleType::UnsizeTo));
             }
             for (const auto& newTy : ivarEnt.typesCoerceTo) {
@@ -2062,26 +2047,8 @@ namespace {
 
             // TODO: Rewrite ALL of the below (extract the helpers to somewhere useful)
 
-            if (fallbackTy != IvarPossFallbackType::None && std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1 && !ivarEnt.forceNoFrom) {
-                const auto& ent = *std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS);
-                if (!context.ivars.typeContainsIvars(ent.ty) && !(ent.ty)->is_Diverge()) {
-                    if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, ent.ty)) {
-                        context.equateTypes(sp, tyL, ent.ty);
-                        return true;
-                    }
-                }
-            }
-            if (fallbackTy == IvarPossFallbackType::IgnoreWeakDisable && possibleTys.size() == 1) {
-                auto ent = possibleTys[0];
-                if (!ent.ty->is_Diverge() && !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, ent.ty)) {
-                    DEBUG(StringView("Single option (and in final), ") << ent.ty);
-                    context.equateTypes(sp, tyL, ent.ty);
-                    return true;
-                }
-            }
-
             // - Slight hack to speed up flow-down inference
-            if (possibleTys.size() == 1 && possibleTys[0].hasType() && possibleTys[0].isSource() && !possibleTys[0].ty->is_Diverge() && !ivarEnt.forceNoFrom) {
+            if (!ivarEnt.forceDisable && possibleTys.size() == 1 && possibleTys[0].hasType() && possibleTys[0].isSource() && !possibleTys[0].ty->is_Diverge() && !ivarEnt.forceNoFrom) {
                 const auto* tyP = possibleTys[0].ty;
                 if (possibleTys[0].isUnsize()) {
                     const HIRType* tmpTy;
@@ -2102,16 +2069,16 @@ namespace {
                 return true;
             }
 
-            // TODO: This shouldn't just return, instead the above null placeholders should be tested
+            const bool legacySelectionDisabled = ivarEnt.forceDisable || ivarEnt.forceNoTo || ivarEnt.forceNoFrom;
             if (ivarEnt.forceNoTo || ivarEnt.forceNoFrom) {
-                switch (fallbackTy) {
-                    case IvarPossFallbackType::IgnoreWeakDisable:
-                    case IvarPossFallbackType::FinalOption:
-                        break;
-                    default:
-                        DEBUG(i << StringView(": coercion blocked"));
-                        return false;
+                if (!tryJointUnification) {
+                    DEBUG(i << StringView(": coercion blocked"));
+                    return false;
                 }
+                DEBUG(i << StringView(": coercion blocked for heuristic selection"));
+                possibleTys.erase(std::remove_if(possibleTys.begin(), possibleTys.end(), [](const PossibleType& candidate) {
+                    return !candidate.hasType();
+                }), possibleTys.end());
             }
 
             ASSERT_BUG(
@@ -2154,7 +2121,7 @@ namespace {
                 return possible.isSource() && (((*possible.ty).is_NodeType() && ((*possible.ty).as_NodeType().is_Closure())) || possible.ty->is_NamedFunction());
             };
             const auto functionSourceCount = std::count_if(possibleTys.begin(), possibleTys.end(), isFunctionSource);
-            if (functionSourceCount >= 2 && (fallbackTy == IvarPossFallbackType::FinalOption || nSrcIvars == 0) && std::all_of(possibleTys.begin(), possibleTys.end(), [&](const auto& possible) {
+            if (functionSourceCount >= 2 && (tryJointUnification || (!legacySelectionDisabled && nSrcIvars == 0)) && std::all_of(possibleTys.begin(), possibleTys.end(), [&](const auto& possible) {
                 return !possible.isSource() || isFunctionSource(possible);
             })) {
                 std::optional<HIRTypeDataFunctionPointer> target;
@@ -2188,7 +2155,7 @@ namespace {
             }
 
             // TODO: Do the oposite for the destination types (least permissive pointer, pick any Sized type)
-            if (nSrcIvars == 0 || fallbackTy == IvarPossFallbackType::Assume) {
+            if (!legacySelectionDisabled && nSrcIvars == 0) {
                 const HIRType* ptrTy = nullptr;
                 if (std::any_of(possibleTys.begin(), possibleTys.end(), [&](const auto& ent) {
                     return ent.cls == PossibleType::CoerceFrom;
@@ -2284,7 +2251,7 @@ namespace {
                 }
                 // TODO: Unsized types? Don't pick an unsized if coercions are present?
                 // TODO: If in a fallback mode, then don't require >1 (just require dest_type)
-                if ((numDistinct > 1 || fallbackTy == IvarPossFallbackType::Assume) && destType && !isUnordered) {
+                if (!legacySelectionDisabled && numDistinct > 1 && destType && !isUnordered) {
                     context.equateTypes(sp, tyL, destType);
                     return true;
                 }
@@ -2397,8 +2364,7 @@ namespace {
                 return !context.getType(edge.ty)->is_Infer();
             });
             DEBUG(StringView("possible_tys = {") << possibleTys << StringView("} (") << nSrcIvars << StringView(" src ivars, possibly_diverge=") << possiblyDiverge << StringView(", deferred_destination=") << hasDeferredDestination << StringView(")"));
-            // GUESS: exercised by never_type_fallback_to_unit, dies with item 10; DEBT
-            if (nSrcIvars == 0 && possibleTys.empty() && possiblyDiverge && !hasDeferredDestination && fallbackTy == IvarPossFallbackType::IgnoreWeakDisable && context.crate.edition < ASTEdition::Rust2024) {
+            if (!ivarEnt.forceDisable && nSrcIvars == 0 && possibleTys.empty() && possiblyDiverge && !hasDeferredDestination && context.crate.edition < ASTEdition::Rust2024) {
                 auto unit = context.crate.types.unit();
                 if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, unit)) {
                     DEBUG(StringView("Possibly `!` and no other options - never-type fallback to `()`"));
@@ -2408,62 +2374,32 @@ namespace {
                 }
             }
 
-            if (possibleTys.size() == 1) {
-                bool active = false;
-                switch (fallbackTy) {
-                    case IvarPossFallbackType::None:
-                    case IvarPossFallbackType::Backwards:
-                    case IvarPossFallbackType::IgnoreWeakDisable:
-                        active = nIvars == 0;
-                        break;
-                    case IvarPossFallbackType::Assume:
-                    case IvarPossFallbackType::FinalOption:
-                        active = true;
-                        break;
-                }
-                if (active) {
-                    const auto* newTy = possibleTys[0].ty;
-                    DEBUG(StringView("Only one option: ") << newTy);
-                    context.equateTypes(sp, tyL, newTy);
-                    return true;
-                }
-            }
-            if (!honourDisable) {
-                if (nSrcIvars == 0 && std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1) {
-                    auto it = std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS);
-                    const auto* newTy = it->ty;
-                    DEBUG(StringView("Picking ") << newTy << StringView(" as the only source [") << possibleTys << StringView("]"));
-                    context.equateTypes(sp, tyL, newTy);
-                    return true;
-                }
-            }
-            if (possibleTys.size() > 0 && !honourDisable && nIvars == 0) {
-                const auto* newTy = possibleTys.back().ty;
-                DEBUG(StringView("Picking ") << newTy << StringView(" as an arbitary an option from [") << possibleTys << StringView("]"));
+            if (!legacySelectionDisabled && possibleTys.size() == 1 && nIvars == 0) {
+                const auto* newTy = possibleTys[0].ty;
+                DEBUG(StringView("Only one option: ") << newTy);
                 context.equateTypes(sp, tyL, newTy);
                 return true;
             }
 
-            mayUseRawPointerFallback = possibleTys.empty() && nIvars == 0;
-        }
-
-        if (mayUseRawPointerFallback && fallbackTy == IvarPossFallbackType::FinalOption) {
-            const HIRType* selected = nullptr;
-            bool conflicting = false;
-            for (const auto& candidate : ivarEnt.rawPointerFallbacks) {
-                const auto* type = context.getType(candidate);
-                if (type == tyL || type->is_Infer() || coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, type)) {
-                    continue;
-                }
-                if (!selected) {
-                    selected = type;
-                } else if (!context.ivars.typesEqual(selected, type)) {
-                    conflicting = true;
-                    break;
+            bool jointlyUnifiable = tryJointUnification && !possibleTys.empty();
+            for (size_t lhs = 0; jointlyUnifiable && lhs < possibleTys.size(); lhs++) {
+                for (size_t rhs = lhs + 1; rhs < possibleTys.size(); rhs++) {
+                    const auto* left = possibleTys[lhs].ty;
+                    const auto* right = possibleTys[rhs].ty;
+                    if (context.resolve.probeTypeRelation(sp, left, right) == SolverCertainty::NoSolution || (left->is_NamedFunction() && right->is_NamedFunction() && !context.ivars.typesEqual(left, right))) {
+                        jointlyUnifiable = false;
+                        break;
+                    }
                 }
             }
-            if (selected && !conflicting) {
-                context.equateTypes(sp, tyL, selected);
+            if (jointlyUnifiable) {
+                DEBUG(StringView("All remaining coercion candidates jointly unify: ") << possibleTys);
+                for (size_t lhs = 0; lhs < possibleTys.size(); lhs++) {
+                    for (size_t rhs = lhs + 1; rhs < possibleTys.size(); rhs++) {
+                        context.equateTypes(sp, possibleTys[lhs].ty, possibleTys[rhs].ty);
+                    }
+                    context.equateTypes(sp, tyL, possibleTys[lhs].ty);
+                }
                 return true;
             }
         }
@@ -5936,29 +5872,10 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
         }
 
         if (!context.ivars.peekChanged()) {
-            DEBUG(StringView("--- IVar possibilities (fallback 0)"));
+            DEBUG(StringView("--- Jointly unifiable IVar possibilities"));
             for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::Backwards)) {
+                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], true)) {
                     break;
-                }
-            }
-        }
-
-        if (!context.ivars.peekChanged()) {
-            DEBUG(StringView("--- IVar possibilities (fallback 1)"));
-            for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::Assume)) {
-                    break;
-                }
-            }
-        }
-
-        if (!context.ivars.peekChanged()) {
-            DEBUG(StringView("--- IVar possibilities (fallback)"));
-            for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::IgnoreWeakDisable)) {
-                    break;
-                } else {
                 }
             }
         }
@@ -6004,16 +5921,6 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             }
             if (appliedDefault) {
                 context.ivars.markChange();
-            }
-        }
-
-        if (!context.ivars.peekChanged()) {
-            DEBUG(StringView("--- IVar possibilities (just pick a bound)"));
-            DEBUG(StringView("--- IVar possibilities (final fallback)"));
-            for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::FinalOption)) {
-                    break;
-                }
             }
         }
 
@@ -11561,28 +11468,6 @@ void stl::output<ZeroCopyOutput, std::vector<PossibleType>>(ZeroCopyOutput& out,
 template <>
 void stl::output<ZeroCopyOutput, CoerceResult>(ZeroCopyOutput& out, CoerceResult value) {
     out << static_cast<int>(value);
-}
-
-template <>
-void stl::output<ZeroCopyOutput, IvarPossFallbackType>(ZeroCopyOutput& os, IvarPossFallbackType t) {
-    switch (t) {
-        case IvarPossFallbackType::None:
-            os << StringView("");
-            break;
-        case IvarPossFallbackType::Backwards:
-            os << StringView(" backwards");
-            break;
-        case IvarPossFallbackType::Assume:
-            os << StringView(" weak");
-            break;
-        case IvarPossFallbackType::IgnoreWeakDisable:
-            os << StringView(" unblock");
-            break;
-        case IvarPossFallbackType::FinalOption:
-            os << StringView(" final");
-            break;
-    }
-    return;
 }
 
 template <>

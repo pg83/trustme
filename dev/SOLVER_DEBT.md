@@ -243,6 +243,20 @@ pre-2024 never-type fallback `!`→`()` — при сносе каркаса о�
 явным правилом, не умирает. Unit 1035/1035, static gate 0/0, перф —
 паритет в обоих режимах машины.
 
+Прогресс п.10 (2026-09-01, шаг «б», верифицирован гейтом): эскалационная
+лестница удалена целиком — раунды Backwards/Assume/IgnoreWeakDisable/
+FinalOption, `IvarPossFallbackType`, ветви fallback_single_source,
+rank_source_most_permissive, ignore_disable_arbitrary,
+ignore_weak_single_option, ignore_disable_only_source, fallback-активации
+most_accepting_pointer, raw_pointer_fallback (−115 строк). Вместо них —
+правило совместной унификации: если все оставшиеся selectable-кандидаты
+попарно унифицируемы транзакционным probe (named fn items — только при
+точном равенстве), все они реально унифицируются `equateTypes` между
+собой и с ivar; для ≥2 fn-item источников — честный fn-pointer LUB.
+GUESS-остатков 0. `TypeRestrictiveOrdering` пока жива (3 потребителя в
+раунде None) — умирает на шаге «г»/«е» вместе с tagOrdering в allowlist.
+Unit 1033/1033, static gate 0/0, перф — паритет (мин. 40.93 vs 41.03).
+
 ### Карта срабатываний (инструментация 2026-09-01, corpus libcore+liballoc+libstd)
 
 Всего 17 239 успешных приравниваний (успех = сдвиг mutationGeneration):
