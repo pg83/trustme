@@ -42,9 +42,10 @@ struct Context {
 
             const HIRType* ty;
             bool selectable;
+            bool patternConstraint;
             unsigned alternativeGroup;
 
-            CoerceTy(const HIRType* ty, bool isCoerce, bool selectable = true, unsigned alternativeGroup = 0);
+            CoerceTy(const HIRType* ty, bool isCoerce, bool selectable = true, unsigned alternativeGroup = 0, bool patternConstraint = false);
         };
 
         bool forceDisable = false;
@@ -225,7 +226,7 @@ struct Context {
         UnsizeFrom,
     };
 
-    void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRType* t, PossibleTypeSource srcTy, bool selectable = true, unsigned alternativeGroup = 0);
+    void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRType* t, PossibleTypeSource srcTy, bool selectable = true, unsigned alternativeGroup = 0, bool patternConstraint = false);
 
     void possibleEquateIvarRawPointerFallback(const Span& sp, unsigned int ivarIndex, const HIRType* type);
 

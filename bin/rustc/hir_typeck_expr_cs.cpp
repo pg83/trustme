@@ -381,7 +381,6 @@ namespace {
 
     struct PossibleType {
         enum {
-            Equal,
             CoerceTo,
             CoerceFrom,
             UnsizeTo,
@@ -406,38 +405,30 @@ namespace {
 
         void remove();
 
-        Ordering ord(const PossibleType& o) const;
-
-        bool operator<(const PossibleType& o) const;
-
         bool operator==(const PossibleType& o) const;
 
         ZeroCopyOutput& fmt(ZeroCopyOutput& os) const;
 
         bool isSource() const;
 
-        bool isDest() const;
-
-        static bool isSourceS(const PossibleType& self);
-
         bool isCoerce() const;
-
-        bool isUnsize() const;
-
-        static bool isCoerceS(const PossibleType& self);
-
-        static bool isUnsizeS(const PossibleType& self);
     };
 
-    struct TypeRestrictiveOrdering {
-        static const HIRType* matchAndExtractPtrTy(const HIRType* ptrTpl, const HIRType* ty);
-
-        static Ordering getOrderingInfer(const Span& sp, const HIRType* r);
-
-        static Ordering getOrderingTy(const Span& sp, const Context& context, const HIRType* l, const HIRType* r, bool& outUnordered);
-
-        static Ordering getOrderingPtr(const Span& sp, const Context& context, const HIRType* l, const HIRType* r, bool& outUnordered, bool deep = true);
+    enum class PointerCoercionForm {
+        MutableBorrow,
+        SharedBorrow,
+        MutableRaw,
+        ConstRaw,
     };
+
+    struct PointerCoercionShape {
+        PointerCoercionForm form;
+        const HIRType* inner;
+    };
+
+    std::optional<PointerCoercionShape> pointerCoercionShape(const HIRType* type);
+
+    std::optional<PointerCoercionForm> pointerChainLub(PointerCoercionForm left, PointerCoercionForm right);
 
     struct RpitOriginMonomorph: public HIRMatchGenerics, public Monomorphiser {
         std::map<u32, const HIRType*> typeBindings;
@@ -1568,6 +1559,21 @@ namespace {
         }
 
         if (hasResponse) {
+            /* An ambiguous operator response may already expose the selected
+             * impl's input equalities while its nested obligations still
+             * contain fresh candidate variables.  Detaching those obligations
+             * would lose the relation to the expression coercion (for example,
+             * &A: PartialEq<&B> becoming A: PartialEq<_>).  Apply the input
+             * effects, but keep the operator rule stalled until its inputs are
+             * concrete; the retry then materialises obligations from the exact
+             * trait head. */
+            const bool operatorInputsNeedInference = v.isOperator
+                && (typeNeedsFurtherInference(context, v.implTy) || pathParamsNeedFurtherInference(context, v.params));
+            if (response.certainty == SolverCertainty::Ambiguous && operatorInputsNeedInference && !response.obligations.empty()) {
+                response.obligations.clear();
+                context.applySolverResponse(sp, response);
+                return AssociatedCheckResult::Stalled;
+            }
             if (response.certainty == SolverCertainty::Ambiguous && !hasSelfCoercionGoal) {
                 /* Preserve only relations involving literal-class inputs before
                  * returning ambiguity; final numeric fallback can then retry. */
@@ -1922,7 +1928,7 @@ namespace {
         return false;
     }
 
-    bool checkIvarPoss(Context& context, const IvarCoercionIndex& coercionIndex, unsigned int i, Context::IVarPossible& ivarEnt, bool tryJointUnification = false) {
+    bool checkIvarPoss(Context& context, const IvarCoercionIndex& coercionIndex, unsigned int i, Context::IVarPossible& ivarEnt, bool finalPhase = false, bool allowIdentityCommit = false, bool allowUnsizingIdentityCommit = false) {
         Span _span;
         const auto& sp = _span;
 
@@ -1943,50 +1949,31 @@ namespace {
         }
 
         {
-            for (const auto& t : ivarEnt.typesCoerceTo) {
-                if (!t.selectable) {
-                    continue;
-                }
-                for (const auto& t2 : ivarEnt.typesCoerceFrom) {
-                    if (!t2.selectable) {
-                        continue;
-                    }
-                    // TODO: Compare such that &[_; 1] == &[u8; 1]? and `&[_]` == `&[T]`
-                    if (t.ty == t2.ty && t.ty != tyL) {
-                        DEBUG(StringView("- Source/Destination type"));
-                        context.equateTypes(sp, tyL, t.ty);
-                        return true;
-                    }
-                }
-            }
-        }
-        if (tyL->as_Infer().isLit()) {
-            DEBUG(i << StringView(": Literal ") << tyL);
-            return false;
-        }
-        if (ivarEnt.forceDisable && !tryJointUnification) {
-            DEBUG(i << StringView(": forced unknown"));
-            return false;
-        }
-
-        {
             bool allowUnsized = !(i < context.ivarsSized.length() ? context.ivarsSized[i] : false);
 
             std::vector<PossibleType> possibleTys;
             if (ivarEnt.forceNoFrom) {
                 possibleTys.push_back(PossibleType::barrier(PossibleType::UnsizeFrom));
             }
+            const bool hasConcreteSource = std::any_of(ivarEnt.typesCoerceFrom.begin(), ivarEnt.typesCoerceFrom.end(), [&](const auto& source) {
+                const auto* type = context.getType(source.ty);
+                return source.selectable && !type->is_Infer() && !type->is_Diverge();
+            });
             for (const auto& newTy : ivarEnt.typesCoerceFrom) {
                 if (newTy.selectable) {
-                    possibleTys.push_back(PossibleType::concrete(newTy.op == Context::IVarPossible::CoerceTy::Coercion ? PossibleType::CoerceFrom : PossibleType::UnsizeFrom, newTy.ty));
+                    possibleTys.push_back(PossibleType::concrete(newTy.op == Context::IVarPossible::CoerceTy::Coercion ? PossibleType::CoerceFrom : PossibleType::UnsizeFrom, context.getType(newTy.ty)));
                 }
             }
             if (ivarEnt.forceNoTo) {
                 possibleTys.push_back(PossibleType::barrier(PossibleType::UnsizeTo));
             }
             for (const auto& newTy : ivarEnt.typesCoerceTo) {
-                if (newTy.selectable) {
-                    possibleTys.push_back(PossibleType::concrete(newTy.op == Context::IVarPossible::CoerceTy::Coercion ? PossibleType::CoerceTo : PossibleType::UnsizeTo, newTy.ty));
+                /* A pattern supplies a type constraint while the scrutinee is
+                 * unknown.  Once a concrete coercion source exists, the
+                 * pattern is a compatibility effect, not an alternative
+                 * destination candidate; validation below still checks it. */
+                if (newTy.selectable && !(newTy.patternConstraint && hasConcreteSource)) {
+                    possibleTys.push_back(PossibleType::concrete(newTy.op == Context::IVarPossible::CoerceTy::Coercion ? PossibleType::CoerceTo : PossibleType::UnsizeTo, context.getType(newTy.ty)));
                 }
             }
 
@@ -2016,40 +2003,158 @@ namespace {
                 possibleTys.erase(newEnd, possibleTys.end());
             }
 
-            // TODO: Rewrite ALL of the below (extract the helpers to somewhere useful)
-
-            // - Slight hack to speed up flow-down inference
-            if (!ivarEnt.forceDisable && possibleTys.size() == 1 && possibleTys[0].hasType() && possibleTys[0].isSource() && !possibleTys[0].ty->is_Diverge() && !ivarEnt.forceNoFrom) {
-                const auto* tyP = possibleTys[0].ty;
-                if (possibleTys[0].isUnsize()) {
-                    const HIRType* tmpTy;
-
-                    do {
-                        if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, tyP)) {
-                            DEBUG(StringView("Single possibility failed bounds, trying deref - ") << tyP);
+            /* Joint unification is one rule in both phases.  Before
+             * finalisation it is forced only when an endpoint occurs on both
+             * sides of the coercion: that identity witness already relates
+             * the ivar to the endpoint, so unifying every jointly-compatible
+             * candidate propagates a constraint rather than selecting a
+             * type.  Without such a witness the rule waits for finalisation,
+             * when every producer has had a chance to add its endpoint.
+             * A diverging source is the bottom of the coercion lattice: it
+             * can flow to every destination but is never an equality endpoint
+             * and therefore cannot determine the component's type. */
+            const auto jointlyUnifyCandidates = [&](const auto& candidates, size_t minimumCandidates = 2) {
+                Vector<const PossibleType*> equalityCandidates;
+                for (const auto& candidate : candidates) {
+                    if (candidate.hasType() && candidate.isSource() && candidate.ty->is_Diverge()) {
+                        continue;
+                    }
+                    equalityCandidates.pushBack(&candidate);
+                }
+                const auto candidateCount = equalityCandidates.length();
+                bool jointlyUnifiable = candidateCount >= minimumCandidates && std::all_of(equalityCandidates.begin(), equalityCandidates.end(), [](const auto* candidate) {
+                    return candidate->hasType();
+                });
+                for (size_t lhs = 0; jointlyUnifiable && lhs < candidateCount; lhs++) {
+                    for (size_t rhs = lhs + 1; rhs < candidateCount; rhs++) {
+                        const auto* left = equalityCandidates[lhs]->ty;
+                        const auto* right = equalityCandidates[rhs]->ty;
+                        if (context.resolve.probeTypeRelation(sp, left, right) == SolverCertainty::NoSolution || (left->is_NamedFunction() && right->is_NamedFunction() && !context.ivars.typesEqual(left, right))) {
+                            jointlyUnifiable = false;
                             break;
                         }
-                    } while ((tyP = context.resolve.autoderef(sp, tyP)));
-                    if (!tyP) {
-                        tyP = possibleTys[0].ty;
                     }
-                } else {
                 }
-                DEBUG(StringView("One possibility (before ivar removal), setting to ") << tyP);
-                context.equateTypes(sp, tyL, tyP);
+                if (!jointlyUnifiable) {
+                    return false;
+                }
+                DEBUG(StringView("All remaining coercion candidates jointly unify: ") << FMT_CB(os, for (const auto* candidate : equalityCandidates) os << *candidate << StringView(", ");));
+                for (size_t lhs = 0; lhs < candidateCount; lhs++) {
+                    for (size_t rhs = lhs + 1; rhs < candidateCount; rhs++) {
+                        context.equateTypes(sp, equalityCandidates[lhs]->ty, equalityCandidates[rhs]->ty);
+                    }
+                    context.equateTypes(sp, tyL, equalityCandidates[lhs]->ty);
+                }
+                return true;
+            };
+            Vector<PossibleType> knownCandidates;
+            for (const auto& candidate : possibleTys) {
+                if (candidate.hasType()) {
+                    knownCandidates.pushBack(candidate);
+                }
+            }
+            const bool hasSourceDestinationIdentity = std::any_of(knownCandidates.begin(), knownCandidates.end(), [&](const auto& source) {
+                return source.isSource() && std::any_of(knownCandidates.begin(), knownCandidates.end(), [&](const auto& destination) {
+                    return !destination.isSource() && destination.hasType() && destination.ty == source.ty;
+                });
+            });
+            if (hasSourceDestinationIdentity) {
+                DEBUG(i << StringView(": source/destination identity witness in ") << FMT_CB(os, for (const auto& candidate : knownCandidates) os << candidate << StringView(", ");));
+            }
+            if (hasSourceDestinationIdentity && jointlyUnifyCandidates(knownCandidates)) {
                 return true;
             }
 
-            const bool legacySelectionDisabled = ivarEnt.forceDisable || ivarEnt.forceNoTo || ivarEnt.forceNoFrom;
+            /* A top-level named/value/range pattern is a type constraint on
+             * an otherwise unknown scrutinee, not a coercion alternative.
+             * Apply one such constraint directly; multiple arms must jointly
+             * unify or the scrutinee remains ambiguous.  Nested pattern
+             * shapes are deliberately excluded because match ergonomics must
+             * first learn whether their enclosing field is borrowed. */
+            Vector<PossibleType> determiningPatternConstraints;
+            if (finalPhase && !hasConcreteSource && !ivarEnt.forceNoFrom && !ivarEnt.forceNoTo && !ivarEnt.forceDisable) {
+                for (const auto& destination : ivarEnt.typesCoerceTo) {
+                    if (destination.selectable && destination.patternConstraint) {
+                        determiningPatternConstraints.pushBack(PossibleType::concrete(
+                            destination.op == Context::IVarPossible::CoerceTy::Coercion ? PossibleType::CoerceTo : PossibleType::UnsizeTo,
+                            context.getType(destination.ty)
+                        ));
+                    }
+                }
+            }
+            if (jointlyUnifyCandidates(determiningPatternConstraints, 1)) {
+                return true;
+            }
+
+            if (tyL->as_Infer().isLit() && !finalPhase) {
+                DEBUG(i << StringView(": Literal ") << tyL);
+                return false;
+            }
+            if (ivarEnt.forceDisable && !finalPhase) {
+                DEBUG(i << StringView(": forced unknown"));
+                return false;
+            }
+
+            const bool hasInferenceBarrier = ivarEnt.forceDisable || ivarEnt.forceNoTo || ivarEnt.forceNoFrom;
             if (ivarEnt.forceNoTo || ivarEnt.forceNoFrom) {
-                if (!tryJointUnification) {
+                if (!finalPhase) {
                     DEBUG(i << StringView(": coercion blocked"));
                     return false;
                 }
-                DEBUG(i << StringView(": coercion blocked for heuristic selection"));
+                DEBUG(i << StringView(": ignoring exhausted final-phase barriers"));
                 possibleTys.erase(std::remove_if(possibleTys.begin(), possibleTys.end(), [](const PossibleType& candidate) {
                     return !candidate.hasType();
                 }), possibleTys.end());
+            }
+
+            /* In the final effect sweep, jointly-unifiable source and
+             * destination endpoints are one equality component.  Keep ivar
+             * endpoints in this check: removing them first would turn
+             * `S -> dest -> D` into a spurious single-source identity case.
+             * This is also the general form of the old exact-endpoint case;
+             * no endpoint is preferred or ranked. */
+            if (finalPhase && jointlyUnifyCandidates(possibleTys)) {
+                return true;
+            }
+
+            /* Identity commit is a finalisation rule, not an inference
+             * heuristic.  Once all ordinary revisits and obligations have
+             * stabilised and a separate final effect-only sweep found nothing
+             * more to propagate, a coercion destination with no other
+             * constraints takes its source type: dest := source.  Applying
+             * this before that point would be unsound because a later
+             * destination constraint could still require a real coercion.
+             * forceNoFrom
+             * and forceNoTo are discovery barriers only: every ordinary
+             * producer has run before this final round, so a marker that has
+             * not become a concrete edge is exhausted.  A forceDisable bound
+             * is not an alternative type: identity propagates the source into
+             * that obligation, and coercionCandidateIsInvalid must prove it.
+             * An outgoing coercion is propagation, not a competing constraint:
+             * it receives the committed source type on the next pass.  If its
+             * destination already makes that type impossible,
+             * coercionCandidateIsInvalid rejects the commit.
+             * Non-selectable destination effects are not competing choices;
+             * coercionCandidateIsInvalid must nevertheless prove that the
+             * source satisfies all of them before the commit. */
+            Vector<const PossibleType*> identityCandidates;
+            for (const auto& candidate : possibleTys) {
+                if (candidate.hasType() && !(candidate.isSource() && candidate.ty->is_Diverge())) {
+                    identityCandidates.pushBack(&candidate);
+                }
+            }
+            if (finalPhase
+                && allowIdentityCommit
+                && std::none_of(ivarEnt.typesCoerceTo.begin(), ivarEnt.typesCoerceTo.end(), [](const auto& destination) {
+                    return destination.selectable && !destination.patternConstraint;
+                })
+                && identityCandidates.length() == 1
+                && identityCandidates[0]->isSource()
+                && (identityCandidates[0]->isCoerce() || allowUnsizingIdentityCommit)
+                && !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, identityCandidates[0]->ty)) {
+                DEBUG(i << StringView(": Final unconstrained coercion destination takes its source type: ") << identityCandidates[0]->ty);
+                context.equateTypes(sp, tyL, identityCandidates[0]->ty);
+                return true;
             }
 
             ASSERT_BUG(
@@ -2092,7 +2197,7 @@ namespace {
                 return possible.isSource() && (((*possible.ty).is_NodeType() && ((*possible.ty).as_NodeType().is_Closure())) || possible.ty->is_NamedFunction());
             };
             const auto functionSourceCount = std::count_if(possibleTys.begin(), possibleTys.end(), isFunctionSource);
-            if (functionSourceCount >= 2 && (tryJointUnification || (!legacySelectionDisabled && nSrcIvars == 0)) && std::all_of(possibleTys.begin(), possibleTys.end(), [&](const auto& possible) {
+            if (functionSourceCount >= 2 && (finalPhase || (!hasInferenceBarrier && nSrcIvars == 0)) && std::all_of(possibleTys.begin(), possibleTys.end(), [&](const auto& possible) {
                 return !possible.isSource() || isFunctionSource(possible);
             })) {
                 std::optional<HIRTypeDataFunctionPointer> target;
@@ -2125,111 +2230,193 @@ namespace {
                 }
             }
 
-            // TODO: Do the oposite for the destination types (least permissive pointer, pick any Sized type)
-            if (!legacySelectionDisabled && nSrcIvars == 0) {
-                const HIRType* ptrTy = nullptr;
-                if (std::any_of(possibleTys.begin(), possibleTys.end(), [&](const auto& ent) {
-                    return ent.cls == PossibleType::CoerceFrom;
-                })) {
-                    for (const auto& ent : possibleTys) {
-                        if (!ent.isSource()) {
-                            continue;
+            /* Pointer LUB is the coercion lattice, not a restrictiveness
+             * ranking.  For one jointly-unifiable pointee T its form chains are
+             *
+             *     &mut T <= &T <= *const T
+             *     &mut T <= *mut T <= *const T
+             *
+             * All source forms must be on one chain.  In particular, &T and
+             * *mut T are incomparable here and leave the ivar ambiguous.
+             * Pointees are unified independently.  If they do not unify as
+             * written, each borrow pointee has one directed coercion chain
+             * through proven Deref::Target steps (including [T; N] <= [T]).
+             * The pointee LUB is the unique minimal common member of those
+             * chains.  No common member, or incomparable minimal common
+             * members, is ambiguity.  This applies source-autoderef effects
+             * before the form LUB; it does not order arbitrary types. */
+            if (finalPhase || (!hasInferenceBarrier && nSrcIvars == 0)) {
+                struct PointerLubSource {
+                    PointerCoercionShape shape;
+                    ThinVector<const HIRType*> pointeeChain;
+                    size_t selectedPointee = 0;
+                };
+                ThinVector<PointerLubSource> sourcePointers;
+                std::optional<PointerCoercionForm> pointerLub;
+                bool isPointerChain = true;
+                for (const auto& possible : possibleTys) {
+                    if (!possible.isSource()) {
+                        continue;
+                    }
+                    const auto shape = pointerCoercionShape(possible.ty);
+                    if (!shape) {
+                        isPointerChain = false;
+                        break;
+                    }
+                    PointerLubSource source{*shape};
+                    source.pointeeChain.push_back(context.getType(shape->inner));
+                    sourcePointers.push_back(std::move(source));
+                    if (pointerLub) {
+                        pointerLub = pointerChainLub(*pointerLub, shape->form);
+                        if (!pointerLub) {
+                            isPointerChain = false;
+                            break;
                         }
-
-                        bool unusedUnordered = false;
-                        if (ptrTy == nullptr) {
-                            ptrTy = ent.ty;
-                        } else if (TypeRestrictiveOrdering::getOrderingPtr(sp, context, ent.ty, ptrTy, unusedUnordered, /*deep=*/false) == OrdLess) {
-                            ptrTy = ent.ty;
-                        } else {
-                        }
+                    } else {
+                        pointerLub = shape->form;
+                    }
+                }
+                const HIRType* pointeeLub = nullptr;
+                bool pointeesUnifyDirectly = true;
+                for (const auto& source : sourcePointers) {
+                    if (!pointeeLub) {
+                        pointeeLub = source.pointeeChain.front();
+                        continue;
+                    }
+                    const auto* left = context.getType(pointeeLub);
+                    const auto* right = source.pointeeChain.front();
+                    if (left->tag() != right->tag() || context.resolve.probeTypeRelation(sp, left, right) == SolverCertainty::NoSolution) {
+                        pointeesUnifyDirectly = false;
+                        break;
                     }
                 }
 
-                for (const auto& ent : possibleTys) {
-                    if (!ent.isSource()) {
-                        continue;
-                    }
-                    const HIRType* innerTy = (ptrTy ? TypeRestrictiveOrdering::matchAndExtractPtrTy(ptrTy, ent.ty) : ent.ty);
-                    if (!innerTy) {
-                        continue;
+                if (isPointerChain && sourcePointers.size() >= 2 && !pointeesUnifyDirectly) {
+                    const auto pointeesRelate = [&](const HIRType* left, const HIRType* right) {
+                        left = context.getType(left);
+                        right = context.getType(right);
+                        return left->tag() == right->tag()
+                            && context.resolve.probeTypeRelation(sp, left, right) != SolverCertainty::NoSolution;
+                    };
+                    for (auto& source : sourcePointers) {
+                        bool chainTerminated = false;
+                        for (unsigned depth = 0; depth < context.resolve.board().settings->recursionLimit; depth++) {
+                            const auto step = context.resolve.autoderefStep(sp, source.pointeeChain.back());
+                            if (step.result == TraitResolution::AutoderefResult::NoMatch) {
+                                chainTerminated = true;
+                                break;
+                            }
+                            if (step.result == TraitResolution::AutoderefResult::Ambiguous
+                                || std::any_of(source.pointeeChain.begin(), source.pointeeChain.end(), [&](const auto* previous) {
+                                    return pointeesRelate(previous, step.target);
+                                })) {
+                                isPointerChain = false;
+                                break;
+                            }
+                            source.pointeeChain.push_back(context.getType(step.target));
+                        }
+                        if (!chainTerminated) {
+                            isPointerChain = false;
+                        }
+                        if (!isPointerChain) {
+                            break;
+                        }
                     }
 
-                    bool isMaxAccepting = false;
-                    if ((innerTy)->is_Slice()) {
-                        isMaxAccepting = true;
-                    } else if (((*innerTy).is_Primitive() && ((*innerTy).as_Primitive() == HIRCoreType::Str))) {
-                        isMaxAccepting = true;
-                    } else {
+                    struct CommonPointee {
+                        const HIRType* type;
+                        Vector<size_t> positions;
+                    };
+                    ThinVector<CommonPointee> commonPointees;
+                    if (isPointerChain) {
+                        for (const auto& proposedBy : sourcePointers) {
+                            for (const auto* proposed : proposedBy.pointeeChain) {
+                                if (std::any_of(commonPointees.begin(), commonPointees.end(), [&](const auto& existing) {
+                                    return pointeesRelate(existing.type, proposed);
+                                })) {
+                                    continue;
+                                }
+                                CommonPointee common{proposed};
+                                for (const auto& source : sourcePointers) {
+                                    const auto found = std::find_if(source.pointeeChain.begin(), source.pointeeChain.end(), [&](const auto* reachable) {
+                                        return pointeesRelate(reachable, proposed);
+                                    });
+                                    if (found == source.pointeeChain.end()) {
+                                        common.positions.clear();
+                                        break;
+                                    }
+                                    common.positions.pushBack(static_cast<size_t>(found - source.pointeeChain.begin()));
+                                }
+                                if (!common.positions.empty()) {
+                                    commonPointees.push_back(std::move(common));
+                                }
+                            }
+                        }
                     }
-                    if (isMaxAccepting) {
-                        DEBUG(StringView("Most accepting pointer class, and most permissive inner type - ") << ent.ty);
-                        context.equateTypes(sp, tyL, ent.ty);
+
+                    std::optional<size_t> minimalCommon;
+                    for (size_t candidate = 0; candidate < commonPointees.size(); candidate++) {
+                        bool hasStrictlyLowerCommon = false;
+                        for (size_t other = 0; other < commonPointees.size(); other++) {
+                            if (candidate == other) {
+                                continue;
+                            }
+                            bool noLater = true;
+                            bool earlierSomewhere = false;
+                            for (size_t source = 0; source < sourcePointers.size(); source++) {
+                                noLater &= commonPointees[other].positions[source] <= commonPointees[candidate].positions[source];
+                                earlierSomewhere |= commonPointees[other].positions[source] < commonPointees[candidate].positions[source];
+                            }
+                            if (noLater && earlierSomewhere) {
+                                hasStrictlyLowerCommon = true;
+                                break;
+                            }
+                        }
+                        if (!hasStrictlyLowerCommon) {
+                            if (minimalCommon) {
+                                isPointerChain = false;
+                                break;
+                            }
+                            minimalCommon = candidate;
+                        }
+                    }
+                    if (!minimalCommon) {
+                        isPointerChain = false;
+                    } else if (isPointerChain) {
+                        pointeeLub = commonPointees[*minimalCommon].type;
+                        for (size_t source = 0; source < sourcePointers.size(); source++) {
+                            sourcePointers[source].selectedPointee = commonPointees[*minimalCommon].positions[source];
+                        }
+                    }
+                }
+                if (isPointerChain && sourcePointers.size() >= 2) {
+                    const HIRType* newTy = nullptr;
+                    switch (*pointerLub) {
+                        case PointerCoercionForm::MutableBorrow:
+                            newTy = context.crate.types.borrow(HIRBorrowType::Unique, pointeeLub);
+                            break;
+                        case PointerCoercionForm::SharedBorrow:
+                            newTy = context.crate.types.borrow(HIRBorrowType::Shared, pointeeLub);
+                            break;
+                        case PointerCoercionForm::MutableRaw:
+                            newTy = context.crate.types.pointer(HIRBorrowType::Unique, pointeeLub);
+                            break;
+                        case PointerCoercionForm::ConstRaw:
+                            newTy = context.crate.types.pointer(HIRBorrowType::Shared, pointeeLub);
+                            break;
+                    }
+                    if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, newTy)) {
+                        DEBUG(StringView("Pointer coercion LUB: ") << newTy);
+                        for (const auto& source : sourcePointers) {
+                            context.equateTypes(sp, pointeeLub, source.pointeeChain[source.selectedPointee]);
+                        }
+                        context.equateTypes(sp, tyL, newTy);
                         return true;
                     }
                 }
             }
 
-            if (std::all_of(possibleTys.begin(), possibleTys.end(), PossibleType::isCoerceS)) {
-                size_t numDistinct = 0;
-                for (const auto& ent : possibleTys) {
-                    if (!ent.isDest()) {
-                        continue;
-                    }
-                    if (((*ent.ty).is_Borrow() && ((*ent.ty).as_Borrow().inner->is_Infer()))) {
-                        continue;
-                    }
-                    bool isDuplicate = false;
-                    for (const auto& ent2 : possibleTys) {
-                        if (&ent2 == &ent) {
-                            break;
-                        }
-                        if (!ent2.isSource()) {
-                            continue;
-                        }
-                        if (ent.ty == ent2.ty) {
-                            isDuplicate = true;
-                            break;
-                        }
-                        // TODO: Compare such that &[_; 1] == &[u8; 1]?
-                    }
-                    if (!isDuplicate) {
-                        numDistinct += 1;
-                    }
-                }
-                bool isUnordered = false;
-                const HIRType* destType = nullptr;
-                for (const auto& ent : possibleTys) {
-                    if (ent.isDest()) {
-                        continue;
-                    }
-                    if (!destType) {
-                        destType = ent.ty;
-                        continue;
-                    }
-
-                    auto cmp = TypeRestrictiveOrdering::getOrderingPtr(sp, context, ent.ty, destType, isUnordered);
-                    switch (cmp) {
-                        case OrdLess:
-                            break;
-                        case OrdEqual:
-                            break;
-                        case OrdGreater:
-                            destType = ent.ty;
-                            isUnordered = false;
-                            break;
-                    }
-                }
-                // TODO: Unsized types? Don't pick an unsized if coercions are present?
-                // TODO: If in a fallback mode, then don't require >1 (just require dest_type)
-                if (!legacySelectionDisabled && numDistinct > 1 && destType && !isUnordered) {
-                    context.equateTypes(sp, tyL, destType);
-                    return true;
-                }
-            }
-
-            DEBUG(StringView("possible_tys = ") << possibleTys);
-            DEBUG(StringView("possible_tys = ") << possibleTys);
+            DEBUG(i << StringView(": possible_tys = ") << possibleTys);
             for (auto it = possibleTys.begin(); it != possibleTys.end();) {
                 bool removeOption = false;
                 if (it->ty == tyL) {
@@ -2249,93 +2436,52 @@ namespace {
 
                 it = (removeOption ? possibleTys.erase(it) : it + 1);
             }
-            DEBUG(StringView("possible_tys = ") << possibleTys);
+            DEBUG(i << StringView(": possible_tys = ") << possibleTys);
             for (auto it = possibleTys.begin(); it != possibleTys.end();) {
-                bool removeOption = false;
-                for (const auto& otherOpt : possibleTys) {
-                    if (&otherOpt == &*it) {
-                        continue;
-                    }
-                    if (otherOpt.ty == it->ty) {
-                        if (otherOpt.cls == it->cls) {
-                            removeOption = true;
-                            break;
-                        }
-
-                        if (it->isSource() && otherOpt.isCoerce() == it->isCoerce()) {
-                            removeOption = true;
-                            break;
-                        }
-                    }
-                }
-                it = (removeOption ? possibleTys.erase(it) : it + 1);
-            }
-
-            DEBUG(StringView("possible_tys = ") << possibleTys);
-            for (auto it = possibleTys.begin(); it != possibleTys.end();) {
-                bool removeOption = false;
-                if (it->isSource() && !(it->ty)->is_Infer()) {
-                    DEBUG(StringView("> ") << *it);
-                    const HIRType* tmp, tmp2;
-                    const auto* dty = it->ty;
-                    auto srcBty = HIRBorrowType::Shared;
-                    if (it->isCoerce()) {
-                        if ((dty)->is_Borrow()) {
-                            srcBty = (dty)->as_Borrow().type;
-                        }
-                        dty = context.resolve.autoderef(sp, dty);
-                    }
-                    if (dty) {
-                        for (const auto& otherOpt : possibleTys) {
-                            if (&otherOpt == &*it) {
-                                continue;
-                            }
-                            if ((otherOpt.ty)->is_Infer()) {
-                                continue;
-                            }
-
-                            DEBUG(StringView(" > ") << otherOpt);
-                            const auto* oty = otherOpt.ty;
-                            auto oBty = HIRBorrowType::Owned;
-                            if (otherOpt.isCoerce()) {
-                                if ((oty)->is_Borrow()) {
-                                    oBty = (oty)->as_Borrow().type;
-                                }
-                                oty = context.resolve.autoderef(sp, oty);
-                            }
-                            if (oBty > srcBty) {
-                                DEBUG(StringView("BT ") << oBty << StringView(" > ") << srcBty);
-                                break;
-                            }
-                            // TODO: Check if unsize is possible from `dty` to `oty`
-                            if (oty) {
-                                DEBUG(StringView(" > ") << dty << StringView(" =? ") << oty);
-                                auto cmp = checkUnsizeTys(context, sp, oty, dty, nullptr);
-                                DEBUG(StringView("check_unsize_tys(..) = ") << cmp);
-                                if (cmp == CoerceResult::Equality) {
-                                    //TODO(sp, StringView("Impossibility for ") << oty << " := " << dty);
-                                } else if (cmp == CoerceResult::Unknown) {
-                                } else {
-                                    removeOption = true;
-                                    DEBUG(StringView("- Remove ") << *it << StringView(", can deref to ") << otherOpt);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-                if (!removeOption && !(it->ty)->is_Infer() && coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, it->ty)) {
-                    removeOption = true;
+                const bool removeOption = !(it->ty)->is_Infer() && coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, it->ty);
+                if (removeOption) {
                     DEBUG(StringView("- Remove ") << *it << StringView(" due to bounds"));
                 }
                 it = (removeOption ? possibleTys.erase(it) : it + 1);
             }
 
+            /* Candidate validation is part of the coercion rule, not a
+             * ranking step: an endpoint which is NoSolution for any pending
+             * coercion is not viable.  Once those endpoints are removed, all
+             * remaining endpoints form one equality component exactly when
+             * they jointly unify.  This ordering matters for autoderef: both
+             * the identity pointee and a later Deref::Target can be emitted,
+             * while another argument rejects the identity pointee and relates
+             * the target to the same ivar. */
+            if (finalPhase && jointlyUnifyCandidates(possibleTys)) {
+                return true;
+            }
+
+            /* Post-validation form of the final identity rule: if solver
+             * validation has proved every other concrete endpoint
+             * impossible, one remaining source is not a ranked winner.  It
+             * is the only coercion effect left, so the unconstrained
+             * destination takes that source type.  Do not discard unresolved
+             * ivar endpoints to manufacture this case. */
+            if (finalPhase
+                && allowIdentityCommit
+                && nIvars == 0
+                && possibleTys.size() == 1
+                && possibleTys[0].isSource()
+                && (possibleTys[0].isCoerce() || allowUnsizingIdentityCommit)) {
+                DEBUG(i << StringView(": Final sole solver-viable source becomes the coercion destination: ") << possibleTys[0].ty);
+                context.equateTypes(sp, tyL, possibleTys[0].ty);
+                return true;
+            }
+
             const bool hasDeferredDestination = std::any_of(ivarEnt.typesCoerceTo.begin(), ivarEnt.typesCoerceTo.end(), [&](const auto& edge) {
                 return !context.getType(edge.ty)->is_Infer();
             });
-            DEBUG(StringView("possible_tys = {") << possibleTys << StringView("} (") << nSrcIvars << StringView(" src ivars, possibly_diverge=") << possiblyDiverge << StringView(", deferred_destination=") << hasDeferredDestination << StringView(")"));
-            if (!ivarEnt.forceDisable && nSrcIvars == 0 && possibleTys.empty() && possiblyDiverge && !hasDeferredDestination && context.crate.edition < ASTEdition::Rust2024) {
+            DEBUG(i << StringView(": possible_tys = {") << possibleTys << StringView("} (") << nSrcIvars << StringView(" src ivars, possibly_diverge=") << possiblyDiverge << StringView(", deferred_destination=") << hasDeferredDestination << StringView(")"));
+            /* Never-type fallback is the last language fallback in this
+             * component.  A resolved non-bottom source may still arrive via
+             * an ivar edge during either identity propagation phase. */
+            if (finalPhase && allowUnsizingIdentityCommit && !ivarEnt.forceDisable && nSrcIvars == 0 && possibleTys.empty() && possiblyDiverge && !hasDeferredDestination && context.crate.edition < ASTEdition::Rust2024) {
                 auto unit = context.crate.types.unit();
                 if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, unit)) {
                     DEBUG(StringView("Possibly `!` and no other options - never-type fallback to `()`"));
@@ -2343,35 +2489,6 @@ namespace {
                     context.equateTypes(sp, tyL, unit);
                     return true;
                 }
-            }
-
-            if (!legacySelectionDisabled && possibleTys.size() == 1 && nIvars == 0) {
-                const auto* newTy = possibleTys[0].ty;
-                DEBUG(StringView("Only one option: ") << newTy);
-                context.equateTypes(sp, tyL, newTy);
-                return true;
-            }
-
-            bool jointlyUnifiable = tryJointUnification && !possibleTys.empty();
-            for (size_t lhs = 0; jointlyUnifiable && lhs < possibleTys.size(); lhs++) {
-                for (size_t rhs = lhs + 1; rhs < possibleTys.size(); rhs++) {
-                    const auto* left = possibleTys[lhs].ty;
-                    const auto* right = possibleTys[rhs].ty;
-                    if (context.resolve.probeTypeRelation(sp, left, right) == SolverCertainty::NoSolution || (left->is_NamedFunction() && right->is_NamedFunction() && !context.ivars.typesEqual(left, right))) {
-                        jointlyUnifiable = false;
-                        break;
-                    }
-                }
-            }
-            if (jointlyUnifiable) {
-                DEBUG(StringView("All remaining coercion candidates jointly unify: ") << possibleTys);
-                for (size_t lhs = 0; lhs < possibleTys.size(); lhs++) {
-                    for (size_t rhs = lhs + 1; rhs < possibleTys.size(); rhs++) {
-                        context.equateTypes(sp, possibleTys[lhs].ty, possibleTys[rhs].ty);
-                    }
-                    context.equateTypes(sp, tyL, possibleTys[lhs].ty);
-                }
-                return true;
             }
         }
 
@@ -3280,17 +3397,19 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
             const HIRType* outerTy;
             HIRPattern& pattern;
             HIRPatternBinding::Type outerMode;
+            bool nestedRoot;
 
             mutable Vector<const HIRType*> tempIvars;
             mutable std::optional<const HIRType*> possibleType;
             mutable const HIRPattern* possibleTypePattern = nullptr;
 
-            MatchErgonomicsRevisit(Span sp, bool isIrrefutable, const HIRType* outer, HIRPattern& pat, HIRPatternBinding::Type bindingMode = HIRPatternBinding::Type::Move)
+            MatchErgonomicsRevisit(Span sp, bool isIrrefutable, const HIRType* outer, HIRPattern& pat, HIRPatternBinding::Type bindingMode = HIRPatternBinding::Type::Move, bool nestedRoot = false)
                 : sp(mv$(sp))
                 , isIrrefutable(isIrrefutable)
                 , outerTy(mv$(outer))
                 , pattern(pat)
                 , outerMode(bindingMode)
+                , nestedRoot(nestedRoot)
             {
             }
 
@@ -3305,15 +3424,15 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
             bool revisit(Context& context, bool isFallbackMode) override {
                 TRACE_FUNCTION_F(StringView("Match ergonomics - ") << pattern << StringView(" : ") << outerTy << StringView(isFallbackMode ? " (fallback)" : ""));
                 outerTy = context.expandAssociatedTypes(sp, mv$(outerTy));
-                return this->revisitInnerReal(context, pattern, outerTy, outerMode, isFallbackMode);
+                return this->revisitInnerReal(context, pattern, outerTy, outerMode, isFallbackMode, nestedRoot);
             }
 
             // TODO: Recurse into inner patterns, creating new revisitors?
 
             bool revisitInner(Context& context, HIRPattern& pattern, const HIRType* type, HIRPatternBinding::Type bindingMode) const {
-                if (!revisitInnerReal(context, pattern, type, bindingMode, false)) {
+                if (!revisitInnerReal(context, pattern, type, bindingMode, false, true)) {
                     DEBUG(StringView("Add revisit for ") << pattern << StringView(" : ") << type << StringView("(mode = ") << (int)bindingMode << StringView(")"));
-                    context.addRevisitAdv(box$((MatchErgonomicsRevisit{sp, isIrrefutable, type, pattern, bindingMode})));
+                    context.addRevisitAdv(box$((MatchErgonomicsRevisit{sp, isIrrefutable, type, pattern, bindingMode, true})));
                 }
                 return true;
             }
@@ -3748,7 +3867,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                 UNREACHABLE();
             }
 
-            bool revisitInnerReal(Context& context, HIRPattern& pattern, const HIRType* type, HIRPatternBinding::Type bindingMode, bool isFallback) const {
+            bool revisitInnerReal(Context& context, HIRPattern& pattern, const HIRType* type, HIRPatternBinding::Type bindingMode, bool isFallback, bool isNested) const {
                 type = context.expandAssociatedTypes(sp, context.getType(type));
 
                 TRACE_FUNCTION_F(pattern << StringView(" : ") << type);
@@ -3832,7 +3951,15 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                 DEBUG(StringView("- ") << nDeref << StringView(" derefs of class ") << bt << StringView(" to get ") << ty);
                 if (ty->is_Infer() || ((*ty).is_Path() && ((*ty).as_Path().binding.is_Unbound()))) {
                     const auto* infer = ty->opt_Infer();
-                    const bool fallbackBlocked = infer && infer->index < context.possibleIvarVals.size() && context.possibleIvarVals[infer->index].forceDisable;
+                    /* Pattern fallback may default an otherwise unconstrained
+                     * scrutinee to the pattern shape.  A live discovery/bound
+                     * barrier means an external expected type can still
+                     * arrive (notably through a generic closure argument), so
+                     * defaulting before that effect materialises is unsound. */
+                    const bool fallbackBlocked = infer && infer->index < context.possibleIvarVals.size()
+                        && (context.possibleIvarVals[infer->index].forceDisable
+                            || context.possibleIvarVals[infer->index].forceNoFrom
+                            || context.possibleIvarVals[infer->index].forceNoTo);
 
                     const auto& possibleType = getPossibleType(context, pattern);
                     if (possibleType) {
@@ -3848,9 +3975,19 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         if (possibleTypeP) {
                             const auto* possibleType = possibleTypeP;
                             if (isFallback) {
-                                if (!fallbackBlocked) {
-                                    DEBUG(StringView("Fallback equate ") << possibleType);
-                                    context.equateTypes(sp, ty, possibleType);
+                                /* A nested shape cannot default its own ivar:
+                                 * the enclosing scrutinee may still reveal an
+                                 * implicit borrow on the next solver pass.
+                                 * Only the root owns pattern fallback. */
+                                if (!fallbackBlocked && !nestedRoot) {
+                                    const HIRType* fallbackType = possibleType;
+                                    if (!isIrrefutable) {
+                                        if (const auto* te2 = possibleType->opt_Array()) {
+                                            fallbackType = context.crate.types.slice(te2->inner);
+                                        }
+                                    }
+                                    DEBUG(StringView("Fallback equate ") << fallbackType);
+                                    context.equateTypes(sp, ty, fallbackType);
                                 }
                             } else if (infer) {
                                 if (const auto* te2 = possibleType->opt_Array()) {
@@ -3858,10 +3995,20 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                                         context.possibleEquateIvar(sp, infer->index, possibleType, Context::PossibleTypeSource::UnsizeTo);
                                     } else {
                                         auto t = context.crate.types.slice(te2->inner);
-                                        context.possibleEquateIvar(sp, infer->index, t, Context::PossibleTypeSource::UnsizeTo);
+                                        /* A refutable slice pattern constrains the scrutinee to
+                                         * unsize to a slice; it does not propose the array length
+                                         * written in the pattern as its sole type.  Preserve that
+                                         * exact array as a pattern equality candidate too: equal
+                                         * shapes across all arms jointly determine an unknown
+                                         * sized scrutinee, while alternative `[]`/`[x]` shapes do
+                                         * not unify and retain only the slice compatibility edge. */
+                                        context.possibleEquateIvar(sp, infer->index, possibleType, Context::PossibleTypeSource::UnsizeTo, true, 0, true);
+                                        context.possibleEquateIvar(sp, infer->index, t, Context::PossibleTypeSource::UnsizeTo, false);
                                     }
                                 } else {
-                                    context.possibleEquateIvar(sp, infer->index, possibleType, Context::PossibleTypeSource::UnsizeTo);
+                                    const bool determinesUnknownScrutinee = !isNested
+                                        && (pattern.data.is_Value() || pattern.data.is_Range() || pattern.data.is_PathValue() || pattern.data.is_PathTuple() || pattern.data.is_PathNamed());
+                                    context.possibleEquateIvar(sp, infer->index, possibleType, Context::PossibleTypeSource::UnsizeTo, isIrrefutable || determinesUnknownScrutinee, 0, !isIrrefutable);
                                 }
                             } else {
                             }
@@ -5362,7 +5509,7 @@ Context::IVarPossible* Context::getPossibleIvarSink(unsigned index) {
     return &possibleIvarVals[index];
 }
 
-void Context::possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRType* rawT, PossibleTypeSource src, bool selectable, unsigned alternativeGroup) {
+void Context::possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRType* rawT, PossibleTypeSource src, bool selectable, unsigned alternativeGroup, bool patternConstraint) {
     const auto& t = this->ivars.getType(rawT);
     DEBUG(ivarIndex << StringView(" ") << src << StringView(" ") << rawT << StringView(" ") << t);
     auto* entp = getIvarPossibilities(sp, ivarIndex);
@@ -5373,16 +5520,16 @@ void Context::possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const H
 
     switch (src) {
         case PossibleTypeSource::UnsizeTo:
-            ent.typesCoerceTo.push_back(IVarPossible::CoerceTy(t, false, selectable, alternativeGroup));
+            ent.typesCoerceTo.push_back(IVarPossible::CoerceTy(t, false, selectable, alternativeGroup, patternConstraint));
             break;
         case PossibleTypeSource::CoerceTo:
-            ent.typesCoerceTo.push_back(IVarPossible::CoerceTy(t, true, selectable, alternativeGroup));
+            ent.typesCoerceTo.push_back(IVarPossible::CoerceTy(t, true, selectable, alternativeGroup, patternConstraint));
             break;
         case PossibleTypeSource::UnsizeFrom:
-            ent.typesCoerceFrom.push_back(IVarPossible::CoerceTy(t, false, selectable, alternativeGroup));
+            ent.typesCoerceFrom.push_back(IVarPossible::CoerceTy(t, false, selectable, alternativeGroup, patternConstraint));
             break;
         case PossibleTypeSource::CoerceFrom:
-            ent.typesCoerceFrom.push_back(IVarPossible::CoerceTy(t, true, selectable, alternativeGroup));
+            ent.typesCoerceFrom.push_back(IVarPossible::CoerceTy(t, true, selectable, alternativeGroup, patternConstraint));
             break;
     }
 
@@ -5842,10 +5989,35 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             }
         }
 
+        /* Final inference effects must precede fallback revisits: a fallback
+         * revisit may diagnose an ambiguity which an identity commit (or an
+         * exact joint effect) is specifically responsible for resolving. */
         if (!context.ivars.peekChanged()) {
-            DEBUG(StringView("--- Jointly unifiable IVar possibilities"));
+            DEBUG(StringView("--- Final IVar effects"));
             for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], true)) {
+                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], true, false)) {
+                    break;
+                }
+            }
+        }
+
+        if (!context.ivars.peekChanged()) {
+            DEBUG(StringView("--- Final IVar identity commits"));
+            for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
+                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], true, true)) {
+                    break;
+                }
+            }
+        }
+
+        /* An unsizing source is not an equality endpoint until ordinary
+         * identity propagation has stabilised: an expected outer pointer can
+         * still determine its pointee through a pending dereference/cast.
+         * Only then may the no-op unsizing case use the same identity rule. */
+        if (!context.ivars.peekChanged()) {
+            DEBUG(StringView("--- Final IVar unsizing identity commits"));
+            for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
+                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], true, true, true)) {
                     break;
                 }
             }
@@ -5883,18 +6055,13 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             }
         }
 
-        if (!context.ivars.peekChanged()) {
-            bool appliedDefault = false;
-            for (unsigned int i = 0; i < context.ivars.ivars.size(); i++) {
-                if (!numericDefaultMustWait(context, i)) {
-                    appliedDefault |= context.ivars.applyDefault(i);
-                }
-            }
-            if (appliedDefault) {
-                context.ivars.markChange();
-            }
+        if (!context.ivars.peekChanged() && context.linkCoerce.empty()) {
+            context.fallbackUnresolvedRpitType(rootPtr->span());
         }
 
+        /* Generic and numeric defaults are language fallbacks, so they run
+         * only after every final coercion effect and identity propagation has
+         * had a chance to constrain the ivar through pending obligations. */
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("- Applying generic defaults"));
             for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
@@ -5913,8 +6080,16 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             }
         }
 
-        if (!context.ivars.peekChanged() && context.linkCoerce.empty()) {
-            context.fallbackUnresolvedRpitType(rootPtr->span());
+        if (!context.ivars.peekChanged()) {
+            bool appliedDefault = false;
+            for (unsigned int i = 0; i < context.ivars.ivars.size(); i++) {
+                if (!numericDefaultMustWait(context, i)) {
+                    appliedDefault |= context.ivars.applyDefault(i);
+                }
+            }
+            if (appliedDefault) {
+                context.ivars.markChange();
+            }
         }
 
         if (!context.ivars.peekChanged()) {
@@ -6476,10 +6651,11 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
     context.equateTypesCoerce(sp, newResTy, rootPtr);
 }
 
-Context::IVarPossible::CoerceTy::CoerceTy(const HIRType* ty, bool isCoerce, bool selectable, unsigned alternativeGroup)
+Context::IVarPossible::CoerceTy::CoerceTy(const HIRType* ty, bool isCoerce, bool selectable, unsigned alternativeGroup, bool patternConstraint)
     : op(isCoerce ? Coercion : Unsizing)
     , ty(ty)
     , selectable(selectable)
+    , patternConstraint(patternConstraint)
     , alternativeGroup(alternativeGroup)
 {
 }
@@ -6523,6 +6699,7 @@ void Context::IVarPossible::mergeFrom(const IVarPossible& source) {
                 destination.push_back(value);
             } else {
                 found->selectable |= value.selectable;
+                found->patternConstraint &= value.patternConstraint;
             }
         }
     };
@@ -9166,32 +9343,12 @@ auto PossibleType::remove() -> void {
     ty = nullptr;
 }
 
-auto PossibleType::ord(const PossibleType& o) const -> Ordering {
-    if (state != o.state) {
-        return ::ord(static_cast<int>(state), static_cast<int>(o.state));
-    }
-    if (hasType() && ty != o.ty) {
-        return ::ord(ty, o.ty);
-    }
-    if (cls != o.cls) {
-        return ::ord(static_cast<int>(cls), static_cast<int>(o.cls));
-    }
-    return OrdEqual;
-}
-
-auto PossibleType::operator<(const PossibleType& o) const -> bool {
-    return ord(o) == OrdLess;
-}
-
 auto PossibleType::operator==(const PossibleType& o) const -> bool {
-    return ord(o) == OrdEqual;
+    return state == o.state && (!hasType() || ty == o.ty) && cls == o.cls;
 }
 
 auto PossibleType::fmt(ZeroCopyOutput& os) const -> ZeroCopyOutput& {
     switch (cls) {
-        case Equal:
-            os << StringView("==");
-            break;
         case CoerceTo:
             os << StringView("C-");
             break;
@@ -9220,251 +9377,63 @@ auto PossibleType::isSource() const -> bool {
     return cls == CoerceFrom || cls == UnsizeFrom;
 }
 
-auto PossibleType::isDest() const -> bool {
-    return cls == CoerceTo || cls == UnsizeTo;
-}
-
-auto PossibleType::isSourceS(const PossibleType& self) -> bool {
-    return self.isSource();
-}
-
 auto PossibleType::isCoerce() const -> bool {
     return cls == CoerceTo || cls == CoerceFrom;
 }
 
-auto PossibleType::isUnsize() const -> bool {
-    return cls == UnsizeTo || cls == UnsizeFrom;
+namespace {
+auto pointerCoercionShape(const HIRType* type) -> std::optional<PointerCoercionShape> {
+    if (const auto* borrow = type->opt_Borrow()) {
+        switch (borrow->type) {
+            case HIRBorrowType::Unique:
+                return PointerCoercionShape{PointerCoercionForm::MutableBorrow, borrow->inner};
+            case HIRBorrowType::Shared:
+                return PointerCoercionShape{PointerCoercionForm::SharedBorrow, borrow->inner};
+            case HIRBorrowType::Owned:
+                return std::nullopt;
+        }
+    }
+    if (const auto* pointer = type->opt_Pointer()) {
+        switch (pointer->type) {
+            case HIRBorrowType::Unique:
+                return PointerCoercionShape{PointerCoercionForm::MutableRaw, pointer->inner};
+            case HIRBorrowType::Shared:
+                return PointerCoercionShape{PointerCoercionForm::ConstRaw, pointer->inner};
+            case HIRBorrowType::Owned:
+                return std::nullopt;
+        }
+    }
+    return std::nullopt;
 }
 
-auto PossibleType::isCoerceS(const PossibleType& self) -> bool {
-    return self.isCoerce();
-}
-
-auto PossibleType::isUnsizeS(const PossibleType& self) -> bool {
-    return self.isUnsize();
-}
-
-auto TypeRestrictiveOrdering::matchAndExtractPtrTy(const HIRType* ptrTpl, const HIRType* ty) -> const HIRType* {
-    if (ty->tag() != ptrTpl->tag()) {
-        return nullptr;
-    }
-    switch ((*ty).tag()) {
-        case HIRType::TAG_Borrow: {
-            auto& te = (*ty).as_Borrow();
-            if (te.type == ptrTpl->as_Borrow().type) {
-                return te.inner;
-            }
-            break;
+auto pointerChainLub(PointerCoercionForm left, PointerCoercionForm right) -> std::optional<PointerCoercionForm> {
+    const auto canCoerceTo = [](PointerCoercionForm source, PointerCoercionForm destination) {
+        if (source == destination) {
+            return true;
         }
-        case HIRType::TAG_Pointer: {
-            auto& te = (*ty).as_Pointer();
-            if (te.type == ptrTpl->as_Pointer().type) {
-                return te.inner;
-            }
-            break;
+        switch (source) {
+            case PointerCoercionForm::MutableBorrow:
+                return destination == PointerCoercionForm::SharedBorrow
+                    || destination == PointerCoercionForm::MutableRaw
+                    || destination == PointerCoercionForm::ConstRaw;
+            case PointerCoercionForm::SharedBorrow:
+                return destination == PointerCoercionForm::ConstRaw;
+            case PointerCoercionForm::MutableRaw:
+                return destination == PointerCoercionForm::ConstRaw;
+            case PointerCoercionForm::ConstRaw:
+                return false;
         }
-        case HIRType::TAG_Path: {
-            auto& te = (*ty).as_Path();
-            if (te.binding == ptrTpl->as_Path().binding) {
-                // TODO: Get inner
-            }
-            break;
-        } break;
-        default:
-            break;
-    }
-    return nullptr;
-}
-
-auto TypeRestrictiveOrdering::getOrderingInfer(const Span& sp, const HIRType* r) -> Ordering {
-    switch ((*r).tag()) {
-        default:
-            return OrdLess;
-        case HIRType::TAG_Path: {
-            auto& te = (*r).as_Path();
-            if (te.binding.is_Opaque()) {
-                return OrdLess;
-            }
-            if (te.binding.is_Unbound()) {
-                return OrdEqual;
-            }
-            // TODO: Check if the type is concrete? (Check an unsizing param if present)
-            return OrdLess;
-        }
-        case HIRType::TAG_Borrow: {
-            auto& _ = (*r).as_Borrow();
-            return OrdEqual;
-        }
-        case HIRType::TAG_Infer: {
-            auto& _ = (*r).as_Infer();
-            return OrdEqual;
-        }
-        case HIRType::TAG_Pointer: {
-            auto& _ = (*r).as_Pointer();
-            return OrdEqual;
-        }
-    }
-    UNREACHABLE();
-}
-
-auto TypeRestrictiveOrdering::getOrderingTy(const Span& sp, const Context& context, const HIRType* l, const HIRType* r, bool& outUnordered) -> Ordering {
-    if (l == r) {
-        return OrdEqual;
-    }
-    if (l->is_Infer()) {
-        return getOrderingInfer(sp, r);
-    }
-    if (r->is_Infer()) {
-        switch (getOrderingInfer(sp, l)) {
-            case OrdLess:
-                return OrdGreater;
-            case OrdEqual:
-                return OrdEqual;
-            case OrdGreater:
-                return OrdLess;
-        }
-    }
-    if (l->is_Path()) {
-        const auto& teL = l->as_Path();
-        switch ((*r).tag()) {
-            default:
-                if (teL.binding.is_Unbound()) {
-                    return OrdLess;
-                }
-                outUnordered = true;
-                return OrdEqual;
-            //TODO(sp, l << " with " << r << " - LHS is Path, RHS is " << r->tag_str());
-            case HIRType::TAG_Slice: {
-                return OrdGreater;
-            }
-            case HIRType::TAG_Path: {
-                auto& teR = (*r).as_Path();
-                if (teL.binding.is_Unbound() && teR.binding.is_Unbound()) {
-                    return OrdEqual;
-                }
-                if (teL.binding.is_Unbound()) {
-                    return OrdLess;
-                }
-                if (teR.binding.is_Unbound()) {
-                    return OrdGreater;
-                } else if (teR.binding.is_Opaque()) {
-                    TODO(sp, l << StringView(" with ") << r << StringView(" - LHS is Path, RHS is opaque type"));
-                } else if ((teR.binding.is_Struct() && (teR.binding.as_Struct()->structMarkings.canUnsize))) {
-                    TODO(sp, l << StringView(" with ") << r << StringView(" - LHS is Path, RHS is unsize-capable struct"));
-                } else {
-                    return OrdEqual;
-                }
-                break;
-            }
-        }
-    }
-    if (r->is_Path()) {
-        switch (getOrderingTy(sp, context, r, l, outUnordered)) {
-            case OrdLess:
-                return OrdGreater;
-            case OrdEqual:
-                return OrdEqual;
-            case OrdGreater:
-                return OrdLess;
-        }
-    }
-
-    if (l->tag() == r->tag()) {
-        return OrdEqual;
-    } else {
-        if (l->is_Slice() && r->is_Array()) {
-            return OrdGreater;
-        }
-        if (l->is_Array() && r->is_Slice()) {
-            return OrdLess;
-        }
-
-        if (l->is_Borrow() && !r->is_Borrow()) {
-            return OrdGreater;
-        }
-        if (r->is_Borrow() && !l->is_Borrow()) {
-            return OrdLess;
-        }
-
-        outUnordered = true;
-        return OrdEqual;
-        //TODO(sp, StringView("Compare ") << l << " and " << r);
-    }
-}
-
-auto TypeRestrictiveOrdering::getOrderingPtr(const Span& sp, const Context& context, const HIRType* l, const HIRType* r, bool& outUnordered, bool deep) -> Ordering {
-    Ordering cmp;
-    TRACE_FUNCTION_FR(l << StringView(" , ") << r, cmp);
-    static const HIRType::Tag tagOrdering[] = {
-        HIRType::TAG_Pointer,
-        HIRType::TAG_Borrow,
-        HIRType::TAG_Path,
-        HIRType::TAG_Generic,
-        HIRType::TAG_ErasedType,
-        HIRType::TAG_Function,
-        HIRType::TAG_NamedFunction,
-        HIRType::TAG_NodeType,
+        UNREACHABLE();
     };
-    static const HIRType::Tag* tagOrderingEnd = &tagOrdering[sizeof(tagOrdering) / sizeof(tagOrdering[0])];
-    if (l->tag() != r->tag()) {
-        auto pL = std::find(tagOrdering, tagOrderingEnd, l->tag());
-        auto pR = std::find(tagOrdering, tagOrderingEnd, r->tag());
-        if (pL == tagOrderingEnd) {
-            TODO(sp, StringView("Type ") << l << StringView(" not in ordering list"));
-        }
-        if (pR == tagOrderingEnd) {
-            TODO(sp, StringView("Type ") << r << StringView(" not in ordering list"));
-        }
-        cmp = ord(static_cast<int>(pL - pR), 0);
-    } else {
-        if (l == r) {
-            return OrdEqual;
-        }
-        switch ((*l).tag()) {
-            default:
-                BUG(sp, StringView("Unexpected type class ") << l << StringView(" in get_ordering_ty (") << r << StringView(")"));
-                break;
-            case HIRType::TAG_Generic: {
-                cmp = OrdEqual;
-                break;
-            }
-            case HIRType::TAG_NamedFunction: {
-                cmp = OrdEqual;
-                break;
-            }
-            case HIRType::TAG_Path: {
-                // TODO: Prevent this rule from applying?
-                return OrdEqual;
-            }
-            case HIRType::TAG_NodeType: {
-                outUnordered = true;
-                return OrdEqual;
-            }
-            case HIRType::TAG_ErasedType: {
-                outUnordered = true;
-                return OrdEqual;
-            }
-            case HIRType::TAG_Borrow: {
-                auto& teL = (*l).as_Borrow();
-                const auto& teR = r->as_Borrow();
-                cmp = ord((int)teL.type, (int)teR.type);
-                if (cmp == OrdEqual && deep) {
-                    cmp = getOrderingTy(sp, context, context.ivars.getType(teL.inner), context.ivars.getType(teR.inner), outUnordered);
-                }
-                break;
-            }
-            case HIRType::TAG_Pointer: {
-                auto& teL = (*l).as_Pointer();
-                const auto& teR = r->as_Pointer();
-                cmp = ord((int)teR.type, (int)teL.type);
-                if (cmp == OrdEqual && deep) {
-                    cmp = getOrderingTy(sp, context, context.ivars.getType(teL.inner), context.ivars.getType(teR.inner), outUnordered);
-                }
-                break;
-            }
-        }
+    if (canCoerceTo(left, right)) {
+        return right;
     }
-    return cmp;
+    if (canCoerceTo(right, left)) {
+        return left;
+    }
+    return std::nullopt;
+}
+
 }
 
 ExprVisitorTagStaleIvars::ExprVisitorTagStaleIvars(HIRTypeInterner& types)

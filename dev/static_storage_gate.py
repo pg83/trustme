@@ -50,9 +50,6 @@ ALLOWED_IMMUTABLE = frozenset((
     ("synext_macro.cpp.o",
      "_ZZN12_GLOBAL__N_120canonicalX86RegisterERKNSt3__112basic_stringIcNS0_"
      "11char_traitsIcEENS0_9allocatorIcEEEEbE7aliases", "d"),
-    ("hir_typeck_expr_cs.cpp.o",
-     "_ZZN12_GLOBAL__N_123TypeRestrictiveOrdering14getOrderingPtrERK4SpanRK7"
-     "ContextPK7HIRTypeS9_RbbE11tagOrdering", "r"),
     ("hir_typeck_helpers.cpp.o",
      "_ZZNK15TraitResolution22NextTraitGoalEvaluator20literalClassCanMatchERK"
      "13HIRSimplePathRK13HIRPathParams13HIRInferClassE8intPrims", "r"),
