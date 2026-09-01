@@ -1,67 +1,127 @@
-# SOLVER.md — единый goal solver
+# SOLVER.md — единый goal solver и инференс без эвристик
 
-Typeck пользуется одним goal solver. Потребитель не видит множество viable
-impl'ов, не выбирает кандидата по `HIRCompare::Fuzzy` и не повторяет legacy
-поиск после `Ambiguous`.
+Typeck пользуется одним goal solver. Через границу солвера выходят только
+`Proven`, `Ambiguous`, `NoSolution` и типизированные данные ответа.
+`Ambiguous` — состояние управления, не ответ: потребитель обязан
+defer/stall/retry (данные остаются в obligations и пересматриваются при
+новых фактах); принимать решение — выбирать кандидата, применять impl,
+считать доказанным — можно только по `Proven`/`NoSolution`.
 
-Через границу солвера выходят только `NoSolution`, `Ambiguous` или `Proven` и
-типизированные данные ответа. `Fuzzy` остался во внутренних структурных
-фильтрах; окончательная relation кандидата выполняется `Unifier` под
-snapshot и возвращает `Proven`, `Ambiguous` или `Mismatch`.
-
-## Ответ и граница
+## Граница и ответ
 
 - Все type/const inference variables входной цели канонизируются.
 - `SolverResponse` содержит certainty, type/const slots, trait obligations,
   type/value equalities, выбранный solver impl и агрегат операторной
-  семантики. Индивидуальных ambiguous candidates в ответе нет.
-- Candidate assembly, evaluator и ответ используют нативный `SolverImpl`;
-  legacy-представления `ImplRef` и преобразований в него нет.
-- `Context::applySolverResponse(const SolverResponse&)` — единственная точка
-  применения inference-эффектов к caller table.
-- Coercion/unsize передаются в `TraitGoalQuery` как данные relation. Их
-  проверка, сравнение endpoints и ranking выполняются внутри солвера; callback
-  в `Context` и post-solver retry удалены.
-- Кэш хранит полный неизменяемый canonical response. One-shot response,
-  `slotsBefore` и мутация caller inference на границе удалены.
+  семантики. Индивидуальных ambiguous candidates в ответе нет; при
+  нескольких кандидатах экспортируется только пересечение их общих
+  slots/equalities/obligations (для literal-ivar — ∀-квантор по всем
+  viable-кандидатам).
+- `Context::applySolverResponse(const SolverResponse&)` — единственная
+  точка применения inference-эффектов к caller table.
+- Coercion/unsize передаются в `TraitGoalQuery` как данные relation и
+  решаются внутри солвера; expression typeck только материализует
+  возвращённый `SolverCoercionAdjustment` в HIR-узлы.
+- Кэш хранит полный неизменяемый canonical response.
+- `StaticTraitResolve` — мост в этот же солвер, не второй решатель;
+  `canUnsize` ставит обычную цель `Unsize<dst>` и принимает только
+  `Proven`.
 
-## Проекции и выбор
+## Candidate assembly и relation
 
-- `NormalizesTo(<T as Trait>::Assoc, ?out)` возвращает associated output и все
-  inference-эффекты одним типизированным ответом.
-- Dynamic/static EAT только ставят цель и применяют ответ.
-- Trait impl, ParamEnv, builtin, trait-object и opaque heads проходят общую
-  транзакционную relation. Pending alias relations становятся nested goals.
-- Specialization, associated item source, inherent impl и method selection
-  решаются до выхода из solver/selection слоя.
-- Отдельные EAT-селекторы, recursion state, `definingUse`, `selfSimilarChain`,
-  `noGoalBridge` и consumer fallback удалены.
+- Голова каждого кандидата (trait impl, ParamEnv, builtin, alias-bound,
+  trait-object, opaque, magic) проходит транзакционную унификацию
+  (`relateAssembledHead`/`unifyImplHead`) под snapshot; экспортируемые
+  head equalities доказываются evaluator-ом.
+- Префильтры (HIR-impl-индекс, `probeTypeRelation`/`probeParamRelation`)
+  отклоняют только доказанный `NoSolution` и не влияют на certainty.
+  Structural tri-state сравнений (`compareWithPlaceholders`-класс) в
+  решающих путях нет; `HIRCompare` живёт только в структурном компараторе
+  (`hir_type.cpp`/`hir_path.cpp`) и реализациях `HIRMatchGenerics` с
+  точными исходами.
+- Override assoc-биндинга при неточном совпадении params несёт попарные
+  typed equalities, которые evaluator обязан доказать; effectful-кандидаты
+  не дедуплицируются с другими путями доказательства.
+- Builtin `Sized`/`Copy`/`Clone`/`Unsize`/`CoerceUnsized` — правила
+  evaluator-а: структурные формы порождают вложенные obligations
+  (per-element, DST-хвост, pointee relation), generic-параметры идут
+  обычным ParamEnv-путём. Certainty-only запросы `typeIsSized/Copy/Clone`
+  возвращают `SolverCertainty` и мемоизируются по указателю
+  интернированного типа с инвалидацией по поколениям
+  eatCache/ivars/solverEnv; кэшируются только effect-free не-Ambiguous
+  ответы.
 
-## Потребители
+## Инференс выражений
 
-На solve/apply переведены expression typeck, static resolve, method lookup,
-autoderef и builtin-доказательства, включая `Deref`, `Unsize` и
-`CoerceUnsized`. Static bridge передаёт полный `SolverResponse`; `canUnsize`
-ставит обычную цель `Unsize<dst>` и принимает только `Proven`.
+Из дерева выражений строится ruleset (equate/coerce/assoc), дальше
+фикспойнт. Отложенность — данные, объявленные в типах: `Coercion`-узлы в
+`linkCoerce`, `linkAssoc` + `Associated::stalledOn`, solver deferred
+coercions, `ValuePtr::NotYetKnown`. Исключений-«результатов» нет.
 
-Identity retry, specialisable repeat, операторный legacy probe, trait-driven
-possibilities и ручной выбор единственного ambiguous candidate удалены.
-Поздний output diverging closure передаётся явной obligation, без мутации HIR
-через `const_cast`.
+Финализация (`finaliseIvarCoercions`) применяет правила над view из живых
+obligations (`IvarCoercionIndex`, перевычисляется из `Coercion`-узлов
+через `evaluateCoercionGoal`); параллельного хранилища кандидатов нет:
 
-Низкоуровневый `HIRTraitImplCallback` в `HIRCrate` только перечисляет HIR
-declarations для candidate assembly. Он не является границей solver API, не
-несёт `HIRCompare` и не выбирает ответ.
+- совместная унификация: если все оставшиеся кандидаты попарно
+  унифицируемы транзакционным probe (named fn items — только при точном
+  равенстве), все они реально унифицируются между собой и с ivar;
+- identity-commit: несвязанная коэрция берёт тип источника — только в
+  финальной фазе, либо раньше при identity-свидетеле (endpoint по обе
+  стороны коэрции);
+- pointer-LUB — явная решётка форм `&mut T ≤ &T ≤ *const T`,
+  `&mut T ≤ *mut T ≤ *const T`; несравнимые формы = ambiguity; pointee —
+  единственный минимальный общий член Deref/unsize-цепочек,
+  неединственность = ambiguity;
+- два и более fn-item источника — fn-pointer LUB;
+- `!` — дно решётки коэрций: не typing hint и не identity/equality
+  endpoint.
+
+Ранжирования, «взять первого», «наименее рестриктивного» не существует.
+
+## Фолбэки
+
+Только явные языковые правила, в самом конце, когда obligations больше
+ничего не дадут:
+
+- незакреплённые literal-ivar: int → `i32`, float → `f64`
+  (`applyDefault`, откладывается `numericDefaultMustWait`);
+- pre-2024 never-fallback `!` → `()` — настоящая type-only коэрция;
+- объявленные generic defaults — применяются только при единогласии всех
+  дефолтов класса эквивалентности; разногласие остаётся ambiguity;
+- RPIT defaulting.
+
+Остаточная неоднозначность после фолбэков — ошибка компиляции с
+диагностикой, не выбор.
+
+## Инварианты
+
+- Tri-state/fuzzy результат не превращается в решение ни под каким именем;
+  эвристика, перенесённая или переименованная, — нарушение.
+- Префильтр отклоняет только доказанное и не влияет на certainty.
+- `Ambiguous` + `impl` в ответе не применяется как выбранный: потребители
+  делают defer/stall/retry (`NotYetKnown`, retry autoderef/inherent,
+  `CoerceResult::Unknown`).
+- Классификация (operator summary и т.п.) требует `Proven`; fuzzy
+  деградирует только в консервативную сторону.
+- Новые «default»-механики допустимы только как объявленные языковые
+  правила с единогласием/единственностью и применением последними.
 
 ## Gates
 
 - C++ UT компиляцией фиксирует точную форму `SolverResponse` и
   `TraitGoalQuery`, а также единственный overload
-  `Context::applySolverResponse`. Возврат candidate export или старого apply
-  API ломает сборку, без парсинга исходников тестом.
-- Семантические Rust-регрессии покрывают ambiguity, ParamEnv, projections,
-  coercion/unsize, operators, inherent methods и static consumers.
-- Итоговый полный Nix `unit` на рабочем дереве зелёный.
+  `Context::applySolverResponse`.
+- Семантические Rust-регрессии: ambiguity, ParamEnv, projections,
+  coercion/unsize, operators, inherent methods, static consumers,
+  literal/never fallback.
+- Static gate: 0 статических объектов / 0 writable bytes.
+- Полный Nix `unit` зелёный.
 
-История миграции, аудит преждевременного «готово» и закрытие каждого найденного
-моста находятся в `SOLVER_EX.md`.
+## Перф-методика
+
+Замер компиляции libcore: rustc на `library/core/src/lib.rs` из
+`.build/tst/rust-src.tar` с `-O --crate-name core --crate-type rlib
+--crate-tag 0_0_0 -C emit-cpp-only -C emit-link-manifest=… --edition
+2024`, внутри `nix develop .#clang`, `/usr/bin/time -f 'wall=%e
+maxrss=%M'`. Машина бимодальна — сравнивать только интерливленными
+парами против эталонного бинаря. Уровень: 40.8–41.3 с быстрого режима,
+допуск +5%.
