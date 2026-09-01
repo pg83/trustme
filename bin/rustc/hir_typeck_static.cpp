@@ -935,8 +935,8 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRType* type) const 
 
     HIRPathParams params;
     bool proven = false;
-    this->findImpl(sp, langClone(), &params, type, [&](SolverResponse response) {
-        proven = response.certainty == SolverCertainty::Proven;
+    this->findImpl(sp, langClone(), &params, type, [&](SolverSelection) {
+        proven = true;
         return proven;
     });
     cloneCache.insert(std::make_pair(type, proven));
@@ -946,8 +946,8 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRType* type) const 
 bool StaticTraitResolve::typeIsSized(const Span& sp, const HIRType* type) const {
     HIRPathParams params;
     bool proven = false;
-    this->findImpl(sp, langSized(), &params, type, [&](SolverResponse response) {
-        proven = response.certainty == SolverCertainty::Proven;
+    this->findImpl(sp, langSized(), &params, type, [&](SolverSelection) {
+        proven = true;
         return proven;
     });
     return proven;
@@ -1080,8 +1080,8 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRType* dstTy, const H
     TRACE_FUNCTION_F(dstTy << StringView(" <- ") << srcTy);
     ASSERT_BUG(sp, !dstTy->is_Infer(), StringView("_ seen after inferrence - ") << dstTy);
     ASSERT_BUG(sp, !srcTy->is_Infer(), StringView("_ seen after inferrence - ") << srcTy);
-    return findImpl(sp, langUnsize(), HIRPathParams(dstTy), srcTy, [](SolverResponse response) {
-        return response.certainty == SolverCertainty::Proven;
+    return findImpl(sp, langUnsize(), HIRPathParams(dstTy), srcTy, [](SolverSelection) {
+        return true;
     });
 }
 
@@ -1451,8 +1451,8 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) co
             }
 
             auto pp = HIRPathParams();
-            bool hasDirectDrop = this->findImpl(sp, langDrop(), &pp, ty, [&](SolverResponse response) {
-                return response.certainty == SolverCertainty::Proven;
+            bool hasDirectDrop = this->findImpl(sp, langDrop(), &pp, ty, [&](SolverSelection) {
+                return true;
             });
             if (hasDirectDrop) {
                 dropCache.insert(std::make_pair(ty, true));
@@ -1596,8 +1596,8 @@ const HIRType* StaticTraitResolve::findAsyncDrop(const Span& sp, const HIRType* 
     }
 
     bool found = false;
-    findImpl(sp, trait, HIRPathParams{}, ty, [&](SolverResponse response) {
-        if (response.certainty == SolverCertainty::Proven && response.impl && response.impl->traitImpl) {
+    findImpl(sp, trait, HIRPathParams{}, ty, [&](SolverSelection selection) {
+        if (selection.impl.traitImpl) {
             found = true;
             return true;
         }
@@ -1911,24 +1911,24 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 bool selectedIsSpecialisable = false;
                 bool hasBoundedImpl = false;
                 bool hasAmbiguousImpl = false;
-                SolverResponse selectedResponse;
+                const SolverImpl* selectedImpl = nullptr;
                 ValuePtr rv;
                 bool lookupNeedsResolution = specializationLookupNeedsResolution(pe.type, pe.trait.params);
-                auto visitImpl = [&](SolverResponse response) -> bool {
-                    if (!response.impl) {
-                        hasAmbiguousImpl |= response.certainty == SolverCertainty::Ambiguous;
+                auto visitImpl = [&](SolverMayApply probe) -> bool {
+                    if (!probe.candidate) {
+                        hasAmbiguousImpl |= probe.effects.certainty == SolverCertainty::Ambiguous;
                         return false;
                     }
-                    DEBUG(response.impl->traitPath << StringView(" for ") << response.impl->type);
-                    if (!response.impl->traitImpl) {
+                    DEBUG(probe.candidate->traitPath << StringView(" for ") << probe.candidate->type);
+                    if (!probe.candidate->traitImpl) {
                         hasBoundedImpl = true;
                         return false;
                     }
-                    if (response.certainty != SolverCertainty::Proven && lookupNeedsResolution) {
+                    if (probe.effects.certainty != SolverCertainty::Proven && lookupNeedsResolution) {
                         hasAmbiguousImpl = true;
                         return false;
                     }
-                    const HIRTraitImpl& ti = *response.impl->traitImpl;
+                    const HIRTraitImpl& ti = *probe.candidate->traitImpl;
                     bool isSpec = false;
 
                     ValuePtr thisRv;
@@ -1959,7 +1959,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                         return false;
                     }
                     selectedIsSpecialisable = isSpec;
-                    selectedResponse = std::move(response);
+                    selectedImpl = probe.candidate;
                     rv = std::move(thisRv);
                     return false;
                 };
@@ -1968,9 +1968,9 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     ASSERT_BUG(sp, crate.pool, StringView("next-solver requires the crate object pool"));
                     nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
                 }
-                SolverResponseCb<decltype(visitImpl)> callback(visitImpl);
+                SolverMayApplyCb<decltype(visitImpl)> callback(visitImpl);
                 nextSolver->findValue(sp, implGenerics_, itemGenerics_, pe.trait.path, pe.trait.params, pe.type, pe.item.c_str(), callback);
-                if (!selectedResponse.impl) {
+                if (!selectedImpl) {
                     if (hasBoundedImpl || hasAmbiguousImpl) {
                         DEBUG(StringView("Trait item depends on an in-scope bound or fuzzy impl"));
                         return ValuePtr::make_NotYetKnown({});
@@ -2011,8 +2011,8 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     }
                 }
 
-                ASSERT_BUG(sp, selectedResponse.impl && selectedResponse.impl->traitImpl, StringView("Selected trait value has no concrete impl: ") << p);
-                const auto& selected = *selectedResponse.impl;
+                ASSERT_BUG(sp, selectedImpl->traitImpl, StringView("Selected trait value has no concrete impl: ") << p);
+                const auto& selected = *selectedImpl;
                 const auto& impl = *selected.traitImpl;
                 if (outImplParamsDef) {
                     *outImplParamsDef = &impl.params;
@@ -2192,19 +2192,12 @@ auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGen
         params = &inferredParams;
     }
 
-    return resolve_.solveTraitGoal(sp, trait, *params, type, [&](SolverResponse response) {
-        return callback.visit(std::move(response));
-    }, {.ambiguity = SolverAmbiguityPolicy::Report});
+    return resolve_.solveTraitGoalCb(sp, trait, *params, type, callback, {.ambiguity = SolverAmbiguityPolicy::Report});
 }
 
 auto StaticTraitResolve::NextSolverBridge::findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const char* valueName, SolverResponseCallback& callback) -> bool {
     resolve_.setGenericContext(implGenerics, itemGenerics);
-    return resolve_.solveTraitGoal(sp, trait, params, type, [&](SolverResponse response) {
-        if (!response.impl) {
-            return false;
-        }
-        return callback.visit(std::move(response));
-    }, {.valueName = valueName});
+    return resolve_.solveTraitGoalCb(sp, trait, params, type, callback, {.valueName = valueName});
 }
 
 auto StaticTraitResolve::NextSolverBridge::normalize(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* projection) -> const HIRType* {

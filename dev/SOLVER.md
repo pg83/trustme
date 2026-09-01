@@ -10,9 +10,13 @@ defer/stall/retry (данные остаются в obligations и пересм�
 ## Граница и ответ
 
 - Все type/const inference variables входной цели канонизируются.
-- `SolverResponse` содержит certainty, type/const slots, trait obligations,
-  type/value equalities, выбранный solver impl и агрегат операторной
-  семантики. Индивидуальных ambiguous candidates в ответе нет; при
+- Ответ трёхчастный, misuse непредставим в типах: `SolverResponse` —
+  только effects (certainty, type/const slots, obligations, type/value
+  equalities, операторный агрегат), поля impl у него нет;
+  `SolverSelection{effects, const SolverImpl& impl}` — доказанный и
+  выбранный impl, существует только при `Proven`; `SolverMayApply` —
+  явный probe «мог бы примениться», кандидат опционален и выбором не
+  является. Индивидуальных ambiguous candidates в ответе нет; при
   нескольких кандидатах экспортируется только пересечение их общих
   slots/equalities/obligations (для literal-ivar — ∀-квантор по всем
   viable-кандидатам).
@@ -115,6 +119,15 @@ obligations (`IvarCoercionIndex`, перевычисляется из `Coercion`
   literal/never fallback.
 - Static gate: 0 статических объектов / 0 writable bytes.
 - Полный Nix `unit` зелёный.
+
+## Долг
+
+- П.5: ручной method-selection контур (`hir_typeck_helpers.cpp` ~:6600+):
+  собственное перечисление inherent/ParamEnv/trait-object/in-scope,
+  `traitContainsMethod` по supertraits, своя канонизация и ранжирование
+  current-trait/supertraits, custom receiver через `HIRMatchGenerics` с
+  TODO. Свернуть в solver/selection слой; приоритеты — только как
+  документированные правила языка. ОТКРЫТ.
 
 ## Перф-методика
 

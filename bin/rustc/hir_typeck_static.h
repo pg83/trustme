@@ -120,13 +120,25 @@ public:
 
     template <typename F>
     bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRType* type, F f) const {
-        SolverResponseCb<F> cb(f);
+        SolverSelectionCb<F> cb(f);
         return findImplCb(sp, traitPath, traitParams, type, cb);
     }
 
     template <typename F>
     bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRType* type, F f) const {
-        SolverResponseCb<F> cb(f);
+        SolverSelectionCb<F> cb(f);
+        return findImplCb(sp, traitPath, traitParams, type, cb);
+    }
+
+    template <typename F>
+    bool probeImplMayApply(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRType* type, F f) const {
+        SolverMayApplyCb<F> cb(f);
+        return findImplCb(sp, traitPath, traitParams, type, cb);
+    }
+
+    template <typename F>
+    bool probeImplMayApply(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRType* type, F f) const {
+        SolverMayApplyCb<F> cb(f);
         return findImplCb(sp, traitPath, traitParams, type, cb);
     }
 

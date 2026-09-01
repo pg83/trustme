@@ -86,8 +86,17 @@ struct SolverResponse {
     ThinVector<SolverObligation> obligations;
     ThinVector<SolverTypeEquality> equalities;
     ThinVector<SolverValueEquality> valueEqualities;
-    const SolverImpl* impl = nullptr;
     SolverOperatorSummary operatorSummary;
+};
+
+struct SolverSelection {
+    SolverResponse effects;
+    const SolverImpl& impl;
+};
+
+struct SolverMayApply {
+    SolverResponse effects;
+    const SolverImpl* candidate = nullptr;
 };
 
 enum class SolverCoercionRelation : u8 {
@@ -143,6 +152,7 @@ struct NextSolverCrateCache {
         SolverCertainty certainty = SolverCertainty::NoSolution;
         bool hasResponse = false;
         const SolverResponse* response = nullptr;
+        const SolverImpl* applicable = nullptr;
     };
 
     stl::ObjPool::Ref pool;
@@ -550,6 +560,8 @@ struct AssembledImplCallback {
 
 struct SolverResponseCallback {
     virtual bool visit(SolverResponse response) = 0;
+    virtual bool visit(SolverSelection selection) = 0;
+    virtual bool visit(SolverMayApply probe) = 0;
 };
 
 struct NormalizesToCallback {
@@ -567,6 +579,58 @@ struct SolverResponseCb final: SolverResponseCallback {
 
     bool visit(SolverResponse response) override {
         return f(std::move(response));
+    }
+
+    bool visit(SolverSelection selection) override {
+        return f(std::move(selection.effects));
+    }
+
+    bool visit(SolverMayApply probe) override {
+        return f(std::move(probe.effects));
+    }
+};
+
+template <typename F>
+struct SolverSelectionCb final: SolverResponseCallback {
+    F f;
+
+    explicit SolverSelectionCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(SolverResponse) override {
+        return false;
+    }
+
+    bool visit(SolverSelection selection) override {
+        return f(std::move(selection));
+    }
+
+    bool visit(SolverMayApply) override {
+        return false;
+    }
+};
+
+template <typename F>
+struct SolverMayApplyCb final: SolverResponseCallback {
+    F f;
+
+    explicit SolverMayApplyCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(SolverResponse response) override {
+        return f(SolverMayApply{std::move(response), nullptr});
+    }
+
+    bool visit(SolverSelection selection) override {
+        return f(SolverMayApply{std::move(selection.effects), &selection.impl});
+    }
+
+    bool visit(SolverMayApply probe) override {
+        return f(std::move(probe));
     }
 };
 
@@ -729,6 +793,18 @@ public:
     template <typename F>
     bool solveTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, F f, const TraitGoalQuery& query = {}) const {
         SolverResponseCb<F> cb(f);
+        return solveTraitGoalCb(sp, trait, params, type, cb, query);
+    }
+
+    template <typename F>
+    bool selectTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, F f, const TraitGoalQuery& query = {}) const {
+        SolverSelectionCb<F> cb(f);
+        return solveTraitGoalCb(sp, trait, params, type, cb, query);
+    }
+
+    template <typename F>
+    bool probeTraitGoalMayApply(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, F f, const TraitGoalQuery& query = {}) const {
+        SolverMayApplyCb<F> cb(f);
         return solveTraitGoalCb(sp, trait, params, type, cb, query);
     }
 

@@ -222,8 +222,8 @@ auto TypecheckVisitor::pushModTraits(const HIRModule& mod) -> ModTraitsGuard {
 }
 
 auto TypecheckVisitor::traitBoundSatisfied(const Span& sp, const StaticTraitResolve& resolve, const HIRType* type, const HIRTraitPath& trait) -> bool {
-    return resolve.findImpl(sp, trait.path.path, &trait.path.params, type, [](SolverResponse response) {
-        return response.certainty == SolverCertainty::Proven;
+    return resolve.findImpl(sp, trait.path.path, &trait.path.params, type, [](SolverSelection) {
+        return true;
     });
 }
 
@@ -542,8 +542,8 @@ auto TypecheckVisitor::locateInTraitAndSet(const Span& sp, HIRVisitor::PathConte
 auto TypecheckVisitor::setFromImpl(const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd) -> bool {
     auto& e = pd.as_UfcsUnknown();
     const auto& type = e.type;
-    return resolve_.findImpl(Span(), traitPath.path, traitPath.params, type, [&](SolverResponse response) {
-        if (response.certainty == SolverCertainty::NoSolution) {
+    return resolve_.probeImplMayApply(Span(), traitPath.path, traitPath.params, type, [&](SolverMayApply probe) {
+        if (probe.effects.certainty == SolverCertainty::NoSolution) {
             return false;
         }
         pd = getUfcsKnown(mv$(e), makeGenericPath(traitPath.path, trait), trait);

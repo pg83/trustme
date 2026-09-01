@@ -381,8 +381,8 @@ auto AsyncDropPollBuilder::setState(unsigned state) const -> MIRStatement {
 
 auto AsyncDropPollBuilder::hasDropImpl(const HIRType* ty) const -> bool {
     const auto& trait = resolve.langDrop();
-    return !trait.components().empty() && resolve.findImpl(sp, trait, HIRPathParams{}, ty, [](SolverResponse response) {
-        return response.certainty == SolverCertainty::Proven && response.impl && response.impl->traitImpl;
+    return !trait.components().empty() && resolve.findImpl(sp, trait, HIRPathParams{}, ty, [](SolverSelection selection) {
+        return selection.impl.traitImpl;
     });
 }
 

@@ -1328,6 +1328,7 @@ namespace {
         bool sawCurrentOperatorImpl = false;
         bool currentOperatorImplHasBuiltinSignature = false;
         SolverResponse operatorResponse;
+        const SolverImpl* operatorApplicable = nullptr;
         bool hasOperatorResponse = false;
         bool operatorProbeUsesOriginalInputs = true;
         if (v.operatorKind != TypeckPrimitiveOperator::None) {
@@ -1344,11 +1345,13 @@ namespace {
                 .outputParams = &v.atyPp,
                 .currentImpl = context.currentTraitImpl,
             };
-            context.resolve.solveTraitGoal(sp, v.trait, probeParams, v.implTy, [&](SolverResponse response) {
+            context.resolve.probeTraitGoalMayApply(sp, v.trait, probeParams, v.implTy, [&](SolverMayApply probe) {
+                auto& response = probe.effects;
                 hasSemanticOperatorImpl = response.operatorSummary.hasSemanticImpl;
                 sawCurrentOperatorImpl = response.operatorSummary.sawCurrentImpl;
                 currentOperatorImplHasBuiltinSignature = response.operatorSummary.currentImplHasBuiltinSignature;
-                const bool hasImpl = response.impl != nullptr;
+                const bool hasImpl = probe.candidate != nullptr;
+                operatorApplicable = probe.candidate;
                 operatorResponse = std::move(response);
                 hasOperatorResponse = true;
                 return hasImpl;
@@ -1470,18 +1473,21 @@ namespace {
         const auto* excludedCurrentOperatorImpl = currentOperatorUsesLanguagePrimitive() && operatorTypesAreResolved ? context.currentTraitImpl : nullptr;
 
         SolverResponse response;
+        const SolverImpl* responseApplicable = nullptr;
         bool hasResponse = false;
         if (hasOperatorResponse && operatorProbeUsesOriginalInputs && coercionGoals.empty()) {
             response = std::move(operatorResponse);
+            responseApplicable = operatorApplicable;
             hasResponse = true;
         } else {
-            context.resolve.solveTraitGoal(
+            context.resolve.probeTraitGoalMayApply(
                 sp,
                 v.trait,
                 v.params,
                 v.implTy,
-                [&](SolverResponse value) {
-                    response = std::move(value);
+                [&](SolverMayApply probe) {
+                    response = std::move(probe.effects);
+                    responseApplicable = probe.candidate;
                     hasResponse = true;
                     return true;
                 },
@@ -1495,8 +1501,8 @@ namespace {
                 }
             );
         }
-        if (!lateClosureReturn && hasResponse && response.impl) {
-            lateClosureReturn = registerLateClosureOutput(response.impl->getImplType(context.crate.types));
+        if (!lateClosureReturn && hasResponse && responseApplicable) {
+            lateClosureReturn = registerLateClosureOutput(responseApplicable->getImplType(context.crate.types));
             if (lateClosureReturn) {
                 const auto isLateOutputRelation = [&](const HIRType* left, const HIRType* right) {
                     const auto matches = [&](const HIRType* actual, const HIRType* expected) {
@@ -1572,7 +1578,7 @@ namespace {
                 }
             }
             context.applySolverResponse(sp, response);
-            if (!response.impl) {
+            if (!responseApplicable) {
                 return response.certainty == SolverCertainty::Proven ? AssociatedCheckResult::Complete : AssociatedCheckResult::Ambiguous;
             }
             if (response.certainty == SolverCertainty::Ambiguous) {
@@ -5169,13 +5175,10 @@ void Context::selectWellFormed(const Span& sp, const HIRType* type) {
         if (!projection) {
             return false;
         }
-        resolve.solveTraitGoal(sp, projection->trait.path, projection->trait.params, projection->type, [&](SolverResponse response) {
-            if (response.certainty != SolverCertainty::Proven || !response.impl) {
-                return false;
-            }
-            applySolverResponse(sp, response);
-            equateTypes(sp, projection->type, response.impl->getImplType(crate.types));
-            auto responseParams = response.impl->getTraitParams(crate.types);
+        resolve.selectTraitGoal(sp, projection->trait.path, projection->trait.params, projection->type, [&](SolverSelection selection) {
+            applySolverResponse(sp, selection.effects);
+            equateTypes(sp, projection->type, selection.impl.getImplType(crate.types));
+            auto responseParams = selection.impl.getTraitParams(crate.types);
             ASSERT_BUG(sp, projection->trait.params.types.size() == responseParams.types.size(), StringView("WF response type parameter count mismatch"));
             ASSERT_BUG(sp, projection->trait.params.values.size() == responseParams.values.size(), StringView("WF response const parameter count mismatch"));
             for (size_t i = 0; i < responseParams.types.size(); i++) {
@@ -6200,19 +6203,16 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
             HIRPathParams selectedImplParams;
 
             if (!monomorphiseTypeNeeded(e.type) && !monomorphisePathparamsNeeded(e.trait.params) && !context.resolve.typeContainsIvars(e.type) && !context.resolve.paramsContainIvars(e.trait.params)) {
-                context.resolve.solveTraitGoal(sp, e.trait.path, e.trait.params, e.type, [&](SolverResponse response) {
-                    if (response.certainty != SolverCertainty::Proven || !response.impl) {
+                context.resolve.selectTraitGoal(sp, e.trait.path, e.trait.params, e.type, [&](SolverSelection selection) {
+                    if (!selection.impl.traitImpl) {
                         return false;
                     }
-                    if (!response.impl->traitImpl) {
-                        return false;
-                    }
-                    auto method = response.impl->traitImpl->methods.find(e.item);
-                    if (method != response.impl->traitImpl->methods.end() && method->second.data.traitReturnType) {
+                    auto method = selection.impl.traitImpl->methods.find(e.item);
+                    if (method != selection.impl.traitImpl->methods.end() && method->second.data.traitReturnType) {
                         fcnPtr = &method->second.data;
                         cache.fcnParams = &fcnPtr->params;
-                        cache.topParams = &response.impl->traitImpl->params;
-                        selectedImplParams = response.impl->implParams.clone();
+                        cache.topParams = &selection.impl.traitImpl->params;
+                        selectedImplParams = selection.impl.implParams.clone();
                         implParams = &selectedImplParams;
                     }
                     return true;
@@ -6982,17 +6982,17 @@ auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
 
         bool hasResponse = false;
         bool selected = false;
-        this->context.resolve.solveTraitGoal(
+        this->context.resolve.probeTraitGoalMayApply(
             node.span(),
             langIndex,
             traitPp,
             ty,
-            [&](SolverResponse response) {
-            if (!response.impl) {
+            [&](SolverMayApply probe) {
+            if (!probe.candidate) {
                 return false;
             }
             hasResponse = true;
-            context.applySolverResponse(node.span(), response);
+            context.applySolverResponse(node.span(), probe.effects);
             selected = true;
             return true;
         },
@@ -7152,22 +7152,22 @@ auto ExprVisitorRevisit::callAsyncCallable(HIRExprNodeCallValue& node, const HIR
             fcnArgsTup = mv$(tup);
         };
         bool ambiguous = false;
-        const bool found = this->context.resolve.solveTraitGoal(
+        const bool found = this->context.resolve.probeTraitGoalMayApply(
             node.span(),
             candidate.trait,
             traitPp,
             ty,
-            [&](SolverResponse response) {
-            if (!response.impl) {
-                ambiguous |= response.certainty == SolverCertainty::Ambiguous;
+            [&](SolverMayApply probe) {
+            if (!probe.candidate) {
+                ambiguous |= probe.effects.certainty == SolverCertainty::Ambiguous;
                 return false;
             }
-            context.applySolverResponse(node.span(), response);
-            if (response.certainty != SolverCertainty::Proven) {
+            context.applySolverResponse(node.span(), probe.effects);
+            if (probe.effects.certainty != SolverCertainty::Proven) {
                 ambiguous = true;
                 return false;
             }
-            inspectImpl(*response.impl);
+            inspectImpl(*probe.candidate);
             return true;
         },
             {
@@ -7278,21 +7278,21 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
 
                 fcnRet = impl.getType(context.crate.types, "Output", {});
             };
-            this->context.resolve.solveTraitGoal(
+            this->context.resolve.probeTraitGoalMayApply(
                 node.span(),
                 langFnOnce,
                 traitPp,
                 ty,
-                [&](SolverResponse response) {
-                if (!response.impl) {
+                [&](SolverMayApply probe) {
+                if (!probe.candidate) {
                     return false;
                 }
-                context.applySolverResponse(node.span(), response);
-                if (response.certainty != SolverCertainty::Proven) {
+                context.applySolverResponse(node.span(), probe.effects);
+                if (probe.effects.certainty != SolverCertainty::Proven) {
                     ambiguous = true;
                     return false;
                 }
-                inspectImpl(*response.impl);
+                inspectImpl(*probe.candidate);
                 found = true;
                 return true;
             },
@@ -7922,13 +7922,13 @@ auto ExprVisitorApply::visit(HIRExprNodeCallValue& node) -> void {
                 traitPp.types.push_back(context.crate.types.tuple(mv$(argTypes)));
             }
 
-            if (!this->context.resolve.langFn().components().empty() && this->context.resolve.solveTraitGoal(node.span(), this->context.resolve.langFn(), traitPp, ty, [&](SolverResponse response) {
-                return response.certainty == SolverCertainty::Proven && response.impl;
+            if (!this->context.resolve.langFn().components().empty() && this->context.resolve.selectTraitGoal(node.span(), this->context.resolve.langFn(), traitPp, ty, [&](SolverSelection) {
+                return true;
             })) {
                 DEBUG(StringView("-- Using Fn"));
                 node.traitUsed = HIRExprNodeCallValue::TraitUsed::Fn;
-            } else if (!this->context.resolve.langFnMut().components().empty() && this->context.resolve.solveTraitGoal(node.span(), this->context.resolve.langFnMut(), traitPp, ty, [&](SolverResponse response) {
-                return response.certainty == SolverCertainty::Proven && response.impl;
+            } else if (!this->context.resolve.langFnMut().components().empty() && this->context.resolve.selectTraitGoal(node.span(), this->context.resolve.langFnMut(), traitPp, ty, [&](SolverSelection) {
+                return true;
             })) {
                 DEBUG(StringView("-- Using FnMut"));
                 node.traitUsed = HIRExprNodeCallValue::TraitUsed::FnMut;

@@ -756,8 +756,8 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
     if (!impl.params.isGeneric()) {
         bool implAvailable = true;
         if (!impl.params.bounds.empty()) {
-            implAvailable = resolve.findImpl(sp, traitPath, impl.traitArgs, implTy, [&](SolverResponse response) {
-                return response.certainty == SolverCertainty::Proven && response.impl && response.impl->traitImpl == &impl;
+            implAvailable = resolve.findImpl(sp, traitPath, impl.traitArgs, implTy, [&](SolverSelection selection) {
+                return selection.impl.traitImpl == &impl;
             });
         }
         if (!implAvailable) {
@@ -797,12 +797,9 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
                         resolve.expandAssociatedTypesTp(sp, bTpMono);
 
                         DEBUG(StringView("Check ") << bTyMono << StringView(": ") << bTpMono);
-                        rv = resolve.findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](SolverResponse response) {
-                            if (!response.impl) {
-                                return false;
-                            }
+                        rv = resolve.findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](SolverSelection selection) {
                             for (const auto& tyB : bTpMono.typeBounds) {
-                                const auto& ty = response.impl->getType(state.crate.types, tyB.first.c_str(), tyB.second.atyParams);
+                                const auto& ty = selection.impl.getType(state.crate.types, tyB.first.c_str(), tyB.second.atyParams);
                                 DEBUG(StringView("ATY ") << tyB.first << StringView(" ") << ty << StringView(" ?= exp ") << tyB.second.type);
                                 if (ty != tyB.second.type) {
                                     return false;
@@ -1249,16 +1246,17 @@ static EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate
                 DEBUG(StringView("VTable, quick return"));
                 return EntPtr::make_AutoGenerate({});
             }
-            bool foundBound = false;
-            bool foundImpl = false;
-            resolve.findImpl(sp, pe->trait.path, pe->trait.params, pe->type, [&](SolverResponse response) -> bool {
-                if (!response.impl) {
-                    return false;
+            const bool callableTrait = pe->trait.path == crate.getLangItemPathOpt("fn") || pe->trait.path == crate.getLangItemPathOpt("fn_mut") || pe->trait.path == crate.getLangItemPathOpt("fn_once");
+            if (const auto* named = pe->type->opt_NamedFunction(); named && callableTrait) {
+                const auto function = named->decay(crate.types, sp);
+                if (function.abi == ABI_RUST && !function.isUnsafe) {
+                    return EntPtr::make_AutoGenerate({});
                 }
-                DEBUG(StringView("[get_ent_fullpath] Found ") << response.impl->traitPath << StringView(" for ") << response.impl->type);
-                if (response.impl->traitImpl) {
-                    foundImpl = true;
-                } else {
+            }
+            bool foundBound = false;
+            resolve.findImpl(sp, pe->trait.path, pe->trait.params, pe->type, [&](SolverSelection selection) -> bool {
+                DEBUG(StringView("[get_ent_fullpath] Found ") << selection.impl.traitPath << StringView(" for ") << selection.impl.type);
+                if (!selection.impl.traitImpl) {
                     foundBound = true;
                 }
                 return false;

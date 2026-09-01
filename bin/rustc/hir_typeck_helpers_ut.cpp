@@ -7,15 +7,49 @@
 using namespace stl;
 
 namespace {
+    template <typename T>
+    concept HasSolverImpl = requires(T value) {
+        value.impl;
+    };
+
+    template <typename T>
+    concept HasSolverCandidate = requires(T value) {
+        value.candidate;
+    };
+
+    static_assert(!HasSolverImpl<SolverResponse>);
+    static_assert(HasSolverImpl<SolverSelection>);
+    static_assert(!HasSolverImpl<SolverMayApply>);
+    static_assert(!HasSolverCandidate<SolverResponse>);
+    static_assert(!HasSolverCandidate<SolverSelection>);
+    static_assert(HasSolverCandidate<SolverMayApply>);
+
     [[maybe_unused]] void solverResponseApiGate(SolverResponse& response) {
-        auto& [certainty, slots, obligations, equalities, valueEqualities, impl, operatorSummary] = response;
+        auto& [certainty, slots, obligations, equalities, valueEqualities, operatorSummary] = response;
         (void)certainty;
         (void)slots;
         (void)obligations;
         (void)equalities;
         (void)valueEqualities;
-        (void)impl;
         (void)operatorSummary;
+    }
+
+    [[maybe_unused]] void solverSelectionApiGate(SolverSelection& selection) {
+        auto& [effects, impl] = selection;
+        (void)effects;
+        (void)impl;
+    }
+
+    [[maybe_unused]] void solverMayApplyApiGate(SolverMayApply& probe) {
+        auto& [effects, candidate] = probe;
+        (void)effects;
+        (void)candidate;
+    }
+
+    [[maybe_unused]] void solverQueryApiGate(const TraitResolution& resolve, const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type) {
+        resolve.solveTraitGoal(sp, trait, params, type, [](SolverResponse) { return true; });
+        resolve.selectTraitGoal(sp, trait, params, type, [](SolverSelection) { return true; });
+        resolve.probeTraitGoalMayApply(sp, trait, params, type, [](SolverMayApply) { return true; });
     }
 
     [[maybe_unused]] void traitGoalQueryApiGate(TraitGoalQuery& query) {

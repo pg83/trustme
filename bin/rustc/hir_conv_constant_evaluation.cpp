@@ -3016,18 +3016,12 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
             if (trait.isConst) {
                 const HIRTraitImpl* selectedImpl = nullptr;
                 bool hasConstBound = false;
-                resolve.findImpl(state.sp, e->trait.path, e->trait.params, e->type, [&](SolverResponse response) {
-                    if (response.certainty != SolverCertainty::Proven) {
+                resolve.findImpl(state.sp, e->trait.path, e->trait.params, e->type, [&](SolverSelection selection) {
+                    if (!selection.impl.traitImpl) {
+                        hasConstBound |= selection.impl.constness != HIRBoundConstness::Never;
                         return false;
                     }
-                    if (!response.impl) {
-                        return false;
-                    }
-                    if (!response.impl->traitImpl) {
-                        hasConstBound |= response.impl->constness != HIRBoundConstness::Never;
-                        return false;
-                    }
-                    selectedImpl = response.impl->traitImpl;
+                    selectedImpl = selection.impl.traitImpl;
                     return false;
                 });
                 MIR_ASSERT(state, hasConstBound || selectedImpl, StringView("const trait call did not resolve to an impl: ") << path);

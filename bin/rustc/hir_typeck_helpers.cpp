@@ -372,6 +372,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
         GoalKey goal;
         Certainty certainty;
         const SolverResponse* response = nullptr;
+        const SolverImpl* applicable = nullptr;
         bool hasResponse = false;
         bool persistent = false;
         bool responseIsIdentity = false;
@@ -568,7 +569,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     CachedGoal* cacheGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, Certainty certainty, bool persistent = false, bool responseIsIdentity = false, const Vector<u32>* existentialEnvironment = nullptr);
 
-    CachedGoal* cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverResponse* response, const Vector<u32>* existentialEnvironment = nullptr, bool suppressAmbiguity = false);
+    CachedGoal* cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverResponse* response, const SolverImpl* applicable, const Vector<u32>* existentialEnvironment = nullptr, bool suppressAmbiguity = false);
 
     void clearGoalCache(bool clearCanonicalNoEffectResponses = false);
 
@@ -3182,16 +3183,16 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
     if (!langPointee().components().empty() && trait == langPointee()) {
         const auto nameMetadata = RcString::newInterned("Metadata");
         const auto delegateMetadata = [&](const HIRType* tailTy) {
-            return this->solveTraitGoal(sp, trait, params, tailTy, [&](SolverResponse response) {
-                if (!response.impl) {
+            return this->probeTraitGoalMayApply(sp, trait, params, tailTy, [&](SolverMayApply probe) {
+                if (!probe.candidate) {
                     return false;
                 }
                 HIRTraitPath::assocListT assoc;
-                auto metadataTy = response.impl->getType(crate.types, "Metadata", {});
+                auto metadataTy = probe.candidate->getType(crate.types, "Metadata", {});
                 if (metadataTy) {
                     assoc.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{trait, {}, std::move(metadataTy)}));
                 }
-                return callback.visit(SolverImpl(type, params.clone(), std::move(assoc)), response.certainty);
+                return callback.visit(SolverImpl(type, params.clone(), std::move(assoc)), probe.effects.certainty);
             }, {.ambiguity = SolverAmbiguityPolicy::Report});
         };
         // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
@@ -3344,17 +3345,17 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
 
         const HIRType* outputType = nullptr;
         auto futureCertainty = SolverCertainty::NoSolution;
-        this->solveTraitGoal(sp, langFuture(), {}, futureType, [&](SolverResponse response) {
-            if (!response.impl) {
+        this->probeTraitGoalMayApply(sp, langFuture(), {}, futureType, [&](SolverMayApply probe) {
+            if (!probe.candidate) {
                 return false;
             }
-            auto candidateOutput = response.impl->getType(crate.types, "Output", {});
+            auto candidateOutput = probe.candidate->getType(crate.types, "Output", {});
             if (candidateOutput == nullptr) {
                 return false;
             }
             outputType = mv$(candidateOutput);
-            futureCertainty = response.certainty;
-            return response.certainty == SolverCertainty::Proven;
+            futureCertainty = probe.effects.certainty;
+            return probe.effects.certainty == SolverCertainty::Proven;
         }, {.ambiguity = SolverAmbiguityPolicy::Report});
         if (outputType == nullptr) {
             return false;
@@ -3451,17 +3452,14 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
             if (isAsyncCallableTrait && type->as_Path().isClosure() && params.types.size() == 1 && params.types.front()->is_Tuple()) {
                 const auto& fnTrait = trait == langAsyncFn() ? langFn() : (trait == langAsyncFnMut() ? langFnMut() : langFnOnce());
                 const HIRType* futureType;
-                this->solveTraitGoal(sp, langFnOnce(), params, type, [&](SolverResponse response) {
-                    if (response.certainty != SolverCertainty::Proven || !response.impl) {
-                        return false;
-                    }
-                    futureType = response.impl->getType(crate.types, "Output", {});
+                this->selectTraitGoal(sp, langFnOnce(), params, type, [&](SolverSelection selection) {
+                    futureType = selection.impl.getType(crate.types, "Output", {});
                     return futureType != nullptr;
                 }, {.ambiguity = SolverAmbiguityPolicy::Report});
                 bool callable = fnTrait == langFnOnce();
                 if (!callable) {
-                    callable = this->solveTraitGoal(sp, fnTrait, params, type, [](SolverResponse response) {
-                        return response.impl && response.certainty == SolverCertainty::Proven;
+                    callable = this->selectTraitGoal(sp, fnTrait, params, type, [](SolverSelection) {
+                        return true;
                     }, {.ambiguity = SolverAmbiguityPolicy::Report});
                 }
                 if (callable && futureType != nullptr && findAsyncCallable(params.types.front()->as_Tuple(), futureType, true, true)) {
@@ -4575,10 +4573,11 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
             }
 
             bool sawResponse = false;
-            this->solveTraitGoal(sp, realTrait.path.path, realTrait.path.params, realType, [&](SolverResponse response) {
-                if (!response.impl) {
+            this->probeTraitGoalMayApply(sp, realTrait.path.path, realTrait.path.params, realType, [&](SolverMayApply probe) {
+                if (!probe.candidate) {
                     return false;
                 }
+                auto& response = probe.effects;
                 sawResponse = true;
                 merge(response.certainty);
 
@@ -4624,7 +4623,7 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
                 }
 
                 for (const auto& associated : realTrait.typeBounds) {
-                    auto actual = response.impl->getType(crate.types, associated.first.c_str(), associated.second.atyParams);
+                    auto actual = probe.candidate->getType(crate.types, associated.first.c_str(), associated.second.atyParams);
                     if (actual == nullptr) {
                         actual = crate.types.path(HIRPath(realType, associated.second.sourceTrait.clone(), associated.first, associated.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
                     }
@@ -5226,13 +5225,13 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
             return true;
         };
         const auto findExpectation = [&](const HIRSimplePath& trait) {
-            return solveTraitGoal(
+            return selectTraitGoal(
                 sp,
                 trait,
                 desiredParams,
                 resolvedDestination,
-                [&](SolverResponse response) {
-                return response.certainty == SolverCertainty::Proven && response.impl && inspectExpectation(*response.impl);
+                [&](SolverSelection selection) {
+                return inspectExpectation(selection.impl);
             },
                 {
                     .allowInferInputs = true,
@@ -5695,7 +5694,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         }
         SolverCertainty result = SolverCertainty::NoSolution;
         solveTraitGoal(sp, unsizeTrait, HIRPathParams(destination), source, [&](SolverResponse response) {
-            if (!response.impl && response.certainty != SolverCertainty::Ambiguous) {
+            if (response.certainty == SolverCertainty::NoSolution) {
                 return false;
             }
             result = response.certainty;
@@ -5784,12 +5783,12 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
     const auto langCoerceUnsized = crate.getLangItemPathOpt("coerce_unsized");
     if (!langCoerceUnsized.components().empty() && (typeIsBounded(source) || typeIsBounded(destination))) {
         SolverCertainty result = SolverCertainty::NoSolution;
-        solveTraitGoal(sp, langCoerceUnsized, HIRPathParams(destination), source, [&](SolverResponse response) {
-            const bool selected = response.impl != nullptr;
+        probeTraitGoalMayApply(sp, langCoerceUnsized, HIRPathParams(destination), source, [&](SolverMayApply probe) {
+            const bool selected = probe.candidate != nullptr;
             if (selected) {
-                result = response.certainty;
+                result = probe.effects.certainty;
                 if (effects) {
-                    appendEffects(*effects, std::move(response));
+                    appendEffects(*effects, std::move(probe.effects));
                 }
             }
             return selected;
@@ -6084,7 +6083,7 @@ TraitResolution::Autoderef TraitResolution::autoderefStep(const Span& sp, const 
         SolverCertainty certainty = SolverCertainty::NoSolution;
         bool ambiguous = false;
 
-        this->solveTraitGoal(sp, langDeref_, HIRPathParams{}, ty, [&](SolverResponse response) {
+        this->probeTraitGoalMayApply(sp, langDeref_, HIRPathParams{}, ty, [&](SolverMayApply probe) {
             const auto inspect = [&](const SolverImpl& solverImpl, SolverCertainty candidateCertainty) {
                 auto foundTarget = solverImpl.getType(crate.types, "Target", {});
                 if (foundTarget == nullptr) {
@@ -6097,12 +6096,12 @@ TraitResolution::Autoderef TraitResolution::autoderefStep(const Span& sp, const 
                 certainty = candidateCertainty;
             };
 
-            if (response.impl) {
-                inspect(*response.impl, response.certainty);
+            if (probe.candidate) {
+                inspect(*probe.candidate, probe.effects.certainty);
                 return true;
             }
 
-            ambiguous |= response.certainty == SolverCertainty::Ambiguous;
+            ambiguous |= probe.effects.certainty == SolverCertainty::Ambiguous;
             return false;
         }, {.ambiguity = SolverAmbiguityPolicy::Report});
 
@@ -6692,8 +6691,8 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 auto traitParams = getIvaredParams(trait.params);
 
                 {
-                    const bool crateImplFound = solveTraitGoal(sp, finalTraitPath.path, traitParams, *selfTy, [](SolverResponse response) {
-                        return response.impl && response.certainty == SolverCertainty::Proven;
+                    const bool crateImplFound = selectTraitGoal(sp, finalTraitPath.path, traitParams, *selfTy, [](SolverSelection) {
+                        return true;
                     }, {.ambiguity = SolverAmbiguityPolicy::Report});
                     if (crateImplFound) {
                         possibilities.push_back({borrowType, HIRPath(*selfTy, HIRGenericPath(finalTraitPath.path, mv$(traitParams)), methodName, {}), nullptr});
@@ -7033,8 +7032,9 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 .assocParams = returnProjection ? &returnProjection->params : nullptr,
                 .allowInferInputs = receiverIsOpen,
             };
-            solveTraitGoal(sp, *traitRef.first, traitParams, selfTy, [&](SolverResponse response) {
-                if (!response.impl) {
+            probeTraitGoalMayApply(sp, *traitRef.first, traitParams, selfTy, [&](SolverMayApply probe) {
+                auto& response = probe.effects;
+                if (!probe.candidate) {
                     if (response.certainty == SolverCertainty::Ambiguous) {
                         undecided = true;
                     }
@@ -8683,10 +8683,6 @@ auto NextTraitGoalEvaluator::monomorphSolverResponse(const SolverResponse& sourc
     SolverResponse result;
     result.certainty = source.certainty;
     result.operatorSummary = source.operatorSummary;
-    if (source.impl) {
-        ASSERT_BUG(span(), source.impl, StringView("solver response has no implementation"));
-        result.impl = monomorphSolverImpl(*source.impl, monomorph);
-    }
     for (const auto& type : source.slots.typeInputs) {
         result.slots.typeInputs.push_back(monomorph.monomorphType(span(), type, true));
     }
@@ -9164,7 +9160,7 @@ auto NextTraitGoalEvaluator::cacheGoal(size_t hash, const HIRSimplePath& trait, 
     return goal;
 }
 
-auto NextTraitGoalEvaluator::cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverResponse* response, const Vector<u32>* existentialEnvironment, bool suppressAmbiguity) -> CachedGoal* {
+auto NextTraitGoalEvaluator::cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverResponse* response, const SolverImpl* applicable, const Vector<u32>* existentialEnvironment, bool suppressAmbiguity) -> CachedGoal* {
     ASSERT_BUG(span(), response, StringView("cannot cache an empty solver response"));
     auto* cached = findCachedGoal(hash, trait, params, type, associated, existentialEnvironment, suppressAmbiguity);
     const auto certainty = response->certainty;
@@ -9175,9 +9171,10 @@ auto NextTraitGoalEvaluator::cacheResponse(size_t hash, const HIRSimplePath& tra
     }
     cached->certainty = certainty;
     cached->response = response;
+    cached->applicable = applicable;
     cached->hasResponse = true;
-    cached->responseIsIdentity = response->certainty == Certainty::Proven && response->impl &&
-        response->impl->getImplType(crate.types) == type && response->impl->getTraitParamsRef(crate.types) == params &&
+    cached->responseIsIdentity = response->certainty == Certainty::Proven && applicable &&
+        applicable->getImplType(crate.types) == type && applicable->getTraitParamsRef(crate.types) == params &&
         response->equalities.empty() && response->valueEqualities.empty() && response->obligations.empty() &&
         std::equal(response->slots.typeInputs.begin(), response->slots.typeInputs.end(), response->slots.types.begin(), response->slots.types.end()) &&
         std::equal(response->slots.valueInputs.begin(), response->slots.valueInputs.end(), response->slots.values.begin(), response->slots.values.end());
@@ -10251,11 +10248,8 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
         auto responseBinding = CandidateBindingResult::Unchanged;
         if (!useCandidateResponse) {
             const bool constrainOutput = applyResponseBindings && !typeHasUnknown(requirement.second.type);
-            auto nestedCallback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-                if (response.certainty != Certainty::Proven || !response.impl) {
-                    return false;
-                }
-                auto output = response.impl->getType(crate.types, requirement.first.c_str(), requirement.second.atyParams);
+            auto nestedCallback = makeCallable<SolverSelectionCb>([&](SolverSelection selection) {
+                auto output = selection.impl.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams);
                 if (output == nullptr) {
                     return false;
                 }
@@ -10267,12 +10261,12 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
                         nestedType,
                         requirement.second.sourceTrait.params,
                         responseAssociated,
-                        *response.impl
+                        selection.impl
                     );
                     if (responseBinding == CandidateBindingResult::Mismatch) {
                         return false;
                     }
-                    appendRelationEffects(candidate, std::move(response));
+                    appendRelationEffects(candidate, std::move(selection.effects));
                 }
                 candidateOutput = std::move(output);
                 return true;
@@ -10419,8 +10413,9 @@ auto NextTraitGoalEvaluator::appendRelationEffects(Candidate& candidate, SolverR
 
 auto NextTraitGoalEvaluator::solveRelationGoal(Candidate& candidate, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated) -> Certainty {
     Certainty certainty = Certainty::NoSolution;
-    auto callback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-        if (!response.impl && response.certainty != Certainty::Ambiguous) {
+    auto callback = makeCallable<SolverMayApplyCb>([&](SolverMayApply probe) {
+        auto& response = probe.effects;
+        if (!probe.candidate && response.certainty != Certainty::Ambiguous) {
             return false;
         }
         certainty = response.certainty;
@@ -11748,14 +11743,15 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                 Certainty responseCertainty = Certainty::NoSolution;
                 auto responseBinding = CandidateBindingResult::Unchanged;
                 bool responseHadEffects = false;
-                auto nestedCallback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-                    if (response.impl) {
-                        responseBinding = bindCandidateResponse(*candidate, nestedType, nestedParams, nestedAssociated, *response.impl);
+                auto nestedCallback = makeCallable<SolverMayApplyCb>([&](SolverMayApply probe) {
+                    auto& response = probe.effects;
+                    if (probe.candidate) {
+                        responseBinding = bindCandidateResponse(*candidate, nestedType, nestedParams, nestedAssociated, *probe.candidate);
                         if (responseBinding == CandidateBindingResult::Mismatch) {
                             return false;
                         }
                     }
-                    if (!response.impl && response.certainty != Certainty::Ambiguous) {
+                    if (!probe.candidate && response.certainty != Certainty::Ambiguous) {
                         return false;
                     }
                     bool hasEffects = !response.equalities.empty() || !response.valueEqualities.empty() || !response.obligations.empty();
@@ -12577,9 +12573,11 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 guidedQuery.assocType = nullptr;
             }
             SolverResponse guidedResponse;
+            const SolverImpl* guidedApplicable = nullptr;
             bool hasGuidedResponse = false;
-            auto guidedCallback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-                guidedResponse = std::move(response);
+            auto guidedCallback = makeCallable<SolverMayApplyCb>([&](SolverMayApply probe) {
+                guidedResponse = std::move(probe.effects);
+                guidedApplicable = probe.candidate;
                 hasGuidedResponse = true;
                 return true;
             });
@@ -12591,9 +12589,9 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                     return left == right || left->equalsIgnoringRegions(right);
                 };
                 bool exactCandidate = true;
-                if (guidedResponse.impl) {
-                    candidateType = guidedResponse.impl->getImplType(crate.types);
-                    candidateParams = guidedResponse.impl->getTraitParams(crate.types);
+                if (guidedApplicable) {
+                    candidateType = guidedApplicable->getImplType(crate.types);
+                    candidateParams = guidedApplicable->getTraitParams(crate.types);
                     exactCandidate = (resolve_.typeContainsIvars(resolvedType) && !selfGuided) || exactType(candidateType, guidedType);
                     exactCandidate &= candidateParams.types.size() == guidedParams.types.size() && candidateParams.values.size() == guidedParams.values.size();
                     for (size_t i = 0; exactCandidate && i < candidateParams.types.size(); i++) {
@@ -12611,11 +12609,11 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                     }
                 }
                 if (exactCandidate && deferGuidedAssociated) {
-                    if (!guidedResponse.impl) {
+                    if (!guidedApplicable) {
                         exactCandidate = typeHasUnknown(assocType);
                     } else {
                         const HIRPathParams noParams;
-                        const auto* candidateOutput = guidedResponse.impl->getType(crate.types, assocName, assocParams ? *assocParams : noParams);
+                        const auto* candidateOutput = guidedApplicable->getType(crate.types, assocName, assocParams ? *assocParams : noParams);
                         if (!candidateOutput || (!typeHasUnknown(assocType) && unifyProbe(assocType, candidateOutput) != Certainty::Proven)) {
                             exactCandidate = false;
                         } else if (assocType != candidateOutput) {
@@ -12653,12 +12651,20 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                         responseCanonicalizer.freeze();
 
                         auto canonicalResponse = monomorphSolverResponse(guidedResponse, responseCanonicalizer);
-                        if (canonicalResponse.impl) {
-                            canonicalResponse.slots = extractSlotValues(responseGoal, *canonicalResponse.impl, responseCanonicalizer, canonicalResponse.certainty);
+                        const auto* canonicalApplicable = guidedApplicable ? monomorphSolverImpl(*guidedApplicable, responseCanonicalizer) : nullptr;
+                        if (canonicalApplicable) {
+                            canonicalResponse.slots = extractSlotValues(responseGoal, *canonicalApplicable, responseCanonicalizer, canonicalResponse.certainty);
                         }
                         InstantiateTraitResponseForCaller instantiator(crate.types, resolve_.ivars, responseCanonicalizer.placeholderNames(), &responseCanonicalizer);
                         auto callerResponse = monomorphSolverResponse(canonicalResponse, instantiator);
-                        return callback.visit(std::move(callerResponse));
+                        const auto* callerApplicable = canonicalApplicable ? monomorphSolverImpl(*canonicalApplicable, instantiator) : nullptr;
+                        if (!callerApplicable) {
+                            return callback.visit(std::move(callerResponse));
+                        }
+                        if (callerResponse.certainty == Certainty::Proven) {
+                            return callback.visit(SolverSelection{std::move(callerResponse), *callerApplicable});
+                        }
+                        return callback.visit(SolverMayApply{std::move(callerResponse), callerApplicable});
                     }
                 }
             }
@@ -12734,23 +12740,26 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     const bool cacheEmptyAssembly = outermost && !hasCoercionGoals;
     const auto emptyAssemblyHash = cacheEmptyAssembly ? hashMix(goalHashWithEnvironment(goalHash(trait, canonical.params, canonical.type, nullptr), canonicalizer.alphaSolverEnvironment()), includeRootMagicCandidates) : 0;
     Vector<std::pair<const Candidate*, Certainty>> distinctViable;
-    auto deliverResponse = [&](const SolverResponse& response, const SolverImpl* directImpl) {
+    auto deliverResponse = [&](const SolverResponse& response, const SolverImpl* applicable) {
+        const auto visitResponse = [&](SolverResponse output, const SolverImpl* outputApplicable) {
+            if (!outputApplicable) {
+                return callback.visit(std::move(output));
+            }
+            if (output.certainty == Certainty::Proven) {
+                return callback.visit(SolverSelection{std::move(output), *outputApplicable});
+            }
+            return callback.visit(SolverMayApply{std::move(output), outputApplicable});
+        };
         if (!outermost && !callerBoundary) {
             DecanonicalizeSolverInfers mapper(crate.types, canonicalizer);
             auto nestedResponse = monomorphSolverResponse(response, mapper);
-            if (directImpl) {
-                auto direct = monomorphCandidateImpl(*directImpl, mapper);
-                nestedResponse.impl = ownSolverImpl(std::move(direct));
-            }
-            return callback.visit(std::move(nestedResponse));
+            const auto* nestedApplicable = applicable ? monomorphSolverImpl(*applicable, mapper) : nullptr;
+            return visitResponse(std::move(nestedResponse), nestedApplicable);
         }
         InstantiateTraitResponseForCaller instantiator(crate.types, resolve_.ivars, canonicalizer.placeholderNames(), &canonicalizer);
         auto callerResponse = monomorphSolverResponse(response, instantiator);
-        if (directImpl) {
-            auto direct = monomorphCandidateImpl(*directImpl, instantiator);
-            callerResponse.impl = ownSolverImpl(std::move(direct));
-        }
-        return callback.visit(std::move(callerResponse));
+        const auto* callerApplicable = applicable ? monomorphSolverImpl(*applicable, instantiator) : nullptr;
+        return visitResponse(std::move(callerResponse), callerApplicable);
     };
     const bool cacheableAssociatedItem = !hasAssociatedItemQuery || canonicalAssocType;
     const bool cacheableResponse = cacheableAssociatedItem && !valueName && !canonicalAssociated && !excludedImpl && !hasCoercionGoals && !query.operatorGoal;
@@ -12758,11 +12767,11 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     if (cacheableResponse) {
         if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, responseCacheAssociated, &canonicalizer.alphaSolverEnvironment(), suppressAmbiguity);
             cached && cached->hasResponse) {
-            return deliverResponse(*cached->response, nullptr);
+            return deliverResponse(*cached->response, cached->applicable);
         }
         if (crateCacheableResponse) {
             if (const auto* global = crateCache().find(rootHash, trait, canonical.params, canonical.type); global && global->hasResponse) {
-                return deliverResponse(*global->response, nullptr);
+                return deliverResponse(*global->response, global->applicable);
             }
         }
     }
@@ -12999,9 +13008,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         SolverResponse solverResponse;
         solverResponse.certainty = certainty;
         solverResponse.slots = extractSlotValues(canonical, canonicalResponse, canonicalizer, solverResponse.certainty);
-        if (exposeImpl) {
-            solverResponse.impl = ownSolverImpl(monomorphCandidateImpl(canonicalResponse, MonomorphiserNop(crate.types)));
-        }
+        const auto* canonicalApplicable = exposeImpl ? ownSolverImpl(monomorphCandidateImpl(canonicalResponse, MonomorphiserNop(crate.types))) : nullptr;
         if (distinctViable.empty()) {
             classifyOperatorImpl(solverResponse.operatorSummary, canonicalResponse);
         }
@@ -13249,17 +13256,17 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (crateCacheableResponse && rigidKey && cycleHits_ == cycleHitsBefore) {
             auto* global = crateCache().insert(rootHash, trait, canonical.params.clone(), canonical.type, solverResponse.certainty);
             auto globalResponse = monomorphSolverResponse(solverResponse, MonomorphiserNop(crate.types));
-            if (globalResponse.impl) {
-                auto globalImpl = monomorphCandidateImpl(*globalResponse.impl, MonomorphiserNop(crate.types));
-                globalResponse.impl = crateCache().pool->make<SolverImpl>(std::move(globalImpl));
+            if (canonicalApplicable) {
+                auto globalImpl = monomorphCandidateImpl(*canonicalApplicable, MonomorphiserNop(crate.types));
+                global->applicable = crateCache().pool->make<SolverImpl>(std::move(globalImpl));
             }
             global->response = crateCache().pool->make<SolverResponse>(std::move(globalResponse));
             global->hasResponse = true;
         }
         auto* storedResponse = resolve_.eatCachePool->make<SolverResponse>(std::move(solverResponse));
-        auto* cached = cacheResponse(rootHash, trait, canonical.params, canonical.type, responseCacheAssociated, storedResponse, &canonicalizer.alphaSolverEnvironment(), suppressAmbiguity);
+        auto* cached = cacheResponse(rootHash, trait, canonical.params, canonical.type, responseCacheAssociated, storedResponse, canonicalApplicable, &canonicalizer.alphaSolverEnvironment(), suppressAmbiguity);
         cached->persistent = rigidKey && cycleHits_ == cycleHitsBefore;
-        return deliverResponse(*storedResponse, nullptr);
+        return deliverResponse(*storedResponse, canonicalApplicable);
     };
     CanonicalizeTraitGoal activeCanonicalizer(crate.types, &resolve_.ivars);
     const auto activeCanonical = canonicalizeGoal(goalParams, resolvedType, associated, activeCanonicalizer);

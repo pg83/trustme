@@ -960,8 +960,8 @@ namespace {
 
     bool typeIsUseCloned(const StaticTraitResolve& resolve, const Span& sp, const HIRType* type) {
         const auto& trait = resolve.hirCrate().getLangItemPathOpt("use_cloned");
-        return !trait.components().empty() && resolve.findImpl(sp, trait, HIRPathParams{}, type, [](SolverResponse response) {
-            return response.certainty == SolverCertainty::Proven;
+        return !trait.components().empty() && resolve.findImpl(sp, trait, HIRPathParams{}, type, [](SolverSelection) {
+            return true;
         });
     }
 
@@ -6239,8 +6239,8 @@ auto UfcsExprVisitorMutate::isBuiltinOperator(const Span& sp, TypeckPrimitiveOpe
     if (traitPath.components().empty()) {
         return true;
     }
-    return !resolve_.findImpl(sp, traitPath, traitParams, tyL, [&](SolverResponse response) {
-        return !response.impl || !(currentTraitImpl && response.impl->traitImpl == currentTraitImpl);
+    return !resolve_.probeImplMayApply(sp, traitPath, traitParams, tyL, [&](SolverMayApply probe) {
+        return !probe.candidate || !(currentTraitImpl && probe.candidate->traitImpl == currentTraitImpl);
     });
 }
 
@@ -6257,8 +6257,8 @@ auto UfcsExprVisitorMutate::isBuiltinOperator(const Span& sp, TypeckPrimitiveOpe
     if (traitPath.components().empty()) {
         return true;
     }
-    return !resolve_.findImpl(sp, traitPath, HIRPathParams(), ty, [&](SolverResponse response) {
-        return !response.impl || !(currentTraitImpl && response.impl->traitImpl == currentTraitImpl);
+    return !resolve_.probeImplMayApply(sp, traitPath, HIRPathParams(), ty, [&](SolverMayApply probe) {
+        return !probe.candidate || !(currentTraitImpl && probe.candidate->traitImpl == currentTraitImpl);
     });
 }
 

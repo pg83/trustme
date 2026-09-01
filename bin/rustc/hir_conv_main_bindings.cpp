@@ -3751,11 +3751,11 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
     TRACE_FUNCTION_F(StringView("trait_path=") << traitPath << StringView(", p=<") << type << StringView(" as _>::") << e.item);
     // TODO: This is VERY arbitary and possibly nowhere near what rustc does.
 
-    this->resolve_.findImpl(sp, traitPath.path, nullptr, type, [&](SolverResponse response) -> bool {
-        if (response.certainty == SolverCertainty::NoSolution) {
+    this->resolve_.probeImplMayApply(sp, traitPath.path, nullptr, type, [&](SolverMayApply probe) -> bool {
+        if (probe.effects.certainty == SolverCertainty::NoSolution) {
             return false;
         }
-        auto pp = response.impl ? response.impl->getTraitParams(crate.types) : traitPath.params.clone();
+        auto pp = probe.candidate ? probe.candidate->getTraitParams(crate.types) : traitPath.params.clone();
         struct KillPlaceholders: public Monomorphiser {
             explicit KillPlaceholders(HIRTypeInterner& types)
                 : Monomorphiser(types)
@@ -3774,7 +3774,7 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
         };
 
         pp = KillPlaceholders(crate.types).monomorphPathParams(sp, pp, true);
-        DEBUG(StringView("FOUND impl from ") << (response.impl ? response.impl->traitPath : traitPath.path));
+        DEBUG(StringView("FOUND impl from ") << (probe.candidate ? probe.candidate->traitPath : traitPath.path));
         if (auto* innerE = pd.opt_UfcsKnown()) {
             BUG_ASSERT(pp.types.size() == innerE->trait.params.types.size());
             for (unsigned int i = 0; i < pp.types.size(); i++) {
