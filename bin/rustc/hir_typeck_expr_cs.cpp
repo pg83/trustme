@@ -2025,6 +2025,40 @@ namespace {
                 bool jointlyUnifiable = candidateCount >= minimumCandidates && std::all_of(equalityCandidates.begin(), equalityCandidates.end(), [](const auto* candidate) {
                     return candidate->hasType();
                 });
+                /* Structural unification of an outer coercion endpoint must
+                 * not bind a nested coercion destination before that nested
+                 * component resolves its own source.  For example, in the
+                 * LUB of Box<_> (fed by a function item) and Box<dyn Fn>,
+                 * binding the inner ivar to dyn Fn turns the required Box
+                 * unsize into an invalid Box::new::<dyn Fn>.  Let the inner
+                 * identity/LUB commit first; the next pass then sees the real
+                 * Box<fn item> source and proves the outer unsizing normally.
+                 * A direct ivar endpoint remains part of the joint component,
+                 * and `!` remains bottom rather than an identity source. */
+                const auto hasPendingNestedCoercionSource = [&](const HIRType* candidateType) {
+                    if (context.getType(candidateType)->is_Infer()) {
+                        return false;
+                    }
+                    bool pending = false;
+                    visitTyWith(candidateType, [&](const HIRType* inner) {
+                        const auto* infer = context.getType(inner)->opt_Infer();
+                        if (!infer || infer->index == i || infer->index >= context.possibleIvarVals.size()) {
+                            return false;
+                        }
+                        const auto& nested = context.possibleIvarVals[infer->index];
+                        pending = std::any_of(nested.typesCoerceFrom.begin(), nested.typesCoerceFrom.end(), [&](const auto& source) {
+                            return source.selectable && !context.getType(source.ty)->is_Diverge();
+                        });
+                        return pending;
+                    });
+                    return pending;
+                };
+                if (jointlyUnifiable && std::any_of(equalityCandidates.begin(), equalityCandidates.end(), [&](const auto* candidate) {
+                    return hasPendingNestedCoercionSource(candidate->ty);
+                })) {
+                    DEBUG(StringView("Nested coercion source must resolve before structural joint unification"));
+                    jointlyUnifiable = false;
+                }
                 for (size_t lhs = 0; jointlyUnifiable && lhs < candidateCount; lhs++) {
                     for (size_t rhs = lhs + 1; rhs < candidateCount; rhs++) {
                         const auto* left = equalityCandidates[lhs]->ty;
@@ -2105,6 +2139,43 @@ namespace {
                 possibleTys.erase(std::remove_if(possibleTys.begin(), possibleTys.end(), [](const PossibleType& candidate) {
                     return !candidate.hasType();
                 }), possibleTys.end());
+            }
+
+            /* A concrete outgoing Coercion edge is a directed upper bound,
+             * not an equality candidate.  In the final effect sweep, one
+             * such bound determines the component when a concrete producer
+             * exists and every obligation accepts the bound.  This is what
+             * carries an actual expected-result coercion into an expression
+             * LUB: `fn item -> match result -> fn pointer`, for example,
+             * must select the pointer before the later identity phase can
+             * freeze the result at the function-item type.  Unsizing edges
+             * are deliberately excluded: the pointee of `Box<T> ->
+             * Box<dyn Trait>` remains T while the outer coercion performs the
+             * unsizing. */
+            const HIRType* directedDestination = nullptr;
+            bool uniqueDirectedDestination = true;
+            for (const auto& destination : ivarEnt.typesCoerceTo) {
+                if (destination.op != Context::IVarPossible::CoerceTy::Coercion || destination.patternConstraint) {
+                    continue;
+                }
+                const auto* type = context.getType(destination.ty);
+                if (type->is_Infer()) {
+                    continue;
+                }
+                if (directedDestination && !context.ivars.typesEqual(directedDestination, type)) {
+                    uniqueDirectedDestination = false;
+                    break;
+                }
+                directedDestination = type;
+            }
+            if (finalPhase
+                && hasConcreteSource
+                && uniqueDirectedDestination
+                && directedDestination
+                && !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, directedDestination)) {
+                DEBUG(i << StringView(": Unique concrete coercion destination bounds the component: ") << directedDestination);
+                context.equateTypes(sp, tyL, directedDestination);
+                return true;
             }
 
             /* In the final effect sweep, jointly-unifiable source and
@@ -2999,6 +3070,18 @@ void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType*
                 this->requireSized(sp, rT);
             }
 
+            /* Solver effects belong to the ivar equivalence class, not to
+             * whichever numeric representative happened to receive them.
+             * Coercion equality can choose the opposite representative from
+             * an earlier generic-default producer (Wrapper<T, S = T> is the
+             * minimal case), so carry every accumulated obligation into the
+             * representative retained by ivarUnify. */
+            if (lE->index != rE->index && rE->index < possibleIvarVals.size()) {
+                if (lE->index >= possibleIvarVals.size()) {
+                    possibleIvarVals.resize(lE->index + 1);
+                }
+                possibleIvarVals[lE->index].mergeFrom(possibleIvarVals[rE->index]);
+            }
             this->ivars.ivarUnify(lE->index, rE->index);
         } else {
             setIvar(rT, lT);
@@ -5118,19 +5201,6 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
     }
 }
 
-void Context::recordCoercionHint(const HIRType* type, HIRExprNodeP& nodePtr) {
-    auto* hintNode = nodePtr.get();
-    while (const auto* block = cast<const HIRExprNodeBlock>(hintNode)) {
-        if (!block->valueNode) {
-            break;
-        }
-        hintNode = block->valueNode.get();
-    }
-    if (hintNode) {
-        this->coercionHints[hintNode] = type;
-    }
-}
-
 void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr) {
     const auto* destination = this->ivars.getType(l);
     const auto* destinationInfer = destination->opt_Infer();
@@ -5140,7 +5210,6 @@ void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& 
     if (destinationRequiresSized) {
         this->requireSized(sp, nodePtr->resType);
     }
-    this->recordCoercionHint(l, nodePtr);
     this->linkCoerce.push_back(std::make_unique<Coercion>(Coercion{this->nextRuleIdx++, l, &nodePtr}));
     DEBUG(StringView("++ ") << *this->linkCoerce.back());
     this->ivars.markChange();
@@ -6642,7 +6711,6 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
     }
 
     DEBUG(StringView("--- Enumerating"));
-    context.recordCoercionHint(newResTy, rootPtr);
     ExprVisitorEnum visitor(context, ms.traits, newResTy);
     rootPtr->resType = context.addIvars(rootPtr->resType);
     rootPtr->visit(visitor);
@@ -6866,11 +6934,6 @@ bool Context::fallbackUnresolvedRpitType(const Span& sp) {
         return true;
     }
     return false;
-}
-
-const HIRType* Context::coercionHint(const HIRExprNode& node) const {
-    const auto it = coercionHints.find(&node);
-    return it == coercionHints.end() ? nullptr : it->second;
 }
 
 MonomorphEraseHrls::MonomorphEraseHrls(HIRTypeInterner& types)
@@ -7761,11 +7824,31 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
 
     // TODO: Obtain a list of avaliable methods at that level?
     const auto* resultType = this->context.getType(node.resType);
-    const HIRType* expectedMethodResult = resultType;
-    if (const auto* infer = resultType->opt_Infer(); infer && !infer->isLit()) {
-        if (const auto* hint = this->context.coercionHint(node)) {
-            const auto* resolvedHint = this->context.getType(hint);
-            expectedMethodResult = resolvedHint;
+    const HIRType* contextualResult = resultType;
+    if (const auto* infer = resultType->opt_Infer(); infer && !infer->isLit() && infer->index < this->context.possibleIvarVals.size()) {
+        const HIRType* destinationType = nullptr;
+        bool destinationsAgree = true;
+        for (const auto& destination : this->context.possibleIvarVals[infer->index].typesCoerceTo) {
+            if (destination.patternConstraint) {
+                continue;
+            }
+            const auto* type = this->context.getType(destination.ty);
+            if (type->is_Infer()) {
+                continue;
+            }
+            if (destinationType && !this->context.ivars.typesEqual(destinationType, type)) {
+                destinationsAgree = false;
+                break;
+            }
+            destinationType = type;
+        }
+        if (destinationsAgree && destinationType) {
+            /* This context comes from the method result's real deferred
+             * coercion edge.  It can constrain generic method selection, but
+             * it must not replace the producer's natural result type: e.g.
+             * NonNull::as_ptr returns *mut T which then coerces to an expected
+             * *const T. */
+            contextualResult = destinationType;
         }
     }
     ThinVector<const HIRType*> methodArgumentTypes;
@@ -7774,14 +7857,18 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
         methodArgumentTypes.push_back(argument->resType);
     }
     ThinVector<TraitResolution::MethodCandidate> possibleMethods;
-    unsigned int derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.method, methodArgumentTypes, expectedMethodResult, this->isFallback, possibleMethods);
-    if ((derefCount == ~0u || possibleMethods.empty()) && expectedMethodResult != resultType) {
+    const auto findMethod = [&](const RcString& method) {
         possibleMethods.clear();
-        derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.method, methodArgumentTypes, resultType, this->isFallback, possibleMethods);
-    }
+        auto derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, methodArgumentTypes, contextualResult, this->isFallback, possibleMethods);
+        if ((derefCount == ~0u || possibleMethods.empty()) && contextualResult != resultType) {
+            possibleMethods.clear();
+            derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, methodArgumentTypes, resultType, this->isFallback, possibleMethods);
+        }
+        return derefCount;
+    };
+    unsigned int derefCount = findMethod(node.method);
     if ((derefCount == ~0u || possibleMethods.empty()) && node.method != node.fallbackMethod) {
-        possibleMethods.clear();
-        derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.fallbackMethod, methodArgumentTypes, expectedMethodResult, this->isFallback, possibleMethods);
+        derefCount = findMethod(node.fallbackMethod);
         if (derefCount != ~0u && !possibleMethods.empty()) {
             node.method = node.fallbackMethod;
         }
@@ -9915,10 +10002,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeLet& node) -> void {
 auto ExprVisitorEnum::visit(HIRExprNodeMatch& node) -> void {
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" match ..."));
     auto valType = this->context.ivars.newIvarTr();
-    const auto* armResultType = this->context.coercionHint(node);
-    if (!armResultType) {
-        armResultType = node.resType;
-    }
+    const auto* armResultType = node.resType;
 
     {
         auto _ = this->pushInnerCoerceScoped(true);
@@ -10233,10 +10317,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeUniOp& node) -> void {
     BUG_ASSERT(itemName);
     const HIRType* inputType = node.value->resType;
     if (this->context.getType(inputType)->is_Diverge()) {
-        const HIRType* expectedType = this->context.coercionHint(node);
-        if (!expectedType) {
-            expectedType = node.resType;
-        }
+        const HIRType* expectedType = node.resType;
         expectedType = this->context.getType(expectedType);
         if ((!expectedType->is_Infer() || expectedType->as_Infer().isLit()) && !expectedType->is_Diverge()) {
             inputType = expectedType;
@@ -10535,14 +10616,6 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
 
     const auto ty = this->getStructenumTy(node.span(), node.isStruct, tyPath);
     this->context.equateTypes(node.span(), node.resType, ty);
-    if (const auto* expectedHint = this->context.coercionHint(node)) {
-        const auto* expected = this->context.getType(expectedHint);
-        const auto* actualPath = ty->opt_Path();
-        const auto* expectedPath = expected->opt_Path();
-        if (actualPath && expectedPath && actualPath->path.data.is_Generic() && expectedPath->path.data.is_Generic() && actualPath->path.data.as_Generic().path == expectedPath->path.data.as_Generic().path && this->context.resolve.probeTypeRelation(sp, ty, expected) != SolverCertainty::NoSolution) {
-            this->context.equateTypes(sp, ty, expected);
-        }
-    }
     if (node.baseValue) {
         this->context.equateTypes(node.span(), node.baseValue->resType, ty);
     }

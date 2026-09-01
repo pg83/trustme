@@ -286,6 +286,18 @@ endpoint; литеральный/never fallback — последними. 8 кл
 0/0 без tagOrdering-записи, перф: все 3 пары быстрее базлайна
 (43.9–44.1 vs 44.4–44.8), RSS +2.3 МБ.
 
+Прогресс п.12 (2026-09-01, шаг «д», верифицирован гейтом): канал
+`coercionHints` удалён целиком (map, API, все producer/consumer; grep 0).
+Ожидаемый тип приходит настоящей коэрцией (`linkCoerce`): struct literal,
+match, unary-`!`, method-probing (транзакционный, destination только для
+probe, естественный результат метода сохраняется, pointer-связь по
+решётке). Новые правила solver-уровня: уникальная конкретная направленная
+CoerceTo-граница разрешает компонент до финального identity; outer
+structural unification ждёт разрешения вложенного coercion source;
+obligations переносятся при слиянии ivar-классов. GUESS 0. Unit
+1033/1033 + 89/89, static gate 0/0, перф: new быстрее во всех парах
+(40.6–40.9 vs 41.2–44.4). П.12 закрыт целиком.
+
 ### Карта срабатываний (инструментация 2026-09-01, corpus libcore+liballoc+libstd)
 
 Всего 17 239 успешных приравниваний (успех = сдвиг mutationGeneration):

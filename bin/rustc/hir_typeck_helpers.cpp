@@ -6498,16 +6498,44 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 auto methodParams = this->makeFreshImplParams(method.data.params);
                 auto monomorph = MonomorphStatePtr(crate.types, selfTy, &implParams, &methodParams);
                 const auto* methodReturn = monomorph.monomorphType(sp, method.data.returnType, true);
+                const auto resultSnapshot = this->ivars.snapshot();
                 Unifier relation(sp, this->ivars, this, {.relateProjectionInputs = true});
                 switch (relation.unify(methodReturn, expectedResult)) {
                     case Unifier::Outcome::Proven:
+                        this->ivars.commit(resultSnapshot);
                         break;
                     case Unifier::Outcome::Ambiguous:
+                        this->ivars.commit(resultSnapshot);
                         inherentResult = SolverCertainty::Ambiguous;
                         break;
-                    case Unifier::Outcome::Mismatch:
-                        inherentResult = SolverCertainty::NoSolution;
+                    case Unifier::Outcome::Mismatch: {
+                        this->ivars.rollbackTo(resultSnapshot);
+                        /* The expression result is coerced to its context; it
+                         * need not equal it.  Raw-pointer mutability is the
+                         * relevant built-in outer relation during method
+                         * probing: relate its pointees while preserving the
+                         * natural *mut result.  The expression's coercion node
+                         * still proves and applies the complete conversion. */
+                        const auto* destinationPointer = this->ivars.getType(expectedResult)->opt_Pointer();
+                        const auto* sourcePointer = this->ivars.getType(methodReturn)->opt_Pointer();
+                        if (!destinationPointer || !sourcePointer || destinationPointer->type > sourcePointer->type) {
+                            inherentResult = SolverCertainty::NoSolution;
+                            break;
+                        }
+                        Unifier pointeeRelation(sp, this->ivars, this, {.relateProjectionInputs = true});
+                        switch (pointeeRelation.unify(destinationPointer->inner, sourcePointer->inner)) {
+                            case Unifier::Outcome::Proven:
+                                inherentResult = SolverCertainty::Proven;
+                                break;
+                            case Unifier::Outcome::Ambiguous:
+                                inherentResult = SolverCertainty::Ambiguous;
+                                break;
+                            case Unifier::Outcome::Mismatch:
+                                inherentResult = SolverCertainty::NoSolution;
+                                break;
+                        }
                         break;
+                    }
                 }
             }
             if (inherentResult != SolverCertainty::NoSolution) {

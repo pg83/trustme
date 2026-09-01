@@ -11,7 +11,6 @@
 #include <std/lib/vector.h>
 
 #include <algorithm>
-#include <unordered_map>
 
 struct Context {
     class Revisitor {
@@ -108,8 +107,6 @@ struct Context {
     unsigned nextCoercionAlternativeGroup = 1;
 
     std::vector<std::unique_ptr<Coercion>> linkCoerce;
-
-    std::unordered_map<const HIRExprNode*, const HIRType*> coercionHints;
     std::vector<Associated> linkAssoc;
     stl::ObjPool::Ref linkAssocIndexPool;
     stl::IntMap<stl::Vector<unsigned>> linkAssocIndex;
@@ -182,9 +179,6 @@ struct Context {
     void compactIvars(const Span& sp);
 
     void equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr);
-    void recordCoercionHint(const HIRType* type, HIRExprNodeP& nodePtr);
-
-    const HIRType* coercionHint(const HIRExprNode& node) const;
 
     void equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimplePath& trait, HIRPathParams params, const HIRType* implTy, const char* name, const HIRPathParams& atyPp, bool isOp = false, TypeckPrimitiveOperator operatorKind = TypeckPrimitiveOperator::None);
 
