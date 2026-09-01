@@ -420,8 +420,6 @@ namespace {
 
         static bool isSourceS(const PossibleType& self);
 
-        static bool isDestS(const PossibleType& self);
-
         bool isCoerce() const;
 
         bool isUnsize() const;
@@ -2082,45 +2080,6 @@ namespace {
                 }
             }
 
-            if (std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS) == 1 && std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1 && !ivarEnt.forceNoFrom && !ivarEnt.forceNoTo) {
-                const auto& entS = *std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS);
-                const auto& entD = *std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS);
-
-                // TODO: And this ivar isn't Sized bounded?
-                if (entS.isCoerce() && entD.isCoerce()) {
-                    bool srcNoivars = !context.ivars.typeContainsIvars(entS.ty);
-                    bool dstNoivars = !context.ivars.typeContainsIvars(entD.ty);
-                    bool srcValid = !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, entS.ty);
-                    bool dstValid = !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, entD.ty);
-
-                    if (srcValid) {
-                        if (srcNoivars) {
-                            DEBUG(StringView("Single each way, concrete source, ") << entS.ty);
-                            context.equateTypes(sp, tyL, entS.ty);
-                            return true;
-                        }
-                    }
-                    if (dstValid) {
-                        if (dstNoivars) {
-                            DEBUG(StringView("Single each way, concrete destination, ") << entD.ty);
-                            context.equateTypes(sp, tyL, entD.ty);
-                            return true;
-                        }
-                    }
-
-                    if (srcValid) {
-                        DEBUG(StringView("Single each way, ivar source, ") << entS.ty);
-                        context.equateTypes(sp, tyL, entS.ty);
-                        return true;
-                    }
-                    if (dstValid) {
-                        DEBUG(StringView("Single each way, ivar destination, ") << entD.ty);
-                        context.equateTypes(sp, tyL, entD.ty);
-                        return true;
-                    }
-                }
-            }
-
             // - Slight hack to speed up flow-down inference
             if (possibleTys.size() == 1 && possibleTys[0].hasType() && possibleTys[0].isSource() && !possibleTys[0].ty->is_Diverge() && !ivarEnt.forceNoFrom) {
                 const auto* tyP = possibleTys[0].ty;
@@ -2170,18 +2129,14 @@ namespace {
             // - TODO: Should this also remove &_ types? (maybe not, as they give information about borrow classes)
             size_t nIvars;
             size_t nSrcIvars;
-            size_t nDstIvars;
             bool possiblyDiverge = false;
             {
                 nSrcIvars = 0;
-                nDstIvars = 0;
                 auto newEnd = std::remove_if(possibleTys.begin(), possibleTys.end(), [&](const PossibleType& ent) {
                     // TODO: Should this remove Unbound associated types too?
                     if ((ent.ty)->is_Infer()) {
                         if (ent.isSource()) {
                             nSrcIvars += 1;
-                        } else {
-                            nDstIvars += 1;
                         }
                         return true;
                     } else if ((ent.ty)->is_Diverge()) {
@@ -2194,7 +2149,7 @@ namespace {
                 nIvars = possibleTys.end() - newEnd;
                 possibleTys.erase(newEnd, possibleTys.end());
             }
-            DEBUG(nIvars << StringView(" ivars (") << nSrcIvars << StringView(" src, ") << nDstIvars << StringView(" dst)"));
+            DEBUG(nIvars << StringView(" ivars (") << nSrcIvars << StringView(" src)"));
             const auto isFunctionSource = [](const PossibleType& possible) {
                 return possible.isSource() && (((*possible.ty).is_NodeType() && ((*possible.ty).as_NodeType().is_Closure())) || possible.ty->is_NamedFunction());
             };
@@ -2335,104 +2290,6 @@ namespace {
                 }
             }
 
-            if (std::all_of(possibleTys.begin(), possibleTys.end(), PossibleType::isCoerceS)) {
-                size_t numDistinct = 0;
-                for (const auto& ent : possibleTys) {
-                    if (!ent.isSource()) {
-                        continue;
-                    }
-                    if (((*ent.ty).is_Borrow() && ((*ent.ty).as_Borrow().inner->is_Infer()))) {
-                        continue;
-                    }
-                    bool isDuplicate = false;
-                    for (const auto& ent2 : possibleTys) {
-                        if (&ent2 == &ent) {
-                            break;
-                        }
-                        if (!ent2.isSource()) {
-                            continue;
-                        }
-                        if (ent.ty == ent2.ty) {
-                            isDuplicate = true;
-                            break;
-                        }
-                        // TODO: Compare such that &[_; 1] == &[u8; 1]?
-                    }
-                    if (!isDuplicate) {
-                        numDistinct += 1;
-                    }
-                }
-                bool isUnordered = false;
-                const HIRType* destType = nullptr;
-                for (const auto& ent : possibleTys) {
-                    if (ent.isSource()) {
-                        continue;
-                    }
-                    if (!destType) {
-                        destType = ent.ty;
-                        continue;
-                    }
-
-                    auto cmp = TypeRestrictiveOrdering::getOrderingPtr(sp, context, ent.ty, destType, isUnordered);
-                    switch (cmp) {
-                        case OrdLess:
-                            destType = ent.ty;
-                            isUnordered = false;
-                            break;
-                        case OrdEqual:
-                            break;
-                        case OrdGreater:
-                            break;
-                    }
-                }
-                // TODO: Unsized types? Don't pick an unsized if coercions are present?
-                // TODO: If in a fallback mode, then don't require >1 (just require dest_type)
-                if ((numDistinct > 1 || fallbackTy == IvarPossFallbackType::Assume) && destType && !isUnordered) {
-                    DEBUG(StringView("- Most-restrictive destination ") << destType);
-                    context.equateTypes(sp, tyL, destType);
-                    return true;
-                }
-            }
-
-            // TODO: If in fallback mode, pick the most permissive option
-
-            if (fallbackTy == IvarPossFallbackType::Assume) {
-                if (std::all_of(possibleTys.begin(), possibleTys.end(), PossibleType::isCoerceS) && nIvars == 0) {
-                    const HIRType* destType = nullptr;
-                    bool anyIvarPresent = false;
-                    bool isUnordered = false;
-                    for (const auto& ent : possibleTys) {
-                        if (visitTyWith(ent.ty, [](const HIRType* t) {
-                            return t->is_Infer();
-                        })) {
-                            anyIvarPresent = true;
-                        }
-                        if (!destType) {
-                            destType = ent.ty;
-                            continue;
-                        }
-
-                        auto cmp = TypeRestrictiveOrdering::getOrderingPtr(sp, context, ent.ty, destType, isUnordered);
-                        switch (cmp) {
-                            case OrdLess:
-                                destType = ent.ty;
-                                isUnordered = false;
-                                break;
-                            case OrdEqual:
-                                break;
-                            case OrdGreater:
-                                break;
-                        }
-                    }
-
-                    if (destType && nIvars == 0 && anyIvarPresent == false && !((*destType).is_NodeType() && ((*destType).as_NodeType().is_Closure())) && !isUnordered) {
-                        DEBUG(StringView("Suitable option ") << destType << StringView(" from ") << possibleTys);
-                        context.equateTypes(sp, tyL, destType);
-                        return true;
-                    }
-                }
-            }
-
             DEBUG(StringView("possible_tys = ") << possibleTys);
             DEBUG(StringView("possible_tys = ") << possibleTys);
             for (auto it = possibleTys.begin(); it != possibleTys.end();) {
@@ -2467,13 +2324,6 @@ namespace {
                             break;
                         }
 
-                        // TODO: Ivars have been removed?
-                        if (!(it->ty)->is_Infer() && otherOpt.isCoerce() == it->isCoerce() && otherOpt.isSource() != it->isSource()) {
-                            // TODO: Possible duplicate with a check above...
-                            DEBUG(StringView("Source and destination possibility, picking ") << it->ty);
-                            context.equateTypes(sp, tyL, it->ty);
-                            return true;
-                        }
                         if (it->isSource() && otherOpt.isCoerce() == it->isCoerce()) {
                             removeOption = true;
                             break;
@@ -2546,40 +2396,15 @@ namespace {
             const bool hasDeferredDestination = std::any_of(ivarEnt.typesCoerceTo.begin(), ivarEnt.typesCoerceTo.end(), [&](const auto& edge) {
                 return !context.getType(edge.ty)->is_Infer();
             });
-            DEBUG(StringView("possible_tys = {") << possibleTys << StringView("} (") << nSrcIvars << StringView(" src ivars, ") << nDstIvars << StringView(" dst ivars, possibly_diverge=") << possiblyDiverge << StringView(", deferred_destination=") << hasDeferredDestination << StringView(")"));
-            if (nSrcIvars == 0 && /*n_dst_ivars == 0 &&*/ possibleTys.empty() && possiblyDiverge && !hasDeferredDestination && fallbackTy == IvarPossFallbackType::IgnoreWeakDisable) {
-                if (context.crate.edition < ASTEdition::Rust2024) {
-                    auto unit = context.crate.types.unit();
-                    if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, unit)) {
-                        DEBUG(StringView("Possibly `!` and no other options - never-type fallback to `()`"));
-                        context.recordNeverFallback(i);
-                        context.equateTypes(sp, tyL, unit);
-                        return true;
-                    }
-                }
-                auto t = context.crate.types.diverge();
-                if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, t)) {
-                    DEBUG(StringView("Possibly `!` and no other options - setting"));
-                    context.equateTypes(sp, tyL, context.crate.types.diverge());
+            DEBUG(StringView("possible_tys = {") << possibleTys << StringView("} (") << nSrcIvars << StringView(" src ivars, possibly_diverge=") << possiblyDiverge << StringView(", deferred_destination=") << hasDeferredDestination << StringView(")"));
+            // GUESS: exercised by never_type_fallback_to_unit, dies with item 10; DEBT
+            if (nSrcIvars == 0 && possibleTys.empty() && possiblyDiverge && !hasDeferredDestination && fallbackTy == IvarPossFallbackType::IgnoreWeakDisable && context.crate.edition < ASTEdition::Rust2024) {
+                auto unit = context.crate.types.unit();
+                if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, unit)) {
+                    DEBUG(StringView("Possibly `!` and no other options - never-type fallback to `()`"));
+                    context.recordNeverFallback(i);
+                    context.equateTypes(sp, tyL, unit);
                     return true;
-                }
-            }
-
-            for (const auto& e : possibleTys) {
-                if (e.cls == PossibleType::CoerceFrom) {
-                    const HIRType* tmp;
-                    const auto* dty = context.resolve.autoderef(sp, e.ty);
-                    if (dty && !(dty)->is_Infer()) {
-                        for (const auto& e2 : possibleTys) {
-                            if (e2.cls == PossibleType::UnsizeTo) {
-                                if (context.ivars.typesEqual(dty, e2.ty)) {
-                                    DEBUG(StringView("Coerce source can deref once to an unsize destination, picking source ") << e.ty);
-                                    context.equateTypes(sp, tyL, e.ty);
-                                    return true;
-                                }
-                            }
-                        }
-                    }
                 }
             }
 
@@ -2610,18 +2435,6 @@ namespace {
                     DEBUG(StringView("Picking ") << newTy << StringView(" as the only source [") << possibleTys << StringView("]"));
                     context.equateTypes(sp, tyL, newTy);
                     return true;
-                }
-                if (fallbackTy != IvarPossFallbackType::None && nDstIvars == 0 && std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS) == 1) {
-                    auto it = std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS);
-                    const auto* newTy = it->ty;
-                    if (it->isCoerce()) {
-                        DEBUG(StringView("Picking ") << newTy << StringView(" as the only target [") << possibleTys << StringView("]"));
-                        context.equateTypes(sp, tyL, newTy);
-                        return true;
-                    } else {
-                        // HACK: Work around failure in librustc
-                        DEBUG(StringView("Would pick ") << newTy << StringView(" as the only target, but it's an unsize"));
-                    }
                 }
             }
             if (possibleTys.size() > 0 && !honourDisable && nIvars == 0) {
@@ -9535,10 +9348,6 @@ auto PossibleType::isDest() const -> bool {
 
 auto PossibleType::isSourceS(const PossibleType& self) -> bool {
     return self.isSource();
-}
-
-auto PossibleType::isDestS(const PossibleType& self) -> bool {
-    return self.isDest();
 }
 
 auto PossibleType::isCoerce() const -> bool {

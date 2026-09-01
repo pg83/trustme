@@ -203,6 +203,75 @@ eatCache/ivars/solverEnv; никаких static). Гейт-замер интер
   hir_typeck_helpers.h интерфейсах решателя и его потребителях.
 - Статус: ОТКРЫТ.
 
+## Открытые пункты (третий заход, 2026-09-01): движок угадывания типов
+
+Перф-контроль этого захода: бинарь HEAD `fe2a7712f`, уровень 40.8–41.3 с
+на libcore, порог +5%. Замер интерливленными парами, методика выше.
+
+### 10. Ядро: possibleIvarVals / checkIvarPoss
+- `hir_typeck_expr_cs.cpp:1966` (`checkIvarPoss`), `hir_typeck_expr_cs.h`
+  (`Context::IVarPossible`, `possibleIvarVals`): выбор типа для
+  неразрешённого ivar из множеств coerce-from/coerce-to — ранжирование
+  `TypeRestrictiveOrdering` (`:434`; её `tagOrdering`-таблица числится в
+  allowlist static gate — удалить оттуда в финале), флаги `selectable`,
+  барьеры `forceNoFrom/forceNoTo/forceDisable`, пять эскалирующих
+  fallback-раундов `:6115–:6201`: None → Backwards → Assume →
+  IgnoreWeakDisable → FinalOption.
+- Замена: явные литеральные фолбэки (int/float/`!`) как документированные
+  правила + доведение вывода через solver/coercion obligations; настоящая
+  неоднозначность — ошибка с диагностикой.
+- Статус: ОТКРЫТ.
+
+### 11. Фидеры движка
+- `possibleEquateTypeUnknown` / `IvarUnknownType::From/To/Bound` — 12+
+  мест (`:981–:988`, `:1440–:1476`, `:4488` и далее по grep).
+- Умирают вместе с п.10; до того — по мере снятия раундов.
+- Статус: ОТКРЫТ.
+
+### 12. Magic inference links и coercionHints-equate
+- «Magic inferrence link» эвристики операторов/примитивов (`:1396`,
+  `:1420`, `:1433`) — приравнивание типов мимо солвера.
+- Жадный equate по `coercionHints` (probe-гейт есть, но сама механика —
+  эвристика, не obligation).
+- Статус: ОТКРЫТ.
+
+Прогресс п.10 (2026-09-01, шаг «а», верифицирован гейтом): 10 из 11
+мёртвых ветвей удалены (−191 строка), вместе с осиротевшими
+`PossibleType::isDestS`/`nDstIvars`. `never_fallback_unit` оказался живым
+(`never_type_fallback_to_unit`): это НЕ угадывание, а языковое правило
+pre-2024 never-type fallback `!`→`()` — при сносе каркаса оформляется
+явным правилом, не умирает. Unit 1035/1035, static gate 0/0, перф —
+паритет в обоих режимах машины.
+
+### Карта срабатываний (инструментация 2026-09-01, corpus libcore+liballoc+libstd)
+
+Всего 17 239 успешных приравниваний (успех = сдвиг mutationGeneration):
+- magic_primitive_binop 13 003 (75.4%); magic_numeric_uniop 591 (3.4%);
+  magic_borrowed_primitive 1 (мёртв практически).
+- Раунд None 2 767 (16.1%), из них pre_removal_single_source 2 655 (96%);
+  остальное: source_destination_exact 44, most_accepting_pointer 34,
+  only_remaining_option 32, function_pointer_merge 2.
+- coercionHints equate 435 (2.5%, в alloc 12.6%).
+- Assume 194 (1.1%) — все через rank_source_most_permissive; в примерах
+  кандидаты почти всегда взаимно унифицируемы (NonNull<u8> vs NonNull<_77>).
+- IgnoreWeakDisable 131, из них ignore_disable_arbitrary 66 (!),
+  ignore_weak_single_option 42.
+- FinalOption 59 (fallback_single_source 55, most_accepting_pointer 3,
+  raw_pointer_fallback 1); Backwards 58 (все fallback_single_source).
+- Мёртвые на корпусе ветви (11): single_each_concrete_source/destination,
+  single_each_ivar_source/destination, rank_destination_most_restrictive,
+  assume_rank_all, duplicate_source_destination, never_fallback_unit,
+  never_fallback_diverge, coerce_source_deref_unsize_destination,
+  ignore_disable_only_target.
+
+План резки (сверху — раньше): (а) мёртвые ветви; (б) хвост лестницы
+Backwards/Assume/IgnoreWeakDisable/FinalOption — правило «если все
+оставшиеся кандидаты взаимно унифицируемы, унифицировать их все» покрывает
+большинство примеров, произвол (ignore_disable_arbitrary) умирает;
+(в) magic binop/uniop → solver operator obligations + литеральный fallback;
+(г) None/single-source → принципиальное разрешение coercion-obligation;
+(д) coercionHints; (е) снос каркаса + tagOrdering из allowlist.
+
 ## Закрытые пункты
 
 (перечислены выше со статусом ЗАКРЫТ)
