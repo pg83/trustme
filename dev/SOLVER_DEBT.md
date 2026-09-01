@@ -257,6 +257,20 @@ GUESS-остатков 0. `TypeRestrictiveOrdering` пока жива (3 пот�
 раунде None) — умирает на шаге «г»/«е» вместе с tagOrdering в allowlist.
 Unit 1033/1033, static gate 0/0, перф — паритет (мин. 40.93 vs 41.03).
 
+Прогресс п.12 (2026-09-01, шаг «в», верифицирован гейтом): все три
+magic-линка операторов удалены (binop 13k, uniop 591, borrowed 1) вместе
+с `H::typeIsNum`, shift-shortcut и `canContextualisePrimitiveRhs`.
+Замена — правила: из Ambiguous typed response экспортируются только
+отношения, общие для ВСЕХ viable-кандидатов и касающиеся literal-ivar
+(∀-квантор, не выбор); конкретный associated output ограничивает Self
+через typed response; вложенный coercion-ivar даёт подсказку только при
+единогласии всех selectable endpoints; литеральный int→i32/float→f64
+fallback уже существовал в финальной фазе (`applyDefault`) и не менялся.
+Двойной solver-проход оператора устранён (response переиспользуется).
+GUESS-остатков 0. Unit 1033/1033, static gate 0/0, перф: мин. 40.79 vs
+41.03 у базлайна, RSS +2.6 МБ. Из п.12 остаётся только
+coercionHints-equate (шаг «д»).
+
 ### Карта срабатываний (инструментация 2026-09-01, corpus libcore+liballoc+libstd)
 
 Всего 17 239 успешных приравниваний (успех = сдвиг mutationGeneration):

@@ -13007,6 +13007,11 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (distinctViable.length() != 0) {
             ThinVector<SolverSlotValues> candidateSlots;
             ThinVector<SolverResponse> candidateEffects;
+            ThinVector<const HIRType*> candidateAssociatedOutputs;
+            const bool hasLiteralInput = std::any_of(solverResponse.slots.typeInputs.begin(), solverResponse.slots.typeInputs.end(), [](const HIRType* input) {
+                const auto* infer = input->opt_Infer();
+                return infer && infer->isLit();
+            });
             for (size_t i = 0; i < distinctViable.length(); i++) {
                 const auto* candidate = distinctViable[i].first;
                 const auto candidateCertainty = distinctViable[i].second;
@@ -13015,6 +13020,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 candidateSlots.push_back(extractSlotValues(canonical, candidateImpl, canonicalizer, candidateCertainty));
                 SolverResponse effects;
                 appendCandidateEffects(effects, candidate);
+                const HIRType* associatedOutput = nullptr;
                 if (canonicalAssocType && assocName && assocName[0]) {
                     const HIRPathParams noParams;
                     const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noParams;
@@ -13050,10 +13056,14 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                     }
                     if (output != nullptr) {
                         output = normalizeGoalInput(std::move(output));
+                        associatedOutput = output;
                         appendAssociatedEquality(effects, canonicalAssocType, std::move(output));
                     }
                 }
                 candidateEffects.push_back(std::move(effects));
+                if (hasLiteralInput && canonicalAssocType && assocName && assocName[0]) {
+                    candidateAssociatedOutputs.push_back(associatedOutput);
+                }
             }
 
             const auto& first = candidateSlots.front();
@@ -13089,6 +13099,46 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 }
                 if (shared) {
                     solverResponse.slots.values[slot] = common.clone();
+                }
+            }
+
+            /* A response can prove relations between canonical inputs even when
+             * the concrete witness differs between candidates. Literal-class
+             * slots need these relations before their final numeric fallback. */
+            if (hasLiteralInput) {
+                for (size_t leftSlot = 0; leftSlot < solverResponse.slots.typeInputs.size(); leftSlot++) {
+                    for (size_t rightSlot = leftSlot + 1; rightSlot < solverResponse.slots.typeInputs.size(); rightSlot++) {
+                        const auto* leftInfer = solverResponse.slots.typeInputs[leftSlot]->opt_Infer();
+                        const auto* rightInfer = solverResponse.slots.typeInputs[rightSlot]->opt_Infer();
+                        if ((!leftInfer || !leftInfer->isLit()) && (!rightInfer || !rightInfer->isLit())) {
+                            continue;
+                        }
+                        const bool sharedRelation = std::all_of(candidateSlots.begin(), candidateSlots.end(), [&](const SolverSlotValues& slots) {
+                            return leftSlot < slots.types.size() && rightSlot < slots.types.size() && slots.types[leftSlot] == slots.types[rightSlot];
+                        });
+                        if (sharedRelation && solverResponse.slots.typeInputs[leftSlot] != solverResponse.slots.typeInputs[rightSlot]) {
+                            solverResponse.equalities.push_back(SolverTypeEquality{solverResponse.slots.typeInputs[leftSlot], solverResponse.slots.typeInputs[rightSlot]});
+                        }
+                    }
+                }
+                if (canonicalAssocType && candidateAssociatedOutputs.size() == candidateSlots.size()) {
+                    for (size_t slot = 0; slot < solverResponse.slots.typeInputs.size(); slot++) {
+                        const auto* inputInfer = solverResponse.slots.typeInputs[slot]->opt_Infer();
+                        if (!inputInfer || !inputInfer->isLit()) {
+                            continue;
+                        }
+                        bool sharedRelation = true;
+                        for (size_t candidate = 0; candidate < candidateSlots.size(); candidate++) {
+                            const auto& slots = candidateSlots[candidate];
+                            if (!candidateAssociatedOutputs[candidate] || slot >= slots.types.size() || candidateAssociatedOutputs[candidate] != slots.types[slot]) {
+                                sharedRelation = false;
+                                break;
+                            }
+                        }
+                        if (sharedRelation && canonicalAssocType != solverResponse.slots.typeInputs[slot]) {
+                            solverResponse.equalities.push_back(SolverTypeEquality{canonicalAssocType, solverResponse.slots.typeInputs[slot]});
+                        }
+                    }
                 }
             }
 

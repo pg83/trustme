@@ -1297,29 +1297,6 @@ namespace {
         std::optional<const HIRType*> outputType;
 
         struct H {
-            static bool typeIsNum(const HIRType* t) {
-                switch ((*t).tag()) {
-                    default:
-                        return false;
-                    case HIRType::TAG_Primitive: {
-                        auto& e = (*t).as_Primitive();
-                        switch (e) {
-                            case HIRCoreType::Str:
-                            case HIRCoreType::Char:
-                                return false;
-                            default:
-                                return true;
-                        }
-                        break;
-                    }
-                    case HIRType::TAG_Infer: {
-                        auto& e = (*t).as_Infer();
-                        return e.isLit();
-                    }
-                }
-                UNREACHABLE();
-            }
-
             static bool unaryCanUseExpected(TypeckPrimitiveOperator op, const HIRType* type) {
                 if (primitiveOperatorHasBuiltin(op, type)) {
                     return true;
@@ -1332,32 +1309,63 @@ namespace {
             }
         };
 
+        /* A nested coercion ivar guides candidate selection only when all of
+         * its selectable concrete endpoints agree. Divergence is not guidance. */
         const auto concreteCoercionSource = [&](const HIRType* type) {
             const auto* infer = context.getType(type)->opt_Infer();
             if (!infer || infer->index == ~0u || infer->index >= context.possibleIvarVals.size()) {
                 return static_cast<const HIRType*>(nullptr);
             }
+            const HIRType* concrete = nullptr;
             const auto& possible = context.possibleIvarVals[infer->index];
             for (const auto& source : possible.typesCoerceFrom) {
                 if (!source.selectable) {
                     continue;
                 }
                 const auto* sourceType = context.getType(source.ty);
-                if (!sourceType->is_Infer()) {
-                    return sourceType;
+                if (!sourceType->is_Infer() && !sourceType->is_Diverge()) {
+                    if (concrete && concrete != sourceType && !concrete->equalsIgnoringRegions(sourceType)) {
+                        return static_cast<const HIRType*>(nullptr);
+                    }
+                    concrete = sourceType;
                 }
             }
-            return static_cast<const HIRType*>(nullptr);
+            return concrete;
+        };
+        const auto concreteCoercionTarget = [&](const HIRType* type) {
+            const auto* infer = context.getType(type)->opt_Infer();
+            if (!infer || infer->index == ~0u || infer->index >= context.possibleIvarVals.size()) {
+                return static_cast<const HIRType*>(nullptr);
+            }
+            const HIRType* concrete = nullptr;
+            const auto& possible = context.possibleIvarVals[infer->index];
+            for (const auto& target : possible.typesCoerceTo) {
+                if (!target.selectable) {
+                    continue;
+                }
+                const auto* targetType = context.getType(target.ty);
+                if (!targetType->is_Infer() && !targetType->is_Diverge()) {
+                    if (concrete && concrete != targetType && !concrete->equalsIgnoringRegions(targetType)) {
+                        return static_cast<const HIRType*>(nullptr);
+                    }
+                    concrete = targetType;
+                }
+            }
+            return concrete;
         };
 
         bool hasSemanticOperatorImpl = false;
         bool sawCurrentOperatorImpl = false;
         bool currentOperatorImplHasBuiltinSignature = false;
+        SolverResponse operatorResponse;
+        bool hasOperatorResponse = false;
+        bool operatorProbeUsesOriginalInputs = true;
         if (v.operatorKind != TypeckPrimitiveOperator::None) {
             auto probeParams = v.params.clone();
             if (probeParams.types.size() == 1) {
                 if (const auto* source = concreteCoercionSource(probeParams.types.front())) {
                     probeParams.types.front() = source;
+                    operatorProbeUsesOriginalInputs = false;
                 }
             }
             const SolverOperatorGoal operatorGoal{
@@ -1370,89 +1378,21 @@ namespace {
                 hasSemanticOperatorImpl = response.operatorSummary.hasSemanticImpl;
                 sawCurrentOperatorImpl = response.operatorSummary.sawCurrentImpl;
                 currentOperatorImplHasBuiltinSignature = response.operatorSummary.currentImplHasBuiltinSignature;
-                return response.impl != nullptr;
-            }, {.operatorGoal = &operatorGoal, .ambiguity = SolverAmbiguityPolicy::Report});
+                const bool hasImpl = response.impl != nullptr;
+                operatorResponse = std::move(response);
+                hasOperatorResponse = true;
+                return hasImpl;
+            }, {
+                .assocName = v.name.c_str(),
+                .assocType = v.name == "" ? nullptr : v.leftTy,
+                .assocParams = v.name == "" ? nullptr : &v.atyPp,
+                .allowInferInputs = true,
+                .operatorGoal = &operatorGoal,
+                .ambiguity = SolverAmbiguityPolicy::Report,
+            });
         }
 
-        if (v.name != "" && (v.operatorKind == TypeckPrimitiveOperator::Shl || v.operatorKind == TypeckPrimitiveOperator::Shr || v.operatorKind == TypeckPrimitiveOperator::ShlAssign || v.operatorKind == TypeckPrimitiveOperator::ShrAssign)) {
-            const auto* valueTy = context.getType(v.implTy);
-            if (const auto* borrow = valueTy->opt_Borrow()) {
-                valueTy = context.getType(borrow->inner);
-            }
-            const auto* leftInfer = valueTy->opt_Infer();
-            if (leftInfer && leftInfer->tyClass == HIRInferClass::Integer) {
-                DEBUG(StringView("- Shift of an integer literal yields its own type"));
-                context.equateTypes(sp, v.leftTy, valueTy);
-            }
-        }
-
-        if (v.isOperator && v.params.types.size() == 1 && !context.ivars.typeContainsIvars(v.implTy, /*only_unbound=*/true)) {
-            if (const auto* borrow = context.getType(v.implTy)->opt_Borrow()) {
-                const auto& valueTy = context.getType(borrow->inner);
-                const auto& rightTy = context.getType(v.params.types.front());
-                if (H::typeIsNum(valueTy) && !valueTy->is_Infer() && H::typeIsNum(rightTy)) {
-                    DEBUG(StringView("- Magic inferrence link through a borrowed primitive"));
-                    if (v.name != "") {
-                        context.equateTypes(sp, v.leftTy, valueTy);
-                    }
-                    const bool isComparison = v.operatorKind == TypeckPrimitiveOperator::Equal || v.operatorKind == TypeckPrimitiveOperator::Order;
-                    if (!isComparison && primitiveOperatorLhsDeterminesRhs(v.operatorKind, valueTy)) {
-                        context.equateTypes(sp, v.params.types.front(), valueTy);
-                    }
-                }
-            }
-        }
-
-        const bool canContextualisePrimitiveRhs = v.isOperator && !hasSemanticOperatorImpl && (!sawCurrentOperatorImpl || currentOperatorImplHasBuiltinSignature) && v.params.types.size() == 1 && !context.ivars.typeContainsIvars(v.implTy, /*only_unbound=*/true) && primitiveOperatorLhsDeterminesRhs(v.operatorKind, context.getType(v.implTy)) && v.params.types.front()->is_Infer() && v.params.types.front()->as_Infer().index == ~0u;
-        if (canContextualisePrimitiveRhs) {
-            v.params.types.front() = context.addIvars(v.params.types.front());
-        }
-
-        const bool primitiveTypesAreContextual = !context.ivars.typeContainsIvars(v.implTy, /*only_unbound=*/true) && !context.ivars.pathparamsContainIvars(v.params, /*only_unbound=*/true) && (v.name == "" || !context.ivars.typeContainsIvars(v.leftTy, /*only_unbound=*/true));
-
-        if (v.isOperator && !hasSemanticOperatorImpl && primitiveTypesAreContextual) {
-            if (v.params.types.size() == 0) {
-                const auto& ty = context.getType(v.implTy);
-                const auto& res = context.getType(v.leftTy);
-                if (H::typeIsNum(ty)) {
-                    DEBUG(StringView("- Magic inferrence link for uniops on numerics"));
-                    context.equateTypes(sp, res, ty);
-                }
-            } else if (v.params.types.size() == 1) {
-                const auto& left = v.implTy;
-                const auto& right = v.params.types.at(0);
-                const auto& res = v.leftTy;
-                const auto& leftTy = context.getType(left);
-                const auto& rightTy = context.getType(right);
-                const bool primitiveOrLiteralPair = H::typeIsNum(leftTy) && H::typeIsNum(rightTy);
-                const bool languagePrimitiveCandidate = primitiveOperatorHasLanguageCandidate(v.operatorKind, leftTy, rightTy);
-                const bool isShiftOperator = v.operatorKind == TypeckPrimitiveOperator::Shl || v.operatorKind == TypeckPrimitiveOperator::Shr || v.operatorKind == TypeckPrimitiveOperator::ShlAssign || v.operatorKind == TypeckPrimitiveOperator::ShrAssign;
-                if (primitiveOrLiteralPair || languagePrimitiveCandidate) {
-                    DEBUG(StringView("- Magic inferrence link for primitive binops"));
-                    if (v.name == "") {
-                    } else {
-                        context.equateTypes(sp, res, left);
-                    }
-                    if (isShiftOperator) {
-                        if (rightTy->is_Infer() && rightTy->as_Infer().isLit() && !leftTy->is_Infer()) {
-                            context.possibleEquateTypeUnknown(sp, right, Context::IvarUnknownType::To);
-                            return AssociatedCheckResult::Stalled;
-                        }
-                    } else {
-                        context.equateTypes(sp, left, right);
-                    }
-                    if (v.name != "" && context.getType(left)->is_Infer() && context.getType(right)->is_Infer() && context.getType(res)->is_Infer()) {
-                        context.possibleEquateTypeUnknown(sp, right, Context::IvarUnknownType::To);
-                        DEBUG(StringView("> All are infer, skip"));
-                        return AssociatedCheckResult::Stalled;
-                    }
-                }
-
-                context.possibleEquateTypeUnknown(sp, right, Context::IvarUnknownType::To);
-            } else {
-                BUG(sp, StringView("Associated type rule with `is_operator` set but an incorrect parameter count"));
-            }
-        }
+        const bool operatorTypesAreResolved = !context.ivars.typeContainsIvars(v.implTy) && !context.ivars.pathparamsContainIvars(v.params, /*only_unbound=*/false) && (v.name == "" || !context.ivars.typeContainsIvars(v.leftTy));
 
         if (v.name != "") {
             context.possibleEquateTypeUnknown(sp, v.leftTy, Context::IvarUnknownType::Bound);
@@ -1462,14 +1402,17 @@ namespace {
             return AssociatedCheckResult::Complete;
         }
 
+        /* A concrete associated output can select Self through the trait's typed
+         * response even when every input still contains inference variables. */
+        const bool outputConstrainsSelf = v.isOperator && v.name != "" && !context.getType(v.leftTy)->is_Diverge() && !context.ivars.typeContainsIvars(v.leftTy);
         if (const auto* e = context.ivars.getType(v.implTy)->opt_Infer()) {
             const bool hasSelfCoercionGuidance = e->index != ~0u && e->index < context.possibleIvarVals.size() && (!context.possibleIvarVals[e->index].typesCoerceTo.empty() || !context.possibleIvarVals[e->index].typesCoerceFrom.empty());
             // TODO: ?
-            if (!e->isLit() && v.params.types.empty() && !hasSelfCoercionGuidance) {
+            if (!e->isLit() && v.params.types.empty() && !hasSelfCoercionGuidance && !outputConstrainsSelf) {
                 return AssociatedCheckResult::Ambiguous;
             }
 
-            if (!e->isLit() && !hasSelfCoercionGuidance) {
+            if (!e->isLit() && !hasSelfCoercionGuidance && !outputConstrainsSelf) {
                 for (const auto& t : v.params.types) {
                     context.possibleEquateTypeUnknown(sp, t, Context::IvarUnknownType::To);
                 }
@@ -1492,7 +1435,7 @@ namespace {
             return false;
         };
 
-        if (!hasSemanticOperatorImpl && primitiveTypesAreContextual && currentOperatorUsesLanguagePrimitive()) {
+        if (!hasSemanticOperatorImpl && operatorTypesAreResolved && currentOperatorUsesLanguagePrimitive()) {
             return AssociatedCheckResult::Complete;
         }
 
@@ -1505,9 +1448,12 @@ namespace {
             }
             const bool inputRequiresSized = infer->index < context.ivarsSized.length() && context.ivarsSized[infer->index];
             const auto append = [&](const Context::IVarPossible::CoerceTy& edge, SolverCoercionConstraint::Direction direction) {
-                const auto* other = context.getType(edge.ty);
+                auto* other = context.getType(edge.ty);
                 if (const auto* otherInfer = other->opt_Infer(); otherInfer && otherInfer->index != ~0u) {
-                    return;
+                    other = direction == SolverCoercionConstraint::Direction::InputIsDestination ? concreteCoercionSource(other) : concreteCoercionTarget(other);
+                    if (!other) {
+                        return;
+                    }
                 }
                 coercionGoals.push_back(
                     SolverCoercionConstraint{
@@ -1560,27 +1506,36 @@ namespace {
         };
         const HIRType* lateClosureReturn = registerLateClosureOutput(context.getType(v.implTy));
 
+        /* The current primitive impl is redundant only after every operator
+         * type is known. Before then its typed head carries inference effects. */
+        const auto* excludedCurrentOperatorImpl = currentOperatorUsesLanguagePrimitive() && operatorTypesAreResolved ? context.currentTraitImpl : nullptr;
+
         SolverResponse response;
         bool hasResponse = false;
-        context.resolve.solveTraitGoal(
-            sp,
-            v.trait,
-            v.params,
-            v.implTy,
-            [&](SolverResponse value) {
-                response = std::move(value);
-                hasResponse = true;
-                return true;
-            },
-            {
-                .assocName = v.name.c_str(),
-                .assocType = v.name == "" || lateClosureReturn ? nullptr : v.leftTy,
-                .assocParams = v.name == "" ? nullptr : &v.atyPp,
-                .allowInferInputs = true,
-                .excludedImpl = currentOperatorUsesLanguagePrimitive() ? context.currentTraitImpl : nullptr,
-                .coercions = coercionGoals.empty() ? nullptr : &coercionGoals,
-            }
-        );
+        if (hasOperatorResponse && operatorProbeUsesOriginalInputs && coercionGoals.empty()) {
+            response = std::move(operatorResponse);
+            hasResponse = true;
+        } else {
+            context.resolve.solveTraitGoal(
+                sp,
+                v.trait,
+                v.params,
+                v.implTy,
+                [&](SolverResponse value) {
+                    response = std::move(value);
+                    hasResponse = true;
+                    return true;
+                },
+                {
+                    .assocName = v.name.c_str(),
+                    .assocType = v.name == "" || lateClosureReturn ? nullptr : v.leftTy,
+                    .assocParams = v.name == "" ? nullptr : &v.atyPp,
+                    .allowInferInputs = true,
+                    .excludedImpl = excludedCurrentOperatorImpl,
+                    .coercions = coercionGoals.empty() ? nullptr : &coercionGoals,
+                }
+            );
+        }
         if (!lateClosureReturn && hasResponse && response.impl) {
             lateClosureReturn = registerLateClosureOutput(response.impl->getImplType(context.crate.types));
             if (lateClosureReturn) {
@@ -1612,12 +1567,28 @@ namespace {
             }
         }
 
-
-        if (!hasResponse || !response.impl || v.operatorKind != TypeckPrimitiveOperator::None) {
-        }
-
         if (hasResponse) {
             if (response.certainty == SolverCertainty::Ambiguous && !hasSelfCoercionGoal) {
+                /* Preserve only relations involving literal-class inputs before
+                 * returning ambiguity; final numeric fallback can then retry. */
+                SolverResponse literalEffects;
+                literalEffects.certainty = response.certainty;
+                const auto isLiteralIvar = [&](const HIRType* type) {
+                    const auto* infer = context.getType(type)->opt_Infer();
+                    return infer && infer->isLit();
+                };
+                for (size_t i = 0; i < response.slots.typeInputs.size(); i++) {
+                    if (isLiteralIvar(response.slots.typeInputs[i]) || isLiteralIvar(response.slots.types[i])) {
+                        literalEffects.slots.typeInputs.push_back(response.slots.typeInputs[i]);
+                        literalEffects.slots.types.push_back(response.slots.types[i]);
+                    }
+                }
+                for (const auto& equality : response.equalities) {
+                    if (isLiteralIvar(equality.left) || isLiteralIvar(equality.right)) {
+                        literalEffects.equalities.push_back(equality);
+                    }
+                }
+                context.applySolverResponse(sp, literalEffects);
                 const auto* implType = context.getType(v.implTy);
                 if (const auto* path = implType->opt_Path(); path && path->binding.is_Unbound()) {
                     return AssociatedCheckResult::Stalled;
