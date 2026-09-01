@@ -298,6 +298,37 @@ obligations переносятся при слиянии ivar-классов. GU
 1033/1033 + 89/89, static gate 0/0, перф: new быстрее во всех парах
 (40.6–40.9 vs 41.2–44.4). П.12 закрыт целиком.
 
+Прогресс пп.10–11 (2026-09-01, шаг «е», верифицирован гейтом): каркас
+снесён. `Context::IVarPossible`/`possibleIvarVals`/`getPossibleIvarSink`/
+`CapturedIvarPossible` и все фидеры `possibleEquateTypeUnknown`/
+`IvarUnknownType` удалены (−970/+428); финализация (`finaliseIvarCoercions`,
+бывший `checkIvarPoss`) читает кандидатов из view над живыми
+`Context::Coercion`/solver deferred coercions через `IvarCoercionIndex`,
+перевычисляемый `evaluateCoercionGoal`. Каждый флаг/барьер сведён к факту
+obligations (таблица в отчёте задачи): selectable → неразрешённость
+противоположного endpoint/alternative-группа из solver response;
+forceNoFrom/To → живой Coercion/revisit/constraint; forceDisable →
+`Associated::stalledOn`/pattern-revisit зависимости. Never-fallback стал
+настоящей коэрцией `! → result`; generic defaults — самостоятельный
+декларативный фолбэк (`ivarDefaults`: только объявленные дефолты,
+применение последним, только при единогласии класса — разногласие
+остаётся ambiguity). GUESS 0. Unit 1033/1033 + 89/89, static gate 0/0,
+перф: быстрый режим +1% (41.47 vs 41.07), медленный — паритет.
+
+## Итог кампании (2026-09-01)
+
+Пп. 10–12 закрыты целиком. Движок угадывания не существует: grep
+`checkIvarPoss|possibleIvarVals|IVarPossible|TypeRestrictiveOrdering|`
+`possibleEquateTypeUnknown|IvarUnknownType|tagOrdering` по bin/rustc = 0.
+Финальный независимый deep-dive гейта: выбора типа вне солвера нет;
+финализация — правила (совместная унификация, identity-commit финальной
+фазы, решётка указателей с ambiguity на несравнимых, fn-pointer LUB) над
+view из настоящих obligations; фолбэки — только явные языковые правила
+(int→i32/float→f64, `!`→`()` pre-2024 как коэрция, объявленные generic
+defaults при единогласии, RPIT). Единственный `std::sort` в финализации —
+дедупликация индексов. Перф кампании: уровень базлайна `fe2a7712f`
+сохранён (быстрый режим 40.8–41.5, медленный — паритет).
+
 ### Карта срабатываний (инструментация 2026-09-01, corpus libcore+liballoc+libstd)
 
 Всего 17 239 успешных приравниваний (успех = сдвиг mutationGeneration):

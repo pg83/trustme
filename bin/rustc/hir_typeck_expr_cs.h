@@ -19,6 +19,8 @@ struct Context {
         virtual const Span& span() const = 0;
         virtual void fmt(stl::ZeroCopyOutput& os) const = 0;
         virtual bool revisit(Context& context, bool isFallback) = 0;
+        virtual void collectInferenceDependencies(const Context&, stl::Vector<unsigned>&) const {
+        }
     };
 
     struct Binding {
@@ -28,53 +30,23 @@ struct Context {
 
     struct Coercion {
         unsigned ruleIdx;
+        Span obligationSpan;
         const HIRType* leftTy;
         HIRExprNodeP* rightNodePtr;
-    };
+        const HIRType* rightTy;
+        SolverCoercionOp op;
 
-    struct IVarPossible {
-        struct CoerceTy {
-            enum Op {
-                Coercion,
-                Unsizing,
-            } op;
+        Coercion(unsigned ruleIdx, const HIRType* leftTy, HIRExprNodeP* rightNodePtr);
+        Coercion(unsigned ruleIdx, const Span& span, const HIRType* leftTy, const HIRType* rightTy, SolverCoercionOp op);
 
-            const HIRType* ty;
-            bool selectable;
-            bool patternConstraint;
-            unsigned alternativeGroup;
-
-            CoerceTy(const HIRType* ty, bool isCoerce, bool selectable = true, unsigned alternativeGroup = 0, bool patternConstraint = false);
-        };
-
-        bool forceDisable = false;
-        bool forceNoTo = false;
-        bool forceNoFrom = false;
-
-        std::vector<CoerceTy> typesCoerceTo;
-
-        std::vector<CoerceTy> typesCoerceFrom;
-
-        HIRTypeRefSet typesDefault;
-
-        HIRTypeRefSet rawPointerFallbacks;
-
-        void reset();
-
-        bool hasRules() const;
-
-        void mergeFrom(const IVarPossible& source);
+        const Span& span() const;
+        const HIRType* sourceType() const;
     };
 
     struct Associated {
         struct StallDependency {
             unsigned index;
             const HIRType* resolved;
-        };
-
-        struct CapturedIvarPossible {
-            unsigned index;
-            IVarPossible possibilities;
         };
 
         unsigned ruleIdx;
@@ -93,7 +65,6 @@ struct Context {
         bool isAmbiguous = false;
 
         stl::Vector<StallDependency> stalledOn;
-        ThinVector<CapturedIvarPossible> stalledPossibilities;
     };
 
     const HIRCrate& crate;
@@ -104,7 +75,6 @@ struct Context {
     TraitResolution resolve;
 
     unsigned nextRuleIdx;
-    unsigned nextCoercionAlternativeGroup = 1;
 
     std::vector<std::unique_ptr<Coercion>> linkCoerce;
     std::vector<Associated> linkAssoc;
@@ -126,10 +96,12 @@ struct Context {
 
     HIRGenericParams emptyGenericParams;
     stl::Vector<bool> ivarsSized;
-    std::vector<IVarPossible> possibleIvarVals;
-    ThinVector<Associated::CapturedIvarPossible>* possibleIvarSink = nullptr;
 
-    IVarPossible* getPossibleIvarSink(unsigned index);
+    struct IvarDefault {
+        unsigned index;
+        const HIRType* type;
+    };
+    ThinVector<IvarDefault> ivarDefaults;
 
     struct TaitEntry {
         HIRPathParams params;
@@ -179,6 +151,7 @@ struct Context {
     void compactIvars(const Span& sp);
 
     void equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr);
+    void addCoercionObligation(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op);
 
     void equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimplePath& trait, HIRPathParams params, const HIRType* implTy, const char* name, const HIRPathParams& atyPp, bool isOp = false, TypeckPrimitiveOperator operatorKind = TypeckPrimitiveOperator::None);
 
@@ -199,32 +172,7 @@ struct Context {
 
     void selectWellFormed(const Span& sp, const HIRType* type);
 
-    IVarPossible* getIvarPossibilities(const Span& sp, unsigned int ivarIndex);
-
-    enum class IvarUnknownType {
-        To,
-
-        From,
-
-        Bound,
-    };
-
-    void possibleEquateTypeUnknown(const Span& sp, const HIRType* ty, IvarUnknownType srcTy);
-
-    void possibleEquateTypeBounds(const Span& sp, const HIRType* ty, stl::Vector<const HIRType*> t);
-
-    enum class PossibleTypeSource {
-        CoerceTo,
-        UnsizeTo,
-        CoerceFrom,
-        UnsizeFrom,
-    };
-
-    void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRType* t, PossibleTypeSource srcTy, bool selectable = true, unsigned alternativeGroup = 0, bool patternConstraint = false);
-
-    void possibleEquateIvarRawPointerFallback(const Span& sp, unsigned int ivarIndex, const HIRType* type);
-
-    void possibleEquateIvarUnknown(const Span& sp, unsigned int ivarIndex, IvarUnknownType srcTy);
+    void addIvarDefault(const Span& sp, unsigned int ivarIndex, const HIRType* type);
 
     void handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type, bool isIrrefutable = false);
     void handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HIRType* type);

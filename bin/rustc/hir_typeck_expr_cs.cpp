@@ -29,6 +29,8 @@ using namespace stl;
 #define NEWNODE(TY, SP, CLASS, ...) mkExprnodep(context.crate.pool->make<HIRExprNode##CLASS>(SP, ##__VA_ARGS__), TY)
 
 namespace {
+    struct IvarCoercionIndex;
+
     struct MonomorphEraseHrls: public Monomorphiser {
         explicit MonomorphEraseHrls(HIRTypeInterner& types);
 
@@ -42,10 +44,11 @@ namespace {
         bool completed;
         bool isFallback;
         const Vector<const HIRType*>* passStartIvars;
+        const IvarCoercionIndex* coercionIndex;
 
         bool nodeDiverges(const HIRExprNode& node) const;
 
-        ExprVisitorRevisit(Context& context, bool fallback = false, const Vector<const HIRType*>* passStartIvars = nullptr);
+        ExprVisitorRevisit(Context& context, bool fallback = false, const Vector<const HIRType*>* passStartIvars = nullptr, const IvarCoercionIndex* coercionIndex = nullptr);
 
         bool nodeCompleted() const;
 
@@ -342,22 +345,20 @@ namespace {
         void collect();
     };
 
-    struct IvarDependencyIndex {
-        Context& context;
-        std::vector<Vector<unsigned int>> associatedTargets;
-        std::vector<Vector<unsigned int>> possibilityTargets;
-
-        static void collectDirectIvars(const HIRType* type, Vector<unsigned int>& out);
-
-        static void deduplicate(Vector<unsigned int>& values);
-
-        IvarDependencyIndex(Context& context);
-
-        void disableDependents(unsigned int source);
+    struct IvarCoercionEndpoint {
+        const HIRType* other;
+        SolverCoercionConstraint::Direction direction;
+        SolverCoercionOp op;
+        const Context::Coercion* obligation;
+        unsigned alternativeGroup;
     };
 
     struct IvarCoercionRefs {
         Vector<const Context::Coercion*> coercions;
+        Vector<IvarCoercionEndpoint> endpoints;
+        Vector<const Context::Associated*> associated;
+        Vector<const HIRExprNode*> revisits;
+        Vector<const Context::Revisitor*> advancedRevisits;
     };
 
     struct IvarCoercionIndex {
@@ -365,9 +366,12 @@ namespace {
         std::vector<IvarCoercionRefs> refs;
 
         void collectIvars(const HIRType* root, Vector<unsigned int>& out) const;
+        static void deduplicate(Vector<unsigned int>& values);
 
         template <typename T>
         void addRefs(const Vector<unsigned int>& dependencies, Vector<T> IvarCoercionRefs::* member, T value);
+
+        void addEndpoint(const Context::Coercion& obligation, const SolverDeferredCoercion& deferred, unsigned alternativeGroup);
 
         explicit IvarCoercionIndex(const Context& context);
 
@@ -389,15 +393,12 @@ namespace {
 
         enum class State {
             Concrete,
-            Barrier,
             Removed,
         } state;
 
         const HIRType* ty;
 
         static PossibleType concrete(decltype(cls) cls, const HIRType* ty);
-
-        static PossibleType barrier(decltype(cls) cls);
 
         bool isActive() const;
 
@@ -866,37 +867,6 @@ namespace {
         Unsize,
     };
 
-    void registerDeferredCoercions(Context& context, const Span& sp, const SolverCoercionResponse& response) {
-        ThinVector<std::pair<unsigned, unsigned>> alternativeGroups;
-        const auto contextAlternativeGroup = [&](unsigned responseGroup) {
-            if (responseGroup == 0) {
-                return 0u;
-            }
-            for (const auto& group : alternativeGroups) {
-                if (group.first == responseGroup) {
-                    return group.second;
-                }
-            }
-            const auto contextGroup = context.nextCoercionAlternativeGroup++;
-            alternativeGroups.push_back({responseGroup, contextGroup});
-            return contextGroup;
-        };
-        for (const auto& deferred : response.deferred) {
-            const auto* destination = context.getType(deferred.destination);
-            const auto* source = context.getType(deferred.source);
-            const auto to = deferred.op == SolverCoercionOp::Unsizing ? Context::PossibleTypeSource::UnsizeTo : Context::PossibleTypeSource::CoerceTo;
-            const auto from = deferred.op == SolverCoercionOp::Unsizing ? Context::PossibleTypeSource::UnsizeFrom : Context::PossibleTypeSource::CoerceFrom;
-            const auto alternativeGroup = contextAlternativeGroup(deferred.alternativeGroup);
-            if (const auto* infer = source->opt_Infer(); infer && !infer->isLit()) {
-                context.possibleEquateIvar(sp, infer->index, destination, to, false, alternativeGroup);
-            }
-            if (const auto* infer = destination->opt_Infer(); infer && !infer->isLit()) {
-                const auto* sourceInfer = source->opt_Infer();
-                context.possibleEquateIvar(sp, infer->index, source, from, !sourceInfer || sourceInfer->isLit(), alternativeGroup);
-            }
-        }
-    }
-
     // TODO: Add a (two?) callback(s) that handle type equalities (and possible equalities) so this function doesn't have to mutate the context
     CoerceResult checkUnsizeTys(const Context& context, const Span& sp, const HIRType* dstRaw, const HIRType* srcRaw, Context* contextMut, HIRExprNodeP* nodePtrPtr = nullptr) {
         const auto& dst = context.ivars.getType(dstRaw);
@@ -918,7 +888,6 @@ namespace {
         if (solverResponse.effects.certainty == SolverCertainty::Proven) {
             if (contextMut) {
                 contextMut->applySolverResponse(sp, solverResponse.effects);
-                registerDeferredCoercions(*contextMut, sp, solverResponse);
             }
             if (solverResponse.adjustment.kind == SolverCoercionAdjustmentKind::SourceAutoderef) {
                 ASSERT_BUG(sp, nodePtrPtr && contextMut && !solverResponse.adjustment.sourceAutoderef.empty(), StringView("Source autoderef coercion has no adjustment target"));
@@ -941,7 +910,6 @@ namespace {
         if (solverResponse.effects.certainty == SolverCertainty::Ambiguous) {
             if (contextMut) {
                 contextMut->applySolverResponse(sp, solverResponse.effects);
-                registerDeferredCoercions(*contextMut, sp, solverResponse);
             }
             return CoerceResult::Unknown;
         }
@@ -965,23 +933,11 @@ namespace {
         if (solverResponse.effects.certainty == SolverCertainty::Ambiguous) {
             if (contextMut) {
                 contextMut->applySolverResponse(sp, solverResponse.effects);
-                registerDeferredCoercions(*contextMut, sp, solverResponse);
-                if (src->is_Infer()) {
-                    contextMut->possibleEquateTypeUnknown(sp, dst, Context::IvarUnknownType::From);
-                }
-                if (const auto* destinationInfer = dst->opt_Infer(); destinationInfer && src->is_NodeType() && src->as_NodeType().is_Closure()) {
-                    const auto* closure = src->as_NodeType().as_Closure();
-                    for (const auto& argument : closure->args) {
-                        contextMut->possibleEquateTypeUnknown(sp, argument.second, Context::IvarUnknownType::To);
-                    }
-                    contextMut->possibleEquateTypeUnknown(sp, closure->returnType, Context::IvarUnknownType::Bound);
-                }
             }
             return CoerceResult::Unknown;
         }
         if (contextMut) {
             contextMut->applySolverResponse(sp, solverResponse.effects);
-            registerDeferredCoercions(*contextMut, sp, solverResponse);
         }
 
         const auto retagYieldingValue = [&]() {
@@ -1105,10 +1061,31 @@ namespace {
     }
 
     bool checkCoerce(Context& context, const Context::Coercion& v) {
+        if (!v.rightNodePtr) {
+            const auto& sp = v.span();
+            const auto* tyDst = context.getType(v.leftTy);
+            const auto* tySrc = context.getType(v.sourceType());
+            TRACE_FUNCTION_F(v << StringView(" - ") << context.ivars.fmtType(tyDst) << StringView(" := ") << context.ivars.fmtType(tySrc));
+            const auto result = v.op == SolverCoercionOp::Coercion
+                ? checkCoerceTys(context, sp, tyDst, tySrc, &context)
+                : checkUnsizeTys(context, sp, tyDst, tySrc, &context);
+            switch (result) {
+                case CoerceResult::Fail:
+                case CoerceResult::Unknown:
+                    return false;
+                case CoerceResult::Equality:
+                    context.equateTypes(sp, tyDst, tySrc);
+                    return true;
+                case CoerceResult::Custom:
+                case CoerceResult::Unsize:
+                    return true;
+            }
+            UNREACHABLE();
+        }
         HIRExprNodeP& nodePtr = *v.rightNodePtr;
-        const auto& sp = nodePtr->span();
+        const auto& sp = v.span();
         const auto& tyDst = context.ivars.getType(v.leftTy);
-        const auto& tySrc = context.ivars.getType(nodePtr->resType);
+        const auto& tySrc = context.ivars.getType(v.sourceType());
         TRACE_FUNCTION_FR(v << StringView(" - ") << context.ivars.fmtType(tyDst) << StringView(" := ") << context.ivars.fmtType(tySrc), v << StringView(" - ") << context.ivars.fmtType(v.leftTy) << StringView(" := ") << context.ivars.fmtType(nodePtr->resType));
 
         struct PendingSourceDeref: HIRExprVisitorDef {
@@ -1191,12 +1168,6 @@ namespace {
         dependency.visitNodePtr(nodePtr);
         const bool hasPendingDerefTarget = dependency.found;
         if (hasPendingDerefTarget) {
-            const auto* dstInfer = tyDst->opt_Infer();
-            const auto* srcInfer = tySrc->opt_Infer();
-            if (cast<HIRExprNodeDeref>(nodePtr.get()) && dstInfer && srcInfer && !dstInfer->isLit() && !srcInfer->isLit()) {
-                context.possibleEquateIvar(sp, srcInfer->index, tyDst, Context::PossibleTypeSource::CoerceTo);
-                context.possibleEquateIvar(sp, dstInfer->index, tySrc, Context::PossibleTypeSource::CoerceFrom);
-            }
             DEBUG(StringView("Deref target is pending - keep coercion"));
             return false;
         }
@@ -1261,7 +1232,16 @@ namespace {
         return false;
     }
 
-    AssociatedCheckResult checkAssociated(Context& context, Context::Associated& v) {
+    bool coercionEndpointCanDetermineType(const Context& context, const IvarCoercionEndpoint& endpoint) {
+        if (endpoint.direction != SolverCoercionConstraint::Direction::InputIsDestination) {
+            return false;
+        }
+        const auto* other = context.getType(endpoint.other);
+        const auto* infer = other->opt_Infer();
+        return !infer || infer->isLit();
+    }
+
+    AssociatedCheckResult checkAssociated(Context& context, const IvarCoercionIndex& coercionIndex, Context::Associated& v) {
         const auto& sp = v.span;
 
         TRACE_FUNCTION_F(v);
@@ -1301,19 +1281,19 @@ namespace {
         };
 
         /* A nested coercion ivar guides candidate selection only when all of
-         * its selectable concrete endpoints agree. Divergence is not guidance. */
+         * its candidate-binding concrete source endpoints agree. Divergence
+         * is not guidance. */
         const auto concreteCoercionSource = [&](const HIRType* type) {
             const auto* infer = context.getType(type)->opt_Infer();
-            if (!infer || infer->index == ~0u || infer->index >= context.possibleIvarVals.size()) {
+            if (!infer || infer->index == ~0u || infer->index >= coercionIndex.refs.size()) {
                 return static_cast<const HIRType*>(nullptr);
             }
             const HIRType* concrete = nullptr;
-            const auto& possible = context.possibleIvarVals[infer->index];
-            for (const auto& source : possible.typesCoerceFrom) {
-                if (!source.selectable) {
+            for (const auto& endpoint : coercionIndex[infer->index].endpoints) {
+                if (endpoint.direction != SolverCoercionConstraint::Direction::InputIsDestination || !coercionEndpointCanDetermineType(context, endpoint)) {
                     continue;
                 }
-                const auto* sourceType = context.getType(source.ty);
+                const auto* sourceType = context.getType(endpoint.other);
                 if (!sourceType->is_Infer() && !sourceType->is_Diverge()) {
                     if (concrete && concrete != sourceType && !concrete->equalsIgnoringRegions(sourceType)) {
                         return static_cast<const HIRType*>(nullptr);
@@ -1325,16 +1305,15 @@ namespace {
         };
         const auto concreteCoercionTarget = [&](const HIRType* type) {
             const auto* infer = context.getType(type)->opt_Infer();
-            if (!infer || infer->index == ~0u || infer->index >= context.possibleIvarVals.size()) {
+            if (!infer || infer->index == ~0u || infer->index >= coercionIndex.refs.size()) {
                 return static_cast<const HIRType*>(nullptr);
             }
             const HIRType* concrete = nullptr;
-            const auto& possible = context.possibleIvarVals[infer->index];
-            for (const auto& target : possible.typesCoerceTo) {
-                if (!target.selectable) {
+            for (const auto& endpoint : coercionIndex[infer->index].endpoints) {
+                if (endpoint.direction != SolverCoercionConstraint::Direction::InputIsSource || !coercionEndpointCanDetermineType(context, endpoint)) {
                     continue;
                 }
-                const auto* targetType = context.getType(target.ty);
+                const auto* targetType = context.getType(endpoint.other);
                 if (!targetType->is_Infer() && !targetType->is_Diverge()) {
                     if (concrete && concrete != targetType && !concrete->equalsIgnoringRegions(targetType)) {
                         return static_cast<const HIRType*>(nullptr);
@@ -1385,10 +1364,6 @@ namespace {
 
         const bool operatorTypesAreResolved = !context.ivars.typeContainsIvars(v.implTy) && !context.ivars.pathparamsContainIvars(v.params, /*only_unbound=*/false) && (v.name == "" || !context.ivars.typeContainsIvars(v.leftTy));
 
-        if (v.name != "") {
-            context.possibleEquateTypeUnknown(sp, v.leftTy, Context::IvarUnknownType::Bound);
-        }
-
         if (v.isOperator && v.params.types.empty() && context.getType(v.implTy)->is_Diverge() && H::unaryCanUseExpected(v.operatorKind, context.getType(v.leftTy))) {
             return AssociatedCheckResult::Complete;
         }
@@ -1397,16 +1372,13 @@ namespace {
          * response even when every input still contains inference variables. */
         const bool outputConstrainsSelf = v.isOperator && v.name != "" && !context.getType(v.leftTy)->is_Diverge() && !context.ivars.typeContainsIvars(v.leftTy);
         if (const auto* e = context.ivars.getType(v.implTy)->opt_Infer()) {
-            const bool hasSelfCoercionGuidance = e->index != ~0u && e->index < context.possibleIvarVals.size() && (!context.possibleIvarVals[e->index].typesCoerceTo.empty() || !context.possibleIvarVals[e->index].typesCoerceFrom.empty());
+            const bool hasSelfCoercionGuidance = e->index != ~0u && e->index < coercionIndex.refs.size() && !coercionIndex[e->index].endpoints.empty();
             // TODO: ?
             if (!e->isLit() && v.params.types.empty() && !hasSelfCoercionGuidance && !outputConstrainsSelf) {
                 return AssociatedCheckResult::Ambiguous;
             }
 
             if (!e->isLit() && !hasSelfCoercionGuidance && !outputConstrainsSelf) {
-                for (const auto& t : v.params.types) {
-                    context.possibleEquateTypeUnknown(sp, t, Context::IvarUnknownType::To);
-                }
                 return AssociatedCheckResult::Ambiguous;
             }
         }
@@ -1434,14 +1406,14 @@ namespace {
         const auto appendCoercionGoals = [&](const HIRType* rawInput, unsigned typeIndex, bool isSelf) {
             const auto* input = context.getType(rawInput);
             const auto* infer = input->opt_Infer();
-            if (!infer || infer->index == ~0u || infer->index >= context.possibleIvarVals.size()) {
+            if (!infer || infer->index == ~0u || infer->index >= coercionIndex.refs.size()) {
                 return;
             }
             const bool inputRequiresSized = infer->index < context.ivarsSized.length() && context.ivarsSized[infer->index];
-            const auto append = [&](const Context::IVarPossible::CoerceTy& edge, SolverCoercionConstraint::Direction direction) {
-                auto* other = context.getType(edge.ty);
+            const auto append = [&](const IvarCoercionEndpoint& endpoint) {
+                auto* other = context.getType(endpoint.other);
                 if (const auto* otherInfer = other->opt_Infer(); otherInfer && otherInfer->index != ~0u) {
-                    other = direction == SolverCoercionConstraint::Direction::InputIsDestination ? concreteCoercionSource(other) : concreteCoercionTarget(other);
+                    other = endpoint.direction == SolverCoercionConstraint::Direction::InputIsDestination ? concreteCoercionSource(other) : concreteCoercionTarget(other);
                     if (!other) {
                         return;
                     }
@@ -1450,25 +1422,21 @@ namespace {
                     SolverCoercionConstraint{
                         static_cast<unsigned>(typeIndex),
                         other,
-                        direction,
-                        edge.op == Context::IVarPossible::CoerceTy::Coercion ? SolverCoercionOp::Coercion : SolverCoercionOp::Unsizing,
+                        endpoint.direction,
+                        endpoint.op,
                         isSelf,
                         inputRequiresSized,
-                        edge.op == Context::IVarPossible::CoerceTy::Unsizing,
-                        edge.selectable,
-                        edge.alternativeGroup,
+                        endpoint.op == SolverCoercionOp::Unsizing,
+                        coercionEndpointCanDetermineType(context, endpoint),
+                        endpoint.alternativeGroup,
                     }
                 );
             };
-            const auto& possible = context.possibleIvarVals[infer->index];
-            for (const auto& edge : possible.typesCoerceFrom) {
-                if (context.getType(edge.ty)->is_Diverge()) {
+            for (const auto& endpoint : coercionIndex[infer->index].endpoints) {
+                if (endpoint.direction == SolverCoercionConstraint::Direction::InputIsDestination && context.getType(endpoint.other)->is_Diverge()) {
                     continue;
                 }
-                append(edge, SolverCoercionConstraint::Direction::InputIsDestination);
-            }
-            for (const auto& edge : possible.typesCoerceTo) {
-                append(edge, SolverCoercionConstraint::Direction::InputIsSource);
+                append(endpoint);
             }
         };
         appendCoercionGoals(v.implTy, 0, true);
@@ -1692,7 +1660,7 @@ namespace {
         return true;
     }
 
-    bool associatedStillStalled(const Context& context, const Context::Associated& rule) {
+    bool associatedStillStalled(const Context& context, const IvarCoercionIndex& coercionIndex, const Context::Associated& rule) {
         if (rule.stalledOn.empty()) {
             return false;
         }
@@ -1700,32 +1668,16 @@ namespace {
             if (context.ivars.getType(dependency.index) != dependency.resolved) {
                 return false;
             }
-            if (dependency.index >= context.possibleIvarVals.size()) {
+            if (dependency.index >= coercionIndex.refs.size()) {
                 return true;
             }
-            const auto& possibilities = context.possibleIvarVals[dependency.index];
-            const auto hasUsableGuidance = [&](const auto& edges) {
-                return std::any_of(edges.begin(), edges.end(), [&](const auto& edge) {
-                    const auto* other = context.getType(edge.ty);
-                    const auto* infer = other->opt_Infer();
-                    return !infer || infer->index == ~0u;
-                });
-            };
-            return !hasUsableGuidance(possibilities.typesCoerceTo) && !hasUsableGuidance(possibilities.typesCoerceFrom);
+            const auto& endpoints = coercionIndex[dependency.index].endpoints;
+            return std::none_of(endpoints.begin(), endpoints.end(), [&](const auto& endpoint) {
+                const auto* other = context.getType(endpoint.other);
+                const auto* infer = other->opt_Infer();
+                return !infer || infer->index == ~0u;
+            });
         });
-    }
-
-    void mergeAssociatedPossibilities(Context& context, const ThinVector<Context::Associated::CapturedIvarPossible>& captured) {
-        for (const auto& value : captured) {
-            const auto resolved = context.ivars.getType(value.index);
-            if (!resolved->is_Infer() || resolved->as_Infer().index != value.index) {
-                continue;
-            }
-            if (value.index >= context.possibleIvarVals.size()) {
-                context.possibleIvarVals.resize(value.index + 1);
-            }
-            context.possibleIvarVals[value.index].mergeFrom(value.possibilities);
-        }
     }
 
     bool typeHasIndependentUnresolvedIvar(const Context& context, const HIRType* type, unsigned int exceptIndex, const ActiveOperatorOutput* active = nullptr);
@@ -1795,7 +1747,7 @@ namespace {
 
     bool numericDefaultMustWait(const Context& context, unsigned int index) {
         for (const auto& coercion : context.linkCoerce) {
-            const auto* source = (*coercion->rightNodePtr)->resType;
+            const auto* source = coercion->sourceType();
             const bool destinationUsesIndex = typeDependsOnIvar(context, coercion->leftTy, index);
             const bool sourceUsesIndex = typeDependsOnIvar(context, source, index);
             if ((destinationUsesIndex && source->mayHaveAssociatedType() && typeHasIndependentUnresolvedIvar(context, source, index)) || (sourceUsesIndex && coercion->leftTy->mayHaveAssociatedType() && typeHasIndependentUnresolvedIvar(context, coercion->leftTy, index))) {
@@ -1893,16 +1845,16 @@ namespace {
         for (const auto* bound : coercionRefs.coercions) {
             usedTy = false;
             auto tL = cloneTyWith(context.crate.types, sp, bound->leftTy, cb);
-            auto tR = cloneTyWith(context.crate.types, sp, (*bound->rightNodePtr)->resType, cb);
+            auto tR = cloneTyWith(context.crate.types, sp, bound->sourceType(), cb);
             if (!usedTy) {
                 continue;
             }
             tL = context.expandAssociatedTypes(sp, mv$(tL));
             tR = context.expandAssociatedTypes(sp, mv$(tR));
 
-            DEBUG(StringView("Check Coerce R") << bound->ruleIdx << StringView(" - ") << bound->leftTy << StringView(" := ") << (*bound->rightNodePtr)->resType);
+            DEBUG(StringView("Check Coerce R") << bound->ruleIdx << StringView(" - ") << bound->leftTy << StringView(" := ") << bound->sourceType());
             DEBUG(StringView("Testing ") << tL << StringView(" := ") << tR);
-            const auto response = context.resolve.evaluateCoercionGoal(sp, tL, tR, SolverCoercionOp::Coercion);
+            const auto response = context.resolve.evaluateCoercionGoal(sp, tL, tR, bound->op);
             if (response.effects.certainty == SolverCertainty::NoSolution) {
                 DEBUG(StringView("Solver rejected coercion candidate"));
                 return true;
@@ -1916,11 +1868,13 @@ namespace {
             }
         }
 
-        for (const auto& pty : context.possibleIvarVals.at(tyL->as_Infer().index).typesCoerceTo) {
-            const auto op = pty.op == Context::IVarPossible::CoerceTy::Unsizing ? SolverCoercionOp::Unsizing : SolverCoercionOp::Coercion;
-            const auto response = context.resolve.evaluateCoercionGoal(sp, pty.ty, newTy, op, op == SolverCoercionOp::Unsizing);
+        for (const auto& endpoint : coercionRefs.endpoints) {
+            if (endpoint.direction != SolverCoercionConstraint::Direction::InputIsSource) {
+                continue;
+            }
+            const auto response = context.resolve.evaluateCoercionGoal(sp, endpoint.other, newTy, endpoint.op, endpoint.op == SolverCoercionOp::Unsizing);
             if (response.effects.certainty == SolverCertainty::NoSolution) {
-                DEBUG(StringView("Solver rejected possible coercion target ") << pty.ty << StringView(" <- ") << newTy);
+                DEBUG(StringView("Solver rejected coercion target ") << endpoint.other << StringView(" <- ") << newTy);
                 return true;
             }
         }
@@ -1928,7 +1882,7 @@ namespace {
         return false;
     }
 
-    bool checkIvarPoss(Context& context, const IvarCoercionIndex& coercionIndex, unsigned int i, Context::IVarPossible& ivarEnt, bool finalPhase = false, bool allowIdentityCommit = false, bool allowUnsizingIdentityCommit = false) {
+    bool finaliseIvarCoercions(Context& context, const IvarCoercionIndex& coercionIndex, unsigned int i, bool finalPhase = false, bool allowIdentityCommit = false, bool allowUnsizingIdentityCommit = false) {
         Span _span;
         const auto& sp = _span;
 
@@ -1936,15 +1890,10 @@ namespace {
         const auto& coercionRefs = coercionIndex[i];
 
         if (!((*tyL).is_Infer() && ((*tyL).as_Infer().index == i))) {
-            if (ivarEnt.hasRules()) {
-                DEBUG(StringView("- IVar ") << i << StringView(" had possibilities, but was known to be ") << tyL);
-                ivarEnt = Context::IVarPossible();
-            } else {
-            }
             return false;
         }
 
-        if (!ivarEnt.hasRules()) {
+        if (coercionRefs.endpoints.empty()) {
             return false;
         }
 
@@ -1952,29 +1901,26 @@ namespace {
             bool allowUnsized = !(i < context.ivarsSized.length() ? context.ivarsSized[i] : false);
 
             std::vector<PossibleType> possibleTys;
-            if (ivarEnt.forceNoFrom) {
-                possibleTys.push_back(PossibleType::barrier(PossibleType::UnsizeFrom));
+            for (const auto& endpoint : coercionRefs.endpoints) {
+                if (!coercionEndpointCanDetermineType(context, endpoint)) {
+                    continue;
+                }
+                const auto cls = endpoint.direction == SolverCoercionConstraint::Direction::InputIsDestination
+                    ? (endpoint.op == SolverCoercionOp::Coercion ? PossibleType::CoerceFrom : PossibleType::UnsizeFrom)
+                    : (endpoint.op == SolverCoercionOp::Coercion ? PossibleType::CoerceTo : PossibleType::UnsizeTo);
+                possibleTys.push_back(PossibleType::concrete(cls, context.getType(endpoint.other)));
             }
-            const bool hasConcreteSource = std::any_of(ivarEnt.typesCoerceFrom.begin(), ivarEnt.typesCoerceFrom.end(), [&](const auto& source) {
-                const auto* type = context.getType(source.ty);
-                return source.selectable && !type->is_Infer() && !type->is_Diverge();
+            const bool hasConcreteSource = std::any_of(possibleTys.begin(), possibleTys.end(), [](const auto& source) {
+                return source.isSource() && !source.ty->is_Infer() && !source.ty->is_Diverge();
             });
-            for (const auto& newTy : ivarEnt.typesCoerceFrom) {
-                if (newTy.selectable) {
-                    possibleTys.push_back(PossibleType::concrete(newTy.op == Context::IVarPossible::CoerceTy::Coercion ? PossibleType::CoerceFrom : PossibleType::UnsizeFrom, context.getType(newTy.ty)));
-                }
-            }
-            if (ivarEnt.forceNoTo) {
-                possibleTys.push_back(PossibleType::barrier(PossibleType::UnsizeTo));
-            }
-            for (const auto& newTy : ivarEnt.typesCoerceTo) {
-                /* A pattern supplies a type constraint while the scrutinee is
-                 * unknown.  Once a concrete coercion source exists, the
-                 * pattern is a compatibility effect, not an alternative
-                 * destination candidate; validation below still checks it. */
-                if (newTy.selectable && !(newTy.patternConstraint && hasConcreteSource)) {
-                    possibleTys.push_back(PossibleType::concrete(newTy.op == Context::IVarPossible::CoerceTy::Coercion ? PossibleType::CoerceTo : PossibleType::UnsizeTo, context.getType(newTy.ty)));
-                }
+            const bool hasInferenceBarrier = !coercionRefs.associated.empty()
+                || !coercionRefs.revisits.empty()
+                || !coercionRefs.advancedRevisits.empty()
+                || (coercionRefs.endpoints.empty() && !coercionRefs.coercions.empty());
+
+            if (hasInferenceBarrier && !finalPhase) {
+                DEBUG(i << StringView(": unresolved obligation still owns this ivar"));
+                return false;
             }
 
             DEBUG(i << StringView(": possible_tys = ") << possibleTys);
@@ -2042,12 +1988,13 @@ namespace {
                     bool pending = false;
                     visitTyWith(candidateType, [&](const HIRType* inner) {
                         const auto* infer = context.getType(inner)->opt_Infer();
-                        if (!infer || infer->index == i || infer->index >= context.possibleIvarVals.size()) {
+                        if (!infer || infer->index == i || infer->index >= coercionIndex.refs.size()) {
                             return false;
                         }
-                        const auto& nested = context.possibleIvarVals[infer->index];
-                        pending = std::any_of(nested.typesCoerceFrom.begin(), nested.typesCoerceFrom.end(), [&](const auto& source) {
-                            return source.selectable && !context.getType(source.ty)->is_Diverge();
+                        pending = std::any_of(coercionIndex[infer->index].endpoints.begin(), coercionIndex[infer->index].endpoints.end(), [&](const auto& endpoint) {
+                            return endpoint.direction == SolverCoercionConstraint::Direction::InputIsDestination
+                                && coercionEndpointCanDetermineType(context, endpoint)
+                                && !context.getType(endpoint.other)->is_Diverge();
                         });
                         return pending;
                     });
@@ -2099,46 +2046,9 @@ namespace {
                 return true;
             }
 
-            /* A top-level named/value/range pattern is a type constraint on
-             * an otherwise unknown scrutinee, not a coercion alternative.
-             * Apply one such constraint directly; multiple arms must jointly
-             * unify or the scrutinee remains ambiguous.  Nested pattern
-             * shapes are deliberately excluded because match ergonomics must
-             * first learn whether their enclosing field is borrowed. */
-            Vector<PossibleType> determiningPatternConstraints;
-            if (finalPhase && !hasConcreteSource && !ivarEnt.forceNoFrom && !ivarEnt.forceNoTo && !ivarEnt.forceDisable) {
-                for (const auto& destination : ivarEnt.typesCoerceTo) {
-                    if (destination.selectable && destination.patternConstraint) {
-                        determiningPatternConstraints.pushBack(PossibleType::concrete(
-                            destination.op == Context::IVarPossible::CoerceTy::Coercion ? PossibleType::CoerceTo : PossibleType::UnsizeTo,
-                            context.getType(destination.ty)
-                        ));
-                    }
-                }
-            }
-            if (jointlyUnifyCandidates(determiningPatternConstraints, 1)) {
-                return true;
-            }
-
             if (tyL->as_Infer().isLit() && !finalPhase) {
                 DEBUG(i << StringView(": Literal ") << tyL);
                 return false;
-            }
-            if (ivarEnt.forceDisable && !finalPhase) {
-                DEBUG(i << StringView(": forced unknown"));
-                return false;
-            }
-
-            const bool hasInferenceBarrier = ivarEnt.forceDisable || ivarEnt.forceNoTo || ivarEnt.forceNoFrom;
-            if (ivarEnt.forceNoTo || ivarEnt.forceNoFrom) {
-                if (!finalPhase) {
-                    DEBUG(i << StringView(": coercion blocked"));
-                    return false;
-                }
-                DEBUG(i << StringView(": ignoring exhausted final-phase barriers"));
-                possibleTys.erase(std::remove_if(possibleTys.begin(), possibleTys.end(), [](const PossibleType& candidate) {
-                    return !candidate.hasType();
-                }), possibleTys.end());
             }
 
             /* A concrete outgoing Coercion edge is a directed upper bound,
@@ -2154,11 +2064,11 @@ namespace {
              * unsizing. */
             const HIRType* directedDestination = nullptr;
             bool uniqueDirectedDestination = true;
-            for (const auto& destination : ivarEnt.typesCoerceTo) {
-                if (destination.op != Context::IVarPossible::CoerceTy::Coercion || destination.patternConstraint) {
+            for (const auto& endpoint : coercionRefs.endpoints) {
+                if (endpoint.direction != SolverCoercionConstraint::Direction::InputIsSource || endpoint.op != SolverCoercionOp::Coercion) {
                     continue;
                 }
-                const auto* type = context.getType(destination.ty);
+                const auto* type = context.getType(endpoint.other);
                 if (type->is_Infer()) {
                     continue;
                 }
@@ -2195,19 +2105,16 @@ namespace {
              * constraints takes its source type: dest := source.  Applying
              * this before that point would be unsound because a later
              * destination constraint could still require a real coercion.
-             * forceNoFrom
-             * and forceNoTo are discovery barriers only: every ordinary
-             * producer has run before this final round, so a marker that has
-             * not become a concrete edge is exhausted.  A forceDisable bound
-             * is not an alternative type: identity propagates the source into
-             * that obligation, and coercionCandidateIsInvalid must prove it.
+             * Pending associated/revisit obligations are not alternative
+             * types: identity propagates the source into those obligations,
+             * and coercionCandidateIsInvalid must prove the coercion edges.
              * An outgoing coercion is propagation, not a competing constraint:
              * it receives the committed source type on the next pass.  If its
              * destination already makes that type impossible,
              * coercionCandidateIsInvalid rejects the commit.
-             * Non-selectable destination effects are not competing choices;
-             * coercionCandidateIsInvalid must nevertheless prove that the
-             * source satisfies all of them before the commit. */
+             * Deferred destination effects whose source input is still open
+             * are not competing choices; coercionCandidateIsInvalid must
+             * nevertheless prove them before the commit. */
             Vector<const PossibleType*> identityCandidates;
             for (const auto& candidate : possibleTys) {
                 if (candidate.hasType() && !(candidate.isSource() && candidate.ty->is_Diverge())) {
@@ -2216,8 +2123,9 @@ namespace {
             }
             if (finalPhase
                 && allowIdentityCommit
-                && std::none_of(ivarEnt.typesCoerceTo.begin(), ivarEnt.typesCoerceTo.end(), [](const auto& destination) {
-                    return destination.selectable && !destination.patternConstraint;
+                && std::none_of(coercionRefs.endpoints.begin(), coercionRefs.endpoints.end(), [&](const auto& endpoint) {
+                    return endpoint.direction == SolverCoercionConstraint::Direction::InputIsSource
+                        && coercionEndpointCanDetermineType(context, endpoint);
                 })
                 && identityCandidates.length() == 1
                 && identityCandidates[0]->isSource()
@@ -2227,18 +2135,6 @@ namespace {
                 context.equateTypes(sp, tyL, identityCandidates[0]->ty);
                 return true;
             }
-
-            ASSERT_BUG(
-                sp,
-                std::all_of(
-                    possibleTys.begin(),
-                    possibleTys.end(),
-                    [](const PossibleType& ty) {
-                return ty.hasType();
-            }
-                ),
-                StringView("Coercion barrier escaped into concrete type selection")
-            );
 
             // - TODO: Should this also remove &_ types? (maybe not, as they give information about borrow classes)
             size_t nIvars;
@@ -2545,14 +2441,15 @@ namespace {
                 return true;
             }
 
-            const bool hasDeferredDestination = std::any_of(ivarEnt.typesCoerceTo.begin(), ivarEnt.typesCoerceTo.end(), [&](const auto& edge) {
-                return !context.getType(edge.ty)->is_Infer();
+            const bool hasDeferredDestination = std::any_of(coercionRefs.endpoints.begin(), coercionRefs.endpoints.end(), [](const auto& endpoint) {
+                return endpoint.direction == SolverCoercionConstraint::Direction::InputIsSource;
             });
             DEBUG(i << StringView(": possible_tys = {") << possibleTys << StringView("} (") << nSrcIvars << StringView(" src ivars, possibly_diverge=") << possiblyDiverge << StringView(", deferred_destination=") << hasDeferredDestination << StringView(")"));
             /* Never-type fallback is the last language fallback in this
              * component.  A resolved non-bottom source may still arrive via
              * an ivar edge during either identity propagation phase. */
-            if (finalPhase && allowUnsizingIdentityCommit && !ivarEnt.forceDisable && nSrcIvars == 0 && possibleTys.empty() && possiblyDiverge && !hasDeferredDestination && context.crate.edition < ASTEdition::Rust2024) {
+            const bool hasUnresolvedOwner = !coercionRefs.advancedRevisits.empty();
+            if (finalPhase && allowUnsizingIdentityCommit && !hasUnresolvedOwner && nSrcIvars == 0 && possibleTys.empty() && possiblyDiverge && !hasDeferredDestination && context.crate.edition < ASTEdition::Rust2024) {
                 auto unit = context.crate.types.unit();
                 if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, unit)) {
                     DEBUG(StringView("Possibly `!` and no other options - never-type fallback to `()`"));
@@ -2582,11 +2479,9 @@ namespace {
             const auto& typ = paramDefs.types[i];
             if (const auto* te = ty->opt_Infer()) {
                 if (!typ.defaultValue->is_Infer()) {
-                    if (auto* ent = context.getIvarPossibilities(sp, te->index)) {
-                        auto defTy = ms.monomorphType(sp, typ.defaultValue);
-                        DEBUG(StringView("Added default for ") << ty << StringView(": ") << defTy);
-                        ent->typesDefault.insert(std::move(defTy));
-                    }
+                    auto defTy = ms.monomorphType(sp, typ.defaultValue);
+                    DEBUG(StringView("Added default for ") << ty << StringView(": ") << defTy);
+                    context.addIvarDefault(sp, te->index, defTy);
                 }
             }
         }
@@ -3070,18 +2965,6 @@ void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType*
                 this->requireSized(sp, rT);
             }
 
-            /* Solver effects belong to the ivar equivalence class, not to
-             * whichever numeric representative happened to receive them.
-             * Coercion equality can choose the opposite representative from
-             * an earlier generic-default producer (Wrapper<T, S = T> is the
-             * minimal case), so carry every accumulated obligation into the
-             * representative retained by ivarUnify. */
-            if (lE->index != rE->index && rE->index < possibleIvarVals.size()) {
-                if (lE->index >= possibleIvarVals.size()) {
-                    possibleIvarVals.resize(lE->index + 1);
-                }
-                possibleIvarVals[lE->index].mergeFrom(possibleIvarVals[rE->index]);
-            }
             this->ivars.ivarUnify(lE->index, rE->index);
         } else {
             setIvar(rT, lT);
@@ -3508,6 +3391,16 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                 TRACE_FUNCTION_F(StringView("Match ergonomics - ") << pattern << StringView(" : ") << outerTy << StringView(isFallbackMode ? " (fallback)" : ""));
                 outerTy = context.expandAssociatedTypes(sp, mv$(outerTy));
                 return this->revisitInnerReal(context, pattern, outerTy, outerMode, isFallbackMode, nestedRoot);
+            }
+
+            void collectInferenceDependencies(const Context& context, Vector<unsigned>& dependencies) const override {
+                visitTyWith(outerTy, [&](const HIRType* inner) {
+                    const auto* resolved = context.getType(inner);
+                    if (const auto* infer = resolved->opt_Infer(); infer && infer->index != ~0u) {
+                        dependencies.pushBack(infer->index);
+                    }
+                    return false;
+                });
             }
 
             // TODO: Recurse into inner patterns, creating new revisitors?
@@ -4034,15 +3927,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                 DEBUG(StringView("- ") << nDeref << StringView(" derefs of class ") << bt << StringView(" to get ") << ty);
                 if (ty->is_Infer() || ((*ty).is_Path() && ((*ty).as_Path().binding.is_Unbound()))) {
                     const auto* infer = ty->opt_Infer();
-                    /* Pattern fallback may default an otherwise unconstrained
-                     * scrutinee to the pattern shape.  A live discovery/bound
-                     * barrier means an external expected type can still
-                     * arrive (notably through a generic closure argument), so
-                     * defaulting before that effect materialises is unsound. */
-                    const bool fallbackBlocked = infer && infer->index < context.possibleIvarVals.size()
-                        && (context.possibleIvarVals[infer->index].forceDisable
-                            || context.possibleIvarVals[infer->index].forceNoFrom
-                            || context.possibleIvarVals[infer->index].forceNoTo);
 
                     const auto& possibleType = getPossibleType(context, pattern);
                     if (possibleType) {
@@ -4058,47 +3942,40 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         if (possibleTypeP) {
                             const auto* possibleType = possibleTypeP;
                             if (isFallback) {
-                                /* A nested shape cannot default its own ivar:
-                                 * the enclosing scrutinee may still reveal an
-                                 * implicit borrow on the next solver pass.
-                                 * Only the root owns pattern fallback. */
-                                if (!fallbackBlocked && !nestedRoot) {
+                                /* A nested pattern can determine its input
+                                 * only after every external obligation which
+                                 * mentions that input has had its fallback
+                                 * pass.  The pattern revisit itself is the
+                                 * remaining fact, not a stored candidate. */
+                                bool hasExternalInferenceOwner = false;
+                                if (nestedRoot && infer && infer->index != ~0u) {
+                                    const IvarCoercionIndex obligations(context);
+                                    if (infer->index < obligations.refs.size()) {
+                                        const auto& refs = obligations[infer->index];
+                                        hasExternalInferenceOwner = !refs.coercions.empty()
+                                            || !refs.associated.empty()
+                                            || !refs.revisits.empty();
+                                    }
+                                }
+                                if (!nestedRoot || !hasExternalInferenceOwner) {
                                     const HIRType* fallbackType = possibleType;
                                     if (!isIrrefutable) {
                                         if (const auto* te2 = possibleType->opt_Array()) {
-                                            fallbackType = context.crate.types.slice(te2->inner);
+                                            const bool requiresSized = infer
+                                                && infer->index < context.ivarsSized.length()
+                                                && context.ivarsSized[infer->index];
+                                            if (!requiresSized) {
+                                                fallbackType = context.crate.types.slice(te2->inner);
+                                            }
                                         }
                                     }
                                     DEBUG(StringView("Fallback equate ") << fallbackType);
                                     context.equateTypes(sp, ty, fallbackType);
                                 }
-                            } else if (infer) {
-                                if (const auto* te2 = possibleType->opt_Array()) {
-                                    if (isIrrefutable) {
-                                        context.possibleEquateIvar(sp, infer->index, possibleType, Context::PossibleTypeSource::UnsizeTo);
-                                    } else {
-                                        auto t = context.crate.types.slice(te2->inner);
-                                        /* A refutable slice pattern constrains the scrutinee to
-                                         * unsize to a slice; it does not propose the array length
-                                         * written in the pattern as its sole type.  Preserve that
-                                         * exact array as a pattern equality candidate too: equal
-                                         * shapes across all arms jointly determine an unknown
-                                         * sized scrutinee, while alternative `[]`/`[x]` shapes do
-                                         * not unify and retain only the slice compatibility edge. */
-                                        context.possibleEquateIvar(sp, infer->index, possibleType, Context::PossibleTypeSource::UnsizeTo, true, 0, true);
-                                        context.possibleEquateIvar(sp, infer->index, t, Context::PossibleTypeSource::UnsizeTo, false);
-                                    }
-                                } else {
-                                    const bool determinesUnknownScrutinee = !isNested
-                                        && (pattern.data.is_Value() || pattern.data.is_Range() || pattern.data.is_PathValue() || pattern.data.is_PathTuple() || pattern.data.is_PathNamed());
-                                    context.possibleEquateIvar(sp, infer->index, possibleType, Context::PossibleTypeSource::UnsizeTo, isIrrefutable || determinesUnknownScrutinee, 0, !isIrrefutable);
-                                }
-                            } else {
                             }
                         }
                     }
 
-                    MatchErgonomicsRevisit::disablePossibilitiesOnBindings(sp, context, pattern, /*is_top_level=*/true);
                     return false;
                 }
                 if (ty->is_Primitive() && ty->as_Primitive() == HIRCoreType::Str) {
@@ -4430,104 +4307,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     }
                 }
                 return rv;
-            }
-
-            static void disablePossibilitiesOnBindings(const Span& sp, Context& context, const HIRPattern& pat, bool isTopLevel = false) {
-                if (!isTopLevel) {
-                    for (const auto& pb : pat.bindings) {
-                        context.possibleEquateTypeUnknown(sp, context.getVar(sp, pb.slot), Context::IvarUnknownType::Bound);
-                    }
-                }
-                switch (pat.data.tag()) {
-                    case HIRPatternData::TAG_Any: {
-                        break;
-                    }
-                    case HIRPatternData::TAG_Value: {
-                        break;
-                    }
-                    case HIRPatternData::TAG_Range: {
-                        break;
-                    }
-                    case HIRPatternData::TAG_Box: {
-                        auto& e = pat.data.as_Box();
-                        disablePossibilitiesOnBindings(sp, context, *e.sub);
-                        break;
-                    }
-                    case HIRPatternData::TAG_Deref: {
-                        auto& e = pat.data.as_Deref();
-                        disablePossibilitiesOnBindings(sp, context, *e.sub);
-                        break;
-                    }
-                    case HIRPatternData::TAG_Ref: {
-                        auto& e = pat.data.as_Ref();
-                        disablePossibilitiesOnBindings(sp, context, *e.sub);
-                        break;
-                    }
-                    case HIRPatternData::TAG_Tuple: {
-                        auto& e = pat.data.as_Tuple();
-                        for (auto& subpat : e.subPatterns) {
-                            disablePossibilitiesOnBindings(sp, context, subpat);
-                        }
-                        break;
-                    }
-                    case HIRPatternData::TAG_SplitTuple: {
-                        auto& e = pat.data.as_SplitTuple();
-                        for (auto& subpat : e.leading) {
-                            disablePossibilitiesOnBindings(sp, context, subpat);
-                        }
-                        for (auto& subpat : e.trailing) {
-                            disablePossibilitiesOnBindings(sp, context, subpat);
-                        }
-                        break;
-                    }
-                    case HIRPatternData::TAG_Slice: {
-                        auto& e = pat.data.as_Slice();
-                        for (auto& sub : e.subPatterns) {
-                            disablePossibilitiesOnBindings(sp, context, sub);
-                        }
-                        break;
-                    }
-                    case HIRPatternData::TAG_SplitSlice: {
-                        auto& e = pat.data.as_SplitSlice();
-                        for (auto& sub : e.leading) {
-                            disablePossibilitiesOnBindings(sp, context, sub);
-                        }
-                        if (e.extraBind.isValid()) {
-                            context.possibleEquateTypeUnknown(sp, context.getVar(sp, e.extraBind.slot), Context::IvarUnknownType::Bound);
-                        }
-                        for (auto& sub : e.trailing) {
-                            disablePossibilitiesOnBindings(sp, context, sub);
-                        }
-                        break;
-                    }
-                    case HIRPatternData::TAG_PathValue: {
-                        break;
-                    }
-                    case HIRPatternData::TAG_PathTuple: {
-                        auto& e = pat.data.as_PathTuple();
-                        for (auto& subpat : e.leading) {
-                            disablePossibilitiesOnBindings(sp, context, subpat);
-                        }
-                        for (auto& subpat : e.trailing) {
-                            disablePossibilitiesOnBindings(sp, context, subpat);
-                        }
-                        break;
-                    }
-                    case HIRPatternData::TAG_PathNamed: {
-                        auto& e = pat.data.as_PathNamed();
-                        for (auto& fieldPat : e.subPatterns) {
-                            disablePossibilitiesOnBindings(sp, context, fieldPat.second);
-                        }
-                        break;
-                    }
-                    case HIRPatternData::TAG_Or: {
-                        auto& e = pat.data.as_Or();
-                        for (auto& subpat : e) {
-                            disablePossibilitiesOnBindings(sp, context, subpat);
-                        }
-                        break;
-                    }
-                }
             }
 
             static void createBindings(const Span& sp, Context& context, HIRPattern& pat) {
@@ -5201,6 +4980,34 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
     }
 }
 
+Context::Coercion::Coercion(unsigned ruleIdx, const HIRType* leftTy, HIRExprNodeP* rightNodePtr)
+    : ruleIdx(ruleIdx)
+    , obligationSpan((*rightNodePtr)->span())
+    , leftTy(leftTy)
+    , rightNodePtr(rightNodePtr)
+    , rightTy(nullptr)
+    , op(SolverCoercionOp::Coercion)
+{
+}
+
+Context::Coercion::Coercion(unsigned ruleIdx, const Span& span, const HIRType* leftTy, const HIRType* rightTy, SolverCoercionOp op)
+    : ruleIdx(ruleIdx)
+    , obligationSpan(span)
+    , leftTy(leftTy)
+    , rightNodePtr(nullptr)
+    , rightTy(rightTy)
+    , op(op)
+{
+}
+
+const Span& Context::Coercion::span() const {
+    return rightNodePtr ? (*rightNodePtr)->span() : obligationSpan;
+}
+
+const HIRType* Context::Coercion::sourceType() const {
+    return rightNodePtr ? (*rightNodePtr)->resType : rightTy;
+}
+
 void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr) {
     const auto* destination = this->ivars.getType(l);
     const auto* destinationInfer = destination->opt_Infer();
@@ -5210,73 +5017,19 @@ void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& 
     if (destinationRequiresSized) {
         this->requireSized(sp, nodePtr->resType);
     }
-    this->linkCoerce.push_back(std::make_unique<Coercion>(Coercion{this->nextRuleIdx++, l, &nodePtr}));
+    this->linkCoerce.push_back(std::make_unique<Coercion>(this->nextRuleIdx++, l, &nodePtr));
     DEBUG(StringView("++ ") << *this->linkCoerce.back());
     this->ivars.markChange();
 }
 
-void Context::possibleEquateTypeUnknown(const Span& sp, const HIRType* ty, Context::IvarUnknownType src) {
-    {
-        auto& tuMatch = (*this->getType(ty));
-        switch (tuMatch.tag()) {
-            default:
-                // TODO: Shadow sub-types too
-                break;
-            case HIRType::TAG_Path: {
-                auto& e = tuMatch.as_Path();
-                switch (e.path.data.tag()) {
-                    default:
-                        // TODO: Ufcs?
-                        break;
-                    case HIRPathData::TAG_Generic: {
-                        auto& pe = e.path.data.as_Generic();
-                        for (const auto& sty : pe.params.types) {
-                            this->possibleEquateTypeUnknown(sp, sty, src);
-                        }
-                        break;
-                    }
-                }
-                break;
-            }
-            case HIRType::TAG_Tuple: {
-                auto& e = tuMatch.as_Tuple();
-                for (const auto& sty : e) {
-                    this->possibleEquateTypeUnknown(sp, sty, src);
-                }
-                break;
-            }
-            case HIRType::TAG_Borrow: {
-                auto& e = tuMatch.as_Borrow();
-                this->possibleEquateTypeUnknown(sp, e.inner, src);
-                break;
-            }
-            case HIRType::TAG_Array: {
-                auto& e = tuMatch.as_Array();
-                this->possibleEquateTypeUnknown(sp, e.inner, src);
-                break;
-            }
-            case HIRType::TAG_Slice: {
-                auto& e = tuMatch.as_Slice();
-                this->possibleEquateTypeUnknown(sp, e.inner, src);
-                break;
-            }
-            case HIRType::TAG_NodeType: {
-                auto& e = tuMatch.as_NodeType();
-                if (e.is_Closure()) {
-                    auto* nodeP = e.as_Closure();
-                    for (const auto& aty : nodeP->args) {
-                        this->possibleEquateTypeUnknown(sp, aty.second, src);
-                    }
-                    this->possibleEquateTypeUnknown(sp, nodeP->returnType, src);
-                }
-                break;
-            }
-            case HIRType::TAG_Infer: {
-                auto& e = tuMatch.as_Infer();
-                this->possibleEquateIvarUnknown(sp, e.index, src);
-                break;
-            }
-        }
+void Context::addCoercionObligation(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op) {
+    const auto duplicate = std::any_of(linkCoerce.begin(), linkCoerce.end(), [&](const auto& obligation) {
+        return !obligation->rightNodePtr && obligation->op == op && obligation->leftTy == destination && obligation->rightTy == source;
+    });
+    if (!duplicate) {
+        linkCoerce.push_back(std::make_unique<Coercion>(nextRuleIdx++, sp, destination, source, op));
+        DEBUG(StringView("++ ") << *linkCoerce.back());
+        ivars.markChange();
     }
 }
 
@@ -5390,7 +5143,7 @@ void Context::storeAssociated(unsigned index, Associated rule, u64 oldKey) {
 void Context::removeAssociated(unsigned index, u64 oldKey) {
     const auto& removed = linkAssoc[index];
     const bool unblocksCoercion = removed.operatorKind == TypeckPrimitiveOperator::Deref && std::any_of(linkCoerce.begin(), linkCoerce.end(), [&](const auto& coercion) {
-        const auto* source = ivars.getType((*coercion->rightNodePtr)->resType);
+        const auto* source = ivars.getType(coercion->sourceType());
         return visitTyWith(source, [&](const HIRType* inner) {
             return ivars.typesEqual(removed.leftTy, inner);
         });
@@ -5549,102 +5302,18 @@ void Context::requireSized(const Span& sp, const HIRType* ty_) {
     }
 }
 
-Context::IVarPossible* Context::getIvarPossibilities(const Span& sp, unsigned int ivarIndex) {
-    {
-        const auto& realTy = ivars.getType(ivarIndex);
-        if (!((*realTy).is_Infer() && ((*realTy).as_Infer().index == ivarIndex))) {
-            DEBUG(StringView("IVar ") << ivarIndex << StringView(" is actually ") << realTy);
-            return nullptr;
-        }
-    }
-
-    return getPossibleIvarSink(ivarIndex);
-}
-
-Context::IVarPossible* Context::getPossibleIvarSink(unsigned index) {
-    if (possibleIvarSink) {
-        for (auto& captured : *possibleIvarSink) {
-            if (captured.index == index) {
-                return &captured.possibilities;
-            }
-        }
-        possibleIvarSink->push_back(Associated::CapturedIvarPossible{index, {}});
-        return &possibleIvarSink->back().possibilities;
-    }
-
-    if (index >= possibleIvarVals.size()) {
-        possibleIvarVals.resize(index + 1);
-    }
-    return &possibleIvarVals[index];
-}
-
-void Context::possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRType* rawT, PossibleTypeSource src, bool selectable, unsigned alternativeGroup, bool patternConstraint) {
-    const auto& t = this->ivars.getType(rawT);
-    DEBUG(ivarIndex << StringView(" ") << src << StringView(" ") << rawT << StringView(" ") << t);
-    auto* entp = getIvarPossibilities(sp, ivarIndex);
-    if (!entp) {
+void Context::addIvarDefault(const Span& sp, unsigned int ivarIndex, const HIRType* type) {
+    const auto* resolved = ivars.getType(ivarIndex);
+    const auto* infer = resolved->opt_Infer();
+    if (!infer || infer->index == ~0u) {
+        DEBUG(StringView("IVar ") << ivarIndex << StringView(" is already ") << resolved);
         return;
     }
-    auto& ent = *entp;
-
-    switch (src) {
-        case PossibleTypeSource::UnsizeTo:
-            ent.typesCoerceTo.push_back(IVarPossible::CoerceTy(t, false, selectable, alternativeGroup, patternConstraint));
-            break;
-        case PossibleTypeSource::CoerceTo:
-            ent.typesCoerceTo.push_back(IVarPossible::CoerceTy(t, true, selectable, alternativeGroup, patternConstraint));
-            break;
-        case PossibleTypeSource::UnsizeFrom:
-            ent.typesCoerceFrom.push_back(IVarPossible::CoerceTy(t, false, selectable, alternativeGroup, patternConstraint));
-            break;
-        case PossibleTypeSource::CoerceFrom:
-            ent.typesCoerceFrom.push_back(IVarPossible::CoerceTy(t, true, selectable, alternativeGroup, patternConstraint));
-            break;
-    }
-
-    if (!t->is_Infer()) {
-        switch (src) {
-            case PossibleTypeSource::UnsizeTo:
-            case PossibleTypeSource::CoerceTo:
-                possibleEquateTypeUnknown(sp, t, IvarUnknownType::To);
-                break;
-            case PossibleTypeSource::UnsizeFrom:
-            case PossibleTypeSource::CoerceFrom:
-                possibleEquateTypeUnknown(sp, t, IvarUnknownType::From);
-                break;
-        }
-    }
-}
-
-void Context::possibleEquateIvarRawPointerFallback(const Span& sp, unsigned int ivarIndex, const HIRType* rawType) {
-    auto* possibilities = getIvarPossibilities(sp, ivarIndex);
-    if (!possibilities) {
-        return;
-    }
-
-    ASSERT_BUG(sp, !typeContainsImplPlaceholder(crate.types, rawType), StringView("Type contained an impl placeholder parameter - ") << rawType);
-    const auto* type = ivars.getType(rawType);
-    if (const auto* infer = type->opt_Infer(); infer && infer->index == ivarIndex) {
-        return;
-    }
-    possibilities->rawPointerFallbacks.insert(type);
-}
-
-void Context::possibleEquateIvarUnknown(const Span& sp, unsigned int ivarIndex, IvarUnknownType src) {
-    DEBUG(ivarIndex << StringView(" = ?? (") << src << StringView(")"));
-    ASSERT_BUG(sp, ivars.getType(ivarIndex)->is_Infer(), StringView("possible_equate_ivar_unknown on known ivar"));
-
-    auto& ent = *getPossibleIvarSink(ivarIndex);
-    switch (src) {
-        case IvarUnknownType::To:
-            ent.forceNoTo = true;
-            break;
-        case IvarUnknownType::From:
-            ent.forceNoFrom = true;
-            break;
-        case IvarUnknownType::Bound:
-            ent.forceDisable = true;
-            break;
+    const auto duplicate = std::any_of(ivarDefaults.begin(), ivarDefaults.end(), [&](const auto& existing) {
+        return existing.index == infer->index && existing.type == type;
+    });
+    if (!duplicate) {
+        ivarDefaults.push_back({infer->index, type});
     }
 }
 
@@ -5857,7 +5526,7 @@ void Context::compactIvars(const Span& sp) {
     resolve.compactIvars(ivars, &effects);
 }
 
-void processAssociatedRules(Context& context) {
+void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionIndex) {
     DEBUG(StringView("--- Associated types"));
     unsigned int linkAssocIterLimit = context.linkAssoc.size() * 4;
     for (unsigned int i = 0; i < context.linkAssoc.size();) {
@@ -5877,11 +5546,9 @@ void processAssociatedRules(Context& context) {
         };
         rule.isAmbiguous = indexedRule.isAmbiguous;
         rule.stalledOn = indexedRule.stalledOn;
-        rule.stalledPossibilities = indexedRule.stalledPossibilities;
 
         DEBUG(StringView("- ") << rule);
-        if (associatedStillStalled(context, rule)) {
-            mergeAssociatedPossibilities(context, rule.stalledPossibilities);
+        if (associatedStillStalled(context, coercionIndex, rule)) {
             context.storeAssociated(i, mv$(rule), indexedKey);
             i++;
             if (linkAssocIterLimit-- == 0) {
@@ -5899,17 +5566,7 @@ void processAssociatedRules(Context& context) {
         }
         rule.implTy = context.expandAssociatedTypes(rule.span, mv$(rule.implTy));
 
-        ThinVector<Context::Associated::CapturedIvarPossible> capturedPossibilities;
-        AssociatedCheckResult result;
-        {
-            auto* previousSink = context.possibleIvarSink;
-            context.possibleIvarSink = &capturedPossibilities;
-            STD_DEFER {
-                context.possibleIvarSink = previousSink;
-            };
-            result = checkAssociated(context, rule);
-        }
-        mergeAssociatedPossibilities(context, capturedPossibilities);
+        const auto result = checkAssociated(context, coercionIndex, rule);
         rule.isAmbiguous = result == AssociatedCheckResult::Ambiguous;
 
         if (result == AssociatedCheckResult::Complete) {
@@ -5917,21 +5574,8 @@ void processAssociatedRules(Context& context) {
             context.removeAssociated(i, indexedKey);
         } else {
             if ((result == AssociatedCheckResult::Stalled || result == AssociatedCheckResult::Ambiguous) && setAssociatedStall(context, rule)) {
-                rule.stalledPossibilities = mv$(capturedPossibilities);
-                for (const auto& dependency : rule.stalledOn) {
-                    auto existing = std::find_if(rule.stalledPossibilities.begin(), rule.stalledPossibilities.end(), [&](const auto& possible) {
-                        return possible.index == dependency.index;
-                    });
-                    if (existing == rule.stalledPossibilities.end()) {
-                        rule.stalledPossibilities.push_back({dependency.index, {}});
-                        existing = rule.stalledPossibilities.end() - 1;
-                    }
-                    existing->possibilities.forceDisable = true;
-                    context.getPossibleIvarSink(dependency.index)->forceDisable = true;
-                }
             } else {
                 rule.stalledOn.clear();
-                rule.stalledPossibilities.clear();
             }
             context.storeAssociated(i, mv$(rule), indexedKey);
             i++;
@@ -5969,23 +5613,31 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
     unsigned int count = 0;
     while (context.takeChanged() /*&& context.has_rules()*/ && count < MAX_ITERATIONS) {
         TRACE_FUNCTION_F(StringView("=== PASS ") << count << StringView(" ==="));
+        std::optional<IvarCoercionIndex> ivarCoercionIndex;
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Coercion checking"));
             for (size_t i = 0; i < context.linkCoerce.size();) {
                 auto ent = mv$(context.linkCoerce[i]);
-                const auto& span = (*ent->rightNodePtr)->span();
-                auto& srcTy = (*ent->rightNodePtr)->resType;
-                srcTy = context.expandAssociatedTypes(span, mv$(srcTy)); // TODO: This was commented, why?
+                const auto& span = ent->span();
+                if (ent->rightNodePtr) {
+                    auto& srcTy = (*ent->rightNodePtr)->resType;
+                    srcTy = context.expandAssociatedTypes(span, mv$(srcTy)); // TODO: This was commented, why?
+                } else {
+                    ent->rightTy = context.expandAssociatedTypes(span, mv$(ent->rightTy));
+                }
                 ent->leftTy = context.expandAssociatedTypes(span, mv$(ent->leftTy));
                 if (checkCoerce(context, *ent)) {
-                    DEBUG(StringView("- Consumed coercion R") << ent->ruleIdx << StringView(" ") << ent->leftTy << StringView(" := ") << srcTy);
+                    DEBUG(StringView("- Consumed coercion R") << ent->ruleIdx << StringView(" ") << ent->leftTy << StringView(" := ") << ent->sourceType());
                     context.linkCoerce.erase(context.linkCoerce.begin() + i);
                 } else {
                     context.linkCoerce[i] = mv$(ent);
                     ++i;
                 }
             }
-            processAssociatedRules(context);
+            if (!context.ivars.peekChanged()) {
+                ivarCoercionIndex.emplace(context);
+                processAssociatedRules(context, *ivarCoercionIndex);
+            }
         }
         if (!context.ivars.peekChanged()) {
             Vector<const HIRType*> passStartIvars;
@@ -5995,7 +5647,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             }
             for (size_t i = 0; i < context.toVisit.length();) {
                 HIRExprNode& node = *context.toVisit[i];
-                ExprVisitorRevisit visitor{context, false, &passStartIvars};
+                ExprVisitorRevisit visitor{context, false, &passStartIvars, &*ivarCoercionIndex};
                 DEBUG(StringView("> ") << static_cast<const void*>(&node) << StringView(" ") << typeid(node).name() << StringView(" -> ") << context.ivars.fmtType(node.resType));
                 node.visit(visitor);
                 if (visitor.nodeCompleted()) {
@@ -6024,36 +5676,26 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
         }
 
         if (!context.ivars.peekChanged()) {
-            processAssociatedRules(context);
+            ivarCoercionIndex.emplace(context);
+            processAssociatedRules(context, *ivarCoercionIndex);
+            if (!context.ivars.peekChanged()) {
+                ivarCoercionIndex.emplace(context);
+            }
         }
 
-        std::unique_ptr<IvarCoercionIndex> ivarCoercionIndex;
         if (!context.ivars.peekChanged()) {
-            ivarCoercionIndex = std::make_unique<IvarCoercionIndex>(context);
-        }
-
-        if (!context.ivars.peekChanged()) {
-            DEBUG(StringView("--- IVar possibilities"));
-            // TODO: De-duplicate this with the block ~80 lines below
-            std::unique_ptr<IvarDependencyIndex> dependencyIndex;
+            DEBUG(StringView("--- IVar coercion effects"));
             for (unsigned int sourcePass = 0; sourcePass < 2; sourcePass++) {
-                for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                    bool hasConcreteSource = false;
-                    for (const auto& source : context.possibleIvarVals[i].typesCoerceFrom) {
-                        if (source.selectable && !context.ivars.typeContainsIvars(context.getType(source.ty))) {
-                            hasConcreteSource = true;
-                            break;
-                        }
-                    }
+                for (unsigned int i = 0; i < ivarCoercionIndex->refs.size(); i++) {
+                    const bool hasConcreteSource = std::any_of((*ivarCoercionIndex)[i].endpoints.begin(), (*ivarCoercionIndex)[i].endpoints.end(), [&](const auto& endpoint) {
+                        return endpoint.direction == SolverCoercionConstraint::Direction::InputIsDestination
+                            && coercionEndpointCanDetermineType(context, endpoint)
+                            && !context.ivars.typeContainsIvars(context.getType(endpoint.other));
+                    });
                     if (hasConcreteSource != (sourcePass == 0)) {
                         continue;
                     }
-                    if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i])) {
-                        if (!dependencyIndex) {
-                            dependencyIndex = std::make_unique<IvarDependencyIndex>(context);
-                        }
-                        dependencyIndex->disableDependents(i);
-                    }
+                    finaliseIvarCoercions(context, *ivarCoercionIndex, i);
                 }
             }
         }
@@ -6063,8 +5705,8 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
          * exact joint effect) is specifically responsible for resolving. */
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Final IVar effects"));
-            for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], true, false)) {
+            for (unsigned int i = 0; i < ivarCoercionIndex->refs.size(); i++) {
+                if (finaliseIvarCoercions(context, *ivarCoercionIndex, i, true, false)) {
                     break;
                 }
             }
@@ -6072,8 +5714,8 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
 
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Final IVar identity commits"));
-            for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], true, true)) {
+            for (unsigned int i = 0; i < ivarCoercionIndex->refs.size(); i++) {
+                if (finaliseIvarCoercions(context, *ivarCoercionIndex, i, true, true)) {
                     break;
                 }
             }
@@ -6085,8 +5727,8 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
          * Only then may the no-op unsizing case use the same identity rule. */
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Final IVar unsizing identity commits"));
-            for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], true, true, true)) {
+            for (unsigned int i = 0; i < ivarCoercionIndex->refs.size(); i++) {
+                if (finaliseIvarCoercions(context, *ivarCoercionIndex, i, true, true, true)) {
                     break;
                 }
             }
@@ -6096,7 +5738,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             DEBUG(StringView("--- Node revisits (fallback)"));
             for (size_t i = 0; i < context.toVisit.length();) {
                 HIRExprNode& node = *context.toVisit[i];
-                ExprVisitorRevisit visitor{context, true};
+                ExprVisitorRevisit visitor{context, true, nullptr, &*ivarCoercionIndex};
                 DEBUG(StringView("> ") << static_cast<const void*>(&node) << StringView(" ") << typeid(node).name() << StringView(" -> ") << context.ivars.fmtType(node.resType));
                 node.visit(visitor);
                 if (visitor.nodeCompleted()) {
@@ -6133,18 +5775,34 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
          * had a chance to constrain the ivar through pending obligations. */
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("- Applying generic defaults"));
-            for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                const auto& ent = context.possibleIvarVals[i];
-                if (!ent.typesDefault.empty()) {
-                    const auto& tyL = context.ivars.getType(i);
-
-                    if (((*tyL).is_Infer() && ((*tyL).as_Infer().index == i))) {
-                        if (ent.typesDefault.size() != 1) {
-                            // TODO: Error?
-                        } else {
-                            context.equateTypes(rootPtr->span(), tyL, *ent.typesDefault.begin());
-                        }
+            for (size_t i = 0; i < context.ivarDefaults.size(); i++) {
+                const auto* tyL = context.ivars.getType(context.ivarDefaults[i].index);
+                const auto* infer = tyL->opt_Infer();
+                if (!infer || infer->index == ~0u) {
+                    continue;
+                }
+                bool firstForClass = true;
+                const HIRType* uniqueDefault = nullptr;
+                bool defaultsDisagree = false;
+                for (size_t j = 0; j < context.ivarDefaults.size(); j++) {
+                    const auto* member = context.ivars.getType(context.ivarDefaults[j].index);
+                    const auto* memberInfer = member->opt_Infer();
+                    if (!memberInfer || memberInfer->index != infer->index) {
+                        continue;
                     }
+                    if (j < i) {
+                        firstForClass = false;
+                        break;
+                    }
+                    const auto* candidate = context.getType(context.ivarDefaults[j].type);
+                    if (uniqueDefault && !context.ivars.typesEqual(uniqueDefault, candidate)) {
+                        defaultsDisagree = true;
+                    } else {
+                        uniqueDefault = candidate;
+                    }
+                }
+                if (firstForClass && uniqueDefault && !defaultsDisagree) {
+                    context.equateTypes(rootPtr->span(), tyL, uniqueDefault);
                 }
             }
         }
@@ -6165,7 +5823,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             DEBUG(StringView("--- Coercion consume"));
             if (!context.linkCoerce.empty()) {
                 auto selected = std::find_if(context.linkCoerce.begin(), context.linkCoerce.end(), [&](const auto& coercion) {
-                    return !context.getType((*coercion->rightNodePtr)->resType)->is_Diverge();
+                    return !context.getType(coercion->sourceType())->is_Diverge();
                 });
                 if (selected == context.linkCoerce.end()) {
                     selected = context.linkCoerce.begin();
@@ -6173,8 +5831,8 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 auto ent = mv$(*selected);
                 context.linkCoerce.erase(selected);
 
-                const auto& sp = (*ent->rightNodePtr)->span();
-                auto& srcTy = (*ent->rightNodePtr)->resType;
+                const auto& sp = ent->span();
+                const auto* srcTy = ent->sourceType();
                 ent->leftTy = context.expandAssociatedTypes(sp, mv$(ent->leftTy));
 
                 DEBUG(StringView("- Equate coercion R") << ent->ruleIdx << StringView(" ") << ent->leftTy << StringView(" := ") << srcTy);
@@ -6191,10 +5849,6 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             if (appliedDefault) {
                 context.ivars.markChange();
             }
-        }
-
-        for (auto& ivarEnt : context.possibleIvarVals) {
-            ivarEnt.reset();
         }
 
         count++;
@@ -6220,8 +5874,8 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
         }
         for (const auto& coercionP : context.linkCoerce) {
             const auto& coercion = *coercionP;
-            const auto& sp = (**coercion.rightNodePtr).span();
-            const auto& srcTy = (**coercion.rightNodePtr).resType;
+            const auto& sp = coercion.span();
+            const auto* srcTy = coercion.sourceType();
             WARNING(sp, W0000, StringView("Spare Rule - ") << context.ivars.fmtType(coercion.leftTy) << StringView(" := ") << context.ivars.fmtType(srcTy));
         }
         for (const auto& rule : context.linkAssoc) {
@@ -6719,64 +6373,6 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
     context.equateTypesCoerce(sp, newResTy, rootPtr);
 }
 
-Context::IVarPossible::CoerceTy::CoerceTy(const HIRType* ty, bool isCoerce, bool selectable, unsigned alternativeGroup, bool patternConstraint)
-    : op(isCoerce ? Coercion : Unsizing)
-    , ty(ty)
-    , selectable(selectable)
-    , patternConstraint(patternConstraint)
-    , alternativeGroup(alternativeGroup)
-{
-}
-
-void Context::IVarPossible::reset() {
-    this->forceDisable = false;
-    this->forceNoTo = false;
-    this->forceNoFrom = false;
-    this->typesCoerceTo.clear();
-    this->typesCoerceFrom.clear();
-    this->rawPointerFallbacks.clear();
-}
-
-bool Context::IVarPossible::hasRules() const {
-    if (forceDisable) {
-        return true;
-    }
-    if (forceNoTo || !typesCoerceTo.empty()) {
-        return true;
-    }
-    if (forceNoFrom || !typesCoerceFrom.empty()) {
-        return true;
-    }
-    if (!rawPointerFallbacks.empty()) {
-        return true;
-    }
-    return false;
-}
-
-void Context::IVarPossible::mergeFrom(const IVarPossible& source) {
-    forceDisable |= source.forceDisable;
-    forceNoTo |= source.forceNoTo;
-    forceNoFrom |= source.forceNoFrom;
-
-    auto mergeCoercions = [](auto& destination, const auto& values) {
-        for (const auto& value : values) {
-            const auto found = std::find_if(destination.begin(), destination.end(), [&](const auto& existing) {
-                return existing.op == value.op && existing.ty == value.ty && existing.alternativeGroup == value.alternativeGroup;
-            });
-            if (found == destination.end()) {
-                destination.push_back(value);
-            } else {
-                found->selectable |= value.selectable;
-                found->patternConstraint &= value.patternConstraint;
-            }
-        }
-    };
-    mergeCoercions(typesCoerceTo, source.typesCoerceTo);
-    mergeCoercions(typesCoerceFrom, source.typesCoerceFrom);
-    typesDefault.insert(source.typesDefault.begin(), source.typesDefault.end());
-    rawPointerFallbacks.insert(source.rawPointerFallbacks.begin(), source.rawPointerFallbacks.end());
-}
-
 Context::TaitEntry::TaitEntry(const HIRPathParams& p, const HIRType* t)
     : params(p.clone())
     , ourType(std::move(t))
@@ -6953,11 +6549,12 @@ auto ExprVisitorRevisit::nodeDiverges(const HIRExprNode& node) const -> bool {
     return node.diverges || this->context.getType(node.resType)->is_Diverge();
 }
 
-ExprVisitorRevisit::ExprVisitorRevisit(Context& context, bool fallback, const Vector<const HIRType*>* passStartIvars)
+ExprVisitorRevisit::ExprVisitorRevisit(Context& context, bool fallback, const Vector<const HIRType*>* passStartIvars, const IvarCoercionIndex* coercionIndex)
     : context(context)
     , completed(false)
     , isFallback(fallback)
     , passStartIvars(passStartIvars)
+    , coercionIndex(coercionIndex)
 {
 }
 
@@ -6981,7 +6578,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeBlock& node) -> void {
                 diverges = false;
                 break;
             default:
-                this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::From);
                 return;
         }
     } else if (lastTy->is_Diverge()) {
@@ -7039,7 +6635,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeLet& node) -> void {
     const auto* valueType = this->context.getType(node.value->resType);
     const auto* infer = valueType->opt_Infer();
     if (!node.value->diverges && infer && infer->tyClass == HIRInferClass::None) {
-        this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::From);
         return;
     }
     node.diverges = this->nodeDiverges(*node.value);
@@ -7220,19 +6815,11 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                     }
                     const auto& srcInner = this->context.getType(sE.inner);
 
-                    if (const auto* sEI = srcInner->opt_Infer()) {
-                        this->context.possibleEquateIvar(sp, sEI->index, ity, Context::PossibleTypeSource::UnsizeTo);
-                    }
-                    if (const auto* dEI = ity->opt_Infer()) {
-                        this->context.possibleEquateIvar(sp, dEI->index, sE.inner, Context::PossibleTypeSource::UnsizeFrom);
-                        if (!this->isFallback) {
-                            this->context.possibleEquateIvarUnknown(sp, dEI->index, Context::IvarUnknownType::From);
-                        }
-                    }
-
                     if (srcInner->is_Array()) {
                         if (const auto* sEI = this->context.getType(srcInner->as_Array().inner)->opt_Infer()) {
-                            this->context.possibleEquateIvar(sp, sEI->index, ity, Context::PossibleTypeSource::UnsizeTo);
+                            if (this->isFallback) {
+                                this->context.equateTypes(sp, this->context.ivars.getType(sEI->index), ity);
+                            }
                             return;
                         }
                     }
@@ -7240,6 +6827,10 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                     // TODO: Wouldn't this be better served by a coercion point?
 
                     if (srcInner->is_Infer() || ity->is_Infer()) {
+                        if (this->isFallback) {
+                            this->context.equateTypes(sp, srcInner, ity);
+                            this->completed = true;
+                        }
                     } else if (srcInner->is_Array() && srcInner->as_Array().inner == ity) {
                         auto ty = context.crate.types.pointer(e.type, srcInner);
                         node.value = NEWNODE(ty, sp, Cast, mv$(node.value), ty);
@@ -7270,19 +6861,24 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                     const auto& dstInner = this->context.getType(e.inner);
                     const auto& srcInner = this->context.getType(sE.inner);
                     if (dstInner->is_Infer()) {
-                        this->context.possibleEquateIvarRawPointerFallback(sp, dstInner->as_Infer().index, srcInner);
+                        const auto index = dstInner->as_Infer().index;
+                        const bool hasLiveCoercion = std::any_of(this->context.linkCoerce.begin(), this->context.linkCoerce.end(), [&](const auto& obligation) {
+                            return typeDependsOnIvar(this->context, obligation->leftTy, index)
+                                || typeDependsOnIvar(this->context, obligation->sourceType(), index);
+                        });
+                        if (this->isFallback && !hasLiveCoercion) {
+                            this->context.equateTypes(sp, dstInner, srcInner);
+                            this->completed = true;
+                        }
                         return;
                     } else if (srcInner->is_Infer()) {
-                        if (!this->isFallback) {
-                            this->context.possibleEquateIvarRawPointerFallback(sp, srcInner->as_Infer().index, dstInner);
+                        const auto index = srcInner->as_Infer().index;
+                        const bool hasLiveCoercion = std::any_of(this->context.linkCoerce.begin(), this->context.linkCoerce.end(), [&](const auto& obligation) {
+                            return typeDependsOnIvar(this->context, obligation->leftTy, index)
+                                || typeDependsOnIvar(this->context, obligation->sourceType(), index);
+                        });
+                        if (!this->isFallback || hasLiveCoercion) {
                             return;
-                        }
-                        auto srcIdx = srcInner->as_Infer().index;
-                        if (srcIdx < this->context.possibleIvarVals.size()) {
-                            const auto& poss = this->context.possibleIvarVals[srcIdx];
-                            if (!poss.typesCoerceTo.empty() || !poss.typesCoerceFrom.empty()) {
-                                return;
-                            }
                         }
                         this->context.equateTypes(sp, dstInner, srcInner);
                     } else {
@@ -7369,8 +6965,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
     const auto& idxTy = this->context.getType(node.cache.indexTy);
 
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" Index: val=") << valTy << StringView(", idx=") << idxTy << StringView(""));
-    this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::From);
-
     unsigned int derefCount = 0;
     const HIRType* tmpType;
     const auto* currentTy = node.value->resType;
@@ -7462,7 +7056,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeDeref& node) -> void {
             }
         } break;
         case HIRType::TAG_Infer: {
-            this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::From);
             return;
         }
         case HIRType::TAG_Borrow: {
@@ -7603,11 +7196,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
     const auto& tyO = this->context.getType(node.value->resType);
 
     TRACE_FUNCTION_F(StringView("CallValue: ty=") << tyO);
-    this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::Bound);
-    for (const auto& argTy : node.argIvars) {
-        this->context.possibleEquateTypeUnknown(node.span(), argTy, Context::IvarUnknownType::To);
-    }
-
     if (tyO->is_Infer()) {
         return;
     }
@@ -7776,11 +7364,8 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
     const auto& ty = this->context.getType(node.value->resType);
 
     TRACE_FUNCTION_F(StringView("(CallMethod) {") << this->context.ivars.fmtType(ty) << StringView("}.") << node.method << node.params << StringView("(") << FMT_CB(os, for (const auto& argNode : node.args) os << this->context.ivars.fmtType(argNode->resType) << StringView(", ");) << StringView(")") << StringView(" -> ") << this->context.ivars.fmtType(node.resType));
-    this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::From);
-    for (const auto& argNode : node.args) {
-        this->context.possibleEquateTypeUnknown(node.span(), argNode->resType, Context::IvarUnknownType::To);
-    }
-
+    BUG_ASSERT(this->coercionIndex);
+    const auto& methodCoercions = *this->coercionIndex;
     if (!this->isFallback) {
         bool hasPendingReceiverCoercion = false;
         if (this->passStartIvars) {
@@ -7798,21 +7383,8 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
             if (!infer) {
                 return false;
             }
-            if (infer->index < this->context.possibleIvarVals.size()) {
-                const auto& possible = this->context.possibleIvarVals[infer->index];
-                hasPendingReceiverCoercion = !possible.typesCoerceTo.empty() || !possible.typesCoerceFrom.empty();
-            }
-            for (const auto& coercion : this->context.linkCoerce) {
-                auto containsReceiverIvar = [&](const HIRType* type) {
-                    return visitTyWith(this->context.getType(type), [&](const HIRType* candidate) {
-                        const auto* candidateInfer = this->context.getType(candidate)->opt_Infer();
-                        return candidateInfer && candidateInfer->index == infer->index;
-                    });
-                };
-                if (containsReceiverIvar(coercion->leftTy) || containsReceiverIvar((*coercion->rightNodePtr)->resType)) {
-                    hasPendingReceiverCoercion = true;
-                    break;
-                }
+            if (infer->index < methodCoercions.refs.size()) {
+                hasPendingReceiverCoercion = !methodCoercions[infer->index].coercions.empty();
             }
             return hasPendingReceiverCoercion;
         });
@@ -7825,14 +7397,14 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
     // TODO: Obtain a list of avaliable methods at that level?
     const auto* resultType = this->context.getType(node.resType);
     const HIRType* contextualResult = resultType;
-    if (const auto* infer = resultType->opt_Infer(); infer && !infer->isLit() && infer->index < this->context.possibleIvarVals.size()) {
+    if (const auto* infer = resultType->opt_Infer(); infer && !infer->isLit() && infer->index < methodCoercions.refs.size()) {
         const HIRType* destinationType = nullptr;
         bool destinationsAgree = true;
-        for (const auto& destination : this->context.possibleIvarVals[infer->index].typesCoerceTo) {
-            if (destination.patternConstraint) {
+        for (const auto& endpoint : methodCoercions[infer->index].endpoints) {
+            if (endpoint.direction != SolverCoercionConstraint::Direction::InputIsSource) {
                 continue;
             }
-            const auto* type = this->context.getType(destination.ty);
+            const auto* type = this->context.getType(endpoint.other);
             if (type->is_Infer()) {
                 continue;
             }
@@ -7900,9 +7472,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
                     for (unsigned int i = 0; i < selected->trait.params.types.size(); i++) {
                         const auto* selectedParam = context.ivars.getType(selected->trait.params.types[i]);
                         if (const auto* infer = selectedParam->opt_Infer()) {
-                            if (auto* possible = context.getIvarPossibilities(sp, infer->index)) {
-                                possible->typesDefault.insert(exactTrait.params.types[i]);
-                            }
+                            context.addIvarDefault(sp, infer->index, exactTrait.params.types[i]);
                         }
                     }
                 }
@@ -8012,8 +7582,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeField& node) -> void {
     const auto& fieldName = node.field;
 
     TRACE_FUNCTION_F(StringView("(Field) name=") << fieldName << StringView(", ty = ") << this->context.ivars.fmtType(node.value->resType));
-    this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::Bound);
-
     const HIRType* outType;
 
     unsigned int derefCount = 0;
@@ -9260,104 +8828,6 @@ auto AssociatedStallCollector::collect() -> void {
     }
 }
 
-auto IvarDependencyIndex::collectDirectIvars(const HIRType* type, Vector<unsigned int>& out) -> void {
-    visitTyWith(type, [&](const HIRType* inner) {
-        if (const auto* infer = inner->opt_Infer()) {
-            out.pushBack(infer->index);
-        }
-        return false;
-    });
-}
-
-auto IvarDependencyIndex::deduplicate(Vector<unsigned int>& values) -> void {
-    if (values.empty()) {
-        return;
-    }
-    std::sort(values.mutBegin(), values.mutEnd());
-    size_t write = 1;
-    for (size_t read = 1; read < values.length(); ++read) {
-        if (values[read] != values[write - 1]) {
-            values.mut(write++) = values[read];
-        }
-    }
-    while (values.length() > write) {
-        values.popBack();
-    }
-}
-
-IvarDependencyIndex::IvarDependencyIndex(Context& context)
-    : context(context)
-    , associatedTargets(context.possibleIvarVals.size())
-    , possibilityTargets(context.possibleIvarVals.size())
-{
-    for (const auto& rule : context.linkAssoc) {
-        Vector<unsigned int> sources;
-        Vector<unsigned int> targets;
-        collectDirectIvars(rule.implTy, sources);
-        if (rule.name != "") {
-            collectDirectIvars(rule.leftTy, sources);
-        }
-        collectDirectIvars(rule.implTy, targets);
-        for (const auto& type : rule.params.types) {
-            collectDirectIvars(type, sources);
-            collectDirectIvars(type, targets);
-        }
-        deduplicate(sources);
-        deduplicate(targets);
-        for (const auto source : sources) {
-            if (source < associatedTargets.size()) {
-                associatedTargets[source].append(targets.begin(), targets.end());
-            }
-        }
-    }
-
-    for (size_t target = 0; target < context.possibleIvarVals.size(); target++) {
-        const auto& possible = context.possibleIvarVals[target];
-        Vector<unsigned int> sources;
-        for (const auto& type : possible.typesCoerceFrom) {
-            collectDirectIvars(type.ty, sources);
-        }
-        for (const auto& type : possible.typesCoerceTo) {
-            collectDirectIvars(type.ty, sources);
-        }
-        for (const auto& type : possible.rawPointerFallbacks) {
-            collectDirectIvars(type, sources);
-        }
-        deduplicate(sources);
-        for (const auto source : sources) {
-            if (source < possibilityTargets.size()) {
-                possibilityTargets[source].pushBack(target);
-            }
-        }
-    }
-
-    for (auto& targets : associatedTargets) {
-        deduplicate(targets);
-    }
-    for (auto& targets : possibilityTargets) {
-        deduplicate(targets);
-    }
-}
-
-auto IvarDependencyIndex::disableDependents(unsigned int source) -> void {
-    if (source >= associatedTargets.size()) {
-        return;
-    }
-    for (const auto rawTarget : associatedTargets[source]) {
-        const auto& target = context.ivars.getType(rawTarget);
-        if (const auto* infer = target->opt_Infer()) {
-            DEBUG(StringView("Disable IVar ") << infer->index);
-            if (infer->index < context.possibleIvarVals.size()) {
-                context.possibleIvarVals[infer->index].forceDisable = true;
-            }
-        }
-    }
-    for (const auto target : possibilityTargets[source]) {
-        DEBUG(StringView("Block IVar ") << target);
-        context.possibleIvarVals[target].forceDisable = true;
-    }
-}
-
 auto IvarCoercionIndex::collectIvars(const HIRType* root, Vector<unsigned int>& out) const -> void {
     Vector<const HIRType*> pending;
     pending.pushBack(root);
@@ -9382,6 +8852,22 @@ auto IvarCoercionIndex::collectIvars(const HIRType* root, Vector<unsigned int>& 
     }
 }
 
+auto IvarCoercionIndex::deduplicate(Vector<unsigned int>& values) -> void {
+    if (values.empty()) {
+        return;
+    }
+    std::sort(values.mutBegin(), values.mutEnd());
+    size_t write = 1;
+    for (size_t read = 1; read < values.length(); ++read) {
+        if (values[read] != values[write - 1]) {
+            values.mut(write++) = values[read];
+        }
+    }
+    while (values.length() > write) {
+        values.popBack();
+    }
+}
+
 template <typename T>
 auto IvarCoercionIndex::addRefs(const Vector<unsigned int>& dependencies, Vector<T> IvarCoercionRefs::* member, T value) -> void {
     for (const auto index : dependencies) {
@@ -9391,17 +8877,82 @@ auto IvarCoercionIndex::addRefs(const Vector<unsigned int>& dependencies, Vector
     }
 }
 
+auto IvarCoercionIndex::addEndpoint(const Context::Coercion& obligation, const SolverDeferredCoercion& rawDeferred, unsigned alternativeGroup) -> void {
+    const auto* destination = context.getType(rawDeferred.destination);
+    const auto* source = context.getType(rawDeferred.source);
+    if (const auto* infer = destination->opt_Infer(); infer && infer->index != ~0u && !infer->isLit() && infer->index < refs.size()) {
+        refs[infer->index].endpoints.pushBack(IvarCoercionEndpoint{
+            source,
+            SolverCoercionConstraint::Direction::InputIsDestination,
+            rawDeferred.op,
+            &obligation,
+            alternativeGroup,
+        });
+    }
+    if (const auto* infer = source->opt_Infer(); infer && infer->index != ~0u && !infer->isLit() && infer->index < refs.size()) {
+        refs[infer->index].endpoints.pushBack(IvarCoercionEndpoint{
+            destination,
+            SolverCoercionConstraint::Direction::InputIsSource,
+            rawDeferred.op,
+            &obligation,
+            alternativeGroup,
+        });
+    }
+}
+
 IvarCoercionIndex::IvarCoercionIndex(const Context& context)
     : context(context)
-    , refs(context.possibleIvarVals.size())
+    , refs(context.ivars.ivars.size())
 {
     Vector<unsigned int> dependencies;
+    unsigned nextAlternativeGroup = 1;
     for (const auto& bound : context.linkCoerce) {
         dependencies.clear();
         collectIvars(bound->leftTy, dependencies);
-        collectIvars((*bound->rightNodePtr)->resType, dependencies);
-        IvarDependencyIndex::deduplicate(dependencies);
+        collectIvars(bound->sourceType(), dependencies);
+        deduplicate(dependencies);
         addRefs(dependencies, &IvarCoercionRefs::coercions, static_cast<const Context::Coercion*>(bound.get()));
+
+        const auto response = context.resolve.evaluateCoercionGoal(bound->span(), context.getType(bound->leftTy), context.getType(bound->sourceType()), bound->op);
+        ThinVector<std::pair<unsigned, unsigned>> groups;
+        for (const auto& deferred : response.deferred) {
+            unsigned group = 0;
+            if (deferred.alternativeGroup != 0) {
+                const auto found = std::find_if(groups.begin(), groups.end(), [&](const auto& existing) {
+                    return existing.first == deferred.alternativeGroup;
+                });
+                if (found == groups.end()) {
+                    group = nextAlternativeGroup++;
+                    groups.push_back({deferred.alternativeGroup, group});
+                } else {
+                    group = found->second;
+                }
+            }
+            addEndpoint(*bound, deferred, group);
+        }
+    }
+
+    for (const auto& rule : context.linkAssoc) {
+        dependencies.clear();
+        for (const auto& dependency : rule.stalledOn) {
+            dependencies.pushBack(dependency.index);
+        }
+        deduplicate(dependencies);
+        addRefs(dependencies, &IvarCoercionRefs::associated, &rule);
+    }
+
+    for (const auto* node : context.toVisit) {
+        dependencies.clear();
+        collectIvars(node->resType, dependencies);
+        deduplicate(dependencies);
+        addRefs(dependencies, &IvarCoercionRefs::revisits, node);
+    }
+
+    for (const auto& revisit : context.advRevisits) {
+        dependencies.clear();
+        revisit->collectInferenceDependencies(context, dependencies);
+        deduplicate(dependencies);
+        addRefs(dependencies, &IvarCoercionRefs::advancedRevisits, static_cast<const Context::Revisitor*>(revisit.get()));
     }
 }
 
@@ -9411,10 +8962,6 @@ auto IvarCoercionIndex::operator[](unsigned int index) const -> const IvarCoerci
 
 auto PossibleType::concrete(decltype(cls) cls, const HIRType* ty) -> PossibleType {
     return PossibleType{cls, State::Concrete, ty};
-}
-
-auto PossibleType::barrier(decltype(cls) cls) -> PossibleType {
-    return PossibleType{cls, State::Barrier, nullptr};
 }
 
 auto PossibleType::isActive() const -> bool {
@@ -9452,8 +8999,6 @@ auto PossibleType::fmt(ZeroCopyOutput& os) const -> ZeroCopyOutput& {
     os << StringView(" ");
     if (hasType()) {
         os << ty;
-    } else if (state == State::Barrier) {
-        os << StringView("<barrier>");
     } else {
         os << StringView("<removed>");
     }
@@ -9742,7 +9287,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeBlock& node) -> void {
             DEBUG(StringView("Block diverges, yield !"));
             const auto* blockInfer = this->context.crate.edition < ASTEdition::Rust2024 ? this->context.getType(node.resType)->opt_Infer() : nullptr;
             if (const auto* i = blockInfer) {
-                this->context.possibleEquateIvar(node.span(), i->index, this->context.crate.types.diverge(), Context::PossibleTypeSource::CoerceFrom);
+                this->context.addCoercionObligation(node.span(), this->context.ivars.getType(i->index), this->context.crate.types.diverge(), SolverCoercionOp::Coercion);
                 this->context.addRevisitAdv(std::make_unique<RevisitDefaultUnit>(&node));
             } else {
                 this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
@@ -11406,20 +10951,15 @@ auto ExprVisitorEnum::RevisitDefaultUnit::revisit(Context& context, bool isFallb
             return true;
         }
         if (isFallback) {
-            if (i->index < context.possibleIvarVals.size()) {
-                const auto& possible = context.possibleIvarVals[i->index];
-                const bool hasInferenceGuidance = possible.forceNoTo
-                    || possible.forceNoFrom
-                    || !possible.typesCoerceTo.empty()
-                    || !possible.typesCoerceFrom.empty()
-                    || !possible.rawPointerFallbacks.empty();
-                if (hasInferenceGuidance) {
+            const IvarCoercionIndex obligations(context);
+            if (i->index < obligations.refs.size()) {
+                const auto& refs = obligations[i->index];
+                if (!refs.coercions.empty() || !refs.associated.empty()) {
                     return false;
                 }
             }
             context.equateTypes(node->span(), ty, context.crate.types.unit());
             return true;
-            DEBUG(StringView("- Still specialisable"));
         }
         return false;
     } else {
@@ -11484,43 +11024,13 @@ void stl::output<ZeroCopyOutput, CoerceResult>(ZeroCopyOutput& out, CoerceResult
 }
 
 template <>
-void stl::output<ZeroCopyOutput, Context::PossibleTypeSource>(ZeroCopyOutput& os, Context::PossibleTypeSource x) {
-    switch (x) {
-        case Context::PossibleTypeSource::UnsizeTo:
-            os << StringView("UnsizeTo");
-            break;
-        case Context::PossibleTypeSource::CoerceTo:
-            os << StringView("CoerceTo");
-            break;
-        case Context::PossibleTypeSource::UnsizeFrom:
-            os << StringView("UnsizeFrom");
-            break;
-        case Context::PossibleTypeSource::CoerceFrom:
-            os << StringView("CoerceFrom");
-            break;
+void stl::output<ZeroCopyOutput, Context::Coercion>(ZeroCopyOutput& os, const Context::Coercion& v) {
+    os << StringView("R") << v.ruleIdx << StringView(" ") << v.leftTy << StringView(" := ");
+    if (v.rightNodePtr) {
+        os << static_cast<const void*>(v.rightNodePtr) << StringView(" ") << static_cast<const void*>(&**v.rightNodePtr) << StringView(" (") << v.sourceType() << StringView(")");
+    } else {
+        os << v.sourceType() << StringView(" (type-only)");
     }
-    return;
-}
-
-template <>
-void stl::output<ZeroCopyOutput, Context::IvarUnknownType>(ZeroCopyOutput& os, Context::IvarUnknownType x) {
-    switch (x) {
-        case Context::IvarUnknownType::To:
-            os << StringView("To");
-            break;
-        case Context::IvarUnknownType::From:
-            os << StringView("From");
-            break;
-        case Context::IvarUnknownType::Bound:
-            os << StringView("Bound");
-            break;
-    }
-    return;
-}
-
-template <>
-void stl::output<ZeroCopyOutput, Context::Coercion>(ZeroCopyOutput& os, Context::Coercion v) {
-    os << StringView("R") << v.ruleIdx << StringView(" ") << v.leftTy << StringView(" := ") << static_cast<const void*>(v.rightNodePtr) << StringView(" ") << static_cast<const void*>(&**v.rightNodePtr) << StringView(" (") << (*v.rightNodePtr)->resType << StringView(")");
     return;
 }
 
