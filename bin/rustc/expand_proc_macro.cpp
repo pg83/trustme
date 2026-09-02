@@ -191,7 +191,7 @@ namespace {
 
         void visitTypeAsText(const ASTType* ty);
 
-        void visitType(::ASTType* ty);
+        void visitType(const ::ASTType* ty);
 
         void visitHrbs(const ASTHigherRankedBounds& hrbs);
 
@@ -310,7 +310,7 @@ void RegisterProcMacroBuiltins(ExpandRegistry& registry) {
 
 void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     auto pmCrateName = RcString::newInterned("proc_macro");
-    wb.settings->implicitCrates.insert(std::make_pair(pmCrateName, const_cast<ASTCrate&>(crate).loadExternCrate(*wb.settings, Span(), pmCrateName)));
+    wb.settings->implicitCrates.insert(std::make_pair(pmCrateName, crate.loadExternCrate(*wb.settings, Span(), pmCrateName)));
 
     auto mainFn = ASTFunction{Span(), mkType(*crate.pool, ASTTypeTags::Unit(), Span()), {}};
     {
@@ -435,7 +435,12 @@ ProcMacroInv::ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition ed
     posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[0]);
     posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[1]);
 
-    char* argv[3] = {const_cast<char*>(executable), const_cast<char*>(procMacroDesc.name.c_str()), nullptr};
+    Vector<char> executableArg(strlen(executable) + 1);
+    executableArg.append(executable, strlen(executable) + 1);
+    auto* procMacroName = procMacroDesc.name.c_str();
+    Vector<char> procMacroNameArg(strlen(procMacroName) + 1);
+    procMacroNameArg.append(procMacroName, strlen(procMacroName) + 1);
+    char* argv[3] = {executableArg.mutData(), procMacroNameArg.mutData(), nullptr};
     DEBUG(argv[0] << StringView(" ") << argv[1]);
     int rv = posix_spawn(&this->handles.childPid, executable, &file_actions, nullptr, argv, environ);
     if (rv != 0) {
@@ -1063,7 +1068,7 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             BUG(sp, StringView("Unexpected whitepace in tokenstream"));
             break;
         case TOK_INTERPOLATED_TYPE:
-            visitType(const_cast<::Token&>(tok).fragType());
+            visitType(tok.fragType());
             break;
         case TOK_INTERPOLATED_PATH:
             TODO(sp, StringView("TOK_INTERPOLATED_PATH"));
@@ -1072,7 +1077,7 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_INTERPOLATED_STMT:
         case TOK_INTERPOLATED_BLOCK:
         case TOK_INTERPOLATED_EXPR:
-            visitNode(const_cast<::Token&>(tok).fragNode());
+            visitNode(tok.fragNode());
             break;
         case TOK_INTERPOLATED_META:
         case TOK_INTERPOLATED_STMT_ITEM:
@@ -1557,7 +1562,7 @@ auto ProcMacroVisitor::visitTypeAsText(const ASTType* ty) -> void {
     parseString(std::string(static_cast<const char*>(ss.data()), ss.length()));
 }
 
-auto ProcMacroVisitor::visitType(::ASTType* ty) -> void {
+auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
     // TODO: Correct handling of visit_type
     switch (ty->data.tag()) {
         case TypeData::TAG_None: {

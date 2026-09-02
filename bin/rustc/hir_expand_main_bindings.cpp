@@ -232,6 +232,7 @@ namespace {
         std::vector<std::unique_ptr<HIRTypeImpl>> implsType;
 
         ClosureTypeCallback* newType = nullptr;
+        Vector<std::pair<const HIRExprNode*, HIRExprNode*>> mutableNodes;
 
         void pushNewImpls(const Span& sp, HIRCrate& crate);
 
@@ -913,12 +914,12 @@ namespace {
     };
 
     struct StaticBorrowOuterVisitor: public HIRVisitor, public NewStaticCallback {
-        const HIRCrate& crate;
+        HIRCrate& crate;
         StaticTraitResolve resolve_;
 
         const HIRType* selfType = nullptr;
         const HIRItemPath* currentModulePath;
-        const HIRModule* currentModule;
+        HIRModule* currentModule;
         bool isConst;
 
         struct NewStatic {
@@ -927,7 +928,7 @@ namespace {
             bool isConst;
         };
 
-        std::map<const HIRModule*, std::vector<NewStatic>> newStatics;
+        std::map<HIRModule*, std::vector<NewStatic>> newStatics;
 
         StaticBorrowOuterVisitor(const WireBoard& wb);
 
@@ -1125,9 +1126,36 @@ void HIRExpandAnnotateUsage(const WireBoard& wb, HIRCrate& crate) {
 
 #define NEWNODE(TY, CLASS, ...) closureMkExprnodep(pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
 
-const HIRType* HIRExpandClosuresExpr(const WireBoard& wb, const HIRCrate& crateRo, const HIRType* expTy, HIRExprPtr& exp) {
+static auto indexMutableAnonymousNodes(HIRExprPtr& exp, OutState& out, HIRTypeInterner& types) -> void {
+    struct NodeMutIndex final: HIRExprVisitorDef {
+        OutState& out;
+
+        NodeMutIndex(HIRTypeInterner& types, OutState& out)
+            : HIRExprVisitorDef(types)
+            , out(out)
+        {
+        }
+
+        void visit(HIRExprNodeClosure& node) override {
+            out.mutableNodes.pushBack(std::make_pair(&node, &node));
+            HIRExprVisitorDef::visit(node);
+        }
+
+        void visit(HIRExprNodeGenerator& node) override {
+            out.mutableNodes.pushBack(std::make_pair(&node, &node));
+            HIRExprVisitorDef::visit(node);
+        }
+
+        void visit(HIRExprNodeAsyncBlock& node) override {
+            out.mutableNodes.pushBack(std::make_pair(&node, &node));
+            HIRExprVisitorDef::visit(node);
+        }
+    } nodeIndex{types, out};
+    exp->visit(nodeIndex);
+}
+
+const HIRType* HIRExpandClosuresExpr(const WireBoard& wb, HIRCrate& crate, const HIRType* expTy, HIRExprPtr& exp) {
     Span sp;
-    auto& crate = const_cast<HIRCrate&>(crateRo);
 
     TRACE_FUNCTION;
     StaticTraitResolve resolve{wb};
@@ -1137,6 +1165,7 @@ const HIRType* HIRExpandClosuresExpr(const WireBoard& wb, const HIRCrate& crateR
     const HIRType* selfType = nullptr; // TODO: Need to be able to get this?
 
     OutState out;
+    indexMutableAnonymousNodes(exp, out, crate.types);
     auto newType = makeCallable<ClosureTypeCb>([&](const char* prefix, const char* suffix, auto s) -> auto {
         auto name = RcString::newInterned(FMT(prefix << StringView("C_") << ++wb.id));
         auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{HIRPublicity::newNone(), HIRTypeItem(mv$(s))});
@@ -1275,7 +1304,7 @@ void HIRExpandStaticBorrowConstantsMarkExpr(const WireBoard& wb, const HIRCrate&
     }
 }
 
-void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
+void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
     TRACE_FUNCTION_F(ip);
     StaticTraitResolve resolve(wb);
     resolve.setBothGenericsRaw(exp.state->implGenerics, exp.state->itemGenerics);
@@ -1306,10 +1335,10 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
         newStatic.saveLiteral = true;
 
         struct Nvs: HIREvaluator::Newval {
-            const HIRCrate& crate;
+            HIRCrate& crate;
             u32& id;
 
-            Nvs(const HIRCrate& crate, u32& id)
+            Nvs(HIRCrate& crate, u32& id)
                 : crate(crate)
                 , id(id)
             {
@@ -3317,7 +3346,15 @@ auto ClosureExprVisitorExtract::extractReferencedNode(const Span& sp, const Node
     }
 
     ASSERT_BUG(sp, !isActive(constNode), StringView("Cyclic anonymous type dependency"));
-    auto& node = *const_cast<Node*>(constNode);
+    HIRExprNode* mutableNode = nullptr;
+    for (const auto& entry : out.mutableNodes) {
+        if (entry.first == constNode) {
+            mutableNode = entry.second;
+            break;
+        }
+    }
+    ASSERT_BUG(sp, mutableNode, StringView("Anonymous type is not owned by the expression being expanded"));
+    auto& node = static_cast<Node&>(*mutableNode);
     ASSERT_BUG(sp, node.code, StringView("Anonymous type lost its body before extraction"));
     visit(node);
     ASSERT_BUG(sp, node.objPtr && node.objPathBase != HIRGenericPath(), StringView("Anonymous type extraction did not assign a path"));
@@ -3539,7 +3576,8 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
     DEBUG(StringView("args_ty = ") << argsTy << StringView(", ret_type = ") << retType);
     const auto& langCopy = resolve_.hirCrate().getLangItemPathOpt("copy");
     if (node.isCopy && !langCopy.components().empty()) {
-        auto& v = const_cast<HIRCrate&>(resolve_.hirCrate()).traitImpls[langCopy].getListForTypeMut(closureType);
+        auto& crate = resolve_.hirCrateMut();
+        auto& v = crate.traitImpls[langCopy].getListForTypeMut(closureType);
         v.push_back(box$(
             HIRTraitImpl{
                 params.clone(),
@@ -3552,7 +3590,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
                 /*source module*/ HIRSimplePath(resolve_.hirCrate().crateName, {})
             }
         ));
-        const_cast<HIRCrate&>(resolve_.hirCrate()).allTraitImpls[langCopy].getListForTypeMut(closureType).push_back(v.back().get());
+        crate.allTraitImpls[langCopy].getListForTypeMut(closureType).push_back(v.back().get());
     }
 
     HIRPathParams traitParams;
@@ -4625,6 +4663,7 @@ auto ClosureOuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> voi
     auto _ = this->resolve_.setItemGenerics(item.params);
     if (item.code) {
         BUG_ASSERT(curModPath);
+        indexMutableAnonymousNodes(item.code, out, resolve_.hirCrate().types);
 
         DEBUG(StringView("Function code ") << p);
         {
@@ -4645,6 +4684,7 @@ auto ClosureOuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> voi
 
 auto ClosureOuterVisitor::visitStatic(HIRItemPath p, HIRStatic& item) -> void {
     if (item.value) {
+        indexMutableAnonymousNodes(item.value, out, resolve_.hirCrate().types);
         auto _ = this->resolve_.setItemGenerics(item.params);
         ClosureExprVisitorExtract ev(resolve_, selfType, item.value.bindings, item.value, out, p.name);
         ev.visitRoot(*item.value);
@@ -4660,6 +4700,7 @@ auto ClosureOuterVisitor::visitStatic(HIRItemPath p, HIRStatic& item) -> void {
 
 auto ClosureOuterVisitor::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
     if (item.value) {
+        indexMutableAnonymousNodes(item.value, out, resolve_.hirCrate().types);
         auto _ = this->resolve_.setItemGenerics(item.params);
         ClosureExprVisitorExtract ev(resolve_, selfType, item.value.bindings, item.value, out, p.name);
         ev.visitRoot(*item.value);
@@ -5848,7 +5889,7 @@ auto StaticBorrowOuterVisitor::visitCrate(HIRCrate& crate) -> void {
     HIRVisitor::visitCrate(crate);
 
     for (auto& modList : newStatics) {
-        auto& mod = *const_cast<HIRModule*>(modList.first);
+        auto& mod = *modList.first;
         currentModule = &mod;
 
         HIRSimplePath modPath;
@@ -5950,7 +5991,7 @@ auto StaticBorrowOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void
 }
 
 auto StaticBorrowOuterVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
-    const auto& srcmod = this->crate.getModByPath(Span(), impl.srcModule);
+    auto& srcmod = this->crate.getModByPathMut(Span(), impl.srcModule);
     auto modIp = HIRItemPath(impl.srcModule);
     selfType = impl.type;
     currentModule = &srcmod;
@@ -5964,7 +6005,7 @@ auto StaticBorrowOuterVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
 }
 
 auto StaticBorrowOuterVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
-    const auto& srcmod = this->crate.getModByPath(Span(), impl.srcModule);
+    auto& srcmod = this->crate.getModByPathMut(Span(), impl.srcModule);
     auto modIp = HIRItemPath(impl.srcModule);
     selfType = impl.type;
     currentModule = &srcmod;

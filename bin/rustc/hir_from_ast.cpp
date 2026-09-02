@@ -75,10 +75,10 @@ namespace {
         HIRGenericParams LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsSized);
         HIRPath LowerHIRPatternPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
         HIRPattern LowerHIRPattern(const ASTPattern& pat);
-        HIRExprPtr LowerHIRExpr(const ASTExprNode* e);
+        HIRExprPtr LowerHIRExpr(ASTExprNode* e);
         HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric = false);
         HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs = {});
-        HIRConstGeneric LowerHIRConstGeneric(const ASTExprNode& nodeRef);
+        HIRConstGeneric LowerHIRConstGeneric(ASTExprNode& nodeRef);
         HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
         HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds = false, ASTBoundConstness constness = ASTBoundConstness::Never);
         HIRPath LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
@@ -93,9 +93,9 @@ namespace {
         std::vector<HIRSimplePath> LowerHIRDefineOpaque(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs);
         HIRFunction LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRType* realSelfType);
         HIRValueItem LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attrs, const ASTStatic& e, const Span& sp, const RcString& name);
-        HIRModule LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std::vector<HIRSimplePath> traits = {});
+        HIRModule LowerHIRModule(ASTModule& astMod, HIRItemPath path, std::vector<HIRSimplePath> traits = {});
         void LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate);
-        HIRExprPtr LowerHIRExprNode(const ASTExprNode& e);
+        HIRExprPtr LowerHIRExprNode(ASTExprNode& e);
 
         HIRCrate* lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crate);
     };
@@ -1155,7 +1155,7 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
     UNREACHABLE();
 }
 
-HIRExprPtr AST2HIR::LowerHIRExpr(const ASTExprNode* e) {
+HIRExprPtr AST2HIR::LowerHIRExpr(ASTExprNode* e) {
     if (e) {
         return LowerHIRExprNode(*e);
     } else {
@@ -1283,7 +1283,7 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
     return params;
 }
 
-HIRConstGeneric AST2HIR::LowerHIRConstGeneric(const ASTExprNode& nodeRef) {
+HIRConstGeneric AST2HIR::LowerHIRConstGeneric(ASTExprNode& nodeRef) {
     const Span& sp = nodeRef.span();
     const ASTExprNode* nodeP = &nodeRef;
     if (const auto* e = cast<const ASTExprNodeBlock>(nodeP)) {
@@ -1690,7 +1690,7 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                         }
                     } fg;
 
-                    const_cast<ASTExprNode&>(*e.size).visit(fg);
+                    e.size->visit(fg);
                     if (fg.found) {
                         ERROR(ty->span(), E0000, StringView("generic parameters may not be used in const operations - ") << ty);
                     }
@@ -2919,7 +2919,7 @@ HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attr
     }
 }
 
-HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std::vector<HIRSimplePath> traits) {
+HIRModule AST2HIR::LowerHIRModule(ASTModule& astMod, HIRItemPath path, std::vector<HIRSimplePath> traits) {
     TRACE_FUNCTION_F(StringView("path = ") << path);
     HIRModule mod{};
 
@@ -3001,8 +3001,8 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
         }
     }
 
-    for (const auto& ip : astMod.items) {
-        const auto& item = *ip;
+    for (auto& ip : astMod.items) {
+        auto& item = *ip;
         const auto& sp = item.span;
         auto itemPath = HIRItemPath(path, item.name.c_str());
         DEBUG(itemPath << StringView(" ") << item.data.tagStr());
@@ -3131,7 +3131,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
             }
         }
     }
-    for (auto& mac : const_cast<ASTModule&>(astMod).macros()) {
+    for (auto& mac : astMod.macros()) {
         if (mac.data || mac.vis.isGlobal()) {
             ASSERT_BUG(mac.span, mac.data, StringView("Null macro - ") << mac.name);
             ASSERT_BUG(mac.span, mac.data->rules.size() > 0, StringView("Empty macro - ") << mac.name);
@@ -3677,10 +3677,10 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
     return &rv;
 }
 
-HIRExprPtr AST2HIR::LowerHIRExprNode(const ASTExprNode& e) {
+HIRExprPtr AST2HIR::LowerHIRExprNode(ASTExprNode& e) {
     LowerHIRExprNodeVisitor v(*this);
 
-    const_cast<ASTExprNode*>(&e)->visit(v);
+    e.visit(v);
 
     if (!v.rv) {
         BUG(e.span(), typeid(e).name() << StringView(" - Yielded a nullptr HIR node"));

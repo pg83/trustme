@@ -15,6 +15,7 @@ class LangItems;
 struct Settings;
 struct TargetSpec;
 struct NextSolverCrateCache;
+struct HIRMutableOwnerCache;
 
 struct WireBoard {
     struct TargetLayoutContext;
@@ -50,4 +51,6 @@ struct WireBoard {
     HIRInherentCache* inherentMethods = nullptr;
 
     NextSolverCrateCache* solverCache = nullptr;
+
+    HIRMutableOwnerCache* hirOwners = nullptr;
 };

@@ -552,7 +552,9 @@ namespace {
             }
         } visitor(resolve.hirCrate().types);
 
-        const_cast<HIRExprNodeClosure&>(closure).visit(visitor);
+        auto* closureMut = cast<HIRExprNodeClosure>(&resolve.hirCrateMut().findExprNodeMut(Span(), closure));
+        ASSERT_BUG(Span(), closureMut, StringView("Closure owner lookup returned the wrong node type"));
+        closureMut->visit(visitor);
         std::sort(visitor.definitions.mutBegin(), visitor.definitions.mutEnd());
         const auto* uniqueEnd = std::unique(visitor.definitions.mutBegin(), visitor.definitions.mutEnd());
         while (visitor.definitions.end() != uniqueEnd) {
@@ -1601,7 +1603,8 @@ namespace {
         };
 
         if (!enm.discriminantsEvaluated) {
-            ConvertHIRConstantEvaluateEnum(resolve.board(), resolve.hirCrate(), te.path.data.as_Generic().path, enm);
+            auto& crate = resolve.hirCrateMut();
+            ConvertHIRConstantEvaluateEnum(resolve.board(), crate, te.path.data.as_Generic().path, crate.getEnumByPathMut(sp, te.path.data.as_Generic().path));
             BUG_ASSERT(enm.discriminantsEvaluated);
         }
 

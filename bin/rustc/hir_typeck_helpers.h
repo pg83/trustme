@@ -200,6 +200,8 @@ struct NextSolverCrateCache {
     }
 };
 
+void NextSolverCreateCrateCache(WireBoard& wb, stl::ObjPool& pool);
+
 class HMTypeInferrence {
 public:
     struct FmtType {
@@ -369,7 +371,7 @@ private:
     void expandIvarsTraitPath(HIRTraitPath& path);
 
     unsigned int rootIvarIndex(unsigned int slot) const;
-    IVar& getPointedIvar(unsigned int slot) const;
+    const IVar& getPointedIvar(unsigned int slot) const;
 
     bool containsLiveIvar(const HIRType* type, unsigned int rootIndex) const;
 

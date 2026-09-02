@@ -558,9 +558,9 @@ namespace {
         return MIRFunctionPointer(box$(std::move(fcn)).release());
     }
 
-    MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath& path, const HIRExprPtr& ptr, const HIRType* retTy, const HIRFunction::argsT& args) {
+    MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath& path, HIRExprPtr& ptr, const HIRType* retTy, const HIRFunction::argsT& args) {
         TRACE_FUNCTION_F(path);
-        HIRExprNode& rootNode = const_cast<HIRExprNode&>(*ptr);
+        HIRExprNode& rootNode = *ptr;
         if (auto* generator = cast<HIRExprNodeGeneratorWrapper>(&rootNode)) {
             if (generator->objPtr && generator->objPtr->structMarkings.isAsyncDropGlue) {
                 return lowerAsyncDropGluePoll(resolve, path, *generator, retTy);
@@ -623,8 +623,10 @@ namespace {
                 builder.finalCleanup();
 
                 auto storageLifetimes = ev.generatorPruneInactiveLocals(sp, resolve, path, retTy, args, fcn);
-                std::set<unsigned> saved = ev.generatorFinalise(genNode->span(), const_cast<HIREnum&>(resolve.hirCrate().getEnumByPath(sp, genNode->stateIdxEnum)));
-                auto& stateTy = const_cast<HIRStruct&>(*genNode->stateDataType->as_Path().binding.as_Struct());
+                auto& crate = resolve.hirCrateMut();
+                std::set<unsigned> saved = ev.generatorFinalise(genNode->span(), crate.getEnumByPathMut(sp, genNode->stateIdxEnum));
+                auto& stateTyPath = genNode->stateDataType->as_Path().path.data.as_Generic().path;
+                auto& stateTy = crate.getStructByPathMut(sp, stateTyPath);
                 unsigned valueVarIdx;
                 {
                     const auto& unmMaybeUninit = resolve.hirCrate().getUnionByPath(sp, resolve.hirCrate().getLangItemPath(genNode->span(), "maybe_uninit"));
@@ -642,7 +644,6 @@ namespace {
                 ThinVector<const HIRType*> storageTypes;
                 unsigned storageSlotCount = 0;
                 auto makeStorageType = [&]() {
-                    auto& crate = const_cast<HIRCrate&>(resolve.hirCrate());
                     auto& items = crate.rootModule.modItems;
                     auto itemIndex = items.size();
                     RcString name;
@@ -675,7 +676,8 @@ namespace {
                     ASSERT_BUG(sp, storageSlot < storageSlotCount, StringView("Non-contiguous coroutine storage slot ") << storageSlot);
                     storageSlots.insert(idx, storageSlot);
 
-                    auto& storageTy = const_cast<HIRUnion&>(*storageTypes[storageSlot]->as_Path().binding.as_Union());
+                    auto& storagePath = storageTypes[storageSlot]->as_Path().path.data.as_Generic().path;
+                    auto& storageTy = crate.getUnionByPathMut(sp, storagePath);
                     auto storageVariant = static_cast<unsigned>(storageTy.variants.size());
                     storageTy.variants.push_back(HIRStructField{RcString(), HIRPublicity::newNone(), fcn.locals[idx], {}});
                     mappings.insert(std::make_pair(idx, std::vector<MIRLValue::Wrapper>{MIRLValue::Wrapper::newField(0), MIRLValue::Wrapper::newDowncast(valueVarIdx), MIRLValue::Wrapper::newField(0), MIRLValue::Wrapper::newField(1 + storageSlot), MIRLValue::Wrapper::newDowncast(storageVariant)}));
@@ -896,7 +898,7 @@ namespace {
             ERROR(sp, E0000, StringView("cycle detected when evaluating constant `") << pve->path << StringView("`"));
         }
         if (binding->valueState == HIRConstant::ValueState::Unknown || (binding->valueState == HIRConstant::ValueState::Generic && !binding->monomorphCache.count(pve->path))) {
-            ConvertHIRConstantEvaluateConstant(resolve, implDef, pve->path, const_cast<HIRConstant&>(*binding));
+            ConvertHIRConstantEvaluateConstant(resolve, implDef, pve->path, resolve.hirCrateMut().findConstantMut(resolve.board(), sp, pve->path, *binding));
         }
         if (binding->valueState == HIRConstant::ValueState::Known) {
             return &binding->valueRes;
@@ -2401,7 +2403,7 @@ namespace {
     }
 }
 
-void HIRGenerateMIRExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, const HIRFunction::argsT& args, const HIRType* resTy) {
+void HIRGenerateMIRExpr(const WireBoard& wb, HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, HIRFunction::argsT& args, const HIRType* resTy) {
     if (!exprPtr.mir) {
         TRACE_FUNCTION;
         StaticTraitResolve resolve{wb};

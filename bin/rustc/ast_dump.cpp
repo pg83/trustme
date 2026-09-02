@@ -915,7 +915,7 @@ void DumpRust(const char* filename, const ASTCrate& crate) {
 
 void DumpASTNode(ZeroCopyOutput& os, const ASTExprNode& node) {
     RustPrinter printer(os);
-    const_cast<ASTExprNode&>(node).visit(printer);
+    node.clone()->visit(printer);
 }
 
 RustPrinter::RustPrinter(ZeroCopyOutput& os)

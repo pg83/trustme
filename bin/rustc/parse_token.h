@@ -138,6 +138,7 @@ public:
 
     // TODO: Replace these with a way of getting a InterpolatedFragment&
     ASTType*& fragType();
+    const ASTType* fragType() const;
 
     ASTPath& fragPath();
 
@@ -146,6 +147,7 @@ public:
     ASTAttribute& fragMeta();
 
     ASTExprNode& fragNode();
+    const ASTExprNode& fragNode() const;
 
     ASTExprNode* takeFragNode();
     ASTNamed<ASTItem> takeFragItem();

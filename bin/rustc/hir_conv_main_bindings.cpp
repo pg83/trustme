@@ -32,12 +32,12 @@ namespace {
     };
 
     struct BindVisitor: public HIRVisitor {
-        const HIRCrate& crate;
+        HIRCrate& crate;
 
         TypeckModuleState ms;
 
         struct CurMod {
-            const HIRModule* ptr;
+            HIRModule* ptr;
             const HIRItemPath* path;
         } curModule;
 
@@ -181,7 +181,7 @@ namespace {
     };
 
     struct MarkingsVisitor: public HIRVisitor {
-        const HIRCrate& crate;
+        HIRCrate& crate;
         StaticTraitResolve resolve_;
         const HIRSimplePath& langUnsize_;
         const HIRSimplePath& langCoerceUnsized_;
@@ -1378,7 +1378,7 @@ auto BindVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     selfType = impl.type;
 
     auto modIp = HIRItemPath(impl.srcModule);
-    const auto* mod = (impl.srcModule != HIRSimplePath() ? &this->ms.crate.getModByPath(Span(), impl.srcModule) : nullptr);
+    auto* mod = (impl.srcModule != HIRSimplePath() ? &crate.getModByPathMut(Span(), impl.srcModule) : nullptr);
     if (mod) {
         ms.pushTraits(impl.srcModule, *mod);
         curModule.ptr = mod;
@@ -1407,7 +1407,7 @@ auto BindVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
     selfType = impl.type;
 
     auto modIp = HIRItemPath(impl.srcModule);
-    const auto* mod = (impl.srcModule != HIRSimplePath() ? &this->ms.crate.getModByPath(Span(), impl.srcModule) : nullptr);
+    auto* mod = (impl.srcModule != HIRSimplePath() ? &crate.getModByPathMut(Span(), impl.srcModule) : nullptr);
     if (mod) {
         ms.pushTraits(impl.srcModule, *mod);
         curModule.ptr = mod;
@@ -1428,7 +1428,7 @@ auto BindVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl&
     selfType = impl.type;
 
     auto modIp = HIRItemPath(impl.srcModule);
-    const auto* mod = (impl.srcModule != HIRSimplePath() ? &this->ms.crate.getModByPath(Span(), impl.srcModule) : nullptr);
+    auto* mod = (impl.srcModule != HIRSimplePath() ? &crate.getModByPathMut(Span(), impl.srcModule) : nullptr);
     if (mod) {
         ms.pushTraits(impl.srcModule, *mod);
         curModule.ptr = mod;
@@ -3087,9 +3087,20 @@ auto MarkingsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImp
 
     if (impl.type->is_Path()) {
         const auto& te = impl.type->as_Path();
-        const HIRTraitMarkings* markingsPtr = te.binding.getTraitMarkings();
+        ASSERT_BUG(sp, te.path.data.is_Generic(), StringView("Impl type path is not generic: ") << impl.type);
+        auto& typeItem = crate.getTypeitemByPathMut(sp, te.path.data.as_Generic().path);
+        HIRTraitMarkings* markingsPtr = nullptr;
+        if (auto* item = typeItem.opt_ExternType()) {
+            markingsPtr = &item->markings;
+        } else if (auto* item = typeItem.opt_Struct()) {
+            markingsPtr = &item->markings;
+        } else if (auto* item = typeItem.opt_Union()) {
+            markingsPtr = &item->markings;
+        } else if (auto* item = typeItem.opt_Enum()) {
+            markingsPtr = &item->markings;
+        }
         if (markingsPtr) {
-            HIRTraitMarkings& markings = *const_cast<HIRTraitMarkings*>(markingsPtr);
+            HIRTraitMarkings& markings = *markingsPtr;
             if (traitPath == langUnsize_) {
                 DEBUG(StringView("Type ") << impl.type << StringView(" can Unsize"));
                 ERROR(sp, E0000, StringView("Unsize shouldn't be manually implemented"));
@@ -3098,7 +3109,8 @@ auto MarkingsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImp
                 markings.hasDropImpl = true;
                 markings.hasConstDropImpl = markings.hasConstDropImpl || impl.isConst;
             } else if (traitPath == langCoerceUnsized_) {
-                auto& structMarkings = const_cast<HIRStruct*>(te.binding.as_Struct())->structMarkings;
+                ASSERT_BUG(sp, typeItem.is_Struct(), StringView("CoerceUnsized impl is not for a struct"));
+                auto& structMarkings = typeItem.as_Struct().structMarkings;
                 if (structMarkings.coerceUnsizedIndex != ~0u) {
                     ERROR(sp, E0000, StringView("CoerceUnsized can only be implemented once per struct"));
                 }

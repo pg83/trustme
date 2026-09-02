@@ -64,6 +64,7 @@ struct CachedFunction {
 struct TransListFunction {
     const HIRPath* path;
     const HIRFunction* ptr;
+    HIRFunction* mutPtr;
     TransParams pp;
 
     CachedFunction monomorphised;

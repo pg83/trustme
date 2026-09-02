@@ -5632,7 +5632,7 @@ void ParseModRootItems(TokenStream& lex, ASTModule& mod) {
     }
 }
 
-ASTCrate* ParseCrate(const WireBoard& wb, ObjPool* pool, std::string mainfile, ASTEdition edition) {
+ASTCrate* ParseCrate(WireBoard& wb, ObjPool* pool, std::string mainfile, ASTEdition edition) {
     Token tok;
 
     Lexer lex(wb.id, *wb.pool, mainfile, edition, ParseState());
@@ -5642,6 +5642,7 @@ ASTCrate* ParseCrate(const WireBoard& wb, ObjPool* pool, std::string mainfile, A
     std::string mainpath = mainfile == "-" ? "-" : (p != std::string::npos ? std::string(mainfile.begin(), mainfile.begin() + p + 1) : "./");
 
     auto* crate = pool->make<ASTCrate>(wb, pool, wb.pool, *wb.types);
+    wb.astCrate = crate;
     crate->edition = edition;
 
     crate->rootModule().fileInfo.path = mainpath;

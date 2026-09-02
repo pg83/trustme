@@ -45,7 +45,21 @@ const TransListFunction* TransList::findFunction(const HIRPath& p) const {
 }
 
 TransListFunction* TransList::findFunction(const HIRPath& p) {
-    return const_cast<TransListFunction*>(static_cast<const TransList&>(*this).findFunction(p));
+    auto exact = functions.find(p);
+    if (exact != functions.end()) {
+        return exact->second.get();
+    }
+
+    BUG_ASSERT(wb_);
+    const auto symbol = FMT(TransMangleValue(*wb_, p));
+    auto canonical = functionSymbols.find(symbol);
+    if (canonical == functionSymbols.end()) {
+        return nullptr;
+    }
+    ASSERT_BUG(Span(), canonical->second.equalsIgnoringRegions(p), StringView("Distinct function paths have the same mangled name: ") << canonical->second << StringView(" and ") << p);
+    exact = functions.find(canonical->second);
+    ASSERT_BUG(Span(), exact != functions.end(), StringView("Function symbol index is stale for ") << p);
+    return exact->second.get();
 }
 
 bool TransList::hasType(const HIRType* type, bool shallow) const {
@@ -224,6 +238,7 @@ const HIRType* TransParams::maybeMonomorph(const ::StaticTraitResolve& resolve, 
 TransListFunction::TransListFunction(HIRTypeInterner& types, const HIRPath& path)
     : path(&path)
     , ptr(nullptr)
+    , mutPtr(nullptr)
     , pp(types)
     , forcePrototype(false)
 {

@@ -146,8 +146,8 @@ struct Context {
     const HIRType* closureReturnExpectation(const HIRExprNodeClosure* closure) const;
     void recordNeverFallback(unsigned index);
     bool usedNeverFallback(const HIRType* type) const;
-    const HIRType* expandAssociatedTypes(const Span& sp, const HIRType* input) const;
-    void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const;
+    const HIRType* expandAssociatedTypes(const Span& sp, const HIRType* input);
+    void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params);
     void compactIvars(const Span& sp);
 
     void equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr);

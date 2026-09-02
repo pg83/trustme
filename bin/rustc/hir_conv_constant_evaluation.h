@@ -12,9 +12,9 @@ class MIRTerminator;
 class MIRTypeResolve;
 void CtfeCreateContext(WireBoard& wb, stl::ObjPool& pool);
 void ConvertHIRConstantEvaluate(const WireBoard& wb, HIRCrate& hirCrate);
-void ConvertHIRConstantEvaluateExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp);
-void ConvertHIRConstantEvaluateEnum(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, const HIREnum& enm);
-void ConvertHIRConstantEvaluateEnumVariant(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, const HIREnum& enm, size_t idx);
+void ConvertHIRConstantEvaluateExpr(const WireBoard& wb, HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp);
+void ConvertHIRConstantEvaluateEnum(const WireBoard& wb, HIRCrate& crate, const HIRItemPath& ip, HIREnum& enm);
+void ConvertHIRConstantEvaluateEnumVariant(const WireBoard& wb, HIRCrate& crate, const HIRItemPath& ip, HIREnum& enm, size_t idx);
 void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRConstant& e);
 void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* paramsDef, HIRPathParams& params);
 void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRType* ty, HIRConstGeneric& cg);
@@ -71,8 +71,8 @@ public:
     HIREvaluator(HIREvaluator&&) = default;
     HIREvaluator(const HIREvaluator&) = delete;
 
-    EncodedLiteral evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, const HIRType* exp);
-    EncodedLiteral evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, const HIRType* exp, MonomorphState ms);
+    EncodedLiteral evaluateConstant(const HIRItemPath& ip, HIRExprPtr& expr, const HIRType* exp);
+    EncodedLiteral evaluateConstant(const HIRItemPath& ip, HIRExprPtr& expr, const HIRType* exp, MonomorphState ms);
 
     void setRequireConstCalls() {
         requireConstCalls = true;

@@ -150,12 +150,12 @@ namespace {
     };
 
     struct ExprVisitorApply: public HIRExprVisitorDef {
-        const Context& context;
+        Context& context;
         const HMTypeInferrence& ivars;
         HIRPathParams nopImpl;
         HIRPathParams nopItem;
 
-        ExprVisitorApply(const Context& context);
+        ExprVisitorApply(Context& context);
 
         void visitNodePtr(HIRExprPtr& nodePtr);
 
@@ -5512,19 +5512,17 @@ void Context::applySolverResponse(const Span& sp, const SolverResponse& response
     }
 }
 
-const HIRType* Context::expandAssociatedTypes(const Span& sp, const HIRType* input) const {
-    auto& context = const_cast<Context&>(*this);
+const HIRType* Context::expandAssociatedTypes(const Span& sp, const HIRType* input) {
     auto effects = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-        context.applySolverResponse(sp, response);
+        applySolverResponse(sp, response);
         return false;
     });
     return resolve.expandAssociatedTypes(sp, std::move(input), &effects);
 }
 
-void Context::expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const {
-    auto& context = const_cast<Context&>(*this);
+void Context::expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) {
     auto effects = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-        context.applySolverResponse(sp, response);
+        applySolverResponse(sp, response);
         return false;
     });
     resolve.expandAssociatedTypesParams(sp, params, &effects);
@@ -7723,7 +7721,7 @@ auto ExprVisitorRevisit::noRevisit(HIRExprNode& node) -> void {
     BUG(node.span(), StringView("Node revisit unexpected - ") << typeid(node).name());
 }
 
-ExprVisitorApply::ExprVisitorApply(const Context& context)
+ExprVisitorApply::ExprVisitorApply(Context& context)
     : HIRExprVisitorDef(context.crate.types)
     , context(context)
     , ivars(context.ivars)

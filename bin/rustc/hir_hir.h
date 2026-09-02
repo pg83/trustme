@@ -40,6 +40,8 @@ class HIRMacroItem;
 class HIRItemPath;
 struct WireBoard;
 
+void HIRCreateMutableOwnerCache(WireBoard& wb, stl::ObjPool& pool);
+
 class HIRPublicity {
     enum class Kind {
         Global,
@@ -722,7 +724,7 @@ public:
     mutable HIRValueItem intrinsicOffsetof;
 
     mutable HIRImplMatcherScratch implMatcherScratch;
-    mutable HIRFunction::argsT emptyMirArgs;
+    HIRFunction::argsT emptyMirArgs;
     HIRSimplePath emptyLangItemPath;
     RcString crateName;
 
@@ -811,22 +813,36 @@ public:
     const HIRMacroItem& getMacroitemByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false, bool ignoreLastNode = false) const;
 
     const HIRTypeItem& getTypeitemByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false, bool ignoreLastNode = false) const;
+    HIRTypeItem& getTypeitemByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false, bool ignoreLastNode = false);
 
     const HIRTypeItem* getTypeitemByPathOpt(const HIRSimplePath& path) const;
     const HIRTrait& getTraitByPath(const Span& sp, const HIRSimplePath& path) const;
     std::optional<size_t> findMostSpecificTrait(const Span& sp, const std::vector<HIRSimplePath>& candidates) const;
     const HIRStruct& getStructByPath(const Span& sp, const HIRSimplePath& path) const;
+    HIRStruct& getStructByPathMut(const Span& sp, const HIRSimplePath& path);
     const HIRUnion& getUnionByPath(const Span& sp, const HIRSimplePath& path) const;
+    HIRUnion& getUnionByPathMut(const Span& sp, const HIRSimplePath& path);
     const HIREnum& getEnumByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false, bool ignoreLastNode = false) const;
+    HIREnum& getEnumByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false, bool ignoreLastNode = false);
     const HIRModule& getModByPath(const Span& sp, const HIRSimplePath& path, bool ignoreLastNode = false, bool ignoreCrateName = false) const;
+    HIRModule& getModByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreLastNode = false, bool ignoreCrateName = false);
 
     const HIRValueItem& getValitemByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false) const;
+    HIRValueItem& getValitemByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false);
     const HIRFunction& getFunctionByPath(const Span& sp, const HIRSimplePath& path) const;
+    HIRFunction& getFunctionByPathMut(const Span& sp, const HIRSimplePath& path);
     bool functionTracksCaller(const Span& sp, const HIRPath& path, const HIRFunction& function) const;
 
     const HIRStatic& getStaticByPath(const Span& sp, const HIRSimplePath& path) const;
+    HIRStatic& getStaticByPathMut(const Span& sp, const HIRSimplePath& path);
 
     const HIRConstant& getConstantByPath(const Span& sp, const HIRSimplePath& path) const;
+    HIRConstant& getConstantByPathMut(const Span& sp, const HIRSimplePath& path);
+
+    HIRFunction& findFunctionMut(const WireBoard& wb, const Span& sp, const HIRPath& path, const HIRFunction& function);
+    HIRStatic& findStaticMut(const WireBoard& wb, const Span& sp, const HIRPath& path, const HIRStatic& item);
+    HIRConstant& findConstantMut(const WireBoard& wb, const Span& sp, const HIRPath& path, const HIRConstant& item);
+    HIRExprNode& findExprNodeMut(const Span& sp, const HIRExprNode& node);
 
     bool findTraitImplsCb(const HIRSimplePath& path, const HIRType* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) const;
     bool findAutoTraitImplsCb(const HIRSimplePath& path, const HIRType* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) const;
@@ -855,11 +871,11 @@ public:
         const HIRType* type;
     };
 
-    MirResult getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, const HIRType* retTy) const;
+    MirResult getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, HIRExprPtr& ep, HIRFunction::argsT& args, const HIRType* retTy);
 
-    const MIRFunction* getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRFunction& fcn) const;
+    const MIRFunction* getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, HIRFunction& fcn);
 
-    MirResult getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRType* expTy) const;
+    MirResult getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, HIRExprPtr& ep, const HIRType* expTy);
 };
 
 const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIRPattern::PathBinding& binding, bool isTuple);

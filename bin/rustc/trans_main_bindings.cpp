@@ -84,7 +84,7 @@ namespace {
     };
 
     struct EnumState {
-        const HIRCrate& crate;
+        HIRCrate& crate;
         StaticTraitResolve resolve;
         TransList rv;
         const TransList* origList;
@@ -462,7 +462,7 @@ void TransDeleteMIREnumCache(const MIRFunction::MIREnumCache* cache) {
 
 static TransList TransEnumerateCommonPost(EnumState& state);
 
-static void TransEnumerateExplicitLinkage(EnumState& state, const HIRModule& mod, HIRSimplePath modPath);
+static void TransEnumerateExplicitLinkage(EnumState& state, HIRModule& mod, HIRSimplePath modPath);
 
 static void TransEnumerateTypes(EnumState& state);
 
@@ -592,7 +592,7 @@ static void TransEnumerateGenericFunctionItems(EnumState& state, const Span& sp,
     }
 }
 
-static void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool isVisible, TransPathCallback& getPath) {
+static void TransEnumerateValItem(EnumState& state, HIRValueItem& vi, bool isVisible, TransPathCallback& getPath) {
     TRACE_FUNCTION_F(getPath.get() << StringView(" : ") << vi.tagStr() << StringView(" is_visible=") << isVisible);
     const Span sp;
     switch (vi.tag()) {
@@ -602,7 +602,7 @@ static void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool
             // TODO: If visible, ensure that target is visited.
             if (isVisible) {
                 if (!e.isVariant && e.path.crateName() == state.crate.crateName) {
-                    const auto& vi2 = state.crate.getValitemByPath(sp, e.path, false);
+                    auto& vi2 = state.crate.getValitemByPathMut(sp, e.path, false);
                     auto callback = makeCallable<TransPathCb>([&]() {
                         return e.path;
                     });
@@ -653,7 +653,7 @@ static void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool
         } break;
             break;
         case HIRValueItem::TAG_Function: {
-            const auto& e = *vi.as_Function();
+            auto& e = *vi.as_Function();
             bool isInline = false;
             if (isVisible) {
                 switch (e.markings.inlineType) {
@@ -672,7 +672,7 @@ static void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool
             }
 
             if (e.params.isGeneric() || (isInline && isVisible)) {
-                const_cast<HIRFunction&>(e).saveCode = true;
+                e.saveCode = true;
             } else {
                 if (isVisible) {
                     TransParams pp(state.crate.types);
@@ -689,8 +689,8 @@ static void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool
     }
 }
 
-static void TransEnumerateExplicitLinkage(EnumState& state, const HIRModule& mod, HIRSimplePath modPath) {
-    for (const auto& vi : mod.valueItems) {
+static void TransEnumerateExplicitLinkage(EnumState& state, HIRModule& mod, HIRSimplePath modPath) {
+    for (auto& vi : mod.valueItems) {
         bool hasExplicitLinkage = false;
         if (const auto* function = vi.second->ent.opt_Function()) {
             hasExplicitLinkage = (*function)->linkage.name != "" || (*function)->linkage.section != "";
@@ -706,8 +706,8 @@ static void TransEnumerateExplicitLinkage(EnumState& state, const HIRModule& mod
         }
     }
 
-    for (const auto& ti : mod.modItems) {
-        if (const auto* child = ti.second->ent.opt_Module()) {
+    for (auto& ti : mod.modItems) {
+        if (auto* child = ti.second->ent.opt_Module()) {
             TransEnumerateExplicitLinkage(state, *child, modPath + ti.first);
         }
     }
@@ -896,6 +896,7 @@ static bool mergeEnumeratedItems(HIRTypeInterner& types, TransList& out, TransLi
         if (auto* dst = out.addFunction(types, ent.first.clone())) {
             changed = true;
             dst->ptr = ent.second->ptr;
+            dst->mutPtr = ent.second->mutPtr;
             dst->pp = mv$(ent.second->pp);
             dst->monomorphised = mv$(ent.second->monomorphised);
             dst->forcePrototype = ent.second->forcePrototype;
@@ -1984,6 +1985,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 auto m = impl.methods.find(method);
                 ASSERT_BUG(Span(), m != impl.methods.end(), StringView("Generated Clone for ") << ty << StringView(" has no `") << method << StringView("`"));
                 e->ptr = &m->second.data;
+                e->mutPtr = &m->second.data;
             };
             bind("clone");
             if (transList.autoCloneFromImpls.count(ty)) {
@@ -2029,6 +2031,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 auto& impl = *list.back();
                 BUG_ASSERT(impl.methods.size() == 1);
                 e->ptr = &impl.methods.begin()->second.data;
+                e->mutPtr = &impl.methods.begin()->second.data;
             }
         }
         transList.autoFnptrImpls.clear();
@@ -2127,6 +2130,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             auto* e = transList.addFunction(crate.types, path.clone());
             if (e) {
                 e->ptr = transList.autoFunctions.back().get();
+                e->mutPtr = transList.autoFunctions.back().get();
             } else {
                 transList.autoFunctions.pop_back();
             }
@@ -2202,6 +2206,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
                         transList.autoFunctions.push_back(box$(fcn));
                         e->ptr = transList.autoFunctions.back().get();
+                        e->mutPtr = transList.autoFunctions.back().get();
                     }
                 }
             } else if (const auto* te = type->opt_Function()) {
@@ -2242,6 +2247,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
                         transList.autoFunctions.push_back(box$(fcn));
                         e->ptr = transList.autoFunctions.back().get();
+                        e->mutPtr = transList.autoFunctions.back().get();
                     }
                 }
             }
@@ -2409,6 +2415,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
                                 transList.autoFunctions.push_back(box$(newFcn));
                                 e->ptr = transList.autoFunctions.back().get();
+                                e->mutPtr = transList.autoFunctions.back().get();
                             }
                         }
                     }
@@ -2695,6 +2702,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 auto fcnE = state.resolve.getValue(sp, p, /*out*/ params, /*signature_only=*/false, &implParamsDef);
                                 ASSERT_BUG(sp, fcnE.is_Function(), StringView("Drop didn't point to a function! ") << fcnE.tagStr() << StringView(" ") << p);
                                 e->ptr = fcnE.as_Function();
+                                e->mutPtr = &state.crate.findFunctionMut(state.resolve.board(), sp, p, *fcnE.as_Function());
                                 e->pp.selfType = params.getSelfType();
                                 e->pp.gdefImpl = implParamsDef;
                                 if (const auto* implParams = params.getImplParams()) {
@@ -2759,6 +2767,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             auto* e = transList.addFunction(crate.types, mv$(path));
             if (e) {
                 e->ptr = transList.autoFunctions.back().get();
+                e->mutPtr = transList.autoFunctions.back().get();
             } else {
                 transList.autoFunctions.pop_back();
             }
@@ -3376,6 +3385,7 @@ auto EnumState::enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp) -> vo
         ASSERT_BUG(Span(), inserted, StringView("Duplicated mangled name - ") << *e->path);
         fcnsToTypeVisit.pushBack(e);
         e->ptr = &fcn;
+        e->mutPtr = &crate.findFunctionMut(resolve.board(), Span(), *e->path, fcn);
         e->pp = mv$(pp);
         DEBUG(*e->path << StringView(" w/ ") << e->pp.ppImpl << StringView(" and ") << e->pp.ppMethod);
         fcnQueue.push_back(e);

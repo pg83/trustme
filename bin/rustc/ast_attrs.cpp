@@ -52,6 +52,15 @@ const ASTAttribute* ASTAttributeList::get(const char* name) const {
     return nullptr;
 }
 
+ASTAttribute* ASTAttributeList::get(const char* name) {
+    for (auto& item : items) {
+        if (item.name() == name) {
+            return &item;
+        }
+    }
+    return nullptr;
+}
+
 ASTAttribute::ASTAttribute(Span sp, ASTAttributeName name, TokenTree data)
     : span_(std::move(sp))
     , name_(std::move(name))
@@ -76,7 +85,7 @@ void ASTAttribute::fmt(ZeroCopyOutput& out) const {
     out << name_ << data_;
 }
 
-std::string ASTAttribute::parseEqualsString(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod) const {
+std::string ASTAttribute::parseEqualsString(const WireBoard& wb, const ASTCrate& crate, ASTModule& mod) const {
     TTStream lex(span_, ParseState(), data());
     lex.parseState().wb = &wb;
     lex.getTokenCheck(TOK_EQUAL);

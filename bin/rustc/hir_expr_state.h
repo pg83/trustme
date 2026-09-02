@@ -6,7 +6,7 @@ class HIRExprState {
 public:
     HIRTypeInterner& types;
     HIRSimplePath modPath;
-    const HIRModule& module;
+    HIRModule& module;
 
     const HIRGenericParams* implGenerics;
     const HIRGenericParams* itemGenerics;
@@ -32,7 +32,7 @@ public:
         MirRequest,
         Mir,
     };
-    mutable Stage stage;
+    Stage stage;
 
     struct Captures {
         bool computed = false;
@@ -45,7 +45,7 @@ public:
         u64 valueMask[2] = {0, 0};
     };
 
-    mutable Captures captures;
+    Captures captures;
 
-    HIRExprState(HIRTypeInterner& types, const HIRModule& modPtr, HIRSimplePath modPath);
+    HIRExprState(HIRTypeInterner& types, HIRModule& modPtr, HIRSimplePath modPath);
 };

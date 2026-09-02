@@ -19,8 +19,8 @@ namespace stl {
     class ObjPool;
 }
 
-void HIRDump(stl::ZeroCopyOutput& sink, const HIRCrate& crate);
-void HIRDumpExpr(stl::ZeroCopyOutput& sink, const HIRExprPtr& expr);
+void HIRDump(stl::ZeroCopyOutput& sink, HIRCrate& crate);
+void HIRDumpExpr(stl::ZeroCopyOutput& sink, HIRExprPtr& expr);
 void HIRSerialise(const std::string& filename, const HIRCrate& crate);
 
 HIRCrate* HIRDeserialise(u32& id, stl::ObjPool* pool, HIRTypeInterner& types, const std::string& filename);

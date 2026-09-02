@@ -78,12 +78,12 @@ public:
 };
 
 #include "expand_common_tu.h"
-MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTAttributeName& path);
-MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTPath& path);
+MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<ASTModule*> modstack, const ASTAttributeName& path);
+MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<ASTModule*> modstack, const ASTPath& path);
 
 ExpandProcMacro* ExpandFindProcMacro(const WireBoard& wb, const RcString& name);
 ExpandDecorator* ExpandFindDecorator(const WireBoard& wb, const RcString& name);
 void ExpandInit(ExpandRegistry& registry);
 void Expand(const WireBoard& wb, ASTCrate& crate);
-ASTExprNode* ExpandParseAndExpandExprVal(const ASTCrate& crate, const ASTModule& mod, TokenStream& lex);
-ASTExprNode* ExpandBareExpr(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, ASTExprNode* node);
+ASTExprNode* ExpandParseAndExpandExprVal(const ASTCrate& crate, ASTModule& mod, TokenStream& lex);
+ASTExprNode* ExpandBareExpr(const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, ASTExprNode* node);

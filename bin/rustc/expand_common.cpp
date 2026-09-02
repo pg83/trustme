@@ -34,14 +34,14 @@ namespace {
     struct ExpandState {
         const WireBoard& wb;
         ASTCrate& crate;
-        LList<const ASTModule*> modstack;
+        LList<ASTModule*> modstack;
         ExpandMode mode;
         ASTModule* currentMod;
         Vector<const ASTModule*>* activeAnonModules = nullptr;
         mutable bool change;
         mutable bool hasMissing;
 
-        ExpandState(const WireBoard& wb, ASTCrate& crate, LList<const ASTModule*> modstack, ExpandMode mode, ASTModule* currentMod);
+        ExpandState(const WireBoard& wb, ASTCrate& crate, LList<ASTModule*> modstack, ExpandMode mode, ASTModule* currentMod);
 
         explicit ExpandState(const ExpandState&) = default;
     };
@@ -452,7 +452,7 @@ namespace {
         return !remove;
     }
 
-    std::unique_ptr<TokenStream> ExpandMacroInner(const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, ASTModule& mod, Span miSpan, const ASTPath& path, const RcString& inputIdent, TokenTree& inputTt) {
+    std::unique_ptr<TokenStream> ExpandMacroInner(const WireBoard& wb, const ASTCrate& crate, LList<ASTModule*> modstack, ASTModule& mod, Span miSpan, const ASTPath& path, const RcString& inputIdent, TokenTree& inputTt) {
         ASSERT_BUG(miSpan, path.isValid(), StringView("Macro invocation with invalid path"));
 
         TRACE_FUNCTION_F(StringView("Searching for macro ") << path);
@@ -1308,7 +1308,7 @@ namespace {
 
             if (i.data.is_Module()) {
                 auto& e = i.data.as_Module();
-                LList<const ASTModule*> subModstack(&es.modstack, &e);
+                LList<ASTModule*> subModstack(&es.modstack, &e);
                 ExpandState esInner(es.wb, es.crate, subModstack, es.mode, &e);
                 esInner.activeAnonModules = es.activeAnonModules;
                 ExpandMod(esInner, path, e, 0);
@@ -1864,7 +1864,7 @@ ExpandDecorator* ExpandFindDecorator(const WireBoard& wb, const RcString& name) 
     return wb.expandRegistry->findDecorator(name);
 }
 
-MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTAttributeName& path) {
+MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<ASTModule*> modstack, const ASTAttributeName& path) {
     ASTPath p = ASTPath::newRelative({}, {});
     for (const auto& ent : path.elems) {
         p += ASTPathNode(ent);
@@ -1872,7 +1872,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
     return ExpandLookupMacro(miSpan, wb, crate, modstack, p);
 }
 
-MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTPath& path) {
+MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<ASTModule*> modstack, const ASTPath& path) {
     ASSERT_BUG(miSpan, path.size() > 0, StringView("Path should have nodes: ") << path);
 
     const bool hasDefinitionModule = path.cls.is_Relative() && path.cls.as_Relative().hygiene.hasModPath();
@@ -1951,14 +1951,15 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
     return MacroRef();
 }
 
-ASTExprNode* ExpandBareExpr(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, ASTExprNode* node) {
-    ExpandState es{wb, const_cast<ASTCrate&>(crate), LList<const ASTModule*>(nullptr, &mod), ExpandMode::FirstPass, const_cast<ASTModule*>(&mod)};
+ASTExprNode* ExpandBareExpr(const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, ASTExprNode* node) {
+    ASSERT_BUG(Span(), wb.astCrate == &crate, StringView("Expression expansion requires the owning AST crate"));
+    ExpandState es{wb, *wb.astCrate, LList<ASTModule*>(nullptr, &mod), ExpandMode::FirstPass, &mod};
     node = ExpandExpr(es, node);
     es.mode = ExpandMode::Final;
     return node;
 }
 
-ASTExprNode* ExpandParseAndExpandExprVal(const ASTCrate& crate, const ASTModule& mod, TokenStream& lex) {
+ASTExprNode* ExpandParseAndExpandExprVal(const ASTCrate& crate, ASTModule& mod, TokenStream& lex) {
     auto sp = lex.pointSpan();
     auto n = ParseExprVal(lex);
     ASSERT_BUG(sp, n, StringView("No expression returned"));
@@ -1969,7 +1970,7 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
     wb.expandRegistry->eachDecorator([](const char* name, const ExpandDecorator&) {});
     wb.expandRegistry->eachMacro([](const char* name, const ExpandProcMacro&) {});
 
-    ExpandState es{wb, crate, LList<const ASTModule*>(nullptr, &crate.rootModule_), ExpandMode::FirstPass, &crate.rootModule_};
+    ExpandState es{wb, crate, LList<ASTModule*>(nullptr, &crate.rootModule_), ExpandMode::FirstPass, &crate.rootModule_};
 
     ExpandAttrsCfgAttr(*es.wb.settings, crate.attrs);
     ExpandAttrs(es, crate.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
@@ -2085,7 +2086,7 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
     }
 }
 
-ExpandState::ExpandState(const WireBoard& wb, ASTCrate& crate, LList<const ASTModule*> modstack, ExpandMode mode, ASTModule* currentMod)
+ExpandState::ExpandState(const WireBoard& wb, ASTCrate& crate, LList<ASTModule*> modstack, ExpandMode mode, ASTModule* currentMod)
     : wb(wb)
     , crate(crate)
     , modstack(modstack)
@@ -2125,7 +2126,8 @@ CExpandExpr::~CExpandExpr() {
 }
 
 auto CExpandExpr::curMod() -> ASTModule& {
-    return *const_cast<ASTModule*>(expandState.modstack.item);
+    ASSERT_BUG(Span(), expandState.modstack.item, StringView("Expression expansion has no current module"));
+    return *expandState.modstack.item;
 }
 
 auto CExpandExpr::visit(ASTExprNode* cnode) -> ASTExprNode* {
@@ -2300,7 +2302,7 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
 
     auto prevModstack = this->expandState.modstack;
     if (node.localMod) {
-        this->expandState.modstack = LList<const ASTModule*>(&prevModstack, node.localMod.get());
+        this->expandState.modstack = LList<ASTModule*>(&prevModstack, node.localMod.get());
     }
 
     // TODO: macro_rules! invocations within the expression list influence this.
@@ -2335,7 +2337,7 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
             std::vector<ASTExprNodeBlock::Line> newNodes;
             this->visitMacro(*nodeMac, &newNodes);
             if (!hasLocalMod && node.localMod) {
-                this->expandState.modstack = LList<const ASTModule*>(&prevModstack, node.localMod.get());
+                this->expandState.modstack = LList<ASTModule*>(&prevModstack, node.localMod.get());
                 hasLocalMod = true;
             }
             if (node.localMod && modItemCount < node.localMod->items.size()) {

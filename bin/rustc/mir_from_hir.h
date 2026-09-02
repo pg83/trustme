@@ -12,7 +12,7 @@
 class MirBuilder;
 
 void HIRGenerateMIR(const WireBoard& wb, HIRCrate& crate);
-void HIRGenerateMIRExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, const HIRFunction::argsT& args, const HIRType* resTy);
+void HIRGenerateMIRExpr(const WireBoard& wb, HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, HIRFunction::argsT& args, const HIRType* resTy);
 
 struct MIRDropEmitter {
     virtual bool emitDeepDrop(const Span& sp, const MIRLValue& value, unsigned int flag) = 0;

@@ -1310,7 +1310,7 @@ namespace {
         ERROR(sp, E0000, StringView("CoercePointee can only be derived for structs"));
     }
 
-    Vector<RcString> findMacro(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, const ASTPath& traitPath) {
+    Vector<RcString> findMacro(const Span& sp, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const ASTPath& traitPath) {
         Vector<RcString> macPath;
 
         if (traitPath.isTrivial()) {
@@ -1338,7 +1338,7 @@ namespace {
             }
         }
         if (macPath.empty()) {
-            auto mac = ExpandLookupMacro(sp, wb, crate, LList<const ASTModule*>(nullptr, &mod), traitPath);
+            auto mac = ExpandLookupMacro(sp, wb, crate, LList<ASTModule*>(nullptr, &mod), traitPath);
 
             switch (mac.tag()) {
                 case MacroRef::TAG_None: {

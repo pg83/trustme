@@ -172,11 +172,11 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
 
     struct Nvs: public HIREvaluator::Newval {
         TransList& out;
-        const HIRCrate& crate;
+        HIRCrate& crate;
         unsigned count;
         std::vector<std::pair<HIRSimplePath, HIRStatic*>> added;
 
-        Nvs(TransList& out, const HIRCrate& crate)
+        Nvs(TransList& out, HIRCrate& crate)
             : out(out)
             , crate(crate)
             , count(0)
@@ -198,7 +198,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
                 s.saveLiteral = false;
                 added.push_back(std::make_pair(p, &s));
             }
-            const_cast<HIRModule&>(crate.rootModule).valueItems.insert(std::make_pair(name, std::move(ent)));
+            crate.rootModule.valueItems.insert(std::make_pair(name, std::move(ent)));
             return p;
         }
     } nvs{list, crate};
@@ -220,7 +220,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
 
             const auto& path = ent.first;
             const auto& pp = ent.second->pp;
-            const auto& c = *ent.second->ptr;
+            auto& c = crate.findConstantMut(wb, pp.sp, path, *ent.second->ptr);
             TRACE_FUNCTION_FR(StringView("CONSTANT ") << path, StringView("CONSTANT ") << path);
             auto ty = pp.monomorph(resolve, c.type);
             auto eval = HIREvaluator{pp.sp, wb, nvs};
@@ -244,7 +244,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
 
             const auto& path = ent.first;
             const auto& pp = ent.second->pp;
-            const auto& s = *ent.second->ptr;
+            auto& s = crate.findStaticMut(wb, pp.sp, path, *ent.second->ptr);
             TRACE_FUNCTION_FR(StringView("STATIC ") << path, StringView("STATIC ") << path);
             auto ty = pp.monomorph(resolve, s.type);
             auto eval = HIREvaluator{pp.sp, wb, nvs};

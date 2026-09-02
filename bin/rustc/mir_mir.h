@@ -375,6 +375,8 @@ struct MIRLValue {
     };
 
     class MRef: public RefCommon {
+        MIRLValue* mutLv_;
+
     public:
         MRef(MIRLValue& lv);
 

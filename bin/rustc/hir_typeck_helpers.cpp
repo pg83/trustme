@@ -24,6 +24,11 @@
 
 using namespace stl;
 
+void NextSolverCreateCrateCache(WireBoard& wb, ObjPool& pool) {
+    BUG_ASSERT(!wb.solverCache);
+    wb.solverCache = pool.make<NextSolverCrateCache>();
+}
+
 namespace {
     constexpr u32 SOLVER_ALPHA_SCOPE_BASE = ~u32(255);
 
@@ -1937,8 +1942,8 @@ unsigned int HMTypeInferrence::rootIvarIndex(unsigned int slot) const {
     return index;
 }
 
-HMTypeInferrence::IVar& HMTypeInferrence::getPointedIvar(unsigned int slot) const {
-    return const_cast<IVar&>(ivars.at(this->rootIvarIndex(slot)));
+const HMTypeInferrence::IVar& HMTypeInferrence::getPointedIvar(unsigned int slot) const {
+    return ivars.at(this->rootIvarIndex(slot));
 }
 
 bool HMTypeInferrence::pathparamsContainIvars(const HIRPathParams& pps, bool onlyUnbound) const {
@@ -8982,11 +8987,8 @@ auto NextTraitGoalEvaluator::crateCacheUsable() const -> bool {
 }
 
 auto NextTraitGoalEvaluator::crateCache() const -> NextSolverCrateCache& {
-    auto& wb = const_cast<WireBoard&>(resolve_.board());
-    if (!wb.solverCache) {
-        wb.solverCache = wb.pool->make<NextSolverCrateCache>();
-    }
-    return *wb.solverCache;
+    BUG_ASSERT(resolve_.board().solverCache);
+    return *resolve_.board().solverCache;
 }
 
 auto NextTraitGoalEvaluator::canonicalizeGoal(const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, CanonicalizeTraitGoal& canonicalizer) const -> CanonicalGoal {

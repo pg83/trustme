@@ -166,6 +166,11 @@ struct TraitResolveCommon {
         return crate;
     }
 
+    HIRCrate& hirCrateMut() const {
+        ASSERT_BUG(Span(), wb.crate == &crate, stl::StringView("Mutable HIR access requested for a non-owned crate"));
+        return *wb.crate;
+    }
+
     const HIRGenericParams* implGenerics_;
     const HIRGenericParams* itemGenerics_;
     HIRGenericParams emptyGenerics_;

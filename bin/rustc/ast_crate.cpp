@@ -61,6 +61,33 @@ ASTCrate::ASTCrate(const WireBoard& wb, ObjPool* pool, ObjPool* hirPool, HIRType
 {
 }
 
+namespace {
+    ASTTrait* findTraitInModule(ASTModule& mod, const ASTTrait& target) {
+        for (auto& item : mod.items) {
+            if (auto* trait = item->data.opt_Trait(); trait == &target) {
+                return trait;
+            }
+            if (auto* child = item->data.opt_Module()) {
+                if (auto* found = findTraitInModule(*child, target)) {
+                    return found;
+                }
+            }
+        }
+        for (auto& child : mod.anonMods()) {
+            if (auto* found = findTraitInModule(*child, target)) {
+                return found;
+            }
+        }
+        return nullptr;
+    }
+}
+
+ASTTrait& ASTCrate::findTraitMut(const Span& sp, const ASTTrait& trait) {
+    auto* found = findTraitInModule(rootModule_, trait);
+    ASSERT_BUG(sp, found, StringView("Trait is not owned by this AST crate"));
+    return *found;
+}
+
 void ASTCrate::loadExterns(Settings& settings) {
     auto cb = [this, &settings](ASTModule& mod) {
         for (/*const*/ auto& it : mod.items) {

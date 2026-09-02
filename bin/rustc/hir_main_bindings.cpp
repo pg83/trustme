@@ -1367,13 +1367,13 @@ RcString HIRDeserialiseJustName(const std::string& filename) {
 
 #define NODE_IS(valptr, tysuf) (cast<const HIRExprNode##tysuf>(&*valptr) != nullptr)
 
-void HIRDump(ZeroCopyOutput& sink, const HIRCrate& crate) {
+void HIRDump(ZeroCopyOutput& sink, HIRCrate& crate) {
     TreeVisitor tv{crate.types, sink};
 
-    tv.visitCrate(const_cast<HIRCrate&>(crate));
+    tv.visitCrate(crate);
 }
 
-void HIRDumpExpr(ZeroCopyOutput& sink, const HIRExprPtr& expr) {
+void HIRDumpExpr(ZeroCopyOutput& sink, HIRExprPtr& expr) {
     if (!expr) {
         sink << StringView("/*NULL*/");
         return;
@@ -1382,7 +1382,7 @@ void HIRDumpExpr(ZeroCopyOutput& sink, const HIRExprPtr& expr) {
     BUG_ASSERT(expr.state);
     TreeVisitor tv{expr.state->types, sink};
 
-    const_cast<HIRExprPtr&>(expr)->visit(tv);
+    expr->visit(tv);
 }
 
 #undef NODE_IS

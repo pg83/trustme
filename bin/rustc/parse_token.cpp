@@ -442,7 +442,12 @@ Token Token::clone() const {
 ASTExprNode& Token::fragNode() {
     BUG_ASSERT(type_ == TOK_INTERPOLATED_EXPR || type_ == TOK_INTERPOLATED_STMT || type_ == TOK_INTERPOLATED_BLOCK);
     auto ptr = data_.as_Fragment();
-    return *reinterpret_cast<ASTExprNode*>(ptr);
+    return *static_cast<ASTExprNode*>(ptr);
+}
+
+const ASTExprNode& Token::fragNode() const {
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_EXPR || type_ == TOK_INTERPOLATED_STMT || type_ == TOK_INTERPOLATED_BLOCK);
+    return *static_cast<const ASTExprNode*>(data_.as_Fragment());
 }
 
 ASTExprNode* Token::takeFragNode() {
@@ -956,7 +961,12 @@ Token& Token::operator=(const Token& t) {
 // TODO: Replace these with a way of getting a InterpolatedFragment&
 ASTType*& Token::fragType() {
     BUG_ASSERT(type_ == TOK_INTERPOLATED_TYPE);
-    return *reinterpret_cast<ASTType**>(data_.as_Fragment());
+    return *static_cast<ASTType**>(data_.as_Fragment());
+}
+
+const ASTType* Token::fragType() const {
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_TYPE);
+    return *static_cast<ASTType* const*>(data_.as_Fragment());
 }
 
 ASTPath& Token::fragPath() {

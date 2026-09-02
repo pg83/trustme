@@ -1256,20 +1256,24 @@ void visitTerminatorTargetMut(MIRTerminator& term, MIRTargetVisitorMut& cb) {
 }
 
 void visitTerminatorTarget(const MIRTerminator& term, MIRTargetVisitor& cb) {
-    struct ConstAdapter final: public MIRTargetVisitorMut {
+    struct TermCbVisitor final: public MIRVisitor {
         MIRTargetVisitor& cb;
 
-        explicit ConstAdapter(MIRTargetVisitor& cb)
+        explicit TermCbVisitor(MIRTargetVisitor& cb)
             : cb(cb)
         {
         }
 
-        void visitTarget(MIRBasicBlockId& target) override {
-            cb.visitTarget(target);
+        bool visitLvalue(const MIRLValue&, MIRValUsage) override {
+            return false;
         }
-    } adapter{cb};
 
-    visitTerminatorTargetMut(const_cast<MIRTerminator&>(term), adapter);
+        bool visitBlockId(const MIRBasicBlockId& target) override {
+            cb.visitTarget(target);
+            return false;
+        }
+    } visitor{cb};
+    visitor.visitTerminator(term);
 }
 
 #if 1

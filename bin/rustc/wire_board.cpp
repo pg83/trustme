@@ -5,6 +5,8 @@
 #include "mir_operations.h"
 #include "trans_mangling.h"
 #include "hir_conv_constant_evaluation.h"
+#include "hir_typeck_helpers.h"
+#include "hir_hir.h"
 
 #include <std/mem/obj_pool.h>
 
@@ -17,5 +19,7 @@ WireBoard::WireBoard(ObjPool* pool)
     TargetCreateLayoutContext(*this, *pool);
     MIRCreateOperationsContext(*this, *pool);
     CtfeCreateContext(*this, *pool);
+    NextSolverCreateCrateCache(*this, *pool);
+    HIRCreateMutableOwnerCache(*this, *pool);
     TransCreateManglingContext(*this, *pool);
 }

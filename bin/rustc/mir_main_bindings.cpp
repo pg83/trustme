@@ -65,10 +65,10 @@ namespace {
     }
 }
 
-void MIRDump(ZeroCopyOutput& sink, const HIRCrate& crate) {
+void MIRDump(ZeroCopyOutput& sink, HIRCrate& crate) {
     TreeVisitor tv{crate.types, sink};
 
-    tv.visitCrate(const_cast<HIRCrate&>(crate));
+    tv.visitCrate(crate);
 }
 
 void MIRDumpFcn(ZeroCopyOutput& sink, const MIRFunction& fcn, unsigned int il) {

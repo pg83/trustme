@@ -21,7 +21,7 @@
 
 struct WireBoard;
 
-ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, std::string mainfile, ASTEdition edition);
+ASTCrate* ParseCrate(WireBoard& wb, stl::ObjPool* pool, std::string mainfile, ASTEdition edition);
 
 enum eParsePathGenericMode {
     PATH_GENERIC_NONE,

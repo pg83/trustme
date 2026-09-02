@@ -1034,6 +1034,33 @@ style.append(command(
     descr="UT",
     color="green",
 ))
+style.append(command(
+    name="unit_compiler_no_const_cast",
+    inputs=[
+        "$(S)/tst/unit/test_compiler_no_const_cast.py",
+        *build.glob("$(S)/bin/rustc/**/*.h"),
+        *build.glob("$(S)/bin/rustc/**/*.cpp"),
+        *build.glob("$(S)/bin/rustc/**/*.inc"),
+        *TIMEOUT_INPUT,
+    ],
+    outputs=["$(B)/tst/unit/compiler_no_const_cast.stamp"],
+    cmd=[
+        [
+            *TEST_TIMEOUT,
+            "python3",
+            "$(S)/tst/unit/test_compiler_no_const_cast.py",
+            "-v",
+        ],
+        [
+            *TEST_TIMEOUT,
+            "sh",
+            "-c",
+            "> $(B)/tst/unit/compiler_no_const_cast.stamp",
+        ],
+    ],
+    descr="UT",
+    color="green",
+))
 unit_tests.append(command(
     name="unit_rust_lib_import",
     inputs=[

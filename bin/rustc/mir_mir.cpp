@@ -1713,6 +1713,7 @@ const MIRLValue::CRef MIRLValue::CRef::innerRef() const {
 
 MIRLValue::MRef::MRef(MIRLValue& lv)
     : RefCommon(lv, lv.wrappers.size())
+    , mutLv_(&lv)
 {
 }
 
@@ -1724,15 +1725,14 @@ MIRLValue::MRef MIRLValue::MRef::innerRef() {
 }
 
 void MIRLValue::MRef::replace(MIRLValue x) {
-    auto& mutLv = const_cast<MIRLValue&>(*lv_);
     if (wrapperCount_ == 0 && x.wrappers.empty()) {
-        mutLv.root = std::move(x.root);
+        mutLv_->root = std::move(x.root);
         return;
     }
     if (wrapperCount_ < lv_->wrappers.size()) {
         x.wrappers.insert(x.wrappers.end(), lv_->wrappers.begin() + wrapperCount_, lv_->wrappers.end());
     }
-    mutLv = std::move(x);
+    *mutLv_ = std::move(x);
 }
 
 ItemAddress::ItemAddress(std::unique_ptr<HIRPath> p, U128 offset)

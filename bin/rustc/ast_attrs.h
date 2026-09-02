@@ -49,10 +49,7 @@ public:
     void push_back(ASTAttribute i);
 
     const ASTAttribute* get(const char* name) const;
-
-    ASTAttribute* get(const char* name) {
-        return const_cast<ASTAttribute*>(const_cast<const ASTAttributeList*>(this)->get(name));
-    }
+    ASTAttribute* get(const char* name);
 
     bool has(const char* name) const {
         return get(name) != 0;
@@ -127,7 +124,7 @@ public:
         return data_;
     }
 
-    std::string parseEqualsString(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod) const;
+    std::string parseEqualsString(const WireBoard& wb, const ASTCrate& crate, ASTModule& mod) const;
 
     std::string parseParenString() const;
 

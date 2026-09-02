@@ -5,6 +5,7 @@
 
 #include <std/lib/vector.h>
 
+#define ZLIB_CONST
 #include <zlib.h>
 #include <fstream>
 #include <string.h>
@@ -133,7 +134,7 @@ HIRSerialiseWriter::Inner::~Inner() {
 
 void HIRSerialiseWriter::Inner::write(const void* buf, size_t len) {
     zstream.avail_in = len;
-    zstream.next_in = reinterpret_cast<unsigned char*>(const_cast<void*>(buf));
+    zstream.next_in = static_cast<const unsigned char*>(buf);
 
     size_t lastAvailIn = zstream.avail_in;
 
@@ -565,7 +566,7 @@ std::string HIRSerialiseReader::readString() {
         len |= readU16();
     }
     std::string rv(len, '\0');
-    read(const_cast<char*>(rv.data()), len);
+    read(rv.data(), len);
     return rv;
 }
 
@@ -615,7 +616,7 @@ size_t HIRSerialiseReader::rawReadLen() {
 std::string HIRSerialiseReader::rawReadBytesStdstring() {
     auto len = rawReadLen();
     std::string rv(len, '\0');
-    read(const_cast<char*>(rv.data()), len);
+    read(rv.data(), len);
     return rv;
 }
 

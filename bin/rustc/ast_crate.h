@@ -119,6 +119,8 @@ public:
     void loadExterns(Settings& settings);
 
     RcString loadExternCrate(Settings& settings, Span sp, const RcString& name, const std::string& file = "");
+
+    ASTTrait& findTraitMut(const Span& sp, const ASTTrait& trait);
 };
 
 class ASTExternCrate {

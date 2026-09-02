@@ -212,9 +212,9 @@ const HIRType* StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, cons
                         revealed = resolve.hirCrate().types.path(HIRPath(path.type, path.trait.clone(), name, path.params.clone()), {});
                     } else {
                         ASSERT_BUG(sp, value.is_Function(), StringView("ErasedType with Fcn type doesn't point at a function: ") << functionOpaque.origin << StringView(": ") << value.tagStr());
-                        const auto& function = *value.as_Function();
+                        auto& function = resolve.hirCrateMut().findFunctionMut(resolve.board(), sp, functionOpaque.origin, *value.as_Function());
                         if (functionOpaque.index >= function.code.erasedTypes.length()) {
-                            resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(functionOpaque.origin), function);
+                            resolve.hirCrateMut().getOrGenMir(resolve.board(), HIRItemPath(functionOpaque.origin), function);
                         }
                         ASSERT_BUG(sp, functionOpaque.index < function.code.erasedTypes.length(), StringView("Erased type index out of range for ") << functionOpaque.origin << StringView(" - ") << functionOpaque.index << StringView(" >= ") << function.code.erasedTypes.length());
                         revealed = monomorph.monomorphType(sp, function.code.erasedTypes[functionOpaque.index]);
@@ -230,7 +230,8 @@ const HIRType* StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, cons
                                 MonomorphState monomorph(resolve.hirCrate().types);
                                 auto value = resolve.getValue(sp, path, monomorph);
                                 if (const auto* function = value.opt_Function()) {
-                                    resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(path), **function);
+                                    auto& functionMut = resolve.hirCrateMut().findFunctionMut(resolve.board(), sp, path, **function);
+                                    resolve.hirCrateMut().getOrGenMir(resolve.board(), HIRItemPath(path), functionMut);
                                 }
                                 if (alias.inner->type != nullptr) {
                                     break;

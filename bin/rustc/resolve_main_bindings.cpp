@@ -69,7 +69,7 @@ namespace {
 #include "resolve_ctx_ent_tu.h"
 
     struct Context {
-        const ASTCrate& crate;
+        ASTCrate& crate;
         const ASTModule& mod;
         std::vector<Ent> nameContext;
 
@@ -91,7 +91,7 @@ namespace {
 
         ObjPool& typePool() const;
 
-        Context(const Settings& settings, const ASTCrate& crate, const ASTModule& mod);
+        Context(const Settings& settings, ASTCrate& crate, const ASTModule& mod);
 
         void push(const ASTHigherRankedBounds& params);
 
@@ -170,10 +170,39 @@ namespace {
     struct ActiveUseResolution;
 
     struct UseResolutionContext {
+        struct CachedBindings {
+            const ASTPath* path;
+            ASTPath::Bindings bindings;
+            CachedBindings* next;
+
+            CachedBindings(const ASTPath& path, ASTPath::Bindings bindings, CachedBindings* next)
+                : path(&path)
+                , bindings(std::move(bindings))
+                , next(next)
+            {
+            }
+        };
+
         const ActiveUseResolution* activeUse = nullptr;
         std::vector<std::pair<const ASTModule*, const char*>> moduleLookups;
         Vector<const ASTUseItem*> wildcardUses;
         std::vector<std::pair<const ASTModule*, RcString>> wildcardModules;
+        ObjPool::Ref bindingCachePool = ObjPool::fromMemory();
+        CachedBindings* bindingCache = nullptr;
+
+        const ASTPath::Bindings* findCachedBindings(const ASTPath& path) const {
+            for (auto* entry = bindingCache; entry; entry = entry->next) {
+                if (entry->path == &path) {
+                    return &entry->bindings;
+                }
+            }
+            return nullptr;
+        }
+
+        const ASTPath::Bindings& cacheBindings(const ASTPath& path, ASTPath::Bindings bindings) {
+            bindingCache = bindingCachePool->make<CachedBindings>(path, std::move(bindings), bindingCache);
+            return bindingCache->bindings;
+        }
     };
 
     struct ActiveUseResolution {
@@ -220,7 +249,7 @@ namespace {
     void ResolveAbsoluteExpr(Context& context, ASTExprNode* expr);
     void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node);
     void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& pat);
-    void ResolveAbsoluteMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod);
+    void ResolveAbsoluteMod(const Settings& settings, ASTCrate& crate, ASTModule& mod);
     void ResolveAbsoluteMod(Context itemContext, ASTModule& mod);
 
     void ResolveAbsoluteFunction(Context& itemContext, ASTFunction& fcn, DelegationSignatureSource signatureSource = {}, bool hasParentSelf = false, bool isTraitImpl = false);
@@ -3125,7 +3154,7 @@ namespace {
         itemContext.pop(e.params());
     }
 
-    void ResolveAbsoluteMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod) {
+    void ResolveAbsoluteMod(const Settings& settings, ASTCrate& crate, ASTModule& mod) {
         ResolveAbsoluteMod(Context{settings, crate, mod}, mod);
     }
 
@@ -3209,8 +3238,8 @@ namespace {
 
                         itemContext.pop(def.params());
 
-                        // HACK: Mutate the source to indicate that it's an auto trait
-                        const_cast<ASTTrait*>(def.trait().ent.bindings.type.binding.as_Trait().trait_)->setIsMarker();
+                        auto* trait = def.trait().ent.bindings.type.binding.as_Trait().trait_;
+                        itemContext.crate.findTraitMut(i->span, *trait).setIsMarker();
                     } else {
                         TRACE_FUNCTION_F(StringView("impl ") << def.trait().ent << StringView(" for ") << def.type());
                         itemContext.pushSelf(def.type());
@@ -4999,6 +5028,10 @@ namespace {
                     DEBUG(StringView("- Search glob of ") << impE.path << StringView(" in ") << mod.path());
                     ASTPath::Bindings bindings_;
                     const auto* bindings = &impE.path.bindings;
+                    auto* cached = resolveContext.findCachedBindings(impE.path);
+                    if (bindings->type.is_Unbound() && cached) {
+                        bindings = cached;
+                    }
                     if (bindings->type.is_Unbound()) {
                         DEBUG(StringView("Temp resolving wildcard ") << impE.path);
                         auto& resolveStackPtrs = resolveContext.wildcardUses;
@@ -5010,8 +5043,7 @@ namespace {
                                 resolveStackPtrs.popBack();
                                 continue;
                             }
-                            const_cast<ASTPath::Bindings&>(impE.path.bindings) = bindings_.clone();
-                            bindings = &bindings_;
+                            bindings = &resolveContext.cacheBindings(impE.path, bindings_.clone());
                             resolveStackPtrs.popBack();
                         } else {
                             DEBUG(StringView("Recursion detected (resolve_stack_ptrs), skipping ") << impE.path);
@@ -5805,7 +5837,7 @@ auto Context::typePool() const -> ObjPool& {
     return *crate.pool;
 }
 
-Context::Context(const Settings& settings, const ASTCrate& crate, const ASTModule& mod)
+Context::Context(const Settings& settings, ASTCrate& crate, const ASTModule& mod)
     : settings(settings)
     , crate(crate)
     , mod(mod)
@@ -6610,7 +6642,7 @@ auto Context::cloneMod() const -> Context {
             }
             if (isConcrete) {
                 rv.selfCtorOnlyIdx = rv.nameContext.size();
-                rv.nameContext.push_back(Ent::make_ConcreteSelf(const_cast<ASTType**>(selfTy)));
+                rv.nameContext.push_back(Ent::make_ConcreteSelf(selfTy));
             }
         }
     }

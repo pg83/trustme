@@ -19,6 +19,7 @@
 #include "hir_conv_constant_evaluation.h"
 
 #include <std/alg/defer.h>
+#include <std/sym/h_map.h>
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
@@ -28,6 +29,330 @@
 using namespace stl;
 
 namespace {
+    struct HIRPointerHasher {
+        template <typename T>
+        static u64 hash(const T* ptr) noexcept {
+            return static_cast<u64>(std::hash<const void*>{}(ptr));
+        }
+    };
+}
+
+struct HIRMutableOwnerCache {
+    HashMap<HIRFunction*, const HIRFunction*, HIRPointerHasher> functions;
+    HashMap<HIRStatic*, const HIRStatic*, HIRPointerHasher> statics;
+    HashMap<HIRConstant*, const HIRConstant*, HIRPointerHasher> constants;
+    bool indexed = false;
+
+    explicit HIRMutableOwnerCache(ObjPool* pool)
+        : functions(pool)
+        , statics(pool)
+        , constants(pool)
+    {
+    }
+};
+
+void HIRCreateMutableOwnerCache(WireBoard& wb, ObjPool& pool) {
+    wb.hirOwners = pool.make<HIRMutableOwnerCache>(&pool);
+}
+
+namespace {
+    HIRFunction* findFunctionInModule(HIRModule& mod, const HIRFunction& target) {
+        for (auto& pair : mod.valueItems) {
+            if (auto* item = pair.second->ent.opt_Function(); item && *item == &target) {
+                return *item;
+            }
+        }
+        for (auto& pair : mod.modItems) {
+            auto& item = pair.second->ent;
+            if (auto* sub = item.opt_Module()) {
+                if (auto* found = findFunctionInModule(*sub, target)) {
+                    return found;
+                }
+            } else if (auto* trait = item.opt_Trait()) {
+                for (auto& value : trait->values) {
+                    if (auto* function = value.second.opt_Function(); function == &target) {
+                        return function;
+                    }
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    HIRConstant* findConstantInModule(HIRModule& mod, const HIRConstant& target) {
+        for (auto& pair : mod.valueItems) {
+            if (auto* item = pair.second->ent.opt_Constant(); item && *item == &target) {
+                return *item;
+            }
+        }
+        for (auto& pair : mod.modItems) {
+            auto& item = pair.second->ent;
+            if (auto* sub = item.opt_Module()) {
+                if (auto* found = findConstantInModule(*sub, target)) {
+                    return found;
+                }
+            } else if (auto* trait = item.opt_Trait()) {
+                for (auto& value : trait->values) {
+                    if (auto* constant = value.second.opt_Constant(); constant == &target) {
+                        return constant;
+                    }
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    HIRStatic* findStaticInModule(HIRModule& mod, const HIRStatic& target) {
+        for (auto& pair : mod.valueItems) {
+            if (auto* item = pair.second->ent.opt_Static(); item && *item == &target) {
+                return *item;
+            }
+        }
+        for (auto& item : mod.inlineStatics) {
+            if (item.second.get() == &target) {
+                return item.second.get();
+            }
+        }
+        for (auto& pair : mod.modItems) {
+            auto& item = pair.second->ent;
+            if (auto* sub = item.opt_Module()) {
+                if (auto* found = findStaticInModule(*sub, target)) {
+                    return found;
+                }
+            } else if (auto* trait = item.opt_Trait()) {
+                for (auto& value : trait->values) {
+                    if (auto* stat = value.second.opt_Static(); stat == &target) {
+                        return stat;
+                    }
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    template <typename Group, typename Callback>
+    auto findInImplGroup(Group& group, Callback callback) -> decltype(callback(*group.generic.front())) {
+        for (auto& pair : group.named) {
+            for (auto& impl : pair.second) {
+                if (auto* found = callback(*impl)) {
+                    return found;
+                }
+            }
+        }
+        for (auto& impl : group.nonNamed) {
+            if (auto* found = callback(*impl)) {
+                return found;
+            }
+        }
+        for (auto& impl : group.generic) {
+            if (auto* found = callback(*impl)) {
+                return found;
+            }
+        }
+        return nullptr;
+    }
+
+    HIRFunction* findFunctionInCrate(HIRCrate& crate, const HIRFunction& target) {
+        if (auto* found = findFunctionInModule(crate.rootModule, target)) {
+            return found;
+        }
+        for (auto& value : crate.newValues) {
+            if (auto* function = value.second->ent.opt_Function(); function && *function == &target) {
+                return *function;
+            }
+        }
+        if (auto* found = findInImplGroup(crate.typeImpls, [&](HIRTypeImpl& impl) -> HIRFunction* {
+                for (auto& method : impl.methods) {
+                    if (&method.second.data == &target) {
+                        return &method.second.data;
+                    }
+                }
+                return nullptr;
+            })) {
+            return found;
+        }
+        for (auto& trait : crate.traitImpls) {
+            if (auto* found = findInImplGroup(trait.second, [&](HIRTraitImpl& impl) -> HIRFunction* {
+                    for (auto& method : impl.methods) {
+                        if (&method.second.data == &target) {
+                            return &method.second.data;
+                        }
+                    }
+                    return nullptr;
+                })) {
+                return found;
+            }
+        }
+        for (auto& ext : crate.extCrates) {
+            if (ext.second.data) {
+                if (auto* found = findFunctionInCrate(*ext.second.data, target)) {
+                    return found;
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    HIRConstant* findConstantInCrate(HIRCrate& crate, const HIRConstant& target) {
+        if (auto* found = findConstantInModule(crate.rootModule, target)) {
+            return found;
+        }
+        for (auto& value : crate.newValues) {
+            if (auto* constant = value.second->ent.opt_Constant(); constant && *constant == &target) {
+                return *constant;
+            }
+        }
+        if (auto* found = findInImplGroup(crate.typeImpls, [&](HIRTypeImpl& impl) -> HIRConstant* {
+                for (auto& constant : impl.constants) {
+                    if (&constant.second.data == &target) {
+                        return &constant.second.data;
+                    }
+                }
+                return nullptr;
+            })) {
+            return found;
+        }
+        for (auto& trait : crate.traitImpls) {
+            if (auto* found = findInImplGroup(trait.second, [&](HIRTraitImpl& impl) -> HIRConstant* {
+                    for (auto& constant : impl.constants) {
+                        if (&constant.second.data == &target) {
+                            return &constant.second.data;
+                        }
+                    }
+                    return nullptr;
+                })) {
+                return found;
+            }
+        }
+        for (auto& ext : crate.extCrates) {
+            if (ext.second.data) {
+                if (auto* found = findConstantInCrate(*ext.second.data, target)) {
+                    return found;
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    HIRStatic* findStaticInCrate(HIRCrate& crate, const HIRStatic& target) {
+        if (auto* found = findStaticInModule(crate.rootModule, target)) {
+            return found;
+        }
+        for (auto& value : crate.newValues) {
+            if (auto* stat = value.second->ent.opt_Static(); stat && *stat == &target) {
+                return *stat;
+            }
+        }
+        for (auto& trait : crate.traitImpls) {
+            if (auto* found = findInImplGroup(trait.second, [&](HIRTraitImpl& impl) -> HIRStatic* {
+                    for (auto& stat : impl.statics) {
+                        if (&stat.second.data == &target) {
+                            return &stat.second.data;
+                        }
+                    }
+                    return nullptr;
+                })) {
+                return found;
+            }
+        }
+        for (auto& ext : crate.extCrates) {
+            if (ext.second.data) {
+                if (auto* found = findStaticInCrate(*ext.second.data, target)) {
+                    return found;
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    void indexMutableOwnersInModule(HIRMutableOwnerCache& cache, HIRModule& mod) {
+        for (auto& pair : mod.valueItems) {
+            auto& item = pair.second->ent;
+            if (auto* value = item.opt_Function()) {
+                cache.functions.insert(*value, *value);
+            } else if (auto* value = item.opt_Static()) {
+                cache.statics.insert(*value, *value);
+            } else if (auto* value = item.opt_Constant()) {
+                cache.constants.insert(*value, *value);
+            }
+        }
+        for (auto& pair : mod.inlineStatics) {
+            cache.statics.insert(pair.second.get(), pair.second.get());
+        }
+        for (auto& pair : mod.modItems) {
+            auto& item = pair.second->ent;
+            if (auto* sub = item.opt_Module()) {
+                indexMutableOwnersInModule(cache, *sub);
+            } else if (auto* trait = item.opt_Trait()) {
+                for (auto& pair : trait->values) {
+                    auto& value = pair.second;
+                    if (auto* function = value.opt_Function()) {
+                        cache.functions.insert(function, function);
+                    } else if (auto* stat = value.opt_Static()) {
+                        cache.statics.insert(stat, stat);
+                    } else if (auto* constant = value.opt_Constant()) {
+                        cache.constants.insert(constant, constant);
+                    }
+                }
+            }
+        }
+    }
+
+    template <typename Group, typename Callback>
+    void indexMutableOwnersInGroup(Group& group, Callback callback) {
+        for (auto& pair : group.named) {
+            for (auto& impl : pair.second) {
+                callback(*impl);
+            }
+        }
+        for (auto& impl : group.nonNamed) {
+            callback(*impl);
+        }
+        for (auto& impl : group.generic) {
+            callback(*impl);
+        }
+    }
+
+    void indexMutableOwners(HIRMutableOwnerCache& cache, HIRCrate& crate) {
+        indexMutableOwnersInModule(cache, crate.rootModule);
+        for (auto& pair : crate.newValues) {
+            auto& item = pair.second->ent;
+            if (auto* value = item.opt_Function()) {
+                cache.functions.insert(*value, *value);
+            } else if (auto* value = item.opt_Static()) {
+                cache.statics.insert(*value, *value);
+            } else if (auto* value = item.opt_Constant()) {
+                cache.constants.insert(*value, *value);
+            }
+        }
+        indexMutableOwnersInGroup(crate.typeImpls, [&](HIRTypeImpl& impl) {
+            for (auto& pair : impl.methods) {
+                cache.functions.insert(&pair.second.data, &pair.second.data);
+            }
+            for (auto& pair : impl.constants) {
+                cache.constants.insert(&pair.second.data, &pair.second.data);
+            }
+        });
+        for (auto& trait : crate.traitImpls) {
+            indexMutableOwnersInGroup(trait.second, [&](HIRTraitImpl& impl) {
+                for (auto& pair : impl.methods) {
+                    cache.functions.insert(&pair.second.data, &pair.second.data);
+                }
+                for (auto& pair : impl.constants) {
+                    cache.constants.insert(&pair.second.data, &pair.second.data);
+                }
+                for (auto& pair : impl.statics) {
+                    cache.statics.insert(&pair.second.data, &pair.second.data);
+                }
+            });
+        }
+        for (auto& ext : crate.extCrates) {
+            if (ext.second.data) {
+                indexMutableOwners(cache, *ext.second.data);
+            }
+        }
+    }
+
     struct ImplMatcher: public HIRMatchGenerics {
         Vector<const HIRType*>& implTypes;
 
@@ -57,7 +382,8 @@ namespace {
         bool complete() const;
     };
 
-    const HIRModule& getContainingModule(const HIRCrate& crate, const Span& sp, const HIRSimplePath& path, bool ignoreCrateName, bool ignoreLastNode) {
+    template <typename Crate>
+    auto& getContainingModule(Crate& crate, const Span& sp, const HIRSimplePath& path, bool ignoreCrateName, bool ignoreLastNode) {
         ASSERT_BUG(sp, path.components().size() > 0u, StringView("Invalid path (no nodes) - ") << path);
         ASSERT_BUG(sp, path.components().size() > (ignoreLastNode ? 1u : 0u), StringView("Invalid path (only one node with `ignore_last_node` - ") << path);
 
@@ -742,6 +1068,23 @@ const HIRTypeItem& HIRCrate::getTypeitemByPath(const Span& sp, const HIRSimplePa
     return it->second->ent;
 }
 
+HIRTypeItem& HIRCrate::getTypeitemByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName, bool ignoreLastNode) {
+    if (!ignoreLastNode && path.crateName() == crateName && path.components().size() == 1) {
+        auto generated = std::find_if(newTypes.begin(), newTypes.end(), [&](const auto& item) {
+            return item.first == path.components().back();
+        });
+        if (generated != newTypes.end()) {
+            return generated->second->ent;
+        }
+    }
+    auto& mod = getContainingModule(*this, sp, path, ignoreCrateName, ignoreLastNode);
+    auto it = mod.modItems.find(ignoreLastNode ? path.components()[path.components().size() - 2] : path.components().back());
+    if (it == mod.modItems.end()) {
+        BUG(sp, StringView("Could not find type ") << path);
+    }
+    return it->second->ent;
+}
+
 const HIRTypeItem* HIRCrate::getTypeitemByPathOpt(const HIRSimplePath& path) const {
     if (path.components().empty()) {
         return nullptr;
@@ -793,6 +1136,27 @@ const HIRModule& HIRCrate::getModByPath(const Span& sp, const HIRSimplePath& pat
             }
         }
     }
+}
+
+HIRModule& HIRCrate::getModByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreLastNode, bool ignoreCrateName) {
+    if (ignoreLastNode) {
+        ASSERT_BUG(sp, path.components().size() > 0, StringView("get_mod_by_path received invalid path with ignore_last_node=true - ") << path);
+    }
+    if (path.components().size() == (ignoreLastNode ? 1 : 0)) {
+        if (!ignoreCrateName && path.crateName() != crateName) {
+            ASSERT_BUG(sp, extCrates.count(path.crateName()) > 0, StringView("Crate '") << path.crateName() << StringView("' not loaded"));
+            return extCrates.at(path.crateName()).data->rootModule;
+        }
+        return rootModule;
+    }
+    auto& ti = getTypeitemByPathMut(sp, path, ignoreCrateName, ignoreLastNode);
+    if (auto* e = ti.opt_Module()) {
+        return *e;
+    }
+    if (ignoreLastNode) {
+        BUG(sp, StringView("Parent path of ") << path << StringView(" didn't point to a module"));
+    }
+    BUG(sp, StringView("Module path ") << path << StringView(" didn't point to a module"));
 }
 
 const HIRTrait& HIRCrate::getTraitByPath(const Span& sp, const HIRSimplePath& path) const {
@@ -848,6 +1212,14 @@ const HIRStruct& HIRCrate::getStructByPath(const Span& sp, const HIRSimplePath& 
     }
 }
 
+HIRStruct& HIRCrate::getStructByPathMut(const Span& sp, const HIRSimplePath& path) {
+    auto& ti = getTypeitemByPathMut(sp, path);
+    if (ti.is_Struct()) {
+        return ti.as_Struct();
+    }
+    BUG(sp, StringView("Struct path ") << path << StringView(" didn't point to a struct (") << ti.tagStr() << StringView(")"));
+}
+
 const HIRUnion& HIRCrate::getUnionByPath(const Span& sp, const HIRSimplePath& path) const {
     const auto& ti = this->getTypeitemByPath(sp, path);
     if (ti.is_Union()) {
@@ -858,6 +1230,14 @@ const HIRUnion& HIRCrate::getUnionByPath(const Span& sp, const HIRSimplePath& pa
     }
 }
 
+HIRUnion& HIRCrate::getUnionByPathMut(const Span& sp, const HIRSimplePath& path) {
+    auto& ti = getTypeitemByPathMut(sp, path);
+    if (ti.is_Union()) {
+        return ti.as_Union();
+    }
+    BUG(sp, StringView("Path ") << path << StringView(" didn't point to a union (") << ti.tagStr() << StringView(")"));
+}
+
 const HIREnum& HIRCrate::getEnumByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName, bool ignoreLastNode) const {
     const auto& ti = this->getTypeitemByPath(sp, path, ignoreCrateName, ignoreLastNode);
     if (ti.is_Enum()) {
@@ -866,6 +1246,14 @@ const HIREnum& HIRCrate::getEnumByPath(const Span& sp, const HIRSimplePath& path
     } else {
         BUG(sp, StringView("Enum path ") << path << StringView(" didn't point to an enum (") << ti.tagStr() << StringView(")"));
     }
+}
+
+HIREnum& HIRCrate::getEnumByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName, bool ignoreLastNode) {
+    auto& ti = getTypeitemByPathMut(sp, path, ignoreCrateName, ignoreLastNode);
+    if (ti.is_Enum()) {
+        return ti.as_Enum();
+    }
+    BUG(sp, StringView("Enum path ") << path << StringView(" didn't point to an enum (") << ti.tagStr() << StringView(")"));
 }
 
 const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName) const {
@@ -905,6 +1293,38 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
     return it->second->ent;
 }
 
+HIRValueItem& HIRCrate::getValitemByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName) {
+    if (path.crateName() == "#intrinsics") {
+        ASSERT_BUG(sp, path.components().size() == 1, StringView(""));
+        if (path.components().back() == "offset_of") {
+            if (!intrinsicOffsetof.as_Function()) {
+                auto* v = pool->make<HIRFunction>(HIRFunction{HIRFunction::Receiver::Free, HIRGenericParams{}, {}, types.primitive(HIRCoreType::Usize), {}});
+                v->variadic = true;
+                v->params.types.push_back(HIRTypeParamDef{RcString::newInterned("T"), types.infer(), false});
+                v->params.paramKinds.pushBack(HIRGenericParamKind::Type);
+                intrinsicOffsetof = HIRValueItem::make_Function(v);
+            }
+            return intrinsicOffsetof;
+        }
+        TODO(sp, StringView("Get intrinsic ") << path.components().back());
+    }
+    if (path.crateName() == crateName && path.components().size() == 1) {
+        auto i = std::find_if(newValues.begin(), newValues.end(), [&](const auto& v) { return v.first == path.components().back(); });
+        if (i != newValues.end()) {
+            return i->second->ent;
+        }
+    }
+    auto& mod = getContainingModule(*this, sp, path, ignoreCrateName, false);
+    auto it = mod.valueItems.find(path.components().back());
+    if (it == mod.valueItems.end()) {
+        BUG(sp, StringView("Could not find value name ") << path);
+    }
+    if (auto* imp = it->second->ent.opt_Import(); imp && !imp->isVariant && imp->path != path) {
+        return getValitemByPathMut(sp, imp->path, ignoreCrateName);
+    }
+    return it->second->ent;
+}
+
 const HIRFunction& HIRCrate::getFunctionByPath(const Span& sp, const HIRSimplePath& path) const {
     const auto& ti = this->getValitemByPath(sp, path);
     if (ti.is_Function()) {
@@ -912,6 +1332,14 @@ const HIRFunction& HIRCrate::getFunctionByPath(const Span& sp, const HIRSimplePa
     } else {
         BUG(sp, StringView("Function path ") << path << StringView(" didn't point to an function (") << ti.tagStr() << StringView(")"));
     }
+}
+
+HIRFunction& HIRCrate::getFunctionByPathMut(const Span& sp, const HIRSimplePath& path) {
+    auto& ti = getValitemByPathMut(sp, path);
+    if (ti.is_Function()) {
+        return *ti.as_Function();
+    }
+    BUG(sp, StringView("Function path ") << path << StringView(" didn't point to an function (") << ti.tagStr() << StringView(")"));
 }
 
 bool HIRCrate::functionTracksCaller(const Span& sp, const HIRPath& path, const HIRFunction& function) const {
@@ -949,6 +1377,27 @@ const HIRStatic& HIRCrate::getStaticByPath(const Span& sp, const HIRSimplePath& 
         }
     }
     BUG(sp, StringView("`static` path ") << path << StringView(" can't be found"));
+}
+
+HIRStatic& HIRCrate::getStaticByPathMut(const Span& sp, const HIRSimplePath& path) {
+    auto& m = getModByPathMut(sp, path, true);
+    auto it = m.valueItems.find(path.components().back());
+    if (it != m.valueItems.end()) {
+        ASSERT_BUG(sp, it->second->ent.is_Static(), StringView("`static` path ") << path << StringView(" didn't point to a static - ") << it->second->ent.tagStr());
+        return *it->second->ent.as_Static();
+    }
+    for (auto& e : m.inlineStatics) {
+        if (e.first == path.components().back()) {
+            return *e.second;
+        }
+    }
+    if (path.crateName() == crateName && path.components().size() == 1) {
+        auto i = std::find_if(newValues.begin(), newValues.end(), [&](const auto& v) { return v.first == path.components().back(); });
+        if (i != newValues.end()) {
+            return *i->second->ent.as_Static();
+        }
+    }
+    BUG(sp, StringView("Could not find static ") << path);
 }
 
 void HIRCrate::postLoadUpdate(const RcString& name) {
@@ -1194,7 +1643,7 @@ bool HIRCrate::findTypeImplsCb(const HIRType* type, tCbResolveType tyRes, HIRTyp
     return false;
 }
 
-HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, const HIRType* retTy) const {
+HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, HIRExprPtr& ep, HIRFunction::argsT& args, const HIRType* retTy) {
     if (!ep) {
         ASSERT_BUG(Span(), ep.mir, StringView("No HIR (!ep) and no MIR (!ep.m_mir) for ") << ip);
         return {&*ep.mir, retTy};
@@ -1203,15 +1652,13 @@ HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath
             TRACE_FUNCTION_F(ip);
             ASSERT_BUG(Span(), ep.state, StringView("No ExprState for ") << ip);
 
-            auto& epMut = const_cast<HIRExprPtr&>(ep);
-
             HIRGenericPath currentTrait;
             if (ep.state->currentTraitImpl) {
                 currentTrait.path = ep.state->currentTraitPath;
                 currentTrait.params = ep.state->currentTraitImpl->traitArgs.clone();
             }
             if (ep.state->currentSelfType) {
-                retTy = ConvertHIRExpandAliasesSelfExpr(*this, ep.state->currentSelfType, const_cast<HIRFunction::argsT&>(args), retTy, epMut);
+                retTy = ConvertHIRExpandAliasesSelfExpr(*this, ep.state->currentSelfType, args, retTy, ep);
             }
 
             // TODO: Ensure that all referenced items have constants evaluated
@@ -1220,8 +1667,8 @@ HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath
                     ERROR(Span(), E0000, StringView("Loop in constant evaluation"));
                 }
                 ep.state->stage = HIRExprState::Stage::ConstEvalRequest;
-                ConvertHIRResolveUFCSExpr(wb, *this, ip, epMut);
-                ConvertHIRConstantEvaluateExpr(wb, *this, ip, epMut);
+                ConvertHIRResolveUFCSExpr(wb, *this, ip, ep);
+                ConvertHIRConstantEvaluateExpr(wb, *this, ip, ep);
                 ep.state->stage = HIRExprState::Stage::ConstEval;
             }
 
@@ -1238,28 +1685,28 @@ HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath
                 ms.currentTraitImpl = ep.state->currentTraitImpl;
                 ms.traits = ep.state->traits;
                 ms.modPaths.push_back(ep.state->modPath);
-                TypecheckCode(ms, const_cast<HIRFunction::argsT&>(args), retTy, epMut);
+                TypecheckCode(ms, args, retTy, ep);
                 ASSERT_BUG(Span(), ep.state->stage == HIRExprState::Stage::Typecheck, StringView("Typecheck_Code didn't set stage"));
             }
             if (ep.state->stage < HIRExprState::Stage::PostTypecheck) {
-                HIRExpandAnnotateUsageExpr(wb, *this, ip, epMut);
-                HIRExpandStaticBorrowConstantsMarkExpr(wb, *this, ip, epMut);
+                HIRExpandAnnotateUsageExpr(wb, *this, ip, ep);
+                HIRExpandStaticBorrowConstantsMarkExpr(wb, *this, ip, ep);
             }
             if (ep.state->stage < HIRExprState::Stage::Sbc) {
                 if (ep.state->stage == HIRExprState::Stage::SbcRequest) {
                     ERROR(Span(), E0000, StringView("Loop in constant evaluation"));
                 }
                 ep.state->stage = HIRExprState::Stage::SbcRequest;
-                retTy = HIRExpandClosuresExpr(wb, *this, retTy, epMut);
-                HIRExpandStaticBorrowConstantsExpr(wb, *this, ip, epMut);
+                retTy = HIRExpandClosuresExpr(wb, *this, retTy, ep);
+                HIRExpandStaticBorrowConstantsExpr(wb, *this, ip, ep);
             }
             if (ep.state->stage < HIRExprState::Stage::Expand) {
                 if (ep.state->stage == HIRExprState::Stage::ExpandRequest) {
                     ERROR(Span(), E0000, StringView("Loop in constant evaluation"));
                 }
                 ep.state->stage = HIRExprState::Stage::ExpandRequest;
-                HIRExpandUfcsEverythingExpr(wb, *this, epMut, ep.state->currentTraitImpl);
-                HIRExpandReborrowsExpr(wb, *this, epMut);
+                HIRExpandUfcsEverythingExpr(wb, *this, ep, ep.state->currentTraitImpl);
+                HIRExpandReborrowsExpr(wb, *this, ep);
 
                 ep.state->stage = HIRExprState::Stage::Expand;
             }
@@ -1268,7 +1715,7 @@ HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath
                     ERROR(Span(), E0000, StringView("Loop in constant evaluation"));
                 }
                 ep.state->stage = HIRExprState::Stage::MirRequest;
-                HIRGenerateMIRExpr(wb, *this, ip, epMut, args, retTy);
+                HIRGenerateMIRExpr(wb, *this, ip, ep, args, retTy);
                 ep.state->stage = HIRExprState::Stage::Mir;
             }
             BUG_ASSERT(ep.mir);
@@ -1574,12 +2021,124 @@ const HIRConstant& HIRCrate::getConstantByPath(const Span& sp, const HIRSimplePa
     }
 }
 
-const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRFunction& fcn) const {
+HIRConstant& HIRCrate::getConstantByPathMut(const Span& sp, const HIRSimplePath& path) {
+    auto& ti = getValitemByPathMut(sp, path);
+    if (ti.is_Constant()) {
+        return *ti.as_Constant();
+    }
+    BUG(sp, StringView("`const` path ") << path << StringView(" didn't point to a constant"));
+}
+
+HIRFunction& HIRCrate::findFunctionMut(const WireBoard& wb, const Span& sp, const HIRPath& path, const HIRFunction& function) {
+    ASSERT_BUG(sp, wb.hirOwners, StringView("Mutable HIR owner cache is not initialised"));
+    auto& cache = *wb.hirOwners;
+    if (!cache.indexed) {
+        indexMutableOwners(cache, *this);
+        cache.indexed = true;
+    }
+    if (auto* found = cache.functions.find(&function)) {
+        return **found;
+    }
+    indexMutableOwners(cache, *this);
+    if (auto* found = cache.functions.find(&function)) {
+        return **found;
+    }
+    auto* found = findFunctionInCrate(*this, function);
+    ASSERT_BUG(sp, found, StringView("Function is not owned by the HIR crate graph: ") << path);
+    cache.functions.insert(&function, found);
+    return *found;
+}
+
+HIRStatic& HIRCrate::findStaticMut(const WireBoard& wb, const Span& sp, const HIRPath& path, const HIRStatic& item) {
+    ASSERT_BUG(sp, wb.hirOwners, StringView("Mutable HIR owner cache is not initialised"));
+    auto& cache = *wb.hirOwners;
+    if (!cache.indexed) {
+        indexMutableOwners(cache, *this);
+        cache.indexed = true;
+    }
+    if (auto* found = cache.statics.find(&item)) {
+        return **found;
+    }
+    indexMutableOwners(cache, *this);
+    if (auto* found = cache.statics.find(&item)) {
+        return **found;
+    }
+    auto* found = findStaticInCrate(*this, item);
+    ASSERT_BUG(sp, found, StringView("Static is not owned by the HIR crate graph"));
+    cache.statics.insert(&item, found);
+    return *found;
+}
+
+HIRConstant& HIRCrate::findConstantMut(const WireBoard& wb, const Span& sp, const HIRPath& path, const HIRConstant& item) {
+    ASSERT_BUG(sp, wb.hirOwners, StringView("Mutable HIR owner cache is not initialised"));
+    auto& cache = *wb.hirOwners;
+    if (!cache.indexed) {
+        indexMutableOwners(cache, *this);
+        cache.indexed = true;
+    }
+    if (auto* found = cache.constants.find(&item)) {
+        return **found;
+    }
+    indexMutableOwners(cache, *this);
+    if (auto* found = cache.constants.find(&item)) {
+        return **found;
+    }
+    auto* found = findConstantInCrate(*this, item);
+    ASSERT_BUG(sp, found, StringView("Constant is not owned by the HIR crate graph"));
+    cache.constants.insert(&item, found);
+    return *found;
+}
+
+HIRExprNode& HIRCrate::findExprNodeMut(const Span& sp, const HIRExprNode& node) {
+    struct NodeFinder final: HIRExprVisitorDef {
+        const HIRExprNode& target;
+        HIRExprNode* found = nullptr;
+
+        NodeFinder(HIRTypeInterner& types, const HIRExprNode& target)
+            : HIRExprVisitorDef(types)
+            , target(target)
+        {
+        }
+
+        void visitNode(HIRExprNode& candidate) override {
+            if (&candidate == &target) {
+                found = &candidate;
+            }
+        }
+    } nodeFinder{types, node};
+
+    struct CrateFinder final: HIRVisitor {
+        NodeFinder& nodeFinder;
+
+        CrateFinder(HIRTypeInterner& types, NodeFinder& nodeFinder)
+            : HIRVisitor(nullptr, types)
+            , nodeFinder(nodeFinder)
+        {
+        }
+
+        void visitExpr(HIRExprPtr& expr) override {
+            if (expr && !nodeFinder.found) {
+                expr->visit(nodeFinder);
+            }
+        }
+    } crateFinder{types, nodeFinder};
+
+    crateFinder.visitCrate(*this);
+    for (auto& ext : extCrates) {
+        if (!nodeFinder.found) {
+            crateFinder.visitCrate(*ext.second.data);
+        }
+    }
+    ASSERT_BUG(sp, nodeFinder.found, StringView("Expression node is not owned by the HIR crate graph"));
+    return *nodeFinder.found;
+}
+
+const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, HIRFunction& fcn) {
     auto ty = fcn.returnType;
     return getOrGenMir(wb, ip, fcn.code, fcn.args, ty).mir;
 }
 
-HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRType* expTy) const {
+HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, HIRExprPtr& ep, const HIRType* expTy) {
     return getOrGenMir(wb, ip, ep, emptyMirArgs, expTy);
 }
 
