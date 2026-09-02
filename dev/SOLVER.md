@@ -122,12 +122,6 @@ obligations (`IvarCoercionIndex`, перевычисляется из `Coercion`
 
 ## Долг
 
-- П.5б: в `autoderefFindMethod` остались канонизация/дедуп/шэдоуинг
-  кандидатов и current-trait preference (у rustc такого правила нет —
-  там одношаговая мультитрейт-находка это E0034); `traitContainsMethod`
-  с ручным обходом supertrait-деклараций. Заменить: дедуп по identity,
-  неоднозначность на одном шаге лестницы — диагностика, приоритеты —
-  только документированные правила языка. ОТКРЫТ.
 - П.5в: custom receiver через `HIRMatchGenerics` с TODO
   (`checkMethodReceiver`) — честная механика arbitrary self types без
   TODO-матчера. ОТКРЫТ.

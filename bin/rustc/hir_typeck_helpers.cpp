@@ -733,7 +733,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     bool evaluateOverlapUncached(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right);
 
-    Certainty evaluateMethod(const Span& callSpan, const tTraitList& traits, const Vector<unsigned>& ivars, unsigned typeIvarCount, const HIRType* receiver, const RcString& methodName, const HIRPathParams& methodParams, const ThinVector<const HIRType*>& argumentTypes, const HIRType* expectedResult, TraitResolution::MethodAccess access, TraitResolution::AutoderefBorrow borrowType, ThinVector<TraitResolution::MethodCandidate>& possibilities, SolverResponse* deferredEffects);
+    Certainty evaluateMethod(const Span& callSpan, const tTraitList& traits, const Vector<unsigned>& ivars, unsigned typeIvarCount, const HIRType* receiver, const RcString& methodName, const HIRPathParams& methodParams, const ThinVector<const HIRType*>& argumentTypes, const HIRType* expectedResult, TraitResolution::MethodAccess access, TraitResolution::AutoderefBorrow borrowType, bool mustDecide, ThinVector<TraitResolution::MethodCandidate>& possibilities, SolverResponse* deferredEffects);
 
     bool evaluateTyped(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, SolverResponseCallback& callback, const TraitGoalQuery& query, bool callerBoundary = false, bool includeRootMagicCandidates = true);
 
@@ -3760,7 +3760,6 @@ TraitResolution::TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, c
     , ivars(ivars)
     , visPath(visPath)
     , currentTraitPath_(currentTrait)
-    , currentTraitPtr(currentTrait ? &crate.getTraitByPath(Span(), currentTrait->path) : nullptr)
     , eatCachePool(ObjPool::fromMemory())
     , eatCache(eatCachePool.mutPtr())
     , solverExistentials_(eatCachePool.mutPtr())
@@ -5182,6 +5181,11 @@ const HIRFunction* TraitResolution::traitContainsMethod(const Span& sp, const HI
         return rv;
     }
 
+    /* Declaration navigation only.  allParentTraits is the flattened HIR
+     * supertrait closure, so consumers that merely need the declaring path can
+     * avoid reimplementing its substitutions here.  Candidate assembly must
+     * enumerate every matching declaration itself: this traversal order is
+     * not a method-selection rule. */
     auto monomorphCb = MonomorphStatePtr(crate.types, self, &traitPath.params, nullptr);
     for (const auto& st : traitPtr.allParentTraits) {
         if (traitContainsMethodInner(*st.traitPtr, name, rv)) {
@@ -6278,92 +6282,6 @@ unsigned int TraitResolution::autoderefFindMethod(
         const auto* currentTy = topTyR;
 
         auto curAccess = MethodAccess::Move;
-        auto collapseToMostSpecificSubtrait = [&]() {
-            if (!crate.featureEnabled("supertrait_item_shadowing") || possibilities.size() < 2) {
-                return;
-            }
-
-            std::vector<HIRSimplePath> candidateTraits;
-            candidateTraits.reserve(possibilities.size());
-            for (const auto& possibility : possibilities) {
-                const auto* path = possibility.path.data.opt_UfcsKnown();
-                if (!path) {
-                    return;
-                }
-                candidateTraits.push_back(path->trait.path);
-            }
-
-            const auto selected = crate.findMostSpecificTrait(sp, candidateTraits);
-            if (selected) {
-                auto selectedPossibility = mv$(possibilities[*selected]);
-                possibilities.clear();
-                possibilities.push_back(mv$(selectedPossibility));
-            }
-        };
-        auto canonicalizeTraitCandidates = [&]() {
-            auto sharedParams = [&](const HIRPathParams& shape) {
-                ASSERT_BUG(sp, typeIvarCount <= ivars.length(), StringView("Invalid method ivar split"));
-                ASSERT_BUG(sp, shape.types.size() <= typeIvarCount, StringView("Not enough type ivars for method candidate"));
-                ASSERT_BUG(sp, shape.values.size() <= ivars.length() - typeIvarCount, StringView("Not enough value ivars for method candidate"));
-
-                HIRPathParams params;
-                params.types.reserve(shape.types.size());
-                for (size_t i = 0; i < shape.types.size(); i++) {
-                    params.types.push_back(crate.types.infer(ivars[i], HIRInferClass::None));
-                }
-                params.values.reserve(shape.values.size());
-                for (size_t i = 0; i < shape.values.size(); i++) {
-                    params.values.push_back(HIRConstGeneric::make_Infer({ivars[typeIvarCount + i]}));
-                }
-                return params;
-            };
-
-            for (auto first = possibilities.begin(); first != possibilities.end(); ++first) {
-                auto* firstPath = first->path.data.opt_UfcsKnown();
-                if (!firstPath) {
-                    continue;
-                }
-                for (auto second = first + 1; second != possibilities.end();) {
-                    auto* secondPath = second->path.data.opt_UfcsKnown();
-                    if (!secondPath) {
-                        ++second;
-                        continue;
-                    }
-                    if (first->path == second->path) {
-                        for (auto move = second; move + 1 != possibilities.end(); ++move) {
-                            *move = std::move(*(move + 1));
-                        }
-                        possibilities.pop_back();
-                        continue;
-                    }
-
-                    const bool sameSelf = firstPath->type == secondPath->type || firstPath->type->equalsIgnoringRegions(secondPath->type);
-                    if (!sameSelf || firstPath->trait.path != secondPath->trait.path) {
-                        ++second;
-                        continue;
-                    }
-
-                    firstPath->trait.params = sharedParams(firstPath->trait.params);
-                    for (auto move = second; move + 1 != possibilities.end(); ++move) {
-                        *move = std::move(*(move + 1));
-                    }
-                    possibilities.pop_back();
-                }
-            }
-        };
-        auto preferCurrentTraitCandidate = [&]() {
-            if (possibilities.size() > 1 && currentTraitPath_) {
-                for (size_t i = 0; i < possibilities.size(); i++) {
-                    const auto* path = possibilities[i].path.data.opt_UfcsKnown();
-                    if (path && path->trait.path == currentTraitPath_->path) {
-                        auto selected = mv$(possibilities[i]);
-                        possibilities.clear();
-                        possibilities.push_back(mv$(selected));
-                        break;
-                    }
-                }
-            }
-        };
         do {
             const auto* ty = this->ivars.getType(currentTy);
             auto shouldPause = [](const auto& ty) -> bool {
@@ -6387,7 +6305,7 @@ unsigned int TraitResolution::autoderefFindMethod(
 
             DEBUG(derefCount << StringView(": ") << ty);
             const auto methodGoalIsAmbiguous = [&](const HIRType* receiver, MethodAccess goalAccess, AutoderefBorrow goalBorrow) {
-                if (this->findMethod(sp, traits, ivars, typeIvarCount, receiver, methodName, methodParams, argumentTypes, expectedResult, goalAccess, goalBorrow, possibilities, deferredEffects) != SolverCertainty::Ambiguous) {
+                if (this->findMethod(sp, traits, ivars, typeIvarCount, receiver, methodName, methodParams, argumentTypes, expectedResult, goalAccess, goalBorrow, mustDecide, possibilities, deferredEffects) != SolverCertainty::Ambiguous) {
                     return false;
                 }
                 possibilities.clear();
@@ -6440,9 +6358,6 @@ unsigned int TraitResolution::autoderefFindMethod(
                 return ~0u;
             }
             if (!possibilities.empty()) {
-                canonicalizeTraitCandidates();
-                collapseToMostSpecificSubtrait();
-                preferCurrentTraitCandidate();
                 DEBUG(StringView("FOUND ") << possibilities.size() << StringView(" options: ") << possibilities);
                 return derefCount;
             }
@@ -6583,6 +6498,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     const HIRType* expectedResult,
     TraitResolution::MethodAccess access,
     TraitResolution::AutoderefBorrow borrowType,
+    bool mustDecide,
     ThinVector<TraitResolution::MethodCandidate>& possibilities,
     SolverResponse* deferredEffects
 ) -> Certainty {
@@ -6682,6 +6598,10 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             InstantiateMethodExistentials instantiator(crate.types, resolve_.ivars);
             possibilities[i].path = instantiator.monomorphPath(callSpan, possibilities[i].path, true);
             possibilities[i].effects = instantiateMethodResponse(possibilities[i].effects, instantiator);
+            if (possibilities[i].routeImplType) {
+                possibilities[i].routeImplType = instantiator.monomorphType(callSpan, possibilities[i].routeImplType, true);
+                possibilities[i].routeTraitParams = instantiator.monomorphPathParams(callSpan, possibilities[i].routeTraitParams, true);
+            }
         }
         if (deferredEffects && deferredEffects->certainty != Certainty::NoSolution) {
             InstantiateMethodExistentials instantiator(crate.types, resolve_.ivars);
@@ -6816,6 +6736,49 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         } else if (next == Certainty::Ambiguous && result == Certainty::Proven) {
             result = Certainty::Ambiguous;
         }
+    };
+    const auto finishProven = [&]() {
+        if (crate.featureEnabled("supertrait_item_shadowing")) {
+            /* RFC 3624's feature rule is declaration shadowing, not candidate
+             * ranking: an identically named declaration in a strict subtrait
+             * removes declarations from its supertraits.  Equal proof routes
+             * and unrelated traits are deliberately left untouched. */
+            for (size_t candidate = firstPossibility; candidate < possibilities.size();) {
+                const auto& shadowed = possibilities[candidate];
+                bool isShadowed = false;
+                if (shadowed.traitDeclaration) {
+                    for (size_t other = firstPossibility; other < possibilities.size(); other++) {
+                        const auto& subtrait = possibilities[other];
+                        if (other == candidate || !subtrait.traitDeclaration || subtrait.traitDeclaration == shadowed.traitDeclaration || subtrait.declaringTrait == shadowed.declaringTrait) {
+                            continue;
+                        }
+                        const auto& definition = crate.getTraitByPath(callSpan, subtrait.declaringTrait);
+                        isShadowed = std::any_of(definition.allParentTraits.begin(), definition.allParentTraits.end(), [&](const HIRTraitPath& parent) {
+                            return parent.path.path == shadowed.declaringTrait;
+                        });
+                        if (isShadowed) {
+                            break;
+                        }
+                    }
+                }
+                if (!isShadowed) {
+                    candidate++;
+                    continue;
+                }
+                for (size_t move = candidate; move + 1 < possibilities.size(); move++) {
+                    possibilities[move] = std::move(possibilities[move + 1]);
+                }
+                possibilities.pop_back();
+            }
+        }
+
+        if (possibilities.size() - firstPossibility <= 1) {
+            return Certainty::Proven;
+        }
+        if (mustDecide) {
+            ERROR(callSpan, E0000, StringView("multiple applicable items in scope for {") << receiver << StringView("}.") << methodName << StringView(": ") << possibilities);
+        }
+        return emitAmbiguous();
     };
     const auto paramsForInScopeTrait = [&](const HIRGenericParams& definition) {
         ASSERT_BUG(callSpan, typeIvarCount <= methodIvars.length(), StringView("Invalid method ivar split"));
@@ -7414,7 +7377,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         auto proofParams = proofTrait.params.clone();
         auto outputParams = outputTrait.params.clone();
         auto methodParams = paramsForMethod(function.params);
-        auto methodMonomorph = MonomorphStatePtr(crate.types, selfType, &proofParams, &methodParams);
+        auto methodMonomorph = MonomorphStatePtr(crate.types, selfType, &outputParams, &methodParams);
         methodMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
         auto applicability = Certainty::Proven;
         SolverResponse signatureEffects;
@@ -7457,7 +7420,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         auto methodBounds = resolve_.evaluateGenericBounds(callSpan, function.params, methodParams, methodMonomorph, 0, onlyBoundsConstrainingTraitParams);
         if (methodBounds == Certainty::NoSolution) {
             resolve_.ivars.rollbackTo(boundsSnapshot);
-            if (!resolve_.paramsContainIvars(proofParams)) {
+            if (!resolve_.paramsContainIvars(outputParams)) {
                 return Certainty::NoSolution;
             }
             methodBoundsDeferred = true;
@@ -7569,7 +7532,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             }
         }
 
-        auto completeBoundsMonomorph = MonomorphStatePtr(crate.types, selfType, &proofParams, &methodParams);
+        auto completeBoundsMonomorph = MonomorphStatePtr(crate.types, selfType, &outputParams, &methodParams);
         completeBoundsMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
         const auto completeBounds = evaluateMethodBounds(function.params, methodParams, completeBoundsMonomorph, &signatureEffects);
         if (completeBounds == Certainty::NoSolution) {
@@ -7581,8 +7544,8 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         selectedMethodParams = stableParams(selectedMethodParams, snapshot);
         const auto* resultInfer = expectedResult ? expectedResult->opt_Infer() : nullptr;
         if (resultInfer && resultInfer->index != ~0u && resultInfer->index < snapshot.ivarCount && !function.returnType->is_ErasedType()) {
-            auto stableProofParams = stableParams(proofParams, snapshot);
-            auto stableMonomorph = MonomorphStatePtr(crate.types, stableType(selfType, snapshot), &stableProofParams, &selectedMethodParams);
+            auto stableOutputParams = stableParams(outputParams, snapshot);
+            auto stableMonomorph = MonomorphStatePtr(crate.types, stableType(selfType, snapshot), &stableOutputParams, &selectedMethodParams);
             proof.effects.slots.typeInputs.push_back(expectedResult);
             proof.effects.slots.types.push_back(stableMonomorph.monomorphType(callSpan, function.returnType, true));
         }
@@ -7594,15 +7557,67 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         }
 
         outputTrait.params = stableParams(outputParams, snapshot);
+        const auto* routeImplType = proof.candidate ? stableType(resolve_.expandAssociatedTypes(callSpan, proof.candidate->getImplType(crate.types)), snapshot) : nullptr;
+        auto routeTraitParams = proof.candidate ? outputTrait.params.clone() : HIRPathParams();
+        for (auto*& type : routeTraitParams.types) {
+            type = stableType(resolve_.expandAssociatedTypes(callSpan, type), snapshot);
+        }
+        if (routeImplType) {
+            const auto sameParams = [&](const HIRPathParams& left, const HIRPathParams& right) {
+                if (left.types.size() != right.types.size() || left.values.size() != right.values.size()) {
+                    return false;
+                }
+                for (size_t i = 0; i < left.types.size(); i++) {
+                    if (!resolve_.ivars.typesEqual(left.types[i], right.types[i])) {
+                        return false;
+                    }
+                }
+                for (size_t i = 0; i < left.values.size(); i++) {
+                    if (resolve_.ivars.getValue(left.values[i]) != resolve_.ivars.getValue(right.values[i])) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+            const bool duplicate = std::any_of(possibilities.begin() + firstPossibility, possibilities.end(), [&](const TraitResolution::MethodCandidate& existing) {
+                return existing.traitDeclaration == &function
+                    && existing.routeImplType
+                    && resolve_.ivars.typesEqual(existing.routeImplType, routeImplType)
+                    && sameParams(existing.routeTraitParams, routeTraitParams);
+            });
+            if (duplicate) {
+                return Certainty::Proven;
+            }
+        }
+        const auto declaringTrait = outputTrait.path;
         possibilities.push_back(
             TraitResolution::MethodCandidate{
                 borrowType,
                 HIRPath(stableType(selfType, snapshot), std::move(outputTrait), methodName, std::move(selectedMethodParams)),
                 nullptr,
                 std::move(effects),
+                &function,
+                declaringTrait,
+                routeImplType,
+                std::move(routeTraitParams),
             }
         );
         return Certainty::Proven;
+    };
+    const auto forEachTraitMethodDeclaration = [&](const HIRGenericPath& traitPath, const HIRTrait& trait, const HIRType* self, auto callback) {
+        const HIRFunction* function = nullptr;
+        if (traitContainsMethodInner(trait, methodName, function)) {
+            callback(*function, traitPath.clone());
+        }
+
+        auto monomorph = MonomorphStatePtr(crate.types, self, &traitPath.params, nullptr);
+        for (const auto& parent : trait.allParentTraits) {
+            function = nullptr;
+            if (!traitContainsMethodInner(*parent.traitPtr, methodName, function)) {
+                continue;
+            }
+            callback(*function, HIRGenericPath(parent.path.path, monomorph.monomorphPathParams(callSpan, parent.path.params, false)));
+        }
     };
 
     const auto* inherentReceiver = receiver;
@@ -7770,7 +7785,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             return emitAmbiguous();
         }
         if (inherentCertainty == Certainty::Proven) {
-            return Certainty::Proven;
+            return finishProven();
         }
     }
 
@@ -7809,33 +7824,30 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         const auto& boundInfo = bound.second;
         ASSERT_BUG(callSpan, boundInfo.traitPtr, StringView("Cached method bound has no trait definition"));
 
-        HIRGenericPath methodTrait;
-        const auto* function = resolve_.traitContainsMethod(callSpan, boundTrait, *boundInfo.traitPtr, boundType, methodName, methodTrait);
-        if (!function) {
-            continue;
-        }
-        auto methodTraitKey = methodTrait.clone();
-        const auto ambiguousBefore = ambiguousResponses.size();
-        const auto result = assembleTraitCandidate(*function, methodTrait.clone(), std::move(methodTrait), boundType);
-        if (result == Certainty::Ambiguous) {
-            ambiguousBoundTraits.push_back(std::move(methodTraitKey));
-            if (ambiguousResponses.size() == ambiguousBefore) {
-                SolverResponse effects;
-                effects.certainty = Certainty::Ambiguous;
-                ambiguousBoundEffects.push_back(std::move(effects));
-            } else {
-                ASSERT_BUG(callSpan, ambiguousResponses.size() == ambiguousBefore + 1, StringView("Ambiguous ParamEnv method candidate emitted multiple responses"));
-                ambiguousBoundEffects.push_back(std::move(ambiguousResponses.back()));
-                ambiguousResponses.pop_back();
+        forEachTraitMethodDeclaration(boundTrait, *boundInfo.traitPtr, boundType, [&](const HIRFunction& function, HIRGenericPath methodTrait) {
+            auto methodTraitKey = methodTrait.clone();
+            const auto ambiguousBefore = ambiguousResponses.size();
+            const auto result = assembleTraitCandidate(function, boundTrait.clone(), std::move(methodTrait), boundType);
+            if (result == Certainty::Ambiguous) {
+                ambiguousBoundTraits.push_back(std::move(methodTraitKey));
+                if (ambiguousResponses.size() == ambiguousBefore) {
+                    SolverResponse effects;
+                    effects.certainty = Certainty::Ambiguous;
+                    ambiguousBoundEffects.push_back(std::move(effects));
+                } else {
+                    ASSERT_BUG(callSpan, ambiguousResponses.size() == ambiguousBefore + 1, StringView("Ambiguous ParamEnv method candidate emitted multiple responses"));
+                    ambiguousBoundEffects.push_back(std::move(ambiguousResponses.back()));
+                    ambiguousResponses.pop_back();
+                }
             }
-        }
-        if (result == Certainty::Proven) {
-            foundBound = true;
-            foundNonGlobalBound |= boundIsNonGlobal(boundType, boundTrait, boundInfo);
-        }
+            if (result == Certainty::Proven) {
+                foundBound = true;
+                foundNonGlobalBound |= boundIsNonGlobal(boundType, boundTrait, boundInfo);
+            }
+        });
     }
     if (foundBound && foundNonGlobalBound) {
-        return inherentSourceAmbiguous ? emitAmbiguous() : Certainty::Proven;
+        return inherentSourceAmbiguous ? emitAmbiguous() : finishProven();
     }
     const auto restoreUncoveredBoundAmbiguities = [&]() {
         bool uncovered = false;
@@ -7854,25 +7866,6 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         return uncovered;
     };
 
-    if (resolve_.currentTraitPath_) {
-        HIRGenericPath methodTrait;
-        if (const auto* function = resolve_.traitContainsMethod(callSpan, *resolve_.currentTraitPath_, *resolve_.currentTraitPtr, receiver, methodName, methodTrait)) {
-            const auto& definition = crate.getTraitByPath(callSpan, methodTrait.path);
-            methodTrait.params = paramsForInScopeTrait(definition.params);
-            const auto result = assembleTraitCandidate(*function, methodTrait.clone(), std::move(methodTrait), nullptr);
-            if (result == Certainty::Ambiguous) {
-                restoreUncoveredBoundAmbiguities();
-                return emitAmbiguous();
-            }
-            if (result == Certainty::Proven) {
-                if (restoreUncoveredBoundAmbiguities()) {
-                    return emitAmbiguous();
-                }
-                return inherentSourceAmbiguous ? emitAmbiguous() : Certainty::Proven;
-            }
-        }
-    }
-
     const auto getInnerType = [&](const HIRType* type, auto predicate) -> const HIRType* {
         if (predicate(type)) {
             return type;
@@ -7889,32 +7882,12 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         const auto& object = objectType->as_TraitObject();
         const auto& definition = crate.getTraitByPath(callSpan, object.trait.path.path);
         bool foundObjectMethod = false;
-
-        const auto assembleObjectMethod = [&](const HIRFunction& function, HIRGenericPath methodTrait) {
-            const auto result = assembleTraitCandidate(function, methodTrait.clone(), std::move(methodTrait), nullptr);
-            foundObjectMethod |= result == Certainty::Proven;
-            return result;
-        };
-        const HIRFunction* function = nullptr;
         bool objectAmbiguous = false;
-        if (traitContainsMethodInner(definition, methodName, function)) {
-            const auto result = assembleObjectMethod(*function, object.trait.path.clone());
-            if (result == Certainty::Ambiguous) {
-                objectAmbiguous = true;
-            }
-        } else {
-            auto monomorph = MonomorphStatePtr(crate.types, crate.types.self(), &object.trait.path.params, nullptr);
-            for (const auto& parent : definition.allParentTraits) {
-                function = nullptr;
-                if (!traitContainsMethodInner(*parent.traitPtr, methodName, function)) {
-                    continue;
-                }
-                auto methodTrait = HIRGenericPath(parent.path.path, monomorph.monomorphPathParams(callSpan, parent.path.params, false));
-                if (assembleObjectMethod(*function, std::move(methodTrait)) == Certainty::Ambiguous) {
-                    objectAmbiguous = true;
-                }
-            }
-        }
+        forEachTraitMethodDeclaration(object.trait.path, definition, crate.types.self(), [&](const HIRFunction& function, HIRGenericPath methodTrait) {
+            const auto result = assembleTraitCandidate(function, object.trait.path.clone(), std::move(methodTrait), nullptr);
+            foundObjectMethod |= result == Certainty::Proven;
+            objectAmbiguous |= result == Certainty::Ambiguous;
+        });
         if (objectAmbiguous) {
             restoreUncoveredBoundAmbiguities();
             return emitAmbiguous();
@@ -7923,22 +7896,16 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             if (restoreUncoveredBoundAmbiguities()) {
                 return emitAmbiguous();
             }
-            return inherentSourceAmbiguous ? emitAmbiguous() : Certainty::Proven;
+            return inherentSourceAmbiguous ? emitAmbiguous() : finishProven();
         }
     }
 
     if (const auto* erasedType = getInnerType(receiver, [](const HIRType* type) { return type->is_ErasedType(); })) {
         bool erasedAmbiguous = false;
         for (const auto& declaredTrait : erasedType->as_ErasedType().traits) {
-            HIRGenericPath methodTrait;
-            const auto* function = resolve_.traitContainsMethod(callSpan, declaredTrait.path, *declaredTrait.traitPtr, crate.types.self(), methodName, methodTrait);
-            if (!function) {
-                continue;
-            }
-            const auto result = assembleTraitCandidate(*function, methodTrait.clone(), std::move(methodTrait), nullptr);
-            if (result == Certainty::Ambiguous) {
-                erasedAmbiguous = true;
-            }
+            forEachTraitMethodDeclaration(declaredTrait.path, *declaredTrait.traitPtr, crate.types.self(), [&](const HIRFunction& function, HIRGenericPath methodTrait) {
+                erasedAmbiguous |= assembleTraitCandidate(function, declaredTrait.path.clone(), std::move(methodTrait), nullptr) == Certainty::Ambiguous;
+            });
         }
         if (erasedAmbiguous) {
             restoreUncoveredBoundAmbiguities();
@@ -7952,16 +7919,15 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         auto monomorph = MonomorphStatePtr(crate.types, projection.type, &projection.trait.params, &projection.params);
         bool projectionAmbiguous = false;
         resolve_.iterateAtyBounds(callSpan, projection, [&](const HIRTraitPath& declaredTrait) {
-            HIRGenericPath methodTrait;
-            const auto* function = resolve_.traitContainsMethod(callSpan, declaredTrait.path, *declaredTrait.traitPtr, crate.types.self(), methodName, methodTrait);
-            if (!function) {
-                return false;
-            }
-            auto hrtb = HIRPathParams();
-            monomorph.ppHrb = &hrtb;
-            methodTrait = monomorph.monomorphGenericpath(callSpan, methodTrait, false);
-            monomorph.ppHrb = nullptr;
-            projectionAmbiguous |= assembleTraitCandidate(*function, methodTrait.clone(), std::move(methodTrait), nullptr) == Certainty::Ambiguous;
+            forEachTraitMethodDeclaration(declaredTrait.path, *declaredTrait.traitPtr, crate.types.self(), [&](const HIRFunction& function, HIRGenericPath methodTrait) {
+                auto proofTrait = declaredTrait.path.clone();
+                auto hrtb = HIRPathParams();
+                monomorph.ppHrb = &hrtb;
+                proofTrait = monomorph.monomorphGenericpath(callSpan, proofTrait, false);
+                methodTrait = monomorph.monomorphGenericpath(callSpan, methodTrait, false);
+                monomorph.ppHrb = nullptr;
+                projectionAmbiguous |= assembleTraitCandidate(function, std::move(proofTrait), std::move(methodTrait), nullptr) == Certainty::Ambiguous;
+            });
             return false;
         });
         if (projectionAmbiguous) {
@@ -7986,15 +7952,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         }
 
         auto proofTrait = HIRGenericPath(*traitRef.first, paramsForInScopeTrait(traitRef.second->params));
-        HIRGenericPath declaringTrait;
-        const auto* function = resolve_.traitContainsMethod(callSpan, proofTrait, *traitRef.second, crate.types.self(), methodName, declaringTrait);
-        if (!function) {
-            continue;
-        }
-        const auto result = assembleTraitCandidate(*function, proofTrait.clone(), std::move(proofTrait), nullptr);
-        if (result == Certainty::Ambiguous) {
-            inScopeAmbiguous = true;
-        }
+        forEachTraitMethodDeclaration(proofTrait, *traitRef.second, crate.types.self(), [&](const HIRFunction& function, HIRGenericPath declaringTrait) {
+            inScopeAmbiguous |= assembleTraitCandidate(function, proofTrait.clone(), std::move(declaringTrait), nullptr) == Certainty::Ambiguous;
+        });
     }
     if (inScopeAmbiguous) {
         restoreUncoveredBoundAmbiguities();
@@ -8006,7 +7966,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     }
 
     if (possibilities.size() > firstPossibility) {
-        return inherentSourceAmbiguous ? emitAmbiguous() : Certainty::Proven;
+        return inherentSourceAmbiguous ? emitAmbiguous() : finishProven();
     }
     return inherentSourceAmbiguous ? emitAmbiguous() : Certainty::NoSolution;
 }
@@ -8023,13 +7983,14 @@ SolverCertainty TraitResolution::findMethod(
     const HIRType* expectedResult,
     MethodAccess access,
     AutoderefBorrow borrowType,
+    bool mustDecide,
     ThinVector<MethodCandidate>& possibilities,
     SolverResponse* deferredEffects
 ) const {
     if (!nextSolver) {
         nextSolver = eatCachePool->make<NextTraitGoalEvaluator>(*this, crate);
     }
-    return nextSolver->evaluateMethod(sp, traits, methodIvars, typeIvarCount, receiver, methodName, methodParams, argumentTypes, expectedResult, access, borrowType, possibilities, deferredEffects);
+    return nextSolver->evaluateMethod(sp, traits, methodIvars, typeIvarCount, receiver, methodName, methodParams, argumentTypes, expectedResult, access, borrowType, mustDecide, possibilities, deferredEffects);
 }
 
 const HIRType* TraitResolution::findField(const Span& sp, const HIRType* ty, const RcString& name) const {
