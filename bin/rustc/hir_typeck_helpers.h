@@ -69,6 +69,15 @@ struct SolverValueEquality {
     HIRConstGeneric right;
 };
 
+enum class SolverCoercionOp : u8;
+
+struct SolverCoercionObligation {
+    const HIRType* destination;
+    const HIRType* source;
+    SolverCoercionOp op;
+    unsigned sourceInput = ~0u;
+};
+
 struct AssembledImplEffects {
     ThinVector<SolverTypeEquality> equalities;
     ThinVector<SolverValueEquality> valueEqualities;
@@ -82,10 +91,12 @@ struct SolverOperatorSummary {
 
 struct SolverResponse {
     SolverCertainty certainty = SolverCertainty::NoSolution;
+    bool ambiguityOnlyFromObligations = false;
     SolverSlotValues slots;
     ThinVector<SolverObligation> obligations;
     ThinVector<SolverTypeEquality> equalities;
     ThinVector<SolverValueEquality> valueEqualities;
+    ThinVector<SolverCoercionObligation> coercions;
     SolverOperatorSummary operatorSummary;
 };
 
@@ -124,8 +135,6 @@ struct SolverCoercionAdjustment {
     SolverCoercionRelation innerRelation = SolverCoercionRelation::None;
     ThinVector<const HIRType*> sourceAutoderef;
 };
-
-enum class SolverCoercionOp : u8;
 
 struct SolverDeferredCoercion {
     const HIRType* destination;
@@ -871,7 +880,7 @@ private:
     SolverCertainty solveTraitGoalCertainty(const Span& sp, const HIRSimplePath& trait, const HIRType* type) const;
     SolverCertainty solveStructuralTraitGoalCertainty(const Span& sp, StructuralTrait trait, const HIRType* type) const;
     SolverCertainty evaluateCoercionConstraint(const Span& sp, const SolverCoercionConstraint& constraint, const HIRType* input, ThinVector<SolverTypeEquality>* equalities = nullptr, SolverResponse* effects = nullptr, ThinVector<SolverDeferredCoercion>* deferred = nullptr, bool* reachedAutoderefLimit = nullptr, SolverCoercionAdjustment* adjustment = nullptr, bool exportPlaceholderEqualities = false) const;
-    SolverCertainty evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, u32 conditionalScope = 0, bool onlyBoundsConstrainingTraitParams = false) const;
+    SolverCertainty evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, u32 conditionalScope = 0, bool onlyBoundsConstrainingTraitParams = false, SolverResponse* effects = nullptr) const;
     SolverCertainty evaluateInherentImplBounds(const Span& sp, const HIRTypeImpl& impl, const HIRPathParams& implParams) const;
 
 public:
@@ -890,6 +899,7 @@ public:
         AutoderefBorrow borrow;
         HIRPath path;
         const HIRTypeImpl* inherentImpl;
+        SolverResponse effects;
     };
 
     unsigned int autoderefFindMethod(
@@ -899,10 +909,12 @@ public:
         unsigned int typeIvarCount,
         const HIRType* topTy,
         const RcString& methodName,
+        const HIRPathParams& methodParams,
         const ThinVector<const HIRType*>& argumentTypes,
         const HIRType* expectedResult,
         bool mustDecide,
-        /* Out -> */ ThinVector<MethodCandidate>& possibilities
+        /* Out -> */ ThinVector<MethodCandidate>& possibilities,
+        /* Out -> */ SolverResponse* deferredEffects = nullptr
     ) const;
 
     enum class AutoderefResult {
@@ -940,7 +952,7 @@ public:
         Value,
         Box,
     };
-    bool findMethod(const Span& sp, const tTraitList& traits, const stl::Vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRType* ty, const RcString& methodName, const ThinVector<const HIRType*>& argumentTypes, const HIRType* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
+    SolverCertainty findMethod(const Span& sp, const tTraitList& traits, const stl::Vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRType* ty, const RcString& methodName, const HIRPathParams& methodParams, const ThinVector<const HIRType*>& argumentTypes, const HIRType* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ SolverResponse* deferredEffects = nullptr) const;
 
     const HIRFunction* traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRType* self, const RcString& name, HIRGenericPath& outPath) const;
     bool traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const;

@@ -25,12 +25,13 @@ namespace {
     static_assert(HasSolverCandidate<SolverMayApply>);
 
     [[maybe_unused]] void solverResponseApiGate(SolverResponse& response) {
-        auto& [certainty, slots, obligations, equalities, valueEqualities, operatorSummary] = response;
+        auto& [certainty, ambiguityOnlyFromObligations, slots, obligations, equalities, valueEqualities, coercions, operatorSummary] = response;
         (void)certainty;
         (void)slots;
         (void)obligations;
         (void)equalities;
         (void)valueEqualities;
+        (void)coercions;
         (void)operatorSummary;
     }
 

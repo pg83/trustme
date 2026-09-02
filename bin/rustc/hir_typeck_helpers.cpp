@@ -315,6 +315,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
         bool headNormalizationAmbiguity;
         bool ambiguityBeyondHead = false;
         bool nestedAmbiguity = false;
+        bool nonObligationNestedAmbiguity = false;
         bool coercionsProven = true;
         bool coercionsEvaluated = false;
         ThinVector<u8> coercionRanks;
@@ -731,6 +732,8 @@ struct TraitResolution::NextTraitGoalEvaluator {
     IntMap<OverlapEntry*> overlapCache;
 
     bool evaluateOverlapUncached(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right);
+
+    Certainty evaluateMethod(const Span& callSpan, const tTraitList& traits, const Vector<unsigned>& ivars, unsigned typeIvarCount, const HIRType* receiver, const RcString& methodName, const HIRPathParams& methodParams, const ThinVector<const HIRType*>& argumentTypes, const HIRType* expectedResult, TraitResolution::MethodAccess access, TraitResolution::AutoderefBorrow borrowType, ThinVector<TraitResolution::MethodCandidate>& possibilities, SolverResponse* deferredEffects);
 
     bool evaluateTyped(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, SolverResponseCallback& callback, const TraitGoalQuery& query, bool callerBoundary = false, bool includeRootMagicCandidates = true);
 
@@ -4459,10 +4462,29 @@ Unifier::Outcome TraitResolution::relateInherentImplHeader(const Span& sp, const
             .relateProjectionInputs = true,
         }
     );
-    return relation.unify(receiver, candidate);
+    const auto outcome = relation.unify(receiver, candidate);
+    if (outcome != Unifier::Outcome::Ambiguous) {
+        return outcome;
+    }
+
+    const auto* normalizedReceiver = this->expandAssociatedTypes(sp, receiver);
+    const auto* normalizedCandidate = this->expandAssociatedTypes(sp, candidate);
+    if (normalizedReceiver == receiver && normalizedCandidate == candidate) {
+        return outcome;
+    }
+    Unifier normalizedRelation(
+        sp,
+        ivars,
+        this,
+        {
+            .bindRigidValues = true,
+            .relateProjectionInputs = true,
+        }
+    );
+    return normalizedRelation.unify(normalizedReceiver, normalizedCandidate);
 }
 
-SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, u32 conditionalScope, bool onlyBoundsConstrainingTraitParams) const {
+SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, u32 conditionalScope, bool onlyBoundsConstrainingTraitParams, SolverResponse* effects) const {
     auto result = SolverCertainty::Proven;
     const auto merge = [&](SolverCertainty certainty) {
         if (certainty == SolverCertainty::NoSolution) {
@@ -4481,6 +4503,65 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
             case Unifier::Outcome::Mismatch:
                 merge(SolverCertainty::NoSolution);
                 break;
+        }
+    };
+    const auto appendBoundEffects = [&](const SolverResponse& response) {
+        if (!effects) {
+            return;
+        }
+        ASSERT_BUG(sp, response.slots.typeInputs.size() == response.slots.types.size(), StringView("Malformed solver type slots in generic bound"));
+        for (size_t i = 0; i < response.slots.types.size(); i++) {
+            bool duplicate = false;
+            for (size_t existing = 0; existing < effects->slots.types.size(); existing++) {
+                duplicate |= effects->slots.typeInputs[existing] == response.slots.typeInputs[i] && effects->slots.types[existing] == response.slots.types[i];
+            }
+            if (!duplicate) {
+                effects->slots.typeInputs.push_back(response.slots.typeInputs[i]);
+                effects->slots.types.push_back(response.slots.types[i]);
+            }
+        }
+        ASSERT_BUG(sp, response.slots.valueInputs.size() == response.slots.values.size(), StringView("Malformed solver value slots in generic bound"));
+        for (size_t i = 0; i < response.slots.values.size(); i++) {
+            bool duplicate = false;
+            for (size_t existing = 0; existing < effects->slots.values.size(); existing++) {
+                duplicate |= effects->slots.valueInputs[existing] == response.slots.valueInputs[i] && effects->slots.values[existing] == response.slots.values[i];
+            }
+            if (!duplicate) {
+                effects->slots.valueInputs.push_back(response.slots.valueInputs[i].clone());
+                effects->slots.values.push_back(response.slots.values[i].clone());
+            }
+        }
+        for (const auto& obligation : response.obligations) {
+            const bool duplicate = std::any_of(effects->obligations.begin(), effects->obligations.end(), [&](const SolverObligation& existing) {
+                return existing.type == obligation.type && existing.trait == obligation.trait;
+            });
+            if (!duplicate) {
+                effects->obligations.push_back(SolverObligation{obligation.type, obligation.trait.clone()});
+            }
+        }
+        for (const auto& equality : response.equalities) {
+            const bool duplicate = std::any_of(effects->equalities.begin(), effects->equalities.end(), [&](const SolverTypeEquality& existing) {
+                return (existing.left == equality.left && existing.right == equality.right) || (existing.left == equality.right && existing.right == equality.left);
+            });
+            if (!duplicate) {
+                effects->equalities.push_back(equality);
+            }
+        }
+        for (const auto& equality : response.valueEqualities) {
+            const bool duplicate = std::any_of(effects->valueEqualities.begin(), effects->valueEqualities.end(), [&](const SolverValueEquality& existing) {
+                return (existing.left == equality.left && existing.right == equality.right) || (existing.left == equality.right && existing.right == equality.left);
+            });
+            if (!duplicate) {
+                effects->valueEqualities.push_back(SolverValueEquality{equality.left.clone(), equality.right.clone()});
+            }
+        }
+        for (const auto& coercion : response.coercions) {
+            const bool duplicate = std::any_of(effects->coercions.begin(), effects->coercions.end(), [&](const SolverCoercionObligation& existing) {
+                return existing.destination == coercion.destination && existing.source == coercion.source && existing.op == coercion.op && existing.sourceInput == coercion.sourceInput;
+            });
+            if (!duplicate) {
+                effects->coercions.push_back(coercion);
+            }
         }
     };
 
@@ -4573,13 +4654,34 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
             }
 
             bool sawResponse = false;
+            bool boundInputsOpen = ivars.typeContainsIvars(realType, false) || ivars.pathparamsContainIvars(realTrait.path.params, false);
+            for (const auto& associated : realTrait.typeBounds) {
+                boundInputsOpen |= ivars.pathparamsContainIvars(associated.second.sourceTrait.params, false)
+                    || ivars.pathparamsContainIvars(associated.second.atyParams, false)
+                    || ivars.typeContainsIvars(associated.second.type, false);
+            }
             this->probeTraitGoalMayApply(sp, realTrait.path.path, realTrait.path.params, realType, [&](SolverMayApply probe) {
-                if (!probe.candidate) {
+                auto& response = probe.effects;
+                if (response.certainty == SolverCertainty::NoSolution) {
                     return false;
                 }
-                auto& response = probe.effects;
                 sawResponse = true;
-                merge(response.certainty);
+                bool responseHasDeferredConstraints = !response.obligations.empty() || !response.equalities.empty()
+                    || !response.valueEqualities.empty() || !response.coercions.empty();
+                for (size_t i = 0; i < response.slots.types.size(); i++) {
+                    responseHasDeferredConstraints |= response.slots.typeInputs[i] != response.slots.types[i];
+                }
+                for (size_t i = 0; i < response.slots.values.size(); i++) {
+                    responseHasDeferredConstraints |= response.slots.valueInputs[i] != response.slots.values[i];
+                }
+                const bool obligationOnlyAmbiguity = response.certainty == SolverCertainty::Ambiguous && response.ambiguityOnlyFromObligations;
+                const bool selectedWithDeferredConstraints = effects && probe.candidate
+                    && response.certainty == SolverCertainty::Ambiguous && responseHasDeferredConstraints;
+                const bool exportDeferredConstraints = effects && responseHasDeferredConstraints;
+                if (!obligationOnlyAmbiguity && !selectedWithDeferredConstraints) {
+                    merge(response.certainty);
+                }
+                appendBoundEffects(response);
 
                 Unifier relation(
                     sp,
@@ -4590,17 +4692,22 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
                         .relateProjectionInputs = true,
                     }
                 );
+                const auto mergeResponseRelation = [&](Unifier::Outcome outcome) {
+                    if (outcome != Unifier::Outcome::Ambiguous || !exportDeferredConstraints) {
+                        mergeRelation(outcome);
+                    }
+                };
                 const auto relateType = [&](const HIRType* left, const HIRType* right) {
                     if (result == SolverCertainty::NoSolution) {
                         return;
                     }
                     auto normalizedLeft = this->expandAssociatedTypes(sp, left);
                     auto normalizedRight = this->expandAssociatedTypes(sp, right);
-                    mergeRelation(relation.unify(normalizedLeft, normalizedRight));
+                    mergeResponseRelation(relation.unify(normalizedLeft, normalizedRight));
                 };
                 const auto relateValue = [&](const HIRConstGeneric& left, const HIRConstGeneric& right) {
                     if (result != SolverCertainty::NoSolution) {
-                        mergeRelation(relation.unifyValues(left, right));
+                        mergeResponseRelation(relation.unifyValues(left, right));
                     }
                 };
 
@@ -4618,21 +4725,44 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
                 for (const auto& equality : response.valueEqualities) {
                     relateValue(equality.left, equality.right);
                 }
-                if (!response.obligations.empty()) {
+                if (!response.obligations.empty() && !effects) {
                     merge(SolverCertainty::Ambiguous);
                 }
 
-                for (const auto& associated : realTrait.typeBounds) {
-                    auto actual = probe.candidate->getType(crate.types, associated.first.c_str(), associated.second.atyParams);
-                    if (actual == nullptr) {
-                        actual = crate.types.path(HIRPath(realType, associated.second.sourceTrait.clone(), associated.first, associated.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
+                if (probe.candidate) {
+                    for (const auto& associated : realTrait.typeBounds) {
+                        auto actual = probe.candidate->getType(crate.types, associated.first.c_str(), associated.second.atyParams);
+                        if (actual == nullptr) {
+                            actual = crate.types.path(HIRPath(realType, associated.second.sourceTrait.clone(), associated.first, associated.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
+                        }
+                        actual = this->expandAssociatedTypes(sp, std::move(actual));
+                        relateType(associated.second.type, actual);
                     }
-                    actual = this->expandAssociatedTypes(sp, std::move(actual));
-                    relateType(associated.second.type, actual);
+                }
+                if (effects && result != SolverCertainty::NoSolution) {
+                    for (const auto& equality : relation.pending()) {
+                        const bool duplicate = std::any_of(effects->equalities.begin(), effects->equalities.end(), [&](const SolverTypeEquality& existing) {
+                            return (existing.left == equality.left && existing.right == equality.right) || (existing.left == equality.right && existing.right == equality.left);
+                        });
+                        if (!duplicate) {
+                            effects->equalities.push_back(SolverTypeEquality{equality.left, equality.right});
+                        }
+                    }
+                    for (const auto& equality : relation.pendingValues()) {
+                        const bool duplicate = std::any_of(effects->valueEqualities.begin(), effects->valueEqualities.end(), [&](const SolverValueEquality& existing) {
+                            return (existing.left == equality.left && existing.right == equality.right) || (existing.left == equality.right && existing.right == equality.left);
+                        });
+                        if (!duplicate) {
+                            effects->valueEqualities.push_back(SolverValueEquality{equality.left.clone(), equality.right.clone()});
+                        }
+                    }
                 }
                 return true;
-            }, {.allowInferInputs = true, .ambiguity = SolverAmbiguityPolicy::Report});
-
+            }, {
+                .associated = realTrait.typeBounds.empty() ? nullptr : &realTrait.typeBounds,
+                .allowInferInputs = boundInputsOpen,
+                .ambiguity = SolverAmbiguityPolicy::Report,
+            });
             if (!sawResponse) {
                 bool unresolved = ivars.typeContainsIvars(realType, false) || ivars.pathparamsContainIvars(realTrait.path.params, false);
                 for (const auto& associated : realTrait.typeBounds) {
@@ -6134,10 +6264,12 @@ unsigned int TraitResolution::autoderefFindMethod(
     unsigned int typeIvarCount,
     const HIRType* topTy,
     const RcString& methodName,
+    const HIRPathParams& methodParams,
     const ThinVector<const HIRType*>& argumentTypes,
     const HIRType* expectedResult,
     bool mustDecide,
-    /* Out -> */ ThinVector<MethodCandidate>& possibilities
+    /* Out -> */ ThinVector<MethodCandidate>& possibilities,
+    /* Out -> */ SolverResponse* deferredEffects
 ) const {
     {
         TRACE_FUNCTION_F(StringView("{") << topTy << StringView("}.") << methodName);
@@ -6254,16 +6386,24 @@ unsigned int TraitResolution::autoderefFindMethod(
             // TODO: Pause on Box<_>?
 
             DEBUG(derefCount << StringView(": ") << ty);
-            bool undecided = false;
+            const auto methodGoalIsAmbiguous = [&](const HIRType* receiver, MethodAccess goalAccess, AutoderefBorrow goalBorrow) {
+                if (this->findMethod(sp, traits, ivars, typeIvarCount, receiver, methodName, methodParams, argumentTypes, expectedResult, goalAccess, goalBorrow, possibilities, deferredEffects) != SolverCertainty::Ambiguous) {
+                    return false;
+                }
+                possibilities.clear();
+                return true;
+            };
 
-            if (this->findMethod(sp, traits, ivars, typeIvarCount, ty, methodName, argumentTypes, expectedResult, curAccess, AutoderefBorrow::None, possibilities, &undecided)) {
+            if (methodGoalIsAmbiguous(ty, curAccess, AutoderefBorrow::None)) {
+                return ~0u;
             }
 
             if (possibilities.empty()) {
                 if (const auto* ptr = ty->opt_Pointer()) {
                     if (ptr->type != HIRBorrowType::Shared) {
                         auto constTy = crate.types.pointer(HIRBorrowType::Shared, ptr->inner);
-                        if (this->findMethod(sp, traits, ivars, typeIvarCount, constTy, methodName, argumentTypes, expectedResult, curAccess, AutoderefBorrow::RawShared, possibilities, &undecided)) {
+                        if (methodGoalIsAmbiguous(constTy, curAccess, AutoderefBorrow::RawShared)) {
+                            return ~0u;
                         }
                     }
                 }
@@ -6279,7 +6419,8 @@ unsigned int TraitResolution::autoderefFindMethod(
                         if (const auto* borrow = pinInner->opt_Borrow(); borrow && borrow->type == HIRBorrowType::Unique) {
                             auto shared = crate.types.borrow(HIRBorrowType::Shared, borrow->inner);
                             auto sharedPin = crate.types.path(HIRGenericPath(langPin, HIRPathParams(shared)), pathTy->binding.clone());
-                            if (this->findMethod(sp, traits, ivars, typeIvarCount, sharedPin, methodName, argumentTypes, expectedResult, MethodAccess::Move, AutoderefBorrow::PinShared, possibilities, &undecided)) {
+                            if (methodGoalIsAmbiguous(sharedPin, MethodAccess::Move, AutoderefBorrow::PinShared)) {
+                                return ~0u;
                             }
                         }
                     }
@@ -6287,28 +6428,23 @@ unsigned int TraitResolution::autoderefFindMethod(
             }
 
             auto borrowTy = crate.types.borrow(HIRBorrowType::Shared, ty);
-            if (possibilities.empty() && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, argumentTypes, expectedResult, MethodAccess::Move, AutoderefBorrow::Shared, possibilities, &undecided)) {
+            if (possibilities.empty() && methodGoalIsAmbiguous(borrowTy, MethodAccess::Move, AutoderefBorrow::Shared)) {
+                return ~0u;
             }
             borrowTy = crate.types.borrow(HIRBorrowType::Unique, ty);
-            if (possibilities.empty() && curAccess >= MethodAccess::Unique && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, argumentTypes, expectedResult, MethodAccess::Move, AutoderefBorrow::Unique, possibilities, &undecided)) {
+            if (possibilities.empty() && curAccess >= MethodAccess::Unique && methodGoalIsAmbiguous(borrowTy, MethodAccess::Move, AutoderefBorrow::Unique)) {
+                return ~0u;
             }
             borrowTy = crate.types.borrow(HIRBorrowType::Owned, ty);
-            if (possibilities.empty() && curAccess >= MethodAccess::Move && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, argumentTypes, expectedResult, MethodAccess::Move, AutoderefBorrow::Owned, possibilities, &undecided)) {
+            if (possibilities.empty() && curAccess >= MethodAccess::Move && methodGoalIsAmbiguous(borrowTy, MethodAccess::Move, AutoderefBorrow::Owned)) {
+                return ~0u;
             }
             if (!possibilities.empty()) {
                 canonicalizeTraitCandidates();
                 collapseToMostSpecificSubtrait();
                 preferCurrentTraitCandidate();
-                if (undecided && !mustDecide) {
-                    DEBUG(StringView("- ") << possibilities.size() << StringView(" options and the receiver is not known, pausing"));
-                    possibilities.clear();
-                    return ~0u;
-                }
                 DEBUG(StringView("FOUND ") << possibilities.size() << StringView(" options: ") << possibilities);
                 return derefCount;
-            }
-            if (undecided && !mustDecide) {
-                return ~0u;
             }
 
             derefCount += 1;
@@ -6435,688 +6571,1465 @@ std::optional<const HIRType*> TraitResolution::checkMethodReceiver(const Span& s
     return std::nullopt;
 }
 
-bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const Vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRType* ty, const RcString& methodName, const ThinVector<const HIRType*>& argumentTypes, const HIRType* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided) const {
-    bool rv = false;
+auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
+    const Span& callSpan,
+    const tTraitList& traits,
+    const Vector<unsigned>& methodIvars,
+    unsigned typeIvarCount,
+    const HIRType* receiver,
+    const RcString& methodName,
+    const HIRPathParams& explicitMethodParams,
+    const ThinVector<const HIRType*>& argumentTypes,
+    const HIRType* expectedResult,
+    TraitResolution::MethodAccess access,
+    TraitResolution::AutoderefBorrow borrowType,
+    ThinVector<TraitResolution::MethodCandidate>& possibilities,
+    SolverResponse* deferredEffects
+) -> Certainty {
+    TRACE_FUNCTION_FR(StringView("receiver=") << receiver << StringView(", name=") << methodName << StringView(", access=") << access, possibilities);
 
-    TRACE_FUNCTION_FR(StringView("ty=") << ty << StringView(", name=") << methodName << StringView(", access=") << access, rv << StringView(" ") << possibilities);
-    auto getIvaredParams = [&](const HIRGenericParams& tpl) -> HIRPathParams {
-        unsigned int nParams = tpl.types.size();
-        ASSERT_BUG(sp, typeIvarCount <= ivars.length(), StringView("Invalid method ivar split: ") << typeIvarCount << StringView(" type ivars in a pool of ") << ivars.length());
-        ASSERT_BUG(sp, nParams <= typeIvarCount, StringView("Not enough type ivars allocated for method: ") << nParams << StringView(" needed but ") << typeIvarCount << StringView(" allocated by caller\ntpl = ") << tpl.fmtArgs());
-        HIRPathParams traitParams;
-        traitParams.types.reserve(nParams);
-        for (unsigned int i = 0; i < nParams; i++) {
-            traitParams.types.push_back(crate.types.infer(ivars[i], HIRInferClass::None));
-            ASSERT_BUG(sp, this->ivars.getType(traitParams.types.back())->as_Infer().index == ivars[i], StringView("A method selection ivar was bound"));
-        }
-        const unsigned int nValues = tpl.values.size();
-        ASSERT_BUG(sp, nValues <= ivars.length() - typeIvarCount, StringView("Not enough value ivars allocated for method: ") << nValues << StringView(" needed but ") << ivars.length() - typeIvarCount << StringView(" allocated by caller\ntpl = ") << tpl.fmtArgs());
-        traitParams.values.reserve(nValues);
-        for (unsigned int i = 0; i < nValues; i++) {
-            traitParams.values.push_back(HIRConstGeneric::make_Infer({ivars[typeIvarCount + i]}));
-        }
-        return traitParams;
-    };
-
-    // TODO: Have a cache of name+receiver_type to a list of types and impls
-    const auto* inherentReceiver = ty;
-    while (const auto* borrow = inherentReceiver->opt_Borrow()) {
-        inherentReceiver = this->ivars.getType(borrow->inner);
+    if (deferredEffects) {
+        *deferredEffects = SolverResponse{};
     }
-    const auto* erased = inherentReceiver->opt_ErasedType();
-    const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
-    const bool inherentReceiverUnknown = inherentReceiver->is_Infer();
-    const bool opaqueCanReveal = !erased || (alias && this->isOpaqueAliasDefiningScope(*alias->inner)) || erased->inner.is_Known();
-    if (inherentReceiverUnknown) {
-        if (outUndecided) {
-            *outUndecided = true;
-        }
-    } else if (opaqueCanReveal) {
-        this->wb.inherentMethods->find(sp, methodName, ty, this->ivars.callbackResolveInfer(), [&](const HIRType* selfTy, const HIRTypeImpl& impl) {
-            const auto& method = impl.methods.at(methodName);
-            if (!method.publicity.isVisible(this->visPath)) {
-                return;
-            }
-            const auto snapshot = this->ivars.snapshot();
-            STD_DEFER {
-                this->ivars.rollbackTo(snapshot);
-            };
-            HIRPathParams implParams;
-            auto inherentResult = SolverCertainty::Proven;
-            switch (this->relateInherentImplHeader(sp, impl, selfTy, implParams)) {
-                case Unifier::Outcome::Proven:
-                    break;
-                case Unifier::Outcome::Ambiguous:
-                    inherentResult = SolverCertainty::Ambiguous;
-                    break;
-                case Unifier::Outcome::Mismatch:
-                    inherentResult = SolverCertainty::NoSolution;
-                    break;
-            }
-            if (inherentResult != SolverCertainty::NoSolution && expectedResult && !method.data.returnType->is_ErasedType()) {
-                auto methodParams = this->makeFreshImplParams(method.data.params);
-                auto monomorph = MonomorphStatePtr(crate.types, selfTy, &implParams, &methodParams);
-                const auto* methodReturn = monomorph.monomorphType(sp, method.data.returnType, true);
-                const auto resultSnapshot = this->ivars.snapshot();
-                Unifier relation(sp, this->ivars, this, {.relateProjectionInputs = true});
-                switch (relation.unify(methodReturn, expectedResult)) {
-                    case Unifier::Outcome::Proven:
-                        this->ivars.commit(resultSnapshot);
-                        break;
-                    case Unifier::Outcome::Ambiguous:
-                        this->ivars.commit(resultSnapshot);
-                        inherentResult = SolverCertainty::Ambiguous;
-                        break;
-                    case Unifier::Outcome::Mismatch: {
-                        this->ivars.rollbackTo(resultSnapshot);
-                        /* The expression result is coerced to its context; it
-                         * need not equal it.  Raw-pointer mutability is the
-                         * relevant built-in outer relation during method
-                         * probing: relate its pointees while preserving the
-                         * natural *mut result.  The expression's coercion node
-                         * still proves and applies the complete conversion. */
-                        const auto* destinationPointer = this->ivars.getType(expectedResult)->opt_Pointer();
-                        const auto* sourcePointer = this->ivars.getType(methodReturn)->opt_Pointer();
-                        if (!destinationPointer || !sourcePointer || destinationPointer->type > sourcePointer->type) {
-                            inherentResult = SolverCertainty::NoSolution;
-                            break;
-                        }
-                        Unifier pointeeRelation(sp, this->ivars, this, {.relateProjectionInputs = true});
-                        switch (pointeeRelation.unify(destinationPointer->inner, sourcePointer->inner)) {
-                            case Unifier::Outcome::Proven:
-                                inherentResult = SolverCertainty::Proven;
-                                break;
-                            case Unifier::Outcome::Ambiguous:
-                                inherentResult = SolverCertainty::Ambiguous;
-                                break;
-                            case Unifier::Outcome::Mismatch:
-                                inherentResult = SolverCertainty::NoSolution;
-                                break;
-                        }
-                        break;
-                    }
-                }
-            }
-            if (inherentResult != SolverCertainty::NoSolution) {
-                const auto bounds = this->evaluateInherentImplBounds(sp, impl, implParams);
-                if (bounds == SolverCertainty::NoSolution) {
-                    inherentResult = bounds;
-                } else if (bounds == SolverCertainty::Ambiguous) {
-                    inherentResult = bounds;
-                }
-            }
-            if (inherentResult != SolverCertainty::NoSolution) {
-                if (outUndecided && (inherentResult == SolverCertainty::Ambiguous || typeIsUnboundedInfer(this->ivars.getType(selfTy)))) {
-                    *outUndecided = true;
-                }
-                {
-                    const auto& methodParams = this->solverExistentials(sp, method.data.params);
-                    u32 methodScope = 0;
-                    if (!methodParams.types.empty()) {
-                        const auto* generic = methodParams.types.front()->opt_Generic();
-                        ASSERT_BUG(sp, generic && generic->isSolverExistential(), StringView("Method type parameter is not a solver existential"));
-                        methodScope = generic->solverScope;
-                    } else if (!methodParams.values.empty()) {
-                        const auto* generic = methodParams.values.front().opt_Generic();
-                        ASSERT_BUG(sp, generic && generic->isSolverExistential(), StringView("Method value parameter is not a solver existential"));
-                        methodScope = generic->solverScope;
-                    }
+    const auto firstPossibility = possibilities.size();
+    ThinVector<SolverResponse> ambiguousResponses;
+    struct InstantiateMethodExistentials final: public Monomorphiser {
+        HMTypeInferrence& ivars;
+        mutable std::vector<std::pair<HIRGenericRef, const HIRType*>> types;
+        mutable std::vector<std::pair<HIRGenericRef, HIRConstGeneric>> values;
 
-                    auto monomorph = MonomorphStatePtr(crate.types, selfTy, &implParams, &methodParams);
-                    monomorph.setConstevalState(this->board(), HIRItemPath(""));
-                    const auto methodBounds = this->evaluateGenericBounds(sp, method.data.params, methodParams, monomorph, methodScope);
-                    if (methodBounds == SolverCertainty::NoSolution) {
-                        return;
+        InstantiateMethodExistentials(HIRTypeInterner& interner, HMTypeInferrence& ivars)
+            : Monomorphiser(interner)
+            , ivars(ivars)
+        {
+        }
+
+        const HIRType* getType(const Span&, const HIRGenericRef& generic) const override {
+            if (!generic.isSolverExistential()) {
+                return Monomorphiser::types.generic(generic);
+            }
+            for (const auto& entry : types) {
+                if (entry.first == generic) {
+                    return entry.second;
+                }
+            }
+            const auto* fresh = ivars.newIvarTr();
+            types.push_back({generic, fresh});
+            return fresh;
+        }
+
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
+            if (!generic.isSolverExistential()) {
+                return HIRConstGeneric(generic);
+            }
+            for (const auto& entry : values) {
+                if (entry.first == generic) {
+                    return entry.second.clone();
+                }
+            }
+            auto fresh = HIRConstGeneric::make_Infer({ivars.newIvarVal()});
+            values.push_back({generic, fresh.clone()});
+            return fresh;
+        }
+    };
+    const auto instantiateMethodResponse = [&](const SolverResponse& source, InstantiateMethodExistentials& instantiator) {
+        SolverResponse result;
+        result.certainty = source.certainty;
+        result.ambiguityOnlyFromObligations = source.ambiguityOnlyFromObligations;
+        result.operatorSummary = source.operatorSummary;
+        for (const auto* type : source.slots.typeInputs) {
+            result.slots.typeInputs.push_back(instantiator.monomorphType(callSpan, type, true));
+        }
+        for (const auto* type : source.slots.types) {
+            result.slots.types.push_back(instantiator.monomorphType(callSpan, type, true));
+        }
+        for (const auto& value : source.slots.valueInputs) {
+            result.slots.valueInputs.push_back(instantiator.monomorphConstgeneric(callSpan, value, true));
+        }
+        for (const auto& value : source.slots.values) {
+            result.slots.values.push_back(instantiator.monomorphConstgeneric(callSpan, value, true));
+        }
+        for (const auto& obligation : source.obligations) {
+            result.obligations.push_back(SolverObligation{
+                instantiator.monomorphType(callSpan, obligation.type, true),
+                instantiator.monomorphTraitpath(callSpan, obligation.trait, true),
+            });
+        }
+        for (const auto& equality : source.equalities) {
+            result.equalities.push_back(SolverTypeEquality{
+                instantiator.monomorphType(callSpan, equality.left, true),
+                instantiator.monomorphType(callSpan, equality.right, true),
+            });
+        }
+        for (const auto& equality : source.valueEqualities) {
+            result.valueEqualities.push_back(SolverValueEquality{
+                instantiator.monomorphConstgeneric(callSpan, equality.left, true),
+                instantiator.monomorphConstgeneric(callSpan, equality.right, true),
+            });
+        }
+        for (const auto& coercion : source.coercions) {
+            result.coercions.push_back(SolverCoercionObligation{
+                instantiator.monomorphType(callSpan, coercion.destination, true),
+                instantiator.monomorphType(callSpan, coercion.source, true),
+                coercion.op,
+                coercion.sourceInput,
+            });
+        }
+        return result;
+    };
+    STD_DEFER {
+        for (size_t i = firstPossibility; i < possibilities.size(); i++) {
+            InstantiateMethodExistentials instantiator(crate.types, resolve_.ivars);
+            possibilities[i].path = instantiator.monomorphPath(callSpan, possibilities[i].path, true);
+            possibilities[i].effects = instantiateMethodResponse(possibilities[i].effects, instantiator);
+        }
+        if (deferredEffects && deferredEffects->certainty != Certainty::NoSolution) {
+            InstantiateMethodExistentials instantiator(crate.types, resolve_.ivars);
+            *deferredEffects = instantiateMethodResponse(*deferredEffects, instantiator);
+        }
+    };
+    const auto emitAmbiguous = [&]() {
+        const auto responseCount = possibilities.size() - firstPossibility + ambiguousResponses.size();
+        const auto responseAt = [&](size_t index) -> const SolverResponse& {
+            const auto provenCount = possibilities.size() - firstPossibility;
+            return index < provenCount ? possibilities[firstPossibility + index].effects : ambiguousResponses[index - provenCount];
+        };
+        if (deferredEffects) {
+            SolverResponse common;
+            common.certainty = Certainty::Ambiguous;
+            if (responseCount != 0) {
+                const auto& first = responseAt(0);
+                const auto sharedTypeSlot = [&](const HIRType* input, const HIRType* output) {
+                    for (size_t response = 1; response < responseCount; response++) {
+                        const auto& slots = responseAt(response).slots;
+                        bool found = false;
+                        for (size_t i = 0; i < slots.typeInputs.size(); i++) {
+                            found |= slots.typeInputs[i] == input && slots.types[i] == output;
+                        }
+                        if (!found) {
+                            return false;
+                        }
                     }
-                    if (outUndecided && methodBounds == SolverCertainty::Ambiguous) {
-                        *outUndecided = true;
+                    return true;
+                };
+                const auto sharedValueSlot = [&](const HIRConstGeneric& input, const HIRConstGeneric& output) {
+                    for (size_t response = 1; response < responseCount; response++) {
+                        const auto& slots = responseAt(response).slots;
+                        bool found = false;
+                        for (size_t i = 0; i < slots.valueInputs.size(); i++) {
+                            found |= slots.valueInputs[i] == input && slots.values[i] == output;
+                        }
+                        if (!found) {
+                            return false;
+                        }
+                    }
+                    return true;
+                };
+                const auto sharedTypeEquality = [&](const SolverTypeEquality& equality) {
+                    for (size_t response = 1; response < responseCount; response++) {
+                        const auto& equalities = responseAt(response).equalities;
+                        if (std::none_of(equalities.begin(), equalities.end(), [&](const SolverTypeEquality& other) {
+                            return (other.left == equality.left && other.right == equality.right) || (other.left == equality.right && other.right == equality.left);
+                        })) {
+                            return false;
+                        }
+                    }
+                    return true;
+                };
+                const auto sharedValueEquality = [&](const SolverValueEquality& equality) {
+                    for (size_t response = 1; response < responseCount; response++) {
+                        const auto& equalities = responseAt(response).valueEqualities;
+                        if (std::none_of(equalities.begin(), equalities.end(), [&](const SolverValueEquality& other) {
+                            return (other.left == equality.left && other.right == equality.right) || (other.left == equality.right && other.right == equality.left);
+                        })) {
+                            return false;
+                        }
+                    }
+                    return true;
+                };
+                const auto sharedObligation = [&](const SolverObligation& obligation) {
+                    for (size_t response = 1; response < responseCount; response++) {
+                        const auto& obligations = responseAt(response).obligations;
+                        if (std::none_of(obligations.begin(), obligations.end(), [&](const SolverObligation& other) {
+                            return other.type == obligation.type && other.trait == obligation.trait;
+                        })) {
+                            return false;
+                        }
+                    }
+                    return true;
+                };
+                const auto sharedCoercion = [&](const SolverCoercionObligation& coercion) {
+                    for (size_t response = 1; response < responseCount; response++) {
+                        const auto& coercions = responseAt(response).coercions;
+                        if (std::none_of(coercions.begin(), coercions.end(), [&](const SolverCoercionObligation& other) {
+                            return other.destination == coercion.destination && other.source == coercion.source && other.op == coercion.op && other.sourceInput == coercion.sourceInput;
+                        })) {
+                            return false;
+                        }
+                    }
+                    return true;
+                };
+
+                for (size_t i = 0; i < first.slots.typeInputs.size(); i++) {
+                    if (sharedTypeSlot(first.slots.typeInputs[i], first.slots.types[i])) {
+                        common.slots.typeInputs.push_back(first.slots.typeInputs[i]);
+                        common.slots.types.push_back(first.slots.types[i]);
                     }
                 }
-                possibilities.push_back({borrowType, HIRPath(selfTy, methodName, {}), &impl});
-                rv = true;
+                for (size_t i = 0; i < first.slots.valueInputs.size(); i++) {
+                    if (sharedValueSlot(first.slots.valueInputs[i], first.slots.values[i])) {
+                        common.slots.valueInputs.push_back(first.slots.valueInputs[i].clone());
+                        common.slots.values.push_back(first.slots.values[i].clone());
+                    }
+                }
+                for (const auto& equality : first.equalities) {
+                    if (sharedTypeEquality(equality)) {
+                        common.equalities.push_back(equality);
+                    }
+                }
+                for (const auto& equality : first.valueEqualities) {
+                    if (sharedValueEquality(equality)) {
+                        common.valueEqualities.push_back(SolverValueEquality{equality.left.clone(), equality.right.clone()});
+                    }
+                }
+                for (const auto& obligation : first.obligations) {
+                    if (sharedObligation(obligation)) {
+                        common.obligations.push_back(SolverObligation{obligation.type, obligation.trait.clone()});
+                    }
+                }
+                for (const auto& coercion : first.coercions) {
+                    if (sharedCoercion(coercion)) {
+                        common.coercions.push_back(coercion);
+                    }
+                }
             }
+            *deferredEffects = std::move(common);
+        }
+        while (possibilities.size() > firstPossibility) {
+            possibilities.pop_back();
+        }
+        return Certainty::Ambiguous;
+    };
+    const auto merge = [](Certainty& result, Certainty next) {
+        if (next == Certainty::NoSolution) {
+            result = Certainty::NoSolution;
+        } else if (next == Certainty::Ambiguous && result == Certainty::Proven) {
+            result = Certainty::Ambiguous;
+        }
+    };
+    const auto paramsForInScopeTrait = [&](const HIRGenericParams& definition) {
+        ASSERT_BUG(callSpan, typeIvarCount <= methodIvars.length(), StringView("Invalid method ivar split"));
+        ASSERT_BUG(callSpan, definition.types.size() <= typeIvarCount, StringView("Not enough type method-goal slots"));
+        ASSERT_BUG(callSpan, definition.values.size() <= methodIvars.length() - typeIvarCount, StringView("Not enough value method-goal slots"));
+
+        HIRPathParams params;
+        params.types.reserve(definition.types.size());
+        for (size_t i = 0; i < definition.types.size(); i++) {
+            const auto* input = crate.types.infer(methodIvars[i], HIRInferClass::None);
+            params.types.push_back(resolve_.ivars.expandIvars(input));
+        }
+        params.values.reserve(definition.values.size());
+        for (size_t i = 0; i < definition.values.size(); i++) {
+            auto input = HIRConstGeneric::make_Infer({methodIvars[typeIvarCount + i]});
+            params.values.push_back(std::move(input));
+        }
+        return params;
+    };
+    struct ProbeValueDetector {
+        const HMTypeInferrence::Snapshot& snapshot;
+
+        bool params(const HIRPathParams& input) const {
+            for (const auto* type : input.types) {
+                if (this->type(type)) {
+                    return true;
+                }
+            }
+            for (const auto& value : input.values) {
+                if (this->value(value)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        bool path(const HIRPath& input) const {
+            switch (input.data.tag()) {
+                case HIRPathData::TAG_Generic:
+                    return this->params(input.data.as_Generic().params);
+                case HIRPathData::TAG_UfcsKnown: {
+                    const auto& data = input.data.as_UfcsKnown();
+                    return this->type(data.type) || this->params(data.trait.params) || this->params(data.params);
+                }
+                case HIRPathData::TAG_UfcsInherent: {
+                    const auto& data = input.data.as_UfcsInherent();
+                    return this->type(data.type) || this->params(data.params) || this->params(data.implParams);
+                }
+                case HIRPathData::TAG_UfcsUnknown: {
+                    const auto& data = input.data.as_UfcsUnknown();
+                    return this->type(data.type) || this->params(data.params);
+                }
+            }
+            UNREACHABLE();
+        }
+
+        bool trait(const HIRTraitPath& input) const {
+            if (this->params(input.path.params)) {
+                return true;
+            }
+            for (const auto& bound : input.typeBounds) {
+                if (this->params(bound.second.sourceTrait.params) || this->params(bound.second.atyParams) || this->type(bound.second.type)) {
+                    return true;
+                }
+            }
+            for (const auto& bound : input.traitBounds) {
+                if (this->params(bound.second.sourceTrait.params) || this->params(bound.second.atyParams)) {
+                    return true;
+                }
+                for (const auto& child : bound.second.traits) {
+                    if (this->trait(child)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        bool type(const HIRType* input) const {
+            return visitTyWith(input, [&](const HIRType* inner) {
+                if (const auto* pathType = inner->opt_Path()) {
+                    return this->path(pathType->path);
+                }
+                if (const auto* object = inner->opt_TraitObject()) {
+                    if (this->trait(object->trait)) {
+                        return true;
+                    }
+                    for (const auto& marker : object->markers) {
+                        if (this->params(marker.params)) {
+                            return true;
+                        }
+                    }
+                }
+                if (const auto* erased = inner->opt_ErasedType()) {
+                    for (const auto& declared : erased->traits) {
+                        if (this->trait(declared)) {
+                            return true;
+                        }
+                    }
+                    if (this->params(erased->use)) {
+                        return true;
+                    }
+                    switch (erased->inner.tag()) {
+                        case TypeDataErasedTypeInner::TAG_Fcn:
+                            return this->path(erased->inner.as_Fcn().origin);
+                        case TypeDataErasedTypeInner::TAG_Known:
+                            return this->type(erased->inner.as_Known());
+                        case TypeDataErasedTypeInner::TAG_Alias:
+                            return this->params(erased->inner.as_Alias().params);
+                    }
+                    UNREACHABLE();
+                }
+                if (const auto* array = inner->opt_Array()) {
+                    return array->size.is_Unevaluated() && this->value(array->size.as_Unevaluated());
+                }
+                if (const auto* pattern = inner->opt_Pattern()) {
+                    for (const auto& range : pattern->pattern.alternatives) {
+                        if ((range.hasStart && this->value(range.start)) || (range.hasEnd && this->value(range.end))) {
+                            return true;
+                        }
+                    }
+                }
+                if (const auto* function = inner->opt_NamedFunction()) {
+                    return this->path(function->path);
+                }
+                return false;
+            });
+        }
+
+        bool value(const HIRConstGeneric& input) const {
+            if (const auto* infer = input.opt_Infer()) {
+                return infer->index != ~0u && infer->index >= snapshot.valueCount;
+            }
+            const auto* unevaluated = input.opt_Unevaluated();
+            if (!unevaluated) {
+                return false;
+            }
+            const auto& data = **unevaluated;
+            return (data.selfType && this->type(data.selfType)) || this->params(data.paramsImpl) || this->params(data.paramsItem);
+        }
+    };
+    const auto typeHasProbeIvar = [&](const HIRType* type, const HMTypeInferrence::Snapshot& snapshot) {
+        if (visitTyWith(type, [&](const HIRType* inner) {
+            const auto* infer = inner->opt_Infer();
+            return infer && infer->index != ~0u && infer->index >= snapshot.ivarCount;
+        })) {
+            return true;
+        }
+        return ProbeValueDetector{snapshot}.type(type);
+    };
+    const auto valueHasProbeIvar = [](const HIRConstGeneric& value, const HMTypeInferrence::Snapshot& snapshot) {
+        return ProbeValueDetector{snapshot}.value(value);
+    };
+    const auto typeHasSolverExistential = [](const HIRType* type) {
+        return visitTyWith(type, [](const HIRType* inner) {
+            const auto* generic = inner->opt_Generic();
+            return generic && generic->isSolverExistential();
         });
-    }
-
-    if (rv) {
-        return true;
-    }
-
-    // TODO: Handle custom recievers by finding the bottom of a deref chain (or take the top-level reciever as an argument here?)
-
-    DEBUG(StringView("> Bounds"));
-    bool foundBound = false;
-    bool foundNonGlobalBound = false;
-    auto typeIsNonGlobalAfterNormalization = [&](const HIRType* type) {
-        auto normalized = this->expandAssociatedTypes(sp, type);
-        return monomorphiseTypeNeeded(normalized) || this->typeContainsIvars(normalized);
     };
-    auto paramsAreNonGlobalAfterNormalization = [&](const HIRPathParams& params) {
-        for (const auto& type : params.types) {
-            if (typeIsNonGlobalAfterNormalization(type)) {
+    const auto isSolverExistential = [](const HIRType* type) {
+        const auto* generic = type->opt_Generic();
+        return generic && generic->isSolverExistential();
+    };
+    const auto paramsHaveProbeIvar = [&](const HIRPathParams& params, const HMTypeInferrence::Snapshot& snapshot) {
+        for (const auto* type : params.types) {
+            if (typeHasProbeIvar(type, snapshot)) {
+                return true;
+            }
+        }
+        for (const auto& value : params.values) {
+            if (valueHasProbeIvar(value, snapshot)) {
                 return true;
             }
         }
         return false;
     };
-    auto recordBoundGlobalness = [&](const HIRType* type, const HIRGenericPath& trait, const CachedBound& info) {
-        foundNonGlobalBound |= typeIsNonGlobalAfterNormalization(type) || paramsAreNonGlobalAfterNormalization(trait.params);
-        for (const auto& associated : info.assoc) {
-            foundNonGlobalBound |= paramsAreNonGlobalAfterNormalization(associated.second.sourceTrait.params) || paramsAreNonGlobalAfterNormalization(associated.second.atyParams) || typeIsNonGlobalAfterNormalization(associated.second.type);
+        const auto traitHasProbeIvar = [&](const HIRTraitPath& trait, const HMTypeInferrence::Snapshot& snapshot) {
+        if (paramsHaveProbeIvar(trait.path.params, snapshot)) {
+            return true;
         }
+        for (const auto& associated : trait.typeBounds) {
+            if (paramsHaveProbeIvar(associated.second.sourceTrait.params, snapshot)
+                || paramsHaveProbeIvar(associated.second.atyParams, snapshot)
+                || typeHasProbeIvar(associated.second.type, snapshot)) {
+                return true;
+            }
+        }
+        return false;
     };
-    for (const auto& tb : traitBounds) {
-        const auto& eType = tb.first.first;
-        const auto& eTraitGp = tb.first.second;
-        const auto& eTraitInfo = tb.second;
+    const auto stableEffects = [&](SolverResponse response, const HMTypeInferrence::Snapshot& snapshot) {
+        SolverResponse result;
+        result.certainty = Certainty::Proven;
 
-        BUG_ASSERT(eTraitInfo.traitPtr);
-        HIRGenericPath finalTraitPath;
-        const HIRFunction* fcnPtr;
-        if (!(fcnPtr = this->traitContainsMethod(sp, eTraitGp, *eTraitInfo.traitPtr, eType, methodName, finalTraitPath))) {
-            DEBUG(StringView("- Method '") << methodName << StringView("' missing"));
-            continue;
-        }
-
-        DEBUG(StringView("- Found trait ") << finalTraitPath << StringView(" (bound)"));
-        if (auto selfTy = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
-            struct MonomorphEraseHrls: public Monomorphiser {
-                using Monomorphiser::Monomorphiser;
-
-                const HIRType* getType(const Span& sp, const HIRGenericRef& ty) const override {
-                    if (ty.group() == 3) {
-                        return types.infer();
-                    }
-                    return types.generic(ty.name, ty.binding);
-                }
-
-                HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override {
-                    if (val.group() == 3) {
-                        return HIRConstGeneric();
-                    }
-                    return HIRConstGeneric(val);
-                }
-            };
-
-            finalTraitPath = MonomorphEraseHrls(crate.types).monomorphGenericpath(sp, finalTraitPath, true);
-
-            if (((**selfTy).is_Infer() && ((**selfTy).as_Infer().isLit() == false))) {
+        const auto isMethodTypeSlot = [&](const HIRType* input) {
+            const auto* infer = input->opt_Infer();
+            if (!infer || infer->index == ~0u) {
                 return false;
             }
-            const auto snapshot = this->ivars.snapshot();
-            Unifier relation(
-                sp,
-                this->ivars,
-                this,
+            for (size_t i = 0; i < typeIvarCount; i++) {
+                if (infer->index == methodIvars[i]) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        const auto traitHasSolverExistential = [&](const HIRTraitPath& trait) {
+            for (const auto* type : trait.path.params.types) {
+                if (typeHasSolverExistential(type)) {
+                    return true;
+                }
+            }
+            for (const auto& associated : trait.typeBounds) {
+                for (const auto* type : associated.second.sourceTrait.params.types) {
+                    if (typeHasSolverExistential(type)) {
+                        return true;
+                    }
+                }
+                for (const auto* type : associated.second.atyParams.types) {
+                    if (typeHasSolverExistential(type)) {
+                        return true;
+                    }
+                }
+                if (typeHasSolverExistential(associated.second.type)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        const auto typeHasMethodSlot = [&](const HIRType* type) {
+            return visitTyWith(type, [&](const HIRType* inner) {
+                return isMethodTypeSlot(inner);
+            });
+        };
+        const auto traitHasMethodSlot = [&](const HIRTraitPath& trait) {
+            for (const auto* type : trait.path.params.types) {
+                if (typeHasMethodSlot(type)) {
+                    return true;
+                }
+            }
+            for (const auto& associated : trait.typeBounds) {
+                for (const auto* type : associated.second.sourceTrait.params.types) {
+                    if (typeHasMethodSlot(type)) {
+                        return true;
+                    }
+                }
+                for (const auto* type : associated.second.atyParams.types) {
+                    if (typeHasMethodSlot(type)) {
+                        return true;
+                    }
+                }
+                if (typeHasMethodSlot(associated.second.type)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        const auto appendTypeSlot = [&](const HIRType* input, const HIRType* rawOutput) {
+            const auto* resolvedOutput = resolve_.ivars.expandIvars(rawOutput);
+            const auto* output = typeHasProbeIvar(resolvedOutput, snapshot) ? rawOutput : resolvedOutput;
+            if (input == output || typeHasMethodSlot(input)
+                || typeHasSolverExistential(input) || isSolverExistential(output)
+                || typeHasProbeIvar(input, snapshot) || typeHasProbeIvar(output, snapshot)) {
+                return;
+            }
+            for (size_t i = 0; i < result.slots.typeInputs.size(); i++) {
+                if (result.slots.typeInputs[i] == input && result.slots.types[i] == output) {
+                    return;
+                }
+            }
+            result.slots.typeInputs.push_back(input);
+            result.slots.types.push_back(output);
+        };
+        ASSERT_BUG(callSpan, response.slots.typeInputs.size() == response.slots.types.size(), StringView("Malformed method solver type slots"));
+        for (size_t i = 0; i < response.slots.types.size(); i++) {
+            appendTypeSlot(response.slots.typeInputs[i], response.slots.types[i]);
+        }
+        for (const auto& equality : response.equalities) {
+            if (!typeHasMethodSlot(equality.left) && !typeHasMethodSlot(equality.right)
+                && !typeHasSolverExistential(equality.left) && !typeHasSolverExistential(equality.right)
+                && !typeHasProbeIvar(equality.left, snapshot) && !typeHasProbeIvar(equality.right, snapshot)) {
+                result.equalities.push_back(equality);
+            }
+        }
+        const auto stableValue = [&](const HIRConstGeneric& raw) -> std::optional<HIRConstGeneric> {
+            struct UnstableValueDetector final: HIRVisitor {
+                const HMTypeInferrence::Snapshot& snapshot;
+                bool found = false;
+
+                UnstableValueDetector(HIRTypeInterner& types, const HMTypeInferrence::Snapshot& snapshot)
+                    : HIRVisitor(nullptr, types)
+                    , snapshot(snapshot)
+                {
+                }
+
+                void visitConstgeneric(HIRConstGeneric& value) override {
+                    if (const auto* infer = value.opt_Infer()) {
+                        found |= infer->index != ~0u && infer->index >= snapshot.valueCount;
+                    }
+                    if (const auto* generic = value.opt_Generic()) {
+                        found |= generic->isSolverExistential();
+                    }
+                    HIRVisitor::visitConstgeneric(value);
+                }
+
+                [[nodiscard]] const HIRType* visitType(const HIRType* type) override {
+                    if (const auto* infer = type->opt_Infer()) {
+                        found |= infer->index != ~0u && infer->index >= snapshot.ivarCount;
+                    }
+                    if (const auto* generic = type->opt_Generic()) {
+                        found |= generic->isSolverExistential();
+                    }
+                    return visitTypeDefaultViaHooks(type);
+                }
+            };
+            auto value = raw.clone();
+            UnstableValueDetector before(crate.types, snapshot);
+            before.visitConstgeneric(value);
+            if (before.found) {
+                return {};
+            }
+            resolve_.ivars.expandIvars(value);
+            UnstableValueDetector after(crate.types, snapshot);
+            after.visitConstgeneric(value);
+            if (after.found) {
+                return {};
+            }
+            return value;
+        };
+        const auto appendValueSlot = [&](const HIRConstGeneric& input, const HIRConstGeneric& rawOutput) {
+            const auto* infer = input.opt_Infer();
+            if (!infer || infer->index == ~0u || infer->index >= snapshot.valueCount) {
+                return;
+            }
+            auto output = stableValue(rawOutput);
+            if (!output || input == *output) {
+                return;
+            }
+            for (size_t i = 0; i < result.slots.valueInputs.size(); i++) {
+                if (result.slots.valueInputs[i] == input && result.slots.values[i] == *output) {
+                    return;
+                }
+            }
+            result.slots.valueInputs.push_back(input.clone());
+            result.slots.values.push_back(std::move(*output));
+        };
+        ASSERT_BUG(callSpan, response.slots.valueInputs.size() == response.slots.values.size(), StringView("Malformed method solver value slots"));
+        for (size_t i = 0; i < response.slots.values.size(); i++) {
+            appendValueSlot(response.slots.valueInputs[i], response.slots.values[i]);
+        }
+        for (const auto& equality : response.valueEqualities) {
+            auto left = stableValue(equality.left);
+            auto right = stableValue(equality.right);
+            if (!left || !right || *left == *right) {
+                continue;
+            }
+            const bool duplicate = std::any_of(result.valueEqualities.begin(), result.valueEqualities.end(), [&](const SolverValueEquality& existing) {
+                return (existing.left == *left && existing.right == *right) || (existing.left == *right && existing.right == *left);
+            });
+            if (!duplicate) {
+                result.valueEqualities.push_back(SolverValueEquality{std::move(*left), std::move(*right)});
+            }
+        }
+        for (const auto& obligation : response.obligations) {
+            if (!typeHasMethodSlot(obligation.type) && !traitHasMethodSlot(obligation.trait)
+                && !typeHasSolverExistential(obligation.type) && !traitHasSolverExistential(obligation.trait)
+                && !typeHasProbeIvar(obligation.type, snapshot) && !traitHasProbeIvar(obligation.trait, snapshot)) {
+                result.obligations.push_back(SolverObligation{obligation.type, obligation.trait.clone()});
+            }
+        }
+        for (const auto& coercion : response.coercions) {
+            if (!typeHasMethodSlot(coercion.destination)) {
+                continue;
+            }
+            const auto hasCallerIvar = [&](const HIRType* type) {
+                return visitTyWith(type, [&](const HIRType* inner) {
+                    const auto* infer = inner->opt_Infer();
+                    return infer && infer->index != ~0u && infer->index < snapshot.ivarCount;
+                });
+            };
+            if (!hasCallerIvar(coercion.destination) && !hasCallerIvar(coercion.source)) {
+                continue;
+            }
+            const auto stableEndpoint = [&](const HIRType* endpoint) {
+                const auto* resolved = resolve_.ivars.expandIvars(endpoint);
+                return typeHasMethodSlot(endpoint) ? resolved : endpoint;
+            };
+            const auto* destination = stableEndpoint(coercion.destination);
+            const auto* source = stableEndpoint(coercion.source);
+            if (destination == source || resolve_.ivars.typesEqual(destination, source)
+                || typeHasMethodSlot(destination) || typeHasMethodSlot(source)
+                || typeHasSolverExistential(destination) || typeHasSolverExistential(source)
+                || typeHasProbeIvar(destination, snapshot) || typeHasProbeIvar(source, snapshot)) {
+                continue;
+            }
+            const bool duplicate = std::any_of(result.coercions.begin(), result.coercions.end(), [&](const SolverCoercionObligation& existing) {
+                return existing.destination == destination && existing.source == source && existing.op == coercion.op && existing.sourceInput == coercion.sourceInput;
+            });
+            if (!duplicate) {
+                result.coercions.push_back(SolverCoercionObligation{destination, source, coercion.op, coercion.sourceInput});
+            }
+        }
+
+        const auto appendResolvedInputs = [&](const HIRType* input) {
+            visitTyWith(input, [&](const HIRType* inner) {
+                const auto* infer = inner->opt_Infer();
+                if (!infer || infer->index == ~0u || infer->index >= snapshot.ivarCount) {
+                    return false;
+                }
+                appendTypeSlot(inner, resolve_.ivars.expandIvars(inner));
+                return false;
+            });
+        };
+        appendResolvedInputs(receiver);
+        for (const auto* parameter : explicitMethodParams.types) {
+            appendResolvedInputs(parameter);
+        }
+        if (expectedResult) {
+            appendResolvedInputs(expectedResult);
+        }
+        for (const auto& input : explicitMethodParams.values) {
+            appendValueSlot(input, resolve_.ivars.getValue(input));
+        }
+
+        return result;
+    };
+    const auto applyResponse = [&](const SolverResponse& response) {
+        auto result = response.certainty;
+        Unifier relation(
+            callSpan,
+            resolve_.ivars,
+            &resolve_,
+            {
+                .bindRigidValues = true,
+                .relateProjectionInputs = true,
+            }
+        );
+        const auto relateType = [&](const HIRType* left, const HIRType* right) {
+            if (result == Certainty::NoSolution) {
+                return;
+            }
+            auto normalizedLeft = resolve_.expandAssociatedTypes(callSpan, left);
+            auto normalizedRight = resolve_.expandAssociatedTypes(callSpan, right);
+            if (relation.unify(normalizedLeft, normalizedRight) == Unifier::Outcome::Mismatch) {
+                result = Certainty::NoSolution;
+            }
+        };
+        ASSERT_BUG(callSpan, response.slots.typeInputs.size() == response.slots.types.size(), StringView("Malformed method solver type slots"));
+        for (size_t i = 0; i < response.slots.types.size(); i++) {
+            relateType(response.slots.typeInputs[i], response.slots.types[i]);
+        }
+        for (const auto& equality : response.equalities) {
+            relateType(equality.left, equality.right);
+        }
+        const auto relateValue = [&](const HIRConstGeneric& left, const HIRConstGeneric& right) {
+            if (result == Certainty::NoSolution) {
+                return;
+            }
+            if (relation.unifyValues(left, right) == Unifier::Outcome::Mismatch) {
+                result = Certainty::NoSolution;
+            }
+        };
+        ASSERT_BUG(callSpan, response.slots.valueInputs.size() == response.slots.values.size(), StringView("Malformed method solver value slots"));
+        for (size_t i = 0; i < response.slots.values.size(); i++) {
+            relateValue(response.slots.valueInputs[i], response.slots.values[i]);
+        }
+        for (const auto& equality : response.valueEqualities) {
+            relateValue(equality.left, equality.right);
+        }
+        return result;
+    };
+    const auto appendResponse = [](SolverResponse& destination, SolverResponse source) {
+        for (size_t i = 0; i < source.slots.types.size(); i++) {
+            destination.slots.typeInputs.push_back(std::move(source.slots.typeInputs[i]));
+            destination.slots.types.push_back(std::move(source.slots.types[i]));
+        }
+        for (size_t i = 0; i < source.slots.values.size(); i++) {
+            destination.slots.valueInputs.push_back(std::move(source.slots.valueInputs[i]));
+            destination.slots.values.push_back(std::move(source.slots.values[i]));
+        }
+        for (auto& obligation : source.obligations) {
+            destination.obligations.push_back(std::move(obligation));
+        }
+        for (auto& equality : source.equalities) {
+            destination.equalities.push_back(std::move(equality));
+        }
+        for (auto& equality : source.valueEqualities) {
+            destination.valueEqualities.push_back(std::move(equality));
+        }
+        for (auto& coercion : source.coercions) {
+            destination.coercions.push_back(std::move(coercion));
+        }
+    };
+    const auto evaluateMethodArgument = [&](const HIRType* expected, const HIRType* actual, unsigned sourceInput, SolverResponse& effects) {
+        const auto equalitySnapshot = resolve_.ivars.snapshot();
+        Unifier equality(callSpan, resolve_.ivars, &resolve_, {.relateProjectionInputs = true});
+        const auto equalityOutcome = equality.unify(expected, actual);
+        const auto appendCoercion = [&]() {
+            if (sourceInput != ~0u) {
+                effects.coercions.push_back(SolverCoercionObligation{expected, actual, SolverCoercionOp::Coercion, sourceInput});
+            }
+        };
+        if (equalityOutcome == Unifier::Outcome::Proven && !expected->is_ErasedType()) {
+            resolve_.ivars.commit(equalitySnapshot);
+            appendCoercion();
+            return Certainty::Proven;
+        }
+        if (equalityOutcome == Unifier::Outcome::Mismatch) {
+            resolve_.ivars.rollbackTo(equalitySnapshot);
+        } else {
+            resolve_.ivars.commit(equalitySnapshot);
+        }
+
+        auto coercion = resolve_.evaluateCoercionGoal(callSpan, expected, actual, SolverCoercionOp::Coercion, false);
+        if (coercion.effects.certainty == Certainty::NoSolution) {
+            return Certainty::NoSolution;
+        }
+        const auto result = applyResponse(coercion.effects);
+        if (result != Certainty::NoSolution) {
+            appendCoercion();
+            appendResponse(effects, std::move(coercion.effects));
+        }
+        return result;
+    };
+    const auto stableType = [&](const HIRType* original, const HMTypeInferrence::Snapshot& snapshot) {
+        const auto* resolved = resolve_.ivars.expandIvars(original);
+        return typeHasProbeIvar(resolved, snapshot) ? original : resolved;
+    };
+    const auto stableParams = [&](const HIRPathParams& original, const HMTypeInferrence::Snapshot& snapshot) {
+        auto result = original.clone();
+        for (size_t i = 0; i < result.types.size(); i++) {
+            result.types[i] = stableType(result.types[i], snapshot);
+        }
+        for (size_t i = 0; i < result.values.size(); i++) {
+            auto resolved = resolve_.ivars.getValue(result.values[i]).clone();
+            resolve_.ivars.expandIvars(resolved);
+            if (!resolved.is_Infer() && !resolved.is_Unevaluated() && !valueHasProbeIvar(resolved, snapshot)) {
+                result.values[i] = std::move(resolved);
+            }
+        }
+        return result;
+    };
+    const auto paramsForMethod = [&](const HIRGenericParams& definition) {
+        auto params = resolve_.makeFreshImplParams(definition);
+        for (size_t i = 0; i < std::min(params.types.size(), explicitMethodParams.types.size()); i++) {
+            params.types[i] = explicitMethodParams.types[i];
+        }
+        for (size_t i = 0; i < std::min(params.values.size(), explicitMethodParams.values.size()); i++) {
+            params.values[i] = explicitMethodParams.values[i].clone();
+        }
+        return params;
+    };
+    const auto evaluateMethodBounds = [&](const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, SolverResponse* effects = nullptr) {
+        auto result = Certainty::Ambiguous;
+        for (size_t pass = 0; pass <= definition.bounds.size(); pass++) {
+            const auto before = resolve_.ivars.snapshot();
+            resolve_.ivars.commit(before);
+            result = resolve_.evaluateGenericBounds(callSpan, definition, parameters, monomorph, 0, false, effects);
+            if (result != Certainty::Ambiguous) {
+                break;
+            }
+            const auto after = resolve_.ivars.snapshot();
+            resolve_.ivars.commit(after);
+            if (after.generation == before.generation) {
+                break;
+            }
+        }
+        return result;
+    };
+    const auto constrainMethodBoundsBeforeArguments = [&](const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, SolverResponse& effects) {
+        const auto snapshot = resolve_.ivars.snapshot();
+        SolverResponse preliminaryEffects;
+        const auto preliminary = evaluateMethodBounds(definition, parameters, monomorph, &preliminaryEffects);
+        if (preliminary == Certainty::NoSolution) {
+            resolve_.ivars.rollbackTo(snapshot);
+            return;
+        }
+        resolve_.ivars.commit(snapshot);
+        appendResponse(effects, std::move(preliminaryEffects));
+    };
+
+    auto assembleTraitCandidate = [&](const HIRFunction& function, HIRGenericPath proofTrait, HIRGenericPath outputTrait, const HIRType* sourceSelfType) {
+        const auto self = resolve_.checkMethodReceiver(callSpan, function, receiver, access);
+        if (!self) {
+            return Certainty::NoSolution;
+        }
+        const auto* selfType = *self;
+        if (const auto* infer = resolve_.ivars.getType(selfType)->opt_Infer(); infer && !infer->isLit()) {
+            return Certainty::Ambiguous;
+        }
+
+        const auto snapshot = resolve_.ivars.snapshot();
+        STD_DEFER {
+            resolve_.ivars.rollbackTo(snapshot);
+        };
+
+        auto proofParams = proofTrait.params.clone();
+        auto outputParams = outputTrait.params.clone();
+        auto methodParams = paramsForMethod(function.params);
+        auto methodMonomorph = MonomorphStatePtr(crate.types, selfType, &proofParams, &methodParams);
+        methodMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
+        auto applicability = Certainty::Proven;
+        SolverResponse signatureEffects;
+
+        if (sourceSelfType) {
+            Unifier sourceHeadRelation(
+                callSpan,
+                resolve_.ivars,
+                &resolve_,
                 {
                     .relateProjectionInputs = true,
                     .rigidGenericsAreDistinct = true,
                 }
             );
-            const auto outcome = relation.unify(*selfTy, eType);
-            const bool boundInference = this->ivars.mutationGeneration != snapshot.generation;
-            this->ivars.rollbackTo(snapshot);
-            if (outcome == Unifier::Outcome::Mismatch) {
-                continue;
+            switch (sourceHeadRelation.unify(selfType, sourceSelfType)) {
+                case Unifier::Outcome::Proven:
+                    break;
+                case Unifier::Outcome::Ambiguous:
+                    applicability = Certainty::Ambiguous;
+                    break;
+                case Unifier::Outcome::Mismatch:
+                    return Certainty::NoSolution;
             }
-            if (outUndecided && (outcome == Unifier::Outcome::Ambiguous || boundInference)) {
-                *outUndecided = true;
+        }
+
+        if (function.fixedArgCount() == argumentTypes.size() + 1) {
+            for (size_t i = 0; i < argumentTypes.size(); i++) {
+                const auto* expectedArgument = methodMonomorph.monomorphType(callSpan, function.args[i + 1].second, true);
+                const auto argumentApplicability = evaluateMethodArgument(expectedArgument, argumentTypes[i], i, signatureEffects);
+                if (argumentApplicability == Certainty::NoSolution) {
+                    return Certainty::NoSolution;
+                }
+                merge(applicability, argumentApplicability);
+            }
+        }
+
+        constexpr bool onlyBoundsConstrainingTraitParams = true;
+        bool methodBoundsDeferred = false;
+        const auto boundsSnapshot = resolve_.ivars.snapshot();
+        auto methodBounds = resolve_.evaluateGenericBounds(callSpan, function.params, methodParams, methodMonomorph, 0, onlyBoundsConstrainingTraitParams);
+        if (methodBounds == Certainty::NoSolution) {
+            resolve_.ivars.rollbackTo(boundsSnapshot);
+            if (!resolve_.paramsContainIvars(proofParams)) {
+                return Certainty::NoSolution;
+            }
+            methodBoundsDeferred = true;
+        } else {
+            resolve_.ivars.commit(boundsSnapshot);
+        }
+
+        const auto* methodReturn = methodMonomorph.monomorphType(callSpan, function.returnType, true);
+        const auto* methodReturnPath = methodReturn->opt_Path();
+        const auto* methodReturnProjection = methodReturnPath ? methodReturnPath->path.data.opt_UfcsKnown() : nullptr;
+        const bool expectedGuidesProof = expectedResult && methodReturnProjection && methodReturnProjection->trait.path == proofTrait.path;
+        if (expectedResult && !methodReturn->is_ErasedType()) {
+            const auto resultApplicability = evaluateMethodArgument(expectedResult, methodReturn, ~0u, signatureEffects);
+            if (resultApplicability == Certainty::NoSolution) {
+                return Certainty::NoSolution;
+            }
+            if (!expectedGuidesProof) {
+                merge(applicability, resultApplicability);
+            }
+        }
+
+        const bool receiverIsOpen = visitTyWith(resolve_.ivars.getType(selfType), [&](const HIRType* inner) {
+            const auto* resolved = resolve_.ivars.getType(inner);
+            const auto* infer = resolved->opt_Infer();
+            return infer && infer->tyClass == HIRInferClass::None;
+        });
+        const char* expectedAssocName = nullptr;
+        const HIRPathParams* expectedAssocParams = nullptr;
+        if (expectedGuidesProof) {
+            expectedAssocName = methodReturnProjection->item.c_str();
+            expectedAssocParams = &methodReturnProjection->params;
+        }
+        SolverMayApply proof;
+        bool hasProof = false;
+        auto proofCallback = makeCallable<SolverMayApplyCb>([&](SolverMayApply candidate) {
+            proof = std::move(candidate);
+            hasProof = true;
+            return true;
+        });
+        const auto evaluateProof = [&](const char* valueName) {
+            hasProof = false;
+            evaluateTyped(
+                callSpan,
+                proofTrait.path,
+                proofParams,
+                selfType,
+                proofCallback,
+                TraitGoalQuery{
+                    .assocName = expectedAssocName ? expectedAssocName : receiverIsOpen ? "" : nullptr,
+                    .assocType = expectedAssocName ? expectedResult : nullptr,
+                    .assocParams = expectedAssocParams,
+                    .valueName = valueName,
+                    .allowInferInputs = receiverIsOpen,
+                    .ambiguity = SolverAmbiguityPolicy::Report,
+                },
+                true
+            );
+        };
+        evaluateProof(nullptr);
+        if (hasProof && proof.effects.certainty == Certainty::Ambiguous) {
+            auto plainProof = std::move(proof);
+            evaluateProof(methodName.c_str());
+            if (!hasProof || proof.effects.certainty != Certainty::Proven) {
+                proof = std::move(plainProof);
+                hasProof = true;
+            }
+        }
+        if (!hasProof || proof.effects.certainty == Certainty::NoSolution) {
+            return Certainty::NoSolution;
+        }
+        const bool obligationOnlyAmbiguity = proof.effects.certainty == Certainty::Ambiguous && proof.effects.ambiguityOnlyFromObligations;
+        bool proofHasDeferredConstraints = !proof.effects.obligations.empty() || !proof.effects.equalities.empty()
+            || !proof.effects.valueEqualities.empty() || !proof.effects.coercions.empty();
+        for (size_t i = 0; i < proof.effects.slots.types.size(); i++) {
+            proofHasDeferredConstraints |= proof.effects.slots.typeInputs[i] != proof.effects.slots.types[i];
+        }
+        for (size_t i = 0; i < proof.effects.slots.values.size(); i++) {
+            proofHasDeferredConstraints |= proof.effects.slots.valueInputs[i] != proof.effects.slots.values[i];
+        }
+        const bool selectedWithDeferredConstraints = proof.effects.certainty == Certainty::Ambiguous
+            && proof.candidate && proofHasDeferredConstraints;
+        const auto proofApplicability = applyResponse(proof.effects);
+        if (proofApplicability == Certainty::NoSolution) {
+            return Certainty::NoSolution;
+        }
+        if (!obligationOnlyAmbiguity && !selectedWithDeferredConstraints) {
+            merge(applicability, proofApplicability);
+        }
+
+        if (expectedResult && proof.candidate && proof.effects.certainty == Certainty::Proven) {
+            const auto* returnPath = methodReturn->opt_Path();
+            const auto* projection = returnPath ? returnPath->path.data.opt_UfcsKnown() : nullptr;
+            if (projection && projection->trait.path == proofTrait.path) {
+                const auto* selectedReturn = proof.candidate->getType(crate.types, projection->item.c_str(), projection->params);
+                if (selectedReturn) {
+                    const auto resultApplicability = evaluateMethodArgument(expectedResult, selectedReturn, ~0u, signatureEffects);
+                    if (resultApplicability == Certainty::NoSolution) {
+                        return Certainty::NoSolution;
+                    }
+                    merge(applicability, resultApplicability);
+                }
+            }
+        }
+
+        if (methodBoundsDeferred) {
+            methodBounds = evaluateMethodBounds(function.params, methodParams, methodMonomorph, &signatureEffects);
+            if (methodBounds == Certainty::NoSolution) {
+                return Certainty::NoSolution;
+            }
+        }
+
+        auto completeBoundsMonomorph = MonomorphStatePtr(crate.types, selfType, &proofParams, &methodParams);
+        completeBoundsMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
+        const auto completeBounds = evaluateMethodBounds(function.params, methodParams, completeBoundsMonomorph, &signatureEffects);
+        if (completeBounds == Certainty::NoSolution) {
+            return Certainty::NoSolution;
+        }
+        merge(applicability, completeBounds);
+        appendResponse(proof.effects, std::move(signatureEffects));
+        auto selectedMethodParams = resolve_.materializeImplParams(callSpan, function.params, methodParams, snapshot.ivarCount, snapshot.valueCount);
+        selectedMethodParams = stableParams(selectedMethodParams, snapshot);
+        const auto* resultInfer = expectedResult ? expectedResult->opt_Infer() : nullptr;
+        if (resultInfer && resultInfer->index != ~0u && resultInfer->index < snapshot.ivarCount && !function.returnType->is_ErasedType()) {
+            auto stableProofParams = stableParams(proofParams, snapshot);
+            auto stableMonomorph = MonomorphStatePtr(crate.types, stableType(selfType, snapshot), &stableProofParams, &selectedMethodParams);
+            proof.effects.slots.typeInputs.push_back(expectedResult);
+            proof.effects.slots.types.push_back(stableMonomorph.monomorphType(callSpan, function.returnType, true));
+        }
+        auto effects = stableEffects(std::move(proof.effects), snapshot);
+        effects.certainty = applicability;
+        if (applicability != Certainty::Proven) {
+            ambiguousResponses.push_back(std::move(effects));
+            return applicability;
+        }
+
+        outputTrait.params = stableParams(outputParams, snapshot);
+        possibilities.push_back(
+            TraitResolution::MethodCandidate{
+                borrowType,
+                HIRPath(stableType(selfType, snapshot), std::move(outputTrait), methodName, std::move(selectedMethodParams)),
+                nullptr,
+                std::move(effects),
+            }
+        );
+        return Certainty::Proven;
+    };
+
+    const auto* inherentReceiver = receiver;
+    while (const auto* borrow = inherentReceiver->opt_Borrow()) {
+        inherentReceiver = resolve_.ivars.getType(borrow->inner);
+    }
+    const auto* erased = inherentReceiver->opt_ErasedType();
+    const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+    const bool opaqueCanReveal = !erased || (alias && resolve_.isOpaqueAliasDefiningScope(*alias->inner)) || erased->inner.is_Known();
+    const bool inherentSourceAmbiguous = inherentReceiver->is_Infer();
+    if (!inherentSourceAmbiguous && opaqueCanReveal) {
+        auto inherentCertainty = Certainty::NoSolution;
+        resolve_.wb.inherentMethods->find(callSpan, methodName, receiver, resolve_.ivars.callbackResolveInfer(), [&](const HIRType* selfType, const HIRTypeImpl& impl) {
+            const auto& method = impl.methods.at(methodName);
+            if (!method.publicity.isVisible(resolve_.visPath)) {
+                return;
             }
 
-            // TODO: Re-monomorphise final trait using `ty`?
-            possibilities.push_back({borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}})), nullptr});
-            rv = true;
-            foundBound = true;
-            if (outcome == Unifier::Outcome::Proven && !boundInference) {
-                recordBoundGlobalness(eType, eTraitGp, eTraitInfo);
+            const auto snapshot = resolve_.ivars.snapshot();
+            STD_DEFER {
+                resolve_.ivars.rollbackTo(snapshot);
+            };
+            HIRPathParams implParams;
+            bool headNormalizationAmbiguity = false;
+            switch (resolve_.relateInherentImplHeader(callSpan, impl, selfType, implParams)) {
+                case Unifier::Outcome::Proven:
+                    break;
+                case Unifier::Outcome::Ambiguous: {
+                    auto monomorph = MonomorphStatePtr(crate.types, selfType, &implParams, nullptr);
+                    const auto* implType = monomorph.monomorphType(callSpan, impl.type, true);
+                    if (resolve_.hasAssociatedType(selfType) || resolve_.hasAssociatedType(implType)) {
+                        headNormalizationAmbiguity = true;
+                    }
+                    break;
+                }
+                case Unifier::Outcome::Mismatch:
+                    return;
             }
-        } else {
+            auto implBounds = resolve_.evaluateInherentImplBounds(callSpan, impl, implParams);
+            if (implBounds == Certainty::NoSolution) {
+                return;
+            }
+
+            auto methodParams = paramsForMethod(method.data.params);
+            auto methodMonomorph = MonomorphStatePtr(crate.types, selfType, &implParams, &methodParams);
+            methodMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
+            auto signatureSnapshot = resolve_.ivars.snapshot();
+            const auto evaluateSignature = [&](bool boundsFirst, SolverResponse& signatureEffects) {
+                auto applicability = headNormalizationAmbiguity ? Certainty::Ambiguous : Certainty::Proven;
+                if (boundsFirst) {
+                    constrainMethodBoundsBeforeArguments(method.data.params, methodParams, methodMonomorph, signatureEffects);
+                }
+                if (method.data.fixedArgCount() == argumentTypes.size() + 1) {
+                    for (size_t i = 0; i < argumentTypes.size(); i++) {
+                        const auto* expectedArgument = methodMonomorph.monomorphType(callSpan, method.data.args[i + 1].second, true);
+                        const auto argumentApplicability = evaluateMethodArgument(expectedArgument, argumentTypes[i], i, signatureEffects);
+                        if (argumentApplicability == Certainty::NoSolution) {
+                            return Certainty::NoSolution;
+                        }
+                        /* Open argument relations are exported as coercion
+                         * obligations. They do not make an otherwise unique
+                         * inherent method source ambiguous. */
+                    }
+                }
+
+                if (expectedResult && !method.data.returnType->is_ErasedType()) {
+                    const auto* methodReturn = methodMonomorph.monomorphType(callSpan, method.data.returnType, true);
+                    const auto resultSnapshot = resolve_.ivars.snapshot();
+                    Unifier relation(callSpan, resolve_.ivars, &resolve_, {.relateProjectionInputs = true});
+                    const auto outcome = relation.unify(methodReturn, expectedResult);
+                    if (outcome == Unifier::Outcome::Mismatch) {
+                        resolve_.ivars.rollbackTo(resultSnapshot);
+                        const auto* destinationPointer = resolve_.ivars.getType(expectedResult)->opt_Pointer();
+                        const auto* sourcePointer = resolve_.ivars.getType(methodReturn)->opt_Pointer();
+                        if (!destinationPointer || !sourcePointer || destinationPointer->type > sourcePointer->type) {
+                            return Certainty::NoSolution;
+                        }
+                        Unifier pointeeRelation(callSpan, resolve_.ivars, &resolve_, {.relateProjectionInputs = true});
+                        if (pointeeRelation.unify(destinationPointer->inner, sourcePointer->inner) == Unifier::Outcome::Mismatch) {
+                            return Certainty::NoSolution;
+                        }
+                    } else {
+                        resolve_.ivars.commit(resultSnapshot);
+                    }
+                }
+
+                /* Receiver/result relations can determine impl parameters that
+                 * were still open during the first bound probe. Re-evaluate the
+                 * obligations transactionally before assigning certainty. */
+                const auto completeImplBounds = resolve_.evaluateInherentImplBounds(callSpan, impl, implParams);
+                if (completeImplBounds == Certainty::NoSolution) {
+                    return Certainty::NoSolution;
+                }
+                merge(applicability, completeImplBounds);
+
+                const auto bounds = evaluateMethodBounds(method.data.params, methodParams, methodMonomorph, &signatureEffects);
+                if (bounds == Certainty::NoSolution) {
+                    return Certainty::NoSolution;
+                }
+                merge(applicability, bounds);
+                return applicability;
+            };
+
+            SolverResponse signatureEffects;
+            auto applicability = evaluateSignature(false, signatureEffects);
+            if (applicability == Certainty::NoSolution) {
+                resolve_.ivars.rollbackTo(signatureSnapshot);
+                signatureSnapshot = resolve_.ivars.snapshot();
+                signatureEffects = SolverResponse{};
+                applicability = evaluateSignature(true, signatureEffects);
+            }
+            if (applicability == Certainty::NoSolution) {
+                resolve_.ivars.rollbackTo(signatureSnapshot);
+                return;
+            }
+            resolve_.ivars.commit(signatureSnapshot);
+            const auto makeInherentEffects = [&]() {
+                auto input = std::move(signatureEffects);
+                const auto* resultInfer = expectedResult ? expectedResult->opt_Infer() : nullptr;
+                if (resultInfer && resultInfer->index != ~0u && resultInfer->index < snapshot.ivarCount && !method.data.returnType->is_ErasedType()) {
+                    HIRPathParams stableImplParams;
+                    auto stableHead = resolve_.probeInherentImplHeader(callSpan, impl, receiver, stableImplParams);
+                    const auto* stableSelf = receiver;
+                    if (stableHead == Certainty::NoSolution) {
+                        stableImplParams = HIRPathParams();
+                        stableSelf = stableType(selfType, snapshot);
+                        stableHead = resolve_.probeInherentImplHeader(callSpan, impl, stableSelf, stableImplParams);
+                    }
+                    if (stableHead == Certainty::NoSolution) {
+                        return stableEffects(std::move(input), snapshot);
+                    }
+                    auto stableMethodParams = resolve_.materializeImplParams(callSpan, method.data.params, methodParams, snapshot.ivarCount, snapshot.valueCount);
+                    stableMethodParams = stableParams(stableMethodParams, snapshot);
+                    auto stableMonomorph = MonomorphStatePtr(crate.types, stableSelf, &stableImplParams, &stableMethodParams);
+                    const auto* stableReturn = stableMonomorph.monomorphType(callSpan, method.data.returnType, true);
+                    input.slots.typeInputs.push_back(expectedResult);
+                    input.slots.types.push_back(stableReturn);
+                }
+                return stableEffects(std::move(input), snapshot);
+            };
+            if (applicability != Certainty::Proven) {
+                inherentCertainty = Certainty::Ambiguous;
+                auto effects = makeInherentEffects();
+                effects.certainty = Certainty::Ambiguous;
+                ambiguousResponses.push_back(std::move(effects));
+                return;
+            }
+
+            auto candidateEffects = makeInherentEffects();
+            auto selectedMethodParams = resolve_.materializeImplParams(callSpan, method.data.params, methodParams, snapshot.ivarCount, snapshot.valueCount);
+            selectedMethodParams = stableParams(selectedMethodParams, snapshot);
+            possibilities.push_back(
+                TraitResolution::MethodCandidate{
+                    borrowType,
+                    HIRPath(stableType(selfType, snapshot), methodName, std::move(selectedMethodParams)),
+                    &impl,
+                    std::move(candidateEffects),
+                }
+            );
+            if (inherentCertainty == Certainty::NoSolution) {
+                inherentCertainty = Certainty::Proven;
+            }
+        });
+        if (inherentCertainty == Certainty::Ambiguous) {
+            return emitAmbiguous();
+        }
+        if (inherentCertainty == Certainty::Proven) {
+            return Certainty::Proven;
+        }
+    }
+
+    auto typeIsNonGlobal = [&](const HIRType* type) {
+        return typeHasUnknown(resolve_.expandAssociatedTypes(callSpan, type));
+    };
+    auto paramsAreNonGlobal = [&](const HIRPathParams& params) {
+        for (const auto* type : params.types) {
+            if (typeIsNonGlobal(type)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    auto boundIsNonGlobal = [&](const HIRType* type, const HIRGenericPath& trait, const TraitResolveCommon::CachedBound& info) {
+        if (typeIsNonGlobal(type) || paramsAreNonGlobal(trait.params)) {
+            return true;
+        }
+        for (const auto& associated : info.assoc) {
+            if (paramsAreNonGlobal(associated.second.sourceTrait.params)
+                || paramsAreNonGlobal(associated.second.atyParams)
+                || typeIsNonGlobal(associated.second.type)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    bool foundBound = false;
+    bool foundNonGlobalBound = false;
+    ThinVector<HIRGenericPath> ambiguousBoundTraits;
+    ThinVector<SolverResponse> ambiguousBoundEffects;
+    for (const auto& bound : resolve_.traitBounds) {
+        const auto& boundType = bound.first.first;
+        const auto& boundTrait = bound.first.second;
+        const auto& boundInfo = bound.second;
+        ASSERT_BUG(callSpan, boundInfo.traitPtr, StringView("Cached method bound has no trait definition"));
+
+        HIRGenericPath methodTrait;
+        const auto* function = resolve_.traitContainsMethod(callSpan, boundTrait, *boundInfo.traitPtr, boundType, methodName, methodTrait);
+        if (!function) {
+            continue;
+        }
+        auto methodTraitKey = methodTrait.clone();
+        const auto ambiguousBefore = ambiguousResponses.size();
+        const auto result = assembleTraitCandidate(*function, methodTrait.clone(), std::move(methodTrait), boundType);
+        if (result == Certainty::Ambiguous) {
+            ambiguousBoundTraits.push_back(std::move(methodTraitKey));
+            if (ambiguousResponses.size() == ambiguousBefore) {
+                SolverResponse effects;
+                effects.certainty = Certainty::Ambiguous;
+                ambiguousBoundEffects.push_back(std::move(effects));
+            } else {
+                ASSERT_BUG(callSpan, ambiguousResponses.size() == ambiguousBefore + 1, StringView("Ambiguous ParamEnv method candidate emitted multiple responses"));
+                ambiguousBoundEffects.push_back(std::move(ambiguousResponses.back()));
+                ambiguousResponses.pop_back();
+            }
+        }
+        if (result == Certainty::Proven) {
+            foundBound = true;
+            foundNonGlobalBound |= boundIsNonGlobal(boundType, boundTrait, boundInfo);
         }
     }
     if (foundBound && foundNonGlobalBound) {
-        return rv;
+        return inherentSourceAmbiguous ? emitAmbiguous() : Certainty::Proven;
     }
-
-    if (currentTraitPath_) {
-        HIRGenericPath finalTraitPath;
-        const HIRFunction* fcnPtr;
-        if ((fcnPtr = this->traitContainsMethod(sp, *currentTraitPath_, *currentTraitPtr, ty, methodName, finalTraitPath))) {
-            DEBUG(StringView("- Found trait ") << finalTraitPath << StringView(" (current)"));
-            if (auto selfTy = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
-                if (((**selfTy).is_Infer() && ((**selfTy).as_Infer().isLit() == false))) {
-                    return false;
-                }
-
-                const auto& trait = crate.getTraitByPath(sp, finalTraitPath.path);
-                auto traitParams = getIvaredParams(trait.params);
-
-                {
-                    const bool crateImplFound = selectTraitGoal(sp, finalTraitPath.path, traitParams, *selfTy, [](SolverSelection) {
-                        return true;
-                    }, {.ambiguity = SolverAmbiguityPolicy::Report});
-                    if (crateImplFound) {
-                        possibilities.push_back({borrowType, HIRPath(*selfTy, HIRGenericPath(finalTraitPath.path, mv$(traitParams)), methodName, {}), nullptr});
-                        return true;
-                    } else {
-                    }
-                }
+    const auto restoreUncoveredBoundAmbiguities = [&]() {
+        bool uncovered = false;
+        for (size_t i = 0; i < ambiguousBoundTraits.size(); i++) {
+            const bool covered = std::any_of(possibilities.begin() + firstPossibility, possibilities.end(), [&](const TraitResolution::MethodCandidate& candidate) {
+                const auto* path = candidate.path.data.opt_UfcsKnown();
+                return path && path->trait == ambiguousBoundTraits[i];
+            });
+            if (!covered) {
+                ambiguousResponses.push_back(std::move(ambiguousBoundEffects[i]));
+                uncovered = true;
             }
         }
-    }
-
-    auto getInnerType = [this, sp](const HIRType* ty, auto cb) -> const HIRType* {
-        if (cb(ty)) {
-            return ty;
-        } else if (ty->is_Borrow()) {
-            const auto* ity = this->ivars.getType(ty->as_Borrow().inner);
-            if (cb(ity)) {
-                return ity;
-            } else {
-                return nullptr;
-            }
-        } else {
-            auto tp = this->typeIsOwnedBox(sp, ty);
-            if (tp && cb(tp)) {
-                return tp;
-            } else {
-                return nullptr;
-            }
-        }
+        ambiguousBoundTraits.clear();
+        ambiguousBoundEffects.clear();
+        return uncovered;
     };
 
-    DEBUG(StringView("> Special cases"));
-    if (const auto* ityp = getInnerType(ty, [](const auto& t) {
-        return t->is_TraitObject();
-    })) {
-        const auto& e = ityp->as_TraitObject();
-        const auto& trait = this->crate.getTraitByPath(sp, e.trait.path.path);
-
-        bool foundTraitObject = false;
-        auto addTraitObjectMethod = [&](const HIRFunction& fcn, HIRGenericPath finalTraitPath) {
-            DEBUG(StringView("- Found trait ") << finalTraitPath << StringView(" (trait object)"));
-            if (auto selfTyP = checkMethodReceiver(sp, fcn, ty, access)) {
-                possibilities.push_back({borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {}), nullptr});
-                rv = true;
-                foundTraitObject = true;
+    if (resolve_.currentTraitPath_) {
+        HIRGenericPath methodTrait;
+        if (const auto* function = resolve_.traitContainsMethod(callSpan, *resolve_.currentTraitPath_, *resolve_.currentTraitPtr, receiver, methodName, methodTrait)) {
+            const auto& definition = crate.getTraitByPath(callSpan, methodTrait.path);
+            methodTrait.params = paramsForInScopeTrait(definition.params);
+            const auto result = assembleTraitCandidate(*function, methodTrait.clone(), std::move(methodTrait), nullptr);
+            if (result == Certainty::Ambiguous) {
+                restoreUncoveredBoundAmbiguities();
+                return emitAmbiguous();
             }
-        };
+            if (result == Certainty::Proven) {
+                if (restoreUncoveredBoundAmbiguities()) {
+                    return emitAmbiguous();
+                }
+                return inherentSourceAmbiguous ? emitAmbiguous() : Certainty::Proven;
+            }
+        }
+    }
 
-        const HIRFunction* fcnPtr = nullptr;
-        if (traitContainsMethodInner(trait, methodName, fcnPtr)) {
-            BUG_ASSERT(fcnPtr);
-            addTraitObjectMethod(*fcnPtr, e.trait.path.clone());
+    const auto getInnerType = [&](const HIRType* type, auto predicate) -> const HIRType* {
+        if (predicate(type)) {
+            return type;
+        }
+        if (const auto* borrow = type->opt_Borrow()) {
+            const auto* inner = resolve_.ivars.getType(borrow->inner);
+            return predicate(inner) ? inner : nullptr;
+        }
+        const auto* inner = resolve_.typeIsOwnedBox(callSpan, type);
+        return inner && predicate(inner) ? inner : nullptr;
+    };
+
+    if (const auto* objectType = getInnerType(receiver, [](const HIRType* type) { return type->is_TraitObject(); })) {
+        const auto& object = objectType->as_TraitObject();
+        const auto& definition = crate.getTraitByPath(callSpan, object.trait.path.path);
+        bool foundObjectMethod = false;
+
+        const auto assembleObjectMethod = [&](const HIRFunction& function, HIRGenericPath methodTrait) {
+            const auto result = assembleTraitCandidate(function, methodTrait.clone(), std::move(methodTrait), nullptr);
+            foundObjectMethod |= result == Certainty::Proven;
+            return result;
+        };
+        const HIRFunction* function = nullptr;
+        bool objectAmbiguous = false;
+        if (traitContainsMethodInner(definition, methodName, function)) {
+            const auto result = assembleObjectMethod(*function, object.trait.path.clone());
+            if (result == Certainty::Ambiguous) {
+                objectAmbiguous = true;
+            }
         } else {
-            const auto selfTy = crate.types.self();
-            auto monomorphCb = MonomorphStatePtr(crate.types, selfTy, &e.trait.path.params, nullptr);
-            for (const auto& st : trait.allParentTraits) {
-                fcnPtr = nullptr;
-                if (!traitContainsMethodInner(*st.traitPtr, methodName, fcnPtr)) {
+            auto monomorph = MonomorphStatePtr(crate.types, crate.types.self(), &object.trait.path.params, nullptr);
+            for (const auto& parent : definition.allParentTraits) {
+                function = nullptr;
+                if (!traitContainsMethodInner(*parent.traitPtr, methodName, function)) {
                     continue;
                 }
-                BUG_ASSERT(fcnPtr);
-                auto finalTraitPath = HIRGenericPath(st.path.path, monomorphCb.monomorphPathParams(sp, st.path.params, false));
-                addTraitObjectMethod(*fcnPtr, std::move(finalTraitPath));
+                auto methodTrait = HIRGenericPath(parent.path.path, monomorph.monomorphPathParams(callSpan, parent.path.params, false));
+                if (assembleObjectMethod(*function, std::move(methodTrait)) == Certainty::Ambiguous) {
+                    objectAmbiguous = true;
+                }
             }
         }
-
-        if (foundTraitObject) {
-            return rv;
+        if (objectAmbiguous) {
+            restoreUncoveredBoundAmbiguities();
+            return emitAmbiguous();
+        }
+        if (foundObjectMethod) {
+            if (restoreUncoveredBoundAmbiguities()) {
+                return emitAmbiguous();
+            }
+            return inherentSourceAmbiguous ? emitAmbiguous() : Certainty::Proven;
         }
     }
 
-    if (const auto* ityp = getInnerType(ty, [](const auto& t) {
-        return t->is_ErasedType();
-    })) {
-        const auto& e = ityp->as_ErasedType();
-        for (const auto& traitPath : e.traits) {
-            const auto& trait = this->crate.getTraitByPath(sp, traitPath.path.path);
-
-            HIRGenericPath finalTraitPath;
-            if (const auto* fcnPtr = this->traitContainsMethod(sp, traitPath.path, trait, crate.types.self(), methodName, finalTraitPath)) {
-                DEBUG(StringView("- Found trait ") << finalTraitPath << StringView(" (erased type)"));
-                if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
-                    possibilities.push_back({borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {}), nullptr});
-                    rv = true;
-                }
+    if (const auto* erasedType = getInnerType(receiver, [](const HIRType* type) { return type->is_ErasedType(); })) {
+        bool erasedAmbiguous = false;
+        for (const auto& declaredTrait : erasedType->as_ErasedType().traits) {
+            HIRGenericPath methodTrait;
+            const auto* function = resolve_.traitContainsMethod(callSpan, declaredTrait.path, *declaredTrait.traitPtr, crate.types.self(), methodName, methodTrait);
+            if (!function) {
+                continue;
+            }
+            const auto result = assembleTraitCandidate(*function, methodTrait.clone(), std::move(methodTrait), nullptr);
+            if (result == Certainty::Ambiguous) {
+                erasedAmbiguous = true;
             }
         }
-    } else if (getInnerType(ty, [](const auto& t) {
-        return t->is_Generic();
-    })) {
-    } else if (const auto* ityp = getInnerType(ty, [](const auto& t) {
-        return t->is_Path() && t->as_Path().path.data.is_UfcsKnown();
-    })) {
-        const auto& e = ityp->as_Path().path.data.as_UfcsKnown();
-
-        DEBUG(StringView("UfcsKnown - Search associated type bounds in trait - ") << e.trait);
-        auto monomorphCb = MonomorphStatePtr(crate.types, e.type, &e.trait.params, &e.params);
-
-        const auto& trait = this->crate.getTraitByPath(sp, e.trait.path);
-        const auto& assocTy = trait.types.at(e.item);
-        for (const auto& bound : assocTy.traitBounds) {
-            ASSERT_BUG(sp, bound.traitPtr, StringView("Pointer to trait ") << bound.path << StringView(" not set in ") << e.trait.path);
-            HIRGenericPath finalTraitPath;
-
-            auto tySelf = crate.types.path(HIRPath(crate.types.self(), bound.path.clone(), e.item), HIRTypePathBinding::make_Opaque({}));
-            if (const auto* fcnPtr = this->traitContainsMethod(sp, bound.path, *bound.traitPtr, tySelf, methodName, finalTraitPath)) {
-                DEBUG(StringView("- Found trait ") << finalTraitPath << StringView(" (UFCS Known, aty bounds)"));
-                if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
-                    if (*selfTyP == ityp) {
-                        auto ppHrb = HIRPathParams();
-                        monomorphCb.ppHrb = &ppHrb;
-                        finalTraitPath = monomorphCb.monomorphGenericpath(sp, finalTraitPath, false);
-
-                        possibilities.push_back({borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {}), nullptr});
-                        rv = true;
-                    }
-                }
-            }
+        if (erasedAmbiguous) {
+            restoreUncoveredBoundAmbiguities();
+            return emitAmbiguous();
         }
-
-        for (const auto& bound : trait.params.bounds) {
-            if (!bound.is_TraitBound()) {
-                continue;
+    } else if (const auto* projectionType = getInnerType(receiver, [](const HIRType* type) {
+        const auto* path = type->opt_Path();
+        return path && path->path.data.is_UfcsKnown();
+    })) {
+        const auto& projection = projectionType->as_Path().path.data.as_UfcsKnown();
+        auto monomorph = MonomorphStatePtr(crate.types, projection.type, &projection.trait.params, &projection.params);
+        bool projectionAmbiguous = false;
+        resolve_.iterateAtyBounds(callSpan, projection, [&](const HIRTraitPath& declaredTrait) {
+            HIRGenericPath methodTrait;
+            const auto* function = resolve_.traitContainsMethod(callSpan, declaredTrait.path, *declaredTrait.traitPtr, crate.types.self(), methodName, methodTrait);
+            if (!function) {
+                return false;
             }
-            const auto& be = bound.as_TraitBound();
-
-            if (!be.type->is_Path()) {
-                continue;
-            }
-            if (!be.type->as_Path().binding.is_Opaque()) {
-                continue;
-            }
-
-            const auto& beTypePe = be.type->as_Path().path.data.as_UfcsKnown();
-            if (beTypePe.type != crate.types.self()) {
-                continue;
-            }
-            if (beTypePe.trait.path != e.trait.path) {
-                continue;
-            }
-            if (beTypePe.item != e.item) {
-                continue;
-            }
-
-            HIRGenericPath finalTraitPath;
-            if (const auto* fcnPtr = this->traitContainsMethod(sp, be.trait.path, *be.trait.traitPtr, crate.types.self(), methodName, finalTraitPath)) {
-                DEBUG(StringView("- Found trait ") << finalTraitPath << StringView(" (UFCS Known, trait bounds)"));
-                if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
-                    if (*selfTyP == ityp) {
-                        if (monomorphisePathparamsNeeded(finalTraitPath.params)) {
-                            finalTraitPath.params = monomorphCb.monomorphPathParams(sp, finalTraitPath.params, false);
-                            DEBUG(StringView("- Monomorph to ") << finalTraitPath);
-                        }
-
-                        possibilities.push_back({borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {}), nullptr});
-                        rv = true;
-                    }
-                }
-            }
+            auto hrtb = HIRPathParams();
+            monomorph.ppHrb = &hrtb;
+            methodTrait = monomorph.monomorphGenericpath(callSpan, methodTrait, false);
+            monomorph.ppHrb = nullptr;
+            projectionAmbiguous |= assembleTraitCandidate(*function, methodTrait.clone(), std::move(methodTrait), nullptr) == Certainty::Ambiguous;
+            return false;
+        });
+        if (projectionAmbiguous) {
+            restoreUncoveredBoundAmbiguities();
+            return emitAmbiguous();
         }
-    } else {
     }
 
-    DEBUG(StringView("> Trait methods"));
+    bool inScopeAmbiguous = false;
     for (const auto& traitRef : ::reverse(traits)) {
-        if (traitRef.first == nullptr) {
+        if (!traitRef.first) {
             break;
         }
-
-        if (crate.edition < ASTEdition::Rust2021 && traitRef.second->skipArrayDuringMethodDispatch && ty->is_Array()) {
+        if (crate.edition < ASTEdition::Rust2021 && traitRef.second->skipArrayDuringMethodDispatch && receiver->is_Array()) {
             continue;
         }
         if (crate.edition < ASTEdition::Rust2024 && traitRef.second->skipBoxedSliceDuringMethodDispatch) {
-            const auto* boxedInner = this->typeIsOwnedBox(sp, ty);
+            const auto* boxedInner = resolve_.typeIsOwnedBox(callSpan, receiver);
             if (boxedInner && boxedInner->is_Slice()) {
                 continue;
             }
         }
 
-        HIRGenericPath finalTraitPath;
-        const HIRFunction* fcnPtr;
-        if (!(fcnPtr = this->traitContainsMethod(sp, *traitRef.first, *traitRef.second, crate.types.self(), methodName, finalTraitPath))) {
+        auto proofTrait = HIRGenericPath(*traitRef.first, paramsForInScopeTrait(traitRef.second->params));
+        HIRGenericPath declaringTrait;
+        const auto* function = resolve_.traitContainsMethod(callSpan, proofTrait, *traitRef.second, crate.types.self(), methodName, declaringTrait);
+        if (!function) {
             continue;
         }
-
-        DEBUG(StringView("- Found trait ") << finalTraitPath << StringView(" (in scope)"));
-        if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
-            const auto& selfTy = *selfTyP;
-            HIRPathParams traitParams = getIvaredParams(traitRef.second->params);
-
-            // TODO: Re-monomorphise the trait path!
-
-            bool undecided = false;
-            bool implFound = false;
-
-            const auto inputSnapshot = this->ivars.snapshot();
-            STD_DEFER {
-                this->ivars.rollbackTo(inputSnapshot);
-            };
-            auto methodParams = this->makeFreshImplParams(fcnPtr->params);
-            auto methodMonomorph = MonomorphStatePtr(crate.types, selfTy, &traitParams, &methodParams);
-            bool inputsApplicable = true;
-            if (fcnPtr->fixedArgCount() == argumentTypes.size() + 1) {
-                for (size_t i = 0; i < argumentTypes.size(); i++) {
-                    const auto expectedArgument = methodMonomorph.monomorphType(sp, fcnPtr->args[i + 1].second, true);
-                    const auto equalitySnapshot = this->ivars.snapshot();
-                    Unifier equality(sp, this->ivars, this, {.relateProjectionInputs = true});
-                    const auto equalityOutcome = equality.unify(expectedArgument, argumentTypes[i]);
-                    if (equalityOutcome != Unifier::Outcome::Mismatch) {
-                        this->ivars.commit(equalitySnapshot);
-                        continue;
-                    }
-                    this->ivars.rollbackTo(equalitySnapshot);
-
-                    ThinVector<SolverTypeEquality> equalities;
-                    const auto coercion = this->evaluateCoercionConstraint(
-                        sp,
-                        SolverCoercionConstraint{
-                            0,
-                            argumentTypes[i],
-                            SolverCoercionConstraint::Direction::InputIsDestination,
-                            SolverCoercionOp::Coercion,
-                        },
-                        expectedArgument,
-                        &equalities
-                    );
-                    if (coercion == SolverCertainty::NoSolution) {
-                        inputsApplicable = false;
-                        break;
-                    }
-                    const auto* destination = this->ivars.getType(expectedArgument);
-                    const auto* source = this->ivars.getType(argumentTypes[i]);
-                    if (equalities.empty() && (destination->is_Infer() || source->is_Infer())) {
-                        equalities.push_back(SolverTypeEquality{destination, source});
-                    }
-                    if (equalities.empty() && coercion == SolverCertainty::Ambiguous) {
-                        const HIRType* destinationInner = nullptr;
-                        const HIRType* sourceInner = nullptr;
-                        if (const auto* destinationPointer = destination->opt_Pointer()) {
-                            if (const auto* sourceBorrow = source->opt_Borrow(); sourceBorrow && destinationPointer->type <= sourceBorrow->type) {
-                                destinationInner = destinationPointer->inner;
-                                sourceInner = sourceBorrow->inner;
-                            } else if (const auto* sourcePointer = source->opt_Pointer(); sourcePointer && destinationPointer->type <= sourcePointer->type) {
-                                destinationInner = destinationPointer->inner;
-                                sourceInner = sourcePointer->inner;
-                            }
-                        } else if (const auto* destinationBorrow = destination->opt_Borrow()) {
-                            if (const auto* sourceBorrow = source->opt_Borrow(); sourceBorrow && destinationBorrow->type <= sourceBorrow->type) {
-                                destinationInner = destinationBorrow->inner;
-                                sourceInner = sourceBorrow->inner;
-                            }
-                        }
-                        if (destinationInner && sourceInner) {
-                            equalities.push_back(SolverTypeEquality{destinationInner, sourceInner});
-                        }
-                    }
-                    for (const auto& equality : equalities) {
-                        Unifier relation(
-                            sp,
-                            this->ivars,
-                            this,
-                            {
-                                .relateProjectionInputs = true,
-                            }
-                        );
-                        if (relation.unify(equality.left, equality.right) == Unifier::Outcome::Mismatch) {
-                            inputsApplicable = false;
-                            break;
-                        }
-                    }
-                    if (!inputsApplicable) {
-                        break;
-                    }
-                }
-            }
-            if (!inputsApplicable) {
-                continue;
-            }
-            constexpr bool onlyBoundsConstrainingTraitParams = true;
-            bool methodBoundsDeferred = false;
-            const auto methodBoundsSnapshot = this->ivars.snapshot();
-            const auto methodBounds = this->evaluateGenericBounds(sp, fcnPtr->params, methodParams, methodMonomorph, 0, onlyBoundsConstrainingTraitParams);
-            if (methodBounds == SolverCertainty::NoSolution) {
-                this->ivars.rollbackTo(methodBoundsSnapshot);
-                if (!this->paramsContainIvars(traitParams)) {
-                    continue;
-                }
-                methodBoundsDeferred = true;
-            } else {
-                this->ivars.commit(methodBoundsSnapshot);
-            }
-            if (methodBounds == SolverCertainty::Ambiguous) {
-                undecided = true;
-            }
-
-            const bool receiverIsOpen = visitTyWith(this->ivars.getType(selfTy), [&](const HIRType* inner) {
-                const auto* r = this->ivars.getType(inner);
-                const auto* e = r->opt_Infer();
-                return e && e->tyClass == HIRInferClass::None;
-            });
-
-            const HIRType* methodReturn;
-            const HIRPath::Data::Data_UfcsKnown* returnProjection = nullptr;
-            if (expectedResult) {
-                methodReturn = methodMonomorph.monomorphType(sp, fcnPtr->returnType, true);
-                const auto* returnPath = methodReturn->opt_Path();
-                returnProjection = returnPath ? returnPath->path.data.opt_UfcsKnown() : nullptr;
-                if (returnProjection) {
-                    HIRGenericPath sourceTrait;
-                    auto rootTrait = HIRGenericPath(*traitRef.first, traitParams.clone());
-                    if (returnProjection->type != selfTy || !traitContainsType(sp, rootTrait, *traitRef.second, returnProjection->item.c_str(), sourceTrait) || sourceTrait.path != returnProjection->trait.path) {
-                        returnProjection = nullptr;
-                    }
-                }
-                if (!returnProjection && !methodReturn->is_ErasedType()) {
-                    const auto snapshot = this->ivars.snapshot();
-                    Unifier relation(sp, this->ivars, this);
-                    const auto outcome = relation.unify(methodReturn, expectedResult);
-                    if (outcome == Unifier::Outcome::Mismatch) {
-                        this->ivars.rollbackTo(snapshot);
-                        continue;
-                    }
-                    auto constrainedParams = traitParams.clone();
-                    for (auto& type : constrainedParams.types) {
-                        type = this->ivars.getType(type);
-                    }
-                    for (auto& value : constrainedParams.values) {
-                        value = this->ivars.getValue(value).clone();
-                    }
-                    this->ivars.rollbackTo(snapshot);
-                    traitParams = std::move(constrainedParams);
-                }
-            }
-            const TraitGoalQuery methodQuery{
-                .assocName = returnProjection ? returnProjection->item.c_str() : (receiverIsOpen ? "" : nullptr),
-                .assocType = returnProjection ? expectedResult : nullptr,
-                .assocParams = returnProjection ? &returnProjection->params : nullptr,
-                .allowInferInputs = receiverIsOpen,
-            };
-            probeTraitGoalMayApply(sp, *traitRef.first, traitParams, selfTy, [&](SolverMayApply probe) {
-                auto& response = probe.effects;
-                if (!probe.candidate) {
-                    if (response.certainty == SolverCertainty::Ambiguous) {
-                        undecided = true;
-                    }
-                    if (response.certainty == SolverCertainty::Proven) {
-                        implFound = true;
-                        return true;
-                    }
-                    return false;
-                }
-
-                const auto responseSnapshot = this->ivars.snapshot();
-                Unifier responseRelation(
-                    sp,
-                    this->ivars,
-                    this,
-                    {
-                        .bindRigidValues = true,
-                        .relateProjectionInputs = true,
-                    }
-                );
-                const auto relateType = [&](const HIRType* left, const HIRType* right) {
-                    auto normalizedLeft = this->expandAssociatedTypes(sp, left);
-                    auto normalizedRight = this->expandAssociatedTypes(sp, right);
-                    return responseRelation.unify(normalizedLeft, normalizedRight) != Unifier::Outcome::Mismatch;
-                };
-                const auto relateValue = [&](const HIRConstGeneric& left, const HIRConstGeneric& right) {
-                    return responseRelation.unifyValues(left, right) != Unifier::Outcome::Mismatch;
-                };
-                bool responseApplies = true;
-                ASSERT_BUG(sp, response.slots.typeInputs.size() == response.slots.types.size(), StringView("Malformed method solver type slots"));
-                for (size_t i = 0; responseApplies && i < response.slots.types.size(); i++) {
-                    responseApplies = relateType(response.slots.typeInputs[i], response.slots.types[i]);
-                }
-                ASSERT_BUG(sp, response.slots.valueInputs.size() == response.slots.values.size(), StringView("Malformed method solver value slots"));
-                for (size_t i = 0; responseApplies && i < response.slots.values.size(); i++) {
-                    responseApplies = relateValue(response.slots.valueInputs[i], response.slots.values[i]);
-                }
-                for (const auto& equality : response.equalities) {
-                    responseApplies &= relateType(equality.left, equality.right);
-                }
-                for (const auto& equality : response.valueEqualities) {
-                    responseApplies &= relateValue(equality.left, equality.right);
-                }
-                if (!responseApplies) {
-                    this->ivars.rollbackTo(responseSnapshot);
-                    return false;
-                }
-
-                if (methodBoundsDeferred) {
-                    const auto resolvedMethodBounds = this->evaluateGenericBounds(sp, fcnPtr->params, methodParams, methodMonomorph, 0, onlyBoundsConstrainingTraitParams);
-                    if (resolvedMethodBounds == SolverCertainty::NoSolution) {
-                        this->ivars.rollbackTo(responseSnapshot);
-                        return false;
-                    }
-                    if (resolvedMethodBounds == SolverCertainty::Ambiguous) {
-                        undecided = true;
-                    }
-                }
-                this->ivars.commit(responseSnapshot);
-                implFound = true;
-                if (receiverIsOpen && response.certainty != SolverCertainty::Proven) {
-                    DEBUG(StringView("[find_method] impl only matches while the receiver is unknown"));
-                    undecided = true;
-                }
-                return true;
-            }, methodQuery);
-            if (implFound) {
-                auto constrainedSelf = selfTy;
-                constrainedSelf = this->ivars.expandIvars(constrainedSelf);
-                this->ivars.expandIvarsParams(traitParams);
-                possibilities.push_back({borrowType, HIRPath(constrainedSelf, HIRGenericPath(*traitRef.first, mv$(traitParams)), methodName, {}), nullptr});
-                rv = true;
-            }
-            if (undecided && outUndecided) {
-                *outUndecided = true;
-            }
-        } else {
-            DEBUG(StringView("> Incorrect receiver"));
+        const auto result = assembleTraitCandidate(*function, proofTrait.clone(), std::move(proofTrait), nullptr);
+        if (result == Certainty::Ambiguous) {
+            inScopeAmbiguous = true;
         }
     }
+    if (inScopeAmbiguous) {
+        restoreUncoveredBoundAmbiguities();
+        return emitAmbiguous();
+    }
 
-    return rv;
+    if (restoreUncoveredBoundAmbiguities()) {
+        return emitAmbiguous();
+    }
+
+    if (possibilities.size() > firstPossibility) {
+        return inherentSourceAmbiguous ? emitAmbiguous() : Certainty::Proven;
+    }
+    return inherentSourceAmbiguous ? emitAmbiguous() : Certainty::NoSolution;
+}
+
+SolverCertainty TraitResolution::findMethod(
+    const Span& sp,
+    const tTraitList& traits,
+    const Vector<unsigned>& methodIvars,
+    unsigned typeIvarCount,
+    const HIRType* receiver,
+    const RcString& methodName,
+    const HIRPathParams& methodParams,
+    const ThinVector<const HIRType*>& argumentTypes,
+    const HIRType* expectedResult,
+    MethodAccess access,
+    AutoderefBorrow borrowType,
+    ThinVector<MethodCandidate>& possibilities,
+    SolverResponse* deferredEffects
+) const {
+    if (!nextSolver) {
+        nextSolver = eatCachePool->make<NextTraitGoalEvaluator>(*this, crate);
+    }
+    return nextSolver->evaluateMethod(sp, traits, methodIvars, typeIvarCount, receiver, methodName, methodParams, argumentTypes, expectedResult, access, borrowType, possibilities, deferredEffects);
 }
 
 const HIRType* TraitResolution::findField(const Span& sp, const HIRType* ty, const RcString& name) const {
@@ -8682,6 +9595,7 @@ auto NextTraitGoalEvaluator::correlateSolverImplForRead(const SolverImpl& source
 auto NextTraitGoalEvaluator::monomorphSolverResponse(const SolverResponse& source, const Monomorphiser& monomorph, bool includeObligations) const -> SolverResponse {
     SolverResponse result;
     result.certainty = source.certainty;
+    result.ambiguityOnlyFromObligations = source.ambiguityOnlyFromObligations;
     result.operatorSummary = source.operatorSummary;
     for (const auto& type : source.slots.typeInputs) {
         result.slots.typeInputs.push_back(monomorph.monomorphType(span(), type, true));
@@ -8720,6 +9634,14 @@ auto NextTraitGoalEvaluator::monomorphSolverResponse(const SolverResponse& sourc
                 monomorph.monomorphConstgeneric(span(), equality.right, true),
             }
         );
+    }
+    for (const auto& coercion : source.coercions) {
+        result.coercions.push_back(SolverCoercionObligation{
+            monomorph.monomorphType(span(), coercion.destination, true),
+            monomorph.monomorphType(span(), coercion.source, true),
+            coercion.op,
+            coercion.sourceInput,
+        });
     }
     return result;
 }
@@ -11452,6 +12374,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         if (structural == Certainty::Ambiguous) {
             candidate->ambiguityBeyondHead = true;
             candidate->nestedAmbiguity = true;
+            candidate->nonObligationNestedAmbiguity = true;
             result = Certainty::Ambiguous;
         }
     }
@@ -11466,6 +12389,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         if (structural == Certainty::Ambiguous) {
             candidate->ambiguityBeyondHead = true;
             candidate->nestedAmbiguity = true;
+            candidate->nonObligationNestedAmbiguity = true;
             result = Certainty::Ambiguous;
         }
     }
@@ -11534,6 +12458,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         if (structural == Certainty::Ambiguous) {
             candidate->ambiguityBeyondHead = true;
             candidate->nestedAmbiguity = true;
+            candidate->nonObligationNestedAmbiguity = true;
             result = Certainty::Ambiguous;
         }
     }
@@ -11547,6 +12472,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         if (structural == Certainty::Ambiguous) {
             candidate->ambiguityBeyondHead = true;
             candidate->nestedAmbiguity = true;
+            candidate->nonObligationNestedAmbiguity = true;
             result = Certainty::Ambiguous;
         }
     }
@@ -11810,6 +12736,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
             if (relation == Certainty::Ambiguous) {
                 candidate->ambiguityBeyondHead = true;
                 candidate->nestedAmbiguity = true;
+                candidate->nonObligationNestedAmbiguity = true;
                 result = Certainty::Ambiguous;
             }
         }
@@ -13021,6 +13948,15 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
         }
         appendCandidateEffects(solverResponse, responseCandidate);
+        solverResponse.ambiguityOnlyFromObligations =
+            solverResponse.certainty == Certainty::Ambiguous
+            && responseCandidate
+            && distinctViable.empty()
+            && responseCandidate->headExact
+            && responseCandidate->headRelation == Certainty::Proven
+            && responseCandidate->nestedAmbiguity
+            && !responseCandidate->nonObligationNestedAmbiguity
+            && !solverResponse.obligations.empty();
         if (exposeImpl && canonicalAssocType && assocName && assocName[0]) {
             const HIRPathParams noParams;
             const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noParams;

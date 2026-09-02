@@ -5449,7 +5449,7 @@ bool Context::usedNeverFallback(const HIRType* type) const {
     BUG(Span(), StringView("Loop detected while checking never fallback for ivar ") << infer->index);
 }
 
-void Context::applySolverResponse(const Span& sp, const SolverResponse& response) {
+void Context::applySolverResponse(const Span& sp, const SolverResponse& response, std::vector<HIRExprNodeP>* coercionInputs) {
     ASSERT_BUG(sp, response.slots.typeInputs.size() == response.slots.types.size(), StringView("solver type slot response is malformed"));
     ASSERT_BUG(sp, response.slots.valueInputs.size() == response.slots.values.size(), StringView("solver value slot response is malformed"));
     const auto applyTypeEquality = [&](const HIRType* left, const HIRType* right) {
@@ -5500,6 +5500,15 @@ void Context::applySolverResponse(const Span& sp, const SolverResponse& response
     }
     for (const auto& obligation : response.obligations) {
         registerSolverObligation(sp, obligation.type, obligation.trait.clone());
+    }
+    for (const auto& coercion : response.coercions) {
+        if (coercion.sourceInput != ~0u) {
+            if (coercionInputs && coercion.sourceInput < coercionInputs->size()) {
+                equateTypesCoerce(sp, coercion.destination, (*coercionInputs)[coercion.sourceInput]);
+            }
+        } else {
+            addCoercionObligation(sp, coercion.destination, coercion.source, coercion.op);
+        }
     }
 }
 
@@ -7429,21 +7438,28 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
         methodArgumentTypes.push_back(argument->resType);
     }
     ThinVector<TraitResolution::MethodCandidate> possibleMethods;
+    SolverResponse deferredMethodEffects;
     const auto findMethod = [&](const RcString& method) {
         possibleMethods.clear();
-        auto derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, methodArgumentTypes, contextualResult, this->isFallback, possibleMethods);
+        deferredMethodEffects = SolverResponse{};
+        auto derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, node.params, methodArgumentTypes, contextualResult, this->isFallback, possibleMethods, &deferredMethodEffects);
         if ((derefCount == ~0u || possibleMethods.empty()) && contextualResult != resultType) {
             possibleMethods.clear();
-            derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, methodArgumentTypes, resultType, this->isFallback, possibleMethods);
+            deferredMethodEffects = SolverResponse{};
+            derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, node.params, methodArgumentTypes, resultType, this->isFallback, possibleMethods, &deferredMethodEffects);
         }
         return derefCount;
     };
     unsigned int derefCount = findMethod(node.method);
-    if ((derefCount == ~0u || possibleMethods.empty()) && node.method != node.fallbackMethod) {
+    if ((derefCount == ~0u || possibleMethods.empty()) && deferredMethodEffects.certainty != SolverCertainty::Ambiguous && node.method != node.fallbackMethod) {
         derefCount = findMethod(node.fallbackMethod);
         if (derefCount != ~0u && !possibleMethods.empty()) {
             node.method = node.fallbackMethod;
         }
+    }
+    if (derefCount == ~0u && deferredMethodEffects.certainty == SolverCertainty::Ambiguous) {
+        this->context.applySolverResponse(sp, deferredMethodEffects, &node.args);
+        return;
     }
     if (derefCount != ~0u) {
         DEBUG(StringView("possible_methods = ") << possibleMethods);
@@ -7457,6 +7473,8 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
             return;
         }
         auto& selectedMethod = possibleMethods.front();
+        ASSERT_BUG(sp, selectedMethod.effects.certainty == SolverCertainty::Proven, StringView("Method selection received a non-proven candidate"));
+        this->context.applySolverResponse(sp, selectedMethod.effects, &node.args);
         auto& adBorrow = selectedMethod.borrow;
         auto& fcnPath = selectedMethod.path;
 
@@ -7480,24 +7498,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
         }
 
         node.methodPath = mv$(fcnPath);
-        switch (node.methodPath.data.tag()) {
-            case HIRPath::Data::TAG_Generic: {
-                break;
-            }
-            case HIRPath::Data::TAG_UfcsUnknown: {
-                break;
-            }
-            case HIRPath::Data::TAG_UfcsKnown: {
-                auto& e = node.methodPath.data.as_UfcsKnown();
-                e.params = mv$(node.params);
-                break;
-            }
-            case HIRPath::Data::TAG_UfcsInherent: {
-                auto& e = node.methodPath.data.as_UfcsInherent();
-                e.params = mv$(node.params);
-                break;
-            }
-        }
 
         ASSERT_BUG(sp, visitCallPopulateCache(this->context, node.span(), node.methodPath, node.cache, selectedMethod.inherentImpl), StringView("Selected method became ambiguous while populating its cache: ") << node.methodPath);
         DEBUG(StringView("> m_method_path = ") << node.methodPath);
@@ -7889,6 +7889,8 @@ auto ExprVisitorApply::visit(HIRExprNodeCallMethod& node) -> void {
     this->visitCallcache(node.span(), node.cache);
 
     this->checkTypeResolvedPath(node.span(), node.methodPath);
+    const auto* methodType = context.crate.types.path(node.methodPath.clone(), {});
+    this->checkTypeResolvedPp(node.span(), node.params, methodType);
     HIRExprVisitorDef::visit(node);
 }
 
@@ -10392,9 +10394,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallMethod& node) -> void {
     for (auto& val : node.args) {
         val->resType = this->context.addIvars(val->resType);
     }
-    for (auto& ty : node.params.types) {
-        ty = this->context.addIvars(ty);
-    }
+    this->context.ivars.addIvarsParams(node.params);
 
     const RcString& methodName = node.method;
     const RcString& fallbackMethodName = node.fallbackMethod;

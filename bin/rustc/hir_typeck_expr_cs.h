@@ -140,7 +140,7 @@ struct Context {
     void equateTypes(const Span& sp, const HIRType* l, const HIRType* r);
     void equateTypesInner(const Span& sp, const HIRType* l, const HIRType* r);
 
-    void applySolverResponse(const Span& sp, const SolverResponse& response);
+    void applySolverResponse(const Span& sp, const SolverResponse& response, std::vector<HIRExprNodeP>* coercionInputs = nullptr);
     void registerSolverObligation(const Span& sp, const HIRType* type, HIRTraitPath trait);
     void registerClosureReturnObligation(const Span& sp, const HIRExprNodeClosure* closure, const HIRType* expected);
     const HIRType* closureReturnExpectation(const HIRExprNodeClosure* closure) const;

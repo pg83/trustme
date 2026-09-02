@@ -122,12 +122,15 @@ obligations (`IvarCoercionIndex`, перевычисляется из `Coercion`
 
 ## Долг
 
-- П.5: ручной method-selection контур (`hir_typeck_helpers.cpp` ~:6600+):
-  собственное перечисление inherent/ParamEnv/trait-object/in-scope,
-  `traitContainsMethod` по supertraits, своя канонизация и ранжирование
-  current-trait/supertraits, custom receiver через `HIRMatchGenerics` с
-  TODO. Свернуть в solver/selection слой; приоритеты — только как
-  документированные правила языка. ОТКРЫТ.
+- П.5б: в `autoderefFindMethod` остались канонизация/дедуп/шэдоуинг
+  кандидатов и current-trait preference (у rustc такого правила нет —
+  там одношаговая мультитрейт-находка это E0034); `traitContainsMethod`
+  с ручным обходом supertrait-деклараций. Заменить: дедуп по identity,
+  неоднозначность на одном шаге лестницы — диагностика, приоритеты —
+  только документированные правила языка. ОТКРЫТ.
+- П.5в: custom receiver через `HIRMatchGenerics` с TODO
+  (`checkMethodReceiver`) — честная механика arbitrary self types без
+  TODO-матчера. ОТКРЫТ.
 
 ## Перф-методика
 
