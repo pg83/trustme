@@ -120,11 +120,25 @@ obligations (`IvarCoercionIndex`, перевычисляется из `Coercion`
 - Static gate: 0 статических объектов / 0 writable bytes.
 - Полный Nix `unit` зелёный.
 
-## Долг
+## Method lookup
 
-- П.5в: custom receiver через `HIRMatchGenerics` с TODO
-  (`checkMethodReceiver`) — честная механика arbitrary self types без
-  TODO-матчера. ОТКРЫТ.
+Перечисление кандидатов метода — candidate assembly солвера
+(`evaluateMethod`): inherent impls, ParamEnv bounds, trait objects с
+supertraits, erased/opaque declared traits, bound projections, in-scope
+traits; применимость каждого — транзакционные головы/obligations.
+Лестница autoderef/borrow-эскалации — документированный порядок проб из
+семантики языка; каждый шаг ставит method-goal новому receiver. Дедуп —
+только по identity доказанного маршрута; несколько разных применимых
+кандидатов на одном шаге — «multiple applicable items in scope»;
+`supertrait_item_shadowing` — правило фичи (строгий подтрейт затеняет
+декларации супертрейтов). Current-trait preference не существует —
+вызовы своих методов покрывает ParamEnv-кандидат `Self: Trait`.
+Custom receiver проверяется транзакционной унификацией объявленной
+receiver-формы с подстановкой Self (допустимые формы задокументированы
+рядом с правилом: `Self`, `&Self`, `&mut Self`, `Box/Rc/Arc<Self>`,
+`Pin<P>`, raw pointers, `Receiver`/`Deref`-цепочка); generic-биндинги
+receiver — из той же унификации. Inherent-cache — грубый индекс формы,
+семантических решений не принимает.
 
 ## Перф-методика
 

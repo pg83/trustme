@@ -6391,99 +6391,62 @@ unsigned int TraitResolution::autoderefFindMethod(
     }
 }
 
-std::optional<const HIRType*> TraitResolution::checkMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRType* ty, TraitResolution::MethodAccess access) const {
+std::optional<const HIRType*> TraitResolution::conventionalMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRType* actual, TraitResolution::MethodAccess access) const {
     switch (fcn.receiver) {
         case HIRFunction::Receiver::Free:
             return std::nullopt;
         case HIRFunction::Receiver::Value:
             if (access >= TraitResolution::MethodAccess::Move) {
-                return this->ivars.getType(ty);
+                return this->ivars.getType(actual);
             }
             break;
         case HIRFunction::Receiver::BorrowOwned:
-            if (!ty->is_Borrow())
-                ;
-            else if (ty->as_Borrow().type != HIRBorrowType::Owned)
-                ;
-            else if (access < TraitResolution::MethodAccess::Move)
-                ;
-            else {
-                return this->ivars.getType(ty->as_Borrow().inner);
+            if (const auto* borrow = actual->opt_Borrow(); borrow && borrow->type == HIRBorrowType::Owned && access >= TraitResolution::MethodAccess::Move) {
+                return this->ivars.getType(borrow->inner);
             }
             break;
         case HIRFunction::Receiver::BorrowUnique:
-            if (!ty->is_Borrow())
-                ;
-            else if (ty->as_Borrow().type != HIRBorrowType::Unique)
-                ;
-            else if (access < TraitResolution::MethodAccess::Unique)
-                ;
-            else {
-                return this->ivars.getType(ty->as_Borrow().inner);
+            if (const auto* borrow = actual->opt_Borrow(); borrow && borrow->type == HIRBorrowType::Unique && access >= TraitResolution::MethodAccess::Unique) {
+                return this->ivars.getType(borrow->inner);
             }
             break;
         case HIRFunction::Receiver::BorrowShared:
-            if (!ty->is_Borrow())
-                ;
-            else if (ty->as_Borrow().type != HIRBorrowType::Shared)
-                ;
-            else if (access < TraitResolution::MethodAccess::Shared)
-                ;
-            else {
-                return this->ivars.getType(ty->as_Borrow().inner);
+            if (const auto* borrow = actual->opt_Borrow(); borrow && borrow->type == HIRBorrowType::Shared && access >= TraitResolution::MethodAccess::Shared) {
+                return this->ivars.getType(borrow->inner);
             }
             break;
-        case HIRFunction::Receiver::Custom: {
-            const auto& receiverType = fcn.args.front().second;
-            ASSERT_BUG(
-                sp,
-                visitTyWith(
-                    receiverType,
-                    [](const HIRType* v) {
-                return v->is_Generic() && v->as_Generic().isSelf();
-            }
-                ),
-                receiverType
-            );
-            // TODO: Handle custom-receiver functions
-            {
-                struct GetSelf: public HIRMatchGenerics {
-                    std::optional<const HIRType*> detectedSelfTy;
-
-                    GetSelf()
-                        : HIRMatchGenerics(BorrowMatchedValues{})
-                    {
-                    }
-
-                    HIRCompare matchTy(const HIRGenericRef& g, const HIRType* ty, tCbResolveType _resolve_cb) override {
-                        if (g.isSelf()) {
-                            detectedSelfTy = ty;
-                        }
-                        return HIRCompare::Equal;
-                    }
-
-                    HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
-                        TODO(Span(), StringView("GetSelf::match_val ") << g << StringView(" with ") << sz);
-                    }
-                } getself;
-
-                if (receiverType->matchTestGenerics(sp, ty, this->ivars.callbackResolveInfer(), getself)) {
-                    ASSERT_BUG(sp, getself.detectedSelfTy, StringView("Unable to determine receiver type when matching ") << receiverType << StringView(" and ") << ty);
-                    return this->ivars.getType(*getself.detectedSelfTy);
-                }
-            }
+        case HIRFunction::Receiver::Custom:
             return std::nullopt;
-        }
         case HIRFunction::Receiver::Box:
-            if (const auto* ity = this->typeIsOwnedBox(sp, ty)) {
-                if (access < TraitResolution::MethodAccess::Move) {
-                } else {
-                    return this->ivars.getType(ity);
-                }
+            if (const auto* inner = this->typeIsOwnedBox(sp, actual); inner && access >= TraitResolution::MethodAccess::Move) {
+                return this->ivars.getType(inner);
             }
             break;
     }
     return std::nullopt;
+}
+
+Unifier::Outcome TraitResolution::checkMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRType* actual, const HIRType* declared, TraitResolution::MethodAccess access) const {
+    ASSERT_BUG(sp, fcn.receiver == HIRFunction::Receiver::Custom, StringView("Custom receiver relation used for conventional receiver"));
+    (void)access;
+
+    /* Declaration checking classifies the language receiver forms as
+     * Self, &Self, &mut Self, Box<Self>, Rc<Self>, Arc<Self>, Pin<P>, raw
+     * pointers, or an arbitrary Receiver/Deref chain.  At a call site every
+     * custom form has one rule: after the current autoderef/autoref step,
+     * relate the actual receiver to the declared form with the candidate Self
+     * and generic arguments substituted. */
+
+    Unifier relation(
+        sp,
+        this->ivars,
+        this,
+        {
+            .bindRigidValues = true,
+            .relateProjectionInputs = true,
+        }
+    );
+    return relation.unify(actual, declared);
 }
 
 auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
@@ -7360,15 +7323,6 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     };
 
     auto assembleTraitCandidate = [&](const HIRFunction& function, HIRGenericPath proofTrait, HIRGenericPath outputTrait, const HIRType* sourceSelfType) {
-        const auto self = resolve_.checkMethodReceiver(callSpan, function, receiver, access);
-        if (!self) {
-            return Certainty::NoSolution;
-        }
-        const auto* selfType = *self;
-        if (const auto* infer = resolve_.ivars.getType(selfType)->opt_Infer(); infer && !infer->isLit()) {
-            return Certainty::Ambiguous;
-        }
-
         const auto snapshot = resolve_.ivars.snapshot();
         STD_DEFER {
             resolve_.ivars.rollbackTo(snapshot);
@@ -7377,22 +7331,16 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         auto proofParams = proofTrait.params.clone();
         auto outputParams = outputTrait.params.clone();
         auto methodParams = paramsForMethod(function.params);
-        auto methodMonomorph = MonomorphStatePtr(crate.types, selfType, &outputParams, &methodParams);
-        methodMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
         auto applicability = Certainty::Proven;
         SolverResponse signatureEffects;
+        const HIRType* selfType;
 
-        if (sourceSelfType) {
-            Unifier sourceHeadRelation(
-                callSpan,
-                resolve_.ivars,
-                &resolve_,
-                {
-                    .relateProjectionInputs = true,
-                    .rigidGenericsAreDistinct = true,
-                }
-            );
-            switch (sourceHeadRelation.unify(selfType, sourceSelfType)) {
+        if (function.receiver == HIRFunction::Receiver::Custom) {
+            selfType = sourceSelfType ? sourceSelfType : resolve_.ivars.newIvarTr();
+            auto receiverMonomorph = MonomorphStatePtr(crate.types, selfType, &outputParams, &methodParams);
+            receiverMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
+            const auto* declaredReceiver = receiverMonomorph.monomorphType(callSpan, function.args.front().second, true);
+            switch (resolve_.checkMethodReceiver(callSpan, function, receiver, declaredReceiver, access)) {
                 case Unifier::Outcome::Proven:
                     break;
                 case Unifier::Outcome::Ambiguous:
@@ -7401,7 +7349,40 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                 case Unifier::Outcome::Mismatch:
                     return Certainty::NoSolution;
             }
+            selfType = resolve_.ivars.getType(selfType);
+        } else {
+            const auto conventionalSelf = resolve_.conventionalMethodReceiver(callSpan, function, receiver, access);
+            if (!conventionalSelf) {
+                return Certainty::NoSolution;
+            }
+            selfType = *conventionalSelf;
+            if (sourceSelfType) {
+                Unifier sourceHeadRelation(
+                    callSpan,
+                    resolve_.ivars,
+                    &resolve_,
+                    {
+                        .relateProjectionInputs = true,
+                        .rigidGenericsAreDistinct = true,
+                    }
+                );
+                switch (sourceHeadRelation.unify(selfType, sourceSelfType)) {
+                    case Unifier::Outcome::Proven:
+                        break;
+                    case Unifier::Outcome::Ambiguous:
+                        applicability = Certainty::Ambiguous;
+                        break;
+                    case Unifier::Outcome::Mismatch:
+                        return Certainty::NoSolution;
+                }
+            }
         }
+        if (const auto* infer = selfType->opt_Infer(); infer && !infer->isLit()) {
+            return Certainty::Ambiguous;
+        }
+
+        auto methodMonomorph = MonomorphStatePtr(crate.types, selfType, &outputParams, &methodParams);
+        methodMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
 
         if (function.fixedArgCount() == argumentTypes.size() + 1) {
             for (size_t i = 0; i < argumentTypes.size(); i++) {
@@ -7630,7 +7611,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     const bool inherentSourceAmbiguous = inherentReceiver->is_Infer();
     if (!inherentSourceAmbiguous && opaqueCanReveal) {
         auto inherentCertainty = Certainty::NoSolution;
-        resolve_.wb.inherentMethods->find(callSpan, methodName, receiver, resolve_.ivars.callbackResolveInfer(), [&](const HIRType* selfType, const HIRTypeImpl& impl) {
+        resolve_.wb.inherentMethods->find(callSpan, methodName, receiver, resolve_.ivars.callbackResolveInfer(), [&](const HIRType* roughSelfType, const HIRTypeImpl& impl) {
             const auto& method = impl.methods.at(methodName);
             if (!method.publicity.isVisible(resolve_.visPath)) {
                 return;
@@ -7641,27 +7622,54 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                 resolve_.ivars.rollbackTo(snapshot);
             };
             HIRPathParams implParams;
+            HIRPathParams methodParams;
+            const HIRType* selfType;
             bool headNormalizationAmbiguity = false;
-            switch (resolve_.relateInherentImplHeader(callSpan, impl, selfType, implParams)) {
-                case Unifier::Outcome::Proven:
-                    break;
-                case Unifier::Outcome::Ambiguous: {
-                    auto monomorph = MonomorphStatePtr(crate.types, selfType, &implParams, nullptr);
-                    const auto* implType = monomorph.monomorphType(callSpan, impl.type, true);
-                    if (resolve_.hasAssociatedType(selfType) || resolve_.hasAssociatedType(implType)) {
+            if (method.data.receiver == HIRFunction::Receiver::Custom) {
+                implParams = resolve_.makeFreshImplParams(impl.params);
+                methodParams = paramsForMethod(method.data.params);
+                auto selfMonomorph = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr);
+                selfMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
+                selfType = selfMonomorph.monomorphType(callSpan, impl.type, true);
+                auto receiverMonomorph = MonomorphStatePtr(crate.types, selfType, &implParams, &methodParams);
+                receiverMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
+                const auto* declaredReceiver = receiverMonomorph.monomorphType(callSpan, method.data.args.front().second, true);
+                switch (resolve_.checkMethodReceiver(callSpan, method.data, receiver, declaredReceiver, access)) {
+                    case Unifier::Outcome::Proven:
+                        break;
+                    case Unifier::Outcome::Ambiguous:
                         headNormalizationAmbiguity = true;
-                    }
-                    break;
+                        break;
+                    case Unifier::Outcome::Mismatch:
+                        return;
                 }
-                case Unifier::Outcome::Mismatch:
+                auto implBounds = resolve_.evaluateInherentImplBounds(callSpan, impl, implParams);
+                if (implBounds == Certainty::NoSolution) {
                     return;
-            }
-            auto implBounds = resolve_.evaluateInherentImplBounds(callSpan, impl, implParams);
-            if (implBounds == Certainty::NoSolution) {
-                return;
+                }
+            } else {
+                selfType = roughSelfType;
+                switch (resolve_.relateInherentImplHeader(callSpan, impl, selfType, implParams)) {
+                    case Unifier::Outcome::Proven:
+                        break;
+                    case Unifier::Outcome::Ambiguous: {
+                        auto monomorph = MonomorphStatePtr(crate.types, selfType, &implParams, nullptr);
+                        const auto* implType = monomorph.monomorphType(callSpan, impl.type, true);
+                        if (resolve_.hasAssociatedType(selfType) || resolve_.hasAssociatedType(implType)) {
+                            headNormalizationAmbiguity = true;
+                        }
+                        break;
+                    }
+                    case Unifier::Outcome::Mismatch:
+                        return;
+                }
+                auto implBounds = resolve_.evaluateInherentImplBounds(callSpan, impl, implParams);
+                if (implBounds == Certainty::NoSolution) {
+                    return;
+                }
+                methodParams = paramsForMethod(method.data.params);
             }
 
-            auto methodParams = paramsForMethod(method.data.params);
             auto methodMonomorph = MonomorphStatePtr(crate.types, selfType, &implParams, &methodParams);
             methodMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
             auto signatureSnapshot = resolve_.ivars.snapshot();
@@ -7739,15 +7747,23 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                 const auto* resultInfer = expectedResult ? expectedResult->opt_Infer() : nullptr;
                 if (resultInfer && resultInfer->index != ~0u && resultInfer->index < snapshot.ivarCount && !method.data.returnType->is_ErasedType()) {
                     HIRPathParams stableImplParams;
-                    auto stableHead = resolve_.probeInherentImplHeader(callSpan, impl, receiver, stableImplParams);
-                    const auto* stableSelf = receiver;
-                    if (stableHead == Certainty::NoSolution) {
-                        stableImplParams = HIRPathParams();
-                        stableSelf = stableType(selfType, snapshot);
-                        stableHead = resolve_.probeInherentImplHeader(callSpan, impl, stableSelf, stableImplParams);
-                    }
-                    if (stableHead == Certainty::NoSolution) {
-                        return stableEffects(std::move(input), snapshot);
+                    const HIRType* stableSelf;
+                    if (method.data.receiver == HIRFunction::Receiver::Custom) {
+                        stableImplParams = resolve_.materializeImplParams(callSpan, impl.params, implParams, snapshot.ivarCount, snapshot.valueCount);
+                        stableImplParams = stableParams(stableImplParams, snapshot);
+                        auto stableSelfMonomorph = MonomorphStatePtr(crate.types, nullptr, &stableImplParams, nullptr);
+                        stableSelf = stableSelfMonomorph.monomorphType(callSpan, impl.type, true);
+                    } else {
+                        auto stableHead = resolve_.probeInherentImplHeader(callSpan, impl, receiver, stableImplParams);
+                        stableSelf = receiver;
+                        if (stableHead == Certainty::NoSolution) {
+                            stableImplParams = HIRPathParams();
+                            stableSelf = stableType(selfType, snapshot);
+                            stableHead = resolve_.probeInherentImplHeader(callSpan, impl, stableSelf, stableImplParams);
+                        }
+                        if (stableHead == Certainty::NoSolution) {
+                            return stableEffects(std::move(input), snapshot);
+                        }
                     }
                     auto stableMethodParams = resolve_.materializeImplParams(callSpan, method.data.params, methodParams, snapshot.ivarCount, snapshot.valueCount);
                     stableMethodParams = stableParams(stableMethodParams, snapshot);

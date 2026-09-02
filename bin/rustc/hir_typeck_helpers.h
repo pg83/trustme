@@ -946,7 +946,8 @@ public:
     };
 
 private:
-    std::optional<const HIRType*> checkMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRType* ty, TraitResolution::MethodAccess access) const;
+    std::optional<const HIRType*> conventionalMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRType* actual, TraitResolution::MethodAccess access) const;
+    Unifier::Outcome checkMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRType* actual, const HIRType* declared, TraitResolution::MethodAccess access) const;
 
 public:
     enum class AllowedReceivers {

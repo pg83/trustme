@@ -26,6 +26,7 @@ namespace {
 
         struct Inner {
             Lowest byvalue;
+            Lowest::listT wildcard;
             std::unique_ptr<Inner> ref;
             std::unique_ptr<Inner> refMut;
             std::unique_ptr<Inner> refMove;
@@ -93,15 +94,12 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRType* curTy, cons
     };
 
     switch ((*curTy).tag()) {
-        default:
-            BUG(sp, StringView("Unknown receiver type - ") << curTy);
+        default: {
+            wildcard.pushBack(&impl);
+            break;
+        }
         case HIRType::TAG_Generic: {
-            auto& te = (*curTy).as_Generic();
-            if (te.isSelf()) {
-                byvalue.insert(sp, impl);
-            } else {
-                BUG(sp, StringView("Receiver generic not `Self` - ") << curTy);
-            }
+            wildcard.pushBack(&impl);
             break;
         }
         case HIRType::TAG_Borrow: {
@@ -136,15 +134,12 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRType* curTy, cons
         }
         case HIRType::TAG_Path: {
             auto& te = (*curTy).as_Path();
-            ASSERT_BUG(sp, te.path.data.is_Generic(), StringView("Receiver path not a generic path - ") << curTy);
-            const auto& gp = te.path.data.as_Generic();
-            if (gp.params.types.empty()) {
-                DEBUG(StringView("m_concrete[") << gp.path << StringView("] += impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);
-                concrete[gp.path].pushBack(&impl);
-                return;
+            if (const auto* gp = te.path.data.opt_Generic()) {
+                DEBUG(StringView("m_concrete[") << gp->path << StringView("] += impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);
+                concrete[gp->path].pushBack(&impl);
+            } else {
+                wildcard.pushBack(&impl);
             }
-            DEBUG(StringView("m_path[") << gp.path << StringView("] += ") << gp.params.types.at(0) << StringView(" impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);
-            path[gp.path].insert(sp, gp.params.types.at(0), impl);
             break;
         }
     }
@@ -153,6 +148,9 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRType* curTy, cons
 void InherentCacheImpl::Inner::find(const Span& sp, const HIRType* curTyAct, tCbResolveType tyRes, Callback& cb) const {
     const auto& curTy = tyRes.getType(sp, curTyAct);
     TRACE_FUNCTION_F(StringView("[Inner] ") << curTy);
+    for (const auto* impl : wildcard) {
+        cb.visit(curTy, *impl);
+    }
     byvalue.iterate(curTy, cb);
 
     const Inner* inner = nullptr;
@@ -266,65 +264,9 @@ void InherentCacheImpl::insertAll(const Span& sp, const HIRTypeImpl& impl, const
 void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIRType* ty, tCbResolveType tyRes, Callback& cb) const {
     TRACE_FUNCTION_F(name << StringView(", ") << ty);
 
-    struct FilterCallback final: Callback {
-        const Span& sp;
-        const RcString& name;
-        const HIRType* ty;
-        tCbResolveType tyRes;
-        Callback& output;
-
-        FilterCallback(const Span& sp, const RcString& name, const HIRType* ty, tCbResolveType tyRes, Callback& output)
-            : sp(sp)
-            , name(name)
-            , ty(ty)
-            , tyRes(tyRes)
-            , output(output)
-        {
-        }
-
-        void visit(const HIRType* roughSelfTy, const HIRTypeImpl& impl) override {
-            DEBUG(StringView("- ") << roughSelfTy);
-            const HIRFunction& fcn = impl.methods.at(name).data;
-
-            struct GetSelf: public HIRMatchGenerics {
-                std::optional<const HIRType*> detectedSelfTy;
-
-                GetSelf()
-                    : HIRMatchGenerics(BorrowMatchedValues{})
-                {
-                }
-
-                HIRCompare matchTy(const HIRGenericRef& g, const HIRType* ty, tCbResolveType _resolve_cb) override {
-                    if (g.isSelf()) {
-                        detectedSelfTy = ty;
-                    }
-                    return HIRCompare::Equal;
-                }
-
-                HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
-                    TODO(Span(), StringView("GetSelf::match_val ") << g << StringView(" with ") << sz);
-                }
-            } getself;
-
-            if (fcn.receiver == HIRFunction::Receiver::Custom) {
-                ASSERT_BUG(sp, fcn.receiverType, StringView("Custom receiver without a receiver type"));
-                if ((*fcn.receiverType)->matchTestGenerics(sp, ty, HIRResolvePlaceholdersNop(), getself)) {
-                    auto selfTy = getself.detectedSelfTy ? *getself.detectedSelfTy : impl.type;
-                    const auto* resolvedSelfTy = tyRes.getType(sp, selfTy);
-                    if (resolvedSelfTy->is_Infer() && !resolvedSelfTy->as_Infer().isLit() && !impl.type->needsMonomorphisation()) {
-                        selfTy = impl.type;
-                    }
-                    output.visit(selfTy, impl);
-                }
-            } else {
-                output.visit(roughSelfTy, impl);
-            }
-        }
-    } filter(sp, name, ty, tyRes, cb);
-
     auto it = items.find(name);
     if (it != items.end()) {
-        it->second.find(sp, ty, tyRes, filter);
+        it->second.find(sp, ty, tyRes, cb);
     }
 }
 
