@@ -5464,7 +5464,16 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
             return result;
         }
         if (op == SolverCoercionOp::Coercion && resolvedSource->is_Diverge()) {
+            /* `!` reaches any destination, and the plan is the same wherever it goes:
+               the value never arrives, so nothing is adjusted.  Constraint evaluation
+               says so itself, but only on the paths that reach the diverging source -
+               a destination settled earlier, such as an opaque alias already related to
+               its hidden type, returns before that.  Naming the relation without naming
+               the plan leaves the caller a proven coercion it cannot carry out. */
             result.relation = SolverCoercionRelation::Coercion;
+            if (result.adjustment.kind == SolverCoercionAdjustmentKind::None) {
+                result.adjustment.kind = SolverCoercionAdjustmentKind::Never;
+            }
             return result;
         }
         const auto snapshot = ivars.snapshot();
