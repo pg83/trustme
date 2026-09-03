@@ -5900,6 +5900,21 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             }
             if (deferred) {
                 deferred->push_back(SolverDeferredCoercion{destination, source, SolverCoercionOp::Unsizing, alternativeGroup});
+                return SolverCertainty::Ambiguous;
+            }
+            /* An unfilled slot of the goal being solved is not an unknown to wait on:
+               it is the candidate's to choose, and a rigid source is what it would have
+               to be.  Say so as an equality the caller decides on - there is nowhere to
+               defer to here, and answering "not known" drops a candidate that can take
+               the value.  `<*const _>::from(&value)` is the shape: whether the reflexive
+               impl accepts the argument comes down to the pointer's target, a slot of
+               that impl's own head. */
+            if (equalities && !source->is_Infer()) {
+                const auto* destinationInfer = destination->opt_Infer();
+                if (destinationInfer && isSolverCanonicalInfer(destinationInfer->index)) {
+                    equalities->push_back(SolverTypeEquality{destination, source});
+                    return related(SolverCertainty::Proven, SolverCoercionRelation::Equality);
+                }
             }
             return SolverCertainty::Ambiguous;
         }
