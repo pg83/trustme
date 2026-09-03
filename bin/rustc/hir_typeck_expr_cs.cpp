@@ -3973,7 +3973,15 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                                  * pass.  The pattern revisit itself is the
                                  * remaining fact, not a stored candidate. */
                                 bool hasExternalInferenceOwner = false;
-                                if (nestedRoot && infer && infer->index != ~0u) {
+                                /* A slice pattern's shape is forced, not a guess about which
+                                   type could match: N elements with no rest binding is an
+                                   array of exactly N. There is nothing for an external
+                                   obligation to decide differently, and waiting for one
+                                   deadlocks when that obligation is itself waiting on this
+                                   input - in `let Foo([a, b, c]) = Foo(x.into())` each side
+                                   waits for the other. */
+                                const bool shapeIsForced = pattern.data.is_Slice();
+                                if (nestedRoot && !shapeIsForced && infer && infer->index != ~0u) {
                                     const IvarCoercionIndex obligations(context);
                                     if (infer->index < obligations.refs.size()) {
                                         const auto& refs = obligations[infer->index];
@@ -4765,7 +4773,16 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                                 default:
                                     ERROR(sp, E0000, StringView("Slice pattern on non-array/-slice - ") << ty);
                                 case HIRType::TAG_Infer: {
-                                    return false;
+                                    if (!isFallback) {
+                                        return false;
+                                    }
+                                    /* A slice pattern without a rest binding matches exactly its
+                                       own length, so once nothing else has determined the type it
+                                       is an array of that length.  Committing to it is what lets
+                                       the value being destructured resolve at all - here it is
+                                       the only thing that can pick an `Into` target. */
+                                    context.equateTypes(sp, ty, context.crate.types.array(inner, static_cast<u64>(size)));
+                                    return true;
                                 }
                                 case HIRType::TAG_Slice: {
                                     auto& te = (*ty).as_Slice();
