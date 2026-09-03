@@ -2289,6 +2289,10 @@ bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
     UNREACHABLE();
 }
 
+bool HMTypeInferrence::ivarOccursIn(unsigned int slot, const HIRType* type) const {
+    return this->containsLiveIvar(type, this->rootIvarIndex(slot));
+}
+
 bool HMTypeInferrence::containsLiveIvar(const HIRType* type, unsigned int rootIndex) const {
     const auto* resolved = this->getType(type);
     return visitTyWith(resolved, [&](const HIRType* inner) {

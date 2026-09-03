@@ -5498,9 +5498,12 @@ void Context::applySolverResponse(const Span& sp, const SolverResponse& response
             if (!infer || !infer->isLit() || !path || !path->path.data.is_UfcsKnown()) {
                 return false;
             }
-            if (visitTyWith(projection, [&](const HIRType* inner) {
-                return inner == candidate;
-            })) {
+            /* The occurs check has to follow aliases: the projection carries whichever
+               ivar the source wrote, which need not be the representative this side
+               resolved to.  Comparing the types by pointer misses that and binds the
+               variable to a type containing itself, and every later walk of it recurses
+               until the stack is gone. */
+            if (ivars.ivarOccursIn(infer->index, projection)) {
                 return false;
             }
             if (infer->index < ivarsSized.length() && ivarsSized[infer->index]) {

@@ -340,6 +340,11 @@ public:
     bool pathparamsEqual(const HIRPathParams& ppsL, const HIRPathParams& ppsR) const;
     bool typesEqual(const HIRType* l, const HIRType* r) const;
 
+    /* Whether binding the variable in `slot` to `type` would make it contain itself.
+       Aliased variables share one root, so the answer cannot be read off the types:
+       the type may name any member of the class the slot belongs to. */
+    bool ivarOccursIn(unsigned int slot, const HIRType* type) const;
+
 private:
     struct JournalEntry {
         enum class Kind : u8 {
