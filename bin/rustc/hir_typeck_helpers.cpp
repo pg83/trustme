@@ -5800,8 +5800,14 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
                 ASSERT_BUG(sp, markings.coerceParam < destinationParams.types.size() && markings.coerceParam < sourceParams.types.size(), StringView("Malformed CoerceUnsized struct markings"));
                 const auto* destinationParam = destinationParams.types[markings.coerceParam];
                 const auto* sourceParam = sourceParams.types[markings.coerceParam];
+                /* The marked parameter can reach its destination by being unsized as
+                   well as by coercing, and while the source still holds inference
+                   variables neither is settled.  Equating the two sides instead reads
+                   the destination back into those variables, deciding a field to be the
+                   unsized target when the expression that produces it says otherwise. */
                 openMarkedParameter = !ivars.typesEqual(destinationParam, sourceParam)
                     && (isOpenStructuralCoercion(destinationParam, sourceParam)
+                        || isOpenStructuralUnsize(destinationParam, sourceParam)
                         || isRigidUnsized(isRigidUnsized, destinationParam) && (resolveKnown(destinationParam)->is_Infer() || resolveKnown(sourceParam)->is_Infer()));
             }
         }
