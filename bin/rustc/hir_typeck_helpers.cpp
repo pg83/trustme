@@ -14823,6 +14823,34 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
     }
 
+    /* Whether a clause may stand in for a trait goal turns on it mentioning something
+       of the caller's - a clause true of no real type says nothing about which types
+       implement a trait.  What an item it names normalizes to is a different question:
+       the clause is what the body was checked against, so it is the answer even where
+       an impl would give another.  `B: A<X = i32>` over an impl saying u8 is exactly
+       that, and the body returns what the clause promised. */
+    if (assocName && assocName[0]) {
+        const HIRPathParams noItemParams;
+        const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noItemParams;
+        const auto namesTheItem = [&](const Candidate* candidate) {
+            return candidate->source == CandidateSource::ParamEnv && candidate->impl.getType(crate.types, assocName, itemParams) != nullptr;
+        };
+        if (std::any_of(frame.viable.begin(), frame.viable.end(), [&](const Candidate* candidate) {
+            return namesTheItem(candidate) && candidate->certainty == Certainty::Proven;
+        })) {
+            auto& viable = frame.viable;
+            size_t kept = 0;
+            for (auto* candidate : viable) {
+                if (namesTheItem(candidate)) {
+                    viable.mut(kept++) = candidate;
+                }
+            }
+            while (viable.length() > kept) {
+                viable.popBack();
+            }
+        }
+    }
+
     const bool hasNonParamEnv = std::any_of(frame.viable.begin(), frame.viable.end(), [](const Candidate* candidate) {
         return candidate->source != CandidateSource::ParamEnv;
     });
