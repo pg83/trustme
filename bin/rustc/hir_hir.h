@@ -14,11 +14,11 @@
 #include "macro_rules_macro_rules_ptr.h"
 
 #include <std/lib/vector.h>
+#include <std/rng/split_mix_64.h>
 
 #include <set>
 #include <memory>
 #include <vector>
-#include <functional>
 #include <optional>
 #include <unordered_map>
 
@@ -717,10 +717,14 @@ struct HIRLocalItemTypeNamePath {
     }
 };
 
+/* stl::HashTable keys its nodes by this value alone and compares hashes rather
+   than keys, so the hash has to be injective: two items whose hashes collide
+   become one entry and the later insert replaces the earlier, handing a lookup
+   somebody else's item.  splitMix64 is a bijection on u64. */
 struct HIRPointerHasher {
     template <typename T>
     static u64 hash(const T* ptr) noexcept {
-        return static_cast<u64>(std::hash<const void*>{}(ptr));
+        return stl::splitMix64(reinterpret_cast<uintptr_t>(ptr));
     }
 };
 
