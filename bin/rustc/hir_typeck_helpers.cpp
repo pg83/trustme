@@ -7455,6 +7455,26 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         }
         return result;
     };
+    /* What the call site expects back is what fixes the method's parameters; the
+       arguments then only have to reach them.  Relate the return type first and the
+       arguments are checked against parameters that are already decided - relate an
+       argument first and its own type is read into a parameter nothing else had
+       claimed, which for a function item means the item's own type rather than the
+       pointer it would become.  The relation is a guess: it is kept when it holds
+       and dropped when it does not, and the real one still runs afterwards. */
+    const auto guideFromExpectedResult = [&](const Monomorphiser& monomorph, const HIRType* returnTypeTemplate) {
+        if (!expectedResult || returnTypeTemplate->is_ErasedType()) {
+            return;
+        }
+        const auto* methodReturn = monomorph.monomorphType(callSpan, returnTypeTemplate, true);
+        const auto snapshot = resolve_.ivars.snapshot();
+        Unifier relation(callSpan, resolve_.ivars, &resolve_, {.relateProjectionInputs = true});
+        if (relation.unify(methodReturn, expectedResult) == Unifier::Outcome::Proven) {
+            resolve_.ivars.commit(snapshot);
+        } else {
+            resolve_.ivars.rollbackTo(snapshot);
+        }
+    };
     const auto stableType = [&](const HIRType* original, const HMTypeInferrence::Snapshot& snapshot) {
         const auto* resolved = resolve_.ivars.expandIvars(original);
         return typeHasProbeIvar(resolved, snapshot) ? original : resolved;
@@ -7573,6 +7593,8 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
 
         auto methodMonomorph = MonomorphStatePtr(crate.types, selfType, &outputParams, &methodParams);
         methodMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
+
+        guideFromExpectedResult(methodMonomorph, function.returnType);
 
         if (function.fixedArgCount() == argumentTypes.size() + 1) {
             for (size_t i = 0; i < argumentTypes.size(); i++) {
@@ -7864,6 +7886,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                 if (boundsFirst) {
                     constrainMethodBoundsBeforeArguments(method.data.params, methodParams, methodMonomorph, signatureEffects);
                 }
+                guideFromExpectedResult(methodMonomorph, method.data.returnType);
                 if (method.data.fixedArgCount() == argumentTypes.size() + 1) {
                     for (size_t i = 0; i < argumentTypes.size(); i++) {
                         const auto* expectedArgument = methodMonomorph.monomorphType(callSpan, method.data.args[i + 1].second, true);
