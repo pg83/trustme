@@ -1241,6 +1241,16 @@ namespace {
         return !infer || infer->isLit();
     }
 
+    /* The result type of a node still waiting to be revisited is that node's to
+       produce - a deref cannot say what it derefs to until the expression under it
+       resolves.  Such a variable is not a coercion destination with nothing else to
+       go on, however few coercion edges it has. */
+    bool isResultOfPendingRevisit(const Context& context, const HIRType* type) {
+        return std::any_of(context.toVisit.begin(), context.toVisit.end(), [&](const HIRExprNode* node) {
+            return context.getType(node->resType) == type;
+        });
+    }
+
     AssociatedCheckResult checkAssociated(Context& context, const IvarCoercionIndex& coercionIndex, Context::Associated& v) {
         const auto& sp = v.span;
 
@@ -2136,6 +2146,7 @@ namespace {
                 && identityCandidates.length() == 1
                 && identityCandidates[0]->isSource()
                 && (identityCandidates[0]->isCoerce() || allowUnsizingIdentityCommit)
+                && !isResultOfPendingRevisit(context, tyL)
                 && !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, identityCandidates[0]->ty)) {
                 DEBUG(i << StringView(": Final unconstrained coercion destination takes its source type: ") << identityCandidates[0]->ty);
                 context.equateTypes(sp, tyL, identityCandidates[0]->ty);
@@ -2460,7 +2471,8 @@ namespace {
                 && nIvars == 0
                 && possibleTys.size() == 1
                 && possibleTys[0].isSource()
-                && (possibleTys[0].isCoerce() || allowUnsizingIdentityCommit)) {
+                && (possibleTys[0].isCoerce() || allowUnsizingIdentityCommit)
+                && !isResultOfPendingRevisit(context, tyL)) {
                 DEBUG(i << StringView(": Final sole solver-viable source becomes the coercion destination: ") << possibleTys[0].ty);
                 context.equateTypes(sp, tyL, possibleTys[0].ty);
                 return true;
