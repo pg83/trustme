@@ -134,6 +134,20 @@ macro_rules 9. Направление: каждый случай — либо р
 - `hir_path.cpp:956` — сортировка по const-param как tie-breaker.
 - 69 `const_cast` — мутации интернированных/иммутабельных структур в
   обход владения; треть — в const eval.
+- `Self` внутри границы ассоциированного типа у erased-типа не доходит
+  до использования. В `impl Tr<Item: PartialEq>` опущенный параметр
+  `PartialEq<Rhs = Self>` означает сам `Item` — так эта же граница
+  читается, когда написана в объявлении трейта
+  (`hir_conv_main_bindings.cpp` `visitAssociatedtype` подставляет туда
+  путь ассоциированного типа). У erased-типа подставить нечего:
+  единственное доступное имя — `ErasedSelf` (`GENERICErasedSelf`), а
+  проекция `<ErasedSelf as Tr>::Item` не переживает монофморфизацию —
+  часть монофморфизаторов его пропускает насквозь
+  (`hir_typeck_expr_cs.cpp:6349`, `:9227`), часть падает
+  (`:6198`, `hir_typeck_common.cpp`). Сейчас параметр заполняется голым
+  `Self`, и монофморфизация сигнатуры, возвращающей такой тип, падает
+  (`TODO: getType - Handle 'Self' when monomorphising`). Красный пример:
+  `fn def() -> impl Tr1<As1: PartialEq>` + `def().mk() == def().mk()`.
 
 ## Класс Г. Backend-компромиссы
 
