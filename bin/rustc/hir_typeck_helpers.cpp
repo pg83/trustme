@@ -2674,10 +2674,27 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                     return Outcome::Mismatch;
                 }
             }
-            if (!le.trait.typeBounds.empty() || !re.trait.typeBounds.empty()) {
-                return this->defer(left, right);
+            /* Associated-type bindings are part of the object type, so relate them
+               pairwise instead of giving up on the whole relation: deferring here left
+               `dyn Fn(TArg) -> TRet` and `dyn Fn(u32) -> u32` unrelated, and every
+               generic parameter behind such an object went unresolved.  The two objects
+               have to name the same bindings to be the same type. */
+            if (le.trait.typeBounds.size() != re.trait.typeBounds.size()) {
+                return Outcome::Mismatch;
             }
-            return this->unifyParams(le.trait.path.params, re.trait.path.params);
+            if (this->unifyParams(le.trait.path.params, re.trait.path.params) == Outcome::Mismatch) {
+                return Outcome::Mismatch;
+            }
+            auto rightBound = re.trait.typeBounds.begin();
+            for (auto leftBound = le.trait.typeBounds.begin(); leftBound != le.trait.typeBounds.end(); ++leftBound, ++rightBound) {
+                if (leftBound->first != rightBound->first) {
+                    return Outcome::Mismatch;
+                }
+                if (this->unifyResolved(leftBound->second.type, rightBound->second.type) == Outcome::Mismatch) {
+                    return Outcome::Mismatch;
+                }
+            }
+            return Outcome::Proven;
         }
         case HIRType::TAG_ErasedType: {
             const auto& le = left->as_ErasedType();
