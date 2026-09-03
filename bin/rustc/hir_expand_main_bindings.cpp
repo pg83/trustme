@@ -180,6 +180,8 @@ namespace {
 
         HIRValueUsage getUsageForPattern(const Span& sp, const HIRPattern& pat, const HIRType* outerTy) const;
 
+        bool typeIsCopyHere(const Span& sp, const HIRType* type);
+
         HIRValueUsage getRealUsage(const Span& sp, unsigned slot, const Vector<RcString>& fields, HIRValueUsage usage);
 
         void markUsedVariableClosure(const Span& sp, ClosureScope& closureRec, unsigned slot, Vector<RcString> fields, HIRValueUsage usage);
@@ -2591,6 +2593,38 @@ auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPatter
     UNREACHABLE();
 }
 
+/* A closure is Copy when everything it captures is: a shared borrow always is, a
+   mutable one never is, and a moved capture is exactly as Copy as what it moved.
+   The solver cannot say - what a closure captures is worked out here, after
+   typecheck, so it answers Copy for every closure - and taking that answer makes
+   a closure that holds a String look copyable.  Whoever then consumes such a
+   closure captures it by reference, and moving out through a reference is not
+   something MIR can express. */
+auto AnnotateExprVisitorMark::typeIsCopyHere(const Span& sp, const HIRType* type) -> bool {
+    if (!type->is_NodeType() || !type->as_NodeType().is_Closure()) {
+        return resolve_.typeIsCopy(sp, type);
+    }
+    for (const auto& capture : type->as_NodeType().as_Closure()->avuCache.capturedVars) {
+        switch (capture.usage) {
+            case HIRValueUsage::Borrow:
+                continue;
+            case HIRValueUsage::Mutate:
+                return false;
+            case HIRValueUsage::Unknown:
+            case HIRValueUsage::Move:
+                break;
+        }
+        const auto* captured = variableTypes[capture.rootSlot];
+        for (const auto& name : capture.fields) {
+            captured = resolve_.getFieldType(sp, captured, name);
+        }
+        if (!typeIsCopyHere(sp, captured)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 auto AnnotateExprVisitorMark::getRealUsage(const Span& sp, unsigned slot, const Vector<RcString>& fields, HIRValueUsage usage) -> HIRValueUsage {
     if (usage == HIRValueUsage::Move) {
         const auto* ty = &variableTypes[slot];
@@ -2600,7 +2634,7 @@ auto AnnotateExprVisitorMark::getRealUsage(const Span& sp, unsigned slot, const 
             ty = &tmpTy;
         }
 
-        if (resolve_.typeIsCopy(sp, *ty)) {
+        if (typeIsCopyHere(sp, *ty)) {
             usage = HIRValueUsage::Borrow;
         } else if ((*ty)->is_Borrow() && (*ty)->as_Borrow().type == HIRBorrowType::Unique) {
             usage = HIRValueUsage::Mutate;
@@ -2690,7 +2724,7 @@ auto AnnotateExprVisitorMark::markUsedVariableClosure(const Span& sp, ClosureSco
             break;
         case HIRValueUsage::Move:
             // TODO: Why is this disabled? Maybe for efficiency? as copies are marked as ValueUsage::Borrow anyway
-            if (resolve_.typeIsCopy(sp, variableTypes[slot])) {
+            if (typeIsCopyHere(sp, variableTypes[slot])) {
                 capTypeName = "Borrow (copy)";
                 closure.cls = std::max(closure.cls, HIRExprNodeClosure::Class::Shared);
             } else {
