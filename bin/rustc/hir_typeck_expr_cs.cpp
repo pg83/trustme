@@ -2167,37 +2167,56 @@ namespace {
             }
             DEBUG(nIvars << StringView(" ivars (") << nSrcIvars << StringView(" src)"));
             const auto isFunctionSource = [](const PossibleType& possible) {
-                return possible.isSource() && (((*possible.ty).is_NodeType() && ((*possible.ty).as_NodeType().is_Closure())) || possible.ty->is_NamedFunction());
+                return possible.isSource() && (((*possible.ty).is_NodeType() && ((*possible.ty).as_NodeType().is_Closure())) || possible.ty->is_NamedFunction() || possible.ty->is_Function());
             };
             const auto functionSourceCount = std::count_if(possibleTys.begin(), possibleTys.end(), isFunctionSource);
             if (functionSourceCount >= 2 && (finalPhase || (!hasInferenceBarrier && nSrcIvars == 0)) && std::all_of(possibleTys.begin(), possibleTys.end(), [&](const auto& possible) {
                 return !possible.isSource() || isFunctionSource(possible);
             })) {
-                std::optional<HIRTypeDataFunctionPointer> target;
+                /* A function pointer among the sources is already the join of this
+                   lattice - a closure and a function item each coerce to one - so it is
+                   the target, and the other sources take their signature from it.  Two
+                   pointers that differ have no join, and the rule does not apply. */
+                const HIRType* pointerSource = nullptr;
+                bool pointerSourceUnique = true;
                 for (const auto& possible : possibleTys) {
-                    if (!possible.isSource()) {
+                    if (!possible.isSource() || !possible.ty->is_Function()) {
                         continue;
                     }
-                    HIRTypeDataFunctionPointer candidate;
-                    if (const auto* function = possible.ty->opt_NamedFunction()) {
-                        candidate = function->decay(context.crate.types, sp);
-                    } else if (const auto* closure = ((*possible.ty).is_NodeType() ? ((*possible.ty).as_NodeType().opt_Closure()) : nullptr)) {
-                        candidate = HIRTypeDataFunctionPointer{false, false, RcString::newInterned(ABI_RUST), (*closure)->returnType, {}};
-                        for (const auto& argument : (*closure)->args) {
-                            candidate.argTypes.pushBack(argument.second);
-                        }
-                    } else {
-                        BUG(sp, StringView(""));
+                    if (pointerSource && !context.ivars.typesEqual(pointerSource, possible.ty)) {
+                        pointerSourceUnique = false;
+                        break;
                     }
-
-                    if (target) {
-                        target->isUnsafe |= candidate.isUnsafe;
-                    } else {
-                        target = std::move(candidate);
-                    }
+                    pointerSource = possible.ty;
                 }
-                auto newTy = context.crate.types.function(std::move(*target));
-                if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, newTy)) {
+                const HIRType* newTy = pointerSource;
+                if (pointerSource == nullptr) {
+                    std::optional<HIRTypeDataFunctionPointer> target;
+                    for (const auto& possible : possibleTys) {
+                        if (!possible.isSource()) {
+                            continue;
+                        }
+                        HIRTypeDataFunctionPointer candidate;
+                        if (const auto* function = possible.ty->opt_NamedFunction()) {
+                            candidate = function->decay(context.crate.types, sp);
+                        } else if (const auto* closure = ((*possible.ty).is_NodeType() ? ((*possible.ty).as_NodeType().opt_Closure()) : nullptr)) {
+                            candidate = HIRTypeDataFunctionPointer{false, false, RcString::newInterned(ABI_RUST), (*closure)->returnType, {}};
+                            for (const auto& argument : (*closure)->args) {
+                                candidate.argTypes.pushBack(argument.second);
+                            }
+                        } else {
+                            BUG(sp, StringView(""));
+                        }
+
+                        if (target) {
+                            target->isUnsafe |= candidate.isUnsafe;
+                        } else {
+                            target = std::move(candidate);
+                        }
+                    }
+                    newTy = context.crate.types.function(std::move(*target));
+                }
+                if (newTy && pointerSourceUnique && !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, newTy)) {
                     context.equateTypes(sp, tyL, newTy);
                     return true;
                 }
