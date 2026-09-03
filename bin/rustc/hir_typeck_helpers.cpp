@@ -6068,7 +6068,18 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             return result;
         }
         if (const auto* named = source->opt_NamedFunction()) {
-            const auto sourceFunction = named->decay(crate.types, sp);
+            /* A trait method decays to a signature that still names `Self::Output`.
+               Normalize the components that can hold one, or the relation defers on an
+               unresolved projection and the coercion is never proven. */
+            auto sourceFunction = named->decay(crate.types, sp);
+            if (sourceFunction.rettype->mayHaveAssociatedType()) {
+                sourceFunction.rettype = expandAssociatedTypes(sp, sourceFunction.rettype);
+            }
+            for (size_t i = 0; i < sourceFunction.argTypes.length(); i++) {
+                if (sourceFunction.argTypes[i]->mayHaveAssociatedType()) {
+                    sourceFunction.argTypes.mut(i) = expandAssociatedTypes(sp, sourceFunction.argTypes[i]);
+                }
+            }
             const auto result = relateFunctionSignature(*destinationFunction, sourceFunction);
             if (adjustment && result == SolverCertainty::Proven) {
                 adjustment->kind = SolverCoercionAdjustmentKind::FunctionPointer;
