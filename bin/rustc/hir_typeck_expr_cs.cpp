@@ -3997,15 +3997,18 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                                     const IvarCoercionIndex obligations(context);
                                     if (infer->index < obligations.refs.size()) {
                                         const auto& refs = obligations[infer->index];
-                                        /* A trait obligation over the input is not a rival
-                                           reading of it: many types satisfy `T: Default`,
-                                           and none of them is named by it.  The pattern
-                                           does name one - `Inner(..)` matches Inner and
-                                           nothing else - so an obligation has nothing to
-                                           decide differently and waiting for it never
-                                           ends. */
-                                        hasExternalInferenceOwner = !refs.coercions.empty()
-                                            || !refs.revisits.empty();
+                                        /* Only a coercion edge is a rival reading of the
+                                           input: it offers a type of its own.  A trait
+                                           obligation names none - many types satisfy
+                                           `T: Default` - and a node revisit does not choose
+                                           among types either, it computes one from its own
+                                           inputs and would already have done so if it
+                                           could.  Waiting for those never ends, and when
+                                           the node is waiting on this very input, both
+                                           stop: `match text.parse() { Ok(42i32) =>` has
+                                           nothing but the pattern to say what the call
+                                           returns. */
+                                        hasExternalInferenceOwner = !refs.coercions.empty();
                                     }
                                 }
                                 if (!nestedRoot || !hasExternalInferenceOwner) {
