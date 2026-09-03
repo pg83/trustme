@@ -23,6 +23,19 @@
 Самый опасный класс; каждый пункт — отдельная цель «починить механизмом».
 
 Типы и трейты:
+- `hir_typeck_static.cpp:2038` — параметр impl'а, который определяется
+  только его собственным where-bound, остаётся несвязанным и доходит до
+  манглинга как `_`. Для `impl<R, F: FnOnce() -> R> FnOnce<()> for
+  AssertUnwindSafe<F>` self-тип связывает `F`, а `R` даёт лишь вложенный
+  bound; `selected.implParams` уносит на его месте ivar, и
+  `trans_mangling.cpp:385` падает с «Non-encodable type _».
+  Репро (5 строк, edition 2024, на 2021 проходит, upstream 1.90 принимает):
+  `let r = catch_unwind(AssertUnwindSafe(|| panic!("x"))); assert!(r.is_err());`
+  Нужны обе половины: never-fallback в edition 2024 должен давать `!`
+  (сейчас правило закрыто проверкой `edition < Rust2024`, хотя условия
+  достижимы — трасса показывает `39: possible_tys = {} … possibly_diverge=1`),
+  и связывание оставшихся параметров impl'а из его bound'ов при выборе.
+  Это самый крупный оставшийся кластер корпуса (~17 узлов).
 - `hir_type.cpp:2013,2019,2028` — структурный компаратор превращает
   Opaque/Unbound/placeholder в fuzzy-совпадение. После солвер-кампаний
   влияет только на index-префильтр и `HIRMatchGenerics`-матчеры, но
