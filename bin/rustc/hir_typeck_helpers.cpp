@@ -3105,6 +3105,16 @@ bool TraitResolution::iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Da
         if (visitSelfBounds(object->trait)) {
             return true;
         }
+    } else if (const auto* path = selfType->opt_Path(); path && path->path.data.is_UfcsKnown()) {
+        /* An item of an item: `Tr<Item: Iterator<Item: Into<u32>>>` records the inner
+           bound on the trait path that bounds the outer item, so it is reached through
+           that path rather than off the type directly.  Each step strips a projection,
+           so asking the same question of the self type ends. */
+        if (this->iterateAtyBounds(sp, path->path.data.as_UfcsKnown(), [&](const HIRTraitPath& outer) {
+            return visitSelfBounds(outer);
+        })) {
+            return true;
+        }
     }
     for (const auto& bound : traitRef.params.bounds) {
         if (!bound.is_TraitBound()) {
