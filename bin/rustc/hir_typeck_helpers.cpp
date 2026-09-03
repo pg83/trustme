@@ -1647,7 +1647,7 @@ void HMTypeInferrence::addIvarsTraitPath(HIRTraitPath& path) {
     for (auto& bound : path.typeBounds) {
         populateSourceTrait(bound.second.sourceTrait);
         addIvarsParams(bound.second.atyParams);
-        addIvars(bound.second.type);
+        bound.second.type = addIvars(bound.second.type);
     }
     for (auto& bound : path.traitBounds) {
         populateSourceTrait(bound.second.sourceTrait);
