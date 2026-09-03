@@ -3997,8 +3997,14 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                                     const IvarCoercionIndex obligations(context);
                                     if (infer->index < obligations.refs.size()) {
                                         const auto& refs = obligations[infer->index];
+                                        /* A trait obligation over the input is not a rival
+                                           reading of it: many types satisfy `T: Default`,
+                                           and none of them is named by it.  The pattern
+                                           does name one - `Inner(..)` matches Inner and
+                                           nothing else - so an obligation has nothing to
+                                           decide differently and waiting for it never
+                                           ends. */
                                         hasExternalInferenceOwner = !refs.coercions.empty()
-                                            || !refs.associated.empty()
                                             || !refs.revisits.empty();
                                     }
                                 }
