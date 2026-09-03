@@ -18,6 +18,7 @@
 #include <set>
 #include <memory>
 #include <vector>
+#include <functional>
 #include <optional>
 #include <unordered_map>
 
@@ -713,6 +714,13 @@ struct HIRLocalItemTypeNamePath {
         , ownerPath(ownerPath)
         , next(next)
     {
+    }
+};
+
+struct HIRPointerHasher {
+    template <typename T>
+    static u64 hash(const T* ptr) noexcept {
+        return static_cast<u64>(std::hash<const void*>{}(ptr));
     }
 };
 

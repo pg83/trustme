@@ -28,15 +28,6 @@
 
 using namespace stl;
 
-namespace {
-    struct HIRPointerHasher {
-        template <typename T>
-        static u64 hash(const T* ptr) noexcept {
-            return static_cast<u64>(std::hash<const void*>{}(ptr));
-        }
-    };
-}
-
 struct HIRMutableOwnerCache {
     HashMap<HIRFunction*, const HIRFunction*, HIRPointerHasher> functions;
     HashMap<HIRStatic*, const HIRStatic*, HIRPointerHasher> statics;
