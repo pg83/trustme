@@ -13190,6 +13190,11 @@ auto NextTraitGoalEvaluator::literalClassCanMatch(const HIRSimplePath& trait, co
                         if (!traitBound->trait.path.params.types.empty() || !traitBound->trait.path.params.values.empty()) {
                             continue;
                         }
+                        /* An auto trait holds of a type unless something says otherwise, so
+                           there is no impl to find and absence proves nothing. */
+                        if (crate.getTraitByPath(span(), traitBound->trait.path.path).isMarker) {
+                            continue;
+                        }
                         bool boundMatches = false;
                         auto boundProbe = [&](SolverImpl, Certainty, AssembledImplEffects*) {
                             boundMatches = true;
