@@ -9260,10 +9260,14 @@ auto ExprVisitorEnum::visit(HIRExprNodeBlock& node) -> void {
             snp->resType = this->context.addIvars(snp->resType);
             snp->visit(*this);
 
+            /* An expression statement's value is dropped and the statement puts no
+               expectation on it.  Defaulting its type to `()` would be read back as an
+               expectation - a method call in statement position would have every
+               candidate whose return is not `()` rejected - so the statement's type is
+               left to the expression's own constraints.  The block's own `()` result is
+               established below, independently of the statements. */
             if (this->nodeDiverges(*snp)) {
                 diverges = true;
-            } else {
-                this->context.addRevisitAdv(std::make_unique<RevisitDefaultUnit>(&*snp));
             }
         }
         this->popInnerCoerce();
