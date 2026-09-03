@@ -6859,10 +6859,13 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                     const auto& srcInner = this->context.getType(sE.inner);
 
                     if (srcInner->is_Array()) {
-                        if (const auto* sEI = this->context.getType(srcInner->as_Array().inner)->opt_Infer()) {
-                            if (this->isFallback) {
-                                this->context.equateTypes(sp, this->context.ivars.getType(sEI->index), ity);
-                            }
+                        if (this->context.getType(srcInner->as_Array().inner)->is_Infer()) {
+                            /* The cast does not decide the array's element type: upstream
+                               lets it settle on its own - an integer literal takes its own
+                               fallback - and only then checks the cast.  Writing the
+                               destination's pointee into the element is not even the right
+                               shape for `&[T; N] as *const [U]`, where the pointee is the
+                               whole slice. */
                             return;
                         }
                     }
