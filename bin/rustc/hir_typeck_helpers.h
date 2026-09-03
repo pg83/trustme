@@ -882,7 +882,7 @@ private:
     SolverCertainty solveStructuralTraitGoalCertainty(const Span& sp, StructuralTrait trait, const HIRType* type) const;
     SolverCertainty evaluateCoercionConstraint(const Span& sp, const SolverCoercionConstraint& constraint, const HIRType* input, ThinVector<SolverTypeEquality>* equalities = nullptr, SolverResponse* effects = nullptr, ThinVector<SolverDeferredCoercion>* deferred = nullptr, bool* reachedAutoderefLimit = nullptr, SolverCoercionAdjustment* adjustment = nullptr, bool exportPlaceholderEqualities = false) const;
     SolverCertainty evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, u32 conditionalScope = 0, bool onlyBoundsConstrainingTraitParams = false, SolverResponse* effects = nullptr) const;
-    SolverCertainty evaluateInherentImplBounds(const Span& sp, const HIRTypeImpl& impl, const HIRPathParams& implParams) const;
+    SolverCertainty evaluateInherentImplBounds(const Span& sp, const HIRTypeImpl& impl, const HIRPathParams& implParams, SolverResponse* effects = nullptr) const;
 
 public:
     enum class AutoderefBorrow {

@@ -4681,9 +4681,23 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
                 const bool obligationOnlyAmbiguity = response.certainty == SolverCertainty::Ambiguous && response.ambiguityOnlyFromObligations;
                 const bool selectedWithDeferredConstraints = effects && probe.candidate
                     && response.certainty == SolverCertainty::Ambiguous && responseHasDeferredConstraints;
+                /* An unproven bound over open inference is data, not a verdict:
+                 * with an effect channel it leaves as the obligation itself, to
+                 * be reconsidered once the inputs are known, so a caller that
+                 * carries obligations is not blocked by it. */
+                const bool deferredBoundObligation = effects && !probe.candidate
+                    && response.certainty == SolverCertainty::Ambiguous && boundInputsOpen;
                 const bool exportDeferredConstraints = effects && responseHasDeferredConstraints;
-                if (!obligationOnlyAmbiguity && !selectedWithDeferredConstraints) {
+                if (!obligationOnlyAmbiguity && !selectedWithDeferredConstraints && !deferredBoundObligation) {
                     merge(response.certainty);
+                }
+                if (deferredBoundObligation) {
+                    const bool duplicate = std::any_of(effects->obligations.begin(), effects->obligations.end(), [&](const SolverObligation& existing) {
+                        return existing.type == realType && existing.trait == realTrait;
+                    });
+                    if (!duplicate) {
+                        effects->obligations.push_back(SolverObligation{realType, realTrait.clone()});
+                    }
                 }
                 appendBoundEffects(response);
 
@@ -4831,10 +4845,10 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
     return result;
 }
 
-SolverCertainty TraitResolution::evaluateInherentImplBounds(const Span& sp, const HIRTypeImpl& impl, const HIRPathParams& implParams) const {
+SolverCertainty TraitResolution::evaluateInherentImplBounds(const Span& sp, const HIRTypeImpl& impl, const HIRPathParams& implParams, SolverResponse* effects) const {
     auto monomorph = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr);
     monomorph.setConstevalState(this->board(), HIRItemPath(""));
-    return this->evaluateGenericBounds(sp, impl.params, implParams, monomorph);
+    return this->evaluateGenericBounds(sp, impl.params, implParams, monomorph, 0, false, effects);
 }
 
 SolverCertainty TraitResolution::evaluateInherentImpl(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const {
@@ -6477,6 +6491,19 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     }
     const auto firstPossibility = possibilities.size();
     ThinVector<SolverResponse> ambiguousResponses;
+    const HIRType* inherentReceiver = receiver;
+    while (const auto* borrow = inherentReceiver->opt_Borrow()) {
+        inherentReceiver = resolve_.ivars.getType(borrow->inner);
+    }
+    const auto* inherentInfer = inherentReceiver->opt_Infer();
+    /* A literal ivar receiver ranges over the primitives of its class, so the
+     * declared-trait routes are enumerated in full even though the inherent
+     * index cannot be probed through an ivar: a candidate proven against it is
+     * the answer, and applying it is what pins the literal. Their absence is a
+     * plain no-match for this step, so the autoderef/autoref ladder keeps
+     * walking; the receiver still being a literal is what pauses the whole
+     * lookup, in autoderefFindMethod, until the default settles it. */
+    const bool traitRoutesAreComplete = inherentInfer && inherentInfer->isLit();
     struct InstantiateMethodExistentials final: public Monomorphiser {
         HMTypeInferrence& ivars;
         mutable std::vector<std::pair<HIRGenericRef, const HIRType*>> types;
@@ -6743,7 +6770,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         if (possibilities.size() - firstPossibility <= 1) {
             return Certainty::Proven;
         }
-        if (mustDecide) {
+        if (mustDecide && !traitRoutesAreComplete) {
             ERROR(callSpan, E0000, StringView("multiple applicable items in scope for {") << receiver << StringView("}.") << methodName << StringView(": ") << possibilities);
         }
         return emitAmbiguous();
@@ -7606,14 +7633,10 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         }
     };
 
-    const auto* inherentReceiver = receiver;
-    while (const auto* borrow = inherentReceiver->opt_Borrow()) {
-        inherentReceiver = resolve_.ivars.getType(borrow->inner);
-    }
     const auto* erased = inherentReceiver->opt_ErasedType();
     const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
     const bool opaqueCanReveal = !erased || (alias && resolve_.isOpaqueAliasDefiningScope(*alias->inner)) || erased->inner.is_Known();
-    const bool inherentSourceAmbiguous = inherentReceiver->is_Infer();
+    const bool inherentSourceAmbiguous = inherentInfer != nullptr;
     if (!inherentSourceAmbiguous && opaqueCanReveal) {
         auto inherentCertainty = Certainty::NoSolution;
         resolve_.wb.inherentMethods->find(callSpan, methodName, receiver, resolve_.ivars.callbackResolveInfer(), [&](const HIRType* roughSelfType, const HIRTypeImpl& impl) {
@@ -7720,7 +7743,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                 /* Receiver/result relations can determine impl parameters that
                  * were still open during the first bound probe. Re-evaluate the
                  * obligations transactionally before assigning certainty. */
-                const auto completeImplBounds = resolve_.evaluateInherentImplBounds(callSpan, impl, implParams);
+                const auto completeImplBounds = resolve_.evaluateInherentImplBounds(callSpan, impl, implParams, &signatureEffects);
                 if (completeImplBounds == Certainty::NoSolution) {
                     return Certainty::NoSolution;
                 }
@@ -7868,7 +7891,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         });
     }
     if (foundBound && foundNonGlobalBound) {
-        return inherentSourceAmbiguous ? emitAmbiguous() : finishProven();
+        return inherentSourceAmbiguous && !traitRoutesAreComplete ? emitAmbiguous() : finishProven();
     }
     const auto restoreUncoveredBoundAmbiguities = [&]() {
         bool uncovered = false;
@@ -7917,7 +7940,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             if (restoreUncoveredBoundAmbiguities()) {
                 return emitAmbiguous();
             }
-            return inherentSourceAmbiguous ? emitAmbiguous() : finishProven();
+            return inherentSourceAmbiguous && !traitRoutesAreComplete ? emitAmbiguous() : finishProven();
         }
     }
 
@@ -7987,9 +8010,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     }
 
     if (possibilities.size() > firstPossibility) {
-        return inherentSourceAmbiguous ? emitAmbiguous() : finishProven();
+        return inherentSourceAmbiguous && !traitRoutesAreComplete ? emitAmbiguous() : finishProven();
     }
-    return inherentSourceAmbiguous ? emitAmbiguous() : Certainty::NoSolution;
+    return inherentSourceAmbiguous && !traitRoutesAreComplete ? emitAmbiguous() : Certainty::NoSolution;
 }
 
 SolverCertainty TraitResolution::findMethod(
