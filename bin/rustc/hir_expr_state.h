@@ -47,5 +47,10 @@ public:
 
     Captures captures;
 
+    /* Creation-order name for an anonymous const-generic body, assigned on first use.
+       The name reaches item paths and the names generated from them, so it has to be
+       a property of the expression rather than of where it happens to be allocated. */
+    u32 anonConstIndex = 0;
+
     HIRExprState(HIRTypeInterner& types, HIRModule& modPtr, HIRSimplePath modPath);
 };

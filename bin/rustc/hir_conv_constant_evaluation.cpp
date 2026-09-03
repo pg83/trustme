@@ -594,12 +594,20 @@ namespace {
         return true;
     }
 
+    RcString anonConstBodyName(const WireBoard& wb, HIRExprPtr& expr) {
+        auto& state = *expr.state;
+        if (state.anonConstIndex == 0) {
+            state.anonConstIndex = ++wb.id;
+        }
+        return RcString::newInterned(FMT(StringView("const_") << state.anonConstIndex << StringView("#")));
+    }
+
     void translateConstExprBody(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRType* type, const HIRConstGenericUnevaluated& value) {
         ASSERT_BUG(sp, type, StringView("translateConstExprBody without an expected type"));
         auto& expr = *value.expr;
         ASSERT_BUG(sp, expr.state, StringView("Const-generic expression has no state"));
+        auto name = anonConstBodyName(wb, expr);
         const auto& state = *expr.state;
-        auto name = FMT(StringView("const_") << static_cast<const void*>(&expr) << StringView("#"));
         const HIRType* exp = type;
         wb.crate->getOrGenMir(wb, HIRItemPath(state.modPath, name.c_str()), expr, exp);
     }
@@ -607,8 +615,8 @@ namespace {
     EncodedLiteral evaluateConstgeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRType* type, const HIRConstGenericUnevaluated& value) {
         auto& expr = *value.expr;
         ASSERT_BUG(sp, expr.state, StringView("Const-generic expression has no state"));
+        auto name = anonConstBodyName(wb, expr);
         const auto& state = *expr.state;
-        auto name = FMT(StringView("const_") << static_cast<const void*>(&expr) << StringView("#"));
 
         NewvalStateNop nvs{sp};
         auto eval = HIREvaluator{sp, wb, nvs};
