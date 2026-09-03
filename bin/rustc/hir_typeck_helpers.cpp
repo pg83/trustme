@@ -3078,6 +3078,34 @@ bool TraitResolution::iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Da
             return true;
         }
     }
+    /* `impl Tr<Item: Bound>` and `dyn Tr<Item: Bound>` state the bound on the type
+       rather than on the trait's declaration of the item.  For an opaque that is all
+       the caller has: the hidden type is not visible, so nothing else says what the
+       projection can do. */
+    const auto visitSelfBounds = [&](const HIRTraitPath& self) {
+        const auto bound = self.traitBounds.find(pe.item);
+        if (bound == self.traitBounds.end() || bound->second.sourceTrait.path != traitPath.path) {
+            return false;
+        }
+        for (const auto& trait : bound->second.traits) {
+            if (cb.visit(trait)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    const auto* selfType = this->ivars.getType(pe.type);
+    if (const auto* erased = selfType->opt_ErasedType()) {
+        for (const auto& self : erased->traits) {
+            if (visitSelfBounds(self)) {
+                return true;
+            }
+        }
+    } else if (const auto* object = selfType->opt_TraitObject()) {
+        if (visitSelfBounds(object->trait)) {
+            return true;
+        }
+    }
     for (const auto& bound : traitRef.params.bounds) {
         if (!bound.is_TraitBound()) {
             continue;
