@@ -785,6 +785,18 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp
         }
     }
 
+    /* A `_` written in a path's generic arguments is a placeholder that only
+       expression type checking populates.  Normalizing a projection that still holds
+       one would have the solver resolve an inference variable that does not exist
+       yet, so leave the projection to the pass that populates it - the same answer
+       the unresolved-self case above gives. */
+    if (input->hasTypeInfer() && visitTyWith(input, [](const HIRType* inner) {
+            const auto* infer = inner->opt_Infer();
+            return infer && infer->index == ~0u;
+        })) {
+        return input;
+    }
+
     if (const auto* replacement = this->replaceEqualities(input)) {
         input = replacement;
         if (recurse) {
