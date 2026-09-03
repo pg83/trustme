@@ -3086,8 +3086,18 @@ auto MarkingsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImp
     HIRVisitor::visitTraitImpl(traitPath, impl);
 
     if (impl.type->is_Path()) {
-        const auto& te = impl.type->as_Path();
-        ASSERT_BUG(sp, te.path.data.is_Generic(), StringView("Impl type path is not generic: ") << impl.type);
+        const HIRType* implType = impl.type;
+        if (!implType->as_Path().path.data.is_Generic()) {
+            /* The impl is written against a projection.  Markings belong to the named
+               type the projection normalizes to, so normalize before looking the type
+               item up; a projection that resolves to something without a type item (a
+               primitive, a tuple, an unresolved projection) has nothing to mark. */
+            implType = resolve_.expandAssociatedTypes(sp, implType);
+            if (!implType->is_Path() || !implType->as_Path().path.data.is_Generic()) {
+                return;
+            }
+        }
+        const auto& te = implType->as_Path();
         auto& typeItem = crate.getTypeitemByPathMut(sp, te.path.data.as_Generic().path);
         HIRTraitMarkings* markingsPtr = nullptr;
         if (auto* item = typeItem.opt_ExternType()) {
