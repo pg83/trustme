@@ -11769,14 +11769,22 @@ auto NextTraitGoalEvaluator::matchAssociatedTypes(const HIRSimplePath& trait, Ca
                 }
                 if (sourceResult == Certainty::Ambiguous) {
                     result = Certainty::Ambiguous;
+                    continue;
                 }
-                continue;
+                /* The nested goal only reports certainty, so the equality it proved for
+                   this binding would be dropped.  Relate the requirement against the
+                   declaring trait's associated type for the same self type - normalized,
+                   because an unresolved projection would only relate as Ambiguous and
+                   leave the binding open - so the equality reaches the caller. */
+                output = resolve_.expandAssociatedTypes(span(), makeAssociatedProjection(impl, aty.sourceTrait, requirement.first, aty.atyParams));
             }
-            if (impl.isTraitImpl()) {
-                result = Certainty::Ambiguous;
-                continue;
+            if (output == nullptr) {
+                if (impl.isTraitImpl()) {
+                    result = Certainty::Ambiguous;
+                    continue;
+                }
+                output = makeAssociatedProjection(impl, aty.sourceTrait, requirement.first, aty.atyParams);
             }
-            output = makeAssociatedProjection(impl, aty.sourceTrait, requirement.first, aty.atyParams);
         }
         auto required = aty.type;
         if (headBindings) {
