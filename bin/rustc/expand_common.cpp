@@ -985,6 +985,7 @@ namespace {
     }
 
     void ExpandFunction(const ExpandState& es, ASTModule& mod, ASTFunction& e) {
+        ExpandGenericParams(es, mod, e.params());
         if (auto* delegation = e.delegation()) {
             for (auto& target : delegation->targets) {
                 ExpandPath(es, mod, target.path);
