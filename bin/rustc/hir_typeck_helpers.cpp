@@ -13174,7 +13174,39 @@ auto NextTraitGoalEvaluator::literalClassCanMatch(const HIRSimplePath& trait, co
             resolve_.assembleParamEnvCandidates(span(), trait, params, prim, probe);
         }
         if (!matches) {
-            crate.findTraitImpls(trait, prim, HIRResolvePlaceholdersNop(), [&](const HIRTraitImpl&) {
+            crate.findTraitImpls(trait, prim, HIRResolvePlaceholdersNop(), [&](const HIRTraitImpl& impl) {
+                /* An impl written for every type matches the primitive's shape but may ask
+                   more of it than a number can give: `impl<F: FnPtr> Ord for F` is one such,
+                   and no number is a function pointer.  A bound with no candidate at all for
+                   this primitive is not satisfiable, so the impl is not one it has. */
+                const auto* implSelf = impl.type;
+                if (implSelf->is_Generic()) {
+                    const auto& selfParam = implSelf->as_Generic();
+                    for (const auto& bound : impl.params.bounds) {
+                        const auto* traitBound = bound.opt_TraitBound();
+                        if (!traitBound || !traitBound->type->is_Generic() || !(traitBound->type->as_Generic() == selfParam)) {
+                            continue;
+                        }
+                        if (!traitBound->trait.path.params.types.empty() || !traitBound->trait.path.params.values.empty()) {
+                            continue;
+                        }
+                        bool boundMatches = false;
+                        auto boundProbe = [&](SolverImpl, Certainty, AssembledImplEffects*) {
+                            boundMatches = true;
+                            return true;
+                        };
+                        resolve_.assembleMagicCandidates(span(), traitBound->trait.path.path, traitBound->trait.path.params, prim, boundProbe);
+                        if (!boundMatches) {
+                            crate.findTraitImpls(traitBound->trait.path.path, prim, HIRResolvePlaceholdersNop(), [&](const HIRTraitImpl&) {
+                                boundMatches = true;
+                                return true;
+                            });
+                        }
+                        if (!boundMatches) {
+                            return false;
+                        }
+                    }
+                }
                 matches = true;
                 return true;
             });
