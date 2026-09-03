@@ -6575,6 +6575,96 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             return fresh;
         }
     };
+    const auto typeHasSolverExistential = [](const HIRType* type) {
+        return visitTyWith(type, [](const HIRType* inner) {
+            const auto* generic = inner->opt_Generic();
+            return generic && generic->isSolverExistential();
+        });
+    };
+    const auto isSolverExistential = [](const HIRType* type) {
+        const auto* generic = type->opt_Generic();
+        return generic && generic->isSolverExistential();
+    };
+    /* An existential belongs to the lookup that made it.  A proven candidate hands
+       its existentials to the caller as the method's generic arguments, so those get
+       an ivar each and the caller ties them down.  An inconclusive lookup has no such
+       caller, and it runs again every round, so whatever it exports about its own
+       existentials it exports afresh each time.  That is worth paying for while the
+       shape says something: `*mut ?E` tells the caller its type is a pointer, and the
+       variable behind it is the method's own parameter waiting to be chosen.  A bare
+       existential, or a projection rooted at one, says nothing - it names a variable
+       the caller cannot see through and cannot discharge, and the copy left behind
+       stands as a rule that typecheck can never satisfy. */
+    const auto opaqueForCaller = [](const HIRType* type) {
+        while (true) {
+            if (const auto* generic = type->opt_Generic()) {
+                return generic->isSolverExistential();
+            }
+            const auto* path = type->opt_Path();
+            if (!path) {
+                return false;
+            }
+            if (const auto* ufcs = path->path.data.opt_UfcsKnown()) {
+                type = ufcs->type;
+            } else if (const auto* inherent = path->path.data.opt_UfcsInherent()) {
+                type = inherent->type;
+            } else if (const auto* unknown = path->path.data.opt_UfcsUnknown()) {
+                type = unknown->type;
+            } else {
+                return false;
+            }
+        }
+    };
+    const auto valueOpaqueForCaller = [](const HIRConstGeneric& value) {
+        return value.is_Generic() && value.as_Generic().isSolverExistential();
+    };
+    const auto traitOpaqueForCaller = [&](const HIRTraitPath& trait) {
+        for (const auto* type : trait.path.params.types) {
+            if (opaqueForCaller(type)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    const auto withoutOpaqueEffects = [&](const SolverResponse& source) {
+        SolverResponse result;
+        result.certainty = source.certainty;
+        result.ambiguityOnlyFromObligations = source.ambiguityOnlyFromObligations;
+        result.operatorSummary = source.operatorSummary;
+        for (size_t i = 0; i < source.slots.typeInputs.size(); i++) {
+            if (!opaqueForCaller(source.slots.typeInputs[i]) && !opaqueForCaller(source.slots.types[i])) {
+                result.slots.typeInputs.push_back(source.slots.typeInputs[i]);
+                result.slots.types.push_back(source.slots.types[i]);
+            }
+        }
+        for (size_t i = 0; i < source.slots.valueInputs.size(); i++) {
+            if (!valueOpaqueForCaller(source.slots.valueInputs[i]) && !valueOpaqueForCaller(source.slots.values[i])) {
+                result.slots.valueInputs.push_back(source.slots.valueInputs[i].clone());
+                result.slots.values.push_back(source.slots.values[i].clone());
+            }
+        }
+        for (const auto& equality : source.equalities) {
+            if (!opaqueForCaller(equality.left) && !opaqueForCaller(equality.right)) {
+                result.equalities.push_back(equality);
+            }
+        }
+        for (const auto& equality : source.valueEqualities) {
+            if (!valueOpaqueForCaller(equality.left) && !valueOpaqueForCaller(equality.right)) {
+                result.valueEqualities.push_back(SolverValueEquality{equality.left.clone(), equality.right.clone()});
+            }
+        }
+        for (const auto& obligation : source.obligations) {
+            if (!opaqueForCaller(obligation.type) && !traitOpaqueForCaller(obligation.trait)) {
+                result.obligations.push_back(SolverObligation{obligation.type, obligation.trait.clone()});
+            }
+        }
+        for (const auto& coercion : source.coercions) {
+            if (!opaqueForCaller(coercion.destination) && !opaqueForCaller(coercion.source)) {
+                result.coercions.push_back(coercion);
+            }
+        }
+        return result;
+    };
     const auto instantiateMethodResponse = [&](const SolverResponse& source, InstantiateMethodExistentials& instantiator) {
         SolverResponse result;
         result.certainty = source.certainty;
@@ -6631,6 +6721,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             }
         }
         if (deferredEffects && deferredEffects->certainty != Certainty::NoSolution) {
+            if (deferredEffects->certainty == Certainty::Ambiguous) {
+                *deferredEffects = withoutOpaqueEffects(*deferredEffects);
+            }
             InstantiateMethodExistentials instantiator(crate.types, resolve_.ivars);
             *deferredEffects = instantiateMethodResponse(*deferredEffects, instantiator);
         }
@@ -6958,16 +7051,6 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     };
     const auto valueHasProbeIvar = [](const HIRConstGeneric& value, const HMTypeInferrence::Snapshot& snapshot) {
         return ProbeValueDetector{snapshot}.value(value);
-    };
-    const auto typeHasSolverExistential = [](const HIRType* type) {
-        return visitTyWith(type, [](const HIRType* inner) {
-            const auto* generic = inner->opt_Generic();
-            return generic && generic->isSolverExistential();
-        });
-    };
-    const auto isSolverExistential = [](const HIRType* type) {
-        const auto* generic = type->opt_Generic();
-        return generic && generic->isSolverExistential();
     };
     const auto paramsHaveProbeIvar = [&](const HIRPathParams& params, const HMTypeInferrence::Snapshot& snapshot) {
         for (const auto* type : params.types) {

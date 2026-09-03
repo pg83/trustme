@@ -1,9 +1,9 @@
-// Comparing a type with itself has to terminate. Types are interned, so the
-// two sides of this comparison are the same pointer; without saying so the
-// comparison walks the type's parameters and, where a parameter leads back to
-// the type, recurses until the stack is gone. This program made the compiler
-// segfault.
-
+// Binding an inference variable to a projection is guarded by an occurs check,
+// so the variable cannot come to contain itself. Aliased variables share one
+// root, so the projection may name any member of the class rather than the
+// representative the candidate resolved to; a check that compares the resolved
+// types by pointer misses that. The infinite type it builds made every later
+// walk recurse until the stack was gone, and this program segfaulted.
 use std::collections::VecDeque;
 
 fn main() {
