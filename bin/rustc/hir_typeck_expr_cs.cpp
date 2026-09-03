@@ -6879,15 +6879,14 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                         }
                         return;
                     } else if (srcInner->is_Infer()) {
-                        const auto index = srcInner->as_Infer().index;
-                        const bool hasLiveCoercion = std::any_of(this->context.linkCoerce.begin(), this->context.linkCoerce.end(), [&](const auto& obligation) {
-                            return typeDependsOnIvar(this->context, obligation->leftTy, index)
-                                || typeDependsOnIvar(this->context, obligation->sourceType(), index);
-                        });
-                        if (!this->isFallback || hasLiveCoercion) {
+                        /* A pointer cast relates the two pointee types not at all.  The
+                           source pointee is resolved by the operand's own constraints -
+                           an integer literal keeps its own fallback - and never by the
+                           cast's destination.  Wait for those constraints, then accept
+                           the cast whatever the pointee turned out to be. */
+                        if (!this->isFallback) {
                             return;
                         }
-                        this->context.equateTypes(sp, dstInner, srcInner);
                     } else {
                     }
                     this->completed = true;
