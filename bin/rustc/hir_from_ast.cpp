@@ -2647,7 +2647,18 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         } else if (const auto* e = argSelfTy->opt_Path()) {
             if (const auto* pe = e->path.data.opt_Generic()) {
                 auto p = crate->getLangItemPathOpt("owned_box");
-                if (pe->path == p) {
+                /* `Box<Self>` is the conventional box receiver: what the box carries
+                   besides Self is settled by the declaration.  `Box<Self, A>` over the
+                   function's own allocator parameter is not - A is read off the actual
+                   receiver at the call site, and only the custom-receiver relation does
+                   that.  Classifying it as the conventional form drops everything after
+                   Self, leaving A fixed by nothing. */
+                const bool boxArgumentsAreFixed = std::none_of(pe->params.types.begin() + std::min<size_t>(1, pe->params.types.size()), pe->params.types.end(), [](const HIRType* argument) {
+                    return visitTyWith(argument, [](const HIRType* inner) {
+                        return inner->is_Generic();
+                    });
+                });
+                if (pe->path == p && boxArgumentsAreFixed) {
                     if (pe->params.types.size() >= 1 && (pe->params.types[0] == crate->types.self() || pe->params.types[0] == realSelfType)) {
                         if (pe->params.types[0] == realSelfType) {
                             auto data = argSelfTy->cloneData();
