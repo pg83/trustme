@@ -1822,6 +1822,53 @@ const HIRType* StaticTraitResolve::getFieldType(const Span& sp, const HIRType* t
     BUG(sp, StringView("Reached end of `get_field_type` - ") << ty);
 }
 
+namespace {
+    /* An impl parameter can be fixed by the impl's own where-bound rather than by
+       its self type: in `impl<R, F: FnOnce() -> R> FnOnce<()> for AssertUnwindSafe<F>`
+       the self type gives `F` and only `F: FnOnce() -> R` gives `R`.  When selection
+       leaves such a parameter open, draw it from that bound; otherwise it travels on
+       as an inference variable and code generation has no encoding for one.  Runs
+       only when a parameter is actually open, so a fully bound impl pays nothing. */
+    void completeOpenImplParams(const Span& sp, const StaticTraitResolve& resolve, const HIRTraitImpl& impl, HIRPathParams& implParams) {
+        bool anyOpen = false;
+        for (const auto* type : implParams.types) {
+            if (type && type->is_Infer()) {
+                anyOpen = true;
+                break;
+            }
+        }
+        if (!anyOpen) {
+            return;
+        }
+        auto& types = resolve.hirCrate().types;
+        for (const auto& bound : impl.params.bounds) {
+            const auto* traitBound = bound.opt_TraitBound();
+            if (!traitBound) {
+                continue;
+            }
+            for (const auto& associated : traitBound->trait.typeBounds) {
+                const auto* declared = associated.second.type;
+                const auto* generic = declared ? declared->opt_Generic() : nullptr;
+                if (!generic || generic->group() != GENERICImpl) {
+                    continue;
+                }
+                const size_t index = generic->idx();
+                if (index >= implParams.types.size() || !implParams.types[index] || !implParams.types[index]->is_Infer()) {
+                    continue;
+                }
+                auto monomorph = MonomorphStatePtr(types, nullptr, &implParams, nullptr);
+                const auto* selfType = monomorph.monomorphType(sp, traitBound->type);
+                auto traitPath = monomorph.monomorphGenericpath(sp, traitBound->trait.path);
+                const auto* projection = types.path(HIRPath(selfType, std::move(traitPath), associated.first, associated.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
+                const auto* resolved = resolve.expandAssociatedTypes(sp, projection);
+                if (resolved && resolved != projection && !resolved->is_Infer()) {
+                    implParams.types[index] = resolved;
+                }
+            }
+        }
+    }
+}
+
 StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const HIRPath& p, MonomorphState& outParams, bool signatureOnly /*=false*/, const HIRGenericParams** outImplParamsDef /*=nullptr*/, ResolvedTraitImplPath* outTraitImplPath /*=nullptr*/) const {
     TRACE_FUNCTION_F(p << StringView(", signature_only=") << signatureOnly);
     outParams = MonomorphState{crate.types};
@@ -2036,6 +2083,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 }
                 outParams.ppImpl = &outParams.ppImplData;
                 outParams.ppImplData = selected.implParams.clone();
+                completeOpenImplParams(sp, *this, impl, outParams.ppImplData);
                 ASSERT_BUG(sp, !rv.is_NotFound(), StringView(""));
                 return rv;
             }
