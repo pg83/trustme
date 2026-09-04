@@ -5686,22 +5686,34 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
         std::optional<IvarCoercionIndex> ivarCoercionIndex;
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Coercion checking"));
-            for (size_t i = 0; i < context.linkCoerce.size();) {
-                auto ent = mv$(context.linkCoerce[i]);
-                const auto& span = ent->span();
-                if (ent->rightNodePtr) {
-                    auto& srcTy = (*ent->rightNodePtr)->resType;
-                    srcTy = context.expandAssociatedTypes(span, mv$(srcTy)); // TODO: This was commented, why?
-                } else {
-                    ent->rightTy = context.expandAssociatedTypes(span, mv$(ent->rightTy));
-                }
-                ent->leftTy = context.expandAssociatedTypes(span, mv$(ent->leftTy));
-                if (checkCoerce(context, *ent)) {
-                    DEBUG(StringView("- Consumed coercion R") << ent->ruleIdx << StringView(" ") << ent->leftTy << StringView(" := ") << ent->sourceType());
-                    context.linkCoerce.erase(context.linkCoerce.begin() + i);
-                } else {
-                    context.linkCoerce[i] = mv$(ent);
-                    ++i;
+            /* Settling one of these can make another ready, and the other may sit
+               earlier in the list than the sweep has already reached.  Sweeping once
+               leaves it for the next pass, and a chain ordered against the list settles
+               one link per pass - each pass re-checking every obligation and revisit in
+               the function.  Keep sweeping while the sweep still settles something; the
+               decisions are the same ones in the same order, without a whole pass
+               between each. */
+            bool coercionSettled = true;
+            while (coercionSettled) {
+                coercionSettled = false;
+                for (size_t i = 0; i < context.linkCoerce.size();) {
+                    auto ent = mv$(context.linkCoerce[i]);
+                    const auto& span = ent->span();
+                    if (ent->rightNodePtr) {
+                        auto& srcTy = (*ent->rightNodePtr)->resType;
+                        srcTy = context.expandAssociatedTypes(span, mv$(srcTy)); // TODO: This was commented, why?
+                    } else {
+                        ent->rightTy = context.expandAssociatedTypes(span, mv$(ent->rightTy));
+                    }
+                    ent->leftTy = context.expandAssociatedTypes(span, mv$(ent->leftTy));
+                    if (checkCoerce(context, *ent)) {
+                        DEBUG(StringView("- Consumed coercion R") << ent->ruleIdx << StringView(" ") << ent->leftTy << StringView(" := ") << ent->sourceType());
+                        context.linkCoerce.erase(context.linkCoerce.begin() + i);
+                        coercionSettled = true;
+                    } else {
+                        context.linkCoerce[i] = mv$(ent);
+                        ++i;
+                    }
                 }
             }
             if (!context.ivars.peekChanged()) {
