@@ -7458,6 +7458,22 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     };
     const auto evaluateMethodArgument = [&](const HIRType* expected, const HIRType* actual, unsigned sourceInput, SolverResponse& effects) {
         const auto equalitySnapshot = resolve_.ivars.snapshot();
+        /* Read before relating: relating is what would fill the slot, and the question is
+           whether anything had filled it already.  Only a parameter of the trait itself
+           counts - that is the one an impl fixes.  A parameter of the method has nothing
+           but its argument to go on, and leaving it open leaves it open for good. */
+        const bool expectedWasUnclaimedTraitSlot = [&]() {
+            const auto* infer = resolve_.ivars.getType(expected)->opt_Infer();
+            if (!infer || infer->index == ~0u || infer->isLit()) {
+                return false;
+            }
+            for (size_t i = 0; i < typeIvarCount; i++) {
+                if (infer->index == methodIvars[i]) {
+                    return true;
+                }
+            }
+            return false;
+        }();
         Unifier equality(callSpan, resolve_.ivars, &resolve_, {.relateProjectionInputs = true});
         const auto equalityOutcome = equality.unify(expected, actual);
         const auto appendCoercion = [&]() {
@@ -7465,6 +7481,11 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                 effects.coercions.push_back(SolverCoercionObligation{expected, actual, SolverCoercionOp::Coercion, sourceInput});
             }
         };
+        if (expectedWasUnclaimedTraitSlot && resolve_.ivars.getType(actual)->is_NamedFunction()) {
+            resolve_.ivars.rollbackTo(equalitySnapshot);
+            appendCoercion();
+            return Certainty::Proven;
+        }
         if (equalityOutcome == Unifier::Outcome::Proven && !expected->is_ErasedType()) {
             resolve_.ivars.commit(equalitySnapshot);
             appendCoercion();
@@ -7672,6 +7693,12 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             const auto* infer = resolved->opt_Infer();
             return infer && infer->tyClass == HIRInferClass::None;
         });
+        const bool proofInputsAreOpen = std::any_of(proofParams.types.begin(), proofParams.types.end(), [&](const HIRType* type) {
+            const auto* resolved = resolve_.ivars.getType(type);
+            const auto* generic = resolved->opt_Generic();
+            const auto* infer = resolved->opt_Infer();
+            return (generic && generic->isSolverExistential()) || (infer && !infer->isLit());
+        });
         const char* expectedAssocName = nullptr;
         const HIRPathParams* expectedAssocParams = nullptr;
         if (expectedGuidesProof) {
@@ -7698,7 +7725,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                     .assocType = expectedAssocName ? expectedResult : nullptr,
                     .assocParams = expectedAssocParams,
                     .valueName = valueName,
-                    .allowInferInputs = receiverIsOpen,
+                    .allowInferInputs = receiverIsOpen || proofInputsAreOpen,
                     .ambiguity = SolverAmbiguityPolicy::Report,
                 },
                 true
