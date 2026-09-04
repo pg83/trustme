@@ -6922,13 +6922,11 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                     const auto& srcInner = this->context.getType(sE.inner);
 
                     if (srcInner->is_Array()) {
-                        if (this->context.getType(srcInner->as_Array().inner)->is_Infer()) {
-                            /* The cast does not decide the array's element type: upstream
-                               lets it settle on its own - an integer literal takes its own
-                               fallback - and only then checks the cast.  Writing the
-                               destination's pointee into the element is not even the right
-                               shape for `&[T; N] as *const [U]`, where the pointee is the
-                               whole slice. */
+                        const auto* elementInfer = this->context.getType(srcInner->as_Array().inner)->opt_Infer();
+                        if (elementInfer && (!this->isFallback || elementInfer->tyClass != HIRInferClass::None)) {
+                            /* Cast checks follow inference and numeric fallback. A remaining
+                               unconstrained element can then be related by the coercion cast
+                               or, if coercion fails, by the array-to-element pointer cast. */
                             return;
                         }
                     }
@@ -6955,6 +6953,12 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                             } else {
                                 this->context.equateTypes(sp, e.inner, sE.inner);
                             }
+                        } else if (response.effects.certainty == SolverCertainty::Ambiguous) {
+                            return;
+                        } else if (srcInner->is_Array() && this->context.resolve.typeIsSized(sp, ity) == SolverCertainty::Proven) {
+                            this->context.equateTypes(sp, srcInner->as_Array().inner, ity);
+                            auto ty = context.crate.types.pointer(e.type, srcInner);
+                            node.value = NEWNODE(ty, sp, Cast, mv$(node.value), ty);
                         } else {
                             this->context.equateTypes(sp, e.inner, sE.inner);
                         }
