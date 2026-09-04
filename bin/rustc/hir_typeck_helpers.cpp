@@ -14872,10 +14872,13 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (std::any_of(frame.viable.begin(), frame.viable.end(), [&](const Candidate* candidate) {
             return namesTheItem(candidate) && candidate->certainty == Certainty::Proven;
         })) {
+            /* Only impls give way.  Another clause is not answering a different question,
+               it is another clause about the same item, and which of them applies is
+               settled by the trait's arguments like anywhere else. */
             auto& viable = frame.viable;
             size_t kept = 0;
             for (auto* candidate : viable) {
-                if (namesTheItem(candidate)) {
+                if (candidate->source == CandidateSource::ParamEnv) {
                     viable.mut(kept++) = candidate;
                 }
             }
