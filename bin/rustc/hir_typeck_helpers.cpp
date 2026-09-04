@@ -5918,7 +5918,14 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             }
             return SolverCertainty::Ambiguous;
         }
-        if (typeIsSized(sp, destination) == SolverCertainty::Proven) {
+        /* A destination that cannot be unsized into is reached by being equal to the
+           source, and that is decided by what the type is, not by what can be proved
+           about it: a where-clause may claim `T<dyn A>` is Sized, and the body is
+           checked under the claim, but the type still ends in a trait object and
+           reaching it from `T<i32>` is still an unsizing.  Structure answers the
+           common cases outright, and only where it cannot does the claim matter. */
+        const auto structurallySized = solveStructuralTraitGoalCertainty(sp, StructuralTrait::Sized, destination);
+        if (structurallySized == SolverCertainty::Proven || (structurallySized == SolverCertainty::Ambiguous && typeIsSized(sp, destination) == SolverCertainty::Proven)) {
             return related(relateEquality(destination, source), SolverCoercionRelation::Equality);
         }
         const bool structuralUnsizeWithOpenSource = isOpenStructuralUnsize(destination, source);
