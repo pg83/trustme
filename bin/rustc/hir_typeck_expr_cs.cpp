@@ -6901,7 +6901,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                             this->context.equateTypes(sp, srcInner, ity);
                             this->completed = true;
                         }
-                    } else if (srcInner->is_Array() && srcInner->as_Array().inner == ity) {
+                    } else if (srcInner->is_Array() && this->context.getType(srcInner->as_Array().inner) == ity) {
                         auto ty = context.crate.types.pointer(e.type, srcInner);
                         node.value = NEWNODE(ty, sp, Cast, mv$(node.value), ty);
                         this->completed = true;
