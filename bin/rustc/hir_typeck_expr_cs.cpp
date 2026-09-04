@@ -1195,10 +1195,24 @@ namespace {
             case CoerceResult::Custom:
                 DEBUG(StringView("Custom - Completed"));
                 return true;
-            case CoerceResult::Equality:
+            case CoerceResult::Equality: {
                 DEBUG(StringView("Trigger equality - Completed"));
                 context.equateTypes(sp, tyDst, tySrc);
+                /* `!` equates with any type without changing it, so a diverging source
+                   comes out of that equality still holding the type it diverged with
+                   rather than the one the context asked for.  Upstream records the
+                   asked-for type on such a node - the value never arrives, so no other
+                   type can contradict it - and every later pass reads the node's type
+                   back and compares it against the place it feeds. */
+                const bool sourceDiverges = visitTyWith(tySrc, [](const HIRType* inner) {
+                    return inner->is_Diverge();
+                });
+                if (sourceDiverges && context.getType(nodePtr->resType) != context.getType(tyDst)) {
+                    DEBUG(StringView("Diverging source keeps the asked-for type ") << tyDst);
+                    nodePtr->resType = tyDst;
+                }
                 return true;
+            }
             case CoerceResult::Unsize:
                 DEBUG(StringView("Add _Unsize ") << static_cast<const void*>(&*nodePtr) << StringView(" -> ") << tyDst);
                 auto span = nodePtr->span();
