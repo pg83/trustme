@@ -14493,7 +14493,28 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     };
     CanonicalizeTraitGoal activeCanonicalizer(crate.types, &resolve_.ivars);
     const auto activeCanonical = canonicalizeGoal(goalParams, resolvedType, associated, activeCanonicalizer);
+    HIRTraitPath::assocListT activeAssociatedStorage;
     const auto* activeAssociated = activeCanonical.associated.empty() ? nullptr : &activeCanonical.associated;
+    if (hasAssociatedItemQuery && assocType) {
+        /* Normalizing one associated item of a trait is a different goal from
+           normalizing another, even though both pick the same impl - which is why the
+           response cache below names the item.  Leaving the item out here made the
+           `Self::Ctxt` reached through `CtxtBrw`'s default look like a re-entry into the
+           goal that was asking for `CtxtBrw`, so it was answered ambiguous and the
+           projection left opaque. */
+        const HIRPathParams noParams;
+        activeAssociatedStorage.insert(
+            {
+                RcString::newInterned(assocName),
+                HIRTraitPath::AtyEqual{
+                    HIRGenericPath(trait, activeCanonical.params.clone()),
+                    activeCanonicalizer.monomorphPathParams(span(), assocParams ? *assocParams : noParams, true),
+                    activeCanonicalizer.monomorphType(span(), assocType, true),
+                },
+            }
+        );
+        activeAssociated = &activeAssociatedStorage;
+    }
     const auto activeHash = goalHash(trait, activeCanonical.params, activeCanonical.type, activeAssociated);
     if (findActiveGoal(activeHash, trait, activeCanonical.params, activeCanonical.type, activeAssociated)) {
         const bool coinductive = crate.getTraitByPath(span(), trait).isCoinductive;
