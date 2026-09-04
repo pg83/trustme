@@ -827,7 +827,20 @@ namespace {
         while (auto* p = cast<HIRExprNodeBlock>(&**nodePtrPtr)) {
             DEBUG(StringView("- Moving into block"));
             BUG_ASSERT(p->valueNode);
-            ASSERT_BUG(p->span(), context.ivars.typesEqual(p->resType, p->valueNode->resType), StringView("Block and result mismatch - ") << context.ivars.fmtType(p->resType) << StringView(" != ") << context.ivars.fmtType(p->valueNode->resType));
+            /* A block yields what its value yields, and that is what this checks.  One
+               side may still hold a projection the other has had normalized, which is
+               the same type written the other way - so ask again with both normalized
+               before calling them different. */
+            const auto blockYieldsItsValue = [&]() {
+                if (context.ivars.typesEqual(p->resType, p->valueNode->resType)) {
+                    return true;
+                }
+                return context.ivars.typesEqual(
+                    context.resolve.expandAssociatedTypes(p->span(), p->resType),
+                    context.resolve.expandAssociatedTypes(p->span(), p->valueNode->resType)
+                );
+            };
+            ASSERT_BUG(p->span(), blockYieldsItsValue(), StringView("Block and result mismatch - ") << context.ivars.fmtType(p->resType) << StringView(" != ") << context.ivars.fmtType(p->valueNode->resType));
             p->resType = context.crate.types.borrow(borrowType, desBorrowInner);
             nodePtrPtr = &p->valueNode;
         }
