@@ -1213,6 +1213,20 @@ static void enumerateConstRelocations(EnumState& state, const HIRPath& path, con
     }
 }
 
+/* A builtin impl carries no items of its own, so an item the trait gives a body to is
+   that body - `TransmuteFrom::transmute` is written once in the trait and every type the
+   compiler proves the trait for runs that one.  Items the backend generates itself are
+   claimed before this is reached. */
+static const HIRFunction* traitOwnBody(const Span& sp, const HIRCrate& crate, const HIRPath::Data::Data_UfcsKnown& pe) {
+    const auto& traitRef = crate.getTraitByPath(sp, pe.trait.path);
+    const auto value = traitRef.values.find(pe.item);
+    if (value == traitRef.values.end() || !value->second.is_Function()) {
+        return nullptr;
+    }
+    const auto& function = value->second.as_Function();
+    return function.code.mir ? &function : nullptr;
+}
+
 static EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate& crate, HIRPath& path, TransParams& params) {
     TRACE_FUNCTION_F(path);
     StaticTraitResolve resolve{wb, OpaqueReveal::All};
@@ -1434,6 +1448,15 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 state.rv.autoCloneImpls.insert(innerTy);
                 if (pe.item == "clone_from") {
                     state.rv.autoCloneFromImpls.insert(innerTy);
+                }
+            } else if (pathMono.data.is_UfcsKnown() && traitOwnBody(sp, state.crate, pathMono.data.as_UfcsKnown()) != nullptr) {
+                const auto& pe = pathMono.data.as_UfcsKnown();
+                const auto* traitFcn = traitOwnBody(sp, state.crate, pe);
+                subPp.forceMonomorphisation = true;
+                subPp.ppImpl = pe.trait.params.clone();
+                evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, traitFcn->params, pathMono, subPp);
+                if (!pathAlreadyEnumerated(state, pathMono)) {
+                    state.enumFcn(mv$(pathMono), *traitFcn, mv$(subPp));
                 }
             } else {
                 BUG(sp, StringView("AutoGenerate returned for unknown path type - ") << pathMono);
