@@ -10900,9 +10900,21 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
     }
     auto resolvedMonomorph = MonomorphStatePtr(crate.types, nullptr, &resolvedInferenceParams, nullptr);
     resolvedMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
-    const auto candidateParams = resolvedMonomorph.monomorphPathParams(span(), implTraitArgs, true);
+    auto candidateParams = resolvedMonomorph.monomorphPathParams(span(), implTraitArgs, true);
     if (candidateParams.types.size() != goalParams.types.size() || candidateParams.values.size() != goalParams.values.size()) {
         return Certainty::NoSolution;
+    }
+    /* Upstream `match_impl` normalizes the impl's trait ref before relating it to the
+       goal; a projection in the head is then a value to compare, not an unknown to
+       leave pending.  The self type has just been related, so the impl's parameters a
+       head projection depends on are known here - `FnOnce<(<<I as IntoIterator>::Item
+       as IntoFuture>::Item,)>` for the closure of a generic method reads as
+       `FnOnce<(u32,)>` once `I` is.  Left as written, it is a pending equality against
+       `u32`, and the candidate stays ambiguous for good. */
+    for (auto& type : candidateParams.types) {
+        if (resolve_.hasAssociatedType(type)) {
+            type = normalizeGoalInput(type);
+        }
     }
     for (size_t i = 0; i < candidateParams.types.size(); i++) {
         relation = unifier.unify(goalParams.types[i], candidateParams.types[i]);
