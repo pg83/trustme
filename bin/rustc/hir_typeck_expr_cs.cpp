@@ -5663,6 +5663,9 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
         }
         rule.implTy = context.expandAssociatedTypes(rule.span, mv$(rule.implTy));
 
+        /* Remember the inputs we are about to check. A response may refine them
+           without resolving the goal, and that refinement must wake the rule. */
+        setAssociatedStall(context, rule);
         const auto result = checkAssociated(context, coercionIndex, rule);
         rule.isAmbiguous = result == AssociatedCheckResult::Ambiguous;
 
@@ -5670,8 +5673,7 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
             DEBUG(StringView("- Consumed associated type rule ") << i << StringView("/") << context.linkAssoc.size() << StringView(" - ") << rule);
             context.removeAssociated(i, indexedKey);
         } else {
-            if ((result == AssociatedCheckResult::Stalled || result == AssociatedCheckResult::Ambiguous) && setAssociatedStall(context, rule)) {
-            } else {
+            if (result == AssociatedCheckResult::Retry) {
                 rule.stalledOn.clear();
             }
             context.storeAssociated(i, mv$(rule), indexedKey);
