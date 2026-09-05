@@ -7,6 +7,7 @@
 #include "trans_target.h"
 #include "hir_inherent_cache.h"
 #include "hir_typeck_monomorph.h"
+#include "hir_typeck_static.h"
 #include "hir_conv_main_bindings.h"
 #include "hir_conv_constant_evaluation.h"
 
@@ -735,6 +736,31 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     ObjList<OverlapEntry> overlapEntries;
     IntMap<OverlapEntry*> overlapCache;
+
+    struct SpecializesEntry {
+        const HIRTraitImpl* child;
+        const HIRTraitImpl* parent;
+        bool specializes;
+        SpecializesEntry* next;
+
+        SpecializesEntry(const HIRTraitImpl* child, const HIRTraitImpl* parent, bool specializes, SpecializesEntry* next)
+            : child(child)
+            , parent(parent)
+            , specializes(specializes)
+            , next(next)
+        {
+        }
+    };
+
+    ObjList<SpecializesEntry> specializesEntries;
+    IntMap<SpecializesEntry*> specializesCache;
+    StaticTraitResolve* specializationProbe = nullptr;
+
+    /* Upstream `specializes(child, parent)`: does `parent` apply to every type `child`
+       does?  A property of the two impls alone, so it is computed once per pair. */
+    bool specializes(const HIRTraitImpl& child, const HIRTraitImpl& parent);
+
+    bool specializesUncached(const HIRTraitImpl& child, const HIRTraitImpl& parent);
 
     bool evaluateOverlapUncached(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right);
 
@@ -11169,7 +11195,15 @@ auto NextTraitGoalEvaluator::assembleTraitImplCandidates(size_t frameIndex, cons
             return false;
         });
 
-        if (includeMagicCandidates) {
+        /* An auto trait holds of a type when it holds of the type's constituents.  A
+           type parameter or a projection has no constituents to look into - what it
+           stands for is unknown here - so upstream adds no such candidate for it: the
+           obligation then holds only for another reason, a where-clause or the bounds
+           of the alias.  Assuming it instead let `impl<T: Send> Select for T` look like
+           it applied to every `T`, and the general impl outranked it. */
+        const auto* resolvedPath = resolvedType->opt_Path();
+        const bool constituentsUnknown = resolvedType->is_Generic() || (resolvedPath && resolvedPath->path.data.is_UfcsKnown());
+        if (includeMagicCandidates && !constituentsUnknown) {
             const auto structuralRelation = resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(params) ? Certainty::Ambiguous : Certainty::Proven;
             pushCandidate(frameIndex, SolverImpl(resolvedType, params.clone(), HIRTraitPath::assocListT()), structuralRelation == Certainty::Proven, structuralRelation, nullptr, {}, true, CandidateSource::Builtin);
         }
@@ -13531,6 +13565,8 @@ NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, c
     , canonicalNestedNoEffectResponseIndex(resolve.eatCachePool.mutPtr())
     , overlapEntries(resolve.eatCachePool.mutPtr())
     , overlapCache(resolve.eatCachePool.mutPtr())
+    , specializesEntries(resolve.eatCachePool.mutPtr())
+    , specializesCache(resolve.eatCachePool.mutPtr())
 {
     BUG_ASSERT(resolve.board().id < SOLVER_ALPHA_SCOPE_BASE);
     alphaExistentialScopeBase_ = SOLVER_ALPHA_SCOPE_BASE;
@@ -13559,6 +13595,127 @@ auto NextTraitGoalEvaluator::evaluateOverlap(const Span& callSpan, const HIRSimp
         bucket = overlapCache.insert(key);
     }
     *bucket = overlapEntries.make(&left, &right, rv, *bucket);
+    return rv;
+}
+
+auto NextTraitGoalEvaluator::specializes(const HIRTraitImpl& child, const HIRTraitImpl& parent) -> bool {
+    const auto key = splitMix64(reinterpret_cast<uintptr_t>(&child)) ^ splitMix64(~reinterpret_cast<uintptr_t>(&parent));
+    auto** bucket = specializesCache.find(key);
+    if (bucket) {
+        for (auto* ent = *bucket; ent; ent = ent->next) {
+            if (ent->child == &child && ent->parent == &parent) {
+                return ent->specializes;
+            }
+        }
+    }
+    const bool rv = specializesUncached(child, parent);
+    if (!bucket) {
+        bucket = specializesCache.insert(key);
+    }
+    *bucket = specializesEntries.make(&child, &parent, rv, *bucket);
+    return rv;
+}
+
+auto NextTraitGoalEvaluator::specializesUncached(const HIRTraitImpl& child, const HIRTraitImpl& parent) -> bool {
+    /* Only a crate that opted into specialization may specialize, and only a positive
+       impl may specialize a positive one.  A const parent is only specialized by a const
+       child. */
+    TRACE_FUNCTION_F(StringView("child=") << child.type << StringView(" : ") << child.traitArgs << StringView(" parent=") << parent.type << StringView(" : ") << parent.traitArgs);
+    if (child.isReservation || parent.isReservation) {
+        return false;
+    }
+    if (parent.isConst && !child.isConst) {
+        return false;
+    }
+    const HIRCrate& childCrate = child.originCrate ? *child.originCrate : crate;
+    if (!childCrate.specializationEnabled()) {
+        DEBUG(StringView("specialization not enabled in ") << childCrate.crateName);
+        return false;
+    }
+
+    /* The parent applies to a type of the child's if its head matches and its
+       where-clauses hold there.  "There" is the most general instantiation of the child:
+       the child's own parameters, rigid, with the child's where-clauses assumed - so the
+       proof runs in a resolver whose environment is the child's generics.  Every
+       requirement must be proven outright; one left ambiguous is not met. */
+    if (!specializationProbe) {
+        specializationProbe = resolve_.eatCachePool.mutPtr()->make<StaticTraitResolve>(resolve_.board());
+    }
+    auto& probe = *specializationProbe;
+    const Span sp;
+    probe.setBothGenericsRaw(&child.params, nullptr);
+    STD_DEFER {
+        probe.clearBothGenerics();
+    };
+
+    struct Prover final: HIRSpecializationBoundCallback {
+        StaticTraitResolve& probe;
+        const HIRCrate& crate;
+        const Span& sp;
+
+        Prover(StaticTraitResolve& probe, const HIRCrate& crate, const Span& sp)
+            : probe(probe)
+            , crate(crate)
+            , sp(sp)
+        {
+        }
+
+        bool traitBound(const HIRType* type, const HIRTraitPath& trait) override {
+            bool proven = false;
+            probe.findImpl(sp, trait.path.path, trait.path.params, type, [&](SolverSelection) {
+                proven = true;
+                return true;
+            });
+            DEBUG(StringView("parent bound ") << type << StringView(": ") << trait << StringView(" => ") << (proven ? "proven" : "NOT proven"));
+            if (!proven) {
+                return false;
+            }
+            for (const auto& bound : trait.typeBounds) {
+                const auto* projection = crate.types.path(HIRPath(type, bound.second.sourceTrait.clone(), bound.first, bound.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
+                if (!typeEquality(projection, bound.second.type)) {
+                    return false;
+                }
+            }
+            for (const auto& bound : trait.traitBounds) {
+                const auto* projection = crate.types.path(HIRPath(type, bound.second.sourceTrait.clone(), bound.first, bound.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
+                const auto* projected = probe.expandAssociatedTypes(sp, projection);
+                for (const auto& required : bound.second.traits) {
+                    if (!traitBound(projected, required)) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        bool typeEquality(const HIRType* left, const HIRType* right) override {
+            const auto* leftNormalized = probe.expandAssociatedTypes(sp, left);
+            const auto* rightNormalized = probe.expandAssociatedTypes(sp, right);
+            return leftNormalized == rightNormalized || leftNormalized->equalsIgnoringRegions(rightNormalized);
+        }
+
+        bool sizedBound(const HIRType* type) override {
+            const bool sized = probe.typeIsSized(sp, type);
+            DEBUG(StringView("parent sized ") << type << StringView(" => ") << sized);
+            return sized;
+        }
+
+        const HIRType* normalizeProjection(const HIRType* type, const HIRGenericPath& sourceTrait, const RcString& item, const HIRPathParams& atyParams) override {
+            const auto* projection = crate.types.path(HIRPath(type, sourceTrait.clone(), item, atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
+            const auto* normalized = probe.expandAssociatedTypes(sp, projection);
+            const auto* path = normalized->opt_Path();
+            const bool unresolved = normalized == projection || (path && path->binding.is_Opaque() && normalized->equalsIgnoringRegions(projection));
+            DEBUG(StringView("parent projection ") << projection << StringView(" => ") << (unresolved ? StringView("unresolved") : StringView("")) << (unresolved ? nullptr : normalized));
+            return unresolved ? nullptr : normalized;
+        }
+
+        const HIRType* normalizeType(const HIRType* type) override {
+            return probe.expandAssociatedTypes(sp, type);
+        }
+    } prover{probe, crate, sp};
+
+    const bool rv = child.headWithin(sp, crate.types, parent, prover);
+    DEBUG(StringView("specializes => ") << rv);
     return rv;
 }
 
@@ -14980,17 +15137,23 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             if (!sameInstantiatedHead && !resolve_.implsOverlap(span(), left, right)) {
                 continue;
             }
-            const bool leftMoreSpecific = left.moreSpecificThan(crate.types, right);
-            const bool rightMoreSpecific = right.moreSpecificThan(crate.types, left);
-            if (leftMoreSpecific) {
-                if (!frame.viable[i]->ambiguityBeyondHead) {
+            /* Upstream `prefer_lhs_over_victim`: an impl gives way to another only when
+               that other is known to apply and specializes it - a relation of the two
+               impls, with the specializing impl's where-clauses implying the victim's.
+               Reading it off the heads alone let `TryFrom<usize> for i32` retire the
+               blanket `TryFrom<U> for T where U: Into<T>` on `i32: TryFrom<_>`, though
+               `usize: Into<i32>` never holds; the goal is ambiguous until `_` is known. */
+            const bool leftSpecializes = specializes(*left.traitImpl, *right.traitImpl);
+            const bool rightSpecializes = !leftSpecializes && specializes(*right.traitImpl, *left.traitImpl);
+            if (leftSpecializes) {
+                if (frame.viable[i]->certainty == Certainty::Proven && !frame.viable[i]->ambiguityBeyondHead) {
                     frame.viable[j]->discarded = true;
                     recordItemSource(frame.viable[i], frame.viable[j]);
                 } else if (frame.viable[j]->certainty == Certainty::Proven) {
                     frame.viable[i]->discarded = true;
                 }
-            } else if (rightMoreSpecific) {
-                if (!frame.viable[j]->ambiguityBeyondHead) {
+            } else if (rightSpecializes) {
+                if (frame.viable[j]->certainty == Certainty::Proven && !frame.viable[j]->ambiguityBeyondHead) {
                     frame.viable[i]->discarded = true;
                     recordItemSource(frame.viable[j], frame.viable[i]);
                     break;

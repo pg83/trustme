@@ -578,6 +578,22 @@ public:
     bool matchesType(const HIRType* tr, tCbResolveType tyRes) const;
 };
 
+/* What a parent impl asks of an impl whose head lies within its own: each of the
+   parent's where-clauses and implicit `Sized` requirements, mapped into the child's
+   generics.  Return false from any of them to say it cannot be met. */
+struct HIRSpecializationBoundCallback {
+    virtual bool traitBound(const HIRType* type, const HIRTraitPath& trait) = 0;
+    virtual bool typeEquality(const HIRType* left, const HIRType* right) = 0;
+    virtual bool sizedBound(const HIRType* type) = 0;
+
+    /* What `<type as sourceTrait>::item<atyParams>` is in the child's environment, or
+       null when it does not resolve there. */
+    virtual const HIRType* normalizeProjection(const HIRType* type, const HIRGenericPath& sourceTrait, const RcString& item, const HIRPathParams& atyParams) = 0;
+
+    /* `type` with every projection the child's environment resolves replaced. */
+    virtual const HIRType* normalizeType(const HIRType* type) = 0;
+};
+
 class HIRTraitImpl {
 public:
     template <typename T>
@@ -601,6 +617,11 @@ public:
 
     bool isReservation = false;
 
+    /* The crate this impl was written in when it was loaded from another crate's
+       metadata; null for the crate being compiled.  Upstream `DefId::krate`: whether
+       the impl may specialize is decided by that crate's features, not the user's. */
+    const HIRCrate* originCrate = nullptr;
+
     bool matchesType(const HIRType* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 
     bool matchesType(const HIRType* tr) const {
@@ -610,6 +631,13 @@ public:
     bool matchesType(const HIRType* tr, tCbResolveType tyRes) const;
 
     bool moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& x) const;
+
+    /* Does every type this impl applies to also match `parent`'s head?  If so, hand the
+       callback what `parent` additionally requires of such a type - its where-clauses
+       and implicit `Sized` bounds with `parent`'s parameters replaced by what this
+       impl's head puts there.  False when the heads do not nest or a requirement is
+       refused. */
+    bool headWithin(const Span& sp, HIRTypeInterner& types, const HIRTraitImpl& parent, HIRSpecializationBoundCallback& cb) const;
 };
 
 class HIRMarkerImpl {
@@ -820,6 +848,12 @@ public:
 
     bool featureEnabled(const char* name) const {
         return features.count(RcString::newInterned(name)) != 0;
+    }
+
+    /* An impl may specialize another only from a crate that opted into specialization
+       (upstream `specialization_enabled_in`). */
+    bool specializationEnabled() const {
+        return featureEnabled("specialization") || featureEnabled("min_specialization");
     }
 
     const HIRMacroItem& getMacroitemByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false, bool ignoreLastNode = false) const;

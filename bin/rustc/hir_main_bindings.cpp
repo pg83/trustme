@@ -27,6 +27,7 @@ namespace {
         HIRTypeInterner& typeInterner;
         u32& id;
         HIRPublicity privateVisibility = HIRPublicity::newNone();
+        HIRCrate* loadingCrate = nullptr;
 
         ObjPool& pool;
 
@@ -1309,6 +1310,7 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     BUG_ASSERT(this->crateName != "" && "Empty crate name loaded from metadata");
     privateVisibility = HIRPublicity::newPriv(HIRSimplePath(this->crateName));
     rv.crateName = this->crateName;
+    loadingCrate = &rv;
     rv.edition = static_cast<ASTEdition>(in.readTag());
     rv.rootModule = deserialiseModule();
 
@@ -1340,6 +1342,13 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
 
     rv.extLibs = deserialiseVec<HIRExternLibrary>();
     rv.linkPaths = deserialiseVec<std::string>();
+
+    {
+        const size_t featureCount = in.readCount();
+        for (size_t i = 0; i < featureCount; i++) {
+            rv.features.insert(in.readIstring());
+        }
+    }
 }
 
 HIRCrate* HIRDeserialise(u32& id, ObjPool* pool, HIRTypeInterner& types, const std::string& filename) {
@@ -1661,6 +1670,7 @@ auto HirDeserialiser::deserialiseTypeimpl() -> HIRTypeImpl {
 
 auto HirDeserialiser::deserialiseTraitimpl() -> HIRTraitImpl {
     HIRTraitImpl rv;
+    rv.originCrate = loadingCrate;
 
     TRACE_FUNCTION_FR(StringView(""), StringView("impl") << rv.params.fmtArgs() << StringView(" ?") << rv.traitArgs << StringView(" for ") << rv.type);
     rv.params = deserialiseGenericparams();
@@ -3599,6 +3609,13 @@ auto HirSerialiser::serialiseCrate(const HIRCrate& crate) -> void {
     }
     serialiseVec(crate.extLibs);
     serialiseVec(crate.linkPaths);
+
+    /* Whether an impl may specialize is decided by the features of the crate it was
+       written in, so a crate's features travel with it. */
+    out.writeCount(crate.features.size());
+    for (const auto& feature : crate.features) {
+        out.writeString(feature);
+    }
 }
 
 auto HirSerialiser::serialise(const HIRExternLibrary& lib) -> void {

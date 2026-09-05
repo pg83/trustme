@@ -1428,6 +1428,105 @@ bool HIRMarkerImpl::matchesType(const HIRType* type, tCbResolveType tyRes) const
     return matchesType(type, tyRes, scratch);
 }
 
+bool HIRTraitImpl::headWithin(const Span& sp, HIRTypeInterner& types, const HIRTraitImpl& parent, HIRSpecializationBoundCallback& cb) const {
+    Vector<const HIRType*> parentMappings;
+    ImplMatcher parentMatcher(parentMappings, parent.params);
+    if (!matchImplHead(sp, parent, *this, parentMatcher)) {
+        return false;
+    }
+    auto resolve = HIRResolvePlaceholdersNop();
+
+    /* A parameter the parent's head never mentions is decided by its where-clauses:
+       upstream instantiates it with an inference variable and lets proving the
+       where-clauses bind it, which happens through the projection equalities among
+       them - `Iter: Iterator<Item = (A, B)>` names `A` and `B` from what `Iter`'s
+       `Item` is.  Read each such equality in the child's environment and take the
+       binding off the required shape, until nothing new is learnt. */
+    const auto mappedCount = [&]() {
+        size_t count = 0;
+        for (size_t i = 0; i < parent.params.types.size(); i++) {
+            if (parentMatcher.mappedType(i)) {
+                count++;
+            }
+        }
+        return count;
+    };
+    for (size_t known = mappedCount();;) {
+        for (const auto& bound : parent.params.bounds) {
+            if (const auto* traitBound = bound.opt_TraitBound()) {
+                if (traitBound->trait.typeBounds.empty()) {
+                    continue;
+                }
+                ImplHeadMonomorphiser subject(types, parentMatcher);
+                const auto* type = subject.monomorphType(sp, traitBound->type);
+                if (!subject.complete()) {
+                    continue;
+                }
+                for (const auto& equality : traitBound->trait.typeBounds) {
+                    ImplHeadMonomorphiser source(types, parentMatcher);
+                    auto sourceParams = source.monomorphPathParams(sp, equality.second.sourceTrait.params, true);
+                    auto atyParams = source.monomorphPathParams(sp, equality.second.atyParams, true);
+                    if (!source.complete()) {
+                        continue;
+                    }
+                    const auto* normalized = cb.normalizeProjection(type, HIRGenericPath(equality.second.sourceTrait.path, std::move(sourceParams)), equality.first, atyParams);
+                    if (normalized && equality.second.type->matchTestGenericsFuzz(sp, normalized, resolve, parentMatcher) == HIRCompare::Unequal) {
+                        return false;
+                    }
+                }
+            } else {
+                const auto& equality = bound.as_TypeEquality();
+                const HIRType* sides[2][2] = {{equality.type, equality.otherType}, {equality.otherType, equality.type}};
+                for (const auto& side : sides) {
+                    ImplHeadMonomorphiser known(types, parentMatcher);
+                    const auto* type = known.monomorphType(sp, side[0]);
+                    if (!known.complete()) {
+                        continue;
+                    }
+                    if (side[1]->matchTestGenericsFuzz(sp, cb.normalizeType(type), resolve, parentMatcher) == HIRCompare::Unequal) {
+                        return false;
+                    }
+                }
+            }
+        }
+        const auto learnt = mappedCount();
+        if (learnt == known) {
+            break;
+        }
+        known = learnt;
+    }
+    ImplHeadMonomorphiser monomorph(types, parentMatcher);
+
+    /* A parameter still unconstrained after that is an inference variable nothing
+       decides; upstream reports it and the relation does not hold. */
+    for (size_t i = 0; i < parent.params.types.size(); i++) {
+        if (!parent.params.types[i].isSized) {
+            continue;
+        }
+        const auto* mapped = parentMatcher.mappedType(i);
+        if (!mapped || !cb.sizedBound(mapped)) {
+            return false;
+        }
+    }
+    for (const auto& bound : parent.params.bounds) {
+        if (const auto* traitBound = bound.opt_TraitBound()) {
+            const auto* type = monomorph.monomorphType(sp, traitBound->type);
+            auto trait = monomorph.monomorphTraitpath(sp, traitBound->trait, true);
+            if (!monomorph.complete() || !cb.traitBound(type, trait)) {
+                return false;
+            }
+        } else {
+            const auto& equality = bound.as_TypeEquality();
+            const auto* left = monomorph.monomorphType(sp, equality.type);
+            const auto* right = monomorph.monomorphType(sp, equality.otherType);
+            if (!monomorph.complete() || !cb.typeEquality(left, right)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& other) const {
     const Span _sp;
     const Span& sp = _sp;
