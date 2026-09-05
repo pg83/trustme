@@ -33,6 +33,15 @@ void NextSolverCreateCrateCache(WireBoard& wb, ObjPool& pool) {
 namespace {
     constexpr u32 SOLVER_ALPHA_SCOPE_BASE = ~u32(255);
 
+    /* Existentials standing for an impl's parameters in one instantiation of it carry
+       this bit in their scope, which is what marks them for alpha-renaming when a goal
+       is canonicalized. */
+    constexpr u32 SOLVER_IMPL_EXISTENTIAL_SCOPE = u32(1) << 30;
+
+    bool isImplExistentialScope(u32 scope) {
+        return scope < SOLVER_ALPHA_SCOPE_BASE && (scope & SOLVER_IMPL_EXISTENTIAL_SCOPE) != 0;
+    }
+
     bool containsImplPlaceholder(HIRTypeInterner& types, const HIRType* type) {
         struct Visitor: HIRVisitor {
             bool found = false;
@@ -86,14 +95,14 @@ namespace {
         mutable bool frozen_ = false;
         mutable bool sawForeignIvar_ = false;
         mutable bool sawForeignSolverExistential_ = false;
-        const IntMap<u32>* alphaSolverScopes_ = nullptr;
+        bool alphaImplScopes_ = false;
         u32 alphaScopeBase_ = 0;
         mutable Vector<u32> solverScopes_;
         mutable Vector<u32> solverScopeClasses_;
 
         RcString canonicalPlaceholderName(const RcString& name) const;
 
-        explicit CanonicalizeTraitGoal(HIRTypeInterner& types, const HMTypeInferrence* ivarTable = nullptr, const IntMap<u32>* alphaSolverScopes = nullptr, u32 alphaScopeBase = 0);
+        explicit CanonicalizeTraitGoal(HIRTypeInterner& types, const HMTypeInferrence* ivarTable = nullptr, bool alphaImplScopes = false, u32 alphaScopeBase = 0);
 
         const HIRType* canonicalIvar(const HIRType* infer) const;
 
@@ -397,13 +406,6 @@ struct TraitResolution::NextTraitGoalEvaluator {
     mutable u64 ivarGenerationSeen_ = ~0ull;
     mutable u64 solverEnvGenerationSeen_ = ~0ull;
 
-    struct ImplExistentials {
-        const HIRGenericParams* definition;
-        HIRPathParams params;
-    };
-
-    IntMap<ThinVector<ImplExistentials>> implExistentials_;
-    IntMap<u32> implExistentialScopes_;
     u32 alphaExistentialScopeBase_ = 0;
 
     struct StructuralCertaintyCacheEntry {
@@ -484,7 +486,6 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     const Span& span() const;
 
-    const HIRPathParams& implExistentials(const HIRGenericParams& definition);
 
     bool goalIsConcrete(const HIRSimplePath& trait, const CanonicalGoal& canonical) const;
 
@@ -8554,10 +8555,10 @@ auto CanonicalizeTraitGoal::canonicalPlaceholderName(const RcString& name) const
     return canonical;
 }
 
-CanonicalizeTraitGoal::CanonicalizeTraitGoal(HIRTypeInterner& types, const HMTypeInferrence* ivarTable, const IntMap<u32>* alphaSolverScopes, u32 alphaScopeBase)
+CanonicalizeTraitGoal::CanonicalizeTraitGoal(HIRTypeInterner& types, const HMTypeInferrence* ivarTable, bool alphaImplScopes, u32 alphaScopeBase)
     : Monomorphiser(types)
     , ivarTable_(ivarTable)
-    , alphaSolverScopes_(alphaSolverScopes)
+    , alphaImplScopes_(alphaImplScopes)
     , alphaScopeBase_(alphaScopeBase)
 {
 }
@@ -8674,9 +8675,8 @@ auto CanonicalizeTraitGoal::monomorphType(const Span& sp, const HIRType* ty, boo
 }
 
 auto CanonicalizeTraitGoal::getType(const Span&, const HIRGenericRef& generic) const -> const HIRType* {
-    if (generic.isSolverExistential() && alphaSolverScopes_) {
-        const auto* alphaScope = alphaSolverScopes_->find(generic.solverScope);
-        if (!alphaScope) {
+    if (generic.isSolverExistential() && alphaImplScopes_) {
+        if (!isImplExistentialScope(generic.solverScope)) {
             return types.generic(generic);
         }
         for (size_t i = 0; i < solverScopes_.length(); i++) {
@@ -8690,16 +8690,15 @@ auto CanonicalizeTraitGoal::getType(const Span&, const HIRGenericRef& generic) c
         }
         const auto slot = solverScopes_.length();
         solverScopes_.pushBack(generic.solverScope);
-        solverScopeClasses_.pushBack(*alphaScope);
+        solverScopeClasses_.pushBack(0);
         return types.generic(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(slot), static_cast<u16>(generic.idx())));
     }
     return generic.isPlaceholder() && !generic.isSolverExistential() ? types.generic(canonicalPlaceholderName(generic.name), generic.binding) : types.generic(generic);
 }
 
 auto CanonicalizeTraitGoal::getValue(const Span&, const HIRGenericRef& generic) const -> HIRConstGeneric {
-    if (generic.isSolverExistential() && alphaSolverScopes_) {
-        const auto* alphaScope = alphaSolverScopes_->find(generic.solverScope);
-        if (!alphaScope) {
+    if (generic.isSolverExistential() && alphaImplScopes_) {
+        if (!isImplExistentialScope(generic.solverScope)) {
             return HIRConstGeneric(generic);
         }
         for (size_t i = 0; i < solverScopes_.length(); i++) {
@@ -8713,7 +8712,7 @@ auto CanonicalizeTraitGoal::getValue(const Span&, const HIRGenericRef& generic) 
         }
         const auto slot = solverScopes_.length();
         solverScopes_.pushBack(generic.solverScope);
-        solverScopeClasses_.pushBack(*alphaScope);
+        solverScopeClasses_.pushBack(0);
         return HIRConstGeneric(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(slot), static_cast<u16>(generic.idx())));
     }
     return HIRConstGeneric(generic.isPlaceholder() && !generic.isSolverExistential() ? HIRGenericRef(canonicalPlaceholderName(generic.name), generic.binding) : generic);
@@ -9195,38 +9194,6 @@ auto DecanonicalizeSolverInfers::getValue(const Span&, const HIRGenericRef& gene
 auto NextTraitGoalEvaluator::span() const -> const Span& {
     ASSERT_BUG(Span(), span_, StringView("next-solver session used outside an evaluation"));
     return *span_;
-}
-
-auto NextTraitGoalEvaluator::implExistentials(const HIRGenericParams& definition) -> const HIRPathParams& {
-    const auto key = splitMix64(reinterpret_cast<uintptr_t>(&definition));
-    auto* bucket = implExistentials_.find(key);
-    if (bucket) {
-        for (const auto& entry : *bucket) {
-            if (entry.definition == &definition) {
-                return entry.params;
-            }
-        }
-    } else {
-        bucket = implExistentials_.insert(key);
-    }
-
-    const auto scope = ++resolve_.board().id;
-    ASSERT_BUG(span(), scope != 0, StringView("solver existential scope exhausted"));
-    implExistentialScopes_.insert(scope, 0);
-
-    HIRPathParams params;
-    params.types.reserve(definition.types.size());
-    for (size_t i = 0; i < definition.types.size(); i++) {
-        ASSERT_BUG(span(), i < 256, StringView("Too many candidate type parameters"));
-        params.types.push_back(crate.types.generic(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i))));
-    }
-    params.values.reserve(definition.values.size());
-    for (size_t i = 0; i < definition.values.size(); i++) {
-        ASSERT_BUG(span(), i < 256, StringView("Too many candidate value parameters"));
-        params.values.push_back(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i)));
-    }
-    bucket->push_back(ImplExistentials{&definition, mv$(params)});
-    return bucket->back().params;
 }
 
 auto NextTraitGoalEvaluator::goalIsConcrete(const HIRSimplePath& trait, const CanonicalGoal& canonical) const -> bool {
@@ -10950,7 +10917,24 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
         }
     }
 
-    const auto& stableExistentials = implExistentials(implParamsDef);
+    /* Upstream instantiates an impl with fresh inference variables for every candidate
+       (`fresh_args_for_item`); whatever the head match leaves unresolved is an
+       existential of this instantiation alone.  Handing every instantiation of an impl
+       the same existentials made the `A: PartialOrd<B>` behind `&A: PartialOrd<&B>`
+       share `B` with the outer one, and the answer came back `B == &B`. */
+    const auto scope = SOLVER_IMPL_EXISTENTIAL_SCOPE | ++resolve_.board().id;
+    ASSERT_BUG(span(), (resolve_.board().id & SOLVER_IMPL_EXISTENTIAL_SCOPE) == 0, StringView("solver existential scope exhausted"));
+    HIRPathParams stableExistentials;
+    stableExistentials.types.reserve(implParamsDef.types.size());
+    for (size_t i = 0; i < implParamsDef.types.size(); i++) {
+        ASSERT_BUG(span(), i < 256, StringView("Too many candidate type parameters"));
+        stableExistentials.types.push_back(crate.types.generic(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i))));
+    }
+    stableExistentials.values.reserve(implParamsDef.values.size());
+    for (size_t i = 0; i < implParamsDef.values.size(); i++) {
+        ASSERT_BUG(span(), i < 256, StringView("Too many candidate value parameters"));
+        stableExistentials.values.push_back(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i)));
+    }
 
     struct MaterializeCandidate final: public MonomorphiserNop {
         const HMTypeInferrence& table;
@@ -13081,7 +13065,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
             return Certainty::NoSolution;
         }
     }
-    CanonicalizeTraitGoal canonicalizer(crate.types, &resolve_.ivars, &implExistentialScopes_, alphaExistentialScopeBase_);
+    CanonicalizeTraitGoal canonicalizer(crate.types, &resolve_.ivars, true, alphaExistentialScopeBase_);
     const auto canonical = canonicalizeGoal(goalParams, resolvedType, associated, canonicalizer);
     const auto* canonicalAssociated = canonical.associated.empty() ? nullptr : &canonical.associated;
     const auto hash = goalHashWithEnvironment(goalHash(trait, canonical.params, canonical.type, canonicalAssociated), canonicalizer.alphaSolverEnvironment());
@@ -13128,7 +13112,9 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
             return global->certainty;
         }
     }
-    CanonicalizeTraitGoal activeCanonicalizer(crate.types, &resolve_.ivars);
+    /* The cycle key freshens as upstream does: two goals differing only in which
+       instantiation's unknowns they name are the same goal. */
+    CanonicalizeTraitGoal activeCanonicalizer(crate.types, &resolve_.ivars, true, alphaExistentialScopeBase_);
     const auto activeCanonical = canonicalizeGoal(goalParams, resolvedType, associated, activeCanonicalizer);
     const auto* activeAssociated = activeCanonical.associated.empty() ? nullptr : &activeCanonical.associated;
     const auto activeHash = goalHash(trait, activeCanonical.params, activeCanonical.type, activeAssociated);
@@ -13554,8 +13540,6 @@ NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, c
     : resolve_(resolve)
     , crate(crate)
     , langCoerceUnsized_(crate.getLangItemPathOpt("coerce_unsized"))
-    , implExistentials_(resolve.eatCachePool.mutPtr())
-    , implExistentialScopes_(resolve.eatCachePool.mutPtr())
     , structuralCertaintyCache_(resolve.eatCachePool.mutPtr())
     , candidateNodes(resolve.eatCachePool.mutPtr())
     , activeGoalNodes(resolve.eatCachePool.mutPtr())
@@ -13880,6 +13864,14 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             return false;
         }
     }
+    /* Upstream (`assemble_candidates`): a goal whose self type is an inference variable
+       is ambiguous outright - no impl is matched against it, which is also what keeps
+       `_: Display` from descending through every impl's own parameters for ever.  The
+       existential standing for an impl parameter of one instantiation is such a
+       variable. */
+    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && isImplExistentialScope(selfGeneric->solverScope) && !associatedConstrainsSelf && !hasSelfCoercionGoal) {
+        return emitForcedAmbiguity();
+    }
     const bool plainTraitGoal = (!assocName || !assocName[0]) && !associated && !valueName;
     if (plainTraitGoal && resolvedType->is_Infer() && coercionSelectsCandidate) {
         const auto coercionEntailsGoal = [&](const SolverCoercionConstraint& constraint) {
@@ -14011,7 +14003,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                         for (auto& equality : coercionEqualities) {
                             guidedResponse.equalities.push_back(std::move(equality));
                         }
-                        CanonicalizeTraitGoal responseCanonicalizer(crate.types, &resolve_.ivars, &implExistentialScopes_, alphaExistentialScopeBase_);
+                        CanonicalizeTraitGoal responseCanonicalizer(crate.types, &resolve_.ivars, true, alphaExistentialScopeBase_);
                         const auto responseGoal = canonicalizeGoal(goalParams, resolvedType, associated, responseCanonicalizer);
                         if (assocType) {
                             responseCanonicalizer.monomorphType(span(), assocType, true);
@@ -14055,7 +14047,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         return false;
     };
-    CanonicalizeTraitGoal canonicalizer(crate.types, &resolve_.ivars, &implExistentialScopes_, alphaExistentialScopeBase_);
+    CanonicalizeTraitGoal canonicalizer(crate.types, &resolve_.ivars, true, alphaExistentialScopeBase_);
     const auto canonical = canonicalizeGoal(goalParams, resolvedType, associated, canonicalizer);
     const auto* canonicalAssociated = canonical.associated.empty() ? nullptr : &canonical.associated;
     const HIRType* canonicalAssocTypeStorage;
@@ -14648,7 +14640,9 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         cached->persistent = rigidKey && cycleHits_ == cycleHitsBefore;
         return deliverResponse(*storedResponse, canonicalApplicable);
     };
-    CanonicalizeTraitGoal activeCanonicalizer(crate.types, &resolve_.ivars);
+    /* The cycle key freshens as upstream does: two goals differing only in which
+       instantiation's unknowns they name are the same goal. */
+    CanonicalizeTraitGoal activeCanonicalizer(crate.types, &resolve_.ivars, true, alphaExistentialScopeBase_);
     const auto activeCanonical = canonicalizeGoal(goalParams, resolvedType, associated, activeCanonicalizer);
     HIRTraitPath::assocListT activeAssociatedStorage;
     const auto* activeAssociated = activeCanonical.associated.empty() ? nullptr : &activeCanonical.associated;
