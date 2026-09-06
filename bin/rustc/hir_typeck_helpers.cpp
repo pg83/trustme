@@ -6085,6 +6085,25 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
     if ((destination->is_Infer() && destination->as_Infer().isLit()) || destination->is_Diverge() || (source->is_Infer() && source->as_Infer().isLit())) {
         return relateEquality(destination, source);
     }
+    /* Two projections with nothing left to infer relate as upstream relates two
+       aliases: `coerce` finds no unsizing for them and ends in `unify`, which holds
+       for the same item over the same inputs and fails otherwise - after either has
+       been normalized as far as it goes.  `T::Type1` is not reached from `T::Type2`;
+       waiting for a normalization that cannot come left a method with a route per
+       bound undecided. */
+    const auto rigidProjection = [&](const HIRType* type) {
+        const auto* path = type->opt_Path();
+        return path && (path->binding.is_Unbound() || path->binding.is_Opaque()) && path->path.data.is_UfcsKnown() && !ivars.typeContainsIvars(type);
+    };
+    if (rigidProjection(destination) && rigidProjection(source)) {
+        const auto snapshot = ivars.snapshot();
+        Unifier distinct(sp, ivars, this, {.relateProjectionInputs = true, .rigidProjectionsAreDistinct = true});
+        const auto outcome = distinct.unify(destination, source);
+        ivars.rollbackTo(snapshot);
+        if (outcome == Unifier::Outcome::Mismatch) {
+            return SolverCertainty::NoSolution;
+        }
+    }
     if (destination->is_Infer() || source->is_Infer() || (destination->is_Path() && destination->as_Path().binding.is_Unbound()) || (source->is_Path() && source->as_Path().binding.is_Unbound())) {
         if (deferred) {
             deferred->push_back(SolverDeferredCoercion{destination, source, constraint.op});
