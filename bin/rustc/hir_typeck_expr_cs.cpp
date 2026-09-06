@@ -7073,13 +7073,19 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                         }
                         return;
                     } else if (srcInner->is_Infer()) {
-                        /* A pointer cast relates the two pointee types not at all.  The
-                           source pointee is resolved by the operand's own constraints -
-                           an integer literal keeps its own fallback - and never by the
-                           cast's destination.  Wait for those constraints, then accept
-                           the cast whatever the pointee turned out to be. */
+                        /* Upstream checks casts after the numeric fallback, and a cast is
+                           tried as a coercion first (`try_coercion_cast`): a pointer cast
+                           the mutability allows is `coerce_raw_ptr` unifying the pointees
+                           once `?U: Unsize<T>` proved ambiguous, so `dangling().as_ptr()
+                           as *const T` decides `?U`.  An integer literal is decided by its
+                           own fallback before that and keeps it; a cast the mutability
+                           refuses as a coercion is a plain pointer cast, and a thin
+                           destination accepts an unknown source pointee as it is. */
                         if (!this->isFallback) {
                             return;
+                        }
+                        if (srcInner->as_Infer().tyClass == HIRInferClass::None && sE.type >= e.type) {
+                            this->context.equateTypes(sp, srcInner, dstInner);
                         }
                     } else {
                     }
