@@ -42,6 +42,12 @@ namespace {
         return scope < SOLVER_ALPHA_SCOPE_BASE && (scope & SOLVER_IMPL_EXISTENTIAL_SCOPE) != 0;
     }
 
+    /* Only such existentials are alpha-renamed when a goal is canonicalized, so one in
+       a renamed scope is the same unknown seen from inside the canonical goal. */
+    bool isUnknownExistentialScope(u32 scope) {
+        return isImplExistentialScope(scope) || scope >= SOLVER_ALPHA_SCOPE_BASE;
+    }
+
     bool containsImplPlaceholder(HIRTypeInterner& types, const HIRType* type) {
         struct Visitor: HIRVisitor {
             bool found = false;
@@ -1957,7 +1963,7 @@ const HIRConstGeneric& HMTypeInferrence::getValue(unsigned slot) const {
 unsigned int HMTypeInferrence::rootIvarIndex(unsigned int slot) const {
     auto index = slot;
     unsigned int count = 0;
-    BUG_ASSERT(index < ivars.size());
+    ASSERT_BUG(Span(), index < ivars.size(), StringView("type ivar ") << slot << StringView(" is not in a table of ") << ivars.size());
     while (ivars.at(index).isAlias()) {
         index = ivars.at(index).alias;
 
@@ -9470,7 +9476,23 @@ auto NextTraitGoalEvaluator::goalHasUnassignedInfer(const HIRPathParams& params,
 
 auto NextTraitGoalEvaluator::selfIsUnresolvedProjectionOverIvar(const HIRType* type) const -> bool {
     const auto* path = type->opt_Path();
-    return path && path->binding.is_Unbound() && path->path.data.is_UfcsKnown() && resolve_.typeContainsIvars(type);
+    const auto* projection = path && path->binding.is_Unbound() ? path->path.data.opt_UfcsKnown() : nullptr;
+    if (!projection) {
+        return false;
+    }
+    if (resolve_.typeContainsIvars(type)) {
+        return true;
+    }
+    /* Upstream normalizes the self type before assembling anything, and a projection
+       over an inference variable - here the existential of an impl parameter its head
+       left open - normalizes to a fresh one: the goal is as ambiguous as any on an
+       unknown, and no impl is matched against the projection by guesswork. */
+    const auto* self = resolve_.resolveType(projection->type);
+    const auto* selfGeneric = self->opt_Generic();
+    if (selfGeneric && selfGeneric->isSolverExistential() && isUnknownExistentialScope(selfGeneric->solverScope)) {
+        return true;
+    }
+    return selfIsUnresolvedProjectionOverIvar(self);
 }
 
 auto NextTraitGoalEvaluator::normalizeGoalInput(const HIRType* input) const -> const HIRType* {
@@ -10912,9 +10934,23 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
        `FnOnce<(u32,)>` once `I` is.  Left as written, it is a pending equality against
        `u32`, and the candidate stays ambiguous for good. */
     for (auto& type : candidateParams.types) {
-        if (resolve_.hasAssociatedType(type)) {
-            type = normalizeGoalInput(type);
+        if (!resolve_.hasAssociatedType(type)) {
+            continue;
         }
+        /* A normalization that had to invent an unknown - a variable standing for a
+           projection it could not resolve - answered with something local to this
+           probe, gone with its rollback.  Upstream hands back that fresh variable with
+           the normalizes-to goal still pending; for the head that is the projection
+           itself, related to the goal later, when it may be known. */
+        const auto probe = resolve_.ivars.snapshot();
+        const auto* normalized = normalizeGoalInput(type);
+        if (resolve_.ivars.ivars.size() != probe.ivarCount || resolve_.ivars.values.size() != probe.valueCount) {
+            DEBUG(StringView("head projection ") << type << StringView(" stays pending: normalizing it needs unknowns of its own"));
+            resolve_.ivars.rollbackTo(probe);
+            continue;
+        }
+        resolve_.ivars.commit(probe);
+        type = normalized;
     }
     for (size_t i = 0; i < candidateParams.types.size(); i++) {
         relation = unifier.unify(goalParams.types[i], candidateParams.types[i]);
@@ -11020,6 +11056,7 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
                 materialize.monomorphType(span(), equality.right, true),
             }
         );
+        DEBUG(StringView("head pending ") << equality.left << StringView(" = ") << equality.right << StringView(" materialized ") << headEqualities.back().left << StringView(" = ") << headEqualities.back().right);
     }
     for (const auto& equality : unifier.pendingValues()) {
         const bool pendingUnresolved = !isCanonicalValueInput(equality.left) && !isCanonicalValueInput(equality.right);
@@ -11964,6 +12001,7 @@ auto NextTraitGoalEvaluator::evaluateBuiltinUnsize(Candidate& candidate, const H
 }
 
 auto NextTraitGoalEvaluator::evaluateHeadEquality(Candidate& candidate, const SolverTypeEquality& equality) -> Certainty {
+    DEBUG(StringView("head equality ") << equality.left << StringView(" = ") << equality.right);
     const auto normalizedLeft = normalizeGoalInput(equality.left);
     const auto normalizedRight = normalizeGoalInput(equality.right);
     const auto relation = this->relateTypes(candidate, normalizedLeft, normalizedRight);
@@ -13881,7 +13919,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
        `_: Display` from descending through every impl's own parameters for ever.  The
        existential standing for an impl parameter of one instantiation is such a
        variable. */
-    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && isImplExistentialScope(selfGeneric->solverScope) && !associatedConstrainsSelf && !hasSelfCoercionGoal) {
+    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && isUnknownExistentialScope(selfGeneric->solverScope) && !associatedConstrainsSelf && !hasSelfCoercionGoal) {
         return emitForcedAmbiguity();
     }
     const bool plainTraitGoal = (!assocName || !assocName[0]) && !associated && !valueName;
