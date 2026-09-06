@@ -5018,6 +5018,18 @@ InherentImplSelection TraitResolution::selectInherentImpl(const Span& sp, const 
         if (certainty == SolverCertainty::NoSolution) {
             return false;
         }
+        /* Upstream (`select_inherent_assoc_candidates`) keeps a candidate only if the
+           impl's where-clauses select without error under its parameters as the
+           receiver fixes them: `impl<T: Copy> Choose<T>` is no candidate for
+           `Choose<NonCopy>::Result`, and the impl for `Choose<NonCopy>` alone remains.
+           A bound still open keeps the candidate, as upstream keeps it. */
+        if (kind == InherentItemKind::Type && !impl.params.bounds.empty()) {
+            const auto bounds = this->evaluateGenericBounds(sp, impl.params, implParams, MonomorphStatePtr(crate.types, receiver, &implParams, nullptr));
+            if (bounds == SolverCertainty::NoSolution) {
+                DEBUG(StringView("inherent impl bounds fail for ") << receiver << StringView(": ") << impl.type);
+                return false;
+            }
+        }
         if (selected.certainty != SolverCertainty::NoSolution) {
             selected.certainty = SolverCertainty::Ambiguous;
             selected.impl = nullptr;
