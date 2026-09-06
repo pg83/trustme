@@ -1925,7 +1925,7 @@ namespace {
         return false;
     }
 
-    bool finaliseIvarCoercions(Context& context, const IvarCoercionIndex& coercionIndex, unsigned int i, bool finalPhase = false, bool allowIdentityCommit = false, bool allowUnsizingIdentityCommit = false) {
+    bool finaliseIvarCoercions(Context& context, const IvarCoercionIndex& coercionIndex, unsigned int i, bool finalPhase = false, bool allowIdentityCommit = false, bool allowUnsizingIdentityCommit = false, bool allowUnknownPointeeUnsize = false) {
         Span _span;
         const auto& sp = _span;
 
@@ -2128,6 +2128,50 @@ namespace {
                 && !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, directedDestination)) {
                 DEBUG(i << StringView(": Unique concrete coercion destination bounds the component: ") << directedDestination);
                 context.equateTypes(sp, tyL, directedDestination);
+                return true;
+            }
+
+            /* An unsizing edge from an unknown pointee is different: upstream's
+               `coerce_unsized` finds `?S: Unsize<D>` ambiguous and keeps it only for a
+               `Sized` `?S` and a trait object `D`; into anything else it is "no
+               unsizing", and the reborrow (`coerce_borrowed_pointer`, `coerce_raw_ptr`)
+               unifies `?S` with `D` - `str` and `[T]` included.  Upstream does that as
+               the argument is coerced, its type already known; here the pointee is
+               unknown for as long as the rules that type it are pending, so the
+               equality is drawn once they have all had their say: `s.as_ref()` against
+               `*const str` is then `AsRef<str>`. */
+            const HIRType* unsizingDestination = nullptr;
+            bool uniqueUnsizingDestination = true;
+            for (const auto& endpoint : coercionRefs.endpoints) {
+                if (endpoint.direction != SolverCoercionConstraint::Direction::InputIsSource || endpoint.op != SolverCoercionOp::Unsizing) {
+                    continue;
+                }
+                const auto* type = context.getType(endpoint.other);
+                if (type->is_Infer()) {
+                    continue;
+                }
+                if (unsizingDestination && !context.ivars.typesEqual(unsizingDestination, type)) {
+                    uniqueUnsizingDestination = false;
+                    break;
+                }
+                unsizingDestination = type;
+            }
+            /* Only once nothing else can still speak for the pointee: a pending rule
+               or revisit that names it - a pattern binding waiting on its scrutinee -
+               is what upstream would already have run, and the identity commits of
+               every other component come first, in their own sweeps. */
+            if (finalPhase
+                && allowUnknownPointeeUnsize
+                && coercionRefs.associated.empty()
+                && coercionRefs.advancedRevisits.empty()
+                && uniqueUnsizingDestination
+                && unsizingDestination
+                && !unsizingDestination->is_TraitObject()
+                && !directedDestination
+                && !isResultOfPendingRevisit(context, tyL)
+                && !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, unsizingDestination)) {
+                DEBUG(i << StringView(": Unsizing into no trait object is the unknown pointee's type: ") << unsizingDestination);
+                context.equateTypes(sp, tyL, unsizingDestination);
                 return true;
             }
 
@@ -5871,6 +5915,17 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             DEBUG(StringView("--- Final IVar unsizing identity commits"));
             for (unsigned int i = 0; i < ivarCoercionIndex->refs.size(); i++) {
                 if (finaliseIvarCoercions(context, *ivarCoercionIndex, i, true, true, true)) {
+                    break;
+                }
+            }
+        }
+        /* An unknown pointee unsized into no trait object is the last word: upstream
+         * unifies it as the argument is coerced, with everything the argument's own
+         * type could say already said. */
+        if (!context.ivars.peekChanged()) {
+            DEBUG(StringView("--- Final IVar unknown pointee unsizing"));
+            for (unsigned int i = 0; i < ivarCoercionIndex->refs.size(); i++) {
+                if (finaliseIvarCoercions(context, *ivarCoercionIndex, i, true, true, true, true)) {
                     break;
                 }
             }
