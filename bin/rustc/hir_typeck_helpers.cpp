@@ -7489,6 +7489,31 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             destination.coercions.push_back(std::move(coercion));
         }
     };
+    /* Upstream instantiates a method's signature and normalizes it before any
+       argument is related to it (`confirm_method`).  A parameter written `T::Item`
+       with `T` already decided is then the type it names.  One whose `T` is still a
+       variable normalizes to a fresh variable owed to the projection; the argument
+       is related to that variable, and the projection is settled once `T` is.  The
+       fresh variable would be unified with the argument at once, so the argument's
+       own type stands in for it here: the parameter is taken to be that type, and
+       the projection is owed to it.  Relating the argument to the projection itself
+       never settled, and a call left ambiguous by it registered its argument
+       coercions afresh on every pass. */
+    const auto normalizeSignatureType = [&](const HIRType* type, const HIRType* argument, SolverResponse& effects) -> const HIRType* {
+        if (!resolve_.hasAssociatedType(type)) {
+            return type;
+        }
+        const auto* normalized = resolve_.expandAssociatedTypes(callSpan, type);
+        DEBUG(StringView("signature type ") << type << StringView(" normalizes to ") << normalized);
+        const auto* path = normalized->opt_Path();
+        const bool projection = path && (path->binding.is_Unbound() || path->binding.is_Opaque()) && path->path.data.is_UfcsKnown();
+        if (!projection || !resolve_.typeContainsIvars(normalized)) {
+            return normalized;
+        }
+        DEBUG(StringView("signature projection ") << normalized << StringView(" owed to the argument ") << argument);
+        effects.equalities.push_back(SolverTypeEquality{argument, normalized});
+        return argument;
+    };
     const auto evaluateMethodArgument = [&](const HIRType* expected, const HIRType* actual, unsigned sourceInput, SolverResponse& effects) {
         const auto equalitySnapshot = resolve_.ivars.snapshot();
         /* Read before relating: relating is what would fill the slot, and the question is
@@ -7509,6 +7534,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         }();
         Unifier equality(callSpan, resolve_.ivars, &resolve_, {.relateProjectionInputs = true});
         const auto equalityOutcome = equality.unify(expected, actual);
+        DEBUG(StringView("method argument ") << sourceInput << StringView(": expected ") << expected << StringView(" actual ") << actual << StringView(" equality=") << static_cast<unsigned>(equalityOutcome));
         const auto appendCoercion = [&]() {
             if (sourceInput != ~0u) {
                 effects.coercions.push_back(SolverCoercionObligation{expected, actual, SolverCoercionOp::Coercion, sourceInput});
@@ -7684,7 +7710,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
 
         if (function.fixedArgCount() == argumentTypes.size() + 1) {
             for (size_t i = 0; i < argumentTypes.size(); i++) {
-                const auto* expectedArgument = methodMonomorph.monomorphType(callSpan, function.args[i + 1].second, true);
+                const auto* expectedArgument = normalizeSignatureType(methodMonomorph.monomorphType(callSpan, function.args[i + 1].second, true), argumentTypes[i], signatureEffects);
                 const auto argumentApplicability = evaluateMethodArgument(expectedArgument, argumentTypes[i], i, signatureEffects);
                 if (argumentApplicability == Certainty::NoSolution) {
                     return Certainty::NoSolution;
@@ -7981,7 +8007,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                 guideFromExpectedResult(methodMonomorph, method.data.returnType);
                 if (method.data.fixedArgCount() == argumentTypes.size() + 1) {
                     for (size_t i = 0; i < argumentTypes.size(); i++) {
-                        const auto* expectedArgument = methodMonomorph.monomorphType(callSpan, method.data.args[i + 1].second, true);
+                        const auto* expectedArgument = normalizeSignatureType(methodMonomorph.monomorphType(callSpan, method.data.args[i + 1].second, true), argumentTypes[i], signatureEffects);
                         const auto argumentApplicability = evaluateMethodArgument(expectedArgument, argumentTypes[i], i, signatureEffects);
                         if (argumentApplicability == Certainty::NoSolution) {
                             return Certainty::NoSolution;
