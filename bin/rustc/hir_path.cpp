@@ -943,8 +943,36 @@ HIRConstGenericUnevaluated HIRConstGenericUnevaluated::monomorph(const Span& sp,
     return rv;
 }
 
+namespace {
+    /* An expression built of const parameters and literals alone names nothing of
+       its context: the parameters are read through the generics the value carries,
+       so which `Self` it was written under cannot matter. */
+    bool constExprIsSelfFree(const HIRExprNode& node) {
+        if (cast<const HIRExprNodeConstParam>(&node) || cast<const HIRExprNodeLiteral>(&node)) {
+            return true;
+        }
+        if (const auto* binop = cast<const HIRExprNodeBinOp>(&node)) {
+            return constExprIsSelfFree(*binop->left) && constExprIsSelfFree(*binop->right);
+        }
+        if (const auto* uniop = cast<const HIRExprNodeUniOp>(&node)) {
+            return constExprIsSelfFree(*uniop->value);
+        }
+        if (const auto* block = cast<const HIRExprNodeConstBlock>(&node)) {
+            return constExprIsSelfFree(*block->inner);
+        }
+        return false;
+    }
+}
+
 bool HIRConstGenericUnevaluated::equivalent(const HIRConstGenericUnevaluated& x) const {
-    return selfType == x.selfType && constExprNodesEqual(*this, **this->expr, x, **x.expr);
+    /* Upstream relates unevaluated consts structurally (`ConstKind::Expr`), with the
+       generics substituted; the `Self` a value carries is part of that substitution
+       only for an expression that names it.  `N + 1` written in a trait's signature
+       and `N + 1` written at the call are one const over the same `N`. */
+    if (selfType != x.selfType && !(constExprIsSelfFree(**this->expr) && constExprIsSelfFree(**x.expr))) {
+        return false;
+    }
+    return constExprNodesEqual(*this, **this->expr, x, **x.expr);
 }
 
 Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) const {
