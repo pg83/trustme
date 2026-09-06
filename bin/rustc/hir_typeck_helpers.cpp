@@ -1790,6 +1790,7 @@ const HIRType* HMTypeInferrence::getType(unsigned idx) const {
 }
 
 void HMTypeInferrence::setIvarTo(unsigned int slot, const HIRType* type, bool solverProven) {
+
     auto sp = Span();
     const auto rootIndex = this->rootIvarIndex(slot);
     auto& rootIvar = ivars.at(rootIndex);
@@ -11686,14 +11687,27 @@ auto NextTraitGoalEvaluator::bindCandidateResponse(Candidate& candidate, const H
         relations.pathParams(nestedParams, response.getTraitParamsRef(crate.types));
         for (const auto& requirement : nestedAssociated) {
             auto output = response.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams);
+            /* `F: FnMut() -> A` is `F: FnMut<()>` and, separately, `<F as FnOnce<()>>::Output
+               == A` (upstream lowers the binding to a projection predicate on the trait
+               that declares the item).  An impl of the subtrait alone - a closure's,
+               whose `Output` sits with its `FnOnce` impl - answers the binding through
+               the declaring trait, as `matchAssociatedTypes` reads it; only an item the
+               response should carry and does not is a mismatch. */
             if (output == nullptr) {
-                relations.mismatch();
-                break;
+                output = resolve_.expandAssociatedTypes(span(), makeAssociatedProjection(nestedType, requirement.second.sourceTrait, requirement.first, requirement.second.atyParams));
+                if (const auto* path = output->opt_Path(); path && (path->binding.is_Unbound() || path->binding.is_Opaque()) && path->path.data.is_UfcsKnown()) {
+                    continue;
+                }
             }
             const bool callableOutput = requirement.first == "Output" && (requirement.second.sourceTrait.path == resolve_.langFn() || requirement.second.sourceTrait.path == resolve_.langFnMut() || requirement.second.sourceTrait.path == resolve_.langFnOnce());
             const auto* outputInfer = output->opt_Infer();
             const auto* resolvedOutput = outputInfer && outputInfer->index == ~0u ? output : resolve_.ivars.getType(output);
-            if (callableOutput && resolvedOutput->is_Diverge()) {
+            /* A closure whose body diverges still has its return type to learn from
+               where it is used, so a `!` read off the closure node itself binds nothing
+               yet.  The `Output` of an impl is what it says: a closure's own impl, once
+               its return type is settled as `!`, gives `A` that value (`repeat_with(||
+               panic!())` is an iterator of `!`). */
+            if (callableOutput && resolvedOutput->is_Diverge() && !response.isTraitImpl()) {
                 continue;
             }
             relations.type(requirement.second.type, output);
@@ -13073,6 +13087,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                 const bool forwarded = forwardProjectionRequirements(nestedType, nestedTrait, nestedParams, nestedAssociated);
                 const auto binding = bindCandidatePlaceholders(*candidate, nestedType, nestedAssociated, false, forwarded);
                 if (binding == CandidateBindingResult::Mismatch) {
+                    DEBUG(StringView("nested bound placeholders mismatch: ") << nestedType << StringView(": ") << nestedTrait << nestedParams);
                     return Certainty::NoSolution;
                 }
                 if (binding == CandidateBindingResult::Changed) {
@@ -13132,6 +13147,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                 });
                 const bool hasResponse = evaluateTyped(span(), nestedTrait, nestedParams, nestedType, nestedCallback, {.ambiguity = SolverAmbiguityPolicy::Report});
                 if (!hasResponse) {
+                    DEBUG(StringView("nested bound response rejected: ") << nestedType << StringView(": ") << nestedTrait << nestedParams << StringView(" binding=") << static_cast<unsigned>(responseBinding));
                     return Certainty::NoSolution;
                 }
                 if (responseBinding == CandidateBindingResult::Unchanged && !responseHadEffects) {
