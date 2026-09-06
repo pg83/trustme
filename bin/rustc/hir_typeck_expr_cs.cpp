@@ -2164,19 +2164,50 @@ namespace {
                     identityCandidates.pushBack(&candidate);
                 }
             }
+            /* The dereference steps of one reborrow are one source, not several: with
+               the target's pointee unknown, upstream's `coerce_unsized` finds
+               `Source: Unsize<?T>` ambiguous and takes that as "no unsizing", and
+               `coerce_borrowed_pointer` then unifies the target with the first step
+               that fits - which for an unknown is the first, the source's own pointee.
+               `use_ref(&mut &&&&&t)` reads `T` as `&&&&&&Box<_>`, not as any of the
+               types further down the chain. */
+            const PossibleType* alternativesHead = nullptr;
+            bool alternativesOfOneReborrow = !identityCandidates.empty();
+            {
+                unsigned headGroup = 0;
+                for (const auto& endpoint : coercionRefs.endpoints) {
+                    if (!coercionEndpointCanDetermineType(context, endpoint) || endpoint.alternativeGroup == 0 || endpoint.direction != SolverCoercionConstraint::Direction::InputIsDestination) {
+                        alternativesOfOneReborrow = false;
+                        break;
+                    }
+                    if (headGroup == 0) {
+                        headGroup = endpoint.alternativeGroup;
+                        const auto* head = context.getType(endpoint.other);
+                        for (const auto* candidate : identityCandidates) {
+                            if (candidate->isSource() && candidate->ty == head) {
+                                alternativesHead = candidate;
+                            }
+                        }
+                    } else if (endpoint.alternativeGroup != headGroup) {
+                        alternativesOfOneReborrow = false;
+                        break;
+                    }
+                }
+            }
+            const PossibleType* identityCandidate = identityCandidates.length() == 1 ? identityCandidates[0] : alternativesOfOneReborrow ? alternativesHead : nullptr;
             if (finalPhase
                 && allowIdentityCommit
                 && std::none_of(coercionRefs.endpoints.begin(), coercionRefs.endpoints.end(), [&](const auto& endpoint) {
                     return endpoint.direction == SolverCoercionConstraint::Direction::InputIsSource
                         && coercionEndpointCanDetermineType(context, endpoint);
                 })
-                && identityCandidates.length() == 1
-                && identityCandidates[0]->isSource()
-                && (identityCandidates[0]->isCoerce() || allowUnsizingIdentityCommit)
+                && identityCandidate
+                && identityCandidate->isSource()
+                && (identityCandidate->isCoerce() || allowUnsizingIdentityCommit)
                 && !isResultOfPendingRevisit(context, tyL)
-                && !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, identityCandidates[0]->ty)) {
-                DEBUG(i << StringView(": Final unconstrained coercion destination takes its source type: ") << identityCandidates[0]->ty);
-                context.equateTypes(sp, tyL, identityCandidates[0]->ty);
+                && !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, identityCandidate->ty)) {
+                DEBUG(i << StringView(": Final unconstrained coercion destination takes its source type: ") << identityCandidate->ty);
+                context.equateTypes(sp, tyL, identityCandidate->ty);
                 return true;
             }
 
