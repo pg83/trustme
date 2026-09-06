@@ -8135,18 +8135,23 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
 
                 /* Receiver/result relations can determine impl parameters that
                  * were still open during the first bound probe. Re-evaluate the
-                 * obligations transactionally before assigning certainty. */
+                 * obligations transactionally before assigning certainty.
+                 * Upstream's probe drops an inherent impl only for a where-clause
+                 * that cannot hold (`predicate_may_hold`); one still open is
+                 * registered at confirmation as an obligation and does not keep
+                 * the method from being picked - `v.append(&mut w)` on a
+                 * `VecDeque<_>` whose element is still unknown is picked, and the
+                 * argument is related, with `_: Sized` left pending.  The open
+                 * bounds travel in the effects as obligations. */
                 const auto completeImplBounds = resolve_.evaluateInherentImplBounds(callSpan, impl, implParams, &signatureEffects);
                 if (completeImplBounds == Certainty::NoSolution) {
                     return Certainty::NoSolution;
                 }
-                merge(applicability, completeImplBounds);
 
                 const auto bounds = evaluateMethodBounds(method.data.params, methodParams, methodMonomorph, &signatureEffects);
                 if (bounds == Certainty::NoSolution) {
                     return Certainty::NoSolution;
                 }
-                merge(applicability, bounds);
                 return applicability;
             };
 
