@@ -92,6 +92,9 @@ struct SolverOperatorSummary {
 struct SolverResponse {
     SolverCertainty certainty = SolverCertainty::NoSolution;
     bool ambiguityOnlyFromObligations = false;
+    /* A viable candidate gave way to one that specializes it: the answer rests on
+       the specializing impl being known to apply. */
+    bool winnowedBySpecialization = false;
     SolverSlotValues slots;
     ThinVector<SolverObligation> obligations;
     ThinVector<SolverTypeEquality> equalities;

@@ -365,6 +365,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
     };
 
     struct CandidateFrame {
+        bool specializationWinnowed = false;
         Vector<Candidate*> candidates;
         Vector<Candidate*> viable;
         size_t availableDepth = 0;
@@ -6753,6 +6754,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         SolverResponse result;
         result.certainty = source.certainty;
         result.ambiguityOnlyFromObligations = source.ambiguityOnlyFromObligations;
+        result.winnowedBySpecialization = source.winnowedBySpecialization;
         result.operatorSummary = source.operatorSummary;
         for (size_t i = 0; i < source.slots.typeInputs.size(); i++) {
             if (!opaqueForCaller(source.slots.typeInputs[i]) && !opaqueForCaller(source.slots.types[i])) {
@@ -6792,6 +6794,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         SolverResponse result;
         result.certainty = source.certainty;
         result.ambiguityOnlyFromObligations = source.ambiguityOnlyFromObligations;
+        result.winnowedBySpecialization = source.winnowedBySpecialization;
         result.operatorSummary = source.operatorSummary;
         for (const auto* type : source.slots.typeInputs) {
             result.slots.typeInputs.push_back(instantiator.monomorphType(callSpan, type, true));
@@ -7663,6 +7666,64 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         appendResponse(effects, std::move(preliminaryEffects));
     };
 
+    /* Upstream registers the method's trait obligation at lookup and, before an
+       argument is coerced to a parameter that still holds inference variables,
+       selects what it can (`resolve_vars_with_obligations`): a trait parameter that
+       one impl alone decides is decided before the argument is related to it.
+       `set.eq(&other_ref)` reads `Rhs` as `BTreeSet` from the only `PartialEq` impl
+       of `BTreeSet`, and the argument then reaches `&BTreeSet` by dereferencing;
+       related first, it would have read `Rhs` off the argument as `Ref<BTreeSet>`.
+       Only a parameter an argument mentions is worth the probe, and only a proof
+       that decides outright is kept. */
+    const auto constrainTraitParamsBeforeArguments = [&](const HIRFunction& function, const HIRGenericPath& proofTrait, const HIRPathParams& proofParams, const HIRType* selfType, const Monomorphiser& monomorph, SolverResponse& effects) {
+        if (function.fixedArgCount() != argumentTypes.size() + 1) {
+            return;
+        }
+        ThinVector<unsigned> openSlots;
+        for (const auto* param : proofParams.types) {
+            const auto* infer = resolve_.ivars.getType(param)->opt_Infer();
+            if (infer && !infer->isLit() && infer->index != ~0u) {
+                openSlots.push_back(infer->index);
+            }
+        }
+        if (openSlots.empty()) {
+            return;
+        }
+        bool argumentMentionsSlot = false;
+        for (size_t i = 0; i < argumentTypes.size() && !argumentMentionsSlot; i++) {
+            const auto* expected = monomorph.monomorphType(callSpan, function.args[i + 1].second, true);
+            argumentMentionsSlot = visitTyWith(expected, [&](const HIRType* inner) {
+                const auto* infer = resolve_.ivars.getType(inner)->opt_Infer();
+                return infer && std::find(openSlots.begin(), openSlots.end(), infer->index) != openSlots.end();
+            });
+        }
+        if (!argumentMentionsSlot) {
+            return;
+        }
+        const auto snapshot = resolve_.ivars.snapshot();
+        SolverMayApply probe;
+        bool hasProbe = false;
+        auto probeCallback = makeCallable<SolverMayApplyCb>([&](SolverMayApply candidate) {
+            probe = std::move(candidate);
+            hasProbe = true;
+            return true;
+        });
+        evaluateTyped(callSpan, proofTrait.path, proofParams, selfType, probeCallback, TraitGoalQuery{.allowInferInputs = true, .ambiguity = SolverAmbiguityPolicy::Report}, true);
+        /* Upstream would also let a specializing impl retire the others here, but only
+           when its evaluation is certain - and it is certain about less than this
+           typeck is: with `let mut v = Vec::with_capacity(n); v.spec_extend(iter)`
+           the vector's element is still unknown to upstream at the call, the
+           specializing impl is not known to apply, and nothing is decided.  An answer
+           that rests on specialization is therefore not taken before the arguments. */
+        if (!hasProbe || probe.effects.certainty != Certainty::Proven || !probe.candidate || probe.effects.winnowedBySpecialization || applyResponse(probe.effects) != Certainty::Proven) {
+            resolve_.ivars.rollbackTo(snapshot);
+            return;
+        }
+        DEBUG(StringView("trait parameters decided before the arguments by ") << *probe.candidate);
+        resolve_.ivars.commit(snapshot);
+        appendResponse(effects, std::move(probe.effects));
+    };
+
     auto assembleTraitCandidate = [&](const HIRFunction& function, HIRGenericPath proofTrait, HIRGenericPath outputTrait, const HIRType* sourceSelfType) {
         const auto snapshot = resolve_.ivars.snapshot();
         STD_DEFER {
@@ -7726,6 +7787,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         methodMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
 
         guideFromExpectedResult(methodMonomorph, function.returnType);
+        constrainTraitParamsBeforeArguments(function, proofTrait, proofParams, selfType, methodMonomorph, signatureEffects);
 
         if (function.fixedArgCount() == argumentTypes.size() + 1) {
             for (size_t i = 0; i < argumentTypes.size(); i++) {
@@ -9898,6 +9960,7 @@ auto NextTraitGoalEvaluator::monomorphSolverResponse(const SolverResponse& sourc
     SolverResponse result;
     result.certainty = source.certainty;
     result.ambiguityOnlyFromObligations = source.ambiguityOnlyFromObligations;
+    result.winnowedBySpecialization = source.winnowedBySpecialization;
     result.operatorSummary = source.operatorSummary;
     for (const auto& type : source.slots.typeInputs) {
         result.slots.typeInputs.push_back(monomorph.monomorphType(span(), type, true));
@@ -14382,6 +14445,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         appendParams(left->trait.params, right->trait.params);
         appendParams(left->params, right->params);
     };
+    bool rootSpecializationWinnowed = false;
     const auto operatorImplHasBuiltinSignature = [&](const SolverImpl& impl) {
         ASSERT_BUG(span(), query.operatorGoal, StringView("operator candidate classification without an operator goal"));
         const auto& operatorGoal = *query.operatorGoal;
@@ -14475,6 +14539,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         auto canonicalResponse = monomorphCandidateImpl(response, canonicalizer);
         SolverResponse solverResponse;
         solverResponse.certainty = certainty;
+        solverResponse.winnowedBySpecialization = rootSpecializationWinnowed;
         solverResponse.slots = extractSlotValues(canonical, canonicalResponse, canonicalizer, solverResponse.certainty);
         const auto* canonicalApplicable = exposeImpl ? ownSolverImpl(monomorphCandidateImpl(canonicalResponse, MonomorphiserNop(crate.types))) : nullptr;
         if (distinctViable.empty()) {
@@ -15247,17 +15312,21 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             if (leftSpecializes) {
                 if (frame.viable[i]->certainty == Certainty::Proven && !frame.viable[i]->ambiguityBeyondHead) {
                     frame.viable[j]->discarded = true;
+                    frame.specializationWinnowed = true;
                     recordItemSource(frame.viable[i], frame.viable[j]);
                 } else if (frame.viable[j]->certainty == Certainty::Proven) {
                     frame.viable[i]->discarded = true;
+                    frame.specializationWinnowed = true;
                 }
             } else if (rightSpecializes) {
                 if (frame.viable[j]->certainty == Certainty::Proven && !frame.viable[j]->ambiguityBeyondHead) {
                     frame.viable[i]->discarded = true;
+                    frame.specializationWinnowed = true;
                     recordItemSource(frame.viable[j], frame.viable[i]);
                     break;
                 } else if (frame.viable[i]->certainty == Certainty::Proven) {
                     frame.viable[j]->discarded = true;
+                    frame.specializationWinnowed = true;
                 }
             }
         }
@@ -15273,6 +15342,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             frame.viable.popBack();
         }
     }
+    rootSpecializationWinnowed = frame.specializationWinnowed;
 
     bool sameResponse = true;
     bool oneResponse = true;
