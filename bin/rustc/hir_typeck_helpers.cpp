@@ -5355,7 +5355,7 @@ SolverCertainty TraitResolution::typeIsClone(const Span& sp, const HIRType* ty) 
     return solveTraitGoalCertainty(sp, langClone(), type);
 }
 
-SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op, bool allowSourceAutoderef) const {
+SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op, bool allowSourceAutoderef, bool unknownTargetIsFresh) const {
     SolverCoercionResponse result;
     TRACE_FUNCTION_FR(
         StringView("dst=") << destination << StringView(", src=") << source << StringView(", op=") << static_cast<unsigned>(op),
@@ -5393,17 +5393,19 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
     };
     const auto* normalizedDestination = normalize(destination);
     const auto* normalizedSource = normalize(source);
+    SolverCoercionConstraint constraint{
+        0,
+        normalizedDestination,
+        SolverCoercionConstraint::Direction::InputIsSource,
+        op,
+        false,
+        false,
+        allowSourceAutoderef,
+    };
+    constraint.unknownTargetIsFresh = unknownTargetIsFresh;
     const auto coercionCertainty = evaluateCoercionConstraint(
         sp,
-        SolverCoercionConstraint{
-            0,
-            normalizedDestination,
-            SolverCoercionConstraint::Direction::InputIsSource,
-            op,
-            false,
-            false,
-            allowSourceAutoderef,
-        },
+        constraint,
         normalizedSource,
         nullptr,
         &result.effects,
@@ -5907,7 +5909,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         return SolverCertainty::Proven;
     }
 
-    const auto unsize = [&](const HIRType* rawDestination, const HIRType* rawSource, bool hasAutoderefAlternative = false, unsigned alternativeGroup = 0, SolverCoercionRelation* relation = nullptr) {
+    const auto unsize = [&](const HIRType* rawDestination, const HIRType* rawSource, bool hasAutoderefAlternative = false, unsigned alternativeGroup = 0, SolverCoercionRelation* relation = nullptr, bool reborrow = false) {
         const auto* destination = resolveKnown(rawDestination);
         const auto* source = resolveKnown(rawSource);
         if (relation) {
@@ -5929,6 +5931,19 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         }
         if (destination->is_Infer() || (source->is_Infer() && !sourceLiteral)) {
             if (!hasAutoderefAlternative && !destination->is_Infer() && typeIsSized(sp, destination) == SolverCertainty::Proven) {
+                return related(relateEquality(destination, source), SolverCoercionRelation::Equality);
+            }
+            /* Upstream `coerce_unsized`: with the target still unknown, `Source:
+               Unsize<?U>` is ambiguous, and that is taken as "no unsizing" (`ambiguous
+               unsize` -> `Err`), so `coerce` falls through to `coerce_borrowed_pointer`
+               - a reborrow that unifies the target with the first dereference of the
+               source, which is where this is asked from.  That holds once the target's
+               unknowns are the coercion's own: a method argument is related after what
+               the call expects back has been applied, and `self.x.call(self)` with
+               `self: &mut Z<T>` against `&U` leaves `U` to the argument - it is `Z<T>`,
+               not an unsizing to wait on.  A target that a later expectation may still
+               decide keeps waiting; a slot of the goal being solved is answered below. */
+            if (constraint.unknownTargetIsFresh && (!hasAutoderefAlternative || reborrow) && destination->is_Infer() && !source->is_Infer() && !isSolverCanonicalInfer(destination->as_Infer().index)) {
                 return related(relateEquality(destination, source), SolverCoercionRelation::Equality);
             }
             if (deferred) {
@@ -6283,7 +6298,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             const auto deferredStart = deferred ? deferred->size() : 0;
             const auto alternativeGroup = deferred ? static_cast<unsigned>(deferredStart + 1) : 0;
             SolverCoercionRelation innerRelation = SolverCoercionRelation::None;
-            auto result = unsize(destinationBorrow->inner, sourceBorrow->inner, true, alternativeGroup, &innerRelation);
+            auto result = unsize(destinationBorrow->inner, sourceBorrow->inner, true, alternativeGroup, &innerRelation, true);
             if (result == SolverCertainty::Proven) {
                 if (adjustment) {
                     adjustment->kind = SolverCoercionAdjustmentKind::Borrow;
@@ -7556,7 +7571,11 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             resolve_.ivars.commit(equalitySnapshot);
         }
 
-        auto coercion = resolve_.evaluateCoercionGoal(callSpan, expected, actual, SolverCoercionOp::Coercion, false);
+        /* An argument is related after `guideFromExpectedResult`: what the method's
+           parameters could learn from the expected result they have, and one still open
+           in a parameter type is the argument's to fix (upstream: fudged to a fresh
+           variable in `expected_inputs_for_expected_output`, then bound by `coerce`). */
+        auto coercion = resolve_.evaluateCoercionGoal(callSpan, expected, actual, SolverCoercionOp::Coercion, false, sourceInput != ~0u);
         if (coercion.effects.certainty == Certainty::NoSolution) {
             return Certainty::NoSolution;
         }

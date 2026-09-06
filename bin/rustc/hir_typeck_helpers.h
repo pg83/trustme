@@ -482,6 +482,10 @@ struct SolverCoercionConstraint {
     bool allowSourceAutoderef = false;
     bool bindInputToCandidate = true;
     unsigned alternativeGroup = 0;
+    /* The destination's unknowns have had their chance to be decided by what the call
+       site expects back (upstream: `expected_inputs_for_expected_output`); what is
+       still open is a fresh variable of the coercion's own, bound by it. */
+    bool unknownTargetIsFresh = false;
 };
 
 struct SolverOperatorGoal {
@@ -839,7 +843,7 @@ public:
     SolverCertainty evaluateInherentImpl(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const;
     SolverCertainty probeInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const;
 
-    SolverCoercionResponse evaluateCoercionGoal(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op, bool allowSourceAutoderef = false) const;
+    SolverCoercionResponse evaluateCoercionGoal(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op, bool allowSourceAutoderef = false, bool unknownTargetIsFresh = false) const;
 
     InherentImplSelection selectInherentImpl(const Span& sp, const HIRType* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams = nullptr) const;
 
