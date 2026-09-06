@@ -52,6 +52,7 @@ generate(
             HAS_UNEVALUATED_CONST = 1u << 3,
             HAS_ASSOCIATED_TYPE = 1u << 4,
             HAS_DEFERRED_CONST = 1u << 5,
+            HAS_NODE_TYPE = 1u << 6,
         };
 
         bool hasTypeInfer() const {

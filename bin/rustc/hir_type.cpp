@@ -571,6 +571,7 @@ namespace {
                 break;
             }
             case HIRType::TAG_NodeType: {
+                flags |= HIRType::HAS_NODE_TYPE;
                 break;
             }
         }

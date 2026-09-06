@@ -90,6 +90,16 @@ namespace {
 
     struct CanonicalizeTraitGoal;
 
+    /* What a canonical goal depends on beyond its trait, inputs and bindings: the
+       classes of the impl instantiations it names, and the signatures of the
+       closures it names.  Upstream's closure type carries its signature as generic
+       arguments, so the signature is part of the canonical goal there; here the
+       closure type is the node, and the canonical signature rides alongside. */
+    struct SolverGoalEnvironment {
+        Vector<u32> scopeClasses;
+        Vector<const HIRType*> closureSignatures;
+    };
+
     using NextTraitGoalEvaluator = TraitResolution::NextTraitGoalEvaluator;
 
     struct CanonicalizeTraitGoal final: public Monomorphiser {
@@ -99,12 +109,14 @@ namespace {
         mutable size_t inputPlaceholderCount_ = 0;
         const HMTypeInferrence* ivarTable_ = nullptr;
         mutable bool frozen_ = false;
+        mutable bool sealed_ = false;
         mutable bool sawForeignIvar_ = false;
         mutable bool sawForeignSolverExistential_ = false;
         bool alphaImplScopes_ = false;
         u32 alphaScopeBase_ = 0;
         mutable Vector<u32> solverScopes_;
-        mutable Vector<u32> solverScopeClasses_;
+        mutable SolverGoalEnvironment environment_;
+        mutable Vector<const HIRExprNodeClosure*> closuresInProgress_;
 
         RcString canonicalPlaceholderName(const RcString& name) const;
 
@@ -114,13 +126,16 @@ namespace {
 
         void freeze() const;
 
+        /* The goal's inputs are complete: nothing met from here on becomes a slot. */
+        void seal() const;
+
         bool sawForeignIvar() const;
 
         bool sawForeignSolverExistential() const;
 
         std::optional<HIRGenericRef> originalSolverGeneric(const HIRGenericRef& generic) const;
 
-        const Vector<u32>& alphaSolverEnvironment() const;
+        const SolverGoalEnvironment& alphaSolverEnvironment() const;
 
         const HIRType* originalIvar(unsigned index) const;
 
@@ -386,9 +401,10 @@ struct TraitResolution::NextTraitGoalEvaluator {
         const HIRType* type;
         HIRTraitPath::assocListT associated;
         ThinVector<u32> existentialEnvironment;
+        ThinVector<const HIRType*> closureSignatures;
         bool suppressAmbiguity;
 
-        GoalKey(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Vector<u32>* existentialEnvironment = nullptr, bool suppressAmbiguity = false);
+        GoalKey(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false);
     };
 
     struct CachedGoal {
@@ -400,7 +416,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
         bool persistent = false;
         bool responseIsIdentity = false;
 
-        CachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, Certainty certainty, const Vector<u32>* existentialEnvironment = nullptr, bool suppressAmbiguity = false);
+        CachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, Certainty certainty, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false);
     };
 
     const TraitResolution& resolve_;
@@ -431,6 +447,10 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     ObjList<Candidate> candidateNodes;
     Vector<CandidateFrame*> frames;
+    /* The canonicalizer of the goal whose candidates are being assembled: a candidate
+       read off a closure carries the closure's own inference variables, which the
+       canonical goal does not, and they are given slots here. */
+    const CanonicalizeTraitGoal* assemblyCanonicalizer_ = nullptr;
     size_t frameDepth = 0;
     ObjList<GoalKey> activeGoalNodes;
     ObjList<CachedGoal> cachedGoalNodes;
@@ -443,7 +463,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
         GoalKey goal;
         bool includeMagicCandidates;
 
-        EmptyRootGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const Vector<u32>& existentialEnvironment, bool includeMagicCandidates);
+        EmptyRootGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const SolverGoalEnvironment& existentialEnvironment, bool includeMagicCandidates);
     };
 
     struct CacheIndexBucket {
@@ -476,7 +496,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
         HIRPathParams candidateParams;
         Certainty certainty;
 
-        CanonicalNestedNoEffectResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Vector<u32>& existentialEnvironment, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty certainty);
+        CanonicalNestedNoEffectResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment& existentialEnvironment, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty certainty);
     };
 
     ThinVector<CanonicalNestedNoEffectResponse> canonicalNestedNoEffectResponses;
@@ -556,7 +576,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     static size_t goalHash(const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated);
 
-    static size_t goalHashWithEnvironment(size_t hash, const Vector<u32>& existentialEnvironment);
+    static size_t goalHashWithEnvironment(size_t hash, const SolverGoalEnvironment& existentialEnvironment);
 
     static HIRTraitPath::assocListT cloneAssociated(const HIRTraitPath::assocListT* associated);
 
@@ -572,9 +592,9 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     SolverSlotValues extractSlotValues(const CanonicalGoal& goal, const SolverImpl& response, const CanonicalizeTraitGoal& canonicalizer, Certainty certainty) const;
 
-    static bool goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Vector<u32>* existentialEnvironment = nullptr, bool suppressAmbiguity = false);
+    static bool goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false);
 
-    CachedGoal* findCachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Vector<u32>* existentialEnvironment = nullptr, bool suppressAmbiguity = false) const;
+    CachedGoal* findCachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false) const;
 
     GoalKey* findActiveGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated) const;
 
@@ -582,15 +602,15 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     void popActiveGoal(GoalKey* goal);
 
-    CachedGoal* cacheGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, Certainty certainty, bool persistent = false, bool responseIsIdentity = false, const Vector<u32>* existentialEnvironment = nullptr);
+    CachedGoal* cacheGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, Certainty certainty, bool persistent = false, bool responseIsIdentity = false, const SolverGoalEnvironment* existentialEnvironment = nullptr);
 
-    CachedGoal* cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverResponse* response, const SolverImpl* applicable, const Vector<u32>* existentialEnvironment = nullptr, bool suppressAmbiguity = false);
+    CachedGoal* cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverResponse* response, const SolverImpl* applicable, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false);
 
     void clearGoalCache(bool clearCanonicalNoEffectResponses = false);
 
-    bool rootAssemblyKnownEmpty(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const Vector<u32>& existentialEnvironment, bool includeMagicCandidates) const;
+    bool rootAssemblyKnownEmpty(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const SolverGoalEnvironment& existentialEnvironment, bool includeMagicCandidates) const;
 
-    void rememberEmptyRootAssembly(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const Vector<u32>& existentialEnvironment, bool includeMagicCandidates);
+    void rememberEmptyRootAssembly(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const SolverGoalEnvironment& existentialEnvironment, bool includeMagicCandidates);
 
     size_t rawNestedNoEffectHash(const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Candidate& candidate) const;
 
@@ -600,11 +620,11 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     size_t canonicalNestedNoEffectHash(size_t goalHash, const Candidate& candidate, const HIRPathParams& candidateParams) const;
 
-    bool findCanonicalNestedNoEffectResponse(size_t goalHash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Vector<u32>& existentialEnvironment, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty& certainty) const;
+    bool findCanonicalNestedNoEffectResponse(size_t goalHash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment& existentialEnvironment, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty& certainty) const;
 
     void rememberCanonicalNestedNoEffectResponse(const GoalKey& goal, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty certainty);
 
-    static bool canonicalGoalIsRigid(const CanonicalGoal& canonical);
+    static bool canonicalGoalIsRigid(const CanonicalGoal& canonical, const SolverGoalEnvironment& environment);
 
     static const HIRTraitPath::assocListT* boundedAssociated(const SolverImpl& impl);
 
@@ -2329,10 +2349,38 @@ bool HMTypeInferrence::ivarOccursIn(unsigned int slot, const HIRType* type) cons
 }
 
 bool HMTypeInferrence::containsLiveIvar(const HIRType* type, unsigned int rootIndex) const {
+    if (const auto* infer = type->opt_Infer(); infer && infer->index != ~0u && !isAliasInputInfer(infer->index) && infer->index >= ivars.size()) {
+        return false;
+    }
     const auto* resolved = this->getType(type);
     return visitTyWith(resolved, [&](const HIRType* inner) {
+        if (const auto* node = inner->opt_NodeType()) {
+            /* Upstream's closure and coroutine types carry their signatures as
+               generic arguments, so the occurs check walks them; here the node
+               is the type, and its signature is walked by hand. */
+            if (const auto* closure = node->opt_Closure()) {
+                for (const auto& arg : (*closure)->args) {
+                    if (this->containsLiveIvar(arg.second, rootIndex)) {
+                        return true;
+                    }
+                }
+                return this->containsLiveIvar((*closure)->returnType, rootIndex);
+            }
+            if (const auto* generator = node->opt_Generator()) {
+                return this->containsLiveIvar((*generator)->resumeTy, rootIndex) || this->containsLiveIvar((*generator)->yieldTy, rootIndex) || this->containsLiveIvar((*generator)->returnType, rootIndex);
+            }
+            if (const auto* async = node->opt_Async()) {
+                return ((*async)->yieldTy && this->containsLiveIvar((*async)->yieldTy, rootIndex)) || this->containsLiveIvar((*async)->returnType, rootIndex);
+            }
+            return false;
+        }
         const auto* infer = inner->opt_Infer();
         if (!infer || infer->index == ~0u || isAliasInputInfer(infer->index)) {
+            return false;
+        }
+        /* A signature variable of another table (a probe's, or the expression's
+           seen from a scratch table) is not one of this table's. */
+        if (infer->index >= ivars.size()) {
             return false;
         }
         if (this->rootIvarIndex(infer->index) == rootIndex) {
@@ -2504,6 +2552,22 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
         }
         const auto rootIndex = table_.rootIvarIndex(infer->as_Infer().index);
         if (table_.containsLiveIvar(other, rootIndex)) {
+            /* An alias that mentions the variable is not a type containing it until
+               it is normalized: `<Map<I, closure> as Iterator>::Item` names the
+               closure's return variable and normalizes to it.  Upstream relates an
+               alias through an `AliasRelate` goal - the alias is normalized and the
+               result related - and never fails an occurs check on the alias itself;
+               one that does not normalize yet stays open. */
+            const auto* otherPath = other->opt_Path();
+            if (otherPath && otherPath->path.data.is_UfcsKnown() && (otherPath->binding.is_Unbound() || otherPath->binding.is_Opaque())) {
+                if (resolve_) {
+                    const auto* normalized = resolve_->expandAssociatedTypes(sp_, other);
+                    if (normalized != other) {
+                        return this->unify(infer, normalized);
+                    }
+                }
+                return this->defer(left, right);
+            }
             return Outcome::Mismatch;
         }
         bindings_.pushBack(PendingEquality{infer, other});
@@ -8719,7 +8783,7 @@ auto CanonicalizeTraitGoal::canonicalIvar(const HIRType* infer) const -> const H
             return types.infer(HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(i), infer->as_Infer().tyClass);
         }
     }
-    if (frozen_) {
+    if (frozen_ || sealed_) {
         if (ivarTable_ && infer->as_Infer().index >= ivarTable_->ivars.size()) {
             const auto original = RcString::newInterned(FMT(StringView("#solver-unowned-type-") << infer->as_Infer().index));
             return types.generic(canonicalPlaceholderName(original), GENERICPlaceholder * 256);
@@ -8736,6 +8800,10 @@ auto CanonicalizeTraitGoal::freeze() const -> void {
         inputPlaceholderCount_ = placeholderNames_.size();
     }
     frozen_ = true;
+}
+
+auto CanonicalizeTraitGoal::seal() const -> void {
+    sealed_ = true;
 }
 
 auto CanonicalizeTraitGoal::sawForeignIvar() const -> bool {
@@ -8757,8 +8825,8 @@ auto CanonicalizeTraitGoal::originalSolverGeneric(const HIRGenericRef& generic) 
     return HIRGenericRef::newSolverExistential(solverScopes_[slot], static_cast<u16>(generic.idx()));
 }
 
-auto CanonicalizeTraitGoal::alphaSolverEnvironment() const -> const Vector<u32>& {
-    return solverScopeClasses_;
+auto CanonicalizeTraitGoal::alphaSolverEnvironment() const -> const SolverGoalEnvironment& {
+    return environment_;
 }
 
 auto CanonicalizeTraitGoal::originalIvar(unsigned index) const -> const HIRType* {
@@ -8775,7 +8843,7 @@ auto CanonicalizeTraitGoal::canonicalValueIvar(unsigned original) const -> HIRCo
             return HIRConstGeneric::make_Infer({HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(i)});
         }
     }
-    if (frozen_) {
+    if (frozen_ || sealed_) {
         if (ivarTable_ && original >= ivarTable_->values.size()) {
             const auto name = RcString::newInterned(FMT(StringView("#solver-unowned-value-") << original));
             return HIRConstGeneric(HIRGenericRef(canonicalPlaceholderName(name), GENERICPlaceholder * 256));
@@ -8797,18 +8865,64 @@ auto CanonicalizeTraitGoal::originalValueIvar(unsigned index) const -> const uns
 
 auto CanonicalizeTraitGoal::monomorphType(const Span& sp, const HIRType* ty, bool allowInfer) const -> const HIRType* {
     const auto* inputPath = ty->opt_Path();
-    if (!ty->hasTypeInfer() && !ty->needsMonomorphisation() && !(inputPath && inputPath->binding.is_Opaque())) {
+    if (!ty->hasTypeInfer() && !ty->needsMonomorphisation() && !(ty->flags & HIRType::HAS_NODE_TYPE) && !(inputPath && inputPath->binding.is_Opaque())) {
+        return ty;
+    }
+    if (ivarTable_ && ty->is_NodeType()) {
+        /* Upstream's closure type carries its signature as generic arguments
+           (`rustc_type_ir::ClosureArgs`), so a goal about a closure has the
+           closure's argument and return variables among its inputs.  The closure
+           type here is the node; its signature is canonicalized in place and kept
+           with the goal, so the variables have slots and the canonical form
+           distinguishes what the signature says. */
+        if (const auto* closure = ty->as_NodeType().opt_Closure()) {
+            /* A signature variable may resolve to a projection over the closure
+               itself (`<closure as FnOnce<()>>::Output`); the closure is visited once. */
+            for (const auto* inProgress : closuresInProgress_) {
+                if (inProgress == *closure) {
+                    return ty;
+                }
+            }
+            closuresInProgress_.pushBack(*closure);
+            Vector<const HIRType*> signature;
+            signature.grow((*closure)->args.size() + 1);
+            for (const auto& arg : (*closure)->args) {
+                signature.pushBack(this->monomorphType(sp, arg.second, allowInfer));
+            }
+            signature.pushBack(this->monomorphType(sp, (*closure)->returnType, allowInfer));
+            closuresInProgress_.popBack();
+            if (!frozen_ && !sealed_) {
+                environment_.closureSignatures.pushBack(types.tuple(std::move(signature)));
+            }
+        }
         return ty;
     }
     if (ivarTable_ && ty->is_Infer()) {
-        const auto& infer = ty->as_Infer();
-        if (frozen_ && isSolverCanonicalInfer(infer.index) && originalIvar(infer.index)) {
-            return ty;
-        }
         const auto* resolved = ivarTable_->getType(ty);
         if (const auto* infer = resolved->opt_Infer()) {
             if (isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index)) {
                 return resolved;
+            }
+            /* An enclosing goal's canonical input is an unknown of this goal like any
+               other and takes a slot while the inputs are gathered.  A canonical input
+               met in a response is this goal's own; one met in a candidate while the
+               inputs are sealed is the enclosing goal's where that took a slot - a
+               closure's return variable bound to an impl parameter of the enclosing
+               candidate resolves to it - and this goal's own otherwise. */
+            if (isSolverCanonicalInfer(infer->index)) {
+                if (frozen_ && originalIvar(infer->index)) {
+                    return resolved;
+                }
+                if (sealed_) {
+                    for (size_t i = 0; i < ivarNodes_.length(); i++) {
+                        if (ivarNodes_[i] == resolved) {
+                            return types.infer(HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(i), infer->tyClass);
+                        }
+                    }
+                    if (originalIvar(infer->index)) {
+                        return resolved;
+                    }
+                }
             }
             return canonicalIvar(resolved);
         }
@@ -8834,13 +8948,13 @@ auto CanonicalizeTraitGoal::getType(const Span&, const HIRGenericRef& generic) c
                 return types.generic(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(i), static_cast<u16>(generic.idx())));
             }
         }
-        if (frozen_ || solverScopes_.length() >= 256) {
+        if (frozen_ || sealed_ || solverScopes_.length() >= 256) {
             sawForeignSolverExistential_ = true;
             return types.generic(generic);
         }
         const auto slot = solverScopes_.length();
         solverScopes_.pushBack(generic.solverScope);
-        solverScopeClasses_.pushBack(0);
+        environment_.scopeClasses.pushBack(0);
         return types.generic(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(slot), static_cast<u16>(generic.idx())));
     }
     return generic.isPlaceholder() && !generic.isSolverExistential() ? types.generic(canonicalPlaceholderName(generic.name), generic.binding) : types.generic(generic);
@@ -8856,13 +8970,13 @@ auto CanonicalizeTraitGoal::getValue(const Span&, const HIRGenericRef& generic) 
                 return HIRConstGeneric(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(i), static_cast<u16>(generic.idx())));
             }
         }
-        if (frozen_ || solverScopes_.length() >= 256) {
+        if (frozen_ || sealed_ || solverScopes_.length() >= 256) {
             sawForeignSolverExistential_ = true;
             return HIRConstGeneric(generic);
         }
         const auto slot = solverScopes_.length();
         solverScopes_.pushBack(generic.solverScope);
-        solverScopeClasses_.pushBack(0);
+        environment_.scopeClasses.pushBack(0);
         return HIRConstGeneric(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(slot), static_cast<u16>(generic.idx())));
     }
     return HIRConstGeneric(generic.isPlaceholder() && !generic.isSolverExistential() ? HIRGenericRef(canonicalPlaceholderName(generic.name), generic.binding) : generic);
@@ -8871,7 +8985,7 @@ auto CanonicalizeTraitGoal::getValue(const Span&, const HIRGenericRef& generic) 
 auto CanonicalizeTraitGoal::monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const -> HIRConstGeneric {
     if (ivarTable_) {
         if (const auto* infer = val.opt_Infer(); infer && infer->index != ~0u) {
-            if (frozen_ && isSolverCanonicalInfer(infer->index) && originalValueIvar(infer->index)) {
+            if ((frozen_ || sealed_) && isSolverCanonicalInfer(infer->index) && originalValueIvar(infer->index)) {
                 return val.clone();
             }
             const auto& resolved = ivarTable_->getValue(val);
@@ -9933,10 +10047,14 @@ auto NextTraitGoalEvaluator::goalHash(const HIRSimplePath& trait, const HIRPathP
     return result;
 }
 
-auto NextTraitGoalEvaluator::goalHashWithEnvironment(size_t hash, const Vector<u32>& existentialEnvironment) -> size_t {
-    hash = hashMix(hash, existentialEnvironment.length());
-    for (const auto environmentClass : existentialEnvironment) {
+auto NextTraitGoalEvaluator::goalHashWithEnvironment(size_t hash, const SolverGoalEnvironment& existentialEnvironment) -> size_t {
+    hash = hashMix(hash, existentialEnvironment.scopeClasses.length());
+    for (const auto environmentClass : existentialEnvironment.scopeClasses) {
         hash = hashMix(hash, environmentClass);
+    }
+    hash = hashMix(hash, existentialEnvironment.closureSignatures.length());
+    for (const auto* signature : existentialEnvironment.closureSignatures) {
+        hash = hashMix(hash, hashType(signature));
     }
     return hash;
 }
@@ -10408,13 +10526,18 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
     return result;
 }
 
-auto NextTraitGoalEvaluator::goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Vector<u32>* existentialEnvironment, bool suppressAmbiguity) -> bool {
+auto NextTraitGoalEvaluator::goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity) -> bool {
     if (goal.trait != trait || goal.params != params || goal.type != type || goal.suppressAmbiguity != suppressAmbiguity) {
         return false;
     }
-    const auto environmentSize = existentialEnvironment ? existentialEnvironment->length() : 0;
+    const auto environmentSize = existentialEnvironment ? existentialEnvironment->scopeClasses.length() : 0;
     if (goal.existentialEnvironment.size() != environmentSize ||
-        (existentialEnvironment && !std::equal(goal.existentialEnvironment.begin(), goal.existentialEnvironment.end(), existentialEnvironment->begin()))) {
+        (existentialEnvironment && !std::equal(goal.existentialEnvironment.begin(), goal.existentialEnvironment.end(), existentialEnvironment->scopeClasses.begin()))) {
+        return false;
+    }
+    const auto signatureCount = existentialEnvironment ? existentialEnvironment->closureSignatures.length() : 0;
+    if (goal.closureSignatures.size() != signatureCount ||
+        (existentialEnvironment && !std::equal(goal.closureSignatures.begin(), goal.closureSignatures.end(), existentialEnvironment->closureSignatures.begin()))) {
         return false;
     }
     if (!associated || associated->empty()) {
@@ -10433,7 +10556,7 @@ auto NextTraitGoalEvaluator::goalMatches(const GoalKey& goal, const HIRSimplePat
     return true;
 }
 
-auto NextTraitGoalEvaluator::findCachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Vector<u32>* existentialEnvironment, bool suppressAmbiguity) const -> CachedGoal* {
+auto NextTraitGoalEvaluator::findCachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity) const -> CachedGoal* {
     const auto range = goalCacheIndex.equal_range(hash);
     for (auto it = range.first; it != range.second; ++it) {
         if (goalMatches(it->second->goal, trait, params, type, associated, existentialEnvironment, suppressAmbiguity)) {
@@ -10475,7 +10598,7 @@ auto NextTraitGoalEvaluator::popActiveGoal(GoalKey* goal) -> void {
     std::abort();
 }
 
-auto NextTraitGoalEvaluator::cacheGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, Certainty certainty, bool persistent, bool responseIsIdentity, const Vector<u32>* existentialEnvironment) -> CachedGoal* {
+auto NextTraitGoalEvaluator::cacheGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, Certainty certainty, bool persistent, bool responseIsIdentity, const SolverGoalEnvironment* existentialEnvironment) -> CachedGoal* {
     auto* goal = cachedGoalNodes.make(hash, trait, params, type, associated, certainty, existentialEnvironment);
     goal->persistent = persistent;
     goal->responseIsIdentity = responseIsIdentity;
@@ -10484,7 +10607,7 @@ auto NextTraitGoalEvaluator::cacheGoal(size_t hash, const HIRSimplePath& trait, 
     return goal;
 }
 
-auto NextTraitGoalEvaluator::cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverResponse* response, const SolverImpl* applicable, const Vector<u32>* existentialEnvironment, bool suppressAmbiguity) -> CachedGoal* {
+auto NextTraitGoalEvaluator::cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverResponse* response, const SolverImpl* applicable, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity) -> CachedGoal* {
     ASSERT_BUG(span(), response, StringView("cannot cache an empty solver response"));
     auto* cached = findCachedGoal(hash, trait, params, type, associated, existentialEnvironment, suppressAmbiguity);
     const auto certainty = response->certainty;
@@ -10529,7 +10652,7 @@ auto NextTraitGoalEvaluator::clearGoalCache(bool clearCanonicalNoEffectResponses
     }
 }
 
-auto NextTraitGoalEvaluator::rootAssemblyKnownEmpty(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const Vector<u32>& existentialEnvironment, bool includeMagicCandidates) const -> bool {
+auto NextTraitGoalEvaluator::rootAssemblyKnownEmpty(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const SolverGoalEnvironment& existentialEnvironment, bool includeMagicCandidates) const -> bool {
     const auto* bucket = emptyRootGoalIndex.find(hash);
     if (!bucket || bucket->generation != emptyRootGoalGeneration) {
         return false;
@@ -10543,7 +10666,7 @@ auto NextTraitGoalEvaluator::rootAssemblyKnownEmpty(size_t hash, const HIRSimple
     return false;
 }
 
-auto NextTraitGoalEvaluator::rememberEmptyRootAssembly(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const Vector<u32>& existentialEnvironment, bool includeMagicCandidates) -> void {
+auto NextTraitGoalEvaluator::rememberEmptyRootAssembly(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const SolverGoalEnvironment& existentialEnvironment, bool includeMagicCandidates) -> void {
     const auto index = emptyRootGoals.size();
     emptyRootGoals.emplace_back(hash, trait, params, type, existentialEnvironment, includeMagicCandidates);
     auto* bucket = emptyRootGoalIndex.find(hash);
@@ -10615,7 +10738,7 @@ auto NextTraitGoalEvaluator::canonicalNestedNoEffectHash(size_t goalHash, const 
     return hashMix(hash, candidateParams.values.size());
 }
 
-auto NextTraitGoalEvaluator::findCanonicalNestedNoEffectResponse(size_t goalHash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Vector<u32>& existentialEnvironment, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty& certainty) const -> bool {
+auto NextTraitGoalEvaluator::findCanonicalNestedNoEffectResponse(size_t goalHash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment& existentialEnvironment, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty& certainty) const -> bool {
     const auto hash = canonicalNestedNoEffectHash(goalHash, candidate, candidateParams);
     const auto* bucket = canonicalNestedNoEffectResponseIndex.find(hash);
     if (!bucket || bucket->generation != canonicalNestedNoEffectResponseGeneration) {
@@ -10634,9 +10757,12 @@ auto NextTraitGoalEvaluator::findCanonicalNestedNoEffectResponse(size_t goalHash
 
 auto NextTraitGoalEvaluator::rememberCanonicalNestedNoEffectResponse(const GoalKey& goal, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty certainty) -> void {
     Certainty cachedCertainty;
-    Vector<u32> existentialEnvironment;
+    SolverGoalEnvironment existentialEnvironment;
     for (const auto environmentClass : goal.existentialEnvironment) {
-        existentialEnvironment.pushBack(environmentClass);
+        existentialEnvironment.scopeClasses.pushBack(environmentClass);
+    }
+    for (const auto* signature : goal.closureSignatures) {
+        existentialEnvironment.closureSignatures.pushBack(signature);
     }
     if (findCanonicalNestedNoEffectResponse(goal.hash, goal.trait, goal.params, goal.type, goal.associated.empty() ? nullptr : &goal.associated, existentialEnvironment, candidate, candidateParams, cachedCertainty)) {
         return;
@@ -10654,7 +10780,7 @@ auto NextTraitGoalEvaluator::rememberCanonicalNestedNoEffectResponse(const GoalK
     bucket->indexes.push_back(canonicalNestedNoEffectResponses.size() - 1);
 }
 
-auto NextTraitGoalEvaluator::canonicalGoalIsRigid(const CanonicalGoal& canonical) -> bool {
+auto NextTraitGoalEvaluator::canonicalGoalIsRigid(const CanonicalGoal& canonical, const SolverGoalEnvironment& environment) -> bool {
     auto typeIsRigid = [](const HIRType* ty) {
         return !visitTyWith(ty, [](const HIRType* inner) {
             if (inner->is_Infer()) {
@@ -10687,6 +10813,11 @@ auto NextTraitGoalEvaluator::canonicalGoalIsRigid(const CanonicalGoal& canonical
     }
     for (const auto& entry : canonical.associated) {
         if (!typeIsRigid(entry.second.type)) {
+            return false;
+        }
+    }
+    for (const auto* signature : environment.closureSignatures) {
+        if (!typeIsRigid(signature)) {
             return false;
         }
     }
@@ -11289,6 +11420,14 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
     const bool selfIsRigidProjection = selfPath && selfPath->binding.is_Opaque();
     auto collect = [&](CandidateSource source) {
         return [&, source, selfIsRigidProjection](SolverImpl impl, Certainty assemblyCertainty, AssembledImplEffects* assemblyEffects) {
+            /* A candidate read off a closure (`closure: Fn<(?a,)> + {Output: ?r}`)
+               names the closure's signature variables as they are; the goal gave
+               them slots when it was canonicalized, and the head is related in
+               those terms so the answer reaches the caller as an equality between
+               its own variables, not as a canonical input leaking into one. */
+            if (assemblyCanonicalizer_ && !impl.isTraitImpl() && impl.type && impl.type->is_NodeType()) {
+                impl = monomorphCandidateImpl(impl, *assemblyCanonicalizer_);
+            }
             auto effectiveSource = source;
             if (source == CandidateSource::Other && selfIsRigidProjection && !impl.isTraitImpl()) {
                 effectiveSource = CandidateSource::ParamEnv;
@@ -13340,7 +13479,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     };
 
     const auto cycleHitsBefore = cycleHits_;
-    const bool rigidKey = canonicalGoalIsRigid(canonical);
+    const bool rigidKey = canonicalGoalIsRigid(canonical, canonicalizer.alphaSolverEnvironment());
     auto cacheResult = [&](Certainty certainty, bool identityResponse = false) {
         DEBUG(StringView("solveGoal ") << trait << StringView(" for ") << type << StringView(" => ") << static_cast<unsigned>(certainty));
         if (responseIsIdentity) {
@@ -13371,7 +13510,13 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
         }
     };
 
-    assembleCandidates(frameIndex, trait, canonical.params, canonical.type);
+    canonicalizer.seal();
+    {
+        const auto* previousAssemblyCanonicalizer = assemblyCanonicalizer_;
+        assemblyCanonicalizer_ = &canonicalizer;
+        assembleCandidates(frameIndex, trait, canonical.params, canonical.type);
+        assemblyCanonicalizer_ = previousAssemblyCanonicalizer;
+    }
 
     bool sawAmbiguous = false;
     bool suppressAutoBuiltin = false;
@@ -14362,7 +14507,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         return emitNoViable();
     }
     const auto cycleHitsBefore = cycleHits_;
-    const bool rigidKey = canonicalGoalIsRigid(canonical);
+    const bool rigidKey = canonicalGoalIsRigid(canonical, canonicalizer.alphaSolverEnvironment());
     const auto appendAssociatedEquality = [&](auto& response, const HIRType* required, const HIRType* output) {
         response.equalities.push_back(SolverTypeEquality{required, output});
 
@@ -14937,8 +15082,14 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         });
     };
     const bool hasExactSelfGuidance = coercionSelectsCandidate && canonical.type->is_Infer() && std::any_of(canonicalCoercions.begin(), canonicalCoercions.end(), selfGuidanceIsExact);
+    canonicalizer.seal();
     if (!hasExactSelfGuidance) {
-        assembleCandidates(frameIndex, trait, canonical.params, canonical.type, includeRootMagicCandidates);
+        {
+            const auto* previousAssemblyCanonicalizer = assemblyCanonicalizer_;
+            assemblyCanonicalizer_ = &canonicalizer;
+            assembleCandidates(frameIndex, trait, canonical.params, canonical.type, includeRootMagicCandidates);
+            assemblyCanonicalizer_ = previousAssemblyCanonicalizer;
+        }
     }
     if (coercionSelectsCandidate && canonical.type->is_Infer()) {
         for (const auto& constraint : canonicalCoercions) {
@@ -14950,10 +15101,20 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             if (guidedSelf->is_Infer() || (guidedPath && guidedPath->binding.is_Unbound())) {
                 continue;
             }
-            assembleCandidates(frameIndex, trait, canonical.params, guidedSelf, includeRootMagicCandidates);
+            {
+                const auto* previousAssemblyCanonicalizer = assemblyCanonicalizer_;
+                assemblyCanonicalizer_ = &canonicalizer;
+                assembleCandidates(frameIndex, trait, canonical.params, guidedSelf, includeRootMagicCandidates);
+                assemblyCanonicalizer_ = previousAssemblyCanonicalizer;
+            }
             if (selfGuidanceIsExact(constraint)) {
                 while ((guidedSelf = resolve_.autoderef(span(), guidedSelf))) {
-                    assembleCandidates(frameIndex, trait, canonical.params, guidedSelf, includeRootMagicCandidates);
+                    {
+                const auto* previousAssemblyCanonicalizer = assemblyCanonicalizer_;
+                assemblyCanonicalizer_ = &canonicalizer;
+                assembleCandidates(frameIndex, trait, canonical.params, guidedSelf, includeRootMagicCandidates);
+                assemblyCanonicalizer_ = previousAssemblyCanonicalizer;
+            }
                 }
             }
         }
@@ -15623,7 +15784,7 @@ auto NextTraitGoalEvaluator::CandidateFrame::clear(ObjList<Candidate>& nodes) ->
     encounteredOverflow = false;
 }
 
-NextTraitGoalEvaluator::GoalKey::GoalKey(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Vector<u32>* existentialEnvironment, bool suppressAmbiguity)
+NextTraitGoalEvaluator::GoalKey::GoalKey(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity)
     : hash(hash)
     , trait(trait)
     , params(params.clone())
@@ -15632,19 +15793,22 @@ NextTraitGoalEvaluator::GoalKey::GoalKey(size_t hash, const HIRSimplePath& trait
     , suppressAmbiguity(suppressAmbiguity)
 {
     if (existentialEnvironment) {
-        for (const auto environmentClass : *existentialEnvironment) {
+        for (const auto environmentClass : existentialEnvironment->scopeClasses) {
             this->existentialEnvironment.push_back(environmentClass);
+        }
+        for (const auto* signature : existentialEnvironment->closureSignatures) {
+            this->closureSignatures.push_back(signature);
         }
     }
 }
 
-NextTraitGoalEvaluator::CachedGoal::CachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, Certainty certainty, const Vector<u32>* existentialEnvironment, bool suppressAmbiguity)
+NextTraitGoalEvaluator::CachedGoal::CachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, Certainty certainty, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity)
     : goal(hash, trait, params, type, associated, existentialEnvironment, suppressAmbiguity)
     , certainty(certainty)
 {
 }
 
-NextTraitGoalEvaluator::EmptyRootGoal::EmptyRootGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const Vector<u32>& existentialEnvironment, bool includeMagicCandidates)
+NextTraitGoalEvaluator::EmptyRootGoal::EmptyRootGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const SolverGoalEnvironment& existentialEnvironment, bool includeMagicCandidates)
     : goal(hash, trait, params, type, nullptr, &existentialEnvironment)
     , includeMagicCandidates(includeMagicCandidates)
 {
@@ -15659,7 +15823,7 @@ NextTraitGoalEvaluator::RawNestedNoEffectResponse::RawNestedNoEffectResponse(siz
 {
 }
 
-NextTraitGoalEvaluator::CanonicalNestedNoEffectResponse::CanonicalNestedNoEffectResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Vector<u32>& existentialEnvironment, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty certainty)
+NextTraitGoalEvaluator::CanonicalNestedNoEffectResponse::CanonicalNestedNoEffectResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment& existentialEnvironment, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty certainty)
     : goal(hash, trait, params, type, associated, &existentialEnvironment)
     , traitImpl(candidate.impl.traitImpl)
     , markerImpl(candidate.markerImpl)
