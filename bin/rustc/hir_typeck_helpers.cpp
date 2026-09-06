@@ -671,7 +671,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
     };
 
     template <typename Relate>
-    CandidateBindingResult unifyCandidateParams(HIRPathParams& params, Relate relate);
+    CandidateBindingResult unifyCandidateParams(Candidate& candidate, HIRPathParams& params, Relate relate);
 
     CandidateBindingResult bindCandidatePlaceholders(Candidate& candidate, const HIRType* nestedType, const HIRTraitPath::assocListT& associated, bool useCandidateResponse = false, bool applyResponseBindings = false);
 
@@ -11536,7 +11536,7 @@ auto NextTraitGoalEvaluator::makeAssociatedProjection(const SolverImpl& impl, co
 }
 
 template <typename Relate>
-auto NextTraitGoalEvaluator::unifyCandidateParams(HIRPathParams& params, Relate relate) -> CandidateBindingResult {
+auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathParams& params, Relate relate) -> CandidateBindingResult {
     const auto original = params.clone();
     const auto snapshot = resolve_.ivars.snapshot();
     STD_DEFER {
@@ -11739,6 +11739,31 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(HIRPathParams& params, Relate 
 
     MaterializeCandidate materialize(crate.types, resolve_.ivars, typeBindings, valueBindings);
     auto output = materialize.monomorphPathParams(span(), probeParams, true);
+    /* A relation binds a variable of the goal as readily as a candidate parameter:
+       `Result<T, E>` against `Result<usize, ?e>` with `E` already `u32` binds `?e`.
+       Upstream keeps that in the inference context and the canonical response
+       carries it as the variable's value; here the probe is undone with the
+       relation, so the binding is kept as an equality the response carries. */
+    const auto isProbe = [&](const HIRType* type) {
+        for (const auto& binding : typeBindings) {
+            if (binding.probe == type) {
+                return true;
+            }
+        }
+        return false;
+    };
+    for (const auto& pending : unifier.bindings()) {
+        const auto* infer = pending.left->opt_Infer();
+        if (!infer || infer->index == ~0u || isAliasInputInfer(infer->index) || isProbe(pending.left)) {
+            continue;
+        }
+        if (visitTyWith(pending.right, [&](const HIRType* inner) { return isProbe(inner); })) {
+            continue;
+        }
+        if (pending.left != pending.right) {
+            candidate.relationEqualities.push_back(SolverTypeEquality{pending.left, pending.right});
+        }
+    }
     const bool changed = output != original;
     if (changed) {
         params = std::move(output);
@@ -11817,7 +11842,7 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
         }
         const auto* candidatePattern = useCandidateResponse ? candidateOutput : requirement.second.type;
         const auto* responseValue = useCandidateResponse ? requirement.second.type : candidateOutput;
-        const auto binding = this->unifyCandidateParams(*candidateParams, [&](auto& relations) {
+        const auto binding = this->unifyCandidateParams(candidate, *candidateParams, [&](auto& relations) {
             relations.type(candidatePattern, responseValue);
         });
         if (binding == CandidateBindingResult::Mismatch) {
@@ -11845,7 +11870,7 @@ auto NextTraitGoalEvaluator::bindCandidateResponse(Candidate& candidate, const H
         return CandidateBindingResult::Unchanged;
     }
 
-    const auto binding = this->unifyCandidateParams(*candidateParams, [&](auto& relations) {
+    const auto binding = this->unifyCandidateParams(candidate, *candidateParams, [&](auto& relations) {
         relations.type(nestedType, response.getImplType(crate.types));
         relations.pathParams(nestedParams, response.getTraitParamsRef(crate.types));
         for (const auto& requirement : nestedAssociated) {
