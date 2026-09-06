@@ -39,6 +39,7 @@ HIRExprStatePtr HIRExprStatePtr::clone(ObjPool* pool) const {
     rv->currentSelfType = (*this)->currentSelfType;
     rv->defineOpaque = (*this)->defineOpaque;
     rv->stage = (*this)->stage;
+    rv->anonymousConst = (*this)->anonymousConst;
     return rv;
 }
 

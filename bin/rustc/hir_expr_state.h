@@ -52,5 +52,9 @@ public:
        a property of the expression rather than of where it happens to be allocated. */
     u32 anonConstIndex = 0;
 
+    /* An anonymous constant (an array length, a const argument) is an item of its
+       own with the enclosing item's generics and none of its where-clauses. */
+    bool anonymousConst = false;
+
     HIRExprState(HIRTypeInterner& types, HIRModule& modPtr, HIRSimplePath modPath);
 };

@@ -1053,6 +1053,9 @@ auto BindVisitor::visitPattern(HIRPattern& pat) -> void {
 auto BindVisitor::visitConstgeneric(HIRConstGeneric& value) -> void {
     HIRVisitor::visitConstgeneric(value);
     if (auto* unevaluated = value.opt_Unevaluated()) {
+        if ((*unevaluated)->expr && (*unevaluated)->expr->state) {
+            (*unevaluated)->expr->state->anonymousConst = true;
+        }
         (*unevaluated)->selfType = selfType;
         if (ms.implGenerics) {
             (*unevaluated)->paramsImpl = ms.implGenerics->makeNopParams(crate.types, 0);

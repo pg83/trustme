@@ -1771,6 +1771,26 @@ HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath
                 TypeckModuleState ms{wb};
                 ms.implGenerics = ep.state->implGenerics;
                 ms.itemGenerics = ep.state->itemGenerics;
+                if (ep.state->anonymousConst && !featureEnabled("generic_const_exprs")) {
+                    /* An anonymous constant is an item of its own: it has the enclosing
+                       item's generics but none of its where-clauses (upstream reads an
+                       item's predicates off the node's own generics, and an anonymous
+                       constant has none - `gather_explicit_predicates_of`).  So
+                       `u8::ASSOC_CONST` in `[T; u8::ASSOC_CONST]` sees the impls alone,
+                       where the function body would also see `u8: Trait<T>`.  Under
+                       `generic_const_exprs` upstream hands the constant its parent's
+                       predicates instead (`explicit_predicates_of`), and so does this. */
+                    const auto withoutBounds = [&](const HIRGenericParams* generics) -> const HIRGenericParams* {
+                        if (!generics || generics->bounds.empty()) {
+                            return generics;
+                        }
+                        auto* stripped = pool->make<HIRGenericParams>(generics->clone());
+                        stripped->bounds.clear();
+                        return stripped;
+                    };
+                    ms.implGenerics = withoutBounds(ms.implGenerics);
+                    ms.itemGenerics = withoutBounds(ms.itemGenerics);
+                }
                 ms.currentTrait = ep.state->currentTraitImpl ? &currentTrait : nullptr;
                 ms.currentTraitImpl = ep.state->currentTraitImpl;
                 ms.traits = ep.state->traits;
