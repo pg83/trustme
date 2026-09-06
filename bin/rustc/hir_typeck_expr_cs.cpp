@@ -2993,50 +2993,24 @@ void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType*
         }
     }
 
-    auto equateErasedAlias = [&](const HIRTypeDataErasedType& erased, const auto& alias, const HIRType* hiddenType) {
+    /* In its defining scope an opaque type is the inference variable of its hidden
+       type: upstream replaces every opaque in the signature by a fresh variable
+       before the body is checked (`replace_opaque_types_with_inference_vars`), and
+       relating the opaque with any type - a variable included - relates that.  So
+       `Thunk::new(closure)` against `Thunk<Tait>` gives the method's `F` the
+       variable, not the opaque type, and a recursive call's `Tait` result settles
+       the same variable. */
+    auto equateErasedAlias = [&](const HIRTypeDataErasedType& erased, const auto& alias, const HIRType* otherType) {
         if (!resolve.isOpaqueAliasDefiningScope(*alias.inner)) {
             return false;
         }
-
-        auto inserted = this->erasedTypeAliases.insert(std::make_pair(alias.inner.get(), Context::TaitEntry{alias.params, hiddenType}));
-        if (!inserted.second) {
-            equateTypesInner(sp, inserted.first->second.ourType, hiddenType);
-            return true;
-        }
-
-        struct MonomorphErasedSelf: MonomorphiserNop {
-            const HIRType* hiddenType;
-
-            MonomorphErasedSelf(HIRTypeInterner& types, const HIRType* hiddenType)
-                : MonomorphiserNop(types)
-                , hiddenType(hiddenType)
-            {
-            }
-
-            const HIRType* getType(const Span&, const HIRGenericRef& type) const override {
-                if (type.binding == GENERICErasedSelf) {
-                    return hiddenType;
-                }
-                return types.generic(type.name, type.binding);
-            }
-        } monomorph{crate.types, hiddenType};
-
-        for (const auto& trait : erased.traits) {
-            auto traitMono = monomorph.monomorphTraitpath(sp, trait, false);
-            if (traitMono.typeBounds.empty()) {
-                equateTypesAssoc(sp, crate.types.infer(), traitMono.path.path, traitMono.path.params.clone(), hiddenType, "", {}, false);
-                continue;
-            }
-            for (const auto& aty : traitMono.typeBounds) {
-                equateTypesAssoc(sp, aty.second.type, aty.second.sourceTrait.path, aty.second.sourceTrait.params.clone(), hiddenType, aty.first.c_str(), aty.second.atyParams, false);
-            }
-        }
+        equateTypesInner(sp, hiddenTypeForOpaqueAlias(sp, erased), otherType);
         return true;
     };
 
     if (const auto* et = rT->opt_ErasedType()) {
         if (const auto* ee = et->inner.opt_Alias()) {
-            if (!lT->is_Infer() && equateErasedAlias(*et, *ee, lT)) {
+            if (equateErasedAlias(*et, *ee, lT)) {
                 return;
             }
         }
@@ -6474,9 +6448,6 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
 
     DEBUG(StringView("args = ") << args);
     DEBUG(StringView("result_type = ") << resultType);
-    for (auto& arg : args) {
-        context.handlePattern(Span(), arg.first, arg.second);
-    }
 
     struct M: public Monomorphiser {
         Context& context;
@@ -6506,6 +6477,12 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
 
         const HIRType* monomorphType(const Span& sp, const HIRType* tpl, bool allowInfer = true) const override {
             if (const auto* e = tpl->opt_ErasedType()) {
+                /* An opaque alias this body defines is, throughout the body, the
+                   inference variable of its hidden type (upstream's
+                   `replace_opaque_types_with_inference_vars` on the signature). */
+                if (const auto* alias = e->inner.opt_Alias(); alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner)) {
+                    return context.hiddenTypeForOpaqueAlias(sp, *e);
+                }
                 if (const auto* ee = e->inner.opt_Fcn()) {
                     while (expr.erasedTypes.length() <= ee->index) {
                         expr.erasedTypes.pushBack(nullptr);
@@ -6546,6 +6523,10 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
         }
     };
 
+    for (auto& arg : args) {
+        /* The declaration keeps the opaque type; the binding sees the hidden type's variable. */
+        context.handlePattern(Span(), arg.first, M(context, expr).monomorphType(sp, arg.second));
+    }
     const HIRType* newResTy = resultType ? M(context, expr).monomorphType(sp, resultType) : context.ivars.newIvarTr();
     for (size_t i = 0; i < expr.erasedTypes.length(); i++) {
         ASSERT_BUG(sp, expr.erasedTypes[i] != nullptr, StringView("Non-visited erased type #") << i);
@@ -6571,6 +6552,45 @@ Context::TaitEntry::TaitEntry(const HIRPathParams& p, const HIRType* t)
     : params(p.clone())
     , ourType(std::move(t))
 {
+}
+
+const HIRType* Context::hiddenTypeForOpaqueAlias(const Span& sp, const HIRTypeDataErasedType& erased) {
+    const auto& alias = erased.inner.as_Alias();
+    auto inserted = this->erasedTypeAliases.insert(std::make_pair(alias.inner.get(), Context::TaitEntry{alias.params, nullptr}));
+    if (!inserted.second) {
+        return inserted.first->second.ourType;
+    }
+    const HIRType* hiddenType = this->ivars.newIvarTr();
+    inserted.first->second.ourType = hiddenType;
+
+    struct MonomorphErasedSelf: MonomorphiserNop {
+        const HIRType* hiddenType;
+
+        MonomorphErasedSelf(HIRTypeInterner& types, const HIRType* hiddenType)
+            : MonomorphiserNop(types)
+            , hiddenType(hiddenType)
+        {
+        }
+
+        const HIRType* getType(const Span&, const HIRGenericRef& type) const override {
+            if (type.binding == GENERICErasedSelf) {
+                return hiddenType;
+            }
+            return types.generic(type.name, type.binding);
+        }
+    } monomorph{crate.types, hiddenType};
+
+    for (const auto& trait : erased.traits) {
+        auto traitMono = monomorph.monomorphTraitpath(sp, trait, false);
+        if (traitMono.typeBounds.empty()) {
+            equateTypesAssoc(sp, crate.types.infer(), traitMono.path.path, traitMono.path.params.clone(), hiddenType, "", {}, false);
+            continue;
+        }
+        for (const auto& aty : traitMono.typeBounds) {
+            equateTypesAssoc(sp, aty.second.type, aty.second.sourceTrait.path, aty.second.sourceTrait.params.clone(), hiddenType, aty.first.c_str(), aty.second.atyParams, false);
+        }
+    }
+    return hiddenType;
 }
 
 Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& modPath, const HIRGenericPath* currentTrait, const HIRTraitImpl* currentTraitImpl)

@@ -190,6 +190,9 @@ struct Context {
 
     const HIRType* revealOpaqueType(const HIRType* type) const;
     const HIRType* revealOpaqueTypes(const HIRType* type) const;
+    /* The inference variable standing for the hidden type of an opaque alias
+       defined by this body; made on first use, with the alias's bounds as rules. */
+    const HIRType* hiddenTypeForOpaqueAlias(const Span& sp, const HIRTypeDataErasedType& erased);
 
     void addRpitType(const HIRPath& origin, unsigned int index, const HIRType* type);
     void noteRpitSelfReferences(const HIRType* type);
