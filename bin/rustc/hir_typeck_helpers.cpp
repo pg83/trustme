@@ -13311,7 +13311,11 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     for (const auto& ty : goalParams.types) {
         paramsHoldOpaque |= containsDefiningOpaque(ty);
     }
-    const bool inferMayUnlock = resolvedType->is_Infer() || paramsHoldOpaque || (selfIsAlias && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)));
+    /* As in `emitNoViable`: an integer or float variable is matched against impls
+       like any other type, and no viable candidate is "unimplemented" for it. */
+    const auto* selfInfer = resolvedType->opt_Infer();
+    const bool selfIsTypeVariable = selfInfer && !selfInfer->isLit();
+    const bool inferMayUnlock = selfIsTypeVariable || paramsHoldOpaque || (selfIsAlias && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)));
     if (sawAmbiguous || inferMayUnlock || (coherenceMode && !traitRefIsKnowable(trait, goalParams, resolvedType))) {
         return cacheResult(Certainty::Ambiguous);
     }
@@ -14137,7 +14141,13 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         for (const auto& ty : goalParams.types) {
             holdsOpaque |= containsDefiningOpaque(ty);
         }
-        if (resolvedType->is_Infer() || holdsOpaque || (selfIsAlias && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)))) {
+        /* An integer or float variable is not a type variable: upstream matches impls
+           against it like any other type, and finding none is "unimplemented", not
+           "ambiguous" - `{integer}: Into<NonZero<u8>>` has no impl, and the blanket
+           `TryFrom<U> for T where U: Into<T>` that asked is rejected for it. */
+        const auto* selfInfer = resolvedType->opt_Infer();
+        const bool selfIsTypeVariable = selfInfer && !selfInfer->isLit();
+        if (selfIsTypeVariable || holdsOpaque || (selfIsAlias && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)))) {
             return emitForcedAmbiguity();
         }
         return false;
