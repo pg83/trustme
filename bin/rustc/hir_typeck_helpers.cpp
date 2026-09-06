@@ -7079,7 +7079,56 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             result = Certainty::Ambiguous;
         }
     };
+    /* A route through a trait reference that names a projection nobody can
+       normalize - `Supertrait<<P as WithAssoc>::Assoc>` read off `dyn Trait<P>`
+       where `P: WithAssoc` has no solution - is not a route.  Upstream reaches the
+       same point in trait selection: the object candidate is normalized as it is
+       matched, the projection turns into a fresh variable plus the obligation
+       `P: WithAssoc` (`normalize_to_error`), and `winnow_candidates` evaluates
+       each candidate with its nested obligations when several match, dropping
+       the one that cannot hold.  A lone candidate is not winnowed there. */
+    const auto traitRouteIsRealizable = [&](const HIRPath& path) {
+        const auto* route = path.data.opt_UfcsKnown();
+        if (!route) {
+            return true;
+        }
+        bool realizable = true;
+        for (const auto* type : route->trait.params.types) {
+            visitTyWith(type, [&](const HIRType* inner) {
+                const auto* innerPath = inner->opt_Path();
+                if (!innerPath || !(innerPath->binding.is_Unbound() || innerPath->binding.is_Opaque())) {
+                    return false;
+                }
+                const auto* projection = innerPath->path.data.opt_UfcsKnown();
+                if (!projection) {
+                    return false;
+                }
+                auto probe = makeCallable<SolverMayApplyCb>([&](SolverMayApply) {
+                    return true;
+                });
+                if (!evaluateTyped(callSpan, projection->trait.path, projection->trait.params, projection->type, probe, TraitGoalQuery{.ambiguity = SolverAmbiguityPolicy::Report}, true)) {
+                    realizable = false;
+                    return true;
+                }
+                return false;
+            });
+            if (!realizable) {
+                break;
+            }
+        }
+        return realizable;
+    };
     const auto finishProven = [&]() {
+        for (size_t candidate = firstPossibility; possibilities.size() - firstPossibility > 1 && candidate < possibilities.size();) {
+            if (traitRouteIsRealizable(possibilities[candidate].path)) {
+                candidate++;
+                continue;
+            }
+            for (size_t move = candidate; move + 1 < possibilities.size(); move++) {
+                possibilities[move] = std::move(possibilities[move + 1]);
+            }
+            possibilities.pop_back();
+        }
         if (crate.featureEnabled("supertrait_item_shadowing")) {
             /* RFC 3624's feature rule is declaration shadowing, not candidate
              * ranking: an identically named declaration in a strict subtrait
