@@ -14564,7 +14564,11 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         return visitResponse(std::move(callerResponse), callerApplicable);
     };
     const bool cacheableAssociatedItem = !hasAssociatedItemQuery || canonicalAssocType;
-    const bool cacheableResponse = cacheableAssociatedItem && !valueName && !canonicalAssociated && !excludedImpl && !hasCoercionGoals && !query.operatorGoal;
+    /* A goal with associated-type bindings (`F: FnMut<(A,)> + Output = B`) is a
+       canonical goal like any other and its response is cached under the bindings
+       as well; upstream caches every canonical goal evaluation.  Without this each
+       adapter in a chain of `map`s re-proves the whole chain beneath it. */
+    const bool cacheableResponse = cacheableAssociatedItem && !valueName && !excludedImpl && !hasCoercionGoals && !query.operatorGoal;
     const bool crateCacheableResponse = cacheableResponse && !suppressAmbiguity && !hasAssociatedItemQuery && crateCacheUsable() && goalIsConcrete(trait, canonical);
     if (cacheableResponse) {
         if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, responseCacheAssociated, &canonicalizer.alphaSolverEnvironment(), suppressAmbiguity);
