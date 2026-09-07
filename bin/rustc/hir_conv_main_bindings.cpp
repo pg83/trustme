@@ -1054,7 +1054,22 @@ auto BindVisitor::visitConstgeneric(HIRConstGeneric& value) -> void {
     HIRVisitor::visitConstgeneric(value);
     if (auto* unevaluated = value.opt_Unevaluated()) {
         if ((*unevaluated)->expr && (*unevaluated)->expr->state) {
-            (*unevaluated)->expr->state->anonymousConst = true;
+            /* Upstream `lower_const_path_to_const_arg` / `lower_anon_const_to_const_arg`:
+               under `min_generic_const_args` a const argument that is a bare path
+               (a block around one included) is `ConstArgKind::Path`, resolved in the
+               enclosing item with its where-clauses; any other expression is an
+               anonymous constant, an item of its own.  Without the feature only a
+               const parameter's path is such a path, and that never gets here. */
+            const HIRExprNode* root = (*unevaluated)->expr->get();
+            if (root->nodeKind() == HIRExprNodeBlock::kind) {
+                const auto& block = static_cast<const HIRExprNodeBlock&>(*root);
+                if (block.nodes.empty() && block.valueNode) {
+                    root = block.valueNode.get();
+                }
+            }
+            const bool pathConstArg = crate.featureEnabled("min_generic_const_args")
+                && (root->nodeKind() == HIRExprNodePathValue::kind || root->nodeKind() == HIRExprNodeUnitVariant::kind);
+            (*unevaluated)->expr->state->anonymousConst = !pathConstArg;
         }
         (*unevaluated)->selfType = selfType;
         if (ms.implGenerics) {
