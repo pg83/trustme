@@ -5782,6 +5782,32 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
     for (const auto& path : expr.state->defineOpaque) {
         context.resolve.addDefiningOpaqueAlias(path);
     }
+    /* Upstream `opaque_types_defined_by` for an associated item (mode
+       `ImplTraitInAssocTypes`): `sig_types::walk_types` collects the impl's
+       associated-type opaques that the item's own signature names - a function's
+       inputs and output, a constant's type - and only such an item defines them; a
+       `Self::Assoc` there stands for the impl's item (the projection arm of the
+       collector).  Any other item of the impl uses the opaque opaquely. */
+    if (ms.currentTraitImpl) {
+        const auto sp = expr.span();
+        const auto collect = [&](const HIRType* type) {
+            if (!type) {
+                return;
+            }
+            visitTyWith(context.expandAssociatedTypes(sp, type), [&](const HIRType* inner) {
+                const auto* erased = inner->opt_ErasedType();
+                const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+                if (alias && alias->inner->path.components().back().c_str()[0] == '#') {
+                    context.resolve.addDefiningOpaqueAlias(alias->inner->path);
+                }
+                return false;
+            });
+        };
+        collect(resultType);
+        for (const auto& arg : args) {
+            collect(arg.second);
+        }
+    }
 
     TypecheckCodeCSEnumerateRules(context, ms, args, resultType, expr, rootPtr);
 
@@ -6651,18 +6677,6 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
     , linkAssocIndex(linkAssocIndexPool.mutPtr())
     , langBox(crate.getLangItemPathOpt("owned_box"))
 {
-    if (currentTraitImpl) {
-        for (const auto& entry : currentTraitImpl->types) {
-            visitTyWith(entry.second.data, [&](const HIRType* type) {
-                const auto* erased = type->opt_ErasedType();
-                const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
-                if (alias && alias->inner->path.components().back().c_str()[0] == '#') {
-                    resolve.addDefiningOpaqueAlias(alias->inner->path);
-                }
-                return false;
-            });
-        }
-    }
 }
 
 const HIRType* Context::revealOpaqueType(const HIRType* type) const {
