@@ -14904,7 +14904,28 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
            `TryFrom<U> for T where U: Into<T>` that asked is rejected for it. */
         const auto* selfInfer = resolvedType->opt_Infer();
         const bool selfIsTypeVariable = selfInfer && !selfInfer->isLit();
-        if (selfIsTypeVariable || holdsOpaque || (selfIsAlias && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)))) {
+        /* A projection left rigid - over a generic, with no variable in it - is a
+           type of its own: upstream assembles its candidates from the item bounds
+           and the environment, and finding none is "unimplemented" however open the
+           goal's parameters are (`<I as Stream>::IterOffsets: FnMut<(&mut ?I,)>`
+           has no impl, so the blanket `Parser for F: FnMut` is no route to `take`).
+           One still to normalize, or holding a variable, may yet be anything. */
+        const auto definitelyRigidAlias = [&](const HIRType* type) {
+            for (unsigned depth = 0; depth < 8; depth++) {
+                const auto* path = type->opt_Path();
+                const auto* projection = path && path->binding.is_Opaque() ? path->path.data.opt_UfcsKnown() : nullptr;
+                if (!projection || resolve_.typeContainsIvars(type)) {
+                    return false;
+                }
+                const auto* self = projection->type;
+                if (const auto* generic = self->opt_Generic()) {
+                    return !generic->isSolverExistential();
+                }
+                type = self;
+            }
+            return false;
+        };
+        if (selfIsTypeVariable || holdsOpaque || (selfIsAlias && !definitelyRigidAlias(resolvedType) && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)))) {
             return emitForcedAmbiguity();
         }
         return false;
