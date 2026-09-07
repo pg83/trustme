@@ -31,7 +31,7 @@ using namespace stl;
 namespace {
     struct IvarCoercionIndex;
 
-    const HIRType* coerceCallArgument(Context& context, const Span& sp, const HIRType* formal, const HIRType* expectedInput, HIRExprNodeP& argument, bool argumentSite);
+    const HIRType* coerceCallArgument(Context& context, const Span& sp, const HIRType* formal, const HIRType* expectedInput, HIRExprNodeP& argument, bool argumentSite, bool argumentVisited = false);
     bool expectedInputIsUnsizedHint(Context& context, const Span& sp, const HIRType* type);
 
     struct MonomorphEraseHrls: public Monomorphiser {
@@ -1328,18 +1328,140 @@ struct OrderPlace {
         return false;
     }
 
-    const HIRType* coerceCallArgument(Context& context, const Span& sp, const HIRType* formal, const HIRType* expectedInput, HIRExprNodeP& argument, bool argumentSite) {
-        if (expectedInput == formal) {
-            context.equateTypesCoerce(sp, formal, argument, argumentSite, true);
-            return expectedInput;
-        }
-        if (expectedInputIsUnsizedHint(context, sp, expectedInput)) {
-            context.equateTypesCoerce(sp, formal, argument, argumentSite, true);
+    /* Upstream `is_syntactic_place_expr`: a path, a dereference, a field access or an
+       indexing, by syntax alone. */
+    bool isSyntacticPlaceExpression(const HIRExprNode& node) {
+        return cast<const HIRExprNodeVariable>(&node) || cast<const HIRExprNodePathValue>(&node) || cast<const HIRExprNodeDeref>(&node)
+            || cast<const HIRExprNodeField>(&node) || cast<const HIRExprNodeIndex>(&node);
+    }
+
+    /* Upstream `check_expr_addr_of`: the operand of `&`/`&raw` expects the expected
+       pointer's pointee - as it is for a place, which may legitimately be unsized, and
+       as `rvalue_hint` for anything else, so an unsized pointee (`dyn Trait`, `[T]`,
+       `str`) is no expectation at all for an rvalue: `&1` against `&dyn Foo` types the
+       literal as an integer and unsizes the reference. */
+    const HIRType* borrowOperandExpectationOf(Context& context, const Span& sp, const HIRExprNode& operand, const HIRType* expected) {
+        if (!expected) {
             return nullptr;
         }
-        context.equateTypesCoerce(sp, expectedInput, argument, argumentSite, true);
-        context.equateTypes(sp, formal, expectedInput);
-        return expectedInput;
+        const auto* resolved = context.getType(expected);
+        const HIRType* pointee = nullptr;
+        if (const auto* borrow = resolved->opt_Borrow()) {
+            pointee = borrow->inner;
+        } else if (const auto* pointer = resolved->opt_Pointer()) {
+            pointee = pointer->inner;
+        }
+        if (!pointee) {
+            return nullptr;
+        }
+        if (isSyntacticPlaceExpression(operand) || context.resolve.typeIsSized(sp, pointee) != SolverCertainty::NoSolution) {
+            return pointee;
+        }
+        return nullptr;
+    }
+
+    /* Upstream `check_expr_with_expectation` for an argument the enumeration visited
+       before its call was resolved: a method call resolves in a revisit, after its
+       arguments were enumerated with no expectation, while upstream resolves it
+       first (`lookup_method` reads only the receiver) and checks the arguments under
+       the inputs it gives.  The expectation reaches the argument the way the
+       enumeration passes one down: into an enumerated call's inputs
+       (`expected_inputs_for_expected_output`, the declared parameter then equal to
+       its input - `mem::replace(&mut x.ast, empty_ast())` under `Vec<Ast>::push`
+       takes `T = Ast`, not the `Box<Ast>` its first argument would bind), a block's
+       tail, a match's arms and a borrow's operand.  Other nodes read none. */
+    struct LateExpectation: HIRExprVisitorDef {
+        Context& context;
+        const Span& sp;
+        const HIRType* expected;
+
+        LateExpectation(Context& context, const Span& sp, const HIRType* expected)
+            : HIRExprVisitorDef(context.crate.types)
+            , context(context)
+            , sp(sp)
+            , expected(expected)
+        {
+        }
+
+        void visitNodePtr(HIRExprNodeP&) override {
+        }
+
+        void expect(HIRExprNodeP& nodePtr, const HIRType* expectation) {
+            if (!expectation) {
+                return;
+            }
+            LateExpectation inner(context, sp, expectation);
+            const auto parentOrder = context.currentOrder;
+            context.currentOrder = nodePtr->checkOrder;
+            nodePtr->visit(inner);
+            context.currentOrder = parentOrder;
+        }
+
+        void expectCallInputs(const Vector<const HIRType*>& argTypes, size_t firstInput, HIRExprNodeP* args, size_t argCount) {
+            const auto expectedInputs = context.expectedInputsForExpectedOutput(sp, expected, argTypes, firstInput);
+            for (size_t i = 0; i < argCount && i < expectedInputs.length(); i++) {
+                const auto* formal = argTypes[firstInput + i];
+                const auto* input = expectedInputs[i];
+                if (input != formal) {
+                    if (expectedInputIsUnsizedHint(context, sp, input)) {
+                        continue;
+                    }
+                    context.equateTypes(sp, formal, input);
+                }
+                expect(args[i], input);
+            }
+        }
+
+        void visit(HIRExprNodeCallPath& node) override {
+            context.rememberCallExpectation(node, expected);
+            if (node.cache.argTypes.length() >= 1) {
+                expectCallInputs(node.cache.argTypes, 0, node.args.data(), node.args.size());
+            }
+        }
+
+        void visit(HIRExprNodeCallMethod& node) override {
+            context.rememberCallExpectation(node, expected);
+            if (node.cache.argTypes.length() >= 1) {
+                expectCallInputs(node.cache.argTypes, 1, node.args.data(), node.args.size());
+            }
+        }
+
+        void visit(HIRExprNodeBlock& node) override {
+            if (node.valueNode) {
+                expect(node.valueNode, expected);
+            }
+        }
+
+        void visit(HIRExprNodeMatch& node) override {
+            for (auto& arm : node.arms) {
+                expect(arm.code, expected);
+            }
+        }
+
+        void visit(HIRExprNodeBorrow& node) override {
+            expect(node.value, borrowOperandExpectationOf(context, node.span(), *node.value, expected));
+        }
+
+        void visit(HIRExprNodeRawBorrow& node) override {
+            expect(node.value, borrowOperandExpectationOf(context, node.span(), *node.value, expected));
+        }
+    };
+
+    const HIRType* coerceCallArgument(Context& context, const Span& sp, const HIRType* formal, const HIRType* expectedInput, HIRExprNodeP& argument, bool argumentSite, bool argumentVisited) {
+        const HIRType* expectation = expectedInput;
+        if (expectedInput == formal) {
+            context.equateTypesCoerce(sp, formal, argument, argumentSite, true);
+        } else if (expectedInputIsUnsizedHint(context, sp, expectedInput)) {
+            context.equateTypesCoerce(sp, formal, argument, argumentSite, true);
+            expectation = nullptr;
+        } else {
+            context.equateTypesCoerce(sp, expectedInput, argument, argumentSite, true);
+            context.equateTypes(sp, formal, expectedInput);
+        }
+        if (argumentVisited && expectation) {
+            LateExpectation(context, sp, expectation).expect(argument, expectation);
+        }
+        return expectation;
     }
 
     bool checkCoerce(Context& context, const Context::Coercion& v) {
@@ -8165,7 +8287,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallPath& node) -> void {
        parameter type, and the declared parameter type is then equal to it. */
     const auto expectedInputs = this->context.expectedInputsForExpectedOutput(node.span(), this->context.callExpectation(node), node.cache.argTypes, 0);
     for (unsigned int i = 0; i < node.cache.argTypes.length() - 1; i++) {
-        coerceCallArgument(this->context, node.span(), node.cache.argTypes[i], expectedInputs[i], node.args[i], true);
+        coerceCallArgument(this->context, node.span(), node.cache.argTypes[i], expectedInputs[i], node.args[i], true, true);
     }
     this->context.equateTypes(node.span(), node.resType, node.cache.argTypes.back());
     this->context.requireSized(node.span(), node.resType);
@@ -8559,7 +8681,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
         const auto expectedInputs = this->context.expectedInputsForExpectedOutput(sp, this->context.callExpectation(node), node.cache.argTypes, 1);
         for (unsigned int i = 0; i < node.args.size(); i++) {
             DEBUG(StringView("> ARG ") << i << StringView(" : ") << node.cache.argTypes[1 + i] << StringView(" expected ") << expectedInputs[i]);
-            coerceCallArgument(this->context, sp, node.cache.argTypes[1 + i], expectedInputs[i], node.args[i], true);
+            coerceCallArgument(this->context, sp, node.cache.argTypes[1 + i], expectedInputs[i], node.args[i], true, true);
         }
         DEBUG(StringView("> Ret : ") << node.cache.argTypes.back());
         this->context.equateTypes(sp, node.resType, node.cache.argTypes.back());
@@ -11126,37 +11248,8 @@ auto ExprVisitorEnum::visit(HIRExprNodeUniOp& node) -> void {
     }
 }
 
-/* Upstream `is_syntactic_place_expr`: a path, a dereference, a field access or an
-   indexing, by syntax alone. */
-static bool isSyntacticPlaceExpression(const HIRExprNode& node) {
-    return cast<const HIRExprNodeVariable>(&node) || cast<const HIRExprNodePathValue>(&node) || cast<const HIRExprNodeDeref>(&node)
-        || cast<const HIRExprNodeField>(&node) || cast<const HIRExprNodeIndex>(&node);
-}
-
-/* Upstream `check_expr_addr_of`: the operand of `&`/`&raw` expects the expected
-   pointer's pointee - as it is for a place, which may legitimately be unsized, and
-   as `rvalue_hint` for anything else, so an unsized pointee (`dyn Trait`, `[T]`,
-   `str`) is no expectation at all for an rvalue: `&1` against `&dyn Foo` types the
-   literal as an integer and unsizes the reference. */
 const HIRType* ExprVisitorEnum::borrowOperandExpectation(const HIRExprNode& node, const HIRExprNode& operand) {
-    const auto* expected = this->expectationFor(node);
-    if (!expected) {
-        return nullptr;
-    }
-    const auto* resolved = this->context.getType(expected);
-    const HIRType* pointee = nullptr;
-    if (const auto* borrow = resolved->opt_Borrow()) {
-        pointee = borrow->inner;
-    } else if (const auto* pointer = resolved->opt_Pointer()) {
-        pointee = pointer->inner;
-    }
-    if (!pointee) {
-        return nullptr;
-    }
-    if (isSyntacticPlaceExpression(operand) || this->context.resolve.typeIsSized(node.span(), pointee) != SolverCertainty::NoSolution) {
-        return pointee;
-    }
-    return nullptr;
+    return borrowOperandExpectationOf(this->context, node.span(), operand, this->expectationFor(node));
 }
 
 auto ExprVisitorEnum::visit(HIRExprNodeBorrow& node) -> void {
