@@ -6137,10 +6137,10 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         return SolverCertainty::Proven;
     }
     if (source->is_Diverge()) {
-        if (destination->is_Infer() && deferred) {
-            deferred->push_back(SolverDeferredCoercion{destination, source, SolverCoercionOp::Coercion});
-            return SolverCertainty::Ambiguous;
-        }
+        /* Upstream `Coerce::coerce`: `!` coerces to any type as `NeverToAny`, the
+           destination - an inference variable included - left as it is; nothing
+           stays pending.  `apply_adjustments` then records a variable destination
+           as diverging, which is what the never-type fallback later acts on. */
         if (adjustment) {
             adjustment->kind = SolverCoercionAdjustmentKind::Never;
         }

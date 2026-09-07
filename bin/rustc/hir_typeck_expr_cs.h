@@ -93,6 +93,10 @@ struct Context {
     stl::Vector<ClosureReturnObligation> closureReturnObligations;
     ThinVector<SolverObligation> solverObligations;
     stl::Vector<bool> neverFallbackIvars;
+    /* Inference variables `!` was coerced into - upstream's `diverging_type_vars`;
+       whichever variable each has since been unified with is the root that falls
+       back. */
+    stl::Vector<unsigned> divergingIvars;
 
     HIRGenericParams emptyGenericParams;
     stl::Vector<bool> ivarsSized;
@@ -146,6 +150,7 @@ struct Context {
     const HIRType* closureReturnExpectation(const HIRExprNodeClosure* closure) const;
     void recordNeverFallback(unsigned index);
     bool usedNeverFallback(const HIRType* type) const;
+    void markDivergingIvar(const HIRType* destination);
     const HIRType* expandAssociatedTypes(const Span& sp, const HIRType* input);
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params);
     void compactIvars(const Span& sp);

@@ -364,8 +364,14 @@ namespace {
     struct IvarCoercionIndex {
         const Context& context;
         std::vector<IvarCoercionRefs> refs;
+        /* The connected components of the pending rules over the inference
+           variables - the root variable of each variable's component.  Rules only
+           ever propagate within a component, so a finalisation sweep may commit one
+           effect in each component and still make the decisions a sweep restarted
+           after every effect would make. */
+        Vector<unsigned int> componentRoots;
 
-        void collectIvars(const HIRType* root, Vector<unsigned int>& out) const;
+        void collectIvars(const HIRType* root, Vector<unsigned int>& out, bool throughClosures = false) const;
         static void deduplicate(Vector<unsigned int>& values);
 
         template <typename T>
@@ -373,9 +379,13 @@ namespace {
 
         void addEndpoint(const Context::Coercion& obligation, const SolverDeferredCoercion& deferred, unsigned alternativeGroup);
 
+        void buildComponents();
+
         explicit IvarCoercionIndex(const Context& context);
 
         const IvarCoercionRefs& operator[](unsigned int index) const;
+
+        unsigned int componentOf(unsigned int index) const;
     };
 
     struct ActiveOperatorOutput {
@@ -512,18 +522,6 @@ namespace {
         Vector<HIRExprNodeLoop*> loopBlocks;
 
         tTraitList traits;
-
-        struct RevisitDefaultUnit: public Context::Revisitor {
-            HIRExprNode* node;
-
-            RevisitDefaultUnit(HIRExprNode* node);
-
-            const Span& span(void) const;
-
-            void fmt(ZeroCopyOutput& os) const;
-
-            bool revisit(Context& context, bool isFallback);
-        };
 
         ExprVisitorEnum(Context& context, tTraitList baseTraits, const HIRType* retType);
 
@@ -984,6 +982,11 @@ namespace {
                 ASSERT_BUG(sp, solverResponse.relation == SolverCoercionRelation::Equality, StringView("Proven coercion has no adjustment plan"));
                 return CoerceResult::Equality;
             case SolverCoercionAdjustmentKind::Never:
+                /* Upstream `apply_adjustments`: the variable `!` was coerced into is a
+                   diverging type variable (`diverging_type_vars`). */
+                if (contextMut) {
+                    contextMut->markDivergingIvar(dst);
+                }
                 return CoerceResult::Custom;
             case SolverCoercionAdjustmentKind::Retag:
                 return retagYieldingValue();
@@ -2258,7 +2261,6 @@ namespace {
             // - TODO: Should this also remove &_ types? (maybe not, as they give information about borrow classes)
             size_t nIvars;
             size_t nSrcIvars;
-            bool possiblyDiverge = false;
             {
                 nSrcIvars = 0;
                 auto newEnd = std::remove_if(possibleTys.begin(), possibleTys.end(), [&](const PossibleType& ent) {
@@ -2269,7 +2271,6 @@ namespace {
                         }
                         return true;
                     } else if ((ent.ty)->is_Diverge()) {
-                        possiblyDiverge = true;
                         return true;
                     } else {
                         return false;
@@ -2580,25 +2581,39 @@ namespace {
                 return true;
             }
 
-            const bool hasDeferredDestination = std::any_of(coercionRefs.endpoints.begin(), coercionRefs.endpoints.end(), [](const auto& endpoint) {
-                return endpoint.direction == SolverCoercionConstraint::Direction::InputIsSource;
-            });
-            DEBUG(i << StringView(": possible_tys = {") << possibleTys << StringView("} (") << nSrcIvars << StringView(" src ivars, possibly_diverge=") << possiblyDiverge << StringView(", deferred_destination=") << hasDeferredDestination << StringView(")"));
-            /* Never-type fallback is the last language fallback in this
-             * component.  A resolved non-bottom source may still arrive via
-             * an ivar edge during either identity propagation phase. */
-            const bool hasUnresolvedOwner = !coercionRefs.advancedRevisits.empty();
-            if (finalPhase && allowUnsizingIdentityCommit && !hasUnresolvedOwner && nSrcIvars == 0 && possibleTys.empty() && possiblyDiverge && !hasDeferredDestination && context.crate.edition < ASTEdition::Rust2024) {
-                auto unit = context.crate.types.unit();
-                if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, unit)) {
-                    DEBUG(StringView("Possibly `!` and no other options - never-type fallback to `()`"));
-                    context.recordNeverFallback(i);
-                    context.equateTypes(sp, tyL, unit);
-                    return true;
-                }
-            }
+            DEBUG(i << StringView(": possible_tys = {") << possibleTys << StringView("} (") << nSrcIvars << StringView(" src ivars)"));
         }
 
+        return false;
+    }
+
+    /* Upstream `type_inference_fallback`: once nothing else can move, every unsolved
+       type variable that `!` was coerced into (`diverging_type_vars`, taken by root in
+       `calculate_diverging_fallback`) falls back - to `()` before edition 2024 and to
+       `!` from it (`default_fallback`).  Numeric variables have their own fallback.
+       A variable that a pending coercion or an unresolved owner still names is left
+       alone: upstream unifies such a coercion at once, so its fallback never sees
+       that variable. */
+    bool applyNeverTypeFallback(Context& context, const IvarCoercionIndex& coercionIndex) {
+        for (const auto index : context.divergingIvars) {
+            const auto* type = context.ivars.getType(index);
+            const auto* infer = type->opt_Infer();
+            if (!infer || infer->tyClass != HIRInferClass::None || infer->index >= coercionIndex.refs.size()) {
+                continue;
+            }
+            const auto& refs = coercionIndex[infer->index];
+            if (!refs.coercions.empty() || !refs.revisits.empty() || !refs.advancedRevisits.empty()) {
+                DEBUG(infer->index << StringView(": diverging, but a pending coercion, revisit or owner still names it"));
+                continue;
+            }
+            const bool toNever = context.crate.edition >= ASTEdition::Rust2024;
+            DEBUG(infer->index << StringView(": diverging and unsolved - never-type fallback to ") << (toNever ? StringView("`!`") : StringView("`()`")));
+            if (!toNever) {
+                context.recordNeverFallback(infer->index);
+            }
+            context.equateTypes(Span(), type, toNever ? context.crate.types.diverge() : context.crate.types.unit());
+            return true;
+        }
         return false;
     }
 
@@ -5564,6 +5579,19 @@ void Context::recordNeverFallback(unsigned index) {
     neverFallbackIvars.mut(index) = true;
 }
 
+void Context::markDivergingIvar(const HIRType* destination) {
+    /* Upstream `apply_adjustments` only records a general type variable
+       (`is_ty_var`): an integer or float variable has its own fallback. */
+    const auto* infer = ivars.getType(destination)->opt_Infer();
+    if (!infer || infer->index == ~0u || infer->tyClass != HIRInferClass::None) {
+        return;
+    }
+    if (std::find(divergingIvars.begin(), divergingIvars.end(), infer->index) == divergingIvars.end()) {
+        DEBUG(StringView("- IVar ") << infer->index << StringView(" is diverging"));
+        divergingIvars.pushBack(infer->index);
+    }
+}
+
 bool Context::usedNeverFallback(const HIRType* type) const {
     const auto* infer = type->opt_Infer();
     if (!infer || infer->index == ~0u) {
@@ -5863,22 +5891,40 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
         /* Final inference effects must precede fallback revisits: a fallback
          * revisit may diagnose an ambiguity which an identity commit (or an
          * exact joint effect) is specifically responsible for resolving. */
-        if (!context.ivars.peekChanged()) {
-            DEBUG(StringView("--- Final IVar effects"));
-            for (unsigned int i = 0; i < ivarCoercionIndex->refs.size(); i++) {
-                if (finaliseIvarCoercions(context, *ivarCoercionIndex, i, true, false)) {
-                    break;
+        /* These sweeps stand in for what upstream does at each coercion site as it is
+           met - `coerce_borrowed_pointer` unifying an unknown pointee with the source's
+           own, `coerce` unifying an unknown destination with its source.  An effect
+           may let the ordinary rules say more about a variable of the same component
+           (the closure a `Box::new` argument turns out to be gives its body's
+           expectation), so after an effect the rest of that component waits for the
+           next pass; another component shares no rule with it, so its first effect is
+           the same one a restarted sweep would reach, and a function with N
+           independent sites no longer costs N passes over every rule in it (past the
+           iteration limit, that was an inference failure). */
+        const auto finaliseSweep = [&](bool allowIdentityCommit, bool allowUnsizingIdentityCommit, bool allowUnknownPointeeUnsize) {
+            const auto count = ivarCoercionIndex->refs.size();
+            Vector<bool> settledComponents;
+            for (size_t i = 0; i < count; i++) {
+                settledComponents.pushBack(false);
+            }
+            for (unsigned int i = 0; i < count; i++) {
+                const auto component = ivarCoercionIndex->componentOf(i);
+                if (settledComponents[component]) {
+                    continue;
+                }
+                if (finaliseIvarCoercions(context, *ivarCoercionIndex, i, true, allowIdentityCommit, allowUnsizingIdentityCommit, allowUnknownPointeeUnsize)) {
+                    settledComponents.mut(component) = true;
                 }
             }
+        };
+        if (!context.ivars.peekChanged()) {
+            DEBUG(StringView("--- Final IVar effects"));
+            finaliseSweep(false, false, false);
         }
 
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Final IVar identity commits"));
-            for (unsigned int i = 0; i < ivarCoercionIndex->refs.size(); i++) {
-                if (finaliseIvarCoercions(context, *ivarCoercionIndex, i, true, true)) {
-                    break;
-                }
-            }
+            finaliseSweep(true, false, false);
         }
 
         /* An unsizing source is not an equality endpoint until ordinary
@@ -5887,22 +5933,14 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
          * Only then may the no-op unsizing case use the same identity rule. */
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Final IVar unsizing identity commits"));
-            for (unsigned int i = 0; i < ivarCoercionIndex->refs.size(); i++) {
-                if (finaliseIvarCoercions(context, *ivarCoercionIndex, i, true, true, true)) {
-                    break;
-                }
-            }
+            finaliseSweep(true, true, false);
         }
         /* An unknown pointee unsized into no trait object is the last word: upstream
          * unifies it as the argument is coerced, with everything the argument's own
          * type could say already said. */
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Final IVar unknown pointee unsizing"));
-            for (unsigned int i = 0; i < ivarCoercionIndex->refs.size(); i++) {
-                if (finaliseIvarCoercions(context, *ivarCoercionIndex, i, true, true, true, true)) {
-                    break;
-                }
-            }
+            finaliseSweep(true, true, true);
         }
 
         if (!context.ivars.peekChanged()) {
@@ -5935,6 +5973,16 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                     }
                 }
             }
+        }
+
+        /* Upstream resolves a method call on its receiver as it is met and unifies an
+           argument variable with its parameter at once, so by `type_inference_fallback`
+           those have all said their part; here the pending revisits above are their
+           stand-in and run first.  Opaque types are replaced only after this fallback
+           (`type_inference_fallback`'s second selection). */
+        if (!context.ivars.peekChanged()) {
+            DEBUG(StringView("--- Never-type fallback"));
+            applyNeverTypeFallback(context, *ivarCoercionIndex);
         }
 
         if (!context.ivars.peekChanged() && context.linkCoerce.empty()) {
@@ -9047,7 +9095,7 @@ auto AssociatedStallCollector::collect() -> void {
     }
 }
 
-auto IvarCoercionIndex::collectIvars(const HIRType* root, Vector<unsigned int>& out) const -> void {
+auto IvarCoercionIndex::collectIvars(const HIRType* root, Vector<unsigned int>& out, bool throughClosures) const -> void {
     Vector<const HIRType*> pending;
     pending.pushBack(root);
     Vector<const HIRType*> visited;
@@ -9059,16 +9107,121 @@ auto IvarCoercionIndex::collectIvars(const HIRType* root, Vector<unsigned int>& 
         }
         visited.pushBack(type);
         visitTyWith(type, [&](const HIRType* inner) {
-            if (const auto* infer = inner->opt_Infer()) {
+            if (const auto* infer = inner->opt_Infer(); infer && infer->index != ~0u) {
                 out.pushBack(infer->index);
                 const auto& resolved = context.getType(inner);
                 if (resolved != inner) {
                     pending.pushBack(resolved);
                 }
             }
+            /* The type visitor stops at a closure; its signature is part of the
+               type all the same (upstream `ClosureArgs`).  A signature not yet
+               populated with variables still holds `_` placeholders. */
+            if (throughClosures && inner->is_NodeType()) {
+                if (const auto* closure = inner->as_NodeType().opt_Closure()) {
+                    for (const auto& argument : (*closure)->args) {
+                        pending.pushBack(argument.second);
+                    }
+                    pending.pushBack((*closure)->returnType);
+                }
+            }
             return false;
         });
     }
+}
+
+auto IvarCoercionIndex::buildComponents() -> void {
+    const auto count = refs.size();
+    for (size_t i = 0; i < count; i++) {
+        componentRoots.pushBack(static_cast<unsigned int>(i));
+    }
+    const auto find = [&](unsigned int index) {
+        while (componentRoots[index] != index) {
+            componentRoots.mut(index) = componentRoots[componentRoots[index]];
+            index = componentRoots[index];
+        }
+        return index;
+    };
+    Vector<unsigned int> members;
+    const auto unite = [&]() {
+        unsigned int root = ~0u;
+        for (const auto member : members) {
+            if (member >= count) {
+                continue;
+            }
+            const auto memberRoot = find(member);
+            if (root == ~0u) {
+                root = memberRoot;
+            } else if (memberRoot != root) {
+                componentRoots.mut(memberRoot) = root;
+            }
+        }
+        members.clear();
+    };
+    for (const auto& bound : context.linkCoerce) {
+        collectIvars(bound->leftTy, members, true);
+        collectIvars(bound->sourceType(), members, true);
+        unite();
+    }
+    for (const auto& rule : context.linkAssoc) {
+        collectIvars(rule.leftTy, members, true);
+        collectIvars(rule.implTy, members, true);
+        for (const auto* type : rule.params.types) {
+            collectIvars(type, members, true);
+        }
+        for (const auto* type : rule.atyPp.types) {
+            collectIvars(type, members, true);
+        }
+        unite();
+    }
+    /* A pending node reads its own type and its operands' - a method call its
+       receiver, arguments and result. */
+    struct OperandTypes: HIRExprVisitorDef {
+        Vector<const HIRType*> types;
+
+        explicit OperandTypes(HIRTypeInterner& types)
+            : HIRExprVisitorDef(types)
+        {
+        }
+
+        void visitNodePtr(HIRExprNodeP& nodePtr) override {
+            if (nodePtr) {
+                types.pushBack(nodePtr->resType);
+            }
+        }
+    };
+    for (auto* node : context.toVisit) {
+        OperandTypes operands(context.crate.types);
+        node->visit(operands);
+        collectIvars(node->resType, members, true);
+        for (const auto* type : operands.types) {
+            collectIvars(type, members, true);
+        }
+        unite();
+    }
+    for (const auto& revisit : context.advRevisits) {
+        revisit->collectInferenceDependencies(context, members);
+        unite();
+    }
+    for (const auto& obligation : context.solverObligations) {
+        collectIvars(obligation.type, members, true);
+        unite();
+    }
+    for (const auto& obligation : context.closureReturnObligations) {
+        for (const auto& argument : obligation.closure->args) {
+            collectIvars(argument.second, members, true);
+        }
+        collectIvars(obligation.closure->returnType, members, true);
+        collectIvars(obligation.expected, members, true);
+        unite();
+    }
+    for (size_t i = 0; i < count; i++) {
+        componentRoots.mut(i) = find(static_cast<unsigned int>(i));
+    }
+}
+
+auto IvarCoercionIndex::componentOf(unsigned int index) const -> unsigned int {
+    return index < componentRoots.length() ? componentRoots[index] : index;
 }
 
 auto IvarCoercionIndex::deduplicate(Vector<unsigned int>& values) -> void {
@@ -9173,6 +9326,8 @@ IvarCoercionIndex::IvarCoercionIndex(const Context& context)
         deduplicate(dependencies);
         addRefs(dependencies, &IvarCoercionRefs::advancedRevisits, static_cast<const Context::Revisitor*>(revisit.get()));
     }
+
+    buildComponents();
 }
 
 auto IvarCoercionIndex::operator[](unsigned int index) const -> const IvarCoercionRefs& {
@@ -9507,14 +9662,13 @@ auto ExprVisitorEnum::visit(HIRExprNodeBlock& node) -> void {
             DEBUG(StringView("Block final node returns _, derfer diverge check"));
             this->context.addRevisit(node);
         } else if (diverges) {
+            /* Upstream `check_block_with_expected`: a block without a tail expression
+               that always diverges supplies no value, so `CoerceMany::complete` makes
+               it `!` in every edition (`DivergingBlockBehavior::Never`).  The
+               never-type fallback acts on the variables that `!` is then coerced
+               into, not on the block. */
             DEBUG(StringView("Block diverges, yield !"));
-            const auto* blockInfer = this->context.crate.edition < ASTEdition::Rust2024 ? this->context.getType(node.resType)->opt_Infer() : nullptr;
-            if (const auto* i = blockInfer) {
-                this->context.addCoercionObligation(node.span(), this->context.ivars.getType(i->index), this->context.crate.types.diverge(), SolverCoercionOp::Coercion);
-                this->context.addRevisitAdv(std::make_unique<RevisitDefaultUnit>(&node));
-            } else {
-                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
-            }
+            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
         } else {
             DEBUG(StringView("Block doesn't diverge but doesn't yield a value, yield ()"));
             this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
@@ -9780,7 +9934,15 @@ auto ExprVisitorEnum::visit(HIRExprNodeMatch& node) -> void {
         this->inheritDivergence(node, *node.value);
         // TODO: If a coercion point (and ivar for the value) is placed here, it will allow `match &string { "..." ... }`
 
-        this->context.equateTypes(node.span(), valType, node.value->resType);
+        /* Upstream `demand_scrutinee_type`: with arms to match, the scrutinee is
+           checked against a fresh variable, so a `!` scrutinee is a `NeverToAny` into
+           that variable - the patterns then give it its type (`Some(x)` makes it an
+           `Option`), and otherwise it falls back like any diverging variable. */
+        if (this->context.getType(node.value->resType)->is_Diverge() && !node.arms.empty()) {
+            this->context.markDivergingIvar(valType);
+        } else {
+            this->context.equateTypes(node.span(), valType, node.value->resType);
+        }
     }
 
     for (auto& arm : node.arms) {
@@ -11149,43 +11311,6 @@ ExprVisitorEnum::RetTarget::RetTarget(const HIRType* retType, const HIRType* res
     , resumeType(resumeType)
     , yieldType(yieldType)
 {
-}
-
-ExprVisitorEnum::RevisitDefaultUnit::RevisitDefaultUnit(HIRExprNode* node)
-    : node(node)
-{
-}
-
-auto ExprVisitorEnum::RevisitDefaultUnit::span(void) const -> const Span& {
-    return node->span();
-}
-
-auto ExprVisitorEnum::RevisitDefaultUnit::fmt(ZeroCopyOutput& os) const -> void {
-    os << StringView("RevisitDefaultUnit(") << static_cast<const void*>(node) << StringView(": ") << node->resType << StringView(")");
-}
-
-auto ExprVisitorEnum::RevisitDefaultUnit::revisit(Context& context, bool isFallback) -> bool {
-    DEBUG(StringView("is_fallback=") << isFallback);
-    const auto& ty = context.getType(node->resType);
-    if (const auto* i = ty->opt_Infer()) {
-        if (i->tyClass != HIRInferClass::None) {
-            return true;
-        }
-        if (isFallback) {
-            const IvarCoercionIndex obligations(context);
-            if (i->index < obligations.refs.size()) {
-                const auto& refs = obligations[i->index];
-                if (!refs.coercions.empty() || !refs.associated.empty()) {
-                    return false;
-                }
-            }
-            context.equateTypes(node->span(), ty, context.crate.types.unit());
-            return true;
-        }
-        return false;
-    } else {
-        return true;
-    }
 }
 
 ExprVisitorEnum::InnerCoerceGuard::InnerCoerceGuard(ExprVisitorEnum& t)
