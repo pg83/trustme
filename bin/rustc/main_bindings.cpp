@@ -20,6 +20,7 @@
 #include "expand_common.h"
 #include "lint_must_use.h"
 #include "target_detect.h"
+#include "target_version.h"
 #include "trans_codegen.h"
 #include "mir_operations.h"
 #include "lint_unsafe_code.h"
@@ -106,6 +107,8 @@ namespace {
 
         std::string targetSaveback;
         bool printCfgs = false;
+        bool printVersion = false;
+        bool verbose = false;
 
         std::vector<std::string> crateSearchDirs;
         std::vector<std::string> nativeLibSearchDirs;
@@ -220,6 +223,21 @@ namespace {
         }
         {
             TargetSetCfg(wb, params.target);
+        }
+        /* Upstream `rustc -V` / `--version` names the release, and `-vV` (`--version
+           --verbose`) adds the fields build scripts read: `autocfg` takes `release:`,
+           `libc`, `rustversion` and `zerocopy` parse the first line.  The host is the
+           default target; there is no LLVM to report. */
+        if (params.printVersion) {
+            sysO << StringView("rustc ") << StringView(RUSTC_RELEASE_VERSION) << StringView(" (") << StringView(RUSTC_RELEASE_COMMIT_SHORT) << StringView(" ") << StringView(RUSTC_RELEASE_DATE) << StringView(")") << endL;
+            if (params.verbose) {
+                sysO << StringView("binary: rustc") << endL;
+                sysO << StringView("commit-hash: ") << StringView(RUSTC_RELEASE_COMMIT) << endL;
+                sysO << StringView("commit-date: ") << StringView(RUSTC_RELEASE_DATE) << endL;
+                sysO << StringView("host: ") << StringView(DEFAULT_TARGET_NAME) << endL;
+                sysO << StringView("release: ") << StringView(RUSTC_RELEASE_VERSION) << endL;
+            }
+            return 0;
         }
         if (params.printCfgs) {
             auto out = sysO;
@@ -1293,6 +1311,12 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     case 'g':
                         this->debugInfo = DebugInfoLevel::Full;
                         break;
+                    case 'V':
+                        this->printVersion = true;
+                        break;
+                    case 'v':
+                        this->verbose = true;
+                        break;
                     default:
                         sysE << StringView("Unknown option: '-") << *arg << StringView("'") << endL;
                         exit(1);
@@ -1473,6 +1497,10 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 this->targetSaveback = argv[++i];
             } else if (strcmp(arg, "--test") == 0) {
                 this->testHarness = true;
+            } else if (strcmp(arg, "--version") == 0) {
+                this->printVersion = true;
+            } else if (strcmp(arg, "--verbose") == 0) {
+                this->verbose = true;
             } else if (const char* editionStr = checkWithArg("edition")) {
                 if (strcmp(editionStr, "2015") == 0) {
                     this->edition = ASTEdition::Rust2015;
