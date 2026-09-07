@@ -15753,14 +15753,14 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         auto selectedResponse = monomorphCandidateImpl(responseSource->impl, MonomorphiserNop(crate.types));
         if (certainty != Certainty::Proven) {
-            const auto* declaredSelf = selected->impl.traitImpl ? selected->impl.traitImpl->type : nullptr;
-            const auto selectedSelfHasOpenInference = visitTyWith(selectedResponse.getImplType(crate.types), [](const HIRType* inner) {
-                const auto* infer = inner->opt_Infer();
-                return infer && !infer->isLit();
-            });
-            if (selected->nestedAmbiguity && declaredSelf && declaredSelf->is_Generic() && selectedSelfHasOpenInference) {
-                return emitForcedAmbiguity();
-            }
+            /* Upstream keeps the one candidate's constraints under nested ambiguity: a
+               `Maybe` response is instantiated like a `Yes` one and the goal merely
+               stays pending (`instantiate_and_apply_query_response`, fulfillment
+               re-registering on `Certainty::Maybe`).  Only a self type that *is* an
+               inference variable answers without constraints
+               (`assemble_and_evaluate_candidates`); a blanket impl over a self type
+               that merely holds one - `<Next<.., ?T> as IntoFuture>::IntoFuture` - names
+               its output, and that output is what lets the variable be found. */
             return emitResponse(materializeRootAssociated(std::move(selectedResponse), trait, assocName, canonicalAssocParams), Certainty::Ambiguous, selected);
         }
         return emitResponse(materializeRootAssociated(std::move(selectedResponse), trait, assocName, canonicalAssocParams), Certainty::Proven, selected);
