@@ -5940,39 +5940,55 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
        collector).  Any other item of the impl uses the opaque opaquely. */
     if (ms.currentTraitImpl) {
         const auto sp = expr.span();
-        const auto collect = [&](const HIRType* type) {
+        /* The collector normalizes nothing and evaluates nothing: its projection arm
+           resolves only `<Self as ImplTrait>::Assoc` - the impl's own trait - to the
+           impl's item and walks that; any other projection has just its arguments
+           walked, and an array length stays the unevaluated constant it is (a
+           `where [u8; Self::C]:` names the length's anonymous constant, whose own
+           predicates under `generic_const_exprs` name it again). */
+        const auto* implTrait = context.resolve.currentTraitPath();
+        const auto* implSelf = context.crate.types.self();
+        const auto collect = [&](auto& self, const HIRType* type) -> void {
             if (!type) {
                 return;
             }
-            visitTyWith(context.expandAssociatedTypes(sp, type), [&](const HIRType* inner) {
+            visitTyWith(type, [&](const HIRType* inner) {
                 const auto* erased = inner->opt_ErasedType();
                 const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
                 if (alias && alias->inner->path.components().back().c_str()[0] == '#') {
                     context.resolve.addDefiningOpaqueAlias(alias->inner->path);
                 }
+                const auto* path = inner->opt_Path();
+                const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
+                if (projection && implTrait && projection->trait.path == implTrait->path && projection->trait.params.equalsIgnoringRegions(implTrait->params)
+                    && (projection->type == implSelf || projection->type == ms.currentTraitImpl->type || projection->type->equalsIgnoringRegions(ms.currentTraitImpl->type))) {
+                    if (const auto it = ms.currentTraitImpl->types.find(projection->item); it != ms.currentTraitImpl->types.end()) {
+                        self(self, it->second.data);
+                    }
+                }
                 return false;
             });
         };
-        collect(resultType);
+        collect(collect, resultType);
         for (const auto& arg : args) {
-            collect(arg.second);
+            collect(collect, arg.second);
         }
         /* ...and the item's own predicates (`explicit_predicates_of` in
            `sig_types::walk_types`): a `where Self::Assoc:` names the opaque too. */
         if (ms.itemGenerics) {
             for (const auto& bound : ms.itemGenerics->bounds) {
                 if (const auto* traitBound = bound.opt_TraitBound()) {
-                    collect(traitBound->type);
+                    collect(collect, traitBound->type);
                     for (const auto* type : traitBound->trait.path.params.types) {
-                        collect(type);
+                        collect(collect, type);
                     }
                 } else if (const auto* equality = bound.opt_TypeEquality()) {
-                    collect(equality->type);
-                    collect(equality->otherType);
+                    collect(collect, equality->type);
+                    collect(collect, equality->otherType);
                 }
             }
             for (const auto* type : ms.itemGenerics->wellFormedTypes) {
-                collect(type);
+                collect(collect, type);
             }
         }
     }
