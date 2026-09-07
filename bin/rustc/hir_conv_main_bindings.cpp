@@ -3703,8 +3703,11 @@ auto UfcsVisitor::getUfcsKnown(HIRVisitor::PathContext pc, HIRPath::Data::Data_U
     if (pc == HIRVisitor::PathContext::TYPE) {
         const auto& aty = trait.types.at(e.item);
     }
-    // TODO: Only do this when there's multiple options?
-    if (inExpr) {
+    /* A value path `Self::item` is looked up on the self type, its trait arguments
+       left to inference; a type `Self::Assoc` is the impl's own trait reference with
+       its arguments (upstream `lower_assoc_path` for `Res::SelfTyAlias` of a trait
+       impl), also when it heads a struct literal in a body. */
+    if (inExpr && pc != HIRVisitor::PathContext::TYPE) {
         for (auto& type : traitPath.params.types) {
             type = crate.types.infer();
         }
@@ -4084,7 +4087,12 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
             }
             if (locateInTraitAndSet(pc, traitPath, *currentTrait, p.data)) {
                 BUG_ASSERT(!p.data.is_UfcsUnknown());
-                if (inExpr && !inTraitDef_) {
+                /* Upstream (`lower_assoc_path`, `Res::SelfTyAlias` of a trait impl):
+                   `Self::Assoc` as a type names the impl's own trait reference, arguments
+                   included - `Self::Output { .. }` in `impl Add<Span> for usize` is
+                   `<usize as Add<Span>>::Output`.  A value path `Self::item` is looked up
+                   on the self type instead, so its trait arguments stay to be inferred. */
+                if (inExpr && !inTraitDef_ && pc != HIRVisitor::PathContext::TYPE) {
                     for (auto& t : p.data.as_UfcsKnown().trait.params.types) {
                         t = crate.types.infer();
                     }
@@ -4144,7 +4152,7 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
 
             if (locateInTraitAndSet(pc, traitPath, *currentTrait, p.data)) {
                 BUG_ASSERT(!p.data.is_UfcsUnknown());
-                if (inExpr) {
+                if (inExpr && pc != HIRVisitor::PathContext::TYPE) {
                     for (auto& t : p.data.as_UfcsKnown().trait.params.types) {
                         t = crate.types.infer();
                     }
