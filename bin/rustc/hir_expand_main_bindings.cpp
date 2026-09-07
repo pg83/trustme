@@ -3379,7 +3379,16 @@ auto ClosureExprVisitorExtract::extractReferencedNode(const Span& sp, const Node
         return;
     }
 
-    ASSERT_BUG(sp, !isActive(constNode), StringView("Cyclic anonymous type dependency"));
+    /* Upstream's closure type is nominal from the start (`ClosureArgs` over the
+       parent's generics), so a closure's body may name the closure's own type - a
+       nested closure's signature does when it calls the enclosing function whose
+       opaque return is this very closure.  The type being extracted has no path yet;
+       the reference stays a node for the deferred fix-up that runs once the path is
+       assigned, as any reference to a not-yet-extracted closure does. */
+    if (isActive(constNode)) {
+        DEBUG(StringView("Reference to the anonymous type being extracted - left for the deferred fix-up"));
+        return;
+    }
     HIRExprNode* mutableNode = nullptr;
     for (const auto& entry : out.mutableNodes) {
         if (entry.first == constNode) {
