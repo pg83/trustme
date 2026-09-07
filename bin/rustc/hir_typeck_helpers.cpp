@@ -4652,6 +4652,56 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
             break;
         }
         case HIRType::TAG_ErasedType: {
+            /* An opaque type's bounds and captured arguments are types like any
+               other: `impl Parser<I, <I as Stream>::Token, E>` returned from `trace(..)`
+               names the projection in its trait parameters and in the defining
+               function's arguments, and the declared return type names the same
+               projection normalized (winnow's `one_of`); left unnormalized here, the
+               final check sees two spellings of one type. */
+            auto& e = data.as_ErasedType();
+            for (auto& trait : e.traits) {
+                H::expandAssociatedTypesParams(sp, *this, trait.path.params, effects);
+                for (auto& bound : trait.typeBounds) {
+                    bound.second.type = expandAssociatedTypesInplace(sp, bound.second.type, effects);
+                }
+            }
+            H::expandAssociatedTypesParams(sp, *this, e.use, effects);
+            switch (e.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    auto& ee = e.inner.as_Fcn();
+                    switch (ee.origin.data.tag()) {
+                        case HIRPath::Data::TAG_Generic: {
+                            H::expandAssociatedTypesParams(sp, *this, ee.origin.data.as_Generic().params, effects);
+                            break;
+                        }
+                        case HIRPath::Data::TAG_UfcsInherent: {
+                            auto& pe = ee.origin.data.as_UfcsInherent();
+                            pe.type = expandAssociatedTypesInplace(sp, pe.type, effects);
+                            H::expandAssociatedTypesParams(sp, *this, pe.params, effects);
+                            H::expandAssociatedTypesParams(sp, *this, pe.implParams, effects);
+                            break;
+                        }
+                        case HIRPath::Data::TAG_UfcsKnown: {
+                            auto& pe = ee.origin.data.as_UfcsKnown();
+                            pe.type = expandAssociatedTypesInplace(sp, pe.type, effects);
+                            H::expandAssociatedTypesParams(sp, *this, pe.trait.params, effects);
+                            H::expandAssociatedTypesParams(sp, *this, pe.params, effects);
+                            break;
+                        }
+                        case HIRPath::Data::TAG_UfcsUnknown: {
+                            break;
+                        }
+                    }
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    e.inner = TypeDataErasedTypeInner::make_Known(expandAssociatedTypesInplace(sp, e.inner.as_Known(), effects));
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    break;
+                }
+            }
             break;
         }
         case HIRType::TAG_Array: {
