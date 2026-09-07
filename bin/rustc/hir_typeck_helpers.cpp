@@ -12827,9 +12827,19 @@ auto NextTraitGoalEvaluator::evaluateHeadEquality(Candidate& candidate, const So
         if (!resolve_.traitContainsType(span(), projection->trait, crate.getTraitByPath(span(), projection->trait.path), projection->item.c_str(), declaringTrait)) {
             BUG(span(), StringView("Cannot find associated type ") << projection->item << StringView(" anywhere in trait ") << projection->trait);
         }
+        /* The other side a placeholder of the goal - the `_` of `<T as _>::item`'s
+           `Vec4Ext<_>`, a parameter still to be found - is no type to ask the alias's
+           own bounds of: upstream has an inference variable there, and `<M as
+           Machine>::u32x4: u32x4<M>` waits for it rather than failing on it. */
+        const auto* replacementGeneric = replacement->opt_Generic();
+        const bool replacementIsUnknown = replacementGeneric && replacementGeneric->isPlaceholder();
         auto monomorph = MonomorphStatePtr(crate.types, projection->type, &declaringTrait.params, &projection->params);
         resolve_.iterateAtyBounds(span(), *projection, [&](const HIRTraitPath& declaredBound) {
             auto bound = monomorph.monomorphTraitpath(span(), declaredBound, true);
+            if (replacementIsUnknown) {
+                candidate.headObligations.push_back(SolverObligation{replacement, std::move(bound)});
+                return false;
+            }
             const auto* associated = bound.typeBounds.empty() ? nullptr : &bound.typeBounds;
             const auto result = solveGoal(bound.path.path, bound.path.params, replacement, associated);
             if (result == Certainty::NoSolution) {
