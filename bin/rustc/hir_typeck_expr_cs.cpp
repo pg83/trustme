@@ -8648,6 +8648,26 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
                     }
                 }
             }
+            /* ...and so can a pending projection rule that is to give the variable its
+               type - a variable this pass made, past the index, included: `?U = <closure
+               as FnOnce<(Match,)>>::Output` from `.map(|m| m.as_bytes())` before
+               `.unwrap_or(b"")` is looked up on `Option<?U>` - upstream had the closure's
+               return type by then, and the probe would read `U` off the argument as
+               `&[u8; 0]` instead. */
+            const OrderPlace callPlace{node.checkOrderEnd, node.checkOrder};
+            for (const auto& rule : this->context.linkAssoc) {
+                if (hasPendingReceiverCoercion) {
+                    break;
+                }
+                if (rule.name == "") {
+                    continue;
+                }
+                const auto* left = this->context.getType(rule.leftTy)->opt_Infer();
+                if (left && left->index == infer->index && (node.checkOrderEnd == 0 || !OrderPlace{rule.order, rule.order}.after(callPlace))) {
+                    DEBUG(StringView("receiver variable ") << infer->index << StringView(" is owed to R") << rule.ruleIdx << StringView(" at ") << rule.order);
+                    hasPendingReceiverCoercion = true;
+                }
+            }
             return hasPendingReceiverCoercion;
         });
         if (hasPendingReceiverCoercion) {
