@@ -35,6 +35,9 @@ struct Context {
         HIRExprNodeP* rightNodePtr;
         const HIRType* rightTy;
         SolverCoercionOp op;
+        /* A call argument coerced into its parameter type: upstream
+           `check_argument_types` binds a parameter variable to the argument at once. */
+        bool argumentSite = false;
 
         Coercion(unsigned ruleIdx, const HIRType* leftTy, HIRExprNodeP* rightNodePtr);
         Coercion(unsigned ruleIdx, const Span& span, const HIRType* leftTy, const HIRType* rightTy, SolverCoercionOp op);
@@ -97,6 +100,9 @@ struct Context {
        whichever variable each has since been unified with is the root that falls
        back. */
     stl::Vector<unsigned> divergingIvars;
+    /* The expected type a call was met with (upstream's `Expectation` for the call
+       expression), read when the call's parameter list is known. */
+    stl::IntMap<const HIRType*> callExpectations;
 
     HIRGenericParams emptyGenericParams;
     stl::Vector<bool> ivarsSized;
@@ -155,7 +161,15 @@ struct Context {
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params);
     void compactIvars(const Span& sp);
 
-    void equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr);
+    void equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr, bool argumentSite = false);
+    /* Upstream `check_argument_types`: with an expected type for the call's result,
+       the parameter types resolved under a probe that relates the declared result to
+       it are the arguments' coercion targets (`expected_input_tys`); otherwise the
+       declared parameter types are. `argTypes` is the callee's parameter list ending
+       in its result type; the inputs start at `firstInput`. */
+    stl::Vector<const HIRType*> expectedInputsForExpectedOutput(const Span& sp, const HIRType* expected, const stl::Vector<const HIRType*>& argTypes, size_t firstInput);
+    void rememberCallExpectation(const HIRExprNode& node, const HIRType* expected);
+    const HIRType* callExpectation(const HIRExprNode& node) const;
     void addCoercionObligation(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op);
 
     void equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimplePath& trait, HIRPathParams params, const HIRType* implTy, const char* name, const HIRPathParams& atyPp, bool isOp = false, TypeckPrimitiveOperator operatorKind = TypeckPrimitiveOperator::None);

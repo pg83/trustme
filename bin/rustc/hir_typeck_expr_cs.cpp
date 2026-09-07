@@ -517,6 +517,23 @@ namespace {
 
         Vector<RetTarget> closureRetTypes;
 
+        /* Upstream's `Expectation` for the node about to be visited: a parent sets it
+           right before visiting that one node, and the node reads it on entry. */
+        const HIRExprNode* expectationNode = nullptr;
+        const HIRType* expectationType = nullptr;
+
+        const HIRType* expectationFor(const HIRExprNode& node) const {
+            return expectationNode == &node ? expectationType : nullptr;
+        }
+
+        void visitExpecting(HIRExprNodeP& nodePtr, const HIRType* expected) {
+            expectationNode = nodePtr.get();
+            expectationType = expected;
+            nodePtr->visit(*this);
+            expectationNode = nullptr;
+            expectationType = nullptr;
+        }
+
         Vector<bool> innerCoerceEnabledStack;
 
         Vector<HIRExprNodeLoop*> loopBlocks;
@@ -1076,6 +1093,59 @@ namespace {
 
     }
 
+    /* The binding an argument makes to its parameter (see the argument-bindings phase
+       of the pass): the parameter itself when it is an open variable, else its open
+       pointee or `CoerceUnsized` parameter, from the source's own. */
+    void bindArgumentParameter(Context& context, const Context::Coercion& rule) {
+        const auto& sp = rule.span();
+        const auto* destination = context.ivars.getType(rule.leftTy);
+        const auto* source = context.ivars.getType(rule.sourceType());
+        if (source->is_Infer() || source->is_Diverge()) {
+            return;
+        }
+        const auto isOpen = [&](const HIRType* type) {
+            const auto* infer = context.getType(type)->opt_Infer();
+            return infer && !infer->isLit() && infer->index != ~0u;
+        };
+        if (isOpen(destination)) {
+            DEBUG(StringView("Argument binds its parameter variable ") << context.ivars.fmtType(destination) << StringView(" = ") << context.ivars.fmtType(source));
+            context.equateTypes(sp, destination, source);
+            return;
+        }
+        const HIRType* destinationInner = nullptr;
+        const HIRType* sourceInner = nullptr;
+        if (const auto* destinationBorrow = destination->opt_Borrow()) {
+            if (const auto* sourceBorrow = source->opt_Borrow()) {
+                destinationInner = destinationBorrow->inner;
+                sourceInner = sourceBorrow->inner;
+            }
+        } else if (const auto* destinationPointer = destination->opt_Pointer()) {
+            if (const auto* sourcePointer = source->opt_Pointer()) {
+                destinationInner = destinationPointer->inner;
+                sourceInner = sourcePointer->inner;
+            } else if (const auto* sourceBorrow = source->opt_Borrow()) {
+                destinationInner = destinationPointer->inner;
+                sourceInner = sourceBorrow->inner;
+            }
+        } else if (const auto* destinationPath = destination->opt_Path()) {
+            const auto* sourcePath = source->opt_Path();
+            if (sourcePath && destinationPath->binding.is_Struct() && sourcePath->binding.is_Struct() && destinationPath->binding.as_Struct() == sourcePath->binding.as_Struct()
+                && destinationPath->path.data.is_Generic() && sourcePath->path.data.is_Generic()) {
+                const auto& markings = sourcePath->binding.as_Struct()->structMarkings;
+                const auto& destinationParams = destinationPath->path.data.as_Generic().params;
+                const auto& sourceParams = sourcePath->path.data.as_Generic().params;
+                if (markings.coerceUnsized != HIRStructMarkings::Coerce::None && markings.coerceParam < destinationParams.types.size() && markings.coerceParam < sourceParams.types.size()) {
+                    destinationInner = destinationParams.types[markings.coerceParam];
+                    sourceInner = sourceParams.types[markings.coerceParam];
+                }
+            }
+        }
+        if (destinationInner && isOpen(destinationInner)) {
+            DEBUG(StringView("Argument binds the parameter's open part ") << context.ivars.fmtType(destinationInner) << StringView(" = ") << context.ivars.fmtType(sourceInner));
+            context.equateTypes(sp, destinationInner, sourceInner);
+        }
+    }
+
     bool checkCoerce(Context& context, const Context::Coercion& v) {
         if (!v.rightNodePtr) {
             const auto& sp = v.span();
@@ -1330,6 +1400,12 @@ namespace {
             }
             const HIRType* concrete = nullptr;
             for (const auto& endpoint : coercionIndex[infer->index].endpoints) {
+                /* An argument binds its parameter itself (argument-bindings phase);
+                   upstream never selects an impl for a variable from what is coerced
+                   into it (a variable self type is a forced ambiguity). */
+                if (endpoint.obligation && endpoint.obligation->argumentSite) {
+                    continue;
+                }
                 if (endpoint.direction != SolverCoercionConstraint::Direction::InputIsDestination || !coercionEndpointCanDetermineType(context, endpoint)) {
                     continue;
                 }
@@ -1350,6 +1426,9 @@ namespace {
             }
             const HIRType* concrete = nullptr;
             for (const auto& endpoint : coercionIndex[infer->index].endpoints) {
+                if (endpoint.obligation && endpoint.obligation->argumentSite) {
+                    continue;
+                }
                 if (endpoint.direction != SolverCoercionConstraint::Direction::InputIsSource || !coercionEndpointCanDetermineType(context, endpoint)) {
                     continue;
                 }
@@ -1415,7 +1494,9 @@ namespace {
          * response even when every input still contains inference variables. */
         const bool outputConstrainsSelf = v.isOperator && v.name != "" && !context.getType(v.leftTy)->is_Diverge() && !context.ivars.typeContainsIvars(v.leftTy);
         if (const auto* e = context.ivars.getType(v.implTy)->opt_Infer()) {
-            const bool hasSelfCoercionGuidance = e->index != ~0u && e->index < coercionIndex.refs.size() && !coercionIndex[e->index].endpoints.empty();
+            const bool hasSelfCoercionGuidance = e->index != ~0u && e->index < coercionIndex.refs.size() && std::any_of(coercionIndex[e->index].endpoints.begin(), coercionIndex[e->index].endpoints.end(), [](const auto& endpoint) {
+                return !(endpoint.obligation && endpoint.obligation->argumentSite);
+            });
             // TODO: ?
             if (!e->isLit() && v.params.types.empty() && !hasSelfCoercionGuidance && !outputConstrainsSelf) {
                 return AssociatedCheckResult::Ambiguous;
@@ -1477,6 +1558,9 @@ namespace {
             };
             for (const auto& endpoint : coercionIndex[infer->index].endpoints) {
                 if (endpoint.direction == SolverCoercionConstraint::Direction::InputIsDestination && context.getType(endpoint.other)->is_Diverge()) {
+                    continue;
+                }
+                if (endpoint.obligation && endpoint.obligation->argumentSite) {
                     continue;
                 }
                 append(endpoint);
@@ -5162,7 +5246,7 @@ const HIRType* Context::Coercion::sourceType() const {
     return rightNodePtr ? (*rightNodePtr)->resType : rightTy;
 }
 
-void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr) {
+void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr, bool argumentSite) {
     const auto* destination = this->ivars.getType(l);
     const auto* destinationInfer = destination->opt_Infer();
     const bool destinationRequiresSized = destinationInfer
@@ -5172,8 +5256,74 @@ void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& 
         this->requireSized(sp, nodePtr->resType);
     }
     this->linkCoerce.push_back(std::make_unique<Coercion>(this->nextRuleIdx++, l, &nodePtr));
+    this->linkCoerce.back()->argumentSite = argumentSite;
     DEBUG(StringView("++ ") << *this->linkCoerce.back());
     this->ivars.markChange();
+}
+
+Vector<const HIRType*> Context::expectedInputsForExpectedOutput(const Span& sp, const HIRType* expected, const Vector<const HIRType*>& argTypes, size_t firstInput) {
+    Vector<const HIRType*> inputs;
+    for (size_t i = firstInput; i + 1 < argTypes.length(); i++) {
+        inputs.pushBack(argTypes[i]);
+    }
+    if (!expected || argTypes.empty()) {
+        return inputs;
+    }
+    /* An expectation that is itself a bare variable says nothing (upstream drops it:
+       `Expectation::adjust_for_branches`, `only_has_type` of `NoExpectation`). */
+    const auto* expectedType = this->ivars.getType(expected);
+    if (const auto* infer = expectedType->opt_Infer(); infer && !infer->isLit()) {
+        return inputs;
+    }
+    const auto* formalOutput = this->ivars.getType(argTypes.back());
+    const auto ivarCount = this->ivars.ivars.size();
+    const auto snapshot = this->ivars.snapshot();
+    Unifier unifier(sp, this->ivars, &this->resolve);
+    const auto outcome = unifier.unify(expectedType, formalOutput);
+    Vector<const HIRType*> resolved;
+    /* Upstream `fudge_inference_if_ok`: the relation holds only inside the probe; the
+       parameter types are read back resolved under it. */
+    const bool holds = outcome != Unifier::Outcome::Mismatch && unifier.pending().length() == 0 && unifier.pendingValues().empty();
+    if (holds) {
+        for (const auto* input : inputs) {
+            resolved.pushBack(this->ivars.expandIvars(input));
+        }
+    }
+    this->ivars.rollbackTo(snapshot);
+    if (!holds) {
+        return inputs;
+    }
+    for (size_t i = 0; i < inputs.length(); i++) {
+        /* A variable the probe created is gone with the rollback: that input keeps
+           its declared type. */
+        const bool usable = !visitTyWith(resolved[i], [&](const HIRType* inner) {
+            const auto* infer = inner->opt_Infer();
+            return infer && infer->index != ~0u && !isAliasInputInfer(infer->index) && infer->index >= ivarCount;
+        });
+        /* Upstream `Expectation::rvalue_hint`: an expected type whose tail is unsized
+           (`[T]`, `str`, `dyn Trait`) is only a hint, not a coercion target - the
+           argument of `box_new([a, b])` in `vec!` is coerced into the declared `T`,
+           not into `[_]`. */
+        if (usable && this->resolve.typeIsSized(sp, resolved[i]) == SolverCertainty::NoSolution) {
+            continue;
+        }
+        if (usable) {
+            inputs.mut(i) = resolved[i];
+        }
+    }
+    DEBUG(StringView("expected inputs for ") << expectedType << StringView(": ") << inputs);
+    return inputs;
+}
+
+void Context::rememberCallExpectation(const HIRExprNode& node, const HIRType* expected) {
+    if (expected) {
+        *this->callExpectations.insert(reinterpret_cast<uintptr_t>(&node)) = expected;
+    }
+}
+
+const HIRType* Context::callExpectation(const HIRExprNode& node) const {
+    const auto* found = this->callExpectations.find(reinterpret_cast<uintptr_t>(&node));
+    return found ? *found : nullptr;
 }
 
 void Context::addCoercionObligation(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op) {
@@ -5915,6 +6065,28 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             }
         }
 
+        /* Upstream `check_argument_types` coerces an argument into its parameter type
+           as it is met, after `resolve_vars_with_obligations` has let the callee's own
+           bounds say what they can (a where-clause on a projection self type fixes
+           `Rhs` before `other` is coerced), and `coerce` then binds from the source
+           whatever the parameter still leaves open: a parameter that is an inference
+           variable is unified with a known source (`coerce_unsized` bails on such a
+           target); a reference or raw pointer whose pointee is unknown has that pointee
+           unified with the source's own (`Unsize` into an unknown is ambiguous, so
+           `coerce_borrowed_pointer` / `coerce_raw_ptr` settle on the first autoderef
+           step); a `Box<?T>` from a `Box<S>` ends in `unify` the same way.  The
+           obligations have just had their turn; what an argument's parameter still
+           leaves open, the argument binds now, and whatever the parameter's bounds ask
+           is checked against that binding rather than choosing it. */
+        if (!context.ivars.peekChanged()) {
+            DEBUG(StringView("--- Argument bindings"));
+            for (const auto& rule : context.linkCoerce) {
+                if (rule->argumentSite && rule->rightNodePtr) {
+                    bindArgumentParameter(context, *rule);
+                }
+            }
+        }
+
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- IVar coercion effects"));
             for (unsigned int sourcePass = 0; sourcePass < 2; sourcePass++) {
@@ -6634,7 +6806,9 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
     DEBUG(StringView("--- Enumerating"));
     ExprVisitorEnum visitor(context, ms.traits, newResTy);
     rootPtr->resType = context.addIvars(rootPtr->resType);
-    rootPtr->visit(visitor);
+    /* Upstream `check_return_or_body_tail`: the body is checked with the return type
+       as its expectation (`check_expr_with_hint`). */
+    visitor.visitExpecting(rootPtr, resultType ? newResTy : nullptr);
 
     DEBUG(StringView("Return type = ") << newResTy << StringView(", root_ptr = ") << rootPtr->typeName() << StringView(" ") << rootPtr->resType);
     context.equateTypesCoerce(sp, newResTy, rootPtr);
@@ -6693,6 +6867,7 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
     , nextRuleIdx(0)
     , linkAssocIndexPool(ObjPool::fromMemory())
     , linkAssocIndex(linkAssocIndexPool.mutPtr())
+    , callExpectations(linkAssocIndexPool.mutPtr())
     , langBox(crate.getLangItemPathOpt("owned_box"))
 {
 }
@@ -7425,8 +7600,16 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallPath& node) -> void {
             ERROR(node.span(), E0000, StringView("Incorrect number of arguments to ") << node.path << StringView(" - exp ") << expArgc << StringView(" got ") << node.args.size());
         }
     }
+    /* Upstream `check_argument_types`: each argument is coerced into its expected
+       parameter type, and the declared parameter type is then equal to it. */
+    const auto expectedInputs = this->context.expectedInputsForExpectedOutput(node.span(), this->context.callExpectation(node), node.cache.argTypes, 0);
     for (unsigned int i = 0; i < node.cache.argTypes.length() - 1; i++) {
-        this->context.equateTypesCoerce(node.span(), node.cache.argTypes[i], node.args[i]);
+        if (expectedInputs[i] != node.cache.argTypes[i]) {
+            this->context.equateTypesCoerce(node.span(), expectedInputs[i], node.args[i], true);
+            this->context.equateTypes(node.span(), node.cache.argTypes[i], expectedInputs[i]);
+        } else {
+            this->context.equateTypesCoerce(node.span(), node.cache.argTypes[i], node.args[i], true);
+        }
     }
     this->context.equateTypes(node.span(), node.resType, node.cache.argTypes.back());
     this->context.requireSized(node.span(), node.resType);
@@ -7805,9 +7988,17 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
         }
 
         DEBUG(StringView("- fcn_path=") << node.methodPath);
+        /* Upstream `check_argument_types`: each argument is coerced into its expected
+           parameter type, and the declared parameter type is then equal to it. */
+        const auto expectedInputs = this->context.expectedInputsForExpectedOutput(sp, this->context.callExpectation(node), node.cache.argTypes, 1);
         for (unsigned int i = 0; i < node.args.size(); i++) {
-            DEBUG(StringView("> ARG ") << i << StringView(" : ") << node.cache.argTypes[1 + i]);
-            this->context.equateTypesCoerce(sp, node.cache.argTypes[1 + i], node.args[i]);
+            DEBUG(StringView("> ARG ") << i << StringView(" : ") << node.cache.argTypes[1 + i] << StringView(" expected ") << expectedInputs[i]);
+            if (expectedInputs[i] != node.cache.argTypes[1 + i]) {
+                this->context.equateTypesCoerce(sp, expectedInputs[i], node.args[i], true);
+                this->context.equateTypes(sp, node.cache.argTypes[1 + i], expectedInputs[i]);
+            } else {
+                this->context.equateTypesCoerce(sp, node.cache.argTypes[1 + i], node.args[i], true);
+            }
         }
         DEBUG(StringView("> Ret : ") << node.cache.argTypes.back());
         this->context.equateTypes(sp, node.resType, node.cache.argTypes.back());
@@ -9681,6 +9872,8 @@ ExprVisitorEnum::ExprVisitorEnum(Context& context, tTraitList baseTraits, const 
 auto ExprVisitorEnum::visit(HIRExprNodeBlock& node) -> void {
     TRACE_FUNCTION_FR(static_cast<const void*>(&node) << StringView(" { ... }"), static_cast<const void*>(&node) << StringView(" ") << this->context.getType(node.resType));
     this->context.resolve.addOpaqueAliasScope(node.localMod);
+    /* Upstream `check_block_with_expected`: the block's expectation is its tail's. */
+    const auto* expected = this->expectationFor(node);
 
     bool diverges = false;
     node.diverges = false;
@@ -9711,7 +9904,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeBlock& node) -> void {
         snp->resType = this->context.addIvars(snp->resType);
         this->context.equateTypes(snp->span(), node.resType, snp->resType);
         this->context.requireSized(snp->span(), snp->resType);
-        snp->visit(*this);
+        this->visitExpecting(snp, expected);
         node.diverges = diverges || this->nodeDiverges(*snp);
     } else if (node.nodes.size() > 0) {
         const auto& snp = node.nodes.back();
@@ -9851,7 +10044,8 @@ auto ExprVisitorEnum::visit(HIRExprNodeReturn& node) -> void {
     this->context.equateTypesCoerce(node.span(), retTy, node.value);
 
     this->pushInnerCoerce(true);
-    node.value->visit(*this);
+    /* Upstream `check_return_expr`: the return type is the value's expectation. */
+    this->visitExpecting(node.value, retTy);
     this->popInnerCoerce();
     node.diverges = true;
     this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
@@ -9978,7 +10172,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeLet& node) -> void {
             this->pushInnerCoerce(true);
         }
 
-        node.value->visit(*this);
+        /* Upstream `check_decl_initializer`: the declared type is the initializer's
+           expectation. */
+        this->visitExpecting(node.value, node.type->is_Infer() ? nullptr : node.type);
         this->popInnerCoerce();
 
         const auto* valueType = this->context.getType(node.value->resType);
@@ -10001,6 +10197,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeMatch& node) -> void {
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" match ..."));
     auto valType = this->context.ivars.newIvarTr();
     const auto* armResultType = node.resType;
+    /* Upstream `check_expr_match`: the match's expectation is each arm's
+       (`adjust_for_branches`). */
+    const auto* expected = this->expectationFor(node);
 
     {
         auto _ = this->pushInnerCoerceScoped(true);
@@ -10049,7 +10248,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeMatch& node) -> void {
         arm.code->resType = this->context.addIvars(arm.code->resType);
 
         this->context.equateTypesCoerce(node.span(), armResultType, arm.code);
-        arm.code->visit(*this);
+        this->visitExpecting(arm.code, expected);
     }
 
     if (node.arms.empty()) {
@@ -10135,7 +10334,8 @@ auto ExprVisitorEnum::visit(HIRExprNodeAssign& node) -> void {
     this->inheritDivergence(node, *node.slot);
 
     auto _2 = this->pushInnerCoerceScoped(node.op == HIRExprNodeAssign::Op::None);
-    node.value->visit(*this);
+    /* Upstream `check_expr_assign`: the place's type is the value's expectation. */
+    this->visitExpecting(node.value, node.op == HIRExprNodeAssign::Op::None ? node.slot->resType : nullptr);
     this->inheritDivergence(node, *node.value);
     this->context.requireSized(node.span(), node.value->resType);
 
@@ -10788,7 +10988,10 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallPath& node) -> void {
     for (auto& val : node.args) {
         val->resType = this->context.addIvars(val->resType);
     }
+    const auto* expected = this->expectationFor(node);
+    this->context.rememberCallExpectation(node, expected);
 
+    Vector<const HIRType*> expectedInputs;
     const bool cacheOk = visitCallPopulateCache(this->context, node.span(), node.path, node.cache);
     if (cacheOk) {
         BUG_ASSERT(node.cache.argTypes.length() >= 1);
@@ -10803,8 +11006,16 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallPath& node) -> void {
 
         // TODO: Figure out a way to disable coercions in desugared for loops (will speed up typecheck)
 
+        /* Upstream `check_argument_types`: each argument is coerced into its expected
+           parameter type, and the declared parameter type is then equal to it. */
+        expectedInputs = this->context.expectedInputsForExpectedOutput(node.span(), expected, node.cache.argTypes, 0);
         for (unsigned int i = 0; i < node.cache.argTypes.length() - 1; i++) {
-            this->context.equateTypesCoerce(node.span(), node.cache.argTypes[i], node.args[i]);
+            if (expectedInputs[i] != node.cache.argTypes[i]) {
+                this->context.equateTypesCoerce(node.span(), expectedInputs[i], node.args[i], true);
+                this->context.equateTypes(node.span(), node.cache.argTypes[i], expectedInputs[i]);
+            } else {
+                this->context.equateTypesCoerce(node.span(), node.cache.argTypes[i], node.args[i], true);
+            }
         }
         this->context.equateTypes(node.span(), node.resType, node.cache.argTypes.back());
     } else {
@@ -10813,8 +11024,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallPath& node) -> void {
 
     {
         auto _ = this->pushInnerCoerceScoped(true);
-        for (auto& val : node.args) {
-            val->visit(*this);
+        for (size_t i = 0; i < node.args.size(); i++) {
+            auto& val = node.args[i];
+            this->visitExpecting(val, i < expectedInputs.length() ? expectedInputs[i] : nullptr);
             this->inheritDivergence(node, *val);
         }
     }
@@ -10849,6 +11061,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallValue& node) -> void {
 
 auto ExprVisitorEnum::visit(HIRExprNodeCallMethod& node) -> void {
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" (...).") << node.method << StringView("(...)"));
+    this->context.rememberCallExpectation(node, this->expectationFor(node));
     node.value->resType = this->context.addIvars(node.value->resType);
     for (auto& val : node.args) {
         val->resType = this->context.addIvars(val->resType);
@@ -11238,7 +11451,8 @@ auto ExprVisitorEnum::visit(HIRExprNodeClosure& node) -> void {
 
     auto _ = this->pushInnerCoerceScoped(true);
     this->closureRetTypes.pushBack(RetTarget(node.returnType));
-    node.code->visit(*this);
+    /* Upstream `check_fn` for a closure: its body's expectation is its return type. */
+    this->visitExpecting(node.code, node.returnType);
     this->closureRetTypes.popBack();
 
     this->loopBlocks = std::move(savedLoops);
