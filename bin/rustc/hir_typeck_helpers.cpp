@@ -340,6 +340,9 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     struct Candidate {
         SolverImpl impl;
+        /* The scope of the existentials standing for the impl parameters this
+           instantiation's head left open (`unifyImplHead`); 0 when it left none. */
+        u32 existentialScope = 0;
         bool headExact;
         Certainty headRelation;
         Certainty certainty;
@@ -11658,12 +11661,39 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
     struct InstantiateCandidate final: public MonomorphiserNop {
         const Vector<CandidateTypeBinding>& typeBindings_;
         const Vector<CandidateValueBinding>& valueBindings_;
+        const HIRPathParams& params_;
+        u32 scope_;
 
-        InstantiateCandidate(HIRTypeInterner& types, const Vector<CandidateTypeBinding>& typeBindings, const Vector<CandidateValueBinding>& valueBindings)
+        InstantiateCandidate(HIRTypeInterner& types, const Vector<CandidateTypeBinding>& typeBindings, const Vector<CandidateValueBinding>& valueBindings, const HIRPathParams& params, u32 scope)
             : MonomorphiserNop(types)
             , typeBindings_(typeBindings)
             , valueBindings_(valueBindings)
+            , params_(params)
+            , scope_(scope)
         {
+        }
+
+        /* An existential of this instantiation that its parameters no longer show is
+           bound - `U` once `IntoIter = U` has fixed it - and stands for that binding,
+           as the inference variable it is upstream does.  A requirement written before
+           the binding (`Item = U::Item`) is related through the binding, not through a
+           name nothing will ever bind. */
+        const HIRType* boundExistential(const HIRGenericRef& generic) const {
+            if (!generic.isSolverExistential() || generic.solverScope != scope_ || generic.idx() >= params_.types.size()) {
+                return nullptr;
+            }
+            const auto* bound = params_.types[generic.idx()];
+            const auto* boundGeneric = bound->opt_Generic();
+            return boundGeneric && *boundGeneric == generic ? nullptr : bound;
+        }
+
+        const HIRConstGeneric* boundValueExistential(const HIRGenericRef& generic) const {
+            if (!generic.isSolverExistential() || generic.solverScope != scope_ || generic.idx() >= params_.values.size()) {
+                return nullptr;
+            }
+            const auto& bound = params_.values[generic.idx()];
+            const auto* boundGeneric = bound.opt_Generic();
+            return boundGeneric && *boundGeneric == generic ? nullptr : &bound;
         }
 
         const HIRType* monomorphType(const Span& sp, const HIRType* type, bool allowInfer = true) const override {
@@ -11681,6 +11711,9 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
                 if (stable && *stable == generic) {
                     return binding.probe;
                 }
+            }
+            if (const auto* bound = boundExistential(generic)) {
+                return this->monomorphType(sp, bound, true);
             }
             return MonomorphiserNop::getType(sp, generic);
         }
@@ -11703,11 +11736,14 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
                     return HIRConstGeneric::make_Infer({binding.probeIndex});
                 }
             }
+            if (const auto* bound = boundValueExistential(generic)) {
+                return this->monomorphConstgeneric(sp, *bound, true);
+            }
             return MonomorphiserNop::getValue(sp, generic);
         }
     };
 
-    InstantiateCandidate instantiate(crate.types, typeBindings, valueBindings);
+    InstantiateCandidate instantiate(crate.types, typeBindings, valueBindings, params, candidate.existentialScope);
     const auto probeParams = instantiate.monomorphPathParams(span(), params, true);
     Unifier unifier(span(), resolve_.ivars, &resolve_, {.bindRigidValues = true});
 
@@ -13828,6 +13864,7 @@ auto NextTraitGoalEvaluator::appendResponseObligations(ThinVector<SolverObligati
     if (!candidate) {
         return;
     }
+    DEBUG(StringView("response obligations of ") << candidate->impl << StringView(" head=") << candidate->headObligations.size() << StringView(" relation=") << candidate->relationObligations.size() << StringView(" normalization=") << candidate->normalizationNestedGoals.length());
 
     auto append = [&](const HIRType* type, HIRTraitPath trait) {
         type = canonicalizer.monomorphType(span(), type, true);
@@ -13887,6 +13924,7 @@ auto NextTraitGoalEvaluator::appendResponseObligations(ThinVector<SolverObligati
         for (const auto& associated : trait.typeBounds) {
             needed |= needsResponse(associated.second.type);
         }
+        DEBUG(StringView("response obligation ") << type << StringView(": ") << trait << StringView(" needed=") << needed << StringView(" normalization=") << isNormalizationGoal(bound));
         if (needed) {
             append(std::move(type), std::move(trait));
         }
@@ -14620,6 +14658,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     const auto cycleHitsBefore = cycleHits_;
     const bool rigidKey = canonicalGoalIsRigid(canonical, canonicalizer.alphaSolverEnvironment());
     const auto appendAssociatedEquality = [&](auto& response, const HIRType* required, const HIRType* output) {
+        DEBUG(StringView("response associated equality ") << required << StringView(" == ") << output);
         response.equalities.push_back(SolverTypeEquality{required, output});
 
         const auto snapshot = resolve_.ivars.snapshot();
@@ -14817,6 +14856,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         const auto appendTypes = [&](const auto& equalities) {
             for (const auto& equality : equalities) {
+                DEBUG(StringView("response relation ") << equality.left << StringView(" == ") << equality.right);
                 response.equalities.push_back(
                     SolverTypeEquality{
                         canonicalizer.monomorphType(span(), equality.left, true),
@@ -15870,6 +15910,19 @@ NextTraitGoalEvaluator::Candidate::Candidate(SolverImpl impl, bool headExact, Ce
     , headEqualities(std::move(headEqualities))
     , headValueEqualities(std::move(headValueEqualities))
 {
+    const auto& params = this->impl.traitImpl ? this->impl.implParams : this->markerImplParams;
+    for (const auto* type : params.types) {
+        if (const auto* generic = type->opt_Generic(); generic && generic->isSolverExistential()) {
+            existentialScope = generic->solverScope;
+            return;
+        }
+    }
+    for (const auto& value : params.values) {
+        if (const auto* generic = value.opt_Generic(); generic && generic->isSolverExistential()) {
+            existentialScope = generic->solverScope;
+            return;
+        }
+    }
 }
 
 auto NextTraitGoalEvaluator::Candidate::isNegative() const -> bool {
