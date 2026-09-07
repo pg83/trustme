@@ -44,6 +44,7 @@ def main() -> int:
     if crate_type not in {"bin", "cdylib", "lib"}:
         raise RuntimeError(f"unsupported unit crate type: {crate_type}")
     rust_lib_dependencies = "//@ rust-lib-dev-dependencies" in source_text
+    aux_builds = re.findall(r"^//@\s*aux-build:\s*(\S+)\s*$", source_text, re.MULTILINE)
 
     with lib.workdir() as work:
         env = dict(os.environ)
@@ -61,6 +62,19 @@ def main() -> int:
                 dependencies,
                 ["rand", "rand_xorshift"],
             )
+        # `//@ aux-build: name.rs`: tst/unit/aux/name.rs built as an rlib the unit
+        # links with `--extern name=...` - named or not, as a Cargo dependency is.
+        for aux in aux_builds:
+            aux_src = os.path.join(os.path.dirname(src), "aux", aux)
+            aux_name = os.path.splitext(os.path.basename(aux))[0]
+            aux_rlib = os.path.join(work, f"lib{aux_name}.rlib")
+            lib.run(
+                [rustc, aux_src, "-L", os.path.join(libstd, "release"),
+                 "--crate-type", "rlib", "--crate-name", aux_name, "-o", aux_rlib,
+                 "--edition", edition],
+                env=env,
+            )
+            dependency_args.extend(("--extern", f"{aux_name}={aux_rlib}"))
         binary = os.path.join(work, "t")
         mode = ["--test"] if test_harness else ["--crate-type", crate_type]
         command = lib.wrap_gdb(

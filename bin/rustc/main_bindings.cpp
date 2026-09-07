@@ -293,7 +293,9 @@ namespace {
                 crate.loadExterns(*wb.settings);
                 if (params.testHarness) {
                     auto testCrateName = RcString::newInterned("test");
-                    wb.settings->implicitCrates.insert(std::make_pair(testCrateName, crate.loadExternCrate(*wb.settings, Span(), testCrateName)));
+                    const auto realName = crate.loadExternCrate(*wb.settings, Span(), testCrateName);
+                    crate.markExternCrateUsed(realName);
+                    wb.settings->implicitCrates.insert(std::make_pair(testCrateName, realName));
                 }
             }
             {
@@ -404,12 +406,12 @@ namespace {
                     }
                     allocatorCrateLoaded = true;
                     if (!allocatorCrateLoaded) {
-                        crate.loadExternCrate(*wb.settings, Span(), "alloc_system");
+                        crate.markExternCrateUsed(crate.loadExternCrate(*wb.settings, Span(), "alloc_system"));
                     }
 
                     if (panicRuntimeNeeded /*&& !panic_runtime_loaded*/) {
                         auto panicCrate = "panic_" + params.codegen.panicType;
-                        crate.loadExternCrate(*wb.settings, Span(), panicCrate.c_str());
+                        crate.markExternCrateUsed(crate.loadExternCrate(*wb.settings, Span(), panicCrate.c_str()));
                     }
 
                     if (!crate.noMain) {

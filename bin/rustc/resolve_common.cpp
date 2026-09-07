@@ -292,6 +292,7 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                         return getModuleAst(crate.rootModule_, path, 1, ignoreLast, outPath);
                     } else {
                         ASSERT_BUG(sp, crate.externCrates.count(ecIt->second), StringView("Crate \"") << ecIt->second << StringView("\" not loaded (for \"") << ecIt->first << StringView("\")"));
+                        crate.markExternCrateUsed(ecIt->second);
                         const auto& ec = crate.externCrates.at(ecIt->second);
                         DEBUG(StringView("Implicitly imported crate"));
                         if (outPath) {
@@ -347,6 +348,7 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                     DEBUG(StringView("Crate ") << ecIt->second << StringView(" not found"));
                     return ResolveModuleRef();
                 }
+                crate.markExternCrateUsed(ecIt->second);
                 if (outPath) {
                     *outPath = ASTAbsolutePath(ecIt->second, {});
                 }
@@ -384,6 +386,7 @@ auto ResolveState::getModuleForMacro(const ASTPath& basePath, const ASTPath& pat
     }
 
     ASSERT_BUG(sp, crate.externCrates.count(implicitIt->second), StringView("Crate \"") << implicitIt->second << StringView("\" not loaded (for \"") << crateAlias << StringView("\")"));
+    crate.markExternCrateUsed(implicitIt->second);
     const auto& externalCrate = crate.externCrates.at(implicitIt->second);
     if (outPath) {
         *outPath = ASTAbsolutePath(implicitIt->second, {});
@@ -741,6 +744,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                                         outPath->crate = ecIt->second;
                                         outPath->nodes.clear();
                                     }
+                                    crate.markExternCrateUsed(ecIt->second);
                                     return ResolveItemRefType(&*crate.externCrates.at(ecIt->second).hir);
                                 }
                                 TODO(sp, StringView("ImplicitPrelude?"));

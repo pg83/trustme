@@ -117,6 +117,11 @@ public:
     void setCrateName(std::string name);
 
     void loadExterns(Settings& settings);
+    /* Upstream loads an `--extern` crate on the first use of its name
+       (`maybe_process_path_extern`), an `extern crate` item's at the item, and the
+       dependencies of each loaded crate with it; the others stay unloaded, so their
+       impls are not seen.  Every crate is read up front here; this records the use. */
+    void markExternCrateUsed(const RcString& name) const;
 
     RcString loadExternCrate(Settings& settings, Span sp, const RcString& name, const std::string& file = "");
 
@@ -133,6 +138,13 @@ public:
     RcString procMacroFilename;
     bool isProcMacro = false;
     HIRCrate* hir = nullptr;
+    /* Whether the crate is loaded in upstream's sense: named by an `extern crate`
+       item, reached through the extern prelude, its macro invoked, or the prelude's
+       root - as opposed to merely listed with `--extern` (`markExternCrateUsed`).
+       Its dependencies follow it (`LowerHIRCrate`); the rest of the table is not
+       loaded at all, its impls included.  Set while resolving, through a `const`
+       crate. */
+    mutable bool used = false;
 
     ASTExternCrate(u32& id, stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name, const std::string& path);
 

@@ -1378,6 +1378,7 @@ namespace {
                         ERROR(sp, E0000, StringView("Unable to find external crate for path ") << path);
                     }
                     e.crate = ecIt->second;
+                    context.crate.markExternCrateUsed(e.crate);
                 }
                 // HACK: If this is `crate::foo::bar`, and `foo` doesn't exist in the root, but it is an implicit crate, then resolve to that
 
@@ -1385,6 +1386,7 @@ namespace {
                     auto ecIt = context.settings.implicitCrates.find(e.nodes.front().name().c_str());
                     if (ecIt != context.settings.implicitCrates.end()) {
                         e.crate = ecIt->second;
+                        context.crate.markExternCrateUsed(e.crate);
                         e.nodes.erase(e.nodes.begin());
                     }
                 }
@@ -4440,6 +4442,7 @@ namespace {
                     auto ecIt = settings.implicitCrates.find(name);
                     if (ecIt != settings.implicitCrates.end()) {
                         DEBUG(StringView("Found implict crate ") << name);
+                        crate.markExternCrateUsed(ecIt->second);
                         e.nodes.erase(e.nodes.begin());
                         return ASTPath(ecIt->second, e.nodes);
                     } else {
@@ -4588,6 +4591,7 @@ namespace {
                         ERROR(span, E0000, StringView("Unable to find external crate for path ") << path);
                     }
                     e.crate = ecIt->second;
+                    crate.markExternCrateUsed(e.crate);
                 }
                 return path;
             }
@@ -6574,6 +6578,7 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
         auto it = this->settings.implicitCrates.find(name);
         if (it != this->settings.implicitCrates.end()) {
             DEBUG(StringView("- Found '") << name << StringView("' (= ") << it->second << StringView(")"));
+            crate.markExternCrateUsed(it->second);
             return ASTPath(it->second, {});
         }
     }

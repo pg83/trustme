@@ -3600,8 +3600,43 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
         rv.langItems.insert(std::make_pair(langItemPath.first, HIRSimplePath(crateName, langItemPath.second.nodes)));
         DEBUG(StringView("Defined language item '") << langItemPath.first << StringView("' at ") << langItemPath.second);
     }
-    rv.extCratesOrdered = crate.externCratesOrd;
+    /* Upstream's crate graph holds the crates it loaded: the prelude's root, those
+       named by `extern crate` items or reached through the extern prelude, those
+       whose macros ran (`ASTCrate::markExternCrateUsed`), and the dependencies of
+       each of them.  An `--extern` crate never named - serde_json behind a
+       dev-dependency zerocopy's own tests never mention - is not loaded at all, so
+       neither its lang items nor its impls (`impl PartialEq<Value> for usize`, which
+       would leave `usize: PartialEq<?T>` with two candidates) are seen. */
+    {
+        Vector<RcString> loaded;
+        for (const auto& extCrate : crate.externCrates) {
+            if (extCrate.second.used) {
+                loaded.pushBack(extCrate.first);
+            }
+        }
+        while (!loaded.empty()) {
+            const auto name = loaded.back();
+            loaded.popBack();
+            for (const auto& dependency : crate.externCrates.at(name).hir->extCrates) {
+                auto dependencyIt = crate.externCrates.find(dependency.first);
+                if (dependencyIt != crate.externCrates.end() && !dependencyIt->second.used) {
+                    DEBUG(StringView("Extern crate used: ") << dependency.first << StringView(" (dependency of ") << name << StringView(")"));
+                    dependencyIt->second.used = true;
+                    loaded.pushBack(dependency.first);
+                }
+            }
+        }
+    }
+    for (const auto& name : crate.externCratesOrd) {
+        if (crate.externCrates.at(name).used) {
+            rv.extCratesOrdered.pushBack(name);
+        }
+    }
     for (auto& extCrate : crate.externCrates) {
+        if (!extCrate.second.used) {
+            DEBUG(StringView("Extern crate not loaded: ") << extCrate.first);
+            continue;
+        }
         for (const auto& lang : extCrate.second.hir->langItems) {
             const auto& name = lang.first;
             const auto& path = lang.second;

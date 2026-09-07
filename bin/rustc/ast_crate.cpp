@@ -129,9 +129,9 @@ void ASTCrate::loadExterns(Settings& settings) {
 
     if (noCore) {
     } else if (noStd) {
-        auto n = this->loadExternCrate(settings, Span(), "core");
+        this->markExternCrateUsed(this->loadExternCrate(settings, Span(), "core"));
     } else {
-        auto n = this->loadExternCrate(settings, Span(), "std");
+        this->markExternCrateUsed(this->loadExternCrate(settings, Span(), "std"));
     }
 
     DEBUG(StringView("Load from --extern"));
@@ -152,6 +152,14 @@ void ASTCrate::loadExterns(Settings& settings) {
     });
     if (this->extCratenameCore != "") {
         settings.implicitCrates.insert(std::make_pair(RcString::newInterned("core"), this->extCratenameCore));
+    }
+}
+
+void ASTCrate::markExternCrateUsed(const RcString& name) const {
+    auto it = this->externCrates.find(name);
+    if (it != this->externCrates.end() && !it->second.used) {
+        DEBUG(StringView("Extern crate used: ") << name);
+        it->second.used = true;
     }
 }
 

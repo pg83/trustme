@@ -394,6 +394,7 @@ namespace {
                 if (crate.externCrates.count(crateItem->name) == 0) {
                     crateItem->name = crate.loadExternCrate(*wb.settings, item.span, crateItem->name);
                 }
+                crate.markExternCrateUsed(crateItem->name);
                 if (modpath.nodes.empty()) {
                     wb.settings->implicitCrates.insert({item.name, crateItem->name});
                 }
@@ -1445,6 +1446,7 @@ namespace {
                         if (es.crate.externCrates.count(e.name) == 0) {
                             e.name = es.crate.loadExternCrate(*es.wb.settings, i.span, e.name);
                         }
+                        es.crate.markExternCrateUsed(e.name);
                     }
                     if (modpath.nodes.empty()) {
                         es.wb.settings->implicitCrates.insert_or_assign(i.name, e.name);

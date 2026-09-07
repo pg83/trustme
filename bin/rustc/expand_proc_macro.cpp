@@ -244,6 +244,7 @@ namespace {
         TRACE_FUNCTION_F(macPath);
         const auto& crateName = macPath[0];
         ASSERT_BUG(sp, crate.externCrates.count(crateName), StringView("Crate not loaded for macro: [") << macPath << StringView("]"));
+        crate.markExternCrateUsed(crateName);
         const auto& extCrate = crate.externCrates.at(crateName);
         // TODO: Ensure that this macro is in the listed crate.
         const HIRProcMacro* pmp = nullptr;
@@ -310,7 +311,9 @@ void RegisterProcMacroBuiltins(ExpandRegistry& registry) {
 
 void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     auto pmCrateName = RcString::newInterned("proc_macro");
-    wb.settings->implicitCrates.insert(std::make_pair(pmCrateName, crate.loadExternCrate(*wb.settings, Span(), pmCrateName)));
+    const auto realName = crate.loadExternCrate(*wb.settings, Span(), pmCrateName);
+    crate.markExternCrateUsed(realName);
+    wb.settings->implicitCrates.insert(std::make_pair(pmCrateName, realName));
 
     auto mainFn = ASTFunction{Span(), mkType(*crate.pool, ASTTypeTags::Unit(), Span()), {}};
     {
