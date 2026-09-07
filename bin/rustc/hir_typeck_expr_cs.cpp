@@ -433,13 +433,78 @@ struct OrderPlace {
        reads its pointee.  This checker defers such a coercion; it is a ready binding
        at its own place instead, ordered with the argument bindings; a `!` source
        binds nothing. */
+    /* Whether a closure's return is still upstream's to deduce from its expectation
+       (`deduce_closure_signature`) rather than the body's to decide: a pending
+       `Output` rule with a decided left side names the closure or the variable the
+       closure is coerced into (`from_fn::<&dyn Debug, N, _>(|i| &array[i])`), or the
+       closure is coerced into a variable still open that no such rule names yet -
+       `Box::new(move |t| Box::new(hook(t)))` into `Box<dyn Fn(&Thread) -> Box<dyn
+       FnOnce()>>` learns its return from the unsizing once `Box::new`'s parameter is
+       the closure, and upstream had that expectation before the body.  A rule with
+       an open left side (`map`'s `B`) leaves the body to decide it (`check_fn`). */
+    bool closureReturnIsExpected(const Context& context, const HIRType* closureType) {
+        const auto* closure = context.ivars.getType(closureType);
+        Vector<const HIRType*> targets;
+        for (const auto& coercion : context.linkCoerce) {
+            if (coercion->op != SolverCoercionOp::Coercion || context.ivars.getType(coercion->sourceType()) != closure) {
+                continue;
+            }
+            const auto* destination = context.ivars.getType(coercion->leftTy);
+            const auto* infer = destination->opt_Infer();
+            if (infer && !infer->isLit()) {
+                targets.pushBack(destination);
+            }
+        }
+        const auto namesClosure = [&](const HIRType* self) {
+            if (self == closure) {
+                return true;
+            }
+            for (const auto* target : targets) {
+                if (target == self) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        Vector<const HIRType*> namedTargets;
+        for (const auto& pending : context.linkAssoc) {
+            if (pending.name != "Output") {
+                continue;
+            }
+            const auto* self = context.ivars.getType(pending.implTy);
+            if (!namesClosure(self)) {
+                continue;
+            }
+            if (!context.ivars.getType(pending.leftTy)->is_Infer()) {
+                return true;
+            }
+            namedTargets.pushBack(self);
+        }
+        for (const auto* target : targets) {
+            bool named = false;
+            for (const auto* namedTarget : namedTargets) {
+                named = named || namedTarget == target;
+            }
+            if (!named) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     ArgumentBinding variableBinding(const Context& context, const IvarCoercionIndex& coercionIndex, const Context::Coercion& rule) {
-        /* Not a closure body's coercion into the closure's return type: upstream
-           deduces that type from the bound the closure's parameter carries
-           (`deduce_closure_signature`) before the body is checked - `from_fn::<&dyn
-           Debug, N, _>(|i| &array[i])` returns `&dyn Debug`, and `&array[i]` unsizes
-           into it - and the body binds it only when nothing expected it. */
-        if (rule.op != SolverCoercionOp::Coercion || rule.closureReturn) {
+        if (rule.op != SolverCoercionOp::Coercion) {
+            return {};
+        }
+        /* A closure body's coercion into the closure's return type: upstream deduces
+           that type before the body is checked from the `Output` obligations on the
+           closure's expected type - the variable the closure is coerced into, or the
+           closure itself (`deduce_closure_signature`) - so `from_fn::<&dyn Debug, N,
+           _>(|i| &array[i])` returns `&dyn Debug`, and `&array[i]` unsizes into it.
+           While such a pending rule has a decided left side, the body does not bind
+           the return; with the output itself open (`map`'s `B`), upstream makes it the
+           closure's return and the body's coercion into it binds it (`check_fn`). */
+        if (rule.closureType && closureReturnIsExpected(context, rule.closureType)) {
             return {};
         }
         const auto* destination = context.ivars.getType(rule.leftTy);
@@ -12289,7 +12354,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeClosure& node) -> void {
     this->context.equateTypes(node.span(), node.resType, this->context.crate.types.closure(&node));
 
     this->context.equateTypesCoerce(node.span(), node.returnType, node.code);
-    this->context.linkCoerce.back()->closureReturn = true;
+    this->context.linkCoerce.back()->closureType = node.resType;
 
     auto savedLoops = std::move(this->loopBlocks);
 
@@ -12317,7 +12382,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeGenerator& node) -> void {
     this->context.equateTypes(node.span(), node.resType, this->context.crate.types.generator(&node));
 
     this->context.equateTypesCoerce(node.span(), node.returnType, node.code);
-    this->context.linkCoerce.back()->closureReturn = true;
+    this->context.linkCoerce.back()->closureType = node.resType;
     // TODO: Save/clear/restore loop labels
     auto _ = this->pushInnerCoerceScoped(true);
     this->closureRetTypes.pushBack(RetTarget(node.returnType, node.resumeTy, node.yieldTy));
@@ -12339,7 +12404,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeAsyncBlock& node) -> void {
 
     this->context.equateTypes(node.span(), node.resType, this->context.crate.types.asyncBlock(&node));
     this->context.equateTypesCoerce(node.span(), node.returnType, node.code);
-    this->context.linkCoerce.back()->closureReturn = true;
+    this->context.linkCoerce.back()->closureType = node.resType;
 
     // TODO: Save/clear/restore loop labels
     auto _ = this->pushInnerCoerceScoped(true);
