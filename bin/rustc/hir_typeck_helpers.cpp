@@ -8481,7 +8481,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
            `fold_chunks_with(2, 0, sum)` - is therefore a possibility, marked so that a
            candidate proven outright is preferred; left for later it never picks the
            method, and the literal argument is defaulted before it is coerced. */
-        const bool boundsAmbiguous = applicability == Certainty::Ambiguous && proofApplicability == Certainty::Proven;
+        /* Upstream matches on the trait obligation *may* holding (`predicate_may_hold`):
+           `Iter<{integer}>: ParallelIterator` with `{integer}: Sync` still open counts. */
+        const bool boundsAmbiguous = applicability == Certainty::Ambiguous && proofApplicability != Certainty::NoSolution;
         if (applicability != Certainty::Proven) {
             DEBUG(StringView("method candidate ambiguous: applicability ") << static_cast<unsigned>(applicability) << StringView(" (proof ") << static_cast<unsigned>(proofApplicability) << StringView(", complete bounds ") << static_cast<unsigned>(completeBounds) << StringView(")"));
             ambiguousResponses.push_back(std::move(effects));

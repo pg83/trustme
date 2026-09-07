@@ -1,7 +1,8 @@
 /* rayon's `check_fold_chunks_len` / `tests/debug.rs`: `(0..8).into_par_iter().fold_chunks_with(2,
    0, sum)` with the generic `fn sum<T, U>(x: T, y: U) -> T where T: Add<U, Output = T>`, and
    `v.par_iter().fold_chunks_with(3, 0, |x, _| x)` - the method's `T` comes from the literal
-   `0` and `F: Fn(T, Self::Item) -> T` from the function item or the closure. */
+   `0` and `F: Fn(T, Self::Item) -> T` from the function item or the closure; on `[1].par_iter()`
+   the receiver's element is a literal too, so even the trait obligation is only ambiguous. */
 use std::ops::Add;
 
 trait ParIter: Sized {
@@ -50,4 +51,5 @@ fn main() {
     let v: Vec<i32> = vec![1, 2, 3];
     assert_eq!(3, SliceIter(&v).fold_chunks_with(3, 0, |x, _| x).len());
     assert_eq!(1, SliceIter(&v).fold_chunks_with(1, 0, sum).len());
+    assert_eq!(3, SliceIter(&[1]).fold_chunks_with(3, 0, sum).len());
 }
