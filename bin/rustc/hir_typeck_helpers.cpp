@@ -13503,6 +13503,15 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
             return Certainty::NoSolution;
         }
     }
+    /* Upstream (`assemble_candidates`): a goal whose self type is an inference variable
+       is ambiguous outright, at any depth.  The existential standing for an impl
+       parameter that the candidate's head left open is such a variable: `W: Wake` under
+       `impl<W: Wake> From<Arc<W>> for Waker` for the goal `Waker: From<?1>` is `?W: Wake`,
+       ambiguous rather than unimplemented, so that candidate stays viable until the
+       argument fixes `?1`. */
+    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && isUnknownExistentialScope(selfGeneric->solverScope) && !associatedConstrainsSelf) {
+        return Certainty::Ambiguous;
+    }
     CanonicalizeTraitGoal canonicalizer(crate.types, &resolve_.ivars, true, alphaExistentialScopeBase_);
     const auto canonical = canonicalizeGoal(goalParams, resolvedType, associated, canonicalizer);
     const auto* canonicalAssociated = canonical.associated.empty() ? nullptr : &canonical.associated;
