@@ -5642,7 +5642,20 @@ void Context::addCoercionObligation(const Span& sp, const HIRType* destination, 
     }
 }
 
-void Context::equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimplePath& trait, HIRPathParams pp, const HIRType* implTy, const char* name, const HIRPathParams& atyPp, bool isOp, TypeckPrimitiveOperator operatorKind) {
+void Context::equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimplePath& requestedTrait, HIRPathParams pp, const HIRType* implTy, const char* name, const HIRPathParams& atyPp, bool isOp, TypeckPrimitiveOperator operatorKind) {
+    /* `I: DoubleEndedIterator<Item = X>` binds the supertrait `Iterator`'s type:
+       upstream lowers the binding to a projection on the declaring trait, and so does
+       the rule - an impl of the subtrait alone has nothing to relate `X` to. */
+    HIRGenericPath declaring;
+    const HIRSimplePath* traitPtr = &requestedTrait;
+    if (name != nullptr && name[0] != '\0') {
+        const auto& requestedDef = crate.getTraitByPath(sp, requestedTrait);
+        if (requestedDef.types.find(RcString(name)) == requestedDef.types.end() && resolve.traitContainsType(sp, HIRGenericPath(requestedTrait, pp.clone()), requestedDef, name, declaring)) {
+            traitPtr = &declaring.path;
+            pp = declaring.params.clone();
+        }
+    }
+    const HIRSimplePath& trait = *traitPtr;
     const auto& traitDef = crate.getTraitByPath(sp, trait);
     auto monomorph = MonomorphStatePtr(crate.types, implTy, &pp, nullptr);
     while (pp.types.size() < traitDef.params.types.size()) {
