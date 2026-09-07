@@ -36,6 +36,11 @@ public:
     bool diverges = false;
     HIRValueUsage usage = HIRValueUsage::Unknown;
 
+    /* The node's place in the order the body is checked (pre-order, from 1), and the
+       last place of its subtree; 0 for a node made after the numbering. */
+    unsigned checkOrder = 0;
+    unsigned checkOrderEnd = 0;
+
     const Span& span() const {
         return span_;
     }

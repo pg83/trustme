@@ -492,6 +492,12 @@ namespace {
 
         ExprVisitorAddIvars(Context& context);
 
+        /* Upstream checks a body in source order; every node gets its place in that
+           order here, before the rules exist, so a rule can say where it belongs. */
+        unsigned order = 0;
+
+        void visitNodePtr(HIRExprNodeP& nodePtr) override;
+
         const HIRType* innerVisitType(const HIRType* ty);
 
         void visitPathParams(HIRPathParams& pp) override;
@@ -529,9 +535,17 @@ namespace {
         void visitExpecting(HIRExprNodeP& nodePtr, const HIRType* expected) {
             expectationNode = nodePtr.get();
             expectationType = expected;
-            nodePtr->visit(*this);
+            this->visitChild(*nodePtr);
             expectationNode = nullptr;
             expectationType = nullptr;
+        }
+
+        /* The rules a node registers belong to its place in the check order. */
+        void visitChild(HIRExprNode& node) {
+            const auto parentOrder = context.currentOrder;
+            context.currentOrder = node.checkOrder;
+            node.visit(*this);
+            context.currentOrder = parentOrder;
         }
 
         const HIRType* borrowOperandExpectation(const HIRExprNode& node, const HIRExprNode& operand);
@@ -1098,21 +1112,31 @@ namespace {
     /* The binding an argument makes to its parameter (see the argument-bindings phase
        of the pass): the parameter itself when it is an open variable, else its open
        pointee or `CoerceUnsized` parameter, from the source's own. */
-    void bindArgumentParameter(Context& context, const Context::Coercion& rule) {
-        const auto& sp = rule.span();
+    struct ArgumentBinding {
+        const HIRType* destination = nullptr;
+        const HIRType* source = nullptr;
+        bool whole = false;
+    };
+
+    /* What an argument would bind of its parameter right now, if anything. */
+    ArgumentBinding argumentBinding(const Context& context, const Context::Coercion& rule) {
         const auto* destination = context.ivars.getType(rule.leftTy);
         const auto* source = context.ivars.getType(rule.sourceType());
         if (source->is_Infer() || source->is_Diverge()) {
-            return;
+            return {};
         }
         const auto isOpen = [&](const HIRType* type) {
             const auto* infer = context.getType(type)->opt_Infer();
             return infer && !infer->isLit() && infer->index != ~0u;
         };
+        /* Only a binding that says something is ready: the argument's own variable
+           handed back as the parameter (`f(&mut *orig)` with `F: FnOnce(&mut T)`) binds
+           nothing, and a cut waiting on it would never lift. */
         if (isOpen(destination)) {
-            DEBUG(StringView("Argument binds its parameter variable ") << context.ivars.fmtType(destination) << StringView(" = ") << context.ivars.fmtType(source));
-            context.equateTypes(sp, destination, source);
-            return;
+            if (context.ivars.typesEqual(destination, source)) {
+                return {};
+            }
+            return {destination, source, true};
         }
         const HIRType* destinationInner = nullptr;
         const HIRType* sourceInner = nullptr;
@@ -1142,10 +1166,23 @@ namespace {
                 }
             }
         }
-        if (destinationInner && isOpen(destinationInner)) {
-            DEBUG(StringView("Argument binds the parameter's open part ") << context.ivars.fmtType(destinationInner) << StringView(" = ") << context.ivars.fmtType(sourceInner));
-            context.equateTypes(sp, destinationInner, sourceInner);
+        if (destinationInner && isOpen(destinationInner) && !context.ivars.typesEqual(destinationInner, sourceInner)) {
+            return {destinationInner, sourceInner, false};
         }
+        return {};
+    }
+
+    void bindArgumentParameter(Context& context, const Context::Coercion& rule) {
+        const auto binding = argumentBinding(context, rule);
+        if (!binding.destination) {
+            return;
+        }
+        if (binding.whole) {
+            DEBUG(StringView("Argument binds its parameter variable ") << context.ivars.fmtType(binding.destination) << StringView(" = ") << context.ivars.fmtType(binding.source));
+        } else {
+            DEBUG(StringView("Argument binds the parameter's open part ") << context.ivars.fmtType(binding.destination) << StringView(" = ") << context.ivars.fmtType(binding.source));
+        }
+        context.equateTypes(rule.span(), binding.destination, binding.source);
     }
 
     bool checkCoerce(Context& context, const Context::Coercion& v) {
@@ -5268,6 +5305,10 @@ void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& 
     }
     this->linkCoerce.push_back(std::make_unique<Coercion>(this->nextRuleIdx++, l, &nodePtr));
     this->linkCoerce.back()->argumentSite = argumentSite;
+    this->linkCoerce.back()->order = this->currentOrder;
+    if (argumentSite) {
+        this->linkCoerce.back()->bindingOrder = nodePtr->checkOrderEnd;
+    }
     DEBUG(StringView("++ ") << *this->linkCoerce.back());
     this->ivars.markChange();
 }
@@ -5343,6 +5384,7 @@ void Context::addCoercionObligation(const Span& sp, const HIRType* destination, 
     });
     if (!duplicate) {
         linkCoerce.push_back(std::make_unique<Coercion>(nextRuleIdx++, sp, destination, source, op));
+        linkCoerce.back()->order = currentOrder;
         DEBUG(StringView("++ ") << *linkCoerce.back());
         ivars.markChange();
     }
@@ -5407,6 +5449,7 @@ void Context::equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimple
         return false;
     });
     this->linkAssoc.push_back(Associated{this->nextRuleIdx++, sp, ruleLeftTy, trait.clone(), mv$(ruleParams), ruleImplTy, ruleName, mv$(ruleAtyPp), isOp, operatorKind});
+    this->linkAssoc.back().order = this->currentOrder;
     this->indexAssociated(this->linkAssoc.size() - 1);
     DEBUG(StringView("++ ") << this->linkAssoc.back());
     this->ivars.markChange();
@@ -5861,10 +5904,101 @@ void Context::compactIvars(const Span& sp) {
     resolve.compactIvars(ivars, &effects);
 }
 
+/* Upstream checks a function body in order, and a call's arguments are coerced - an
+   open parameter bound from its argument - after `resolve_vars_with_obligations` has
+   let the obligations registered so far act, before anything later is checked.  Here
+   all rules exist at once, so a rule that comes after an argument binding that is
+   ready must not be decided before that binding: `E: From<?E>` from a later `?` would
+   pick the where-clause `E: From<Error>` and fix `?E` before `Sections::load`'s own
+   bound `F: FnMut(SectionId) -> Result<R, ?E>` has met `?F = F`.  Rules are ordered
+   by the check-order place of their node, not by registration - a deref revisited
+   inside the argument registers late but precedes the argument's coercion.  The cut
+   of a component is the earliest place of a ready argument binding in it; the rules
+   of that component past the cut wait a pass. */
+Vector<unsigned> argumentBindingCuts(const Context& context, const IvarCoercionIndex& coercionIndex) {
+    /* Empty when no argument binding is ready - the common sweep. */
+    Vector<unsigned> cuts;
+    const auto count = coercionIndex.refs.size();
+    Vector<unsigned int> ivars;
+    for (const auto& rule : context.linkCoerce) {
+        if (!rule->argumentSite || !rule->rightNodePtr || rule->bindingOrder == 0) {
+            continue;
+        }
+        const auto binding = argumentBinding(context, *rule);
+        if (!binding.destination) {
+            continue;
+        }
+        ivars.clear();
+        coercionIndex.collectIvars(context.getType(rule->leftTy), ivars);
+        if (ivars.empty() || ivars[0] >= count) {
+            continue;
+        }
+        const auto component = coercionIndex.componentOf(ivars[0]);
+        if (cuts.empty()) {
+            cuts.grow(count);
+            for (size_t i = 0; i < count; i++) {
+                cuts.pushBack(~0u);
+            }
+        }
+        if (rule->bindingOrder < cuts[component]) {
+            cuts.mut(component) = rule->bindingOrder;
+        }
+    }
+    return cuts;
+}
+
+bool associatedPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<unsigned>& cuts, Vector<unsigned>& ivars, const Context::Associated& rule) {
+    const auto count = coercionIndex.refs.size();
+    ivars.clear();
+    coercionIndex.collectIvars(context.getType(rule.implTy), ivars);
+    for (const auto* type : rule.params.types) {
+        coercionIndex.collectIvars(context.getType(type), ivars);
+    }
+    if (rule.name != "") {
+        coercionIndex.collectIvars(context.getType(rule.leftTy), ivars);
+    }
+    for (const auto index : ivars) {
+        if (index < count && rule.order > cuts[coercionIndex.componentOf(index)]) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionIndex) {
     DEBUG(StringView("--- Associated types"));
+    const auto cuts = argumentBindingCuts(context, coercionIndex);
+    Vector<unsigned> cutIvars;
+    /* Upstream's fulfillment processes its obligations in the order they were
+       registered, so an earlier one has the first say: the callee's bound `F:
+       FnMut(SectionId) -> Result<R, ?E>` fixes `?E = E` before the `?`'s `E: From<?E>`
+       could pick the where-clause.  The rules are visited in check order (their
+       node's place, then registration); a rule made during the sweep joins the end,
+       and a rule moved into a consumed one's slot keeps its turn. */
+    Vector<unsigned> visitOrder;
+    Vector<unsigned> positionOf;
+    for (unsigned i = 0; i < context.linkAssoc.size(); i++) {
+        visitOrder.pushBack(i);
+    }
+    std::stable_sort(visitOrder.mutBegin(), visitOrder.mutEnd(), [&](unsigned a, unsigned b) {
+        const auto& ra = context.linkAssoc[a];
+        const auto& rb = context.linkAssoc[b];
+        return ra.order != rb.order ? ra.order < rb.order : ra.ruleIdx < rb.ruleIdx;
+    });
+    positionOf.grow(visitOrder.length());
+    for (unsigned k = 0; k < visitOrder.length(); k++) {
+        positionOf.pushBack(0);
+    }
+    for (unsigned k = 0; k < visitOrder.length(); k++) {
+        positionOf.mut(visitOrder[k]) = k;
+    }
     unsigned int linkAssocIterLimit = context.linkAssoc.size() * 4;
-    for (unsigned int i = 0; i < context.linkAssoc.size();) {
+    for (unsigned int k = 0; k < visitOrder.length(); k++) {
+        while (positionOf.length() < context.linkAssoc.size()) {
+            visitOrder.pushBack(positionOf.length());
+            positionOf.pushBack(visitOrder.length() - 1);
+        }
+        const unsigned i = visitOrder[k];
         const auto& indexedRule = context.linkAssoc[i];
         const auto indexedKey = context.associatedIndexKey(indexedRule);
         Context::Associated rule{
@@ -5881,11 +6015,11 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
         };
         rule.isAmbiguous = indexedRule.isAmbiguous;
         rule.stalledOn = indexedRule.stalledOn;
+        rule.order = indexedRule.order;
 
         DEBUG(StringView("- ") << rule);
-        if (associatedStillStalled(context, coercionIndex, rule)) {
+        if (associatedStillStalled(context, coercionIndex, rule) || (!cuts.empty() && associatedPastArgumentCut(context, coercionIndex, cuts, cutIvars, rule))) {
             context.storeAssociated(i, mv$(rule), indexedKey);
-            i++;
             if (linkAssocIterLimit-- == 0) {
                 DEBUG(StringView("link_assoc iteration limit exceeded"));
                 break;
@@ -5904,18 +6038,35 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
         /* Remember the inputs we are about to check. A response may refine them
            without resolving the goal, and that refinement must wake the rule. */
         setAssociatedStall(context, rule);
+        context.currentOrder = rule.order;
         const auto result = checkAssociated(context, coercionIndex, rule);
+        context.currentOrder = 0;
         rule.isAmbiguous = result == AssociatedCheckResult::Ambiguous;
 
         if (result == AssociatedCheckResult::Complete) {
             DEBUG(StringView("- Consumed associated type rule ") << i << StringView("/") << context.linkAssoc.size() << StringView(" - ") << rule);
+            const auto last = static_cast<unsigned>(context.linkAssoc.size() - 1);
             context.removeAssociated(i, indexedKey);
+            if (i != last) {
+                if (last < positionOf.length()) {
+                    const auto movedPosition = positionOf[last];
+                    if (movedPosition > k) {
+                        visitOrder.mut(movedPosition) = i;
+                    }
+                    positionOf.mut(i) = movedPosition;
+                    positionOf.popBack();
+                } else {
+                    visitOrder.pushBack(i);
+                    positionOf.mut(i) = visitOrder.length() - 1;
+                }
+            } else {
+                positionOf.popBack();
+            }
         } else {
             if (result == AssociatedCheckResult::Retry) {
                 rule.stalledOn.clear();
             }
             context.storeAssociated(i, mv$(rule), indexedKey);
-            i++;
         }
 
         if (linkAssocIterLimit-- == 0) {
@@ -6033,7 +6184,10 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                         ent->rightTy = context.expandAssociatedTypes(span, mv$(ent->rightTy));
                     }
                     ent->leftTy = context.expandAssociatedTypes(span, mv$(ent->leftTy));
-                    if (checkCoerce(context, *ent)) {
+                    context.currentOrder = ent->bindingOrder ? ent->bindingOrder : ent->order;
+                    const bool consumed = checkCoerce(context, *ent);
+                    context.currentOrder = 0;
+                    if (consumed) {
                         DEBUG(StringView("- Consumed coercion R") << ent->ruleIdx << StringView(" ") << ent->leftTy << StringView(" := ") << ent->sourceType());
                         context.linkCoerce.erase(context.linkCoerce.begin() + i);
                         coercionSettled = true;
@@ -6058,7 +6212,9 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 HIRExprNode& node = *context.toVisit[i];
                 ExprVisitorRevisit visitor{context, false, &passStartIvars, &*ivarCoercionIndex};
                 DEBUG(StringView("> ") << static_cast<const void*>(&node) << StringView(" ") << typeid(node).name() << StringView(" -> ") << context.ivars.fmtType(node.resType));
+                context.currentOrder = node.checkOrder;
                 node.visit(visitor);
+                context.currentOrder = 0;
                 if (visitor.nodeCompleted()) {
                     for (size_t j = i + 1; j < context.toVisit.length(); j++) {
                         context.toVisit.mut(j - 1) = context.toVisit[j];
@@ -6133,7 +6289,9 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 if (boundComponents[component]) {
                     continue;
                 }
+                context.currentOrder = rule->bindingOrder;
                 bindArgumentParameter(context, *rule);
+                context.currentOrder = 0;
                 if (context.ivars.takeChanged()) {
                     bound = true;
                     boundComponents.mut(component) = true;
@@ -6222,7 +6380,9 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 HIRExprNode& node = *context.toVisit[i];
                 ExprVisitorRevisit visitor{context, true, nullptr, &*ivarCoercionIndex};
                 DEBUG(StringView("> ") << static_cast<const void*>(&node) << StringView(" ") << typeid(node).name() << StringView(" -> ") << context.ivars.fmtType(node.resType));
+                context.currentOrder = node.checkOrder;
                 node.visit(visitor);
+                context.currentOrder = 0;
                 if (visitor.nodeCompleted()) {
                     for (size_t j = i + 1; j < context.toVisit.length(); j++) {
                         context.toVisit.mut(j - 1) = context.toVisit[j];
@@ -6857,7 +7017,9 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
         DEBUG(StringView("--- Pre-adding ivars"));
         ExprVisitorAddIvars visitor(context);
         rootPtr->resType = context.addIvars(rootPtr->resType);
+        rootPtr->checkOrder = ++visitor.order;
         rootPtr->visit(visitor);
+        rootPtr->checkOrderEnd = visitor.order;
     }
 
     DEBUG(StringView("--- Enumerating"));
@@ -9804,6 +9966,12 @@ ExprVisitorAddIvars::ExprVisitorAddIvars(Context& context)
 {
 }
 
+void ExprVisitorAddIvars::visitNodePtr(HIRExprNodeP& nodePtr) {
+    nodePtr->checkOrder = ++this->order;
+    HIRExprVisitorDef::visitNodePtr(nodePtr);
+    nodePtr->checkOrderEnd = this->order;
+}
+
 auto ExprVisitorAddIvars::innerVisitType(const HIRType* ty) -> const HIRType* {
     return rewriteTyWith(context.crate.types, ty, [this](const HIRType*, HIRType& data) -> const HIRType* {
         if (auto* te = data.opt_Path()) {
@@ -9940,7 +10108,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeBlock& node) -> void {
         for (unsigned int i = 0; i < node.nodes.size(); i++) {
             auto& snp = node.nodes[i];
             snp->resType = this->context.addIvars(snp->resType);
-            snp->visit(*this);
+            this->visitChild(*snp);
 
             /* An expression statement's value is dropped and the statement puts no
                expectation on it.  Defaulting its type to `()` would be read back as an
@@ -10011,7 +10179,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeConstBlock& node) -> void {
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" const { ... }"));
     node.inner->resType = this->context.addIvars(node.inner->resType);
 
-    node.inner->visit(*this);
+    this->visitChild(*node.inner);
     node.diverges = this->nodeDiverges(*node.inner);
     this->context.equateTypes(node.span(), node.resType, node.inner->resType);
 }
@@ -10021,12 +10189,12 @@ auto ExprVisitorEnum::visit(HIRExprNodeAsm& node) -> void {
     this->pushInnerCoerce(false);
     for (auto& v : node.outputs) {
         v.value->resType = this->context.addIvars(v.value->resType);
-        v.value->visit(*this);
+        this->visitChild(*v.value);
         this->inheritDivergence(node, *v.value);
     }
     for (auto& v : node.inputs) {
         v.value->resType = this->context.addIvars(v.value->resType);
-        v.value->visit(*this);
+        this->visitChild(*v.value);
         this->inheritDivergence(node, *v.value);
     }
     this->popInnerCoerce();
@@ -10120,7 +10288,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeYield& node) -> void {
     this->context.equateTypesCoerce(node.span(), retTy, node.value);
 
     this->pushInnerCoerce(true);
-    node.value->visit(*this);
+    this->visitChild(*node.value);
     this->popInnerCoerce();
     this->inheritDivergence(node, *node.value);
     this->context.equateTypes(node.span(), node.resType, resumeTy);
@@ -10129,7 +10297,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeYield& node) -> void {
 auto ExprVisitorEnum::visit(HIRExprNodeAWait& node) -> void {
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView("(...).await"));
     node.value->resType = this->context.addIvars(node.value->resType);
-    node.value->visit(*this);
+    this->visitChild(*node.value);
     this->inheritDivergence(node, *node.value);
     if (node.isNext) {
         auto itemTy = this->context.ivars.newIvarTr();
@@ -10143,7 +10311,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeAWait& node) -> void {
 
 auto ExprVisitorEnum::visit(HIRExprNodeUse& node) -> void {
     node.value->resType = this->context.addIvars(node.value->resType);
-    node.value->visit(*this);
+    this->visitChild(*node.value);
     this->inheritDivergence(node, *node.value);
     this->context.equateTypes(node.span(), node.resType, node.value->resType);
 }
@@ -10155,7 +10323,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeLoop& node) -> void {
 
     node.code->resType = this->context.addIvars(node.code->resType);
     this->context.equateTypes(node.span(), node.code->resType, this->context.crate.types.unit());
-    node.code->visit(*this);
+    this->visitChild(*node.code);
 
     this->loopBlocks.popBack();
 
@@ -10200,7 +10368,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeLoopControl& node) -> void {
         if (node.value) {
             node.value->resType = this->context.addIvars(node.value->resType);
             this->pushInnerCoerce(true);
-            node.value->visit(*this);
+            this->visitChild(*node.value);
             this->popInnerCoerce();
             this->context.equateTypesCoerce(node.span(), loopNode.resType, node.value);
             this->context.requireSized(node.span(), node.value->resType);
@@ -10262,7 +10430,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeMatch& node) -> void {
         auto _ = this->pushInnerCoerceScoped(true);
         node.value->resType = this->context.addIvars(node.value->resType);
 
-        node.value->visit(*this);
+        this->visitChild(*node.value);
         this->inheritDivergence(node, *node.value);
         // TODO: If a coercion point (and ivar for the value) is placed here, it will allow `match &string { "..." ... }`
 
@@ -10292,9 +10460,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeMatch& node) -> void {
 
             if (c.isIf) {
                 this->context.equateTypesCoerce(c.val->span(), this->context.crate.types.primitive(HIRCoreType::Bool), c.val);
-                c.val->visit(*this);
+                this->visitChild(*c.val);
             } else {
-                c.val->visit(*this);
+                this->visitChild(*c.val);
                 this->context.handlePattern(node.span(), c.pat, c.val->resType);
             }
             if (unconditionallySelected && &c == &arm.guards.front()) {
@@ -10387,7 +10555,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeAssign& node) -> void {
         }
     }
 
-    node.slot->visit(*this);
+    this->visitChild(*node.slot);
     this->inheritDivergence(node, *node.slot);
 
     auto _2 = this->pushInnerCoerceScoped(node.op == HIRExprNodeAssign::Op::None);
@@ -10411,10 +10579,10 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
     const auto& rightTy = rightTyInner;
     this->context.equateTypesCoerce(node.span(), rightTyInner, node.right);
 
-    node.left->visit(*this);
+    this->visitChild(*node.left);
     {
         auto _2 = this->pushInnerCoerceScoped(true);
-        node.right->visit(*this);
+        this->visitChild(*node.right);
     }
 
     const bool leftDiverges = this->nodeDiverges(*node.left);
@@ -10562,7 +10730,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeUniOp& node) -> void {
 
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" ") << HIRExprNodeUniOp::opname(node.op) << StringView("..."));
     node.value->resType = this->context.addIvars(node.value->resType);
-    node.value->visit(*this);
+    this->visitChild(*node.value);
     this->inheritDivergence(node, *node.value);
 
     const char* itemName = nullptr;
@@ -10652,7 +10820,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeCast& node) -> void {
     node.dstType = this->context.addIvars(node.dstType);
 
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" ... as ") << node.dstType);
-    node.value->visit(*this);
+    this->visitChild(*node.value);
     this->inheritDivergence(node, *node.value);
 
     this->context.equateTypes(node.span(), node.resType, node.dstType);
@@ -10662,7 +10830,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeCast& node) -> void {
 
 auto ExprVisitorEnum::visit(HIRExprNodeUnsize& node) -> void {
     node.dstType = this->context.addIvars(node.dstType);
-    node.value->visit(*this);
+    this->visitChild(*node.value);
     this->inheritDivergence(node, *node.value);
 
     this->context.equateTypesCoerce(node.value->span(), node.dstType, node.value);
@@ -10677,8 +10845,8 @@ auto ExprVisitorEnum::visit(HIRExprNodeIndex& node) -> void {
     node.cache.indexTy = this->context.ivars.newIvarTr();
     node.index->resType = this->context.addIvars(node.index->resType);
 
-    node.value->visit(*this);
-    node.index->visit(*this);
+    this->visitChild(*node.value);
+    this->visitChild(*node.index);
     this->inheritDivergence(node, *node.value);
     this->inheritDivergence(node, *node.index);
     this->context.equateTypesCoerce(node.index->span(), node.cache.indexTy, node.index);
@@ -10691,7 +10859,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeDeref& node) -> void {
 
     node.value->resType = this->context.addIvars(node.value->resType);
 
-    node.value->visit(*this);
+    this->visitChild(*node.value);
     this->inheritDivergence(node, *node.value);
 
     const auto& ty = this->context.getType(node.value->resType);
@@ -10718,10 +10886,10 @@ auto ExprVisitorEnum::visit(HIRExprNodeEmplace& node) -> void {
     node.place->resType = this->context.addIvars(node.place->resType);
     node.value->resType = this->context.addIvars(node.value->resType);
 
-    node.place->visit(*this);
+    this->visitChild(*node.place);
     this->inheritDivergence(node, *node.place);
     auto _2 = this->pushInnerCoerceScoped(true);
-    node.value->visit(*this);
+    this->visitChild(*node.value);
     this->inheritDivergence(node, *node.value);
 
     this->context.addRevisit(node);
@@ -10870,7 +11038,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeTupleVariant& node) -> void {
 
     auto _ = this->pushInnerCoerceScoped(true);
     for (auto& val : node.args) {
-        val->visit(*this);
+        this->visitChild(*val);
         this->context.requireSized(node.span(), val->resType);
         node.diverges = node.diverges || this->nodeDiverges(*val);
     }
@@ -10978,7 +11146,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
 
                     if (node.baseValue) {
                         auto _ = this->pushInnerCoerceScoped(false);
-                        node.baseValue->visit(*this);
+                        this->visitChild(*node.baseValue);
                         this->inheritDivergence(node, *node.baseValue);
                     }
                     return;
@@ -11024,13 +11192,13 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
     applyBoundsAsRules(context, node.span(), *generics, monomorphCb, /*is_impl_level=*/true);
 
     for (auto& val : node.values) {
-        val.second->visit(*this);
+        this->visitChild(*val.second);
         this->context.requireSized(node.span(), val.second->resType);
         node.diverges = node.diverges || this->nodeDiverges(*val.second);
     }
     if (node.baseValue) {
         auto _ = this->pushInnerCoerceScoped(false);
-        node.baseValue->visit(*this);
+        this->visitChild(*node.baseValue);
         node.diverges = node.diverges || this->nodeDiverges(*node.baseValue);
     }
 }
@@ -11134,14 +11302,14 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallValue& node) -> void {
 
     {
         auto _ = this->pushInnerCoerceScoped(false);
-        node.value->visit(*this);
+        this->visitChild(*node.value);
     }
     this->inheritDivergence(node, *node.value);
     auto _ = this->pushInnerCoerceScoped(true);
     for (unsigned int i = 0; i < node.args.size(); i++) {
         auto& val = node.args[i];
         this->context.equateTypesCoerce(val->span(), node.argIvars[i], val);
-        val->visit(*this);
+        this->visitChild(*val);
         this->inheritDivergence(node, *val);
     }
     this->context.requireSized(node.span(), node.resType);
@@ -11233,12 +11401,12 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallMethod& node) -> void {
 
     {
         auto _ = this->pushInnerCoerceScoped(false);
-        node.value->visit(*this);
+        this->visitChild(*node.value);
     }
     this->inheritDivergence(node, *node.value);
     auto _ = this->pushInnerCoerceScoped(true);
     for (auto& val : node.args) {
-        val->visit(*this);
+        this->visitChild(*val);
         this->inheritDivergence(node, *val);
     }
     this->context.requireSized(node.span(), node.resType);
@@ -11251,7 +11419,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeField& node) -> void {
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" (...).") << node.field);
     node.value->resType = this->context.addIvars(node.value->resType);
 
-    node.value->visit(*this);
+    this->visitChild(*node.value);
     this->inheritDivergence(node, *node.value);
 
     this->context.addRevisit(node);
@@ -11295,7 +11463,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeTuple& node) -> void {
     }
 
     for (auto& val : node.vals) {
-        val->visit(*this);
+        this->visitChild(*val);
         this->context.requireSized(node.span(), val->resType);
         node.diverges = node.diverges || this->nodeDiverges(*val);
     }
@@ -11317,7 +11485,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeArrayList& node) -> void {
     }
 
     for (auto& val : node.vals) {
-        val->visit(*this);
+        this->visitChild(*val);
         node.diverges = node.diverges || this->nodeDiverges(*val);
     }
 }
@@ -11336,7 +11504,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeArraySized& node) -> void {
     const auto& innerTy = ty->as_Array().inner;
     this->equateTypesInnerCoerce(node.span(), innerTy, node.val);
 
-    node.val->visit(*this);
+    this->visitChild(*node.val);
     node.diverges = this->nodeDiverges(*node.val);
     this->context.addRevisit(node);
 }
@@ -11577,7 +11745,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeGenerator& node) -> void {
     // TODO: Save/clear/restore loop labels
     auto _ = this->pushInnerCoerceScoped(true);
     this->closureRetTypes.pushBack(RetTarget(node.returnType, node.resumeTy, node.yieldTy));
-    node.code->visit(*this);
+    this->visitChild(*node.code);
     this->closureRetTypes.popBack();
 }
 
@@ -11604,7 +11772,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeAsyncBlock& node) -> void {
     } else {
         this->closureRetTypes.pushBack(RetTarget(node.returnType));
     }
-    node.code->visit(*this);
+    this->visitChild(*node.code);
     this->closureRetTypes.popBack();
 }
 

@@ -38,6 +38,10 @@ struct Context {
         /* A call argument coerced into its parameter type: upstream
            `check_argument_types` binds a parameter variable to the argument at once. */
         bool argumentSite = false;
+        /* The check-order place of the node the rule was registered for, and - for an
+           argument - the place its binding has: after the argument's own subtree. */
+        unsigned order = 0;
+        unsigned bindingOrder = 0;
 
         Coercion(unsigned ruleIdx, const HIRType* leftTy, HIRExprNodeP* rightNodePtr);
         Coercion(unsigned ruleIdx, const Span& span, const HIRType* leftTy, const HIRType* rightTy, SolverCoercionOp op);
@@ -66,6 +70,8 @@ struct Context {
         bool isOperator;
         TypeckPrimitiveOperator operatorKind;
         bool isAmbiguous = false;
+        /* The check-order place of the node the rule was registered for. */
+        unsigned order = 0;
 
         stl::Vector<StallDependency> stalledOn;
     };
@@ -78,6 +84,9 @@ struct Context {
     TraitResolution resolve;
 
     unsigned nextRuleIdx;
+    /* The check-order place (`HIRExprNode::checkOrder`) a rule registered now belongs
+       to: the node being visited, or the rule being checked; 0 outside both. */
+    unsigned currentOrder = 0;
 
     std::vector<std::unique_ptr<Coercion>> linkCoerce;
     std::vector<Associated> linkAssoc;
