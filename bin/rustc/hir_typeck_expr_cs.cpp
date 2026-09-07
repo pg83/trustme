@@ -5045,7 +5045,14 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                                 if (const auto* ee = enm.data.opt_Data()) {
                                     ASSERT_BUG(sp, be.varIdx < ee->size(), StringView(""));
                                     const auto& var = (*ee)[be.varIdx];
-                                    ASSERT_BUG(sp, var.type == context.crate.types.unit(), StringView("EnumValue used on non-value enum variant"));
+                                    /* A fieldless variant of an enum with `#[repr(align(N))]` is
+                                       lowered to a unit-like struct of that alignment rather than
+                                       `()` (`hir_from_ast.cpp`); the pattern names the variant
+                                       either way. */
+                                    const auto* variantPath = var.type->opt_Path();
+                                    const auto* variantStruct = variantPath && variantPath->binding.is_Struct() ? variantPath->binding.as_Struct() : nullptr;
+                                    const bool unitLikeVariant = var.type == context.crate.types.unit() || (variantStruct && variantStruct->data.is_Unit());
+                                    ASSERT_BUG(sp, unitLikeVariant, StringView("EnumValue used on non-value enum variant"));
                                 }
                                 break;
                             }
