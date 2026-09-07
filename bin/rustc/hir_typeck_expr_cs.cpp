@@ -620,6 +620,23 @@ struct OrderPlace {
         return rule.bindingOrder ? OrderPlace{rule.bindingOrder, rule.bindingStart} : OrderPlace{rule.order, rule.order};
     }
 
+    /* The place a coercion binds at: upstream coerces a value once its expression is
+       checked (`check_expr_coercible_to_type`; `CoerceMany::coerce` after each arm), so
+       a binding's turn is its source's subtree end - the `Ok` arm of `&self.getenv(..)?`
+       binds the match's variable to `Arc<OsStr>` before the borrow's coercion into
+       `&OsStr` would bind it to `OsStr`.  The rule's own `order` (the enclosing node's
+       visit) keeps placing it for the cuts and the receiver pause, where a coercion
+       registered before a call stands for the expectation the call's branch has. */
+    OrderPlace bindingPlace(const Context::Coercion& rule) {
+        if (rule.bindingOrder) {
+            return OrderPlace{rule.bindingOrder, rule.bindingStart};
+        }
+        if (rule.rightNodePtr && (*rule.rightNodePtr)->checkOrderEnd) {
+            return OrderPlace{(*rule.rightNodePtr)->checkOrderEnd, (*rule.rightNodePtr)->checkOrder};
+        }
+        return OrderPlace{rule.order, rule.order};
+    }
+
     /* A coercion decided in the sweep - `Err(From::from(e))`'s outer coercion of the
        inner call's result variable - comes at its argument's place too, and past a
        ready binding of its component it waits like an obligation would. */
@@ -6966,7 +6983,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 }
                 const auto component = ivarCoercionIndex->componentOf(ivars[0]);
                 const auto* current = earliest[component];
-                if (!current || coercionPlace(*current).after(coercionPlace(*rule)) || (coercionPlace(*current).end == coercionPlace(*rule).end && coercionPlace(*current).start == coercionPlace(*rule).start && rule->ruleIdx < current->ruleIdx)) {
+                if (!current || bindingPlace(*current).after(bindingPlace(*rule)) || (bindingPlace(*current).end == bindingPlace(*rule).end && bindingPlace(*current).start == bindingPlace(*rule).start && rule->ruleIdx < current->ruleIdx)) {
                     earliest.mut(component) = rule.get();
                 }
             }
