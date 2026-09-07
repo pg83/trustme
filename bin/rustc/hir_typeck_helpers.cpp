@@ -792,7 +792,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     bool evaluateOverlapUncached(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right);
 
-    Certainty evaluateMethod(const Span& callSpan, const tTraitList& traits, const Vector<unsigned>& ivars, unsigned typeIvarCount, const HIRType* receiver, const RcString& methodName, const HIRPathParams& methodParams, const ThinVector<const HIRType*>& argumentTypes, const HIRType* expectedResult, TraitResolution::MethodAccess access, TraitResolution::AutoderefBorrow borrowType, bool mustDecide, ThinVector<TraitResolution::MethodCandidate>& possibilities, SolverResponse* deferredEffects);
+    Certainty evaluateMethod(const Span& callSpan, const tTraitList& traits, const Vector<unsigned>& ivars, unsigned typeIvarCount, const HIRType* receiver, const RcString& methodName, const HIRPathParams& methodParams, const ThinVector<const HIRType*>& argumentTypes, const HIRType* expectedResult, TraitResolution::MethodAccess access, TraitResolution::AutoderefBorrow borrowType, bool mustDecide, ThinVector<TraitResolution::MethodCandidate>& possibilities, SolverResponse* deferredEffects, bool singleTraitScope);
 
     bool evaluateTyped(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, SolverResponseCallback& callback, const TraitGoalQuery& query, bool callerBoundary = false, bool includeRootMagicCandidates = true);
 
@@ -6548,7 +6548,8 @@ unsigned int TraitResolution::autoderefFindMethod(
     const HIRType* expectedResult,
     bool mustDecide,
     /* Out -> */ ThinVector<MethodCandidate>& possibilities,
-    /* Out -> */ SolverResponse* deferredEffects
+    /* Out -> */ SolverResponse* deferredEffects,
+    bool singleTraitScope
 ) const {
     {
         TRACE_FUNCTION_F(StringView("{") << topTy << StringView("}.") << methodName);
@@ -6580,7 +6581,7 @@ unsigned int TraitResolution::autoderefFindMethod(
 
             DEBUG(derefCount << StringView(": ") << ty);
             const auto methodGoalIsAmbiguous = [&](const HIRType* receiver, MethodAccess goalAccess, AutoderefBorrow goalBorrow) {
-                if (this->findMethod(sp, traits, ivars, typeIvarCount, receiver, methodName, methodParams, argumentTypes, expectedResult, goalAccess, goalBorrow, mustDecide, possibilities, deferredEffects) != SolverCertainty::Ambiguous) {
+                if (this->findMethod(sp, traits, ivars, typeIvarCount, receiver, methodName, methodParams, argumentTypes, expectedResult, goalAccess, goalBorrow, mustDecide, possibilities, deferredEffects, singleTraitScope) != SolverCertainty::Ambiguous) {
                     return false;
                 }
                 possibilities.clear();
@@ -6738,7 +6739,8 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     TraitResolution::AutoderefBorrow borrowType,
     bool mustDecide,
     ThinVector<TraitResolution::MethodCandidate>& possibilities,
-    SolverResponse* deferredEffects
+    SolverResponse* deferredEffects,
+    bool singleTraitScope
 ) -> Certainty {
     TRACE_FUNCTION_FR(StringView("receiver=") << receiver << StringView(", name=") << methodName << StringView(", access=") << access, possibilities);
 
@@ -8165,7 +8167,10 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
     const bool opaqueCanReveal = !erased || (alias && resolve_.isOpaqueAliasDefiningScope(*alias->inner)) || erased->inner.is_Known();
     const bool inherentSourceAmbiguous = inherentInfer != nullptr;
-    if (!inherentSourceAmbiguous && opaqueCanReveal) {
+    /* Upstream (`ProbeScope::Single`): the call a delegation body lowers to has one
+       candidate, the named trait's declaration; the inherent, where-clause and object
+       routes are not assembled for it. */
+    if (!singleTraitScope && !inherentSourceAmbiguous && opaqueCanReveal) {
         auto inherentCertainty = Certainty::NoSolution;
         resolve_.wb.inherentMethods->find(callSpan, methodName, receiver, resolve_.ivars.callbackResolveInfer(), [&](const HIRType* roughSelfType, const HIRTypeImpl& impl) {
             const auto& method = impl.methods.at(methodName);
@@ -8397,6 +8402,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     ThinVector<HIRGenericPath> ambiguousBoundTraits;
     ThinVector<SolverResponse> ambiguousBoundEffects;
     for (const auto& bound : resolve_.traitBounds) {
+        if (singleTraitScope) {
+            break;
+        }
         const auto& boundType = bound.first.first;
         const auto& boundTrait = bound.first.second;
         const auto& boundInfo = bound.second;
@@ -8456,7 +8464,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         return inner && predicate(inner) ? inner : nullptr;
     };
 
-    if (const auto* objectType = getInnerType(receiver, [](const HIRType* type) { return type->is_TraitObject(); })) {
+    if (const auto* objectType = singleTraitScope ? nullptr : getInnerType(receiver, [](const HIRType* type) { return type->is_TraitObject(); })) {
         const auto& object = objectType->as_TraitObject();
         const auto& definition = crate.getTraitByPath(callSpan, object.trait.path.path);
         bool foundObjectMethod = false;
@@ -8478,7 +8486,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         }
     }
 
-    if (const auto* erasedType = getInnerType(receiver, [](const HIRType* type) { return type->is_ErasedType(); })) {
+    if (const auto* erasedType = singleTraitScope ? nullptr : getInnerType(receiver, [](const HIRType* type) { return type->is_ErasedType(); })) {
         bool erasedAmbiguous = false;
         for (const auto& declaredTrait : erasedType->as_ErasedType().traits) {
             forEachTraitMethodDeclaration(declaredTrait.path, *declaredTrait.traitPtr, crate.types.self(), [&](const HIRFunction& function, HIRGenericPath methodTrait) {
@@ -8489,7 +8497,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             restoreUncoveredBoundAmbiguities();
             return emitAmbiguous();
         }
-    } else if (const auto* projectionType = getInnerType(receiver, [](const HIRType* type) {
+    } else if (const auto* projectionType = singleTraitScope ? nullptr : getInnerType(receiver, [](const HIRType* type) {
         const auto* path = type->opt_Path();
         return path && path->path.data.is_UfcsKnown();
     })) {
@@ -8563,12 +8571,13 @@ SolverCertainty TraitResolution::findMethod(
     AutoderefBorrow borrowType,
     bool mustDecide,
     ThinVector<MethodCandidate>& possibilities,
-    SolverResponse* deferredEffects
+    SolverResponse* deferredEffects,
+    bool singleTraitScope
 ) const {
     if (!nextSolver) {
         nextSolver = eatCachePool->make<NextTraitGoalEvaluator>(*this, crate);
     }
-    return nextSolver->evaluateMethod(sp, traits, methodIvars, typeIvarCount, receiver, methodName, methodParams, argumentTypes, expectedResult, access, borrowType, mustDecide, possibilities, deferredEffects);
+    return nextSolver->evaluateMethod(sp, traits, methodIvars, typeIvarCount, receiver, methodName, methodParams, argumentTypes, expectedResult, access, borrowType, mustDecide, possibilities, deferredEffects, singleTraitScope);
 }
 
 const HIRType* TraitResolution::findField(const Span& sp, const HIRType* ty, const RcString& name) const {

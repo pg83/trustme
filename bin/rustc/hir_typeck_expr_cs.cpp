@@ -7922,11 +7922,11 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
     const auto findMethod = [&](const RcString& method) {
         possibleMethods.clear();
         deferredMethodEffects = SolverResponse{};
-        auto derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, node.params, methodArgumentTypes, contextualResult, this->isFallback, possibleMethods, &deferredMethodEffects);
+        auto derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, node.params, methodArgumentTypes, contextualResult, this->isFallback, possibleMethods, &deferredMethodEffects, !node.probeTrait.components().empty());
         if ((derefCount == ~0u || possibleMethods.empty()) && contextualResult != resultType) {
             possibleMethods.clear();
             deferredMethodEffects = SolverResponse{};
-            derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, node.params, methodArgumentTypes, resultType, this->isFallback, possibleMethods, &deferredMethodEffects);
+            derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, node.params, methodArgumentTypes, resultType, this->isFallback, possibleMethods, &deferredMethodEffects, !node.probeTrait.components().empty());
         }
         return derefCount;
     };
@@ -11109,16 +11109,27 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallMethod& node) -> void {
             visitTraitInner(pt.path.path, *pt.traitPtr, false);
         }
     };
-    for (const auto& traitRef : ::reverse(traits)) {
-        if (traitRef.first == nullptr) {
-            break;
+    if (!node.probeTrait.components().empty()) {
+        /* Upstream (`ProbeScope::Single`, the scope of the call a delegation body lowers
+           to): the target trait's declaration is the only candidate.  No inherent
+           method and no other trait in scope takes part, so `reuse Trait::value { self.0 }`
+           calls `Trait::value` even when the field's type has an inherent `value`. */
+        const HIRTrait& trait = context.resolve.hirCrate().getTraitByPath(node.span(), node.probeTrait);
+        maxNumParams = trait.params.types.size();
+        maxNumValueParams = trait.params.values.size();
+        possibleTraits.push_back(std::make_pair(&node.probeTrait, &trait));
+    } else {
+        for (const auto& traitRef : ::reverse(traits)) {
+            if (traitRef.first == nullptr) {
+                break;
+            }
+            visitTrait(*traitRef.first, *traitRef.second);
         }
-        visitTrait(*traitRef.first, *traitRef.second);
-    }
-    if (context.resolve.currentTraitPath()) {
-        const HIRSimplePath& tp = context.resolve.currentTraitPath()->path;
-        const HIRTrait& tr = context.resolve.hirCrate().getTraitByPath(node.span(), tp);
-        visitTrait(tp, tr);
+        if (context.resolve.currentTraitPath()) {
+            const HIRSimplePath& tp = context.resolve.currentTraitPath()->path;
+            const HIRTrait& tr = context.resolve.hirCrate().getTraitByPath(node.span(), tp);
+            visitTrait(tp, tr);
+        }
     }
     node.traits = mv$(possibleTraits);
     node.traitParamTypeIvars = maxNumParams;

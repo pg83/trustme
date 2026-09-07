@@ -493,6 +493,9 @@ struct HIRExprNodeCallMethod: public HIRExprNode {
 
     stl::Vector<unsigned int> traitParamIvars;
     unsigned int traitParamTypeIvars = 0;
+    /* Set on the call a delegation body lowers to: the only lookup candidate is this
+       trait's declaration of the method (upstream `ProbeScope::Single`). */
+    HIRSimplePath probeTrait;
 
     HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString methodName, HIRPathParams params, std::vector<HIRExprNodeP> args, RcString fallbackMethod = {});
 

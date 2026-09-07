@@ -932,7 +932,8 @@ public:
         const HIRType* expectedResult,
         bool mustDecide,
         /* Out -> */ ThinVector<MethodCandidate>& possibilities,
-        /* Out -> */ SolverResponse* deferredEffects = nullptr
+        /* Out -> */ SolverResponse* deferredEffects = nullptr,
+        bool singleTraitScope = false
     ) const;
 
     enum class AutoderefResult {
@@ -971,7 +972,7 @@ public:
         Value,
         Box,
     };
-    SolverCertainty findMethod(const Span& sp, const tTraitList& traits, const stl::Vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRType* ty, const RcString& methodName, const HIRPathParams& methodParams, const ThinVector<const HIRType*>& argumentTypes, const HIRType* expectedResult, MethodAccess access, AutoderefBorrow borrowType, bool mustDecide, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ SolverResponse* deferredEffects = nullptr) const;
+    SolverCertainty findMethod(const Span& sp, const tTraitList& traits, const stl::Vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRType* ty, const RcString& methodName, const HIRPathParams& methodParams, const ThinVector<const HIRType*>& argumentTypes, const HIRType* expectedResult, MethodAccess access, AutoderefBorrow borrowType, bool mustDecide, /* Out -> */ ThinVector<MethodCandidate>& possibilities, /* Out -> */ SolverResponse* deferredEffects = nullptr, bool singleTraitScope = false) const;
 
     const HIRFunction* traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRType* self, const RcString& name, HIRGenericPath& outPath) const;
     bool traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const;

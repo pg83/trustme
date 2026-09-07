@@ -286,6 +286,9 @@ struct ASTExprNodeCallMethod: public ASTExprNode {
     ASTExprNode* val = nullptr;
     ASTPathNode method;
     std::vector<ASTExprNode*> args;
+    /* Set on the call a delegation body lowers to: method lookup considers only this
+       trait's declaration of the method (upstream `ProbeScope::Single`). */
+    ASTPath probeTrait;
 
     ASTExprNodeCallMethod(ASTExprNode* obj, ASTPathNode method, std::vector<ASTExprNode*> args);
 

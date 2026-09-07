@@ -2903,6 +2903,23 @@ namespace {
         if (auto delegation = fcn.takeDelegation()) {
             ASSERT_BUG(fcn.sp(), delegation->targets.size() == 1, StringView("TODO: Expand delegation lists before name resolution"));
             auto target = mv$(delegation->targets.front().path);
+            /* Upstream (`finalize_body_lowering`): the body of a delegation whose target is
+               a method named without a qualified self type and without generic arguments
+               before the method segment is a method call on the first argument, so the
+               receiver autorefs and autoderefs (`reuse Trait::* { self.0 }` with `&self`
+               methods), and its lookup is confined to the target's trait
+               (`ProbeScope::Single`).  Any other target is called as a path, the first
+               argument passed as written. */
+            const bool targetHasQself = target.cls.is_UFCS();
+            bool argsBeforeMethod = false;
+            ASTPathNode methodNode;
+            if (!targetHasQself) {
+                const auto& nodes = target.nodes();
+                for (size_t i = 0; i + 1 < nodes.size(); i++) {
+                    argsBeforeMethod |= !nodes[i].args().entries.empty();
+                }
+                methodNode = ASTPathNode(nodes.back());
+            }
             ResolveAbsolutePath(itemContext, fcn.sp(), Context::LookupMode::Variable, target);
             const auto* binding = target.bindings.value.binding.opt_Function();
             const auto* targetFunction = binding ? binding->func_ : nullptr;
@@ -2974,7 +2991,8 @@ namespace {
                 });
                 replacement.params() = mv$(merged);
             }
-            const bool isMethod = hasParentSelf && !replacement.args().empty() && replacement.args().front().pat.bindings().size() == 1 && replacement.args().front().pat.bindings().front().name.name == "self";
+            const bool targetIsMethod = !replacement.args().empty() && replacement.args().front().pat.bindings().size() == 1 && replacement.args().front().pat.bindings().front().name.name == "self";
+            const bool isMethod = hasParentSelf && targetIsMethod;
             std::vector<ASTExprNode*> args;
             for (size_t i = 0; i < replacement.args().size(); i++) {
                 auto name = isMethod && i == 0 ? RcString::newInterned("self") : RcString::newInterned(FMT(StringView("arg") << i));
@@ -3003,17 +3021,18 @@ namespace {
                     } visitor(name);
 
                     arg->visit(visitor);
-
-                    const auto targetBorrow = targetFunction && !targetFunction->args().empty() && targetFunction->args().front().ty->data.is_Borrow();
-                    const auto targetHirBorrow = targetHirFunction && (targetHirFunction->receiver == HIRFunction::Receiver::BorrowOwned || targetHirFunction->receiver == HIRFunction::Receiver::BorrowUnique || targetHirFunction->receiver == HIRFunction::Receiver::BorrowShared);
-                    if (targetBorrow || targetHirBorrow) {
-                        const bool isMut = targetBorrow ? targetFunction->args().front().ty->data.as_Borrow().isMut : targetHirFunction->receiver == HIRFunction::Receiver::BorrowUnique;
-                        arg = makeAstExprNode<ASTExprNodeUniOp>(itemContext.typePool(), isMut ? ASTExprNodeUniOp::REFMUT : ASTExprNodeUniOp::REF, mv$(arg));
-                    }
                 }
                 args.push_back(mv$(arg));
             }
-            replacement.setCode(makeAstExprNode<ASTExprNodeCallPath>(itemContext.typePool(), mv$(target), mv$(args)));
+            if (targetIsMethod && targetTrait && !targetHasQself && !argsBeforeMethod && !args.empty()) {
+                auto* receiver = args.front();
+                args.erase(args.begin());
+                auto* call = makeAstExprNode<ASTExprNodeCallMethod>(itemContext.typePool(), receiver, mv$(methodNode), mv$(args));
+                static_cast<ASTExprNodeCallMethod*>(call)->probeTrait = ASTPath(*target.cls.as_UFCS().trait);
+                replacement.setCode(call);
+            } else {
+                replacement.setCode(makeAstExprNode<ASTExprNodeCallPath>(itemContext.typePool(), mv$(target), mv$(args)));
+            }
             fcn = mv$(replacement);
         }
         itemContext.push(fcn.params(), GenericSlot::Level::Method, /*hasSelf=*/false, /*allowShadowing=*/fromDelegation);

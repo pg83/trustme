@@ -4904,7 +4904,11 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeCallMethod& v) -> void {
         args.push_back(lower(arg));
     }
 
-    rv.reset(ctx.crate->pool->make<HIRExprNodeCallMethod>(v.span(), lower(v.val), v.method.hygienicName(), ctx.LowerHIRPathParams(v.span(), v.method.args(), /*allow_assoc=*/false), mv$(args), v.method.name()));
+    auto* call = ctx.crate->pool->make<HIRExprNodeCallMethod>(v.span(), lower(v.val), v.method.hygienicName(), ctx.LowerHIRPathParams(v.span(), v.method.args(), /*allow_assoc=*/false), mv$(args), v.method.name());
+    if (v.probeTrait.isValid()) {
+        call->probeTrait = ctx.LowerHIRSimplePath(v.span(), v.probeTrait, FromASTPathClass::Type, /*allowFinalGeneric=*/true);
+    }
+    rv.reset(call);
 }
 
 auto LowerHIRExprNodeVisitor::visit(ASTExprNodeCallObject& v) -> void {

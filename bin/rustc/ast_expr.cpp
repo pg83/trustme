@@ -563,7 +563,9 @@ NODE(
         for (const auto& a : this->args) {
             args.push_back(a->clone());
         }
-        return NEWNODE(ASTExprNodeCallMethod, val->clone(), method, mv$(args));
+        auto* rv = makeAstExprNode<ASTExprNodeCallMethod>(pool(), val->clone(), method, mv$(args));
+        static_cast<ASTExprNodeCallMethod*>(rv)->probeTrait = ASTPath(probeTrait);
+        return mkExprnodep(span(), rv);
     }
 )
 
