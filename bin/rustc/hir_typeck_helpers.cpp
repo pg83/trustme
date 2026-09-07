@@ -3260,6 +3260,8 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         return !type->is_Generic() && callback.visit(SolverImpl(type, nullptr, nullptr));
     }
 
+    /* Upstream `instantiate_constituent_tys_for_copy_clone_trait`: the builtin `Copy`
+       and `Clone` candidates cover a pattern type too, through its base type. */
     if (!langCopy().components().empty() && trait == langCopy()) {
         switch ((*type).tag()) {
             case HIRType::TAG_Infer:
@@ -3271,6 +3273,7 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
             case HIRType::TAG_NamedFunction:
             case HIRType::TAG_Function:
             case HIRType::TAG_NodeType:
+            case HIRType::TAG_Pattern:
                 return callback.visit(SolverImpl(type, nullptr, nullptr));
             default:
                 return false;
@@ -3311,6 +3314,7 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
             case HIRType::TAG_NamedFunction:
             case HIRType::TAG_Function:
             case HIRType::TAG_NodeType:
+            case HIRType::TAG_Pattern:
                 return callback.visit(SolverImpl(type, nullptr, nullptr));
             case HIRType::TAG_Path:
                 return type->as_Path().isClosure() && callback.visit(SolverImpl(type, nullptr, nullptr));
@@ -12623,6 +12627,10 @@ auto NextTraitGoalEvaluator::evaluateBuiltinSizedCopyClone(Candidate* candidate,
             return evaluateAll(type->as_Tuple(), [](const HIRType* field) { return field; });
         case HIRType::TAG_Array:
             return evaluateInner(type->as_Array().inner);
+        /* Upstream `instantiate_constituent_tys_for_copy_clone_trait`: a pattern
+           type's one constituent is its base type. */
+        case HIRType::TAG_Pattern:
+            return evaluateInner(type->as_Pattern().inner);
         case HIRType::TAG_Path:
             return builtin == StructuralTrait::Clone && type->as_Path().isClosure() ? Certainty::Proven : Certainty::NoSolution;
         default:
