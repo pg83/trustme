@@ -3678,6 +3678,14 @@ ASTExprNode* ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
 
         switch (tok.type()) {
             case TOK_INTERPOLATED_BLOCK:
+                /* Upstream `parse_expr_dot_or_call_with`: a `$b:block` fragment is an
+                   expression, and `.`/`?` after it continue that expression before the
+                   statement-position completeness check (`$parser.parse_mode(..)` in
+                   combine's `parser!`). */
+                if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
+                    lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, tok.takeFragNode())));
+                    return ParseExprBlockLineStmt(lex, *addSilence);
+                }
                 return tok.takeFragNode();
             case TOK_SEMICOLON:
                 return nullptr;
