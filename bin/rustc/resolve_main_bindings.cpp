@@ -2941,11 +2941,15 @@ namespace {
 
             auto replacement = signatureSource.ast ? signatureSource.ast->clone() : signatureSource.hir ? HIRFunctionToAST(itemContext, fcn.sp(), *signatureSource.hir) : targetFunction ? targetFunction->clone() : HIRFunctionToAST(itemContext, fcn.sp(), *targetHirFunction);
             const ASTTrait* targetTrait = nullptr;
+            /* The target is a trait's method, whether the trait is this crate's (AST) or an
+               external one (HIR only). */
+            bool targetInTrait = false;
             if (target.cls.is_UFCS()) {
                 const auto& ufcs = target.cls.as_UFCS();
                 if (ufcs.trait && ufcs.trait->isValid()) {
                     if (const auto* traitBinding = ufcs.trait->bindings.type.binding.opt_Trait()) {
                         targetTrait = traitBinding->trait_;
+                        targetInTrait = traitBinding->trait_ || traitBinding->hir;
                     }
                 }
             }
@@ -3024,7 +3028,7 @@ namespace {
                 }
                 args.push_back(mv$(arg));
             }
-            if (targetIsMethod && targetTrait && !targetHasQself && !argsBeforeMethod && !args.empty()) {
+            if (targetIsMethod && targetInTrait && !targetHasQself && !argsBeforeMethod && !args.empty()) {
                 auto* receiver = args.front();
                 args.erase(args.begin());
                 auto* call = makeAstExprNode<ASTExprNodeCallMethod>(itemContext.typePool(), receiver, mv$(methodNode), mv$(args));
