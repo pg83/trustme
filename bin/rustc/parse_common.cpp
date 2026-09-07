@@ -3677,6 +3677,16 @@ ASTExprNode* ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
         }
 
         switch (tok.type()) {
+            case TOK_INTERPOLATED_STMT:
+                /* Upstream `parse_full_stmt`: a `$s:stmt` fragment is a whole statement,
+                   and no semicolon is looked for after it - `$action let rest = ..;` in
+                   clap 3's `tags!` - a following `;` only discards its value. */
+                ret = tok.takeFragNode();
+                if (LOOK_AHEAD(lex) == TOK_SEMICOLON) {
+                    GET_TOK(tok, lex);
+                    *addSilence = true;
+                }
+                return ret;
             case TOK_INTERPOLATED_BLOCK:
                 /* Upstream `parse_expr_dot_or_call_with`: a `$b:block` fragment is an
                    expression, and `.`/`?` after it continue that expression before the
