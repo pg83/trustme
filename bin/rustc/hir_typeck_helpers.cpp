@@ -2626,7 +2626,27 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                 }
             }
             if (!leftProjection || !rightProjection) {
-                if (!rigidProjectionsAreDistinct_) {
+                /* A projection over a type still open is not rigid: upstream normalizes
+                   it first - to a fresh variable with the projection left as an
+                   obligation when its self is an inference variable - and relates that,
+                   so `OsString` against `<?B as ToOwned>::Owned` waits for `?B`
+                   (`Cow::Owned` handed to `Result::map`, whose output then fixes it). */
+                const auto* projection = leftProjection ? leftProjection : rightProjection;
+                const auto projectionIsOpen = [&]() {
+                    const auto hasLive = [&](const HIRType* type) {
+                        return visitTyWith(type, [&](const HIRType* inner) { return inferIsLive(inner); });
+                    };
+                    if (hasLive(projection->type)) {
+                        return true;
+                    }
+                    for (const auto* type : projection->trait.params.types) {
+                        if (hasLive(type)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+                if (!rigidProjectionsAreDistinct_ || projectionIsOpen()) {
                     return this->defer(left, right);
                 }
                 return Outcome::Mismatch;
@@ -12173,6 +12193,16 @@ auto NextTraitGoalEvaluator::relateTypes(Candidate& candidate, const HIRType* le
             const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
             if (!projection) {
                 return {false, Certainty::Ambiguous};
+            }
+
+            /* Upstream (`assemble_candidates`, `project`): a projection whose self type is
+               an inference variable normalizes to nothing yet - the goal is ambiguous, not
+               unimplemented.  `<?B as ToOwned>::Owned` against `OsString` waits for `?B`,
+               which the candidate's own output (`Cow<?B> = Cow<OsStr>`) supplies. */
+            const auto* projectionSelf = resolve_.resolveType(projection->type);
+            const auto* selfGeneric = projectionSelf->opt_Generic();
+            if (projectionSelf->is_Infer() || (selfGeneric && selfGeneric->isSolverExistential())) {
+                return {true, Certainty::Ambiguous};
             }
 
             bool sawResponse = false;
