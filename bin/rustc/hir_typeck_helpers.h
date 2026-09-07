@@ -395,6 +395,11 @@ public:
         bool relateProjectionInputs = false;
         bool rigidGenericsAreDistinct = false;
         bool rigidProjectionsAreDistinct = false;
+        /* An impl head against a goal: a projection left rigid - over a generic or
+           another rigid projection, with no variable in it - is a type of its own and
+           matches no constructor (upstream `match_impl` after normalization); decided
+           without normalizing, so no variable is made in the probe. */
+        bool distinctRigidProjections = false;
     };
 
     enum class Outcome : u8 {
@@ -457,6 +462,7 @@ private:
     bool relateProjectionInputs_;
     bool rigidGenericsAreDistinct_;
     bool rigidProjectionsAreDistinct_;
+    bool distinctRigidProjections_;
     stl::Vector<PendingEquality> pending_;
     ThinVector<PendingValueEquality> pendingValues_;
     stl::Vector<PendingEquality> bindings_;

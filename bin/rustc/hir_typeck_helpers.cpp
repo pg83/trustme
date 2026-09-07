@@ -2407,6 +2407,7 @@ Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution*
     , relateProjectionInputs_(options.relateProjectionInputs)
     , rigidGenericsAreDistinct_(options.rigidGenericsAreDistinct)
     , rigidProjectionsAreDistinct_(options.rigidProjectionsAreDistinct)
+    , distinctRigidProjections_(options.distinctRigidProjections)
 {
 }
 
@@ -2661,6 +2662,46 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
         }
     }
 
+    if (distinctRigidProjections_) {
+        const auto definitelyRigidProjection = [&](const HIRType* type) {
+            for (unsigned depth = 0; depth < 8; depth++) {
+                const auto* path = type->opt_Path();
+                const auto* projection = path && path->binding.is_Opaque() ? path->path.data.opt_UfcsKnown() : nullptr;
+                if (!projection || table_.typeContainsIvars(type)) {
+                    return false;
+                }
+                const auto* self = projection->type;
+                if (const auto* generic = self->opt_Generic()) {
+                    return !generic->isSolverExistential();
+                }
+                type = self;
+            }
+            return false;
+        };
+        const auto isConstructor = [](const HIRType* type) {
+            switch (type->tag()) {
+                case HIRType::TAG_Primitive:
+                case HIRType::TAG_Tuple:
+                case HIRType::TAG_Array:
+                case HIRType::TAG_Slice:
+                case HIRType::TAG_Borrow:
+                case HIRType::TAG_Pointer:
+                case HIRType::TAG_Function:
+                case HIRType::TAG_NamedFunction:
+                case HIRType::TAG_TraitObject:
+                    return true;
+                case HIRType::TAG_Path: {
+                    const auto& binding = type->as_Path().binding;
+                    return binding.is_Struct() || binding.is_Enum() || binding.is_Union() || binding.is_ExternType();
+                }
+                default:
+                    return false;
+            }
+        };
+        if ((definitelyRigidProjection(left) && isConstructor(right)) || (definitelyRigidProjection(right) && isConstructor(left))) {
+            return Outcome::Mismatch;
+        }
+    }
     if (typeIsRigidUnknown(left) || typeIsRigidUnknown(right)) {
         return this->defer(left, right);
     }
@@ -11447,7 +11488,7 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
     auto monomorph = MonomorphStatePtr(crate.types, nullptr, &inferenceParams, nullptr);
     const auto candidateType = monomorph.monomorphType(span(), implType, true);
 
-    Unifier unifier(span(), resolve_.ivars, &resolve_);
+    Unifier unifier(span(), resolve_.ivars, &resolve_, {.distinctRigidProjections = true});
 
     auto relation = unifier.unify(goalType, candidateType);
     if (relation == Unifier::Outcome::Mismatch) {
