@@ -4118,16 +4118,19 @@ HIRPathParams TraitResolution::materializeImplParams(const Span& sp, const HIRGe
                     }
                     const auto* resolved = table.getType(type);
                     if (const auto* resolvedInfer = resolved->opt_Infer()) {
+                        /* The caller's own variable - a `_` written at the call
+                           (`extend_from_iter::<_, false>(..)`) - is the parameter itself;
+                           only a variable made for the probe becomes the placeholder. */
+                        if (resolvedInfer->index < externalTypeIvars) {
+                            return resolved;
+                        }
                         for (size_t j = 0; j < inference.types.size(); j++) {
                             const auto* candidate = inference.types[j]->opt_Infer();
                             if (candidate && candidate->index == resolvedInfer->index) {
                                 return stable.types[j];
                             }
                         }
-                        if (resolvedInfer->index >= externalTypeIvars) {
-                            return stable.types[i];
-                        }
-                        return resolved;
+                        return stable.types[i];
                     }
                     return this->monomorphType(sp, resolved, allowInfer);
                 }
@@ -4144,16 +4147,16 @@ HIRPathParams TraitResolution::materializeImplParams(const Span& sp, const HIRGe
                     }
                     const auto& resolved = table.getValue(value);
                     if (const auto* resolvedInfer = resolved.opt_Infer()) {
+                        if (resolvedInfer->index < externalValueIvars) {
+                            return resolved.clone();
+                        }
                         for (size_t j = 0; j < inference.values.size(); j++) {
                             const auto* candidate = inference.values[j].opt_Infer();
                             if (candidate && candidate->index == resolvedInfer->index) {
                                 return stable.values[j].clone();
                             }
                         }
-                        if (resolvedInfer->index >= externalValueIvars) {
-                            return stable.values[i].clone();
-                        }
-                        return resolved.clone();
+                        return stable.values[i].clone();
                     }
                     return this->monomorphConstgeneric(sp, resolved, allowInfer);
                 }
