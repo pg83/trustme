@@ -662,6 +662,9 @@ void HIRVisitor::visitParams(HIRGenericParams& params) {
     for (auto& bound : params.bounds) {
         visitGenericBound(bound);
     }
+    for (auto& type : mutRange(params.wellFormedTypes)) {
+        type = visitType(type);
+    }
 }
 
 void HIRVisitor::visitGenericBound(HIRGenericBound& bound) {

@@ -733,6 +733,9 @@ auto TypecheckVisitor::visitParams(HIRGenericParams& params) -> void {
             }
         }
     }
+    for (auto& type : mutRange(params.wellFormedTypes)) {
+        type = this->visitType(type);
+    }
 }
 
 auto TypecheckVisitor::visitModule(HIRItemPath p, HIRModule& mod) -> void {

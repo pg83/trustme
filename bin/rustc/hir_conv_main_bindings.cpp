@@ -3378,6 +3378,9 @@ auto UfcsVisitor::visitParams(HIRGenericParams& params) -> void {
     for (auto& bound : params.bounds) {
         visitGenericBound(bound);
     }
+    for (auto& type : mutRange(params.wellFormedTypes)) {
+        type = this->visitType(type);
+    }
 
     resolve_.prepIndexes(Span());
 }

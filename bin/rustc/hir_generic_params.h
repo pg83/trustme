@@ -41,6 +41,10 @@ public:
     stl::Vector<HIRGenericParamKind> paramKinds;
 
     std::vector<HIRGenericBound> bounds;
+    /* The types of `where Ty:` clauses with no bounds.  Upstream keeps such a
+       clause as a `WellFormed(Ty)` predicate (`predicates_of`, #53696), so the type
+       is among the item's predicates - a defining use of an opaque it names. */
+    stl::Vector<const HIRType*> wellFormedTypes;
 
     HIRGenericParams clone() const;
 

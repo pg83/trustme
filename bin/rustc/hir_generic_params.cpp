@@ -72,6 +72,9 @@ HIRGenericParams HIRGenericParams::clone() const {
     for (const auto& bound : bounds) {
         rv.bounds.push_back(bound.clone());
     }
+    for (const auto* type : wellFormedTypes) {
+        rv.wellFormedTypes.pushBack(type);
+    }
     return rv;
 }
 

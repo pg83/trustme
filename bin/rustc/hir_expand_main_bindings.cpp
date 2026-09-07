@@ -4853,6 +4853,9 @@ auto ErasedOuterVisitorFixup::visitParams(HIRGenericParams& params) -> void {
     for (auto& bound : params.bounds) {
         visitGenericBound(bound);
     }
+    for (auto& type : mutRange(params.wellFormedTypes)) {
+        type = visitType(type);
+    }
 }
 
 [[nodiscard]] auto ErasedOuterVisitorFixup::visitType(const HIRType* ty) -> const HIRType* {

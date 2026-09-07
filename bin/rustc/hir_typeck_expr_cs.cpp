@@ -5807,6 +5807,24 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
         for (const auto& arg : args) {
             collect(arg.second);
         }
+        /* ...and the item's own predicates (`explicit_predicates_of` in
+           `sig_types::walk_types`): a `where Self::Assoc:` names the opaque too. */
+        if (ms.itemGenerics) {
+            for (const auto& bound : ms.itemGenerics->bounds) {
+                if (const auto* traitBound = bound.opt_TraitBound()) {
+                    collect(traitBound->type);
+                    for (const auto* type : traitBound->trait.path.params.types) {
+                        collect(type);
+                    }
+                } else if (const auto* equality = bound.opt_TypeEquality()) {
+                    collect(equality->type);
+                    collect(equality->otherType);
+                }
+            }
+            for (const auto* type : ms.itemGenerics->wellFormedTypes) {
+                collect(type);
+            }
+        }
     }
 
     TypecheckCodeCSEnumerateRules(context, ms, args, resultType, expr, rootPtr);

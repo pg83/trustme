@@ -786,6 +786,15 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
         }
     }
 
+    /* Upstream `predicates_of`: a `where Ty:` with no bounds on a type that is not
+       a type parameter keeps `Ty` as a `WellFormed` predicate (#53696); a parameter
+       is trivially well-formed and adds nothing. */
+    for (auto* bare : gp.bareBoundTypes) {
+        auto type = LowerHIRType(bare);
+        if (!type->is_Generic()) {
+            rv.wellFormedTypes.pushBack(type);
+        }
+    }
     for (const auto& bound : gp.bounds) {
         switch (bound.tag()) {
             case ASTGenericBound::TAG_None: {
