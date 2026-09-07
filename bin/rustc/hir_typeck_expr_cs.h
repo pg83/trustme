@@ -88,6 +88,11 @@ struct Context {
 
     std::vector<std::unique_ptr<Revisitor>> advRevisits;
 
+    /* The alias pairs whose rigid-projection relation is deferred to a revisit; the
+       rule relating them is re-applied while ambiguous and must not register the
+       deferral again each pass. */
+    stl::Vector<std::pair<const HIRType*, const HIRType*>> deferredRigidProjections;
+
     struct ClosureReturnObligation {
         const HIRExprNodeClosure* closure;
         const HIRType* expected;

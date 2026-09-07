@@ -3034,6 +3034,15 @@ void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType*
             }
         };
 
+        /* The rule that relates the two is re-applied every pass while it stays
+           ambiguous; a second copy of the same deferral would count as progress each
+           time and starve the argument bindings that decide the open self. */
+        for (const auto& existing : this->deferredRigidProjections) {
+            if (existing.first == lT && existing.second == rT) {
+                return;
+            }
+        }
+        this->deferredRigidProjections.pushBack({lT, rT});
         this->addRevisitAdv(box$((DeferredRigidProjectionSelf(sp, lT, rT, lProjection->type, rProjection->type))));
         return;
     }
