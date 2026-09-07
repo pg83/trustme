@@ -11877,16 +11877,32 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
         }
         return false;
     };
+    /* A variable born inside the probe (an index past the snapshot's count) is the
+       probe's own: upstream's canonical response names such a variable only through
+       its equivalence class.  A binding recorded on one is read through the class it
+       joined - `?209 = @85` makes it `?85 = Word` - and one that joined nothing, or a
+       value still naming one, leaves with the probe. */
+    const auto bornInProbe = [&](const HIRType* type) {
+        const auto* infer = type->opt_Infer();
+        return infer && infer->index != ~0u && !isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index) && infer->index >= snapshot.ivarCount;
+    };
     for (const auto& pending : unifier.bindings()) {
-        const auto* infer = pending.left->opt_Infer();
-        if (!infer || infer->index == ~0u || isAliasInputInfer(infer->index) || isProbe(pending.left)) {
+        const auto* left = pending.left;
+        if (bornInProbe(left)) {
+            left = resolve_.ivars.getType(left);
+            if (bornInProbe(left) || left->is_Infer() == false) {
+                continue;
+            }
+        }
+        const auto* infer = left->opt_Infer();
+        if (!infer || infer->index == ~0u || isAliasInputInfer(infer->index) || isProbe(left)) {
             continue;
         }
-        if (visitTyWith(pending.right, [&](const HIRType* inner) { return isProbe(inner); })) {
+        if (visitTyWith(pending.right, [&](const HIRType* inner) { return isProbe(inner) || bornInProbe(inner); })) {
             continue;
         }
-        if (pending.left != pending.right) {
-            candidate.relationEqualities.push_back(SolverTypeEquality{pending.left, pending.right});
+        if (left != pending.right) {
+            candidate.relationEqualities.push_back(SolverTypeEquality{left, pending.right});
         }
     }
     const bool changed = output != original;
@@ -14879,6 +14895,24 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
     };
 
+    /* A variable born while this goal was evaluated (an index past the table's size at
+       entry) belongs to a probe that has since been undone; upstream's canonical
+       response names such a variable only through the class it joined.  A relation is
+       read through those classes, and one still naming a stray variable stays inside. */
+    const auto namesUndoneVariable = [&](const HIRType* type) {
+        return visitTyWith(type, [&](const HIRType* inner) {
+            const auto* infer = inner->opt_Infer();
+            return infer && infer->index != ~0u && !isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index) && infer->index >= resolve_.ivars.ivars.size();
+        });
+    };
+    /* A variable made during this evaluation and still in the table is the caller's
+       to receive - an impl parameter left open comes back as such a fresh variable -
+       but one a probe made and undid has no entry any more: a relation on it was read
+       through its class before the probe was undone (`unifyCandidateParams`), and
+       whatever still names it cannot leave. */
+    const auto throughClasses = [&](const HIRType* type) -> const HIRType* {
+        return namesUndoneVariable(type) ? nullptr : type;
+    };
     const auto appendCandidateEffects = [&](SolverResponse& response, const Candidate* candidate) {
         appendResponseObligations(response.obligations, candidate, canonicalizer);
         if (!candidate) {
@@ -14886,11 +14920,17 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         const auto appendTypes = [&](const auto& equalities) {
             for (const auto& equality : equalities) {
-                DEBUG(StringView("response relation ") << equality.left << StringView(" == ") << equality.right);
+                const auto* left = throughClasses(equality.left);
+                const auto* right = throughClasses(equality.right);
+                if (!left || !right) {
+                    DEBUG(StringView("response relation dropped, probe-born variable: ") << equality.left << StringView(" == ") << equality.right);
+                    continue;
+                }
+                DEBUG(StringView("response relation ") << left << StringView(" == ") << right);
                 response.equalities.push_back(
                     SolverTypeEquality{
-                        canonicalizer.monomorphType(span(), equality.left, true),
-                        canonicalizer.monomorphType(span(), equality.right, true),
+                        canonicalizer.monomorphType(span(), left, true),
+                        canonicalizer.monomorphType(span(), right, true),
                     }
                 );
             }
@@ -15170,6 +15210,53 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         solverResponse.slots.typeInputs.resize(keptTypeSlots);
         solverResponse.slots.types.resize(keptTypeSlots);
+        /* Nothing a probe made may leave with the response: a slot value or an equality
+           naming such a variable is read through its class, a stray one leaves the slot
+           at its input and drops the equality or obligation. */
+        for (size_t i = 0; i < solverResponse.slots.types.size(); i++) {
+            if (const auto* through = throughClasses(solverResponse.slots.types[i])) {
+                solverResponse.slots.types[i] = through;
+            } else {
+                solverResponse.slots.types[i] = solverResponse.slots.typeInputs[i];
+            }
+        }
+        {
+            size_t kept = 0;
+            for (size_t i = 0; i < solverResponse.equalities.size(); i++) {
+                const auto* left = throughClasses(solverResponse.equalities[i].left);
+                const auto* right = throughClasses(solverResponse.equalities[i].right);
+                if (!left || !right) {
+                    DEBUG(StringView("response equality dropped, probe-born variable: ") << solverResponse.equalities[i].left << StringView(" == ") << solverResponse.equalities[i].right);
+                    continue;
+                }
+                solverResponse.equalities[kept++] = SolverTypeEquality{left, right};
+            }
+            solverResponse.equalities.resize(kept);
+        }
+        {
+            size_t kept = 0;
+            for (size_t i = 0; i < solverResponse.obligations.size(); i++) {
+                auto& obligation = solverResponse.obligations[i];
+                const auto* type = throughClasses(obligation.type);
+                bool stray = type == nullptr;
+                for (const auto* param : obligation.trait.path.params.types) {
+                    stray |= throughClasses(param) == nullptr;
+                }
+                for (const auto& associated : obligation.trait.typeBounds) {
+                    stray |= throughClasses(associated.second.type) == nullptr;
+                }
+                if (stray) {
+                    DEBUG(StringView("response obligation dropped, probe-born variable: ") << obligation.type << StringView(": ") << obligation.trait);
+                    continue;
+                }
+                obligation.type = type;
+                if (kept != i) {
+                    solverResponse.obligations[kept] = std::move(obligation);
+                }
+                kept++;
+            }
+            solverResponse.obligations.resize(kept);
+        }
         if (!cacheableResponse || canonicalizer.sawForeignIvar() || canonicalizer.sawForeignSolverExistential()) {
             return deliverResponse(solverResponse, exposeImpl ? &response : nullptr);
         }
