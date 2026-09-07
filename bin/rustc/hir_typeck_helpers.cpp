@@ -9041,6 +9041,13 @@ auto CanonicalizeTraitGoal::monomorphConstgeneric(const Span& sp, const HIRConst
             if ((frozen_ || sealed_) && isSolverCanonicalInfer(infer->index) && originalValueIvar(infer->index)) {
                 return val.clone();
             }
+            /* A value variable this table does not own - a nested evaluation's, met in
+               a closure signature or a candidate's parameters - has no value to read
+               here; it gets its slot or its unowned placeholder as a type variable in
+               the same position does (`canonicalIvar`). */
+            if (!isAliasInputInfer(infer->index) && infer->index >= ivarTable_->values.size()) {
+                return canonicalValueIvar(infer->index);
+            }
             const auto& resolved = ivarTable_->getValue(val);
             if (const auto* resolvedInfer = resolved.opt_Infer()) {
                 if (isAliasInputInfer(resolvedInfer->index) && !isSolverCanonicalInfer(resolvedInfer->index)) {
