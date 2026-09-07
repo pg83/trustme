@@ -6096,10 +6096,40 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
            is checked against that binding rather than choosing it. */
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Argument bindings"));
+            /* Upstream binds a call's arguments one at a time, each after
+               `resolve_vars_with_obligations` has let the obligations act on what the
+               earlier ones bound: `Self` from `&**self` lets `Self: MyEq<?U>` select its
+               one impl and fix `?U = [?B]` before `other: &[B; 0]` is coerced into `&?U`.
+               So one binding per connected component of the pending rules, and the
+               rules run again before the next. */
+            const auto count = ivarCoercionIndex->refs.size();
+            Vector<bool> boundComponents;
+            for (size_t i = 0; i < count; i++) {
+                boundComponents.pushBack(false);
+            }
+            Vector<unsigned int> ivars;
+            bool bound = false;
             for (const auto& rule : context.linkCoerce) {
-                if (rule->argumentSite && rule->rightNodePtr) {
-                    bindArgumentParameter(context, *rule);
+                if (!rule->argumentSite || !rule->rightNodePtr) {
+                    continue;
                 }
+                ivars.clear();
+                ivarCoercionIndex->collectIvars(context.getType(rule->leftTy), ivars);
+                if (ivars.empty() || ivars[0] >= count) {
+                    continue;
+                }
+                const auto component = ivarCoercionIndex->componentOf(ivars[0]);
+                if (boundComponents[component]) {
+                    continue;
+                }
+                bindArgumentParameter(context, *rule);
+                if (context.ivars.takeChanged()) {
+                    bound = true;
+                    boundComponents.mut(component) = true;
+                }
+            }
+            if (bound) {
+                context.ivars.markChange();
             }
         }
 
