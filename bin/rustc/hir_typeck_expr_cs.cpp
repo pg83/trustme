@@ -440,10 +440,33 @@ struct OrderPlace {
        closure is coerced into a variable still open that no such rule names yet -
        `Box::new(move |t| Box::new(hook(t)))` into `Box<dyn Fn(&Thread) -> Box<dyn
        FnOnce()>>` learns its return from the unsizing once `Box::new`'s parameter is
-       the closure, and upstream had that expectation before the body.  A rule with
-       an open left side (`map`'s `B`) leaves the body to decide it (`check_fn`). */
+       the closure, and upstream had that expectation before the body - or the
+       closure is an argument of a call still to be resolved, whose signature is what
+       upstream would have checked the closure against (`lookup_method` precedes the
+       arguments: `entry.or_insert_with(|| Box::new(init()))` returns the map's `Box<dyn
+       Opaque>`, not `Box<u32>`).  A rule with an open left side (`map`'s `B`) leaves
+       the body to decide it (`check_fn`). */
     bool closureReturnIsExpected(const Context& context, const HIRType* closureType) {
         const auto* closure = context.ivars.getType(closureType);
+        const auto isArgumentOfPendingCall = [&](const auto& arguments) {
+            for (const auto& argument : arguments) {
+                if (context.ivars.getType(argument->resType) == closure) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        for (const auto* pending : context.toVisit) {
+            if (pending->nodeKind() == HIRExprNodeCallMethod::kind && isArgumentOfPendingCall(static_cast<const HIRExprNodeCallMethod&>(*pending).args)) {
+                return true;
+            }
+            if (pending->nodeKind() == HIRExprNodeCallValue::kind && isArgumentOfPendingCall(static_cast<const HIRExprNodeCallValue&>(*pending).args)) {
+                return true;
+            }
+            if (pending->nodeKind() == HIRExprNodeCallPath::kind && isArgumentOfPendingCall(static_cast<const HIRExprNodeCallPath&>(*pending).args)) {
+                return true;
+            }
+        }
         Vector<const HIRType*> targets;
         for (const auto& coercion : context.linkCoerce) {
             if (coercion->op != SolverCoercionOp::Coercion || context.ivars.getType(coercion->sourceType()) != closure) {
