@@ -5024,6 +5024,14 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
             case SolverCertainty::Proven:
                 break;
             case SolverCertainty::Ambiguous:
+                /* A parameter still an open variable: upstream registers `?B: Sized`
+                   as an obligation and confirms the method regardless (`Values {
+                   iter: values.map(unwrap_downcast_into), .. }` with the struct's `T`
+                   open); with an effect channel it leaves as that obligation. */
+                if (effects && parameter->is_Infer()) {
+                    effects->obligations.push_back(SolverObligation{parameter, HIRTraitPath(HIRGenericPath(this->langSized(), {}))});
+                    break;
+                }
                 merge(SolverCertainty::Ambiguous);
                 break;
             case SolverCertainty::NoSolution:

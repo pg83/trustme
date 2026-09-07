@@ -11634,6 +11634,11 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
 
     node.valueTypes.zero(fields.size());
 
+    /* Upstream `check_expr_struct_fields`: each value is checked with its field's
+       type as the expectation (`check_expr_with_hint`) and coerced into it -
+       `values.map(unwrap_downcast_into)` under a `fn(AnyValue) -> T` field takes the
+       fn pointer as `map`'s `F`, and the fn item reifies into it. */
+    Vector<const HIRType*> fieldTypes;
     for (auto& val : node.values) {
         const auto& name = val.first;
         auto it = std::find_if(fields.begin(), fields.end(), [&](const HIRStructField& v) -> bool {
@@ -11654,12 +11659,14 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
             desTy = &desTyCache;
         }
         this->context.equateTypesCoerce(node.span(), *desTy, val.second);
+        fieldTypes.pushBack(*desTy);
     }
 
     applyBoundsAsRules(context, node.span(), *generics, monomorphCb, /*is_impl_level=*/true);
 
-    for (auto& val : node.values) {
-        this->visitChild(*val.second);
+    for (size_t i = 0; i < node.values.size(); i++) {
+        auto& val = node.values[i];
+        this->visitExpecting(val.second, fieldTypes[i]);
         this->context.requireSized(node.span(), val.second->resType);
         node.diverges = node.diverges || this->nodeDiverges(*val.second);
     }
