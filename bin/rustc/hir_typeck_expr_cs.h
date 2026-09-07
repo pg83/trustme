@@ -38,6 +38,10 @@ struct Context {
         /* A call argument coerced into its parameter type: upstream
            `check_argument_types` binds a parameter variable to the argument at once. */
         bool argumentSite = false;
+        /* A closure body's coercion into the closure's return type: upstream deduces
+           that type from the bound its parameter carries before the body is checked,
+           so the body does not bind it (see `variableBinding`). */
+        bool closureReturn = false;
         /* The check-order place of the node the rule was registered for, and - for an
            argument - the place its binding has: after the argument's own subtree. */
         unsigned order = 0;

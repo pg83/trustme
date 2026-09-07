@@ -33,6 +33,19 @@ namespace {
 
     const HIRType* coerceCallArgument(Context& context, const Span& sp, const HIRType* formal, const HIRType* expectedInput, HIRExprNodeP& argument, bool argumentSite, bool argumentVisited = false);
     bool expectedInputIsUnsizedHint(Context& context, const Span& sp, const HIRType* type);
+    const HIRType* borrowOperandExpectationOf(Context& context, const Span& sp, const HIRExprNode& operand, const HIRType* expected);
+    /* The binding an argument makes to its parameter (see the argument-bindings phase
+       of the pass): the parameter itself when it is an open variable, else its open
+       pointee or `CoerceUnsized` parameter, from the source's own - or the source's
+       open pointee from the parameter's known one.  `destination` is the open
+       variable, `source` what it takes. */
+    struct ArgumentBinding {
+        const HIRType* destination = nullptr;
+        const HIRType* source = nullptr;
+        bool whole = false;
+    };
+
+    ArgumentBinding variableBinding(const Context& context, const IvarCoercionIndex& coercionIndex, const Context::Coercion& rule);
 
     struct MonomorphEraseHrls: public Monomorphiser {
         explicit MonomorphEraseHrls(HIRTypeInterner& types);
@@ -412,6 +425,59 @@ struct OrderPlace {
 
         unsigned int componentOf(unsigned int index) const;
     };
+
+    /* Upstream `coerce` into a variable still open, from a source that is not:
+       `coerce_unsized` bails with either side open, no reborrow or reification
+       applies to a variable, and the variable is unified with the source at once -
+       `let self_next = iter.next()?` types `self_next` before `set.contains(&self_next)`
+       reads its pointee.  This checker defers such a coercion; it is a ready binding
+       at its own place instead, ordered with the argument bindings; a `!` source
+       binds nothing. */
+    ArgumentBinding variableBinding(const Context& context, const IvarCoercionIndex& coercionIndex, const Context::Coercion& rule) {
+        /* Not a closure body's coercion into the closure's return type: upstream
+           deduces that type from the bound the closure's parameter carries
+           (`deduce_closure_signature`) before the body is checked - `from_fn::<&dyn
+           Debug, N, _>(|i| &array[i])` returns `&dyn Debug`, and `&array[i]` unsizes
+           into it - and the body binds it only when nothing expected it. */
+        if (rule.op != SolverCoercionOp::Coercion || rule.closureReturn) {
+            return {};
+        }
+        const auto* destination = context.ivars.getType(rule.leftTy);
+        const auto* infer = destination->opt_Infer();
+        if (!infer || infer->isLit() || infer->index == ~0u || infer->index >= coercionIndex.refs.size()) {
+            return {};
+        }
+        const auto* source = context.ivars.getType(rule.sourceType());
+        if (source->is_Infer() || source->is_Diverge()) {
+            return {};
+        }
+        /* Several coercions into the variable (an array's elements, a `match`'s arms):
+           upstream's `CoerceMany` unifies the variable with the first and then
+           coerces the later ones to it - or, when they do not reach it, coerces the
+           earlier ones to a common type instead (two fn items to the fn pointer, a
+           `&mut T` arm to a `&T` one), so the variable's final type is the join of
+           them all.  Sources all known and alike bind now; differing or still open
+           ones stay the finalisation sweeps' joint decision. */
+        for (const auto* other : coercionIndex[infer->index].coercions) {
+            if (other == &rule || other->op != SolverCoercionOp::Coercion) {
+                continue;
+            }
+            const auto* otherInfer = context.ivars.getType(other->leftTy)->opt_Infer();
+            if (!otherInfer || otherInfer->index != infer->index) {
+                continue;
+            }
+            const auto* otherSource = context.ivars.getType(other->sourceType());
+            if (otherSource->is_Diverge()) {
+                continue;
+            }
+            /* Alike means the same interned type: two items of one function with
+               different constant arguments are two types that join into the pointer. */
+            if (otherSource->is_Infer() || otherSource != source) {
+                return {};
+            }
+        }
+        return {destination, source, true};
+    }
 
     OrderPlace coercionPlace(const Context::Coercion& rule) {
         return rule.bindingOrder ? OrderPlace{rule.bindingOrder, rule.bindingStart} : OrderPlace{rule.order, rule.order};
@@ -1210,15 +1276,6 @@ struct OrderPlace {
 
     }
 
-    /* The binding an argument makes to its parameter (see the argument-bindings phase
-       of the pass): the parameter itself when it is an open variable, else its open
-       pointee or `CoerceUnsized` parameter, from the source's own. */
-    struct ArgumentBinding {
-        const HIRType* destination = nullptr;
-        const HIRType* source = nullptr;
-        bool whole = false;
-    };
-
     /* What an argument would bind of its parameter right now, if anything. */
     ArgumentBinding argumentBinding(const Context& context, const Context::Coercion& rule) {
         const auto* destination = context.ivars.getType(rule.leftTy);
@@ -1269,6 +1326,22 @@ struct OrderPlace {
         }
         if (destinationInner && isOpen(destinationInner) && !context.ivars.typesEqual(destinationInner, sourceInner)) {
             return {destinationInner, sourceInner, false};
+        }
+        /* The other way round - the parameter's pointee known, the argument's own still
+           open (`&variants_union` from a generic `parse` into `&DeriveInput`, `&pod`
+           from a closure's parameter into `&B::Bits`): `?S: Unsize<T>` is ambiguous
+           with an open self, so `coerce_unsized` chooses nothing and
+           `coerce_borrowed_pointer` / `coerce_raw_ptr` / `unify` settle on the first
+           step, the parameter's pointee - unless the parameter's is a trait object
+           and the argument's is known `Sized`, where upstream keeps the `Unsize`
+           obligation and binds nothing yet. */
+        if (destinationInner && sourceInner && !isOpen(destinationInner) && isOpen(sourceInner)) {
+            const auto* sourceInfer = context.getType(sourceInner)->opt_Infer();
+            const bool knownSized = sourceInfer->index < context.ivarsSized.length() && context.ivarsSized[sourceInfer->index];
+            if (context.getType(destinationInner)->is_TraitObject() && knownSized) {
+                return {};
+            }
+            return {sourceInner, destinationInner, false};
         }
         return {};
     }
@@ -6331,7 +6404,7 @@ Vector<OrderPlace> argumentBindingCuts(const Context& context, const IvarCoercio
             continue;
         }
         ivars.clear();
-        coercionIndex.collectIvars(context.getType(rule->leftTy), ivars);
+        coercionIndex.collectIvars(context.getType(binding.destination), ivars);
         if (ivars.empty() || ivars[0] >= count) {
             continue;
         }
@@ -6726,11 +6799,15 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 earliest.pushBack(nullptr);
             }
             for (const auto& rule : context.linkCoerce) {
-                if (!rule->argumentSite || !rule->rightNodePtr || !argumentBinding(context, *rule).destination) {
+                if (!rule->rightNodePtr) {
+                    continue;
+                }
+                const auto binding = rule->argumentSite ? argumentBinding(context, *rule) : variableBinding(context, *ivarCoercionIndex, *rule);
+                if (!binding.destination) {
                     continue;
                 }
                 ivars.clear();
-                ivarCoercionIndex->collectIvars(context.getType(rule->leftTy), ivars);
+                ivarCoercionIndex->collectIvars(context.getType(binding.destination), ivars);
                 if (ivars.empty() || ivars[0] >= count) {
                     continue;
                 }
@@ -6745,8 +6822,16 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 if (!rule || boundComponents[component]) {
                     continue;
                 }
-                context.currentOrder = rule->bindingOrder;
-                bindArgumentParameter(context, *rule);
+                context.currentOrder = rule->bindingOrder ? rule->bindingOrder : rule->order;
+                if (rule->argumentSite) {
+                    bindArgumentParameter(context, *rule);
+                } else {
+                    const auto binding = variableBinding(context, *ivarCoercionIndex, *rule);
+                    if (binding.destination) {
+                        DEBUG(StringView("Coercion binds its open variable ") << context.ivars.fmtType(binding.destination) << StringView(" = ") << context.ivars.fmtType(binding.source));
+                        context.equateTypes(rule->span(), binding.destination, binding.source);
+                    }
+                }
                 context.currentOrder = 0;
                 if (context.ivars.takeChanged()) {
                     bound = true;
@@ -12184,6 +12269,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeClosure& node) -> void {
     this->context.equateTypes(node.span(), node.resType, this->context.crate.types.closure(&node));
 
     this->context.equateTypesCoerce(node.span(), node.returnType, node.code);
+    this->context.linkCoerce.back()->closureReturn = true;
 
     auto savedLoops = std::move(this->loopBlocks);
 
@@ -12211,6 +12297,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeGenerator& node) -> void {
     this->context.equateTypes(node.span(), node.resType, this->context.crate.types.generator(&node));
 
     this->context.equateTypesCoerce(node.span(), node.returnType, node.code);
+    this->context.linkCoerce.back()->closureReturn = true;
     // TODO: Save/clear/restore loop labels
     auto _ = this->pushInnerCoerceScoped(true);
     this->closureRetTypes.pushBack(RetTarget(node.returnType, node.resumeTy, node.yieldTy));
@@ -12232,6 +12319,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeAsyncBlock& node) -> void {
 
     this->context.equateTypes(node.span(), node.resType, this->context.crate.types.asyncBlock(&node));
     this->context.equateTypesCoerce(node.span(), node.returnType, node.code);
+    this->context.linkCoerce.back()->closureReturn = true;
 
     // TODO: Save/clear/restore loop labels
     auto _ = this->pushInnerCoerceScoped(true);
