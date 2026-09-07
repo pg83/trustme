@@ -4232,6 +4232,28 @@ HIRPathParams TraitResolution::materializeImplParams(const Span& sp, const HIRGe
                         }
                         return stable.types[i];
                     }
+                    /* A parameter decided only in part - `(Exclusive, ?97, ?98)`, the
+                       impl's own undetermined parameters made for the probe inside it -
+                       names variables the caller's table will not have.  Upstream
+                       instantiates such impl parameters as fresh variables of the
+                       caller (`fresh_args_for_item`); the parameter goes back as its
+                       placeholder, and the caller's own bound decides it again. */
+                    const bool holdsProbeVariable = visitTyWith(resolved, [&](const HIRType* inner) {
+                        const auto* innerInfer = inner->opt_Infer();
+                        if (!innerInfer || innerInfer->index == ~0u || innerInfer->index < externalTypeIvars) {
+                            return false;
+                        }
+                        for (size_t j = 0; j < inference.types.size(); j++) {
+                            const auto* candidate = inference.types[j]->opt_Infer();
+                            if (candidate && candidate->index == innerInfer->index) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
+                    if (holdsProbeVariable) {
+                        return stable.types[i];
+                    }
                     return this->monomorphType(sp, resolved, allowInfer);
                 }
             }
