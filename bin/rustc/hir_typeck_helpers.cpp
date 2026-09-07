@@ -282,6 +282,25 @@ namespace {
         return infer && infer->index != ~0u && !isAliasInputInfer(infer->index);
     }
 
+    /* A projection over something still open - its self or a trait parameter
+       holding a live variable - is what upstream normalizes to a fresh variable
+       with the projection left as an obligation: it relates to nothing
+       structurally until that variable is known. */
+    bool projectionIsOpen(const HIRPath::Data::Data_UfcsKnown& projection) {
+        const auto hasLive = [](const HIRType* type) {
+            return visitTyWith(type, [](const HIRType* inner) { return inferIsLive(inner); });
+        };
+        if (hasLive(projection.type)) {
+            return true;
+        }
+        for (const auto* type : projection.trait.params.types) {
+            if (hasLive(type)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     bool typeIsRigidUnknown(const HIRType* type) {
         if (const auto* path = type->opt_Path()) {
             if (!path->path.data.is_Generic()) {
@@ -2652,6 +2671,18 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                 }
                 return Outcome::Mismatch;
             }
+            /* Two projections with either still open are not related through their
+               inputs, nor told apart by their items: upstream normalizes the open one
+               to a fresh variable first, with the projection left as an obligation
+               that waits for its self - `<?B as PI>::Item` against `<A as PI>::Item`
+               (rayon's `CallbackA<CB, B>` for `ProducerCallback<A::Item>`) does not
+               read `?B` as `A`, and `<?A as Producer>::Item` against `<B as
+               PI>::Item` is no mismatch; the self comes from the struct literal, and
+               the where-clause (`B: IndexedParallelIterator<Item = A::Item>`, `A:
+               Producer<Item = B::Item>`) then proves the pair equal. */
+            if (projectionIsOpen(*leftProjection) || projectionIsOpen(*rightProjection)) {
+                return this->defer(left, right);
+            }
             if (leftProjection->trait.path != rightProjection->trait.path || leftProjection->item != rightProjection->item) {
                 return Outcome::Mismatch;
             }
@@ -2663,6 +2694,34 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
     }
 
     if (distinctRigidProjections_) {
+        /* A projection over something still open - `<?B as PI>::Item` in an impl head
+           whose parameter the goal has not fixed - is what upstream normalizes to a
+           fresh variable with the projection left as an obligation: it relates to
+           nothing structurally now and waits (`Chain::with_producer`'s `CallbackA`
+           against `ProducerCallback<A::Item>` must not read `?B` as `A`). */
+        const auto projectionOf = [](const HIRType* type) -> const HIRPath::Data::Data_UfcsKnown* {
+            const auto* path = type->opt_Path();
+            return path && (path->binding.is_Opaque() || path->binding.is_Unbound()) ? path->path.data.opt_UfcsKnown() : nullptr;
+        };
+        const auto openProjection = [&](const HIRType* type) {
+            const auto* projection = projectionOf(type);
+            return projection && projectionIsOpen(*projection);
+        };
+        if (openProjection(left) || openProjection(right)) {
+            return this->defer(left, right);
+        }
+        /* Two projections both closed are compared normalized, as upstream's
+           `match_impl` compares them: `<B as PI>::Item` is `<A as PI>::Item` by the
+           where-clause `B: IndexedParallelIterator<Item = A::Item>`.  Only a
+           normalization that makes no variable is taken. */
+        if (resolve_ && projectionOf(left) && projectionOf(right) && left != right) {
+            const auto before = table_.ivars.size();
+            const auto* normalizedLeft = resolve_->expandAssociatedTypes(sp_, left);
+            const auto* normalizedRight = resolve_->expandAssociatedTypes(sp_, right);
+            if (table_.ivars.size() == before && (normalizedLeft != left || normalizedRight != right)) {
+                return this->unifyResolved(normalizedLeft, normalizedRight);
+            }
+        }
         const auto definitelyRigidProjection = [&](const HIRType* type) {
             for (unsigned depth = 0; depth < 8; depth++) {
                 const auto* path = type->opt_Path();
@@ -10615,6 +10674,28 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
         const auto* leftProjection = leftPath ? leftPath->path.data.opt_UfcsKnown() : nullptr;
         const auto* rightProjection = rightPath ? rightPath->path.data.opt_UfcsKnown() : nullptr;
         if (leftProjection && rightProjection && leftProjection->trait.path == rightProjection->trait.path && leftProjection->item == rightProjection->item && leftProjection->trait.params.types.size() == rightProjection->trait.params.types.size() && leftProjection->trait.params.values.size() == rightProjection->trait.params.values.size() && leftProjection->params.types.size() == rightProjection->params.types.size() && leftProjection->params.values.size() == rightProjection->params.values.size()) {
+            /* A projection over a slot still open - the impl head's `<?B as PI>::Item`
+               answered for the goal's `<A as PI>::Item` - is what upstream carries as
+               a fresh variable with the projection left as an obligation: it fixes no
+               slot (`?B` is not `A`; it is the argument's, `B`, whose `Item` the
+               where-clause makes `A::Item`). */
+            const auto projectionOpen = [&](const HIRPath::Data::Data_UfcsKnown& projection) {
+                const auto hasInfer = [&](const HIRType* type) {
+                    return visitTyWith(type, [&](const HIRType* inner) { return inner->is_Infer(); });
+                };
+                if (hasInfer(projection.type)) {
+                    return true;
+                }
+                for (const auto* type : projection.trait.params.types) {
+                    if (hasInfer(type)) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            if (projectionOpen(*leftProjection) || projectionOpen(*rightProjection)) {
+                return;
+            }
             self(leftProjection->type, rightProjection->type);
             for (size_t i = 0; i < leftProjection->trait.params.types.size(); i++) {
                 self(leftProjection->trait.params.types[i], rightProjection->trait.params.types[i]);

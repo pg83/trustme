@@ -434,7 +434,11 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(unifier.pendingValues().empty());
     }
 
-    STD_TEST(testImplHeaderRelationMatchesProjectionInputs) {
+    /* An impl head's projection over a slot still open is what upstream normalizes
+       to a fresh variable with the projection left as an obligation (`match_impl`):
+       the pair waits for the slot rather than reading it off the other side; two
+       closed projections relate through their inputs. */
+    STD_TEST(testImplHeaderRelationWaitsForAnOpenProjectionInput) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
@@ -455,10 +459,13 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
         const auto candidateSlot = table.newIvarTr();
         Unifier candidate(sp, table, nullptr, {.relateProjectionInputs = true});
-        STD_INSIST(candidate.unify(projection(rigidInput), projection(candidateSlot)) == Unifier::Outcome::Proven);
-        STD_INSIST(table.getType(candidateSlot) == rigidInput);
+        STD_INSIST(candidate.unify(projection(rigidInput), projection(candidateSlot)) == Unifier::Outcome::Ambiguous);
+        STD_INSIST(candidate.pending().length() == 1);
+        STD_INSIST(table.getType(candidateSlot) == candidateSlot);
 
-        STD_INSIST(candidate.unify(projection(rigidInput), projection(types.primitive(HIRCoreType::U16))) == Unifier::Outcome::Mismatch);
+        Unifier closed(sp, table, nullptr, {.relateProjectionInputs = true});
+        STD_INSIST(closed.unify(projection(rigidInput), projection(rigidInput)) == Unifier::Outcome::Proven);
+        STD_INSIST(closed.unify(projection(rigidInput), projection(types.primitive(HIRCoreType::U16))) == Unifier::Outcome::Mismatch);
         STD_INSIST(candidate.unify(rigidInput, projection(types.primitive(HIRCoreType::U16))) == Unifier::Outcome::Ambiguous);
 
         Unifier paramEnv(
