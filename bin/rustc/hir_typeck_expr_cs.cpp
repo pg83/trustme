@@ -534,6 +534,8 @@ namespace {
             expectationType = nullptr;
         }
 
+        const HIRType* borrowOperandExpectation(const HIRExprNode& node, const HIRExprNode& operand);
+
         Vector<bool> innerCoerceEnabledStack;
 
         Vector<HIRExprNodeLoop*> loopBlocks;
@@ -10583,13 +10585,46 @@ auto ExprVisitorEnum::visit(HIRExprNodeUniOp& node) -> void {
     }
 }
 
+/* Upstream `is_syntactic_place_expr`: a path, a dereference, a field access or an
+   indexing, by syntax alone. */
+static bool isSyntacticPlaceExpression(const HIRExprNode& node) {
+    return cast<const HIRExprNodeVariable>(&node) || cast<const HIRExprNodePathValue>(&node) || cast<const HIRExprNodeDeref>(&node)
+        || cast<const HIRExprNodeField>(&node) || cast<const HIRExprNodeIndex>(&node);
+}
+
+/* Upstream `check_expr_addr_of`: the operand of `&`/`&raw` expects the expected
+   pointer's pointee - as it is for a place, which may legitimately be unsized, and
+   as `rvalue_hint` for anything else, so an unsized pointee (`dyn Trait`, `[T]`,
+   `str`) is no expectation at all for an rvalue: `&1` against `&dyn Foo` types the
+   literal as an integer and unsizes the reference. */
+const HIRType* ExprVisitorEnum::borrowOperandExpectation(const HIRExprNode& node, const HIRExprNode& operand) {
+    const auto* expected = this->expectationFor(node);
+    if (!expected) {
+        return nullptr;
+    }
+    const auto* resolved = this->context.getType(expected);
+    const HIRType* pointee = nullptr;
+    if (const auto* borrow = resolved->opt_Borrow()) {
+        pointee = borrow->inner;
+    } else if (const auto* pointer = resolved->opt_Pointer()) {
+        pointee = pointer->inner;
+    }
+    if (!pointee) {
+        return nullptr;
+    }
+    if (isSyntacticPlaceExpression(operand) || this->context.resolve.typeIsSized(node.span(), pointee) != SolverCertainty::NoSolution) {
+        return pointee;
+    }
+    return nullptr;
+}
+
 auto ExprVisitorEnum::visit(HIRExprNodeBorrow& node) -> void {
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" &_ ..."));
     node.value->resType = this->context.addIvars(node.value->resType);
 
     this->context.equateTypes(node.span(), node.resType, this->context.crate.types.borrow(node.type, node.value->resType));
 
-    node.value->visit(*this);
+    this->visitExpecting(node.value, this->borrowOperandExpectation(node, *node.value));
     this->inheritDivergence(node, *node.value);
 }
 
@@ -10599,7 +10634,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeRawBorrow& node) -> void {
 
     this->context.equateTypes(node.span(), node.resType, this->context.crate.types.pointer(node.type, node.value->resType));
 
-    node.value->visit(*this);
+    this->visitExpecting(node.value, this->borrowOperandExpectation(node, *node.value));
     this->inheritDivergence(node, *node.value);
 }
 
