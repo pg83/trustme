@@ -6955,6 +6955,11 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     }
     const auto firstPossibility = possibilities.size();
     ThinVector<SolverResponse> ambiguousResponses;
+    /* Trait candidates whose trait obligation holds but whose bounds are still
+       ambiguous, with their response in `ambiguousResponses`: upstream's probe
+       matches on the trait obligation alone (`consider_probe`) and confirms the
+       unique pick, its where-clauses registered as pending obligations. */
+    ThinVector<TraitResolution::MethodCandidate> boundsAmbiguousCandidates;
     const HIRType* inherentReceiver = receiver;
     while (const auto* borrow = inherentReceiver->opt_Borrow()) {
         inherentReceiver = resolve_.ivars.getType(borrow->inner);
@@ -8468,9 +8473,35 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         }
         auto effects = stableEffects(std::move(proof.effects), snapshot);
         effects.certainty = applicability;
+        /* Upstream's probe matches a trait candidate on its trait obligation alone
+           (`consider_probe`: the predicate may hold); the method's where-clauses and
+           the arguments belong to the confirmation, registered as obligations and
+           coerced after the pick.  A candidate whose proof holds but whose bounds are
+           still ambiguous - `T: Add<i32, Output = T>` on a literal `T` in rayon's
+           `fold_chunks_with(2, 0, sum)` - is therefore a possibility, marked so that a
+           candidate proven outright is preferred; left for later it never picks the
+           method, and the literal argument is defaulted before it is coerced. */
+        const bool boundsAmbiguous = applicability == Certainty::Ambiguous && proofApplicability == Certainty::Proven;
         if (applicability != Certainty::Proven) {
             DEBUG(StringView("method candidate ambiguous: applicability ") << static_cast<unsigned>(applicability) << StringView(" (proof ") << static_cast<unsigned>(proofApplicability) << StringView(", complete bounds ") << static_cast<unsigned>(completeBounds) << StringView(")"));
             ambiguousResponses.push_back(std::move(effects));
+            if (boundsAmbiguous) {
+                auto candidateTrait = outputTrait.clone();
+                candidateTrait.params = stableParams(outputParams, snapshot);
+                boundsAmbiguousCandidates.push_back(
+                    TraitResolution::MethodCandidate{
+                        borrowType,
+                        HIRPath(stableType(selfType, snapshot), std::move(candidateTrait), methodName, std::move(selectedMethodParams)),
+                        nullptr,
+                        SolverResponse{},
+                        &function,
+                        outputTrait.path,
+                        nullptr,
+                        HIRPathParams(),
+                        true,
+                    }
+                );
+            }
             return applicability;
         }
 
@@ -8922,7 +8953,22 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         });
     }
     if (inScopeAmbiguous) {
-        restoreUncoveredBoundAmbiguities();
+        const bool uncoveredBounds = restoreUncoveredBoundAmbiguities();
+        /* The one in-scope candidate, its trait obligation proven and only its bounds
+           still ambiguous (`T: Add<i32, Output = T>` on a literal `T` in rayon's
+           `fold_chunks_with(2, 0, sum)`), is upstream's unique pick: left ambiguous,
+           the method is never selected, its argument coercions never made, and the
+           literal `chunk_size` is defaulted before `usize` can take it. */
+        if (!uncoveredBounds && !inherentSourceAmbiguous && possibilities.size() == firstPossibility && ambiguousResponses.size() == 1 && boundsAmbiguousCandidates.size() == 1) {
+            DEBUG(StringView("method candidate with ambiguous bounds is the one pick"));
+            auto candidate = std::move(boundsAmbiguousCandidates.front());
+            candidate.effects = std::move(ambiguousResponses.front());
+            candidate.effects.certainty = Certainty::Proven;
+            ambiguousResponses.clear();
+            boundsAmbiguousCandidates.clear();
+            possibilities.push_back(std::move(candidate));
+            return finishProven();
+        }
         return emitAmbiguous();
     }
 

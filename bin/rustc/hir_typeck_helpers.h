@@ -924,6 +924,9 @@ public:
         HIRSimplePath declaringTrait;
         const HIRType* routeImplType = nullptr;
         HIRPathParams routeTraitParams;
+        /* The trait obligation holds but the method's own bounds are still
+           ambiguous: a possibility only while no candidate is proven outright. */
+        bool boundsAmbiguous = false;
     };
 
     unsigned int autoderefFindMethod(
