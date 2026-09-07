@@ -8198,7 +8198,11 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         const auto* methodReturn = methodMonomorph.monomorphType(callSpan, function.returnType, true);
         const auto* methodReturnPath = methodReturn->opt_Path();
         const auto* methodReturnProjection = methodReturnPath ? methodReturnPath->path.data.opt_UfcsKnown() : nullptr;
-        const bool expectedGuidesProof = expectedResult && methodReturnProjection && methodReturnProjection->trait.path == proofTrait.path;
+        /* The expected result guides the proof only through a return that is
+           `<Self as Trait>::Item` over this very receiver: a method returning `Self`
+           on a receiver that is itself a projection of the trait (`wrapping_sub` on
+           `<T as Int>::Unsigned`) returns the receiver, not its `Unsigned`. */
+        const bool expectedGuidesProof = expectedResult && methodReturnProjection && methodReturnProjection->trait.path == proofTrait.path && resolve_.ivars.typesEqual(methodReturnProjection->type, selfType);
         if (expectedResult && !methodReturn->is_ErasedType()) {
             const auto resultApplicability = evaluateMethodArgument(expectedResult, methodReturn, ~0u, signatureEffects);
             if (resultApplicability == Certainty::NoSolution) {
@@ -8287,7 +8291,12 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         if (expectedResult && proof.candidate && proof.effects.certainty == Certainty::Proven) {
             const auto* returnPath = methodReturn->opt_Path();
             const auto* projection = returnPath ? returnPath->path.data.opt_UfcsKnown() : nullptr;
-            if (projection && projection->trait.path == proofTrait.path) {
+            /* Only a return that is `<Self as Trait>::Item` - a projection over this
+               very receiver - is read off the candidate.  A method returning `Self`
+               on a receiver that is itself a projection of the trait
+               (`end.wrapping_sub(start)` on `<T as Int>::Unsigned`, `type Unsigned:
+               Int`) returns that receiver, not its `Unsigned`. */
+            if (projection && projection->trait.path == proofTrait.path && resolve_.ivars.typesEqual(projection->type, selfType)) {
                 const auto* selectedReturn = proof.candidate->getType(crate.types, projection->item.c_str(), projection->params);
                 if (selectedReturn) {
                     const auto resultApplicability = evaluateMethodArgument(expectedResult, selectedReturn, ~0u, signatureEffects);
