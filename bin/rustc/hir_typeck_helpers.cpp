@@ -7717,6 +7717,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         effects.equalities.push_back(SolverTypeEquality{argument, normalized});
         return argument;
     };
+    /* Method parameters an argument must not read its own type into yet: a bound
+       naming them still has other open inputs (see `decideMethodParamsBeforeArguments`). */
+    ThinVector<unsigned> heldMethodSlots;
     const auto evaluateMethodArgument = [&](const HIRType* expected, const HIRType* actual, unsigned sourceInput, SolverResponse& effects) {
         const auto equalitySnapshot = resolve_.ivars.snapshot();
         /* Read before relating: relating is what would fill the slot, and the question is
@@ -7735,6 +7738,22 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             }
             return false;
         }();
+        const bool expectedIsHeldMethodSlot = [&]() {
+            const auto* infer = resolve_.ivars.getType(expected)->opt_Infer();
+            return infer && infer->index != ~0u && !infer->isLit() && std::find(heldMethodSlots.begin(), heldMethodSlots.end(), infer->index) != heldMethodSlots.end();
+        }();
+        /* The argument's own open variables before the relation: what the relation
+           would bind of them is the coercion's to bind, at the argument's place. */
+        ThinVector<unsigned> argumentVariables;
+        if (sourceInput != ~0u) {
+            visitTyWith(resolve_.ivars.getType(actual), [&](const HIRType* inner) {
+                const auto* infer = resolve_.ivars.getType(inner)->opt_Infer();
+                if (infer && !infer->isLit() && infer->index != ~0u) {
+                    argumentVariables.push_back(infer->index);
+                }
+                return false;
+            });
+        }
         Unifier equality(callSpan, resolve_.ivars, &resolve_, {.relateProjectionInputs = true});
         const auto equalityOutcome = equality.unify(expected, actual);
         DEBUG(StringView("method argument ") << sourceInput << StringView(": expected ") << expected << StringView(" actual ") << actual << StringView(" equality=") << static_cast<unsigned>(equalityOutcome));
@@ -7744,6 +7763,32 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             }
         };
         if (expectedWasUnclaimedTraitSlot && resolve_.ivars.getType(actual)->is_NamedFunction()) {
+            resolve_.ivars.rollbackTo(equalitySnapshot);
+            appendCoercion();
+            return Certainty::Proven;
+        }
+        /* A held parameter stays open: the coercion into it is exported, and the
+           argument binds it only once the rules before the call have had their turn
+           (the argument-bindings phase) - a closure excepted, whose signature is
+           read off the bound the parameter carries and needs it bound now. */
+        const auto* actualType = resolve_.ivars.getType(actual);
+        const bool actualIsClosure = actualType->is_NodeType() && actualType->as_NodeType().is_Closure();
+        if (expectedIsHeldMethodSlot && equalityOutcome == Unifier::Outcome::Proven && sourceInput != ~0u && !actualIsClosure) {
+            DEBUG(StringView("method argument ") << sourceInput << StringView(" leaves the held parameter ") << expected << StringView(" open"));
+            resolve_.ivars.rollbackTo(equalitySnapshot);
+            appendCoercion();
+            return Certainty::Proven;
+        }
+        /* A relation that fixed one of the argument's own variables from the
+           parameter (`&self_next` into `&T` while `self_next` is still owed to an
+           earlier `?`) read the parameter into the argument; upstream has such a
+           variable settled by the rules before the call when the argument is
+           coerced, and the coercion is what binds it if not.  The coercion is
+           exported instead and made in the argument-bindings phase. */
+        if (equalityOutcome == Unifier::Outcome::Proven && std::any_of(argumentVariables.begin(), argumentVariables.end(), [&](unsigned index) {
+            return !resolve_.ivars.getType(index)->is_Infer();
+        })) {
+            DEBUG(StringView("method argument ") << sourceInput << StringView(" keeps its own variables for the coercion"));
             resolve_.ivars.rollbackTo(equalitySnapshot);
             appendCoercion();
             return Certainty::Proven;
@@ -7839,6 +7884,112 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         }
         return result;
     };
+    /* Upstream selects the method's own obligations before an argument is coerced
+       to a parameter still open (`resolve_vars_with_obligations` in
+       `check_argument_types`): `[String]: Join<?S>` has one impl, `Join<&str>`, so
+       `als.join(&val_sep)` reads `Separator` as `&str` and `&String` dereferences to
+       it - related first, the argument would have read `&String` into it.  Only a
+       method parameter an argument mentions is worth the probe, and only bounds
+       that decide such a parameter outright are kept. */
+    const auto decideMethodParamsBeforeArguments = [&](const HIRGenericParams& definition, const HIRPathParams& parameters, size_t argCount, const auto& argumentTemplate, const Monomorphiser& monomorph, SolverResponse& effects) {
+        heldMethodSlots.clear();
+        ThinVector<unsigned> openSlots;
+        for (const auto* param : parameters.types) {
+            const auto* infer = resolve_.ivars.getType(param)->opt_Infer();
+            if (infer && !infer->isLit() && infer->index != ~0u) {
+                openSlots.push_back(infer->index);
+            }
+        }
+        if (openSlots.empty() || definition.bounds.empty()) {
+            return;
+        }
+        bool argumentMentionsSlot = false;
+        for (size_t i = 0; i < argCount && !argumentMentionsSlot; i++) {
+            const auto* expected = monomorph.monomorphType(callSpan, argumentTemplate(i), true);
+            argumentMentionsSlot = visitTyWith(expected, [&](const HIRType* inner) {
+                const auto* infer = resolve_.ivars.getType(inner)->opt_Infer();
+                return infer && std::find(openSlots.begin(), openSlots.end(), infer->index) != openSlots.end();
+            });
+        }
+        if (!argumentMentionsSlot) {
+            return;
+        }
+        const auto isOpenVariable = [&](const HIRType* type) {
+            const auto* infer = resolve_.ivars.getType(type)->opt_Infer();
+            return infer && !infer->isLit() && infer->index != ~0u;
+        };
+        /* A bound on a variable itself (`?F: Fn(..)`) is ambiguous upstream - no
+           candidate is assembled for an inference-variable self - and decides
+           nothing; this solver would read an impl's self pattern into it, so the
+           bounds are not evaluated with one among them. */
+        bool boundOnVariable = false;
+        for (const auto& bound : definition.bounds) {
+            const auto* traitBound = bound.opt_TraitBound();
+            if (traitBound && traitBound->trait.path.path != resolve_.langSized() && isOpenVariable(monomorph.monomorphType(callSpan, traitBound->type, true))) {
+                boundOnVariable = true;
+                break;
+            }
+        }
+        if (!boundOnVariable) {
+            const auto snapshot = resolve_.ivars.snapshot();
+            SolverResponse preliminaryEffects;
+            const auto preliminary = evaluateMethodBounds(definition, parameters, monomorph, &preliminaryEffects);
+            const bool decided = preliminary == Certainty::Proven && std::any_of(openSlots.begin(), openSlots.end(), [&](unsigned index) {
+                return !resolve_.ivars.getType(index)->is_Infer();
+            });
+            if (decided) {
+                DEBUG(StringView("method parameters decided before the arguments by the method's bounds"));
+                resolve_.ivars.commit(snapshot);
+                appendResponse(effects, std::move(preliminaryEffects));
+                return;
+            }
+            resolve_.ivars.rollbackTo(snapshot);
+        }
+        /* Not decided yet.  A bound naming the parameter whose other inputs are still
+           open - `[?T]: Join<?S>` with the vector's element unknown - may be decided
+           by the rules before the call once those settle, as upstream's fixpoint has
+           them settled here; such a parameter is held open for the arguments. */
+        const auto heldSnapshot = resolve_.ivars.snapshot();
+        for (const auto& bound : definition.bounds) {
+            const auto* traitBound = bound.opt_TraitBound();
+            if (!traitBound) {
+                continue;
+            }
+            const auto* boundType = monomorph.monomorphType(callSpan, traitBound->type, true);
+            if (isOpenVariable(boundType)) {
+                continue;
+            }
+            boundType = resolve_.expandAssociatedTypes(callSpan, boundType);
+            auto boundTrait = monomorph.monomorphTraitpath(callSpan, traitBound->trait, true);
+            ThinVector<unsigned> mentioned;
+            bool otherOpen = false;
+            const auto collect = [&](const HIRType* type) {
+                visitTyWith(type, [&](const HIRType* inner) {
+                    const auto* infer = resolve_.ivars.getType(inner)->opt_Infer();
+                    if (infer && !infer->isLit() && infer->index != ~0u) {
+                        if (std::find(openSlots.begin(), openSlots.end(), infer->index) != openSlots.end()) {
+                            mentioned.push_back(infer->index);
+                        } else {
+                            otherOpen = true;
+                        }
+                    }
+                    return false;
+                });
+            };
+            collect(boundType);
+            for (const auto* param : boundTrait.path.params.types) {
+                collect(resolve_.expandAssociatedTypes(callSpan, param));
+            }
+            if (otherOpen) {
+                for (const auto index : mentioned) {
+                    if (std::find(heldMethodSlots.begin(), heldMethodSlots.end(), index) == heldMethodSlots.end()) {
+                        heldMethodSlots.push_back(index);
+                    }
+                }
+            }
+        }
+        resolve_.ivars.rollbackTo(heldSnapshot);
+    };
     const auto constrainMethodBoundsBeforeArguments = [&](const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, SolverResponse& effects) {
         const auto snapshot = resolve_.ivars.snapshot();
         SolverResponse preliminaryEffects;
@@ -7918,6 +8069,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         auto proofParams = proofTrait.params.clone();
         auto outputParams = outputTrait.params.clone();
         auto methodParams = paramsForMethod(function.params);
+        heldMethodSlots.clear();
         auto applicability = Certainty::Proven;
         SolverResponse signatureEffects;
         const HIRType* selfType;
@@ -7973,6 +8125,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
 
         guideFromExpectedResult(methodMonomorph, function.returnType);
         constrainTraitParamsBeforeArguments(function, proofTrait, proofParams, selfType, methodMonomorph, signatureEffects);
+        if (function.fixedArgCount() == argumentTypes.size() + 1) {
+            decideMethodParamsBeforeArguments(function.params, methodParams, argumentTypes.size(), [&](size_t i) -> const HIRType* { return function.args[i + 1].second; }, methodMonomorph, signatureEffects);
+        }
 
         if (function.fixedArgCount() == argumentTypes.size() + 1) {
             for (size_t i = 0; i < argumentTypes.size(); i++) {
@@ -8081,6 +8236,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             && proof.candidate && proofHasDeferredConstraints;
         const auto proofApplicability = applyResponse(proof.effects);
         if (proofApplicability == Certainty::NoSolution) {
+            DEBUG(StringView("method candidate dropped: the proof's effects do not apply"));
             return Certainty::NoSolution;
         }
         if (!obligationOnlyAmbiguity && !selectedWithDeferredConstraints) {
@@ -8095,6 +8251,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                 if (selectedReturn) {
                     const auto resultApplicability = evaluateMethodArgument(expectedResult, selectedReturn, ~0u, signatureEffects);
                     if (resultApplicability == Certainty::NoSolution) {
+                        DEBUG(StringView("method candidate dropped: the selected return does not reach the expected result"));
                         return Certainty::NoSolution;
                     }
                     merge(applicability, resultApplicability);
@@ -8105,6 +8262,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         if (methodBoundsDeferred) {
             methodBounds = evaluateMethodBounds(function.params, methodParams, methodMonomorph, &signatureEffects);
             if (methodBounds == Certainty::NoSolution) {
+                DEBUG(StringView("method candidate dropped: the deferred method bounds fail"));
                 return Certainty::NoSolution;
             }
         }
@@ -8113,6 +8271,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         completeBoundsMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
         const auto completeBounds = evaluateMethodBounds(function.params, methodParams, completeBoundsMonomorph, &signatureEffects);
         if (completeBounds == Certainty::NoSolution) {
+            DEBUG(StringView("method candidate dropped: the complete method bounds fail"));
             return Certainty::NoSolution;
         }
         merge(applicability, completeBounds);
@@ -8129,6 +8288,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         auto effects = stableEffects(std::move(proof.effects), snapshot);
         effects.certainty = applicability;
         if (applicability != Certainty::Proven) {
+            DEBUG(StringView("method candidate ambiguous: applicability ") << static_cast<unsigned>(applicability) << StringView(" (proof ") << static_cast<unsigned>(proofApplicability) << StringView(", complete bounds ") << static_cast<unsigned>(completeBounds) << StringView(")"));
             ambiguousResponses.push_back(std::move(effects));
             return applicability;
         }
@@ -8269,12 +8429,16 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             methodMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
             auto signatureSnapshot = resolve_.ivars.snapshot();
             const auto evaluateSignature = [&](bool boundsFirst, SolverResponse& signatureEffects) {
+                heldMethodSlots.clear();
                 auto applicability = headNormalizationAmbiguity ? Certainty::Ambiguous : Certainty::Proven;
                 if (boundsFirst) {
                     constrainMethodBoundsBeforeArguments(method.data.params, methodParams, methodMonomorph, signatureEffects);
                 }
                 guideFromExpectedResult(methodMonomorph, method.data.returnType);
                 if (method.data.fixedArgCount() == argumentTypes.size() + 1) {
+                    if (!boundsFirst) {
+                        decideMethodParamsBeforeArguments(method.data.params, methodParams, argumentTypes.size(), [&](size_t i) -> const HIRType* { return method.data.args[i + 1].second; }, methodMonomorph, signatureEffects);
+                    }
                     for (size_t i = 0; i < argumentTypes.size(); i++) {
                         const auto* expectedArgument = normalizeSignatureType(methodMonomorph.monomorphType(callSpan, method.data.args[i + 1].second, true), argumentTypes[i], signatureEffects);
                         const auto argumentApplicability = evaluateMethodArgument(expectedArgument, argumentTypes[i], i, signatureEffects);
