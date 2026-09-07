@@ -6382,6 +6382,15 @@ void Context::applySolverResponse(const Span& sp, const SolverResponse& response
             if (!infer || !infer->isLit() || !path || !path->path.data.is_UfcsKnown()) {
                 return false;
             }
+            /* A projection still open - `<?I as IntoParallelIterator>::Item` with `I`
+               to come from a closure's return (rayon's `check(&a, || a)`) - is not a
+               type the literal can become: upstream normalizes it to a fresh variable
+               first and relates the literal to that, so binding it here would tie `I`
+               to itself through the array the closure returns.  Such a relation is
+               left to the associated-type rules. */
+            if (ivars.typeContainsIvars(projection)) {
+                return false;
+            }
             /* The occurs check has to follow aliases: the projection carries whichever
                ivar the source wrote, which need not be the representative this side
                resolved to.  Comparing the types by pointer misses that and binds the
