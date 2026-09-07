@@ -531,12 +531,61 @@ struct OrderPlace {
             return {};
         }
         const auto* destination = context.ivars.getType(rule.leftTy);
-        const auto* infer = destination->opt_Infer();
-        if (!infer || infer->isLit() || infer->index == ~0u || infer->index >= coercionIndex.refs.size()) {
-            return {};
-        }
         const auto* source = context.ivars.getType(rule.sourceType());
         if (source->is_Infer() || source->is_Diverge()) {
+            return {};
+        }
+        const auto isOpen = [&](const HIRType* type) {
+            const auto* infer = context.getType(type)->opt_Infer();
+            return infer && !infer->isLit() && infer->index != ~0u && infer->index < coercionIndex.refs.size();
+        };
+        /* A reference or raw pointer into one whose pointee is open, or from one whose
+           pointee is open: `coerce_unsized` finds `Src: Unsize<?T>` (or `?S: Unsize<T>`)
+           ambiguous and chooses nothing, and `coerce_borrowed_pointer` / `coerce_raw_ptr`
+           unify the two pointees where the coercion is met - at a `let` or an `if` arm
+           as much as at an argument (`argumentBinding`).  zerocopy's `transmute_ref!`
+           types `e: &_ = $e` and the `Dst` of `Wrap<&Src, &Dst>` this way: the arm
+           `if false { t.transmute_ref_inference_helper() }` gives `&Dst` to the `if`'s
+           `&[[u8; 2]]` before `t.transmute_ref()` is looked up, where an inherent impl
+           with `Dst: Sized` would otherwise be picked over the trait's.  Only one open
+           pointee against a known one binds here; both open is the sweeps' matter, and a
+           trait-object pointee with the source's known `Sized` is the `Unsize` case
+           upstream keeps as an obligation and binds nothing yet. */
+        {
+            const HIRType* destinationInner = nullptr;
+            const HIRType* sourceInner = nullptr;
+            if (const auto* destinationBorrow = destination->opt_Borrow()) {
+                if (const auto* sourceBorrow = source->opt_Borrow()) {
+                    destinationInner = destinationBorrow->inner;
+                    sourceInner = sourceBorrow->inner;
+                }
+            } else if (const auto* destinationPointer = destination->opt_Pointer()) {
+                if (const auto* sourcePointer = source->opt_Pointer()) {
+                    destinationInner = destinationPointer->inner;
+                    sourceInner = sourcePointer->inner;
+                } else if (const auto* sourceBorrow = source->opt_Borrow()) {
+                    destinationInner = destinationPointer->inner;
+                    sourceInner = sourceBorrow->inner;
+                }
+            }
+            if (destinationInner && sourceInner) {
+                const bool destinationOpen = isOpen(destinationInner);
+                const bool sourceOpen = isOpen(sourceInner);
+                if (destinationOpen && !context.getType(sourceInner)->is_Infer()) {
+                    return {destinationInner, sourceInner, false};
+                }
+                if (sourceOpen && !context.getType(destinationInner)->is_Infer()) {
+                    const auto* sourceInfer = context.getType(sourceInner)->opt_Infer();
+                    const bool knownSized = sourceInfer->index < context.ivarsSized.length() && context.ivarsSized[sourceInfer->index];
+                    if (context.getType(destinationInner)->is_TraitObject() && knownSized) {
+                        return {};
+                    }
+                    return {sourceInner, destinationInner, false};
+                }
+            }
+        }
+        const auto* infer = destination->opt_Infer();
+        if (!infer || infer->isLit() || infer->index == ~0u || infer->index >= coercionIndex.refs.size()) {
             return {};
         }
         /* Several coercions into the variable (an array's elements, a `match`'s arms):
