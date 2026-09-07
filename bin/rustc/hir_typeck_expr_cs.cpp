@@ -31,6 +31,9 @@ using namespace stl;
 namespace {
     struct IvarCoercionIndex;
 
+    const HIRType* coerceCallArgument(Context& context, const Span& sp, const HIRType* formal, const HIRType* expectedInput, HIRExprNodeP& argument, bool argumentSite);
+    bool expectedInputIsUnsizedHint(Context& context, const Span& sp, const HIRType* type);
+
     struct MonomorphEraseHrls: public Monomorphiser {
         explicit MonomorphEraseHrls(HIRTypeInterner& types);
 
@@ -361,6 +364,24 @@ namespace {
         Vector<const Context::Revisitor*> advancedRevisits;
     };
 
+/* A place in the check order: the last node of a subtree and its first, so that
+   of two places ending at the same node the deeper one - an argument's own binding
+   against the coercion of the call enclosing it - comes first. */
+struct OrderPlace {
+    unsigned end = ~0u;
+    unsigned start = ~0u;
+
+    bool isNone() const {
+        return end == ~0u;
+    }
+
+    /* Whether this place comes after `cut`. */
+    bool after(const OrderPlace& cut) const {
+        return end > cut.end || (end == cut.end && start < cut.start);
+    }
+};
+
+
     struct IvarCoercionIndex {
         const Context& context;
         std::vector<IvarCoercionRefs> refs;
@@ -370,6 +391,10 @@ namespace {
            effect in each component and still make the decisions a sweep restarted
            after every effect would make. */
         Vector<unsigned int> componentRoots;
+        /* Per component root, the earliest check-order place of a node still to be
+           revisited in it (none when there is none): upstream resolved that method
+           call or operator before it checked anything after it. */
+        Vector<OrderPlace> pendingNodeCut;
 
         void collectIvars(const HIRType* root, Vector<unsigned int>& out, bool throughClosures = false) const;
         static void deduplicate(Vector<unsigned int>& values);
@@ -387,6 +412,72 @@ namespace {
 
         unsigned int componentOf(unsigned int index) const;
     };
+
+    OrderPlace coercionPlace(const Context::Coercion& rule) {
+        return rule.bindingOrder ? OrderPlace{rule.bindingOrder, rule.bindingStart} : OrderPlace{rule.order, rule.order};
+    }
+
+    /* A coercion decided in the sweep - `Err(From::from(e))`'s outer coercion of the
+       inner call's result variable - comes at its argument's place too, and past a
+       ready binding of its component it waits like an obligation would. */
+    bool coercionPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<OrderPlace>& cuts, Vector<unsigned>& ivars, const Context::Coercion& rule) {
+        const auto count = coercionIndex.refs.size();
+        const auto place = coercionPlace(rule);
+        ivars.clear();
+        coercionIndex.collectIvars(context.getType(rule.leftTy), ivars);
+        coercionIndex.collectIvars(context.getType(rule.sourceType()), ivars);
+        const auto& pendingCuts = coercionIndex.pendingNodeCut;
+        for (const auto index : ivars) {
+            if (index >= count) {
+                continue;
+            }
+            const auto component = coercionIndex.componentOf(index);
+            if (!cuts.empty() && !cuts[component].isNone() && place.after(cuts[component])) {
+                DEBUG(StringView("- Coercion R") << rule.ruleIdx << StringView(" at ") << place.end << StringView(" waits for the binding at ") << cuts[component].end);
+                return true;
+            }
+            /* A pending node inside this coercion's own argument does not hold it:
+               the coercion of `Some(|ptr| .. ptr as *mut T ..)` into `Option<unsafe
+               fn(*mut u8)>` stands for the expectation that types `ptr` - upstream
+               had it before the cast was checked - and the cast waits for it, not
+               the other way round. */
+            if (!pendingCuts.empty() && !pendingCuts[component].isNone() && place.after(pendingCuts[component])
+                && !(place.start <= pendingCuts[component].start && place.end >= pendingCuts[component].end)) {
+                DEBUG(StringView("- Coercion R") << rule.ruleIdx << StringView(" at ") << place.end << StringView(" waits for the pending node at ") << pendingCuts[component].end);
+                context.pendingCutHolds++;
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /* The place a pending node's resolution has in the check order: the whole node,
+       so that what follows it waits and what is inside it - its receiver and, for a
+       call, its arguments, whose types the method probe reads - does not.  (Upstream
+       looks a method up before checking the arguments; cutting them here would
+       starve the probe that needs them: `self.map(key(f))` in `min_by_key`.)  None
+       for a node made after the numbering. */
+    OrderPlace pendingNodeCutPlace(const HIRExprNode& node) {
+        /* Only a lookup upstream does at once and this checker defers - a method or
+           value call, an index, a dereference, an operator, a field access - cuts.  A
+           `let` or a block waits for a variable a later statement may well decide
+           (`let w = input.parse()?; .. Ok((w, f))`), as upstream's does; a cast is
+           checked last of all (`CastCheck`), so `buf.as_mut_ptr() as *mut _` decides
+           nothing before `from_vec(buf)` has said what `buf` holds. */
+        switch (node.nodeKind()) {
+            case HIRExprNodeCallMethod::kind:
+            case HIRExprNodeCallValue::kind:
+            case HIRExprNodeIndex::kind:
+            case HIRExprNodeDeref::kind:
+            case HIRExprNodeUniOp::kind:
+            case HIRExprNodeBinOp::kind:
+            case HIRExprNodeField::kind:
+                break;
+            default:
+                return OrderPlace{};
+        }
+        return node.checkOrderEnd ? OrderPlace{node.checkOrderEnd, node.checkOrder} : OrderPlace{};
+    }
 
     struct ActiveOperatorOutput {
         unsigned int index;
@@ -538,6 +629,16 @@ namespace {
             this->visitChild(*nodePtr);
             expectationNode = nullptr;
             expectationType = nullptr;
+        }
+
+        /* Upstream `check_argument_types`: the argument is coerced into the input the
+           expected output gives, and the formal parameter is then equal to it - unless
+           that input has an unsized tail (`rvalue_hint`: `NoDrop<dyn IterTrait>` for
+           `Box::new(NoDrop::new(iter::empty()))`), when it is only a hint that reaches
+           no call and the coercion goes to the formal parameter.  Returns the
+           expectation the argument is visited with. */
+        const HIRType* coerceArgument(const Span& sp, const HIRType* formal, const HIRType* expectedInput, HIRExprNodeP& argument, bool argumentSite = true) {
+            return coerceCallArgument(context, sp, formal, expectedInput, argument, argumentSite);
         }
 
         /* The rules a node registers belong to its place in the check order. */
@@ -1185,6 +1286,62 @@ namespace {
         context.equateTypes(rule.span(), binding.destination, binding.source);
     }
 
+    /* Upstream `check_argument_types`: the argument is coerced into the input the
+       expected output gives, and the formal parameter is then equal to it - unless
+       that input has an unsized tail (`rvalue_hint`: `NoDrop<dyn IterTrait>` for
+       `Box::new(NoDrop::new(iter::empty()))`), when it is only a hint that reaches no
+       call and the coercion goes to the formal parameter.  Returns the expectation
+       the argument is visited with. */
+    /* Upstream `rvalue_hint`: the struct tail of the type - the last field's,
+       through nested structs - is a slice, `str` or a trait object. */
+    bool expectedInputIsUnsizedHint(Context& context, const Span& sp, const HIRType* type) {
+        for (unsigned depth = 0; depth < 32; depth++) {
+            const auto* resolved = context.getType(type);
+            if (resolved->is_TraitObject() || resolved->is_Slice()) {
+                return true;
+            }
+            if (const auto* primitive = resolved->opt_Primitive(); primitive && *primitive == HIRCoreType::Str) {
+                return true;
+            }
+            const auto* path = resolved->opt_Path();
+            if (!path || !path->binding.is_Struct() || !path->path.data.is_Generic()) {
+                return false;
+            }
+            const auto& definition = *path->binding.as_Struct();
+            const HIRType* last = nullptr;
+            if (const auto* tuple = definition.data.opt_Tuple()) {
+                if (tuple->empty()) {
+                    return false;
+                }
+                last = tuple->back().ent;
+            } else if (const auto* named = definition.data.opt_Named()) {
+                if (named->empty()) {
+                    return false;
+                }
+                last = named->back().ty;
+            } else {
+                return false;
+            }
+            auto monomorph = MonomorphStatePtr(context.crate.types, resolved, &path->path.data.as_Generic().params, nullptr);
+            type = monomorph.monomorphType(sp, last, true);
+        }
+        return false;
+    }
+
+    const HIRType* coerceCallArgument(Context& context, const Span& sp, const HIRType* formal, const HIRType* expectedInput, HIRExprNodeP& argument, bool argumentSite) {
+        if (expectedInput == formal) {
+            context.equateTypesCoerce(sp, formal, argument, argumentSite, true);
+            return expectedInput;
+        }
+        if (expectedInputIsUnsizedHint(context, sp, expectedInput)) {
+            context.equateTypesCoerce(sp, formal, argument, argumentSite, true);
+            return nullptr;
+        }
+        context.equateTypesCoerce(sp, expectedInput, argument, argumentSite, true);
+        context.equateTypes(sp, formal, expectedInput);
+        return expectedInput;
+    }
+
     bool checkCoerce(Context& context, const Context::Coercion& v) {
         if (!v.rightNodePtr) {
             const auto& sp = v.span();
@@ -1390,7 +1547,7 @@ namespace {
         });
     }
 
-    AssociatedCheckResult checkAssociated(Context& context, const IvarCoercionIndex& coercionIndex, Context::Associated& v) {
+    AssociatedCheckResult checkAssociated(Context& context, const IvarCoercionIndex& coercionIndex, Context::Associated& v, const Vector<OrderPlace>* cuts = nullptr) {
         const auto& sp = v.span;
 
         TRACE_FUNCTION_F(v);
@@ -1595,11 +1752,19 @@ namespace {
                     }
                 );
             };
+            Vector<unsigned> cutIvars;
             for (const auto& endpoint : coercionIndex[infer->index].endpoints) {
                 if (endpoint.direction == SolverCoercionConstraint::Direction::InputIsDestination && context.getType(endpoint.other)->is_Diverge()) {
                     continue;
                 }
                 if (endpoint.obligation && endpoint.obligation->argumentSite) {
+                    continue;
+                }
+                /* A coercion that comes after a ready argument binding in check order
+                   has not happened yet (`Err(From::from(e))`'s coercion of the inner
+                   call's result while `e` is still to bind `?E`): it says nothing about
+                   the goal's self. */
+                if (endpoint.obligation && cuts && (!cuts->empty() || !coercionIndex.pendingNodeCut.empty()) && coercionPastArgumentCut(context, coercionIndex, *cuts, cutIvars, *endpoint.obligation)) {
                     continue;
                 }
                 append(endpoint);
@@ -3653,6 +3818,89 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                 return this->revisitInnerReal(context, pattern, outerTy, outerMode, isFallbackMode, nestedRoot);
             }
 
+            /* The revisit decides the scrutinee's type and, with it, the types of the
+               pattern's bindings: `e` of `Err(e)` on a call still to be resolved is
+               of that call's component. */
+            static void collectBindingDependencies(const Context& context, const Span& sp, const HIRPattern& pat, Vector<unsigned>& dependencies) {
+                const auto collectType = [&](const HIRType* type) {
+                    visitTyWith(type, [&](const HIRType* inner) {
+                        const auto* resolved = context.getType(inner);
+                        if (const auto* infer = resolved->opt_Infer(); infer && infer->index != ~0u) {
+                            dependencies.pushBack(infer->index);
+                        }
+                        return false;
+                    });
+                };
+                for (const auto& pb : pat.bindings) {
+                    collectType(context.getVar(sp, pb.slot));
+                }
+                switch (pat.data.tag()) {
+                    case HIRPatternData::TAG_Any:
+                    case HIRPatternData::TAG_Value:
+                    case HIRPatternData::TAG_Range:
+                    case HIRPatternData::TAG_PathValue:
+                        break;
+                    case HIRPatternData::TAG_Box:
+                        collectBindingDependencies(context, sp, *pat.data.as_Box().sub, dependencies);
+                        break;
+                    case HIRPatternData::TAG_Deref:
+                        collectBindingDependencies(context, sp, *pat.data.as_Deref().sub, dependencies);
+                        break;
+                    case HIRPatternData::TAG_Ref:
+                        collectBindingDependencies(context, sp, *pat.data.as_Ref().sub, dependencies);
+                        break;
+                    case HIRPatternData::TAG_Tuple:
+                        for (const auto& sub : pat.data.as_Tuple().subPatterns) {
+                            collectBindingDependencies(context, sp, sub, dependencies);
+                        }
+                        break;
+                    case HIRPatternData::TAG_SplitTuple:
+                        for (const auto& sub : pat.data.as_SplitTuple().leading) {
+                            collectBindingDependencies(context, sp, sub, dependencies);
+                        }
+                        for (const auto& sub : pat.data.as_SplitTuple().trailing) {
+                            collectBindingDependencies(context, sp, sub, dependencies);
+                        }
+                        break;
+                    case HIRPatternData::TAG_Slice:
+                        for (const auto& sub : pat.data.as_Slice().subPatterns) {
+                            collectBindingDependencies(context, sp, sub, dependencies);
+                        }
+                        break;
+                    case HIRPatternData::TAG_SplitSlice: {
+                        const auto& e = pat.data.as_SplitSlice();
+                        for (const auto& sub : e.leading) {
+                            collectBindingDependencies(context, sp, sub, dependencies);
+                        }
+                        if (e.extraBind.isValid()) {
+                            collectType(context.getVar(sp, e.extraBind.slot));
+                        }
+                        for (const auto& sub : e.trailing) {
+                            collectBindingDependencies(context, sp, sub, dependencies);
+                        }
+                        break;
+                    }
+                    case HIRPatternData::TAG_PathTuple:
+                        for (const auto& sub : pat.data.as_PathTuple().leading) {
+                            collectBindingDependencies(context, sp, sub, dependencies);
+                        }
+                        for (const auto& sub : pat.data.as_PathTuple().trailing) {
+                            collectBindingDependencies(context, sp, sub, dependencies);
+                        }
+                        break;
+                    case HIRPatternData::TAG_PathNamed:
+                        for (const auto& fieldPat : pat.data.as_PathNamed().subPatterns) {
+                            collectBindingDependencies(context, sp, fieldPat.second, dependencies);
+                        }
+                        break;
+                    case HIRPatternData::TAG_Or:
+                        if (!pat.data.as_Or().empty()) {
+                            collectBindingDependencies(context, sp, pat.data.as_Or()[0], dependencies);
+                        }
+                        break;
+                }
+            }
+
             void collectInferenceDependencies(const Context& context, Vector<unsigned>& dependencies) const override {
                 visitTyWith(outerTy, [&](const HIRType* inner) {
                     const auto* resolved = context.getType(inner);
@@ -3661,6 +3909,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     }
                     return false;
                 });
+                collectBindingDependencies(context, sp, pattern, dependencies);
             }
 
             // TODO: Recurse into inner patterns, creating new revisitors?
@@ -5294,7 +5543,7 @@ const HIRType* Context::Coercion::sourceType() const {
     return rightNodePtr ? (*rightNodePtr)->resType : rightTy;
 }
 
-void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr, bool argumentSite) {
+void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr, bool argumentSite, bool callArgument) {
     const auto* destination = this->ivars.getType(l);
     const auto* destinationInfer = destination->opt_Infer();
     const bool destinationRequiresSized = destinationInfer
@@ -5306,8 +5555,11 @@ void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& 
     this->linkCoerce.push_back(std::make_unique<Coercion>(this->nextRuleIdx++, l, &nodePtr));
     this->linkCoerce.back()->argumentSite = argumentSite;
     this->linkCoerce.back()->order = this->currentOrder;
-    if (argumentSite) {
+    /* A call's argument - a constructor's too - is coerced after its own subtree, in
+       check order; the place says so even when the parameter is not bound from it. */
+    if (argumentSite || callArgument) {
         this->linkCoerce.back()->bindingOrder = nodePtr->checkOrderEnd;
+        this->linkCoerce.back()->bindingStart = nodePtr->checkOrder;
     }
     DEBUG(StringView("++ ") << *this->linkCoerce.back());
     this->ivars.markChange();
@@ -5915,10 +6167,25 @@ void Context::compactIvars(const Span& sp) {
    inside the argument registers late but precedes the argument's coercion.  The cut
    of a component is the earliest place of a ready argument binding in it; the rules
    of that component past the cut wait a pass. */
-Vector<unsigned> argumentBindingCuts(const Context& context, const IvarCoercionIndex& coercionIndex) {
-    /* Empty when no argument binding is ready - the common sweep. */
-    Vector<unsigned> cuts;
+
+Vector<OrderPlace> argumentBindingCuts(const Context& context, const IvarCoercionIndex& coercionIndex) {
+    /* Empty when nothing cuts - the common sweep. */
+    Vector<OrderPlace> cuts;
     const auto count = coercionIndex.refs.size();
+    const auto ensureCuts = [&]() {
+        if (cuts.empty()) {
+            cuts.grow(count);
+            for (size_t i = 0; i < count; i++) {
+                cuts.pushBack(OrderPlace{});
+            }
+        }
+    };
+    const auto cutAt = [&](unsigned component, OrderPlace place) {
+        ensureCuts();
+        if (cuts[component].isNone() || cuts[component].after(place)) {
+            cuts.mut(component) = place;
+        }
+    };
     Vector<unsigned int> ivars;
     for (const auto& rule : context.linkCoerce) {
         if (!rule->argumentSite || !rule->rightNodePtr || rule->bindingOrder == 0) {
@@ -5934,21 +6201,14 @@ Vector<unsigned> argumentBindingCuts(const Context& context, const IvarCoercionI
             continue;
         }
         const auto component = coercionIndex.componentOf(ivars[0]);
-        if (cuts.empty()) {
-            cuts.grow(count);
-            for (size_t i = 0; i < count; i++) {
-                cuts.pushBack(~0u);
-            }
-        }
-        if (rule->bindingOrder < cuts[component]) {
-            cuts.mut(component) = rule->bindingOrder;
-        }
+        cutAt(component, coercionPlace(*rule));
     }
     return cuts;
 }
 
-bool associatedPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<unsigned>& cuts, Vector<unsigned>& ivars, const Context::Associated& rule) {
+bool associatedPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<OrderPlace>& cuts, Vector<unsigned>& ivars, const Context::Associated& rule) {
     const auto count = coercionIndex.refs.size();
+    const OrderPlace place{rule.order, rule.order};
     ivars.clear();
     coercionIndex.collectIvars(context.getType(rule.implTy), ivars);
     for (const auto* type : rule.params.types) {
@@ -5957,8 +6217,37 @@ bool associatedPastArgumentCut(const Context& context, const IvarCoercionIndex& 
     if (rule.name != "") {
         coercionIndex.collectIvars(context.getType(rule.leftTy), ivars);
     }
+    /* A node still to be revisited - a method call whose receiver is not known
+       yet - is one upstream resolved before checking anything after it: the rules
+       of its component past its place wait for it too. */
+    const auto& pendingCuts = coercionIndex.pendingNodeCut;
     for (const auto index : ivars) {
-        if (index < count && rule.order > cuts[coercionIndex.componentOf(index)]) {
+        if (index >= count) {
+            continue;
+        }
+        const auto component = coercionIndex.componentOf(index);
+        if (!cuts.empty() && !cuts[component].isNone() && place.after(cuts[component])) {
+            DEBUG(StringView("- R") << rule.ruleIdx << StringView(" at ") << rule.order << StringView(" waits for the binding at ") << cuts[component].end);
+            return true;
+        }
+        if (!pendingCuts.empty() && !pendingCuts[component].isNone() && place.after(pendingCuts[component])) {
+            DEBUG(StringView("- R") << rule.ruleIdx << StringView(" at ") << rule.order << StringView(" waits for the pending node at ") << pendingCuts[component].end);
+            context.pendingCutHolds++;
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Whether anything may cut - the cheap test before the index is built. */
+bool anyOrderCut(const Context& context) {
+    for (const auto* node : context.toVisit) {
+        if (!pendingNodeCutPlace(*node).isNone()) {
+            return true;
+        }
+    }
+    for (const auto& rule : context.linkCoerce) {
+        if (rule->argumentSite && rule->rightNodePtr && rule->bindingOrder != 0 && argumentBinding(context, *rule).destination) {
             return true;
         }
     }
@@ -6018,7 +6307,7 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
         rule.order = indexedRule.order;
 
         DEBUG(StringView("- ") << rule);
-        if (associatedStillStalled(context, coercionIndex, rule) || (!cuts.empty() && associatedPastArgumentCut(context, coercionIndex, cuts, cutIvars, rule))) {
+        if (associatedStillStalled(context, coercionIndex, rule) || ((!cuts.empty() || !coercionIndex.pendingNodeCut.empty()) && associatedPastArgumentCut(context, coercionIndex, cuts, cutIvars, rule))) {
             context.storeAssociated(i, mv$(rule), indexedKey);
             if (linkAssocIterLimit-- == 0) {
                 DEBUG(StringView("link_assoc iteration limit exceeded"));
@@ -6039,7 +6328,7 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
            without resolving the goal, and that refinement must wake the rule. */
         setAssociatedStall(context, rule);
         context.currentOrder = rule.order;
-        const auto result = checkAssociated(context, coercionIndex, rule);
+        const auto result = checkAssociated(context, coercionIndex, rule, &cuts);
         context.currentOrder = 0;
         rule.isAmbiguous = result == AssociatedCheckResult::Ambiguous;
 
@@ -6160,10 +6449,17 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
     const unsigned int MAX_ITERATIONS = 5000;
     unsigned int count = 0;
     while (context.takeChanged() /*&& context.has_rules()*/ && count < MAX_ITERATIONS) {
+        context.pendingCutHolds = 0;
         TRACE_FUNCTION_F(StringView("=== PASS ") << count << StringView(" ==="));
         std::optional<IvarCoercionIndex> ivarCoercionIndex;
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Coercion checking"));
+            Vector<OrderPlace> coercionCuts;
+            Vector<unsigned> cutIvars;
+            if (anyOrderCut(context)) {
+                ivarCoercionIndex.emplace(context);
+                coercionCuts = argumentBindingCuts(context, *ivarCoercionIndex);
+            }
             /* Settling one of these can make another ready, and the other may sit
                earlier in the list than the sweep has already reached.  Sweeping once
                leaves it for the next pass, and a chain ordered against the list settles
@@ -6172,10 +6468,16 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                decisions are the same ones in the same order, without a whole pass
                between each. */
             bool coercionSettled = true;
+            bool anyConsumed = false;
             while (coercionSettled) {
                 coercionSettled = false;
                 for (size_t i = 0; i < context.linkCoerce.size();) {
                     auto ent = mv$(context.linkCoerce[i]);
+                    if (ivarCoercionIndex && (!coercionCuts.empty() || !ivarCoercionIndex->pendingNodeCut.empty()) && coercionPastArgumentCut(context, *ivarCoercionIndex, coercionCuts, cutIvars, *ent)) {
+                        context.linkCoerce[i] = mv$(ent);
+                        ++i;
+                        continue;
+                    }
                     const auto& span = ent->span();
                     if (ent->rightNodePtr) {
                         auto& srcTy = (*ent->rightNodePtr)->resType;
@@ -6191,6 +6493,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                         DEBUG(StringView("- Consumed coercion R") << ent->ruleIdx << StringView(" ") << ent->leftTy << StringView(" := ") << ent->sourceType());
                         context.linkCoerce.erase(context.linkCoerce.begin() + i);
                         coercionSettled = true;
+                        anyConsumed = true;
                     } else {
                         context.linkCoerce[i] = mv$(ent);
                         ++i;
@@ -6198,7 +6501,11 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 }
             }
             if (!context.ivars.peekChanged()) {
-                ivarCoercionIndex.emplace(context);
+                /* The index built for the sweep's cuts still describes the rules when
+                   the sweep consumed and changed nothing. */
+                if (!ivarCoercionIndex || anyConsumed) {
+                    ivarCoercionIndex.emplace(context);
+                }
                 processAssociatedRules(context, *ivarCoercionIndex);
             }
         }
@@ -6276,8 +6583,15 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             }
             Vector<unsigned int> ivars;
             bool bound = false;
+            /* Upstream binds the arguments in check order, so of a component's ready
+               bindings the earliest one - an inner call's before the enclosing call's
+               - is made first. */
+            Vector<const Context::Coercion*> earliest;
+            for (size_t i = 0; i < count; i++) {
+                earliest.pushBack(nullptr);
+            }
             for (const auto& rule : context.linkCoerce) {
-                if (!rule->argumentSite || !rule->rightNodePtr) {
+                if (!rule->argumentSite || !rule->rightNodePtr || !argumentBinding(context, *rule).destination) {
                     continue;
                 }
                 ivars.clear();
@@ -6286,7 +6600,14 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                     continue;
                 }
                 const auto component = ivarCoercionIndex->componentOf(ivars[0]);
-                if (boundComponents[component]) {
+                const auto* current = earliest[component];
+                if (!current || coercionPlace(*current).after(coercionPlace(*rule)) || (coercionPlace(*current).end == coercionPlace(*rule).end && coercionPlace(*current).start == coercionPlace(*rule).start && rule->ruleIdx < current->ruleIdx)) {
+                    earliest.mut(component) = rule.get();
+                }
+            }
+            for (size_t component = 0; component < count; component++) {
+                const auto* rule = earliest[component];
+                if (!rule || boundComponents[component]) {
                     continue;
                 }
                 context.currentOrder = rule->bindingOrder;
@@ -6302,6 +6623,14 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             }
         }
 
+        /* Nothing else moved and something waited for a node this checker could not
+           resolve from what precedes it: from here on the pending-node cuts are
+           lifted, and the rules after such a node may say what it needs. */
+        if (!context.ivars.peekChanged() && context.pendingCutHolds > 0 && !context.pendingCutsLifted) {
+            DEBUG(StringView("--- Pending-node cuts lifted"));
+            context.pendingCutsLifted = true;
+            context.ivars.markChange();
+        }
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- IVar coercion effects"));
             for (unsigned int sourcePass = 0; sourcePass < 2; sourcePass++) {
@@ -7823,12 +8152,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallPath& node) -> void {
        parameter type, and the declared parameter type is then equal to it. */
     const auto expectedInputs = this->context.expectedInputsForExpectedOutput(node.span(), this->context.callExpectation(node), node.cache.argTypes, 0);
     for (unsigned int i = 0; i < node.cache.argTypes.length() - 1; i++) {
-        if (expectedInputs[i] != node.cache.argTypes[i]) {
-            this->context.equateTypesCoerce(node.span(), expectedInputs[i], node.args[i], true);
-            this->context.equateTypes(node.span(), node.cache.argTypes[i], expectedInputs[i]);
-        } else {
-            this->context.equateTypesCoerce(node.span(), node.cache.argTypes[i], node.args[i], true);
-        }
+        coerceCallArgument(this->context, node.span(), node.cache.argTypes[i], expectedInputs[i], node.args[i], true);
     }
     this->context.equateTypes(node.span(), node.resType, node.cache.argTypes.back());
     this->context.requireSized(node.span(), node.resType);
@@ -8092,7 +8416,17 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
                 return false;
             }
             if (infer->index < methodCoercions.refs.size()) {
-                hasPendingReceiverCoercion = !methodCoercions[infer->index].coercions.empty();
+                /* Only a coercion before the call in check order can still say what
+                   the receiver is at lookup - upstream had it by then; one after it
+                   (`from_vec(buf)` after `buf.as_mut_ptr()`) is no reason to wait, and
+                   waiting would hold the very coercion that waits for this call. */
+                const OrderPlace callPlace{node.checkOrderEnd, node.checkOrder};
+                for (const auto* coercion : methodCoercions[infer->index].coercions) {
+                    if (node.checkOrderEnd == 0 || !coercionPlace(*coercion).after(callPlace)) {
+                        hasPendingReceiverCoercion = true;
+                        break;
+                    }
+                }
             }
             return hasPendingReceiverCoercion;
         });
@@ -8212,12 +8546,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
         const auto expectedInputs = this->context.expectedInputsForExpectedOutput(sp, this->context.callExpectation(node), node.cache.argTypes, 1);
         for (unsigned int i = 0; i < node.args.size(); i++) {
             DEBUG(StringView("> ARG ") << i << StringView(" : ") << node.cache.argTypes[1 + i] << StringView(" expected ") << expectedInputs[i]);
-            if (expectedInputs[i] != node.cache.argTypes[1 + i]) {
-                this->context.equateTypesCoerce(sp, expectedInputs[i], node.args[i], true);
-                this->context.equateTypes(sp, node.cache.argTypes[1 + i], expectedInputs[i]);
-            } else {
-                this->context.equateTypesCoerce(sp, node.cache.argTypes[1 + i], node.args[i], true);
-            }
+            coerceCallArgument(this->context, sp, node.cache.argTypes[1 + i], expectedInputs[i], node.args[i], true);
         }
         DEBUG(StringView("> Ret : ") << node.cache.argTypes.back());
         this->context.equateTypes(sp, node.resType, node.cache.argTypes.back());
@@ -9675,6 +10004,7 @@ auto IvarCoercionIndex::buildComponents() -> void {
             }
         }
     };
+    Vector<std::pair<unsigned int, OrderPlace>> pendingNodes;
     for (auto* node : context.toVisit) {
         OperandTypes operands(context.crate.types);
         node->visit(operands);
@@ -9683,6 +10013,14 @@ auto IvarCoercionIndex::buildComponents() -> void {
             collectType(type);
         }
         collectOwnTypes(*node);
+        if (const auto cutPlace = pendingNodeCutPlace(*node); !cutPlace.isNone()) {
+            for (const auto member : members) {
+                if (member < count) {
+                    pendingNodes.pushBack({member, cutPlace});
+                    break;
+                }
+            }
+        }
         unite();
     }
     for (const auto& revisit : context.advRevisits) {
@@ -9703,6 +10041,19 @@ auto IvarCoercionIndex::buildComponents() -> void {
     }
     for (size_t i = 0; i < count; i++) {
         componentRoots.mut(i) = find(static_cast<unsigned int>(i));
+    }
+    if (!pendingNodes.empty() && !context.pendingCutsLifted) {
+        pendingNodeCut.grow(count);
+        for (size_t i = 0; i < count; i++) {
+            pendingNodeCut.pushBack(OrderPlace{});
+        }
+        for (const auto& pending : pendingNodes) {
+            const auto component = componentRoots[pending.first];
+            DEBUG(StringView("pending node cut at ") << pending.second.end << StringView("/") << pending.second.start << StringView(" via ivar ") << pending.first << StringView(" component ") << component);
+            if (pendingNodeCut[component].isNone() || pendingNodeCut[component].after(pending.second)) {
+                pendingNodeCut.mut(component) = pending.second;
+            }
+        }
     }
 }
 
@@ -11025,6 +11376,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeTupleVariant& node) -> void {
     applyBoundsAsRules(this->context, sp, *generics, monomorphCb, /*is_impl_level=*/true);
 
     node.argTypes.zero(node.args.size());
+    Vector<const HIRType*> formalTypes;
     for (unsigned int i = 0; i < node.args.size(); i++) {
         const auto& desTyR = fields[i].ent;
         const auto* desTy = &desTyR;
@@ -11032,13 +11384,22 @@ auto ExprVisitorEnum::visit(HIRExprNodeTupleVariant& node) -> void {
             node.argTypes.mut(i) = monomorphCb.monomorphType(sp, desTyR);
             desTy = &node.argTypes[i];
         }
-
-        this->context.equateTypesCoerce(node.span(), *desTy, node.args[i]);
+        formalTypes.pushBack(*desTy);
+    }
+    formalTypes.pushBack(ty);
+    /* Upstream checks a tuple-variant constructor as a call: `check_argument_types`
+       with the inputs the expected type gives (`Some(|ptr| ..)` under
+       `Option<unsafe fn(*mut u8)>` coerces the closure to the fn pointer). */
+    const auto expectedInputs = this->context.expectedInputsForExpectedOutput(sp, this->expectationFor(node), formalTypes, 0);
+    Vector<const HIRType*> argumentExpectations;
+    for (unsigned int i = 0; i < node.args.size(); i++) {
+        argumentExpectations.pushBack(this->coerceArgument(sp, formalTypes[i], expectedInputs[i], node.args[i], false));
     }
 
     auto _ = this->pushInnerCoerceScoped(true);
-    for (auto& val : node.args) {
-        this->visitChild(*val);
+    for (size_t i = 0; i < node.args.size(); i++) {
+        auto& val = node.args[i];
+        this->visitExpecting(val, argumentExpectations[i]);
         this->context.requireSized(node.span(), val->resType);
         node.diverges = node.diverges || this->nodeDiverges(*val);
     }
@@ -11268,12 +11629,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallPath& node) -> void {
            parameter type, and the declared parameter type is then equal to it. */
         expectedInputs = this->context.expectedInputsForExpectedOutput(node.span(), expected, node.cache.argTypes, 0);
         for (unsigned int i = 0; i < node.cache.argTypes.length() - 1; i++) {
-            if (expectedInputs[i] != node.cache.argTypes[i]) {
-                this->context.equateTypesCoerce(node.span(), expectedInputs[i], node.args[i], true);
-                this->context.equateTypes(node.span(), node.cache.argTypes[i], expectedInputs[i]);
-            } else {
-                this->context.equateTypesCoerce(node.span(), node.cache.argTypes[i], node.args[i], true);
-            }
+            expectedInputs.mut(i) = this->coerceArgument(node.span(), node.cache.argTypes[i], expectedInputs[i], node.args[i]);
         }
         this->context.equateTypes(node.span(), node.resType, node.cache.argTypes.back());
     } else {
@@ -11930,7 +12286,7 @@ void stl::output<ZeroCopyOutput, CoerceResult>(ZeroCopyOutput& out, CoerceResult
 
 template <>
 void stl::output<ZeroCopyOutput, Context::Coercion>(ZeroCopyOutput& os, const Context::Coercion& v) {
-    os << StringView("R") << v.ruleIdx << StringView(" ") << v.leftTy << StringView(" := ");
+    os << StringView("R") << v.ruleIdx << StringView("@") << v.order << StringView("/") << v.bindingOrder << StringView(" ") << v.leftTy << StringView(" := ");
     if (v.rightNodePtr) {
         os << static_cast<const void*>(v.rightNodePtr) << StringView(" ") << static_cast<const void*>(&**v.rightNodePtr) << StringView(" (") << v.sourceType() << StringView(")");
     } else {
@@ -11941,7 +12297,7 @@ void stl::output<ZeroCopyOutput, Context::Coercion>(ZeroCopyOutput& os, const Co
 
 template <>
 void stl::output<ZeroCopyOutput, Context::Associated>(ZeroCopyOutput& os, const Context::Associated& v) {
-    os << StringView("R") << v.ruleIdx << StringView(" ");
+    os << StringView("R") << v.ruleIdx << StringView("@") << v.order << StringView(" ");
     if (v.name == "") {
         os << StringView("req ty ") << v.implTy << StringView(" impl ") << v.trait << v.params;
     } else {

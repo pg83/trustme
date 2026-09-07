@@ -42,6 +42,7 @@ struct Context {
            argument - the place its binding has: after the argument's own subtree. */
         unsigned order = 0;
         unsigned bindingOrder = 0;
+        unsigned bindingStart = 0;
 
         Coercion(unsigned ruleIdx, const HIRType* leftTy, HIRExprNodeP* rightNodePtr);
         Coercion(unsigned ruleIdx, const Span& span, const HIRType* leftTy, const HIRType* rightTy, SolverCoercionOp op);
@@ -87,6 +88,13 @@ struct Context {
     /* The check-order place (`HIRExprNode::checkOrder`) a rule registered now belongs
        to: the node being visited, or the rule being checked; 0 outside both. */
     unsigned currentOrder = 0;
+    /* Rules held back this pass by a node still to be revisited, and whether such
+       cuts were given up: upstream resolved every such node before checking what
+       follows, but this checker's lookup may need what only a later rule gives
+       (`sum::<S>()` before the `FnOnce` bound that fixes `S`); when nothing else
+       can move, the cuts are lifted for the rest of the body. */
+    mutable unsigned pendingCutHolds = 0;
+    bool pendingCutsLifted = false;
 
     std::vector<std::unique_ptr<Coercion>> linkCoerce;
     std::vector<Associated> linkAssoc;
@@ -175,7 +183,7 @@ struct Context {
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params);
     void compactIvars(const Span& sp);
 
-    void equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr, bool argumentSite = false);
+    void equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr, bool argumentSite = false, bool callArgument = false);
     /* Upstream `check_argument_types`: with an expected type for the call's result,
        the parameter types resolved under a probe that relates the declared result to
        it are the arguments' coercion targets (`expected_input_tys`); otherwise the
