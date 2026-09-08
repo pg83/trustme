@@ -12176,6 +12176,18 @@ auto ExprVisitorEnum::visit(HIRExprNodeField& node) -> void {
     this->visitChild(*node.value);
     this->inheritDivergence(node, *node.value);
 
+    /* Upstream `check_field` resolves the field on the spot once the receiver's type
+       is known (`structurally_resolve_type`), so what is assigned to `state.0` is
+       checked expecting the field's type: `Some(Box::new(..))` then hands `Box::new`
+       the expected `Box<dyn Any + Send>`, and the argument is boxed before it is
+       unsized - rather than the trait object being read back into `Box::new`'s `T`
+       from a coercion of the whole `Option` (combine's `AnyPartialState`).  A
+       receiver still open keeps the revisit. */
+    ExprVisitorRevisit eager{this->context};
+    node.visit(eager);
+    if (eager.nodeCompleted()) {
+        return;
+    }
     this->context.addRevisit(node);
 }
 
