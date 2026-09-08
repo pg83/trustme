@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -132,4 +133,66 @@ func TestRunRetryingTextBusyRetriesOnlyThatError(t *testing.T) {
 	if !errors.Is(err, other) || calls != 1 {
 		t.Fatalf("expected the other error at once, got err=%v calls=%d", err, calls)
 	}
+}
+
+func TestCdylibLibraryLinksASharedLibraryBesideItsRlib(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "src", "lib.rs")
+
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	library := &Target{
+		kind: "lib", name: "dylib_dep", path: "src/lib.rs", crateTypes: []string{"cdylib", "rlib"},
+	}
+	pkg := &Package{
+		dir: root, manifestPath: filepath.Join(root, "Cargo.toml"), name: "dylib-dep",
+		version: Version{major: 1}, targets: []*Target{library},
+		activeFeatures: map[string]bool{},
+	}
+	context := &BuildContext{
+		opts: BuildOptions{command: "build", profile: "debug", targetDir: filepath.Join(root, "target")},
+		root: pkg, workspace: &Workspace{dir: root}, host: "host", target: "host",
+	}
+	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
+	_, artifacts := builder.rootTasks()
+
+	if got := crateType(library); got != "rlib" {
+		t.Fatalf("cdylib compiles as %q, want rlib", got)
+	}
+
+	unit := builder.units[builder.libraryTask(pkg, true)]
+	if unit == nil || unit.metadata < 0 || !strings.HasSuffix(unit.rs.outputs[unit.metadata].name, ".rlib") {
+		t.Fatal("cdylib compile unit has no rlib metadata output")
+	}
+
+	shared := filepath.Join(root, "target", "debug", "libdylib_dep"+sharedLibrarySuffix())
+	found := false
+	for _, artifact := range artifacts {
+		if artifact.path == shared {
+			found = true
+			if artifact.task.kind != "LD" {
+				t.Fatalf("shared library comes from a %q task, want LD", artifact.task.kind)
+			}
+			if artifact.task == builder.finalTask(unit.rs) {
+				t.Fatal("shared library is the rlib's own final task")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no artifact installs %s: %v", shared, artifactPaths(artifacts))
+	}
+}
+
+func artifactPaths(artifacts []InstallArtifact) []string {
+	var paths []string
+	for _, artifact := range artifacts {
+		paths = append(paths, artifact.path)
+	}
+
+	return paths
 }

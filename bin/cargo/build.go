@@ -241,6 +241,14 @@ func (b *Builder) publishedDependencies() ([]*Task, []InstallArtifact) {
 				})
 			}
 		}
+
+		if linksCdylib(unit.target) {
+			shared := b.sharedLibraryTask(unit.rs)
+			roots = append(roots, shared)
+			artifacts = append(artifacts, InstallArtifact{
+				task: shared, index: 0, path: b.sharedLibraryPath(unit),
+			})
+		}
 	}
 
 	return roots, artifacts
@@ -361,6 +369,14 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact) {
 					artifacts = append(artifacts, InstallArtifact{
 						task: b.codegenTask(task), index: 0,
 						path: b.artifact(root, unit.target, isHost) + ".o",
+					})
+				}
+
+				if !checkOnly && linksCdylib(unit.target) {
+					shared := b.sharedLibraryTask(task)
+					tasks = append(tasks, shared)
+					artifacts = append(artifacts, InstallArtifact{
+						task: shared, index: 0, path: b.sharedLibraryPath(unit),
 					})
 				}
 			}
@@ -681,6 +697,59 @@ func (b *Builder) finalTask(compile *Task) *Task {
 	b.addSystemInputs(task, unit.isHost, true)
 	b.tasks[key] = task
 	unit.final = task
+	b.units[task] = unit
+	linkedUnits := b.linkedUnits(unit)
+
+	for _, linked := range linkedUnits {
+		task.deps = append(task.deps, b.codegenTask(linked.rs))
+	}
+
+	task.action = func(ctx *TaskContext) {
+		b.linkUnit(ctx, unit, linkedUnits)
+	}
+
+	return task
+}
+
+// A cdylib target compiles as the rlib its dependents link (crateType); the
+// shared library Cargo produces for it besides - target/debug/libdylib_dep.so,
+// which backtrace's accuracy test opens next to its own executable - is linked
+// here as a binary is: from that rlib's object, its dependencies' objects and
+// the standard library.
+func linksCdylib(target *Target) bool {
+	return target.kind == "lib" && !target.procMacro && contains(target.crateTypes, "cdylib")
+}
+
+func (b *Builder) sharedLibraryPath(unit *CompileUnit) string {
+	return filepath.Join(b.outputDir(unit.isHost), "lib"+unit.target.name+sharedLibrarySuffix())
+}
+
+func (b *Builder) sharedLibraryTask(compile *Task) *Task {
+	unit := b.units[compile]
+
+	if unit == nil {
+		throwFmt("internal: no compile unit for %s", compile.name)
+	}
+
+	key := strings.Replace(unit.rs.key, "rs|", "so|", 1)
+
+	if task := b.tasks[key]; task != nil {
+		return task
+	}
+
+	cc := b.codegenTask(compile)
+	cxx := b.cxxSpec(unit.isHost)
+	task := &Task{
+		key:       key,
+		name:      compile.name + " (shared library)",
+		kind:      "LD",
+		deps:      []*Task{cc},
+		inputs:    []string{cxx.compiler},
+		outputs:   []TaskOutput{{name: "lib" + unit.target.name + sharedLibrarySuffix()}},
+		signature: append([]string{"link", "shared"}, b.cxxSignature(unit.isHost)...),
+	}
+	b.addSystemInputs(task, unit.isHost, true)
+	b.tasks[key] = task
 	b.units[task] = unit
 	linkedUnits := b.linkedUnits(unit)
 
@@ -1610,8 +1679,10 @@ func crateType(target *Target) string {
 		return "proc-macro"
 	}
 
+	// A cdylib compiles as the rlib its dependents use; the shared library
+	// Cargo produces for it as well is linked from that rlib (sharedLibraryTask).
 	if len(target.crateTypes) == 0 || target.crateTypes[0] == "lib" ||
-		target.crateTypes[0] == "dylib" && !dylibEnabled() {
+		target.crateTypes[0] == "dylib" && !dylibEnabled() || target.crateTypes[0] == "cdylib" {
 		return "rlib"
 	}
 
