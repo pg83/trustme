@@ -1773,7 +1773,10 @@ namespace {
         TRACE_FUNCTION;
         Token tok;
 
-        if (lex.lookahead(0) == TOK_COMMA || lex.lookahead(0) == TOK_BRACE_OPEN || lex.lookahead(0) == TOK_SEMICOLON) {
+        /* An empty bound list, `T:` - before `,`, `{`, `;`, and also before `>` or a
+           default (combine's `tuple_parser!` writes `impl<Input: Stream, $h:, $($id:),*>`,
+           whose last parameter is followed by `>`). */
+        if (lex.lookahead(0) == TOK_COMMA || lex.lookahead(0) == TOK_BRACE_OPEN || lex.lookahead(0) == TOK_SEMICOLON || lex.lookahead(0) == TOK_GT || lex.lookahead(0) == TOK_GTE || lex.lookahead(0) == TOK_EQUAL) {
             if (retainBareType) {
                 ret.bareBoundTypes.pushBack(mv$(checkedType));
             }
