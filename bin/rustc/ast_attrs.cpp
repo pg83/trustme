@@ -109,6 +109,28 @@ std::string ASTAttribute::parseParenString() const {
     return result;
 }
 
+RcString ASTAttribute::parseParenKeyString(const char* key) const {
+    TTStream lex(span_, ParseState(), data());
+    RcString result;
+    lex.getTokenCheck(TOK_PAREN_OPEN);
+    while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
+        const auto name = lex.getTokenCheck(TOK_IDENT).ident().name;
+        if (lex.lookahead(0) == TOK_EQUAL) {
+            lex.getTokenCheck(TOK_EQUAL);
+            auto value = lex.getToken();
+            if (name == key && value.type() == TOK_STRING) {
+                result = RcString::newInterned(value.str());
+            }
+        }
+        if (lex.lookahead(0) != TOK_COMMA) {
+            break;
+        }
+        lex.getTokenCheck(TOK_COMMA);
+    }
+    lex.getTokenCheck(TOK_PAREN_CLOSE);
+    return result;
+}
+
 void ASTAttribute::parseParenIdentListCb(ASTAttributeIdentCallback& itemCb) const {
     TTStream lex(span_, ParseState(), data());
     lex.getTokenCheck(TOK_PAREN_OPEN);

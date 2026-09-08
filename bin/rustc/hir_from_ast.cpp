@@ -2750,6 +2750,9 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     if (attrs.get("track_caller")) {
         markings.trackCaller = true;
     }
+    if (const auto* unstable = attrs.get("unstable")) {
+        markings.unstableFeature = unstable->parseParenKeyString("feature");
+    }
     markings.mustUse = attrs.has("must_use");
     markings.isNaked = f.markings.isNaked;
     markings.alignment = f.markings.alignment;

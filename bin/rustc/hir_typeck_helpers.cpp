@@ -7432,6 +7432,39 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             }
             possibilities.pop_back();
         }
+        /* Upstream `consider_candidates`: a candidate whose stability is denied here -
+           `#[unstable]` in another crate, the feature not enabled - is set aside while a
+           stable one applies, and reaches the pick only when none does (the
+           `unstable_name_collisions` case: `Itertools::intersperse` beside core's
+           unstable `Iterator::intersperse`). */
+        const auto stabilityDenied = [&](const MethodCandidate& candidate) {
+            const HIRFunction* function = candidate.traitDeclaration;
+            RcString itemCrate = candidate.declaringTrait.crateName();
+            if (candidate.inherentImpl) {
+                const auto method = candidate.inherentImpl->methods.find(methodName);
+                function = method == candidate.inherentImpl->methods.end() ? nullptr : &method->second.data;
+                itemCrate = candidate.inherentImpl->srcModule.crateName();
+            }
+            if (!function || function->markings.unstableFeature == "" || itemCrate == crate.crateName) {
+                return false;
+            }
+            return !crate.featureEnabled(function->markings.unstableFeature.c_str());
+        };
+        bool anyStable = false;
+        for (size_t candidate = firstPossibility; candidate < possibilities.size(); candidate++) {
+            anyStable = anyStable || !stabilityDenied(possibilities[candidate]);
+        }
+        for (size_t candidate = firstPossibility; anyStable && candidate < possibilities.size();) {
+            if (!stabilityDenied(possibilities[candidate])) {
+                candidate++;
+                continue;
+            }
+            DEBUG(StringView("unstable candidate set aside: ") << possibilities[candidate]);
+            for (size_t move = candidate; move + 1 < possibilities.size(); move++) {
+                possibilities[move] = std::move(possibilities[move + 1]);
+            }
+            possibilities.pop_back();
+        }
         if (crate.featureEnabled("supertrait_item_shadowing")) {
             /* RFC 3624's feature rule is declaration shadowing, not candidate
              * ranking: an identically named declaration in a strict subtrait

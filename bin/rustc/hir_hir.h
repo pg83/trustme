@@ -193,6 +193,9 @@ public:
     struct Markings {
         stl::Vector<unsigned> rustcLegacyConstGenerics;
         bool trackCaller = false;
+        /* `#[unstable(feature = ..)]`: the feature another crate must enable to use
+           the item (upstream `eval_stability`); empty when stable. */
+        RcString unstableFeature;
 
         bool mustUse = false;
         bool isNaked = false;

@@ -2112,6 +2112,7 @@ auto HirDeserialiser::deserialiseFunctionMarkings() -> HIRFunction::Markings {
     HIRFunction::Markings rv;
     rv.rustcLegacyConstGenerics = deserialiseVector<unsigned>();
     rv.trackCaller = in.readBool();
+    rv.unstableFeature = in.readIstring();
     rv.isRustcIntrinsic = in.readBool();
     rv.isRustcPromotable = in.readBool();
     rv.mustUse = in.readBool();
@@ -4642,6 +4643,7 @@ auto HirSerialiser::serialise(const HIRFunction::Markings& m) -> void {
     auto _ = out.openObject("HIR::Function::Markings");
     serialiseVec(m.rustcLegacyConstGenerics);
     out.writeBool(m.trackCaller);
+    out.writeString(m.unstableFeature);
     out.writeBool(m.isRustcIntrinsic);
     out.writeBool(m.isRustcPromotable);
     out.writeBool(m.mustUse);
