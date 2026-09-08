@@ -12768,6 +12768,15 @@ auto NextTraitGoalEvaluator::relateTypes(Candidate& candidate, const HIRType* le
             if (projectionSelf->is_Infer() || (selfGeneric && selfGeneric->isSolverExistential())) {
                 return {true, Certainty::Ambiguous};
             }
+            /* So does a self that is itself a projection still open: `<<Range<?T> as
+               AsRangedCoord>::CoordDescType as Ranged>::ValueType` against `f64` waits
+               for `?T` (the closure handed to `x_label_formatter` before the range's
+               element type is known).  The normalization goal on such a self is forced
+               ambiguous (`evaluateTyped`), and silently so under the suppressing
+               policy - no answer is not "no solution". */
+            if (selfIsUnresolvedProjectionOverIvar(normalizeGoalInput(projectionSelf))) {
+                return {true, Certainty::Ambiguous};
+            }
 
             bool sawResponse = false;
             bool sawOutput = false;
