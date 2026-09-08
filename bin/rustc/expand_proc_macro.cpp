@@ -1026,9 +1026,6 @@ auto ProcMacroInv::sendSpanDef(size_t index, const Span& sp) -> void {
 }
 
 auto ProcMacroInv::attrIsUsed(const RcString& n) const -> bool {
-    if (n == "repr") {
-        return true;
-    }
     return std::find(procMacroDesc.attributes.begin(), procMacroDesc.attributes.end(), n) != procMacroDesc.attributes.end();
 }
 
@@ -2174,9 +2171,16 @@ auto ProcMacroVisitor::visitAttr(const ASTAttribute& a) -> void {
         DEBUG(StringView("Skip ") << a << StringView(" (derive input)"));
         return;
     }
-    auto isLocal = (a.name().isTrivial() && pmi.attrIsUsed(a.name().asTrivial()));
-    if (this->emitAllAttrs || isLocal) {
-        if (isLocal) {
+    /* The macro is handed the item's attributes, `#[repr]` among them (upstream
+       sends the whole item); only the macro's own helper attributes - the
+       `attributes(..)` of its declaration - are inert for the rest of expansion.
+       `#[repr(C, packed)]` after a derive was marked inert with them, the `repr`
+       decorator never saw it, and zerocopy's `Unalign<T>` had its field's alignment
+       (`read_from_bytes` of a `u64` then took the `unreachable_unchecked` branch). */
+    const bool isHelper = a.name().isTrivial() && pmi.attrIsUsed(a.name().asTrivial());
+    const bool isRepr = a.name().isTrivial() && a.name().asTrivial() == "repr";
+    if (this->emitAllAttrs || isHelper || isRepr) {
+        if (isHelper) {
             a.markInert();
         }
         DEBUG(StringView("Send ") << a);

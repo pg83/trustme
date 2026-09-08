@@ -1,0 +1,11 @@
+[package]
+name = "proc-macro-repr-after-derive-unit"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "proc_macro_repr_after_derive_unit"
+path = "src/main.rs"
+
+[dependencies]
+marker-derive = { path = "marker-derive" }
