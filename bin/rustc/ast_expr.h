@@ -53,6 +53,10 @@ public:
     ASTAttributeList& attrs() {
         return attrs_;
     }
+
+    const ASTAttributeList& attrs() const {
+        return attrs_;
+    }
 };
 
 template <typename T, typename... Args>

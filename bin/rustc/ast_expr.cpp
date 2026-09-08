@@ -187,6 +187,17 @@ namespace {
         return en;
     }
 
+    /* A clone keeps the node's attributes: an `expr` fragment a macro uses twice
+       is cloned for its second use, and the `#[cfg]`s on the statements inside
+       (bitflags' `const FOO = { #[cfg(..)] { 1 } #[cfg(not(..))] { 2 } }`) must
+       still be there when the expansion is visited. */
+    static inline ASTExprNode* mkExprnodep(const Span& pos, const ASTAttributeList& attrs, ASTExprNode* en) {
+        en->setSpan(pos);
+        auto copy = attrs.clone();
+        en->setAttrs(std::move(copy));
+        return en;
+    }
+
     bool macroTokenNeedsSpace(eTokenType previous, eTokenType current) {
         switch (current) {
             case TOK_PAREN_CLOSE:
@@ -235,7 +246,7 @@ namespace {
         }
     }
 
-#define NEWNODE(type, ...) mkExprnodep(span(), makeAstExprNode<type>(pool() __VA_OPT__(, ) __VA_ARGS__))
+#define NEWNODE(type, ...) mkExprnodep(span(), attrs(), makeAstExprNode<type>(pool() __VA_OPT__(, ) __VA_ARGS__))
 
     void fmtIfletConditions(ZeroCopyOutput& os, const std::vector<ASTIfLetCondition>& conditions) {
         for (const auto& cond : conditions) {
