@@ -12,6 +12,7 @@
 #include "ast_generics.h"
 #include "parse_common.h"
 #include "expand_common.h"
+#include "lint_level.h"
 #include "parse_ttstream.h"
 #include "parse_parseerror.h"
 #include "expand_proc_macro.h"
@@ -603,9 +604,6 @@ namespace {
         virtual CfgLintLevel level() const = 0;
 
         AttrStage stage() const override;
-
-        template <typename F>
-        static void collectLintNames(const ASTAttribute& mi, const F& cb);
 
         void recordItemLevel(const ASTAttribute& mi, ASTItem& item) const;
 
@@ -4506,43 +4504,6 @@ auto CMultiHandlerLint::stage() const -> AttrStage {
     return AttrStage::Pre;
 }
 
-template <typename F>
-auto CMultiHandlerLint::collectLintNames(const ASTAttribute& mi, const F& cb) -> void {
-    TTStream lex(mi.span(), ParseState(), mi.data());
-    if (!lex.getTokenIf(TOK_PAREN_OPEN)) {
-        return;
-    }
-    unsigned depth = 1;
-    bool atName = true;
-    while (depth > 0) {
-        auto tok = lex.getToken();
-        if (tok == TOK_EOF) {
-            break;
-        }
-        if (tok == TOK_PAREN_OPEN) {
-            depth += 1;
-            atName = false;
-            continue;
-        }
-        if (tok == TOK_PAREN_CLOSE) {
-            depth -= 1;
-            atName = true;
-            continue;
-        }
-        if (tok == TOK_COMMA) {
-            atName = (depth == 1);
-            continue;
-        }
-        if (depth == 1 && atName && tok == TOK_IDENT) {
-            const auto next = lex.lookahead(0);
-            if (next == TOK_COMMA || next == TOK_PAREN_CLOSE) {
-                cb(tok.ident().name);
-            }
-        }
-        atName = false;
-    }
-}
-
 auto CMultiHandlerLint::recordItemLevel(const ASTAttribute& mi, ASTItem& item) const -> void {
     LintLevelOverrides* overrides = nullptr;
     if (auto* function = item.opt_Function()) {
@@ -4553,16 +4514,16 @@ auto CMultiHandlerLint::recordItemLevel(const ASTAttribute& mi, ASTItem& item) c
     if (!overrides) {
         return;
     }
-    collectLintNames(mi, [&](const RcString& name) {
+    for (const auto& name : LintNamesOf(mi)) {
         const bool isGroup = name == "warnings" || name == "unused";
         overrides->set(name, isGroup, this->level());
-    });
+    }
 }
 
 auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
-    collectLintNames(mi, [&](const RcString& name) {
+    for (const auto& name : LintNamesOf(mi)) {
         CfgSetLintLevel(*wb.settings, name.c_str(), this->level());
-    });
+    }
 }
 
 auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {

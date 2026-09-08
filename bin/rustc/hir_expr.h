@@ -7,6 +7,7 @@
 #include "hir_pattern.h"
 #include "hir_visitor.h"
 #include "hir_typeck_common.h"
+#include "settings.h"
 
 #include <std/lib/vector.h>
 
@@ -40,6 +41,10 @@ public:
        last place of its subtree; 0 for a node made after the numbering. */
     unsigned checkOrder = 0;
     unsigned checkOrderEnd = 0;
+
+    /* Lint levels set on the node itself - `#[allow(unsafe_code)]` on a statement
+       or a block - which hold for its subtree, the node included. */
+    const LintLevelOverrides* lintLevels = nullptr;
 
     const Span& span() const {
         return span_;

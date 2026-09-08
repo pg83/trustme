@@ -13,10 +13,13 @@ namespace {
     const char* const LINT_NAME = "unsafe_code";
 
     struct UnsafeBlockVisitor: public HIRExprVisitorDef {
+        const Settings& settings_;
         CfgLintLevel level_;
         const RcString& crateName_;
 
-        UnsafeBlockVisitor(HIRTypeInterner& types, CfgLintLevel level, const RcString& crateName);
+        UnsafeBlockVisitor(HIRTypeInterner& types, const Settings& settings, CfgLintLevel level, const RcString& crateName);
+
+        void visitNodePtr(HIRExprNodeP& nodePtr) override;
 
         void visit(HIRExprNodeBlock& node) override;
     };
@@ -72,11 +75,25 @@ void LintUnsafeCode(const WireBoard& wb, HIRCrate& crate) {
     visitor.visitCrate(crate);
 }
 
-UnsafeBlockVisitor::UnsafeBlockVisitor(HIRTypeInterner& types, CfgLintLevel level, const RcString& crateName)
+UnsafeBlockVisitor::UnsafeBlockVisitor(HIRTypeInterner& types, const Settings& settings, CfgLintLevel level, const RcString& crateName)
     : HIRExprVisitorDef(types)
+    , settings_(settings)
     , level_(level)
     , crateName_(crateName)
 {
+}
+
+/* A level set on the node itself - `#[allow(unsafe_code)]` on a statement or a
+   block - holds for its subtree, the node included. */
+auto UnsafeBlockVisitor::visitNodePtr(HIRExprNodeP& nodePtr) -> void {
+    if (!nodePtr->lintLevels) {
+        HIRExprVisitorDef::visitNodePtr(nodePtr);
+        return;
+    }
+    const auto saved = level_;
+    level_ = ApplyLintLevelOverrides(settings_, *nodePtr->lintLevels, LINT_NAME, level_);
+    HIRExprVisitorDef::visitNodePtr(nodePtr);
+    level_ = saved;
 }
 
 auto UnsafeBlockVisitor::visit(HIRExprNodeBlock& node) -> void {
@@ -127,8 +144,8 @@ auto UnsafeCodeVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void 
 }
 
 auto UnsafeCodeVisitor::visitExpr(HIRExprPtr& exp) -> void {
-    if (exp && level_ != CfgLintLevel::Allow) {
-        UnsafeBlockVisitor visitor(this->typeInterner(), level_, crateName_);
+    if (exp) {
+        UnsafeBlockVisitor visitor(this->typeInterner(), settings_, level_, crateName_);
         exp->visit(visitor);
     }
 }

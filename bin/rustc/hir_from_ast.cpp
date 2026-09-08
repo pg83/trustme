@@ -1,5 +1,7 @@
 #include "hir_from_ast.h"
 
+#include "lint_level.h"
+
 #include "common.h"
 #include "ast_ast.h"
 #include "hir_hir.h"
@@ -294,6 +296,8 @@ namespace {
         RcString resolveLoopLabel(const Span& sp, const Ident& target) const;
 
         HIRExprNodeP lower(ASTExprNode* ep);
+
+        void attachLintLevels(const ASTAttributeList& attrs, HIRExprNode& node);
 
         HIRExprNodeP lowerOpt(ASTExprNode* ep);
 
@@ -4365,7 +4369,22 @@ auto LowerHIRExprNodeVisitor::lower(ASTExprNode* ep) -> HIRExprNodeP {
     ep->visit(*this);
     ASSERT_BUG(ep->span(), rv, ep->typeName() << StringView(" - Yielded a nullptr HIR node"));
     rv->resType = ctx.crate->types.infer();
+    attachLintLevels(ep->attrs(), *rv);
     return std::move(rv);
+}
+
+/* A lint level set on a statement, an expression or a match arm holds for that
+   node's subtree, as upstream builds its lint levels over every attributed HIR
+   node: `#[allow(unsafe_code)]` on a `let` or on a block admits the `unsafe`
+   block inside under `#![deny(unsafe_code)]`. */
+auto LowerHIRExprNodeVisitor::attachLintLevels(const ASTAttributeList& attrs, HIRExprNode& node) -> void {
+    if (attrs.items.empty()) {
+        return;
+    }
+    LintLevelOverrides overrides;
+    if (CollectLintLevelAttributes(attrs, overrides)) {
+        node.lintLevels = ctx.crate->pool->make<LintLevelOverrides>(std::move(overrides));
+    }
 }
 
 auto LowerHIRExprNodeVisitor::lowerOpt(ASTExprNode* ep) -> HIRExprNodeP {
@@ -5013,6 +5032,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeMatch& v) -> void {
 
     for (auto& arm : v.arms) {
         HIRExprNodeMatch::Arm newArm{{}, ifletToGuards(arm.guard), lower(arm.code)};
+        attachLintLevels(arm.attrs, *newArm.code);
 
         for (const auto& pat : arm.patterns) {
             newArm.patterns.push_back(ctx.LowerHIRPattern(pat));
