@@ -287,8 +287,26 @@ namespace {
        with the projection left as an obligation: it relates to nothing
        structurally until that variable is known. */
     bool projectionIsOpen(const HIRPath::Data::Data_UfcsKnown& projection) {
+        /* A closure's signature is not in the type walk: `<FilterMap<I, closure(&F) -> ?R>
+           as Iterator>::Item` is open through `?R`, the return the closure's body has
+           not decided yet. */
         const auto hasLive = [](const HIRType* type) {
-            return visitTyWith(type, [](const HIRType* inner) { return inferIsLive(inner); });
+            return visitTyWith(type, [](const HIRType* inner) {
+                if (inferIsLive(inner)) {
+                    return true;
+                }
+                const auto* node = inner->opt_NodeType();
+                const auto* closure = node ? node->opt_Closure() : nullptr;
+                if (!closure) {
+                    return false;
+                }
+                for (const auto& arg : (*closure)->args) {
+                    if (visitTyWith(arg.second, [](const HIRType* t) { return inferIsLive(t); })) {
+                        return true;
+                    }
+                }
+                return visitTyWith((*closure)->returnType, [](const HIRType* t) { return inferIsLive(t); });
+            });
         };
         if (hasLive(projection.type)) {
             return true;
@@ -15345,6 +15363,15 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         const auto* left = requiredPath ? requiredPath->path.data.opt_UfcsKnown() : nullptr;
         const auto* right = outputPath ? outputPath->path.data.opt_UfcsKnown() : nullptr;
         if (!left || !right || left->trait.path != right->trait.path || left->item != right->item) {
+            return;
+        }
+        /* Two projections of one item are equal through their inputs only when both
+           are rigid.  One still open - `<FilterMap<I, closure(&F) -> ?R> as
+           Iterator>::Item`, whose closure return the body has not decided - is what
+           upstream normalizes to a fresh variable with the projection left as an
+           obligation: `chain`'s `U: IntoIterator<Item = Self::Item>` over two such
+           `FilterMap`s says nothing about their self types, and the pair waits. */
+        if (projectionIsOpen(*left) || projectionIsOpen(*right)) {
             return;
         }
         const auto appendParams = [&](const HIRPathParams& lhs, const HIRPathParams& rhs) {
