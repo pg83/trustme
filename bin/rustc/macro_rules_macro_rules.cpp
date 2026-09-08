@@ -1680,6 +1680,23 @@ namespace {
                     return false;
                 }
                 goto fn;
+            /* `async unsafe? extern? fn`: the qualifiers of a function item as
+               upstream's grammar orders them (`const? async? unsafe? extern? fn`);
+               tokio's `cfg_rt! { pub async fn yield_now() { .. } }` hands one to an
+               `$item` fragment. */
+            case TOK_RWORD_ASYNC:
+                lex.consume();
+                if (lex.next() == TOK_RWORD_UNSAFE) {
+                    lex.consume();
+                }
+                if (lex.next() == TOK_RWORD_EXTERN) {
+                    lex.consume();
+                    lex.consumeIf(TOK_STRING);
+                }
+                if (!lex.consumeIf(TOK_RWORD_FN)) {
+                    return false;
+                }
+                goto fn;
             case TOK_RWORD_FN:
                 lex.consume();
             fn:
