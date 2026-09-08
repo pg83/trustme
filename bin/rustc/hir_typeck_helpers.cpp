@@ -12216,7 +12216,26 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
                 return;
             }
             const auto pattern = instantiate_.monomorphType(span_, candidate, true);
+            DEBUG(StringView("relations.type pattern ") << pattern << StringView(" value ") << value);
             failed = unifier_.unify(value, pattern) == Unifier::Outcome::Mismatch;
+        }
+
+        /* Both sides the candidate's own: the requirement `Output = U` of `F: Fn(U,
+           I::Item) -> U` against the alias `<F as FnOnce<(U, I::Item)>>::Output` its
+           trait names, when no response supplied the output.  Instantiated on both
+           sides, the alias mentions the pattern's probe variable, and the unifier
+           normalizes it or defers (upstream's `AliasRelate`) instead of binding `U` to
+           an alias over its own existential, which nothing could normalize later
+           (rayon's `fold(|| 0, |a, b| a + b).find_any(..)`: `U: Send` on it had no
+           solution). */
+        void candidateType(const HIRType* candidate, const HIRType* value) {
+            if (failed) {
+                return;
+            }
+            const auto pattern = instantiate_.monomorphType(span_, candidate, true);
+            const auto instantiatedValue = instantiate_.monomorphType(span_, value, true);
+            DEBUG(StringView("relations.candidateType pattern ") << pattern << StringView(" value ") << instantiatedValue);
+            failed = unifier_.unify(instantiatedValue, pattern) == Unifier::Outcome::Mismatch;
         }
 
         void value(const HIRConstGeneric& candidate, const HIRConstGeneric& value) {
@@ -12260,13 +12279,22 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
         {
         }
 
+        /* A probe variable is known by its index: a literal class it took from a
+           variable it joined (`?131` from `|| 0`'s `{integer}`) makes it another node,
+           and read by identity it would leave with the candidate's parameters. */
+        static bool isProbeVariable(const CandidateTypeBinding& binding, const HIRType* type) {
+            const auto* infer = type->opt_Infer();
+            const auto* probe = binding.probe->opt_Infer();
+            return infer && probe && infer->index == probe->index;
+        }
+
         const HIRType* monomorphType(const Span& sp, const HIRType* type, bool allowInfer = true) const override {
             for (const auto& binding : typeBindings_) {
-                if (binding.probe != type) {
+                if (!isProbeVariable(binding, type)) {
                     continue;
                 }
                 const auto* resolved = table_.getType(type);
-                return resolved == type ? binding.stable : this->monomorphType(sp, resolved, allowInfer);
+                return isProbeVariable(binding, resolved) ? binding.stable : this->monomorphType(sp, resolved, allowInfer);
             }
             return MonomorphiserNop::monomorphType(sp, type, allowInfer);
         }
@@ -12297,7 +12325,7 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
        relation, so the binding is kept as an equality the response carries. */
     const auto isProbe = [&](const HIRType* type) {
         for (const auto& binding : typeBindings) {
-            if (binding.probe == type) {
+            if (MaterializeCandidate::isProbeVariable(binding, type)) {
                 return true;
             }
         }
@@ -12395,8 +12423,10 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
             }
             changed |= responseBinding == CandidateBindingResult::Changed;
         }
+        bool outputFromRequirement = false;
         if (candidateOutput == nullptr) {
             candidateOutput = makeAssociatedProjection(nestedType, requirement.second.sourceTrait, requirement.first, requirement.second.atyParams);
+            outputFromRequirement = true;
         }
         if (!useCandidateResponse && !typeHasUfcsUnknown(candidateOutput)) {
             candidateOutput = resolve_.expandAssociatedTypes(span(), std::move(candidateOutput));
@@ -12410,7 +12440,11 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
         const auto* candidatePattern = useCandidateResponse ? candidateOutput : requirement.second.type;
         const auto* responseValue = useCandidateResponse ? requirement.second.type : candidateOutput;
         const auto binding = this->unifyCandidateParams(candidate, *candidateParams, [&](auto& relations) {
-            relations.type(candidatePattern, responseValue);
+            if (outputFromRequirement && !useCandidateResponse) {
+                relations.candidateType(candidatePattern, responseValue);
+            } else {
+                relations.type(candidatePattern, responseValue);
+            }
         });
         if (binding == CandidateBindingResult::Mismatch) {
             return binding;
