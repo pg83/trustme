@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 )
 
 const (
@@ -1649,31 +1652,35 @@ func runCommand(dir string, extraEnv map[string]string, logPath string, dryRun b
 		return
 	}
 
-	cmd := exec.Command(name, args...)
+	err := runRetryingTextBusy(func() error {
+		cmd := exec.Command(name, args...)
 
-	cmd.Dir = dir
-	cmd.Env = os.Environ()
+		cmd.Dir = dir
+		cmd.Env = os.Environ()
 
-	for key, value := range extraEnv {
-		cmd.Env = append(cmd.Env, key+"="+value)
-	}
+		for key, value := range extraEnv {
+			cmd.Env = append(cmd.Env, key+"="+value)
+		}
 
-	cmd.Stderr = os.Stderr
-	var log *os.File
+		cmd.Stderr = os.Stderr
+		var log *os.File
 
-	if logPath != "" {
-		throw(os.MkdirAll(filepath.Dir(logPath), 0o755))
-		log = throw2(os.Create(logPath))
-		cmd.Stdout = log
-	} else {
-		cmd.Stdout = os.Stdout
-	}
+		if logPath != "" {
+			throw(os.MkdirAll(filepath.Dir(logPath), 0o755))
+			log = throw2(os.Create(logPath))
+			cmd.Stdout = log
+		} else {
+			cmd.Stdout = os.Stdout
+		}
 
-	err := cmd.Run()
+		err := cmd.Run()
 
-	if log != nil {
-		throw(log.Close())
-	}
+		if log != nil {
+			throw(log.Close())
+		}
+
+		return err
+	})
 
 	if err != nil {
 		if logPath != "" {
@@ -1682,6 +1689,27 @@ func runCommand(dir string, extraEnv map[string]string, logPath string, dryRun b
 
 		throwFmt("%s failed: %v", shellJoin(append([]string{name}, args...)), err)
 	}
+}
+
+// A binary another task has just written can still be open for writing in a
+// child of a concurrent fork until that child execs (the descriptor is
+// close-on-exec, but the window between fork and exec is real), and executing
+// it then fails with ETXTBSY. The condition passes within milliseconds; cmd/go
+// retries the same way.
+func runRetryingTextBusy(run func() error) error {
+	var err error
+
+	for attempt := 0; attempt < 20; attempt++ {
+		err = run()
+
+		if err == nil || !errors.Is(err, syscall.ETXTBSY) {
+			return err
+		}
+
+		time.Sleep(time.Duration(10*(attempt+1)) * time.Millisecond)
+	}
+
+	return err
 }
 
 func (b *Builder) runTest(binary string, args []string) {

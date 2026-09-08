@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
 
@@ -106,4 +108,28 @@ func containsTask(tasks []*Task, want *Task) bool {
 	}
 
 	return false
+}
+
+func TestRunRetryingTextBusyRetriesOnlyThatError(t *testing.T) {
+	calls := 0
+	err := runRetryingTextBusy(func() error {
+		calls++
+		if calls < 3 {
+			return &os.PathError{Op: "fork/exec", Path: "bin", Err: syscall.ETXTBSY}
+		}
+		return nil
+	})
+	if err != nil || calls != 3 {
+		t.Fatalf("expected success after 3 attempts, got err=%v calls=%d", err, calls)
+	}
+
+	calls = 0
+	other := errors.New("other")
+	err = runRetryingTextBusy(func() error {
+		calls++
+		return other
+	})
+	if !errors.Is(err, other) || calls != 1 {
+		t.Fatalf("expected the other error at once, got err=%v calls=%d", err, calls)
+	}
 }
