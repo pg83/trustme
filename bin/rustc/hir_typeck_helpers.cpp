@@ -4673,19 +4673,33 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
                                which has a sink and would have bound it.  So without a sink such an
                                alias stays as it is: a goal relates it as an alias and keeps the
                                obligations with its candidate; the checker's normalization is the
-                               one that makes the variable. */
-                            bool asksTheCaller = false;
+                               one that makes the variable.  A projection met on the way
+                               (`<Filter<FilterMap<..>> as Iterator>::Item` is
+                               `<FilterMap<..> as Iterator>::Item`) has the probe for its sink and
+                               is held to the same rule: taking the probe for a sink, it cached
+                               its fresh `B` as the normalized form, and a goal reading that entry
+                               bound the checker's variable to a canonical one of its own. */
+                            const bool sinkIsProbe = !effects || effects == eatProbe_;
+                            const bool askedBefore = eatProbeAsked_;
+                            eatProbeAsked_ = false;
                             auto askCheck = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-                                asksTheCaller = asksTheCaller || !response.obligations.empty() || !response.equalities.empty() || !response.valueEqualities.empty();
+                                eatProbeAsked_ = eatProbeAsked_ || !response.obligations.empty() || !response.equalities.empty() || !response.valueEqualities.empty();
                                 return true;
                             });
                             const auto ivarsBefore = ivars.ivars.size();
+                            const auto* enclosingProbe = eatProbe_;
+                            if (!effects) {
+                                eatProbe_ = &askCheck;
+                            }
                             const auto* expanded = this->expandAssociatedTypesInplaceUfcsKnown(sp, input, effects ? effects : &askCheck);
+                            eatProbe_ = enclosingProbe;
+                            const bool asksTheCaller = eatProbeAsked_;
+                            eatProbeAsked_ = askedBefore || asksTheCaller;
                             /* Only an output that is (or holds) a variable this normalization made
                                is the case: `<B as Iterator>::Item` of a generic `B` normalizes to
                                a rigid type with an equality or two about the environment, and
                                stays normalized. */
-                            const bool outputIsFresh = !effects && asksTheCaller && visitTyWith(expanded, [&](const HIRType* inner) {
+                            const bool outputIsFresh = sinkIsProbe && asksTheCaller && visitTyWith(expanded, [&](const HIRType* inner) {
                                 const auto* infer = inner->opt_Infer();
                                 return infer && infer->index != ~0u && !isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index) && infer->index >= ivarsBefore;
                             });

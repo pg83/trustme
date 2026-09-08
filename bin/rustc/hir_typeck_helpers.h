@@ -724,6 +724,11 @@ private:
     mutable u64 eatCacheGeneration = 0;
     mutable bool normalizingBoundType = false;
 
+    /* The probe standing in for a sink while a sink-less normalization runs, and
+       whether anything was asked of it (see `expandAssociatedTypesInplace`). */
+    mutable const SolverResponseCallback* eatProbe_ = nullptr;
+    mutable bool eatProbeAsked_ = false;
+
     mutable NextTraitGoalEvaluator* nextSolver = nullptr;
 
     mutable NextTraitGoalEvaluator* coherenceEvaluator = nullptr;
