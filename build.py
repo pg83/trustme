@@ -1458,6 +1458,27 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_proc_macro_token_streams",
+    inputs=[
+        "$(S)/tst/unit/test_proc_macro_token_streams.py",
+        *build.glob("$(S)/tst/unit/proc_macro_token_streams/**/*.toml"),
+        *build.glob("$(S)/tst/unit/proc_macro_token_streams/**/*.rs"),
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/proc_macro_token_streams.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_proc_macro_token_streams.py",
+        "$(S)/tst/unit/proc_macro_token_streams/Cargo.toml",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/proc_macro_token_streams.stamp",
+    ],
+    deps=[libstd, rustc, cargo],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_transitive_proc_macro_artifact",
     inputs=[
         "$(S)/tst/unit/test_transitive_proc_macro_artifact.py",

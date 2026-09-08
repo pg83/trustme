@@ -33,7 +33,18 @@ impl Span
 
 impl Span
 {
+    /* Upstream's bridge is only set up while a procedural macro runs; a call from
+       anywhere else panics with this message, and proc-macro2 0.4 probes exactly that
+       (`catch_unwind(|| Span::call_site())`) to choose between compiler and fallback
+       spans - a call that quietly answered gave it compiler spans whose `start()` is
+       line 0 outside a proc macro (version-sync's `html_root_url` check). */
+    fn require_available() {
+        if !crate::is_available() {
+            panic!("procedural macro API is used outside of a procedural macro");
+        }
+    }
     pub fn call_site() -> Span {
+        Self::require_available();
         Span(1)
     }
     //pub fn def_site() -> Span {
@@ -41,6 +52,7 @@ impl Span
     //}
     // 1.45
     pub fn mixed_site() -> Span {
+        Self::require_available();
         Span(0)
     }
     // 1.45

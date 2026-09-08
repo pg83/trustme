@@ -1,3 +1,6 @@
+// Lexing and printing of token streams, checked from inside a procedural macro: upstream's
+// `proc_macro` API panics anywhere else ("procedural macro API is used outside of a
+// procedural macro"), and so does trustme's.
 extern crate proc_macro;
 
 use proc_macro::{Delimiter, Ident, Literal, Span, TokenStream, TokenTree};
@@ -21,7 +24,8 @@ fn expect_empty_group(token: Option<TokenTree>, expected: Delimiter) {
     }
 }
 
-fn main() {
+#[proc_macro]
+pub fn check_token_streams(_input: TokenStream) -> TokenStream {
     for invalid in &["", "'static", "255", "a#"] {
         assert!(panic::catch_unwind(|| Ident::new(invalid, Span::call_site())).is_err());
     }
@@ -91,4 +95,6 @@ fn main() {
 
     assert!(TokenStream::from_str("(]").is_err());
     assert!(TokenStream::from_str("{").is_err());
+
+    TokenStream::new()
 }
