@@ -1949,6 +1949,18 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, const HIRType* type, bool so
             HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override {
                 return g;
             }
+            /* An identity rebuild: a projection the environment has found rigid stays
+               marked so.  The general monomorphiser drops the mark, as a substitution
+               may make the projection normalizable; here nothing is substituted, and a
+               field type `&<Elf as FileHeader>::SectionHeader` stored unmarked left the
+               method lookup on it waiting for a resolution that never comes once the
+               pass has nothing else to change (object's `comdat.rs`). */
+            const HIRType* monomorphType(const Span& sp, const HIRType* tpl, bool allowInfer = true) const override {
+                if (const auto* path = tpl->opt_Path(); path && path->binding.is_Opaque()) {
+                    return types.intern(HIRType::make_Path({this->monomorphPath(sp, path->path, allowInfer), HIRTypePathBinding::make_Opaque({})}));
+                }
+                return Monomorphiser::monomorphType(sp, tpl, allowInfer);
+            }
         };
 
         type = MonomorphAddLifetimes(types).monomorphType(sp, type, true);
