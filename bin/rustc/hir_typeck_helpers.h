@@ -852,6 +852,10 @@ public:
     bool implsOverlap(const Span& sp, const SolverImpl& left, const SolverImpl& right) const;
 
     const HIRPathParams& solverExistentials(const Span& sp, const HIRGenericParams& definition) const;
+    /* `input` with each anonymous `_` replaced by a solver existential of one fresh
+       unknown scope: what a type still being resolved (`StateEntry<_>`) is to the
+       solver when a path probes the traits in scope for it. */
+    const HIRType* unknownExistentials(const Span& sp, const HIRType* input) const;
 
     Unifier::Outcome relateInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const;
     SolverCertainty evaluateInherentImpl(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const;

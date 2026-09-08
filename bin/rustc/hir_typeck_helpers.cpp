@@ -4230,6 +4230,23 @@ const HIRPathParams& TraitResolution::solverExistentials(const Span& sp, const H
     return bucket->back().params;
 }
 
+const HIRType* TraitResolution::unknownExistentials(const Span& sp, const HIRType* input) const {
+    u32 scope = 0;
+    u16 index = 0;
+    return cloneTyWith(crate.types, sp, input, [&](const HIRType* inner) -> const HIRType* {
+        const auto* infer = inner->opt_Infer();
+        if (!infer || infer->index != ~0u) {
+            return nullptr;
+        }
+        if (scope == 0) {
+            scope = SOLVER_IMPL_EXISTENTIAL_SCOPE | ++this->board().id;
+            ASSERT_BUG(sp, (this->board().id & SOLVER_IMPL_EXISTENTIAL_SCOPE) == 0, StringView("solver existential scope exhausted"));
+        }
+        ASSERT_BUG(sp, index < 256, StringView("Too many unknowns in a probed type"));
+        return crate.types.generic(HIRGenericRef::newSolverExistential(scope, index++));
+    });
+}
+
 HIRPathParams TraitResolution::materializeImplParams(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& inferenceParams, size_t externalTypeIvars, size_t externalValueIvars) const {
     const auto& stable = this->solverExistentials(sp, definition);
 

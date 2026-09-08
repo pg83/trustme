@@ -2253,7 +2253,23 @@ auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGen
         params = &inferredParams;
     }
 
-    return resolve_.solveTraitGoalCb(sp, trait, *params, type, callback, {.ambiguity = SolverAmbiguityPolicy::Report});
+    /* A type still being resolved (`StateEntry<_>` in `StateEntry::read(..)`) is
+       matched against the impl heads with its unknowns as unknowns, as upstream
+       probes it: each `_` becomes a solver existential of an unknown scope, so a
+       trait with no impl for the type is no candidate, rather than an ambiguity that
+       lets the first trait in scope with the item's name win (read-fonts'
+       `Scalar::read` beside `FontRead::read`).  A self that is `_` outright stays
+       ambiguous, as a goal on an unknown is. */
+    const auto* probedType = resolve_.unknownExistentials(sp, type);
+    HIRPathParams probedParams;
+    if (std::any_of(params->types.begin(), params->types.end(), [&](const HIRType* param) { return resolve_.unknownExistentials(sp, param) != param; })) {
+        probedParams = params->clone();
+        for (auto& param : probedParams.types) {
+            param = resolve_.unknownExistentials(sp, param);
+        }
+        params = &probedParams;
+    }
+    return resolve_.solveTraitGoalCb(sp, trait, *params, probedType, callback, {.ambiguity = SolverAmbiguityPolicy::Report});
 }
 
 auto StaticTraitResolve::NextSolverBridge::findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const char* valueName, SolverResponseCallback& callback) -> bool {
