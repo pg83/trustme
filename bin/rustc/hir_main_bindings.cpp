@@ -3494,8 +3494,7 @@ auto HirSerialiser::serialisePath(const HIRPath& path) -> void {
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            DEBUG(StringView("-- UfcsUnknown - ") << path);
-            BUG_ASSERT(!"Unexpected UfcsUnknown");
+            BUG(Span(), StringView("Unexpected UfcsUnknown in a serialised path: ") << path);
             break;
         }
     }

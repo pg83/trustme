@@ -70,8 +70,6 @@ namespace {
         HIRCrate* crate = nullptr;
         const ASTCrate* astCrate = nullptr;
         ImplTraitSource implTraitSource;
-        const HIRItemPath* localItemTypeNameOwner = nullptr;
-        const HIRPath* localItemTypeNameOwnerPath = nullptr;
 
         HIRPublicity LowerHIRVis(const HIRSimplePath& modPath, const ASTVisibility& vis);
         HIRGenericParams LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsSized);
@@ -2805,13 +2803,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     }
     rv.returnType = LowerHIRType(f.rettype());
     rv.source = SourceLocation(f.sp());
-    const auto* previousLocalItemTypeNameOwner = localItemTypeNameOwner;
-    const auto* previousLocalItemTypeNameOwnerPath = localItemTypeNameOwnerPath;
-    localItemTypeNameOwner = &p;
-    localItemTypeNameOwnerPath = nullptr;
     rv.code = LowerHIRExpr(f.code());
-    localItemTypeNameOwner = previousLocalItemTypeNameOwner;
-    localItemTypeNameOwnerPath = previousLocalItemTypeNameOwnerPath;
     if (rv.code) {
         bool neverArg = false;
         for (const auto& arg : f.args()) {
@@ -4428,12 +4420,6 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeBlock& v) -> void {
     if (v.localMod) {
         // TODO: Populate m_traits from the local module's import list
         rv->localMod = HIRSimplePath(ctx.crateName, v.localMod->path().nodes);
-        if (ctx.localItemTypeNameOwner) {
-            if (!ctx.localItemTypeNameOwnerPath) {
-                ctx.localItemTypeNameOwnerPath = ctx.crate->pool->make<HIRPath>(ctx.localItemTypeNameOwner->getFullPath());
-            }
-            ctx.crate->localItemTypeNamePaths = ctx.crate->pool->make<HIRLocalItemTypeNamePath>(rv->localMod, ctx.localItemTypeNameOwnerPath, ctx.crate->localItemTypeNamePaths);
-        }
     }
 
     switch (v.blockType) {

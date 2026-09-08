@@ -361,13 +361,15 @@ void HIRVisitor::visitGlobalAssembly(HIRGlobalAssembly& item) {
 }
 
 void HIRVisitor::visitTypeImpl(HIRTypeImpl& impl) {
-    HIRItemPath p{impl.type};
     TRACE_FUNCTION_F(StringView("impl.m_type=") << impl.type);
     if (resolve_) {
         resolve_->setImplGenericsRaw(MetadataType::Unknown, impl.params);
     }
     this->visitParams(impl.params);
     impl.type = visitType(impl.type);
+    /* The items are named by the self type as visited: a pass that resolves
+       `X::ValueType` in it hands its items the resolved type. */
+    HIRItemPath p{impl.type};
 
     for (auto& method : impl.methods) {
         DEBUG(StringView("method ") << method.first);
@@ -399,7 +401,6 @@ void HIRVisitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) {
 }
 
 void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) {
-    HIRItemPath p(impl.type, traitPath, impl.traitArgs);
     TRACE_FUNCTION_F(StringView("impl") << impl.params.fmtArgs() << StringView(" ") << traitPath << impl.traitArgs << StringView(" for ") << impl.type);
     if (resolve_) {
         resolve_->setImplGenericsRaw(MetadataType::Unknown, impl.params);
@@ -411,6 +412,7 @@ void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& im
         impl.traitArgs = mv$(gp.params);
     }
     impl.type = visitType(impl.type);
+    HIRItemPath p(impl.type, traitPath, impl.traitArgs);
 
     for (auto& ent : impl.methods) {
         DEBUG(StringView("method ") << ent.first);

@@ -323,6 +323,7 @@ namespace {
 
     struct UfcsVisitor: public HIRVisitor {
         const HIRCrate& crate;
+        HIRCrate& mutableCrate_;
         bool visitExprs_;
         bool runEat;
 
@@ -416,6 +417,8 @@ namespace {
         bool setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
 
         bool locateInTraitImplAndSet(const Span& sp, HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
+
+        void recordLocalItemOwners(const HIRItemPath& p, HIRExprPtr& code);
 
         bool resolve_UfcsUnknown_inherent(const HIRSimplePath& visPath, const HIRPath& p, HIRVisitor::PathContext pc, HIRPath::Data& pd);
 
@@ -3334,6 +3337,7 @@ auto Visitor2::visitStruct(HIRItemPath ip, HIRStruct& str) -> void {
 UfcsVisitor::UfcsVisitor(const WireBoard& wb, bool visitExprs)
     : HIRVisitor(nullptr, wb.crate->types)
     , crate(*wb.crate)
+    , mutableCrate_(*wb.crate)
     , visitExprs_(visitExprs)
     , runEat(visitExprs)
     , resolve_(wb)
@@ -3416,6 +3420,39 @@ auto UfcsVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     auto _ = resolve_.setItemGenerics(item.params);
     DeclaredTypeGuard declaredTypes(*this);
     HIRVisitor::visitFunction(p, item);
+    if (visitExprs_ && item.code) {
+        recordLocalItemOwners(p, item.code);
+    }
+}
+
+/* The items declared in a function's blocks are named after the function
+   (`typeNameForItemPath`), by its path with the self type as resolved here:
+   `impl<X: Ranged> Wrap<X::ValueType>` names its methods by `<X as
+   Ranged>::ValueType`, which the lowering could not yet spell. */
+auto UfcsVisitor::recordLocalItemOwners(const HIRItemPath& p, HIRExprPtr& code) -> void {
+    struct LocalModules final: HIRExprVisitorDef {
+        Vector<const HIRSimplePath*> modules;
+
+        explicit LocalModules(HIRTypeInterner& types)
+            : HIRExprVisitorDef(types)
+        {
+        }
+
+        void visit(HIRExprNodeBlock& node) override {
+            if (!node.localMod.components().empty()) {
+                modules.pushBack(&node.localMod);
+            }
+            HIRExprVisitorDef::visit(node);
+        }
+    } localModules(mutableCrate_.types);
+    code->visit(localModules);
+    if (localModules.modules.empty()) {
+        return;
+    }
+    const auto* ownerPath = mutableCrate_.pool->make<HIRPath>(p.getFullPath());
+    for (const auto* module : localModules.modules) {
+        mutableCrate_.localItemTypeNamePaths = mutableCrate_.pool->make<HIRLocalItemTypeNamePath>(*module, ownerPath, mutableCrate_.localItemTypeNamePaths);
+    }
 }
 
 auto UfcsVisitor::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
