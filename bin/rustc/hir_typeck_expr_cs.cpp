@@ -632,6 +632,10 @@ struct OrderPlace {
             return OrderPlace{rule.bindingOrder, rule.bindingStart};
         }
         if (rule.rightNodePtr && (*rule.rightNodePtr)->checkOrderEnd) {
+            /* A closure is what it is at its start (see `equateTypesCoerce`). */
+            if (cast<HIRExprNodeClosure>(&**rule.rightNodePtr)) {
+                return OrderPlace{(*rule.rightNodePtr)->checkOrder, (*rule.rightNodePtr)->checkOrder};
+            }
             return OrderPlace{(*rule.rightNodePtr)->checkOrderEnd, (*rule.rightNodePtr)->checkOrder};
         }
         return OrderPlace{rule.order, rule.order};
@@ -5914,7 +5918,13 @@ void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& 
     /* A call's argument - a constructor's too - is coerced after its own subtree, in
        check order; the place says so even when the parameter is not bound from it. */
     if (argumentSite || callArgument) {
-        this->linkCoerce.back()->bindingOrder = nodePtr->checkOrderEnd;
+        /* A closure argument is what it is at its start: upstream deduces its
+           signature from its expectation (`deduce_closure_signature`) before checking
+           the body, so the bound on the parameter it binds (`impl FnOnce(PathBuf) ->
+           R`) types its arguments before the body relates `&path` to `&Path`
+           (tempfile's `create_helper(dir, .., |path| create_unlinked(&path))`). */
+        const bool closureSource = cast<HIRExprNodeClosure>(&*nodePtr) != nullptr;
+        this->linkCoerce.back()->bindingOrder = closureSource ? nodePtr->checkOrder : nodePtr->checkOrderEnd;
         this->linkCoerce.back()->bindingStart = nodePtr->checkOrder;
     }
     DEBUG(StringView("++ ") << *this->linkCoerce.back());
