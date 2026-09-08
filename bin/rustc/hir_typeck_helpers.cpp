@@ -769,7 +769,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     bool canAssembleBuiltinUnsize(const HIRType* destination, const HIRType* source) const;
 
-    Certainty evaluateHeadEquality(Candidate& candidate, const SolverTypeEquality& equality);
+    Certainty evaluateHeadEquality(Candidate& candidate, const SolverTypeEquality& equality, bool* normalizesToIdentity = nullptr);
 
     Certainty matchAssociatedTypes(const HIRSimplePath& trait, Candidate& candidate, const HIRTraitPath::assocListT* associated, const Monomorphiser* headBindings = nullptr);
 
@@ -13098,10 +13098,15 @@ auto NextTraitGoalEvaluator::evaluateBuiltinUnsize(Candidate& candidate, const H
     return Certainty::NoSolution;
 }
 
-auto NextTraitGoalEvaluator::evaluateHeadEquality(Candidate& candidate, const SolverTypeEquality& equality) -> Certainty {
+auto NextTraitGoalEvaluator::evaluateHeadEquality(Candidate& candidate, const SolverTypeEquality& equality, bool* normalizesToIdentity) -> Certainty {
     DEBUG(StringView("head equality ") << equality.left << StringView(" = ") << equality.right);
     const auto normalizedLeft = normalizeGoalInput(equality.left);
     const auto normalizedRight = normalizeGoalInput(equality.right);
+    /* Both sides the same type once normalized: the equality was a difference of
+       spelling, not a question - see the head relation in `evaluateCandidate`. */
+    if (normalizesToIdentity) {
+        *normalizesToIdentity = normalizedLeft == normalizedRight;
+    }
     const auto relation = this->relateTypes(candidate, normalizedLeft, normalizedRight);
     if (relation == Certainty::Proven) {
         return relation;
@@ -13776,14 +13781,28 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
 
     auto result = candidate->headRelation;
 
+    /* Upstream normalizes an impl's trait reference before matching it against the
+       goal (`match_impl`), so a head that differs from the goal only in how a
+       projection is written is an exact match there.  Here the structural match runs
+       without normalizing and leaves such an equality pending, which makes the head
+       relation ambiguous - and the ambiguity survived proving the equality, because
+       the candidate's certainty was seeded from that relation.  An equality whose two
+       sides are the same type once normalized asked nothing: itertools' `(&u8,)`
+       matches `impl<I: Iterator> HasCombination<I> for (I::Item,)` as written, and
+       `TupleCombinations<Iter<u8>, (&u8,)>` is the `Iterator` its methods are
+       translated through.  An equality that holds only by binding something is a real
+       question and leaves the head ambiguous as before. */
+    bool headEqualitiesAreIdentity = !candidate->headEqualities.empty() && candidate->headValueEqualities.empty();
     for (const auto& equality : candidate->headEqualities) {
-        const auto equalityResult = evaluateHeadEquality(*candidate, equality);
+        bool normalizesToIdentity = false;
+        const auto equalityResult = evaluateHeadEquality(*candidate, equality, &normalizesToIdentity);
         if (equalityResult == Certainty::NoSolution) {
             return Certainty::NoSolution;
         }
         if (equalityResult == Certainty::Ambiguous) {
             result = Certainty::Ambiguous;
         }
+        headEqualitiesAreIdentity = headEqualitiesAreIdentity && normalizesToIdentity && equalityResult == Certainty::Proven;
     }
     for (const auto& equality : candidate->headValueEqualities) {
         const auto equalityResult = unifyValueProbe(equality.left, equality.right);
@@ -13793,6 +13812,9 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         if (equalityResult == Certainty::Ambiguous) {
             result = Certainty::Ambiguous;
         }
+    }
+    if (headEqualitiesAreIdentity && candidate->headRelation == Certainty::Ambiguous) {
+        result = Certainty::Proven;
     }
     if (!candidate->headObligations.empty()) {
         candidate->ambiguityBeyondHead = true;
