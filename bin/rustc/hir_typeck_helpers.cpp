@@ -16295,10 +16295,22 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             if (coherenceMode) {
                 continue;
             }
-            const auto leftType = left.getImplType(crate.types);
-            const auto rightType = right.getImplType(crate.types);
-            const auto& leftParams = left.getTraitParamsRef(crate.types);
-            const auto& rightParams = right.getTraitParamsRef(crate.types);
+            /* An instantiated head is read normalized: the default `impl<I: IntoIterator,
+               A> SpecExtend<I> for LinkedList<I::Item, A>` on `LinkedList<Vec<i32>>` is
+               `LinkedList<<LinkedList<Vec<i32>> as IntoIterator>::Item, Global>`, the same
+               head as the specializing `impl<T> SpecExtend<LinkedList<T>> for LinkedList<T>`
+               once the projection is `Vec<i32>`; read raw, the two never met, both stayed
+               viable, and the code generator found no `spec_extend` to call. */
+            const auto leftType = normalizeGoalInput(left.getImplType(crate.types));
+            const auto rightType = normalizeGoalInput(right.getImplType(crate.types));
+            auto leftParams = left.getTraitParamsRef(crate.types).clone();
+            auto rightParams = right.getTraitParamsRef(crate.types).clone();
+            for (auto& param : leftParams.types) {
+                param = normalizeGoalInput(std::move(param));
+            }
+            for (auto& param : rightParams.types) {
+                param = normalizeGoalInput(std::move(param));
+            }
             const bool sameInstantiatedHead = (leftType == rightType || leftType->equalsIgnoringRegions(rightType)) && leftParams.equalsIgnoringRegions(rightParams);
             if (!sameInstantiatedHead && !resolve_.implsOverlap(span(), left, right)) {
                 continue;
