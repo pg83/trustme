@@ -282,17 +282,27 @@ namespace {
         return infer && infer->index != ~0u && !isAliasInputInfer(infer->index);
     }
 
+    /* A variable of the table, or a goal's canonical stand-in for one: something
+       the caller has not decided yet, unlike an alias input's placeholder. */
+    bool inferIsUnknown(const HIRType* type) {
+        const auto* infer = type->opt_Infer();
+        return infer && infer->index != ~0u && (!isAliasInputInfer(infer->index) || isSolverCanonicalInfer(infer->index));
+    }
+
     /* A projection over something still open - its self or a trait parameter
-       holding a live variable - is what upstream normalizes to a fresh variable
-       with the projection left as an obligation: it relates to nothing
-       structurally until that variable is known. */
+       holding an undecided variable - is what upstream normalizes to a fresh
+       variable with the projection left as an obligation: it relates to nothing
+       structurally until that variable is known.  A goal's canonical variable is
+       as undecided as the caller's variable it stands for: `<?Input as
+       StreamOnce>::Token` in `C: FnMut(char, <?Input as StreamOnce>::Token)` is
+       open, and the where-clause `C: FnMut(char, char)` may still prove it. */
     bool projectionIsOpen(const HIRPath::Data::Data_UfcsKnown& projection) {
         /* A closure's signature is not in the type walk: `<FilterMap<I, closure(&F) -> ?R>
            as Iterator>::Item` is open through `?R`, the return the closure's body has
            not decided yet. */
         const auto hasLive = [](const HIRType* type) {
             return visitTyWith(type, [](const HIRType* inner) {
-                if (inferIsLive(inner)) {
+                if (inferIsUnknown(inner)) {
                     return true;
                 }
                 const auto* node = inner->opt_NodeType();
@@ -301,11 +311,11 @@ namespace {
                     return false;
                 }
                 for (const auto& arg : (*closure)->args) {
-                    if (visitTyWith(arg.second, [](const HIRType* t) { return inferIsLive(t); })) {
+                    if (visitTyWith(arg.second, [](const HIRType* t) { return inferIsUnknown(t); })) {
                         return true;
                     }
                 }
-                return visitTyWith((*closure)->returnType, [](const HIRType* t) { return inferIsLive(t); });
+                return visitTyWith((*closure)->returnType, [](const HIRType* t) { return inferIsUnknown(t); });
             });
         };
         if (hasLive(projection.type)) {
@@ -2670,21 +2680,7 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                    so `OsString` against `<?B as ToOwned>::Owned` waits for `?B`
                    (`Cow::Owned` handed to `Result::map`, whose output then fixes it). */
                 const auto* projection = leftProjection ? leftProjection : rightProjection;
-                const auto projectionIsOpen = [&]() {
-                    const auto hasLive = [&](const HIRType* type) {
-                        return visitTyWith(type, [&](const HIRType* inner) { return inferIsLive(inner); });
-                    };
-                    if (hasLive(projection->type)) {
-                        return true;
-                    }
-                    for (const auto* type : projection->trait.params.types) {
-                        if (hasLive(type)) {
-                            return true;
-                        }
-                    }
-                    return false;
-                };
-                if (!rigidProjectionsAreDistinct_ || projectionIsOpen()) {
+                if (!rigidProjectionsAreDistinct_ || projectionIsOpen(*projection)) {
                     return this->defer(left, right);
                 }
                 return Outcome::Mismatch;
