@@ -12186,19 +12186,37 @@ auto ExprVisitorEnum::visit(HIRExprNodeTuple& node) -> void {
         val->resType = this->context.addIvars(val->resType);
     }
 
+    Vector<const HIRType*> elementExpectations;
+    elementExpectations.grow(node.vals.size());
+    for (size_t i = 0; i < node.vals.size(); i++) {
+        elementExpectations.pushBack(nullptr);
+    }
     if (canCoerceInnerResult()) {
         DEBUG(StringView("Tuple inner coerce"));
         const auto& ty = this->context.getType(node.resType);
+        /* Upstream `check_expr_tuple`: with a tuple expected, each element is checked
+           coercible to its field of the expectation and the literal has those field
+           types.  `(id(LazyJust::new(|| ..)),)` returned as `(LazyJust<T, fn() -> T>,)`
+           so hands the calls the expected output whose expected input gives the
+           closure its fn pointer (proptest's `prop_oneof!`); a fresh variable per
+           field instead let the closure bind `F` before that expectation reached it. */
+        const auto* expected = this->expectationFor(node);
+        const auto* expectedType = expected ? this->context.getType(expected) : nullptr;
+        const auto* expectedFields = expectedType ? expectedType->opt_Tuple() : nullptr;
         if (const auto* e = ty->opt_Tuple()) {
             if (e->length() != node.vals.size()) {
                 ERROR(node.span(), E0000, StringView("Tuple literal node count mismatches with return type"));
             }
         } else if (ty->is_Infer()) {
-            Vector<const HIRType*> tupleTys;
-            for (const auto& val : node.vals) {
-                tupleTys.pushBack(this->context.ivars.newIvarTr());
+            if (expectedFields && expectedFields->length() == node.vals.size()) {
+                this->context.equateTypes(node.span(), node.resType, expectedType);
+            } else {
+                Vector<const HIRType*> tupleTys;
+                for (const auto& val : node.vals) {
+                    tupleTys.pushBack(this->context.ivars.newIvarTr());
+                }
+                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.tuple(mv$(tupleTys)));
             }
-            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.tuple(mv$(tupleTys)));
         } else {
             ERROR(node.span(), E0000, StringView("Tuple literal used where a non-tuple expected - ") << ty);
         }
@@ -12207,6 +12225,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeTuple& node) -> void {
 
         for (unsigned int i = 0; i < innerTys.length(); i++) {
             this->context.equateTypesCoerce(node.span(), innerTys[i], node.vals[i]);
+            if (!this->context.getType(innerTys[i])->is_Infer()) {
+                elementExpectations.mut(i) = innerTys[i];
+            }
         }
     } else {
         Vector<const HIRType*> tupleTys;
@@ -12216,8 +12237,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeTuple& node) -> void {
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.tuple(mv$(tupleTys)));
     }
 
-    for (auto& val : node.vals) {
-        this->visitChild(*val);
+    for (size_t i = 0; i < node.vals.size(); i++) {
+        auto& val = node.vals[i];
+        this->visitExpecting(val, elementExpectations[i]);
         this->context.requireSized(node.span(), val->resType);
         node.diverges = node.diverges || this->nodeDiverges(*val);
     }
