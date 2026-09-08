@@ -1479,6 +1479,27 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_proc_macro_named_test",
+    inputs=[
+        "$(S)/tst/unit/test_proc_macro_named_test.py",
+        *build.glob("$(S)/tst/unit/proc_macro_named_test/**/*.toml"),
+        *build.glob("$(S)/tst/unit/proc_macro_named_test/**/*.rs"),
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/proc_macro_named_test.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_proc_macro_named_test.py",
+        "$(S)/tst/unit/proc_macro_named_test/Cargo.toml",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/proc_macro_named_test.stamp",
+    ],
+    deps=[libstd, rustc, cargo],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_proc_macro_repr_after_derive",
     inputs=[
         "$(S)/tst/unit/test_proc_macro_repr_after_derive.py",

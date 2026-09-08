@@ -1,0 +1,11 @@
+[package]
+name = "proc-macro-named-test-unit"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "proc_macro_named_test_unit"
+path = "src/main.rs"
+
+[dependencies]
+named-test-macros = { path = "named-test-macros" }

@@ -3687,6 +3687,19 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
         if (e.second.is_MacroRules()) {
             ASSERT_BUG(Span(), !e.second.as_MacroRules()->rules.empty(), StringView("Empty macro? - ") << e.first);
         }
+        /* A macro the crate defines - an exported `macro_rules!` or a procedural
+           macro - is the item under its name in the crate root, and an import of that
+           name does not hide it: upstream reaches the module's own items
+           (`Scope::Module`) before the macro-use prelude and the builtin attributes
+           (`early_resolve_ident_in_lexical_scope`), so tokio-macros' `test` attribute
+           is what `pub use tokio_macros::test` names, not the builtin `#[test]` the
+           prelude brings into every module - the shadowing tokio works around with
+           `#[cfg(not(test))]` (rust-lang/rust#62127). */
+        if (!e.second.is_Import()) {
+            if (auto existing = rv.rootModule.macroItems.find(e.first); existing != rv.rootModule.macroItems.end() && existing->second->ent.is_Import()) {
+                rv.rootModule.macroItems.erase(existing);
+            }
+        }
         rv.rootModule.macroItems.insert(std::make_pair(e.first, rv.pool->make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{HIRPublicity::newGlobal(), mv$(e.second)})));
     }
 
