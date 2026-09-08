@@ -4780,6 +4780,24 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy) -> MI
             HIRItemPath modIp{item.value.state->modPath};
             auto nvs = NewvalState(item.value.state->module, modIp, FMT(StringView("static") << static_cast<const void*>(&item) << StringView("#")));
             auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
+            /* A generic static - the `&[..]` temporary lifted out of the `LAYOUT` constant
+               of `impl<const OFFSET: usize> KnownLayout for SliceDst<OFFSET>` - has a value
+               per instantiation, as upstream evaluates a promoted constant with the
+               instance's substitutions; one value on the item would be the first
+               instance's for all (`SliceDst<0>` reading `SliceDst<2>`'s offset).  Its
+               values live in `monomorphCache` by instantiated path, where the code
+               generator reads them. */
+            if (item.params.isGeneric()) {
+                auto it = item.monomorphCache.find(p);
+                if (it == item.monomorphCache.end()) {
+                    DEBUG(StringView("- Evaluate monomorphed ") << p);
+                    auto val = eval.evaluateConstant(HIRItemPath(p), item.value, staticTy, std::move(constMs));
+                    DEBUG(p << StringView(" = ") << val);
+                    it = item.monomorphCache.insert(std::make_pair(p.clone(), std::move(val))).first;
+                }
+                const auto* value = it->second.bytes.length() == staticSize ? &it->second : nullptr;
+                return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), value, staticSize);
+            }
             DEBUG(StringView("- Evaluate ") << p);
             item.valueGenerated = true;
             item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, staticTy, std::move(constMs));
