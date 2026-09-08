@@ -13086,6 +13086,13 @@ auto NextTraitGoalEvaluator::matchAssociatedTypes(const HIRSimplePath& trait, Ca
             output = headBindings->monomorphType(span(), output, true);
             required = headBindings->monomorphType(span(), required, true);
         }
+        /* Both sides are related normalized, as upstream relates them: the impl's
+           `<J as IPI>::Item` is `<I as IPI>::Item` by the where-clause `J:
+           IPI<Item = I::Item>`, and the required `<Take<I> as IPI>::Item` is
+           `<I as IPI>::Item` by `Take`'s impl (rayon's derived `Debug` for
+           `InterleaveShortest<I, J>`); as written they only waited on each other. */
+        output = normalizeGoalInput(output);
+        required = normalizeGoalInput(required);
         const auto relation = this->relateTypes(candidate, output, required);
         if (relation == Certainty::NoSolution) {
             if (resolve_.ivars.getType(output)->is_Diverge()) {
