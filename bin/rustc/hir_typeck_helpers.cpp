@@ -1915,7 +1915,13 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, const HIRType* type, bool so
             }
 
             const HIRType* getType(const Span& sp, const HIRGenericRef& g) const override {
-                return types.generic(g.name, g.binding);
+                /* The generic as it is, scope and all: an impl parameter its head left
+                   open (a solver existential) stored into a variable stayed that unknown
+                   only by its scope; rebuilt from name and binding it was a rigid
+                   placeholder, and `?U: Send` on it was then answered by the one generic
+                   impl head assembled for it (`Send for &T`), `LinkedList<Vec<&_>>` for
+                   rayon's `MapConsumer` chain under `join_context`. */
+                return types.generic(g);
             }
 
             HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override {
