@@ -1274,6 +1274,17 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
 
     auto it = mod.valueItems.find(path.components().back());
     if (it == mod.valueItems.end()) {
+        /* A static the constant evaluator lifted after the expander's pass moved the
+           module's inline statics into its items - `&Self::ANSI_FG_U8` in owo-colors'
+           `const ANSI_FG: &str = bytes_to_str(&Self::ANSI_FG_U8)` of a const-generic
+           impl, evaluated per instantiation at monomorphization - still sits among
+           them, as `getStaticByPath` reads it. */
+        for (const auto& inlineStatic : mod.inlineStatics) {
+            if (inlineStatic.first == path.components().back()) {
+                newValues.push_back(std::make_pair(inlineStatic.first, pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), HIRValueItem::make_Static(inlineStatic.second.get())})));
+                return newValues.back().second->ent;
+            }
+        }
         BUG(sp, StringView("Could not find value name ") << path);
     }
 
@@ -1308,6 +1319,12 @@ HIRValueItem& HIRCrate::getValitemByPathMut(const Span& sp, const HIRSimplePath&
     auto& mod = getContainingModule(*this, sp, path, ignoreCrateName, false);
     auto it = mod.valueItems.find(path.components().back());
     if (it == mod.valueItems.end()) {
+        for (auto& inlineStatic : mod.inlineStatics) {
+            if (inlineStatic.first == path.components().back()) {
+                newValues.push_back(std::make_pair(inlineStatic.first, pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), HIRValueItem::make_Static(inlineStatic.second.get())})));
+                return newValues.back().second->ent;
+            }
+        }
         BUG(sp, StringView("Could not find value name ") << path);
     }
     if (auto* imp = it->second->ent.opt_Import(); imp && !imp->isVariant && imp->path != path) {
