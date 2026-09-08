@@ -8394,6 +8394,11 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             }
             selfType = *conventionalSelf;
             if (sourceSelfType) {
+                /* A where-clause route is for the bounded type itself (upstream
+                   assembles it only for that param or alias): a rigid projection there -
+                   `<Input as StreamOnce>::Range: Range` against `needle.len()` on
+                   `&mut &[u8]` (combine's `take_until_bytes`) - matches no constructor,
+                   and the route is dropped rather than left ambiguous. */
                 Unifier sourceHeadRelation(
                     callSpan,
                     resolve_.ivars,
@@ -8401,6 +8406,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                     {
                         .relateProjectionInputs = true,
                         .rigidGenericsAreDistinct = true,
+                        .rigidProjectionsAreDistinct = true,
                     }
                 );
                 switch (sourceHeadRelation.unify(selfType, sourceSelfType)) {
