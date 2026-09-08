@@ -4621,7 +4621,37 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
                             DEBUG(StringView("CACHED: ") << input << StringView(" -> ") << cached->type);
                             input = cached->type;
                         } else {
-                            input = this->expandAssociatedTypesInplaceUfcsKnown(sp, input, effects);
+                            /* A normalization may ask something of the caller: `<FilterMap<I, F> as
+                               Iterator>::Item` is the impl's `B`, a fresh variable, that the
+                               obligation `F: FnMut(I::Item) -> Option<B>` decides.  Upstream
+                               registers such obligations wherever it normalizes
+                               (`normalize_projection_ty` into the fulfillment context).  With no
+                               sink to take them the result would leave its variable unbound for
+                               good - and cached, be handed to the checker's own normalization,
+                               which has a sink and would have bound it.  So without a sink such an
+                               alias stays as it is: a goal relates it as an alias and keeps the
+                               obligations with its candidate; the checker's normalization is the
+                               one that makes the variable. */
+                            bool asksTheCaller = false;
+                            auto askCheck = makeCallable<SolverResponseCb>([&](SolverResponse response) {
+                                asksTheCaller = asksTheCaller || !response.obligations.empty() || !response.equalities.empty() || !response.valueEqualities.empty();
+                                return true;
+                            });
+                            const auto ivarsBefore = ivars.ivars.size();
+                            const auto* expanded = this->expandAssociatedTypesInplaceUfcsKnown(sp, input, effects ? effects : &askCheck);
+                            /* Only an output that is (or holds) a variable this normalization made
+                               is the case: `<B as Iterator>::Item` of a generic `B` normalizes to
+                               a rigid type with an equality or two about the environment, and
+                               stays normalized. */
+                            const bool outputIsFresh = !effects && asksTheCaller && visitTyWith(expanded, [&](const HIRType* inner) {
+                                const auto* infer = inner->opt_Infer();
+                                return infer && infer->index != ~0u && !isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index) && infer->index >= ivarsBefore;
+                            });
+                            if (outputIsFresh) {
+                                DEBUG(StringView("Not normalized without a sink for its obligations: ") << input << StringView(" (would be ") << expanded << StringView(")"));
+                                return input;
+                            }
+                            input = expanded;
                             if (input->is_Path() && (input->as_Path().binding.is_Unbound() || input->as_Path().binding.is_Opaque())) {
                             } else if (!ivars.probing()) {
                                 DEBUG(StringView("CACHE+: ") << cacheKey << StringView(" = ") << input);
