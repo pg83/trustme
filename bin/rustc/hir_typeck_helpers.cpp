@@ -15119,7 +15119,27 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
             return false;
         };
-        if (selfIsTypeVariable || holdsOpaque || (selfIsAlias && !definitelyRigidAlias(resolvedType) && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)))) {
+        /* A closure in the alias carries its signature outside the type walk:
+           `<FilterMap<I, closure(&K) -> ?R> as Iterator>::Item` is as open as `?R`. */
+        const auto aliasHoldsIvars = [&](const HIRType* type) {
+            if (resolve_.typeContainsIvars(type)) {
+                return true;
+            }
+            return visitTyWith(resolve_.resolveType(type), [&](const HIRType* inner) {
+                const auto* node = inner->opt_NodeType();
+                const auto* closure = node ? node->opt_Closure() : nullptr;
+                if (!closure) {
+                    return false;
+                }
+                for (const auto& arg : (*closure)->args) {
+                    if (resolve_.typeContainsIvars(arg.second)) {
+                        return true;
+                    }
+                }
+                return resolve_.typeContainsIvars((*closure)->returnType);
+            });
+        };
+        if (selfIsTypeVariable || holdsOpaque || (selfIsAlias && !definitelyRigidAlias(resolvedType) && (aliasHoldsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)))) {
             return emitForcedAmbiguity();
         }
         return false;
