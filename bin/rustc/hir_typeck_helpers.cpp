@@ -329,6 +329,28 @@ namespace {
         return false;
     }
 
+    /* A projection that normalizes through no impl: its self, through nested
+       projections, is a type parameter or a placeholder (not a solver existential).
+       Only such a pair of one item relates through its inputs, as upstream's
+       structural relation of two unnormalizable aliases does; `<ShuffleValueTree<V>
+       as ValueTree>::Value` normalizes through its impl and says nothing about
+       `ShuffleValueTree<V>` against `V` (proptest's `shuffle.rs`). */
+    bool projectionIsRigid(const HIRPath::Data::Data_UfcsKnown& projection) {
+        const HIRType* self = projection.type;
+        for (unsigned depth = 0; depth < 8; depth++) {
+            if (const auto* generic = self->opt_Generic()) {
+                return !generic->isSolverExistential();
+            }
+            const auto* path = self->opt_Path();
+            const auto* inner = path ? path->path.data.opt_UfcsKnown() : nullptr;
+            if (!inner) {
+                return false;
+            }
+            self = inner->type;
+        }
+        return false;
+    }
+
     bool typeIsRigidUnknown(const HIRType* type) {
         if (const auto* path = type->opt_Path()) {
             if (!path->path.data.is_Generic()) {
@@ -7869,7 +7891,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             }
             auto normalizedLeft = resolve_.expandAssociatedTypes(callSpan, left);
             auto normalizedRight = resolve_.expandAssociatedTypes(callSpan, right);
-            if (relation.unify(normalizedLeft, normalizedRight) == Unifier::Outcome::Mismatch) {
+            const auto outcome = relation.unify(normalizedLeft, normalizedRight);
+            DEBUG(StringView("method response relation ") << left << StringView(" == ") << right << StringView(" normalized ") << normalizedLeft << StringView(" == ") << normalizedRight << StringView(" -> ") << static_cast<unsigned>(outcome));
+            if (outcome == Unifier::Outcome::Mismatch) {
                 result = Certainty::NoSolution;
             }
         };
@@ -15380,7 +15404,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
            upstream normalizes to a fresh variable with the projection left as an
            obligation: `chain`'s `U: IntoIterator<Item = Self::Item>` over two such
            `FilterMap`s says nothing about their self types, and the pair waits. */
-        if (projectionIsOpen(*left) || projectionIsOpen(*right)) {
+        if (projectionIsOpen(*left) || projectionIsOpen(*right) || !projectionIsRigid(*left) || !projectionIsRigid(*right)) {
             return;
         }
         const auto appendParams = [&](const HIRPathParams& lhs, const HIRPathParams& rhs) {
