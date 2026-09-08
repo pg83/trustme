@@ -637,6 +637,7 @@ insta_0_8_2 = add_project_test(
         "--xfail", "test_yaml_inline_redacted",
         "--xfail", "test_with_random_value",
     ],
+    timeout=NESTED_PROJECT_TIMEOUT,
 )
 
 rayon_1_12_0 = add_project_test(
@@ -721,6 +722,7 @@ zerocopy = add_project_test(
     manifest="zerocopy",
     adapter_args=["--features", "derive,simd"],
     lockfile="$(S)/tst/projects/zerocopy/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
 )
 
 zerocopy_0_8_56 = add_project_test(
@@ -730,6 +732,7 @@ zerocopy_0_8_56 = add_project_test(
     manifest="zerocopy",
     adapter_args=["--features", "derive,simd"],
     lockfile="$(S)/tst/projects/zerocopy_0_8_56/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
 )
 
 rustversion = add_project_test(
