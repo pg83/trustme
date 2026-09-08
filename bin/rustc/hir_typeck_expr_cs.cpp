@@ -515,8 +515,38 @@ struct OrderPlace {
         return false;
     }
 
+    /* Whether a coercion's destination is an argument placeholder of a call whose
+       callee is still open.  Upstream resolves the callee first (`check_call`:
+       `structurally_resolve_type`) and only then coerces each argument into its
+       parameter (`check_argument_types`); an argument of a call not yet resolved has
+       no parameter to bind and binds nothing - the function items of `if c { a } else
+       { b }` join into their pointer first, and `&axis.widths` is then coerced into
+       that pointer's `&[i32]` rather than fixing the argument at `&SmallVec<i32, N>`
+       (skrifa's `scale_style_metrics`). */
+    bool isArgumentOfOpenCall(const Context& context, const HIRType* destination) {
+        const auto* infer = context.ivars.getType(destination)->opt_Infer();
+        if (!infer || infer->isLit() || infer->index == ~0u) {
+            return false;
+        }
+        for (const auto* pending : context.toVisit) {
+            if (pending->nodeKind() != HIRExprNodeCallValue::kind) {
+                continue;
+            }
+            for (const auto* argument : static_cast<const HIRExprNodeCallValue&>(*pending).argIvars) {
+                const auto* argumentInfer = context.ivars.getType(argument)->opt_Infer();
+                if (argumentInfer && argumentInfer->index == infer->index) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     ArgumentBinding variableBinding(const Context& context, const IvarCoercionIndex& coercionIndex, const Context::Coercion& rule) {
         if (rule.op != SolverCoercionOp::Coercion) {
+            return {};
+        }
+        if (isArgumentOfOpenCall(context, rule.leftTy)) {
             return {};
         }
         /* A closure body's coercion into the closure's return type: upstream deduces
