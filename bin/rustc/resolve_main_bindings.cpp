@@ -939,6 +939,20 @@ namespace {
             path.bindings.value.set(std::move(ap), ASTPathBindingValue::make_Function({nullptr}));
             return;
         } else if (pathAbs.crate == CRATE_BUILTINS) {
+            /* `core::primitive::str::bytes` (rustix's `cstr!`): the import of a primitive
+               type, followed by an item of it, is a UFCS path on the primitive, as a bare
+               `str::bytes` is; the import's own binding names the type alone. */
+            if (!path.bindings.hasBinding() && pathAbs.nodes.size() > 1) {
+                const auto coreType = coretypeFromstring(pathAbs.nodes.front().name().c_str());
+                if (coreType != CORETYPE_INVAL) {
+                    auto newPath = ASTPath::newUfcsTy(mkType(context.typePool(), sp, coreType));
+                    for (size_t i = 1; i < pathAbs.nodes.size(); i++) {
+                        newPath.nodes().push_back(mv$(pathAbs.nodes[i]));
+                    }
+                    path = mv$(newPath);
+                    return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
+                }
+            }
             ASSERT_BUG(sp, path.bindings.hasBinding(), StringView(""));
             return;
         } else if (pathAbs.crate != "" && pathAbs.crate != context.crate.crateNameReal) {
