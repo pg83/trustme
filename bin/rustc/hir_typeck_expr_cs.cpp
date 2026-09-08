@@ -12253,7 +12253,25 @@ auto ExprVisitorEnum::visit(HIRExprNodeArrayList& node) -> void {
         val->resType = this->context.addIvars(val->resType);
     }
 
-    auto arrayTy = this->context.crate.types.array(context.ivars.newIvarTr(), node.vals.size());
+    /* Upstream `check_expr_array`: the element type is taken off an expected array
+       or slice type, each element is checked with it as the hint and coerced there
+       (`CoerceMany`); `[id(LazyJust::new(|| ..))]` returned as `[LazyJust<T, fn() -> T>;
+       1]` so hands the calls the expected output whose expected input gives the
+       closure its fn pointer.  A fresh variable instead let the closure bind `F`
+       before that expectation reached it. */
+    const HIRType* expectedElement = nullptr;
+    if (const auto* expected = this->expectationFor(node)) {
+        const auto* expectedType = this->context.getType(expected);
+        if (const auto* array = expectedType->opt_Array()) {
+            expectedElement = array->inner;
+        } else if (const auto* slice = expectedType->opt_Slice()) {
+            expectedElement = slice->inner;
+        }
+        if (expectedElement && this->context.getType(expectedElement)->is_Infer()) {
+            expectedElement = nullptr;
+        }
+    }
+    auto arrayTy = this->context.crate.types.array(expectedElement ? expectedElement : context.ivars.newIvarTr(), node.vals.size());
     this->context.equateTypes(node.span(), node.resType, arrayTy);
     const auto& innerTy = arrayTy->as_Array().inner;
     for (auto& val : node.vals) {
@@ -12261,7 +12279,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeArrayList& node) -> void {
     }
 
     for (auto& val : node.vals) {
-        this->visitChild(*val);
+        this->visitExpecting(val, expectedElement);
         node.diverges = node.diverges || this->nodeDiverges(*val);
     }
 }
