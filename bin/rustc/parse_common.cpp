@@ -4026,12 +4026,16 @@ ASTExprNode* ParseExprVal(TokenStream& lex) {
     return rv;
 }
 
+/* A token keeps the edition it was written in, as upstream's spans do: through a
+   macro of another edition, `use libc::X` written in a 2015 crate still names the
+   crate root, so each leaf takes the edition its token was read with, not the one
+   current when the tree was opened (net2's `cfg_if!` from a 2018 `cfg_if`). */
 TokenTree ParseTT(TokenStream& lex, bool unwrapped) {
     TokenTree rv;
 
     TRACE_FUNCTION_FR(StringView(""), rv);
-    auto edition = lex.getEdition();
     Token tok = lex.getToken();
+    const auto edition = lex.getEdition();
     eTokenType closer = TOK_PAREN_CLOSE;
     switch (tok.type()) {
         case TOK_PAREN_OPEN:

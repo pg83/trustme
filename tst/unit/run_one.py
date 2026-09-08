@@ -68,10 +68,14 @@ def main() -> int:
             aux_src = os.path.join(os.path.dirname(src), "aux", aux)
             aux_name = os.path.splitext(os.path.basename(aux))[0]
             aux_rlib = os.path.join(work, f"lib{aux_name}.rlib")
+            # an aux crate may name its own edition (`//@ edition: 2018` in the aux)
+            with open(aux_src) as aux_file:
+                aux_edition_match = re.search(r"^//@\s*edition:\s*(\d+)", aux_file.read(), re.MULTILINE)
+            aux_edition = aux_edition_match.group(1) if aux_edition_match else edition
             lib.run(
                 [rustc, aux_src, "-L", os.path.join(libstd, "release"),
                  "--crate-type", "rlib", "--crate-name", aux_name, "-o", aux_rlib,
-                 "--edition", edition],
+                 "--edition", aux_edition],
                 env=env,
             )
             dependency_args.extend(("--extern", f"{aux_name}={aux_rlib}"))

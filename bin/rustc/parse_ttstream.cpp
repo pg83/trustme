@@ -29,6 +29,7 @@ Token TTStream::realGetToken() {
 
         if (idx == 0 && tree.isToken()) {
             idx++;
+            edition = tree.getEdition();
             hygienePtr = &tree.hygiene();
             DEBUG(tree.tok());
             return tree.tok();
@@ -38,6 +39,8 @@ Token TTStream::realGetToken() {
             const TokenTree& subtree = tree[idx];
             idx++;
             if (subtree.size() == 0) {
+                /* A leaf carries its own edition, as its hygiene. */
+                edition = subtree.getEdition();
                 hygienePtr = &subtree.hygiene();
                 DEBUG(subtree.tok());
                 return subtree.tok().clone();
