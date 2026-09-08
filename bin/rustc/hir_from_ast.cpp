@@ -1403,6 +1403,21 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                     return ms.monomorphGenericpath(sp, rv, /*allow_infer=*/true);
                 }
             }
+            /* A supertrait written as a where-clause on `Self` (plotters' `trait
+               DiscreteRanged where Self: Ranged`) declares the item as much as one
+               written after the colon: `DiscreteRanged<ValueType = T>` names `Ranged`'s
+               `ValueType`. */
+            for (const auto& bound : trait.params().bounds) {
+                const auto* isTrait = bound.opt_IsTrait();
+                if (!isTrait || ctx.LowerHIRType(isTrait->type) != selfTy || !isTrait->trait.bindings.type.binding.is_Trait()) {
+                    continue;
+                }
+                auto b = ctx.LowerHIRTraitPath(sp, isTrait->trait, isTrait->innerHrbs, true, isTrait->constness);
+                auto rv = findSourceTrait(sp, b.path, isTrait->trait.bindings.type.binding.as_Trait(), name, ns, cb);
+                if (rv != HIRGenericPath()) {
+                    return ms.monomorphGenericpath(sp, rv, /*allow_infer=*/true);
+                }
+            }
             return HIRGenericPath();
         }
 
