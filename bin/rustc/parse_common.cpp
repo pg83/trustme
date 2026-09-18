@@ -1180,18 +1180,18 @@ namespace {
         Token tok;
         tok = lex.getToken();
 
-        // TODO: Why is this here explicitly?
-        if (tok.type() == TOK_IDENT && lex.lookahead(0) == TOK_EXCLAM) {
+        /* `deref!(pat)` is a built-in pattern, not a macro call - rustc spells it
+           `builtin#deref(pat)` and parses it in `parse_pat_builtin`
+           (rustc_parse/src/parser/pat.rs). Every other `!` after a name is a
+           macro call, and is left to the path parser below. */
+        if (tok.type() == TOK_IDENT && tok.ident().name == "deref" && lex.lookahead(0) == TOK_EXCLAM) {
             lex.getToken();
-            if (tok.ident().name == "deref") {
-                GET_TOK(tok, lex);
-                CHECK_TOK(tok, TOK_PAREN_OPEN);
-                auto sub = ParsePattern(lex, AllowOrPattern::Yes);
-                GET_TOK(tok, lex);
-                CHECK_TOK(tok, TOK_PAREN_CLOSE);
-                return ASTPattern(ASTPattern::TagDeref(), lex.endSpan(ps), mv$(sub));
-            }
-            return ASTPattern(ASTPattern::TagMacro(), lex.endSpan(ps), box$(ParseMacroInvocation(ps, tok.ident().name, lex)));
+            GET_TOK(tok, lex);
+            CHECK_TOK(tok, TOK_PAREN_OPEN);
+            auto sub = ParsePattern(lex, AllowOrPattern::Yes);
+            GET_TOK(tok, lex);
+            CHECK_TOK(tok, TOK_PAREN_CLOSE);
+            return ASTPattern(ASTPattern::TagDeref(), lex.endSpan(ps), mv$(sub));
         }
         if (tok.type() == TOK_INTERPOLATED_PATTERN) {
             return mv$(tok.fragPattern());
@@ -1238,6 +1238,10 @@ namespace {
 
             pat = ParsePattern1(lex, allowOr);
         } else if (tok.type() == TOK_IDENT) {
+            /* rustc's `can_be_ident_pat` (rustc_parse/src/parser/pat.rs) rejects an
+               identifier followed by any of these, so that the name is re-read as the
+               head of a path instead of as a binding - `!` among them, because that
+               makes it a macro expanding to a pattern. */
             switch (LOOK_AHEAD(lex)) {
                 case TOK_DOUBLE_COLON:
                 case TOK_BRACE_OPEN:
@@ -1245,6 +1249,7 @@ namespace {
                 case TOK_DOUBLE_DOT:
                 case TOK_TRIPLE_DOT:
                 case TOK_DOUBLE_DOT_EQUAL:
+                case TOK_EXCLAM:
                     PUTBACK(tok, lex);
                     pat = ParsePatternReal(lex, allowOr);
                     break;
@@ -1457,6 +1462,20 @@ namespace {
 
     ASTPattern ParsePatternRealPath(TokenStream& lex, ProtoSpan ps, ASTPath path) {
         Token tok;
+
+        /* A path followed by `!` is a macro call in pattern position, exactly as in
+           expression and type position. rustc decides this in
+           `parse_pat_with_range_pat` (rustc_parse/src/parser/pat.rs): once the path
+           has been parsed it tests `qself.is_none() && self.check(exp!(Bang))` and
+           hands the whole path to `parse_pat_mac_invoc`, which yields a
+           `PatKind::MacCall`. Because the test is on the finished path, `m!(..)`,
+           `a::m!(..)` and `$crate::m!(..)` are all macro calls; only a qualified
+           `<T as Tr>::m` path can never be one. */
+        if (!path.cls.is_UFCS() && lex.lookahead(0) == TOK_EXCLAM) {
+            GET_CHECK_TOK(tok, lex, TOK_EXCLAM);
+            auto inv = ParseMacroInvocation(ps, mv$(path), lex);
+            return ASTPattern(ASTPattern::TagMacro(), lex.endSpan(ps), box$(mv$(inv)));
+        }
 
         switch (GET_TOK(tok, lex)) {
             case TOK_PAREN_OPEN:
