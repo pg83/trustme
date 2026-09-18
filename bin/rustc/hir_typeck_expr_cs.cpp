@@ -633,6 +633,16 @@ struct OrderPlace {
             if (other == &rule || other->op != SolverCoercionOp::Coercion) {
                 continue;
             }
+            /* An assignment into the variable is not one of them: `check_expr_assign`
+               reads the place's type off the place and only demands the value reach it
+               (`demand_coerce`, never `CoerceMany`), so `let mut buf = self.fill_buf()?;
+               .. buf = rest;` has the initialiser decide `buf` - upstream's `coerce`
+               into a variable target is `unify` - and the later assignment conform to
+               it, not hold it open until `rest` is known (bstr's
+               `for_byte_record_with_terminator`). */
+            if (other->assignmentSite) {
+                continue;
+            }
             const auto* otherInfer = context.ivars.getType(other->leftTy)->opt_Infer();
             if (!otherInfer || otherInfer->index != infer->index) {
                 continue;
@@ -11433,6 +11443,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeAssign& node) -> void {
 
     if (node.op == HIRExprNodeAssign::Op::None) {
         this->context.equateTypesCoerce(node.span(), node.slot->resType, node.value);
+        this->context.linkCoerce.back()->assignmentSite = true;
     } else {
         const char* langItem = nullptr;
         auto operatorKind = TypeckPrimitiveOperator::None;

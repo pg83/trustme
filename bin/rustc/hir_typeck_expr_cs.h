@@ -38,6 +38,11 @@ struct Context {
         /* A call argument coerced into its parameter type: upstream
            `check_argument_types` binds a parameter variable to the argument at once. */
         bool argumentSite = false;
+        /* An assignment's right-hand side coerced into the place's type: upstream
+           `check_expr_assign` gives the place the type `check_expr` read off it and
+           only demands the value reach it, so the rule conforms to that type rather
+           than taking part in deciding it (see `variableBinding`). */
+        bool assignmentSite = false;
         /* A closure body's coercion into the closure's return type, with the closure's
            own type: upstream deduces that type from the bound the closure's parameter
            carries before the body is checked, so the body binds it only when no such
