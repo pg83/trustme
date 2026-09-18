@@ -13991,6 +13991,23 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
     }
     const HIRPathParams* boundParams = markerImpl ? &candidate->markerImplParams : traitImpl ? &candidate->impl.implParams : &associatedProjection->params;
 
+    /* Upstream proves an impl candidate's where-clauses against the arguments its own
+       trait reference was unified with, never against the goal as written: the new
+       solver's `consider_impl_candidate` (rustc_next_trait_solver, solve/trait_goals.rs)
+       runs `eq(goal.predicate.trait_ref, impl_trait_ref)` and only then instantiates
+       `predicates_of(impl_def_id)` with the very same args, all inside that one probe -
+       as does the old selector, whose `match_impl` precedes `impl_obligations`.  That
+       `eq` binds the goal's own inference variables, so `Vec<_>: Extend<&str>` reaches
+       `impl<'a, T: Copy + 'a, A: Allocator> Extend<&'a T> for Vec<T, A>` with `T = str`
+       and dies there on `str: Sized`.  Read off the unsubstituted head the clause only
+       asks `_: Sized`, which is ambiguous rather than false, so both `Vec` impls stayed
+       viable and the goal was never answered.  The head unification is already recorded
+       - `materializeHead` is what it bound the goal's variables to - so a clause is
+       asked of that. */
+    const auto underHead = [&](const HIRType* type) {
+        return materializeHead.monomorphType(span(), type, true);
+    };
+
     auto monomorphTraitBound = [&](const auto& traitBound, HIRSimplePath& nestedTrait, HIRPathParams& nestedParams, HIRTraitPath::assocListT& nestedAssociated) -> const HIRType* {
         auto monomorphBound = [&](auto& ms) {
             auto boundType = ms.monomorphType(span(), traitBound.type);
@@ -14003,22 +14020,29 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
             }
             return boundType;
         };
+        const HIRType* boundType;
         if (markerImpl) {
             auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
-            return monomorphBound(ms);
+            boundType = monomorphBound(ms);
         } else if (traitImpl) {
-            auto nestedType = candidate->impl.monomorphImplType(crate.types, span(), traitBound.type);
+            boundType = candidate->impl.monomorphImplType(crate.types, span(), traitBound.type);
             auto boundTrait = candidate->impl.monomorphImplTraitPath(crate.types, span(), traitBound.trait);
             nestedTrait = boundTrait.path.path;
             nestedParams = boundTrait.path.params.clone();
             for (const auto& aty : boundTrait.typeBounds) {
                 nestedAssociated.insert({aty.first, aty.second.clone()});
             }
-            return nestedType;
         } else {
             auto ms = MonomorphStatePtr(crate.types, associatedProjection->type, &associatedProjection->trait.params, &associatedProjection->params);
-            return monomorphBound(ms);
+            boundType = monomorphBound(ms);
         }
+        nestedParams = materializeHead.monomorphPathParams(span(), nestedParams, true);
+        for (auto& aty : nestedAssociated) {
+            aty.second.sourceTrait.params = materializeHead.monomorphPathParams(span(), aty.second.sourceTrait.params, true);
+            aty.second.atyParams = materializeHead.monomorphPathParams(span(), aty.second.atyParams, true);
+            aty.second.type = underHead(aty.second.type);
+        }
+        return underHead(boundType);
     };
 
     const auto forwardProjectionRequirements = [&](const HIRType* nestedType, const HIRSimplePath& nestedTrait, const HIRPathParams& nestedParams, HIRTraitPath::assocListT& nestedAssociated) {
@@ -14087,10 +14111,10 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
             if (!implParamsDef->types[i].isSized) {
                 continue;
             }
-            const auto& bound = boundParams->types[i];
-            if (bound == nullptr) {
+            if (boundParams->types[i] == nullptr) {
                 continue;
             }
+            const auto* bound = underHead(boundParams->types[i]);
             if (typeHasCandidatePlaceholder(bound)) {
                 continue;
             }
