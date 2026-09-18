@@ -1270,6 +1270,28 @@ struct OrderPlace {
         Unsize,
     };
 
+    /* A coercion goal that is still open must not instantiate the candidate it
+       would have picked.  Upstream grows a coercion's obligation set only from a
+       decided selection: `Coerce::coerce_unsized`
+       (rustc_hir_typeck/src/coercion.rs) queues `impl_source.nested` under
+       `Ok(Some(ImplSource::UserDefined(..)))`, while the `Ok(None)` arm either
+       re-queues the goal exactly as it was or abandons the coercion - the same
+       answer `FulfillProcessor::process_trait_obligation`
+       (rustc_trait_selection/src/traits/fulfill.rs) gives an ambiguous goal,
+       `ProcessResult::Unchanged`, with the impl left uninstantiated.
+
+       The sweep re-asks every unconsumed coercion once a pass, so taking the
+       where-clauses of a candidate that has not been decided yet mints a fresh
+       set of that impl's parameters on each pass.  Those only the clauses
+       mention - an `O`/`E` constrained solely through `F: FnMut(P::Output) ->
+       Result<O, E>` (RFC 447) - can never be related to the previous pass's
+       copies, so nothing deduplicates them, each new rule marks a change, and
+       the pass ends before the stage that would have consumed the coercion. */
+    void applyOpenCoercionEffects(Context& context, const Span& sp, SolverResponse& effects) {
+        effects.obligations.clear();
+        context.applySolverResponse(sp, effects);
+    }
+
     // TODO: Add a (two?) callback(s) that handle type equalities (and possible equalities) so this function doesn't have to mutate the context
     CoerceResult checkUnsizeTys(const Context& context, const Span& sp, const HIRType* dstRaw, const HIRType* srcRaw, Context* contextMut, HIRExprNodeP* nodePtrPtr = nullptr) {
         const auto& dst = context.ivars.getType(dstRaw);
@@ -1312,7 +1334,7 @@ struct OrderPlace {
         }
         if (solverResponse.effects.certainty == SolverCertainty::Ambiguous) {
             if (contextMut) {
-                contextMut->applySolverResponse(sp, solverResponse.effects);
+                applyOpenCoercionEffects(*contextMut, sp, solverResponse.effects);
             }
             return CoerceResult::Unknown;
         }
@@ -1335,7 +1357,7 @@ struct OrderPlace {
         }
         if (solverResponse.effects.certainty == SolverCertainty::Ambiguous) {
             if (contextMut) {
-                contextMut->applySolverResponse(sp, solverResponse.effects);
+                applyOpenCoercionEffects(*contextMut, sp, solverResponse.effects);
             }
             return CoerceResult::Unknown;
         }

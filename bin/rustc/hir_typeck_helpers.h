@@ -707,8 +707,6 @@ private:
 
     struct EatCacheEntry {
         u64 generation;
-
-        u64 ivarGeneration;
         const HIRType* type;
     };
 

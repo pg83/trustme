@@ -4697,8 +4697,24 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
 
                         const auto cacheKey = input->uid;
 
+                        /* The key is the projection with its own inference resolved, so binding
+                           a variable inside it gives a different key and strands the old entry
+                           rather than making it wrong - upstream's `ProjectionCache`
+                           (rustc_infer/src/traits/project.rs) says as much: "projection cache
+                           entries can be 'stranded' ... We make no attempt to recover or remove
+                           'stranded' entries, but rather let them be (for the lifetime of the
+                           infcx)".  Its entries survive every mutation short of a snapshot
+                           rollback, and they are *meant* to hold open variables: "entries ...
+                           might contain inference variables that will be resolved by obligations
+                           on the projection cache entry (e.g., when a type parameter in the
+                           associated type is constrained through an 'RFC 447' projection on the
+                           impl)".  That is what makes normalizing such a projection idempotent -
+                           a second ask hands back the same variable instead of minting another
+                           one together with another copy of the obligations that decide it.
+                           Retiring the entry on any mutation elsewhere gave that up exactly where
+                           it is needed, since the fresh variable's own arrival is a mutation. */
                         auto* cached = ivars.probing() ? nullptr : eatCache.find(cacheKey);
-                        if (cached && cached->generation == eatCacheGeneration && (!((input->flags | cached->type->flags) & (HIRType::HAS_TYPE_INFER | HIRType::HAS_DEFERRED_CONST)) || cached->ivarGeneration == ivars.mutationGeneration)) {
+                        if (cached && cached->generation == eatCacheGeneration) {
                             if (input != cached->type) {
                                 cached->type = this->expandAssociatedTypesInplace(sp, cached->type, effects);
                             }
@@ -4753,7 +4769,7 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
                             if (input->is_Path() && (input->as_Path().binding.is_Unbound() || input->as_Path().binding.is_Opaque())) {
                             } else if (!ivars.probing()) {
                                 DEBUG(StringView("CACHE+: ") << cacheKey << StringView(" = ") << input);
-                                eatCache.insert(cacheKey, EatCacheEntry{eatCacheGeneration, ivars.mutationGeneration, input});
+                                eatCache.insert(cacheKey, EatCacheEntry{eatCacheGeneration, input});
                             }
                         }
                     }
