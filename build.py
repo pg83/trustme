@@ -718,6 +718,10 @@ proptest_1_11_0 = add_project_test(
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/proptest_1_11_0/Cargo.lock",
     adapter_args=["--", "--test-threads=1"],
+    # One harness thread turns proptest's own property tests - thousands of
+    # generated cases each - into a serial run that outlasts the ordinary
+    # project budget.
+    timeout=NESTED_PROJECT_TIMEOUT,
 )
 
 alloca = add_project_test(
