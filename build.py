@@ -1369,6 +1369,27 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_closure_inline_marking",
+    inputs=[
+        "$(S)/tst/unit/test_closure_inline_marking.py",
+        "$(S)/tst/unit/closure_inline_marking_input.rs",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/closure_inline_marking.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_closure_inline_marking.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/closure_inline_marking_input.rs",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/closure_inline_marking.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_driver_lint_cfg_options",
     inputs=[
         "$(S)/tst/unit/test_driver_lint_cfg_options.py",

@@ -54,6 +54,10 @@ namespace {
 
     struct CHandlerInline: public CommonFunction {
         void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
+
+        ASTExprNode* handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const override;
+
+        static ASTInlineMarking parse(const ASTAttribute& mi);
     };
 
     struct CHandlerCold: public CommonFunction {
@@ -1894,22 +1898,45 @@ auto CommonFunction::handle(const Span& sp, const ASTAttribute& mi, const WireBo
     }
 }
 
-auto CHandlerInline::handle(const ASTAttribute& mi, ASTFunction& fcn) const -> void {
+auto CHandlerInline::parse(const ASTAttribute& mi) -> ASTInlineMarking {
     TTStream lex(mi.span(), ParseState(), mi.data());
     if (lex.getTokenIf(TOK_PAREN_OPEN)) {
         auto attr = lex.getTokenCheck(TOK_IDENT).ident().name;
+        auto rv = ASTInlineMarking::Auto;
         if (attr == "never") {
-            fcn.markings.inlineType = ASTFunction::Markings::Inline::Never;
+            rv = ASTInlineMarking::Never;
         } else if (attr == "always") {
-            fcn.markings.inlineType = ASTFunction::Markings::Inline::Always;
+            rv = ASTInlineMarking::Always;
         } else {
             ERROR(lex.pointSpan(), E0000, StringView("Unknown inline type #[inline(") << attr << StringView(")]"));
         }
         lex.getTokenCheck(TOK_PAREN_CLOSE);
         lex.getTokenCheck(TOK_EOF);
-    } else {
-        fcn.markings.inlineType = ASTFunction::Markings::Inline::Normal;
+        return rv;
     }
+    return ASTInlineMarking::Normal;
+}
+
+auto CHandlerInline::handle(const ASTAttribute& mi, ASTFunction& fcn) const -> void {
+    fcn.markings.inlineType = CHandlerInline::parse(mi);
+}
+
+/* A closure is one of the two targets upstream `check_inline`
+   (rustc_passes/src/check_attr.rs) accepts without a word:
+        Target::Fn | Target::Closure | Target::Method(..) => {}
+   and `codegen_fn_attrs` (rustc_codegen_ssa/src/codegen_attrs.rs) writes the
+   parsed `InlineAttr` onto whichever def carried it, closures included - which
+   is why `f(#[inline(always)] |x| ..)` is written all over zerocopy and
+   aho-corasick. The marking rides the closure to the `call`/`call_mut`/
+   `call_once` method extracted from it, where it becomes
+   `__attribute__((always_inline))` exactly as it would on a free function. */
+auto CHandlerInline::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const -> ASTExprNode* {
+    if (auto* n = cast<ASTExprNodeClosure>(expr)) {
+        n->inlineType = CHandlerInline::parse(mi);
+    } else {
+        ERROR(sp, E0000, StringView("#[inline] should be applied to a function or closure"));
+    }
+    return expr;
 }
 
 auto CHandlerCold::handle(const ASTAttribute& mi, ASTFunction& fcn) const -> void {

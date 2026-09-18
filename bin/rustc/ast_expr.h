@@ -519,10 +519,14 @@ struct ASTExprNodeClosure: public ASTExprNode {
     bool isUse;
     bool isPinned;
     bool trackCaller;
+    /* `#[inline]` on the closure expression: upstream `check_inline` lists
+       `Target::Closure` beside `Target::Fn`, and `codegen_fn_attrs` stores the
+       result on the closure's own def. */
+    ASTInlineMarking inlineType;
 
     ASTHigherRankedBounds hrbs;
 
-    ASTExprNodeClosure(argsT args, ASTType* rv, ASTExprNode* code, bool isMove, bool isUse, bool isPinned, bool trackCaller = false)
+    ASTExprNodeClosure(argsT args, ASTType* rv, ASTExprNode* code, bool isMove, bool isUse, bool isPinned, bool trackCaller = false, ASTInlineMarking inlineType = ASTInlineMarking::Auto)
         : args(std::move(args))
         , returnType(rv)
         , code(code)
@@ -530,6 +534,7 @@ struct ASTExprNodeClosure: public ASTExprNode {
         , isUse(isUse)
         , isPinned(isPinned)
         , trackCaller(trackCaller)
+        , inlineType(inlineType)
     {
     }
 

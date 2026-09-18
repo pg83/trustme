@@ -33,6 +33,23 @@
 using namespace stl;
 
 namespace {
+    /* One `#[inline]`, whether it was written on a function item or on a closure
+       expression, ends up in the same place upstream: `codegen_fn_attrs` stores
+       the parsed `InlineAttr` on the def that carried it. */
+    HIRFunction::Markings::Inline LowerHIRInlineMarking(ASTInlineMarking marking) {
+        switch (marking) {
+            case ASTInlineMarking::Never:
+                return HIRFunction::Markings::Inline::Never;
+            case ASTInlineMarking::Always:
+                return HIRFunction::Markings::Inline::Always;
+            case ASTInlineMarking::Normal:
+                return HIRFunction::Markings::Inline::Normal;
+            case ASTInlineMarking::Auto:
+                break;
+        }
+        return HIRFunction::Markings::Inline::Auto;
+    }
+
     struct ImplTraitSource {
         const HIRItemPath* path;
         const HIRGenericParams* paramsOuter;
@@ -2726,19 +2743,13 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
 
     bool forceEmit = false;
     HIRFunction::Markings markings;
-    switch (f.markings.inlineType) {
-        case ASTFunction::Markings::Inline::Auto:
-            markings.inlineType = HIRFunction::Markings::Inline::Auto;
+    markings.inlineType = LowerHIRInlineMarking(f.markings.inlineType);
+    switch (markings.inlineType) {
+        case HIRFunction::Markings::Inline::Auto:
+        case HIRFunction::Markings::Inline::Never:
             break;
-        case ASTFunction::Markings::Inline::Never:
-            markings.inlineType = HIRFunction::Markings::Inline::Never;
-            break;
-        case ASTFunction::Markings::Inline::Always:
-            markings.inlineType = HIRFunction::Markings::Inline::Always;
-            forceEmit = true;
-            break;
-        case ASTFunction::Markings::Inline::Normal:
-            markings.inlineType = HIRFunction::Markings::Inline::Normal;
+        case HIRFunction::Markings::Inline::Always:
+        case HIRFunction::Markings::Inline::Normal:
             forceEmit = true;
             break;
     }
@@ -5195,6 +5206,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeClosure& v) -> void {
         auto resumePattern = hasResumePattern ? std::move(args.front().first) : HIRPattern();
         auto* generator = ctx.crate->pool->make<HIRExprNodeGenerator>(v.span(), ctx.LowerHIRType(v.returnType), resumeTy, std::move(resumePattern), hasResumePattern, ctx.crate->types.infer(), mv$(inner), v.isMove, v.isPinned, false);
         generator->trackCaller = v.trackCaller;
+        generator->inlineType = LowerHIRInlineMarking(v.inlineType);
         rv.reset(generator);
     } else {
         if (v.isPinned) {
@@ -5202,6 +5214,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeClosure& v) -> void {
         }
         auto* closure = ctx.crate->pool->make<HIRExprNodeClosure>(v.span(), std::move(args), ctx.LowerHIRType(v.returnType), std::move(inner), v.isMove, v.isUse);
         closure->trackCaller = v.trackCaller;
+        closure->inlineType = LowerHIRInlineMarking(v.inlineType);
         rv.reset(closure);
     }
 }

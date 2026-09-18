@@ -10,6 +10,16 @@ class ASTExprNode;
 struct WireBoard;
 class ASTModule;
 
+/* What one `#[inline]` said. It lives beside the attribute types because both
+   things that can carry the attribute - a function item and a closure
+   expression - are declared in headers that do not see each other. */
+enum class ASTInlineMarking {
+    Auto,
+    Never,
+    Normal,
+    Always,
+};
+
 struct ASTAttributeIdentCallback {
     virtual void visit(const Span& sp, RcString ident) = 0;
 };

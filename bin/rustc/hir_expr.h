@@ -656,6 +656,9 @@ struct HIRExprNodeClosure: public HIRExprNode {
     bool isMove = false;
     bool isUse = false;
     bool trackCaller = false;
+    /* `#[inline]` written on the closure expression, handed on to the methods
+       extracted from it. */
+    HIRFunction::Markings::Inline inlineType = HIRFunction::Markings::Inline::Auto;
 
     enum class Class {
         Unknown,
@@ -701,6 +704,9 @@ struct HIRExprNodeGenerator: public HIRExprNode {
     bool isMove;
     bool isPinned;
     bool trackCaller = false;
+    /* See `HIRExprNodeClosure::inlineType` - an `async` closure lowers to this
+       node instead, and carries the same marking. */
+    HIRFunction::Markings::Inline inlineType = HIRFunction::Markings::Inline::Auto;
 
     bool isCoroutineClosureBody;
 

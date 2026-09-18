@@ -3752,10 +3752,15 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
             break;
     }
 
+    /* `#[inline]` and `#[track_caller]` were written on the closure expression;
+       the closure's body now lives in these `call`/`call_mut`/`call_once`
+       methods, so that is where the markings belong. Upstream reaches the same
+       place through `codegen_fn_attrs` of the closure's own def. */
     for (size_t i = implCounts.closure; i < out.implsClosure.size(); i++) {
         auto& ti = out.implsClosure[i];
         for (auto& m : ti.second.methods) {
             m.second.data.markings.trackCaller = node.trackCaller;
+            m.second.data.markings.inlineType = node.inlineType;
             if (!m.second.data.code.state) {
                 m.second.data.code.state = exprPtr.state.clone(pool);
             }
@@ -3765,6 +3770,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
         auto& ti = out.implsType[i];
         for (auto& m : ti->methods) {
             m.second.data.markings.trackCaller = node.trackCaller;
+            m.second.data.markings.inlineType = node.inlineType;
             if (!m.second.data.code.state) {
                 m.second.data.code.state = exprPtr.state.clone(pool);
             }
@@ -4042,6 +4048,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
 
     HIRFunction fcnResume;
     fcnResume.markings.trackCaller = node.trackCaller;
+    fcnResume.markings.inlineType = node.inlineType;
     fcnResume.receiver = HIRFunction::Receiver::Custom;
     fcnResume.receiverType = selfArgTy;
     fcnResume.args.push_back(std::make_pair(HIRPattern(), selfArgTy));

@@ -220,12 +220,9 @@ private:
 
 public:
     struct Markings {
-        enum Inline {
-            Auto,
-            Never,
-            Normal,
-            Always
-        } inlineType = Inline::Auto;
+        using Inline = ASTInlineMarking;
+
+        Inline inlineType = Inline::Auto;
 
         bool isCold = false;
         bool isNaked = false;
