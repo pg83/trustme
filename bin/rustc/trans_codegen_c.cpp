@@ -199,7 +199,15 @@ namespace {
 
         bool usesIntelCompilerAsmDialect() const;
 
-        bool literalBlobPathIsSafe() const;
+        /* The generated C++ is cached by content and assembled from whatever
+           directory the build driver picks, so it names its literal blob by a
+           bare file name - the base name of the output plus `.blob` - and the
+           driver points the assembler at the directory holding it. */
+        const char* outfileBaseName() const;
+
+        bool literalBlobNameIsSafe() const;
+
+        void openLiteralBlob();
 
         size_t appendLiteralBlob(const EncodedLiteral& encoded);
 
@@ -693,21 +701,36 @@ auto CodeGeneratorC::usesIntelCompilerAsmDialect() const -> bool {
     return arch == "x86" || arch == "x86_64";
 }
 
-auto CodeGeneratorC::literalBlobPathIsSafe() const -> bool {
-    for (char c : outfilePath) {
-        if (c == '"' || c == '\\' || c == '\n' || c == '\r') {
+auto CodeGeneratorC::outfileBaseName() const -> const char* {
+    const char* base = outfilePath.c_str();
+    for (const char* c = base; *c; c++) {
+        if (*c == '/') {
+            base = c + 1;
+        }
+    }
+    return base;
+}
+
+auto CodeGeneratorC::literalBlobNameIsSafe() const -> bool {
+    for (const char* c = outfileBaseName(); *c; c++) {
+        if (*c == '"' || *c == '\\' || *c == '\n' || *c == '\r') {
             return false;
         }
     }
     return true;
 }
 
-auto CodeGeneratorC::appendLiteralBlob(const EncodedLiteral& encoded) -> size_t {
-    if (!literalBlob) {
-        const auto path = outfilePath + ".blob";
-        literalBlob = fopen(path.c_str(), "wb");
-        ASSERT_BUG(Span(), literalBlob, StringView("Failed to open `") << path << StringView("` for writing"));
+auto CodeGeneratorC::openLiteralBlob() -> void {
+    if (literalBlob) {
+        return;
     }
+    const auto path = outfilePath + ".blob";
+    literalBlob = fopen(path.c_str(), "wb");
+    ASSERT_BUG(Span(), literalBlob, StringView("Failed to open `") << path << StringView("` for writing"));
+}
+
+auto CodeGeneratorC::appendLiteralBlob(const EncodedLiteral& encoded) -> size_t {
+    openLiteralBlob();
     const size_t offset = literalBlobSize;
     const size_t written = fwrite(encoded.bytes.data(), 1, encoded.bytes.length(), literalBlob);
     ASSERT_BUG(Span(), written == encoded.bytes.length(), StringView("Failed to write literal blob for `") << outfilePath << StringView("`"));
@@ -951,11 +974,16 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
     of << StringView("}\n");
     emitCallerLocationDefinitions();
     of.finish();
-    closeLiteralBlob();
 
     if (opt.emitCppOnly) {
+        /* The driver caches the generated C++ and assembles it elsewhere, so
+           the blob has to travel with it as a declared output of this run -
+           emit it even when no static was large enough to fill it. */
+        openLiteralBlob();
+        closeLiteralBlob();
         return;
     }
+    closeLiteralBlob();
 
     struct LinkList: private StringList {
         enum class Ty {
@@ -1236,6 +1264,15 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
         case CodegenOutput::StaticLibrary:
             args.push_back(outfilePath + ".o");
             break;
+    }
+    if (literalBlobSize > 0) {
+        /* Tell the assembler where the blob the generated C++ names lives.
+           An output with no directory of its own already sits in the working
+           directory, which the assembler searches first. */
+        const size_t directoryLength = outfileBaseName() - outfilePath.c_str();
+        if (directoryLength > 0) {
+            args.push_back("-Wa,-I" + outfilePath.substr(0, directoryLength));
+        }
     }
     args.push_back(outfilePathC.c_str());
     switch (outTy) {
@@ -2294,7 +2331,7 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
     const bool isZero = isZeroLiteral(type, encoded, params);
 
     const bool blobLinkage = item.linkage.type == HIRLinkage::Type::Auto || item.linkage.type == HIRLinkage::Type::Weak;
-    if (!isZero && encoded.bytes.length() >= 64 * 1024 && encoded.relocations.empty() && TargetGetCurSpec(wb_).osName == "linux" && blobLinkage && item.linkage.name.empty() && item.linkage.section.empty() && literalBlobPathIsSafe()) {
+    if (!isZero && encoded.bytes.length() >= 64 * 1024 && encoded.relocations.empty() && TargetGetCurSpec(wb_).osName == "linux" && blobLinkage && item.linkage.name.empty() && item.linkage.section.empty() && literalBlobNameIsSafe()) {
         size_t size = 0;
         size_t align = 0;
         MIR_ASSERT(topMirRes, TargetGetSizeAndAlignOf(sp, resolve_, type, size, align), StringView("Unsized static ") << p);
@@ -2311,7 +2348,7 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
         of << StringView("\".") << (weak ? "weak " : "globl ") << TransMangleValue(p) << StringView("\\n\"\n");
         of << StringView("\".type ") << TransMangleValue(p) << StringView(",@object\\n\"\n");
         of << StringView("\"") << TransMangleValue(p) << StringView(":\\n\"\n");
-        of << StringView("\".incbin \\\"") << outfilePath << StringView(".blob\\\", ") << blobOffset << StringView(", ") << encoded.bytes.length() << StringView("\\n\"\n");
+        of << StringView("\".incbin \\\"") << StringView(outfileBaseName()) << StringView(".blob\\\", ") << blobOffset << StringView(", ") << encoded.bytes.length() << StringView("\\n\"\n");
         of << StringView("\".size ") << TransMangleValue(p) << StringView(",") << size << StringView("\\n\"\n");
         of << StringView("\".popsection\\n\");\n");
         mirRes = nullptr;

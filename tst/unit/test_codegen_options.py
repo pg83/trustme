@@ -476,6 +476,72 @@ def check_prototype_order(rustc: str, src: str, work: str) -> None:
         raise RuntimeError("external function declaration was not emitted before definitions")
 
 
+def check_relocatable_literal_blob(rustc: str, src: str, work: str) -> None:
+    """A static too large for a C initialiser becomes an assembler `.incbin` of a
+    companion blob. The build driver caches the generated C++ by content and
+    assembles it from an unrelated directory, so the blob is named without a
+    path and reached through the assembler's search path."""
+    origin = os.path.join(work, "literal-blob")
+    elsewhere = os.path.join(work, "literal-blob-elsewhere")
+    os.makedirs(origin)
+    os.makedirs(elsewhere)
+    output = os.path.join(origin, "t")
+    command_file = os.path.join(work, "literal-blob.command")
+    result = subprocess.run(
+        lib.wrap_gdb([
+            rustc, src,
+            "--crate-type", "bin",
+            "--crate-name", "codegen_literal_blob",
+            "-o", output,
+            f"-Cemit-build-command={command_file}",
+        ]),
+        env=dict(os.environ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    expect_ok(result, "literal blob codegen")
+    generated = Path(output + ".cpp").read_text()
+    blobs = re.findall(r'\.incbin \\"([^"\\]*)\\", (\d+), (\d+)', generated)
+    extents = sorted((int(offset), int(size)) for _, offset, size in blobs)
+    if extents != [(0, 70000), (70000, 70000)]:
+        raise RuntimeError(f"large statics were not packed into one blob: {blobs!r}")
+    names = {name for name, _, _ in blobs}
+    if names != {"t.blob"}:
+        raise RuntimeError(f"generated C++ names its literal blob by path: {sorted(names)!r}")
+
+    command = shlex.split(Path(command_file).read_text())
+    response = next((arg[1:] for arg in command if arg.startswith("@")), None)
+    if response is None:
+        raise RuntimeError(f"literal blob command has no response file: {command!r}")
+    prefix = "-Wa,-I"
+    search = [
+        os.path.normpath(arg[len(prefix):])
+        for arg in shlex.split(Path(response).read_text())
+        if arg.startswith(prefix)
+    ]
+    if search != [origin]:
+        raise RuntimeError(f"literal blob command does not name the blob's directory: {search!r}")
+
+    blob = Path(output + ".blob")
+    if blob.stat().st_size != 140000:
+        raise RuntimeError(f"literal blob is {blob.stat().st_size} bytes, expected 140000")
+    blob.rename(os.path.join(elsewhere, "t.blob"))
+    build = subprocess.run(
+        [*command, f"-Wa,-I{elsewhere}"],
+        env=dict(os.environ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    expect_ok(build, "relocated literal blob build")
+    run = subprocess.run([output], env=dict(os.environ), timeout=60, check=False)
+    if run.returncode != 0:
+        raise RuntimeError(f"relocated literal blob binary exited {run.returncode}")
+
+
 def check_large_function_backend_budget(
     rustc: str, src: str, libstd_tar: str, work: str
 ) -> None:
@@ -501,11 +567,11 @@ def check_large_function_backend_budget(
 
 
 def main() -> int:
-    if len(sys.argv) != 13:
+    if len(sys.argv) != 14:
         raise SystemExit(
             "usage: test_codegen_options.py "
             "RUSTC MIR_RS CFG_RS LINK_RS UNWIND_RS SWITCH_RS FIELDLESS_RS "
-            "CFG_COMPACT_RS PROTO_RS LARGE_RS LIBSTD_TAR STAMP"
+            "CFG_COMPACT_RS PROTO_RS LARGE_RS BLOB_RS LIBSTD_TAR STAMP"
         )
     (
         rustc,
@@ -518,6 +584,7 @@ def main() -> int:
         cfg_compact_src,
         proto_src,
         large_src,
+        blob_src,
         libstd_tar,
         stamp,
     ) = map(os.path.abspath, sys.argv[1:])
@@ -595,6 +662,7 @@ def main() -> int:
         check_cfg_compaction(rustc, cfg_compact_src, work)
         check_prototype_order(rustc, proto_src, work)
         check_large_function_backend_budget(rustc, large_src, libstd_tar, work)
+        check_relocatable_literal_blob(rustc, blob_src, work)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)
     Path(stamp).touch()

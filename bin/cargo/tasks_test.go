@@ -123,6 +123,42 @@ func TestTaskContextMaterializesOnlyRequestedTree(t *testing.T) {
 	runTasks([]*Task{consumer}, 1, root, false)
 }
 
+func TestTaskContextStagesFileOutputUnderItsName(t *testing.T) {
+	root := t.TempDir()
+	blob := "libcrate-H1.rlib.blob"
+	producer := &Task{
+		key:     "test|blob",
+		name:    "blob",
+		kind:    "RS",
+		outputs: []TaskOutput{{name: blob}},
+		action: func(ctx *TaskContext) {
+			if err := os.WriteFile(ctx.output(0), []byte("payload"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		},
+	}
+	consumer := &Task{
+		key:     "test|assemble",
+		name:    "assemble",
+		kind:    "CC",
+		deps:    []*Task{producer},
+		outputs: []TaskOutput{{name: "object"}},
+		action: func(ctx *TaskContext) {
+			data, err := os.ReadFile(filepath.Join(ctx.stageFile(producer, 0), blob))
+
+			if err != nil || string(data) != "payload" {
+				t.Fatalf("staged file = %q, %v", data, err)
+			}
+
+			if err := os.WriteFile(ctx.output(0), nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		},
+	}
+
+	runTasks([]*Task{consumer}, 1, root, false)
+}
+
 func TestInstallDoesNotChangeSharedCasMode(t *testing.T) {
 	root := t.TempDir()
 	makeTask := func(key string, executable bool) *Task {

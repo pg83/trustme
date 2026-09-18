@@ -50,6 +50,7 @@ type CompileUnit struct {
 	metadata     int
 	cpp          int
 	linkManifest int
+	blob         int
 	cc           *Task
 	final        *Task
 }
@@ -495,6 +496,10 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 	outputs = append(outputs, TaskOutput{name: baseName + ".cpp"})
 	linkManifest := len(outputs)
 	outputs = append(outputs, TaskOutput{name: baseName + ".link"})
+	// The generated C++ embeds its large statics by name through an assembler
+	// .incbin, so the blob is a companion output that has to reach [CC].
+	blob := len(outputs)
+	outputs = append(outputs, TaskOutput{name: baseName + ".blob"})
 	task := &Task{
 		key:       key,
 		name:      b.taskName(pkg, target, isHost),
@@ -512,7 +517,7 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 	b.tasks[key] = task
 	unit := &CompileUnit{
 		pkg: pkg, target: target, isHost: isHost, baseName: baseName, rs: task,
-		metadata: metadata, cpp: cpp, linkManifest: linkManifest,
+		metadata: metadata, cpp: cpp, linkManifest: linkManifest, blob: blob,
 	}
 	b.units[task] = unit
 
@@ -583,7 +588,7 @@ func (b *Builder) buildScriptCompileTask(pkg *Package) *Task {
 		name:      pkg.name + " v" + pkg.version.string() + " (build script)",
 		kind:      "RS",
 		inputs:    b.packageInputs(pkg),
-		outputs:   []TaskOutput{{name: baseName + ".cpp"}, {name: baseName + ".link"}},
+		outputs:   []TaskOutput{{name: baseName + ".cpp"}, {name: baseName + ".link"}, {name: baseName + ".blob"}},
 		signature: b.rustSignature(pkg, target, true),
 	}
 
@@ -595,7 +600,7 @@ func (b *Builder) buildScriptCompileTask(pkg *Package) *Task {
 	b.tasks[key] = task
 	unit := &CompileUnit{
 		pkg: pkg, target: target, isHost: true, baseName: baseName, rs: task,
-		metadata: -1, cpp: 0, linkManifest: 1,
+		metadata: -1, cpp: 0, linkManifest: 1, blob: 2,
 	}
 	b.units[task] = unit
 
@@ -788,6 +793,10 @@ func (b *Builder) codegenTask(compile *Task) *Task {
 	b.units[task] = unit
 	task.action = func(ctx *TaskContext) {
 		args := b.cxxCompileArgs(unit.isHost)
+		// A CAS path has no neighbours, so the blob the generated C++ names in
+		// its .incbin is staged under that name and handed to the assembler as
+		// a search path.
+		args = append(args, "-Wa,-I"+ctx.stageFile(compile, unit.blob))
 		// CAS paths intentionally have no semantic filename. Tell the compiler
 		// the language instead of making it guess from a .cpp suffix.
 		args = append(args, "-o", ctx.output(0), "-x", "c++", ctx.file(compile, unit.cpp), "-c")

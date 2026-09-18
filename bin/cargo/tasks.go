@@ -528,6 +528,38 @@ func (ctx *TaskContext) tree(task *Task, index int) string {
 	return root
 }
 
+// stageFile materialises one file output under the name the task gave it and
+// returns the directory holding it. A CAS path is named by its digest alone, so
+// a tool that resolves a companion file by name - the assembler looking up an
+// .incbin - needs the real name back.
+func (ctx *TaskContext) stageFile(task *Task, index int) string {
+	if task.state == nil {
+		throwFmt("internal: task %s has no result", task.name)
+	}
+
+	root := filepath.Join(ctx.tmp, "in", task.state.uid, fmt.Sprintf("%d", index))
+	throw(os.MkdirAll(root, 0o755))
+	name := filepath.Base(filepath.Clean(task.outputs[index].name))
+
+	if name == "." || name == ".." || name == string(filepath.Separator) {
+		throwFmt("internal: unstageable task output %q", task.outputs[index].name)
+	}
+
+	destination := filepath.Join(root, name)
+
+	if _, err := os.Stat(destination); err == nil {
+		return root
+	}
+
+	source := ctx.file(task, index)
+
+	if err := os.Link(source, destination); err != nil {
+		throw(os.Symlink(source, destination))
+	}
+
+	return root
+}
+
 func (ex *TaskExecutor) install(task *Task, index int, destination string) {
 	ctx := &TaskContext{executor: ex}
 	source := ctx.file(task, index)
