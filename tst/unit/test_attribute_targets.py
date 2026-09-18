@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Attributes belong to more positions than free items.
 
-`#[target_feature]` on an inherent or provided method and `#[inline]` on a
-closure are both accepted in silence by rustc 1.90 - see
-`check_target_feature`/`check_inline` (rustc_passes/src/check_attr.rs). The
-positions upstream rejects must still be rejected here.
+`#[target_feature]` on an inherent or provided method, `#[inline]` on a closure
+and a `///` on a `macro_rules!` inside a function body are all accepted in
+silence by rustc 1.90 - see `check_target_feature`/`check_inline`
+(rustc_passes/src/check_attr.rs) and `UnusedDocComment::check_stmt`
+(rustc_lint/src/builtin.rs). The positions upstream rejects must still be
+rejected here.
 """
 
 import os

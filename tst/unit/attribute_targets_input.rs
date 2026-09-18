@@ -28,3 +28,13 @@ pub fn closure_inline() {
     takes(#[inline] |x: u32| x);
     takes(#[inline(never)] |x: u32| x);
 }
+
+pub fn documented_macro() {
+    /* `UnusedDocComment::check_stmt`: ast::StmtKind::Item(..) => return */
+    /// A macro defined inside a function body is an item rustdoc renders.
+    macro_rules! answer {
+        () => {
+            42
+        };
+    }
+}

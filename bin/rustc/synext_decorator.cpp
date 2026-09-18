@@ -531,6 +531,8 @@ namespace {
 
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
 
+        ASTExprNode* handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const override;
+
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override;
     };
 
@@ -4337,6 +4339,23 @@ auto CDocHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard
 }
 
 auto CDocHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const -> void {
+}
+
+/* Upstream's complaint about a doc comment in an expression position is the
+   `unused_doc_comments` lint, and `UnusedDocComment::check_stmt`
+   (rustc_lint/src/builtin.rs) exempts the two statement kinds that reach this
+   overload as a macro node:
+        ast::StmtKind::Item(..) => return,
+        ast::StmtKind::MacCall(_) => return,
+   A `macro_rules!` written inside a function body is a `StmtKind::Item` holding
+   an `ItemKind::MacroDef` - a documented macro, which rustdoc does render - so
+   its `///` is used, not unused. Anything else here is still `check_expr`'s
+   "expressions" case, which does warn. */
+auto CDocHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNode* expr) const -> ASTExprNode* {
+    if (cast<ASTExprNodeMacro>(expr)) {
+        return expr;
+    }
+    return ExpandDecorator::handle(sp, mi, wb, crate, expr);
 }
 
 auto CDocHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const -> void {
