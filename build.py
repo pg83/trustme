@@ -703,6 +703,13 @@ camino_1_1_12 = add_project_test(
     lockfile="$(S)/tst/projects/camino_1_1_12/Cargo.lock",
 )
 
+# `persisted_cases_do_not_count_towards_total_cases` and
+# `failing_cases_persisted_and_reloaded` (proptest/src/test_runner/runner.rs)
+# both name the crate directory's `persistence-test.txt` as their failure
+# persistence file and each begins by deleting it, so in parallel one test
+# reads or truncates the other's file and either may fail. The race is
+# upstream's - it reproduces under rustc 1.90 - and one harness thread is the
+# only cure that does not touch the pinned source.
 proptest_1_11_0 = add_project_test(
     name="proptest_1_11_0",
     url="https://github.com/proptest-rs/proptest.git",
@@ -710,6 +717,7 @@ proptest_1_11_0 = add_project_test(
     manifest="proptest",
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/proptest_1_11_0/Cargo.lock",
+    adapter_args=["--", "--test-threads=1"],
 )
 
 alloca = add_project_test(
