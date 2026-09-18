@@ -1,5 +1,6 @@
 #include "trans_mangling.h"
 
+#include "int128.h"
 #include "hir_hir.h"
 #include "hir_type.h"
 #include "wire_board.h"
@@ -173,6 +174,26 @@ RcString TransMangle(const WireBoard& wb, const HIRType* v) {
 
 RcString TransMangleTypeId(const WireBoard& wb, const HIRType* v) {
     return transMangleType(*wb.mangling, v, true);
+}
+
+/* The value of a `core::any::TypeId`, as `TyCtxt::type_id_hash`
+   (rustc_middle/src/ty/util.rs) defines it: a stable 128-bit hash of the type
+   with its free regions erased and its bound regions anonymised. The type
+   identity mangling is exactly that canonical form, so hash its text.
+
+   Both halves have to carry identity: `TypeId`'s `Hash` impl only reads the
+   second pointer-sized chunk (library/core/src/any.rs), and the value has to
+   be the same in every process that runs the program, so it cannot be a
+   link-time address. */
+U128 TransTypeIdHash(const WireBoard& wb, const HIRType* v) {
+    auto& context = *wb.mangling;
+    auto& sb = mangleBegin(context);
+    sb << StringView("ZRT");
+    Mangler(context, LifetimeIdentityMode::All).fmtType(v);
+    const auto* data = static_cast<const char*>(sb.data());
+    const auto size = static_cast<const char*>(sb.current()) - data;
+    auto hash = XXH3_128bits(data, size);
+    return U128(hash.low64, hash.high64);
 }
 
 ManglingContext::ManglingContext(ObjPool& pool)

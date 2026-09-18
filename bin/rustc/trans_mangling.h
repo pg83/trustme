@@ -1,5 +1,6 @@
 #pragma once
 
+#include "int128.h"
 #include "rc_string.h"
 
 namespace stl {
@@ -22,3 +23,4 @@ RcString TransMangleValue(const WireBoard& wb, const HIRSimplePath& path);
 RcString TransMangleValue(const WireBoard& wb, const HIRGenericPath& path);
 RcString TransMangleValue(const WireBoard& wb, const HIRPath& path);
 RcString TransMangleTypeId(const WireBoard& wb, const HIRType* ty);
+U128 TransTypeIdHash(const WireBoard& wb, const HIRType* ty);

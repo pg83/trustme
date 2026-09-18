@@ -6786,16 +6786,10 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         auto pseudoTerm = MIRTerminator::Data_Call{e.retBlock, MIRUnwindAction::make_Continue({}), e.retVal.clone(), MIRCallTarget::make_Path(fcnPath.clone()), std::move(args)};
         emitTermCall(localMirRes, pseudoTerm, 1);
     } else if (name == "type_id") {
-        const auto& ty = params.types.at(0);
-        emitLvalue(e.retVal);
-        of << StringView(" = ");
-        if (options.emulatedI128) {
-            of << StringView("make128(");
-        }
-        of << StringView("(uintptr_t)&__typeid_") << TransMangleTypeId(ty);
-        if (options.emulatedI128) {
-            of << StringView(")");
-        }
+        /* `type_id` returns a `TypeId`, and its value is produced by constant
+           evaluation (as in rustc's `write_type_id`); `TypeId::of` wraps the
+           call in a `const` block, so it never reaches codegen as a call. */
+        MIR_TODO(localMirRes, StringView("Runtime call to the `type_id` intrinsic for ") << params.types.at(0));
     } else if (name == "type_name") {
         auto name = localMirRes.intrinsicTypeName(params.types.at(0));
         emitLvalue(e.retVal);

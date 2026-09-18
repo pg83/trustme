@@ -12,6 +12,7 @@
 #include "trans_target.h"
 #include "trans_codegen.h"
 #include "hir_expr_state.h"
+#include "trans_mangling.h"
 #include "hir_typeck_common.h"
 #include "trans_monomorphise.h"
 #include "hir_typeck_monomorph.h"
@@ -2290,7 +2291,12 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     dst.slice(TargetGetPointerBits() / 8).writeUint(state, TargetGetPointerBits(), name.size());
                 } else if (te->name == "type_id") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalStaticRefPtr::allocate(localState.valuePool, HIRPath(mv$(ty), "#type_id"), nullptr, 0));
+                    /* rustc's `write_type_id` (rustc_const_eval/src/interpret/intrinsics.rs)
+                       fills the whole 128-bit value with `type_id_hash(ty)`; the pointer
+                       provenance it then decorates the chunks with is CTFE bookkeeping and
+                       leaves the bits alone. */
+                    ASSERT_BUG(state.sp, !monomorphiseTypeNeeded(ty), StringView("type_id of a non-concrete type - ") << ty);
+                    dst.writeUint(state, 128, TransTypeIdHash(this->resolve.wb, ty));
                 } else if (te->name == "needs_drop") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     dst.writeUint(state, 8, resolve.typeNeedsDropGlue(state.sp, ty) ? 1 : 0);
