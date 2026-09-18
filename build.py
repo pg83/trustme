@@ -1390,6 +1390,25 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_attribute_targets",
+    inputs=[
+        "$(S)/tst/unit/test_attribute_targets.py",
+        "$(S)/tst/unit/attribute_targets_input.rs",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/attribute_targets.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_attribute_targets.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/attribute_targets_input.rs",
+        "$(B)/tst/unit/attribute_targets.stamp",
+    ],
+    deps=[rustc],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_driver_lint_cfg_options",
     inputs=[
         "$(S)/tst/unit/test_driver_lint_cfg_options.py",

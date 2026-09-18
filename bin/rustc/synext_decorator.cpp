@@ -126,6 +126,10 @@ namespace {
         AttrStage stage() const override;
 
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
     };
 
     struct CHandlerRustcIntrinsic: public ExpandDecorator {
@@ -2383,6 +2387,36 @@ auto CHandlerTargetFeature::stage() const -> AttrStage {
 
 auto CHandlerTargetFeature::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     // TODO: Only valid on functions?
+}
+
+/* Upstream `check_target_feature` (rustc_passes/src/check_attr.rs) accepts
+   `#[target_feature]` on `Target::Fn` *and* on
+   `Target::Method(MethodKind::Trait { body: true } | MethodKind::Inherent)` -
+   an inherent or provided method is as much a function definition as a free
+   one. The attribute itself only feeds `codegen_fn_attrs.target_features`, and
+   this backend spells the x86 vector intrinsics out as portable C (the
+   `llvm.x86.*` bodies in trans_codegen_c.cpp), so there is no per-function
+   target attribute to carry it into: like the free-function case above, the
+   whole content of honouring it is accepting it. */
+auto CHandlerTargetFeature::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (i.is_None()) {
+    } else if (i.is_Function()) {
+    } else {
+        ERROR(sp, E0000, StringView("#[target_feature] should be applied to a function definition"));
+    }
+}
+
+auto CHandlerTargetFeature::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
+    if (i.is_None()) {
+    } else if (const auto* e = i.opt_Function()) {
+        /* `MethodKind::Trait { body: false }` falls through to the catch-all arm
+           upstream: a required method is a signature, not a definition. */
+        if (!e->code()) {
+            ERROR(sp, E0000, StringView("#[target_feature] should be applied to a function definition"));
+        }
+    } else {
+        ERROR(sp, E0000, StringView("#[target_feature] should be applied to a function definition"));
+    }
 }
 
 auto CHandlerRustcIntrinsic::stage() const -> AttrStage {
