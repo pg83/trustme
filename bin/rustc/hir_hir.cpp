@@ -1860,7 +1860,23 @@ const HIRType* HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, co
     vtableParams.types.resize(te.trait.path.params.types.size() + this->typeIndexes.size());
     for (const auto& tyB : te.trait.typeBounds) {
         if (this->typeIndexes.count(tyB.first) == 0) {
-            WARNING(sp, W0000, StringView("Trait object path ") << te.trait << StringView(" references a type with no vtable type index"));
+            /* An associated type the *declaration* already pinned gets no vtable
+               type index: `VtableOuterVisitor` only reserves a slot for a parent
+               trait's ATY that the declaration left open (`isKnown` in
+               `addTypesFromTrait`). syn's
+                    trait IterTrait<'a, T: 'a>: Iterator<Item = &'a T> + ..
+               fixes `Item` for every implementor, so `dyn IterTrait<'a, T>`
+               carries `Item = &'a T` only because the object type elaborates its
+               supertrait bounds - the parent vtable field is filled from the
+               declaration's own binding in `FixupVisitor::visitStruct`, and
+               upstream does not put associated types in a vtable at all (see
+               `vtable_entries`, rustc_trait_selection/src/traits/vtable.rs -
+               entries are the drop/size/align prefix, methods, and supertrait
+               pointers). A name the trait never declared is a different thing,
+               and still worth a word. */
+            if (!this->getAtyDef(tyB.first).first) {
+                WARNING(sp, W0000, StringView("Trait object path ") << te.trait << StringView(" references an associated type the trait does not declare"));
+            }
             continue;
         }
         auto idx = this->typeIndexes.at(tyB.first);

@@ -1409,6 +1409,27 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_trait_object_supertrait_binding",
+    inputs=[
+        "$(S)/tst/unit/test_trait_object_supertrait_binding.py",
+        "$(S)/tst/unit/trait_object_supertrait_binding_input.rs",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/trait_object_supertrait_binding.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_trait_object_supertrait_binding.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/trait_object_supertrait_binding_input.rs",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/trait_object_supertrait_binding.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_driver_lint_cfg_options",
     inputs=[
         "$(S)/tst/unit/test_driver_lint_cfg_options.py",
