@@ -46,6 +46,7 @@ namespace {
     };
 
     ArgumentBinding variableBinding(const Context& context, const IvarCoercionIndex& coercionIndex, const Context::Coercion& rule);
+    bool openPointeeAwaitsItsProducer(const Context& context, const HIRType* pointee);
 
     struct MonomorphEraseHrls: public Monomorphiser {
         explicit MonomorphEraseHrls(HIRTypeInterner& types);
@@ -608,6 +609,9 @@ struct OrderPlace {
                     const auto* sourceInfer = context.getType(sourceInner)->opt_Infer();
                     const bool knownSized = sourceInfer->index < context.ivarsSized.length() && context.ivarsSized[sourceInfer->index];
                     if (context.getType(destinationInner)->is_TraitObject() && knownSized) {
+                        return {};
+                    }
+                    if (openPointeeAwaitsItsProducer(context, sourceInner)) {
                         return {};
                     }
                     return {sourceInner, destinationInner, false};
@@ -1529,6 +1533,9 @@ struct OrderPlace {
             if (context.getType(destinationInner)->is_TraitObject() && knownSized) {
                 return {};
             }
+            if (openPointeeAwaitsItsProducer(context, sourceInner)) {
+                return {};
+            }
             return {sourceInner, destinationInner, false};
         }
         return {};
@@ -1928,6 +1935,20 @@ struct OrderPlace {
         return std::any_of(context.toVisit.begin(), context.toVisit.end(), [&](const HIRExprNode* node) {
             return context.getType(node->resType) == type;
         });
+    }
+
+    /* Nor is such a variable a pointee a coercion may settle.  Upstream reaches
+       `coerce_borrowed_pointer` with the source as `check_expr` gave it: a method call
+       inside it has been looked up already, its receiver forced to a type of its own
+       first (`check_expr_method_call` -> `structurally_resolve_type`), so a variable
+       pointee there is one nothing else will fill in and unifying it with the target's
+       pointee - the first autoderef step - is the whole answer.  Here that lookup may
+       still be pending, and taking the target's pointee for it forecloses the step
+       upstream makes once the result is known: `tl_buf.as_mut().unwrap()` is `&mut
+       Formatter`, which reaches a `&mut Formatter` parameter by one dereference
+       (env_logger's `Logger::log`). */
+    bool openPointeeAwaitsItsProducer(const Context& context, const HIRType* pointee) {
+        return isResultOfPendingRevisit(context, context.getType(pointee));
     }
 
     AssociatedCheckResult checkAssociated(Context& context, const IvarCoercionIndex& coercionIndex, Context::Associated& v, const Vector<OrderPlace>* cuts = nullptr) {
