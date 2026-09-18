@@ -6700,6 +6700,91 @@ bool associatedPastArgumentCut(const Context& context, const IvarCoercionIndex& 
     return false;
 }
 
+/* The check-order places of the calls whose arguments are still to be coerced - the
+   cheap test before a rule is matched against them. */
+Vector<unsigned> argumentBindingOrders(const Context& context) {
+    Vector<unsigned> orders;
+    for (const auto& rule : context.linkCoerce) {
+        if (!rule->argumentSite || !rule->rightNodePtr || rule->order == 0) {
+            continue;
+        }
+        orders.pushBack(rule->order);
+    }
+    return orders;
+}
+
+/* Whether an obligation a call registered still waits for one of that call's own
+   arguments to bind a parameter variable it names.  Upstream `check_argument_types`
+   coerces the arguments first and lets nothing select the obligations the callee's
+   path brought with it until they are coerced - its one opportunistic
+   `select_obligations_where_possible` sits between the two `check_closures` rounds,
+   after every plain argument has been coerced - and a coercion into a parameter that
+   is still a bare inference variable is a unification: `Coerce::coerce` bails out of
+   `coerce_unsized` on such a target, matches no case of the target's shape and ends
+   in `self.unify(a, b)` (coercion.rs).  So `FromResidual::from_residual(residual)`
+   has its `R` from the residual before `?S: FromResidual<R>` is ever selected;
+   selected with `R` still open, that obligation's nested `E: From<?E>` picks a
+   candidate of its own and binds `R` against the coercion still pending.  A node's
+   rules all carry its order, so a ready argument binding of the same order is one
+   this obligation's own call is still to make, whatever their places say - the
+   argument's binding place is past the call node the obligation was registered at. */
+bool associatedWaitsForArgumentBinding(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<unsigned>& orders, Vector<unsigned>& ivars, const Context::Associated& rule) {
+    if (rule.order == 0) {
+        return false;
+    }
+    /* Only a goal upstream could not have selected yet.  A goal whose self type is
+       still an inference variable makes no progress there - `assemble_candidates`
+       takes the fast path out for it and reports ambiguity - so the coercion
+       `check_argument_types` performs is the first thing to say anything.  A goal
+       with a known self type is one `resolve_vars_with_obligations` does select
+       before that coercion, and then its own bound fixes the parameter and the
+       argument is coerced into what it decided: `als.join(&val_sep)` picks the one
+       `Join<&str>` impl of `[String]` and `&String` deref-coerces into `&str`.  This
+       checker can read a self type of the first kind off the coercion of the call's
+       own result (`checkAssociated`'s guidance), which is what lets the two cases
+       meet here at all. */
+    const auto* self = context.getType(rule.implTy);
+    const auto* selfInfer = self->opt_Infer();
+    if (!selfInfer || selfInfer->isLit()) {
+        return false;
+    }
+    if (std::none_of(orders.begin(), orders.end(), [&](unsigned order) { return order == rule.order; })) {
+        return false;
+    }
+    ivars.clear();
+    coercionIndex.collectIvars(self, ivars);
+    for (const auto* type : rule.params.types) {
+        coercionIndex.collectIvars(context.getType(type), ivars);
+    }
+    for (const auto* type : rule.atyPp.types) {
+        coercionIndex.collectIvars(context.getType(type), ivars);
+    }
+    if (ivars.empty()) {
+        return false;
+    }
+    for (const auto& coercion : context.linkCoerce) {
+        if (!coercion->argumentSite || !coercion->rightNodePtr || coercion->order != rule.order) {
+            continue;
+        }
+        const auto binding = argumentBinding(context, *coercion);
+        if (!binding.destination) {
+            continue;
+        }
+        const auto* infer = context.getType(binding.destination)->opt_Infer();
+        if (!infer || infer->isLit() || infer->index == ~0u) {
+            continue;
+        }
+        for (const auto index : ivars) {
+            if (index != infer->index) {
+                continue;
+            }
+            DEBUG(StringView("- R") << rule.ruleIdx << StringView(" at ") << rule.order << StringView(" waits for the argument binding of R") << coercion->ruleIdx);
+            return true;
+        }
+    }
+    return false;
+}
+
 /* Whether anything may cut - the cheap test before the index is built. */
 bool anyOrderCut(const Context& context) {
     for (const auto* node : context.toVisit) {
@@ -6718,6 +6803,10 @@ bool anyOrderCut(const Context& context) {
 void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionIndex) {
     DEBUG(StringView("--- Associated types"));
     const auto cuts = argumentBindingCuts(context, coercionIndex);
+    /* Rebuilt whenever a response added a rule - the sweep only ever appends to
+       `linkCoerce`, so the places a rule was matched against stay the ones there are. */
+    auto bindingOrders = argumentBindingOrders(context);
+    size_t bindingOrdersAt = context.linkCoerce.size();
     Vector<unsigned> cutIvars;
     /* Upstream's fulfillment processes its obligations in the order they were
        registered, so an earlier one has the first say: the callee's bound `F:
@@ -6767,8 +6856,12 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
         rule.stalledOn = indexedRule.stalledOn;
         rule.order = indexedRule.order;
 
+        if (bindingOrdersAt != context.linkCoerce.size()) {
+            bindingOrders = argumentBindingOrders(context);
+            bindingOrdersAt = context.linkCoerce.size();
+        }
         DEBUG(StringView("- ") << rule);
-        if (associatedStillStalled(context, coercionIndex, rule) || ((!cuts.empty() || !coercionIndex.pendingNodeCut.empty()) && associatedPastArgumentCut(context, coercionIndex, cuts, cutIvars, rule))) {
+        if (associatedStillStalled(context, coercionIndex, rule) || ((!cuts.empty() || !coercionIndex.pendingNodeCut.empty()) && associatedPastArgumentCut(context, coercionIndex, cuts, cutIvars, rule)) || (!bindingOrders.empty() && associatedWaitsForArgumentBinding(context, coercionIndex, bindingOrders, cutIvars, rule))) {
             context.storeAssociated(i, mv$(rule), indexedKey);
             if (linkAssocIterLimit-- == 0) {
                 DEBUG(StringView("link_assoc iteration limit exceeded"));
