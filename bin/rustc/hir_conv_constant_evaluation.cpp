@@ -1394,14 +1394,48 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
 
 static void writeCtfeUnsizeMetadata(MIREvalCallStackEntry& localState, MIREvalValueRef dst, const HIRType* dynamicTypeD, const HIRType* dynamicTypeS) {
     const auto& state = localState.state;
+    /* Walk the two pointee types down to their tails in lockstep, the way
+     * `TyCtxt::struct_lockstep_tails_raw` (rustc_middle/src/ty/util.rs) does for
+     * `unsize_into_ptr` (rustc_const_eval/src/interpret/cast.rs): while both sides
+     * are the same struct, descend into that struct's tail (last) field,
+     * instantiated with each side's own arguments.
+     *
+     * The gate here is `Unsize`, not `CoerceUnsized`. Built-in `Unsize` for
+     * `Struct<T> -> Struct<U>` only asks that the two definitions match
+     * (`assemble_candidates_for_unsizing`) and that the tail field unsizes while the
+     * other fields stay put (`confirm_builtin_unsize_candidate`) - that is what makes
+     * `&Aligned<[u8; N]> -> &Aligned<[u8]>` legal for a plain reference.
+     * `CoerceUnsized` is the separate opt-in a smart pointer implements so that a
+     * *by-value* `Rc<T> -> Rc<dyn Tr>` is a coercion; it says nothing about `&T -> &U`
+     * and a bare `Aligned` naturally has no such impl. This is the same descent
+     * `MIRCleanupUnsizeGetMetadata` already performs for the non-constant path. */
     while (const auto* pathD = dynamicTypeD->opt_Path()) {
         MIR_ASSERT(state, pathD->binding.is_Struct(), StringView("Pointer unsize to ") << dynamicTypeD);
         const auto* pathS = dynamicTypeS->opt_Path();
         MIR_ASSERT(state, pathS && pathS->binding.is_Struct() && pathS->binding.as_Struct() == pathD->binding.as_Struct(), StringView("Pointer unsize from ") << dynamicTypeS << StringView(" to ") << dynamicTypeD);
-        const auto& markings = pathD->binding.as_Struct()->structMarkings;
-        MIR_ASSERT(state, markings.coerceUnsized != HIRStructMarkings::Coerce::None, StringView("Pointer unsize through non-CoerceUnsized type ") << dynamicTypeD);
-        dynamicTypeD = pathD->path.data.as_Generic().params.types.at(markings.unsizedParam);
-        dynamicTypeS = pathS->path.data.as_Generic().params.types.at(markings.unsizedParam);
+        const auto& definition = *pathD->binding.as_Struct();
+        const auto unsizedField = definition.structMarkings.unsizedField;
+        MIR_ASSERT(state, unsizedField != ~0u, StringView("Pointer unsize through type with no unsized tail ") << dynamicTypeD);
+        const HIRType* tailTemplate = nullptr;
+        switch (definition.data.tag()) {
+            case HIRStructData::TAG_Unit:
+                MIR_BUG(state, StringView("Pointer unsize through unit-like struct ") << dynamicTypeD);
+                break;
+            case HIRStructData::TAG_Tuple:
+                tailTemplate = definition.data.as_Tuple().at(unsizedField).ent;
+                break;
+            case HIRStructData::TAG_Named:
+                tailTemplate = definition.data.as_Named().at(unsizedField).ty;
+                break;
+        }
+        const auto instantiateTail = [&](const HIRType* self, const HIRPath& path) {
+            auto monomorph = MonomorphStatePtr(state.crate.types, self, &path.data.as_Generic().params, nullptr);
+            return localState.resolve.expandAssociatedTypes(state.sp, monomorph.monomorphType(state.sp, tailTemplate, false));
+        };
+        const auto* tailD = instantiateTail(dynamicTypeD, pathD->path);
+        const auto* tailS = instantiateTail(dynamicTypeS, pathS->path);
+        dynamicTypeD = tailD;
+        dynamicTypeS = tailS;
     }
 
     const auto ptrSize = TargetGetPointerBits() / 8;
