@@ -2342,10 +2342,21 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             const auto& vtableSp = trait.vtablePath;
             ASSERT_BUG(sp, vtableSp != HIRSimplePath(), StringView("Trait ") << traitPath.path << StringView(" doesn't have a vtable"));
             auto vtableParams = traitPath.params.clone();
+            /* The vtable struct's associated-type arguments sit at the slot that
+               `typeIndexes` assigned when the struct was synthesised, never at the
+               position `typeIndexes` happens to be walked in - that map is hashed.
+               rustc spells a trait object's associated types once, in one canonical
+               order, and asserts it on interning: TyCtxt::mk_poly_existential_predicates
+               (rustc_middle/src/ty/context.rs) rejects a predicate list that is not
+               sorted by ExistentialPredicate::stable_cmp, an order documented as one
+               that "will not change if modules are reordered". */
             for (const auto& ty : trait.typeIndexes) {
+                auto idx = ty.second;
+                if (vtableParams.types.size() <= idx) {
+                    vtableParams.types.resize(idx + 1);
+                }
                 auto aty = crate.types.path(HIRPath(type, traitPath.clone(), ty.first), {});
-                aty = state.resolve.expandAssociatedTypes(sp, aty);
-                vtableParams.types.push_back(mv$(aty));
+                vtableParams.types[idx] = state.resolve.expandAssociatedTypes(sp, aty);
             }
             const auto& vtableRef = crate.getStructByPath(sp, vtableSp);
             auto vtableTy = crate.types.path(HIRGenericPath(mv$(vtableSp), mv$(vtableParams)), &vtableRef);
