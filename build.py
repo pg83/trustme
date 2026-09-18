@@ -1558,6 +1558,27 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_proc_macro_call_site_locals",
+    inputs=[
+        "$(S)/tst/unit/test_proc_macro_call_site_locals.py",
+        *build.glob("$(S)/tst/unit/proc_macro_call_site_locals/**/*.toml"),
+        *build.glob("$(S)/tst/unit/proc_macro_call_site_locals/**/*.rs"),
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/proc_macro_call_site_locals.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_proc_macro_call_site_locals.py",
+        "$(S)/tst/unit/proc_macro_call_site_locals/Cargo.toml",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/proc_macro_call_site_locals.stamp",
+    ],
+    deps=[libstd, rustc, cargo],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_proc_macro_token_streams",
     inputs=[
         "$(S)/tst/unit/test_proc_macro_token_streams.py",

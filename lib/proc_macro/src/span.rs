@@ -29,6 +29,11 @@ impl Span
     pub(crate) fn from_raw(idx: usize) -> Self {
         Span(idx)
     }
+    /// The index the compiler knows this span by - echoed back so that a token
+    /// this macro passes through keeps the resolution context it arrived with.
+    pub(crate) fn to_raw(&self) -> usize {
+        self.0
+    }
 }
 
 impl Span

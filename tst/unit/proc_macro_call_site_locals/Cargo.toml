@@ -1,0 +1,11 @@
+[package]
+name = "proc-macro-call-site-locals-unit"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "proc_macro_call_site_locals_unit"
+path = "src/main.rs"
+
+[dependencies]
+call-site-locals-macro = { path = "call-site-locals-macro" }

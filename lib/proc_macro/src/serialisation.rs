@@ -7,16 +7,20 @@ use crate::protocol::{Reader,Writer};
 pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
 {
     let mut s = Reader::new(reader);
-    return get_subtree(&mut s, "");
+    // A `SpanRef` applies to every token after it until the next one, and the
+    // stream opens at the call site; a token handed back to the compiler with
+    // this span keeps the resolution context it was written with.
+    let mut span = Span::call_site();
+    return get_subtree(&mut s, "", &mut span);
 
-    fn get_subtree<R: ::std::io::Read>(s: &mut Reader<R>, end: &'static str) -> TokenStream {
+    fn get_subtree<R: ::std::io::Read>(s: &mut Reader<R>, end: &'static str, span: &mut Span) -> TokenStream {
         let mut toks: Vec<TokenTree> = Vec::new();
         while let Some(t) = s.read_ent()
         {
             let tt = match t
                 {
-                Token::SpanRef(_idx) => {
-                    // Ignore - for now
+                Token::SpanRef(idx) => {
+                    *span = crate::Span::from_raw(idx);
                     continue
                     },
                 Token::SpanDef(sd) => {
@@ -35,58 +39,73 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
                 Token::Symbol(sym) => {
                     match &sym[..]
                     {
-                    "{" => { Group::new(Delimiter::Brace, get_subtree(s, "}")).into() },
-                    "[" => { Group::new(Delimiter::Bracket, get_subtree(s, "]")).into() },
-                    "(" => { Group::new(Delimiter::Parenthesis, get_subtree(s, ")")).into() },
+                    "{" => { group(Delimiter::Brace, s, "}", span).into() },
+                    "[" => { group(Delimiter::Bracket, s, "]", span).into() },
+                    "(" => { group(Delimiter::Parenthesis, s, ")", span).into() },
                     _ => {
                         let mut it = sym.chars();
                         let mut c = it.next().unwrap();
                         while let Some(nc) = it.next()
                         {
-                            toks.push(Punct::new(c, Spacing::Joint).into());
+                            let mut p = Punct::new(c, Spacing::Joint);
+                            p.span = *span;
+                            toks.push(p.into());
                             c = nc;
                         }
-                        Punct::new(c, Spacing::Alone).into()
+                        let mut p = Punct::new(c, Spacing::Alone);
+                        p.span = *span;
+                        p.into()
                         },
                     }
                     },
-                Token::Ident(val) => Ident { span: Span::call_site(), is_raw: false, val }.into(),
+                Token::Ident(val) => Ident { span: *span, is_raw: false, val }.into(),
                 Token::Lifetime(val) => {
-                    toks.push(Punct::new('\'', Spacing::Joint).into());
-                    Ident { span: Span::call_site(), is_raw: false, val }.into()
+                    let mut p = Punct::new('\'', Spacing::Joint);
+                    p.span = *span;
+                    toks.push(p.into());
+                    Ident { span: *span, is_raw: false, val }.into()
                     },
                 Token::String(val) => Literal {
-                    span: crate::Span::call_site(),
+                    span: *span,
                     val: crate::token_tree::LiteralValue::String(val)
                     }.into(),
                 Token::ByteString(val) => Literal {
-                    span: crate::Span::call_site(),
+                    span: *span,
                     val: crate::token_tree::LiteralValue::ByteString(val)
                     }.into(),
                 Token::Char(ch) => Literal {
-                    span: crate::Span::call_site(),
+                    span: *span,
                     val: crate::token_tree::LiteralValue::CharLit(ch),
                     }.into(),
                 Token::Unsigned(val, ty) => Literal {
-                    span: crate::Span::call_site(),
+                    span: *span,
                     val: crate::token_tree::LiteralValue::UnsignedInt(val, ty),
                     }.into(),
                 Token::Signed(val, ty) => Literal {
-                    span: crate::Span::call_site(),
+                    span: *span,
                     val: crate::token_tree::LiteralValue::SignedInt(val, ty),
                     }.into(),
                 Token::Float(val, ty) => Literal {
-                    span: crate::Span::call_site(),
+                    span: *span,
                     val: crate::token_tree::LiteralValue::Float(val, ty),
                     }.into(),
                 Token::RawLiteral(val) => Literal {
-                    span: crate::Span::call_site(),
+                    span: *span,
                     val: crate::token_tree::LiteralValue::Raw(val),
                     }.into(),
                 };
             toks.push(tt);
         }
         panic!("Unexpected EOF")
+    }
+
+    /// A delimited group opens with the span in force at its opening delimiter;
+    /// its contents carry on updating the same running span.
+    fn group<R: ::std::io::Read>(delimiter: Delimiter, s: &mut Reader<R>, end: &'static str, span: &mut Span) -> Group {
+        let open = *span;
+        let mut g = Group::new(delimiter, get_subtree(s, end, span));
+        g.span = open;
+        g
     }
 }
 
@@ -98,7 +117,18 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
 /// Send a token stream back to the compiler
 pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
 {
-    fn inner<T: ::std::io::Write>(s: &mut Writer<T>, ts: TokenStream)
+    /// The compiler reads the stream at the call site until told otherwise, so a
+    /// `SpanRef` only has to go out where the span changes.
+    fn set_span<T: ::std::io::Write>(s: &mut Writer<T>, last: &mut usize, span: Span)
+    {
+        let raw = span.to_raw();
+        if raw != *last {
+            *last = raw;
+            s.write_ent(Token::SpanRef(raw));
+        }
+    }
+
+    fn inner<T: ::std::io::Write>(s: &mut Writer<T>, ts: TokenStream, last: &mut usize)
     {
         use crate::token_tree::LiteralValue;
         let mut it = ts.inner.into_iter();
@@ -107,6 +137,7 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
             match t
             {
             TokenTree::Group(sg) => {
+                set_span(s, last, sg.span);
                 match sg.delimiter
                 {
                 Delimiter::None => {},
@@ -114,7 +145,8 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                 Delimiter::Parenthesis => s.write_sym_1('('),
                 Delimiter::Bracket => s.write_sym_1('['),
                 }
-                inner(s, sg.stream);
+                inner(s, sg.stream, last);
+                set_span(s, last, sg.span);
                 match sg.delimiter
                 {
                 Delimiter::None => {},
@@ -123,8 +155,12 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                 Delimiter::Bracket => s.write_sym_1(']'),
                 }
                 },
-            TokenTree::Ident(i) => s.write_ent(Token::Ident(i.val)),
+            TokenTree::Ident(i) => {
+                set_span(s, last, i.span);
+                s.write_ent(Token::Ident(i.val));
+                },
             TokenTree::Punct(p) => {
+                set_span(s, last, p.span);
                 if p.ch == '\'' {
                     // Get next, must be ident, push lifetime
                     let v = match it.next()
@@ -154,7 +190,9 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                     s.write_sym(chars.as_bytes());
                 }
                 },
-            TokenTree::Literal(Literal { val: v, .. }) => s.write_ent(match v
+            TokenTree::Literal(Literal { span: sp, val: v }) => {
+                set_span(s, last, sp);
+                s.write_ent(match v
                 {
                 LiteralValue::String(v) => Token::String(v),
                 LiteralValue::ByteString(v) => Token::ByteString(v),
@@ -163,14 +201,16 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                 LiteralValue::SignedInt(v, sz)   => Token::Signed(v, sz),
                 LiteralValue::Float(v, sz)       => Token::Float(v, sz),
                 LiteralValue::Raw(v)             => Token::RawLiteral(v),
-                }),
+                })
+                },
             }
         }
     }
 
     let mut s = Writer::new(out_stream);
-    // Send the token stream
-    inner(&mut s, ts);
+    // Send the token stream - the compiler starts it off at the call site
+    let mut last = 1;
+    inner(&mut s, ts, &mut last);
     // Empty symbol indicates EOF
     s.write_sym(b"");
 }
