@@ -674,7 +674,10 @@ backtrace_0_3_76 = add_project_test(
     name="backtrace_0_3_76",
     url="https://github.com/rust-lang/backtrace-rs.git",
     rev="775f6a1ba62e7d35a1fac76e64c61d9d4687b5f2",
-    adapter_args=["--xfail", "smoke_test_frames"],
+    adapter_args=[
+        "--xfail", "smoke_test_frames",
+        "--xfail-target", "current-exe-mismatch",
+    ],
 )
 
 pest_2_9_0 = add_project_test(
