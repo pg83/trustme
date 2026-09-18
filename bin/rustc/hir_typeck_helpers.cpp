@@ -2720,6 +2720,19 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                    so `OsString` against `<?B as ToOwned>::Owned` waits for `?B`
                    (`Cow::Owned` handed to `Result::map`, whose output then fixes it). */
                 const auto* projection = leftProjection ? leftProjection : rightProjection;
+                /* A placeholder the goal put there - the `_` of `<T as _>::item`'s
+                   `Vec4Ext<_>`, a parameter still to be found - is no constructor to
+                   tell a rigid projection apart from: upstream has an inference
+                   variable there and `match_normalize_trait_ref`'s `eq` binds it to
+                   whatever the bound names, so `<M as Machine>::U32x4x4: Vec4Ext<_>`
+                   still reads `Vec4Ext<M::U32x4>` off the item bounds.  (An
+                   existential of an instantiated impl is a different thing: upstream
+                   fixes those from the goal before any nested obligation is
+                   registered, so none is open to bind here.) */
+                const auto* otherGeneric = (leftProjection ? right : left)->opt_Generic();
+                if (otherGeneric && otherGeneric->isPlaceholder() && !otherGeneric->isSolverExistential()) {
+                    return this->defer(left, right);
+                }
                 if (!rigidProjectionsAreDistinct_ || projectionIsOpen(*projection)) {
                     return this->defer(left, right);
                 }
@@ -12109,7 +12122,16 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
             bool headNormalizationAmbiguity = false;
             ThinVector<SolverTypeEquality> headEqualities;
             ThinVector<SolverValueEquality> headValueEqualities;
-            auto relation = relateAssembledHead(source, params, type, impl, headNormalizationAmbiguity, headEqualities, headValueEqualities);
+            /* A clause read off the item bounds of a rigid projection is related the way
+               the environment's clauses are, not the way a type's own structure is:
+               upstream `assemble_candidates_from_projected_tys` keeps such a bound only
+               when `match_normalize_trait_ref` equates it with the goal after
+               normalization, and two rigid types that are not the same type do not
+               equate.  Related as structure, `<T as Encoder>::Error: From<io::Error>`
+               was instead left waiting on `<T as Encoder>::Error == io::Error`, and the
+               goal `<T as Encoder>::Error: From<<T as Encoder>::Error>` - which the
+               reflexive `impl<T> From<T> for T` proves outright - came out ambiguous. */
+            auto relation = relateAssembledHead(effectiveSource, params, type, impl, headNormalizationAmbiguity, headEqualities, headValueEqualities);
             if (relation == Certainty::NoSolution) {
                 return false;
             }
