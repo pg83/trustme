@@ -40,22 +40,84 @@ PATTERNS = [
 
 
 
+def digit_separator(text, i):
+    """True when the quote at `i` is a C++14 digit separator, not a quote.
+
+    A separator lives inside a pp-number: the token it interrupts starts
+    with a digit (or a dot and a digit), and a digit or nondigit follows
+    it. The character literal prefixes - L, u, U, u8 - all start with a
+    letter, so a prefixed literal never looks like a separator.
+    """
+    nxt = text[i + 1:i + 2]
+    if not (nxt.isalnum() or nxt == "_"):
+        return False
+    j = i
+    while j > 0 and (text[j - 1].isalnum() or text[j - 1] in "_.'"):
+        j -= 1
+    if text[j].isdigit():
+        return True
+    return text[j] == "." and text[j + 1:j + 2].isdigit()
+
+
+def raw_string_prefix(text, i):
+    """True when the `R"` at `i` opens a raw string.
+
+    Only L, u, U and u8 may stand in front of the R; any other letter
+    before it makes the R the tail of an identifier that merely happens
+    to precede a string.
+    """
+    j = i
+    while j > 0 and (text[j - 1].isalnum() or text[j - 1] == "_"):
+        j -= 1
+    return text[j:i] in ("", "L", "u", "U", "u8")
+
+
+def literal_end(text, i):
+    """Index past the quote closing the literal at `i`, or None.
+
+    None means the literal never closes on its line: a quote left over
+    from a construct this lexer does not know about. Swallowing text up
+    to the next quote in the file would blank hundreds of lines of real
+    code, so the caller keeps it as code instead.
+    """
+    quote = text[i]
+    j, n = i + 1, len(text)
+    while j < n:
+        c = text[j]
+        if c == "\\":
+            j += 2           # any escape, `\'` and an end-of-line one alike
+        elif c == quote:
+            return j + 1
+        elif c == "\n":
+            return None
+        else:
+            j += 1
+    return None
+
+
+def blanked(text):
+    """`text` with every character but its newlines turned into a space."""
+    return re.sub(r"[^\n]", " ", text)
+
+
 def strip_code(text):
     """Blank out comments, string and char literals (newlines kept)."""
     out = []
     i, n = 0, len(text)
     while i < n:
         c = text[i]
-        if c == "/" and i + 1 < n and text[i + 1] == "/":
+        if c == "/" and text[i + 1:i + 2] == "/":
             j = text.find("\n", i)
             j = n if j < 0 else j
+            out.append(blanked(text[i:j]))
             i = j
-        elif c == "/" and i + 1 < n and text[i + 1] == "*":
+        elif c == "/" and text[i + 1:i + 2] == "*":
             j = text.find("*/", i + 2)
             j = n if j < 0 else j + 2
-            out.append(re.sub(r"[^\n]", " ", text[i:j]))
+            out.append(blanked(text[i:j]))
             i = j
-        elif c == "R" and text[i:i + 2] == 'R"':
+        elif (c == "R" and text[i + 1:i + 2] == '"'
+              and raw_string_prefix(text, i)):
             m = re.match(r'R"([^(]*)\(', text[i:])
             if not m:
                 out.append(c)
@@ -64,14 +126,18 @@ def strip_code(text):
             close = ")" + m.group(1) + '"'
             j = text.find(close, i + m.end())
             j = n if j < 0 else j + len(close)
-            out.append(re.sub(r"[^\n]", " ", text[i:j]))
+            out.append(blanked(text[i:j]))
             i = j
+        elif c == "'" and digit_separator(text, i):
+            out.append(c)
+            i += 1
         elif c in "\"'":
-            j = i + 1
-            while j < n and text[j] != c:
-                j += 2 if text[j] == "\\" else 1
-            j = min(j + 1, n)
-            out.append(re.sub(r"[^\n]", " ", text[i:j]))
+            j = literal_end(text, i)
+            if j is None:
+                out.append(c)
+                i += 1
+                continue
+            out.append(blanked(text[i:j]))
             i = j
         else:
             out.append(c)

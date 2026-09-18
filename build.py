@@ -940,6 +940,27 @@ style += [
         descr="UT",
         color="green",
     ),
+    command(
+        name="unit_std_ratchet_lexer",
+        inputs=[
+            "$(S)/tst/unit/test_std_ratchet.py",
+            "$(S)/dev/std_ratchet.py",
+            *TIMEOUT_INPUT,
+        ],
+        outputs=["$(B)/tst/unit/std_ratchet_lexer.stamp"],
+        cmd=[
+            [
+                *TEST_TIMEOUT,
+                "python3", "$(S)/tst/unit/test_std_ratchet.py", "-v",
+            ],
+            [
+                *TEST_TIMEOUT,
+                "sh", "-c", "> $(B)/tst/unit/std_ratchet_lexer.stamp",
+            ],
+        ],
+        descr="UT",
+        color="green",
+    ),
 ]
 
 for source in sorted(RUSTC_CPP_SRC):
