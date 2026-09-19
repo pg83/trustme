@@ -5592,8 +5592,17 @@ namespace {
                                 it->second.isDirectUsed = true;
                             }
                         } else if (lv.wrappers.front().is_Field()) {
-                            // TODO: Find out what code makes the assumption that `&foo.0` is a good stand-in for `&foo`
-                            if (lv.wrappers.front().as_Field() == 0 && vu == MIRValUsage::Borrow) {
+                            /* A borrow of any field keeps the aggregate whole. rustc's
+                               `escaping_locals` (rustc_mir_transform/src/sroa.rs) excludes a
+                               local whose "address is taken, and thus the relative addresses
+                               of the fields are observable to client code", and a subslice
+                               binding observes exactly that: it borrows the field the
+                               subslice starts at and casts the pointer to the wider
+                               `[T; n]`, then dereferences it (mir_from_hir.cpp, the
+                               `splitSlice` binding). Splitting the aggregate leaves that
+                               pointer addressing one lone local. The start field is not
+                               always 0 - `[_, ref x @ .., _]` borrows field 1. */
+                            if (vu == MIRValUsage::Borrow) {
                                 it->second.isDirectUsed = true;
                             }
                         } else if (lv.wrappers.front().is_Downcast()) {
