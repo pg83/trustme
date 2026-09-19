@@ -2534,6 +2534,15 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\tconst u8* src = (const u8*)&arg0;\n") << StringView("\tconst u8* mask = (const u8*)&arg1;\n") << StringView("\tu8* dst = (u8*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << 128 / 8 << StringView("; i ++) dst[i] = (mask[i] < 0x80 ? src[mask[i] & 0xF] : 0);\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.avx2.pshuf.b") {
             of << StringView("\tconst u8* src = (const u8*)&arg0;\n") << StringView("\tconst u8* mask = (const u8*)&arg1;\n") << StringView("\tu8* dst = (u8*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << 256 / 8 << StringView("; i ++) dst[i] = (mask[i] < 0x80 ? src[(i & 16) | (mask[i] & 0xF)] : 0);\n") << StringView("\treturn rv;\n");
+        } else if (item.linkage.name == "llvm.x86.avx2.permd" || item.linkage.name == "llvm.x86.avx2.permps") {
+            /* VPERMD and VPERMPS (LLVM IntrinsicsX86.td: int_x86_avx2_permd,
+               int_x86_avx2_permps; Intel SDM vol.2 VPERMD/VPERMPS): eight
+               32-bit lanes permuted across the whole 256-bit register, with
+               dst[i] = a[idx[i] & 7] - only the low three bits of an index
+               select a lane. The intrinsic takes the data vector first and
+               the index vector second, the reverse of the order the
+               instruction itself spells its two sources in. */
+            of << StringView("\tu32 lanes[8], index[8], result[8];\n") << StringView("\tmemcpy(lanes, &arg0, sizeof(lanes)); memcpy(index, &arg1, sizeof(index));\n") << StringView("\tfor(unsigned i = 0; i < 8; i ++) result[i] = lanes[index[i] & 7];\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.pmadd.ub.sw.128" || item.linkage.name == "llvm.x86.avx2.pmadd.ub.sw") {
             int n = (item.linkage.name == "llvm.x86.avx2.pmadd.ub.sw" ? 32 : 16);
             of << StringView("\tconst u8* a = (const u8*)&arg0;\n") << StringView("\tconst i8* b = (const i8*)&arg1;\n") << StringView("\ti16* dst = (i16*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << n / 2 << StringView("; i ++) {\n") << StringView("\t\ti32 v = (i32)a[2*i]*b[2*i] + (i32)a[2*i+1]*b[2*i+1];\n") << StringView("\t\tdst[i] = (i16)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));\n") << StringView("\t}\n") << StringView("\treturn rv;\n");
