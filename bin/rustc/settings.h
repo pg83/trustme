@@ -114,7 +114,7 @@ struct Settings {
             return true;
         }
         if (group == "unused") {
-            return name == "unused_must_use" || name == "unused_variables" || name == "unused_imports" || name == "unused_mut" || name == "unused_parens";
+            return name == "unused_must_use" || name == "unused_variables" || name == "unused_imports" || name == "unused_mut" || name == "unused_parens" || name == "unused_attributes";
         }
         return false;
     }

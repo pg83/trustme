@@ -10,6 +10,7 @@
 #include "wire_board.h"
 #include "parse_common.h"
 #include "main_bindings.h"
+#include "lint_level.h"
 #include "parse_ttstream.h"
 #include "resolve_common.h"
 #include "expand_proc_macro.h"
@@ -77,6 +78,15 @@ namespace {
 
         ASTExprNodeBlock* currentBlock = nullptr;
         bool inAssignLhs = false;
+
+        /* The level `unused_attributes` reports at inside the expression being
+           walked, narrowed as the walk descends into nodes that set it. Empty
+           until something asks: resolving it walks the module stack, and the
+           attribute it reports on is rare enough that most expressions never
+           need the answer. */
+        std::optional<CfgLintLevel> unusedAttributes;
+
+        CfgLintLevel unusedAttributesLevel();
 
         CExpandExpr(const ExpandState& es);
 
@@ -361,6 +371,95 @@ namespace {
         for (auto& a : attrs.items) {
             ExpandAttr(es, a.span(), a, stage, f);
         }
+    }
+
+    const char* const LINT_UNUSED_ATTRIBUTES = "unused_attributes";
+
+    /* Where `unused_attributes` stands for a node in this module: the level the
+       command line and the crate's own inner attributes left in `Settings`,
+       narrowed by each enclosing module's `allow`/`warn`/`deny`/`forbid`,
+       outermost first. Upstream resolves the whole chain at once, off the lint
+       node id the expansion carries; expansion here only has the module stack
+       and (in CExpandExpr) the expression nodes it has descended through, so a
+       level set on the enclosing *item* is not seen. */
+    CfgLintLevel UnusedAttributesLevel(const ExpandState& es) {
+        auto level = es.wb.settings->lintLevel(LINT_UNUSED_ATTRIBUTES, CfgLintLevel::Warn);
+        Vector<const ASTModule*> inward;
+        for (const auto* ll = &es.modstack; ll; ll = ll->prev) {
+            if (ll->item) {
+                inward.pushBack(ll->item);
+            }
+        }
+        for (size_t i = inward.length(); i > 0; i--) {
+            level = ApplyLintLevelOverrides(*es.wb.settings, inward[i - 1]->lintLevels, LINT_UNUSED_ATTRIBUTES, level);
+        }
+        return level;
+    }
+
+    /* A macro invocation is the one place a built-in attribute never runs.
+       `InvocationCollector::take_first_attr` (rustc_expand/src/expand.rs) walks
+       the node's attributes and only ever takes `cfg`/`cfg_attr`, which are
+       evaluated eagerly, or a name that is *not* a built-in attribute - an
+       attribute macro. A built-in stays where it is, and `take_mac_call` then
+       drops the whole attribute list along with the `MacCall` node, so the
+       attribute is inert: it decorates nothing, because by the time anything
+       could read it the invocation it sat on is gone. `check_attributes`, in
+       the same file, reports each one it dropped under `unused_attributes`
+       (BuiltinLintDiag::UnusedBuiltinAttribute).
+
+       Our built-in attributes are the registered decorators, so the same rule
+       reads: on an invocation, a decorator other than `cfg` does not run - it
+       is marked inert and warned about. Without this `#[inline] mac!();` is
+       handed to the `#[inline]` decorator, which sees an expression that is
+       neither a function nor a closure and errors out.
+
+       The invocation's own attributes are not part of the level the report is
+       made at - a `#[allow(warnings)]` written on the macro call is itself one
+       of the inert attributes being reported, which is why upstream's test
+       expects a warning for it and one for the `#[inline]` beside it. Knowing
+       only part of the level stack (see UnusedAttributesLevel), this warns and
+       never denies. */
+    void ExpandAttrsOnMacroInvocation(const ExpandState& es, const ASTAttributeList& attrs, const ASTExprNodeMacro& mac, CfgLintLevel level) {
+        const RcString rcstringCfg = RcString::newInterned("cfg");
+        const RcString rcstringDoc = RcString::newInterned("doc");
+        const bool report = level != CfgLintLevel::Allow;
+        for (const auto& a : attrs.items) {
+            if (a.isInert() || !a.name().isTrivial()) {
+                continue;
+            }
+            const auto& name = a.name().asTrivial();
+            if (name == rcstringCfg || !ExpandFindDecorator(es.wb, name)) {
+                continue;
+            }
+            a.markInert();
+            /* A doc comment on an invocation is upstream's `unused_doc_comments`,
+               a lint of its own that we do not have. */
+            if (report && name != rcstringDoc) {
+                /* Upstream names the invocation with `pprust::path_to_string`; a
+                   path printed here still carries its hygiene annotations. */
+                WARNING(a.span(), W0000, StringView("unused attribute `") << name << StringView("`: the built-in attribute will be ignored, since it's applied to the macro invocation `") << FMT_CB(os, {
+                    if (mac.path.isTrivial()) {
+                        os << mac.path.asTrivial();
+                    } else {
+                        os << mac.path;
+                    }
+                }) << StringView("`"));
+            }
+        }
+    }
+
+    /* `macro_rules!` is a definition, not an invocation - upstream parses it as
+       `ItemKind::MacroDef` and reads the built-in attributes on it (notably
+       `#[macro_export]`) as it would on any other item. */
+    const ASTExprNodeMacro* AttrsInertHere(ASTExprNode* node) {
+        const auto* mac = cast<const ASTExprNodeMacro>(node);
+        if (!mac || !mac->path.isValid()) {
+            return nullptr;
+        }
+        if (mac->path.isTrivial() && mac->path.asTrivial() == "macro_rules") {
+            return nullptr;
+        }
+        return mac;
     }
 
     void ExpandAttrsCfgAttr(const Settings& settings, ASTAttributeList& attrs) {
@@ -2119,6 +2218,13 @@ CExpandExpr::CExpandExpr(const ExpandState& es)
 {
 }
 
+auto CExpandExpr::unusedAttributesLevel() -> CfgLintLevel {
+    if (!this->unusedAttributes) {
+        this->unusedAttributes = UnusedAttributesLevel(this->expandState);
+    }
+    return *this->unusedAttributes;
+}
+
 CExpandExpr::~CExpandExpr() {
     if (expandState.change) {
         parentExpandState.change = true;
@@ -2134,9 +2240,18 @@ auto CExpandExpr::curMod() -> ASTModule& {
 }
 
 auto CExpandExpr::visit(ASTExprNode* cnode) -> ASTExprNode* {
+    const auto outerUnusedAttributes = this->unusedAttributes;
     if (cnode) {
         auto attrs = mv$(cnode->attrs());
         ExpandAttrsCfgAttr(*expandState.wb.settings, attrs);
+        if (const auto* invocation = AttrsInertHere(cnode)) {
+            ExpandAttrsOnMacroInvocation(expandState, attrs, *invocation, this->unusedAttributesLevel());
+        } else if (LintLevelOverrides overrides; CollectLintLevelAttributes(attrs, overrides)) {
+            /* A level this node sets holds for its subtree, the node included -
+               `#[allow(warnings)] { #[inline] mac!(); }` is upstream's "this does
+               work, since the attribute is on a parent of the macro invocation". */
+            this->unusedAttributes = ApplyLintLevelOverrides(*expandState.wb.settings, overrides, LINT_UNUSED_ATTRIBUTES, this->unusedAttributesLevel());
+        }
         ExpandAttrs(expandState, attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const auto& a) {
             cnode = d.handle(sp, a, this->expandState.wb, this->crate, cnode);
         }));
@@ -2167,6 +2282,7 @@ auto CExpandExpr::visit(ASTExprNode* cnode) -> ASTExprNode* {
         }
     }
     BUG_ASSERT(!this->replacement);
+    this->unusedAttributes = outerUnusedAttributes;
     return cnode;
 }
 
@@ -2326,6 +2442,9 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
             const auto macroName = nodeMac->ident;
             auto attrs = std::move(it->node->attrs());
             ExpandAttrsCfgAttr(*expandState.wb.settings, attrs);
+            if (const auto* invocation = AttrsInertHere(it->node)) {
+                ExpandAttrsOnMacroInvocation(expandState, attrs, *invocation, this->unusedAttributesLevel());
+            }
             ExpandAttrs(expandState, attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                 it->node = d.handle(sp, a, this->expandState.wb, this->crate, it->node);
             }));
