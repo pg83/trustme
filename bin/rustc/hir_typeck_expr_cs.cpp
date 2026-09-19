@@ -4920,19 +4920,25 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                                     }
                                 }
                                 if (!nestedRoot || !hasExternalInferenceOwner) {
-                                    const HIRType* fallbackType = possibleType;
-                                    if (!isIrrefutable) {
-                                        if (const auto* te2 = possibleType->opt_Array()) {
-                                            const bool requiresSized = infer
-                                                && infer->index < context.ivarsSized.length()
-                                                && context.ivarsSized[infer->index];
-                                            if (!requiresSized) {
-                                                fallbackType = context.crate.types.slice(te2->inner);
-                                            }
-                                        }
+                                    /* `check_pat_slice` hands the scrutinee the array
+                                       that the pattern's shape names
+                                       (`try_resolve_slice_ty_to_array_ty` - N elements
+                                       and no rest binding is an array of exactly N)
+                                       only where the pattern is irrefutable
+                                       (`pat_is_irrefutable`).  A refutable one names
+                                       nothing: it leaves the scrutinee to
+                                       `structurally_resolve_type`, i.e. to whichever
+                                       rule still owns it - here the `Iterator::Item`
+                                       of an iterator not yet decided.  And no pattern
+                                       shape anywhere upstream names a slice: even a
+                                       byte-string pattern becomes `&[u8]` only against
+                                       an expected type already known to be one
+                                       (`check_pat_lit`), never against an open one. */
+                                    if (!isIrrefutable && pattern.data.is_Slice()) {
+                                        return false;
                                     }
-                                    DEBUG(StringView("Fallback equate ") << fallbackType);
-                                    context.equateTypes(sp, ty, fallbackType);
+                                    DEBUG(StringView("Fallback equate ") << possibleType);
+                                    context.equateTypes(sp, ty, possibleType);
                                 }
                             }
                         }
