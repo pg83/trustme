@@ -347,15 +347,32 @@ TEST_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "60s"]
 # A real project contains a full Cargo graph and starts from archive inputs in a
 # fresh directory, so unlike a unit node it cannot reuse a materialised CAS.
 PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "5m"]
-# trybuild compiles its own dependency graph and then a second generated Cargo
-# workspace containing the UI cases. Keep the ordinary project budget tight,
-# but allow this deliberately nested corpus node to finish from cold archives.
+# A handful of corpus nodes are heavy by construction: trybuild and zerocopy
+# compile their own dependency graph and then a second generated Cargo
+# workspace of UI cases, and rayon carries a test suite far larger than the
+# library - 5m54s alone and 9m01s with the load average averaging 76, the
+# longest thing on this budget and what its size is set by. addr2line, syn and
+# pest are heavy only next to the ordinary budget: alone they finish in 3 to 4
+# minutes, but the corpus does not run on an idle machine, and at a load
+# average between 77 and 97 on 78 cores those three take 5 to 7 minutes, which
+# is all the five-minute budget was killing them for. Keep the ordinary project
+# budget tight and hand this one only to the nodes that have been measured to
+# need it.
 NESTED_PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "15m"]
 # clap is the largest suite in the corpus: eight test binaries, one of them
 # holding 1742 tests, every one of them linked from C++ the backend writes, and
 # two of them starting a second Cargo build of the crate's examples. Measured at
 # 14 minutes from cold archives with 24 build jobs.
 LARGE_PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "30m"]
+# resvg is the node a busy machine stretches furthest. It compiles the widest
+# dependency graph in the corpus, 150 units, and then renders a reference suite
+# through the binary it built, and every one of those units wants a core of its
+# own: 2m53s at a load average of 13, 11m01s on a machine already busy, 14m56s
+# with the load average averaging 58 and peaking at 143 - four seconds inside
+# the nested budget, which is how the corpus was losing it - and 23m07s with it
+# averaging 162, exiting 0 every time. Sized at twice that worst measurement,
+# so that a real hang is still distinguishable from a contended machine.
+HEAVY_PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "45m"]
 # A from-scratch standard-library build is intentionally much heavier than a
 # single test, but it must not leave the graph occupied indefinitely.
 LIBSTD_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "10m"]
@@ -571,6 +588,7 @@ resvg = add_project_test(
     adapter="$(S)/tst/build_project.py",
     adapter_args=["python3", "$(S)/tst/resvg/run.py", "@BIN@"],
     adapter_inputs=["$(S)/tst/resvg/run.py"],
+    timeout=HEAVY_PROJECT_TIMEOUT,
 )
 
 base64 = add_project_test(
@@ -615,6 +633,7 @@ syn_0_15_44 = add_project_test(
     rev="6d798b63c255e90b7b1dbbfb3707fdce1704a18d",
     lockfile="$(S)/tst/projects/syn_0_15_44/Cargo.lock",
     adapter_args=["--release", "--all-features"],
+    timeout=NESTED_PROJECT_TIMEOUT,
 )
 
 ron_0_4_2 = add_project_test(
@@ -652,6 +671,7 @@ rayon_1_12_0 = add_project_test(
     url="https://github.com/rayon-rs/rayon.git",
     rev="c9ced185ae3508246a9eb70c8407a1199bb1b77f",
     lockfile="$(S)/tst/projects/rayon_1_12_0/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
 )
 
 crossbeam_utils_0_8_22 = add_project_test(
@@ -675,6 +695,7 @@ addr2line_0_25_1 = add_project_test(
     url="https://github.com/gimli-rs/addr2line.git",
     rev="f02db009deb9b441818afa49cb1b17453c1e4243",
     adapter_args=["--no-default-features"],
+    timeout=NESTED_PROJECT_TIMEOUT,
 )
 
 backtrace_0_3_76 = add_project_test(
@@ -694,6 +715,7 @@ pest_2_9_0 = add_project_test(
     manifest="pest",
     vendor_manifest="pest",
     lockfile="$(S)/tst/projects/pest_2_9_0/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
 )
 
 combine = add_project_test(
@@ -725,10 +747,15 @@ proptest_1_11_0 = add_project_test(
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/proptest_1_11_0/Cargo.lock",
     adapter_args=["--", "--test-threads=1"],
-    # One harness thread turns proptest's own property tests - thousands of
-    # generated cases each - into a serial run that outlasts the ordinary
-    # project budget.
-    timeout=NESTED_PROJECT_TIMEOUT,
+    # The one harness thread is not what this node is short of, because it is
+    # killed long before a test of its own runs. Building proptest's src/lib.rs
+    # as a test binary is one trustme process at 100% of a core for 44 minutes
+    # with a 3.1G resident set, and the C++ it writes is a 2.3M line
+    # translation unit; on an idle machine all 163 units are built inside the
+    # hour, and a 60 minute budget still ends with the tests running. It
+    # keeps the ordinary budget rather than spending fifteen minutes of every
+    # corpus run to rediscover that: what it is short of is a compiler that can
+    # build proptest, not time.
 )
 
 alloca = add_project_test(
