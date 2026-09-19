@@ -8,6 +8,15 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import lib  # noqa: E402
 
+# Every exercism case after the first carries `#[ignore]`, for a learner to
+# enable one at a time, so the whole exercise only runs under
+# `--include-ignored` - and that pulls in the exhaustive ones.
+# `palindrome-products` runs `palindrome_products(1000, 9999)` twice, 40.5M
+# iterations each, and needs 52.3s of a quiet machine; the next slowest
+# exercise is 10.6s. The node's own budget is sized to match (build.py,
+# EXERCISM_TIMEOUT).
+RUN_TIMEOUT_SECONDS = 170
+
 
 def fail_output(result: subprocess.CompletedProcess, case: str, stage: str) -> int:
     sys.stdout.buffer.write(result.stdout)
@@ -95,11 +104,14 @@ def main() -> int:
                         env=environment,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        timeout=60,
+                        timeout=RUN_TIMEOUT_SECONDS,
                         check=False,
                     )
                 except subprocess.TimeoutExpired:
-                    print(f"FAIL Exercism {slug}: timed out after 60 seconds", file=sys.stderr)
+                    print(
+                        f"FAIL Exercism {slug}: timed out after {RUN_TIMEOUT_SECONDS} seconds",
+                        file=sys.stderr,
+                    )
                     return 1
                 if run_result.returncode != 0:
                     return fail_output(run_result, slug, "runtime")

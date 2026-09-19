@@ -370,6 +370,15 @@ TESTS_LIB = [*TIMEOUT_INPUT, "$(S)/tst/lib.py", "$(S)/tst/wrap_gdb.py"]
 # Bound the whole test node, including compilation performed by adapters. The
 # in-tree wrapper gives ix and Ubuntu identical process-group semantics.
 TEST_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "60s"]
+# Exercism's convention is that every case after the first carries `#[ignore]`,
+# for a learner to enable one at a time, so the adapter runs them with
+# `--include-ignored` - which is what the exercise is. That pulls in the
+# exhaustive ones: `palindrome-products` alone runs `palindrome_products(1000,
+# 9999)` twice, 40.5M iterations each, and takes 52.3s of a quiet machine
+# against the next slowest exercise at 10.6s. Compiling is a constant 5s; the
+# cost is all in the run, and the two heavy cases already run in parallel. Sized
+# so the outlier has room on a machine the rest of the corpus is also using.
+EXERCISM_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "3m"]
 # A real project contains a full Cargo graph and starts from archive inputs in a
 # fresh directory, so unlike a unit node it cannot reuse a materialised CAS.
 PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "5m"]
@@ -2159,7 +2168,7 @@ for _index, (_slug, _crate, _edition, _count) in enumerate(exercism_rust_cases):
         ],
         outputs=[_stamp],
         cmd=[
-            *TEST_TIMEOUT,
+            *EXERCISM_TIMEOUT,
             "python3", "$(S)/tst/exercism_rust/adapter.py",
             "$(S)/tst/exercism_rust/cases.tsv", str(_index), "1",
             "$(S)/tst/exercism_rust/upstream", "$(B)/tst/libstd.tar", _stamp,
