@@ -129,6 +129,9 @@ namespace {
         void printAttrs(const ASTAttributeList& attrs);
         void printParams(const ASTGenericParams& params);
         void printBounds(const ASTGenericParams& params);
+        void printIntegerLiteral(enum eCoreType datatype, const U128& value);
+        void printFloatLiteral(enum eCoreType datatype, FloatValue value);
+        void printPatternValue(const ASTPattern::Value& v);
         void printPatternTuple(const ASTPattern::TuplePat& v, bool isRefutable);
         void printPattern(const ASTPattern& p, bool isRefutable);
         void printType(ASTType* t);
@@ -484,6 +487,43 @@ void RustPrinter::printPatternTuple(const ASTPattern::TuplePat& v, bool isRefuta
     }
 }
 
+/* A literal in a pattern is the literal it was written as: upstream prints
+   `PatKind::Expr(e)` by printing that expression (`print_pat` in
+   rustc_ast_pretty/src/pprust/state.rs), so a match arm reads `0 => ..`, not a
+   dump of how the value is held. This text is re-lexed and handed to proc
+   macros, so a dump is not a parseable pattern to them. */
+void RustPrinter::printPatternValue(const ASTPattern::Value& v) {
+    switch (v.tag()) {
+        case ASTPattern::Value::TAG_Invalid:
+            break;
+        case ASTPattern::Value::TAG_Integer: {
+            const auto& e = v.as_Integer();
+            /* `true`/`false` are held as a bool-typed integer, and the literal
+               printer has no spelling for those. */
+            if (e.type == CORETYPE_BOOL) {
+                os << StringView(e.value == 0 ? "false" : "true");
+            } else {
+                printIntegerLiteral(e.type, e.value);
+            }
+            break;
+        }
+        case ASTPattern::Value::TAG_Float: {
+            const auto& e = v.as_Float();
+            printFloatLiteral(e.type, e.value);
+            break;
+        }
+        case ASTPattern::Value::TAG_String:
+            os << StringView("\"") << FmtEscaped(v.as_String()) << StringView("\"");
+            break;
+        case ASTPattern::Value::TAG_ByteString:
+            os << StringView("b\"") << FmtEscaped(v.as_ByteString().v) << StringView("\"");
+            break;
+        case ASTPattern::Value::TAG_Named:
+            os << v.as_Named();
+            break;
+    }
+}
+
 void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
     for (const auto& pb : p.bindings()) {
         if (pb.isMutable) {
@@ -566,15 +606,18 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
         }
         case ASTPattern::Data::TAG_Value: {
             auto& v = p.data().as_Value();
-            os << v.start;
+            printPatternValue(v.start);
             if (!v.end.is_Invalid()) {
-                os << StringView(" ..= ") << v.end;
+                os << StringView(" ..= ");
+                printPatternValue(v.end);
             }
             break;
         }
         case ASTPattern::Data::TAG_ValueLeftInc: {
             auto& v = p.data().as_ValueLeftInc();
-            os << v.start << StringView(" .. ") << v.end;
+            printPatternValue(v.start);
+            os << StringView(" .. ");
+            printPatternValue(v.end);
             break;
         }
         case ASTPattern::Data::TAG_StructTuple: {
@@ -1440,17 +1483,21 @@ auto RustPrinter::visit(ASTExprNodeWildcardPattern& n) -> void {
 
 auto RustPrinter::visit(ASTExprNodeInteger& n) -> void {
     exprRoot = false;
-    switch (n.datatype) {
+    printIntegerLiteral(n.datatype, n.value);
+}
+
+auto RustPrinter::printIntegerLiteral(enum eCoreType datatype, const U128& value) -> void {
+    switch (datatype) {
         case CORETYPE_INVAL:
-            os << StringView("0x") << formatHex(n.value) << StringView("_/*INVAL*/");
+            os << StringView("0x") << formatHex(value) << StringView("_/*INVAL*/");
             break;
         case CORETYPE_BOOL:
         case CORETYPE_STR:
-            os << StringView("0x") << formatHex(n.value) << StringView("_/*bool/str*/");
+            os << StringView("0x") << formatHex(value) << StringView("_/*bool/str*/");
             break;
         case CORETYPE_CHAR:
-            if (n.value >= 0x20 && n.value < 128) {
-                switch (n.value.truncateU64()) {
+            if (value >= 0x20 && value < 128) {
+                switch (value.truncateU64()) {
                     case '\'':
                         os << StringView("'\\''");
                         break;
@@ -1458,11 +1505,11 @@ auto RustPrinter::visit(ASTExprNodeInteger& n) -> void {
                         os << StringView("'\\\\'");
                         break;
                     default:
-                        os << StringView("'") << (char)n.value.truncateU64() << StringView("'");
+                        os << StringView("'") << (char)value.truncateU64() << StringView("'");
                         break;
                 }
             } else {
-                os << StringView("'\\u{") << formatHex(n.value) << StringView("}'");
+                os << StringView("'\\u{") << formatHex(value) << StringView("}'");
             }
             break;
         case CORETYPE_F16:
@@ -1477,8 +1524,8 @@ auto RustPrinter::visit(ASTExprNodeInteger& n) -> void {
         case CORETYPE_U128:
         case CORETYPE_UINT:
         case CORETYPE_ANY:
-            os << StringView("0x") << formatHex(n.value);
-            os << StringView("_") << coretypeName(n.datatype);
+            os << StringView("0x") << formatHex(value);
+            os << StringView("_") << coretypeName(datatype);
             break;
         case CORETYPE_I8:
         case CORETYPE_I16:
@@ -1486,30 +1533,34 @@ auto RustPrinter::visit(ASTExprNodeInteger& n) -> void {
         case CORETYPE_I64:
         case CORETYPE_I128:
         case CORETYPE_INT:
-            os << n.value;
-            os << StringView("_") << coretypeName(n.datatype);
+            os << value;
+            os << StringView("_") << coretypeName(datatype);
             break;
     }
 }
 
 auto RustPrinter::visit(ASTExprNodeFloat& n) -> void {
     exprRoot = false;
-    switch (n.datatype) {
+    printFloatLiteral(n.datatype, n.value);
+}
+
+auto RustPrinter::printFloatLiteral(enum eCoreType datatype, FloatValue value) -> void {
+    switch (datatype) {
         case CORETYPE_ANY:
-            os << formatFloat128(n.value, FloatFormat::Default, std::numeric_limits<double>::max_digits10 + 1);
+            os << formatFloat128(value, FloatFormat::Default, std::numeric_limits<double>::max_digits10 + 1);
             break;
         case CORETYPE_F16:
         case CORETYPE_F32:
-            os << formatFloat128(n.value, FloatFormat::Default, std::numeric_limits<float>::max_digits10 + 1);
-            os << StringView("_") << coretypeName(n.datatype);
+            os << formatFloat128(value, FloatFormat::Default, std::numeric_limits<float>::max_digits10 + 1);
+            os << StringView("_") << coretypeName(datatype);
             break;
         case CORETYPE_F64:
-            os << formatFloat128(n.value, FloatFormat::Default, std::numeric_limits<double>::max_digits10 + 1);
-            os << StringView("_") << coretypeName(n.datatype);
+            os << formatFloat128(value, FloatFormat::Default, std::numeric_limits<double>::max_digits10 + 1);
+            os << StringView("_") << coretypeName(datatype);
             break;
         case CORETYPE_F128:
-            os << formatFloat128(n.value, FloatFormat::Default, std::numeric_limits<double>::max_digits10 + 1);
-            os << StringView("_") << coretypeName(n.datatype);
+            os << formatFloat128(value, FloatFormat::Default, std::numeric_limits<double>::max_digits10 + 1);
+            os << StringView("_") << coretypeName(datatype);
             break;
         default:
             break;
