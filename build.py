@@ -351,6 +351,11 @@ PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "5m"]
 # workspace containing the UI cases. Keep the ordinary project budget tight,
 # but allow this deliberately nested corpus node to finish from cold archives.
 NESTED_PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "15m"]
+# clap is the largest suite in the corpus: eight test binaries, one of them
+# holding 1742 tests, every one of them linked from C++ the backend writes, and
+# two of them starting a second Cargo build of the crate's examples. Measured at
+# 14 minutes from cold archives with 24 build jobs.
+LARGE_PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "30m"]
 # A from-scratch standard-library build is intentionally much heavier than a
 # single test, but it must not leave the graph occupied indefinitely.
 LIBSTD_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "10m"]
@@ -593,6 +598,8 @@ clap = add_project_test(
     name="clap",
     url="https://github.com/clap-rs/clap.git",
     rev="3bd502024e45cc9abef690f28783d76a9ce33500",
+    adapter_args=["--xfail-target", "examples", "--xfail-target", "ui"],
+    timeout=LARGE_PROJECT_TIMEOUT,
 )
 
 clap_2_33_3 = add_project_test(
