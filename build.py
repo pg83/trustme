@@ -767,10 +767,20 @@ camino_1_1_12 = add_project_test(
 # `persisted_cases_do_not_count_towards_total_cases` and
 # `failing_cases_persisted_and_reloaded` (proptest/src/test_runner/runner.rs)
 # both name the crate directory's `persistence-test.txt` as their failure
-# persistence file and each begins by deleting it, so in parallel one test
-# reads or truncates the other's file and either may fail. The race is
-# upstream's - it reproduces under rustc 1.90 - and one harness thread is the
-# only cure that does not touch the pinned source.
+# persistence file and each begins by deleting it, so run side by side one
+# test reads or truncates the other's file and either may fail. The race is
+# upstream's: run as a pair under rustc 1.90 they collide 19 times in 20.
+# The suite does not run them as a pair. Since `--test` lays its cases out in
+# rustc's order they sit at 1488 and 1495 of 1507 rather than adjacent, and
+# they are far enough apart that most runs miss it - but not all: the first
+# full run after the harness thread came off lost
+# `persisted_cases_do_not_count_towards_total_cases` at 1506 of 1507. So skip
+# one of the pair and keep the parallelism, rather than serialising 1507 tests
+# for the sake of two. The other half of the pair,
+# `failing_cases_persisted_and_reloaded`, keeps the persistence path covered.
+# Building the crate is 6 minutes since a scope's unwind cleanup became one
+# shared chain, and the suite runs in 10 to 18 more, against the 57 minutes
+# one harness thread cost.
 proptest_1_11_0 = add_project_test(
     name="proptest_1_11_0",
     url="https://github.com/proptest-rs/proptest.git",
@@ -778,16 +788,12 @@ proptest_1_11_0 = add_project_test(
     manifest="proptest",
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/proptest_1_11_0/Cargo.lock",
-    adapter_args=["--", "--test-threads=1"],
-    # The one harness thread is not what this node is short of, because it is
-    # killed long before a test of its own runs. Building proptest's src/lib.rs
-    # as a test binary is one trustme process at 100% of a core for 44 minutes
-    # with a 3.1G resident set, and the C++ it writes is a 2.3M line
-    # translation unit; on an idle machine all 163 units are built inside the
-    # hour, and a 60 minute budget still ends with the tests running. It
-    # keeps the ordinary budget rather than spending fifteen minutes of every
-    # corpus run to rediscover that: what it is short of is a compiler that can
-    # build proptest, not time.
+    adapter_args=["--", "--skip", "persisted_cases_do_not_count_towards_total_cases"],
+    # Measured in parallel from cold archives at a load average of 84:
+    # 1051s, 1000s and 628s, exiting 0 every time. Sized at twice the worst
+    # of those on the same rule as the heavier budgets, so that a real hang
+    # is still distinguishable from a contended machine.
+    timeout=HEAVY_PROJECT_TIMEOUT,
 )
 
 alloca = add_project_test(
