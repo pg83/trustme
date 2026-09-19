@@ -8602,6 +8602,40 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             emitParam(e.args.at(1));
             of << StringView(")[i]");
         };
+        auto simdSaturating = [&](bool isAdd) {
+            /* core::intrinsics::simd::simd_saturating_add and
+               simd_saturating_sub (library/core/src/intrinsics/simd.rs): add
+               or subtract two vectors of integer lanes elementwise, with
+               saturation. A lane that leaves its type's range clamps to the
+               end it left by - the maximum or, for a signed lane going the
+               other way, the minimum. */
+            auto info = SimdInfo::forTy(*this, params.types.at(0));
+            MIR_ASSERT(localMirRes, info.ty != SimdInfo::Float, name << StringView(" requires integer lanes"));
+            const unsigned bits = info.itemSize * 8;
+            of << StringView("for(int i = 0; i < ") << info.count << StringView("; i++) { ");
+            info.emitValTy(*this);
+            of << StringView(" lhs = ((");
+            info.emitValTy(*this);
+            of << StringView("*)&");
+            emitParam(e.args.at(0));
+            of << StringView(")[i], rhs = ((");
+            info.emitValTy(*this);
+            of << StringView("*)&");
+            emitParam(e.args.at(1));
+            of << StringView(")[i], whole; ((");
+            info.emitValTy(*this);
+            of << StringView("*)&");
+            emitLvalue(e.retVal);
+            of << StringView(")[i] = __builtin_") << StringView(isAdd ? "add" : "sub") << StringView("_overflow(lhs, rhs, &whole) ? ");
+            if (info.ty == SimdInfo::Signed) {
+                of << StringView("(lhs < 0 ? (i") << bits << StringView(")(-(i") << bits << StringView(")((u") << bits << StringView(")~(u") << bits << StringView(")0 >> 1) - 1) : (i") << bits << StringView(")((u") << bits << StringView(")~(u") << bits << StringView(")0 >> 1))");
+            } else if (isAdd) {
+                of << StringView("(u") << bits << StringView(")~(u") << bits << StringView(")0");
+            } else {
+                of << StringView("(u") << bits << StringView(")0");
+            }
+            of << StringView(" : whole; }");
+        };
         auto simdReduceFold = [&](const char* op) {
             auto info = SimdInfo::forTy(*this, params.types.at(0));
             MIR_ASSERT(localMirRes, e.args.size() == 1, name << StringView(" requires a vector"));
@@ -8875,6 +8909,10 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             simdArith("+");
         } else if (nameStrip == "simd_sub") {
             simdArith("-");
+        } else if (nameStrip == "simd_saturating_add") {
+            simdSaturating(true);
+        } else if (nameStrip == "simd_saturating_sub") {
+            simdSaturating(false);
         } else if (nameStrip == "simd_mul") {
             simdArith("*");
         } else if (nameStrip == "simd_div") {
