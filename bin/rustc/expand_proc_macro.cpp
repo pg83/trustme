@@ -1132,9 +1132,25 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_INTERPOLATED_EXPR:
             visitNode(tok.fragNode());
             break;
-        case TOK_INTERPOLATED_META:
         case TOK_INTERPOLATED_STMT_ITEM:
-        case TOK_INTERPOLATED_ITEM:
+        case TOK_INTERPOLATED_ITEM: {
+            /* An `$x:item` a `macro_rules!` captured is one token to the rest of
+               expansion, but a proc macro is handed the item spelled out: upstream
+               transcribes the capture as `TokenStream::from_ast(item)` wrapped in an
+               invisible `MetaVar(Item)` delimiter (`transcribe_metavar` in
+               rustc_expand/src/mbe/transcribe.rs), and `from_ast` is the item's own
+               attributes followed by its tokens. The invisible group carries no
+               delimiter of its own on the wire - `Delimiter::from_internal` maps it to
+               `Delimiter::None` (rustc_expand/src/proc_macro_server.rs) - so the item
+               is written straight into the stream, attributes first.
+               rstest_reuse's `#[apply(..)]` hands the annotated function to
+               `merge_attrs!` exactly this way. */
+            const auto& item = tok.fragItem();
+            visitAttrs(item.attrs);
+            visitItem(item.name, item.vis, item.data);
+            break;
+        }
+        case TOK_INTERPOLATED_META:
         case TOK_INTERPOLATED_VIS:
             TODO(sp, StringView("TOK_INTERPOLATED_..."));
         case TOK_IDENT:

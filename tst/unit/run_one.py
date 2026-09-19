@@ -45,6 +45,9 @@ def main() -> int:
         raise RuntimeError(f"unsupported unit crate type: {crate_type}")
     rust_lib_dependencies = "//@ rust-lib-dev-dependencies" in source_text
     aux_builds = re.findall(r"^//@\s*aux-build:\s*(\S+)\s*$", source_text, re.MULTILINE)
+    proc_macro_aux_builds = re.findall(
+        r"^//@\s*proc-macro-aux-build:\s*(\S+)\s*$", source_text, re.MULTILINE
+    )
 
     with lib.workdir() as work:
         env = dict(os.environ)
@@ -79,6 +82,33 @@ def main() -> int:
                 env=env,
             )
             dependency_args.extend(("--extern", f"{aux_name}={aux_rlib}"))
+        # `//@ proc-macro-aux-build: name.rs`: the same, for a macro host -
+        # tst/unit/aux/name.rs built as a proc-macro crate. Ours writes the host
+        # as an executable with its metadata beside it, so the unit also needs
+        # `--proc-macro name=<host>`; upstream's host is a shared object that
+        # `--extern` alone names.
+        for aux in proc_macro_aux_builds:
+            aux_src = os.path.join(os.path.dirname(src), "aux", aux)
+            aux_name = os.path.splitext(os.path.basename(aux))[0]
+            with open(aux_src) as aux_file:
+                aux_edition_match = re.search(r"^//@\s*edition:\s*(\d+)", aux_file.read(), re.MULTILINE)
+            aux_edition = aux_edition_match.group(1) if aux_edition_match else edition
+            aux_host = os.path.join(
+                work, f"lib{aux_name}.so" if system_rustc else f"lib{aux_name}-plugin"
+            )
+            lib.run(
+                [rustc, aux_src, "-L", os.path.join(libstd, "release"),
+                 "--crate-type", "proc-macro", "--crate-name", aux_name,
+                 "-o", aux_host, "--edition", aux_edition],
+                env=env,
+            )
+            if system_rustc:
+                dependency_args.extend(("--extern", f"{aux_name}={aux_host}"))
+            else:
+                dependency_args.extend((
+                    "--extern", f"{aux_name}={aux_host}.rlib",
+                    "--proc-macro", f"{aux_name}={aux_host}",
+                ))
         binary = os.path.join(work, "t")
         mode = ["--test"] if test_harness else ["--crate-type", crate_type]
         command = lib.wrap_gdb(

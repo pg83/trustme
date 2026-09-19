@@ -150,6 +150,7 @@ public:
     const ASTExprNode& fragNode() const;
 
     ASTExprNode* takeFragNode();
+    const ASTNamed<ASTItem>& fragItem() const;
     ASTNamed<ASTItem> takeFragItem();
     ASTNamed<ASTItem> takeFragStmtItem();
     ASTVisibility takeFragVis();

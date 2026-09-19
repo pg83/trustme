@@ -457,6 +457,11 @@ ASTExprNode* Token::takeFragNode() {
     return reinterpret_cast<ASTExprNode*>(ptr);
 }
 
+const ASTNamed<ASTItem>& Token::fragItem() const {
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_ITEM || type_ == TOK_INTERPOLATED_STMT_ITEM);
+    return *static_cast<const ASTNamed<ASTItem>*>(data_.as_Fragment());
+}
+
 ASTNamed<ASTItem> Token::takeFragItem() {
     BUG_ASSERT(type_ == TOK_INTERPOLATED_ITEM);
     auto ptr = reinterpret_cast<ASTNamed<ASTItem>*>(data_.as_Fragment());
