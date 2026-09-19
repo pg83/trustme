@@ -5498,6 +5498,36 @@ const HIRType* TraitResolution::expandAssociatedTypesInplaceUfcsInherent(const S
 const HIRType* TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span& sp, const HIRType* input, SolverResponseCallback* effects) const {
     ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsKnown(), input);
 
+    /* A projection can normalize to a projection that is bigger than itself -
+       `<Alphabetic as Deref>::Target` stays rigid, a blanket `impl<R: DerefMut>
+       Rng for R where R::Target: Rng` reads it as its own `R`, and the bound it
+       asks for is one `Deref` deeper than the projection it came from.  Nothing
+       in such a sequence repeats, so no cycle check ends it; upstream ends it by
+       depth.  `project` (rustc_trait_selection/src/traits/project.rs) refuses a
+       projection obligation whose `recursion_depth` has left
+       `tcx.recursion_limit()`, and `AssocTypeNormalizer` (traits/normalize.rs)
+       raises `OverflowCause::DeeplyNormalize` on the same limit while it
+       re-normalizes what a projection produced.  The limit is the crate's
+       `#![recursion_limit]`, 128 when the crate does not name one
+       (`get_recursion_limit`, rustc_interface/src/limits.rs). */
+    const auto recursionLimit = board().settings->recursionLimit;
+    if (eatDepth_ >= recursionLimit) {
+        /* `suggest_new_overflow_limit`
+           (rustc_trait_selection/src/error_reporting/traits/overflow.rs) offers
+           twice the limit, and two when the limit is zero. */
+        const unsigned suggested = recursionLimit == 0 ? 2 : recursionLimit * 2;
+        ERROR(sp, E0000, StringView("overflow normalizing the associated type `") << input
+            << StringView("`; consider increasing the recursion limit by adding a `#![recursion_limit = \"")
+            << suggested << StringView("\"]` attribute to your crate"));
+    }
+    struct ProjectionDepth {
+        unsigned& depth;
+        ~ProjectionDepth() {
+            depth -= 1;
+        }
+    } projectionDepth{eatDepth_};
+    eatDepth_ += 1;
+
     bool normalized = false;
     this->solveNormalizesTo(sp, NormalizesTo{input}, [&](NormalizesToResponse response) {
         if (response.output == nullptr || response.output == input) {
@@ -14079,6 +14109,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
     };
     ThinVector<PreparedTraitBound> preparedBounds(implParamsDef->bounds.size());
     bool prebindingChanged = false;
+    size_t boundsRuledOut = 0;
     for (size_t boundIndex = 0; boundIndex < implParamsDef->bounds.size(); boundIndex++) {
         const auto& bound = implParamsDef->bounds[boundIndex];
         const auto* traitBound = bound.opt_TraitBound();
@@ -14089,6 +14120,39 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         prepared.type = monomorphTraitBound(*traitBound, prepared.trait, prepared.params, prepared.associated);
         const bool forwarded = forwardProjectionRequirements(prepared.type, prepared.trait, prepared.params, prepared.associated);
         prepared.ready = true;
+        if (prepared.associated.empty()) {
+            /* Nothing to bind: the bound names no associated type, so it tells the
+               candidate's placeholders nothing. */
+            continue;
+        }
+        /* Upstream takes a candidate's nested goals in the order the impl writes
+           them and stops at the first that has no solution -
+               `if let EvaluatedToErr = eval { return Ok(EvaluatedToErr) }`
+           in `evaluate_predicates_recursively`
+           (rustc_trait_selection/src/traits/select/mod.rs), and the `?` on each
+           `evaluate_goal_raw` in `evaluate_added_goals_step`
+           (rustc_next_trait_solver/src/solve/eval_ctxt/mod.rs) - so a later goal is
+           never reached on a candidate an earlier one already rejected.  Binding the
+           placeholders of a later bound runs ahead of that order, and for
+               `impl<R: DerefMut> Rng for R where R::Target: Rng`
+           against a receiver that is no `DerefMut` it never comes back: `R::Target`
+           is rigid, the same impl reads it as its own `R`, and the bound to bind is
+           one `Deref` deeper every time.  A bound already free of unknowns cannot be
+           helped by whatever a later one would bind, so once it has no solution the
+           candidate is gone and nothing later needs preparing. */
+        for (; boundsRuledOut < boundIndex; boundsRuledOut++) {
+            const auto& earlier = preparedBounds[boundsRuledOut];
+            if (!earlier.ready || !earlier.associated.empty()) {
+                continue;
+            }
+            if (typeHasUnknown(earlier.type) || paramsHaveUnknownTypes(earlier.params)) {
+                continue;
+            }
+            if (solveGoal(earlier.trait, earlier.params, earlier.type, nullptr) == Certainty::NoSolution) {
+                DEBUG(StringView("earlier nested bound has no solution: ") << earlier.type << StringView(": ") << earlier.trait << earlier.params);
+                return Certainty::NoSolution;
+            }
+        }
         const auto binding = bindCandidatePlaceholders(*candidate, prepared.type, prepared.associated, false, forwarded);
         if (binding == CandidateBindingResult::Mismatch) {
             return Certainty::NoSolution;

@@ -727,6 +727,10 @@ private:
     mutable const SolverResponseCallback* eatProbe_ = nullptr;
     mutable bool eatProbeAsked_ = false;
 
+    /* How many projections deep the running normalization is (see
+       `expandAssociatedTypesInplaceUfcsKnown`). */
+    mutable unsigned eatDepth_ = 0;
+
     mutable NextTraitGoalEvaluator* nextSolver = nullptr;
 
     mutable NextTraitGoalEvaluator* coherenceEvaluator = nullptr;
