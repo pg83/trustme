@@ -13789,12 +13789,22 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         const HIRType* monomorphType(const Span& sp, const HIRType* type, bool allowInfer = true) const override {
             if (const auto* infer = type->opt_Infer()) {
                 for (const auto& binding : types) {
-                    const bool matches = resolvingDepth == 0 ? binding.original == type : binding.probe == type;
+                    /* Unifying two probes merges one into the other, and the survivor takes on
+                       the class the merged one carried: an integer literal's variable unified
+                       with a plain one leaves the same variable under a different node.  Naming
+                       a probe by its node then misses it, the probe's own variable escapes into
+                       the caller's table - where its index means some unrelated type - and the
+                       impl's where-clause is asked of that.  Past the first step every variable
+                       met is a probe of this table, so name it by index, as the value case
+                       already does. */
+                    const auto probeIndex = binding.probe->as_Infer().index;
+                    const bool matches = resolvingDepth == 0 ? binding.original == type : probeIndex == infer->index;
                     if (!matches) {
                         continue;
                     }
                     const auto* resolved = table.getType(binding.probe);
-                    if (resolved == binding.probe) {
+                    const auto* resolvedInfer = resolved->opt_Infer();
+                    if (resolvedInfer && resolvedInfer->index == probeIndex) {
                         return binding.original;
                     }
                     resolvingDepth++;
