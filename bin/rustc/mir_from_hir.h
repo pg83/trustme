@@ -131,7 +131,6 @@ class MirBuilder {
     unsigned int currentBlock;
     bool blockActive_;
     bool buildingCleanup = false;
-    const MIRLValue* unwindConsumedValue = nullptr;
 
     MIRRValue result;
     bool resultValid;
@@ -383,6 +382,24 @@ private:
     void dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv);
 
     void dropScopeValues(ScopeDef& sd, bool preserveStates = false);
+
+    /* One node of the unwind cleanup chain: the cleanup block that drops a
+       slot (under `flag`, `~0u` when unconditional) and then continues at
+       `target`. `nextNode` chains the nodes built for one slot, `~0u` ends
+       the chain. */
+    struct UnwindDropNode {
+        unsigned nextNode;
+        MIRBasicBlockId target;
+        unsigned flag;
+        MIRBasicBlockId block;
+    };
+
+    stl::Vector<UnwindDropNode> unwindDropNodes_;
+    stl::Vector<unsigned int> unwindDropNodeHeads_;
+    MIRBasicBlockId unwindResumeBlock_ = ~0u;
+
+    MIRBasicBlockId unwindCleanupChain(const MIRLValue* consumedValue, bool shared);
+    MIRBasicBlockId unwindCleanupNode(const Span& sp, const ScopeDropSlot& slot, const VarState& state, MIRBasicBlockId target, bool shared);
     MIRUnwindAction makeUnwindAction(const Span& sp, const MIRLValue* consumedValue = nullptr);
     void pushDropTerminator(const Span& sp, MIRDropKind kind, MIRLValue val, unsigned int dropFlag);
 

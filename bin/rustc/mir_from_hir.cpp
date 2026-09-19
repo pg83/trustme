@@ -13,7 +13,6 @@
 #include "hir_expr_state.h"
 #include "mir_operations.h"
 #include "hir_typeck_common.h"
-#include "mir_main_bindings.h"
 #include "mir_visit_crate_mir.h"
 #include "hir_typeck_monomorph.h"
 #include "hir_conv_main_bindings.h"
@@ -7250,6 +7249,28 @@ void MirBuilder::emitArrayElementDropLoop(const Span& sp, const MIRLValue& arrLv
 
 void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) {
     TRACE_FUNCTION_F(lv << StringView(" ") << vs);
+
+    /* A value whose type has no drop glue is never dropped, however much of it
+       was moved out: rustc's `schedule_drop` (rustc_mir_build/src/builder/
+       scope.rs) returns before recording anything when
+       `local_decls[local].ty.needs_drop(..)` is false. A whole-slot state
+       reaches `pushStmtDrop`, which asks that; a partially-moved one expands
+       into a variant switch or a nested drop first, so ask before expanding -
+       otherwise the switch reaches the CFG for a value that has nothing to
+       drop. */
+    switch (vs.tag()) {
+        case VarState::TAG_Invalid:
+        case VarState::TAG_Valid:
+        case VarState::TAG_Optional:
+            break;
+        default:
+            if (!resolve_.typeNeedsDropGlue(sp, valType(sp, lv))) {
+                vs = VarState::make_Invalid(InvalidType::Moved);
+                return;
+            }
+            break;
+    }
+
     switch (vs.tag()) {
         case VarState::TAG_Invalid: {
             break;
@@ -7382,9 +7403,6 @@ void MirBuilder::dropScopeValues(ScopeDef& sd, bool preserveStates /*=false*/) {
                 const auto slotType = slot.isArgument ? SlotType::Argument : SlotType::Local;
                 auto lvalue = slot.isArgument ? MIRLValue::newArgument(slot.index) : MIRLValue::newLocal(slot.index);
                 if (buildingCleanup) {
-                    if (unwindConsumedValue && lvalue == *unwindConsumedValue) {
-                        continue;
-                    }
                     auto state = getSlotState(sd.span, slot.index, slotType).clone();
                     DEBUG(lvalue << StringView(" - ") << state);
                     dropValueFromState(sd.span, state, mv$(lvalue));
@@ -7483,19 +7501,129 @@ void MirBuilder::emitUnwindCleanup(const Span& sp) {
     buildingCleanup = wasBuildingCleanup;
 }
 
+/* The cleanup path of one unwinding terminator, as a node of the chain the
+   other terminators already use. rustc does not give a terminator a private
+   copy of that path: `Builder::diverge_cleanup`
+   (rustc_mir_build/src/builder/scope.rs) walks out to the innermost cached
+   entry and `DropTree::add_drop` hands back the node that already drops that
+   local ahead of the same continuation, so a body with N scheduled drops
+   keeps O(N) cleanup blocks rather than one N-long copy per terminator.
+   Ours builds from the tail - the shared `unwind resume` - inwards, which is
+   the order in which a chain is shared, and keys a node the same way: the
+   slot dropped, the drop flag it is dropped under, and the block the chain
+   continues at. */
+MIRBasicBlockId MirBuilder::unwindCleanupNode(const Span& sp, const ScopeDropSlot& slot, const VarState& state, MIRBasicBlockId target, bool shared) {
+    auto lvalue = slot.isArgument ? MIRLValue::newArgument(slot.index) : MIRLValue::newLocal(slot.index);
+
+    if (state.is_Invalid() || !resolve_.typeNeedsDropGlue(sp, valType(sp, lvalue))) {
+        return target;
+    }
+
+    /* Only a whole-slot drop is one block, so only it is a chain node; a
+       partially-moved or boxed-out value expands to a switch or a nested
+       drop and is built on its own. */
+    unsigned int flag = ~0u;
+    bool wholeSlot = false;
+    switch (state.tag()) {
+        case VarState::TAG_Valid:
+            wholeSlot = true;
+            break;
+        case VarState::TAG_Optional:
+            flag = state.as_Optional();
+            wholeSlot = true;
+            break;
+        default:
+            break;
+    }
+
+    if (wholeSlot) {
+        const unsigned int slotKey = slot.index * 2 + (slot.isArgument ? 1 : 0);
+        if (shared) {
+            while (unwindDropNodeHeads_.length() <= slotKey) {
+                unwindDropNodeHeads_.pushBack(~0u);
+            }
+            for (unsigned int idx = unwindDropNodeHeads_[slotKey]; idx != ~0u; idx = unwindDropNodes_[idx].nextNode) {
+                const auto& node = unwindDropNodes_[idx];
+                if (node.target == target && node.flag == flag) {
+                    return node.block;
+                }
+            }
+        }
+
+        const auto block = newBbUnlinked();
+        setCurBlock(block);
+        endBlock(MIRTerminator::make_Drop({MIRDropKind::DEEP, mv$(lvalue), flag, target, MIRUnwindAction::make_Terminate({})}));
+        if (shared) {
+            unwindDropNodes_.pushBack(UnwindDropNode{unwindDropNodeHeads_[slotKey], target, flag, block});
+            unwindDropNodeHeads_.mut(slotKey) = static_cast<unsigned int>(unwindDropNodes_.length() - 1);
+        }
+        return block;
+    }
+
+    const auto block = newBbUnlinked();
+    setCurBlock(block);
+    auto expanded = state.clone();
+    dropValueFromState(sp, expanded, mv$(lvalue));
+    endBlock(MIRTerminator::make_Goto(target));
+    return block;
+}
+
+MIRBasicBlockId MirBuilder::unwindCleanupChain(const MIRLValue* consumedValue, bool shared) {
+    if (shared && unwindResumeBlock_ == ~0u) {
+        unwindResumeBlock_ = newBbUnlinked();
+        setCurBlock(unwindResumeBlock_);
+        endBlock(MIRTerminator::make_UnwindResume({}));
+    }
+
+    auto target = unwindResumeBlock_;
+    if (!shared) {
+        target = newBbUnlinked();
+        setCurBlock(target);
+        endBlock(MIRTerminator::make_UnwindResume({}));
+    }
+
+    /* The outermost scope's drops end the chain, so walk the scopes from the
+       outside in and each scope's slots in declaration order - the reverse of
+       the order `dropScopeValues` drops them in. */
+    for (size_t stackI = 0; stackI < scopeStack.length(); stackI++) {
+        auto& sd = scopes.at(scopeStack[stackI]);
+        if (sd.data.tag() != ScopeType::TAG_Owning) {
+            continue;
+        }
+        const auto& dropSlots = sd.data.as_Owning().dropSlots;
+        for (size_t i = 0; i < dropSlots.length(); i++) {
+            const auto& slot = dropSlots[i];
+            const auto slotType = slot.isArgument ? SlotType::Argument : SlotType::Local;
+            if (consumedValue) {
+                auto lvalue = slot.isArgument ? MIRLValue::newArgument(slot.index) : MIRLValue::newLocal(slot.index);
+                if (lvalue == *consumedValue) {
+                    continue;
+                }
+            }
+            const auto& state = getSlotState(sd.span, slot.index, slotType);
+            DEBUG((slot.isArgument ? StringView("arg$") : StringView("_")) << slot.index << StringView(" - ") << state);
+            target = unwindCleanupNode(sd.span, slot, state, target, shared);
+        }
+    }
+
+    return target;
+}
+
 MIRUnwindAction MirBuilder::makeUnwindAction(const Span& sp, const MIRLValue* consumedValue) {
     if (buildingCleanup) {
         return MIRUnwindAction::make_Terminate({});
     }
 
+    /* A saved-and-cloned region (a match guard) may only reference blocks it
+       owns or blocks that predate it, so a chain built inside one stays
+       private to it. */
+    const bool shared = codeSaveStack.empty();
+
     const auto sourceBlock = pauseCurBlock();
-    const auto cleanupBlock = newBbUnlinked();
-    setCurBlock(cleanupBlock);
-    const auto* oldConsumedValue = unwindConsumedValue;
-    unwindConsumedValue = consumedValue;
-    emitUnwindCleanup(sp);
-    unwindConsumedValue = oldConsumedValue;
-    endBlock(MIRTerminator::make_UnwindResume({}));
+    const auto wasBuildingCleanup = buildingCleanup;
+    buildingCleanup = true;
+    const auto cleanupBlock = unwindCleanupChain(consumedValue, shared);
+    buildingCleanup = wasBuildingCleanup;
     setCurBlock(sourceBlock);
     return MIRUnwindAction::make_Cleanup(cleanupBlock);
 }
