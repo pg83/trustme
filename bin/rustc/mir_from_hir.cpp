@@ -5758,7 +5758,12 @@ void MirBuilder::pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bo
 void MirBuilder::pushStmtDrop(const Span& sp, MIRLValue val, unsigned int flag /*=~0u*/) {
     ASSERT_BUG(sp, blockActive_, StringView("Pushing statement with no active block"));
 
-    if (lvalueIsCopy(sp, val)) {
+    /* A value whose type has no drop glue is never dropped: rustc's
+       `schedule_drop` (rustc_mir_build/src/builder/scope.rs) returns without
+       recording anything when `local_decls[local].ty.needs_drop(..)` is false,
+       so such a drop never reaches the CFG. Being `Copy` is only the special
+       case of that rule - `typeNeedsDropGlue` starts by asking `typeIsCopy`. */
+    if (!resolve_.typeNeedsDropGlue(sp, valType(sp, val))) {
         return;
     }
 
