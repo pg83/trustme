@@ -153,7 +153,6 @@ shims/ctor.rs
 shims/env/args.rs
 shims/env/current_dir.rs
 shims/env/current_exe.rs
-shims/env/home.rs
 shims/env/var.rs
 shims/exit.rs
 shims/io.rs

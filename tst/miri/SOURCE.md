@@ -14,6 +14,18 @@ This excludes nightly-only, Miri-shim-only, non-native, and auxiliary-file
 cases without rewriting upstream sources.  `cases.tsv` is the exact retained
 set.  Build nodes run fixed shards of ten tests.
 
+Run the importer from inside the build's own shell: the criterion is what
+that environment does, and an environment that answers a query differently
+admits a case the graph then cannot pass.  `shims/env/home.rs` is the one
+that was admitted this way and has been removed.  It unsets `HOME` and
+`USERPROFILE` to reach the `getpwuid_r` fallback of `std::env::home_dir`,
+so it asserts that the running uid has an entry in the host's user
+database.  The build shell's own glibc reads `/etc/passwd` and no further
+NSS service, so on a host whose users come from a directory service the
+lookup finds nothing and the test panics - with the official 1.90.0
+compiler exactly as with ours.  It is a property of the host, not of a
+compiler, and no compiler makes it pass.
+
 Refresh from a temporary checkout and an official Rust 1.90.0 toolchain with:
 
 ```sh
