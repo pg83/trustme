@@ -2533,11 +2533,14 @@ namespace {
 
                 DEBUG(StringView("- Insert argument lval assignments"));
                 for (auto& val : cloner.constAssignments) {
-                    const HIRType* tmp;
-                    auto ty = val.is_Constant() ? state.getConstType(val.as_Constant()) : state.getLvalueType(val.as_LValue());
+                    /* An argument is any of the three `MIRParam` shapes, `Borrow`
+                       included - `f(&mut x)` reaches the call as one - so the copy is
+                       typed and built through the param helpers rather than by asking
+                       for an lvalue that a `Borrow` does not have. */
+                    auto ty = state.getParamType(val);
                     auto lv = MIRLValue::newLocal(static_cast<unsigned>(fcn.locals.length()));
                     fcn.locals.pushBack(ty);
-                    auto rval = val.is_Constant() ? MIRRValue(mv$(val.as_Constant())) : MIRRValue(mv$(val.as_LValue()));
+                    auto rval = paramToRvalue(mv$(val));
                     auto stmt = MIRStatement::make_Assign({mv$(lv), mv$(rval)});
                     DEBUG(StringView("++ ") << stmt);
                     newBlocks[0].statements.insert(newBlocks[0].statements.begin(), mv$(stmt));
