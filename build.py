@@ -317,6 +317,32 @@ cargo = command(
     descr="GO",
 )
 
+# The same sources under `go test`: the only gate over Cargo's own graph - the
+# resolver, which targets a build selects, where their outputs are installed,
+# and the message stream `--message-format=json` writes. A real project sees
+# those only through whatever it fails to build, half an hour later.
+cargo_test = command(
+    name="cargo_test",
+    inputs=(
+        build.glob("$(S)/bin/cargo/**/*.go")
+        + ["$(S)/bin/cargo/go.mod", "$(S)/bin/cargo/go.sum", "$(S)/bin/cargo/vendor/modules.txt"]
+    ),
+    outputs=["$(B)/tst/unit/cargo.stamp"],
+    cmd=[
+        ["go", "test", "-timeout", "120s", "./..."],
+        ["sh", "-c", "> $(B)/tst/unit/cargo.stamp"],
+    ],
+    cwd="$(S)/bin/cargo",
+    env={
+        "CGO_ENABLED": "0",
+        "GOCACHE": "$(B)/gocache",
+        "GOFLAGS": "-mod=vendor",
+        "GOTOOLCHAIN": "local",
+    },
+    descr="GO",
+    color="green",
+)
+
 # --- tests -----------------------------------------------------------------
 # A test is one real project, built by our toolchain and exercised. The graph
 # is tar-based: each node produces a single archive, and downstream nodes
@@ -616,7 +642,6 @@ clap = add_project_test(
     name="clap",
     url="https://github.com/clap-rs/clap.git",
     rev="3bd502024e45cc9abef690f28783d76a9ce33500",
-    adapter_args=["--xfail-target", "examples", "--xfail-target", "ui"],
     timeout=LARGE_PROJECT_TIMEOUT,
 )
 
@@ -890,6 +915,7 @@ rustc_ut_run = command(
     color="green",
 )
 unit_tests.append(rustc_ut_run)
+unit_tests.append(cargo_test)
 style = []
 if not system_rustc_mode:
     style.append(command(
