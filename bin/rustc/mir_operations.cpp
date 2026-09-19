@@ -2063,28 +2063,73 @@ namespace {
 
             unsigned int i = 0;
             for (auto& block : fcn.blocks) {
-                if (visited[i]) {
-                    while (block.terminator.is_Goto()) {
+                if (!visited[i]) {
+                    i++;
+                    continue;
+                }
+
+                bool innerChanged = true;
+                while (innerChanged) {
+                    innerChanged = false;
+
+                    /* A branch every arm of which names the same block decides
+                       nothing, so it is a `Goto`. rustc's
+                       `CfgSimplifier::simplify_branch`
+                       (rustc_mir_transform/src/simplify.rs) rewrites it as one
+                       and hands the target back the predecessor count the
+                       duplicate arms were holding, then loops with
+                       `merge_successor` until neither fires. Collapsing and
+                       merging in the same loop is what makes a whole chain of
+                       such branches go in one pass; left to
+                       `MIROptimiseConstPropagate` it costs one `MIROptimise`
+                       round per link, and a scope that ends a few hundred
+                       enum-typed temporaries never reaches a fixpoint. */
+                    if (block.terminator.is_If() || block.terminator.is_Switch() || block.terminator.is_SwitchValue()) {
+                        struct SoleTarget final: public MIRTargetVisitor {
+                            MIRBasicBlockId target = ~0u;
+                            unsigned int armCount = 0;
+                            bool allSame = true;
+
+                            void visitTarget(const MIRBasicBlockId& t) override {
+                                if (armCount == 0) {
+                                    target = t;
+                                } else if (t != target) {
+                                    allSame = false;
+                                }
+                                armCount++;
+                            }
+                        } soleTarget;
+
+                        visitTerminatorTarget(block.terminator, soleTarget);
+
+                        if (soleTarget.allSame && soleTarget.armCount > 0) {
+                            DEBUG(StringView("BB") << i << StringView("/TERM: Branch with every arm on bb") << soleTarget.target << StringView(" is a goto"));
+                            uses.mut(soleTarget.target) -= soleTarget.armCount - 1;
+                            block.terminator = MIRTerminator::make_Goto(soleTarget.target);
+                            changed = true;
+                            innerChanged = true;
+                        }
+                    }
+
+                    if (block.terminator.is_Goto()) {
                         auto tgt = block.terminator.as_Goto();
-                        if (uses[tgt] != 1) {
-                            break;
-                        }
-                        if (tgt == i) {
-                            break;
-                        }
-                        DEBUG(StringView("Append bb ") << tgt << StringView(" to bb") << i);
+                        if (uses[tgt] == 1 && tgt != i) {
+                            DEBUG(StringView("Append bb ") << tgt << StringView(" to bb") << i);
 
-                        BUG_ASSERT(&fcn.blocks[tgt] != &block);
-                        auto srcBlock = mv$(fcn.blocks[tgt]);
-                        fcn.blocks[tgt].terminator = MIRTerminator::make_Incomplete({});
+                            BUG_ASSERT(&fcn.blocks[tgt] != &block);
+                            auto srcBlock = mv$(fcn.blocks[tgt]);
+                            fcn.blocks[tgt].terminator = MIRTerminator::make_Incomplete({});
 
-                        for (auto& stmt : srcBlock.statements) {
-                            block.statements.push_back(mv$(stmt));
+                            for (auto& stmt : srcBlock.statements) {
+                                block.statements.push_back(mv$(stmt));
+                            }
+                            block.terminator = mv$(srcBlock.terminator);
+                            changed = true;
+                            innerChanged = true;
                         }
-                        block.terminator = mv$(srcBlock.terminator);
-                        changed = true;
                     }
                 }
+
                 i++;
             }
         }
