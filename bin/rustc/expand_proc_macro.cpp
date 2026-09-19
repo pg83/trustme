@@ -136,9 +136,17 @@ namespace {
 
         void sendIdent(const char* val);
 
+        void sendIdent(const Ident::Hygiene& h, const char* val);
+
         void sendIdent(const Ident& val);
 
         void sendLifetime(const char* val);
+
+        void sendLifetime(const Ident::Hygiene& h, const char* val);
+
+        void sendIdent_(const char* val);
+
+        void sendLifetime_(const char* val);
 
         void sendString(const std::string& s);
 
@@ -900,7 +908,26 @@ auto ProcMacroInv::sendRword(const char* val) -> void {
     this->sendBytes(val, std::strlen(val));
 }
 
+/* Every name states the context it is written in. A name with no context of its
+   own - one the compiler prints out of an AST rather than passes through from the
+   invocation - is written at the call site: upstream hands a proc macro the node's
+   own recorded tokens (`TokenStream::from_ast`, rustc_ast/src/tokenstream.rs), where
+   no token picks up a context from the token before it. A marker on this wire holds
+   until the next one, so a name that sent none used to take the context of whatever
+   went out last - a `#[values(..)]` on a parameter left the parameter's name in the
+   attribute's context while the body around it was written at the call site, and the
+   two stopped naming the same binding (base64's rstest cases). */
 auto ProcMacroInv::sendIdent(const char* val) -> void {
+    this->sendSpan(Ident::Hygiene());
+    this->sendIdent_(val);
+}
+
+auto ProcMacroInv::sendIdent(const Ident::Hygiene& h, const char* val) -> void {
+    this->sendSpan(h);
+    this->sendIdent_(val);
+}
+
+auto ProcMacroInv::sendIdent_(const char* val) -> void {
     this->sendU8(static_cast<u8>(TokenClass::Ident));
     if (LexFindReservedWord(val, edition) != TOK_NULL) {
         auto size = std::strlen(val);
@@ -917,6 +944,16 @@ auto ProcMacroInv::sendIdent(const Ident& val) -> void {
 }
 
 auto ProcMacroInv::sendLifetime(const char* val) -> void {
+    this->sendSpan(Ident::Hygiene());
+    this->sendLifetime_(val);
+}
+
+auto ProcMacroInv::sendLifetime(const Ident::Hygiene& h, const char* val) -> void {
+    this->sendSpan(h);
+    this->sendLifetime_(val);
+}
+
+auto ProcMacroInv::sendLifetime_(const char* val) -> void {
     this->sendU8(static_cast<u8>(TokenClass::Lifetime));
     this->sendBytes(val, std::strlen(val));
 }
@@ -1156,12 +1193,10 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_IDENT:
             /* A token of the invocation is passed through with the context it
                was written in - that is what the macro gives back for it. */
-            pmi.sendSpan(tok.ident().hygiene);
-            pmi.sendIdent(tok.ident().name.c_str());
+            pmi.sendIdent(tok.ident().hygiene, tok.ident().name.c_str());
             break; // TODO: Raw idents
         case TOK_LIFETIME:
-            pmi.sendSpan(tok.ident().hygiene);
-            pmi.sendLifetime(tok.ident().name.c_str());
+            pmi.sendLifetime(tok.ident().hygiene, tok.ident().name.c_str());
             break;
         case TOK_INTEGER:
             if (tok.datatype() == CORETYPE_CHAR) {
@@ -2218,7 +2253,19 @@ auto ProcMacroVisitor::parseString(const std::string& s) -> void {
         if (t == TOK_EOF) {
             break;
         }
+        /* The lexer opens a scope of its own for the text it is handed, but this
+           text is a re-print of a node, not source anyone wrote: the names in it
+           have no context but the call site's, the same one the signature printed
+           around them is written in. */
         // TODO: If this is an ident, then get the comment after it that specifies the hygine info
+        if (t == TOK_IDENT) {
+            pmi.sendIdent(t.ident().name.c_str());
+            continue;
+        }
+        if (t == TOK_LIFETIME) {
+            pmi.sendLifetime(t.ident().name.c_str());
+            continue;
+        }
         visitToken(t);
     }
 }
