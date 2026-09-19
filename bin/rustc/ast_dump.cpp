@@ -1715,7 +1715,13 @@ auto RustPrinter::visit(ASTExprNodeBinOp& n) -> void {
             os << StringView("..");
             break;
         case ASTExprNodeBinOp::RANGE_INC:
-            os << StringView("...");
+            /* A closed range is written `..=`; `...` was its spelling before Rust
+               1.26 and is no longer an expression at all. Upstream's printer has
+               only the one form - `RangeLimits::Closed => self.word("..=")` in
+               print_expr_inner (rustc_ast_pretty/src/pprust/state/expr.rs) - and it
+               matters here because this text is re-lexed and handed to proc macros,
+               where `syn` rejects the obsolete spelling. */
+            os << StringView("..=");
             break;
         case ASTExprNodeBinOp::PLACE_IN:
             os << StringView("<-");
