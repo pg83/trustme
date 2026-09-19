@@ -135,6 +135,7 @@ type BuildOptions struct {
 	excludePackages []string
 	pause           bool
 	messageFormat   string
+	workspaceMember bool
 }
 
 type TargetSelectors struct {

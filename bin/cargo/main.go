@@ -82,7 +82,7 @@ parseGlobals:
 
 		opts := parseBuildOptions(command, commandArgs)
 
-		buildProject(opts)
+		runBuildCommand(opts)
 
 		if opts.pause {
 			fmt.Fprintln(os.Stderr, "Press enter to exit...")

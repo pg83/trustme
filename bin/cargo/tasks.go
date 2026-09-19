@@ -35,6 +35,9 @@ type Task struct {
 	action    func(*TaskContext)
 	after     func(*TaskContext)
 	state     *TaskState
+	// Whether this task's outputs came out of the cache instead of being
+	// produced now - the `fresh` flag of a `compiler-artifact` message.
+	fresh bool
 }
 
 type TaskState struct {
@@ -201,6 +204,8 @@ func (ex *TaskExecutor) execute(task *Task) {
 	ctx := &TaskContext{executor: ex, task: task, tmp: tmp}
 
 	if !ex.dryRun && task.state.manifest != nil {
+		task.fresh = true
+
 		if task.after != nil {
 			task.after(ctx)
 		}
@@ -218,6 +223,7 @@ func (ex *TaskExecutor) execute(task *Task) {
 	if !ex.dryRun {
 		if manifest := ex.loadManifest(manifestPath); manifest != nil {
 			task.state = &TaskState{uid: uid, manifest: manifest}
+			task.fresh = true
 
 			if task.after != nil {
 				task.after(ctx)

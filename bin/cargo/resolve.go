@@ -50,7 +50,7 @@ func resolveGraph(context *BuildContext) []*Package {
 
 		visitedRevision[pkg] = revision
 
-		includeDev := pkg == root && context.opts.command == "test"
+		includeDev := pkg == root && buildsDevDependents(context.opts)
 
 		for _, dep := range enabledDependencies(context, pkg, includeDev) {
 			child := context.repository.resolve(dep, pkg)
@@ -194,6 +194,18 @@ func findDependency(pkg *Package, name string) *Dependency {
 	}
 
 	return nil
+}
+
+// Whether this build can reach a unit that links the root's dev-dependencies.
+// Cargo hands a dev-dependency to a test target, to an example target and to
+// anything compiled in a test mode (`State::deps`,
+// cargo/core/compiler/unit_dependencies.rs); a build that selects none of them
+// never reaches one, and resolving them anyway would pull their features into
+// the graph of a plain `cargo build`.
+func buildsDevDependents(opts BuildOptions) bool {
+	return opts.command == "test" ||
+		opts.selectors.tests || len(opts.selectors.test) > 0 ||
+		opts.selectors.examples || len(opts.selectors.example) > 0
 }
 
 func enabledDependencies(context *BuildContext, pkg *Package, includeDev bool) []*Dependency {

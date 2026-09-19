@@ -1,8 +1,11 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -51,6 +54,7 @@ type CompileUnit struct {
 	cpp          int
 	linkManifest int
 	blob         int
+	diag         int
 	cc           *Task
 	final        *Task
 }
@@ -60,6 +64,33 @@ type InstallArtifact struct {
 	index  int
 	path   string
 	binary bool
+}
+
+// What one selected target of the package being built produced, once its files
+// are in the target directory: the `compiler-artifact` line of the message
+// stream.
+type ArtifactReport struct {
+	pkg         *Package
+	target      *Target
+	task        *Task
+	path        string
+	executable  bool
+	testProfile bool
+}
+
+// One Cargo invocation writes one `build-finished`, whatever the outcome. The
+// build phase reports its own success, where it still precedes whatever the
+// command does with what it built; a build that threw reports the failure on
+// its way out.
+func runBuildCommand(opts BuildOptions) {
+	exc := try(func() {
+		buildProject(opts)
+	})
+
+	if exc != nil {
+		reportBuildFinished(opts, false)
+		exc.throw()
+	}
 }
 
 func buildProject(opts BuildOptions) []string {
@@ -99,9 +130,12 @@ func buildProject(opts BuildOptions) []string {
 			memberOpts.manifestPath = member
 			memberOpts.workspaceAll = false
 			memberOpts.packageName = ""
+			memberOpts.workspaceMember = true
 
 			binaries = append(binaries, buildProject(memberOpts)...)
 		}
+
+		reportBuildFinished(opts, true)
 
 		return binaries
 	}
@@ -148,7 +182,7 @@ func buildPackage(opts BuildOptions, manifestPath string) []string {
 	resolveGraph(context)
 
 	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
-	roots, artifacts := builder.rootTasks()
+	roots, artifacts, reports := builder.rootTasks()
 
 	if opts.publishDeps {
 		publishedRoots, publishedArtifacts := builder.publishedDependencies()
@@ -167,6 +201,14 @@ func buildPackage(opts BuildOptions, manifestPath string) []string {
 				binaries = append(binaries, artifact.path)
 			}
 		}
+
+		for _, report := range reports {
+			builder.reportArtifact(report)
+		}
+	}
+
+	if !opts.workspaceMember {
+		reportBuildFinished(opts, true)
 	}
 
 	if opts.command == "test" && !opts.noRun {
@@ -324,12 +366,13 @@ func selectWorkspacePackage(workspace *Workspace, members []string, want string)
 	return ""
 }
 
-func (b *Builder) rootTasks() ([]*Task, []InstallArtifact) {
+func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 	root := b.context.root
 	isHost := !b.context.cross
 
 	var tasks []*Task
 	var artifacts []InstallArtifact
+	var reports []ArtifactReport
 
 	selectors := b.context.opts.selectors
 
@@ -358,6 +401,9 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact) {
 					artifacts = append(artifacts, InstallArtifact{
 						task: task, index: unit.metadata,
 						path: path,
+					})
+					reports = append(reports, ArtifactReport{
+						pkg: root, target: unit.target, task: task, path: path,
 					})
 				}
 
@@ -399,14 +445,20 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact) {
 				tasks = append(tasks, rootTask)
 
 				if !checkOnly && target.kind != "lib" {
+					path := b.artifact(root, target, isHost)
 					artifacts = append(artifacts, InstallArtifact{
-						task: rootTask, index: 0, path: b.artifact(root, target, isHost), binary: true,
+						task: rootTask, index: 0, path: path, binary: true,
+					})
+					reports = append(reports, ArtifactReport{
+						pkg: root, target: target, task: rootTask, path: path,
+						executable: true,
 					})
 				}
 			}
 		}
 	} else {
 		lib := packageLibrary(root)
+		runsPrograms := false
 
 		if lib != nil && (!explicit || selectors.lib) && lib.test {
 			target := *lib
@@ -420,8 +472,13 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact) {
 
 			final := b.finalTask(task)
 			tasks = append(tasks, final)
+			path := b.testArtifact(root, &target, isHost)
 			artifacts = append(artifacts, InstallArtifact{
-				task: final, index: 0, path: b.artifact(root, &target, isHost), binary: true,
+				task: final, index: 0, path: path, binary: true,
+			})
+			reports = append(reports, ArtifactReport{
+				pkg: root, target: lib, task: final, path: path,
+				executable: true, testProfile: true,
 			})
 		}
 
@@ -437,13 +494,40 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact) {
 				copy := *target
 
 				copy.kind = "test"
+				runsPrograms = runsPrograms || target.kind == "test" || target.kind == "bench"
 
 				task := b.targetTask(root, &copy, isHost)
 
 				final := b.finalTask(task)
 				tasks = append(tasks, final)
+				path := b.testArtifact(root, &copy, isHost)
 				artifacts = append(artifacts, InstallArtifact{
-					task: final, index: 0, path: b.artifact(root, &copy, isHost), binary: true,
+					task: final, index: 0, path: path, binary: true,
+				})
+				reports = append(reports, ArtifactReport{
+					pkg: root, target: target, task: final, path: path,
+					executable: true, testProfile: true,
+				})
+			}
+		}
+
+		// An integration test or a bench runs the package's programs - through
+		// `CARGO_BIN_EXE_<name>`, or by the name trycmd looks up beside the
+		// harness - so a build holding one builds every bin of the package as
+		// the program it is, on top of the harness the same source makes
+		// (`compute_deps`, cargo/core/compiler/unit_dependencies.rs).
+		if runsPrograms {
+			for _, target := range root.targets {
+				if target.kind != "bin" || !targetFeaturesEnabled(root, target) {
+					continue
+				}
+
+				final := b.finalTask(b.targetTask(root, target, isHost))
+				tasks = append(tasks, final)
+				path := b.artifact(root, target, isHost)
+				artifacts = append(artifacts, InstallArtifact{task: final, index: 0, path: path})
+				reports = append(reports, ArtifactReport{
+					pkg: root, target: target, task: final, path: path, executable: true,
 				})
 			}
 		}
@@ -453,7 +537,7 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact) {
 		throwFmt("package %s has no selected targets", root.name)
 	}
 
-	return tasks, artifacts
+	return tasks, artifacts, reports
 }
 
 func (b *Builder) libraryTask(pkg *Package, isHost bool) *Task {
@@ -500,6 +584,10 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 	// .incbin, so the blob is a companion output that has to reach [CC].
 	blob := len(outputs)
 	outputs = append(outputs, TaskOutput{name: baseName + ".blob"})
+	// What the compiler said about this crate, kept beside what it produced so
+	// a build that did not have to run it can still say it.
+	diag := len(outputs)
+	outputs = append(outputs, TaskOutput{name: baseName + ".diag"})
 	task := &Task{
 		key:       key,
 		name:      b.taskName(pkg, target, isHost),
@@ -517,7 +605,7 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 	b.tasks[key] = task
 	unit := &CompileUnit{
 		pkg: pkg, target: target, isHost: isHost, baseName: baseName, rs: task,
-		metadata: metadata, cpp: cpp, linkManifest: linkManifest, blob: blob,
+		metadata: metadata, cpp: cpp, linkManifest: linkManifest, blob: blob, diag: diag,
 	}
 	b.units[task] = unit
 
@@ -531,7 +619,7 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 		}
 	}
 
-	for _, dep := range b.compileDependencies(pkg, target.kind == "test") {
+	for _, dep := range b.compileDependencies(pkg, usesDevDependencies(target)) {
 		if dep.packageRef == nil {
 			throwFmt("internal: unresolved dependency %s of %s", dep.key, pkg.name)
 		}
@@ -564,6 +652,9 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 
 		b.compileTarget(ctx, unit, outDir)
 	}
+	task.after = func(ctx *TaskContext) {
+		b.replayDiagnostics(ctx, unit)
+	}
 
 	return task
 }
@@ -584,11 +675,14 @@ func (b *Builder) buildScriptCompileTask(pkg *Package) *Task {
 	}
 	baseName := b.buildScriptBase(pkg) + "_run"
 	task := &Task{
-		key:       key,
-		name:      pkg.name + " v" + pkg.version.string() + " (build script)",
-		kind:      "RS",
-		inputs:    b.packageInputs(pkg),
-		outputs:   []TaskOutput{{name: baseName + ".cpp"}, {name: baseName + ".link"}, {name: baseName + ".blob"}},
+		key:    key,
+		name:   pkg.name + " v" + pkg.version.string() + " (build script)",
+		kind:   "RS",
+		inputs: b.packageInputs(pkg),
+		outputs: []TaskOutput{
+			{name: baseName + ".cpp"}, {name: baseName + ".link"},
+			{name: baseName + ".blob"}, {name: baseName + ".diag"},
+		},
 		signature: b.rustSignature(pkg, target, true),
 	}
 
@@ -600,7 +694,7 @@ func (b *Builder) buildScriptCompileTask(pkg *Package) *Task {
 	b.tasks[key] = task
 	unit := &CompileUnit{
 		pkg: pkg, target: target, isHost: true, baseName: baseName, rs: task,
-		metadata: -1, cpp: 0, linkManifest: 1, blob: 2,
+		metadata: -1, cpp: 0, linkManifest: 1, blob: 2, diag: 3,
 	}
 	b.units[task] = unit
 
@@ -616,6 +710,9 @@ func (b *Builder) buildScriptCompileTask(pkg *Package) *Task {
 
 	task.action = func(ctx *TaskContext) {
 		b.compileBuildScript(ctx, unit)
+	}
+	task.after = func(ctx *TaskContext) {
+		b.replayDiagnostics(ctx, unit)
 	}
 
 	return task
@@ -800,7 +897,7 @@ func (b *Builder) codegenTask(compile *Task) *Task {
 		// CAS paths intentionally have no semantic filename. Tell the compiler
 		// the language instead of making it guess from a .cpp suffix.
 		args = append(args, "-o", ctx.output(0), "-x", "c++", ctx.file(compile, unit.cpp), "-c")
-		runCommand("", nil, "", b.context.opts.dryRun, cxx.compiler, args...)
+		b.runTool("", nil, "", unit.pkg, unit.target, cxx.compiler, args...)
 	}
 
 	return task
@@ -859,7 +956,7 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 		args = append(args, "--test")
 	}
 
-	args = append(args, b.crateArgs(ctx, unit, b.compileDependencies(pkg, target.kind == "test"))...)
+	args = append(args, b.crateArgs(ctx, unit, b.compileDependencies(pkg, usesDevDependencies(target)))...)
 
 	env := b.taskEnv(ctx, pkg)
 	env["OUT_DIR"] = outDir
@@ -872,10 +969,10 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 	for _, command := range pkg.buildOutput.preBuild {
 		args := shellCommand(resolveBuildOutputPath(command, outDir))
 
-		runCommand(pkg.dir, env, "", b.context.opts.dryRun, args[0], args[1:]...)
+		b.runTool(pkg.dir, env, "", pkg, target, args[0], args[1:]...)
 	}
 
-	b.runCompiler("", env, source, args...)
+	b.runCompiler("", env, pkg, target, ctx.output(unit.diag), args...)
 
 	if !b.context.opts.dryRun {
 		makeBuildOutputPortable(ctx.output(unit.linkManifest), outDir)
@@ -891,11 +988,12 @@ func (b *Builder) compileBuildScript(ctx *TaskContext, unit *CompileUnit) {
 	args = append(args, "--crate-name", "build", "--crate-type", "bin", "--edition", pkg.edition)
 	args = append(args, "-C", "emit-cpp-only", "-C", "emit-link-manifest="+ctx.output(unit.linkManifest))
 	args = append(args, b.crateArgs(ctx, unit, b.buildDependencies(pkg))...)
-	b.runCompiler("", b.commonEnv(pkg), absoluteFrom(pkg.dir, pkg.buildScript), args...)
+	b.runCompiler("", b.commonEnv(pkg), pkg, unit.target, ctx.output(unit.diag), args...)
 }
 
 func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Task) {
 	output := ctx.output(0)
+	script := b.units[executable].target
 	env := b.taskEnv(ctx, pkg)
 
 	env["OUT_DIR"] = ctx.output(1)
@@ -937,10 +1035,10 @@ func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Tas
 			miri = filepath.Join(filepath.Dir(b.context.compiler), "standalone_miri"+executableSuffix())
 		}
 
-		runCommand(pkg.dir, env, output, b.context.opts.dryRun, miri,
+		b.runTool(pkg.dir, env, output, pkg, script, miri,
 			ctx.file(executable, 0)+".mir", "--logfile", output+"-miri.log")
 	} else {
-		runCommand(pkg.dir, env, output, b.context.opts.dryRun, ctx.file(executable, 0))
+		b.runTool(pkg.dir, env, output, pkg, script, ctx.file(executable, 0))
 	}
 
 	if !b.context.opts.dryRun {
@@ -1102,7 +1200,6 @@ func (b *Builder) rustSignature(pkg *Package, target *Target, isHost bool) []str
 		targetKey(target),
 		crateType(target),
 		b.crateSuffix(pkg),
-		"message-format=" + b.context.opts.messageFormat,
 	}
 	for _, dir := range b.context.opts.libSearch {
 		signature = append(signature, "lib-search="+absolutePath(dir))
@@ -1115,11 +1212,15 @@ func (b *Builder) rustSignature(pkg *Package, target *Target, isHost bool) []str
 	return append(signature, b.envSignature(b.commonEnv(pkg))...)
 }
 
+// What the build script is told, minus what it is told only so it can pace
+// itself. `NUM_JOBS` is how much parallelism the caller allowed, not an input
+// to what the script produces, and Cargo keeps it out of a build script's
+// fingerprint for that reason - a `cargo build -j 24` and the `cargo build`
+// a test spawns underneath it must agree on what is already built.
 func (b *Builder) buildScriptRunSignature(pkg *Package) []string {
 	signature := []string{
 		"target=" + b.context.target,
 		"host=" + b.context.host,
-		"jobs=" + strconv.Itoa(b.context.opts.jobs),
 		"opt-level=" + profileOptLevel(b.context.opts.profile),
 		"debug=" + profileDebug(b.context.opts.profile),
 		"profile=" + b.context.opts.profile,
@@ -1299,7 +1400,7 @@ func (b *Builder) linkUnit(ctx *TaskContext, root *CompileUnit, linked []*Compil
 	}
 
 	args = append(args, cxx.linkPost...)
-	runCommand("", nil, "", b.context.opts.dryRun, cxx.compiler, args...)
+	b.runTool("", nil, "", root.pkg, root.target, cxx.compiler, args...)
 }
 
 func (b *Builder) crateName(unit *CompileUnit) string {
@@ -1536,6 +1637,19 @@ func (b *Builder) compileDependencies(pkg *Package, includeDev bool) []*Dependen
 	return b.mainDependencies(pkg, includeDev)
 }
 
+// An example links the package's dev-dependencies, exactly as a test does.
+// Cargo spells the rule as one filter over a package's declared dependencies
+// (`State::deps`, cargo/core/compiler/unit_dependencies.rs): a dependency that
+// is not transitive - which is what a dev-dependency is - is dropped unless
+// the unit is a test target, an example target, or is compiled in a test mode.
+// `cargo test` here compiles every selected target as a test target, so the
+// test mode needs no case of its own; an example built by `cargo build
+// --examples` does. clap's `examples/repl.rs` uses `shlex`, a dev-dependency,
+// and that is the build trycmd's `compile_examples` drives.
+func usesDevDependencies(target *Target) bool {
+	return target.kind == "test" || target.kind == "example"
+}
+
 func (b *Builder) conditionMatches(pkg *Package, condition string) bool {
 	if strings.HasPrefix(condition, "cfg(") {
 		return b.context.cfg.matches(condition, pkg.activeFeatures)
@@ -1546,6 +1660,20 @@ func (b *Builder) conditionMatches(pkg *Package, condition string) bool {
 
 func (b *Builder) artifact(pkg *Package, target *Target, isHost bool) string {
 	return filepath.Join(b.outputDir(isHost), b.artifactName(pkg, target))
+}
+
+// A test harness is an intermediate output, so it lives in
+// `target/<profile>/deps` under a name a hash of its unit keeps distinct;
+// Cargo uplifts only programs to `target/<profile>/<name>`. A harness written
+// there instead would stand exactly where the program an integration test runs
+// is looked up - `stdio-fixture`, for clap's `tests/ui`, which trycmd resolves
+// beside the harness that asked for it.
+func (b *Builder) testArtifact(pkg *Package, target *Target, isHost bool) string {
+	key := b.unitKey("test", pkg, target, isHost)
+	digest := sha256.Sum256([]byte(key))
+	name := target.name + "-" + hex.EncodeToString(digest[:8]) + executableSuffix()
+
+	return filepath.Join(b.outputDir(isHost), "deps", name)
 }
 
 func (b *Builder) artifactName(pkg *Package, target *Target) string {
@@ -1708,6 +1836,12 @@ func crateType(target *Target) string {
 }
 
 func runCommand(dir string, extraEnv map[string]string, logPath string, dryRun bool, name string, args ...string) {
+	runCommandTo(dir, extraEnv, logPath, dryRun, nil, name, args...)
+}
+
+// What TRUSTME_CARGO_DUMP_COMMAND and TRUSTME_CARGO_DUMP_ENV ask for, of every
+// command this process runs however it runs it.
+func dumpCommand(extraEnv map[string]string, name string, args []string) {
 	if _, dump := os.LookupEnv(trustmeCargoDumpCommand); dump {
 		fmt.Fprintln(os.Stderr, ">", shellJoin(append([]string{name}, args...)))
 	}
@@ -1725,6 +1859,12 @@ func runCommand(dir string, extraEnv map[string]string, logPath string, dryRun b
 			fmt.Fprintf(os.Stderr, "%s=%s\n", key, extraEnv[key])
 		}
 	}
+}
+
+// `output`, when it is not nil, takes what the command writes in place of this
+// process's own streams.
+func runCommandTo(dir string, extraEnv map[string]string, logPath string, dryRun bool, output io.Writer, name string, args ...string) {
+	dumpCommand(extraEnv, name, args)
 
 	if dryRun {
 		fmt.Fprintln(os.Stderr, ">", shellJoin(append([]string{name}, args...)))
@@ -1745,10 +1885,16 @@ func runCommand(dir string, extraEnv map[string]string, logPath string, dryRun b
 		cmd.Stderr = os.Stderr
 		var log *os.File
 
+		if output != nil {
+			cmd.Stderr = output
+		}
+
 		if logPath != "" {
 			throw(os.MkdirAll(filepath.Dir(logPath), 0o755))
 			log = throw2(os.Create(logPath))
 			cmd.Stdout = log
+		} else if output != nil {
+			cmd.Stdout = output
 		} else {
 			cmd.Stdout = os.Stdout
 		}
