@@ -34,6 +34,15 @@ struct WireBoard::ManglingContext {
 namespace {
     using ManglingContext = WireBoard::ManglingContext;
 
+    /* The digits are read out of an unnamed string literal rather than a
+       `static constexpr` table local to each caller. A function-local constant
+       is folded into a private unnamed constant ordinarily but is given a
+       symbol name in a sanitized build, and an object that exists in only one
+       build configuration cannot be an entry the zero-storage gate records. */
+    char hexDigit(u64 value) {
+        return "0123456789abcdef"[value & 0xf];
+    }
+
     enum class LifetimeIdentityMode {
         Erased,
         Closed,
@@ -99,9 +108,8 @@ namespace {
         const auto size = static_cast<const char*>(sb.current()) - data;
         auto hash = XXH3_64bits(data, size);
         char symbol[18] = {'Z', 'R'};
-        static constexpr char HEX[] = "0123456789abcdef";
         for (size_t i = sizeof(symbol); i > 2; i--) {
-            symbol[i - 1] = HEX[hash & 0xf];
+            symbol[i - 1] = hexDigit(hash);
             hash >>= 4;
         }
         return RcString::newInterned(symbol, sizeof(symbol));
@@ -249,11 +257,10 @@ auto Mangler::fmtName(const char* const s) -> void {
 
     std::string encoded;
     if (needsByteEncoding) {
-        static constexpr char HEX[] = "0123456789abcdef";
         encoded = "U";
         for (const auto* p = reinterpret_cast<const unsigned char*>(s); *p; ++p) {
-            encoded += HEX[*p >> 4];
-            encoded += HEX[*p & 0xf];
+            encoded += hexDigit(*p >> 4);
+            encoded += hexDigit(*p);
         }
     } else if (s[0] == 'U') {
         encoded = "U";

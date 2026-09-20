@@ -416,19 +416,56 @@ namespace {
         ERROR(sp, E0000, StringView("Unknown architecture for asm!"));
     }
 
+    /* At namespace scope, not inside the function that reads it: a
+       function-local static carries its function's signature in its symbol
+       name, and `std::string` is spelled differently by each C++ standard
+       library, so the name the zero-storage gate records would only hold for
+       the library it was recorded against. */
+    const std::pair<const char*, const char*> X86_RESERVED_REGISTERS[] = {
+        {"bp", "the frame pointer"},
+        {"ebp", "the frame pointer"},
+        {"rbp", "the frame pointer"},
+        {"sp", "the stack pointer"},
+        {"esp", "the stack pointer"},
+        {"rsp", "the stack pointer"},
+        {"ip", "the instruction pointer"},
+        {"eip", "the instruction pointer"},
+        {"rip", "the instruction pointer"},
+    };
+
+    const std::pair<const char*, const char*> X86_REGISTER_ALIASES[] = {
+        {"al", "rax"},
+        {"ah", "rax"},
+        {"ax", "rax"},
+        {"eax", "rax"},
+        {"rax", "rax"},
+        {"bl", "rbx"},
+        {"bh", "rbx"},
+        {"bx", "rbx"},
+        {"ebx", "rbx"},
+        {"rbx", "rbx"},
+        {"cl", "rcx"},
+        {"ch", "rcx"},
+        {"cx", "rcx"},
+        {"ecx", "rcx"},
+        {"rcx", "rcx"},
+        {"dl", "rdx"},
+        {"dh", "rdx"},
+        {"dx", "rdx"},
+        {"edx", "rdx"},
+        {"rdx", "rdx"},
+        {"sil", "rsi"},
+        {"si", "rsi"},
+        {"esi", "rsi"},
+        {"rsi", "rsi"},
+        {"dil", "rdi"},
+        {"di", "rdi"},
+        {"edi", "rdi"},
+        {"rdi", "rdi"},
+    };
+
     const char* x86ReservedRegister(const std::string& name) {
-        static const std::pair<const char*, const char*> reserved[] = {
-            {"bp", "the frame pointer"},
-            {"ebp", "the frame pointer"},
-            {"rbp", "the frame pointer"},
-            {"sp", "the stack pointer"},
-            {"esp", "the stack pointer"},
-            {"rsp", "the stack pointer"},
-            {"ip", "the instruction pointer"},
-            {"eip", "the instruction pointer"},
-            {"rip", "the instruction pointer"},
-        };
-        for (const auto& entry : reserved) {
+        for (const auto& entry : X86_RESERVED_REGISTERS) {
             if (name == entry.first) {
                 return entry.second;
             }
@@ -437,37 +474,7 @@ namespace {
     }
 
     std::string canonicalX86Register(const std::string& name, bool is64Bit) {
-        static const std::pair<const char*, const char*> aliases[] = {
-            {"al", "rax"},
-            {"ah", "rax"},
-            {"ax", "rax"},
-            {"eax", "rax"},
-            {"rax", "rax"},
-            {"bl", "rbx"},
-            {"bh", "rbx"},
-            {"bx", "rbx"},
-            {"ebx", "rbx"},
-            {"rbx", "rbx"},
-            {"cl", "rcx"},
-            {"ch", "rcx"},
-            {"cx", "rcx"},
-            {"ecx", "rcx"},
-            {"rcx", "rcx"},
-            {"dl", "rdx"},
-            {"dh", "rdx"},
-            {"dx", "rdx"},
-            {"edx", "rdx"},
-            {"rdx", "rdx"},
-            {"sil", "rsi"},
-            {"si", "rsi"},
-            {"esi", "rsi"},
-            {"rsi", "rsi"},
-            {"dil", "rdi"},
-            {"di", "rdi"},
-            {"edi", "rdi"},
-            {"rdi", "rdi"},
-        };
-        for (const auto& alias : aliases) {
+        for (const auto& alias : X86_REGISTER_ALIASES) {
             if (name == alias.first) {
                 if (!is64Bit && alias.second[0] == 'r') {
                     return std::string("e") + (alias.second + 1);

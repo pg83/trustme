@@ -12,11 +12,27 @@ MAX_STORAGE_OBJECTS = 0
 MAX_WRITABLE_BYTES = 0
 
 # nm also exposes data emitted by the C++ ABI and the compiler itself.  None of
-# these names denotes an object declared by the trustme sources.
-IGNORED_PREFIXES = (".", "GCC_except_table", "DW.ref.", "_ZT", "_ZGV")
+# these names denotes an object declared by the trustme sources.  The entries
+# after the ABI ones are constants the compiler synthesises for a function
+# body: they are private and unnamed in an ordinary build, and only a sanitized
+# build gives them a symbol, because AddressSanitizer needs a name to report a
+# global by.  Counting them would make this gate measure the instrumentation
+# instead of the sources.
+IGNORED_PREFIXES = (
+    ".", "GCC_except_table", "DW.ref.", "_ZT", "_ZGV",
+    "__PRETTY_FUNCTION__.", "__func__.", "__FUNCTION__.", "__const.",
+    "switch.table.", "constinit",
+    # AddressSanitizer's own per-global and per-unit bookkeeping.
+    "__odr_asan_gen_",
+)
 IGNORED_NAMES = frozenset((
-    # libc++ inline constant emitted into users of unordered containers.
+    # Standard-library inline constants emitted into users of the containers
+    # that name them: libc++ on the left, libstdc++ on the right.
     "_ZNSt3__119piecewise_constructE",
+    "_ZSt19piecewise_construct",
+    "_ZZNSt19_Sp_make_shared_tag5_S_tiEvE5__tag",
+    # AddressSanitizer's per-unit registration flag.
+    "___asan_globals_registered",
     # Private table from the vendored xxHash implementation.
     "_ZL12XXH3_kSecret",
 ))
@@ -43,13 +59,9 @@ ALLOWED_IMMUTABLE = frozenset((
     ("trans_allocator.cpp.o", "_ZL30ALLOCATOR_METHODS_ARGS_realloc", "r"),
     ("trans_allocator.cpp.o", "_ZL35ALLOCATOR_METHODS_ARGS_alloc_zeroed", "r"),
     ("trans_allocator.cpp.o", "GLOBAL_ALLOCATOR_LANG_ITEM", "R"),
-    # Fixed lookup tables local to their consumers.
-    ("synext_macro.cpp.o",
-     "_ZZN12_GLOBAL__N_119x86ReservedRegisterERKNSt3__112basic_stringIcNS0_"
-     "11char_traitsIcEENS0_9allocatorIcEEEEE8reserved", "d"),
-    ("synext_macro.cpp.o",
-     "_ZZN12_GLOBAL__N_120canonicalX86RegisterERKNSt3__112basic_stringIcNS0_"
-     "11char_traitsIcEENS0_9allocatorIcEEEEbE7aliases", "d"),
+    # Fixed lookup tables read by the inline-assembly register parser.
+    ("synext_macro.cpp.o", "_ZN12_GLOBAL__N_122X86_RESERVED_REGISTERSE", "d"),
+    ("synext_macro.cpp.o", "_ZN12_GLOBAL__N_120X86_REGISTER_ALIASESE", "d"),
     ("hir_typeck_helpers.cpp.o",
      "_ZZNK15TraitResolution22NextTraitGoalEvaluator20literalClassCanMatchERK"
      "13HIRSimplePathRK13HIRPathParams13HIRInferClassE8intPrims", "r"),
