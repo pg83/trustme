@@ -9,6 +9,12 @@ class HIRCrate;
 class MIRFunction;
 struct WireBoard;
 
+namespace stl {
+    class ObjPool;
+}
+
+void TransCreateLinkFunctionCache(WireBoard& wb, stl::ObjPool& pool);
+
 enum class OptimizationLevel : unsigned {
     None,
     Less,

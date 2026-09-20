@@ -7,6 +7,7 @@
 #include "hir_conv_constant_evaluation.h"
 #include "hir_typeck_helpers.h"
 #include "hir_hir.h"
+#include "trans_main_bindings.h"
 
 #include <std/mem/obj_pool.h>
 
@@ -22,4 +23,5 @@ WireBoard::WireBoard(ObjPool* pool)
     NextSolverCreateCrateCache(*this, *pool);
     HIRCreateMutableOwnerCache(*this, *pool);
     TransCreateManglingContext(*this, *pool);
+    TransCreateLinkFunctionCache(*this, *pool);
 }

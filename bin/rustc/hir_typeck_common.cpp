@@ -170,12 +170,24 @@ const HIRType* Monomorphiser::maybeMonomorphType(const Span& sp, const HIRType* 
     return ty;
 }
 
+bool MonomorphiserPP::rewritesType(const HIRType* ty, bool allowInfer) const {
+    constexpr u32 rewritten = HIRType::HAS_TYPE_PARAM | HIRType::HAS_UNEVALUATED_CONST | HIRType::HAS_DEFERRED_CONST | HIRType::HAS_ASSOCIATED_TYPE;
+    return (ty->flags & rewritten) != 0 || (!allowInfer && ty->hasTypeInfer());
+}
+
 MonomorphiserPP::MonomorphiserPP(HIRTypeInterner& types)
     : Monomorphiser(types)
 {
 }
 
+bool Monomorphiser::rewritesType(const HIRType*, bool) const {
+    return true;
+}
+
 const HIRType* Monomorphiser::monomorphType(const Span& sp, const HIRType* tpl, bool allowInfer /*=true*/) const {
+    if (!this->rewritesType(tpl, allowInfer)) {
+        return tpl;
+    }
     switch ((*tpl).tag()) {
         case HIRType::TAG_Infer: {
             ASSERT_BUG(sp, allowInfer, StringView("Unexpected ivar seen - ") << tpl);

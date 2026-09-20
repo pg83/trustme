@@ -101,6 +101,12 @@ namespace {
 
     using NextTraitGoalEvaluator = TraitResolution::NextTraitGoalEvaluator;
 
+    struct NormalizedCandidateHead {
+        const HIRType* type = nullptr;
+        HIRPathParams params;
+        bool ready = false;
+    };
+
     struct CanonicalizeTraitGoal final: public Monomorphiser {
         mutable std::vector<std::pair<RcString, RcString>> placeholderNames_;
         mutable Vector<const HIRType*> ivarNodes_;
@@ -819,41 +825,6 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     bool evaluateOverlap(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right);
 
-    struct OverlapEntry {
-        const HIRTraitImpl* left;
-        const HIRTraitImpl* right;
-        bool overlaps;
-        OverlapEntry* next;
-
-        OverlapEntry(const HIRTraitImpl* left, const HIRTraitImpl* right, bool overlaps, OverlapEntry* next)
-            : left(left)
-            , right(right)
-            , overlaps(overlaps)
-            , next(next)
-        {
-        }
-    };
-
-    ObjList<OverlapEntry> overlapEntries;
-    IntMap<OverlapEntry*> overlapCache;
-
-    struct SpecializesEntry {
-        const HIRTraitImpl* child;
-        const HIRTraitImpl* parent;
-        bool specializes;
-        SpecializesEntry* next;
-
-        SpecializesEntry(const HIRTraitImpl* child, const HIRTraitImpl* parent, bool specializes, SpecializesEntry* next)
-            : child(child)
-            , parent(parent)
-            , specializes(specializes)
-            , next(next)
-        {
-        }
-    };
-
-    ObjList<SpecializesEntry> specializesEntries;
-    IntMap<SpecializesEntry*> specializesCache;
     StaticTraitResolve* specializationProbe = nullptr;
 
     /* Upstream `specializes(child, parent)`: does `parent` apply to every type `child`
@@ -14864,10 +14835,6 @@ NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, c
     , cachedGoalNodes(resolve.eatCachePool.mutPtr())
     , rawNestedNoEffectResponseIndex(resolve.eatCachePool.mutPtr())
     , canonicalNestedNoEffectResponseIndex(resolve.eatCachePool.mutPtr())
-    , overlapEntries(resolve.eatCachePool.mutPtr())
-    , overlapCache(resolve.eatCachePool.mutPtr())
-    , specializesEntries(resolve.eatCachePool.mutPtr())
-    , specializesCache(resolve.eatCachePool.mutPtr())
 {
     BUG_ASSERT(resolve.board().id < SOLVER_ALPHA_SCOPE_BASE);
     alphaExistentialScopeBase_ = SOLVER_ALPHA_SCOPE_BASE;
@@ -14879,38 +14846,22 @@ NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, c
 }
 
 auto NextTraitGoalEvaluator::evaluateOverlap(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right) -> bool {
-    const auto key = splitMix64(reinterpret_cast<uintptr_t>(&left)) ^ splitMix64(~reinterpret_cast<uintptr_t>(&right));
-    auto** bucket = overlapCache.find(key);
-    if (bucket) {
-        for (auto* ent = *bucket; ent; ent = ent->next) {
-            if (ent->left == &left && ent->right == &right) {
-                return ent->overlaps;
-            }
-        }
+    auto& relation = crateCache().overlaps;
+    if (const auto* cached = relation.find(left, right)) {
+        return cached->holds;
     }
     const bool rv = evaluateOverlapUncached(callSpan, trait, left, right);
-    if (!bucket) {
-        bucket = overlapCache.insert(key);
-    }
-    *bucket = overlapEntries.make(&left, &right, rv, *bucket);
+    relation.insert(left, right, rv);
     return rv;
 }
 
 auto NextTraitGoalEvaluator::specializes(const HIRTraitImpl& child, const HIRTraitImpl& parent) -> bool {
-    const auto key = splitMix64(reinterpret_cast<uintptr_t>(&child)) ^ splitMix64(~reinterpret_cast<uintptr_t>(&parent));
-    auto** bucket = specializesCache.find(key);
-    if (bucket) {
-        for (auto* ent = *bucket; ent; ent = ent->next) {
-            if (ent->child == &child && ent->parent == &parent) {
-                return ent->specializes;
-            }
-        }
+    auto& relation = crateCache().specializations;
+    if (const auto* cached = relation.find(child, parent)) {
+        return cached->holds;
     }
     const bool rv = specializesUncached(child, parent);
-    if (!bucket) {
-        bucket = specializesCache.insert(key);
-    }
-    *bucket = specializesEntries.make(&child, &parent, rv, *bucket);
+    relation.insert(child, parent, rv);
     return rv;
 }
 
@@ -16569,6 +16520,19 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             winner->specializationItemSource = shadowed;
         }
     };
+    ThinVector<NormalizedCandidateHead> normalizedHeads(frame.viable.length());
+    const auto normalizedHead = [&](size_t index, const SolverImpl& impl) -> const NormalizedCandidateHead& {
+        auto& head = normalizedHeads[index];
+        if (!head.ready) {
+            head.type = normalizeGoalInput(impl.getImplType(crate.types));
+            head.params = impl.getTraitParamsRef(crate.types).clone();
+            for (auto& param : head.params.types) {
+                param = normalizeGoalInput(std::move(param));
+            }
+            head.ready = true;
+        }
+        return head;
+    };
     for (size_t i = 0; i < frame.viable.length(); i++) {
         if (frame.viable[i]->discarded) {
             continue;
@@ -16594,17 +16558,9 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                head as the specializing `impl<T> SpecExtend<LinkedList<T>> for LinkedList<T>`
                once the projection is `Vec<i32>`; read raw, the two never met, both stayed
                viable, and the code generator found no `spec_extend` to call. */
-            const auto leftType = normalizeGoalInput(left.getImplType(crate.types));
-            const auto rightType = normalizeGoalInput(right.getImplType(crate.types));
-            auto leftParams = left.getTraitParamsRef(crate.types).clone();
-            auto rightParams = right.getTraitParamsRef(crate.types).clone();
-            for (auto& param : leftParams.types) {
-                param = normalizeGoalInput(std::move(param));
-            }
-            for (auto& param : rightParams.types) {
-                param = normalizeGoalInput(std::move(param));
-            }
-            const bool sameInstantiatedHead = (leftType == rightType || leftType->equalsIgnoringRegions(rightType)) && leftParams.equalsIgnoringRegions(rightParams);
+            const auto& leftHead = normalizedHead(i, left);
+            const auto& rightHead = normalizedHead(j, right);
+            const bool sameInstantiatedHead = (leftHead.type == rightHead.type || leftHead.type->equalsIgnoringRegions(rightHead.type)) && leftHead.params.equalsIgnoringRegions(rightHead.params);
             if (!sameInstantiatedHead && !resolve_.implsOverlap(span(), left, right)) {
                 continue;
             }

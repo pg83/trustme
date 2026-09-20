@@ -19,13 +19,47 @@
 #include "hir_conv_constant_evaluation.h"
 
 #include <std/alg/defer.h>
+#include <std/sym/h_map.h>
 #include <std/lib/vector.h>
+#include <std/mem/obj_pool.h>
+#include <std/rng/split_mix_64.h>
 
 #include <deque>
 #include <algorithm>
 #include <unordered_set>
 
 using namespace stl;
+
+struct TransLinkFunctionCache {
+    struct Entry {
+        HIRSimplePath path;
+        const HIRFunction* function;
+
+        Entry(HIRSimplePath path, const HIRFunction* function)
+            : path(std::move(path))
+            , function(function)
+        {
+        }
+    };
+
+    struct NameHasher {
+        static u64 hash(RcString name) noexcept {
+            return splitMix64(name.rawId());
+        }
+    };
+
+    HashMap<Entry, RcString, NameHasher> entries;
+    bool indexed = false;
+
+    explicit TransLinkFunctionCache(ObjPool* pool)
+        : entries(pool)
+    {
+    }
+};
+
+void TransCreateLinkFunctionCache(WireBoard& wb, ObjPool& pool) {
+    wb.linkFunctions = pool.make<TransLinkFunctionCache>(&pool);
+}
 
 namespace {
     struct State {
@@ -95,15 +129,13 @@ namespace {
         std::set<RcString> emittedFunctions;
         std::set<HIRPath> activePaths;
 
-        std::unordered_map<RcString, std::pair<HIRSimplePath, const HIRFunction*>> linkFunctions;
+        TransLinkFunctionCache& linkFunctions;
 
         EnumState(const WireBoard& wb);
 
         void enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp);
 
         void enumerateLinkFunctions();
-
-        void enumerateLinkFunctionsIn(const HIRModule& mod, HIRItemPath modPath);
     };
 
     struct GlobalAsmOperandEvaluator: public HIRVisitor {
@@ -1921,9 +1953,9 @@ static void TransEnumerateFillFromFunction(EnumState& state, const HIRPath& p, c
     TRACE_FUNCTION_F(StringView("Function ") << p << StringView(" pp=") << pp.ppImpl << StringView(" + ") << pp.ppMethod);
     if (!function.code.mir) {
         if (function.linkage.name != "") {
-            auto it = state.linkFunctions.find(RcString::newInterned(function.linkage.name));
-            if (it != state.linkFunctions.end()) {
-                state.enumFcn(HIRPath(it->second.first), *it->second.second, TransParams(state.crate.types, pp.sp));
+            const auto* it = state.linkFunctions.entries.find(RcString::newInterned(function.linkage.name));
+            if (it) {
+                state.enumFcn(HIRPath(it->path), *it->function, TransParams(state.crate.types, pp.sp));
             }
         }
     } else if (state.origList) {
@@ -3408,6 +3440,7 @@ EnumState::EnumState(const WireBoard& wb)
     , resolve(wb, OpaqueReveal::All)
     , rv(wb)
     , origList(nullptr)
+    , linkFunctions(*wb.linkFunctions)
 {
     enumerateLinkFunctions();
 }
@@ -3426,27 +3459,31 @@ auto EnumState::enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp) -> vo
     }
 }
 
-auto EnumState::enumerateLinkFunctions() -> void {
-    enumerateLinkFunctionsIn(crate.rootModule, HIRItemPath(crate.crateName));
-    for (const auto& eCrate : crate.extCrates) {
-        enumerateLinkFunctionsIn(eCrate.second.data->rootModule, HIRItemPath(eCrate.first));
-    }
-}
-
-auto EnumState::enumerateLinkFunctionsIn(const HIRModule& mod, HIRItemPath modPath) -> void {
+static void indexLinkFunctionsIn(TransLinkFunctionCache& cache, const HIRModule& mod, HIRItemPath modPath) {
     for (const auto& vi : mod.valueItems) {
         if (const auto* ip = vi.second->ent.opt_Function()) {
             const auto& i = **ip;
             if (i.code.mir && i.linkage.name != "") {
-                linkFunctions[RcString::newInterned(i.linkage.name)] = std::make_pair((modPath + vi.first).getSimplePath(), &i);
+                cache.entries.insert(RcString::newInterned(i.linkage.name), (modPath + vi.first).getSimplePath(), &i);
             }
         }
     }
 
     for (const auto& ti : mod.modItems) {
         if (const auto* ip = ti.second->ent.opt_Module()) {
-            enumerateLinkFunctionsIn(*ip, modPath + ti.first);
+            indexLinkFunctionsIn(cache, *ip, modPath + ti.first);
         }
+    }
+}
+
+auto EnumState::enumerateLinkFunctions() -> void {
+    if (linkFunctions.indexed) {
+        return;
+    }
+    linkFunctions.indexed = true;
+    indexLinkFunctionsIn(linkFunctions, crate.rootModule, HIRItemPath(crate.crateName));
+    for (const auto& eCrate : crate.extCrates) {
+        indexLinkFunctionsIn(linkFunctions, eCrate.second.data->rootModule, HIRItemPath(eCrate.first));
     }
 }
 

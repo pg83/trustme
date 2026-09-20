@@ -34,6 +34,8 @@ public:
     virtual const HIRType* getType(const Span& sp, const HIRGenericRef& g) const = 0;
     virtual HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const = 0;
 
+    virtual bool rewritesType(const HIRType* ty, bool allowInfer) const;
+
     virtual const HIRType* monomorphType(const Span& sp, const HIRType* ty, bool allowInfer = true) const;
     HIRPath monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer = true) const;
     HIRTraitPath monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer) const;
@@ -58,6 +60,8 @@ public:
 
     const HIRType* getType(const Span& sp, const HIRGenericRef& ty) const override;
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
+
+    bool rewritesType(const HIRType* ty, bool allowInfer) const override;
 };
 
 enum class SolverCertainty : u8 {

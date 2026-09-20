@@ -16,6 +16,7 @@ struct Settings;
 struct TargetSpec;
 struct NextSolverCrateCache;
 struct HIRMutableOwnerCache;
+struct TransLinkFunctionCache;
 
 struct WireBoard {
     struct TargetLayoutContext;
@@ -53,4 +54,6 @@ struct WireBoard {
     NextSolverCrateCache* solverCache = nullptr;
 
     HIRMutableOwnerCache* hirOwners = nullptr;
+
+    TransLinkFunctionCache* linkFunctions = nullptr;
 };

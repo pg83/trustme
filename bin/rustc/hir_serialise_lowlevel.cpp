@@ -7,7 +7,9 @@
 #include <std/sys/fd.h>
 #include <std/lib/buffer.h>
 #include <std/lib/vector.h>
+#include <std/sym/h_map.h>
 #include <std/mem/obj_pool.h>
+#include <std/rng/split_mix_64.h>
 
 #include <zstd.h>
 #include <fcntl.h>
@@ -25,11 +27,25 @@ namespace {
     const u8 TAG_OPEN_ANON = 0xFE;
     const u8 TAG_CLOSE = 0xFF;
 
+    struct InternedStringHasher {
+        static u64 hash(RcString name) noexcept {
+            return splitMix64(name.rawId());
+        }
+    };
+
+    struct WrittenString {
+        RcString value;
+        unsigned uses;
+        unsigned slot;
+    };
+
     struct WriterImpl final: public HIRSerialiseWriter {
         Buffer path;
         Buffer data;
         bool recording;
-        std::map<RcString, unsigned> istringCache;
+        ObjPool::Ref istringPool;
+        HashMap<unsigned, RcString, InternedStringHasher> istringIndex;
+        Vector<WrittenString> istrings;
         std::map<const char*, unsigned> objnameCache;
 
         WriterImpl();
@@ -81,6 +97,8 @@ namespace {
 
 WriterImpl::WriterImpl()
     : recording(false)
+    , istringPool(ObjPool::fromMemory())
+    , istringIndex(istringPool.mutPtr())
 {
 }
 
@@ -107,13 +125,18 @@ WriterImpl::~WriterImpl() {
 }
 
 void WriterImpl::open(const std::string& filename) {
-    std::vector<std::pair<RcString, unsigned>> sorted;
-    sorted.reserve(istringCache.size());
-    for (const auto& e : istringCache) {
-        sorted.push_back(e);
+    Vector<unsigned> order;
+    order.grow(istrings.length());
+    for (unsigned i = 0; i < istrings.length(); i++) {
+        order.pushBack(i);
     }
-    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
-        return a.second > b.second;
+    std::sort(order.mutBegin(), order.mutEnd(), [this](unsigned a, unsigned b) {
+        const auto& left = istrings[a];
+        const auto& right = istrings[b];
+        if (left.uses != right.uses) {
+            return left.uses > right.uses;
+        }
+        return left.value.ord(right.value) == OrdLess;
     });
 
     objnameCache.clear();
@@ -121,15 +144,12 @@ void WriterImpl::open(const std::string& filename) {
     path = Buffer(StringView(filename.c_str()));
     recording = true;
 
-    this->writeCount(sorted.size());
-    for (size_t i = 0; i < sorted.size(); i++) {
-        const auto& s = sorted[i].first;
-        this->writeString(s.size(), s.c_str());
-        DEBUG(i << StringView(" = ") << istringCache[s] << StringView(" '") << s << StringView("'"));
-        istringCache[s] = i;
-    }
-    for (const auto& e : istringCache) {
-        BUG_ASSERT(e.second < sorted.size());
+    this->writeCount(order.length());
+    for (unsigned i = 0; i < order.length(); i++) {
+        auto& entry = istrings.mut(order[i]);
+        this->writeString(entry.value.size(), entry.value.c_str());
+        DEBUG(i << StringView(" = ") << entry.uses << StringView(" '") << entry.value << StringView("'"));
+        entry.slot = i;
     }
 }
 
@@ -176,11 +196,17 @@ void WriterImpl::writeCount(size_t c) {
 }
 
 void WriterImpl::writeString(const RcString& v) {
+    const auto* found = istringIndex.find(v);
     if (recording) {
-        this->writeCount(istringCache.at(v));
-    } else {
-        istringCache.insert(std::make_pair(v, 0)).first->second += 1;
+        BUG_ASSERT(found);
+        this->writeCount(istrings[*found].slot);
+        return;
     }
+    if (!found) {
+        found = istringIndex.insert(v, static_cast<unsigned>(istrings.length()));
+        istrings.pushBack(WrittenString{v, 0, 0});
+    }
+    istrings.mut(*found).uses++;
 }
 
 void WriterImpl::writeString(size_t len, const char* s) {

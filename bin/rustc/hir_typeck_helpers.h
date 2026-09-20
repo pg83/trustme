@@ -9,7 +9,9 @@
 
 #include <std/sym/i_map.h>
 #include <std/lib/vector.h>
+#include <std/mem/obj_list.h>
 #include <std/mem/obj_pool.h>
+#include <std/rng/split_mix_64.h>
 
 bool typeIsUnboundedInfer(const HIRType* ty);
 
@@ -167,12 +169,64 @@ struct NextSolverCrateCache {
         const SolverImpl* applicable = nullptr;
     };
 
+    struct ImplPair {
+        ImplPair* next;
+        const HIRTraitImpl* left;
+        const HIRTraitImpl* right;
+        bool holds;
+
+        ImplPair(ImplPair* next, const HIRTraitImpl* left, const HIRTraitImpl* right, bool holds)
+            : next(next)
+            , left(left)
+            , right(right)
+            , holds(holds)
+        {
+        }
+    };
+
+    struct ImplRelation {
+        stl::ObjList<ImplPair> entries;
+        stl::IntMap<ImplPair*> index;
+
+        explicit ImplRelation(stl::ObjPool* pool)
+            : entries(pool)
+            , index(pool)
+        {
+        }
+
+        static u64 key(const HIRTraitImpl& left, const HIRTraitImpl& right) {
+            return stl::splitMix64(reinterpret_cast<uintptr_t>(&left)) ^ stl::splitMix64(~reinterpret_cast<uintptr_t>(&right));
+        }
+
+        const ImplPair* find(const HIRTraitImpl& left, const HIRTraitImpl& right) const {
+            auto** head = index.find(key(left, right));
+            for (const auto* entry = head ? *head : nullptr; entry; entry = entry->next) {
+                if (entry->left == &left && entry->right == &right) {
+                    return entry;
+                }
+            }
+            return nullptr;
+        }
+
+        void insert(const HIRTraitImpl& left, const HIRTraitImpl& right, bool holds) {
+            auto** head = index.find(key(left, right));
+            if (!head) {
+                head = index.insert(key(left, right));
+            }
+            *head = entries.make(*head, &left, &right, holds);
+        }
+    };
+
     stl::ObjPool::Ref pool;
     stl::IntMap<Entry*> index;
+    ImplRelation overlaps;
+    ImplRelation specializations;
 
     NextSolverCrateCache()
         : pool(stl::ObjPool::fromMemory())
         , index(pool.mutPtr())
+        , overlaps(pool.mutPtr())
+        , specializations(pool.mutPtr())
     {
     }
 
