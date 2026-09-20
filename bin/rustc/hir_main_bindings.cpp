@@ -684,24 +684,12 @@ namespace {
         void serialise(const HIRAssociatedType& at);
     };
 
-    bool isMetadataFile(const auto& filename) {
-        std::ifstream direct(filename, std::ios_base::in | std::ios_base::binary);
-        unsigned char header[2] = {};
-        if (direct.read(reinterpret_cast<char*>(header), sizeof(header))) {
-            const unsigned word = static_cast<unsigned>(header[0]) * 256 + header[1];
-            if ((header[0] & 0x0f) == 8 && word % 31 == 0) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     auto metadataFilename(const auto& filename) {
-        if (isMetadataFile(filename)) {
+        if (HIRSerialiseReader::isMetadata(filename)) {
             return filename;
         }
         auto rlib = filename + ".rlib";
-        if (isMetadataFile(rlib)) {
+        if (HIRSerialiseReader::isMetadata(rlib)) {
             return rlib;
         }
         return filename + ".hir";
@@ -717,7 +705,7 @@ HIRArraySize HirDeserialiser::deserialiseArraysize() {
 #define _(x, ...)               \
     case HIRArraySize::TAG_##x: \
         return HIRArraySize::make_##x(__VA_ARGS__);
-        _(Known, in.readU64c())
+        _(Known, in.readU64())
         _(Unevaluated, deserialiseConstgeneric())
         default:
             BUG(Span(), StringView("Bad tag for HIR::ArraySize - ") << tag);
@@ -1102,7 +1090,7 @@ AsmLineFragment HirDeserialiser::deserialiseAsmLineFrag() {
     AsmLineFragment lf;
     lf.before = in.readString();
     lf.index = in.readCount();
-    lf.modifier = static_cast<char>(in.readI64c());
+    lf.modifier = static_cast<char>(in.readI64());
     return lf;
 }
 
@@ -1243,10 +1231,10 @@ MIRSwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
     case MIRSwitchValues::TAG_##x: \
         return MIRSwitchValues::make_##x(__VA_ARGS__);
         _(Unsigned, deserialiseVectorC<u64>([&]() {
-            return in.readU64c();
+            return in.readU64();
         }))
         _(Signed, deserialiseVectorC<i64>([&]() {
-            return in.readI64c();
+            return in.readI64();
         }))
         _(String, deserialiseVec<std::string>())
         _(ByteString, deserialiseVec<Vector<u8>>())
@@ -3184,11 +3172,11 @@ auto HirSerialiser::serialise(u8 v) -> void {
 }
 
 auto HirSerialiser::serialise(u64 v) -> void {
-    out.writeU64c(v);
+    out.writeU64(v);
 }
 
 auto HirSerialiser::serialise(i64 v) -> void {
-    out.writeI64c(v);
+    out.writeI64(v);
 }
 
 auto HirSerialiser::serialise(const HIRGenericRef& ge) -> void {
@@ -3207,7 +3195,7 @@ auto HirSerialiser::serialiseArraysize(const HIRArraySize& as) -> void {
         }
         case HIRArraySize::TAG_Known: {
             auto& se = as.as_Known();
-            out.writeU64c(se);
+            out.writeU64(se);
             break;
         }
     }
@@ -3913,7 +3901,7 @@ auto HirSerialiser::serialise(const MIRBasicBlock& block) -> void {
 auto HirSerialiser::serialise(const AsmLineFragment& l) -> void {
     serialise(l.before);
     out.writeCount(l.index);
-    out.writeI64c(l.modifier);
+    out.writeI64(l.modifier);
 }
 
 auto HirSerialiser::serialise(const AsmLine& l) -> void {

@@ -208,7 +208,7 @@ else:
         # the platform library joins in so ObjPool inlines too.
         deps=[platform_libstd_lto, codegen_c_prelude, unicode_nfc_tables],
         cxxflags=["-flto=thin"],
-        ldflags=["-lz", "-flto=thin"],
+        ldflags=["-lz", "-lzstd", "-flto=thin"],
     )
 
     rustc_debug = program(
@@ -218,7 +218,7 @@ else:
         deps=[platform_libstd_lto, codegen_c_prelude, unicode_nfc_tables],
         cppflags=["-DTRUSTME_DEBUG=1"],
         cxxflags=["-flto=thin"],
-        ldflags=["-lz", "-flto=thin"],
+        ldflags=["-lz", "-lzstd", "-flto=thin"],
     )
 
     # The production compiler uses ThinLTO, which can hide static storage by
@@ -270,7 +270,7 @@ rustc_ut = program(
     ],
     output="$(B)/tst/unit/rustc_ut",
     deps=[platform_libstd, float128_ut_vectors, codegen_c_prelude, unicode_nfc_tables],
-    ldflags=["-lz"],
+    ldflags=["-lz", "-lzstd"],
 )
 
 node_cast_test = program(
