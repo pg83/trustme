@@ -10,7 +10,7 @@ struct Settings;
 #include <set>
 
 class HIRCrate;
-class HIRTypeInterner;
+struct HIRTypeInterner;
 
 namespace stl {
     class ObjPool;

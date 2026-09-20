@@ -13,7 +13,7 @@ struct WireBoard;
 
 class HIRCrate;
 class HIRExprPtr;
-class HIRTypeInterner;
+struct HIRTypeInterner;
 
 namespace stl {
     class ObjPool;

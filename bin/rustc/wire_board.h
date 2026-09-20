@@ -8,7 +8,7 @@ namespace stl {
 
 struct ASTCrate;
 class HIRCrate;
-class HIRTypeInterner;
+struct HIRTypeInterner;
 class HIRInherentCache;
 class ExpandRegistry;
 class LangItems;

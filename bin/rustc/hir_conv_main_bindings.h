@@ -13,7 +13,7 @@ struct HIRPattern;
 class HIREnum;
 class HIRConstant;
 class HIRType;
-class HIRTypeInterner;
+struct HIRTypeInterner;
 struct HIRSimplePath;
 struct HIRGenericPath;
 class HIRGenericParams;

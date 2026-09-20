@@ -10,7 +10,7 @@
 #include <cstdint>
 
 class HIRType;
-class HIRTypeInterner;
+struct HIRTypeInterner;
 class HIRMatchGenerics;
 
 namespace stl {

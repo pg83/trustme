@@ -13,7 +13,7 @@ namespace stl {
     class ObjPool;
 }
 
-class HIRTypeInterner;
+struct HIRTypeInterner;
 class ExpandRegistry;
 
 void ExpandTestHarness(ASTCrate& crate);

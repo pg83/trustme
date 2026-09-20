@@ -75,7 +75,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testRollbackRestoresBinding) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto a = table.newIvar();
@@ -100,7 +100,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testRollbackUndoesAliasAndTruncates) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto a = table.newIvar();
@@ -131,7 +131,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testRollbackRestoresLiteralClassUpgrade) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto l = table.newIvar();
@@ -151,7 +151,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testRollbackRestoresValueIvars) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto v1 = table.newIvarVal();
@@ -174,7 +174,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testUnifyingValueWithItselfIsNoop) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto value = table.newIvarVal();
@@ -189,7 +189,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testCommitKeepsBindings) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto a = table.newIvar();
@@ -215,7 +215,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testNestedSnapshots) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto a = table.newIvar();
@@ -238,7 +238,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testUnifyBindsAndUnifies) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -259,7 +259,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testUnifyMismatchRollsBack) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -281,7 +281,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testUnifyOccursCheck) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -298,7 +298,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testUnifyLiteralClasses) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -315,7 +315,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testUnifyDefersRigidUnknowns) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -339,7 +339,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testUnifyBindsExistentialToCanonicalInput) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -355,7 +355,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testSolverExistentialHasTypedBinderIdentity) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
 
         const auto first = HIRGenericRef::newSolverExistential(41, 3);
         const auto same = HIRGenericRef::newSolverExistential(41, 3);
@@ -378,7 +378,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testCanonicalLiteralSlotRejectsStructuralType) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -396,7 +396,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testLiteralSlotDefersProjectionBeforeClassCheck) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -417,7 +417,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testUnifyArrayBindsConstLength) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -441,7 +441,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testImplHeaderRelationWaitsForAnOpenProjectionInput) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -485,7 +485,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testSolverProvenProjectionReplacesLiteralFallback) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto slot = table.newIvar(HIRInferClass::Integer);
@@ -498,7 +498,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testCandidateConstExistentialCapturesRigidPlaceholder) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -520,7 +520,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testRollbackRestoresChangedFlag) {
         auto pool = ObjPool::fromMemory();
         u32 id = 0;
-        HIRTypeInterner types(*pool.mutPtr(), id);
+        auto& types = *HIRTypeInterner::create(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto a = table.newIvar();

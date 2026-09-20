@@ -1437,27 +1437,49 @@ HIRTypeDataNodeType HIRTypeDataNodeType::clone() const {
     UNREACHABLE();
 }
 
-const HIRType* HIRTypeInterner::intern(HIRType data) {
-    data.flags = typeFlags(data);
-    const auto hash = hashTypeData(data);
-    const auto range = nodes.equal_range(hash);
-    for (auto it = range.first; it != range.second; ++it) {
-        if (exactTypeDataEqual(*it->second, data)) {
-            return it->second;
+namespace {
+    struct HIRTypeInternerImpl final: public HIRTypeInterner {
+        ObjPool& pool;
+        u32& id;
+        std::unordered_multimap<size_t, const HIRType*> nodes;
+
+        HIRTypeInternerImpl(ObjPool& pool, u32& id)
+            : pool(pool)
+            , id(id)
+        {
         }
-    }
-    auto* node = pool.make<HIRType>(mv$(data));
-    node->uid = ++id;
-    nodes.emplace(hash, node);
-    return node;
+
+        ObjPool& objectPool() const override {
+            return pool;
+        }
+
+        const HIRType* intern(HIRType data) override {
+            data.flags = typeFlags(data);
+            const auto hash = hashTypeData(data);
+            const auto range = nodes.equal_range(hash);
+            for (auto it = range.first; it != range.second; ++it) {
+                if (exactTypeDataEqual(*it->second, data)) {
+                    return it->second;
+                }
+            }
+            auto* node = pool.make<HIRType>(mv$(data));
+            node->uid = ++id;
+            nodes.emplace(hash, node);
+            return node;
+        }
+
+        unsigned newAliasInputInfer() override {
+            return ~++id;
+        }
+    };
+}
+
+HIRTypeInterner* HIRTypeInterner::create(ObjPool& pool, u32& id) {
+    return pool.make<HIRTypeInternerImpl>(pool, id);
 }
 
 const HIRType* HIRTypeInterner::infer(unsigned int idx, HIRInferClass tyClass) {
     return intern(HIRType::make_Infer({idx, tyClass}));
-}
-
-unsigned HIRTypeInterner::newAliasInputInfer() {
-    return ~++id;
 }
 
 const HIRType* HIRTypeInterner::primitive(HIRCoreType ct) {
@@ -2902,12 +2924,6 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
         }
     }
     UNREACHABLE();
-}
-
-HIRTypeInterner::HIRTypeInterner(ObjPool& pool, u32& id)
-    : pool(pool)
-    , id(id)
-{
 }
 
 bool isInteger(const HIRCoreType& v) {

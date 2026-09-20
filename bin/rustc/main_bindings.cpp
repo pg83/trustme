@@ -193,7 +193,7 @@ namespace {
 #endif
         WireBoard& wb = *pool->make<WireBoard>(pool);
         unsigned memoryDumpSequence = 0;
-        wb.types = pool->make<HIRTypeInterner>(*pool, wb.id);
+        wb.types = HIRTypeInterner::create(*pool, wb.id);
         wb.settings = pool->make<Settings>(pool);
         wb.settings->cfg = CfgCreateState(*pool);
         ProgramParams params(*wb.settings, argc, argv);

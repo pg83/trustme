@@ -180,7 +180,7 @@ struct HIRTypeDataInfer {
     }
 };
 
-class HIRTypeInterner;
+struct HIRTypeInterner;
 
 struct HIRTypeDataNamedFunction {
     HIRPath path;
@@ -216,21 +216,12 @@ private:
     stl::ObjPool* retainedValuePool;
 };
 
-class HIRTypeInterner {
-    stl::ObjPool& pool;
-    u32& id;
-    std::unordered_multimap<size_t, const HIRType*> nodes;
+struct HIRTypeInterner {
+    virtual stl::ObjPool& objectPool() const = 0;
+    virtual const HIRType* intern(HIRType data) = 0;
+    virtual unsigned newAliasInputInfer() = 0;
 
-public:
-    HIRTypeInterner(stl::ObjPool& pool, u32& id);
-
-    stl::ObjPool& objectPool() const {
-        return pool;
-    }
-
-    const HIRType* intern(HIRType data);
     const HIRType* infer(unsigned int idx = ~0u, HIRInferClass tyClass = HIRInferClass::None);
-    unsigned newAliasInputInfer();
     const HIRType* primitive(HIRCoreType ct);
     const HIRType* generic(HIRGenericRef generic);
     const HIRType* generic(RcString name, unsigned int slot);
@@ -249,6 +240,8 @@ public:
     const HIRType* closure(HIRExprNodeClosure* node);
     const HIRType* generator(HIRExprNodeGenerator* node);
     const HIRType* asyncBlock(HIRExprNodeAsyncBlock* node);
+
+    static HIRTypeInterner* create(stl::ObjPool& pool, u32& id);
 };
 
 inline bool operator==(const HIRType* ty, HIRCoreType ct) {
