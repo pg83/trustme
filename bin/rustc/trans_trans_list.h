@@ -91,8 +91,8 @@ struct TransListConst {
 class TransList {
     const WireBoard* wb_ = nullptr;
 
-    std::unordered_map<std::string, HIRPath> functionSymbols;
-    std::unordered_map<std::string, HIRPath> staticSymbols;
+    std::unordered_map<RcString, HIRPath> functionSymbols;
+    std::unordered_map<RcString, HIRPath> staticSymbols;
 
     struct TypeEmissionState {
         const HIRType* canonical;
@@ -100,7 +100,7 @@ class TransList {
         bool hasDefinition;
     };
 
-    std::unordered_map<std::string, TypeEmissionState> typeSymbols;
+    std::unordered_map<RcString, TypeEmissionState> typeSymbols;
 
 public:
     TransList() = default;

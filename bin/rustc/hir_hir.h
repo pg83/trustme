@@ -832,7 +832,7 @@ public:
 
     stl::Vector<RcString> exportedMacroNames;
 
-    std::unordered_map<std::string, HIRSimplePath> langItems;
+    std::unordered_map<RcString, HIRSimplePath> langItems;
 
     stl::Vector<RcString> extCratesOrdered;
 

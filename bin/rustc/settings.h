@@ -106,7 +106,7 @@ struct Settings {
 
     CfgState* cfg = nullptr;
 
-    std::map<std::string, CfgLintLevel> lintLevels;
+    std::map<RcString, CfgLintLevel> lintLevels;
     std::optional<CfgLintLevel> lintCap;
 
     static bool lintGroupContains(const std::string& group, const std::string& name) {
@@ -119,7 +119,7 @@ struct Settings {
         return false;
     }
 
-    CfgLintLevel lintLevel(const std::string& name, CfgLintLevel builtin) const {
+    CfgLintLevel lintLevel(const RcString& name, CfgLintLevel builtin) const {
         auto it = lintLevels.find(name);
         auto level = (it != lintLevels.end() ? it->second : builtin);
         if (lintCap && level > *lintCap && level != CfgLintLevel::ForceWarn) {

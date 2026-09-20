@@ -59,7 +59,7 @@ public:
     HIRTypeInterner& types;
     ASTAttributeList attrs;
 
-    std::map<std::string, ASTAbsolutePath> langItems;
+    std::map<RcString, ASTAbsolutePath> langItems;
     std::set<RcString> features;
 
 public:

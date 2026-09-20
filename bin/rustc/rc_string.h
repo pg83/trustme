@@ -51,6 +51,10 @@ public:
         return id;
     }
 
+    static size_t internedCount();
+
+    static size_t internedBytes();
+
     Ordering ord(const char* s, size_t l) const;
 
     Ordering ord(const RcString& s) const;

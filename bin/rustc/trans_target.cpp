@@ -2216,7 +2216,7 @@ struct WireBoard::TargetLayoutContext {
         std::unique_ptr<TypeRepr> repr;
     };
 
-    std::unordered_map<std::string, CachedTypeRepr> encoded;
+    std::unordered_map<RcString, CachedTypeRepr> encoded;
     std::unordered_map<const HIRType*, std::unique_ptr<TypeRepr>> unencoded;
     std::unordered_map<const HIRType*, const TypeRepr*> exact;
 };
@@ -2626,7 +2626,7 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
         return rv;
     }
 
-    auto symbol = FMT(TransMangle(resolve.board(), ty));
+    auto symbol = RcString::newInterned(FMT(TransMangle(resolve.board(), ty)));
     auto existing = cache.encoded.find(symbol);
     if (existing != cache.encoded.end()) {
         ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equalsIgnoringRegions(ty), StringView("Distinct types have the same mangled name: ") << existing->second.canonical << StringView(" and ") << ty);

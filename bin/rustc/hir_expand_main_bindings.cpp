@@ -6941,7 +6941,7 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
     resolve.setImplGenericsRaw(MetadataType::Unknown, tr.params);
     HIRGenericPath traitPath(p.getSimplePath(), tr.params.makeNopParams(crate.types, 0));
 
-    std::unordered_map<std::string, unsigned int> assocTypeIndexes;
+    std::unordered_map<RcString, unsigned int> assocTypeIndexes;
 
     struct Foo {
         HIRTypeInterner& types;

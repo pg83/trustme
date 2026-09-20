@@ -47,6 +47,19 @@ namespace {
     }
 }
 
+size_t RcString::internedCount() {
+    return interner().strs.length();
+}
+
+size_t RcString::internedBytes() {
+    size_t rv = 0;
+    const auto& in = interner();
+    for (u32 i = 1; i < in.strs.length(); i++) {
+        rv += static_cast<size_t>(in.strs[i].end - in.strs[i].begin);
+    }
+    return rv;
+}
+
 RcString::RcString(const char* s, size_t len)
     : id(interner().intern(s, len))
 {

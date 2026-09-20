@@ -92,10 +92,10 @@ namespace {
         std::deque<TransListFunction*> fcnQueue;
         Vector<TransListFunction*> fcnsToTypeVisit;
 
-        std::set<std::string> emittedFunctions;
+        std::set<RcString> emittedFunctions;
         std::set<HIRPath> activePaths;
 
-        std::unordered_map<std::string, std::pair<HIRSimplePath, const HIRFunction*>> linkFunctions;
+        std::unordered_map<RcString, std::pair<HIRSimplePath, const HIRFunction*>> linkFunctions;
 
         EnumState(const WireBoard& wb);
 
@@ -837,7 +837,7 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
 
 template <typename T>
 static void removeMissing(const WireBoard& wb, std::map<HIRPath, T>& target, const std::map<HIRPath, T>& tpl) {
-    std::unordered_map<std::string, const HIRPath*> requiredSymbols;
+    std::unordered_map<RcString, const HIRPath*> requiredSymbols;
     for (const auto& entry : tpl) {
         auto symbol = FMT(TransMangleValue(wb, entry.first));
         auto inserted = requiredSymbols.emplace(mv$(symbol), &entry.first);
@@ -845,7 +845,7 @@ static void removeMissing(const WireBoard& wb, std::map<HIRPath, T>& target, con
     }
 
     for (auto itIn = target.begin(); itIn != target.end();) {
-        const auto symbol = FMT(TransMangleValue(wb, itIn->first));
+        const auto symbol = RcString::newInterned(FMT(TransMangleValue(wb, itIn->first)));
         const auto required = requiredSymbols.find(symbol);
         if (required == requiredSymbols.end()) {
             DEBUG(StringView("Remove ") << itIn->first);
@@ -1921,7 +1921,7 @@ static void TransEnumerateFillFromFunction(EnumState& state, const HIRPath& p, c
     TRACE_FUNCTION_F(StringView("Function ") << p << StringView(" pp=") << pp.ppImpl << StringView(" + ") << pp.ppMethod);
     if (!function.code.mir) {
         if (function.linkage.name != "") {
-            auto it = state.linkFunctions.find(function.linkage.name);
+            auto it = state.linkFunctions.find(RcString::newInterned(function.linkage.name));
             if (it != state.linkFunctions.end()) {
                 state.enumFcn(HIRPath(it->second.first), *it->second.second, TransParams(state.crate.types, pp.sp));
             }
@@ -3414,7 +3414,7 @@ EnumState::EnumState(const WireBoard& wb)
 
 auto EnumState::enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp) -> void {
     if (auto* e = rv.addFunction(crate.types, mv$(p))) {
-        auto name = FMT(TransMangleValue(resolve.board(), *e->path));
+        auto name = RcString::newInterned(FMT(TransMangleValue(resolve.board(), *e->path)));
         auto inserted = emittedFunctions.insert(name).second;
         ASSERT_BUG(Span(), inserted, StringView("Duplicated mangled name - ") << *e->path);
         fcnsToTypeVisit.pushBack(e);
@@ -3438,7 +3438,7 @@ auto EnumState::enumerateLinkFunctionsIn(const HIRModule& mod, HIRItemPath modPa
         if (const auto* ip = vi.second->ent.opt_Function()) {
             const auto& i = **ip;
             if (i.code.mir && i.linkage.name != "") {
-                linkFunctions[i.linkage.name] = std::make_pair((modPath + vi.first).getSimplePath(), &i);
+                linkFunctions[RcString::newInterned(i.linkage.name)] = std::make_pair((modPath + vi.first).getSimplePath(), &i);
             }
         }
     }

@@ -26,9 +26,9 @@ using namespace stl;
 
 struct Settings::CfgState {
     ObjPool* pool;
-    std::multimap<std::string, std::string> values;
-    std::map<std::string, CfgValueCallback*> valueFcns;
-    std::set<std::string> flags;
+    std::multimap<RcString, std::string> values;
+    std::map<RcString, CfgValueCallback*> valueFcns;
+    std::set<RcString> flags;
 
     explicit CfgState(ObjPool& pool);
 };
@@ -255,12 +255,12 @@ void CfgDump(const Settings& settings, ZeroCopyOutput& os) {
 
 void CfgSetFlag(Settings& settings, std::string name) {
     auto& cfg = *settings.cfg;
-    cfg.flags.insert(mv$(name));
+    cfg.flags.insert(RcString::newInterned(name));
 }
 
 void CfgSetValue(Settings& settings, std::string name, std::string val) {
     auto& cfg = *settings.cfg;
-    cfg.values.insert(std::make_pair(mv$(name), mv$(val)));
+    cfg.values.insert(std::make_pair(RcString::newInterned(name), mv$(val)));
 }
 
 void CfgSetValueCallback(Settings& settings, CfgString name, const CfgValueCallback& cb) {
@@ -280,11 +280,12 @@ bool CfgSetCheckSpec(Settings& settings, const std::string& spec, std::string& e
 }
 
 void CfgSetLintLevel(Settings& settings, std::string name, CfgLintLevel level) {
-    auto it = settings.lintLevels.find(name);
+    auto interned = RcString::newInterned(name);
+    auto it = settings.lintLevels.find(interned);
     if (it != settings.lintLevels.end() && it->second == CfgLintLevel::Forbid) {
         return;
     }
-    settings.lintLevels[std::move(name)] = level;
+    settings.lintLevels[interned] = level;
 }
 
 void CfgSetLintCap(Settings& settings, CfgLintLevel level) {

@@ -124,7 +124,7 @@ namespace {
         std::vector<std::string> nativeLibSearchDirs;
         std::vector<std::string> frameworkSearchDirs;
         Vector<const char*> libraries;
-        std::set<std::string> features;
+        std::set<RcString> features;
 
         struct {
             bool pause = false;
@@ -228,7 +228,7 @@ namespace {
             }
             CfgSetValue(*wb.settings, "fmt_debug", params.fmtDebug == Settings::FmtDebug::Shallow ? "shallow" : params.fmtDebug == Settings::FmtDebug::None ? "none" : "full");
             CfgSetValueCb(*wb.settings, "feature", [&params](const std::string& s) {
-                return params.features.count(s) != 0;
+                return params.features.count(RcString::newInterned(s)) != 0;
             });
         }
         {
@@ -915,6 +915,10 @@ int main(int argc, char* argv[]) {
     }
     pthread_join(thread, nullptr);
     pthread_attr_destroy(&attr);
+    if (std::getenv("TRUSTME_INTERN_STATS")) {
+        sysO << StringView("intern: count=") << RcString::internedCount()
+             << StringView(" bytes=") << RcString::internedBytes() << endL;
+    }
     return args.result;
 }
 
@@ -1438,7 +1442,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 CfgParseOption(cfgSpec, name, has_value, value);
                 if (has_value) {
                     if (name == "feature") {
-                        this->features.insert(value);
+                        this->features.insert(RcString::newInterned(value));
                     } else {
                         CfgSetValue(settings, mv$(name), mv$(value));
                     }

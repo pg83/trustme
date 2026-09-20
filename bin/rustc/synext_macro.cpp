@@ -1746,7 +1746,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         const auto& arch = TargetGetCurSpec(wb).arch.name;
         const bool isX86 = arch == "x86" || arch == "x86_64";
         const bool is64Bit = arch == "x86_64";
-        std::map<std::string, std::string> seen;
+        std::map<RcString, std::string> seen;
         for (const auto& param : params) {
             const AsmRegisterSpec* spec = nullptr;
             if (const auto* e = param.opt_Reg()) {
@@ -1790,7 +1790,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         const auto& arch = TargetGetCurSpec(wb).arch.name;
         const bool isX86 = arch == "x86" || arch == "x86_64";
         const bool is64Bit = arch == "x86_64";
-        std::set<std::string> explicitOutputs;
+        std::set<RcString> explicitOutputs;
         for (const auto& param : params) {
             const AsmRegisterSpec* spec = nullptr;
             if (const auto* e = param.opt_Reg()) {
@@ -1803,16 +1803,16 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                 }
             }
             if (spec && spec->is_Explicit()) {
-                explicitOutputs.insert(isX86 ? canonicalX86Register(spec->as_Explicit(), is64Bit) : spec->as_Explicit());
+                explicitOutputs.insert(RcString::newInterned(isX86 ? canonicalX86Register(spec->as_Explicit(), is64Bit) : spec->as_Explicit()));
             } else if (spec) {
                 ERROR(sp, E0000, StringView("asm with `clobber_abi` must specify explicit registers for outputs"));
             }
         }
 
-        std::set<std::string> added;
+        std::set<RcString> added;
         for (const auto& abi : clobberAbis) {
             for (auto reg : getClobberAbiRegisters(wb, sp, abi)) {
-                const auto canonical = isX86 ? canonicalX86Register(reg, is64Bit) : reg;
+                const auto canonical = RcString::newInterned(isX86 ? canonicalX86Register(reg, is64Bit) : reg);
                 if (explicitOutputs.count(canonical) || !added.insert(canonical).second) {
                     continue;
                 }

@@ -44,15 +44,6 @@ namespace {
         size_t deserialiseCount();
 
         template <typename V>
-        std::map<std::string, V> deserialiseStrmap();
-
-        template <typename V>
-        std::unordered_map<std::string, V> deserialiseStrumap();
-
-        template <typename V>
-        std::unordered_multimap<std::string, V> deserialiseStrummap();
-
-        template <typename V>
         std::map<RcString, V> deserialiseIstrmap();
 
         template <typename T>
@@ -448,7 +439,7 @@ namespace {
     };
 
     struct HirSerialiser {
-        std::map<std::string, size_t> types;
+        std::map<RcString, size_t> types;
         HIRSerialiseWriter& out;
         HIRTypeInterner& typeInterner;
 
@@ -460,22 +451,13 @@ namespace {
         void serialiseStrmap(const std::map<RcString, V>& map);
 
         template <typename V>
-        void serialiseStrmap(const std::map<std::string, V>& map);
-
-        template <typename V>
         void serialisePathmap(const std::map<HIRSimplePath, V>& map);
 
         template <typename V>
         void serialiseStrmap(const std::unordered_map<RcString, V>& map);
 
         template <typename V>
-        void serialiseStrmap(const std::unordered_map<std::string, V>& map);
-
-        template <typename V>
         void serialiseStrmap(const std::unordered_multimap<RcString, V>& map);
-
-        template <typename V>
-        void serialiseStrmap(const std::unordered_multimap<std::string, V>& map);
 
         template <typename T>
         void serialiseVec(const ThinVector<T>& vec);
@@ -1326,7 +1308,7 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     rv.markerImpls = deserialisePathmap<HIRCrate::ImplGroup<std::unique_ptr<HIRMarkerImpl>>>();
 
     rv.exportedMacroNames = deserialiseVector<::RcString>();
-    rv.langItems = deserialiseStrumap<HIRSimplePath>();
+    rv.langItems = deserialiseIstrumap<HIRSimplePath>();
 
     {
         size_t n = in.readCount();
@@ -1431,44 +1413,6 @@ auto HirDeserialiser::readU8() -> u8 {
 
 auto HirDeserialiser::deserialiseCount() -> size_t {
     return in.readCount();
-}
-
-template <typename V>
-auto HirDeserialiser::deserialiseStrmap() -> std::map<std::string, V> {
-    TRACE_FUNCTION_F(StringView("<") << typeid(V).name() << StringView(">"));
-    size_t n = in.readCount();
-    std::map<std::string, V> rv;
-    for (size_t i = 0; i < n; i++) {
-        auto s = in.readString();
-        rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
-    }
-    return rv;
-}
-
-template <typename V>
-auto HirDeserialiser::deserialiseStrumap() -> std::unordered_map<std::string, V> {
-    TRACE_FUNCTION_F(StringView("<") << typeid(V).name() << StringView(">"));
-    size_t n = in.readCount();
-    std::unordered_map<std::string, V> rv;
-    for (size_t i = 0; i < n; i++) {
-        auto s = in.readString();
-        DEBUG(StringView("- ") << s);
-        rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
-    }
-    return rv;
-}
-
-template <typename V>
-auto HirDeserialiser::deserialiseStrummap() -> std::unordered_multimap<std::string, V> {
-    TRACE_FUNCTION_F(StringView("<") << typeid(V).name() << StringView(">"));
-    size_t n = in.readCount();
-    std::unordered_multimap<std::string, V> rv;
-    for (size_t i = 0; i < n; i++) {
-        auto s = in.readString();
-        DEBUG(StringView("- ") << s);
-        rv.insert(std::make_pair(mv$(s), D<V>::des(*this)));
-    }
-    return rv;
 }
 
 template <typename V>
@@ -3108,15 +3052,6 @@ auto HirSerialiser::serialiseStrmap(const std::map<RcString, V>& map) -> void {
 }
 
 template <typename V>
-auto HirSerialiser::serialiseStrmap(const std::map<std::string, V>& map) -> void {
-    out.writeCount(map.size());
-    for (const auto& v : map) {
-        out.writeString(v.first);
-        serialise(v.second);
-    }
-}
-
-template <typename V>
 auto HirSerialiser::serialisePathmap(const std::map<HIRSimplePath, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
@@ -3136,28 +3071,9 @@ auto HirSerialiser::serialiseStrmap(const std::unordered_map<RcString, V>& map) 
 }
 
 template <typename V>
-auto HirSerialiser::serialiseStrmap(const std::unordered_map<std::string, V>& map) -> void {
-    out.writeCount(map.size());
-    for (const auto& v : map) {
-        out.writeString(v.first);
-        serialise(v.second);
-    }
-}
-
-template <typename V>
 auto HirSerialiser::serialiseStrmap(const std::unordered_multimap<RcString, V>& map) -> void {
     out.writeCount(map.size());
     for (const auto& v : map) {
-        out.writeString(v.first);
-        serialise(v.second);
-    }
-}
-
-template <typename V>
-auto HirSerialiser::serialiseStrmap(const std::unordered_multimap<std::string, V>& map) -> void {
-    out.writeCount(map.size());
-    for (const auto& v : map) {
-        DEBUG(StringView("- ") << v.first);
         out.writeString(v.first);
         serialise(v.second);
     }
@@ -3301,7 +3217,8 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
         tyStr = tyStr.substr(p + 1);
     }
 
-    auto it = types.find(tyStr);
+    auto interned = RcString::newInterned(tyStr);
+    auto it = types.find(interned);
     if (it != types.end()) {
         DEBUG(StringView("Cached ") << it->second);
         out.writeCount(it->second);
@@ -3418,7 +3335,7 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
             break;
     }
 
-    types.insert(std::make_pair(std::move(tyStr), types.size()));
+    types.insert(std::make_pair(interned, types.size()));
 }
 
 auto HirSerialiser::serialiseSimplepath(const HIRSimplePath& path) -> void {
