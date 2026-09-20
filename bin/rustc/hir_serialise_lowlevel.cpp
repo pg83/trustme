@@ -1,9 +1,9 @@
 #include "hir_serialise_lowlevel.h"
 
 #include "common.h"
-#include "output_file.h"
 
 #include <std/ios/fs_utils.h>
+#include <std/ios/out_fd.h>
 #include <std/sys/fd.h>
 #include <std/lib/buffer.h>
 #include <std/lib/vector.h>
@@ -24,18 +24,16 @@ namespace {
     const u8 TAG_OPEN_NAMED = 0xFD;
     const u8 TAG_OPEN_ANON = 0xFE;
     const u8 TAG_CLOSE = 0xFF;
-}
 
-struct WriterInner;
-
-namespace {
     struct WriterImpl final: public HIRSerialiseWriter {
-        WriterInner* inner;
+        Buffer path;
+        Buffer data;
+        bool recording;
         std::map<RcString, unsigned> istringCache;
         std::map<const char*, unsigned> objnameCache;
-        ObjPool& pool;
 
-        explicit WriterImpl(ObjPool& pool);
+        WriterImpl();
+        ~WriterImpl();
 
         void open(const std::string& filename) override;
         void write(const void* data, size_t count) override;
@@ -81,21 +79,16 @@ namespace {
     };
 }
 
-struct WriterInner {
-    ZeroCopyOutput* backing;
-    Buffer data;
-
-    WriterInner(ObjPool& pool, const std::string& filename);
-    ~WriterInner();
-};
-
-WriterInner::WriterInner(ObjPool& pool, const std::string& filename)
-    : backing(outputFile(pool, filename.c_str()))
-    , data()
+WriterImpl::WriterImpl()
+    : recording(false)
 {
 }
 
-WriterInner::~WriterInner() {
+WriterImpl::~WriterImpl() {
+    if (!recording) {
+        return;
+    }
+
     Buffer packed(ZSTD_compressBound(data.length()));
     auto len = ZSTD_compress(packed.mutData(), packed.capacity(), data.data(), data.length(), COMPRESSION_LEVEL);
 
@@ -104,14 +97,13 @@ WriterInner::~WriterInner() {
         abort();
     }
 
-    backing->write(packed.data(), len);
-    backing->finish();
-}
+    ScopedFD fd(::open(path.cStr(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666));
+    if (fd.get() < 0) {
+        sysE << StringView("ERROR: can not open ") << path.cStr() << endL;
+        abort();
+    }
 
-WriterImpl::WriterImpl(ObjPool& pool)
-    : inner(nullptr)
-    , pool(pool)
-{
+    FDOutput(fd).writeC(packed.data(), len);
 }
 
 void WriterImpl::open(const std::string& filename) {
@@ -126,7 +118,9 @@ void WriterImpl::open(const std::string& filename) {
 
     objnameCache.clear();
 
-    inner = pool.make<WriterInner>(pool, filename);
+    path = Buffer(StringView(filename.c_str()));
+    recording = true;
+
     this->writeCount(sorted.size());
     for (size_t i = 0; i < sorted.size(); i++) {
         const auto& s = sorted[i].first;
@@ -140,8 +134,8 @@ void WriterImpl::open(const std::string& filename) {
 }
 
 void WriterImpl::write(const void* data, size_t count) {
-    if (inner) {
-        inner->data.append(data, count);
+    if (recording) {
+        this->data.append(data, count);
     }
 }
 
@@ -182,7 +176,7 @@ void WriterImpl::writeCount(size_t c) {
 }
 
 void WriterImpl::writeString(const RcString& v) {
-    if (inner) {
+    if (recording) {
         this->writeCount(istringCache.at(v));
     } else {
         istringCache.insert(std::make_pair(v, 0)).first->second += 1;
@@ -413,7 +407,7 @@ void HIRSerialiseWriter::closeObject() {
 }
 
 HIRSerialiseWriter* HIRSerialiseWriter::create(ObjPool& pool) {
-    return pool.make<WriterImpl>(pool);
+    return pool.make<WriterImpl>();
 }
 
 i64 HIRSerialiseReader::readI64() {
