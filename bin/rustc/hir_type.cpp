@@ -467,6 +467,9 @@ namespace {
                 if (e.path.data.is_UfcsKnown() && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
                     flags |= HIRType::HAS_ASSOCIATED_TYPE;
                 }
+                if (e.path.data.is_UfcsInherent() || e.path.data.is_UfcsUnknown()) {
+                    flags |= HIRType::HAS_INHERENT_PROJECTION;
+                }
                 break;
             }
             case HIRType::TAG_Generic: {

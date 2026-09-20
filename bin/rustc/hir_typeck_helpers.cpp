@@ -4645,6 +4645,10 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
         }
     };
 
+    if (!input->needsNormalisation()) {
+        return input;
+    }
+
     auto data = input->cloneData();
     switch (data.tag()) {
         case HIRType::TAG_Infer: {

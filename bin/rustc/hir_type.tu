@@ -49,6 +49,7 @@ generate(
         enum HIRTypeFlags : u32 {
             HAS_TYPE_INFER = 1u << 0,
             HAS_TYPE_PARAM = 1u << 1,
+            HAS_INHERENT_PROJECTION = 1u << 2,
             HAS_UNEVALUATED_CONST = 1u << 3,
             HAS_ASSOCIATED_TYPE = 1u << 4,
             HAS_DEFERRED_CONST = 1u << 5,
@@ -63,6 +64,9 @@ generate(
         }
         bool mayHaveAssociatedType() const {
             return flags & (HAS_ASSOCIATED_TYPE | HAS_TYPE_INFER);
+        }
+        bool needsNormalisation() const {
+            return flags & (HAS_ASSOCIATED_TYPE | HAS_TYPE_INFER | HAS_INHERENT_PROJECTION | HAS_UNEVALUATED_CONST | HAS_DEFERRED_CONST);
         }
 
         HIRType cloneData() const;
