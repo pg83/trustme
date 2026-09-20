@@ -52,6 +52,16 @@
 
 using namespace stl;
 
+#ifndef __has_feature
+    #define __has_feature(x) 0
+#endif
+
+#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)
+    #define TRUSTME_SANITIZER_BUILD 1
+#else
+    #define TRUSTME_SANITIZER_BUILD 0
+#endif
+
 #define NEWNODE(ty, ...) makeAstExprNode<ASTExprNode##ty>(*crate.pool __VA_OPT__(, ) __VA_ARGS__)
 
 namespace {
@@ -886,16 +896,6 @@ void ExpandTestHarness(ASTCrate& crate) {
 }
 
 #undef NEWNODE
-
-#ifndef __has_feature
-    #define __has_feature(x) 0
-#endif
-
-#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)
-    #define TRUSTME_SANITIZER_BUILD 1
-#else
-    #define TRUSTME_SANITIZER_BUILD 0
-#endif
 
 int main(int argc, char* argv[]) {
     size_t stackSize = 1024u * 1024 * 1024;
