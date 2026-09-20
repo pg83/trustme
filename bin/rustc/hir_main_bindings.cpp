@@ -1335,7 +1335,8 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
 
 HIRCrate* HIRDeserialise(u32& id, ObjPool* pool, HIRTypeInterner& types, const std::string& filename) {
     {
-        HIRSerialiseReader in{metadataFilename(filename)};
+        auto readerPool = ObjPool::fromMemory();
+        auto& in = *HIRSerialiseReader::create(*readerPool.mutPtr(), metadataFilename(filename));
         HirDeserialiser s{id, *pool, in, types};
 
         auto* rv = pool->make<HIRCrate>(pool, types);
@@ -1346,7 +1347,8 @@ HIRCrate* HIRDeserialise(u32& id, ObjPool* pool, HIRTypeInterner& types, const s
 
 RcString HIRDeserialiseJustName(const std::string& filename) {
     {
-        HIRSerialiseReader in{metadataFilename(filename)};
+        auto readerPool = ObjPool::fromMemory();
+        auto& in = *HIRSerialiseReader::create(*readerPool.mutPtr(), metadataFilename(filename));
 
         auto crateName = in.readIstring();
         BUG_ASSERT(crateName != "" && "Empty crate name loaded from metadata");
@@ -1379,11 +1381,12 @@ void HIRDumpExpr(ZeroCopyOutput& sink, HIRExprPtr& expr) {
 #undef NODE_IS
 
 void HIRSerialise(const std::string& filename, const HIRCrate& crate) {
-    HIRSerialiseWriter out;
+    auto writerPool = ObjPool::fromMemory();
+    auto& out = *HIRSerialiseWriter::create(*writerPool.mutPtr());
     HirSerialiser s{out, crate.types};
     s.serialiseCrate(crate);
     s.clear();
-    out.open(*crate.pool, filename);
+    out.open(filename);
     s.serialiseCrate(crate);
 }
 

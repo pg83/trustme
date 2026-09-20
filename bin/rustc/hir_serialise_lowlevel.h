@@ -4,200 +4,88 @@
 #include "int128.h"
 #include "rc_string.h"
 
-#include <std/lib/vector.h>
-
-#include <map>
 #include <string>
-#include <vector>
 #include <stddef.h>
 
 namespace stl {
     class ObjPool;
 }
 
-class HIRSerialiseWriter {
-    class Inner;
-
-    Inner* inner;
-    std::map<RcString, unsigned> istringCache;
-    std::map<const char*, unsigned> objnameCache;
-
-public:
-    HIRSerialiseWriter();
-    HIRSerialiseWriter(const HIRSerialiseWriter&) = delete;
-    HIRSerialiseWriter(HIRSerialiseWriter&&) = delete;
-    ~HIRSerialiseWriter();
-
-    void open(stl::ObjPool& pool, const std::string& filename);
-    void write(const void* data, size_t count);
-
-    void writeU8(u8 v) {
-        write(reinterpret_cast<const char*>(&v), 1);
-    }
-
-    void writeU16(u16 v);
-
-    void writeU32(u32 v);
-
-    void writeU64(u64 v);
-
-    void writeI64(i64 v) {
-        writeU64(static_cast<u64>(v));
-    }
-
-    void writeU64c(u64 v);
-
-    void writeI64c(i64 v);
-
-    void writeU128(U128 v);
-
-    void writeI128(S128 v) {
-        writeU128(v.getInner());
-    }
-
-    void writeDouble(double v);
-
-    void writeFloatValue(FloatValue value);
-
-    void writeTag(unsigned int t);
-
-    void writeCount(size_t c);
-
-    void writeString(const RcString& v);
-
-    void writeString(size_t len, const char* s);
-
-    void writeString(const std::string& v) {
-        writeString(v.size(), v.c_str());
-    }
-
-    void writeBool(bool v);
-
-    void rawWriteUint(u64 val);
-
-    void rawWriteLen(size_t len);
-
-    void rawWriteBytes(size_t len, const void* data);
-
-    class CloseOnDrop {
-        friend class HIRSerialiseWriter;
+struct HIRSerialiseWriter {
+    struct CloseOnDrop {
         HIRSerialiseWriter* r;
 
-        CloseOnDrop(HIRSerialiseWriter& r);
-
-    public:
+        explicit CloseOnDrop(HIRSerialiseWriter& r);
+        CloseOnDrop(const CloseOnDrop&) = delete;
         CloseOnDrop(CloseOnDrop&& x);
-
         ~CloseOnDrop();
     };
 
-    CloseOnDrop openObject(const char* name);
+    virtual void open(const std::string& filename) = 0;
+    virtual void write(const void* data, size_t count) = 0;
+    virtual void writeU16(u16 v) = 0;
+    virtual void writeU32(u32 v) = 0;
+    virtual void writeU64(u64 v) = 0;
+    virtual void writeU64c(u64 v) = 0;
+    virtual void writeI64c(i64 v) = 0;
+    virtual void writeU128(U128 v) = 0;
+    virtual void writeDouble(double v) = 0;
+    virtual void writeFloatValue(FloatValue value) = 0;
+    virtual void writeTag(unsigned int t) = 0;
+    virtual void writeCount(size_t c) = 0;
+    virtual void writeString(const RcString& v) = 0;
+    virtual void writeString(size_t len, const char* s) = 0;
+    virtual void writeBool(bool v) = 0;
+    virtual void rawWriteUint(u64 val) = 0;
+    virtual void rawWriteLen(size_t len) = 0;
+    virtual void rawWriteBytes(size_t len, const void* data) = 0;
+    virtual CloseOnDrop openObject(const char* name) = 0;
+    virtual CloseOnDrop openAnonObject() = 0;
 
-    CloseOnDrop openAnonObject();
+    void writeU8(u8 v);
+    void writeI64(i64 v);
+    void writeI128(S128 v);
+    void writeString(const std::string& v);
+    void closeObject();
 
-    void closeObject() {
-        writeU8(0xFF);
-    }
+    static HIRSerialiseWriter* create(stl::ObjPool& pool);
 };
 
-class HIRSerialiseReader {
-    class Inner;
-
-    class Buffer {
-        stl::Vector<u8> backing;
-        unsigned int ofs;
-
-    public:
-        Buffer(size_t size);
-
-        size_t capacity() const {
-            return backing.capacity();
-        }
-
-        size_t read(void* dst, size_t len);
-        void populate(Inner& is);
-    };
-
-    Inner* inner;
-    Buffer buffer;
-    size_t pos;
-    stl::Vector<RcString> strings;
-
-    std::vector<std::string> objnameCache;
-
-public:
-    HIRSerialiseReader(const std::string& path);
-    HIRSerialiseReader(const HIRSerialiseWriter&) = delete;
-    HIRSerialiseReader(HIRSerialiseWriter&&) = delete;
-    ~HIRSerialiseReader();
-
-    size_t getPos() const {
-        return pos;
-    }
-
-    void read(void* dst, size_t count);
-
-    u8 readU8();
-
-    u16 readU16();
-
-    u32 readU32();
-
-    u64 readU64();
-
-    i64 readI64() {
-        return static_cast<i64>(readU64());
-    }
-
-    U128 readU128();
-
-    S128 readI128() {
-        return S128(readU128());
-    }
-
-    u64 readU64c();
-
-    i64 readI64c();
-
-    double readDouble();
-
-    FloatValue readFloatValue();
-
-    unsigned int readTag() {
-        return static_cast<unsigned int>(readU8());
-    }
-
-    size_t readCount();
-
-    RcString readIstring();
-
-    std::string readString();
-
-    bool readBool();
-
-    u64 rawReadUint();
-
-    size_t rawReadLen();
-
-    std::string rawReadBytesStdstring();
-
-    class CloseOnDrop {
-        friend class HIRSerialiseReader;
+struct HIRSerialiseReader {
+    struct CloseOnDrop {
         HIRSerialiseReader* r;
 
-        CloseOnDrop(HIRSerialiseReader& r);
-
-    public:
+        explicit CloseOnDrop(HIRSerialiseReader& r);
         CloseOnDrop(const CloseOnDrop&) = delete;
-
         CloseOnDrop(CloseOnDrop&& x);
-
         ~CloseOnDrop();
     };
 
-    CloseOnDrop openObject(const char* name);
+    virtual size_t getPos() const = 0;
+    virtual void read(void* dst, size_t count) = 0;
+    virtual u8 readU8() = 0;
+    virtual u16 readU16() = 0;
+    virtual u32 readU32() = 0;
+    virtual u64 readU64() = 0;
+    virtual U128 readU128() = 0;
+    virtual u64 readU64c() = 0;
+    virtual i64 readI64c() = 0;
+    virtual double readDouble() = 0;
+    virtual FloatValue readFloatValue() = 0;
+    virtual size_t readCount() = 0;
+    virtual RcString readIstring() = 0;
+    virtual std::string readString() = 0;
+    virtual bool readBool() = 0;
+    virtual u64 rawReadUint() = 0;
+    virtual size_t rawReadLen() = 0;
+    virtual std::string rawReadBytesStdstring() = 0;
+    virtual CloseOnDrop openObject(const char* name) = 0;
+    virtual CloseOnDrop openAnonObject() = 0;
+    virtual void closeObject() = 0;
 
-    CloseOnDrop openAnonObject();
+    i64 readI64();
+    S128 readI128();
+    unsigned int readTag();
 
-    void closeObject();
+    static HIRSerialiseReader* create(stl::ObjPool& pool, const std::string& path);
 };

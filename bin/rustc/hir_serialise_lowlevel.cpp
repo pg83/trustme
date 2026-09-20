@@ -4,16 +4,100 @@
 #include "output_file.h"
 
 #include <std/lib/vector.h>
+#include <std/mem/obj_pool.h>
 
 #define ZLIB_CONST
 #include <zlib.h>
 #include <fstream>
+#include <map>
+#include <vector>
 #include <string.h>
 #include <algorithm>
 
 using namespace stl;
 
-struct HIRSerialiseWriter::Inner {
+struct WriterInner;
+struct ReaderInner;
+
+namespace {
+    struct WriterImpl final: public HIRSerialiseWriter {
+        WriterInner* inner;
+        std::map<RcString, unsigned> istringCache;
+        std::map<const char*, unsigned> objnameCache;
+        ObjPool& pool;
+
+        explicit WriterImpl(ObjPool& pool);
+
+        void open(const std::string& filename) override;
+        void write(const void* data, size_t count) override;
+        void writeU16(u16 v) override;
+        void writeU32(u32 v) override;
+        void writeU64(u64 v) override;
+        void writeU64c(u64 v) override;
+        void writeI64c(i64 v) override;
+        void writeU128(U128 v) override;
+        void writeDouble(double v) override;
+        void writeFloatValue(FloatValue value) override;
+        void writeTag(unsigned int t) override;
+        void writeCount(size_t c) override;
+        void writeString(const RcString& v) override;
+        void writeString(size_t len, const char* s) override;
+        void writeBool(bool v) override;
+        void rawWriteUint(u64 val) override;
+        void rawWriteLen(size_t len) override;
+        void rawWriteBytes(size_t len, const void* data) override;
+        CloseOnDrop openObject(const char* name) override;
+        CloseOnDrop openAnonObject() override;
+    };
+
+    struct ReaderBuffer {
+        Vector<u8> backing;
+        unsigned int ofs;
+
+        explicit ReaderBuffer(size_t size);
+
+        size_t capacity() const {
+            return backing.capacity();
+        }
+
+        size_t read(void* dst, size_t len);
+        void populate(ReaderInner& is);
+    };
+
+    struct ReaderImpl final: public HIRSerialiseReader {
+        ReaderInner* inner;
+        ReaderBuffer buffer;
+        size_t pos;
+        Vector<RcString> strings;
+        std::vector<std::string> objnameCache;
+
+        ReaderImpl(ObjPool& pool, const std::string& path);
+
+        size_t getPos() const override;
+        void read(void* dst, size_t count) override;
+        u8 readU8() override;
+        u16 readU16() override;
+        u32 readU32() override;
+        u64 readU64() override;
+        U128 readU128() override;
+        u64 readU64c() override;
+        i64 readI64c() override;
+        double readDouble() override;
+        FloatValue readFloatValue() override;
+        size_t readCount() override;
+        RcString readIstring() override;
+        std::string readString() override;
+        bool readBool() override;
+        u64 rawReadUint() override;
+        size_t rawReadLen() override;
+        std::string rawReadBytesStdstring() override;
+        CloseOnDrop openObject(const char* name) override;
+        CloseOnDrop openAnonObject() override;
+        void closeObject() override;
+    };
+}
+
+struct WriterInner {
     ZeroCopyOutput* backing;
     z_stream zstream;
     Vector<unsigned char> buffer;
@@ -21,12 +105,12 @@ struct HIRSerialiseWriter::Inner {
     unsigned int byteOutCount = 0;
     unsigned int byteInCount = 0;
 
-    Inner(ObjPool& pool, const std::string& filename);
-    ~Inner();
+    WriterInner(ObjPool& pool, const std::string& filename);
+    ~WriterInner();
     void write(const void* buf, size_t len);
 };
 
-struct HIRSerialiseReader::Inner {
+struct ReaderInner {
     std::ifstream backing;
     z_stream zstream;
     Vector<unsigned char> buffer;
@@ -34,21 +118,18 @@ struct HIRSerialiseReader::Inner {
     unsigned int byteOutCount = 0;
     unsigned int byteInCount = 0;
 
-    Inner(const std::string& filename);
-    ~Inner();
+    ReaderInner(const std::string& filename);
+    ~ReaderInner();
     size_t read(void* buf, size_t len);
 };
 
-HIRSerialiseWriter::HIRSerialiseWriter()
+WriterImpl::WriterImpl(ObjPool& pool)
     : inner(nullptr)
+    , pool(pool)
 {
 }
 
-HIRSerialiseWriter::~HIRSerialiseWriter() {
-    delete inner, inner = nullptr;
-}
-
-void HIRSerialiseWriter::open(ObjPool& pool, const std::string& filename) {
+void WriterImpl::open(const std::string& filename) {
     std::vector<std::pair<RcString, unsigned>> sorted;
     sorted.reserve(istringCache.size());
     for (const auto& e : istringCache) {
@@ -60,7 +141,7 @@ void HIRSerialiseWriter::open(ObjPool& pool, const std::string& filename) {
 
     objnameCache.clear();
 
-    inner = new Inner(pool, filename);
+    inner = pool.make<WriterInner>(pool, filename);
     this->writeCount(sorted.size());
     for (size_t i = 0; i < sorted.size(); i++) {
         const auto& s = sorted[i].first;
@@ -73,7 +154,7 @@ void HIRSerialiseWriter::open(ObjPool& pool, const std::string& filename) {
     }
 }
 
-void HIRSerialiseWriter::write(const void* buf, size_t len) {
+void WriterImpl::write(const void* buf, size_t len) {
     if (inner) {
         DEBUG(StringView("write(") << FMT_CB(ss, for (size_t i = 0; i < len; i++) ss << formatHex(unsigned(((const u8*)buf)[i]), 2)) << StringView(")"));
         inner->write(buf, len);
@@ -81,7 +162,7 @@ void HIRSerialiseWriter::write(const void* buf, size_t len) {
     }
 }
 
-void HIRSerialiseWriter::writeString(const RcString& v) {
+void WriterImpl::writeString(const RcString& v) {
     if (inner) {
         this->writeCount(istringCache.at(v));
     } else {
@@ -89,7 +170,7 @@ void HIRSerialiseWriter::writeString(const RcString& v) {
     }
 }
 
-HIRSerialiseWriter::Inner::Inner(ObjPool& pool, const std::string& filename)
+WriterInner::WriterInner(ObjPool& pool, const std::string& filename)
     : backing(outputFile(pool, filename.c_str()))
     , zstream()
     , buffer()
@@ -109,7 +190,7 @@ HIRSerialiseWriter::Inner::Inner(ObjPool& pool, const std::string& filename)
     zstream.next_out = buffer.mutData();
 }
 
-HIRSerialiseWriter::Inner::~Inner() {
+WriterInner::~WriterInner() {
     BUG_ASSERT(zstream.avail_in == 0);
 
     int ret;
@@ -132,7 +213,7 @@ HIRSerialiseWriter::Inner::~Inner() {
     backing->finish();
 }
 
-void HIRSerialiseWriter::Inner::write(const void* buf, size_t len) {
+void WriterInner::write(const void* buf, size_t len) {
     zstream.avail_in = len;
     zstream.next_in = static_cast<const unsigned char*>(buf);
 
@@ -175,13 +256,13 @@ void HIRSerialiseWriter::Inner::write(const void* buf, size_t len) {
     }
 }
 
-HIRSerialiseReader::Buffer::Buffer(size_t cap)
+ReaderBuffer::ReaderBuffer(size_t cap)
     : backing(cap)
     , ofs(0)
 {
 }
 
-size_t HIRSerialiseReader::Buffer::read(void* dst, size_t len) {
+size_t ReaderBuffer::read(void* dst, size_t len) {
     size_t rem = backing.length() - ofs;
     if (rem >= len) {
         memcpy(dst, backing.data() + ofs, len);
@@ -194,7 +275,7 @@ size_t HIRSerialiseReader::Buffer::read(void* dst, size_t len) {
     }
 }
 
-void HIRSerialiseReader::Buffer::populate(Inner& is) {
+void ReaderBuffer::populate(ReaderInner& is) {
     backing.zero(backing.capacity());
     auto len = is.read(backing.mutData(), backing.length());
     while (backing.length() > len) {
@@ -203,8 +284,8 @@ void HIRSerialiseReader::Buffer::populate(Inner& is) {
     ofs = 0;
 }
 
-HIRSerialiseReader::HIRSerialiseReader(const std::string& filename)
-    : inner(new Inner(filename))
+ReaderImpl::ReaderImpl(ObjPool& pool, const std::string& filename)
+    : inner(pool.make<ReaderInner>(filename))
     , buffer(1024)
     , pos(0)
 {
@@ -217,11 +298,11 @@ HIRSerialiseReader::HIRSerialiseReader(const std::string& filename)
     }
 }
 
-HIRSerialiseReader::~HIRSerialiseReader() {
-    delete inner, inner = nullptr;
+size_t ReaderImpl::getPos() const {
+    return pos;
 }
 
-void HIRSerialiseReader::read(void* buf, size_t len) {
+void ReaderImpl::read(void* buf, size_t len) {
     auto used = buffer.read(buf, len);
     if (used == len) {
         pos += len;
@@ -243,7 +324,7 @@ void HIRSerialiseReader::read(void* buf, size_t len) {
     pos += len;
 }
 
-HIRSerialiseReader::Inner::Inner(const std::string& filename)
+ReaderInner::ReaderInner(const std::string& filename)
     : backing(filename, std::ios_base::in | std::ios_base::binary)
     , zstream()
     , buffer()
@@ -265,11 +346,11 @@ HIRSerialiseReader::Inner::Inner(const std::string& filename)
     zstream.avail_in = 0;
 }
 
-HIRSerialiseReader::Inner::~Inner() {
+ReaderInner::~ReaderInner() {
     inflateEnd(&zstream);
 }
 
-size_t HIRSerialiseReader::Inner::read(void* buf, size_t len) {
+size_t ReaderInner::read(void* buf, size_t len) {
     zstream.avail_out = len;
     zstream.next_out = reinterpret_cast<unsigned char*>(buf);
     do {
@@ -304,22 +385,22 @@ size_t HIRSerialiseReader::Inner::read(void* buf, size_t len) {
     return len;
 }
 
-void HIRSerialiseWriter::writeU16(u16 v) {
+void WriterImpl::writeU16(u16 v) {
     u8 buf[] = {static_cast<u8>(v & 0xFF), static_cast<u8>(v >> 8)};
     this->write(buf, 2);
 }
 
-void HIRSerialiseWriter::writeU32(u32 v) {
+void WriterImpl::writeU32(u32 v) {
     u8 buf[] = {static_cast<u8>(v & 0xFF), static_cast<u8>(v >> 8), static_cast<u8>(v >> 16), static_cast<u8>(v >> 24)};
     this->write(buf, 4);
 }
 
-void HIRSerialiseWriter::writeU64(u64 v) {
+void WriterImpl::writeU64(u64 v) {
     u8 buf[] = {static_cast<u8>(v & 0xFF), static_cast<u8>(v >> 8), static_cast<u8>(v >> 16), static_cast<u8>(v >> 24), static_cast<u8>(v >> 32), static_cast<u8>(v >> 40), static_cast<u8>(v >> 48), static_cast<u8>(v >> 56)};
     this->write(buf, 8);
 }
 
-void HIRSerialiseWriter::writeU64c(u64 v) {
+void WriterImpl::writeU64c(u64 v) {
     if (v < (1 << 7)) {
         writeU8(static_cast<u8>(v));
     } else if (v < (1 << (6 + 16))) {
@@ -334,7 +415,7 @@ void HIRSerialiseWriter::writeU64c(u64 v) {
     }
 }
 
-void HIRSerialiseWriter::writeI64c(i64 v) {
+void WriterImpl::writeI64c(i64 v) {
     bool sign = (v < 0);
     u64 va = (v < 0 ? -v : v);
     va <<= 1;
@@ -342,27 +423,27 @@ void HIRSerialiseWriter::writeI64c(i64 v) {
     writeU64c(va);
 }
 
-void HIRSerialiseWriter::writeU128(U128 v) {
+void WriterImpl::writeU128(U128 v) {
     writeU64(v.getLo());
     writeU64(v.getHi());
 }
 
-void HIRSerialiseWriter::writeDouble(double v) {
+void WriterImpl::writeDouble(double v) {
     this->write(&v, sizeof v);
 }
 
-void HIRSerialiseWriter::writeFloatValue(FloatValue value) {
+void WriterImpl::writeFloatValue(FloatValue value) {
     auto encoded = F128(value);
     writeU64(encoded.lo);
     writeU64(encoded.hi);
 }
 
-void HIRSerialiseWriter::writeTag(unsigned int t) {
+void WriterImpl::writeTag(unsigned int t) {
     BUG_ASSERT(t < 256);
     writeU8(static_cast<u8>(t));
 }
 
-void HIRSerialiseWriter::writeCount(size_t c) {
+void WriterImpl::writeCount(size_t c) {
     DEBUG(c);
     if (c < 0xFD) {
         writeU8(static_cast<u8>(c));
@@ -378,7 +459,7 @@ void HIRSerialiseWriter::writeCount(size_t c) {
     }
 }
 
-void HIRSerialiseWriter::writeString(size_t len, const char* s) {
+void WriterImpl::writeString(size_t len, const char* s) {
     TRACE_FUNCTION;
     if (len < 128) {
         writeU8(static_cast<u8>(len));
@@ -390,12 +471,12 @@ void HIRSerialiseWriter::writeString(size_t len, const char* s) {
     this->write(s, len);
 }
 
-void HIRSerialiseWriter::writeBool(bool v) {
+void WriterImpl::writeBool(bool v) {
     TRACE_FUNCTION_F(v);
     writeU8(v ? 0xFF : 0x00);
 }
 
-void HIRSerialiseWriter::rawWriteUint(u64 val) {
+void WriterImpl::rawWriteUint(u64 val) {
     if (val < 0xC0) {
         writeU8(static_cast<u8>(val));
     } else {
@@ -412,7 +493,7 @@ void HIRSerialiseWriter::rawWriteUint(u64 val) {
     }
 }
 
-void HIRSerialiseWriter::rawWriteLen(size_t len) {
+void WriterImpl::rawWriteLen(size_t len) {
     if (len < (0xFC - 0xC0)) {
         writeU8(0xC0 + len);
     } else {
@@ -421,7 +502,7 @@ void HIRSerialiseWriter::rawWriteLen(size_t len) {
     }
 }
 
-void HIRSerialiseWriter::rawWriteBytes(size_t len, const void* data) {
+void WriterImpl::rawWriteBytes(size_t len, const void* data) {
     rawWriteLen(len);
     this->write(data, len);
 }
@@ -444,7 +525,7 @@ HIRSerialiseWriter::CloseOnDrop::~CloseOnDrop() {
     r = nullptr;
 }
 
-HIRSerialiseWriter::CloseOnDrop HIRSerialiseWriter::openObject(const char* name) {
+HIRSerialiseWriter::CloseOnDrop WriterImpl::openObject(const char* name) {
     writeU8(0xFD);
     auto iv = objnameCache.insert(std::make_pair(name, static_cast<unsigned>(objnameCache.size())));
     rawWriteUint(iv.first->second);
@@ -454,42 +535,42 @@ HIRSerialiseWriter::CloseOnDrop HIRSerialiseWriter::openObject(const char* name)
     return CloseOnDrop(*this);
 }
 
-HIRSerialiseWriter::CloseOnDrop HIRSerialiseWriter::openAnonObject() {
+HIRSerialiseWriter::CloseOnDrop WriterImpl::openAnonObject() {
     writeU8(0xFE);
     return CloseOnDrop(*this);
 }
 
-u8 HIRSerialiseReader::readU8() {
+u8 ReaderImpl::readU8() {
     u8 v;
     read(&v, sizeof v);
     return v;
 }
 
-u16 HIRSerialiseReader::readU16() {
+u16 ReaderImpl::readU16() {
     u8 buf[2];
     read(buf, sizeof buf);
     return static_cast<u16>(buf[0]) | (static_cast<u16>(buf[1]) << 8);
 }
 
-u32 HIRSerialiseReader::readU32() {
+u32 ReaderImpl::readU32() {
     u8 buf[4];
     read(buf, sizeof buf);
     return static_cast<u32>(buf[0]) | (static_cast<u32>(buf[1]) << 8) | (static_cast<u32>(buf[2]) << 16) | (static_cast<u32>(buf[3]) << 24);
 }
 
-u64 HIRSerialiseReader::readU64() {
+u64 ReaderImpl::readU64() {
     u8 buf[8];
     read(buf, sizeof buf);
     return static_cast<u64>(buf[0]) | (static_cast<u64>(buf[1]) << 8) | (static_cast<u64>(buf[2]) << 16) | (static_cast<u64>(buf[3]) << 24) | (static_cast<u64>(buf[4]) << 32) | (static_cast<u64>(buf[5]) << 40) | (static_cast<u64>(buf[6]) << 48) | (static_cast<u64>(buf[7]) << 56);
 }
 
-U128 HIRSerialiseReader::readU128() {
+U128 ReaderImpl::readU128() {
     auto lo = readU64();
     auto hi = readU64();
     return U128(lo, hi);
 }
 
-u64 HIRSerialiseReader::readU64c() {
+u64 ReaderImpl::readU64c() {
     auto v = readU8();
     if (v < (1 << 7)) {
         return static_cast<u64>(v);
@@ -510,7 +591,7 @@ u64 HIRSerialiseReader::readU64c() {
     }
 }
 
-i64 HIRSerialiseReader::readI64c() {
+i64 ReaderImpl::readI64c() {
     u64 va = readU64c();
     bool sign = (va & 0x1) != 0;
     va >>= 1;
@@ -524,20 +605,20 @@ i64 HIRSerialiseReader::readI64c() {
     }
 }
 
-double HIRSerialiseReader::readDouble() {
+double ReaderImpl::readDouble() {
     double v;
     read(reinterpret_cast<char*>(&v), sizeof v);
     return v;
 }
 
-FloatValue HIRSerialiseReader::readFloatValue() {
+FloatValue ReaderImpl::readFloatValue() {
     F128 encoded;
     encoded.lo = readU64();
     encoded.hi = readU64();
     return encoded;
 }
 
-size_t HIRSerialiseReader::readCount() {
+size_t ReaderImpl::readCount() {
     size_t rv;
     auto v = readU8();
     if (v < 0xFD) {
@@ -553,12 +634,12 @@ size_t HIRSerialiseReader::readCount() {
     return rv;
 }
 
-RcString HIRSerialiseReader::readIstring() {
+RcString ReaderImpl::readIstring() {
     size_t idx = readCount();
     return strings[idx];
 }
 
-std::string HIRSerialiseReader::readString() {
+std::string ReaderImpl::readString() {
     size_t len = readU8();
     if (len < 128) {
     } else {
@@ -570,7 +651,7 @@ std::string HIRSerialiseReader::readString() {
     return rv;
 }
 
-bool HIRSerialiseReader::readBool() {
+bool ReaderImpl::readBool() {
     auto v = readU8();
     switch (v) {
         case 0:
@@ -583,7 +664,7 @@ bool HIRSerialiseReader::readBool() {
     }
 }
 
-u64 HIRSerialiseReader::rawReadUint() {
+u64 ReaderImpl::rawReadUint() {
     auto v = readU8();
     BUG_ASSERT(v <= 0xC0 + 8);
     if (v < 0xC0) {
@@ -598,7 +679,7 @@ u64 HIRSerialiseReader::rawReadUint() {
     }
 }
 
-size_t HIRSerialiseReader::rawReadLen() {
+size_t ReaderImpl::rawReadLen() {
     auto v = readU8();
     if (v < 0xC0) {
         sysE << StringView("Expected length, got literal integer ") << unsigned(v) << endL;
@@ -613,7 +694,7 @@ size_t HIRSerialiseReader::rawReadLen() {
     }
 }
 
-std::string HIRSerialiseReader::rawReadBytesStdstring() {
+std::string ReaderImpl::rawReadBytesStdstring() {
     auto len = rawReadLen();
     std::string rv(len, '\0');
     read(rv.data(), len);
@@ -638,7 +719,7 @@ HIRSerialiseReader::CloseOnDrop::~CloseOnDrop() {
     r = nullptr;
 }
 
-HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openObject(const char* name) {
+HIRSerialiseReader::CloseOnDrop ReaderImpl::openObject(const char* name) {
     auto v = readU8();
     if (v != 0xFD) {
         sysE << StringView("Expected OpenNamed(") << name << StringView("), got ") << unsigned(v) << StringView("u8") << endL;
@@ -656,7 +737,7 @@ HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openObject(const char* name)
     return CloseOnDrop(*this);
 }
 
-HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openAnonObject() {
+HIRSerialiseReader::CloseOnDrop ReaderImpl::openAnonObject() {
     auto v = readU8();
     if (v != 0xFE) {
         sysE << StringView("Expected OpenAnon, got ") << unsigned(v) << endL;
@@ -665,10 +746,50 @@ HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openAnonObject() {
     return CloseOnDrop(*this);
 }
 
-void HIRSerialiseReader::closeObject() {
+void ReaderImpl::closeObject() {
     auto v = readU8();
     if (v != 0xFF) {
         sysE << StringView("Expected CloseObject(0xFF), got ") << unsigned(v) << endL;
         abort();
     }
+}
+
+void HIRSerialiseWriter::writeU8(u8 v) {
+    write(reinterpret_cast<const char*>(&v), 1);
+}
+
+void HIRSerialiseWriter::writeI64(i64 v) {
+    writeU64(static_cast<u64>(v));
+}
+
+void HIRSerialiseWriter::writeI128(S128 v) {
+    writeU128(v.getInner());
+}
+
+void HIRSerialiseWriter::writeString(const std::string& v) {
+    writeString(v.size(), v.c_str());
+}
+
+void HIRSerialiseWriter::closeObject() {
+    writeU8(0xFF);
+}
+
+HIRSerialiseWriter* HIRSerialiseWriter::create(ObjPool& pool) {
+    return pool.make<WriterImpl>(pool);
+}
+
+i64 HIRSerialiseReader::readI64() {
+    return static_cast<i64>(readU64());
+}
+
+S128 HIRSerialiseReader::readI128() {
+    return S128(readU128());
+}
+
+unsigned int HIRSerialiseReader::readTag() {
+    return static_cast<unsigned int>(readU8());
+}
+
+HIRSerialiseReader* HIRSerialiseReader::create(ObjPool& pool, const std::string& path) {
+    return pool.make<ReaderImpl>(pool, path);
 }
