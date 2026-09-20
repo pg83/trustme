@@ -5062,11 +5062,21 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, const HIRType** outTy) 
     if (c.valueState == HIRConstant::ValueState::InProgress) {
         ERROR(state.sp, E0000, StringView("cycle detected when evaluating constant `") << p << StringView("`"));
     }
+    if (item.value && !item.value.mir) {
+        /* The body belongs to the generic item, and is checked once against the
+           item's own declared type - upstream type-checks a constant's body
+           under the identity instantiation of its generics (`tcx.typeck` of the
+           constant's own DefId) and instantiates only the evaluation that
+           follows. Do that before the instantiated evaluation below, whether or
+           not the crate walk has already marked the constant generic: reaching
+           it first through an instantiated path must not make its body be
+           checked against an instantiated expected type. A body that already
+           has MIR has been through this, and one that is only MIR - every body
+           read back out of another crate's metadata - was checked there. */
+        const HIRType* bodyTy = item.type;
+        rootResolve.hirCrateMut().getOrGenMir(rootResolve.board(), HIRItemPath(p), item.value, bodyTy);
+    }
     if (c.valueState == HIRConstant::ValueState::Unknown) {
-        {
-            const HIRType* bodyTy = item.type;
-            rootResolve.hirCrateMut().getOrGenMir(rootResolve.board(), HIRItemPath(p), item.value, bodyTy);
-        }
         const auto& caps = exprCaptures(rootResolve.crate.types, item.value);
         const bool bodyNamesEnv = caps.usesSelf || caps.typeMask[0] || caps.typeMask[1] || caps.valueMask[0] || caps.valueMask[1];
         if (bodyNamesEnv) {
