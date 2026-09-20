@@ -20,17 +20,36 @@ def assignment(tree, name):
     raise RuntimeError(f"assignment is missing: {name}")
 
 
-def timeout_value(tree, name, script):
+def budget_call(tree, name):
     value = assignment(tree, name)
-    if not isinstance(value, ast.List):
-        raise RuntimeError(f"{name} is not an argv list")
-    result = []
-    for item in value.elts:
-        if isinstance(item, ast.Name) and item.id == "TIMEOUT_SCRIPT":
-            result.append(script)
-        else:
-            result.append(ast.literal_eval(item))
-    return result
+    if (
+        not isinstance(value, ast.Call)
+        or not isinstance(value.func, ast.Name)
+        or value.func.id != "budget"
+    ):
+        raise RuntimeError(f"{name} is not a budget() call")
+    return {
+        keyword.arg: ast.literal_eval(keyword.value) for keyword in value.keywords
+    }
+
+
+def budget_runs_timeout_script(tree):
+    """True when budget() spends its duration through TIMEOUT_SCRIPT."""
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "budget":
+            return any(
+                isinstance(inner, ast.Name) and inner.id == "TIMEOUT_SCRIPT"
+                for inner in ast.walk(node)
+            )
+    raise RuntimeError("budget() is missing")
+
+
+def timeout_scale(tree):
+    """The multiplier build.py gives a sanitized toolchain."""
+    value = assignment(tree, "TIMEOUT_SCALE")
+    if not isinstance(value, ast.IfExp):
+        raise RuntimeError("TIMEOUT_SCALE is not a conditional")
+    return ast.literal_eval(value.body), ast.literal_eval(value.orelse)
 
 
 def test_timeout_script(script):
@@ -75,7 +94,11 @@ def main() -> int:
     tree = ast.parse(open(build_py, encoding="utf-8").read(), build_py)
 
     timeout_script = ast.literal_eval(assignment(tree, "TIMEOUT_SCRIPT"))
-    timeout = timeout_value(tree, "LIBSTD_TIMEOUT", timeout_script)
+    if timeout_script != "$(S)/dev/timeout.py":
+        raise RuntimeError(f"timeout script differs: {timeout_script!r}")
+    if not budget_runs_timeout_script(tree):
+        raise RuntimeError("budget() does not run the timeout script")
+    timeout = budget_call(tree, "LIBSTD_TIMEOUT")
     libstd_commands = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
@@ -88,9 +111,14 @@ def main() -> int:
         ):
             libstd_commands.append(node.value)
 
-    expected = ["python3", "$(S)/dev/timeout.py", "10m"]
+    expected = {"minutes": 10}
     if timeout != expected:
         raise RuntimeError(f"libstd timeout differs: {timeout!r} != {expected!r}")
+    sanitized, plain = timeout_scale(tree)
+    if plain != 1:
+        raise RuntimeError(f"an unsanitized build stretches its budgets by {plain}")
+    if sanitized <= 1:
+        raise RuntimeError(f"a sanitized build stretches its budgets by {sanitized}")
     if not libstd_commands:
         raise RuntimeError("libstd graph command is missing")
 

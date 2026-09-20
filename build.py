@@ -367,9 +367,27 @@ SYSTEM_TEST_ENV = {"TRUSTME_SYSTEM_RUSTC": "1"} if system_rustc_mode else {}
 TIMEOUT_SCRIPT = "$(S)/dev/timeout.py"
 TIMEOUT_INPUT = [TIMEOUT_SCRIPT]
 TESTS_LIB = [*TIMEOUT_INPUT, "$(S)/tst/lib.py", "$(S)/tst/wrap_gdb.py"]
+# Every budget below is spent driving the compiler this build produced, and a
+# sanitized one spends several times the instructions of a plain one on the same
+# input: the libstd node takes 248s built plainly and 1308s built with
+# -fsanitize=address, on the same quiet machine with the same 40 jobs. A budget
+# is here to catch a hang, not to time the sanitizer, so each one stretches by
+# that measured factor when the toolchain carries a sanitizer, and is left
+# exactly as measured when it does not.
+SANITIZED = any(
+    flag.startswith("-fsanitize=") for flag in (*build.cflags, *build.cxxflags)
+)
+TIMEOUT_SCALE = 5 if SANITIZED else 1
+
+
+def budget(minutes=0, seconds=0):
+    total = (minutes * 60 + seconds) * TIMEOUT_SCALE
+    return ["python3", TIMEOUT_SCRIPT, f"{total}s"]
+
+
 # Bound the whole test node, including compilation performed by adapters. The
 # in-tree wrapper gives ix and Ubuntu identical process-group semantics.
-TEST_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "60s"]
+TEST_TIMEOUT = budget(seconds=60)
 # Exercism's convention is that every case after the first carries `#[ignore]`,
 # for a learner to enable one at a time, so the adapter runs them with
 # `--include-ignored` - which is what the exercise is. That pulls in the
@@ -378,10 +396,10 @@ TEST_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "60s"]
 # against the next slowest exercise at 10.6s. Compiling is a constant 5s; the
 # cost is all in the run, and the two heavy cases already run in parallel. Sized
 # so the outlier has room on a machine the rest of the corpus is also using.
-EXERCISM_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "3m"]
+EXERCISM_TIMEOUT = budget(minutes=3)
 # A real project contains a full Cargo graph and starts from archive inputs in a
 # fresh directory, so unlike a unit node it cannot reuse a materialised CAS.
-PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "5m"]
+PROJECT_TIMEOUT = budget(minutes=5)
 # A handful of corpus nodes are heavy by construction: trybuild and zerocopy
 # compile their own dependency graph and then a second generated Cargo
 # workspace of UI cases, and rayon carries a test suite far larger than the
@@ -393,7 +411,7 @@ PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "5m"]
 # is all the five-minute budget was killing them for. Keep the ordinary project
 # budget tight and hand this one only to the nodes that have been measured to
 # need it.
-NESTED_PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "15m"]
+NESTED_PROJECT_TIMEOUT = budget(minutes=15)
 # resvg is the node a busy machine stretches furthest. It compiles the widest
 # dependency graph in the corpus, 150 units, and then renders a reference suite
 # through the binary it built, and every one of those units wants a core of its
@@ -402,7 +420,7 @@ NESTED_PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "15m"]
 # the nested budget, which is how the corpus was losing it - and 23m07s with it
 # averaging 162, exiting 0 every time. Sized at twice that worst measurement,
 # so that a real hang is still distinguishable from a contended machine.
-HEAVY_PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "45m"]
+HEAVY_PROJECT_TIMEOUT = budget(minutes=45)
 # clap is the longest node in the corpus, and the only one that runs a crate's
 # whole upstream suite: nine test binaries, the largest of them holding 1586
 # tests, every one linked from C++ the backend writes - and now example_tests
@@ -414,10 +432,10 @@ HEAVY_PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "45m"]
 # and peaking at 180, exiting 0 every time. Sized at twice that worst
 # measurement, on the same rule as the heavy budget, so that a real hang is
 # still distinguishable from a contended machine.
-FULL_SUITE_PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "100m"]
+FULL_SUITE_PROJECT_TIMEOUT = budget(minutes=100)
 # A from-scratch standard-library build is intentionally much heavier than a
 # single test, but it must not leave the graph occupied indefinitely.
-LIBSTD_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "10m"]
+LIBSTD_TIMEOUT = budget(minutes=10)
 
 # std_src: fetch + adjust the rust-1.90 source, add the shim, pack it.
 std_src = command(
