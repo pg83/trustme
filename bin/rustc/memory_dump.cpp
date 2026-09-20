@@ -1,15 +1,21 @@
 #include "memory_dump.h"
 
 #include "output.h"
+#include "output_file.h"
 #include "compile_error.h"
 
 #include <std/ios/sys.h>
+#include <std/sys/crt.h>
+#include <std/str/view.h>
 #include <std/sys/types.h>
+#include <std/ios/out_zc.h>
+#include <std/lib/buffer.h>
 #include <std/lib/vector.h>
+#include <std/str/builder.h>
+#include <std/ios/fs_utils.h>
+#include <std/mem/obj_pool.h>
 
-#include <vector>
-#include <cstdint>
-#include <cstring>
+#include <stdlib.h>
 
 #if defined(__linux__)
     #include <zlib.h>
@@ -17,52 +23,109 @@
 
 using namespace stl;
 
+namespace {
+    /* One readable row of /proc/self/maps. The two views borrow the map text,
+       which outlives every range parsed out of it. */
+    struct MapRange {
+        u64 vStart;
+        u64 vEnd;
+        u64 fileOfs;
+        StringView flags;
+        StringView name;
+        u32 firstChunk;
+    };
+
+    StringView takeField(StringView& rest) {
+        const u8* p = rest.begin();
+        const u8* e = rest.end();
+
+        while (p != e && *p == ' ') {
+            ++p;
+        }
+
+        const u8* field = p;
+
+        while (p != e && *p != ' ') {
+            ++p;
+        }
+
+        rest = StringView(p, e);
+
+        return StringView(field, p);
+    }
+
+    StringView dropSpace(StringView rest) {
+        const u8* p = rest.begin();
+        const u8* e = rest.end();
+
+        while (p != e && *p == ' ') {
+            ++p;
+        }
+
+        return StringView(p, e);
+    }
+
+    bool parseMapLine(StringView line, MapRange& range) {
+        StringView first;
+        StringView last;
+
+        if (!takeField(line).split('-', first, last)) {
+            return false;
+        }
+
+        range.vStart = first.stoh();
+        range.vEnd = last.stoh();
+        range.flags = takeField(line);
+        range.fileOfs = takeField(line).stoh();
+
+        takeField(line);
+        takeField(line);
+
+        range.name = dropSpace(line);
+        range.firstChunk = 0;
+
+        return !range.flags.empty();
+    }
+}
+
 void memoryDump(unsigned& sequence, const char* phase) {
     if (getenv("TRUSTME_DUMPMEM")) {
         auto idx = sequence++;
-        char filename[256];
-        sprintf(filename, "trustme-%i-%s.dmp", idx, phase);
+        StringBuilder filename;
+
+        filename << StringView("trustme-") << idx << StringView("-") << phase << StringView(".dmp");
 #if defined(__linux__) && defined(__x86_64__)
     #define DEBUG_MEM_DUMP 1
 
-        struct RangeEnt {
-            u64 vStart = 0;
-            u64 vEnd = 0;
-            char flagsStr[5];
-            u64 fileOfs = 0;
-            int devMaj = 0;
-            int devMin = 0;
-            int inode = 0;
-            std::string name;
-            u32 firstChunk;
-        };
-
         size_t chunkSize = 1 << 20;
-        std::vector<RangeEnt> rangeEnts;
+        Buffer maps;
+        Vector<MapRange> ranges;
         size_t chunkCount = 0;
         {
-            u64 lastVaddr = 0;
-            FILE* fp = std::fopen("/proc/self/maps", "r");
-            while (!feof(fp)) {
-                RangeEnt e;
-                if (fscanf(fp, "%lx-%lx %4s %lx %d:%d %d", &e.vStart, &e.vEnd, e.flagsStr, &e.fileOfs, &e.devMaj, &e.devMin, &e.inode) != 7) {
-                }
-                for (;;) {
-                    int ch = getc(fp);
-                    if (ch < 0 || ch == '\n') {
-                        break;
-                    }
-                    if (ch == ' ' && e.name.empty()) {
-                        continue;
-                    }
-                    e.name.push_back(ch);
-                }
+            Buffer path(StringView("/proc/self/maps"));
 
-                if (e.name == "[vvar]") {
+            /* The map is a snapshot: reserve the whole text up front so that
+               reading it does not itself move the brk the map describes. */
+            maps.grow(1 << 20);
+            readFileContent(path, maps);
+        }
+        {
+            u64 lastVaddr = 0;
+            StringView rest(maps);
+            StringView line;
+
+            while (rest.split('\n', line, rest)) {
+                MapRange e;
+
+                if (!parseMapLine(line, e)) {
                     continue;
                 }
 
-                if (e.flagsStr[0] != 'r') {
+                if (e.name == StringView("[vvar]")) {
+                    continue;
+                }
+
+                if (e.flags[0] != 'r') {
                     continue;
                 }
 
@@ -84,15 +147,20 @@ void memoryDump(unsigned& sequence, const char* phase) {
                     chunkCount += (e.vEnd - (e.vStart + headSize)) / chunkSize;
                 }
                 lastVaddr = e.vEnd;
-                rangeEnts.push_back(std::move(e));
+                ranges.pushBack(e);
             }
             if (lastVaddr % chunkSize != 0) {
                 chunkCount += 1;
             }
-            fclose(fp);
         }
 
-        FILE* outFp = fopen(filename, "wb");
+        auto pool = ObjPool::fromMemory();
+        auto* outFile = outputFile(*pool, filename);
+        size_t written = 0;
+        auto put = [&](const void* data, size_t len) {
+            outFile->write(data, len);
+            written += len;
+        };
 
         struct DumpFileHdr {
             char magic[12];
@@ -101,11 +169,11 @@ void memoryDump(unsigned& sequence, const char* phase) {
             u32 chunkSize;
         } fileHdr;
 
-        strcpy(fileHdr.magic, "FullDump\x97\r\n");
-        fileHdr.nRanges = rangeEnts.size();
+        memCpy(fileHdr.magic, "FullDump\x97\r\n", sizeof(fileHdr.magic));
+        fileHdr.nRanges = ranges.length();
         fileHdr.nChunks = chunkCount;
         fileHdr.chunkSize = chunkSize;
-        fwrite(&fileHdr, sizeof(fileHdr), 1, outFp);
+        put(&fileHdr, sizeof(fileHdr));
 
         struct DumpRangeHdr {
             u64 vStart;
@@ -117,17 +185,17 @@ void memoryDump(unsigned& sequence, const char* phase) {
             u16 _pad[2];
         };
 
-        for (const auto& r : rangeEnts) {
+        for (const auto& r : ranges) {
             DumpRangeHdr hdr;
             hdr.vStart = r.vStart;
             hdr.size = r.vEnd - r.vStart;
             hdr.fileOfs = r.fileOfs;
-            hdr.nameLength = r.name.size();
-            hdr._flags = 0 | (r.flagsStr[0] == 'r' ? 1 : 0);
+            hdr.nameLength = r.name.length();
+            hdr._flags = 0 | (r.flags[0] == 'r' ? 1 : 0);
             hdr._pad[0] = 0;
             hdr._pad[1] = 0;
-            fwrite(&hdr, sizeof(hdr), 1, outFp);
-            fwrite(r.name.c_str(), 1, r.name.size(), outFp);
+            put(&hdr, sizeof(hdr));
+            put(r.name.data(), r.name.length());
         }
         Vector<unsigned char> zlibBuffer;
         zlibBuffer.zero(16 * 1024);
@@ -136,9 +204,9 @@ void memoryDump(unsigned& sequence, const char* phase) {
         size_t chunkCountFlushed = 0;
         auto flushChunk = [&](u64 chunkAddr) {
     #if DEBUG_MEM_DUMP
-            printf("FLUSH %zi @ %li (0x%lx)\n", chunkCountFlushed, ftell(outFp), chunkAddr);
+            sysO << StringView("FLUSH ") << chunkCountFlushed << StringView(" @ ") << written << StringView(" (0x") << formatHex(chunkAddr) << StringView(")") << endL;
     #endif
-            fwrite(&chunkAddr, sizeof(chunkAddr), 1, outFp);
+            put(&chunkAddr, sizeof(chunkAddr));
             chunkCountFlushed += 1;
             z_stream zstream;
             zstream.zalloc = Z_NULL;
@@ -147,8 +215,9 @@ void memoryDump(unsigned& sequence, const char* phase) {
 
             const int COMPRESSION_LEVEL = Z_BEST_COMPRESSION;
             int ret = deflateInit(&zstream, COMPRESSION_LEVEL);
-            if (ret != Z_OK)
-                throw std::runtime_error("zlib init failure");
+            if (ret != Z_OK) {
+                compileErrorGeneric("zlib init failure");
+            }
 
             zstream.avail_out = zlibBuffer.length();
             zstream.next_out = zlibBuffer.mutData();
@@ -160,12 +229,13 @@ void memoryDump(unsigned& sequence, const char* phase) {
                 BUG_ASSERT(zstream.avail_out != 0);
 
                 int ret = deflate(&zstream, Z_NO_FLUSH);
-                if (ret == Z_STREAM_ERROR)
-                    throw std::runtime_error("zlib deflate stream error");
+                if (ret == Z_STREAM_ERROR) {
+                    compileErrorGeneric("zlib deflate stream error");
+                }
 
                 if (zstream.avail_out < zlibBuffer.length()) {
                     size_t bytes = zlibBuffer.length() - zstream.avail_out;
-                    fwrite(zlibBuffer.data(), bytes, 1, outFp);
+                    put(zlibBuffer.data(), bytes);
 
                     zstream.avail_out = zlibBuffer.length();
                     zstream.next_out = zlibBuffer.mutData();
@@ -180,18 +250,18 @@ void memoryDump(unsigned& sequence, const char* phase) {
                 }
                 if (zstream.avail_out != zlibBuffer.length()) {
                     size_t bytes = zlibBuffer.length() - zstream.avail_out;
-                    fwrite(zlibBuffer.data(), bytes, 1, outFp);
+                    put(zlibBuffer.data(), bytes);
 
                     zstream.avail_out = zlibBuffer.length();
                     zstream.next_out = zlibBuffer.mutData();
                 }
             } while (ret == Z_OK);
             deflateEnd(&zstream);
-            memset(buf.mutData(), 0, buf.length());
+            memZero(buf.mutBegin(), buf.mutEnd());
         };
         u64 lastVaddr = 0;
-        for (const auto& r : rangeEnts) {
-            if (r.flagsStr[0] == 'r') {
+        for (const auto& r : ranges) {
+            if (r.flags[0] == 'r') {
                 if (lastVaddr / chunkSize != r.vStart / chunkSize) {
                     if (lastVaddr % chunkSize != 0) {
                         flushChunk(lastVaddr / chunkSize * chunkSize);
@@ -199,28 +269,26 @@ void memoryDump(unsigned& sequence, const char* phase) {
                 }
                 BUG_ASSERT(chunkCountFlushed == r.firstChunk);
     #if DEBUG_MEM_DUMP
-                char range[128];
-                snprintf(range, sizeof(range), "%llx -- %llx(%llx)", static_cast<unsigned long long>(r.vStart), static_cast<unsigned long long>(r.vEnd), static_cast<unsigned long long>(r.vEnd - r.vStart));
-                sysO << chunkCountFlushed << StringView("/") << chunkCount << StringView(": ") << static_cast<const char*>(range) << StringView(" ") << static_cast<const char*>(r.flagsStr) << StringView(" : ") << r.name << endL;
+                sysO << chunkCountFlushed << StringView("/") << chunkCount << StringView(": ") << formatHex(r.vStart) << StringView(" -- ") << formatHex(r.vEnd) << StringView("(") << formatHex(r.vEnd - r.vStart) << StringView(") ") << r.flags << StringView(" : ") << r.name << endL;
     #endif
                 if (r.vStart / chunkSize == (r.vEnd - 1) / chunkSize) {
-                    memcpy(buf.mutData() + r.vStart % chunkSize, (const void*)r.vStart, r.vEnd - r.vStart);
+                    memCpy(buf.mutData() + r.vStart % chunkSize, (const void*)r.vStart, r.vEnd - r.vStart);
                     if (r.vEnd % chunkSize == 0) {
                         flushChunk(r.vStart / chunkSize * chunkSize);
                     }
                 } else {
                     const auto headSize = chunkSize - r.vStart % chunkSize;
-                    memcpy(buf.mutData() + r.vStart % chunkSize, (const void*)r.vStart, headSize);
+                    memCpy(buf.mutData() + r.vStart % chunkSize, (const void*)r.vStart, headSize);
                     flushChunk(r.vStart / chunkSize * chunkSize);
                     const auto tailSize = r.vEnd % chunkSize;
                     const auto tailPos = r.vEnd - tailSize;
                     u64 va = r.vStart + headSize;
                     while (va < tailPos) {
-                        memcpy(buf.mutData(), (const void*)va, chunkSize);
+                        memCpy(buf.mutData(), (const void*)va, chunkSize);
                         flushChunk(va / chunkSize * chunkSize);
                         va += chunkSize;
                     }
-                    memcpy(buf.mutData(), (const void*)tailPos, tailSize);
+                    memCpy(buf.mutData(), (const void*)tailPos, tailSize);
                 }
                 lastVaddr = r.vEnd;
             }
@@ -263,8 +331,8 @@ void memoryDump(unsigned& sequence, const char* phase) {
                      :
                      : "r"(&regs)
                      : "rax");
-        fwrite(&regs, sizeof(regs), 1, outFp);
-        fclose(outFp);
+        put(&regs, sizeof(regs));
+        outFile->finish();
 #else
         sysE << StringView("NOTE: No memory dump supported on this platform") << endL;
 #endif
