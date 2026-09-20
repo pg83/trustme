@@ -490,7 +490,7 @@ public:
     HIRTrait(HIRGenericParams gps, std::vector<HIRTraitPath> parents);
 
     const HIRType* getVtableType(const Span& sp, const HIRCrate& crate, const HIRType::Data_TraitObject& te) const;
-    unsigned getVtableValueIndex(const HIRGenericPath& traitPath, const RcString& name) const;
+    unsigned getVtableValueIndex(HIRTypeInterner& types, const Span& sp, const HIRPathParams& thisParams, const HIRGenericPath& traitPath, const RcString& name) const;
     unsigned getVtableParentIndex(HIRTypeInterner& types, const Span& sp, const HIRPathParams& thisParams, const HIRGenericPath& traitPath) const;
     std::pair<const HIRAssociatedType*, const HIRPathParams*> getAtyDef(const RcString& name) const;
 

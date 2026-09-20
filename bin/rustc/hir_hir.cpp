@@ -1885,17 +1885,50 @@ const HIRType* HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, co
     return crate.types.path(HIRGenericPath(vtableTySpath, mv$(vtableParams)), &vtableRef);
 }
 
-unsigned HIRTrait::getVtableValueIndex(const HIRGenericPath& traitPath, const RcString& name) const {
+unsigned HIRTrait::getVtableValueIndex(HIRTypeInterner& types, const Span& sp, const HIRPathParams& thisParams, const HIRGenericPath& traitPath, const RcString& name) const {
+    /* `trait A: PartialEq<Foo> + PartialEq<Bar>` names one trait twice, and
+       each occurrence owns its own block of slots, so the path alone does not
+       name a slot - the arguments decide which block. Upstream compares whole
+       existential trait references for exactly this reason
+       (`first_method_vtable_slot`, rustc_trait_selection/src/traits/vtable.rs).
+       The stored reference is written in the trait's own generics, so it is
+       instantiated with the object's arguments before being compared, the way
+       `getVtableParentIndex` below instantiates a parent's. */
     auto its = this->valueIndexes.equal_range(name);
+    unsigned onPath = 0;
+    unsigned onPathCount = 0;
     for (auto it = its.first; it != its.second; ++it) {
         DEBUG(traitPath << StringView(" :: ") << name << StringView(" - ") << it->second.second);
-        if (it->second.second.path == traitPath.path) {
-            // TODO: Match generics using match_test_generics comparing to the trait args
-            BUG_ASSERT(it->second.first > 0);
-            return it->second.first;
+        if (it->second.second.path != traitPath.path) {
+            continue;
+        }
+        BUG_ASSERT(it->second.first > 0);
+        onPathCount += 1;
+        if (onPath == 0 || it->second.first < onPath) {
+            onPath = it->second.first;
         }
     }
-    return 0;
+    if (onPathCount <= 1) {
+        return onPath;
+    }
+    unsigned exact = 0;
+    for (auto it = its.first; it != its.second; ++it) {
+        if (it->second.second.path != traitPath.path) {
+            continue;
+        }
+        auto p = MonomorphStatePtr(types, nullptr, &thisParams, nullptr).monomorphGenericpath(sp, it->second.second);
+        if (p == traitPath && (exact == 0 || it->second.first < exact)) {
+            exact = it->second.first;
+        }
+    }
+    if (exact == 0) {
+        /* Nothing matched on arguments: keep the lowest slot of the trait,
+           which is what a single-occurrence lookup would have returned, rather
+           than let the order of an unordered container pick one. */
+        DEBUG(StringView("No argument match for ") << traitPath << StringView(" :: ") << name);
+        return onPath;
+    }
+    return exact;
 }
 
 unsigned HIRTrait::getVtableParentIndex(HIRTypeInterner& types, const Span& sp, const HIRPathParams& thisParams, const HIRGenericPath& traitPath) const {

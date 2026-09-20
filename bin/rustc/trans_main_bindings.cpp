@@ -1361,7 +1361,7 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
 
     if (const auto* pe = pathMono.data.opt_UfcsKnown()) {
         if (const auto* tyDyn = pe->type->opt_TraitObject()) {
-            if (pe->item != "vtable#" && tyDyn->trait.traitPtr->getVtableValueIndex(pe->trait, pe->item) > 0) {
+            if (pe->item != "vtable#" && tyDyn->trait.traitPtr->getVtableValueIndex(state.crate.types, sp, tyDyn->trait.path.params, pe->trait, pe->item) > 0) {
                 state.rv.traitObjectMethods.insert(mv$(pathMono));
                 return;
             }
@@ -2074,7 +2074,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             const auto& trait = crate.getTraitByPath(sp, traitPath.path);
             const auto& fcnDef = trait.values.at(name).as_Function();
 
-            unsigned vtableIdx = tyDyn.trait.traitPtr->getVtableValueIndex(traitPath, name);
+            unsigned vtableIdx = tyDyn.trait.traitPtr->getVtableValueIndex(crate.types, sp, tyDyn.trait.path.params, traitPath, name);
             ASSERT_BUG(sp, vtableIdx > 0, StringView("Calling method '") << name << StringView("' from ") << traitPath << StringView(" through ") << pe.type << StringView(" which isn't in the vtable"));
 
             auto pp = fcnDef.params.makeNopParams(crate.types, 1);

@@ -740,7 +740,7 @@ namespace {
         BUG_ASSERT(te.trait.traitPtr);
         const auto& trait = *te.trait.traitPtr;
 
-        unsigned int vtableIdx = trait.getVtableValueIndex(pe.trait.path, pe.item);
+        unsigned int vtableIdx = trait.getVtableValueIndex(state.crate.types, sp, te.trait.path.params, pe.trait, pe.item);
         if (vtableIdx == 0) {
             BUG(sp, StringView("Calling method '") << pe.item << StringView("' from ") << pe.trait << StringView(" through ") << te.trait.path << StringView(" which isn't in the vtable"));
         }
