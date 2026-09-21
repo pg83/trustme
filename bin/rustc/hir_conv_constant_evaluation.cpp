@@ -3465,31 +3465,34 @@ void ConvertHIRConstantEvaluateArraySize(const Span& sp, const WireBoard& wb, co
 }
 
 void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* paramsDef, HIRPathParams& params) {
-    for (auto& v : params.values) {
-        if (v.is_Unevaluated()) {
-            const auto& ue = *v.as_Unevaluated();
-
-            {
-                ASSERT_BUG(sp, paramsDef, StringView("Missing generic parameter definitions for ") << params);
-                auto idx = static_cast<size_t>(&v - &params.values.front());
-                ASSERT_BUG(sp, idx < paramsDef->values.size(), StringView(""));
-                const HIRType* ty = paramsDef->values[idx].type;
-                const HIRType* tmp;
-                if (monomorphiseTypeNeeded(ty)) {
-                    MonomorphStatePtr ms(crate.types, nullptr, &params, &params);
-                    ty = tmp = ms.monomorphType(sp, ty);
-                    ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), StringView("") << ty);
-                }
-                translateConstExprBody(sp, wb, crate, ty, ue);
-                const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, ue);
-                if (!predicted && !wb.ctfe->capsOracle()) {
-                    continue;
-                }
-                v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(*wb.pool, evaluateConstgeneric(sp, wb, crate, ty, ue)));
-                if (!predicted) {
-                    fprintf(stderr, "PREDICATE MISS [MethodParams]\n");
-                }
-            }
+    if (params.values.empty()) {
+        return;
+    }
+    HIRPathParamsBuilder next(params);
+    for (size_t idx = 0; idx < next.values.size(); idx++) {
+        auto& v = next.values[idx];
+        if (!v.is_Unevaluated()) {
+            continue;
+        }
+        const auto& ue = *v.as_Unevaluated();
+        ASSERT_BUG(sp, paramsDef, StringView("Missing generic parameter definitions for ") << params);
+        ASSERT_BUG(sp, idx < paramsDef->values.size(), StringView(""));
+        const HIRType* ty = paramsDef->values[idx].type;
+        const HIRType* tmp;
+        if (monomorphiseTypeNeeded(ty)) {
+            MonomorphStatePtr ms(crate.types, nullptr, &params, &params);
+            ty = tmp = ms.monomorphType(sp, ty);
+            ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), StringView("") << ty);
+        }
+        translateConstExprBody(sp, wb, crate, ty, ue);
+        const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, ue);
+        if (!predicted && !wb.ctfe->capsOracle()) {
+            continue;
+        }
+        v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(*wb.pool, evaluateConstgeneric(sp, wb, crate, ty, ue)));
+        params = HIRPathParams(next);
+        if (!predicted) {
+            fprintf(stderr, "PREDICATE MISS [MethodParams]\n");
         }
     }
 }
@@ -3616,12 +3619,14 @@ auto MonomorphAvailability::visitConstgeneric(HIRConstGeneric& value) -> void {
         }
         return;
     }
-    if (auto* unevaluated = value.opt_Unevaluated()) {
+    if (const auto* unevaluated = value.opt_Unevaluated()) {
         if ((*unevaluated)->selfType) {
-            (*unevaluated)->selfType = visitType((*unevaluated)->selfType);
+            visitType((*unevaluated)->selfType);
         }
-        visitPathParams((*unevaluated)->paramsImpl);
-        visitPathParams((*unevaluated)->paramsItem);
+        auto paramsImpl = (*unevaluated)->paramsImpl;
+        auto paramsItem = (*unevaluated)->paramsItem;
+        visitPathParams(paramsImpl);
+        visitPathParams(paramsItem);
     }
 }
 
@@ -5612,32 +5617,37 @@ auto Expander::evalulateConstGeneric(const Span& sp, const HIRType* ty, HIRConst
 
 auto Expander::visitPathParams(HIRPathParams& p) -> void {
     Span sp;
-    for (auto& v : p.values) {
-        if (v.is_Unevaluated()) {
+    if (!p.values.empty()) {
+        HIRPathParamsBuilder next(p);
+        for (size_t idx = 0; idx < next.values.size(); idx++) {
+            auto& v = next.values[idx];
+            if (!v.is_Unevaluated()) {
+                continue;
+            }
             if (!getParams) {
                 ASSERT_BUG(sp, paramsUnresolved, StringView("Path parameters visited without their definition"));
                 continue;
             }
-            {
-                const auto& paramsDef = getParams->get(sp);
-                auto idx = static_cast<size_t>(&v - &p.values.front());
-                ASSERT_BUG(sp, idx < paramsDef.values.size(), StringView(""));
-                const auto& ty = paramsDef.values[idx].type;
-                if (monomorphiseTypeNeeded(ty)) {
-                    continue;
-                }
-                evalulateConstGeneric(sp, ty, v);
+            const auto& paramsDef = getParams->get(sp);
+            ASSERT_BUG(sp, idx < paramsDef.values.size(), StringView(""));
+            const auto& ty = paramsDef.values[idx].type;
+            if (monomorphiseTypeNeeded(ty)) {
+                continue;
             }
+            evalulateConstGeneric(sp, ty, v);
         }
+        p = HIRPathParams(mv$(next));
     }
     HIRVisitor::visitPathParams(p);
 }
 
 auto Expander::visitConstgeneric(HIRConstGeneric& value) -> void {
-    if (auto* unevaluated = value.opt_Unevaluated()) {
-        visitPathParams((*unevaluated)->paramsImpl);
-        visitPathParams((*unevaluated)->paramsItem);
-        visitExpr(*(*unevaluated)->expr);
+    if (const auto* unevaluated = value.opt_Unevaluated()) {
+        auto next = (*unevaluated)->clone();
+        visitPathParams(next.paramsImpl);
+        visitPathParams(next.paramsItem);
+        visitExpr(*next.expr);
+        value = HIRConstGeneric(internUnevaluated(mv$(next)));
     }
 }
 

@@ -22,11 +22,44 @@ namespace {
         PathNode(u64 h1, u64 h2, ThinVector<RcString> m, PathNode* next);
     };
 
+    struct ParamsNode {
+        ThinVector<const HIRType*> types;
+        ThinVector<HIRConstGeneric> values;
+        u64 hash;
+        ParamsNode* next;
+
+        ParamsNode(ThinVector<const HIRType*> types, ThinVector<HIRConstGeneric> values, u64 hash, ParamsNode* next);
+    };
+
+    struct UnevaluatedNode: public HIRConstGenericUnevaluated {
+        u64 hash;
+        UnevaluatedNode* next;
+
+        UnevaluatedNode(HIRConstGenericUnevaluated value, u64 hash, UnevaluatedNode* next);
+    };
+
     struct PathInterner {
         ObjPool::Ref poolRef = ObjPool::fromMemory();
         ObjPool* pool = poolRef.mutPtr();
         IntMap<PathNode*> table{pool};
+        IntMap<ParamsNode*> params{pool};
+        IntMap<UnevaluatedNode*> unevaluated{pool};
     };
+
+    ParamsNode::ParamsNode(ThinVector<const HIRType*> types, ThinVector<HIRConstGeneric> values, u64 hash, ParamsNode* next)
+        : types(std::move(types))
+        , values(std::move(values))
+        , hash(hash)
+        , next(next)
+    {
+    }
+
+    UnevaluatedNode::UnevaluatedNode(HIRConstGenericUnevaluated value, u64 hash, UnevaluatedNode* next)
+        : HIRConstGenericUnevaluated(std::move(value))
+        , hash(hash)
+        , next(next)
+    {
+    }
 
     const HIRConstGeneric* getUnevaluatedParam(const HIRConstGenericUnevaluated& value, unsigned int binding) {
         const HIRPathParams* params = nullptr;
@@ -198,6 +231,93 @@ namespace {
         return addPath(h1, h2, std::move(members));
     }
 
+    u64 mixHash(u64 h, u64 v) {
+        return splitMix64(h ^ (v + POS_STEP + (h << 6) + (h >> 2)));
+    }
+
+    u64 pointerHash(const void* p) {
+        return reinterpret_cast<uintptr_t>(p);
+    }
+
+    u64 hashParamsView(const HIRType* const* types, size_t typeCount, const HIRConstGeneric* values, size_t valueCount) {
+        u64 h = splitMix64((static_cast<u64>(typeCount) << 32) ^ static_cast<u64>(valueCount));
+        for (size_t i = 0; i < typeCount; i++) {
+            h = mixHash(h, pointerHash(types[i]));
+        }
+        for (size_t i = 0; i < valueCount; i++) {
+            h = mixHash(h, hirConstGenericExactHash(values[i]));
+        }
+        return h;
+    }
+
+    bool paramsNodeMatches(const ParamsNode& node, const HIRType* const* types, size_t typeCount, const HIRConstGeneric* values, size_t valueCount) {
+        if (node.types.size() != typeCount || node.values.size() != valueCount) {
+            return false;
+        }
+        for (size_t i = 0; i < typeCount; i++) {
+            if (node.types[i] != types[i]) {
+                return false;
+            }
+        }
+        for (size_t i = 0; i < valueCount; i++) {
+            if (!hirConstGenericExactEqual(node.values[i], values[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    const ParamsNode* findParams(u64 hash, const HIRType* const* types, size_t typeCount, const HIRConstGeneric* values, size_t valueCount) {
+        if (auto* head = interner().params.find(hash)) {
+            for (const auto* n = *head; n; n = n->next) {
+                if (n->hash == hash && paramsNodeMatches(*n, types, typeCount, values, valueCount)) {
+                    return n;
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    const ParamsNode* addParams(u64 hash, ThinVector<const HIRType*> types, ThinVector<HIRConstGeneric> values) {
+        auto& in = interner();
+        auto* head = in.params.find(hash);
+        auto* node = in.pool->make<ParamsNode>(std::move(types), std::move(values), hash, head ? *head : nullptr);
+        if (head) {
+            *head = node;
+        } else {
+            in.params.insert(hash, node);
+        }
+        return node;
+    }
+
+    HIRPathParams paramsHandle(const ParamsNode* node) {
+        HIRPathParams rv;
+        rv.types = HIRParamsList<const HIRType*>(&node->types);
+        rv.values = HIRParamsList<HIRConstGeneric>(&node->values);
+        return rv;
+    }
+
+    ThinVector<HIRConstGeneric> cloneValues(const HIRConstGeneric* values, size_t count) {
+        ThinVector<HIRConstGeneric> rv;
+        rv.reserve(count);
+        for (size_t i = 0; i < count; i++) {
+            rv.push_back(values[i].clone());
+        }
+        return rv;
+    }
+
+    u64 hashUnevaluated(const HIRConstGenericUnevaluated& value) {
+        u64 h = pointerHash(value.expr.get());
+        h = mixHash(h, pointerHash(value.selfType));
+        h = mixHash(h, pointerHash(value.paramsImpl.types.identity()));
+        h = mixHash(h, pointerHash(value.paramsItem.types.identity()));
+        return h;
+    }
+
+    bool unevaluatedMatches(const HIRConstGenericUnevaluated& a, const HIRConstGenericUnevaluated& b) {
+        return a.expr.get() == b.expr.get() && a.selfType == b.selfType && a.paramsImpl.sameAs(b.paramsImpl) && a.paramsItem.sameAs(b.paramsItem);
+    }
+
     HIRCompare compareWithPlaceholders(const Span& sp, const HIRPathParams& l, const HIRPathParams& r, tCbResolveType resolvePlaceholder) {
         return l.compareWithPlaceholders(sp, r, resolvePlaceholder);
     }
@@ -363,25 +483,198 @@ bool HIRSimplePath::startsWith(const HIRSimplePath& x, bool skipLast /*=false*/)
     return true;
 }
 
-HIRPathParams::HIRPathParams() {
+void hirParamsListOutOfRange() {
+    BUG(Span(), StringView("HIRParamsList index out of range"));
 }
 
-HIRPathParams::HIRPathParams(const HIRType* ty0) {
-    types = ThinVector<const HIRType*>(1);
-    types[0] = std::move(ty0);
+HIRPathParams::HIRPathParams(const HIRType* ty0)
+    : HIRPathParams(fromTypes(&ty0, 1))
+{
+}
+
+HIRPathParams::HIRPathParams(const HIRPathParamsBuilder& builder)
+    : HIRPathParams(fromView(builder.types.data(), builder.types.size(), builder.values.data(), builder.values.size()))
+{
+}
+
+HIRPathParams::HIRPathParams(HIRPathParamsBuilder&& builder) {
+    if (builder.types.empty() && builder.values.empty()) {
+        return;
+    }
+    const auto hash = hashParamsView(builder.types.data(), builder.types.size(), builder.values.data(), builder.values.size());
+    const auto* node = findParams(hash, builder.types.data(), builder.types.size(), builder.values.data(), builder.values.size());
+    if (!node) {
+        node = addParams(hash, std::move(builder.types), std::move(builder.values));
+    }
+    *this = paramsHandle(node);
+}
+
+HIRPathParams HIRPathParams::fromView(const HIRType* const* types, size_t typeCount, const HIRConstGeneric* values, size_t valueCount) {
+    if (typeCount == 0 && valueCount == 0) {
+        return HIRPathParams();
+    }
+    const auto hash = hashParamsView(types, typeCount, values, valueCount);
+    if (const auto* node = findParams(hash, types, typeCount, values, valueCount)) {
+        return paramsHandle(node);
+    }
+    return paramsHandle(addParams(hash, ThinVector<const HIRType*>(types, types + typeCount), cloneValues(values, valueCount)));
+}
+
+HIRPathParams HIRPathParams::fromTypes(const HIRType* const* types, size_t count) {
+    return fromView(types, count, nullptr, 0);
 }
 
 HIRPathParams HIRPathParams::clone() const {
-    HIRPathParams rv;
-    rv.types.reserve(types.size());
-    for (const auto& t : types) {
-        rv.types.push_back(t);
+    return *this;
+}
+
+HIRPathParams HIRPathParams::withTypes(const HIRType* const* newTypes) const {
+    return fromView(newTypes, types.size(), values.data(), values.size());
+}
+
+HIRPathParams HIRPathParams::withType(size_t index, const HIRType* type) const {
+    HIRPathParamsBuilder builder(*this);
+    builder.types.at(index) = type;
+    return HIRPathParams(std::move(builder));
+}
+
+HIRPathParams HIRPathParams::appended(const HIRType* type) const {
+    HIRPathParamsBuilder builder(*this);
+    builder.types.push_back(type);
+    return HIRPathParams(std::move(builder));
+}
+
+HIRPathParams HIRPathParams::appendedValue(HIRConstGeneric value) const {
+    HIRPathParamsBuilder builder(*this);
+    builder.values.push_back(std::move(value));
+    return HIRPathParams(std::move(builder));
+}
+
+bool HIRPathParams::sameAs(const HIRPathParams& x) const {
+    return types.identity() == x.types.identity();
+}
+
+bool HIRPathParams::hasParams() const {
+    return !types.empty() || !values.empty();
+}
+
+bool HIRPathParams::operator==(const HIRPathParams& x) const {
+    return ord(x) == OrdEqual;
+}
+
+bool HIRPathParams::operator!=(const HIRPathParams& x) const {
+    return ord(x) != OrdEqual;
+}
+
+bool HIRPathParams::operator<(const HIRPathParams& x) const {
+    return ord(x) == OrdLess;
+}
+
+HIRPathParamsBuilder::HIRPathParamsBuilder(const HIRPathParams& base)
+    : types(base.types.begin(), base.types.end())
+    , values(cloneValues(base.values.data(), base.values.size()))
+{
+}
+
+u64 hirConstGenericExactHash(const HIRConstGeneric& value) {
+    u64 h = static_cast<u64>(value.tag()) + 1;
+    switch (value.tag()) {
+        case HIRConstGeneric::TAG_Infer: {
+            h = mixHash(h, value.as_Infer().index);
+            break;
+        }
+        case HIRConstGeneric::TAG_Generic: {
+            const auto& generic = value.as_Generic();
+            h = mixHash(h, generic.binding);
+            if (generic.group() == GENERICPlaceholder) {
+                h = mixHash(h, generic.solverScope);
+                if (!generic.isSolverExistential()) {
+                    h = mixHash(h, contentHash(generic.name));
+                }
+            }
+            break;
+        }
+        case HIRConstGeneric::TAG_Evaluated: {
+            break;
+        }
+        case HIRConstGeneric::TAG_Unevaluated: {
+            h = mixHash(h, pointerHash(value.as_Unevaluated()));
+            break;
+        }
     }
-    rv.values.reserve(values.size());
-    for (const auto& t : values) {
-        rv.values.push_back(t.clone());
+    return h;
+}
+
+bool hirConstGenericExactEqual(const HIRConstGeneric& a, const HIRConstGeneric& b) {
+    if (a.tag() != b.tag()) {
+        return false;
     }
-    return rv;
+    switch (a.tag()) {
+        case HIRConstGeneric::TAG_Infer: {
+            return a.as_Infer().index == b.as_Infer().index;
+        }
+        case HIRConstGeneric::TAG_Generic: {
+            return a.as_Generic() == b.as_Generic();
+        }
+        case HIRConstGeneric::TAG_Evaluated: {
+            return *a.as_Evaluated() == *b.as_Evaluated();
+        }
+        case HIRConstGeneric::TAG_Unevaluated: {
+            return a.as_Unevaluated() == b.as_Unevaluated();
+        }
+    }
+    UNREACHABLE();
+}
+
+const HIRConstGenericUnevaluated* internUnevaluated(HIRConstGenericUnevaluated value) {
+    auto& in = interner();
+    const auto hash = hashUnevaluated(value);
+    auto* head = in.unevaluated.find(hash);
+    if (head) {
+        for (const auto* n = *head; n; n = n->next) {
+            if (n->hash == hash && unevaluatedMatches(*n, value)) {
+                return n;
+            }
+        }
+    }
+    auto* node = in.pool->make<UnevaluatedNode>(std::move(value), hash, head ? *head : nullptr);
+    if (head) {
+        *head = node;
+    } else {
+        in.unevaluated.insert(hash, node);
+    }
+    return node;
+}
+
+HIRPath hirPathWithChildren(const HIRPath& shape, const HIRType* const* children) {
+    switch (shape.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            const auto& e = shape.data.as_Generic();
+            return HIRPath(HIRGenericPath(e.path, e.params.withTypes(children)));
+        }
+        case HIRPathData::TAG_UfcsInherent: {
+            const auto& e = shape.data.as_UfcsInherent();
+            const auto* type = *children++;
+            auto params = e.params.withTypes(children);
+            children += e.params.types.size();
+            auto implParams = e.implParams.withTypes(children);
+            return HIRPath(HIRPath::Data::make_UfcsInherent({type, e.item, params, implParams}));
+        }
+        case HIRPathData::TAG_UfcsKnown: {
+            const auto& e = shape.data.as_UfcsKnown();
+            const auto* type = *children++;
+            auto traitParams = e.trait.params.withTypes(children);
+            children += e.trait.params.types.size();
+            auto params = e.params.withTypes(children);
+            return HIRPath(HIRPath::Data::make_UfcsKnown({type, HIRGenericPath(e.trait.path, traitParams), e.item, params}));
+        }
+        case HIRPathData::TAG_UfcsUnknown: {
+            const auto& e = shape.data.as_UfcsUnknown();
+            const auto* type = *children++;
+            return HIRPath(HIRPath::Data::make_UfcsUnknown({type, e.item, e.params.withTypes(children)}));
+        }
+    }
+    UNREACHABLE();
 }
 
 HIRGenericPath::HIRGenericPath() {
@@ -952,11 +1245,24 @@ Vector<RcString> HIRSimplePath::componentsVec() const {
 }
 
 Ordering HIRPathParams::ord(const HIRPathParams& x) const {
-    if (auto cmp = ::ord(types, x.types)) {
+    if (sameAs(x)) {
+        return OrdEqual;
+    }
+    if (auto cmp = ::ord(types.size(), x.types.size())) {
         return cmp;
     }
-    if (auto cmp = ::ord(values, x.values)) {
+    for (size_t i = 0; i < types.size(); i++) {
+        if (auto cmp = ::ord(types[i], x.types[i])) {
+            return cmp;
+        }
+    }
+    if (auto cmp = ::ord(values.size(), x.values.size())) {
         return cmp;
+    }
+    for (size_t i = 0; i < values.size(); i++) {
+        if (auto cmp = ::ord(values[i], x.values[i])) {
+            return cmp;
+        }
     }
     return OrdEqual;
 }
@@ -1130,7 +1436,7 @@ HIRConstGeneric HIRConstGeneric::clone() const {
         }
         case HIRConstGeneric::TAG_Unevaluated: {
             auto& e = (*this).as_Unevaluated();
-            return std::make_unique<HIRConstGenericUnevaluated>(e->clone());
+            return e;
         }
         case HIRConstGeneric::TAG_Generic: {
             auto& e = (*this).as_Generic();
@@ -1204,7 +1510,7 @@ void stl::output<ZeroCopyOutput, HIRSimplePath>(ZeroCopyOutput& os, HIRSimplePat
 }
 
 template <>
-void stl::output<ZeroCopyOutput, HIRPathParams>(ZeroCopyOutput& os, const HIRPathParams& x) {
+void stl::output<ZeroCopyOutput, HIRPathParams>(ZeroCopyOutput& os, HIRPathParams x) {
     bool hasArgs = (x.types.size() > 0 || x.values.size() > 0);
 
     if (hasArgs) {
@@ -1223,7 +1529,26 @@ void stl::output<ZeroCopyOutput, HIRPathParams>(ZeroCopyOutput& os, const HIRPat
 }
 
 template <>
-void stl::output<ZeroCopyOutput, HIRGenericPath>(ZeroCopyOutput& os, const HIRGenericPath& x) {
+void stl::output<ZeroCopyOutput, HIRPathParamsBuilder>(ZeroCopyOutput& os, const HIRPathParamsBuilder& x) {
+    bool hasArgs = (x.types.size() > 0 || x.values.size() > 0);
+
+    if (hasArgs) {
+        os << StringView("<");
+    }
+    for (const auto& ty : x.types) {
+        os << ty << StringView(",");
+    }
+    for (const auto& v : x.values) {
+        os << StringView("{") << v << StringView("},");
+    }
+    if (hasArgs) {
+        os << StringView(">");
+    }
+    return;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, HIRGenericPath>(ZeroCopyOutput& os, HIRGenericPath x) {
     os << x.path << x.params;
     return;
 }

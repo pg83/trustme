@@ -447,7 +447,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
         const auto projection = [&](const HIRType* input) {
             HIRGenericPath trait;
-            trait.params.types.push_back(input);
+            trait.params = HIRPathParams(input);
             return types.path(HIRPath(types.primitive(HIRCoreType::U8), ::std::move(trait), RcString::newInterned("Output")), HIRTypePathBinding::make_Opaque({}));
         };
 

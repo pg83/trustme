@@ -246,7 +246,7 @@ auto TypecheckVisitor::checkParameters(const Span& sp, const HIRSimplePath& used
             ERROR(sp, E0000, StringView("Unspecified parameter with no default - ") << paramDef.fmtArgs() << StringView(" with ") << paramVals);
         }
 
-        paramVals.types.push_back(ms.monomorphType(sp, tyDef.defaultValue));
+        paramVals = paramVals.appended(ms.monomorphType(sp, tyDef.defaultValue));
         DEBUG(StringView("Add missing param (using default): ") << paramVals.types.back());
     }
 
@@ -259,7 +259,7 @@ auto TypecheckVisitor::checkParameters(const Span& sp, const HIRSimplePath& used
             // TODO: Why is this pulling in the default? Why not just leave it as-is
 
             // TODO: Monomorphise?
-            paramVals.types[i] = ms.monomorphType(sp, paramDef.types[i].defaultValue);
+            paramVals = paramVals.withType(i, ms.monomorphType(sp, paramDef.types[i].defaultValue));
             DEBUG(StringView("Update `_` param (using default): ") << paramDef.types[i].defaultValue << StringView(" -> ") << paramVals.types[i]);
         }
     }
@@ -569,21 +569,21 @@ auto TypecheckVisitor::locateInTraitImplAndSet(HIRVisitor::PathContext pc, const
 }
 
 auto TypecheckVisitor::makeGenericPath(HIRSimplePath sp, const HIRTrait& trait) -> HIRGenericPath {
-    auto traitPathG = HIRGenericPath(mv$(sp));
+    HIRPathParamsBuilder params;
     for (unsigned int i = 0; i < trait.params.types.size(); i++) {
-        traitPathG.params.types.push_back(crate.types.generic(trait.params.types[i].name, i));
+        params.types.push_back(crate.types.generic(trait.params.types[i].name, i));
     }
-    return traitPathG;
+    return HIRGenericPath(mv$(sp), HIRPathParams(mv$(params)));
 }
 
 auto TypecheckVisitor::getCurrentTraitGp() const -> HIRGenericPath {
     BUG_ASSERT(currentTraitPath_);
     BUG_ASSERT(currentTrait);
-    auto traitPath = HIRGenericPath(currentTraitPath_->getSimplePath());
+    HIRPathParamsBuilder params;
     for (unsigned int i = 0; i < currentTrait->params.types.size(); i++) {
-        traitPath.params.types.push_back(crate.types.generic(currentTrait->params.types[i].name, i));
+        params.types.push_back(crate.types.generic(currentTrait->params.types[i].name, i));
     }
-    return traitPath;
+    return HIRGenericPath(currentTraitPath_->getSimplePath(), HIRPathParams(mv$(params)));
 }
 
 auto TypecheckVisitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathContext pc) -> void {
@@ -653,10 +653,11 @@ auto TypecheckVisitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisit
             }
 
             DEBUG(StringView("- Trying trait ") << *traitInfo.first);
-            auto traitPath = HIRGenericPath(*traitInfo.first);
+            HIRPathParamsBuilder traitParams;
             for (unsigned int i = 0; i < trait.params.types.size(); i++) {
-                traitPath.params.types.push_back(crate.types.infer());
+                traitParams.types.push_back(crate.types.infer());
             }
+            auto traitPath = HIRGenericPath(*traitInfo.first, HIRPathParams(mv$(traitParams)));
 
             // TODO: Search supertraits
             // TODO: Should impls be searched first, or item names?

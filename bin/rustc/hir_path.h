@@ -131,40 +131,179 @@ public:
     bool startsWith(const HIRSimplePath& x, bool skipLast = false) const;
 };
 
-struct HIRPathParams {
-    ThinVector<const HIRType*> types;
-    ThinVector<HIRConstGeneric> values;
+[[noreturn]] void hirParamsListOutOfRange();
 
-    HIRPathParams();
+template <typename T>
+class HIRParamsList {
+    const ThinVector<T>* list_ = nullptr;
+
+public:
+    HIRParamsList() = default;
+
+    explicit HIRParamsList(const ThinVector<T>* list);
+
+    const ThinVector<T>* identity() const;
+
+    size_t size() const;
+
+    bool empty() const;
+
+    const T& operator[](size_t i) const;
+
+    const T& at(size_t i) const;
+
+    const T& front() const;
+
+    const T& back() const;
+
+    const T* begin() const;
+
+    const T* end() const;
+
+    const T* data() const;
+};
+
+template <typename T>
+HIRParamsList<T>::HIRParamsList(const ThinVector<T>* list)
+    : list_(list)
+{
+}
+
+template <typename T>
+auto HIRParamsList<T>::identity() const -> const ThinVector<T>* {
+    return list_;
+}
+
+template <typename T>
+auto HIRParamsList<T>::size() const -> size_t {
+    return list_ ? list_->size() : 0;
+}
+
+template <typename T>
+auto HIRParamsList<T>::empty() const -> bool {
+    return size() == 0;
+}
+
+template <typename T>
+auto HIRParamsList<T>::operator[](size_t i) const -> const T& {
+    return (*list_)[i];
+}
+
+template <typename T>
+auto HIRParamsList<T>::at(size_t i) const -> const T& {
+    if (i >= size()) {
+        hirParamsListOutOfRange();
+    }
+    return (*list_)[i];
+}
+
+template <typename T>
+auto HIRParamsList<T>::front() const -> const T& {
+    return at(0);
+}
+
+template <typename T>
+auto HIRParamsList<T>::back() const -> const T& {
+    return at(size() - 1);
+}
+
+template <typename T>
+auto HIRParamsList<T>::begin() const -> const T* {
+    return list_ ? list_->begin() : nullptr;
+}
+
+template <typename T>
+auto HIRParamsList<T>::end() const -> const T* {
+    return list_ ? list_->end() : nullptr;
+}
+
+template <typename T>
+auto HIRParamsList<T>::data() const -> const T* {
+    return begin();
+}
+
+struct HIRPathParamsBuilder;
+
+struct HIRPathParams {
+    HIRParamsList<const HIRType*> types;
+    HIRParamsList<HIRConstGeneric> values;
+
+    HIRPathParams() = default;
     HIRPathParams(const HIRType*);
+    HIRPathParams(const HIRPathParamsBuilder& builder);
+    HIRPathParams(HIRPathParamsBuilder&& builder);
+
+    static HIRPathParams fromView(const HIRType* const* types, size_t typeCount, const HIRConstGeneric* values, size_t valueCount);
+    static HIRPathParams fromTypes(const HIRType* const* types, size_t count);
+
     HIRPathParams clone() const;
-    HIRPathParams(const HIRPathParams&) = delete;
-    HIRPathParams& operator=(const HIRPathParams&) = delete;
-    HIRPathParams(HIRPathParams&&) = default;
-    HIRPathParams& operator=(HIRPathParams&&) = default;
+    HIRPathParams withTypes(const HIRType* const* types) const;
+    HIRPathParams withType(size_t index, const HIRType* type) const;
+    HIRPathParams appended(const HIRType* type) const;
+    HIRPathParams appendedValue(HIRConstGeneric value) const;
+
+    template <typename F, typename G>
+    HIRPathParams map(F typeFn, G valueFn) const;
+
+    template <typename F>
+    HIRPathParams mapTypes(F typeFn) const;
+
+    bool sameAs(const HIRPathParams& x) const;
 
     HIRCompare compareWithPlaceholders(const Span& sp, const HIRPathParams& x, tCbResolveType resolvePlaceholder) const;
     HIRCompare matchTestGenericsFuzz(const Span& sp, const HIRPathParams& x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& match) const;
     bool equalsIgnoringRegions(const HIRPathParams& x) const;
 
-    bool hasParams() const {
-        return !types.empty() || !values.empty();
-    }
+    bool hasParams() const;
 
-    bool operator==(const HIRPathParams& x) const {
-        return ord(x) == OrdEqual;
-    }
+    bool operator==(const HIRPathParams& x) const;
 
-    bool operator!=(const HIRPathParams& x) const {
-        return ord(x) != OrdEqual;
-    }
+    bool operator!=(const HIRPathParams& x) const;
 
-    bool operator<(const HIRPathParams& x) const {
-        return ord(x) == OrdLess;
-    }
+    bool operator<(const HIRPathParams& x) const;
 
     Ordering ord(const HIRPathParams& x) const;
 };
+
+struct HIRPathParamsBuilder {
+    ThinVector<const HIRType*> types;
+    ThinVector<HIRConstGeneric> values;
+
+    HIRPathParamsBuilder() = default;
+
+    explicit HIRPathParamsBuilder(const HIRPathParams& base);
+};
+
+template <typename F, typename G>
+HIRPathParams HIRPathParams::map(F typeFn, G valueFn) const {
+    if (values.empty() && types.size() <= 16) {
+        const HIRType* folded[16];
+        bool changed = false;
+        for (size_t i = 0; i < types.size(); i++) {
+            folded[i] = typeFn(types[i]);
+            changed |= folded[i] != types[i];
+        }
+        return changed ? fromTypes(folded, types.size()) : *this;
+    }
+    HIRPathParamsBuilder builder;
+    builder.types.reserve(types.size());
+    for (const auto* type : types) {
+        builder.types.push_back(typeFn(type));
+    }
+    builder.values.reserve(values.size());
+    for (const auto& value : values) {
+        builder.values.push_back(valueFn(value));
+    }
+    return HIRPathParams(std::move(builder));
+}
+
+template <typename F>
+HIRPathParams HIRPathParams::mapTypes(F typeFn) const {
+    return map(typeFn, [](const HIRConstGeneric& value) { return value.clone(); });
+}
+
+u64 hirConstGenericExactHash(const HIRConstGeneric& value);
+bool hirConstGenericExactEqual(const HIRConstGeneric& a, const HIRConstGeneric& b);
 
 class HIRGenericPath {
 public:
@@ -308,3 +447,6 @@ struct HIRConstGenericUnevaluated {
 private:
     HIRConstGenericUnevaluated();
 };
+
+const HIRConstGenericUnevaluated* internUnevaluated(HIRConstGenericUnevaluated value);
+HIRPath hirPathWithChildren(const HIRPath& shape, const HIRType* const* children);

@@ -423,6 +423,7 @@ namespace {
     }
 
     ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ThinVector<const HIRType*>& left, const ThinVector<const HIRType*>& right);
+    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const HIRParamsList<const HIRType*>& left, const HIRParamsList<const HIRType*>& right);
     ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const Vector<const HIRType*>& left, const Vector<const HIRType*>& right);
 
     ::Ordering arraySizeOrdSpecific(const Span& sp, const HIRArraySize& left, const HIRArraySize& right) {
@@ -625,6 +626,22 @@ namespace {
     }
 
     ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ThinVector<const HIRType*>& le, const ThinVector<const HIRType*>& re) {
+        auto rv = ::OrdEqual;
+        BUG_ASSERT(le.size() == re.size());
+        for (unsigned int i = 0; i < le.size(); i++) {
+            auto a = typeOrdSpecific(context, sp, le[i], re[i]);
+            if (a != ::OrdEqual) {
+                if (rv != ::OrdEqual && a != rv) {
+                    context.mixed = true;
+                    return ::OrdEqual;
+                }
+                rv = a;
+            }
+        }
+        return rv;
+    }
+
+    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const HIRParamsList<const HIRType*>& le, const HIRParamsList<const HIRType*>& re) {
         auto rv = ::OrdEqual;
         BUG_ASSERT(le.size() == re.size());
         for (unsigned int i = 0; i < le.size(); i++) {
@@ -1885,7 +1902,7 @@ const HIRType* HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, co
 
     const auto& vtableTySpath = this->vtablePath;
     const auto& vtableRef = crate.getStructByPath(sp, vtableTySpath);
-    HIRPathParams vtableParams = te.trait.path.params.clone();
+    HIRPathParamsBuilder vtableParams(te.trait.path.params);
     vtableParams.types.resize(te.trait.path.params.types.size() + this->typeIndexes.size());
     for (const auto& tyB : te.trait.typeBounds) {
         if (this->typeIndexes.count(tyB.first) == 0) {
@@ -1911,7 +1928,7 @@ const HIRType* HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, co
         auto idx = this->typeIndexes.at(tyB.first);
         vtableParams.types.at(idx) = tyB.second.type;
     }
-    return crate.types.path(HIRGenericPath(vtableTySpath, mv$(vtableParams)), &vtableRef);
+    return crate.types.path(HIRGenericPath(vtableTySpath, HIRPathParams(mv$(vtableParams))), &vtableRef);
 }
 
 unsigned HIRTrait::getVtableValueIndex(HIRTypeInterner& types, const Span& sp, const HIRPathParams& thisParams, const HIRGenericPath& traitPath, const RcString& name) const {

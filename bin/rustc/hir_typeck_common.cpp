@@ -385,7 +385,7 @@ HIRConstGeneric Monomorphiser::monomorphConstgeneric(const Span& sp, const HIRCo
     if (const auto* ge = val.opt_Generic()) {
         return this->getValue(sp, *ge);
     } else if (const auto* ge = val.opt_Unevaluated()) {
-        auto rv = HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>((*ge)->monomorph(sp, *this, true)));
+        auto rv = HIRConstGeneric(internUnevaluated((*ge)->monomorph(sp, *this, true)));
         // TODO: Evaluate this constant (if possible), but that requires knowing the target type :/
         return rv;
     } else {
@@ -394,19 +394,9 @@ HIRConstGeneric Monomorphiser::monomorphConstgeneric(const Span& sp, const HIRCo
 }
 
 HIRPathParams Monomorphiser::monomorphPathParams(const Span& sp, const HIRPathParams& tpl, bool allowInfer) const {
-    HIRPathParams rv;
-
-    rv.types.reserve(tpl.types.size());
-    for (const auto& ty : tpl.types) {
-        rv.types.push_back(this->monomorphType(sp, ty, allowInfer));
-    }
-
-    rv.values.reserve(tpl.values.size());
-    for (const auto& val : tpl.values) {
-        rv.values.push_back(monomorphConstgeneric(sp, val, allowInfer));
-    }
-
-    return rv;
+    return tpl.map(
+        [&](const HIRType* type) { return this->monomorphType(sp, type, allowInfer); },
+        [&](const HIRConstGeneric& value) { return monomorphConstgeneric(sp, value, allowInfer); });
 }
 
 HIRGenericPath Monomorphiser::monomorphGenericpath(const Span& sp, const HIRGenericPath& tpl, bool allowInfer) const {
@@ -420,7 +410,7 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
             sz = this->getValue(sp, se->as_Generic());
             DEBUG(tpl << StringView(" -> ") << sz);
         } else if (se->is_Unevaluated()) {
-            sz = HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(se->as_Unevaluated()->monomorph(sp, *this, true)));
+            sz = HIRConstGeneric(internUnevaluated(se->as_Unevaluated()->monomorph(sp, *this, true)));
         } else {
             sz = this->monomorphConstgeneric(sp, *se, true);
         }
@@ -445,15 +435,7 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
 }
 
 HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, HIRTypeCloneCallback& callback) {
-    HIRPathParams rv;
-    rv.types.reserve(tpl.types.size());
-    for (const auto& ty : tpl.types) {
-        rv.types.push_back(cloneTyWithCb(types, sp, ty, callback));
-    }
-    for (const auto& v : tpl.values) {
-        rv.values.push_back(v.clone());
-    }
-    return rv;
+    return tpl.mapTypes([&](const HIRType* type) { return cloneTyWithCb(types, sp, type, callback); });
 }
 
 const HIRType* cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRType* tpl, HIRTypeCloneCallback& callback) {
@@ -968,9 +950,7 @@ auto TyVisitorGenericGroup::visitType(const HIRType* ty) -> bool {
 }
 
 auto TyRewriter::rewritePathParams(HIRPathParams& params) -> void {
-    for (auto& type : params.types) {
-        type = rewriteType(type);
-    }
+    params = params.mapTypes([&](const HIRType* type) { return rewriteType(type); });
 }
 
 auto TyRewriter::rewriteTraitPath(HIRTraitPath& trait) -> void {

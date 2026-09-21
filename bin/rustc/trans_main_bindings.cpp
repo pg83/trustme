@@ -1046,17 +1046,18 @@ static void TransEnumerateTypes(EnumState& state) {
 
             const auto& vtableTySpath = trait.vtablePath;
             const auto& vtableRef = state.crate.getStructByPath(sp, vtableTySpath);
-            HIRPathParams vtableParams = gpath.params.clone();
+            HIRPathParamsBuilder vtableBuilder(gpath.params);
             for (const auto& tyIdx : trait.typeIndexes) {
                 auto idx = tyIdx.second;
-                if (vtableParams.types.size() <= idx) {
-                    vtableParams.types.resize(idx + 1);
+                if (vtableBuilder.types.size() <= idx) {
+                    vtableBuilder.types.resize(idx + 1);
                 }
                 auto p = ent.first.clone();
                 p.data.as_UfcsKnown().item = tyIdx.first;
-                vtableParams.types[idx] = state.crate.types.path(mv$(p), {});
-                vtableParams.types[idx] = tv.resolve.expandAssociatedTypes(sp, vtableParams.types[idx]);
+                vtableBuilder.types[idx] = state.crate.types.path(mv$(p), {});
+                vtableBuilder.types[idx] = tv.resolve.expandAssociatedTypes(sp, vtableBuilder.types[idx]);
             }
+            const HIRPathParams vtableParams(mv$(vtableBuilder));
 
             DEBUG(StringView("VTable: ") << vtableTySpath << vtableParams);
             tv.visitType(ty);
@@ -1142,8 +1143,9 @@ static void evaluateTranslationParams(const Span& sp, const WireBoard& wb, const
 
     ASSERT_BUG(sp, defs, StringView("Missing const parameter definitions for ") << params);
     ASSERT_BUG(sp, params.values.size() <= defs->values.size(), StringView("Too many const parameters in ") << params << StringView(" for ") << defs->fmtArgs());
-    for (size_t i = 0; i < params.values.size(); i++) {
-        auto& value = params.values[i];
+    HIRPathParamsBuilder next(params);
+    for (size_t i = 0; i < next.values.size(); i++) {
+        auto& value = next.values[i];
         if (value.is_Unevaluated()) {
             const HIRType* type = defs->values[i].type;
             const HIRType* tmp;
@@ -1153,6 +1155,7 @@ static void evaluateTranslationParams(const Span& sp, const WireBoard& wb, const
                 ASSERT_BUG(sp, !monomorphiseTypeNeeded(type), StringView("Generic const parameter type ") << type << StringView(" in ") << defs->fmtArgs());
             }
             ConvertHIRConstantEvaluateConstGeneric(sp, wb, crate, type, value);
+            params = HIRPathParams(next);
         }
         ASSERT_BUG(sp, value.is_Evaluated(), StringView("Const parameter was not concrete at translation: ") << value);
     }
@@ -2151,7 +2154,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     // TODO: What is the real reciver here? (for the MIR)
 
                     auto gpath = newFcn.args.front().second->as_Path().path.data.as_Generic().clone();
-                    gpath.params.types.at(0) = crate.types.unit();
+                    gpath.params = gpath.params.withType(0, crate.types.unit());
                     auto ty = crate.types.path(mv$(gpath), newFcn.args.front().second->as_Path().binding.clone());
                     lvPtr = getUnitPtr(sp, builder, mv$(ty), MIRLValue::newArgument(0), lvSelf);
                 } break;
@@ -2375,7 +2378,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             const auto& trait = crate.getTraitByPath(sp, traitPath.path);
             const auto& vtableSp = trait.vtablePath;
             ASSERT_BUG(sp, vtableSp != HIRSimplePath(), StringView("Trait ") << traitPath.path << StringView(" doesn't have a vtable"));
-            auto vtableParams = traitPath.params.clone();
+            HIRPathParamsBuilder vtableParams(traitPath.params);
             /* The vtable struct's associated-type arguments sit at the slot that
                `typeIndexes` assigned when the struct was synthesised, never at the
                position `typeIndexes` happens to be walked in - that map is hashed.
@@ -2393,7 +2396,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 vtableParams.types[idx] = state.resolve.expandAssociatedTypes(sp, aty);
             }
             const auto& vtableRef = crate.getStructByPath(sp, vtableSp);
-            auto vtableTy = crate.types.path(HIRGenericPath(mv$(vtableSp), mv$(vtableParams)), &vtableRef);
+            auto vtableTy = crate.types.path(HIRGenericPath(mv$(vtableSp), HIRPathParams(mv$(vtableParams))), &vtableRef);
 
             transList.addType(vtableTy, false);
 
@@ -2863,7 +2866,7 @@ TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate) {
                 const auto& fcn = crate.getFunctionByPath(sp, startPath);
 
                 TransParams langStartPp(crate.types);
-                langStartPp.ppMethod.types.push_back(mainFcn.returnType);
+                langStartPp.ppMethod = HIRPathParams(mainFcn.returnType);
                 HIRPath p = HIRGenericPath(startPath, langStartPp.ppMethod.clone());
                 state.rv.roots.push_back(p.clone());
                 state.enumFcn(std::move(p), fcn, mv$(langStartPp));

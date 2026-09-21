@@ -786,8 +786,7 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                 of << StringView("\t") << TransMangleValue(HIRGenericPath(mainPath)) << StringView("();\n");
                 of << StringView("\treturn 0;\n");
             } else {
-                auto startGpath = HIRGenericPath(resolve_.hirCrate().getLangItemPath(Span(), "start"));
-                startGpath.params.types.push_back(mainFcn.returnType);
+                auto startGpath = HIRGenericPath(resolve_.hirCrate().getLangItemPath(Span(), "start"), HIRPathParams(mainFcn.returnType));
                 of << StringView("\treturn ") << TransMangleValue(startGpath) << StringView("(") << TransMangleValue(HIRGenericPath(mainPath)) << StringView(", argc, (u8**)argv");
                 of << StringView(", 0");
                 of << StringView(");\n");

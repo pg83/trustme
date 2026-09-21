@@ -529,7 +529,7 @@ namespace {
         ASSERT_BUG(sp, pointer, StringView("async-drop glue capture is not a raw pointer: ") << fields[1].ent);
 
         MIRFunction fcn;
-        HIRPathParams intrinsicParams;
+        HIRPathParamsBuilder intrinsicParams;
         intrinsicParams.types.push_back(pointer->inner);
         intrinsicParams.types.push_back(path.getTopIp().ty);
 
@@ -10258,8 +10258,7 @@ auto ExprVisitorConv::visitIndexOperator(HIRExprNodeIndex& node, const HIRType* 
     BUG_ASSERT(langitem);
     BUG_ASSERT(method);
 
-    HIRPathParams ppTrait;
-    ppTrait.types.push_back(tyIdx);
+    HIRPathParams ppTrait(tyIdx);
     HIRGenericPath trait{builder.resolve().crate.getLangItemPath(node.span(), langitem), std::move(ppTrait)};
 
     HIRPathParams ppMethod;
@@ -10455,8 +10454,7 @@ auto ExprVisitorConv::visit(HIRExprNodeEmplace& node) -> void {
 auto ExprVisitorConv::boxNew(HIRExprNode& node, const HIRType* dataTy, MIRRValue val) -> void {
     const auto& langExchangeMalloc = builder.crate().getLangItemPath(node.span(), "exchange_malloc");
 
-    HIRPathParams traitParamsData;
-    traitParamsData.types.push_back(dataTy);
+    HIRPathParams traitParamsData(dataTy);
     auto& types = builder.resolve().crate.types;
 
     MIRParam sizeParam, alignParam;
@@ -10502,7 +10500,7 @@ auto ExprVisitorConv::boxNew(HIRExprNode& node, const HIRType* dataTy, MIRRValue
     auto res = builder.newTemporary(resType);
     auto castPanic = builder.newBbUnlinked();
     auto castOk = builder.newBbUnlinked();
-    HIRPathParams transmuteParams;
+    HIRPathParamsBuilder transmuteParams;
     transmuteParams.types.push_back(resType);
     transmuteParams.types.push_back(placeType);
     builder.endBlock(MIRTerminator::make_Call({castOk, MIRUnwindAction::make_Cleanup(castPanic), res.clone(), MIRCallTarget::make_Intrinsic({"transmute", mv$(transmuteParams)}), makeVec1(MIRParam(mv$(place)))}));
@@ -10900,7 +10898,7 @@ auto ExprVisitorConv::visit(HIRExprNodeLiteral& node) -> void {
 
             auto castPanic = builder.newBbUnlinked();
             auto castOk = builder.newBbUnlinked();
-            HIRPathParams transmuteParams;
+            HIRPathParamsBuilder transmuteParams;
             transmuteParams.types.push_back(node.resType);
             transmuteParams.types.push_back(builder.resolve().crate.types.borrow(HIRBorrowType::Shared, builder.resolve().crate.types.primitive(HIRCoreType::Str)));
             builder.endBlock(MIRTerminator::make_Call({castOk, MIRUnwindAction::make_Cleanup(castPanic), res.clone(), MIRCallTarget::make_Intrinsic({"transmute", mv$(transmuteParams)}), makeVec1(MIRParam(MIRConstant(std::move(s))))}));

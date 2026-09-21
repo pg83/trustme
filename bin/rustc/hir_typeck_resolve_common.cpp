@@ -204,7 +204,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, BoundIndex& in
 
     const auto& trait = crate.getTraitByPath(sp, traitPath.path.path);
     while (traitParams.types.size() < trait.params.types.size()) {
-        traitParams.types.push_back(monomorph.monomorphType(sp, trait.params.types[traitParams.types.size()].defaultValue));
+        traitParams = traitParams.appended(monomorph.monomorphType(sp, trait.params.types[traitParams.types.size()].defaultValue));
     }
 
     getOrAddTraitBound(traitPath.path);

@@ -209,14 +209,14 @@ auto OuterVisitor::visitExpr(HIRExprPtr& exp) -> void {
 }
 
 auto OuterVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
-    HIRGenericPath traitGpath;
-    traitGpath.path = p.getSimplePath();
+    HIRPathParamsBuilder traitParams;
     for (size_t i = 0; i < item.params.types.size(); i++) {
-        traitGpath.params.types.push_back(ms.crate.types.generic(item.params.types[i].name, i));
+        traitParams.types.push_back(ms.crate.types.generic(item.params.types[i].name, i));
     }
     for (size_t i = 0; i < item.params.values.size(); i++) {
-        traitGpath.params.values.push_back(HIRGenericRef(item.params.values[i].name, i));
+        traitParams.values.push_back(HIRGenericRef(item.params.values[i].name, i));
     }
+    HIRGenericPath traitGpath(p.getSimplePath(), HIRPathParams(mv$(traitParams)));
     auto _1 = this->ms.setCurrentTrait(traitGpath);
     auto _ = this->ms.setImplGenerics(item.params);
     HIRVisitor::visitTrait(p, item);

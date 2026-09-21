@@ -1221,7 +1221,7 @@ HIRSimplePath AST2HIR::LowerHIRSimplePath(const Span& sp, const ASTPath& path, F
 }
 
 HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs) {
-    HIRPathParams params;
+    HIRPathParamsBuilder params;
 
     size_t numLft = 0;
     size_t numTy = 0;
@@ -1308,7 +1308,7 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
         }
     }
 
-    return params;
+    return HIRPathParams(mv$(params));
 }
 
 HIRConstGeneric AST2HIR::LowerHIRConstGeneric(ASTExprNode& nodeRef) {
@@ -1328,7 +1328,7 @@ HIRConstGeneric AST2HIR::LowerHIRConstGeneric(ASTExprNode& nodeRef) {
             return HIRGenericRef(e->path.asTrivial(), param.index);
         }
     }
-    return std::make_unique<HIRConstGenericUnevaluated>(LowerHIRExprNode(nodeRef));
+    return internUnevaluated(HIRConstGenericUnevaluated(LowerHIRExprNode(nodeRef)));
 }
 
 HIRGenericPath AST2HIR::LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc) {
@@ -1738,7 +1738,7 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                         ERROR(ty->span(), E0000, StringView("generic parameters may not be used in const operations - ") << ty);
                     }
                 }
-                return crate->types.array(inner, HIRConstGeneric::make_Unevaluated(std::make_unique<HIRConstGenericUnevaluated>(LowerHIRExpr(e.size))));
+                return crate->types.array(inner, HIRConstGeneric::make_Unevaluated(internUnevaluated(HIRConstGenericUnevaluated(LowerHIRExpr(e.size)))));
             } else {
                 return crate->types.array(inner, HIRConstGeneric::make_Infer({}));
             }
@@ -1883,7 +1883,7 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
             }
             TypeDataErasedTypeInner inner;
             if (implTraitSource.path) {
-                auto aliasParams = implTraitSource.paramsOuter->makeNopParams(crate->types, 0);
+                HIRPathParamsBuilder aliasParams(implTraitSource.paramsOuter->makeNopParams(crate->types, 0));
                 if (implTraitSource.paramsInner) {
                     auto innerParams = implTraitSource.paramsInner->makeNopParams(crate->types, 1);
                     aliasParams.types.reserve(aliasParams.types.size() + innerParams.types.size());
@@ -1895,7 +1895,7 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                         aliasParams.values.push_back(value.clone());
                     }
                 }
-                inner = TypeDataErasedTypeInner(TypeDataErasedTypeInner::Data_Alias{mv$(aliasParams), std::make_shared<HIRTypeDataErasedTypeAliasInner>(*implTraitSource.path, *implTraitSource.paramsOuter, implTraitSource.paramsInner)});
+                inner = TypeDataErasedTypeInner(TypeDataErasedTypeInner::Data_Alias{HIRPathParams(mv$(aliasParams)), std::make_shared<HIRTypeDataErasedTypeAliasInner>(*implTraitSource.path, *implTraitSource.paramsOuter, implTraitSource.paramsInner)});
             } else {
                 inner = TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0};
             }
@@ -2630,7 +2630,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                         // TODO: Allow if the type parm is a valid receiver it type too
 
                         if (const auto* inner = validCustomReceiver(pe->params.types[0])) {
-                            pe->params.types[0] = inner;
+                            pe->params = pe->params.withType(0, inner);
                             return ctx.crate->types.intern(mv$(data));
                         }
                     }
@@ -2705,7 +2705,8 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                     if (pe->params.types.size() >= 1 && (pe->params.types[0] == crate->types.self() || pe->params.types[0] == realSelfType)) {
                         if (pe->params.types[0] == realSelfType) {
                             auto data = argSelfTy->cloneData();
-                            data.as_Path().path.data.as_Generic().params.types[0] = crate->types.self();
+                            auto& generic = data.as_Path().path.data.as_Generic();
+                            generic.params = generic.params.withType(0, crate->types.self());
                             argSelfTy = crate->types.intern(mv$(data));
                         }
                         receiver = HIRFunction::Receiver::Box;

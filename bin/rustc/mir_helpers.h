@@ -328,12 +328,12 @@ public:
     }
 
     virtual void visitPathParams(typename Dec<HIRPathParams>::Type& p) {
-        for (auto& e : p.types) {
-            if constexpr (std::is_const_v<typename Dec<HIRPathParams>::Type>) {
+        if constexpr (std::is_const_v<typename Dec<HIRPathParams>::Type>) {
+            for (const auto* e : p.types) {
                 visitType(e);
-            } else {
-                e = visitType(e);
             }
+        } else {
+            p = p.mapTypes([&](const HIRType* e) { return visitType(e); });
         }
     }
 

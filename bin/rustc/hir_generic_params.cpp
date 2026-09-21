@@ -45,7 +45,7 @@ Ordering HIRGenericBound::ord(const HIRGenericBound& b) const {
 }
 
 HIRPathParams HIRGenericParams::makeNopParams(HIRTypeInterner& types, unsigned level) const {
-    HIRPathParams rv;
+    HIRPathParamsBuilder rv;
     rv.types = ThinVector<const HIRType*>(this->types.size());
     rv.values = ThinVector<HIRConstGeneric>(this->values.size());
     for (size_t i = 0; i < this->types.size(); i++) {
@@ -54,7 +54,7 @@ HIRPathParams HIRGenericParams::makeNopParams(HIRTypeInterner& types, unsigned l
     for (size_t i = 0; i < this->values.size(); i++) {
         rv.values[i] = HIRGenericRef(this->values[i].name, 256 * level + i);
     }
-    return rv;
+    return HIRPathParams(mv$(rv));
 }
 
 HIRGenericParams HIRGenericParams::clone() const {

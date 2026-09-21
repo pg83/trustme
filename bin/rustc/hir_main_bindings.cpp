@@ -463,6 +463,9 @@ namespace {
         void serialiseVec(const ThinVector<T>& vec);
 
         template <typename T>
+        void serialiseList(const HIRParamsList<T>& list);
+
+        template <typename T>
         void serialiseVec(const std::vector<T>& vec);
 
         template <typename T>
@@ -788,11 +791,10 @@ HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
 }
 
 HIRPathParams HirDeserialiser::deserialisePathparams() {
-    HIRPathParams rv;
-    TRACE_FUNCTION_FR(StringView(""), rv);
+    HIRPathParamsBuilder rv;
     rv.types = deserialiseThinvec<const HIRType*>();
     rv.values = deserialiseThinvec<HIRConstGeneric>();
-    return rv;
+    return HIRPathParams(std::move(rv));
 }
 
 HIRGenericPath HirDeserialiser::deserialiseGenericpath() {
@@ -1016,7 +1018,7 @@ HIRConstGeneric HirDeserialiser::deserialiseConstgeneric() {
     case HIRConstGeneric::TAG_##x: \
         return HIRConstGeneric::make_##x(__VA_ARGS__);
         _(Infer, {})
-        _(Unevaluated, std::make_unique<HIRConstGenericUnevaluated>(deserialiseConstgenericUnevaluated()))
+        _(Unevaluated, internUnevaluated(deserialiseConstgenericUnevaluated()))
         _(Generic, deserialiseGenericref())
         _(Evaluated, freezeEncodedLiteral(pool, deserialiseEncodedliteral()))
 #undef _
@@ -3066,6 +3068,16 @@ auto HirSerialiser::serialiseStrmap(const std::unordered_multimap<RcString, V>& 
 }
 
 template <typename T>
+auto HirSerialiser::serialiseList(const HIRParamsList<T>& list) -> void {
+    TRACE_FUNCTION_F(StringView("<") << typeid(T).name() << StringView("> size=") << list.size());
+    auto _ = out.openObject(typeid(ThinVector<T>).name());
+    out.writeCount(list.size());
+    for (const auto& i : list) {
+        serialise(i);
+    }
+}
+
+template <typename T>
 auto HirSerialiser::serialiseVec(const ThinVector<T>& vec) -> void {
     TRACE_FUNCTION_F(StringView("<") << typeid(T).name() << StringView("> size=") << vec.size());
     auto _ = out.openObject(typeid(ThinVector<T>).name());
@@ -3346,8 +3358,8 @@ auto HirSerialiser::serialiseSimplepath(const HIRSimplePath& path) -> void {
 }
 
 auto HirSerialiser::serialisePathparams(const HIRPathParams& pp) -> void {
-    serialiseVec(pp.types);
-    serialiseVec(pp.values);
+    serialiseList(pp.types);
+    serialiseList(pp.values);
 }
 
 auto HirSerialiser::serialiseGenericpath(const HIRGenericPath& path) -> void {

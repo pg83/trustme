@@ -635,7 +635,7 @@ namespace {
         ASSERT_BUG(sp, outerPath && outerPath->binding.is_Struct() && outerPath->path.data.is_Generic(), StringView("invalid async-drop glue type ") << outerTy);
         auto path = outerPath->path.data.as_Generic().clone();
         ASSERT_BUG(sp, !path.params.types.empty(), StringView("async-drop glue type without its dropee argument: ") << outerTy);
-        path.params.types[0] = dropeeTy;
+        path.params = path.params.withType(0, dropeeTy);
         return resolve.hirCrate().types.path(std::move(path), outerPath->binding.as_Struct());
     }
 

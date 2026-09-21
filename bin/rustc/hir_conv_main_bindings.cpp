@@ -470,74 +470,80 @@ namespace {
     }
 
     void fixTypeParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, HIRPathParams& params) {
-        if (params.types.size() == 0) {
-            while (params.types.size() < paramsDef.types.size()) {
-                params.types.push_back(types.infer());
+        HIRPathParamsBuilder next(params);
+        if (next.types.size() == 0) {
+            while (next.types.size() < paramsDef.types.size()) {
+                next.types.push_back(types.infer());
             }
             // TODO: Optionally fill in the defaults?
         }
-        if (params.types.size() != paramsDef.types.size()) {
-            ERROR(sp, E0000, StringView("Incorrect parameter count, expected ") << paramsDef.types.size() << StringView(", got ") << params.types.size());
+        if (next.types.size() != paramsDef.types.size()) {
+            ERROR(sp, E0000, StringView("Incorrect parameter count, expected ") << paramsDef.types.size() << StringView(", got ") << next.types.size());
         }
 
-        if (params.values.size() == 0) {
-            params.values.resize(paramsDef.values.size());
+        if (next.values.size() == 0) {
+            next.values.resize(paramsDef.values.size());
         }
-        if (params.values.size() != paramsDef.values.size()) {
-            ERROR(sp, E0000, StringView("Incorrect value parameter count, expected ") << paramsDef.values.size() << StringView(", got ") << params.values.size());
+        if (next.values.size() != paramsDef.values.size()) {
+            ERROR(sp, E0000, StringView("Incorrect value parameter count, expected ") << paramsDef.values.size() << StringView(", got ") << next.values.size());
         }
+        params = HIRPathParams(mv$(next));
     }
 
     void fixParamCount(HIRTypeInterner& types, const Span& sp, const HIRGenericPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params, bool fillInfer = true, const HIRType* selfTy = nullptr) {
         TRACE_FUNCTION_FR(paramDefs.fmtArgs() << StringView(" -> ") << params << StringView(" (fill_infer=") << fillInfer << StringView(")"), params);
-        if (params.types.size() != paramDefs.types.size()) {
+        HIRPathParamsBuilder next(params);
+        if (next.types.size() != paramDefs.types.size()) {
             TRACE_FUNCTION_FR(path, params);
-            if (params.types.size() == 0 && fillInfer) {
-                while (params.types.size() < paramDefs.types.size()) {
-                    params.types.push_back(types.infer());
+            if (next.types.size() == 0 && fillInfer) {
+                while (next.types.size() < paramDefs.types.size()) {
+                    next.types.push_back(types.infer());
                 }
-            } else if (params.types.size() > paramDefs.types.size()) {
-                while (params.types.size() > paramDefs.types.size() && params.values.size() < paramDefs.values.size() && params.types.back()->is_Infer()) {
-                    params.types.pop_back();
-                    params.values.push_back(HIRConstGeneric::make_Infer({}));
+            } else if (next.types.size() > paramDefs.types.size()) {
+                while (next.types.size() > paramDefs.types.size() && next.values.size() < paramDefs.values.size() && next.types.back()->is_Infer()) {
+                    next.types.pop_back();
+                    next.values.push_back(HIRConstGeneric::make_Infer({}));
                 }
-                if (params.types.size() > paramDefs.types.size()) {
+                if (next.types.size() > paramDefs.types.size()) {
                     ERROR(sp, E0000, StringView("Too many type parameters passed to ") << path);
                 }
             }
-            if (params.types.size() < paramDefs.types.size()) {
-                while (params.types.size() < paramDefs.types.size()) {
-                    const auto& typ = paramDefs.types[params.types.size()];
+            if (next.types.size() < paramDefs.types.size()) {
+                while (next.types.size() < paramDefs.types.size()) {
+                    const auto& typ = paramDefs.types[next.types.size()];
                     if (typ.defaultValue->is_Infer()) {
                         ERROR(sp, E0000, StringView("Omitted type parameter with no default in ") << path);
                     } else {
                         // TODO: Does expanding defaults need a custom monomorphiser that can handle later defaults?
+                        params = HIRPathParams(next);
                         MonomorphStatePtr ms(types, selfTy, &params, nullptr);
                         auto ty = ms.monomorphType(sp, typ.defaultValue);
-                        params.types.push_back(mv$(ty));
+                        next.types.push_back(mv$(ty));
                     }
                 }
             }
         }
-        if (params.values.size() != paramDefs.values.size()) {
-            if (params.values.size() == 0 && fillInfer) {
-                params.values.resize(paramDefs.values.size());
-            } else if (params.values.size() > paramDefs.values.size()) {
+        if (next.values.size() != paramDefs.values.size()) {
+            if (next.values.size() == 0 && fillInfer) {
+                next.values.resize(paramDefs.values.size());
+            } else if (next.values.size() > paramDefs.values.size()) {
                 ERROR(sp, E0000, StringView("Too many value parameters passed to ") << path);
             } else {
-                while (params.values.size() < paramDefs.values.size()) {
-                    const auto& val = paramDefs.values[params.values.size()];
+                while (next.values.size() < paramDefs.values.size()) {
+                    const auto& val = paramDefs.values[next.values.size()];
                     if (val.defaultValue.is_Infer()) {
                         ERROR(sp, E0000, StringView("Omitted value parameter with no default in ") << path);
                     } else if (val.defaultValue.is_Unevaluated()) {
-                        params.values.push_back(val.defaultValue.clone());
+                        next.values.push_back(val.defaultValue.clone());
                     } else {
+                        params = HIRPathParams(next);
                         MonomorphStatePtr ms(types, selfTy, &params, nullptr);
-                        params.values.push_back(ms.monomorphConstgeneric(sp, val.defaultValue, false));
+                        next.values.push_back(ms.monomorphConstgeneric(sp, val.defaultValue, false));
                     }
                 }
             }
         }
+        params = HIRPathParams(mv$(next));
     }
 
     const HIRType* ConvertHIRExpandAliasesGetExpansion(const HIRCrate& crate, const HIRPath& path, bool isExpr) {
@@ -641,7 +647,7 @@ namespace {
             const auto& def = trait.params.types[impl.traitArgs.types.size()];
             auto ty = ms.monomorphType(sp, def.defaultValue);
             DEBUG(StringView("Add default trait arg ") << ty << StringView(" from ") << def.defaultValue);
-            impl.traitArgs.types.push_back(mv$(ty));
+            impl.traitArgs = impl.traitArgs.appended(ty);
         }
         while (impl.traitArgs.values.size() < trait.params.values.size()) {
             const auto& def = trait.params.values[impl.traitArgs.values.size()];
@@ -649,14 +655,16 @@ namespace {
                 ERROR(sp, E0000, StringView("Omitted const parameter with no default in impl of ") << traitPath);
             }
             auto value = def.defaultValue.clone();
-            if (auto* unevaluated = value.opt_Unevaluated()) {
-                (*unevaluated)->selfType = impl.type;
-                (*unevaluated)->paramsImpl = impl.traitArgs.clone();
+            if (const auto* unevaluated = value.opt_Unevaluated()) {
+                auto next = (*unevaluated)->clone();
+                next.selfType = impl.type;
+                next.paramsImpl = impl.traitArgs;
+                value = HIRConstGeneric(internUnevaluated(mv$(next)));
             } else {
                 value = ms.monomorphConstgeneric(sp, value, false);
             }
             DEBUG(StringView("Add default trait const arg ") << value << StringView(" from ") << def.defaultValue);
-            impl.traitArgs.values.push_back(mv$(value));
+            impl.traitArgs = impl.traitArgs.appendedValue(mv$(value));
         }
     }
 
@@ -753,48 +761,51 @@ HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& 
         ASSERT_BUG(sp, isAliasInputInfer(index), StringView("exhausted alias inference placeholder range"));
         return index;
     };
+    HIRPathParamsBuilder next(pp);
 
-    if (isExpr && pp.types.empty()) {
-        while (pp.types.size() < paramsDef.types.size()) {
-            pp.types.push_back(types.infer());
+    if (isExpr && next.types.empty()) {
+        while (next.types.size() < paramsDef.types.size()) {
+            next.types.push_back(types.infer());
         }
     }
-    if (isExpr && pp.values.empty()) {
-        pp.values.resize(paramsDef.values.size());
+    if (isExpr && next.values.empty()) {
+        next.values.resize(paramsDef.values.size());
     }
 
     if (isExpr) {
-        for (auto& type : pp.types) {
+        for (auto& type : next.types) {
             if (const auto* infer = type->opt_Infer(); infer && infer->index == ~0u) {
                 type = types.infer(newAliasInputInfer(), infer->tyClass);
             }
         }
-        for (auto& value : pp.values) {
+        for (auto& value : next.values) {
             if (value.is_Infer() && value.as_Infer().index == ~0u) {
                 value.as_Infer().index = newAliasInputInfer();
             }
         }
     }
 
-    pp.types.reserve(paramsDef.types.size());
-    while (pp.types.size() < paramsDef.types.size() && paramsDef.types[pp.types.size()].defaultValue != nullptr) {
+    next.types.reserve(paramsDef.types.size());
+    while (next.types.size() < paramsDef.types.size() && paramsDef.types[next.types.size()].defaultValue != nullptr) {
+        pp = HIRPathParams(next);
         auto monomorph = MonomorphStatePtr(types, nullptr, &pp, nullptr);
-        pp.types.push_back(monomorph.monomorphType(sp, paramsDef.types[pp.types.size()].defaultValue));
+        next.types.push_back(monomorph.monomorphType(sp, paramsDef.types[next.types.size()].defaultValue));
     }
-    if (pp.types.size() != paramsDef.types.size()) {
-        ERROR(sp, E0000, StringView("Mismatched type-generic count in ") << path << StringView(", expected ") << paramsDef.types.size() << StringView(" got ") << pp.types.size());
+    if (next.types.size() != paramsDef.types.size()) {
+        ERROR(sp, E0000, StringView("Mismatched type-generic count in ") << path << StringView(", expected ") << paramsDef.types.size() << StringView(" got ") << next.types.size());
     }
 
-    pp.values.reserve(paramsDef.values.size());
-    while (pp.values.size() < paramsDef.values.size() && !paramsDef.values[pp.values.size()].defaultValue.is_Infer()) {
+    next.values.reserve(paramsDef.values.size());
+    while (next.values.size() < paramsDef.values.size() && !paramsDef.values[next.values.size()].defaultValue.is_Infer()) {
+        pp = HIRPathParams(next);
         auto monomorph = MonomorphStatePtr(types, nullptr, &pp, nullptr);
-        pp.values.push_back(monomorph.monomorphConstgeneric(sp, paramsDef.values[pp.values.size()].defaultValue, false));
+        next.values.push_back(monomorph.monomorphConstgeneric(sp, paramsDef.values[next.values.size()].defaultValue, false));
     }
-    if (pp.values.size() != paramsDef.values.size()) {
-        ERROR(sp, E0000, StringView("Mismatched const-generic count in ") << path << StringView(", expected ") << paramsDef.values.size() << StringView(" got ") << pp.values.size());
+    if (next.values.size() != paramsDef.values.size()) {
+        ERROR(sp, E0000, StringView("Mismatched const-generic count in ") << path << StringView(", expected ") << paramsDef.values.size() << StringView(" got ") << next.values.size());
     }
 
-    return pp;
+    return HIRPathParams(mv$(next));
 }
 
 const HIRType* ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr) {
@@ -1075,13 +1086,15 @@ auto BindVisitor::visitConstgeneric(HIRConstGeneric& value) -> void {
                 && (root->nodeKind() == HIRExprNodePathValue::kind || root->nodeKind() == HIRExprNodeUnitVariant::kind);
             (*unevaluated)->expr->state->anonymousConst = !pathConstArg;
         }
-        (*unevaluated)->selfType = selfType;
+        auto next = (*unevaluated)->clone();
+        next.selfType = selfType;
         if (ms.implGenerics) {
-            (*unevaluated)->paramsImpl = ms.implGenerics->makeNopParams(crate.types, 0);
+            next.paramsImpl = ms.implGenerics->makeNopParams(crate.types, 0);
         }
         if (ms.itemGenerics) {
-            (*unevaluated)->paramsItem = ms.itemGenerics->makeNopParams(crate.types, 1);
+            next.paramsItem = ms.itemGenerics->makeNopParams(crate.types, 1);
         }
+        value = HIRConstGeneric(internUnevaluated(mv$(next)));
     }
 }
 
@@ -1607,8 +1620,9 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
                             // TODO: Check that the expression is a valid const (no locals referenced, no function calls?)
 
                             HIRExprPtr ep{std::move(argNode)};
-                            e->params.values.push_back(HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(std::move(ep))));
-                            upperVisitor.visitConstgeneric(e->params.values.back());
+                            HIRConstGeneric value(internUnevaluated(HIRConstGenericUnevaluated(std::move(ep))));
+                            upperVisitor.visitConstgeneric(value);
+                            e->params = e->params.appendedValue(mv$(value));
                         }
                         auto newEnd = std::remove_if(node.args.begin(), node.args.end(), [](const HIRExprNodeP& np) {
                             return !np;
@@ -2405,13 +2419,16 @@ auto Expander::expandAliasPath(const Span& sp, const HIRPath& path) -> HIRPath {
 }
 
 auto Expander::visitPatternPathBinding(const Span& sp, HIRPath& path) -> HIRPattern::PathBinding {
-    auto resizeTypeParams = [&](HIRPathParams& params, size_t size) {
-        if (params.types.size() > size) {
-            params.types.resize(size);
+    auto resizeParams = [&](HIRPathParams& params, size_t typeCount, size_t valueCount) {
+        HIRPathParamsBuilder next(params);
+        if (next.types.size() > typeCount) {
+            next.types.resize(typeCount);
         }
-        while (params.types.size() < size) {
-            params.types.push_back(crate.types.infer());
+        while (next.types.size() < typeCount) {
+            next.types.push_back(crate.types.infer());
         }
+        next.values.resize(valueCount);
+        params = HIRPathParams(mv$(next));
     };
 
     if (path.data.is_UfcsUnknown()) {
@@ -2449,8 +2466,7 @@ auto Expander::visitPatternPathBinding(const Span& sp, HIRPath& path) -> HIRPatt
 
         auto gp2 = gp.clone();
         gp2.path += name;
-        resizeTypeParams(gp2.params, enm.params.types.size());
-        gp2.params.values.resize(enm.params.values.size());
+        resizeParams(gp2.params, enm.params.types.size(), enm.params.values.size());
 
         auto idx = enm.findVariant(name);
         if (idx == ~0u) {
@@ -2492,8 +2508,7 @@ auto Expander::visitPatternPathBinding(const Span& sp, HIRPath& path) -> HIRPatt
         if (ti.is_Enum()) {
             const auto& enm = ti.as_Enum();
 
-            resizeTypeParams(gp.params, enm.params.types.size());
-            gp.params.values.resize(enm.params.values.size());
+            resizeParams(gp.params, enm.params.types.size(), enm.params.values.size());
 
             auto idx = ti.as_Enum().findVariant(gp.path.components().back());
             return HIRPattern::PathBinding::make_Enum({&enm, static_cast<unsigned>(idx)});
@@ -2504,8 +2519,7 @@ auto Expander::visitPatternPathBinding(const Span& sp, HIRPath& path) -> HIRPatt
     if (ti.is_Union()) {
         const auto& unn = ti.as_Union();
 
-        resizeTypeParams(gp.params, unn.params.types.size());
-        gp.params.values.resize(unn.params.values.size());
+        resizeParams(gp.params, unn.params.types.size(), unn.params.values.size());
 
         return HIRPattern::PathBinding::make_Union(&unn);
     }
@@ -2513,8 +2527,7 @@ auto Expander::visitPatternPathBinding(const Span& sp, HIRPath& path) -> HIRPatt
     ASSERT_BUG(sp, ti.is_Struct(), StringView("Pattern path ") << gp.path << StringView(" didn't point to a struct or union (") << ti.tagStr() << StringView(")"));
     const auto& str = ti.as_Struct();
 
-    resizeTypeParams(gp.params, str.params.types.size());
-    gp.params.values.resize(str.params.values.size());
+    resizeParams(gp.params, str.params.types.size(), str.params.values.size());
 
     return HIRPattern::PathBinding::make_Struct(&str);
 }
@@ -2796,9 +2809,11 @@ AliasConstGenericParamBinder::AliasConstGenericParamBinder(HIRTypeInterner& type
 }
 
 auto AliasConstGenericParamBinder::visitConstgeneric(HIRConstGeneric& value) -> void {
-    if (auto* unevaluated = value.opt_Unevaluated()) {
+    if (const auto* unevaluated = value.opt_Unevaluated()) {
         if (implParams && !(*unevaluated)->paramsImpl.hasParams()) {
-            (*unevaluated)->paramsImpl = implParams->makeNopParams(typeInterner(), 0);
+            auto next = (*unevaluated)->clone();
+            next.paramsImpl = implParams->makeNopParams(typeInterner(), 0);
+            value = HIRConstGeneric(internUnevaluated(mv$(next)));
         }
     }
     HIRVisitor::visitConstgeneric(value);
@@ -2848,9 +2863,9 @@ auto ReceiverValidator::replaceImplTypeWithSelf(const HIRType* ty) -> const HIRT
             return ty;
         }
         auto data = ty->cloneData();
-        auto& inner = data.as_Path().path.data.as_Generic().params.types[0];
-        if (const auto* replaced = replaceImplTypeWithSelf(inner)) {
-            inner = replaced;
+        auto& genericData = data.as_Path().path.data.as_Generic();
+        if (const auto* replaced = replaceImplTypeWithSelf(genericData.params.types[0])) {
+            genericData.params = genericData.params.withType(0, replaced);
         } else {
             return nullptr;
         }
@@ -3746,9 +3761,7 @@ auto UfcsVisitor::getUfcsKnown(HIRVisitor::PathContext pc, HIRPath::Data::Data_U
        its arguments (upstream `lower_assoc_path` for `Res::SelfTyAlias` of a trait
        impl), also when it heads a struct literal in a body. */
     if (inExpr && pc != HIRVisitor::PathContext::TYPE) {
-        for (auto& type : traitPath.params.types) {
-            type = crate.types.infer();
-        }
+        traitPath.params = traitPath.params.mapTypes([&](const HIRType*) { return crate.types.infer(); });
     }
     return HIRPath::Data::make_UfcsKnown({mv$(e.type), mv$(traitPath), mv$(e.item), mv$(e.params)});
 }
@@ -3792,7 +3805,7 @@ auto UfcsVisitor::locateInTraitAndSet(HIRVisitor::PathContext pc, const HIRGener
         }
         if (def == crate.types.self()) {
             // TODO: This has to be the _exact_ same type, including future ivars.
-            pp.types.push_back(pd.as_UfcsUnknown().type);
+            pp = pp.appended(pd.as_UfcsUnknown().type);
             continue;
         }
         TODO(sp, StringView("Monomorphise default arg ") << def << StringView(" for trait path ") << traitPath);
@@ -3861,8 +3874,9 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
         DEBUG(StringView("FOUND impl from ") << (probe.candidate ? probe.candidate->traitPath : traitPath.path));
         if (auto* innerE = pd.opt_UfcsKnown()) {
             BUG_ASSERT(pp.types.size() == innerE->trait.params.types.size());
+            HIRPathParamsBuilder traitParams(innerE->trait.params);
             for (unsigned int i = 0; i < pp.types.size(); i++) {
-                auto& eTy = innerE->trait.params.types[i];
+                auto& eTy = traitParams.types[i];
                 const auto& thisTy = pp.types[i];
                 if (eTy->is_Infer() && eTy->as_Infer().index == ~0u) {
                 } else if (eTy != thisTy) {
@@ -3870,6 +3884,7 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
                 } else {
                 }
             }
+            innerE->trait.params = HIRPathParams(mv$(traitParams));
         } else {
             pd = getUfcsKnown(pc, mv$(e), HIRGenericPath(traitPath.path, mv$(pp)), trait);
         }
@@ -3971,11 +3986,12 @@ auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathCo
         }
 
         DEBUG(StringView("- Trying trait ") << *traitInfo.first);
-        auto traitPath = HIRGenericPath(*traitInfo.first);
-        traitPath.params.types.reserve(trait.params.types.size());
+        HIRPathParamsBuilder traitParams;
+        traitParams.types.reserve(trait.params.types.size());
         for (size_t i = 0; i < trait.params.types.size(); i++) {
-            traitPath.params.types.push_back(crate.types.infer());
+            traitParams.types.push_back(crate.types.infer());
         }
+        auto traitPath = HIRGenericPath(*traitInfo.first, HIRPathParams(mv$(traitParams)));
 
         // TODO: If there's only one trait with this name, assume it's the correct one.
 
@@ -4131,9 +4147,8 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                    `<usize as Add<Span>>::Output`.  A value path `Self::item` is looked up
                    on the self type instead, so its trait arguments stay to be inferred. */
                 if (inExpr && !inTraitDef_ && pc != HIRVisitor::PathContext::TYPE) {
-                    for (auto& t : p.data.as_UfcsKnown().trait.params.types) {
-                        t = crate.types.infer();
-                    }
+                    auto& knownTrait = p.data.as_UfcsKnown().trait;
+                    knownTrait.params = knownTrait.params.mapTypes([&](const HIRType*) { return crate.types.infer(); });
                 }
                 DEBUG(StringView("Found in Self (trait), p = ") << p);
                 return;
@@ -4191,9 +4206,8 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
             if (locateInTraitAndSet(pc, traitPath, *currentTrait, p.data)) {
                 BUG_ASSERT(!p.data.is_UfcsUnknown());
                 if (inExpr && pc != HIRVisitor::PathContext::TYPE) {
-                    for (auto& t : p.data.as_UfcsKnown().trait.params.types) {
-                        t = crate.types.infer();
-                    }
+                    auto& knownTrait = p.data.as_UfcsKnown().trait;
+                    knownTrait.params = knownTrait.params.mapTypes([&](const HIRType*) { return crate.types.infer(); });
                 }
                 DEBUG(StringView("Found in Self (impl") << (inExpr ? " expr" : "") << StringView("), p = ") << p);
                 return;

@@ -2094,20 +2094,22 @@ struct OrderPlace {
             if (paramsDef && params.values.size() == paramsDef->values.size()) {
                 ConvertHIRConstantEvaluateMethodParams(sp, context.resolve.board(), context.crate, paramsDef, params);
             }
-            for (auto& value : params.values) {
-                ConvertHIRConstantEvaluateConstGeneric(sp, context.resolve.board(), context.crate, value);
+            if (!params.values.empty()) {
+                HIRPathParamsBuilder next(params);
+                for (auto& value : next.values) {
+                    ConvertHIRConstantEvaluateConstGeneric(sp, context.resolve.board(), context.crate, value);
+                }
+                params = HIRPathParams(mv$(next));
             }
         };
         const auto& traitDef = context.crate.getTraitByPath(sp, v.trait);
         normalizeConstParams(v.params, &traitDef.params);
         normalizeConstParams(v.atyPp, nullptr);
 
-        for (auto& ty : v.params.types) {
+        v.params = v.params.mapTypes([&](const HIRType* ty) {
             auto revealed = context.revealOpaqueTypes(ty);
-            if (revealed != ty) {
-                ty = context.expandAssociatedTypes(sp, mv$(revealed));
-            }
-        }
+            return revealed != ty ? context.expandAssociatedTypes(sp, mv$(revealed)) : ty;
+        });
 
         std::optional<const HIRType*> outputType;
 
@@ -2188,7 +2190,7 @@ struct OrderPlace {
             auto probeParams = v.params.clone();
             if (probeParams.types.size() == 1) {
                 if (const auto* source = concreteCoercionSource(probeParams.types.front())) {
-                    probeParams.types.front() = source;
+                    probeParams = probeParams.withType(0, source);
                     operatorProbeUsesOriginalInputs = false;
                 }
             }
@@ -3469,44 +3471,49 @@ struct OrderPlace {
 
     template <typename T>
     void fix_param_count_(const Span& sp, Context& context, const HIRType* selfTy, bool useDefaults, const T& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
-        if (params.types.size() == paramDefs.types.size()) {
-        } else if (params.types.size() > paramDefs.types.size()) {
-            while (params.types.size() > paramDefs.types.size() && params.values.size() < paramDefs.values.size() && params.types.back()->is_Infer()) {
-                params.types.pop_back();
-                params.values.push_back({});
-                context.ivars.addIvars(params.values.back());
+        if (params.types.size() == paramDefs.types.size() && params.values.size() == paramDefs.values.size()) {
+            return;
+        }
+        HIRPathParamsBuilder next(params);
+        if (next.types.size() == paramDefs.types.size()) {
+        } else if (next.types.size() > paramDefs.types.size()) {
+            while (next.types.size() > paramDefs.types.size() && next.values.size() < paramDefs.values.size() && next.types.back()->is_Infer()) {
+                next.types.pop_back();
+                next.values.push_back({});
+                context.ivars.addIvars(next.values.back());
             }
-            if (params.types.size() > paramDefs.types.size()) {
+            if (next.types.size() > paramDefs.types.size()) {
                 ERROR(sp, E0000, StringView("Too many type parameters passed to ") << path);
             }
         } else {
-            while (params.types.size() < paramDefs.types.size()) {
-                const auto& typ = paramDefs.types[params.types.size()];
+            while (next.types.size() < paramDefs.types.size()) {
+                const auto& typ = paramDefs.types[next.types.size()];
                 if (useDefaults) {
                     if (typ.defaultValue->is_Infer()) {
                         ERROR(sp, E0000, StringView("Omitted type parameter with no default in ") << path);
                     } else if (monomorphiseTypeNeeded(typ.defaultValue)) {
                         auto cb = MonomorphStatePtr(context.crate.types, selfTy, nullptr, nullptr);
-                        params.types.push_back(cb.monomorphType(sp, typ.defaultValue));
+                        next.types.push_back(cb.monomorphType(sp, typ.defaultValue));
                     } else {
-                        params.types.push_back(typ.defaultValue);
+                        next.types.push_back(typ.defaultValue);
                     }
                 } else {
-                    params.types.push_back(context.ivars.newIvarTr());
+                    next.types.push_back(context.ivars.newIvarTr());
                     // TODO: It's possible that the default could be added using `context.possible_equate_type_def` to give inferrence a fallback
                 }
             }
         }
 
-        if (params.values.size() == paramDefs.values.size()) {
-        } else if (params.values.size() > paramDefs.values.size()) {
+        if (next.values.size() == paramDefs.values.size()) {
+        } else if (next.values.size() > paramDefs.values.size()) {
             ERROR(sp, E0000, StringView("Too many const parameters passed to ") << path);
         } else {
-            while (params.values.size() < paramDefs.values.size()) {
-                params.values.push_back({});
-                context.ivars.addIvars(params.values.back());
+            while (next.values.size() < paramDefs.values.size()) {
+                next.values.push_back({});
+                context.ivars.addIvars(next.values.back());
             }
         }
+        params = HIRPathParams(mv$(next));
     }
 
     void fixParamCount(const Span& sp, Context& context, const HIRType* selfTy, bool useDefaults, const HIRPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
@@ -6220,7 +6227,7 @@ void Context::equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimple
         if (defaultType == nullptr || defaultType->is_Infer()) {
             break;
         }
-        pp.types.push_back(monomorph.monomorphType(sp, defaultType));
+        pp = pp.appended(monomorph.monomorphType(sp, defaultType));
     }
 
     const RcString ruleName(name);
@@ -6988,9 +6995,7 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
             continue;
         }
 
-        for (auto& ty : rule.params.types) {
-            ty = context.expandAssociatedTypes(rule.span, mv$(ty));
-        }
+        rule.params = rule.params.mapTypes([&](const HIRType* ty) { return context.expandAssociatedTypes(rule.span, ty); });
         if (rule.name != "") {
             rule.leftTy = context.expandAssociatedTypes(rule.span, mv$(rule.leftTy));
         }
@@ -8684,8 +8689,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
     Vector<const HIRType*> derefResTypes;
 
     // TODO: (CHECK) rustc doesn't use the index value type when finding the indexable item, trustme does.
-    HIRPathParams traitPp;
-    traitPp.types.push_back(idxTy);
+    HIRPathParams traitPp(idxTy);
     do {
         const auto& ty = this->context.getType(currentTy);
         DEBUG(StringView("(Index): (: ") << ty << StringView(")[: ") << traitPp.types[0] << StringView("]"));
@@ -8801,8 +8805,8 @@ auto ExprVisitorRevisit::visitEmplace129(HIRExprNodeEmplace& node) -> void {
     const auto& str = this->context.crate.getStructByPath(sp, langBoxed);
     // TODO: Store this type to avoid having to construct it every pass
     auto p = HIRGenericPath(langBoxed, {dataTy});
-    p.params.types.push_back(MonomorphStatePtr(context.crate.types, nullptr, &p.params, nullptr).monomorphType(sp, str.params.types.at(1).defaultValue));
-    p.params.types.back() = this->context.addIvars(p.params.types.back());
+    const auto* allocatorTy = MonomorphStatePtr(context.crate.types, nullptr, &p.params, nullptr).monomorphType(sp, str.params.types.at(1).defaultValue);
+    p.params = p.params.appended(this->context.addIvars(allocatorTy));
     auto boxedTy = context.crate.types.path(mv$(p), &str);
 
     // TODO: is there anyting special about this node that might need revisits?
@@ -8928,7 +8932,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
         for (const auto& argTy : node.argIvars) {
             argTypes.pushBack(this->context.getType(argTy));
         }
-        traitPp.types.push_back(context.crate.types.tuple(mv$(argTypes)));
+        traitPp = HIRPathParams(context.crate.types.tuple(mv$(argTypes)));
     }
 
     unsigned int derefCount = 0;
@@ -9661,7 +9665,7 @@ auto ExprVisitorApply::visit(HIRExprNodeCallValue& node) -> void {
                 for (const auto& argTy : node.argIvars) {
                     argTypes.pushBack(this->context.getType(argTy));
                 }
-                traitPp.types.push_back(context.crate.types.tuple(mv$(argTypes)));
+                traitPp = HIRPathParams(context.crate.types.tuple(mv$(argTypes)));
             }
 
             if (!this->context.resolve.langFn().components().empty() && this->context.resolve.selectTraitGoal(node.span(), this->context.resolve.langFn(), traitPp, ty, [&](SolverSelection) {
@@ -9834,12 +9838,13 @@ auto ExprVisitorApply::checkTypeResolvedConstgeneric(const Span& sp, HIRConstGen
 }
 
 auto ExprVisitorApply::checkTypeResolvedPp(const Span& sp, HIRPathParams& pp, const HIRType* topType) const -> void {
-    for (auto& ty : pp.types) {
-        ty = checkTypeResolved(sp, ty, topType);
-    }
-    for (auto& val : pp.values) {
-        checkTypeResolvedConstgeneric(sp, val, topType);
-    }
+    pp = pp.map(
+        [&](const HIRType* ty) { return checkTypeResolved(sp, ty, topType); },
+        [&](const HIRConstGeneric& val) {
+            auto next = val.clone();
+            checkTypeResolvedConstgeneric(sp, next, topType);
+            return next;
+        });
 }
 
 auto ExprVisitorApply::checkTypeResolvedPath(const Span& sp, HIRPath& path) const -> void {
@@ -9848,31 +9853,21 @@ auto ExprVisitorApply::checkTypeResolvedPath(const Span& sp, HIRPath& path) cons
     switch (path.data.tag()) {
         case HIRPath::Data::TAG_Generic: {
             auto& pe = path.data.as_Generic();
-            for (auto& ty : pe.params.types) {
-                ty = this->context.expandAssociatedTypes(sp, mv$(ty));
-            }
+            pe.params = pe.params.mapTypes([&](const HIRType* ty) { return this->context.expandAssociatedTypes(sp, mv$(ty)); });
             break;
         }
         case HIRPath::Data::TAG_UfcsInherent: {
             auto& pe = path.data.as_UfcsInherent();
             pe.type = this->context.expandAssociatedTypes(sp, mv$(pe.type));
-            for (auto& ty : pe.params.types) {
-                ty = this->context.expandAssociatedTypes(sp, mv$(ty));
-            }
-            for (auto& ty : pe.implParams.types) {
-                ty = this->context.expandAssociatedTypes(sp, mv$(ty));
-            }
+            pe.params = pe.params.mapTypes([&](const HIRType* ty) { return this->context.expandAssociatedTypes(sp, mv$(ty)); });
+            pe.implParams = pe.implParams.mapTypes([&](const HIRType* ty) { return this->context.expandAssociatedTypes(sp, mv$(ty)); });
             break;
         }
         case HIRPath::Data::TAG_UfcsKnown: {
             auto& pe = path.data.as_UfcsKnown();
             pe.type = this->context.expandAssociatedTypes(sp, mv$(pe.type));
-            for (auto& ty : pe.params.types) {
-                ty = this->context.expandAssociatedTypes(sp, mv$(ty));
-            }
-            for (auto& ty : pe.trait.params.types) {
-                ty = this->context.expandAssociatedTypes(sp, mv$(ty));
-            }
+            pe.params = pe.params.mapTypes([&](const HIRType* ty) { return this->context.expandAssociatedTypes(sp, mv$(ty)); });
+            pe.trait.params = pe.trait.params.mapTypes([&](const HIRType* ty) { return this->context.expandAssociatedTypes(sp, mv$(ty)); });
             break;
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
@@ -11103,9 +11098,7 @@ auto ExprVisitorAddIvars::innerVisitType(const HIRType* ty) -> const HIRType* {
 
 auto ExprVisitorAddIvars::visitPathParams(HIRPathParams& pp) -> void {
     this->context.ivars.addIvarsParams(pp);
-    for (auto& ty : pp.types) {
-        ty = innerVisitType(ty);
-    }
+    pp = pp.mapTypes([&](const HIRType* ty) { return innerVisitType(ty); });
 }
 
 [[nodiscard]] auto ExprVisitorAddIvars::visitType(const HIRType* ty) -> const HIRType* {
@@ -11956,9 +11949,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeEmplace& node) -> void {
 }
 
 auto ExprVisitorEnum::addIvarsGenericPath(const Span& sp, HIRGenericPath& gp) -> void {
-    for (auto& ty : gp.params.types) {
-        ty = this->context.addIvars(ty);
-    }
+    gp.params = gp.params.mapTypes([&](const HIRType* ty) { return this->context.addIvars(ty); });
 }
 
 auto ExprVisitorEnum::addIvarsPath(const Span& sp, HIRPath& path) -> void {
@@ -11972,9 +11963,7 @@ auto ExprVisitorEnum::addIvarsPath(const Span& sp, HIRPath& path) -> void {
             auto& e = path.data.as_UfcsKnown();
             e.type = this->context.addIvars(e.type);
             this->addIvarsGenericPath(sp, e.trait);
-            for (auto& ty : e.params.types) {
-                ty = this->context.addIvars(ty);
-            }
+            e.params = e.params.mapTypes([&](const HIRType* ty) { return this->context.addIvars(ty); });
             break;
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
@@ -11984,9 +11973,7 @@ auto ExprVisitorEnum::addIvarsPath(const Span& sp, HIRPath& path) -> void {
         case HIRPath::Data::TAG_UfcsInherent: {
             auto& e = path.data.as_UfcsInherent();
             e.type = this->context.addIvars(e.type);
-            for (auto& ty : e.params.types) {
-                ty = this->context.addIvars(ty);
-            }
+            e.params = e.params.mapTypes([&](const HIRType* ty) { return this->context.addIvars(ty); });
             break;
         }
     }

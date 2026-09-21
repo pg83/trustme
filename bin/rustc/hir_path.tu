@@ -1,5 +1,5 @@
-# A const generic value.  clone() stays hand-written: Unevaluated re-wraps
-# into a fresh unique_ptr; every other variant copies plainly.
+# A const generic value.  clone() stays hand-written: every variant copies
+# plainly, Unevaluated as the pointer to its interned node.
 
 generate(
     name="HIRConstGeneric",
@@ -8,11 +8,9 @@ generate(
     output=True,
     variants=[
         v("Infer", "HIRInferData", doc="To be inferred"),
-        v("Unevaluated", "std::unique_ptr<HIRConstGenericUnevaluated>",
-          copy=False,
-          doc="Unevaluated (or evaluation deferred). A unique_ptr because the"
-              " payload holds two PathParams and a shared ptr; every other"
-              " variant is two pointers"),
+        v("Unevaluated", "const HIRConstGenericUnevaluated*",
+          doc="Unevaluated (or evaluation deferred): an interned, immutable"
+              " node"),
         v("Generic", "HIRGenericRef", doc="A single generic reference"),
         v("Evaluated", "const EncodedLiteral*", doc="A fully known literal, frozen in the literal pool"),
     ],

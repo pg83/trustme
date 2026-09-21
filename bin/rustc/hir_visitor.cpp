@@ -33,38 +33,13 @@ namespace {
     bool walkTypesInTraitPath(HIRVisitor& v, const HIRTraitPath& p, HIRTraitPath& out);
 
     bool walkTypesInPathParams(HIRVisitor& v, const HIRPathParams& p, HIRPathParams& out) {
-        for (size_t i = 0; i < p.types.size(); i++) {
-            auto nt = v.visitType(p.types[i]);
-            if (nt != p.types[i]) {
-                out = p.clone();
-                out.types[i] = nt;
-                for (size_t j = i + 1; j < out.types.size(); j++) {
-                    out.types[j] = v.visitType(out.types[j]);
-                }
-                for (auto& val : out.values) {
-                    HIRConstGeneric nv;
-                    if (walkTypesInConstgeneric(v, val, nv)) {
-                        val = mv$(nv);
-                    }
-                }
-                return true;
-            }
-        }
-        for (size_t i = 0; i < p.values.size(); i++) {
-            HIRConstGeneric nv;
-            if (walkTypesInConstgeneric(v, p.values[i], nv)) {
-                out = p.clone();
-                out.values[i] = mv$(nv);
-                for (size_t j = i + 1; j < out.values.size(); j++) {
-                    HIRConstGeneric nv2;
-                    if (walkTypesInConstgeneric(v, out.values[j], nv2)) {
-                        out.values[j] = mv$(nv2);
-                    }
-                }
-                return true;
-            }
-        }
-        return false;
+        out = p.map(
+            [&](const HIRType* type) { return v.visitType(type); },
+            [&](const HIRConstGeneric& value) {
+                HIRConstGeneric next;
+                return walkTypesInConstgeneric(v, value, next) ? mv$(next) : value.clone();
+            });
+        return !out.sameAs(p);
     }
 
     bool walkTypesInConstgeneric(HIRVisitor& v, const HIRConstGeneric& c, HIRConstGeneric& out) {
@@ -82,15 +57,15 @@ namespace {
         if (nself == u.selfType && !cimpl && !citem) {
             return false;
         }
-        out = HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(u.clone()));
-        auto& ou = *out.as_Unevaluated();
-        ou.selfType = nself;
+        auto next = u.clone();
+        next.selfType = nself;
         if (cimpl) {
-            ou.paramsImpl = mv$(nimpl);
+            next.paramsImpl = nimpl;
         }
         if (citem) {
-            ou.paramsItem = mv$(nitem);
+            next.paramsItem = nitem;
         }
+        out = HIRConstGeneric(internUnevaluated(mv$(next)));
         return true;
     }
 
@@ -1194,13 +1169,15 @@ void HIRVisitor::visitTypeDataChildren(HIRType& data) {
 }
 
 void HIRVisitor::visitConstgeneric(HIRConstGeneric& c) {
-    if (auto* unevaluated = c.opt_Unevaluated()) {
-        if ((*unevaluated)->selfType) {
-            (*unevaluated)->selfType = visitType((*unevaluated)->selfType);
+    if (const auto* unevaluated = c.opt_Unevaluated()) {
+        auto next = (*unevaluated)->clone();
+        if (next.selfType) {
+            next.selfType = visitType(next.selfType);
         }
-        this->visitPathParams((*unevaluated)->paramsImpl);
-        this->visitPathParams((*unevaluated)->paramsItem);
-        this->visitExpr(*(*unevaluated)->expr);
+        this->visitPathParams(next.paramsImpl);
+        this->visitPathParams(next.paramsItem);
+        this->visitExpr(*next.expr);
+        c = HIRConstGeneric(internUnevaluated(mv$(next)));
     }
 }
 
@@ -1251,12 +1228,13 @@ void HIRVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) {
 }
 
 void HIRVisitor::visitPathParams(HIRPathParams& p) {
-    for (auto& ty : p.types) {
-        ty = visitType(ty);
-    }
-    for (auto& v : p.values) {
-        visitConstgeneric(v);
-    }
+    p = p.map(
+        [&](const HIRType* type) { return visitType(type); },
+        [&](const HIRConstGeneric& value) {
+            auto next = value.clone();
+            visitConstgeneric(next);
+            return next;
+        });
 }
 
 void HIRVisitor::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext /*pc*/) {

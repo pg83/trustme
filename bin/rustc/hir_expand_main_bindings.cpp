@@ -418,11 +418,11 @@ namespace {
         struct Monomorph: public Monomorphiser {
             const StaticTraitResolve& resolve;
             HIRGenericParams& params;
-            HIRPathParams& constructorPathParams;
+            HIRPathParamsBuilder& constructorPathParams;
             bool frozen = false;
             std::set<const HIRGenericBound*> addedBounds;
 
-            Monomorph(const StaticTraitResolve& resolve, HIRGenericParams& params, HIRPathParams& constructorPathParams);
+            Monomorph(const StaticTraitResolve& resolve, HIRGenericParams& params, HIRPathParamsBuilder& constructorPathParams);
 
             HIRPathParams freeze();
 
@@ -460,7 +460,7 @@ namespace {
             HIRGenericBound monomorphBound(const Span& sp, const HIRGenericBound& b) const;
         };
 
-        Monomorph createParams(const Span& sp, const StaticTraitResolve& resolve, HIRGenericParams& params, HIRPathParams& constructorPathParams) const;
+        Monomorph createParams(const Span& sp, const StaticTraitResolve& resolve, HIRGenericParams& params, HIRPathParamsBuilder& constructorPathParams) const;
 
         void visit(HIRExprNodeClosure& node) override;
 
@@ -898,9 +898,9 @@ namespace {
             HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& ge) const override;
         };
 
-        Monomorph createParams(const Span& sp, HIRGenericParams& params, HIRPathParams& constructorPathParams) const;
+        Monomorph createParams(const Span& sp, HIRGenericParams& params, HIRPathParamsBuilder& constructorPathParams) const;
 
-        HIRExprPtr extractNode(HIRExprNodeP& node, StaticTraitResolve& resolve, HIRGenericParams& paramsDef, HIRPathParams& constrParams, bool preserveGenericContext = false);
+        HIRExprPtr extractNode(HIRExprNodeP& node, StaticTraitResolve& resolve, HIRGenericParams& paramsDef, HIRPathParamsBuilder& constrParams, bool preserveGenericContext = false);
 
         struct MonomorphLifetimesStatic: public Monomorphiser {
             explicit MonomorphLifetimesStatic(HIRTypeInterner& types);
@@ -3426,7 +3426,7 @@ auto ClosureExprVisitorExtract::extractReferencedNodeTypes(const Span& sp, const
     });
 }
 
-auto ClosureExprVisitorExtract::createParams(const Span& sp, const StaticTraitResolve& resolve, HIRGenericParams& params, HIRPathParams& constructorPathParams) const -> Monomorph {
+auto ClosureExprVisitorExtract::createParams(const Span& sp, const StaticTraitResolve& resolve, HIRGenericParams& params, HIRPathParamsBuilder& constructorPathParams) const -> Monomorph {
     // TODO: How to get the bounds?
 
     return Monomorph(resolve, params, constructorPathParams);
@@ -3473,7 +3473,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
     // TODO: Fix up lifetimes somehow
 
     HIRGenericParams params;
-    HIRPathParams constructorPathParams;
+    HIRPathParamsBuilder constructorPathParams;
     // TODO: Don't create using all inputs, instead only use the parameters required by the body
     auto monomorphCb = createParams(sp, resolve_, params, constructorPathParams);
 
@@ -3638,8 +3638,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
         crate.implGeneration++;
     }
 
-    HIRPathParams traitParams;
-    traitParams.types.push_back(argsTy);
+    HIRPathParams traitParams(argsTy);
     switch (node.cls) {
         case HIRExprNodeClosure::Class::Unknown:
             node.cls = HIRExprNodeClosure::Class::NoCapture;
@@ -3946,7 +3945,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
     const auto implCounts = out.saveCounts();
 
     HIRGenericParams params;
-    HIRPathParams constructorPathParams;
+    HIRPathParamsBuilder constructorPathParams;
     auto monomorphCb = createParams(sp, resolve_, params, constructorPathParams);
 
     auto resumeTy = monomorphCb.monomorphType(sp, node.resumeTy);
@@ -4056,7 +4055,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
     fcnResume.args.push_back(std::make_pair(HIRPattern(), selfArgTy));
     fcnResume.args.push_back(std::make_pair(node.hasResumePattern ? HIRPattern{HIRPatternBinding{false, HIRPatternBinding::Type::Move, RcString::newInterned("resume"), 1}, HIRPattern::Data::make_Any({})} : HIRPattern(), resumeTy));
     node.hasResumePattern = false;
-    HIRPathParams retParams;
+    HIRPathParamsBuilder retParams;
     retParams.types.push_back(yieldTy);
     retParams.types.push_back(returnTy);
     fcnResume.returnType = resolve_.hirCrate().types.path(HIRGenericPath(langGeneratorState, std::move(retParams)), &resolve_.hirCrate().getEnumByPath(sp, langGeneratorState));
@@ -4073,7 +4072,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
     fcnResume.code.bindings = std::move(crVars.newLocals);
 
     HIRTraitImpl impl;
-    impl.traitArgs.types.push_back(resumeTy);
+    impl.traitArgs = HIRPathParams(resumeTy);
     impl.type = resolve_.hirCrate().types.path(HIRGenericPath(genStructPath, params.makeNopParams(resolve_.hirCrate().types, 0)), &genStructRef);
     impl.types.insert(std::make_pair(RcString::newInterned("Yield"), HIRTraitImpl::ImplEnt<const HIRType*>{false, yieldTy}));
     impl.types.insert(std::make_pair(RcString::newInterned("Return"), HIRTraitImpl::ImplEnt<const HIRType*>{false, returnTy}));
@@ -4111,7 +4110,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     const auto implCounts = out.saveCounts();
 
     HIRGenericParams params;
-    HIRPathParams constructorPathParams;
+    HIRPathParamsBuilder constructorPathParams;
     auto monomorphCb = createParams(sp, resolve_, params, constructorPathParams);
 
     auto returnTy = monomorphCb.monomorphType(sp, node.returnType);
@@ -4198,7 +4197,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     fcnResume.receiverType = selfArgTy;
     fcnResume.args.push_back(std::make_pair(HIRPattern(), selfArgTy));
     fcnResume.args.push_back(std::make_pair(HIRPattern(), contextArgTy));
-    HIRPathParams retParams;
+    HIRPathParamsBuilder retParams;
     auto langPoll = resolve_.hirCrate().getLangItemPath(sp, "Poll");
     if (node.isAsyncGen) {
         auto langOption = resolve_.hirCrate().getLangItemPath(sp, "Option");
@@ -4351,7 +4350,7 @@ ClosureExprVisitorExtract::DeferredFixup::DeferredFixup(HIRPathParams sourcePara
 {
 }
 
-ClosureExprVisitorExtract::Monomorph::Monomorph(const StaticTraitResolve& resolve, HIRGenericParams& params, HIRPathParams& constructorPathParams)
+ClosureExprVisitorExtract::Monomorph::Monomorph(const StaticTraitResolve& resolve, HIRGenericParams& params, HIRPathParamsBuilder& constructorPathParams)
     : Monomorphiser(resolve.hirCrate().types)
     , resolve(resolve)
     , params(params)
@@ -4361,7 +4360,7 @@ ClosureExprVisitorExtract::Monomorph::Monomorph(const StaticTraitResolve& resolv
 
 auto ClosureExprVisitorExtract::Monomorph::freeze() -> HIRPathParams {
     frozen = true;
-    return constructorPathParams.clone();
+    return HIRPathParams(constructorPathParams);
 }
 
 auto ClosureExprVisitorExtract::Monomorph::getType(const Span& sp, const HIRGenericRef& ge) const -> const HIRType* {
@@ -5605,7 +5604,7 @@ auto StaticBorrowExprVisitorMutate::visitNodePtr(HIRExprNodeP& root) -> void {
     root->visit(*this);
 }
 
-auto StaticBorrowExprVisitorMutate::createParams(const Span& sp, HIRGenericParams& params, HIRPathParams& constructorPathParams) const -> Monomorph {
+auto StaticBorrowExprVisitorMutate::createParams(const Span& sp, HIRGenericParams& params, HIRPathParamsBuilder& constructorPathParams) const -> Monomorph {
     if (resolve_.hasSelf() && selfType) {
         ASSERT_BUG(sp, selfType, StringView("Missing self type (disagreement between m_resolve and StaticBorrowExprVisitorMutate)"));
         constructorPathParams.types.push_back(selfType);
@@ -5670,7 +5669,7 @@ auto StaticBorrowExprVisitorMutate::createParams(const Span& sp, HIRGenericParam
     return monomorphCb;
 }
 
-auto StaticBorrowExprVisitorMutate::extractNode(HIRExprNodeP& node, StaticTraitResolve& resolve, HIRGenericParams& paramsDef, HIRPathParams& constrParams, bool preserveGenericContext) -> HIRExprPtr {
+auto StaticBorrowExprVisitorMutate::extractNode(HIRExprNodeP& node, StaticTraitResolve& resolve, HIRGenericParams& paramsDef, HIRPathParamsBuilder& constrParams, bool preserveGenericContext) -> HIRExprPtr {
     auto monomorph = this->createParams(node->span(), paramsDef, constrParams);
     resolve.setItemGenericsRaw(paramsDef);
 
@@ -5704,10 +5703,7 @@ auto StaticBorrowExprVisitorMutate::extractNode(HIRExprNodeP& node, StaticTraitR
                 this->isGeneric = true;
                 auto newPp = this->monomorph.monomorphPathParams(sp, pp, false);
                 DEBUG(pp << StringView(" -> ") << newPp);
-                pp = std::move(newPp);
-                for (auto& ty : pp.types) {
-                    ty = this->resolve.expandAssociatedTypes(sp, ty);
-                }
+                pp = newPp.mapTypes([&](const HIRType* ty) { return this->resolve.expandAssociatedTypes(sp, ty); });
             }
         }
 
@@ -5764,7 +5760,7 @@ auto StaticBorrowExprVisitorMutate::extractNode(HIRExprNodeP& node, StaticTraitR
     node->resType = v.visitType(node->resType);
     if (!v.isGeneric && !preserveGenericContext) {
         paramsDef = HIRGenericParams();
-        constrParams = HIRPathParams();
+        constrParams = HIRPathParamsBuilder();
         DEBUG(StringView("Concrete static"));
         DEBUG(StringView("Generic static"));
     }
@@ -5804,7 +5800,7 @@ auto StaticBorrowExprVisitorMutate::visit(HIRExprNodeBorrow& node) -> void {
         DEBUG(StringView("-- Creating static"));
         StaticTraitResolve resolve{resolve_.board()};
         HIRGenericParams paramsDef;
-        HIRPathParams constrParams;
+        HIRPathParamsBuilder constrParams;
         auto valExpr = extractNode(valuePtr, resolve, paramsDef, constrParams);
 
         auto sp = valExpr->span();
@@ -5813,8 +5809,9 @@ auto StaticBorrowExprVisitorMutate::visit(HIRExprNodeBorrow& node) -> void {
         staticTy = resolve.expandAssociatedTypes(sp, staticTy);
 
         auto path = newStaticCb.create(sp, mv$(staticTy), mv$(valExpr), mv$(paramsDef), false);
-        DEBUG(StringView("> ") << path << constrParams);
-        auto newNode = NEWNODE(std::move(newResTy), PathValue, sp, HIRGenericPath(mv$(path), mv$(constrParams)), HIRExprNodePathValue::STATIC);
+        const HIRPathParams constrHandle(mv$(constrParams));
+        DEBUG(StringView("> ") << path << constrHandle);
+        auto newNode = NEWNODE(std::move(newResTy), PathValue, sp, HIRGenericPath(mv$(path), constrHandle), HIRExprNodePathValue::STATIC);
         newNode->usage = usage;
         valuePtr = mv$(newNode);
     }
@@ -5836,7 +5833,7 @@ auto StaticBorrowExprVisitorMutate::visit(HIRExprNodeConstBlock& node) -> void {
 
         StaticTraitResolve resolve{resolve_.board()};
         HIRGenericParams paramsDef;
-        HIRPathParams constrParams;
+        HIRPathParamsBuilder constrParams;
         auto valExpr = extractNode(node.inner, resolve, paramsDef, constrParams, true);
 
         auto sp = valExpr->span();
@@ -5845,13 +5842,14 @@ auto StaticBorrowExprVisitorMutate::visit(HIRExprNodeConstBlock& node) -> void {
         staticTy = resolve.expandAssociatedTypes(sp, staticTy);
 
         DEBUG(StringView("ConstBlock: static_ty = ") << staticTy);
-        auto m2 = MonomorphStatePtr(resolve_.hirCrate().types, nullptr, nullptr, &constrParams);
+        const HIRPathParams constrHandle(mv$(constrParams));
+        auto m2 = MonomorphStatePtr(resolve_.hirCrate().types, nullptr, nullptr, &constrHandle);
         auto newResTy = m2.monomorphType(sp, staticTy, false);
 
         DEBUG(StringView("ConstBlock: new_res_ty = ") << newResTy);
         auto path = newStaticCb.create(sp, mv$(staticTy), mv$(valExpr), mv$(paramsDef), true);
-        DEBUG(StringView("> ") << path << constrParams);
-        auto newNode = NEWNODE(std::move(newResTy), PathValue, sp, HIRGenericPath(std::move(path), mv$(constrParams)), HIRExprNodePathValue::CONSTANT);
+        DEBUG(StringView("> ") << path << constrHandle);
+        auto newNode = NEWNODE(std::move(newResTy), PathValue, sp, HIRGenericPath(std::move(path), constrHandle), HIRExprNodePathValue::CONSTANT);
         newNode->usage = usage;
         node.inner = mv$(newNode);
     }
@@ -6222,8 +6220,7 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
         }
         argTupType = crate.types.tuple(mv$(argTypes));
     }
-    HIRPathParams traitArgs;
-    traitArgs.types.push_back(argTupType);
+    HIRPathParams traitArgs(argTupType);
 
     // TODO: You can call via &-ptrs, but that currently isn't handled in typeck
     if (const auto* nodePp = ((*node.value->resType).is_NodeType() ? ((*node.value->resType).as_NodeType().opt_Closure()) : nullptr)) {
@@ -6605,8 +6602,7 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeBinOp& node) -> void {
     }
 
     if (isComparison) {
-        HIRPathParams traitParams;
-        traitParams.types.push_back(tyR);
+        HIRPathParams traitParams(tyR);
         HIRGenericPath trait{crate.getLangItemPath(node.span(), langitem), mv$(traitParams)};
         HIRPathParams fcnParams;
 
@@ -6632,8 +6628,7 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeBinOp& node) -> void {
     BUG_ASSERT(langitem);
     BUG_ASSERT(method);
 
-    HIRPathParams traitParams;
-    traitParams.types.push_back(tyR);
+    HIRPathParams traitParams(tyR);
     HIRGenericPath trait{crate.getLangItemPath(node.span(), langitem), mv$(traitParams)};
 
     std::vector<HIRExprNodeP> args;
@@ -7159,7 +7154,7 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
     }
     auto fields = mv$(vtc.fields);
 
-    HIRPathParams params;
+    HIRPathParamsBuilder params;
     {
         unsigned int i = 0;
         for (const auto& tp : tr.params.types) {
@@ -7230,11 +7225,12 @@ auto FixupVisitor::visitStruct(HIRItemPath ip, HIRStruct& str) -> void {
                 auto& vtableGpath = te.path.data.as_Generic();
                 te.binding = &crate.getStructByPath(sp, vtableGpath.path);
 
+                HIRPathParamsBuilder vtableParams(vtableGpath.params);
                 for (const auto& atyIdx : parentTrait.typeIndexes) {
-                    if (vtableGpath.params.types.size() <= atyIdx.second) {
-                        vtableGpath.params.types.resize(atyIdx.second + 1);
+                    if (vtableParams.types.size() <= atyIdx.second) {
+                        vtableParams.types.resize(atyIdx.second + 1);
                     }
-                    auto& slot = vtableGpath.params.types[atyIdx.second];
+                    auto& slot = vtableParams.types[atyIdx.second];
                     auto it = pt.typeBounds.find(atyIdx.first);
                     if (it != pt.typeBounds.end()) {
                         slot = it->second.type;
@@ -7263,6 +7259,7 @@ auto FixupVisitor::visitStruct(HIRItemPath ip, HIRStruct& str) -> void {
                         slot = it->second.type;
                     }
                 }
+                vtableGpath.params = HIRPathParams(mv$(vtableParams));
                 borrow.inner = crate.types.intern(std::move(pathData));
                 fldTy = crate.types.intern(std::move(borrowData));
             }

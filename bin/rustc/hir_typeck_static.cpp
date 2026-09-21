@@ -366,9 +366,7 @@ const HIRType* StaticTraitResolve::revealOpaqueTypes(const Span& sp, const HIRTy
 
 void StaticTraitResolve::revealOpaqueTypesPath(const Span& sp, HIRPath& input) const {
     auto revealParams = [&](HIRPathParams& params) {
-        for (auto& type : params.types) {
-            type = revealOpaqueTypes(sp, type);
-        }
+        params = params.mapTypes([&](const HIRType* type) { return revealOpaqueTypes(sp, type); });
     };
 
     expandAssociatedTypesPath(sp, input);
@@ -409,9 +407,14 @@ void StaticTraitResolve::evaluateConstGeneric(const Span& sp, HIRConstGeneric& v
 }
 
 void StaticTraitResolve::evaluatePathParams(const Span& sp, HIRPathParams& params) const {
-    for (auto& value : params.values) {
+    if (params.values.empty()) {
+        return;
+    }
+    HIRPathParamsBuilder next(params);
+    for (auto& value : next.values) {
         evaluateConstGeneric(sp, value);
     }
+    params = HIRPathParams(std::move(next));
 }
 
 void StaticTraitResolve::expandAssociatedTypesPath(const Span& sp, HIRPath& input) const {
@@ -424,9 +427,7 @@ void StaticTraitResolve::expandAssociatedTypesPath(const Span& sp, HIRPath& inpu
             auto& path = input.data.as_UfcsInherent();
             path.type = this->expandAssociatedTypesInner(sp, path.type);
             this->expandAssociatedTypesParams(sp, path.params);
-            for (auto& argument : path.implParams.types) {
-                argument = this->expandAssociatedTypesInner(sp, argument);
-            }
+            path.implParams = path.implParams.mapTypes([&](const HIRType* argument) { return this->expandAssociatedTypesInner(sp, argument); });
             break;
         }
         case HIRPathData::TAG_UfcsKnown: {
@@ -487,9 +488,7 @@ bool StaticTraitResolve::typesEqualResolvingOpaque(const Span& sp, const HIRType
 }
 
 void StaticTraitResolve::expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const {
-    for (auto& arg : params.types) {
-        arg = this->expandAssociatedTypesInner(sp, arg);
-    }
+    params = params.mapTypes([&](const HIRType* arg) { return this->expandAssociatedTypesInner(sp, arg); });
 }
 
 void StaticTraitResolve::expandAssociatedTypesTp(const Span& sp, HIRTraitPath& input) const {
@@ -541,10 +540,12 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, co
                     auto data = input->cloneData();
                     auto& ne2 = data.as_Path().path.data.as_Generic();
                     if (tyIdx < ne2.params.types.size()) {
-                        ne2.params.types[tyIdx] = nty;
-                        for (size_t j = tyIdx + 1; j < ne2.params.types.size(); j++) {
-                            ne2.params.types[j] = expandAssociatedTypesInner(sp, ne2.params.types[j]);
+                        HIRPathParamsBuilder next(ne2.params);
+                        next.types[tyIdx] = nty;
+                        for (size_t j = tyIdx + 1; j < next.types.size(); j++) {
+                            next.types[j] = expandAssociatedTypesInner(sp, next.types[j]);
                         }
+                        ne2.params = HIRPathParams(std::move(next));
                     }
                     if (valueWork) {
                         evaluatePathParams(sp, ne2.params);
@@ -558,9 +559,7 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, co
                     auto& e2 = data.as_Path().path.data.as_UfcsInherent();
                     e2.type = this->expandAssociatedTypesInner(sp, e2.type);
                     expandAssociatedTypesParams(sp, e2.params);
-                    for (auto& arg : e2.implParams.types) {
-                        arg = this->expandAssociatedTypesInner(sp, arg);
-                    }
+                    e2.implParams = e2.implParams.mapTypes([&](const HIRType* arg) { return this->expandAssociatedTypesInner(sp, arg); });
                     auto rv = crate.types.intern(mv$(data));
                     if (const auto* expanded = this->expandAssociatedTypesUfcsInherent(sp, rv)) {
                         rv = this->expandAssociatedTypesInner(sp, expanded);
@@ -747,9 +746,7 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, co
                     e2.type = this->expandAssociatedTypesInner(sp, e2.type);
                     expandAssociatedTypesParams(sp, e2.params);
                     // TODO: impl params too?
-                    for (auto& arg : e2.implParams.types) {
-                        arg = this->expandAssociatedTypesInner(sp, arg);
-                    }
+                    e2.implParams = e2.implParams.mapTypes([&](const HIRType* arg) { return this->expandAssociatedTypesInner(sp, arg); });
                     break;
                 }
                 case HIRPathData::TAG_UfcsKnown: {
@@ -841,12 +838,8 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp
     auto data = input->cloneData();
     auto& projection = data.as_Path().path.data.as_UfcsKnown();
     projection.type = this->expandAssociatedTypesInner(sp, projection.type);
-    for (auto& argument : projection.params.types) {
-        argument = this->expandAssociatedTypesInner(sp, argument);
-    }
-    for (auto& argument : projection.trait.params.types) {
-        argument = this->expandAssociatedTypesInner(sp, argument);
-    }
+    projection.params = projection.params.mapTypes([&](const HIRType* argument) { return this->expandAssociatedTypesInner(sp, argument); });
+    projection.trait.params = projection.trait.params.mapTypes([&](const HIRType* argument) { return this->expandAssociatedTypesInner(sp, argument); });
     const auto& trait = crate.getTraitByPath(sp, projection.trait.path);
     ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &trait.params, projection.trait.params);
     input = crate.types.intern(std::move(data));
@@ -1963,7 +1956,7 @@ namespace {
                 const auto* projection = types.path(HIRPath(selfType, std::move(traitPath), associated.first, associated.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
                 const auto* resolved = resolve.expandAssociatedTypes(sp, projection);
                 if (resolved && resolved != projection && !resolved->is_Infer()) {
-                    implParams.types[index] = resolved;
+                    implParams = implParams.withType(index, resolved);
                 }
             }
         }
@@ -2388,10 +2381,7 @@ auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGen
     const auto* probedType = resolve_.unknownExistentials(sp, type);
     HIRPathParams probedParams;
     if (std::any_of(params->types.begin(), params->types.end(), [&](const HIRType* param) { return resolve_.unknownExistentials(sp, param) != param; })) {
-        probedParams = params->clone();
-        for (auto& param : probedParams.types) {
-            param = resolve_.unknownExistentials(sp, param);
-        }
+        probedParams = params->mapTypes([&](const HIRType* param) { return resolve_.unknownExistentials(sp, param); });
         params = &probedParams;
     }
     return resolve_.solveTraitGoalCb(sp, trait, *params, probedType, callback, {.ambiguity = SolverAmbiguityPolicy::Report});

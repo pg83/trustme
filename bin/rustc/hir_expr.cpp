@@ -755,9 +755,7 @@ const HIRType* HIRExprVisitorDef::visitType(const HIRType* ty) {
 }
 
 void HIRExprVisitorDef::visitPathParams(HIRPathParams& pp) {
-    for (auto& ty : pp.types) {
-        ty = visitType(ty);
-    }
+    pp = pp.mapTypes([&](const HIRType* type) { return visitType(type); });
 }
 
 void HIRExprVisitorDef::visitTraitPath(HIRTraitPath& p) {
@@ -1168,7 +1166,7 @@ HIRExprNodeArrayList::HIRExprNodeArrayList(Span sp, std::vector<HIRExprNodeP> va
 HIRExprNodeArraySized::HIRExprNodeArraySized(Span sp, HIRExprNodeP val, HIRExprPtr size)
     : HIRExprNode(mv$(sp))
     , val(mv$(val))
-    , size(HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(mv$(size))))
+    , size(HIRConstGeneric(internUnevaluated(HIRConstGenericUnevaluated(mv$(size)))))
 {
 }
 

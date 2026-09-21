@@ -438,9 +438,10 @@ auto AsyncDropPollBuilder::buildAsyncDestructor(const HIRType* ty, MIRLValue val
     const auto ready = newBlock();
     const auto pending = newBlock();
 
-    HIRPathParams storageParams;
-    storageParams.types.push_back(outerTy);
-    storageParams.types.push_back(futureTy);
+    HIRPathParamsBuilder storageBuilder;
+    storageBuilder.types.push_back(outerTy);
+    storageBuilder.types.push_back(futureTy);
+    const HIRPathParams storageParams(mv$(storageBuilder));
     output.blocks[getStorage].terminator = MIRTerminator::make_Call({
         makeValuePin,
         MIRUnwindAction::make_Continue({}),

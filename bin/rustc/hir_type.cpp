@@ -22,49 +22,11 @@ namespace {
     }
 
     bool exactConstGenericEqual(const HIRConstGeneric& a, const HIRConstGeneric& b) {
-        if (a.tag() != b.tag()) {
-            return false;
-        }
-        switch (a.tag()) {
-            case HIRConstGeneric::TAG_Infer: {
-                auto& ae = a.as_Infer();
-                auto& be = b.as_Infer();
-                return ae.index == be.index;
-            }
-            case HIRConstGeneric::TAG_Generic: {
-                auto& ae = a.as_Generic();
-                auto& be = b.as_Generic();
-                return exactGenericRefEqual(ae, be);
-            }
-            case HIRConstGeneric::TAG_Evaluated: {
-                auto& ae = a.as_Evaluated();
-                auto& be = b.as_Evaluated();
-                return *ae == *be;
-            }
-            case HIRConstGeneric::TAG_Unevaluated: {
-                auto& ae = a.as_Unevaluated();
-                auto& be = b.as_Unevaluated();
-                return ae->expr.get() == be->expr.get() && ae->selfType == be->selfType && exactPathParamsEqual(ae->paramsImpl, be->paramsImpl) && exactPathParamsEqual(ae->paramsItem, be->paramsItem);
-            }
-        }
-        UNREACHABLE();
+        return hirConstGenericExactEqual(a, b);
     }
 
     bool exactPathParamsEqual(const HIRPathParams& a, const HIRPathParams& b) {
-        if (a.types.size() != b.types.size() || a.values.size() != b.values.size()) {
-            return false;
-        }
-        for (size_t i = 0; i < a.types.size(); i++) {
-            if (a.types[i] != b.types[i]) {
-                return false;
-            }
-        }
-        for (size_t i = 0; i < a.values.size(); i++) {
-            if (!exactConstGenericEqual(a.values[i], b.values[i])) {
-                return false;
-            }
-        }
-        return true;
+        return a.sameAs(b);
     }
 
     bool exactGenericPathEqual(const HIRGenericPath& a, const HIRGenericPath& b) {
@@ -608,42 +570,11 @@ namespace {
     }
 
     size_t hashConstGeneric(const HIRConstGeneric& value) {
-        size_t h = static_cast<size_t>(value.tag());
-        switch (value.tag()) {
-            case HIRConstGeneric::TAG_Infer: {
-                auto& e = value.as_Infer();
-                h = hashMix(h, e.index);
-                break;
-            }
-            case HIRConstGeneric::TAG_Generic: {
-                auto& e = value.as_Generic();
-                h = hashMix(h, hashGenericRef(e));
-                break;
-            }
-            case HIRConstGeneric::TAG_Evaluated: {
-                break;
-            }
-            case HIRConstGeneric::TAG_Unevaluated: {
-                auto& e = value.as_Unevaluated();
-                h = hashMix(h, reinterpret_cast<uintptr_t>(e->expr.get()));
-                h = hashMix(h, hashTypeRef(e->selfType));
-                h = hashMix(h, hashPathParams(e->paramsImpl));
-                h = hashMix(h, hashPathParams(e->paramsItem));
-                break;
-            }
-        }
-        return h;
+        return hirConstGenericExactHash(value);
     }
 
     size_t hashPathParams(const HIRPathParams& params) {
-        size_t h = hashMix(params.types.size(), params.values.size());
-        for (const auto type : params.types) {
-            h = hashMix(h, hashTypeRef(type));
-        }
-        for (const auto& value : params.values) {
-            h = hashMix(h, hashConstGeneric(value));
-        }
-        return h;
+        return std::hash<const void*>()(params.types.identity());
     }
 
     size_t hashGenericPath(const HIRGenericPath& path) {
@@ -669,141 +600,6 @@ namespace {
             }
         }
         return h;
-    }
-
-    size_t hashPathParamsWith(const HIRPathParams& params, const HIRType* const*& children) {
-        size_t h = hashMix(params.types.size(), params.values.size());
-        for (size_t i = 0; i < params.types.size(); i++) {
-            h = hashMix(h, hashTypeRef(*children++));
-        }
-        for (const auto& value : params.values) {
-            h = hashMix(h, hashConstGeneric(value));
-        }
-        return h;
-    }
-
-    size_t hashPathWith(const HIRPath& shape, const HIRType* const* children) {
-        size_t h = static_cast<size_t>(shape.data.tag());
-        switch (shape.data.tag()) {
-            case HIRPathData::TAG_Generic: {
-                auto& e = shape.data.as_Generic();
-                h = hashMix(h, hashMix(hashSimplePath(e.path), hashPathParamsWith(e.params, children)));
-                break;
-            }
-            case HIRPathData::TAG_UfcsInherent: {
-                auto& e = shape.data.as_UfcsInherent();
-                h = hashMix(h, hashTypeRef(*children++));
-                h = hashMix(h, std::hash<RcString>()(e.item));
-                h = hashMix(h, hashPathParamsWith(e.params, children));
-                h = hashMix(h, hashPathParamsWith(e.implParams, children));
-                break;
-            }
-            case HIRPathData::TAG_UfcsKnown: {
-                auto& e = shape.data.as_UfcsKnown();
-                h = hashMix(h, hashTypeRef(*children++));
-                h = hashMix(h, hashMix(hashSimplePath(e.trait.path), hashPathParamsWith(e.trait.params, children)));
-                h = hashMix(h, std::hash<RcString>()(e.item));
-                h = hashMix(h, hashPathParamsWith(e.params, children));
-                break;
-            }
-            case HIRPathData::TAG_UfcsUnknown: {
-                auto& e = shape.data.as_UfcsUnknown();
-                h = hashMix(h, hashTypeRef(*children++));
-                h = hashMix(h, std::hash<RcString>()(e.item));
-                h = hashMix(h, hashPathParamsWith(e.params, children));
-                break;
-            }
-        }
-        return h;
-    }
-
-    bool exactPathParamsEqualWith(const HIRPathParams& a, const HIRPathParams& shape, const HIRType* const*& children) {
-        if (a.types.size() != shape.types.size() || a.values.size() != shape.values.size()) {
-            children += shape.types.size();
-            return false;
-        }
-        bool equal = true;
-        for (size_t i = 0; i < a.types.size(); i++) {
-            equal &= a.types[i] == *children++;
-        }
-        for (size_t i = 0; equal && i < a.values.size(); i++) {
-            equal = exactConstGenericEqual(a.values[i], shape.values[i]);
-        }
-        return equal;
-    }
-
-    bool exactPathEqualWith(const HIRPath& a, const HIRPath& shape, const HIRType* const* children) {
-        if (a.data.tag() != shape.data.tag()) {
-            return false;
-        }
-        switch (shape.data.tag()) {
-            case HIRPathData::TAG_Generic: {
-                auto& ae = a.data.as_Generic();
-                auto& se = shape.data.as_Generic();
-                return ae.path == se.path && exactPathParamsEqualWith(ae.params, se.params, children);
-            }
-            case HIRPathData::TAG_UfcsInherent: {
-                auto& ae = a.data.as_UfcsInherent();
-                auto& se = shape.data.as_UfcsInherent();
-                const bool type = ae.type == *children++;
-                const bool params = exactPathParamsEqualWith(ae.params, se.params, children);
-                const bool implParams = exactPathParamsEqualWith(ae.implParams, se.implParams, children);
-                return type && ae.item == se.item && params && implParams;
-            }
-            case HIRPathData::TAG_UfcsKnown: {
-                auto& ae = a.data.as_UfcsKnown();
-                auto& se = shape.data.as_UfcsKnown();
-                const bool type = ae.type == *children++;
-                const bool trait = ae.trait.path == se.trait.path && exactPathParamsEqualWith(ae.trait.params, se.trait.params, children);
-                const bool params = exactPathParamsEqualWith(ae.params, se.params, children);
-                return type && trait && ae.item == se.item && params;
-            }
-            case HIRPathData::TAG_UfcsUnknown: {
-                auto& ae = a.data.as_UfcsUnknown();
-                auto& se = shape.data.as_UfcsUnknown();
-                const bool type = ae.type == *children++;
-                const bool params = exactPathParamsEqualWith(ae.params, se.params, children);
-                return type && ae.item == se.item && params;
-            }
-        }
-        UNREACHABLE();
-    }
-
-    void pathParamsWith(HIRPathParams& params, const HIRType* const*& children) {
-        for (size_t i = 0; i < params.types.size(); i++) {
-            params.types[i] = *children++;
-        }
-    }
-
-    HIRPath pathWith(const HIRPath& shape, const HIRType* const* children) {
-        auto path = shape.clone();
-        switch (path.data.tag()) {
-            case HIRPathData::TAG_Generic: {
-                pathParamsWith(path.data.as_Generic().params, children);
-                break;
-            }
-            case HIRPathData::TAG_UfcsInherent: {
-                auto& e = path.data.as_UfcsInherent();
-                e.type = *children++;
-                pathParamsWith(e.params, children);
-                pathParamsWith(e.implParams, children);
-                break;
-            }
-            case HIRPathData::TAG_UfcsKnown: {
-                auto& e = path.data.as_UfcsKnown();
-                e.type = *children++;
-                pathParamsWith(e.trait.params, children);
-                pathParamsWith(e.params, children);
-                break;
-            }
-            case HIRPathData::TAG_UfcsUnknown: {
-                auto& e = path.data.as_UfcsUnknown();
-                e.type = *children++;
-                pathParamsWith(e.params, children);
-                break;
-            }
-        }
-        return path;
     }
 
     size_t hashPath(const HIRPath& path) {
@@ -1663,8 +1459,9 @@ namespace {
         }
 
         const HIRType* pathType(const HIRPath& shape, const HIRType* const* children, const HIRTypePathBinding& binding) override {
+            const auto path = hirPathWithChildren(shape, children);
             size_t hash = static_cast<size_t>(HIRType::TAG_Path);
-            hash = hashMix(hash, hashPathWith(shape, children));
+            hash = hashMix(hash, hashPath(path));
             hash = hashMix(hash, hashBinding(binding));
             const auto range = nodes.equal_range(hash);
             for (auto it = range.first; it != range.second; ++it) {
@@ -1672,11 +1469,11 @@ namespace {
                     continue;
                 }
                 const auto& e = it->second->as_Path();
-                if (exactPathEqualWith(e.path, shape, children) && exactBindingEqual(e.binding, binding)) {
+                if (exactPathEqual(e.path, path) && exactBindingEqual(e.binding, binding)) {
                     return it->second;
                 }
             }
-            return intern(HIRType::make_Path({pathWith(shape, children), binding.clone()}));
+            return intern(HIRType::make_Path({path.clone(), binding.clone()}));
         }
 
         const HIRType* intern(HIRType data) override {

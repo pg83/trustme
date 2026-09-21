@@ -137,32 +137,22 @@ HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPat
     switch (rv.data.tag()) {
         case HIRPathData::TAG_Generic: {
             auto& e2 = rv.data.as_Generic();
-            for (auto& arg : e2.params.types) {
-                arg = resolve.expandAssociatedTypes(sp, arg);
-            }
+            e2.params = e2.params.mapTypes([&](const HIRType* arg) { return resolve.expandAssociatedTypes(sp, arg); });
             break;
         }
         case HIRPathData::TAG_UfcsInherent: {
             auto& e2 = rv.data.as_UfcsInherent();
             e2.type = resolve.expandAssociatedTypes(sp, e2.type);
-            for (auto& arg : e2.params.types) {
-                arg = resolve.expandAssociatedTypes(sp, arg);
-            }
+            e2.params = e2.params.mapTypes([&](const HIRType* arg) { return resolve.expandAssociatedTypes(sp, arg); });
             // TODO: impl params too?
-            for (auto& arg : e2.implParams.types) {
-                arg = resolve.expandAssociatedTypes(sp, arg);
-            }
+            e2.implParams = e2.implParams.mapTypes([&](const HIRType* arg) { return resolve.expandAssociatedTypes(sp, arg); });
             break;
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& e2 = rv.data.as_UfcsKnown();
             e2.type = resolve.expandAssociatedTypes(sp, e2.type);
-            for (auto& arg : e2.trait.params.types) {
-                arg = resolve.expandAssociatedTypes(sp, arg);
-            }
-            for (auto& arg : e2.params.types) {
-                arg = resolve.expandAssociatedTypes(sp, arg);
-            }
+            e2.trait.params = e2.trait.params.mapTypes([&](const HIRType* arg) { return resolve.expandAssociatedTypes(sp, arg); });
+            e2.params = e2.params.mapTypes([&](const HIRType* arg) { return resolve.expandAssociatedTypes(sp, arg); });
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
@@ -179,9 +169,7 @@ HIRGenericPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const
 
 HIRPathParams TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPathParams& p) const {
     auto rv = this->monomorphPathParams(sp, p, false);
-    for (auto& arg : rv.types) {
-        arg = resolve.expandAssociatedTypes(sp, arg);
-    }
+    rv = rv.mapTypes([&](const HIRType* arg) { return resolve.expandAssociatedTypes(sp, arg); });
     return rv;
 }
 
