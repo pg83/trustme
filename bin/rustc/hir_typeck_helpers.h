@@ -13,6 +13,8 @@
 #include <std/mem/obj_pool.h>
 #include <std/rng/split_mix_64.h>
 
+#include <optional>
+
 bool typeIsUnboundedInfer(const HIRType* ty);
 
 struct SolverImpl {
@@ -324,9 +326,11 @@ public:
 
     u64 mutationGeneration = 0;
     stl::Vector<const HIRType*> expandStack;
-    stl::ObjPool::Ref aliasIvarPool;
-    stl::IntMap<const HIRType*> aliasTypeIvars;
-    stl::IntMap<HIRConstGeneric> aliasValueIvars;
+    std::optional<stl::ObjPool::Ref> aliasIvarPool;
+    std::optional<stl::IntMap<const HIRType*>> aliasTypeIvars;
+    std::optional<stl::IntMap<HIRConstGeneric>> aliasValueIvars;
+
+    void openAliasIvarMaps();
 
 public:
     explicit HMTypeInferrence(HIRTypeInterner& types);

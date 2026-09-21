@@ -1563,11 +1563,12 @@ const HIRType* HMTypeInferrence::addIvars(const HIRType* type) {
             return type;
         }
         if (isAliasInputInfer(infer->index)) {
-            auto* mapped = aliasTypeIvars.find(infer->index);
+            this->openAliasIvarMaps();
+            auto* mapped = aliasTypeIvars->find(infer->index);
             if (!mapped) {
-                aliasTypeIvars.insert(infer->index, newIvarTr(infer->tyClass));
+                aliasTypeIvars->insert(infer->index, newIvarTr(infer->tyClass));
                 this->journalMutation(JournalEntry::Kind::AliasTypeMap, infer->index, nullptr);
-                mapped = aliasTypeIvars.find(infer->index);
+                mapped = aliasTypeIvars->find(infer->index);
             }
             type = *mapped;
             this->markChange();
@@ -1709,11 +1710,12 @@ void HMTypeInferrence::addIvars(HIRConstGeneric& val) {
             this->markChange();
             DEBUG(StringView("New ivar ") << val);
         } else if (isAliasInputInfer(val.as_Infer().index)) {
-            auto* mapped = aliasValueIvars.find(val.as_Infer().index);
+            this->openAliasIvarMaps();
+            auto* mapped = aliasValueIvars->find(val.as_Infer().index);
             if (!mapped) {
-                aliasValueIvars.insert(val.as_Infer().index, HIRConstGeneric::make_Infer({newIvarVal()}));
+                aliasValueIvars->insert(val.as_Infer().index, HIRConstGeneric::make_Infer({newIvarVal()}));
                 this->journalMutation(JournalEntry::Kind::AliasValueMap, val.as_Infer().index, nullptr);
-                mapped = aliasValueIvars.find(val.as_Infer().index);
+                mapped = aliasValueIvars->find(val.as_Infer().index);
             }
             val = mapped->clone();
             this->markChange();
@@ -9309,10 +9311,15 @@ HMTypeInferrence::IVarValue::IVarValue()
 HMTypeInferrence::HMTypeInferrence(HIRTypeInterner& types)
     : types(types)
     , hasChanged(false)
-    , aliasIvarPool(ObjPool::fromMemory())
-    , aliasTypeIvars(aliasIvarPool.mutPtr())
-    , aliasValueIvars(aliasIvarPool.mutPtr())
 {
+}
+
+void HMTypeInferrence::openAliasIvarMaps() {
+    if (!aliasTypeIvars) {
+        aliasIvarPool.emplace(ObjPool::fromMemory());
+        aliasTypeIvars.emplace(aliasIvarPool->mutPtr());
+        aliasValueIvars.emplace(aliasIvarPool->mutPtr());
+    }
 }
 
 bool HMTypeInferrence::takeChanged() {
@@ -9381,11 +9388,11 @@ void HMTypeInferrence::rollbackTo(const Snapshot& snapshot) {
                 break;
             }
             case JournalEntry::Kind::AliasTypeMap: {
-                aliasTypeIvars.erase(entry.slot);
+                aliasTypeIvars->erase(entry.slot);
                 break;
             }
             case JournalEntry::Kind::AliasValueMap: {
-                aliasValueIvars.erase(entry.slot);
+                aliasValueIvars->erase(entry.slot);
                 break;
             }
         }
