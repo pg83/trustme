@@ -41,11 +41,13 @@ Token TokenStream::getToken() {
     if (cacheValid) {
         cacheValid = false;
         return mv$(cache);
-    } else if (lookahead_.size()) {
-        Token ret = mv$(lookahead_.front().tok);
-        edition = lookahead_.front().edition;
-        hygiene_ = lookahead_.front().hygiene;
-        lookahead_.erase(lookahead_.begin());
+    } else if (lookaheadCount_) {
+        auto& front = lookaheadAt(0);
+        Token ret = mv$(front.tok);
+        edition = front.edition;
+        hygiene_ = front.hygiene;
+        lookaheadHead_ = (lookaheadHead_ + 1) % MAX_LOOKAHEAD;
+        lookaheadCount_--;
         return ret;
     } else {
         Token ret = this->innerGetToken();
@@ -74,8 +76,6 @@ void TokenStream::putback(Token tok) {
 }
 
 eTokenType TokenStream::lookahead(unsigned int i) {
-    const unsigned int MAX_LOOKAHEAD = 4;
-
     if (cacheValid) {
         if (i == 0) {
             return cache.type();
@@ -87,15 +87,19 @@ eTokenType TokenStream::lookahead(unsigned int i) {
         compileErrorBugCheck("Excessive lookahead");
     }
 
-    while (i >= lookahead_.size()) {
-        DEBUG(StringView("lookahead - read #") << lookahead_.size());
+    while (i >= lookaheadCount_) {
+        DEBUG(StringView("lookahead - read #") << lookaheadCount_);
         auto tok = this->innerGetToken();
         auto hygiene = this->realGetHygiene();
-        lookahead_.push_back({mv$(tok), this->realGetEdition(), mv$(hygiene)});
+        auto& slot = lookaheadAt(lookaheadCount_);
+        slot.tok = mv$(tok);
+        slot.edition = this->realGetEdition();
+        slot.hygiene = mv$(hygiene);
+        lookaheadCount_++;
     }
 
-    DEBUG(StringView("lookahead(") << i << StringView(") = ") << lookahead_[i].tok);
-    return lookahead_[i].tok.type();
+    DEBUG(StringView("lookahead(") << i << StringView(") = ") << lookaheadAt(i).tok);
+    return lookaheadAt(i).tok.type();
 }
 
 bool TokenStream::lookaheadIdentIs(unsigned int i, const char* name) {
@@ -108,7 +112,7 @@ bool TokenStream::lookaheadIdentIs(unsigned int i, const char* name) {
         }
         i--;
     }
-    return lookahead_[i].tok.ident().name == name;
+    return lookaheadAt(i).tok.ident().name == name;
 }
 
 Ident::Hygiene TokenStream::getHygiene() const {

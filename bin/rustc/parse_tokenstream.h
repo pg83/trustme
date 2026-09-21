@@ -57,7 +57,16 @@ class TokenStream {
         Ident::Hygiene hygiene;
     };
 
-    std::vector<LookaheadEnt> lookahead_;
+    static const unsigned MAX_LOOKAHEAD = 4;
+
+    LookaheadEnt lookahead_[MAX_LOOKAHEAD];
+    unsigned lookaheadHead_ = 0;
+    unsigned lookaheadCount_ = 0;
+
+    LookaheadEnt& lookaheadAt(unsigned i) {
+        return lookahead_[(lookaheadHead_ + i) % MAX_LOOKAHEAD];
+    }
+
     ParseState parseState_;
     bool macroExpansionPlaceholder_ = false;
 
