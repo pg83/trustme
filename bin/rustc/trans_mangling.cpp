@@ -8,6 +8,7 @@
 #include <std/str/fmt.h>
 #include <std/sym/i_map.h>
 #include <std/lib/vector.h>
+#include <std/alg/qsort.h>
 #include <std/str/builder.h>
 #include <std/mem/obj_pool.h>
 
@@ -441,9 +442,15 @@ auto Mangler::fmtType(const HIRType* ty) -> void {
             os << StringView("D");
             this->fmtGenericPath(e.trait.path);
             os << e.trait.typeBounds.size();
-            // HACK: Assume all TraitObject types have the same aty set (std::map is deterministic)
+            Vector<const HIRTraitPath::assocListT::value_type*> bounds;
             for (const auto& aty : e.trait.typeBounds) {
-                this->fmtType(aty.second.type);
+                bounds.pushBack(&aty);
+            }
+            quickSort(bounds.mutBegin(), bounds.mutEnd(), [](const auto* a, const auto* b) {
+                return a->first.ord(b->first.c_str(), b->first.size()) == OrdLess;
+            });
+            for (const auto* aty : bounds) {
+                this->fmtType(aty->second.type);
             }
             os << e.markers.size();
             for (const auto& p : e.markers) {
