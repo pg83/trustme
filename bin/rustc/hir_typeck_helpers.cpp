@@ -700,7 +700,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     CachedGoal* cacheResponse(GoalKey* goal, const SolverResponse* response, const SolverImpl* applicable);
 
-    void clearGoalCache(bool clearCanonicalNoEffectResponses = false);
+    void clearGoalCache(bool clearCanonicalNoEffectResponses = false, bool keepCanonicalResponses = false);
 
     size_t rawNestedNoEffectHash(const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Candidate& candidate) const;
 
@@ -11364,13 +11364,16 @@ auto NextTraitGoalEvaluator::cacheResponse(GoalKey* goal, const SolverResponse* 
     return cached;
 }
 
-auto NextTraitGoalEvaluator::clearGoalCache(bool clearCanonicalNoEffectResponses) -> void {
+auto NextTraitGoalEvaluator::clearGoalCache(bool clearCanonicalNoEffectResponses, bool keepCanonicalResponses) -> void {
     rawNestedNoEffectResponses.clear();
     rawNestedNoEffectResponseGeneration++;
     if (clearCanonicalNoEffectResponses) {
         canonicalNestedNoEffectResponses.clear();
         canonicalNestedNoEffectResponseGeneration++;
         emptyRootGoalGeneration++;
+    }
+    if (keepCanonicalResponses) {
+        return;
     }
     for (auto* cached : goalCache) {
         cached->goal->cached = nullptr;
@@ -15094,7 +15097,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             const bool environmentChanged = solverEnvGenerationSeen_ != resolve_.solverEnvGeneration;
             ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
             solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
-            clearGoalCache(environmentChanged);
+            clearGoalCache(environmentChanged, !environmentChanged);
         }
         span_ = &callSpan;
     }
@@ -15106,7 +15109,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 const bool environmentChanged = solverEnvGenerationSeen_ != resolve_.solverEnvGeneration;
                 ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
                 solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
-                clearGoalCache(environmentChanged);
+                clearGoalCache(environmentChanged, !environmentChanged);
             }
             frameDepth = 0;
             span_ = nullptr;
