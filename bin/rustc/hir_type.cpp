@@ -586,11 +586,7 @@ namespace {
     }
 
     size_t hashSimplePath(const HIRSimplePath& path) {
-        size_t h = std::hash<RcString>()(path.crateName());
-        for (const auto& component : path.components()) {
-            h = hashMix(h, std::hash<RcString>()(component));
-        }
-        return h;
+        return reinterpret_cast<uintptr_t>(path.rawData()) * 0x9E3779B97F4A7C15ull;
     }
 
     size_t hashTypeRef(const HIRType* type) {

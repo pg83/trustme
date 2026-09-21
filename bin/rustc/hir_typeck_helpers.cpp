@@ -10702,11 +10702,7 @@ auto NextTraitGoalEvaluator::hashMix(size_t state, size_t value) -> size_t {
 }
 
 auto NextTraitGoalEvaluator::hashSimplePath(const HIRSimplePath& path) -> size_t {
-    size_t result = std::hash<RcString>()(path.crateName());
-    for (const auto& component : path.components()) {
-        result = hashMix(result, std::hash<RcString>()(component));
-    }
-    return result;
+    return reinterpret_cast<uintptr_t>(path.rawData()) * 0x9E3779B97F4A7C15ull;
 }
 
 auto NextTraitGoalEvaluator::hashType(const HIRType* type) -> size_t {
