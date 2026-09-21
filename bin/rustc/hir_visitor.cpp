@@ -814,6 +814,25 @@ void HIRVisitor::visitPatternVal(HIRPattern::Value& val) {
     }
 }
 
+const HIRType* HIRVisitor::visitTypeViaHooks(const HIRType* ty) {
+    if (const auto* e = ty->opt_Path()) {
+        const HIRType* children[16];
+        const auto count = hirPathTypeChildren(e->path, children, 16);
+        if (count <= 16 && !hirPathHasValues(e->path)) {
+            bool changed = false;
+            for (size_t i = 0; i < count; i++) {
+                const auto* child = visitType(children[i]);
+                changed |= child != children[i];
+                children[i] = child;
+            }
+            return changed ? typeInterner().pathType(e->path, children, e->binding) : ty;
+        }
+    }
+    auto data = ty->cloneData();
+    visitTypeDataChildren(data);
+    return typeInterner().internFolded(ty, mv$(data));
+}
+
 const HIRType* HIRVisitor::visitType(const HIRType* ty) {
     BUG_ASSERT(ty);
     switch (ty->tag()) {

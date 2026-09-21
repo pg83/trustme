@@ -612,9 +612,21 @@ const HIRType* HIRExprVisitorDef::visitType(const HIRType* ty) {
         case HIRType::TAG_NodeType:
             return ty;
         case HIRType::TAG_Path: {
-            auto data = ty->cloneData();
-            this->visitPath(HIRVisitor::PathContext::TYPE, data.as_Path().path);
-            return types.internFolded(ty, std::move(data));
+            const auto& e = ty->as_Path();
+            const HIRType* children[16];
+            const auto count = hirPathTypeChildren(e.path, children, 16);
+            if (count > 16 || hirPathHasValues(e.path)) {
+                auto data = ty->cloneData();
+                this->visitPath(HIRVisitor::PathContext::TYPE, data.as_Path().path);
+                return types.internFolded(ty, std::move(data));
+            }
+            bool changed = false;
+            for (size_t i = 0; i < count; i++) {
+                const auto* child = visitType(children[i]);
+                changed |= child != children[i];
+                children[i] = child;
+            }
+            return changed ? types.pathType(e.path, children, e.binding) : ty;
         }
         case HIRType::TAG_TraitObject: {
             auto data = ty->cloneData();
