@@ -532,6 +532,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
         bool hasResponse = false;
         bool responseIsIdentity = false;
         bool emptyRootAssembly = false;
+        u64 implGeneration = 0;
 
         CachedGoal(GoalKey* goal, const GoalContext* context, CachedGoal* next);
     };
@@ -4154,12 +4155,17 @@ TraitResolution::TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, c
 TraitResolution::~TraitResolution() = default;
 
 void TraitResolution::setGenericContext(const HIRGenericParams* implParams, const HIRGenericParams* itemParams) {
-    if (implGenerics_ == implParams && itemGenerics_ == itemParams) {
+    const bool sameParams = implGenerics_ == implParams && itemGenerics_ == itemParams;
+    const auto* interner = wb.typingEnvironments;
+    const bool environmentCurrent = interner ? interner->current(environment_) : environment_ == nullptr;
+    if (sameParams && environmentCurrent) {
         return;
     }
     implGenerics_ = implParams;
     itemGenerics_ = itemParams;
-    eatCacheGeneration++;
+    if (!sameParams) {
+        eatCacheGeneration++;
+    }
     prepIndexes(Span());
 }
 
@@ -11443,13 +11449,13 @@ auto NextTraitGoalEvaluator::refreshContext() -> void {
 auto NextTraitGoalEvaluator::cachedAnswer(const GoalKey* goal) const -> const CachedGoal* {
     BUG_ASSERT(context_);
     for (const auto* cached = goal->cached; cached; cached = cached->next) {
-        if (cached->context == context_) {
+        if (cached->context == context_ && cached->implGeneration == crate.implGeneration) {
             return cached;
         }
     }
     const auto* head = provisionalAnswers.find(splitMix64(reinterpret_cast<uintptr_t>(goal)));
     for (const auto* cached = head ? *head : nullptr; cached; cached = cached->next) {
-        if (cached->goal == goal && cached->context == context_) {
+        if (cached->goal == goal && cached->context == context_ && cached->implGeneration == crate.implGeneration) {
             return cached;
         }
     }
@@ -11458,21 +11464,25 @@ auto NextTraitGoalEvaluator::cachedAnswer(const GoalKey* goal) const -> const Ca
 
 auto NextTraitGoalEvaluator::answerEntry(GoalKey* goal, bool restsOnCycle) -> CachedGoal* {
     BUG_ASSERT(context_);
+    const auto stamped = [&](CachedGoal* cached) {
+        cached->implGeneration = crate.implGeneration;
+        return cached;
+    };
     if (context_->permanent() && !restsOnCycle) {
         for (auto* cached = goal->cached; cached; cached = cached->next) {
             if (cached->context == context_) {
-                return cached;
+                return stamped(cached);
             }
         }
         auto* cached = goalTable().answers.make(goal, context_, goal->cached);
         goal->cached = cached;
-        return cached;
+        return stamped(cached);
     }
     const auto key = splitMix64(reinterpret_cast<uintptr_t>(goal));
     auto* head = provisionalAnswers.find(key);
     for (auto* cached = head ? *head : nullptr; cached; cached = cached->next) {
         if (cached->goal == goal && cached->context == context_) {
-            return cached;
+            return stamped(cached);
         }
     }
     auto* cached = provisionalNodes.make(goal, context_, head ? *head : nullptr);
@@ -11481,7 +11491,7 @@ auto NextTraitGoalEvaluator::answerEntry(GoalKey* goal, bool restsOnCycle) -> Ca
     } else {
         provisionalAnswers.insert(key, cached);
     }
-    return cached;
+    return stamped(cached);
 }
 
 auto NextTraitGoalEvaluator::cacheGoal(GoalKey* goal, Certainty certainty, bool restsOnCycle, bool responseIsIdentity) -> CachedGoal* {

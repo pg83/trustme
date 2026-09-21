@@ -168,6 +168,7 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
 }
 
 void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list, unsigned mirOptLevel) {
+    TypingEnvironmentEpoch environments(wb);
     ::StaticTraitResolve resolve{wb, OpaqueReveal::All};
 
     struct Nvs: public HIREvaluator::Newval {

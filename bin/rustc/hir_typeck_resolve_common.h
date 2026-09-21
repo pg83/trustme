@@ -287,6 +287,7 @@ protected:
 
 struct TypingEnvironment {
     size_t hash;
+    u64 epoch;
     ThinVector<HIRGenericBound> bounds;
     ThinVector<u8> implSized;
     ThinVector<u8> itemSized;
@@ -295,8 +296,9 @@ struct TypingEnvironment {
     TraitResolveCommon::BoundIndex index;
     TypingEnvironment* next;
 
-    TypingEnvironment(size_t hash, TypingEnvironment* next)
+    TypingEnvironment(size_t hash, u64 epoch, TypingEnvironment* next)
         : hash(hash)
+        , epoch(epoch)
         , next(next)
     {
     }
@@ -309,12 +311,14 @@ inline const TraitResolveCommon::BoundIndex& TraitResolveCommon::boundIndex() co
 struct TypingEnvironmentInterner {
     stl::ObjPool::Ref pool;
     stl::IntMap<TypingEnvironment*> index;
+    u64 epoch_ = 0;
     bool enabled_ = false;
 
     TypingEnvironmentInterner();
 
     void enable() {
         enabled_ = true;
+        epoch_++;
     }
 
     void disable() {
@@ -325,7 +329,29 @@ struct TypingEnvironmentInterner {
         return enabled_;
     }
 
+    u64 epoch() const {
+        return epoch_;
+    }
+
+    bool current(const TypingEnvironment* environment) const {
+        return enabled_ ? environment && environment->epoch == epoch_ : environment == nullptr;
+    }
+
     const TypingEnvironment* intern(const TraitResolveCommon& resolve, const Span& sp);
+};
+
+struct TypingEnvironmentEpoch {
+    TypingEnvironmentInterner& interner;
+
+    explicit TypingEnvironmentEpoch(const WireBoard& wb)
+        : interner(*wb.typingEnvironments)
+    {
+        interner.enable();
+    }
+
+    ~TypingEnvironmentEpoch() {
+        interner.disable();
+    }
 };
 
 void TypeckCreateEnvironmentInterner(WireBoard& wb, stl::ObjPool& pool);

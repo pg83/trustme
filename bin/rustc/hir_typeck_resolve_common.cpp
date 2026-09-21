@@ -345,14 +345,14 @@ TypingEnvironmentInterner::TypingEnvironmentInterner()
 }
 
 const TypingEnvironment* TypingEnvironmentInterner::intern(const TraitResolveCommon& resolve, const Span& sp) {
-    const auto hash = resolve.environmentHash();
+    const auto hash = resolve.environmentHash() ^ (epoch_ * 0x9e3779b97f4a7c15ULL);
     auto* head = index.find(hash);
     for (auto* node = head ? *head : nullptr; node; node = node->next) {
-        if (resolve.environmentMatches(*node)) {
+        if (node->epoch == epoch_ && resolve.environmentMatches(*node)) {
             return node;
         }
     }
-    auto* node = pool.mutPtr()->make<TypingEnvironment>(hash, head ? *head : nullptr);
+    auto* node = pool.mutPtr()->make<TypingEnvironment>(hash, epoch_, head ? *head : nullptr);
     resolve.cloneEnvironmentInto(*node);
     resolve.buildIndex(sp, node->index);
     if (head) {

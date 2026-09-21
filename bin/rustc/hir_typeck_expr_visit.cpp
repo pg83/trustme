@@ -8,8 +8,6 @@
 #include "hir_typeck_expr_cs.h"
 #include "hir_typeck_resolve_common.h"
 
-#include <std/alg/defer.h>
-
 using namespace stl;
 
 namespace {
@@ -134,10 +132,7 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
 }
 
 void TypecheckExpressions(const WireBoard& wb, HIRCrate& crate) {
-    wb.typingEnvironments->enable();
-    STD_DEFER {
-        wb.typingEnvironments->disable();
-    };
+    TypingEnvironmentEpoch environments(wb);
     OuterVisitor visitor{wb, crate};
     visitor.visitCrate(crate);
 }

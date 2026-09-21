@@ -7848,6 +7848,7 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
 }
 
 void MIROptimiseCrate(const WireBoard& wb, HIRCrate& crate, unsigned optLevel, bool enableInlining) {
+    TypingEnvironmentEpoch environments(wb);
     auto callback = makeCallable<MIRExprCb>([optLevel, enableInlining](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
         auto& mir = expr.getMirOrErrorMut(Span());
         if (optLevel == 0) {
@@ -7863,6 +7864,7 @@ void MIROptimiseCrate(const WireBoard& wb, HIRCrate& crate, unsigned optLevel, b
 
 void MIROptimiseCrateInlining(const WireBoard& wb, HIRCrate& crate, TransList& list, bool postSave, unsigned optLevel, bool enableInlining) {
     TRACE_FUNCTION;
+    TypingEnvironmentEpoch environments(wb);
     ::StaticTraitResolve resolve{wb};
 
     if (postSave) {
