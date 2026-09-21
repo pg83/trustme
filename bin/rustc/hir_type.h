@@ -221,7 +221,23 @@ private:
 };
 
 struct HIRTypeInterner {
+    class PathFold {
+    public:
+        PathFold(HIRTypeInterner& interner, const HIRType* original);
+        ~PathFold();
+
+        HIRPath& path();
+        const HIRType* intern();
+
+    private:
+        HIRTypeInterner& interner_;
+        const HIRType* original_;
+        HIRPath* scratch_;
+    };
+
     const HIRType* selfParam = nullptr;
+    stl::Vector<HIRPath*> pathScratch;
+    size_t pathScratchDepth = 0;
 
     virtual stl::ObjPool& objectPool() const = 0;
     virtual const HIRType* intern(HIRType data) = 0;

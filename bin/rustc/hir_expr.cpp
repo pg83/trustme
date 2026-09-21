@@ -612,9 +612,9 @@ const HIRType* HIRExprVisitorDef::visitType(const HIRType* ty) {
         case HIRType::TAG_NodeType:
             return ty;
         case HIRType::TAG_Path: {
-            auto data = ty->cloneData();
-            this->visitPath(HIRVisitor::PathContext::TYPE, data.as_Path().path);
-            return types.internFolded(ty, std::move(data));
+            HIRTypeInterner::PathFold fold(types, ty);
+            this->visitPath(HIRVisitor::PathContext::TYPE, fold.path());
+            return fold.intern();
         }
         case HIRType::TAG_TraitObject: {
             auto data = ty->cloneData();

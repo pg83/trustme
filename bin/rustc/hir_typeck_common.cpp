@@ -201,8 +201,12 @@ const HIRType* Monomorphiser::monomorphType(const Span& sp, const HIRType* tpl, 
         }
         case HIRType::TAG_Path: {
             auto& e = (*tpl).as_Path();
-            auto binding = e.binding.is_Opaque() ? HIRTypePathBinding() : e.binding.clone();
-            return types.internFolded(tpl, HIRType::make_Path({this->monomorphPath(sp, e.path, allowInfer), mv$(binding)}));
+            if (e.binding.is_Opaque()) {
+                return types.internFolded(tpl, HIRType::make_Path({this->monomorphPath(sp, e.path, allowInfer), HIRTypePathBinding()}));
+            }
+            HIRTypeInterner::PathFold fold(types, tpl);
+            this->monomorphPathInPlace(sp, fold.path(), allowInfer);
+            return fold.intern();
         }
         case HIRType::TAG_Generic: {
             auto& e = (*tpl).as_Generic();
@@ -324,6 +328,44 @@ const HIRType* Monomorphiser::monomorphType(const Span& sp, const HIRType* tpl, 
         }
     }
     UNREACHABLE();
+}
+
+void Monomorphiser::monomorphPathParamsInPlace(const Span& sp, HIRPathParams& params, bool allowInfer) const {
+    for (auto& ty : params.types) {
+        ty = this->monomorphType(sp, ty, allowInfer);
+    }
+    for (auto& val : params.values) {
+        val = this->monomorphConstgeneric(sp, val, allowInfer);
+    }
+}
+
+void Monomorphiser::monomorphPathInPlace(const Span& sp, HIRPath& path, bool allowInfer) const {
+    switch (path.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            this->monomorphPathParamsInPlace(sp, path.data.as_Generic().params, allowInfer);
+            break;
+        }
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& e = path.data.as_UfcsKnown();
+            e.type = this->monomorphType(sp, e.type, allowInfer);
+            this->monomorphPathParamsInPlace(sp, e.trait.params, allowInfer);
+            this->monomorphPathParamsInPlace(sp, e.params, allowInfer);
+            break;
+        }
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& e = path.data.as_UfcsUnknown();
+            e.type = this->monomorphType(sp, e.type, allowInfer);
+            this->monomorphPathParamsInPlace(sp, e.params, allowInfer);
+            break;
+        }
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& e = path.data.as_UfcsInherent();
+            e.type = this->monomorphType(sp, e.type, allowInfer);
+            this->monomorphPathParamsInPlace(sp, e.params, allowInfer);
+            this->monomorphPathParamsInPlace(sp, e.implParams, allowInfer);
+            break;
+        }
+    }
 }
 
 HIRPath Monomorphiser::monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer /*=true*/) const {

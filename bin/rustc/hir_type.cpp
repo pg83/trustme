@@ -1562,6 +1562,36 @@ HIRTypeInterner* HIRTypeInterner::create(ObjPool& pool, u32& id) {
     return pool.make<HIRTypeInternerImpl>(pool, id);
 }
 
+HIRTypeInterner::PathFold::PathFold(HIRTypeInterner& interner, const HIRType* original)
+    : interner_(interner)
+    , original_(original)
+{
+    const auto& source = original->as_Path().path;
+    const auto depth = interner.pathScratchDepth++;
+    if (depth == interner.pathScratch.length()) {
+        interner.pathScratch.pushBack(interner.objectPool().make<HIRPath>(source.clone()));
+    } else {
+        hirPathAssign(*interner.pathScratch[depth], source);
+    }
+    scratch_ = interner.pathScratch[depth];
+}
+
+HIRTypeInterner::PathFold::~PathFold() {
+    interner_.pathScratchDepth--;
+}
+
+HIRPath& HIRTypeInterner::PathFold::path() {
+    return *scratch_;
+}
+
+const HIRType* HIRTypeInterner::PathFold::intern() {
+    const auto& source = original_->as_Path();
+    if (exactPathEqual(*scratch_, source.path)) {
+        return original_;
+    }
+    return interner_.intern(HIRType::make_Path({scratch_->clone(), source.binding.clone()}));
+}
+
 const HIRType* HIRTypeInterner::internFolded(const HIRType* original, HIRType data) {
     if (exactTypeDataEqual(*original, data)) {
         return original;

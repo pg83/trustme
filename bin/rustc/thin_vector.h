@@ -93,6 +93,14 @@ public:
         return *this;
     }
 
+    void assign(const ThinVector& x) {
+        this->clear();
+        this->reserve(x.size());
+        for (const auto& v : x) {
+            this->push_back(v);
+        }
+    }
+
     void reserve(size_t newCap) {
         if (newCap > this->capacity()) {
             auto saved = std::move(*this);

@@ -38,6 +38,8 @@ public:
 
     virtual const HIRType* monomorphType(const Span& sp, const HIRType* ty, bool allowInfer = true) const;
     HIRPath monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer = true) const;
+    void monomorphPathInPlace(const Span& sp, HIRPath& path, bool allowInfer) const;
+    void monomorphPathParamsInPlace(const Span& sp, HIRPathParams& params, bool allowInfer) const;
     HIRTraitPath monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer) const;
     HIRTraitPath::AtyEqual monomorphTpAtyEqual(const Span& sp, const HIRTraitPath::AtyEqual& tpl, bool allowInfer) const;
     HIRPathParams monomorphPathParams(const Span& sp, const HIRPathParams& tpl, bool allowInfer) const;
