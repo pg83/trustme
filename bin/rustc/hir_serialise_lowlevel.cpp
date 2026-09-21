@@ -33,19 +33,13 @@ namespace {
         }
     };
 
-    struct WrittenString {
-        RcString value;
-        unsigned uses;
-        unsigned slot;
-    };
-
     struct WriterImpl final: public HIRSerialiseWriter {
         Buffer path;
         Buffer data;
         bool recording;
         ObjPool::Ref istringPool;
         HashMap<unsigned, RcString, InternedStringHasher> istringIndex;
-        Vector<WrittenString> istrings;
+        Vector<RcString> istrings;
         std::map<const char*, unsigned> objnameCache;
 
         WriterImpl();
@@ -107,8 +101,18 @@ WriterImpl::~WriterImpl() {
         return;
     }
 
-    Buffer packed(ZSTD_compressBound(data.length()));
-    auto len = ZSTD_compress(packed.mutData(), packed.capacity(), data.data(), data.length(), COMPRESSION_LEVEL);
+    Buffer whole(istrings.length() * 16 + data.length() + 8);
+    const u64 stringCount = istrings.length();
+    whole.append(&stringCount, sizeof stringCount);
+    for (size_t i = 0; i < istrings.length(); i++) {
+        const u64 len = istrings[i].size();
+        whole.append(&len, sizeof len);
+        whole.append(istrings[i].c_str(), len);
+    }
+    whole.append(data.data(), data.length());
+
+    Buffer packed(ZSTD_compressBound(whole.length()));
+    auto len = ZSTD_compress(packed.mutData(), packed.capacity(), whole.data(), whole.length(), COMPRESSION_LEVEL);
 
     if (ZSTD_isError(len)) {
         sysE << StringView("ERROR: zstd compression failed: ") << StringView(ZSTD_getErrorName(len)) << endL;
@@ -125,38 +129,12 @@ WriterImpl::~WriterImpl() {
 }
 
 void WriterImpl::open(const std::string& filename) {
-    Vector<unsigned> order;
-    order.grow(istrings.length());
-    for (unsigned i = 0; i < istrings.length(); i++) {
-        order.pushBack(i);
-    }
-    std::sort(order.mutBegin(), order.mutEnd(), [this](unsigned a, unsigned b) {
-        const auto& left = istrings[a];
-        const auto& right = istrings[b];
-        if (left.uses != right.uses) {
-            return left.uses > right.uses;
-        }
-        return left.value.ord(right.value) == OrdLess;
-    });
-
-    objnameCache.clear();
-
     path = Buffer(StringView(filename.c_str()));
     recording = true;
-
-    this->writeCount(order.length());
-    for (unsigned i = 0; i < order.length(); i++) {
-        auto& entry = istrings.mut(order[i]);
-        this->writeString(entry.value.size(), entry.value.c_str());
-        DEBUG(i << StringView(" = ") << entry.uses << StringView(" '") << entry.value << StringView("'"));
-        entry.slot = i;
-    }
 }
 
 void WriterImpl::write(const void* data, size_t count) {
-    if (recording) {
-        this->data.append(data, count);
-    }
+    this->data.append(data, count);
 }
 
 void WriterImpl::writeU16(u16 v) {
@@ -197,16 +175,11 @@ void WriterImpl::writeCount(size_t c) {
 
 void WriterImpl::writeString(const RcString& v) {
     const auto* found = istringIndex.find(v);
-    if (recording) {
-        BUG_ASSERT(found);
-        this->writeCount(istrings[*found].slot);
-        return;
-    }
     if (!found) {
         found = istringIndex.insert(v, static_cast<unsigned>(istrings.length()));
-        istrings.pushBack(WrittenString{v, 0, 0});
+        istrings.pushBack(v);
     }
-    istrings.mut(*found).uses++;
+    this->writeCount(*found);
 }
 
 void WriterImpl::writeString(size_t len, const char* s) {

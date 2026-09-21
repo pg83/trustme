@@ -1371,10 +1371,8 @@ void HIRDumpExpr(ZeroCopyOutput& sink, HIRExprPtr& expr) {
 void HIRSerialise(const std::string& filename, const HIRCrate& crate) {
     auto writerPool = ObjPool::fromMemory();
     auto& out = *HIRSerialiseWriter::create(*writerPool.mutPtr());
-    HirSerialiser s{out, crate.types};
-    s.serialiseCrate(crate);
-    s.clear();
     out.open(filename);
+    HirSerialiser s{out, crate.types};
     s.serialiseCrate(crate);
 }
 
