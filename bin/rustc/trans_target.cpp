@@ -2626,7 +2626,7 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
         return rv;
     }
 
-    auto symbol = RcString::newInterned(FMT(TransMangle(resolve.board(), ty)));
+    auto symbol = TransMangle(resolve.board(), ty);
     auto existing = cache.encoded.find(symbol);
     if (existing != cache.encoded.end()) {
         ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equalsIgnoringRegions(ty), StringView("Distinct types have the same mangled name: ") << existing->second.canonical << StringView(" and ") << ty);

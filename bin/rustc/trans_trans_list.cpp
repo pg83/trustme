@@ -7,7 +7,7 @@ using namespace stl;
 
 TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
     BUG_ASSERT(wb_);
-    auto symbol = RcString::newInterned(FMT(TransMangleValue(*wb_, p)));
+    auto symbol = TransMangleValue(*wb_, p);
     auto existing = functionSymbols.find(symbol);
     if (existing != functionSymbols.end()) {
         ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p), StringView("Distinct function paths have the same mangled name: ") << existing->second << StringView(" and ") << p);
@@ -33,7 +33,7 @@ const TransListFunction* TransList::findFunction(const HIRPath& p) const {
     }
 
     BUG_ASSERT(wb_);
-    const auto symbol = RcString::newInterned(FMT(TransMangleValue(*wb_, p)));
+    const auto symbol = TransMangleValue(*wb_, p);
     auto canonical = functionSymbols.find(symbol);
     if (canonical == functionSymbols.end()) {
         return nullptr;
@@ -51,7 +51,7 @@ TransListFunction* TransList::findFunction(const HIRPath& p) {
     }
 
     BUG_ASSERT(wb_);
-    const auto symbol = RcString::newInterned(FMT(TransMangleValue(*wb_, p)));
+    const auto symbol = TransMangleValue(*wb_, p);
     auto canonical = functionSymbols.find(symbol);
     if (canonical == functionSymbols.end()) {
         return nullptr;
@@ -64,7 +64,7 @@ TransListFunction* TransList::findFunction(const HIRPath& p) {
 
 bool TransList::hasType(const HIRType* type, bool shallow) const {
     BUG_ASSERT(wb_);
-    const auto symbol = RcString::newInterned(FMT(TransMangle(*wb_, type)));
+    const auto symbol = TransMangle(*wb_, type);
     const auto existing = typeSymbols.find(symbol);
     if (existing == typeSymbols.end()) {
         return false;
@@ -75,7 +75,7 @@ bool TransList::hasType(const HIRType* type, bool shallow) const {
 
 bool TransList::addType(const HIRType* type, bool shallow) {
     BUG_ASSERT(wb_);
-    auto symbol = RcString::newInterned(FMT(TransMangle(*wb_, type)));
+    auto symbol = TransMangle(*wb_, type);
     auto existing = typeSymbols.find(symbol);
     if (existing == typeSymbols.end()) {
         typeSymbols.emplace(mv$(symbol), TypeEmissionState{type, shallow, !shallow});
@@ -99,7 +99,7 @@ void TransList::clearTypes() {
 
 TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
     BUG_ASSERT(wb_);
-    auto symbol = RcString::newInterned(FMT(TransMangleValue(*wb_, p)));
+    auto symbol = TransMangleValue(*wb_, p);
     auto existing = staticSymbols.find(symbol);
     if (existing != staticSymbols.end()) {
         ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p), StringView("Distinct static paths have the same mangled name: ") << existing->second << StringView(" and ") << p);

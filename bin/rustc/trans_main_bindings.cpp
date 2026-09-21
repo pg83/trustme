@@ -878,7 +878,7 @@ static void removeMissing(const WireBoard& wb, std::map<HIRPath, T>& target, con
     }
 
     for (auto itIn = target.begin(); itIn != target.end();) {
-        const auto symbol = RcString::newInterned(FMT(TransMangleValue(wb, itIn->first)));
+        const auto symbol = TransMangleValue(wb, itIn->first);
         const auto required = requiredSymbols.find(symbol);
         if (required == requiredSymbols.end()) {
             DEBUG(StringView("Remove ") << itIn->first);
@@ -3449,7 +3449,7 @@ EnumState::EnumState(const WireBoard& wb)
 
 auto EnumState::enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp) -> void {
     if (auto* e = rv.addFunction(crate.types, mv$(p))) {
-        auto name = RcString::newInterned(FMT(TransMangleValue(resolve.board(), *e->path)));
+        auto name = TransMangleValue(resolve.board(), *e->path);
         auto inserted = emittedFunctions.insert(name).second;
         ASSERT_BUG(Span(), inserted, StringView("Duplicated mangled name - ") << *e->path);
         fcnsToTypeVisit.pushBack(e);
