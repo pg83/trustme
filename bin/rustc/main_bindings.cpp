@@ -1,5 +1,7 @@
 #include "main_bindings.h"
 
+#include <sys/resource.h>
+
 #include "ast_ast.h"
 #include "hir_hir.h"
 #include "ast_dump.h"
@@ -883,6 +885,14 @@ void ExpandTestHarness(ASTCrate& crate) {
 #undef NEWNODE
 
 int main(int argc, char* argv[]) {
+    rlimit stack{};
+    if (getrlimit(RLIMIT_STACK, &stack) == 0 && stack.rlim_cur != RLIM_INFINITY) {
+        const rlim_t wanted = rlim_t(1) << 30;
+        if (stack.rlim_cur < wanted) {
+            stack.rlim_cur = stack.rlim_max == RLIM_INFINITY || stack.rlim_max > wanted ? wanted : stack.rlim_max;
+            setrlimit(RLIMIT_STACK, &stack);
+        }
+    }
     int result = 1;
     try {
         result = compile(argc, argv);
