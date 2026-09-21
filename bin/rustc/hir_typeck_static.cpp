@@ -893,11 +893,11 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp
 const HIRType* StaticTraitResolve::replaceEqualities(const HIRType* input) const {
     const Span sp;
     TRACE_FUNCTION_F(StringView("input=") << input);
-    DEBUG(StringView("m_type_equalities = {") << typeEqualities << StringView("}"));
-    auto a = std::find_if(typeEqualities.begin(), typeEqualities.end(), [&](const auto& entry) {
+    DEBUG(StringView("m_type_equalities = {") << typeEqualities() << StringView("}"));
+    auto a = std::find_if(typeEqualities().begin(), typeEqualities().end(), [&](const auto& entry) {
         return entry.first == input || entry.first->equalsIgnoringRegions(input);
     });
-    if (a != typeEqualities.end()) {
+    if (a != typeEqualities().end()) {
         // HACK: Shouldn't need this, but works around some missing cases
         return a->second.ty;
     } else {

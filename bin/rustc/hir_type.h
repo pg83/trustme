@@ -254,6 +254,10 @@ struct HIRTypeInterner {
 
 bool hirPathParamsIdentical(const HIRPathParams& a, const HIRPathParams& b);
 
+bool hirTraitPathIdentical(const HIRTraitPath& a, const HIRTraitPath& b);
+
+size_t hirTraitPathHash(const HIRTraitPath& path);
+
 inline bool operator==(const HIRType* ty, HIRCoreType ct) {
     return ty && ty->is_Primitive() && ty->as_Primitive() == ct;
 }

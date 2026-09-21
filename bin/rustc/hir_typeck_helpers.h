@@ -228,10 +228,13 @@ struct NextSolverCrateCache {
         }
     };
 
+    struct GoalTable;
+
     stl::ObjPool::Ref pool;
     stl::IntMap<Entry*> index;
     ImplRelation overlaps;
     ImplRelation specializations;
+    GoalTable* goalTable = nullptr;
 
     NextSolverCrateCache()
         : pool(stl::ObjPool::fromMemory())

@@ -501,22 +501,39 @@ struct TraitResolution::NextTraitGoalEvaluator {
         bool active = false;
         /* What the response cache holds for this goal, while it holds anything. */
         CachedGoal* cached = nullptr;
-        /* The generation in which root assembly for this goal came out empty. */
-        u64 emptyRootAssembly = 0;
 
         GoalKey(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity, const OperatorKey& operatorKey, GoalKey* next);
     };
 
+    struct GoalContext {
+        const TypingEnvironment* environment;
+        const HIRGenericParams* implGenerics;
+        const HIRGenericParams* itemGenerics;
+        const void* solverEnvironmentOwner;
+        u64 solverEnvironmentGeneration;
+        bool coherence;
+        GoalContext* next;
+
+        GoalContext(const TypingEnvironment* environment, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const void* solverEnvironmentOwner, u64 solverEnvironmentGeneration, bool coherence, GoalContext* next);
+
+        bool permanent() const {
+            return environment != nullptr;
+        }
+    };
+
     struct CachedGoal {
         GoalKey* goal;
-        Certainty certainty;
+        const GoalContext* context;
+        CachedGoal* next;
+        Certainty certainty = Certainty::NoSolution;
         const SolverResponse* response = nullptr;
         const SolverImpl* applicable = nullptr;
+        bool hasCertainty = false;
         bool hasResponse = false;
-        bool persistent = false;
         bool responseIsIdentity = false;
+        bool emptyRootAssembly = false;
 
-        CachedGoal(GoalKey* goal, Certainty certainty);
+        CachedGoal(GoalKey* goal, const GoalContext* context, CachedGoal* next);
     };
 
     const TraitResolution& resolve_;
@@ -525,9 +542,8 @@ struct TraitResolution::NextTraitGoalEvaluator {
     const Span* span_ = nullptr;
     bool coherenceMode = false;
     mutable u64 cycleHits_ = 0;
-    mutable u64 envGeneration_ = ~0ull;
     mutable u64 ivarGenerationSeen_ = ~0ull;
-    mutable u64 solverEnvGenerationSeen_ = ~0ull;
+    const GoalContext* context_ = nullptr;
 
     u32 alphaExistentialScopeBase_ = 0;
 
@@ -553,16 +569,14 @@ struct TraitResolution::NextTraitGoalEvaluator {
     size_t frameDepth = 0;
     /* The goal interner: one chain of nodes per hash. */
     IntMap<GoalKey*> goalKeys;
-    ObjList<CachedGoal> cachedGoalNodes;
+    IntMap<CachedGoal*> provisionalAnswers;
+    ObjList<CachedGoal> provisionalNodes;
     Vector<GoalKey*> goalStack;
-    Vector<CachedGoal*> goalCache;
 
     struct CacheIndexBucket {
         u64 generation = 0;
         ThinVector<size_t> indexes;
     };
-
-    u64 emptyRootGoalGeneration = 1;
 
     struct RawNestedNoEffectResponse {
         const GoalKey* goal;
@@ -580,17 +594,17 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     struct CanonicalNestedNoEffectResponse {
         const GoalKey* goal;
+        const GoalContext* context;
         const HIRTraitImpl* traitImpl;
         const HIRMarkerImpl* markerImpl;
         HIRPathParams candidateParams;
         Certainty certainty;
 
-        CanonicalNestedNoEffectResponse(const GoalKey* goal, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty certainty);
+        CanonicalNestedNoEffectResponse(const GoalKey* goal, const GoalContext* context, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty certainty);
     };
 
     ThinVector<CanonicalNestedNoEffectResponse> canonicalNestedNoEffectResponses;
-    IntMap<CacheIndexBucket> canonicalNestedNoEffectResponseIndex;
-    u64 canonicalNestedNoEffectResponseGeneration = 1;
+    IntMap<ThinVector<size_t>> canonicalNestedNoEffectResponseIndex;
 
     struct CanonicalGoal {
         HIRPathParams params;
@@ -691,15 +705,27 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     GoalKey* internGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false, const OperatorKey& operatorKey = {});
 
+    NextSolverCrateCache::GoalTable& goalTable() const;
+
+    GoalKey* findCrateGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false, const OperatorKey& operatorKey = {}) const;
+
+    GoalKey* internCrateGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false, const OperatorKey& operatorKey = {});
+
+    void refreshContext();
+
+    const CachedGoal* cachedAnswer(const GoalKey* goal) const;
+
+    CachedGoal* answerEntry(GoalKey* goal, bool restsOnCycle);
+
     void pushActiveGoal(GoalKey* goal);
 
     void popActiveGoal(GoalKey* goal);
 
-    CachedGoal* cacheGoal(GoalKey* goal, Certainty certainty, bool persistent = false, bool responseIsIdentity = false);
+    CachedGoal* cacheGoal(GoalKey* goal, Certainty certainty, bool restsOnCycle, bool responseIsIdentity = false);
 
-    CachedGoal* cacheResponse(GoalKey* goal, const SolverResponse* response, const SolverImpl* applicable);
+    CachedGoal* cacheResponse(GoalKey* goal, const SolverResponse* response, const SolverImpl* applicable, bool restsOnCycle);
 
-    void clearGoalCache(bool clearCanonicalNoEffectResponses = false, bool keepCanonicalResponses = false);
+    void clearRawNestedNoEffectResponses();
 
     size_t rawNestedNoEffectHash(const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Candidate& candidate) const;
 
@@ -802,7 +828,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     struct NestedResponseMemo {
         const Candidate& candidate;
-        CachedGoal* goal = nullptr;
+        GoalKey* goal = nullptr;
         HIRPathParams canonicalCandidateParams;
         bool prepared = false;
         bool knownNoEffect = false;
@@ -851,6 +877,21 @@ struct TraitResolution::NextTraitGoalEvaluator {
     bool evaluateTyped(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, SolverResponseCallback& callback, const TraitGoalQuery& query, bool callerBoundary = false, bool includeRootMagicCandidates = true);
 
     bool evaluateNormalizesTo(const Span& callSpan, const NormalizesTo& goal, NormalizesToCallback& callback, bool callerBoundary = false);
+};
+
+struct NextSolverCrateCache::GoalTable {
+    IntMap<NextTraitGoalEvaluator::GoalKey*> goals;
+    IntMap<NextTraitGoalEvaluator::GoalContext*> contexts;
+    ObjList<NextTraitGoalEvaluator::CachedGoal> answers;
+    ObjPool* pool;
+
+    explicit GoalTable(ObjPool* pool)
+        : goals(pool)
+        , contexts(pool)
+        , answers(pool)
+        , pool(pool)
+    {
+    }
 };
 
 SolverImpl::SolverImpl(HIRPathParams implParams, const HIRTrait& trait, const HIRSimplePath& traitPath, const HIRTraitImpl& traitImpl)
@@ -3276,7 +3317,7 @@ static void appendAssembledParamEqualities(const Span& sp, const HIRPathParams& 
 }
 
 bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type, const HIRSimplePath& trait, TraitBoundCallback& cb) const {
-    for (const auto& b : traitBounds) {
+    for (const auto& b : traitBounds()) {
         if (b.first.second.path != trait) {
             continue;
         }
@@ -3302,7 +3343,7 @@ bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type,
 }
 
 bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type, TraitBoundCallback& cb) const {
-    for (const auto& b : traitBounds) {
+    for (const auto& b : traitBounds()) {
         const HIRType* boundType = b.first.first;
         auto relation = probeTypeRelation(sp, boundType, type);
         const HIRType* normalizedBound;
@@ -3328,7 +3369,7 @@ bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type,
 }
 
 bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, TraitBoundCallback& cb) const {
-    for (const auto& b : traitBounds) {
+    for (const auto& b : traitBounds()) {
         if (cb.visit(b.first.first, b.first.second, b.second)) {
             return true;
         }
@@ -5597,7 +5638,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
 
     // TODO: A bound can imply something via its associated types. How deep can this go?
 
-    for (const auto& bound : traitBounds) {
+    for (const auto& bound : traitBounds()) {
         if (bound.first.second.path != trait) {
             continue;
         }
@@ -5638,7 +5679,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
         return false;
     };
 
-    for (const auto& environment : traitBounds) {
+    for (const auto& environment : traitBounds()) {
         const auto& environmentType = environment.first.first;
         const auto& environmentTrait = environment.first.second;
         const auto& environmentInfo = environment.second;
@@ -9016,7 +9057,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     bool foundNonGlobalBound = false;
     ThinVector<HIRGenericPath> ambiguousBoundTraits;
     ThinVector<SolverResponse> ambiguousBoundEffects;
-    for (const auto& bound : resolve_.traitBounds) {
+    for (const auto& bound : resolve_.traitBounds()) {
         if (singleTraitScope) {
             break;
         }
@@ -10211,7 +10252,7 @@ auto NextTraitGoalEvaluator::crateCacheUsable() const -> bool {
 }
 
 auto NextTraitGoalEvaluator::crateCacheEnv(bool suppressAmbiguity) const -> SolverParamEnv {
-    if (resolve_.traitBounds.size() == 0 && resolve_.typeEqualities.empty()) {
+    if (resolve_.traitBounds().size() == 0 && resolve_.typeEqualities().empty()) {
         return SolverParamEnv{nullptr, nullptr, suppressAmbiguity};
     }
     return SolverParamEnv{resolve_.implGenerics_, resolve_.itemGenerics_, suppressAmbiguity};
@@ -11329,25 +11370,133 @@ auto NextTraitGoalEvaluator::popActiveGoal(GoalKey* goal) -> void {
     goalStack.popBack();
 }
 
-auto NextTraitGoalEvaluator::cacheGoal(GoalKey* goal, Certainty certainty, bool persistent, bool responseIsIdentity) -> CachedGoal* {
-    auto* cached = cachedGoalNodes.make(goal, certainty);
-    cached->persistent = persistent;
-    cached->responseIsIdentity = responseIsIdentity;
-    goal->cached = cached;
-    goalCache.pushBack(cached);
+auto NextTraitGoalEvaluator::goalTable() const -> NextSolverCrateCache::GoalTable& {
+    auto& cache = crateCache();
+    if (!cache.goalTable) {
+        cache.goalTable = cache.pool->make<NextSolverCrateCache::GoalTable>(cache.pool.mutPtr());
+    }
+    return *cache.goalTable;
+}
+
+auto NextTraitGoalEvaluator::findCrateGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity, const OperatorKey& operatorKey) const -> GoalKey* {
+    auto* head = goalTable().goals.find(hash);
+    for (auto* node = head ? *head : nullptr; node; node = node->next) {
+        if (goalMatches(*node, trait, params, type, associated, existentialEnvironment, suppressAmbiguity, operatorKey)) {
+            return node;
+        }
+    }
+    return nullptr;
+}
+
+auto NextTraitGoalEvaluator::internCrateGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity, const OperatorKey& operatorKey) -> GoalKey* {
+    auto& table = goalTable();
+    auto* head = table.goals.find(hash);
+    for (auto* node = head ? *head : nullptr; node; node = node->next) {
+        if (goalMatches(*node, trait, params, type, associated, existentialEnvironment, suppressAmbiguity, operatorKey)) {
+            return node;
+        }
+    }
+    auto* node = table.pool->make<GoalKey>(hash, trait, params, type, associated, existentialEnvironment, suppressAmbiguity, operatorKey, head ? *head : nullptr);
+    if (head) {
+        *head = node;
+    } else {
+        table.goals.insert(hash, node);
+    }
+    return node;
+}
+
+auto NextTraitGoalEvaluator::refreshContext() -> void {
+    const auto* environment = resolve_.typingEnvironment();
+    const auto* implGenerics = environment ? nullptr : resolve_.implGenerics_;
+    const auto* itemGenerics = environment ? nullptr : resolve_.itemGenerics_;
+    const void* owner = resolve_.solverEnvIsEmpty() ? nullptr : static_cast<const void*>(&resolve_);
+    const u64 generation = owner ? resolve_.solverEnvGeneration : 0;
+    const auto sameContext = [&](const GoalContext& context) {
+        return context.environment == environment && context.implGenerics == implGenerics && context.itemGenerics == itemGenerics && context.solverEnvironmentOwner == owner && context.solverEnvironmentGeneration == generation && context.coherence == coherenceMode;
+    };
+    if (context_ && sameContext(*context_)) {
+        return;
+    }
+    clearRawNestedNoEffectResponses();
+    auto& table = goalTable();
+    size_t hash = hashMix(reinterpret_cast<uintptr_t>(environment), reinterpret_cast<uintptr_t>(implGenerics));
+    hash = hashMix(hash, reinterpret_cast<uintptr_t>(itemGenerics));
+    hash = hashMix(hash, reinterpret_cast<uintptr_t>(owner));
+    hash = hashMix(hash, generation);
+    hash = hashMix(hash, coherenceMode ? 1 : 0);
+    auto* head = table.contexts.find(hash);
+    for (auto* node = head ? *head : nullptr; node; node = node->next) {
+        if (sameContext(*node)) {
+            context_ = node;
+            return;
+        }
+    }
+    auto* node = table.pool->make<GoalContext>(environment, implGenerics, itemGenerics, owner, generation, coherenceMode, head ? *head : nullptr);
+    if (head) {
+        *head = node;
+    } else {
+        table.contexts.insert(hash, node);
+    }
+    context_ = node;
+}
+
+auto NextTraitGoalEvaluator::cachedAnswer(const GoalKey* goal) const -> const CachedGoal* {
+    BUG_ASSERT(context_);
+    for (const auto* cached = goal->cached; cached; cached = cached->next) {
+        if (cached->context == context_) {
+            return cached;
+        }
+    }
+    const auto* head = provisionalAnswers.find(splitMix64(reinterpret_cast<uintptr_t>(goal)));
+    for (const auto* cached = head ? *head : nullptr; cached; cached = cached->next) {
+        if (cached->goal == goal && cached->context == context_) {
+            return cached;
+        }
+    }
+    return nullptr;
+}
+
+auto NextTraitGoalEvaluator::answerEntry(GoalKey* goal, bool restsOnCycle) -> CachedGoal* {
+    BUG_ASSERT(context_);
+    if (context_->permanent() && !restsOnCycle) {
+        for (auto* cached = goal->cached; cached; cached = cached->next) {
+            if (cached->context == context_) {
+                return cached;
+            }
+        }
+        auto* cached = goalTable().answers.make(goal, context_, goal->cached);
+        goal->cached = cached;
+        return cached;
+    }
+    const auto key = splitMix64(reinterpret_cast<uintptr_t>(goal));
+    auto* head = provisionalAnswers.find(key);
+    for (auto* cached = head ? *head : nullptr; cached; cached = cached->next) {
+        if (cached->goal == goal && cached->context == context_) {
+            return cached;
+        }
+    }
+    auto* cached = provisionalNodes.make(goal, context_, head ? *head : nullptr);
+    if (head) {
+        *head = cached;
+    } else {
+        provisionalAnswers.insert(key, cached);
+    }
     return cached;
 }
 
-auto NextTraitGoalEvaluator::cacheResponse(GoalKey* goal, const SolverResponse* response, const SolverImpl* applicable) -> CachedGoal* {
-    ASSERT_BUG(span(), response, StringView("cannot cache an empty solver response"));
-    const auto certainty = response->certainty;
-    auto* cached = goal->cached;
-    if (!cached) {
-        cached = cachedGoalNodes.make(goal, certainty);
-        goal->cached = cached;
-        goalCache.pushBack(cached);
-    }
+auto NextTraitGoalEvaluator::cacheGoal(GoalKey* goal, Certainty certainty, bool restsOnCycle, bool responseIsIdentity) -> CachedGoal* {
+    auto* cached = answerEntry(goal, restsOnCycle);
     cached->certainty = certainty;
+    cached->hasCertainty = true;
+    cached->responseIsIdentity = responseIsIdentity;
+    return cached;
+}
+
+auto NextTraitGoalEvaluator::cacheResponse(GoalKey* goal, const SolverResponse* response, const SolverImpl* applicable, bool restsOnCycle) -> CachedGoal* {
+    ASSERT_BUG(span(), response, StringView("cannot cache an empty solver response"));
+    auto* cached = answerEntry(goal, restsOnCycle);
+    cached->certainty = response->certainty;
+    cached->hasCertainty = true;
     cached->response = response;
     cached->applicable = applicable;
     cached->hasResponse = true;
@@ -11359,34 +11508,9 @@ auto NextTraitGoalEvaluator::cacheResponse(GoalKey* goal, const SolverResponse* 
     return cached;
 }
 
-auto NextTraitGoalEvaluator::clearGoalCache(bool clearCanonicalNoEffectResponses, bool keepCanonicalResponses) -> void {
+auto NextTraitGoalEvaluator::clearRawNestedNoEffectResponses() -> void {
     rawNestedNoEffectResponses.clear();
     rawNestedNoEffectResponseGeneration++;
-    if (clearCanonicalNoEffectResponses) {
-        canonicalNestedNoEffectResponses.clear();
-        canonicalNestedNoEffectResponseGeneration++;
-        emptyRootGoalGeneration++;
-    }
-    if (keepCanonicalResponses) {
-        return;
-    }
-    for (auto* cached : goalCache) {
-        cached->goal->cached = nullptr;
-    }
-    size_t kept = 0;
-    for (auto* cached : goalCache) {
-        if (cached->persistent) {
-            goalCache.mut(kept++) = cached;
-        } else {
-            cachedGoalNodes.release(cached);
-        }
-    }
-    while (goalCache.length() > kept) {
-        goalCache.popBack();
-    }
-    for (auto* cached : goalCache) {
-        cached->goal->cached = cached;
-    }
 }
 
 auto NextTraitGoalEvaluator::rawNestedNoEffectHash(const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const Candidate& candidate) const -> size_t {
@@ -11454,12 +11578,12 @@ auto NextTraitGoalEvaluator::canonicalNestedNoEffectHash(size_t goalHash, const 
 auto NextTraitGoalEvaluator::findCanonicalNestedNoEffectResponse(const GoalKey* goal, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty& certainty) const -> bool {
     const auto hash = canonicalNestedNoEffectHash(goal->hash, candidate, candidateParams);
     const auto* bucket = canonicalNestedNoEffectResponseIndex.find(hash);
-    if (!bucket || bucket->generation != canonicalNestedNoEffectResponseGeneration) {
+    if (!bucket) {
         return false;
     }
-    for (const auto index : bucket->indexes) {
+    for (const auto index : *bucket) {
         const auto& cached = canonicalNestedNoEffectResponses[index];
-        if (cached.goal == goal && cached.traitImpl == candidate.impl.traitImpl && cached.markerImpl == candidate.markerImpl &&
+        if (cached.goal == goal && cached.context == context_ && cached.traitImpl == candidate.impl.traitImpl && cached.markerImpl == candidate.markerImpl &&
             cached.candidateParams == candidateParams) {
             certainty = cached.certainty;
             return true;
@@ -11474,16 +11598,12 @@ auto NextTraitGoalEvaluator::rememberCanonicalNestedNoEffectResponse(const GoalK
         return;
     }
     const auto hash = canonicalNestedNoEffectHash(goal->hash, candidate, candidateParams);
-    canonicalNestedNoEffectResponses.emplace_back(goal, candidate, candidateParams, certainty);
+    canonicalNestedNoEffectResponses.emplace_back(goal, context_, candidate, candidateParams, certainty);
     auto* bucket = canonicalNestedNoEffectResponseIndex.find(hash);
     if (!bucket) {
         bucket = canonicalNestedNoEffectResponseIndex.insert(hash);
     }
-    if (bucket->generation != canonicalNestedNoEffectResponseGeneration) {
-        bucket->generation = canonicalNestedNoEffectResponseGeneration;
-        bucket->indexes.clear();
-    }
-    bucket->indexes.push_back(canonicalNestedNoEffectResponses.size() - 1);
+    bucket->push_back(canonicalNestedNoEffectResponses.size() - 1);
 }
 
 auto NextTraitGoalEvaluator::canonicalGoalIsRigid(const CanonicalGoal& canonical, const SolverGoalEnvironment& environment) -> bool {
@@ -13429,6 +13549,7 @@ auto NextTraitGoalEvaluator::evaluateStructuralTrait(const Span& callSpan, Struc
     ASSERT_BUG(callSpan, goalStack.empty(), StringView("next-solver goal stack leaked between structural evaluations"));
     ASSERT_BUG(callSpan, frameDepth == 0, StringView("next-solver candidate frames leaked between structural evaluations"));
     span_ = &callSpan;
+    refreshContext();
     STD_DEFER {
         span_ = nullptr;
     };
@@ -14221,7 +14342,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
             if (nestedResponseIsIdentity) {
                 if (needsResponseConstraints) {
                     if (responseMemo.goal) {
-                        rememberCanonicalNestedNoEffectResponse(responseMemo.goal->goal, *candidate, responseMemo.canonicalCandidateParams, nested);
+                        rememberCanonicalNestedNoEffectResponse(responseMemo.goal, *candidate, responseMemo.canonicalCandidateParams, nested);
                     }
                     rememberRawNestedNoEffectResponse(nestedTrait, nestedParams, nestedType, &nestedAssociated, *candidate, nested);
                 }
@@ -14265,7 +14386,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                 }
                 if (responseBinding == CandidateBindingResult::Unchanged && !responseHadEffects) {
                     if (responseMemo.goal) {
-                        rememberCanonicalNestedNoEffectResponse(responseMemo.goal->goal, *candidate, responseMemo.canonicalCandidateParams, responseCertainty);
+                        rememberCanonicalNestedNoEffectResponse(responseMemo.goal, *candidate, responseMemo.canonicalCandidateParams, responseCertainty);
                     }
                     rememberRawNestedNoEffectResponse(nestedTrait, nestedParams, nestedType, &nestedAssociated, *candidate, responseCertainty);
                 }
@@ -14377,13 +14498,13 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     const auto canonical = canonicalizeGoal(goalParams, resolvedType, associated, canonicalizer);
     const auto* canonicalAssociated = canonical.associated.empty() ? nullptr : &canonical.associated;
     const auto hash = goalHashWithEnvironment(goalHash(trait, canonical.params, canonical.type, canonicalAssociated), canonicalizer.alphaSolverEnvironment());
-    auto* goalKey = internGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated, &canonicalizer.alphaSolverEnvironment());
-    auto prepareResponseMemo = [&](CachedGoal* cached) {
+    auto* goalKey = internCrateGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated, &canonicalizer.alphaSolverEnvironment());
+    auto prepareResponseMemo = [&](GoalKey* answered) {
         if (!responseMemo) {
             return;
         }
-        if (cached) {
-            responseMemo->goal = cached;
+        if (answered) {
+            responseMemo->goal = answered;
         }
         if (responseMemo->prepared) {
             return;
@@ -14403,14 +14524,14 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     if (responseMemo && responseMemo->knownNoEffect) {
         return responseMemo->noEffectCertainty;
     }
-    if (auto* cached = goalKey->cached) {
+    if (const auto* cached = cachedAnswer(goalKey); cached && cached->hasCertainty) {
         if (responseIsIdentity) {
             *responseIsIdentity = cached->responseIsIdentity;
         }
-        prepareResponseMemo(cached);
+        prepareResponseMemo(goalKey);
         return cached->certainty;
     }
-    const bool crateCacheable = !canonicalAssociated && crateCacheUsable() && goalIsConcrete(trait, canonical);
+    const bool crateCacheable = !context_->permanent() && !canonicalAssociated && crateCacheUsable() && goalIsConcrete(trait, canonical);
     const auto crateCacheEnvKey = crateCacheEnv(false);
     const auto crateHash = hashParamEnv(hash, crateCacheEnvKey);
     if (crateCacheable) {
@@ -14443,11 +14564,12 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
         if (responseIsIdentity) {
             *responseIsIdentity = identityResponse;
         }
-        if (crateCacheable && rigidKey && cycleHits_ == cycleHitsBefore) {
+        const bool restsOnCycle = cycleHits_ != cycleHitsBefore;
+        if (crateCacheable && rigidKey && !restsOnCycle) {
             crateCache().insert(crateHash, trait, canonical.params.clone(), canonical.type, crateCacheEnvKey, certainty);
         }
-        auto* cached = cacheGoal(goalKey, certainty, rigidKey && cycleHits_ == cycleHitsBefore, identityResponse);
-        prepareResponseMemo(cached);
+        cacheGoal(goalKey, certainty, restsOnCycle, identityResponse);
+        prepareResponseMemo(goalKey);
         return certainty;
     };
 
@@ -14862,7 +14984,8 @@ NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, c
     , structuralCertaintyCache_(resolve.eatCachePool.mutPtr())
     , candidateNodes(resolve.eatCachePool.mutPtr())
     , goalKeys(resolve.eatCachePool.mutPtr())
-    , cachedGoalNodes(resolve.eatCachePool.mutPtr())
+    , provisionalAnswers(resolve.eatCachePool.mutPtr())
+    , provisionalNodes(resolve.eatCachePool.mutPtr())
     , rawNestedNoEffectResponseIndex(resolve.eatCachePool.mutPtr())
     , canonicalNestedNoEffectResponseIndex(resolve.eatCachePool.mutPtr())
 {
@@ -14870,7 +14993,6 @@ NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, c
     alphaExistentialScopeBase_ = SOLVER_ALPHA_SCOPE_BASE;
     frames.grow(16);
     goalStack.grow(16);
-    goalCache.grow(64);
     rawNestedNoEffectResponses.reserve(32);
     canonicalNestedNoEffectResponses.reserve(64);
 }
@@ -15003,15 +15125,17 @@ auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const
     ASSERT_BUG(callSpan, !coherenceMode, StringView("coherence mode leaked before overlap probe"));
     ASSERT_BUG(callSpan, goalStack.empty(), StringView("next-solver goal stack leaked before coherence probe"));
     ASSERT_BUG(callSpan, frameDepth == 0, StringView("next-solver candidate frames leaked before coherence probe"));
-    clearGoalCache(true);
+    clearRawNestedNoEffectResponses();
     span_ = &callSpan;
     coherenceMode = true;
+    refreshContext();
 
     STD_DEFER {
         BUG_ASSERT(goalStack.empty());
-        clearGoalCache(true);
+        clearRawNestedNoEffectResponses();
         frameDepth = 0;
         coherenceMode = false;
+        refreshContext();
         span_ = nullptr;
     };
 
@@ -15078,31 +15202,20 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     if (outermost) {
         ASSERT_BUG(callSpan, goalStack.empty(), StringView("next-solver goal stack leaked between evaluations"));
         ASSERT_BUG(callSpan, frameDepth == 0, StringView("next-solver candidate frames leaked between evaluations"));
-        if (envGeneration_ != resolve_.eatCacheGeneration) {
-            envGeneration_ = resolve_.eatCacheGeneration;
-            for (auto* goal : goalCache) {
-                goal->persistent = false;
-            }
+        if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration) {
             ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
-            solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
-            clearGoalCache(true);
-        } else if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
-            const bool environmentChanged = solverEnvGenerationSeen_ != resolve_.solverEnvGeneration;
-            ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
-            solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
-            clearGoalCache(environmentChanged, !environmentChanged);
+            clearRawNestedNoEffectResponses();
         }
+        refreshContext();
         span_ = &callSpan;
     }
 
     STD_DEFER {
         if (outermost) {
             BUG_ASSERT(goalStack.empty());
-            if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
-                const bool environmentChanged = solverEnvGenerationSeen_ != resolve_.solverEnvGeneration;
+            if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration) {
                 ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
-                solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
-                clearGoalCache(environmentChanged, !environmentChanged);
+                clearRawNestedNoEffectResponses();
             }
             frameDepth = 0;
             span_ = nullptr;
@@ -15483,12 +15596,12 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
        as well; upstream caches every canonical goal evaluation.  Without this each
        adapter in a chain of `map`s re-proves the whole chain beneath it. */
     const bool cacheableResponse = cacheableAssociatedItem && !valueName && !excludedImpl && !hasCoercionGoals && operatorOutputIsQueriedItem;
-    const bool crateCacheableResponse = cacheableResponse && !query.operatorGoal && !hasAssociatedItemQuery && crateCacheUsable() && goalIsConcrete(trait, canonical);
+    const bool crateCacheableResponse = cacheableResponse && !context_->permanent() && !query.operatorGoal && !hasAssociatedItemQuery && crateCacheUsable() && goalIsConcrete(trait, canonical);
     const auto crateCacheEnvKey = crateCacheEnv(suppressAmbiguity);
     const auto crateRootHash = hashParamEnv(rootHash, crateCacheEnvKey);
-    auto* responseCacheGoal = cacheableResponse ? internGoal(rootHash, trait, canonical.params, canonical.type, responseCacheAssociated, &canonicalizer.alphaSolverEnvironment(), suppressAmbiguity, operatorKey) : nullptr;
+    auto* responseCacheGoal = cacheableResponse ? internCrateGoal(rootHash, trait, canonical.params, canonical.type, responseCacheAssociated, &canonicalizer.alphaSolverEnvironment(), suppressAmbiguity, operatorKey) : nullptr;
     if (cacheableResponse) {
-        if (const auto* cached = responseCacheGoal->cached; cached && cached->hasResponse) {
+        if (const auto* cached = cachedAnswer(responseCacheGoal); cached && cached->hasResponse) {
             return deliverResponse(*cached->response, cached->applicable);
         }
         if (crateCacheableResponse) {
@@ -15498,9 +15611,11 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
     }
     if (cacheEmptyAssembly) {
-        const auto* emptyAssemblyGoal = findGoal(emptyAssemblyHash, trait, canonical.params, canonical.type, nullptr, &canonicalizer.alphaSolverEnvironment());
-        if (emptyAssemblyGoal && emptyAssemblyGoal->emptyRootAssembly == emptyRootGoalGeneration) {
-            return emitNoViable();
+        const auto* emptyAssemblyGoal = findCrateGoal(emptyAssemblyHash, trait, canonical.params, canonical.type, nullptr, &canonicalizer.alphaSolverEnvironment());
+        if (emptyAssemblyGoal) {
+            if (const auto* mark = cachedAnswer(emptyAssemblyGoal); mark && mark->emptyRootAssembly) {
+                return emitNoViable();
+            }
         }
     }
     const auto cycleHitsBefore = cycleHits_;
@@ -16071,7 +16186,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (!cacheableResponse || canonicalizer.sawForeignIvar() || canonicalizer.sawForeignSolverExistential()) {
             return deliverResponse(solverResponse, exposeImpl ? &response : nullptr);
         }
-        if (crateCacheableResponse && rigidKey && cycleHits_ == cycleHitsBefore) {
+        const bool restsOnCycle = cycleHits_ != cycleHitsBefore;
+        if (crateCacheableResponse && rigidKey && !restsOnCycle) {
             auto* global = crateCache().insert(crateRootHash, trait, canonical.params.clone(), canonical.type, crateCacheEnvKey, solverResponse.certainty);
             auto globalResponse = monomorphSolverResponse(solverResponse, MonomorphiserNop(crate.types));
             if (canonicalApplicable) {
@@ -16081,9 +16197,13 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             global->response = crateCache().pool->make<SolverResponse>(std::move(globalResponse));
             global->hasResponse = true;
         }
-        auto* storedResponse = resolve_.eatCachePool->make<SolverResponse>(std::move(solverResponse));
-        auto* cached = cacheResponse(responseCacheGoal, storedResponse, canonicalApplicable);
-        cached->persistent = rigidKey && cycleHits_ == cycleHitsBefore;
+        const bool permanent = context_->permanent() && !restsOnCycle;
+        const auto* storedApplicable = canonicalApplicable;
+        if (permanent && canonicalApplicable) {
+            storedApplicable = goalTable().pool->make<SolverImpl>(monomorphCandidateImpl(*canonicalApplicable, MonomorphiserNop(crate.types)));
+        }
+        auto* storedResponse = (permanent ? goalTable().pool : resolve_.eatCachePool.mutPtr())->make<SolverResponse>(std::move(solverResponse));
+        cacheResponse(responseCacheGoal, storedResponse, storedApplicable, restsOnCycle);
         return deliverResponse(*storedResponse, canonicalApplicable);
     };
     /* The cycle key freshens as upstream does: two goals differing only in which
@@ -16203,7 +16323,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     const size_t candidateCount = frame.candidates.length();
     if (candidateCount == 0) {
         if (cacheEmptyAssembly) {
-            internGoal(emptyAssemblyHash, trait, canonical.params, canonical.type, nullptr, &canonicalizer.alphaSolverEnvironment())->emptyRootAssembly = emptyRootGoalGeneration;
+            answerEntry(internCrateGoal(emptyAssemblyHash, trait, canonical.params, canonical.type, nullptr, &canonicalizer.alphaSolverEnvironment()), cycleHits_ != cycleHitsBefore)->emptyRootAssembly = true;
         }
         return emitNoViable();
     }
@@ -16917,9 +17037,21 @@ NextTraitGoalEvaluator::GoalKey::GoalKey(size_t hash, const HIRSimplePath& trait
     }
 }
 
-NextTraitGoalEvaluator::CachedGoal::CachedGoal(GoalKey* goal, Certainty certainty)
+NextTraitGoalEvaluator::GoalContext::GoalContext(const TypingEnvironment* environment, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const void* solverEnvironmentOwner, u64 solverEnvironmentGeneration, bool coherence, GoalContext* next)
+    : environment(environment)
+    , implGenerics(implGenerics)
+    , itemGenerics(itemGenerics)
+    , solverEnvironmentOwner(solverEnvironmentOwner)
+    , solverEnvironmentGeneration(solverEnvironmentGeneration)
+    , coherence(coherence)
+    , next(next)
+{
+}
+
+NextTraitGoalEvaluator::CachedGoal::CachedGoal(GoalKey* goal, const GoalContext* context, CachedGoal* next)
     : goal(goal)
-    , certainty(certainty)
+    , context(context)
+    , next(next)
 {
 }
 
@@ -16932,8 +17064,9 @@ NextTraitGoalEvaluator::RawNestedNoEffectResponse::RawNestedNoEffectResponse(con
 {
 }
 
-NextTraitGoalEvaluator::CanonicalNestedNoEffectResponse::CanonicalNestedNoEffectResponse(const GoalKey* goal, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty certainty)
+NextTraitGoalEvaluator::CanonicalNestedNoEffectResponse::CanonicalNestedNoEffectResponse(const GoalKey* goal, const GoalContext* context, const Candidate& candidate, const HIRPathParams& candidateParams, Certainty certainty)
     : goal(goal)
+    , context(context)
     , traitImpl(candidate.impl.traitImpl)
     , markerImpl(candidate.markerImpl)
     , candidateParams(candidateParams.clone())

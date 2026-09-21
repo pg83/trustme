@@ -7,9 +7,15 @@
 #include "hir_type_ref.h"
 #include "range_vec_map.h"
 #include "hir_generic_params.h"
+#include "thin_vector.h"
+
+#include <std/sym/i_map.h>
+#include <std/mem/obj_pool.h>
 
 #include <map>
 #include <memory>
+
+struct TypingEnvironment;
 
 struct HIRTypeEqualityCallback {
     virtual const HIRType* visit(const HIRType* type) = 0;
@@ -147,7 +153,8 @@ struct TraitResolveCommon {
     }
 
     void forEachTypeEqualityCb(HIRTypeEqualityCallback& cb) {
-        for (auto& e : typeEqualities) {
+        ASSERT_BUG(Span(), !environment_, stl::StringView("A shared typing environment is not rewritten in place"));
+        for (auto& e : localIndex_.typeEqualities) {
             e.second.ty = cb.visit(e.second.ty);
         }
     }
@@ -178,8 +185,6 @@ struct TraitResolveCommon {
     struct CachedEquality {
         const HIRType* ty;
     };
-
-    HIRTypeRefMap<CachedEquality> typeEqualities;
 
     struct CachedBound {
         const HIRTrait* traitPtr;
@@ -222,7 +227,33 @@ struct TraitResolveCommon {
     };
 
     typedef RangeVecMap<std::pair<const HIRType*, HIRGenericPath>, CachedBound, CachedBoundCmp> cachedBoundsT;
-    cachedBoundsT traitBounds;
+
+    struct BoundIndex {
+        HIRTypeRefMap<CachedEquality> typeEqualities;
+        cachedBoundsT traitBounds;
+    };
+
+    const BoundIndex& boundIndex() const;
+
+    const cachedBoundsT& traitBounds() const {
+        return boundIndex().traitBounds;
+    }
+
+    const HIRTypeRefMap<CachedEquality>& typeEqualities() const {
+        return boundIndex().typeEqualities;
+    }
+
+    const TypingEnvironment* typingEnvironment() const {
+        return environment_;
+    }
+
+    void buildIndex(const Span& sp, BoundIndex& index) const;
+
+    size_t environmentHash() const;
+
+    bool environmentMatches(const TypingEnvironment& environment) const;
+
+    void cloneEnvironmentInto(TypingEnvironment& environment) const;
 
     TraitResolveCommon(const WireBoard& wb);
 
@@ -239,8 +270,11 @@ struct TraitResolveCommon {
     void prepIndexes(const Span& sp);
 
 protected:
-    void prepIndexesAddEquality(const Span& sp, const HIRType* longTy, const HIRType* shortTy);
-    void prepIndexesAddTraitBound(const Span& sp, const HIRType* type, HIRTraitPath traitPath, bool addParents = true);
+    BoundIndex localIndex_;
+    const TypingEnvironment* environment_ = nullptr;
+
+    void prepIndexesAddEquality(const Span& sp, BoundIndex& index, const HIRType* longTy, const HIRType* shortTy) const;
+    void prepIndexesAddTraitBound(const Span& sp, BoundIndex& index, const HIRType* type, HIRTraitPath traitPath, bool addParents = true) const;
 
     bool iterateBoundsCb(HIRGenericBoundCallback& cb) const;
 
@@ -250,3 +284,48 @@ protected:
         return iterateBoundsCb(cb);
     }
 };
+
+struct TypingEnvironment {
+    size_t hash;
+    ThinVector<HIRGenericBound> bounds;
+    ThinVector<u8> implSized;
+    ThinVector<u8> itemSized;
+    ThinVector<const HIRType*> implValueTypes;
+    ThinVector<const HIRType*> itemValueTypes;
+    TraitResolveCommon::BoundIndex index;
+    TypingEnvironment* next;
+
+    TypingEnvironment(size_t hash, TypingEnvironment* next)
+        : hash(hash)
+        , next(next)
+    {
+    }
+};
+
+inline const TraitResolveCommon::BoundIndex& TraitResolveCommon::boundIndex() const {
+    return environment_ ? environment_->index : localIndex_;
+}
+
+struct TypingEnvironmentInterner {
+    stl::ObjPool::Ref pool;
+    stl::IntMap<TypingEnvironment*> index;
+    bool enabled_ = false;
+
+    TypingEnvironmentInterner();
+
+    void enable() {
+        enabled_ = true;
+    }
+
+    void disable() {
+        enabled_ = false;
+    }
+
+    bool enabled() const {
+        return enabled_;
+    }
+
+    const TypingEnvironment* intern(const TraitResolveCommon& resolve, const Span& sp);
+};
+
+void TypeckCreateEnvironmentInterner(WireBoard& wb, stl::ObjPool& pool);

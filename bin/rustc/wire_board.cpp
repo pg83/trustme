@@ -22,6 +22,7 @@ WireBoard::WireBoard(ObjPool* pool)
     MIRCreateOperationsContext(*this, *pool);
     CtfeCreateContext(*this, *pool);
     NextSolverCreateCrateCache(*this, *pool);
+    TypeckCreateEnvironmentInterner(*this, *pool);
     StaticCreateTraitValueCache(*this, *pool);
     HIRCreateMutableOwnerCache(*this, *pool);
     TransCreateManglingContext(*this, *pool);

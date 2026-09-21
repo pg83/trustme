@@ -650,6 +650,27 @@ namespace {
         return hashMix(hashSimplePath(path.path), hashPathParams(path.params));
     }
 
+    size_t hashTraitPath(const HIRTraitPath& path) {
+        size_t h = hashGenericPath(path.path);
+        h = hashMix(h, reinterpret_cast<uintptr_t>(path.traitPtr));
+        h = hashMix(h, static_cast<size_t>(path.constness));
+        for (const auto& bound : path.typeBounds) {
+            h = hashMix(h, std::hash<RcString>()(bound.first));
+            h = hashMix(h, hashGenericPath(bound.second.sourceTrait));
+            h = hashMix(h, hashPathParams(bound.second.atyParams));
+            h = hashMix(h, hashTypeRef(bound.second.type));
+        }
+        for (const auto& bound : path.traitBounds) {
+            h = hashMix(h, std::hash<RcString>()(bound.first));
+            h = hashMix(h, hashGenericPath(bound.second.sourceTrait));
+            h = hashMix(h, hashPathParams(bound.second.atyParams));
+            for (const auto& trait : bound.second.traits) {
+                h = hashMix(h, hashTraitPath(trait));
+            }
+        }
+        return h;
+    }
+
     size_t hashPath(const HIRPath& path) {
         size_t h = static_cast<size_t>(path.data.tag());
         switch (path.data.tag()) {
@@ -950,6 +971,14 @@ namespace {
 
 bool hirPathParamsIdentical(const HIRPathParams& a, const HIRPathParams& b) {
     return exactPathParamsEqual(a, b);
+}
+
+bool hirTraitPathIdentical(const HIRTraitPath& a, const HIRTraitPath& b) {
+    return a.constness == b.constness && exactTraitPathEqual(a, b);
+}
+
+size_t hirTraitPathHash(const HIRTraitPath& path) {
+    return hashTraitPath(path);
 }
 
 Ordering ord(const HIRType* l, const HIRType* r) {
