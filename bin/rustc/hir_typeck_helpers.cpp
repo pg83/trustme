@@ -473,6 +473,13 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     struct CachedGoal;
 
+    struct OperatorKey {
+        TypeckPrimitiveOperator operation;
+        const HIRTraitImpl* currentImpl;
+
+        bool operator==(const OperatorKey&) const = default;
+    };
+
     /* One canonical goal, interned: the node belongs to the evaluator's pool and
        lives as long as it does, and the description above `next` never changes
        once the node is chained in.  Two goals are the same goal exactly when
@@ -487,6 +494,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
         ThinVector<u32> existentialEnvironment;
         ThinVector<const HIRType*> closureSignatures;
         bool suppressAmbiguity;
+        OperatorKey operatorKey;
         GoalKey* next;
 
         /* Being solved right now: a nested goal that reaches this node is a cycle. */
@@ -496,7 +504,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
         /* The generation in which root assembly for this goal came out empty. */
         u64 emptyRootAssembly = 0;
 
-        GoalKey(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity, GoalKey* next);
+        GoalKey(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity, const OperatorKey& operatorKey, GoalKey* next);
     };
 
     struct CachedGoal {
@@ -678,11 +686,11 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     SolverSlotValues extractSlotValues(const CanonicalGoal& goal, const SolverImpl& response, const CanonicalizeTraitGoal& canonicalizer, Certainty certainty) const;
 
-    static bool goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false);
+    static bool goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false, const OperatorKey& operatorKey = {});
 
-    GoalKey* findGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false) const;
+    GoalKey* findGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false, const OperatorKey& operatorKey = {}) const;
 
-    GoalKey* internGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false);
+    GoalKey* internGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false, const OperatorKey& operatorKey = {});
 
     void pushActiveGoal(GoalKey* goal);
 
@@ -11251,8 +11259,8 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
     return result;
 }
 
-auto NextTraitGoalEvaluator::goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity) -> bool {
-    if (goal.trait != trait || goal.params != params || goal.type != type || goal.suppressAmbiguity != suppressAmbiguity) {
+auto NextTraitGoalEvaluator::goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity, const OperatorKey& operatorKey) -> bool {
+    if (goal.trait != trait || goal.params != params || goal.type != type || goal.suppressAmbiguity != suppressAmbiguity || !(goal.operatorKey == operatorKey)) {
         return false;
     }
     const auto environmentSize = existentialEnvironment ? existentialEnvironment->scopeClasses.length() : 0;
@@ -11281,24 +11289,24 @@ auto NextTraitGoalEvaluator::goalMatches(const GoalKey& goal, const HIRSimplePat
     return true;
 }
 
-auto NextTraitGoalEvaluator::findGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity) const -> GoalKey* {
+auto NextTraitGoalEvaluator::findGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity, const OperatorKey& operatorKey) const -> GoalKey* {
     auto* head = goalKeys.find(hash);
     for (auto* node = head ? *head : nullptr; node; node = node->next) {
-        if (goalMatches(*node, trait, params, type, associated, existentialEnvironment, suppressAmbiguity)) {
+        if (goalMatches(*node, trait, params, type, associated, existentialEnvironment, suppressAmbiguity, operatorKey)) {
             return node;
         }
     }
     return nullptr;
 }
 
-auto NextTraitGoalEvaluator::internGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity) -> GoalKey* {
+auto NextTraitGoalEvaluator::internGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity, const OperatorKey& operatorKey) -> GoalKey* {
     auto* head = goalKeys.find(hash);
     for (auto* node = head ? *head : nullptr; node; node = node->next) {
-        if (goalMatches(*node, trait, params, type, associated, existentialEnvironment, suppressAmbiguity)) {
+        if (goalMatches(*node, trait, params, type, associated, existentialEnvironment, suppressAmbiguity, operatorKey)) {
             return node;
         }
     }
-    auto* node = resolve_.eatCachePool->make<GoalKey>(hash, trait, params, type, associated, existentialEnvironment, suppressAmbiguity, head ? *head : nullptr);
+    auto* node = resolve_.eatCachePool->make<GoalKey>(hash, trait, params, type, associated, existentialEnvironment, suppressAmbiguity, operatorKey, head ? *head : nullptr);
     if (head) {
         *head = node;
     } else {
@@ -15423,8 +15431,23 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         responseCacheAssociated = &responseCacheAssociatedStorage;
     }
     const bool suppressAmbiguity = query.ambiguity != SolverAmbiguityPolicy::Report;
+    const OperatorKey operatorKey = query.operatorGoal
+        ? OperatorKey{query.operatorGoal->operation, query.operatorGoal->currentImpl}
+        : OperatorKey{};
+    const bool operatorOutputIsQueriedItem = !query.operatorGoal
+        || (!query.operatorGoal->outputName || !query.operatorGoal->outputName[0]
+                ? !hasAssociatedItemQuery
+                : hasAssociatedItemQuery
+                    && StringView(assocName) == StringView(query.operatorGoal->outputName)
+                    && query.operatorGoal->outputParams == assocParams);
     const auto rootHash = hashMix(
-        goalHashWithEnvironment(goalHash(trait, canonical.params, canonical.type, responseCacheAssociated), canonicalizer.alphaSolverEnvironment()),
+        hashMix(
+            hashMix(
+                goalHashWithEnvironment(goalHash(trait, canonical.params, canonical.type, responseCacheAssociated), canonicalizer.alphaSolverEnvironment()),
+                static_cast<size_t>(operatorKey.operation)
+            ),
+            reinterpret_cast<uintptr_t>(operatorKey.currentImpl)
+        ),
         suppressAmbiguity
     );
     const bool cacheEmptyAssembly = outermost && !hasCoercionGoals;
@@ -15456,11 +15479,11 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
        canonical goal like any other and its response is cached under the bindings
        as well; upstream caches every canonical goal evaluation.  Without this each
        adapter in a chain of `map`s re-proves the whole chain beneath it. */
-    const bool cacheableResponse = cacheableAssociatedItem && !valueName && !excludedImpl && !hasCoercionGoals && !query.operatorGoal;
-    const bool crateCacheableResponse = cacheableResponse && !hasAssociatedItemQuery && crateCacheUsable() && goalIsConcrete(trait, canonical);
+    const bool cacheableResponse = cacheableAssociatedItem && !valueName && !excludedImpl && !hasCoercionGoals && operatorOutputIsQueriedItem;
+    const bool crateCacheableResponse = cacheableResponse && !query.operatorGoal && !hasAssociatedItemQuery && crateCacheUsable() && goalIsConcrete(trait, canonical);
     const auto crateCacheEnvKey = crateCacheEnv(suppressAmbiguity);
     const auto crateRootHash = hashParamEnv(rootHash, crateCacheEnvKey);
-    auto* responseCacheGoal = cacheableResponse ? internGoal(rootHash, trait, canonical.params, canonical.type, responseCacheAssociated, &canonicalizer.alphaSolverEnvironment(), suppressAmbiguity) : nullptr;
+    auto* responseCacheGoal = cacheableResponse ? internGoal(rootHash, trait, canonical.params, canonical.type, responseCacheAssociated, &canonicalizer.alphaSolverEnvironment(), suppressAmbiguity, operatorKey) : nullptr;
     if (cacheableResponse) {
         if (const auto* cached = responseCacheGoal->cached; cached && cached->hasResponse) {
             return deliverResponse(*cached->response, cached->applicable);
@@ -16868,13 +16891,14 @@ auto NextTraitGoalEvaluator::CandidateFrame::clear(ObjList<Candidate>& nodes) ->
     encounteredOverflow = false;
 }
 
-NextTraitGoalEvaluator::GoalKey::GoalKey(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity, GoalKey* next)
+NextTraitGoalEvaluator::GoalKey::GoalKey(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment, bool suppressAmbiguity, const OperatorKey& operatorKey, GoalKey* next)
     : hash(hash)
     , trait(trait)
     , params(params.clone())
     , type(type)
     , associated(cloneAssociated(associated))
     , suppressAmbiguity(suppressAmbiguity)
+    , operatorKey(operatorKey)
     , next(next)
 {
     if (existentialEnvironment) {
