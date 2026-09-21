@@ -16594,13 +16594,16 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
             auto& left = frame.viable[i]->impl;
             auto& right = frame.viable[j]->impl;
-            if (responsesEqual(*frame.viable[i], *frame.viable[j], assocName, canonicalAssocParams, valueName)) {
-                continue;
-            }
             if (!left.isTraitImpl() || !right.isTraitImpl()) {
                 continue;
             }
             if (coherenceMode) {
+                continue;
+            }
+            if (frame.viable[i]->certainty != Certainty::Proven && frame.viable[j]->certainty != Certainty::Proven) {
+                continue;
+            }
+            if (responsesEqual(*frame.viable[i], *frame.viable[j], assocName, canonicalAssocParams, valueName)) {
                 continue;
             }
             /* An instantiated head is read normalized: the default `impl<I: IntoIterator,
