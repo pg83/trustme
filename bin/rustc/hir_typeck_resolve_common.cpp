@@ -352,7 +352,7 @@ const TypingEnvironment* TypingEnvironmentInterner::intern(const TraitResolveCom
             return node;
         }
     }
-    auto* node = pool.mutPtr()->make<TypingEnvironment>(hash, head ? *head : nullptr);
+    auto* node = pool.mutPtr()->make<TypingEnvironment>(hash, pool.mutPtr(), head ? *head : nullptr);
     resolve.cloneEnvironmentInto(*node);
     resolve.buildIndex(sp, node->index);
     if (head) {

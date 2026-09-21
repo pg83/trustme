@@ -70,6 +70,7 @@ struct TraitValueCache {
         Entry* next = nullptr;
         u64 hash = 0;
 
+        const TypingEnvironment* environment = nullptr;
         const HIRGenericParams* implGenerics = nullptr;
         const HIRGenericParams* itemGenerics = nullptr;
         MetadataType selfMetadata = MetadataType::Unknown;
@@ -85,6 +86,7 @@ struct TraitValueCache {
     };
 
     struct Key {
+        const TypingEnvironment* environment;
         const HIRGenericParams* implGenerics;
         const HIRGenericParams* itemGenerics;
         MetadataType selfMetadata;

@@ -293,10 +293,16 @@ struct TypingEnvironment {
     ThinVector<const HIRType*> implValueTypes;
     ThinVector<const HIRType*> itemValueTypes;
     TraitResolveCommon::BoundIndex index;
+    mutable stl::IntMap<u8> copyAnswers;
+    mutable stl::IntMap<u8> dropAnswers;
+    mutable stl::IntMap<const HIRType*> normalized;
     TypingEnvironment* next;
 
-    TypingEnvironment(size_t hash, TypingEnvironment* next)
+    TypingEnvironment(size_t hash, stl::ObjPool* pool, TypingEnvironment* next)
         : hash(hash)
+        , copyAnswers(pool)
+        , dropAnswers(pool)
+        , normalized(pool)
         , next(next)
     {
     }

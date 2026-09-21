@@ -30,7 +30,8 @@ void StaticCreateTraitValueCache(WireBoard& wb, ObjPool& pool) {
 }
 
 auto TraitValueCache::hashKey(const Key& key) -> u64 {
-    u64 hash = splitMix64(reinterpret_cast<uintptr_t>(key.implGenerics));
+    u64 hash = splitMix64(reinterpret_cast<uintptr_t>(key.environment));
+    hash = splitMix64(hash ^ reinterpret_cast<uintptr_t>(key.implGenerics));
     hash = splitMix64(hash ^ reinterpret_cast<uintptr_t>(key.itemGenerics));
     hash = splitMix64(hash ^ (static_cast<u64>(key.selfMetadata) * 8 + static_cast<u64>(key.reveal)));
     hash = splitMix64(hash ^ reinterpret_cast<uintptr_t>(key.trait.rawData()));
@@ -52,6 +53,7 @@ auto TraitValueCache::find(u64 hash, const Key& key) const -> const Entry* {
     auto* head = index->find(hash);
     for (const Entry* entry = head ? *head : nullptr; entry; entry = entry->next) {
         if (entry->type == key.type
+            && entry->environment == key.environment
             && entry->implGenerics == key.implGenerics
             && entry->itemGenerics == key.itemGenerics
             && entry->selfMetadata == key.selfMetadata
@@ -68,6 +70,7 @@ auto TraitValueCache::find(u64 hash, const Key& key) const -> const Entry* {
 auto TraitValueCache::insert(u64 hash, const Key& key) -> Entry* {
     auto* entry = pool.mutPtr()->make<Entry>();
     entry->hash = hash;
+    entry->environment = key.environment;
     entry->implGenerics = key.implGenerics;
     entry->itemGenerics = key.itemGenerics;
     entry->selfMetadata = key.selfMetadata;
@@ -579,15 +582,25 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, co
                         }
                         return rv;
                     }
-                    auto it = atyCache.find(input);
-                    if (it != atyCache.end()) {
+                    const auto* environment = typingEnvironment();
+                    const u64 answerKey = (static_cast<u64>(reinterpret_cast<uintptr_t>(input)) << 4) | (static_cast<u64>(reveal_) << 3) | static_cast<u64>(selfMetadata);
+                    if (environment) {
+                        if (const auto* known = environment->normalized.find(answerKey)) {
+                            DEBUG(StringView("Cached ") << *known);
+                            return *known;
+                        }
+                    } else if (auto it = atyCache.find(input); it != atyCache.end()) {
                         DEBUG(StringView("Cached ") << it->second);
                         return it->second;
                     }
                     auto rv = input;
                     rv = this->expandAssociatedTypesUfcsKnown(sp, rv);
                     if (!(rv->is_Path() && rv->as_Path().binding.is_Opaque())) {
-                        atyCache.insert(std::make_pair(input, rv));
+                        if (environment) {
+                            environment->normalized.insert(answerKey, rv);
+                        } else {
+                            atyCache.insert(std::make_pair(input, rv));
+                        }
                     }
                     return rv;
                 }
@@ -995,7 +1008,13 @@ bool StaticTraitResolve::traitContainsType(const Span& sp, const HIRGenericPath&
 }
 
 bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRType* type) const {
-    if (const auto it = copyCache.find(type); it != copyCache.end()) {
+    const auto* environment = typingEnvironment();
+    const u64 answerKey = reinterpret_cast<uintptr_t>(type);
+    if (environment) {
+        if (const auto* known = environment->copyAnswers.find(answerKey)) {
+            return *known != 0;
+        }
+    } else if (const auto it = copyCache.find(type); it != copyCache.end()) {
         return it->second;
     }
 
@@ -1004,7 +1023,11 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRType* type) const {
         nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
     }
     const bool proven = nextSolver->typeIsCopy(sp, implGenerics_, itemGenerics_, type);
-    copyCache.insert(std::make_pair(type, proven));
+    if (environment) {
+        environment->copyAnswers.insert(answerKey, proven ? 1 : 0);
+    } else {
+        copyCache.insert(std::make_pair(type, proven));
+    }
     return proven;
 }
 
@@ -1525,18 +1548,30 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) co
                 return false;
             }
 
-            auto it = dropCache.find(ty);
-            if (it != dropCache.end()) {
+            const auto* environment = typingEnvironment();
+            const u64 answerKey = reinterpret_cast<uintptr_t>(ty);
+            if (environment) {
+                if (const auto* known = environment->dropAnswers.find(answerKey)) {
+                    return *known != 0;
+                }
+            } else if (auto it = dropCache.find(ty); it != dropCache.end()) {
                 return it->second;
             }
+            const auto rememberDropGlue = [&](bool needsGlue) {
+                if (environment) {
+                    environment->dropAnswers.insert(answerKey, needsGlue ? 1 : 0);
+                } else {
+                    dropCache.insert(std::make_pair(ty, needsGlue));
+                }
+                return needsGlue;
+            };
 
             auto pp = HIRPathParams();
             bool hasDirectDrop = this->findImpl(sp, langDrop(), &pp, ty, [&](SolverSelection) {
                 return true;
             });
             if (hasDirectDrop) {
-                dropCache.insert(std::make_pair(ty, true));
-                return true;
+                return rememberDropGlue(true);
             }
 
             const HIRType* tmpTy;
@@ -1605,8 +1640,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) co
                     break;
                 }
             }
-            dropCache.insert(std::make_pair(ty, needsDropGlue));
-            return needsDropGlue;
+            return rememberDropGlue(needsDropGlue);
         }
         case HIRType::TAG_Diverge: {
             return false;
@@ -2039,7 +2073,8 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 if (cache.generation != crate.implGeneration) {
                     cache.reset(crate.implGeneration);
                 }
-                const TraitValueCache::Key cacheKey{implGenerics_, itemGenerics_, selfMetadata, reveal_, pe.trait.path, pe.trait.params, pe.type, pe.item};
+                const auto* environment = typingEnvironment();
+                const TraitValueCache::Key cacheKey{environment, environment ? nullptr : implGenerics_, environment ? nullptr : itemGenerics_, selfMetadata, reveal_, pe.trait.path, pe.trait.params, pe.type, pe.item};
                 const auto cacheHash = TraitValueCache::hashKey(cacheKey);
                 if (const auto* hit = cache.find(cacheHash, cacheKey)) {
                     const auto& impl = *hit->impl;
