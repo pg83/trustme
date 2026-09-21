@@ -30,7 +30,7 @@
           src = self;
 
           dontConfigure = true;
-          hardeningDisable = [ "format" ];
+          hardeningDisable = [ "all" ];
 
           nativeBuildInputs = with pkgs; [
             go
@@ -86,7 +86,7 @@
         pkgs: toolchain: stdenv: extraPackages: linkerFlags:
         (pkgs.mkShell.override { inherit stdenv; }) {
           inputsFrom = [ toolchain ];
-          hardeningDisable = [ "format" ];
+          hardeningDisable = [ "all" ];
 
           packages =
             (with pkgs; [
