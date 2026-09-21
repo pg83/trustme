@@ -7,8 +7,9 @@ namespace stl {
 
 #include "parse_tokenstream.h"
 
+#include <std/lib/buffer.h>
+
 #include <string>
-#include <fstream>
 
 struct Codepoint {
     u32 v;
@@ -51,8 +52,8 @@ class Lexer: public TokenStream {
     unsigned int line;
     unsigned int lineOfs;
 
-    std::unique_ptr<std::ifstream> istreamFp;
-    std::istream& istream;
+    stl::Buffer source_;
+    size_t sourcePos_;
     bool lastCharValid;
     Codepoint lastChar;
     bool initialShebangChecked;
@@ -101,6 +102,7 @@ private:
     void popHygine() override;
 
     void ungetc();
+    void ungetByte();
     Codepoint getcNum();
     Codepoint getc();
     Codepoint getcCp();

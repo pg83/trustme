@@ -21,6 +21,7 @@
 #include <std/lib/vector.h>
 
 #include <cctype>
+#include <fstream>
 #include <sstream>
 #include <string_view>
 

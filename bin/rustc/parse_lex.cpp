@@ -11,6 +11,7 @@
 
 #include <cctype>
 #include <limits>
+#include <fstream>
 #include <cstdlib>
 #include <sstream>
 #include <iostream>
@@ -206,6 +207,13 @@ namespace {
         TOKENT("yield", TOK_RWORD_YIELD),
     };
 
+    void readStream(std::istream& is, Buffer& out) {
+        char chunk[64 * 1024];
+        while (is.read(chunk, sizeof chunk) || is.gcount() > 0) {
+            out.append(chunk, static_cast<size_t>(is.gcount()));
+        }
+    }
+
     bool issym(Codepoint ch) {
         if ('0' <= ch.v && ch.v <= '9') {
             return true;
@@ -229,8 +237,7 @@ Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edi
     , path_(filename.c_str())
     , line(1)
     , lineOfs(0)
-    , istreamFp(filename != "-" ? new std::ifstream(filename.c_str()) : nullptr)
-    , istream(filename != "-" ? *istreamFp : std::cin)
+    , sourcePos_(0)
     , lastCharValid(false)
     , initialShebangChecked(false)
     , initialFrontmatterAllowed(true)
@@ -239,10 +246,12 @@ Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edi
     , edition(edition)
     , hygiene_(Ident::Hygiene::newScope(id, pool))
 {
-    if (istreamFp) {
-        if (!istreamFp->is_open()) {
+    if (filename != "-") {
+        std::ifstream fp(filename.c_str());
+        if (!fp.is_open()) {
             throw std::runtime_error("Unable to open file '" + filename + "'");
         }
+        readStream(fp, source_);
         if (this->getcByte() == '\xef') {
             if (this->getcByte() != '\xbb') {
                 throw std::runtime_error("Incomplete BOM - missing \\xBB in second position");
@@ -252,8 +261,10 @@ Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edi
             }
             lineOfs = 0;
         } else {
-            istream.unget();
+            this->ungetByte();
         }
+    } else {
+        readStream(std::cin, source_);
     }
 }
 
@@ -263,8 +274,7 @@ Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition,
     , path_("-")
     , line(1)
     , lineOfs(0)
-    , istreamFp(nullptr)
-    , istream(ss)
+    , sourcePos_(0)
     , lastCharValid(false)
     , initialShebangChecked(false)
     , initialFrontmatterAllowed(true)
@@ -273,6 +283,7 @@ Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition,
     , edition(edition)
     , hygiene_(Ident::Hygiene::newScope(id, pool))
 {
+    readStream(ss, source_);
 }
 
 signed int Lexer::getSymbol() {
@@ -1449,16 +1460,20 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
     }
 }
 
+void Lexer::ungetByte() {
+    sourcePos_ -= 1;
+}
+
 char Lexer::getcByte() {
-    int rv = istream.get();
-    if (rv == EOF) {
+    const auto* bytes = static_cast<const u8*>(source_.data());
+    if (sourcePos_ >= source_.length()) {
         throw Lexer::EndOfFile();
     }
+    int rv = bytes[sourcePos_++];
 
     if (rv == '\r') {
-        if (istream.get() != '\n') {
-            istream.unget();
-        } else {
+        if (sourcePos_ < source_.length() && bytes[sourcePos_] == '\n') {
+            sourcePos_++;
             rv = '\n';
         }
     }
