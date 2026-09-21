@@ -1406,6 +1406,20 @@ const HIRType* HMTypeInferrence::expandIvars(const HIRType* type) {
         return type;
     }
 
+    if (const auto* e = type->opt_Path()) {
+        const HIRType* children[16];
+        const auto count = hirPathTypeChildren(e->path, children, 16);
+        if (count <= 16 && !hirPathHasValues(e->path)) {
+            bool changed = false;
+            for (size_t i = 0; i < count; i++) {
+                const auto* child = this->expandIvars(children[i]);
+                changed |= child != children[i];
+                children[i] = child;
+            }
+            return changed ? types.pathType(e->path, children, e->binding) : type;
+        }
+    }
+
     auto data = type->cloneData();
 
     struct H {
@@ -1614,6 +1628,20 @@ const HIRType* HMTypeInferrence::addIvars(const HIRType* type) {
             type = *mapped;
             this->markChange();
             return type;
+        }
+    }
+
+    if (const auto* e = type->opt_Path()) {
+        const HIRType* children[16];
+        const auto count = hirPathTypeChildren(e->path, children, 16);
+        if (count <= 16 && !hirPathHasValues(e->path)) {
+            bool changed = false;
+            for (size_t i = 0; i < count; i++) {
+                const auto* child = this->addIvars(children[i]);
+                changed |= child != children[i];
+                children[i] = child;
+            }
+            return changed ? types.pathType(e->path, children, e->binding) : type;
         }
     }
 
@@ -4680,6 +4708,137 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
         return input;
     }
 
+    const auto normalizeKnownProjection = [&]() -> const HIRType* {
+        const bool wasUnbound = input->as_Path().binding.is_Unbound();
+        const bool wasOpaque = input->as_Path().binding.is_Opaque();
+        if (wasUnbound || wasOpaque) {
+            if (wasOpaque) {
+                return this->expandAssociatedTypesInplaceUfcsKnown(sp, input, effects);
+            }
+
+            const auto cacheKey = input->uid;
+
+            /* The key is the projection with its own inference resolved, so binding
+               a variable inside it gives a different key and strands the old entry
+               rather than making it wrong - upstream's `ProjectionCache`
+               (rustc_infer/src/traits/project.rs) says as much: "projection cache
+               entries can be 'stranded' ... We make no attempt to recover or remove
+               'stranded' entries, but rather let them be (for the lifetime of the
+               infcx)".  Its entries survive every mutation short of a snapshot
+               rollback, and they are *meant* to hold open variables: "entries ...
+               might contain inference variables that will be resolved by obligations
+               on the projection cache entry (e.g., when a type parameter in the
+               associated type is constrained through an 'RFC 447' projection on the
+               impl)".  That is what makes normalizing such a projection idempotent -
+               a second ask hands back the same variable instead of minting another
+               one together with another copy of the obligations that decide it.
+               Retiring the entry on any mutation elsewhere gave that up exactly where
+               it is needed, since the fresh variable's own arrival is a mutation. */
+            auto* cached = ivars.probing() ? nullptr : eatCache.find(cacheKey);
+            if (cached && cached->generation == eatCacheGeneration) {
+                if (input != cached->type) {
+                    cached->type = this->expandAssociatedTypesInplace(sp, cached->type, effects);
+                }
+                DEBUG(StringView("CACHED: ") << input << StringView(" -> ") << cached->type);
+                input = cached->type;
+            } else {
+                /* A normalization may ask something of the caller: `<FilterMap<I, F> as
+                   Iterator>::Item` is the impl's `B`, a fresh variable, that the
+                   obligation `F: FnMut(I::Item) -> Option<B>` decides.  Upstream
+                   registers such obligations wherever it normalizes
+                   (`normalize_projection_ty` into the fulfillment context).  With no
+                   sink to take them the result would leave its variable unbound for
+                   good - and cached, be handed to the checker's own normalization,
+                   which has a sink and would have bound it.  So without a sink such an
+                   alias stays as it is: a goal relates it as an alias and keeps the
+                   obligations with its candidate; the checker's normalization is the
+                   one that makes the variable.  A projection met on the way
+                   (`<Filter<FilterMap<..>> as Iterator>::Item` is
+                   `<FilterMap<..> as Iterator>::Item`) has the probe for its sink and
+                   is held to the same rule: taking the probe for a sink, it cached
+                   its fresh `B` as the normalized form, and a goal reading that entry
+                   bound the checker's variable to a canonical one of its own. */
+                const bool sinkIsProbe = !effects || effects == eatProbe_;
+                const bool askedBefore = eatProbeAsked_;
+                eatProbeAsked_ = false;
+                auto askCheck = makeCallable<SolverResponseCb>([&](SolverResponse response) {
+                    eatProbeAsked_ = eatProbeAsked_ || !response.obligations.empty() || !response.equalities.empty() || !response.valueEqualities.empty();
+                    return true;
+                });
+                const auto ivarsBefore = ivars.ivars.size();
+                const auto* enclosingProbe = eatProbe_;
+                if (!effects) {
+                    eatProbe_ = &askCheck;
+                }
+                const auto* expanded = this->expandAssociatedTypesInplaceUfcsKnown(sp, input, effects ? effects : &askCheck);
+                eatProbe_ = enclosingProbe;
+                const bool asksTheCaller = eatProbeAsked_;
+                eatProbeAsked_ = askedBefore || asksTheCaller;
+                /* Only an output that is (or holds) a variable this normalization made
+                   is the case: `<B as Iterator>::Item` of a generic `B` normalizes to
+                   a rigid type with an equality or two about the environment, and
+                   stays normalized. */
+                const bool outputIsFresh = sinkIsProbe && asksTheCaller && visitTyWith(expanded, [&](const HIRType* inner) {
+                    const auto* infer = inner->opt_Infer();
+                    return infer && infer->index != ~0u && !isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index) && infer->index >= ivarsBefore;
+                });
+                if (outputIsFresh) {
+                    DEBUG(StringView("Not normalized without a sink for its obligations: ") << input << StringView(" (would be ") << expanded << StringView(")"));
+                    return input;
+                }
+                input = expanded;
+                if (input->is_Path() && (input->as_Path().binding.is_Unbound() || input->as_Path().binding.is_Opaque())) {
+                } else if (!ivars.probing()) {
+                    DEBUG(StringView("CACHE+: ") << cacheKey << StringView(" = ") << input);
+                    eatCache.insert(cacheKey, EatCacheEntry{eatCacheGeneration, input});
+                }
+            }
+        }
+        return input;
+    };
+    if (const auto* e = input->opt_Path()) {
+        const HIRType* children[16];
+        const auto count = hirPathTypeChildren(e->path, children, 16);
+        if (count <= 16 && !hirPathHasValues(e->path)) {
+            bool changed = false;
+            const auto fold = [&](size_t i) {
+                const auto* child = this->expandAssociatedTypesInplace(sp, children[i], effects);
+                changed |= child != children[i];
+                children[i] = child;
+            };
+            if (const auto* known = e->path.data.opt_UfcsKnown()) {
+                const auto traitCount = known->trait.params.types.size();
+                fold(0);
+                for (size_t i = 1 + traitCount; i < count; i++) {
+                    fold(i);
+                }
+                for (size_t i = 1; i < 1 + traitCount; i++) {
+                    fold(i);
+                }
+            } else {
+                for (size_t i = 0; i < count; i++) {
+                    fold(i);
+                }
+            }
+            input = changed ? crate.types.pathType(e->path, children, e->binding) : input;
+            switch (e->path.data.tag()) {
+                case HIRPathData::TAG_Generic:
+                case HIRPathData::TAG_UfcsUnknown: {
+                    return input;
+                }
+                case HIRPathData::TAG_UfcsInherent: {
+                    if (const auto* expanded = this->expandAssociatedTypesInplaceUfcsInherent(sp, input, effects)) {
+                        return this->expandAssociatedTypesInplace(sp, expanded, effects);
+                    }
+                    return input;
+                }
+                case HIRPathData::TAG_UfcsKnown: {
+                    return normalizeKnownProjection();
+                }
+            }
+        }
+    }
+
     auto data = input->cloneData();
     switch (data.tag()) {
         case HIRType::TAG_Infer: {
@@ -4723,92 +4882,7 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
                     ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &traitDef.params, pe.trait.params);
                     H::expandAssociatedTypesParams(sp, *this, pe.trait.params, effects);
                     input = crate.types.intern(mv$(data));
-                    const bool wasUnbound = input->as_Path().binding.is_Unbound();
-                    const bool wasOpaque = input->as_Path().binding.is_Opaque();
-                    if (wasUnbound || wasOpaque) {
-                        if (wasOpaque) {
-                            return this->expandAssociatedTypesInplaceUfcsKnown(sp, input, effects);
-                        }
-
-                        const auto cacheKey = input->uid;
-
-                        /* The key is the projection with its own inference resolved, so binding
-                           a variable inside it gives a different key and strands the old entry
-                           rather than making it wrong - upstream's `ProjectionCache`
-                           (rustc_infer/src/traits/project.rs) says as much: "projection cache
-                           entries can be 'stranded' ... We make no attempt to recover or remove
-                           'stranded' entries, but rather let them be (for the lifetime of the
-                           infcx)".  Its entries survive every mutation short of a snapshot
-                           rollback, and they are *meant* to hold open variables: "entries ...
-                           might contain inference variables that will be resolved by obligations
-                           on the projection cache entry (e.g., when a type parameter in the
-                           associated type is constrained through an 'RFC 447' projection on the
-                           impl)".  That is what makes normalizing such a projection idempotent -
-                           a second ask hands back the same variable instead of minting another
-                           one together with another copy of the obligations that decide it.
-                           Retiring the entry on any mutation elsewhere gave that up exactly where
-                           it is needed, since the fresh variable's own arrival is a mutation. */
-                        auto* cached = ivars.probing() ? nullptr : eatCache.find(cacheKey);
-                        if (cached && cached->generation == eatCacheGeneration) {
-                            if (input != cached->type) {
-                                cached->type = this->expandAssociatedTypesInplace(sp, cached->type, effects);
-                            }
-                            DEBUG(StringView("CACHED: ") << input << StringView(" -> ") << cached->type);
-                            input = cached->type;
-                        } else {
-                            /* A normalization may ask something of the caller: `<FilterMap<I, F> as
-                               Iterator>::Item` is the impl's `B`, a fresh variable, that the
-                               obligation `F: FnMut(I::Item) -> Option<B>` decides.  Upstream
-                               registers such obligations wherever it normalizes
-                               (`normalize_projection_ty` into the fulfillment context).  With no
-                               sink to take them the result would leave its variable unbound for
-                               good - and cached, be handed to the checker's own normalization,
-                               which has a sink and would have bound it.  So without a sink such an
-                               alias stays as it is: a goal relates it as an alias and keeps the
-                               obligations with its candidate; the checker's normalization is the
-                               one that makes the variable.  A projection met on the way
-                               (`<Filter<FilterMap<..>> as Iterator>::Item` is
-                               `<FilterMap<..> as Iterator>::Item`) has the probe for its sink and
-                               is held to the same rule: taking the probe for a sink, it cached
-                               its fresh `B` as the normalized form, and a goal reading that entry
-                               bound the checker's variable to a canonical one of its own. */
-                            const bool sinkIsProbe = !effects || effects == eatProbe_;
-                            const bool askedBefore = eatProbeAsked_;
-                            eatProbeAsked_ = false;
-                            auto askCheck = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-                                eatProbeAsked_ = eatProbeAsked_ || !response.obligations.empty() || !response.equalities.empty() || !response.valueEqualities.empty();
-                                return true;
-                            });
-                            const auto ivarsBefore = ivars.ivars.size();
-                            const auto* enclosingProbe = eatProbe_;
-                            if (!effects) {
-                                eatProbe_ = &askCheck;
-                            }
-                            const auto* expanded = this->expandAssociatedTypesInplaceUfcsKnown(sp, input, effects ? effects : &askCheck);
-                            eatProbe_ = enclosingProbe;
-                            const bool asksTheCaller = eatProbeAsked_;
-                            eatProbeAsked_ = askedBefore || asksTheCaller;
-                            /* Only an output that is (or holds) a variable this normalization made
-                               is the case: `<B as Iterator>::Item` of a generic `B` normalizes to
-                               a rigid type with an equality or two about the environment, and
-                               stays normalized. */
-                            const bool outputIsFresh = sinkIsProbe && asksTheCaller && visitTyWith(expanded, [&](const HIRType* inner) {
-                                const auto* infer = inner->opt_Infer();
-                                return infer && infer->index != ~0u && !isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index) && infer->index >= ivarsBefore;
-                            });
-                            if (outputIsFresh) {
-                                DEBUG(StringView("Not normalized without a sink for its obligations: ") << input << StringView(" (would be ") << expanded << StringView(")"));
-                                return input;
-                            }
-                            input = expanded;
-                            if (input->is_Path() && (input->as_Path().binding.is_Unbound() || input->as_Path().binding.is_Opaque())) {
-                            } else if (!ivars.probing()) {
-                                DEBUG(StringView("CACHE+: ") << cacheKey << StringView(" = ") << input);
-                                eatCache.insert(cacheKey, EatCacheEntry{eatCacheGeneration, input});
-                            }
-                        }
-                    }
-                    return input;
+                    return normalizeKnownProjection();
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
                     auto& pe = e.path.data.as_UfcsUnknown();
