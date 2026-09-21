@@ -105,11 +105,7 @@ Ordering RcString::ord(const char* s, size_t len) const {
 }
 
 Ordering RcString::ord(const RcString& s) const {
-    if (id == s.id) {
-        return OrdEqual;
-    }
-    const auto& b = ent(s.id);
-    return ord(b.begin, b.end - b.begin);
+    return ::ord(id, s.id);
 }
 
 Ordering RcString::ord(const char* s) const {
