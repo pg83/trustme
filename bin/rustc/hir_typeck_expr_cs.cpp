@@ -22,6 +22,7 @@
 #include <std/mem/obj_pool.h>
 
 #include <optional>
+#include <iterator>
 #include <algorithm>
 
 using namespace stl;
@@ -370,12 +371,106 @@ namespace {
         unsigned alternativeGroup;
     };
 
+    template <typename T>
+    struct RefNode {
+        T value;
+        RefNode* next;
+    };
+
+    template <typename T>
+    struct RefChain {
+        struct Iterator {
+            using iterator_category = std::forward_iterator_tag;
+            using value_type = T;
+            using difference_type = std::ptrdiff_t;
+            using pointer = const T*;
+            using reference = const T&;
+
+            const RefNode<T>* node;
+
+            const T& operator*() const;
+
+            const T* operator->() const;
+
+            Iterator& operator++();
+
+            Iterator operator++(int);
+
+            bool operator==(const Iterator& other) const;
+        };
+
+        RefNode<T>* head = nullptr;
+        RefNode<T>* tail = nullptr;
+
+        Iterator begin() const;
+
+        Iterator end() const;
+
+        bool empty() const;
+
+        void append(RefNode<T>* node);
+    };
+
+    template <typename T>
+    auto RefChain<T>::Iterator::operator*() const -> const T& {
+        return node->value;
+    }
+
+    template <typename T>
+    auto RefChain<T>::Iterator::operator->() const -> const T* {
+        return &node->value;
+    }
+
+    template <typename T>
+    auto RefChain<T>::Iterator::operator++() -> Iterator& {
+        node = node->next;
+        return *this;
+    }
+
+    template <typename T>
+    auto RefChain<T>::Iterator::operator++(int) -> Iterator {
+        const auto before = *this;
+        node = node->next;
+        return before;
+    }
+
+    template <typename T>
+    auto RefChain<T>::Iterator::operator==(const Iterator& other) const -> bool {
+        return node == other.node;
+    }
+
+    template <typename T>
+    auto RefChain<T>::begin() const -> Iterator {
+        return Iterator{head};
+    }
+
+    template <typename T>
+    auto RefChain<T>::end() const -> Iterator {
+        return Iterator{nullptr};
+    }
+
+    template <typename T>
+    auto RefChain<T>::empty() const -> bool {
+        return head == nullptr;
+    }
+
+    template <typename T>
+    auto RefChain<T>::append(RefNode<T>* node) -> void {
+        node->next = nullptr;
+        if (tail) {
+            tail->next = node;
+        } else {
+            head = node;
+        }
+        tail = node;
+    }
+
     struct IvarCoercionRefs {
-        Vector<const Context::Coercion*> coercions;
-        Vector<IvarCoercionEndpoint> endpoints;
-        Vector<const Context::Associated*> associated;
-        Vector<const HIRExprNode*> revisits;
-        Vector<const Context::Revisitor*> advancedRevisits;
+        RefChain<const Context::Coercion*> coercions;
+        RefChain<IvarCoercionEndpoint> endpoints;
+        RefChain<const Context::Associated*> associated;
+        RefChain<const HIRExprNode*> revisits;
+        RefChain<const Context::Revisitor*> advancedRevisits;
     };
 
 /* A place in the check order: the last node of a subtree and its first, so that
@@ -398,23 +493,26 @@ struct OrderPlace {
 
     struct IvarCoercionIndex {
         const Context& context;
-        std::vector<IvarCoercionRefs> refs;
+        ObjPool::Ref poolRef = ObjPool::fromMemory();
+        ObjPool* pool = poolRef.mutPtr();
+        size_t count = 0;
+        IvarCoercionRefs* refs = nullptr;
         /* The connected components of the pending rules over the inference
            variables - the root variable of each variable's component.  Rules only
            ever propagate within a component, so a finalisation sweep may commit one
            effect in each component and still make the decisions a sweep restarted
            after every effect would make. */
-        Vector<unsigned int> componentRoots;
+        unsigned int* componentRoots = nullptr;
         /* Per component root, the earliest check-order place of a node still to be
            revisited in it (none when there is none): upstream resolved that method
            call or operator before it checked anything after it. */
-        Vector<OrderPlace> pendingNodeCut;
+        const OrderPlace* pendingNodeCut = nullptr;
 
         void collectIvars(const HIRType* root, Vector<unsigned int>& out, bool throughClosures = false) const;
         static void deduplicate(Vector<unsigned int>& values);
 
         template <typename T>
-        void addRefs(const Vector<unsigned int>& dependencies, Vector<T> IvarCoercionRefs::* member, T value);
+        void addRefs(const Vector<unsigned int>& dependencies, RefChain<T> IvarCoercionRefs::* member, T value);
 
         void addEndpoint(const Context::Coercion& obligation, const SolverDeferredCoercion& deferred, unsigned alternativeGroup);
 
@@ -572,7 +670,7 @@ struct OrderPlace {
         }
         const auto isOpen = [&](const HIRType* type) {
             const auto* infer = context.getType(type)->opt_Infer();
-            return infer && !infer->isLit() && infer->index != ~0u && infer->index < coercionIndex.refs.size();
+            return infer && !infer->isLit() && infer->index != ~0u && infer->index < coercionIndex.count;
         };
         /* A reference or raw pointer into one whose pointee is open, or from one whose
            pointee is open: `coerce_unsized` finds `Src: Unsize<?T>` (or `?S: Unsize<T>`)
@@ -623,7 +721,7 @@ struct OrderPlace {
             }
         }
         const auto* infer = destination->opt_Infer();
-        if (!infer || infer->isLit() || infer->index == ~0u || infer->index >= coercionIndex.refs.size()) {
+        if (!infer || infer->isLit() || infer->index == ~0u || infer->index >= coercionIndex.count) {
             return {};
         }
         /* Several coercions into the variable (an array's elements, a `match`'s arms):
@@ -693,7 +791,7 @@ struct OrderPlace {
        inner call's result variable - comes at its argument's place too, and past a
        ready binding of its component it waits like an obligation would. */
     bool coercionPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<OrderPlace>& cuts, Vector<unsigned>& ivars, const Context::Coercion& rule) {
-        const auto count = coercionIndex.refs.size();
+        const auto count = coercionIndex.count;
         const auto place = coercionPlace(rule);
         ivars.clear();
         coercionIndex.collectIvars(context.getType(rule.leftTy), ivars);
@@ -713,7 +811,7 @@ struct OrderPlace {
                fn(*mut u8)>` stands for the expectation that types `ptr` - upstream
                had it before the cast was checked - and the cast waits for it, not
                the other way round. */
-            if (!pendingCuts.empty() && !pendingCuts[component].isNone() && place.after(pendingCuts[component])
+            if (pendingCuts && !pendingCuts[component].isNone() && place.after(pendingCuts[component])
                 && !(place.start <= pendingCuts[component].start && place.end >= pendingCuts[component].end)) {
                 DEBUG(StringView("- Coercion R") << rule.ruleIdx << StringView(" at ") << place.end << StringView(" waits for the pending node at ") << pendingCuts[component].end);
                 context.pendingCutHolds++;
@@ -2031,7 +2129,7 @@ struct OrderPlace {
          * is not guidance. */
         const auto concreteCoercionSource = [&](const HIRType* type) {
             const auto* infer = context.getType(type)->opt_Infer();
-            if (!infer || infer->index == ~0u || infer->index >= coercionIndex.refs.size()) {
+            if (!infer || infer->index == ~0u || infer->index >= coercionIndex.count) {
                 return static_cast<const HIRType*>(nullptr);
             }
             const HIRType* concrete = nullptr;
@@ -2057,7 +2155,7 @@ struct OrderPlace {
         };
         const auto concreteCoercionTarget = [&](const HIRType* type) {
             const auto* infer = context.getType(type)->opt_Infer();
-            if (!infer || infer->index == ~0u || infer->index >= coercionIndex.refs.size()) {
+            if (!infer || infer->index == ~0u || infer->index >= coercionIndex.count) {
                 return static_cast<const HIRType*>(nullptr);
             }
             const HIRType* concrete = nullptr;
@@ -2130,7 +2228,7 @@ struct OrderPlace {
          * response even when every input still contains inference variables. */
         const bool outputConstrainsSelf = v.isOperator && v.name != "" && !context.getType(v.leftTy)->is_Diverge() && !context.ivars.typeContainsIvars(v.leftTy);
         if (const auto* e = context.ivars.getType(v.implTy)->opt_Infer()) {
-            const bool hasSelfCoercionGuidance = e->index != ~0u && e->index < coercionIndex.refs.size() && std::any_of(coercionIndex[e->index].endpoints.begin(), coercionIndex[e->index].endpoints.end(), [](const auto& endpoint) {
+            const bool hasSelfCoercionGuidance = e->index != ~0u && e->index < coercionIndex.count && std::any_of(coercionIndex[e->index].endpoints.begin(), coercionIndex[e->index].endpoints.end(), [](const auto& endpoint) {
                 return !(endpoint.obligation && endpoint.obligation->argumentSite);
             });
             // TODO: ?
@@ -2166,7 +2264,7 @@ struct OrderPlace {
         const auto appendCoercionGoals = [&](const HIRType* rawInput, unsigned typeIndex, bool isSelf) {
             const auto* input = context.getType(rawInput);
             const auto* infer = input->opt_Infer();
-            if (!infer || infer->index == ~0u || infer->index >= coercionIndex.refs.size()) {
+            if (!infer || infer->index == ~0u || infer->index >= coercionIndex.count) {
                 return;
             }
             const bool inputRequiresSized = infer->index < context.ivarsSized.length() && context.ivarsSized[infer->index];
@@ -2204,7 +2302,7 @@ struct OrderPlace {
                    has not happened yet (`Err(From::from(e))`'s coercion of the inner
                    call's result while `e` is still to bind `?E`): it says nothing about
                    the goal's self. */
-                if (endpoint.obligation && cuts && (!cuts->empty() || !coercionIndex.pendingNodeCut.empty()) && coercionPastArgumentCut(context, coercionIndex, *cuts, cutIvars, *endpoint.obligation)) {
+                if (endpoint.obligation && cuts && (!cuts->empty() || coercionIndex.pendingNodeCut) && coercionPastArgumentCut(context, coercionIndex, *cuts, cutIvars, *endpoint.obligation)) {
                     continue;
                 }
                 append(endpoint);
@@ -2442,7 +2540,7 @@ struct OrderPlace {
             if (context.ivars.getType(dependency.index) != dependency.resolved) {
                 return false;
             }
-            if (dependency.index >= coercionIndex.refs.size()) {
+            if (dependency.index >= coercionIndex.count) {
                 return true;
             }
             const auto& endpoints = coercionIndex[dependency.index].endpoints;
@@ -2762,7 +2860,7 @@ struct OrderPlace {
                     bool pending = false;
                     visitTyWith(candidateType, [&](const HIRType* inner) {
                         const auto* infer = context.getType(inner)->opt_Infer();
-                        if (!infer || infer->index == i || infer->index >= coercionIndex.refs.size()) {
+                        if (!infer || infer->index == i || infer->index >= coercionIndex.count) {
                             return false;
                         }
                         pending = std::any_of(coercionIndex[infer->index].endpoints.begin(), coercionIndex[infer->index].endpoints.end(), [&](const auto& endpoint) {
@@ -3326,7 +3424,7 @@ struct OrderPlace {
         for (const auto index : context.divergingIvars) {
             const auto* type = context.ivars.getType(index);
             const auto* infer = type->opt_Infer();
-            if (!infer || infer->tyClass != HIRInferClass::None || infer->index >= coercionIndex.refs.size()) {
+            if (!infer || infer->tyClass != HIRInferClass::None || infer->index >= coercionIndex.count) {
                 continue;
             }
             const auto& refs = coercionIndex[infer->index];
@@ -4907,7 +5005,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                                 const bool shapeIsForced = pattern.data.is_Slice();
                                 if (nestedRoot && !shapeIsForced && infer && infer->index != ~0u) {
                                     const IvarCoercionIndex obligations(context);
-                                    if (infer->index < obligations.refs.size()) {
+                                    if (infer->index < obligations.count) {
                                         const auto& refs = obligations[infer->index];
                                         /* Only a coercion edge is a rival reading of the
                                            input: it offers a type of its own.  A trait
@@ -6652,7 +6750,7 @@ void Context::compactIvars(const Span& sp) {
 Vector<OrderPlace> argumentBindingCuts(const Context& context, const IvarCoercionIndex& coercionIndex) {
     /* Empty when nothing cuts - the common sweep. */
     Vector<OrderPlace> cuts;
-    const auto count = coercionIndex.refs.size();
+    const auto count = coercionIndex.count;
     const auto ensureCuts = [&]() {
         if (cuts.empty()) {
             cuts.grow(count);
@@ -6688,7 +6786,7 @@ Vector<OrderPlace> argumentBindingCuts(const Context& context, const IvarCoercio
 }
 
 bool associatedPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<OrderPlace>& cuts, Vector<unsigned>& ivars, const Context::Associated& rule) {
-    const auto count = coercionIndex.refs.size();
+    const auto count = coercionIndex.count;
     const OrderPlace place{rule.order, rule.order};
     ivars.clear();
     coercionIndex.collectIvars(context.getType(rule.implTy), ivars);
@@ -6711,7 +6809,7 @@ bool associatedPastArgumentCut(const Context& context, const IvarCoercionIndex& 
             DEBUG(StringView("- R") << rule.ruleIdx << StringView(" at ") << rule.order << StringView(" waits for the binding at ") << cuts[component].end);
             return true;
         }
-        if (!pendingCuts.empty() && !pendingCuts[component].isNone() && place.after(pendingCuts[component])) {
+        if (pendingCuts && !pendingCuts[component].isNone() && place.after(pendingCuts[component])) {
             DEBUG(StringView("- R") << rule.ruleIdx << StringView(" at ") << rule.order << StringView(" waits for the pending node at ") << pendingCuts[component].end);
             context.pendingCutHolds++;
             return true;
@@ -6881,7 +6979,7 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
             bindingOrdersAt = context.linkCoerce.size();
         }
         DEBUG(StringView("- ") << rule);
-        if (associatedStillStalled(context, coercionIndex, rule) || ((!cuts.empty() || !coercionIndex.pendingNodeCut.empty()) && associatedPastArgumentCut(context, coercionIndex, cuts, cutIvars, rule)) || (!bindingOrders.empty() && associatedWaitsForArgumentBinding(context, coercionIndex, bindingOrders, cutIvars, rule))) {
+        if (associatedStillStalled(context, coercionIndex, rule) || ((!cuts.empty() || coercionIndex.pendingNodeCut) && associatedPastArgumentCut(context, coercionIndex, cuts, cutIvars, rule)) || (!bindingOrders.empty() && associatedWaitsForArgumentBinding(context, coercionIndex, bindingOrders, cutIvars, rule))) {
             context.storeAssociated(i, mv$(rule), indexedKey);
             if (linkAssocIterLimit-- == 0) {
                 DEBUG(StringView("link_assoc iteration limit exceeded"));
@@ -7047,7 +7145,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 coercionSettled = false;
                 for (size_t i = 0; i < context.linkCoerce.size();) {
                     auto ent = mv$(context.linkCoerce[i]);
-                    if (ivarCoercionIndex && (!coercionCuts.empty() || !ivarCoercionIndex->pendingNodeCut.empty()) && coercionPastArgumentCut(context, *ivarCoercionIndex, coercionCuts, cutIvars, *ent)) {
+                    if (ivarCoercionIndex && (!coercionCuts.empty() || ivarCoercionIndex->pendingNodeCut) && coercionPastArgumentCut(context, *ivarCoercionIndex, coercionCuts, cutIvars, *ent)) {
                         context.linkCoerce[i] = mv$(ent);
                         ++i;
                         continue;
@@ -7150,7 +7248,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                one impl and fix `?U = [?B]` before `other: &[B; 0]` is coerced into `&?U`.
                So one binding per connected component of the pending rules, and the
                rules run again before the next. */
-            const auto count = ivarCoercionIndex->refs.size();
+            const auto count = ivarCoercionIndex->count;
             Vector<bool> boundComponents;
             for (size_t i = 0; i < count; i++) {
                 boundComponents.pushBack(false);
@@ -7220,7 +7318,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- IVar coercion effects"));
             for (unsigned int sourcePass = 0; sourcePass < 2; sourcePass++) {
-                for (unsigned int i = 0; i < ivarCoercionIndex->refs.size(); i++) {
+                for (unsigned int i = 0; i < ivarCoercionIndex->count; i++) {
                     const bool hasConcreteSource = std::any_of((*ivarCoercionIndex)[i].endpoints.begin(), (*ivarCoercionIndex)[i].endpoints.end(), [&](const auto& endpoint) {
                         return endpoint.direction == SolverCoercionConstraint::Direction::InputIsDestination
                             && coercionEndpointCanDetermineType(context, endpoint)
@@ -7248,7 +7346,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
            independent sites no longer costs N passes over every rule in it (past the
            iteration limit, that was an inference failure). */
         const auto finaliseSweep = [&](bool allowIdentityCommit, bool allowUnsizingIdentityCommit, bool allowUnknownPointeeUnsize) {
-            const auto count = ivarCoercionIndex->refs.size();
+            const auto count = ivarCoercionIndex->count;
             Vector<bool> settledComponents;
             for (size_t i = 0; i < count; i++) {
                 settledComponents.pushBack(false);
@@ -9001,7 +9099,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
             if (!infer) {
                 return false;
             }
-            if (infer->index < methodCoercions.refs.size()) {
+            if (infer->index < methodCoercions.count) {
                 /* Only a coercion before the call in check order can still say what
                    the receiver is at lookup - upstream had it by then; one after it
                    (`from_vec(buf)` after `buf.as_mut_ptr()`) is no reason to wait, and
@@ -9045,7 +9143,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
     // TODO: Obtain a list of avaliable methods at that level?
     const auto* resultType = this->context.getType(node.resType);
     const HIRType* contextualResult = resultType;
-    if (const auto* infer = resultType->opt_Infer(); infer && !infer->isLit() && infer->index < methodCoercions.refs.size()) {
+    if (const auto* infer = resultType->opt_Infer(); infer && !infer->isLit() && infer->index < methodCoercions.count) {
         const HIRType* destinationType = nullptr;
         bool destinationsAgree = true;
         for (const auto& endpoint : methodCoercions[infer->index].endpoints) {
@@ -10547,13 +10645,13 @@ auto IvarCoercionIndex::refreshCoercion(Context::Coercion& bound) const -> void 
 }
 
 auto IvarCoercionIndex::buildComponents() -> void {
-    const auto count = refs.size();
+    componentRoots = static_cast<unsigned int*>(pool->allocate(count * sizeof(unsigned int)));
     for (size_t i = 0; i < count; i++) {
-        componentRoots.pushBack(static_cast<unsigned int>(i));
+        componentRoots[i] = static_cast<unsigned int>(i);
     }
     const auto find = [&](unsigned int index) {
         while (componentRoots[index] != index) {
-            componentRoots.mut(index) = componentRoots[componentRoots[index]];
+            componentRoots[index] = componentRoots[componentRoots[index]];
             index = componentRoots[index];
         }
         return index;
@@ -10569,7 +10667,7 @@ auto IvarCoercionIndex::buildComponents() -> void {
             if (root == ~0u) {
                 root = memberRoot;
             } else if (memberRoot != root) {
-                componentRoots.mut(memberRoot) = root;
+                componentRoots[memberRoot] = root;
             }
         }
         members.clear();
@@ -10685,25 +10783,26 @@ auto IvarCoercionIndex::buildComponents() -> void {
         unite();
     }
     for (size_t i = 0; i < count; i++) {
-        componentRoots.mut(i) = find(static_cast<unsigned int>(i));
+        componentRoots[i] = find(static_cast<unsigned int>(i));
     }
     if (!pendingNodes.empty() && !context.pendingCutsLifted) {
-        pendingNodeCut.grow(count);
+        auto* cuts = static_cast<OrderPlace*>(pool->allocate(count * sizeof(OrderPlace)));
         for (size_t i = 0; i < count; i++) {
-            pendingNodeCut.pushBack(OrderPlace{});
+            cuts[i] = OrderPlace{};
         }
+        pendingNodeCut = cuts;
         for (const auto& pending : pendingNodes) {
             const auto component = componentRoots[pending.first];
             DEBUG(StringView("pending node cut at ") << pending.second.end << StringView("/") << pending.second.start << StringView(" via ivar ") << pending.first << StringView(" component ") << component);
-            if (pendingNodeCut[component].isNone() || pendingNodeCut[component].after(pending.second)) {
-                pendingNodeCut.mut(component) = pending.second;
+            if (cuts[component].isNone() || cuts[component].after(pending.second)) {
+                cuts[component] = pending.second;
             }
         }
     }
 }
 
 auto IvarCoercionIndex::componentOf(unsigned int index) const -> unsigned int {
-    return index < componentRoots.length() ? componentRoots[index] : index;
+    return index < count ? componentRoots[index] : index;
 }
 
 auto IvarCoercionIndex::deduplicate(Vector<unsigned int>& values) -> void {
@@ -10723,10 +10822,10 @@ auto IvarCoercionIndex::deduplicate(Vector<unsigned int>& values) -> void {
 }
 
 template <typename T>
-auto IvarCoercionIndex::addRefs(const Vector<unsigned int>& dependencies, Vector<T> IvarCoercionRefs::* member, T value) -> void {
+auto IvarCoercionIndex::addRefs(const Vector<unsigned int>& dependencies, RefChain<T> IvarCoercionRefs::* member, T value) -> void {
     for (const auto index : dependencies) {
-        if (index < refs.size()) {
-            (refs[index].*member).pushBack(value);
+        if (index < count) {
+            (refs[index].*member).append(pool->make<RefNode<T>>(value, nullptr));
         }
     }
 }
@@ -10734,30 +10833,38 @@ auto IvarCoercionIndex::addRefs(const Vector<unsigned int>& dependencies, Vector
 auto IvarCoercionIndex::addEndpoint(const Context::Coercion& obligation, const SolverDeferredCoercion& rawDeferred, unsigned alternativeGroup) -> void {
     const auto* destination = context.getType(rawDeferred.destination);
     const auto* source = context.getType(rawDeferred.source);
-    if (const auto* infer = destination->opt_Infer(); infer && infer->index != ~0u && !infer->isLit() && infer->index < refs.size()) {
-        refs[infer->index].endpoints.pushBack(IvarCoercionEndpoint{
-            source,
-            SolverCoercionConstraint::Direction::InputIsDestination,
-            rawDeferred.op,
-            &obligation,
-            alternativeGroup,
-        });
+    if (const auto* infer = destination->opt_Infer(); infer && infer->index != ~0u && !infer->isLit() && infer->index < count) {
+        refs[infer->index].endpoints.append(pool->make<RefNode<IvarCoercionEndpoint>>(
+            IvarCoercionEndpoint{
+                source,
+                SolverCoercionConstraint::Direction::InputIsDestination,
+                rawDeferred.op,
+                &obligation,
+                alternativeGroup,
+            },
+            nullptr));
     }
-    if (const auto* infer = source->opt_Infer(); infer && infer->index != ~0u && !infer->isLit() && infer->index < refs.size()) {
-        refs[infer->index].endpoints.pushBack(IvarCoercionEndpoint{
-            destination,
-            SolverCoercionConstraint::Direction::InputIsSource,
-            rawDeferred.op,
-            &obligation,
-            alternativeGroup,
-        });
+    if (const auto* infer = source->opt_Infer(); infer && infer->index != ~0u && !infer->isLit() && infer->index < count) {
+        refs[infer->index].endpoints.append(pool->make<RefNode<IvarCoercionEndpoint>>(
+            IvarCoercionEndpoint{
+                destination,
+                SolverCoercionConstraint::Direction::InputIsSource,
+                rawDeferred.op,
+                &obligation,
+                alternativeGroup,
+            },
+            nullptr));
     }
 }
 
 IvarCoercionIndex::IvarCoercionIndex(Context& context)
     : context(context)
-    , refs(context.ivars.ivars.size())
+    , count(context.ivars.ivars.size())
+    , refs(static_cast<IvarCoercionRefs*>(pool->allocate(count * sizeof(IvarCoercionRefs))))
 {
+    for (size_t i = 0; i < count; i++) {
+        refs[i] = IvarCoercionRefs{};
+    }
     Vector<unsigned int> dependencies;
     unsigned nextAlternativeGroup = 1;
     for (auto& bound : context.linkCoerce) {
@@ -10797,7 +10904,8 @@ IvarCoercionIndex::IvarCoercionIndex(Context& context)
 }
 
 auto IvarCoercionIndex::operator[](unsigned int index) const -> const IvarCoercionRefs& {
-    return refs.at(index);
+    BUG_ASSERT(index < count);
+    return refs[index];
 }
 
 auto PossibleType::concrete(decltype(cls) cls, const HIRType* ty) -> PossibleType {
