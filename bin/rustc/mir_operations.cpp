@@ -28,12 +28,41 @@
 
 using namespace stl;
 
+struct OptimiseStmtRef {
+    unsigned bbIdx;
+    unsigned stmtIdx;
+
+    OptimiseStmtRef();
+
+    OptimiseStmtRef(unsigned b, unsigned s);
+
+    bool operator==(const OptimiseStmtRef& x) const;
+};
+
+struct MirDeTemporaryUsage {
+    unsigned nWrite = 0;
+    unsigned nRead = 0;
+    unsigned nBorrow = 0;
+    OptimiseStmtRef setLoc;
+    OptimiseStmtRef useLoc;
+};
+
+struct MirDeTemporaryBorrowUsage {
+    unsigned nWrite = 0;
+    unsigned nOtherRead = 0;
+    unsigned nDerefRead = 0;
+    OptimiseStmtRef setLoc;
+    Vector<OptimiseStmtRef> dropLocs;
+};
+
 struct WireBoard::MirOperationsContext {
     const RcString vtableName = RcString::newInterned("vtable#");
     Vector<bool> visitedBlocks;
     Vector<MIRBasicBlockId> pendingBlocks;
     std::vector<Vector<unsigned>> blockPredecessors;
     bool visitingBlocks = false;
+    std::vector<MirDeTemporaryUsage> deTemporaryUsage;
+    std::vector<MirDeTemporaryBorrowUsage> deTemporaryBorrowUsage;
 };
 
 namespace {
@@ -120,17 +149,6 @@ namespace {
         explicit MIRBlockConstCb(F f);
 
         void run(MIRBasicBlockId bb, const MIRBasicBlock& block) const override;
-    };
-
-    struct OptimiseStmtRef {
-        unsigned bbIdx;
-        unsigned stmtIdx;
-
-        OptimiseStmtRef();
-
-        OptimiseStmtRef(unsigned b, unsigned s);
-
-        bool operator==(const OptimiseStmtRef& x) const;
     };
 
     struct IterPathCallback {
@@ -2691,22 +2709,10 @@ namespace {
 
         TRACE_FUNCTION_FR(StringView(""), changed);
 
-        struct LocalUsage {
-            unsigned nWrite;
-            unsigned nRead;
-            unsigned nBorrow;
-            OptimiseStmtRef setLoc;
-            OptimiseStmtRef useLoc;
-
-            LocalUsage()
-                : nWrite(0)
-                , nRead(0)
-                , nBorrow(0)
-            {
-            }
-        };
-
-        std::vector<LocalUsage> usageInfo(fcn.locals.length());
+        using LocalUsage = MirDeTemporaryUsage;
+        auto& usageInfo = operationsContext(state).deTemporaryUsage;
+        usageInfo.clear();
+        usageInfo.resize(fcn.locals.length());
 
         {
             struct CountUsage final: public LvalueVisitor {
@@ -2972,22 +2978,10 @@ namespace {
 
         TRACE_FUNCTION_FR(StringView(""), changed);
 
-        struct LocalUsage {
-            unsigned nWrite;
-            unsigned nOtherRead;
-            unsigned nDerefRead;
-            OptimiseStmtRef setLoc;
-            Vector<OptimiseStmtRef> dropLocs;
-
-            LocalUsage()
-                : nWrite(0)
-                , nOtherRead(0)
-                , nDerefRead(0)
-            {
-            }
-        };
-
-        std::vector<LocalUsage> usageInfo(fcn.locals.length());
+        using LocalUsage = MirDeTemporaryBorrowUsage;
+        auto& usageInfo = operationsContext(state).deTemporaryBorrowUsage;
+        usageInfo.clear();
+        usageInfo.resize(fcn.locals.length());
         for (size_t i = 0; i < fcn.locals.length(); i++) {
             auto& u = usageInfo[i];
             u.nWrite = 0;

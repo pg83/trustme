@@ -1488,7 +1488,7 @@ namespace {
                         if (ue.name != "" && ue.path.nodes().size() >= 1) {
                             DEBUG(StringView("Use ") << ue.path);
                             ASTAbsolutePath refPath;
-                            auto m = ResolveLookupMacro(ue.sp, *es.wb.settings, es.crate, mod.path(), ue.path, /*out_path=*/&refPath);
+                            auto m = ResolveLookupMacro(ue.sp, *es.wb.settings, es.crate, mod.astPath(), ue.path, /*out_path=*/&refPath);
                             MacroRef ref;
                             switch (m.tag()) {
                                 case ResolveItemRefMacro::TAG_None: {
@@ -2032,7 +2032,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
         }
     }
 
-    auto rv = ResolveLookupMacro(miSpan, *wb.settings, crate, modstack.item->path(), path, /*out_path=*/nullptr);
+    auto rv = ResolveLookupMacro(miSpan, *wb.settings, crate, modstack.item->astPath(), path, /*out_path=*/nullptr);
     switch (rv.tag()) {
         case ResolveItemRefMacro::TAG_None: {
             return MacroRef();

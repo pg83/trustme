@@ -5236,6 +5236,7 @@ MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const 
     , resultValid(false)
     , fcnScope_(*this, 0)
 {
+    scopes.reserve(32);
     if (resolve.hirCrate().langItems.count("owned_box") > 0) {
         langBox_ = &resolve.hirCrate().langItems.at("owned_box");
     }

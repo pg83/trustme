@@ -301,6 +301,22 @@ ASTPath& ASTPath::operator+=(const ASTPath& other) {
     return *this;
 }
 
+bool ASTPath::isAbsoluteChildOf(const ASTAbsolutePath& base, const RcString& name) const {
+    const auto* ent = cls.opt_Absolute();
+    if (!ent || ent->crate != base.crate || ent->nodes.size() != base.nodes.length() + 1) {
+        return false;
+    }
+    const ASTPathParams noParams;
+    for (size_t i = 0; i < ent->nodes.size(); i++) {
+        const auto& node = ent->nodes[i];
+        const auto& expected = i < base.nodes.length() ? base.nodes[i] : name;
+        if (node.hygienicName() != expected || node.args().ord(noParams) != OrdEqual) {
+            return false;
+        }
+    }
+    return true;
+}
+
 Ordering ASTPath::ord(const ASTPath& x) const {
     Ordering rv;
 
