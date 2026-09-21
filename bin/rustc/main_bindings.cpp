@@ -49,7 +49,6 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include <pthread.h>
 
 using namespace stl;
 
@@ -157,12 +156,6 @@ namespace {
         bool overflowChecksEnabled() const;
 
         void showHelp() const;
-    };
-
-    struct CompileArgs {
-        int argc;
-        char** argv;
-        int result;
     };
 
     std::string CrateNameFromFile(const std::string& infile) {
@@ -801,16 +794,6 @@ namespace {
         return 0;
     }
 
-    void* compileOnThread(void* raw) {
-        auto& args = *static_cast<CompileArgs*>(raw);
-        try {
-            args.result = compile(args.argc, args.argv);
-        } catch (const std::exception& e) {
-            sysE << StringView("error: ") << e.what() << endL;
-            ::exit(1);
-        }
-        return nullptr;
-    }
 }
 
 void ExpandTestHarness(ASTCrate& crate) {
@@ -900,28 +883,18 @@ void ExpandTestHarness(ASTCrate& crate) {
 #undef NEWNODE
 
 int main(int argc, char* argv[]) {
-    size_t stackSize = 1024u * 1024 * 1024;
-    if (const char* text = std::getenv("TRUSTME_MIN_STACK")) {
-        char* end = nullptr;
-        const auto value = std::strtoull(text, &end, 10);
-        if (*end == '\0' && value > 0) {
-            stackSize = static_cast<size_t>(value);
-        }
+    int result = 1;
+    try {
+        result = compile(argc, argv);
+    } catch (const std::exception& e) {
+        sysE << StringView("error: ") << e.what() << endL;
+        ::exit(1);
     }
-
-    pthread_attr_t attr;
-    CompileArgs args{argc, argv, 1};
-    pthread_t thread;
-    if (pthread_attr_init(&attr) != 0 || pthread_attr_setstacksize(&attr, stackSize) != 0 || pthread_create(&thread, &attr, compileOnThread, &args) != 0) {
-        return compile(argc, argv);
-    }
-    pthread_join(thread, nullptr);
-    pthread_attr_destroy(&attr);
     if (std::getenv("TRUSTME_INTERN_STATS")) {
         sysO << StringView("intern: count=") << RcString::internedCount()
              << StringView(" bytes=") << RcString::internedBytes() << endL;
     }
-    return args.result;
+    return result;
 }
 
 ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
