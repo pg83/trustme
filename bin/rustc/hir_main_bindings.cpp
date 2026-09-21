@@ -11,6 +11,7 @@
 
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
+#include <std/sym/i_map.h>
 
 #include <typeinfo>
 
@@ -440,12 +441,11 @@ namespace {
 
     struct HirSerialiser {
         std::map<RcString, size_t> types;
+        IntMap<size_t> typeIds;
         HIRSerialiseWriter& out;
         HIRTypeInterner& typeInterner;
 
-        HirSerialiser(HIRSerialiseWriter& out, HIRTypeInterner& typeInterner);
-
-        void clear();
+        HirSerialiser(HIRSerialiseWriter& out, HIRTypeInterner& typeInterner, ObjPool& pool);
 
         template <typename V>
         void serialiseStrmap(const std::map<RcString, V>& map);
@@ -1372,7 +1372,7 @@ void HIRSerialise(const std::string& filename, const HIRCrate& crate) {
     auto writerPool = ObjPool::fromMemory();
     auto& out = *HIRSerialiseWriter::create(*writerPool.mutPtr());
     out.open(filename);
-    HirSerialiser s{out, crate.types};
+    HirSerialiser s{out, crate.types, *writerPool.mutPtr()};
     s.serialiseCrate(crate);
 }
 
@@ -3021,14 +3021,11 @@ auto TreeVisitor::decIndent() -> void {
     indentLevel--;
 }
 
-HirSerialiser::HirSerialiser(HIRSerialiseWriter& out, HIRTypeInterner& typeInterner)
-    : out(out)
+HirSerialiser::HirSerialiser(HIRSerialiseWriter& out, HIRTypeInterner& typeInterner, ObjPool& pool)
+    : typeIds(&pool)
+    , out(out)
     , typeInterner(typeInterner)
 {
-}
-
-auto HirSerialiser::clear() -> void {
-    types.clear();
 }
 
 template <typename V>
@@ -3200,6 +3197,12 @@ auto HirSerialiser::serialiseArraysize(const HIRArraySize& as) -> void {
 }
 
 auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
+    const auto typeKey = reinterpret_cast<uintptr_t>(ty);
+    if (const auto* known = typeIds.find(typeKey)) {
+        DEBUG(StringView("Cached ") << *known);
+        out.writeCount(*known);
+        return;
+    }
     auto tyStr = FMT(ty);
     if (tyStr[0] == '{') {
         auto p = tyStr.find('}');
@@ -3210,6 +3213,7 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
     auto it = types.find(interned);
     if (it != types.end()) {
         DEBUG(StringView("Cached ") << it->second);
+        typeIds.insert(typeKey, it->second);
         out.writeCount(it->second);
         return;
     }
@@ -3324,7 +3328,10 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
             break;
     }
 
-    types.insert(std::make_pair(interned, types.size()));
+    const auto id = types.insert(std::make_pair(interned, types.size())).first->second;
+    if (!typeIds.find(typeKey)) {
+        typeIds.insert(typeKey, id);
+    }
 }
 
 auto HirSerialiser::serialiseSimplepath(const HIRSimplePath& path) -> void {
