@@ -28,11 +28,59 @@
 
 using namespace stl;
 
+namespace {
+    struct OptimiseStmtRef {
+        unsigned bbIdx;
+        unsigned stmtIdx;
+
+        OptimiseStmtRef();
+
+        OptimiseStmtRef(unsigned b, unsigned s);
+
+        bool operator==(const OptimiseStmtRef& x) const;
+    };
+}
+
 struct WireBoard::MirOperationsContext {
+    struct HashedBlock {
+        size_t hash;
+        unsigned int bbIdx;
+    };
+
+    struct LocalSetAndUse {
+        unsigned nWrite = 0;
+        unsigned nRead = 0;
+        unsigned nBorrow = 0;
+        OptimiseStmtRef setLoc;
+        OptimiseStmtRef useLoc;
+    };
+
+    struct LocalBorrows {
+        unsigned nWrite = 0;
+        unsigned nOtherRead = 0;
+        unsigned nDerefRead = 0;
+        OptimiseStmtRef setLoc;
+        unsigned firstDrop = ~0u;
+        unsigned lastDrop = ~0u;
+    };
+
+    struct LocalDrop {
+        OptimiseStmtRef loc;
+        unsigned next;
+    };
+
     const RcString vtableName = RcString::newInterned("vtable#");
     Vector<bool> visitedBlocks;
     Vector<MIRBasicBlockId> pendingBlocks;
     std::vector<Vector<unsigned>> blockPredecessors;
+    Vector<size_t> blockOrigins;
+    Vector<unsigned int> blockUses;
+    Vector<unsigned int> blockReplacements;
+    Vector<HashedBlock> hashedBlocks;
+    Vector<unsigned int> groupReps;
+    Vector<LocalSetAndUse> localSetAndUse;
+    Vector<LocalBorrows> localBorrows;
+    Vector<LocalDrop> localDrops;
     bool visitingBlocks = false;
 };
 
@@ -120,17 +168,6 @@ namespace {
         explicit MIRBlockConstCb(F f);
 
         void run(MIRBasicBlockId bb, const MIRBasicBlock& block) const override;
-    };
-
-    struct OptimiseStmtRef {
-        unsigned bbIdx;
-        unsigned stmtIdx;
-
-        OptimiseStmtRef();
-
-        OptimiseStmtRef(unsigned b, unsigned s);
-
-        bool operator==(const OptimiseStmtRef& x) const;
     };
 
     struct IterPathCallback {
@@ -2691,22 +2728,11 @@ namespace {
 
         TRACE_FUNCTION_FR(StringView(""), changed);
 
-        struct LocalUsage {
-            unsigned nWrite;
-            unsigned nRead;
-            unsigned nBorrow;
-            OptimiseStmtRef setLoc;
-            OptimiseStmtRef useLoc;
-
-            LocalUsage()
-                : nWrite(0)
-                , nRead(0)
-                , nBorrow(0)
-            {
-            }
-        };
-
-        std::vector<LocalUsage> usageInfo(fcn.locals.length());
+        auto& usageInfo = operationsContext(state).localSetAndUse;
+        usageInfo.clear();
+        for (size_t i = 0; i < fcn.locals.length(); i++) {
+            usageInfo.pushBack(MirOperationsContext::LocalSetAndUse{});
+        }
 
         {
             struct CountUsage final: public LvalueVisitor {
@@ -2729,13 +2755,13 @@ namespace {
                     }
                     for (const auto& w : lv.wrappers) {
                         if (w.is_Index()) {
-                            auto& slot = usageInfo[w.as_Index()];
+                            auto& slot = usageInfo.mut(w.as_Index());
                             slot.nRead += 1;
                             slot.useLoc = getCurLoc();
                         }
                     }
                     if (lv.root.is_Local()) {
-                        auto& slot = usageInfo[lv.root.as_Local()];
+                        auto& slot = usageInfo.mut(lv.root.as_Local());
                         switch (vu) {
                             case MIRValUsage::Write:
                                 slot.nWrite += 1;
@@ -2972,29 +2998,13 @@ namespace {
 
         TRACE_FUNCTION_FR(StringView(""), changed);
 
-        struct LocalUsage {
-            unsigned nWrite;
-            unsigned nOtherRead;
-            unsigned nDerefRead;
-            OptimiseStmtRef setLoc;
-            Vector<OptimiseStmtRef> dropLocs;
-
-            LocalUsage()
-                : nWrite(0)
-                , nOtherRead(0)
-                , nDerefRead(0)
-            {
-            }
-        };
-
-        std::vector<LocalUsage> usageInfo(fcn.locals.length());
+        auto& operations = operationsContext(state);
+        auto& usageInfo = operations.localBorrows;
+        auto& drops = operations.localDrops;
+        usageInfo.clear();
+        drops.clear();
         for (size_t i = 0; i < fcn.locals.length(); i++) {
-            auto& u = usageInfo[i];
-            u.nWrite = 0;
-            u.nOtherRead = 0;
-            u.nDerefRead = 0;
-            u.setLoc = OptimiseStmtRef();
-            u.dropLocs.clear();
+            usageInfo.pushBack(MirOperationsContext::LocalBorrows{});
         }
 
         struct CountBorrowUsage final: public LvalueVisitor {
@@ -3010,7 +3020,7 @@ namespace {
 
             bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
                 if (lv.root.is_Local()) {
-                    auto& slot = usageInfo[lv.root.as_Local()];
+                    auto& slot = usageInfo.mut(lv.root.as_Local());
                     if (!lv.wrappers.empty() && lv.wrappers.front().is_Deref()) {
                         slot.nDerefRead++;
                         if (fcn.locals[lv.root.as_Local()]->is_Borrow()) {
@@ -3036,7 +3046,15 @@ namespace {
             auto curLoc = OptimiseStmtRef(&bb - &fcn.blocks.front(), bb.statements.size());
             visitCb.curLoc = curLoc;
             if (const auto* drop = bb.terminator.opt_Drop(); drop && drop->slot.root.is_Local() && drop->slot.wrappers.empty()) {
-                usageInfo[drop->slot.root.as_Local()].dropLocs.pushBack(curLoc);
+                auto& slot = usageInfo.mut(drop->slot.root.as_Local());
+                const auto dropIdx = static_cast<unsigned>(drops.length());
+                drops.pushBack(MirOperationsContext::LocalDrop{curLoc, ~0u});
+                if (slot.lastDrop == ~0u) {
+                    slot.firstDrop = dropIdx;
+                } else {
+                    drops.mut(slot.lastDrop).next = dropIdx;
+                }
+                slot.lastDrop = dropIdx;
             } else {
                 optVisitMirLvalues(bb.terminator, visitCb);
             }
@@ -3085,10 +3103,10 @@ namespace {
                 const MIRLValue& thisVar;
                 const MIRLValue& srcLv;
                 const OptimiseStmtRef& curLoc;
-                const LocalUsage& slot;
+                const MirOperationsContext::LocalBorrows& slot;
                 unsigned numReplaced = 0;
 
-                ReplaceDerefs(MIRTypeResolve& state, const MIRLValue& thisVar, const MIRLValue& srcLv, const OptimiseStmtRef& curLoc, const LocalUsage& slot)
+                ReplaceDerefs(MIRTypeResolve& state, const MIRLValue& thisVar, const MIRLValue& srcLv, const OptimiseStmtRef& curLoc, const MirOperationsContext::LocalBorrows& slot)
                     : state(state)
                     , thisVar(thisVar)
                     , srcLv(srcLv)
@@ -3159,16 +3177,17 @@ namespace {
             }
 
             if (srcLv.root.is_Local() && !srcLv.wrappers.empty() && srcLv.wrappers.front().is_Deref()) {
-                usageInfo[srcLv.root.as_Local()].nDerefRead += replaceCb.numReplaced;
+                usageInfo.mut(srcLv.root.as_Local()).nDerefRead += replaceCb.numReplaced;
                 if (replaceCb.numReplaced == slot.nDerefRead) {
-                    usageInfo[srcLv.root.as_Local()].nDerefRead -= 1;
+                    usageInfo.mut(srcLv.root.as_Local()).nDerefRead -= 1;
                 }
             }
 
             if (replaceCb.numReplaced == slot.nDerefRead + slot.nOtherRead) {
                 DEBUG(thisVar << StringView(" - Erase ") << slot.setLoc << StringView(" as it is no longer used (") << srcBb.statements[slot.setLoc.stmtIdx] << StringView(")"));
                 srcBb.statements[slot.setLoc.stmtIdx] = MIRStatement();
-                for (const auto& dropLoc : slot.dropLocs) {
+                for (auto dropIdx = slot.firstDrop; dropIdx != ~0u; dropIdx = drops[dropIdx].next) {
+                    const auto& dropLoc = drops[dropIdx].loc;
                     DEBUG(thisVar << StringView(" - Drop at ") << dropLoc);
                     auto& dropBb = fcn.blocks[dropLoc.bbIdx];
                     MIR_ASSERT(state, dropLoc.stmtIdx == dropBb.statements.size() && dropBb.terminator.is_Drop(), StringView("Recorded drop is no longer a terminator"));
@@ -4027,17 +4046,17 @@ namespace {
             }
         };
 
-        std::map<unsigned int, unsigned int> replacements;
-
-        struct HashedBlock {
-            size_t hash;
-            unsigned int bbIdx;
-        };
-
-        ThinVector<HashedBlock> hashedBlocks;
-        ThinVector<unsigned int> groupReps;
+        using HashedBlock = MirOperationsContext::HashedBlock;
+        auto& operations = operationsContext(state);
+        auto& replacements = operations.blockReplacements;
+        auto& hashedBlocks = operations.hashedBlocks;
+        auto& groupReps = operations.groupReps;
         for (;;) {
             replacements.clear();
+            while (replacements.length() < fcn.blocks.size()) {
+                replacements.pushBack(~0u);
+            }
+            size_t replaced = 0;
             hashedBlocks.clear();
             for (unsigned int bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
                 if (fcn.blocks[bbIdx].terminator.isDead()) {
@@ -4046,14 +4065,14 @@ namespace {
                 if (fcn.blocks[bbIdx].terminator.is_Incomplete() && fcn.blocks[bbIdx].statements.size() == 0) {
                     continue;
                 }
-                hashedBlocks.push_back(HashedBlock{H::blockHash(fcn.blocks[bbIdx]), bbIdx});
+                hashedBlocks.pushBack(HashedBlock{H::blockHash(fcn.blocks[bbIdx]), bbIdx});
             }
-            std::sort(hashedBlocks.begin(), hashedBlocks.end(), [](const HashedBlock& a, const HashedBlock& b) {
+            std::sort(hashedBlocks.mutBegin(), hashedBlocks.mutEnd(), [](const HashedBlock& a, const HashedBlock& b) {
                 return a.hash != b.hash ? a.hash < b.hash : a.bbIdx < b.bbIdx;
             });
-            for (size_t i = 0; i < hashedBlocks.size();) {
+            for (size_t i = 0; i < hashedBlocks.length();) {
                 size_t j = i;
-                while (j < hashedBlocks.size() && hashedBlocks[j].hash == hashedBlocks[i].hash) {
+                while (j < hashedBlocks.length() && hashedBlocks[j].hash == hashedBlocks[i].hash) {
                     j++;
                 }
                 if (j - i > 1) {
@@ -4063,28 +4082,28 @@ namespace {
                         bool found = false;
                         for (auto candidate : groupReps) {
                             if (H::blocksEqual(fcn.blocks[candidate], fcn.blocks[bbIdx])) {
-                                replacements[bbIdx] = candidate;
+                                replacements.mut(bbIdx) = candidate;
+                                replaced++;
                                 found = true;
                                 break;
                             }
                         }
                         if (!found) {
-                            groupReps.push_back(bbIdx);
+                            groupReps.pushBack(bbIdx);
                         }
                     }
                 }
                 i = j;
             }
 
-            if (replacements.empty()) {
+            if (replaced == 0) {
                 break;
             }
 
-            DEBUG(StringView("Unify blocks (old: new) - ") << replacements);
+            DEBUG(StringView("Unify blocks - ") << replaced << StringView(" replaced"));
             auto patchTgt = [&replacements](MIRBasicBlockId& tgt) {
-                auto it = replacements.find(tgt);
-                if (it != replacements.end()) {
-                    tgt = it->second;
+                if (replacements[tgt] != ~0u) {
+                    tgt = replacements[tgt];
                 }
             };
             for (auto& bb : fcn.blocks) {
@@ -4108,8 +4127,10 @@ namespace {
                 visitTerminatorTargetMut(bb.terminator, patchTargets);
             }
 
-            for (const auto& r : replacements) {
-                fcn.blocks[r.first] = MIRBasicBlock{};
+            for (size_t bbIdx = 0; bbIdx < replacements.length(); bbIdx++) {
+                if (replacements[bbIdx] != ~0u) {
+                    fcn.blocks[bbIdx] = MIRBasicBlock{};
+                }
             }
 
             changed = true;
@@ -4122,16 +4143,24 @@ namespace {
     bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
         bool changeHappend = false;
         TRACE_FUNCTION_FR(StringView(""), changeHappend);
-        Vector<size_t> blockOrigins;
+        auto& operations = operationsContext(state);
+        auto& blockOrigins = operations.blockOrigins;
+        blockOrigins.clear();
         while (blockOrigins.length() < fcn.blocks.size()) {
             blockOrigins.pushBack(SIZE_MAX);
         }
         {
-            Vector<unsigned int> blockUses;
+            ASSERT_BUG(Span(), !operations.visitingBlocks, StringView("MIROptimisePropagateKnownValues re-entered"));
+            operations.visitingBlocks = true;
+            STD_DEFER {
+                operations.visitingBlocks = false;
+            };
+            auto& blockUses = operations.blockUses;
             blockUses.zero(fcn.blocks.size());
-            Vector<bool> visited;
+            auto& visited = operations.visitedBlocks;
             visited.zero(fcn.blocks.size());
-            Vector<MIRBasicBlockId> toVisit;
+            auto& toVisit = operations.pendingBlocks;
+            toVisit.clear();
             toVisit.pushBack(0);
             blockUses.mut(0)++;
             while (toVisit.length() > 0) {
