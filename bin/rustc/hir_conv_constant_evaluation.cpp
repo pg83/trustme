@@ -601,7 +601,7 @@ namespace {
     RcString anonConstBodyName(const WireBoard& wb, HIRExprPtr& expr) {
         auto& state = *expr.state;
         if (state.anonConstIndex == 0) {
-            state.anonConstIndex = ++wb.id;
+            state.anonConstIndex = ++wb.itemSerial;
         }
         return RcString::newInterned(FMT(StringView("const_") << state.anonConstIndex << StringView("#")));
     }
@@ -3410,7 +3410,7 @@ void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve,
     ASSERT_BUG(e.value.span(), constant && *constant == &e, StringView("Resolved a different constant for ") << path);
 
     HIRItemPath modIp{e.value.state->modPath};
-    auto nvs = NewvalState(e.value.state->module, modIp, FMT(StringView("const") << static_cast<const void*>(&e) << StringView("#")), callerResolve.board().id);
+    auto nvs = NewvalState(e.value.state->module, modIp, FMT(StringView("const") << static_cast<const void*>(&e) << StringView("#")), callerResolve.board().itemSerial);
     auto eval = HIREvaluator(e.value.span(), callerResolve.board(), nvs);
     eval.resolve.setBothGenericsRaw(resolvedImplParams, &e.params);
     auto type = constMs.monomorphType(e.value.span(), e.type);
@@ -4827,7 +4827,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy) -> MI
             }
 
             HIRItemPath modIp{item.value.state->modPath};
-            auto nvs = NewvalState(item.value.state->module, modIp, FMT(StringView("static") << static_cast<const void*>(&item) << StringView("#")), rootResolve.wb.id);
+            auto nvs = NewvalState(item.value.state->module, modIp, FMT(StringView("static") << static_cast<const void*>(&item) << StringView("#")), rootResolve.wb.itemSerial);
             auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
             /* A generic static - the `&[..]` temporary lifted out of the `LAYOUT` constant
                of `impl<const OFFSET: usize> KnownLayout for SliceDst<OFFSET>` - has a value
@@ -5083,7 +5083,7 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, const HIRType** outTy) 
             item.valueState = HIRConstant::ValueState::Generic;
         } else {
             HIRItemPath modIp{item.value.state->modPath};
-            auto nvs = NewvalState(item.value.state->module, modIp, FMT(StringView("const") << static_cast<const void*>(&c) << StringView("#")), rootResolve.wb.id);
+            auto nvs = NewvalState(item.value.state->module, modIp, FMT(StringView("const") << static_cast<const void*>(&c) << StringView("#")), rootResolve.wb.itemSerial);
             auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
             eval.resolve.setBothGenericsRaw(implParamsDef, &c.params);
             auto tempPpImpl = implParamsDef ? implParamsDef->makeNopParams(rootResolve.crate.types, 0) : HIRPathParams();
@@ -5111,7 +5111,7 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, const HIRType** outTy) 
         auto it = c.monomorphCache.find(p);
         if (it == c.monomorphCache.end()) {
             HIRItemPath modIp{item.value.state->modPath};
-            auto nvs = NewvalState(item.value.state->module, modIp, FMT(StringView("const") << static_cast<const void*>(&c) << StringView("#")), rootResolve.wb.id);
+            auto nvs = NewvalState(item.value.state->module, modIp, FMT(StringView("const") << static_cast<const void*>(&c) << StringView("#")), rootResolve.wb.itemSerial);
             auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
             eval.resolve.setBothGenericsRaw(implParamsDef, &c.params);
 
@@ -5951,7 +5951,7 @@ auto Expander::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
     } else if (item.valueState == HIRConstant::ValueState::InProgress) {
         ERROR(item.value.span(), E0000, StringView("cycle detected when evaluating constant `") << p << StringView("`"));
     } else if (item.value || item.value.mir) {
-        auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << StringView("#")), wb.id};
+        auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << StringView("#")), wb.itemSerial};
         auto eval = getEval(item.value.span(), nvs);
         if (constItemMustStaySymbolic(implParams, item.params)) {
             item.valueState = HIRConstant::ValueState::Generic;
@@ -5977,7 +5977,7 @@ auto Expander::visitStatic(HIRItemPath p, HIRStatic& item) -> void {
 
     if (pass != Pass::Values) {
     } else if (item.value) {
-        auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << StringView("#")), wb.id};
+        auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << StringView("#")), wb.itemSerial};
         auto eval = getEval(item.value.span(), nvs);
         item.valueEvaluating = true;
         STD_DEFER {
@@ -6143,7 +6143,7 @@ auto Expander::visitEnumVariant(const WireBoard& wb, HIRCrate& crate, const HIRI
     const auto ty = HIREnum::getReprType(item.tagRepr);
     U128 value(0);
     if (*expr) {
-        auto nvs = NewvalState{mod, modPath, FMT(name << StringView("#") << varName << StringView("_")), wb.id};
+        auto nvs = NewvalState{mod, modPath, FMT(name << StringView("#") << varName << StringView("_")), wb.itemSerial};
         auto eval = HIREvaluator{(*expr)->span(), wb, nvs};
         eval.resolve.setImplGenericsRaw(MetadataType::None, item.params);
         {

@@ -1169,7 +1169,7 @@ const HIRType* HIRExpandClosuresExpr(const WireBoard& wb, HIRCrate& crate, const
     OutState out;
     indexMutableAnonymousNodes(exp, out, crate.types);
     auto newType = makeCallable<ClosureTypeCb>([&](const char* prefix, const char* suffix, auto s) -> auto {
-        auto name = RcString::newInterned(FMT(prefix << StringView("C_") << ++wb.id));
+        auto name = RcString::newInterned(FMT(prefix << StringView("C_") << ++wb.itemSerial));
         auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{HIRPublicity::newNone(), HIRTypeItem(mv$(s))});
         auto* retPtr = &boxed->ent;
         crate.newTypes.push_back(std::make_pair(name, boxed));
@@ -1323,7 +1323,7 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, HIRCrate& crate, co
         DEBUG(StringView("self_type = NONE"));
     }
     auto callback = makeCallable<NewStaticCb>([&](Span sp, const HIRType* ty, HIRExprPtr valExpr, HIRGenericParams generics, bool isConst) -> HIRSimplePath {
-        auto name = RcString::newInterned(FMT(StringView("lifted#C_") << ++wb.id));
+        auto name = RcString::newInterned(FMT(StringView("lifted#C_") << ++wb.itemSerial));
 
         auto path = HIRSimplePath(crate.crateName, {name});
         auto newStatic = HIRStatic(
@@ -1369,7 +1369,7 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, HIRCrate& crate, co
                 s.value.state->itemGenerics = &s.params;
                 return path;
             }
-        } nvs{crate, wb.id};
+        } nvs{crate, wb.itemSerial};
 
         if (!newStatic.params.isGeneric()) {
             newStatic.value.state->stage = HIRExprState::Stage::Sbc;

@@ -32,6 +32,8 @@ struct WireBoard {
 
     mutable u32 id = 0;
 
+    mutable u32 itemSerial = 0;
+
     HIRTypeInterner* types = nullptr;
     ExpandRegistry* expandRegistry = nullptr;
 
