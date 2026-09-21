@@ -263,7 +263,7 @@ public:
     }
 
     bool empty() const {
-        return ptr == nullptr;
+        return this->size() == 0;
     }
 
     Ordering ord(const ThinVector<T>& x) const {
