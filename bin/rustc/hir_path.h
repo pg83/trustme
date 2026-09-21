@@ -65,7 +65,7 @@ public:
 
     HIRSimplePath(RcString crate);
 
-    HIRSimplePath(RcString crate, stl::Vector<RcString> components);
+    HIRSimplePath(RcString crate, const stl::Vector<RcString>& components);
 
     HIRSimplePath(RcString crate, std::span<RcString> components);
 

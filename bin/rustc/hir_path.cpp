@@ -899,7 +899,7 @@ HIRSimplePath::HIRSimplePath(RcString crate)
 {
 }
 
-HIRSimplePath::HIRSimplePath(RcString crate, Vector<RcString> components)
+HIRSimplePath::HIRSimplePath(RcString crate, const Vector<RcString>& components)
     : HIRSimplePath(crate, std::span<const RcString>(components))
 {
 }
