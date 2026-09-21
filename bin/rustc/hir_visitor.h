@@ -62,7 +62,7 @@ public:
     [[nodiscard]] const HIRType* visitTypeViaHooks(const HIRType* ty) {
         auto data = ty->cloneData();
         visitTypeDataChildren(data);
-        return typeInterner().intern(mv$(data));
+        return typeInterner().internFolded(ty, mv$(data));
     }
 
     [[nodiscard]] const HIRType* visitTypeDefaultViaHooks(const HIRType* ty) {

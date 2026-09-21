@@ -614,7 +614,7 @@ const HIRType* HIRExprVisitorDef::visitType(const HIRType* ty) {
         case HIRType::TAG_Path: {
             auto data = ty->cloneData();
             this->visitPath(HIRVisitor::PathContext::TYPE, data.as_Path().path);
-            return types.intern(std::move(data));
+            return types.internFolded(ty, std::move(data));
         }
         case HIRType::TAG_TraitObject: {
             auto data = ty->cloneData();
@@ -623,7 +623,7 @@ const HIRType* HIRExprVisitorDef::visitType(const HIRType* ty) {
             for (auto& trait : e.markers) {
                 this->visitGenericPath(HIRVisitor::PathContext::TYPE, trait);
             }
-            return types.intern(std::move(data));
+            return types.internFolded(ty, std::move(data));
         }
         case HIRType::TAG_ErasedType: {
             auto data = ty->cloneData();
@@ -644,12 +644,12 @@ const HIRType* HIRExprVisitorDef::visitType(const HIRType* ty) {
                     break;
                 }
             }
-            return types.intern(std::move(data));
+            return types.internFolded(ty, std::move(data));
         }
         case HIRType::TAG_NamedFunction: {
             auto data = ty->cloneData();
             this->visitPath(HIRVisitor::PathContext::VALUE, data.as_NamedFunction().path);
-            return types.intern(std::move(data));
+            return types.internFolded(ty, std::move(data));
         }
         case HIRType::TAG_Array: {
             auto ninner = visitType(ty->as_Array().inner);

@@ -223,6 +223,8 @@ struct HIRTypeInterner {
     virtual const HIRType* intern(HIRType data) = 0;
     virtual unsigned newAliasInputInfer() = 0;
 
+    const HIRType* internFolded(const HIRType* original, HIRType data);
+
     const HIRType* infer(unsigned int idx = ~0u, HIRInferClass tyClass = HIRInferClass::None);
     const HIRType* primitive(HIRCoreType ct);
     const HIRType* generic(HIRGenericRef generic);

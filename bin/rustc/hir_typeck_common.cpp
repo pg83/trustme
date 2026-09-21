@@ -202,7 +202,7 @@ const HIRType* Monomorphiser::monomorphType(const Span& sp, const HIRType* tpl, 
         case HIRType::TAG_Path: {
             auto& e = (*tpl).as_Path();
             auto binding = e.binding.is_Opaque() ? HIRTypePathBinding() : e.binding.clone();
-            return types.intern(HIRType::make_Path({this->monomorphPath(sp, e.path, allowInfer), mv$(binding)}));
+            return types.internFolded(tpl, HIRType::make_Path({this->monomorphPath(sp, e.path, allowInfer), mv$(binding)}));
         }
         case HIRType::TAG_Generic: {
             auto& e = (*tpl).as_Generic();
@@ -219,7 +219,7 @@ const HIRType* Monomorphiser::monomorphType(const Span& sp, const HIRType* tpl, 
                     to.markers.push_back(this->monomorphGenericpath(sp, trait, allowInfer));
                 }
             }
-            return types.intern(HIRType::make_TraitObject(mv$(to)));
+            return types.internFolded(tpl, HIRType::make_TraitObject(mv$(to)));
         }
         case HIRType::TAG_ErasedType: {
             auto& e = (*tpl).as_ErasedType();
@@ -248,15 +248,17 @@ const HIRType* Monomorphiser::monomorphType(const Span& sp, const HIRType* tpl, 
                 }
             }
 
-            return types.intern(HIRType::make_ErasedType(HIRType::Data_ErasedType{e.isSized, mv$(traits), mv$(inner), this->monomorphPathParams(sp, e.use, allowInfer), e.usePresent}));
+            return types.internFolded(tpl, HIRType::make_ErasedType(HIRType::Data_ErasedType{e.isSized, mv$(traits), mv$(inner), this->monomorphPathParams(sp, e.use, allowInfer), e.usePresent}));
         }
         case HIRType::TAG_Array: {
             auto& e = (*tpl).as_Array();
-            return types.intern(HIRType::make_Array({this->monomorphType(sp, e.inner, allowInfer), this->monomorphArraysize(sp, e.size)}));
+            const auto* inner = this->monomorphType(sp, e.inner, allowInfer);
+            return types.internFolded(tpl, HIRType::make_Array({inner, this->monomorphArraysize(sp, e.size)}));
         }
         case HIRType::TAG_Slice: {
             auto& e = (*tpl).as_Slice();
-            return types.slice(this->monomorphType(sp, e.inner, allowInfer));
+            const auto* inner = this->monomorphType(sp, e.inner, allowInfer);
+            return inner == e.inner ? tpl : types.slice(inner);
         }
         case HIRType::TAG_Pattern: {
             auto& e = (*tpl).as_Pattern();
@@ -272,27 +274,32 @@ const HIRType* Monomorphiser::monomorphType(const Span& sp, const HIRType* tpl, 
                 };
                 pattern.alternatives.push_back(mv$(out));
             }
-            return types.intern(HIRType::make_Pattern({this->monomorphType(sp, e.inner, allowInfer), mv$(pattern)}));
+            return types.internFolded(tpl, HIRType::make_Pattern({this->monomorphType(sp, e.inner, allowInfer), mv$(pattern)}));
         }
         case HIRType::TAG_Tuple: {
             auto& e = (*tpl).as_Tuple();
             Vector<const HIRType*> types;
+            bool changed = false;
             for (const auto& ty : e) {
-                types.pushBack(this->monomorphType(sp, ty, allowInfer));
+                const auto* inner = this->monomorphType(sp, ty, allowInfer);
+                changed |= inner != ty;
+                types.pushBack(inner);
             }
-            return this->types.tuple(mv$(types));
+            return changed ? this->types.tuple(mv$(types)) : tpl;
         }
         case HIRType::TAG_Borrow: {
             auto& e = (*tpl).as_Borrow();
-            return types.borrow(e.type, this->monomorphType(sp, e.inner, allowInfer));
+            const auto* inner = this->monomorphType(sp, e.inner, allowInfer);
+            return inner == e.inner ? tpl : types.borrow(e.type, inner);
         }
         case HIRType::TAG_Pointer: {
             auto& e = (*tpl).as_Pointer();
-            return types.pointer(e.type, this->monomorphType(sp, e.inner, allowInfer));
+            const auto* inner = this->monomorphType(sp, e.inner, allowInfer);
+            return inner == e.inner ? tpl : types.pointer(e.type, inner);
         }
         case HIRType::TAG_NamedFunction: {
             auto& e = (*tpl).as_NamedFunction();
-            return types.intern(HIRType::make_NamedFunction(HIRType::Data_NamedFunction{this->monomorphPath(sp, e.path, allowInfer), e.def.clone()}));
+            return types.internFolded(tpl, HIRType::make_NamedFunction(HIRType::Data_NamedFunction{this->monomorphPath(sp, e.path, allowInfer), e.def.clone()}));
         }
         case HIRType::TAG_Function: {
             auto& e = (*tpl).as_Function();
@@ -304,10 +311,13 @@ const HIRType* Monomorphiser::monomorphType(const Span& sp, const HIRType* tpl, 
             ft.lifetimeIdentity = e.lifetimeIdentity;
             ft.lifetimeIdentityHasFree = e.lifetimeIdentityHasFree;
             ft.rettype = this->monomorphType(sp, e.rettype, allowInfer);
+            bool changed = ft.rettype != e.rettype;
             for (const auto& arg : e.argTypes) {
-                ft.argTypes.pushBack(this->monomorphType(sp, arg, allowInfer));
+                const auto* folded = this->monomorphType(sp, arg, allowInfer);
+                changed |= folded != arg;
+                ft.argTypes.pushBack(folded);
             }
-            return types.function(mv$(ft));
+            return changed ? types.function(mv$(ft)) : tpl;
         }
         case HIRType::TAG_NodeType: {
             return tpl;

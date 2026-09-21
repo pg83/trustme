@@ -1537,6 +1537,13 @@ HIRTypeInterner* HIRTypeInterner::create(ObjPool& pool, u32& id) {
     return pool.make<HIRTypeInternerImpl>(pool, id);
 }
 
+const HIRType* HIRTypeInterner::internFolded(const HIRType* original, HIRType data) {
+    if (exactTypeDataEqual(*original, data)) {
+        return original;
+    }
+    return intern(mv$(data));
+}
+
 const HIRType* HIRTypeInterner::infer(unsigned int idx, HIRInferClass tyClass) {
     return intern(HIRType::make_Infer({idx, tyClass}));
 }

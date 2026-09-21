@@ -4911,7 +4911,7 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
             break;
         }
     }
-    return crate.types.intern(mv$(data));
+    return crate.types.internFolded(input, mv$(data));
 }
 
 Unifier::Outcome TraitResolution::relateInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const {
