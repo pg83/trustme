@@ -58,6 +58,7 @@ public:
     Ordering ord(const char* s, size_t l) const;
 
     Ordering ord(const RcString& s) const;
+    Ordering ordByContent(const RcString& s) const;
 
     bool operator==(const RcString& s) const {
         return id == s.id;

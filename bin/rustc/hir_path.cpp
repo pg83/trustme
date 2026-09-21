@@ -646,6 +646,27 @@ const HIRConstGenericUnevaluated* internUnevaluated(HIRConstGenericUnevaluated v
     return node;
 }
 
+Ordering HIRSimplePath::ordByContent(const HIRSimplePath& x) const {
+    if (p == x.p) {
+        return OrdEqual;
+    }
+    if (!p) {
+        return OrdLess;
+    }
+    if (!x.p) {
+        return OrdGreater;
+    }
+    const auto& members = p->members;
+    const auto& others = x.p->members;
+    const auto shared = members.size() < others.size() ? members.size() : others.size();
+    for (size_t i = 0; i < shared; i++) {
+        if (auto cmp = members[i].ordByContent(others[i])) {
+            return cmp;
+        }
+    }
+    return ::ord(members.size(), others.size());
+}
+
 HIRPath hirPathWithChildren(const HIRPath& shape, const HIRType* const* children) {
     switch (shape.data.tag()) {
         case HIRPathData::TAG_Generic: {

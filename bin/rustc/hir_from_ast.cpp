@@ -1857,8 +1857,6 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                 DEBUG(StringView("t = ") << *t.path);
                 lowering.add(t);
             }
-            std::sort(v.markers.begin(), v.markers.end());
-            v.markers.erase(std::unique(v.markers.begin(), v.markers.end()), v.markers.end());
             return crate->types.intern(HIRType::make_TraitObject(mv$(v)));
         }
         case TypeData::TAG_ErasedType: {

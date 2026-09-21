@@ -5,6 +5,7 @@
 #include "hir_expr.h"
 #include "hir_typeck_monomorph.h"
 
+#include <std/alg/qsort.h>
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
@@ -1405,6 +1406,22 @@ namespace {
     constexpr size_t NUM_INFER_CLASSES = static_cast<size_t>(HIRInferClass::Float) + 1;
     constexpr size_t NUM_CORE_TYPES = static_cast<size_t>(HIRCoreType::Str) + 1;
 
+    size_t canonicalMarkers(HIRGenericPath* markers, size_t count) {
+        quickSort(markers, markers + count, [](const HIRGenericPath& a, const HIRGenericPath& b) {
+            if (auto cmp = a.path.ordByContent(b.path)) {
+                return cmp == OrdLess;
+            }
+            return a.params < b.params;
+        });
+        size_t kept = 0;
+        for (size_t i = 0; i < count; i++) {
+            if (kept == 0 || !(markers[kept - 1] == markers[i])) {
+                markers[kept++] = std::move(markers[i]);
+            }
+        }
+        return kept;
+    }
+
     struct HIRTypeInternerImpl final: public HIRTypeInterner {
         ObjPool& pool;
         u32& id;
@@ -1480,6 +1497,9 @@ namespace {
             const HIRType** slot = commonSlot(data);
             if (slot && *slot) {
                 return *slot;
+            }
+            if (auto* traitObject = data.opt_TraitObject()) {
+                traitObject->markers.resize(canonicalMarkers(traitObject->markers.data(), traitObject->markers.size()));
             }
             data.flags = typeFlags(data);
             const auto hash = hashTypeData(data);

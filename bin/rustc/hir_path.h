@@ -129,6 +129,7 @@ public:
     }
 
     bool startsWith(const HIRSimplePath& x, bool skipLast = false) const;
+    Ordering ordByContent(const HIRSimplePath& x) const;
 };
 
 [[noreturn]] void hirParamsListOutOfRange();
