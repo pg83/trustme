@@ -4074,8 +4074,8 @@ auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathCo
                 stack.pushBack(ty);
             }
             DEBUG(StringView("counter = ") << stack.length());
-            ty = rewriteTyWith(crate.types, ty, [&](const HIRType*, HIRType& data) -> const HIRType* {
-                if ((data.is_Generic() && (data.as_Generic().isPlaceholder()))) {
+            ty = rewriteTyWith(crate.types, ty, [&](const HIRType* type) -> const HIRType* {
+                if ((type->is_Generic() && (type->as_Generic().isPlaceholder()))) {
                     return crate.types.infer();
                 }
                 return nullptr;
@@ -4141,8 +4141,8 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
         }
 
         if (currentType_) {
-            rewritePathTysWith(crate.types, p, [&](const HIRType*, HIRType& data) -> const HIRType* {
-                if (data.is_Generic() && data.as_Generic().binding == GENERICSelf) {
+            rewritePathTysWith(crate.types, p, [&](const HIRType* type) -> const HIRType* {
+                if (type->is_Generic() && type->as_Generic().binding == GENERICSelf) {
                     return currentType_;
                 }
                 return nullptr;

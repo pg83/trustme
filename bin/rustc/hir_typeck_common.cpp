@@ -1025,11 +1025,25 @@ auto TyRewriter::rewriteType(const HIRType* type) -> const HIRType* {
         return type;
     }
     const auto original = type;
-    auto data = original->cloneData();
-    if (const auto* rewritten = callback.rewrite(original, data)) {
+    if (const auto* rewritten = callback.rewrite(original)) {
         return rewritten;
     }
-
+    if (const auto* e = original->opt_Path()) {
+        const HIRType* children[16];
+        const auto count = hirPathTypeChildren(e->path, children, 16);
+        if (count <= 16 && !hirPathHasValues(e->path)) {
+            stack.pushBack(original);
+            bool changed = false;
+            for (size_t i = 0; i < count; i++) {
+                const auto* child = rewriteType(children[i]);
+                changed |= child != children[i];
+                children[i] = child;
+            }
+            stack.popBack();
+            return changed ? types.pathType(e->path, children, e->binding) : original;
+        }
+    }
+    auto data = original->cloneData();
     stack.pushBack(original);
     switch (data.tag()) {
             case HIRType::TAG_Infer: {

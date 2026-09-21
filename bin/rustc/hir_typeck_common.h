@@ -114,7 +114,7 @@ bool visitPathTysWith(const HIRPath& path, F f) {
 }
 
 struct HIRTypeRewriteCallback {
-    virtual const HIRType* rewrite(const HIRType* type, HIRType& data) = 0;
+    virtual const HIRType* rewrite(const HIRType* type) = 0;
 };
 
 template <typename F>
@@ -126,8 +126,8 @@ struct HIRTypeRewriteCb final: HIRTypeRewriteCallback {
     {
     }
 
-    const HIRType* rewrite(const HIRType* type, HIRType& data) override {
-        return f(type, data);
+    const HIRType* rewrite(const HIRType* type) override {
+        return f(type);
     }
 };
 

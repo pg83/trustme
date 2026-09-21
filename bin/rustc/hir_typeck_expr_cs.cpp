@@ -3355,7 +3355,7 @@ struct OrderPlace {
 
     bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr, const HIRTypeImpl* selectedImpl);
 
-    void populateDefaults(const Span& sp, Context& context, const MonomorphStatePtr& ms, const HIRGenericParams& paramDefs, HIRPathParams& params) {
+    void populateDefaults(const Span& sp, Context& context, const MonomorphStatePtr& ms, const HIRGenericParams& paramDefs, const HIRPathParams& params) {
         for (size_t i = 0; i < paramDefs.types.size(); i++) {
             const auto& ty = params.types[i];
             const auto& typ = paramDefs.types[i];
@@ -10953,10 +10953,10 @@ void ExprVisitorAddIvars::visitNodePtr(HIRExprNodeP& nodePtr) {
 }
 
 auto ExprVisitorAddIvars::innerVisitType(const HIRType* ty) -> const HIRType* {
-    return rewriteTyWith(context.crate.types, ty, [this](const HIRType*, HIRType& data) -> const HIRType* {
-        if (auto* te = data.opt_Path()) {
+    return rewriteTyWith(context.crate.types, ty, [this](const HIRType* type) -> const HIRType* {
+        if (const auto* te = type->opt_Path()) {
             if (te->path.data.is_Generic()) {
-                auto& params = te->path.data.as_Generic().params;
+                const auto& params = te->path.data.as_Generic().params;
                 const HIRGenericParams* paramDefs = nullptr;
                 switch (te->binding.tag()) {
                     case HIRTypePathBinding::TAG_Struct: {
