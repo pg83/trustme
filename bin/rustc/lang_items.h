@@ -31,6 +31,11 @@ public:
     virtual const HIRSimplePath& destruct() const = 0;
     virtual const HIRSimplePath& future() const = 0;
     virtual const HIRSimplePath& asyncIterator() const = 0;
+    virtual const HIRSimplePath& deref() const = 0;
+    virtual const HIRSimplePath& coerceUnsized() const = 0;
+    virtual const HIRSimplePath& fnPtrTrait() const = 0;
+    virtual const HIRSimplePath& tupleTrait() const = 0;
+    virtual const HIRSimplePath& transmuteTrait() const = 0;
 
     static LangItems* create(stl::ObjPool& pool, const HIRCrate& crate);
 };

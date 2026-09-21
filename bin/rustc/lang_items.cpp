@@ -30,6 +30,11 @@ namespace {
         HIRSimplePath destruct_;
         HIRSimplePath future_;
         HIRSimplePath asyncIterator_;
+        HIRSimplePath deref_;
+        HIRSimplePath coerceUnsized_;
+        HIRSimplePath fnPtrTrait_;
+        HIRSimplePath tupleTrait_;
+        HIRSimplePath transmuteTrait_;
 
         explicit LangItemsImpl(const HIRCrate& crate);
 
@@ -76,6 +81,16 @@ namespace {
         const HIRSimplePath& future() const override;
 
         const HIRSimplePath& asyncIterator() const override;
+
+        const HIRSimplePath& deref() const override;
+
+        const HIRSimplePath& coerceUnsized() const override;
+
+        const HIRSimplePath& fnPtrTrait() const override;
+
+        const HIRSimplePath& tupleTrait() const override;
+
+        const HIRSimplePath& transmuteTrait() const override;
     };
 }
 
@@ -106,6 +121,11 @@ LangItemsImpl::LangItemsImpl(const HIRCrate& crate)
     , destruct_(crate.getLangItemPathOpt("destruct"))
     , future_(crate.getLangItemPathOpt("future_trait"))
     , asyncIterator_(crate.getLangItemPathOpt("async_iterator"))
+    , deref_(crate.getLangItemPathOpt("deref"))
+    , coerceUnsized_(crate.getLangItemPathOpt("coerce_unsized"))
+    , fnPtrTrait_(crate.getLangItemPathOpt("fn_ptr_trait"))
+    , tupleTrait_(crate.getLangItemPathOpt("tuple_trait"))
+    , transmuteTrait_(crate.getLangItemPathOpt("transmute_trait"))
 {
 }
 
@@ -195,4 +215,24 @@ auto LangItemsImpl::future() const -> const HIRSimplePath& {
 
 auto LangItemsImpl::asyncIterator() const -> const HIRSimplePath& {
     return asyncIterator_;
+}
+
+auto LangItemsImpl::deref() const -> const HIRSimplePath& {
+    return deref_;
+}
+
+auto LangItemsImpl::coerceUnsized() const -> const HIRSimplePath& {
+    return coerceUnsized_;
+}
+
+auto LangItemsImpl::fnPtrTrait() const -> const HIRSimplePath& {
+    return fnPtrTrait_;
+}
+
+auto LangItemsImpl::tupleTrait() const -> const HIRSimplePath& {
+    return tupleTrait_;
+}
+
+auto LangItemsImpl::transmuteTrait() const -> const HIRSimplePath& {
+    return transmuteTrait_;
 }

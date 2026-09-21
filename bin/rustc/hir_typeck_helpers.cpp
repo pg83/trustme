@@ -3464,10 +3464,10 @@ bool TraitResolution::iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Da
 }
 
 bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* ty, AssembledImplCallback& callback) const {
-    const auto langCoerceUnsized = this->crate.getLangItemPathOpt("coerce_unsized");
-    const auto langFnPtr = this->crate.getLangItemPathOpt("fn_ptr_trait");
-    const auto langTuple = this->crate.getLangItemPathOpt("tuple_trait");
-    const auto langTransmute = this->crate.getLangItemPathOpt("transmute_trait");
+    const auto& langCoerceUnsized = this->langCoerceUnsized();
+    const auto& langFnPtr = this->langFnPtrTrait();
+    const auto& langTuple = this->langTupleTrait();
+    const auto& langTransmute = this->langTransmuteTrait();
 
     const auto& type = this->ivars.getType(ty);
 
@@ -4139,7 +4139,7 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
 
 TraitResolution::TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait)
     : TraitResolveCommon(wb)
-    , langDeref_(crate.getLangItemPathOpt("deref"))
+    , langDeref_(wb.langItems->deref())
     , ivars(ivars)
     , visPath(visPath)
     , currentTraitPath_(currentTrait)
@@ -6593,7 +6593,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         }
         return SolverCertainty::Ambiguous;
     }
-    const auto langCoerceUnsized = crate.getLangItemPathOpt("coerce_unsized");
+    const auto& langCoerceUnsized = this->langCoerceUnsized();
     if (!langCoerceUnsized.components().empty() && (typeIsBounded(source) || typeIsBounded(destination))) {
         SolverCertainty result = SolverCertainty::NoSolution;
         probeTraitGoalMayApply(sp, langCoerceUnsized, HIRPathParams(destination), source, [&](SolverMayApply probe) {
@@ -14990,7 +14990,7 @@ auto NextTraitGoalEvaluator::responsesEqual(const Candidate& leftCandidate, cons
 NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, const HIRCrate& crate)
     : resolve_(resolve)
     , crate(crate)
-    , langCoerceUnsized_(crate.getLangItemPathOpt("coerce_unsized"))
+    , langCoerceUnsized_(resolve.langCoerceUnsized())
     , structuralCertaintyCache_(resolve.eatCachePool.mutPtr())
     , candidateNodes(resolve.eatCachePool.mutPtr())
     , goalKeys(resolve.eatCachePool.mutPtr())

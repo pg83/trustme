@@ -144,6 +144,22 @@ struct TraitResolveCommon {
         return wb.langItems->asyncIterator();
     }
 
+    const HIRSimplePath& langCoerceUnsized() const {
+        return wb.langItems->coerceUnsized();
+    }
+
+    const HIRSimplePath& langFnPtrTrait() const {
+        return wb.langItems->fnPtrTrait();
+    }
+
+    const HIRSimplePath& langTupleTrait() const {
+        return wb.langItems->tupleTrait();
+    }
+
+    const HIRSimplePath& langTransmuteTrait() const {
+        return wb.langItems->transmuteTrait();
+    }
+
     const HIRGenericParams* implGenericsPtr() const {
         return implGenerics_;
     }
