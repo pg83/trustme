@@ -265,7 +265,8 @@ rustc_ut = program(
         ],
         *[
             compiler_source(s)
-            for s in SRC if not s.endswith("/main_bindings.cpp")
+            for s in SRC
+            if not s.endswith("/main_bindings.cpp") and not s.endswith("/malloc.cpp")
         ],
     ],
     output="$(B)/tst/unit/rustc_ut",
