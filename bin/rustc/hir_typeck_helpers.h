@@ -156,6 +156,12 @@ struct SolverCoercionResponse {
     bool reachedAutoderefLimit = false;
 };
 
+struct SolverParamEnv {
+    const HIRGenericParams* implGenerics = nullptr;
+    const HIRGenericParams* itemGenerics = nullptr;
+    bool suppressAmbiguity = false;
+};
+
 struct NextSolverCrateCache {
     struct Entry {
         Entry* next = nullptr;
@@ -163,6 +169,9 @@ struct NextSolverCrateCache {
         HIRSimplePath trait;
         HIRPathParams params;
         const HIRType* type = nullptr;
+        const HIRGenericParams* implGenerics = nullptr;
+        const HIRGenericParams* itemGenerics = nullptr;
+        bool suppressAmbiguity = false;
         SolverCertainty certainty = SolverCertainty::NoSolution;
         bool hasResponse = false;
         const SolverResponse* response = nullptr;
@@ -230,22 +239,30 @@ struct NextSolverCrateCache {
     {
     }
 
-    Entry* find(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type) const {
+    Entry* find(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const SolverParamEnv& env) const {
         auto* head = index.find(hash);
         for (Entry* entry = head ? *head : nullptr; entry; entry = entry->next) {
-            if (entry->type == type && entry->trait == trait && entry->params == params) {
+            if (entry->type == type
+                && entry->implGenerics == env.implGenerics
+                && entry->itemGenerics == env.itemGenerics
+                && entry->suppressAmbiguity == env.suppressAmbiguity
+                && entry->trait == trait
+                && entry->params == params) {
                 return entry;
             }
         }
         return nullptr;
     }
 
-    Entry* insert(size_t hash, const HIRSimplePath& trait, HIRPathParams params, const HIRType* type, SolverCertainty certainty) {
+    Entry* insert(size_t hash, const HIRSimplePath& trait, HIRPathParams params, const HIRType* type, const SolverParamEnv& env, SolverCertainty certainty) {
         auto* entry = pool.mutPtr()->make<Entry>();
         entry->hash = hash;
         entry->trait = trait;
         entry->params = std::move(params);
         entry->type = type;
+        entry->implGenerics = env.implGenerics;
+        entry->itemGenerics = env.itemGenerics;
+        entry->suppressAmbiguity = env.suppressAmbiguity;
         entry->certainty = certainty;
         if (auto* head = index.find(hash)) {
             entry->next = *head;
@@ -822,6 +839,10 @@ public:
     const HIRType* closureReturnExpectation(const HIRExprNodeClosure* closure) const;
 
     bool isOpaqueAliasDefiningScope(const HIRTypeDataErasedTypeAliasInner& alias) const;
+
+    bool solverEnvIsEmpty() const {
+        return opaqueAliasScopes.empty() && definingOpaqueAliases.empty() && definingFcnOrigins.empty() && closureReturnExpectations.empty();
+    }
 
     const HIRGenericPath* currentTraitPath() const {
         return currentTraitPath_;

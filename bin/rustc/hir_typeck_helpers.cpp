@@ -600,6 +600,10 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     bool crateCacheUsable() const;
 
+    SolverParamEnv crateCacheEnv(bool suppressAmbiguity) const;
+
+    static size_t hashParamEnv(size_t hash, const SolverParamEnv& env);
+
     NextSolverCrateCache& crateCache() const;
 
     CanonicalGoal canonicalizeGoal(const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, CanonicalizeTraitGoal& canonicalizer) const;
@@ -10189,7 +10193,20 @@ auto NextTraitGoalEvaluator::goalIsConcrete(const HIRSimplePath& trait, const Ca
 }
 
 auto NextTraitGoalEvaluator::crateCacheUsable() const -> bool {
-    return resolve_.traitBounds.size() == 0 && !coherenceMode;
+    return !coherenceMode && resolve_.solverEnvIsEmpty();
+}
+
+auto NextTraitGoalEvaluator::crateCacheEnv(bool suppressAmbiguity) const -> SolverParamEnv {
+    if (resolve_.traitBounds.size() == 0 && resolve_.typeEqualities.empty()) {
+        return SolverParamEnv{nullptr, nullptr, suppressAmbiguity};
+    }
+    return SolverParamEnv{resolve_.implGenerics_, resolve_.itemGenerics_, suppressAmbiguity};
+}
+
+auto NextTraitGoalEvaluator::hashParamEnv(size_t hash, const SolverParamEnv& env) -> size_t {
+    hash = hashMix(hash, reinterpret_cast<uintptr_t>(env.implGenerics));
+    hash = hashMix(hash, reinterpret_cast<uintptr_t>(env.itemGenerics));
+    return hashMix(hash, env.suppressAmbiguity);
 }
 
 auto NextTraitGoalEvaluator::crateCache() const -> NextSolverCrateCache& {
@@ -14383,8 +14400,10 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
         return cached->certainty;
     }
     const bool crateCacheable = !canonicalAssociated && crateCacheUsable() && goalIsConcrete(trait, canonical);
+    const auto crateCacheEnvKey = crateCacheEnv(false);
+    const auto crateHash = hashParamEnv(hash, crateCacheEnvKey);
     if (crateCacheable) {
-        if (const auto* global = crateCache().find(hash, trait, canonical.params, canonical.type)) {
+        if (const auto* global = crateCache().find(crateHash, trait, canonical.params, canonical.type, crateCacheEnvKey)) {
             return global->certainty;
         }
     }
@@ -14414,7 +14433,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
             *responseIsIdentity = identityResponse;
         }
         if (crateCacheable && rigidKey && cycleHits_ == cycleHitsBefore) {
-            crateCache().insert(hash, trait, canonical.params.clone(), canonical.type, certainty);
+            crateCache().insert(crateHash, trait, canonical.params.clone(), canonical.type, crateCacheEnvKey, certainty);
         }
         auto* cached = cacheGoal(goalKey, certainty, rigidKey && cycleHits_ == cycleHitsBefore, identityResponse);
         prepareResponseMemo(cached);
@@ -15438,14 +15457,16 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
        as well; upstream caches every canonical goal evaluation.  Without this each
        adapter in a chain of `map`s re-proves the whole chain beneath it. */
     const bool cacheableResponse = cacheableAssociatedItem && !valueName && !excludedImpl && !hasCoercionGoals && !query.operatorGoal;
-    const bool crateCacheableResponse = cacheableResponse && !suppressAmbiguity && !hasAssociatedItemQuery && crateCacheUsable() && goalIsConcrete(trait, canonical);
+    const bool crateCacheableResponse = cacheableResponse && !hasAssociatedItemQuery && crateCacheUsable() && goalIsConcrete(trait, canonical);
+    const auto crateCacheEnvKey = crateCacheEnv(suppressAmbiguity);
+    const auto crateRootHash = hashParamEnv(rootHash, crateCacheEnvKey);
     auto* responseCacheGoal = cacheableResponse ? internGoal(rootHash, trait, canonical.params, canonical.type, responseCacheAssociated, &canonicalizer.alphaSolverEnvironment(), suppressAmbiguity) : nullptr;
     if (cacheableResponse) {
         if (const auto* cached = responseCacheGoal->cached; cached && cached->hasResponse) {
             return deliverResponse(*cached->response, cached->applicable);
         }
         if (crateCacheableResponse) {
-            if (const auto* global = crateCache().find(rootHash, trait, canonical.params, canonical.type); global && global->hasResponse) {
+            if (const auto* global = crateCache().find(crateRootHash, trait, canonical.params, canonical.type, crateCacheEnvKey); global && global->hasResponse) {
                 return deliverResponse(*global->response, global->applicable);
             }
         }
@@ -16025,7 +16046,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             return deliverResponse(solverResponse, exposeImpl ? &response : nullptr);
         }
         if (crateCacheableResponse && rigidKey && cycleHits_ == cycleHitsBefore) {
-            auto* global = crateCache().insert(rootHash, trait, canonical.params.clone(), canonical.type, solverResponse.certainty);
+            auto* global = crateCache().insert(crateRootHash, trait, canonical.params.clone(), canonical.type, crateCacheEnvKey, solverResponse.certainty);
             auto globalResponse = monomorphSolverResponse(solverResponse, MonomorphiserNop(crate.types));
             if (canonicalApplicable) {
                 auto globalImpl = monomorphCandidateImpl(*canonicalApplicable, MonomorphiserNop(crate.types));
