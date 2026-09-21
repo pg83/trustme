@@ -19,14 +19,16 @@ namespace {
     constexpr size_t PAGE = size_t(1) << PAGE_SHIFT;
     constexpr size_t PAGES_PER_SEGMENT = SEGMENT / PAGE;
     constexpr size_t REGION_SEGMENTS = size_t(1) << 15;
-    constexpr size_t REGION_PAGES = REGION_SEGMENTS * PAGES_PER_SEGMENT;
-    constexpr size_t REGION_BYTES = REGION_SEGMENTS << SEGMENT_SHIFT;
+    constexpr size_t META_SEGMENTS = 17;
+    constexpr size_t HEAP_SEGMENTS = REGION_SEGMENTS - META_SEGMENTS;
+    constexpr uintptr_t HEAP_BASE = REGION_BASE + (META_SEGMENTS << SEGMENT_SHIFT);
+    constexpr size_t HEAP_BYTES = HEAP_SEGMENTS << SEGMENT_SHIFT;
     constexpr size_t SMALL_LIMIT = 16384;
     constexpr size_t RUN_LIMIT = size_t(1) << 20;
     constexpr size_t CLASSES = 40;
     constexpr uint16_t FREE_PAGE = 0xFFFF;
     constexpr uint16_t RUN_PAGE = 0xFFFE;
-    constexpr uint32_t NO_SEGMENT = 0xFFFFFFFF;
+    constexpr uint32_t NO_SEGMENT = 0;
     constexpr size_t LARGE_HEADER = 16;
     constexpr size_t OS_PAGE = 4096;
 
@@ -64,11 +66,20 @@ namespace {
         size_t length;
     };
 
-    Page pages[REGION_PAGES];
-    Segment segments[REGION_SEGMENTS];
+    struct State {
+        uint32_t mapped;
+        uint32_t metaMapped;
+        uint32_t freeSegments;
+    };
+
+    constexpr uintptr_t SEGMENT_TABLE = REGION_BASE;
+    constexpr size_t SEGMENT_TABLE_BYTES = REGION_SEGMENTS * sizeof(Segment);
+    constexpr uintptr_t PAGE_TABLE = SEGMENT_TABLE + SEGMENT_TABLE_BYTES;
+    constexpr size_t PAGE_TABLE_BYTES = HEAP_SEGMENTS * PAGES_PER_SEGMENT * sizeof(Page);
+    static_assert(PAGE_TABLE + PAGE_TABLE_BYTES <= HEAP_BASE);
+
     ClassState classes[CLASSES];
-    uint32_t mapped;
-    uint32_t freeSegments = NO_SEGMENT;
+    State state;
 
     [[noreturn]] void refuse(const char* what) {
         const char* prefix = "trustme: allocator: ";
@@ -95,63 +106,82 @@ namespace {
     }
 
     bool owns(const void* p) {
-        return reinterpret_cast<uintptr_t>(p) - REGION_BASE < REGION_BYTES;
+        return reinterpret_cast<uintptr_t>(p) - HEAP_BASE < HEAP_BYTES;
+    }
+
+    Segment* segmentAt(uint32_t index) {
+        return reinterpret_cast<Segment*>(SEGMENT_TABLE) + index;
+    }
+
+    Page* pageAt(size_t index) {
+        return reinterpret_cast<Page*>(PAGE_TABLE) + index;
     }
 
     Page* pageOf(const void* p) {
-        return pages + ((reinterpret_cast<uintptr_t>(p) - REGION_BASE) >> PAGE_SHIFT);
+        return pageAt((reinterpret_cast<uintptr_t>(p) - HEAP_BASE) >> PAGE_SHIFT);
     }
 
     uintptr_t pageAddress(const Page* page) {
-        return REGION_BASE + (uintptr_t(page - pages) << PAGE_SHIFT);
+        return HEAP_BASE + (uintptr_t(page - pageAt(0)) << PAGE_SHIFT);
     }
 
     void linkSegment(uint32_t index) {
-        auto& segment = segments[index];
-        segment.linked = 1;
-        segment.prev = NO_SEGMENT;
-        segment.next = freeSegments;
-        if (freeSegments != NO_SEGMENT) {
-            segments[freeSegments].prev = index;
+        auto* segment = segmentAt(index);
+        segment->linked = 1;
+        segment->prev = NO_SEGMENT;
+        segment->next = state.freeSegments;
+        if (state.freeSegments != NO_SEGMENT) {
+            segmentAt(state.freeSegments)->prev = index;
         }
-        freeSegments = index;
+        state.freeSegments = index;
     }
 
     void unlinkSegment(uint32_t index) {
-        auto& segment = segments[index];
-        segment.linked = 0;
-        if (segment.prev != NO_SEGMENT) {
-            segments[segment.prev].next = segment.next;
+        auto* segment = segmentAt(index);
+        segment->linked = 0;
+        if (segment->prev != NO_SEGMENT) {
+            segmentAt(segment->prev)->next = segment->next;
         } else {
-            freeSegments = segment.next;
+            state.freeSegments = segment->next;
         }
-        if (segment.next != NO_SEGMENT) {
-            segments[segment.next].prev = segment.prev;
+        if (segment->next != NO_SEGMENT) {
+            segmentAt(segment->next)->prev = segment->prev;
         }
     }
 
-    void mapSegment() {
-        if (mapped == REGION_SEGMENTS) {
-            refuse("region exhausted");
-        }
-        void* wanted = reinterpret_cast<void*>(REGION_BASE + (uintptr_t(mapped) << SEGMENT_SHIFT));
+    void mapFixed(uintptr_t address) {
+        void* wanted = reinterpret_cast<void*>(address);
         void* got = mmap(wanted, SEGMENT, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
         if (got != wanted) {
             refuse("fixed mapping refused");
         }
         madvise(got, SEGMENT, MADV_HUGEPAGE);
-        segments[mapped].freeMask = 0xFFFFFFFF;
-        linkSegment(mapped);
-        mapped++;
+    }
+
+    void mapSegment() {
+        if (state.mapped == HEAP_SEGMENTS) {
+            refuse("region exhausted");
+        }
+        const size_t tableEnd = PAGE_TABLE + size_t(state.mapped + 1) * PAGES_PER_SEGMENT * sizeof(Page) - 1;
+        const uint32_t metaNeeded = uint32_t((tableEnd - REGION_BASE) >> SEGMENT_SHIFT);
+        while (state.metaMapped <= metaNeeded) {
+            mapFixed(REGION_BASE + (uintptr_t(state.metaMapped) << SEGMENT_SHIFT));
+            state.metaMapped++;
+        }
+        const uint32_t index = uint32_t(META_SEGMENTS + state.mapped);
+        mapFixed(REGION_BASE + (uintptr_t(index) << SEGMENT_SHIFT));
+        segmentAt(index)->freeMask = 0xFFFFFFFF;
+        linkSegment(index);
+        state.mapped++;
     }
 
     Page* takePages(size_t count) {
         const uint32_t needed = count == 32 ? 0xFFFFFFFF : (uint32_t(1) << count) - 1;
         for (;;) {
             unsigned hops = 0;
-            for (uint32_t index = freeSegments; index != NO_SEGMENT && hops < 8; index = segments[index].next, hops++) {
-                auto& segment = segments[index];
-                uint32_t runs = segment.freeMask;
+            for (uint32_t index = state.freeSegments; index != NO_SEGMENT && hops < 8; index = segmentAt(index)->next, hops++) {
+                auto* segment = segmentAt(index);
+                uint32_t runs = segment->freeMask;
                 for (size_t i = 1; i < count; i++) {
                     runs &= runs >> 1;
                 }
@@ -159,11 +189,11 @@ namespace {
                     continue;
                 }
                 const unsigned start = __builtin_ctz(runs);
-                segment.freeMask &= ~(needed << start);
-                if (segment.freeMask == 0) {
+                segment->freeMask &= ~(needed << start);
+                if (segment->freeMask == 0) {
                     unlinkSegment(index);
                 }
-                Page* page = pages + (size_t(index) * PAGES_PER_SEGMENT + start);
+                Page* page = pageAt(size_t(index - META_SEGMENTS) * PAGES_PER_SEGMENT + start);
                 page->freeList = nullptr;
                 page->live = 0;
                 page->run = uint16_t(count);
@@ -174,14 +204,14 @@ namespace {
     }
 
     void releasePages(Page* page, size_t count) {
-        const size_t pageIndex = size_t(page - pages);
-        const uint32_t index = uint32_t(pageIndex / PAGES_PER_SEGMENT);
+        const size_t pageIndex = size_t(page - pageAt(0));
+        const uint32_t index = uint32_t(META_SEGMENTS + pageIndex / PAGES_PER_SEGMENT);
         const unsigned start = unsigned(pageIndex % PAGES_PER_SEGMENT);
         const uint32_t bits = count == 32 ? 0xFFFFFFFF : (uint32_t(1) << count) - 1;
-        auto& segment = segments[index];
+        auto* segment = segmentAt(index);
         page->cls = FREE_PAGE;
-        segment.freeMask |= bits << start;
-        if (!segment.linked) {
+        segment->freeMask |= bits << start;
+        if (!segment->linked) {
             linkSegment(index);
         }
     }

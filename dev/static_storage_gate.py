@@ -76,12 +76,10 @@ ALLOWED_MUTABLE = frozenset((
     ("hir_path.cpp.o", "_ZZN12_GLOBAL__N_18internerEvE2in", "b"),
     ("rc_string.cpp.o", "_ZZN12_GLOBAL__N_18internerEvE2in", "b"),
     # The process heap: the allocator behind malloc has no caller to be
-    # threaded from, so its page tables and class cursors are static.
-    ("malloc.cpp.o", "_ZN12_GLOBAL__N_15pagesE", "b"),
-    ("malloc.cpp.o", "_ZN12_GLOBAL__N_18segmentsE", "b"),
+    # threaded from, and its class cursors must be valid before anything
+    # runs, so they and its three counters are zero-initialised statics.
     ("malloc.cpp.o", "_ZN12_GLOBAL__N_17classesE", "b"),
-    ("malloc.cpp.o", "_ZN12_GLOBAL__N_16mappedE", "b"),
-    ("malloc.cpp.o", "_ZN12_GLOBAL__N_112freeSegmentsE", "d"),
+    ("malloc.cpp.o", "_ZN12_GLOBAL__N_15stateE", "b"),
 ))
 READELF_MEMBER = re.compile(r"^File: .+\(([^()]*)\)$")
 
