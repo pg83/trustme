@@ -1,0 +1,136 @@
+TOTAL allocs 46.0M bytes 7.05GB  freed<=100:75% <=10k:6% <=1M:1% long:8% never:10%  live@exit 1403MB
+
+== by allocation count ==
+   3.02M      97.8MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:10481:17 collectIvars  [allocateMemory:100%]
+   2.99M      95.6MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:10473:13 collectIvars  [allocateMemory:100%]
+   2.94M      75.7MB  <=100: 87% <=10k:  5% <=1M:  1% long:  2% never:  5%  live@exit     3.5MB  hir_path.cpp:376:14 clone  [reserveInit:100%]
+   2.54M      65.0MB  <=100: 88% <=10k:  5% <=1M:  1% long:  1% never:  5%  live@exit     3.5MB  hir_typeck_common.cpp:388:14 monomorphPathParams  [reserveInit:100%]
+   1.31M      42.1MB  <=100: 14% <=10k:  0% <=1M:  0% long: 52% never: 33%  live@exit    14.0MB  ast_path.h:43:8 ASTAbsolutePath  [allocateMemory:100%]
+   0.98M      47.2MB  <=100: 16% <=10k:  0% <=1M:  1% long: 22% never: 61%  live@exit    28.6MB  span.cpp:182:16 alloc  [libc++abi:100%]
+   0.86M      63.2MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  rc_string.cpp:198:8 output<stl::ZeroCopyOutput, RcString>  [allocateMemory:100%]
+   0.80M     130.9MB  <=100: 16% <=10k:  0% <=1M:  0% long: 73% never: 11%  live@exit    12.2MB  ast_path.cpp:253:52 ASTPath  [libc++abi:100%]
+   0.64M      91.1MB  <=100: 97% <=10k:  0% <=1M:  0% long:  2% never:  0%  live@exit     0.7MB  ast_path.cpp:560:7 ASTPath  [libc++abi:100%]
+   0.48M      23.5MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  mir_from_hir.cpp:7400:36 dropScopeValues  [allocateMemory:100%]
+   0.48M      15.3MB  <=100: 40% <=10k: 13% <=1M:  1% long: 45% never:  1%  live@exit     0.1MB  ast_attrs.h:69:8 ASTAttributeName  [allocateMemory:100%]
+   0.47M      15.6MB  <=100: 95% <=10k:  1% <=1M:  0% long:  1% never:  3%  live@exit     0.4MB  ast_path.cpp:493:14 operator+  [allocateMemory:100%]
+   0.46M      15.1MB  <=100: 30% <=10k: 70% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:10686:35 addRefs<const Context::Coercion *>  [allocateMemory:100%]
+   0.45M      15.7MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_helpers.cpp:2690:19 unifyResolved  [allocateMemory:100%]
+   0.44M      56.2MB  <=100: 95% <=10k:  5% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:10509:24 buildComponents  [allocateMemory:100%]
+   0.38M      51.2MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  mir_operations.cpp:4127:26 MIROptimisePropagateKnownValues  [allocateMemory:100%]
+   0.38M      50.6MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  mir_operations.cpp:4049:30 MIROptimiseUnifyBlocks  [reserveInit:100%]
+   0.38M      12.2MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_from_ast.cpp:1220:69 LowerHIRSimplePath  [allocateMemory:100%]
+   0.37M      12.0MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_common.cpp:1022:11 rewriteType  [allocateMemory:100%]
+   0.37M      18.0MB  <=100: 96% <=10k:  0% <=1M:  0% long:  2% never:  1%  live@exit     0.3MB  hir_path.cpp:380:15 clone  [reserveInit:100%]
+   0.33M     208.3MB  <=100: 89% <=10k:  1% <=1M:  1% long:  5% never:  4%  live@exit     6.7MB  parse_common.cpp:4090:15 ParseTT  [libc++abi:100%]
+   0.31M      16.5MB  <=100:  7% <=10k:  1% <=1M:  0% long: 64% never: 28%  live@exit     4.3MB  parse_common.cpp:4276:17 ParsePathNodes  [libc++abi:100%]
+   0.31M      89.1MB  <=100:  2% <=10k:  0% <=1M:  0% long: 96% never:  2%  live@exit     0.9MB  resolve_main_bindings.cpp:3503:29 _add_item  [libc++abi:100%]
+   0.29M      10.5MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_helpers.cpp:2548:14 defer  [allocateMemory:100%]
+   0.29M      97.6MB  <=100: 48% <=10k:  3% <=1M:  2% long: 42% never:  4%  live@exit     2.3MB  mir_from_hir.cpp:5828:20 pushStmt  [libc++abi:100%]
+   0.29M      12.9MB  <=100: 99% <=10k:  0% <=1M:  0% long:  0% never:  1%  live@exit     0.1MB  hir_typeck_common.cpp:286:23 monomorphType  [allocateMemory:100%]
+   0.28M      13.6MB  <=100: 91% <=10k:  3% <=1M:  0% long:  1% never:  5%  live@exit     0.6MB  hir_typeck_common.cpp:393:15 monomorphPathParams  [reserveInit:100%]
+   0.27M      90.5MB  <=100: 31% <=10k: 14% <=1M:  0% long: 51% never:  4%  live@exit     9.0MB  parse_tokentree.cpp:14:14 clone  [libc++abi:100%]
+   0.27M       9.2MB  <=100: 89% <=10k: 11% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:10484:21 operator()  [allocateMemory:100%]
+   0.26M      18.9MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_helpers.cpp:6592:23 evaluateCoercionConstraint  [reserveInit:100%]
+   0.26M       8.2MB  <=100:  0% <=10k:  0% <=1M:  0% long:  0% never:100%  live@exit     8.2MB  hir_hir.cpp:2057:43 newPriv  [libc++abi:100%]
+   0.26M      17.8MB  <=100: 84% <=10k: 10% <=1M:  0% long:  0% never:  6%  live@exit     1.1MB  hir_typeck_resolve_common.cpp:192:20 operator()  [libc++abi:100%]
+   0.25M       8.1MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_from_ast.cpp:777:91 LowerHIRVis  [allocateMemory:100%]
+   0.24M      14.7MB  <=100:  0% <=10k:  0% <=1M:  0% long:  0% never: 99%  live@exit    11.1MB  hir_from_ast.cpp:664:24 _add_mod_val_item  [libc++abi:100%]
+   0.23M       8.4MB  <=100:  0% <=10k:  0% <=1M:  0% long:100% never:  0%  live@exit     0.0MB  hir_path.cpp:265:13 operator+  [reserveInit:100%]
+   0.23M      24.9MB  <=100: 88% <=10k:  9% <=1M:  0% long:  0% never:  3%  live@exit     0.2MB  hir_typeck_helpers.cpp:1815:11 newIvar  [libc++abi:100%]
+   0.23M       7.3MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  parse_common.cpp:4799:24 ParseMetaItem  [allocateMemory:100%]
+   0.23M     214.7MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  mir_operations.cpp:2709:33 MIROptimiseDeTemporarySingleSetAndUse  [libc++abi:100%]
+   0.21M       6.9MB  <=100: 95% <=10k:  5% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_helpers.cpp:9538:16 canonicalIvar  [allocateMemory:100%]
+   0.20M      11.5MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:7250:35 operator()  [allocateMemory:100%]
+
+== by bytes ==
+   0.09M     312.3MB  <=100: 18% <=10k: 37% <=1M:  0% long:  0% never: 45%  live@exit   140.3MB  hir_typeck_helpers.cpp:15007:38 NextTraitGoalEvaluator  [reserveInit:100%]
+   0.00M     268.4MB  <=100:  0% <=10k:  0% <=1M:  0% long:  0% never:100%  live@exit   268.4MB  hir_from_ast.cpp:4820:39 visit  [allocateMemory:100%]
+   0.23M     214.7MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  mir_operations.cpp:2709:33 MIROptimiseDeTemporarySingleSetAndUse  [libc++abi:100%]
+   0.33M     208.3MB  <=100: 89% <=10k:  1% <=1M:  1% long:  5% never:  4%  live@exit     6.7MB  parse_common.cpp:4090:15 ParseTT  [libc++abi:100%]
+   0.12M     204.4MB  <=100: 76% <=10k:  2% <=1M:  0% long: 22% never:  0%  live@exit     0.0MB  mir_from_hir.cpp:6212:19 newBbUnlinked  [libc++abi:100%]
+   0.16M     191.6MB  <=100: 81% <=10k: 19% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:10716:7 IvarCoercionIndex  [libc++abi:100%]
+   0.16M     162.4MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  mir_operations.cpp:2990:33 MIROptimiseDeTemporaryBorrows  [libc++abi:100%]
+   0.09M     135.9MB  <=100: 18% <=10k: 37% <=1M:  0% long:  0% never: 45%  live@exit    61.1MB  hir_typeck_helpers.cpp:15006:32 NextTraitGoalEvaluator  [reserveInit:100%]
+   0.00M     134.2MB  <=100:  0% <=10k:  0% <=1M:  0% long:  0% never:100%  live@exit   134.2MB  ident.cpp:144:17 store  [allocateMemory:100%]
+   0.00M     134.2MB  <=100: 55% <=10k: 18% <=1M: 27% long:  0% never:  0%  live@exit     0.0MB  hir_serialise_lowlevel.cpp:137:16 write  [allocateMemory:100%]
+   0.12M     133.7MB  <=100: 74% <=10k: 26% <=1M:  0% long:  0% never:  0%  live@exit     0.1MB  mir_operations.cpp:2124:50 MIROptimiseBlockSimplify  [libc++abi:100%]
+   0.80M     130.9MB  <=100: 16% <=10k:  0% <=1M:  0% long: 73% never: 11%  live@exit    12.2MB  ast_path.cpp:253:52 ASTPath  [libc++abi:100%]
+   0.02M     115.4MB  <=100: 84% <=10k: 16% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  mir_operations.cpp:2604:28 MIROptimiseInlining  [libc++abi:100%]
+   0.06M     111.3MB  <=100: 97% <=10k:  3% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  mir_from_hir.cpp:6255:12 newScopeTemp  [libc++abi:100%]
+   0.09M     106.1MB  <=100: 24% <=10k:  5% <=1M:  6% long: 59% never:  5%  live@exit     2.9MB  parse_common.cpp:4093:15 ParseTT  [libc++abi:100%]
+   0.00M     100.7MB  <=100:  0% <=10k:  0% <=1M:  0% long: 33% never: 67%  live@exit   100.7MB  ast_expr.h:64:23 makeAstExprNode<ASTExprNodeCallPath, ASTPath, std::__1::vector<ASTExprNode *, std::__1::alloc  [allocateMemory:100%]
+   3.02M      97.8MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:10481:17 collectIvars  [allocateMemory:100%]
+   0.29M      97.6MB  <=100: 48% <=10k:  3% <=1M:  2% long: 42% never:  4%  live@exit     2.3MB  mir_from_hir.cpp:5828:20 pushStmt  [libc++abi:100%]
+   2.99M      95.6MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:10473:13 collectIvars  [allocateMemory:100%]
+   0.64M      91.1MB  <=100: 97% <=10k:  0% <=1M:  0% long:  2% never:  0%  live@exit     0.7MB  ast_path.cpp:560:7 ASTPath  [libc++abi:100%]
+
+== by short-lived count (freed within 10k allocations) ==
+   3.02M      97.8MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:10481:17 collectIvars  [allocateMemory:100%]
+   2.99M      95.6MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:10473:13 collectIvars  [allocateMemory:100%]
+   2.94M      75.7MB  <=100: 87% <=10k:  5% <=1M:  1% long:  2% never:  5%  live@exit     3.5MB  hir_path.cpp:376:14 clone  [reserveInit:100%]
+   2.54M      65.0MB  <=100: 88% <=10k:  5% <=1M:  1% long:  1% never:  5%  live@exit     3.5MB  hir_typeck_common.cpp:388:14 monomorphPathParams  [reserveInit:100%]
+   0.86M      63.2MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  rc_string.cpp:198:8 output<stl::ZeroCopyOutput, RcString>  [allocateMemory:100%]
+   0.64M      91.1MB  <=100: 97% <=10k:  0% <=1M:  0% long:  2% never:  0%  live@exit     0.7MB  ast_path.cpp:560:7 ASTPath  [libc++abi:100%]
+   0.48M      23.5MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  mir_from_hir.cpp:7400:36 dropScopeValues  [allocateMemory:100%]
+   0.46M      15.1MB  <=100: 30% <=10k: 70% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:10686:35 addRefs<const Context::Coercion *>  [allocateMemory:100%]
+   0.45M      15.7MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_helpers.cpp:2690:19 unifyResolved  [allocateMemory:100%]
+   0.47M      15.6MB  <=100: 95% <=10k:  1% <=1M:  0% long:  1% never:  3%  live@exit     0.4MB  ast_path.cpp:493:14 operator+  [allocateMemory:100%]
+   0.44M      56.2MB  <=100: 95% <=10k:  5% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_expr_cs.cpp:10509:24 buildComponents  [allocateMemory:100%]
+   0.38M      51.2MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  mir_operations.cpp:4127:26 MIROptimisePropagateKnownValues  [allocateMemory:100%]
+   0.38M      50.6MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  mir_operations.cpp:4049:30 MIROptimiseUnifyBlocks  [reserveInit:100%]
+   0.38M      12.2MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_from_ast.cpp:1220:69 LowerHIRSimplePath  [allocateMemory:100%]
+   0.37M      12.0MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_common.cpp:1022:11 rewriteType  [allocateMemory:100%]
+   0.37M      18.0MB  <=100: 96% <=10k:  0% <=1M:  0% long:  2% never:  1%  live@exit     0.3MB  hir_path.cpp:380:15 clone  [reserveInit:100%]
+   0.33M     208.3MB  <=100: 89% <=10k:  1% <=1M:  1% long:  5% never:  4%  live@exit     6.7MB  parse_common.cpp:4090:15 ParseTT  [libc++abi:100%]
+   0.29M      10.5MB  <=100:100% <=10k:  0% <=1M:  0% long:  0% never:  0%  live@exit     0.0MB  hir_typeck_helpers.cpp:2548:14 defer  [allocateMemory:100%]
+   0.29M      12.9MB  <=100: 99% <=10k:  0% <=1M:  0% long:  0% never:  1%  live@exit     0.1MB  hir_typeck_common.cpp:286:23 monomorphType  [allocateMemory:100%]
+   0.28M      13.6MB  <=100: 91% <=10k:  3% <=1M:  0% long:  1% never:  5%  live@exit     0.6MB  hir_typeck_common.cpp:393:15 monomorphPathParams  [reserveInit:100%]
+
+== by live bytes at exit ==
+   0.00M     268.4MB  <=100:  0% <=10k:  0% <=1M:  0% long:  0% never:100%  live@exit   268.4MB  hir_from_ast.cpp:4820:39 visit  [allocateMemory:100%]
+   0.09M     312.3MB  <=100: 18% <=10k: 37% <=1M:  0% long:  0% never: 45%  live@exit   140.3MB  hir_typeck_helpers.cpp:15007:38 NextTraitGoalEvaluator  [reserveInit:100%]
+   0.00M     134.2MB  <=100:  0% <=10k:  0% <=1M:  0% long:  0% never:100%  live@exit   134.2MB  ident.cpp:144:17 store  [allocateMemory:100%]
+   0.00M     100.7MB  <=100:  0% <=10k:  0% <=1M:  0% long: 33% never: 67%  live@exit   100.7MB  ast_expr.h:64:23 makeAstExprNode<ASTExprNodeCallPath, ASTPath, std::__1::vector<ASTExprNode *, std::__1::alloc  [allocateMemory:100%]
+   0.09M     135.9MB  <=100: 18% <=10k: 37% <=1M:  0% long:  0% never: 45%  live@exit    61.1MB  hir_typeck_helpers.cpp:15006:32 NextTraitGoalEvaluator  [reserveInit:100%]
+   0.01M      90.0MB  <=100: 16% <=10k: 44% <=1M:  1% long:  0% never: 39%  live@exit    54.5MB  hir_typeck_helpers.cpp:10851:35 ownSolverImpl  [allocateMemory:100%]
+   0.01M      87.5MB  <=100: 83% <=10k:  0% <=1M:  0% long:  0% never: 17%  live@exit    44.0MB  macro_rules_macro_rules.cpp:2413:21 ParseMacroRulesCont  [libc++abi:100%]
+   0.03M      38.8MB  <=100:  0% <=10k:  0% <=1M:  0% long:  0% never:100%  live@exit    38.8MB  hir_conv_main_bindings.cpp:1658:28 visitExpr  [libc++abi:100%]
+   0.98M      47.2MB  <=100: 16% <=10k:  0% <=1M:  1% long: 22% never: 61%  live@exit    28.6MB  span.cpp:182:16 alloc  [libc++abi:100%]
+   0.05M      40.4MB  <=100:  1% <=10k:  0% <=1M:  5% long: 27% never: 67%  live@exit    26.6MB  mir_operations.cpp:7824:18 MIRSortBlocks  [libc++abi:100%]
+   0.03M      55.1MB  <=100:  8% <=10k: 14% <=1M:  1% long:  0% never: 77%  live@exit    26.2MB  hir_typeck_helpers.cpp:11752:40 pushCandidate  [allocateMemory:100%]
+   0.00M      18.9MB  <=100:  0% <=10k:  0% <=1M:  0% long:  0% never:100%  live@exit    18.9MB  ast_expr.h:64:23 makeAstExprNode<ASTExprNodeInteger, U128, eCoreType>  [allocateMemory:100%]
+   0.00M      17.3MB  <=100:  0% <=10k:  0% <=1M:  0% long:  0% never:100%  live@exit    17.3MB  hir_typeck_helpers.cpp:11405:30 internCrateGoal  [allocateMemory:100%]
+   0.06M      30.7MB  <=100: 15% <=10k: 31% <=1M:  0% long:  0% never: 54%  live@exit    16.4MB  hir_typeck_helpers.cpp:14998:7 NextTraitGoalEvaluator  [allocateMemory:100%]
+   0.03M      20.0MB  <=100:  4% <=10k:  9% <=1M:  0% long:  0% never: 87%  live@exit    15.4MB  hir_typeck_helpers.cpp:4433:36 solveTraitGoalCb  [allocateMemory:100%]
+   0.05M      17.4MB  <=100:  1% <=10k:  0% <=1M:  2% long: 15% never: 82%  live@exit    14.7MB  mir_operations.cpp:7830:40 MIRSortBlocks  [libc++abi:100%]
+   0.03M      33.4MB  <=100: 87% <=10k:  0% <=1M:  0% long:  2% never: 11%  live@exit    14.5MB  expand_common.cpp:1286:42 ExpandMod  [libc++abi:100%]
+   0.04M      21.1MB  <=100: 10% <=10k: 22% <=1M:  1% long:  0% never: 67%  live@exit    14.2MB  hir_typeck_helpers.cpp:17017:12 CandidateFrame  [allocateMemory:100%]
+   0.04M      21.1MB  <=100: 10% <=10k: 22% <=1M:  1% long:  0% never: 67%  live@exit    14.2MB  hir_typeck_helpers.cpp:17016:16 CandidateFrame  [allocateMemory:100%]
+   1.31M      42.1MB  <=100: 14% <=10k:  0% <=1M:  0% long: 52% never: 33%  live@exit    14.0MB  ast_path.h:43:8 ASTAbsolutePath  [allocateMemory:100%]
+
+== by source file ==
+   9.68M     711.0MB  <=100: 87% <=10k: 11% long:  0% never:  2%  live@exit    11.7MB  hir_typeck_expr_cs.cpp
+   5.45M    1175.4MB  <=100: 71% <=10k: 14% long:  0% never: 15%  live@exit   480.6MB  hir_typeck_helpers.cpp
+   5.28M    1250.6MB  <=100: 95% <=10k:  2% long:  1% never:  2%  live@exit    49.8MB  mir_operations.cpp
+   3.98M     169.3MB  <=100: 84% <=10k:  4% long:  8% never:  4%  live@exit     4.1MB  hir_path.cpp
+   3.52M     106.5MB  <=100: 91% <=10k:  4% long:  1% never:  4%  live@exit     4.4MB  hir_typeck_common.cpp
+   2.66M     675.4MB  <=100: 76% <=10k: 12% long:  8% never:  5%  live@exit    12.3MB  mir_from_hir.cpp
+   2.04M     245.2MB  <=100: 61% <=10k:  0% long: 32% never:  6%  live@exit    14.8MB  ast_path.cpp
+   1.90M     491.1MB  <=100: 63% <=10k:  2% long: 19% never: 15%  live@exit    26.9MB  parse_common.cpp
+   1.42M      45.8MB  <=100: 21% <=10k:  0% long: 48% never: 30%  live@exit    14.0MB  ast_path.h
+   1.35M     347.3MB  <=100: 58% <=10k:  0% long:  1% never: 42%  live@exit   312.7MB  hir_from_ast.cpp
+   1.00M      47.6MB  <=100: 16% <=10k:  0% long: 22% never: 61%  live@exit    29.0MB  span.cpp
+   0.86M      79.9MB  <=100:100% <=10k:  0% long:  0% never:  0%  live@exit     0.0MB  rc_string.cpp
+   0.59M     105.2MB  <=100: 36% <=10k:  1% long: 57% never:  6%  live@exit     2.6MB  resolve_main_bindings.cpp
+   0.55M     169.1MB  <=100: 93% <=10k:  4% long:  1% never:  1%  live@exit    46.0MB  macro_rules_macro_rules.cpp
+   0.54M      26.7MB  <=100: 66% <=10k:  0% long:  0% never: 34%  live@exit     7.6MB  hir_type.cpp
+   0.48M      15.3MB  <=100: 40% <=10k: 13% long: 45% never:  1%  live@exit     0.1MB  ast_attrs.h
+   0.37M      20.7MB  <=100: 67% <=10k:  3% long: 15% never: 13%  live@exit     2.5MB  mir_mir.cpp
+   0.31M      23.4MB  <=100: 97% <=10k:  0% long:  0% never:  0%  live@exit     0.0MB  trans_codegen_c.cpp
+   0.29M      21.4MB  <=100: 83% <=10k:  9% long:  0% never:  8%  live@exit     2.3MB  hir_typeck_resolve_common.cpp
+   0.29M     105.0MB  <=100: 82% <=10k:  1% long:  1% never: 16%  live@exit    41.5MB  hir_conv_main_bindings.cpp
+   0.27M      90.5MB  <=100: 31% <=10k: 14% long: 51% never:  4%  live@exit     9.0MB  parse_tokentree.cpp
+   0.27M      19.5MB  <=100:  3% <=10k:  1% long:  0% never: 96%  live@exit     9.2MB  hir_hir.cpp
+   0.26M      40.7MB  <=100: 51% <=10k:  4% long: 28% never: 15%  live@exit     6.3MB  common.h
+   0.24M      70.9MB  <=100: 81% <=10k:  7% long:  0% never:  5%  live@exit     0.6MB  hir_conv_constant_evaluation.cpp
+   0.20M      15.6MB  <=100: 39% <=10k:  2% long: 13% never: 19%  live@exit     1.1MB  trans_main_bindings.cpp
