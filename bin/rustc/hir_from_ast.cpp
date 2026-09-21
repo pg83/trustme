@@ -3415,6 +3415,13 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 }
 
                 auto hirImpl = std::make_unique<HIRTraitImpl>(HIRTraitImpl{mv$(params), mv$(traitArgs), mv$(type), mv$(methods), mv$(constants), {}, mv$(types), modPath});
+                for (const auto& assoc : hirImpl->types) {
+                    const auto* erased = assoc.second.data->opt_ErasedType();
+                    if (const auto* alias = erased ? erased->inner.opt_Alias() : nullptr) {
+                        alias->inner->definingImpl = hirImpl.get();
+                        alias->inner->definingTrait = traitName;
+                    }
+                }
                 hirImpl->isConst = impl.def().isConst();
                 hirImpl->isReservation = i->attrs.has("rustc_reservation_impl");
                 hirCrate.traitImpls[mv$(traitName)].generic.push_back(mv$(hirImpl));

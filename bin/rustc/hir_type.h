@@ -29,6 +29,7 @@ class HIRUnion;
 class HIREnum;
 class HIRFunction;
 class HIRItemPath;
+class HIRTraitImpl;
 struct HIRExprNodeClosure;
 struct HIRExprNodeGenerator;
 
@@ -100,6 +101,8 @@ struct HIRTypeDataErasedTypeAliasInner {
     HIRGenericParams generics;
     HIRSimplePath path;
     const HIRType* type;
+    const HIRTraitImpl* definingImpl = nullptr;
+    HIRSimplePath definingTrait;
 
     HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& paramsOuter, const HIRGenericParams* paramsInner = nullptr);
     bool isLocalTo(const HIRSimplePath& p) const;

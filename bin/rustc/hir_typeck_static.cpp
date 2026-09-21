@@ -261,6 +261,32 @@ const HIRType* StaticTraitResolve::expandAssociatedTypes(const Span& sp, const H
     return input;
 }
 
+namespace {
+    bool signatureNamesOpaque(const HIRCrate& crate, const HIRTraitImpl& impl, const HIRSimplePath& implTrait, const HIRSimplePath& aliasPath, const HIRType* signature, unsigned depth = 0) {
+        if (!signature) {
+            return false;
+        }
+        bool named = false;
+        visitTyWith(signature, [&](const HIRType* inner) {
+            if (const auto* erased = inner->opt_ErasedType()) {
+                if (const auto* alias = erased->inner.opt_Alias(); alias && alias->inner->path == aliasPath) {
+                    named = true;
+                }
+            }
+            const auto* path = inner->opt_Path();
+            const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
+            if (!named && projection && depth < 8 && projection->trait.path == implTrait && projection->trait.params.equalsIgnoringRegions(impl.traitArgs)
+                && (projection->type == crate.types.self() || projection->type == impl.type || projection->type->equalsIgnoringRegions(impl.type))) {
+                if (const auto it = impl.types.find(projection->item); it != impl.types.end()) {
+                    named = signatureNamesOpaque(crate, impl, implTrait, aliasPath, it->second.data, depth + 1);
+                }
+            }
+            return named;
+        });
+        return named;
+    }
+}
+
 const HIRType* StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, const HIRType* input) const {
     struct Visitor: public HIRVisitor {
         const Span& sp;
@@ -302,10 +328,63 @@ const HIRType* StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, cons
                                 if (const auto* function = value.opt_Function()) {
                                     auto& functionMut = resolve.hirCrateMut().findFunctionMut(resolve.board(), sp, path, **function);
                                     resolve.hirCrateMut().getOrGenMir(resolve.board(), HIRItemPath(path), functionMut);
+                                } else if (const auto* constant = value.opt_Constant()) {
+                                    auto& constantMut = resolve.hirCrateMut().findConstantMut(resolve.board(), sp, path, **constant);
+                                    resolve.hirCrateMut().getOrGenMir(resolve.board(), HIRItemPath(path), constantMut.value, constantMut.type);
                                 }
                                 if (alias.inner->type != nullptr) {
                                     break;
                                 }
+                            }
+                        }
+                        if (alias.inner->type == nullptr && alias.inner->definingImpl) {
+                            const auto& impl = *alias.inner->definingImpl;
+                            const HIRItemPath implPath(impl.type, alias.inner->definingTrait, impl.traitArgs);
+                            const auto names = [&](const HIRType* signature) {
+                                return signatureNamesOpaque(resolve.hirCrate(), impl, alias.inner->definingTrait, alias.inner->path, signature);
+                            };
+                            const auto boundsName = [&](const HIRGenericParams& generics) {
+                                bool named = false;
+                                for (const auto& bound : generics.bounds) {
+                                    if (const auto* traitBound = bound.opt_TraitBound()) {
+                                        named |= names(traitBound->type);
+                                        for (const auto* type : traitBound->trait.path.params.types) {
+                                            named |= names(type);
+                                        }
+                                    } else if (const auto* equality = bound.opt_TypeEquality()) {
+                                        named |= names(equality->type) || names(equality->otherType);
+                                    }
+                                }
+                                for (const auto* type : generics.wellFormedTypes) {
+                                    named |= names(type);
+                                }
+                                return named;
+                            };
+                            for (const auto& method : impl.methods) {
+                                bool named = names(method.second.data.returnType) || boundsName(method.second.data.params);
+                                for (const auto& arg : method.second.data.args) {
+                                    named |= names(arg.second);
+                                }
+                                if (!named) {
+                                    continue;
+                                }
+                                const auto path = HIRItemPath(implPath, method.first.c_str()).getFullPath();
+                                auto& functionMut = resolve.hirCrateMut().findFunctionMut(resolve.board(), sp, path, method.second.data);
+                                resolve.hirCrateMut().getOrGenMir(resolve.board(), HIRItemPath(path), functionMut);
+                                if (alias.inner->type != nullptr) {
+                                    break;
+                                }
+                            }
+                            for (const auto& constant : impl.constants) {
+                                if (alias.inner->type != nullptr) {
+                                    break;
+                                }
+                                if (!names(constant.second.data.type) && !boundsName(constant.second.data.params)) {
+                                    continue;
+                                }
+                                const auto path = HIRItemPath(implPath, constant.first.c_str()).getFullPath();
+                                auto& constantMut = resolve.hirCrateMut().findConstantMut(resolve.board(), sp, path, constant.second.data);
+                                resolve.hirCrateMut().getOrGenMir(resolve.board(), HIRItemPath(path), constantMut.value, constantMut.type);
                             }
                         }
                         if (alias.inner->type == nullptr) {
