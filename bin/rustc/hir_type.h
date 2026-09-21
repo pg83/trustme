@@ -217,6 +217,8 @@ private:
 };
 
 struct HIRTypeInterner {
+    const HIRType* selfParam = nullptr;
+
     virtual stl::ObjPool& objectPool() const = 0;
     virtual const HIRType* intern(HIRType data) = 0;
     virtual unsigned newAliasInputInfer() = 0;

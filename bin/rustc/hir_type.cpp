@@ -1445,10 +1445,21 @@ HIRTypeDataNodeType HIRTypeDataNodeType::clone() const {
 }
 
 namespace {
+    constexpr size_t NUM_PREINTERNED_INFER = 100;
+    constexpr size_t NUM_INFER_CLASSES = static_cast<size_t>(HIRInferClass::Float) + 1;
+    constexpr size_t NUM_CORE_TYPES = static_cast<size_t>(HIRCoreType::Str) + 1;
+
     struct HIRTypeInternerImpl final: public HIRTypeInterner {
         ObjPool& pool;
         u32& id;
         std::unordered_multimap<size_t, const HIRType*> nodes;
+
+        const HIRType* inferAnon[NUM_INFER_CLASSES] = {};
+        const HIRType* inferVars[NUM_INFER_CLASSES][NUM_PREINTERNED_INFER] = {};
+        const HIRType* inferCanonicals[NUM_INFER_CLASSES][NUM_PREINTERNED_INFER] = {};
+        const HIRType* primitives[NUM_CORE_TYPES] = {};
+        const HIRType* diverge = nullptr;
+        const HIRType* unit = nullptr;
 
         HIRTypeInternerImpl(ObjPool& pool, u32& id)
             : pool(pool)
@@ -1460,18 +1471,59 @@ namespace {
             return pool;
         }
 
+        const HIRType** commonSlot(const HIRType& data) {
+            switch (data.tag()) {
+                case HIRType::TAG_Infer: {
+                    const auto& e = data.as_Infer();
+                    const auto cls = static_cast<size_t>(e.tyClass);
+                    if (e.index == ~0u) {
+                        return &inferAnon[cls];
+                    }
+                    if (e.index < NUM_PREINTERNED_INFER) {
+                        return &inferVars[cls][e.index];
+                    }
+                    if (e.index >= HIR_INFER_SOLVER_CANONICAL_MIN && e.index - HIR_INFER_SOLVER_CANONICAL_MIN < NUM_PREINTERNED_INFER) {
+                        return &inferCanonicals[cls][e.index - HIR_INFER_SOLVER_CANONICAL_MIN];
+                    }
+                    return nullptr;
+                }
+                case HIRType::TAG_Primitive: {
+                    return &primitives[static_cast<size_t>(data.as_Primitive())];
+                }
+                case HIRType::TAG_Diverge: {
+                    return &diverge;
+                }
+                case HIRType::TAG_Tuple: {
+                    return data.as_Tuple().empty() ? &unit : nullptr;
+                }
+                default: {
+                    return nullptr;
+                }
+            }
+        }
+
         const HIRType* intern(HIRType data) override {
+            const HIRType** slot = commonSlot(data);
+            if (slot && *slot) {
+                return *slot;
+            }
             data.flags = typeFlags(data);
             const auto hash = hashTypeData(data);
             const auto range = nodes.equal_range(hash);
             for (auto it = range.first; it != range.second; ++it) {
                 if (exactTypeDataEqual(*it->second, data)) {
+                    if (slot) {
+                        *slot = it->second;
+                    }
                     return it->second;
                 }
             }
             auto* node = pool.make<HIRType>(mv$(data));
             node->uid = ++id;
             nodes.emplace(hash, node);
+            if (slot) {
+                *slot = node;
+            }
             return node;
         }
 
@@ -1502,7 +1554,10 @@ const HIRType* HIRTypeInterner::generic(RcString name, unsigned int slot) {
 }
 
 const HIRType* HIRTypeInterner::self() {
-    return generic(RcString::newInterned("Self"), GENERICSelf);
+    if (!selfParam) {
+        selfParam = generic(RcString::newInterned("Self"), GENERICSelf);
+    }
+    return selfParam;
 }
 
 const HIRType* HIRTypeInterner::unit() {
