@@ -1630,6 +1630,21 @@ const HIRSimplePath* HIRType::getSortPath() const {
     return nullptr;
 }
 
+u32 HIRType::simplifiedType() const {
+    switch (this->tag()) {
+        case HIRType::TAG_Infer:
+        case HIRType::TAG_Generic:
+        case HIRType::TAG_ErasedType:
+            return 0;
+        case HIRType::TAG_Path:
+            return as_Path().binding.is_Opaque() || as_Path().binding.is_Unbound() ? 0 : SIMPLIFIED_TYPE_TAG_BASE + HIRType::TAG_Path;
+        case HIRType::TAG_Primitive:
+            return SIMPLIFIED_TYPE_PRIMITIVE_BASE + static_cast<u32>(as_Primitive());
+        default:
+            return SIMPLIFIED_TYPE_TAG_BASE + this->tag();
+    }
+}
+
 Ordering ord(const TypeDataErasedTypeInner& l, const TypeDataErasedTypeInner& r);
 
 bool HIRType::equalsIgnoringRegions(const HIRType* x) const {

@@ -822,6 +822,39 @@ public:
                 return nonNamed;
             }
         }
+
+        mutable stl::Vector<u32> nonNamedOrder;
+        mutable stl::Vector<u32> nonNamedStart;
+        mutable size_t nonNamedIndexed = ~static_cast<size_t>(0);
+
+        void ensureNonNamedIndex() const {
+            if (nonNamedIndexed == nonNamed.size()) {
+                return;
+            }
+            nonNamedStart.clear();
+            nonNamedStart.zero(SIMPLIFIED_TYPE_COUNT + 2);
+            for (const auto& impl : nonNamed) {
+                nonNamedStart.mut(impl->type->simplifiedType() + 1) += 1;
+            }
+            for (size_t i = 1; i < nonNamedStart.length(); i++) {
+                nonNamedStart.mut(i) += nonNamedStart[i - 1];
+            }
+            nonNamedOrder.clear();
+            nonNamedOrder.zero(nonNamed.size());
+            stl::Vector<u32> cursor;
+            cursor.zero(SIMPLIFIED_TYPE_COUNT + 1);
+            for (size_t i = 0; i < nonNamed.size(); i++) {
+                const auto key = nonNamed[i]->type->simplifiedType();
+                nonNamedOrder.mut(nonNamedStart[key] + cursor[key]) = static_cast<u32>(i);
+                cursor.mut(key) += 1;
+            }
+            nonNamedIndexed = nonNamed.size();
+        }
+
+        const u32* nonNamedBucket(u32 key, size_t& count) const {
+            count = nonNamedStart[key + 1] - nonNamedStart[key];
+            return nonNamedOrder.data() + nonNamedStart[key];
+        }
     };
 
     ImplGroup<std::unique_ptr<HIRTypeImpl>> typeImpls;

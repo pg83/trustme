@@ -59,6 +59,10 @@ bool isInteger(const HIRCoreType& v);
 
 bool isFloat(const HIRCoreType& v);
 
+constexpr u32 SIMPLIFIED_TYPE_TAG_BASE = 1;
+constexpr u32 SIMPLIFIED_TYPE_PRIMITIVE_BASE = 32;
+constexpr u32 SIMPLIFIED_TYPE_COUNT = SIMPLIFIED_TYPE_PRIMITIVE_BASE + static_cast<u32>(HIRCoreType::Str) + 1;
+
 enum class HIRBorrowType {
     Shared,
     Unique,

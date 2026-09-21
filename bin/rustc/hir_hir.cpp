@@ -748,13 +748,48 @@ namespace {
         return false;
     }
 
+    template <typename Group, typename Callback>
+    bool findImplsNonNamed(const Group& group, const HIRType* type, tCbResolveType tyRes, HIRImplMatcherScratch& scratch, Callback& callback) {
+        const auto key = type->simplifiedType();
+        if (key == 0) {
+            return findImplsList(group.nonNamed, type, tyRes, scratch, callback);
+        }
+        group.ensureNonNamedIndex();
+        size_t unsimplifiedCount = 0;
+        const u32* unsimplified = group.nonNamedBucket(0, unsimplifiedCount);
+        size_t keyedCount = 0;
+        const u32* keyed = group.nonNamedBucket(key, keyedCount);
+        size_t i = 0;
+        size_t j = 0;
+        while (i < unsimplifiedCount || j < keyedCount) {
+            const u32 index = (j == keyedCount || (i < unsimplifiedCount && unsimplified[i] < keyed[j])) ? unsimplified[i++] : keyed[j++];
+            const auto& impl = group.nonNamed[index];
+            if (impl->matchesType(type, tyRes, scratch)) {
+                if (callback.visit(*impl)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    template <typename Group, typename Callback>
+    bool findImplsForType(const Group& group, const HIRType* type, tCbResolveType tyRes, HIRImplMatcherScratch& scratch, Callback& callback) {
+        if (const auto* path = type->getSortPath()) {
+            auto it = group.named.find(*path);
+            if (it == group.named.end()) {
+                return false;
+            }
+            return findImplsList(it->second, type, tyRes, scratch, callback);
+        }
+        return findImplsNonNamed(group, type, tyRes, scratch, callback);
+    }
+
     bool findTraitImplsInt(const HIRCrate& crate, const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) {
         auto it = crate.traitImpls.find(trait);
         if (it != crate.traitImpls.end()) {
-            if (const auto* implList = it->second.getListForType(type)) {
-                if (findImplsList(*implList, type, tyRes, crate.implMatcherScratch, callback)) {
-                    return true;
-                }
+            if (findImplsForType(it->second, type, tyRes, crate.implMatcherScratch, callback)) {
+                return true;
             }
             if (type->is_Infer() && !type->as_Infer().isLit()) {
                 DEBUG(StringView("Search all lists"));
@@ -776,10 +811,8 @@ namespace {
     bool findAutoTraitImplsInt(const HIRCrate& crate, const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) {
         auto it = crate.markerImpls.find(trait);
         if (it != crate.markerImpls.end()) {
-            if (const auto* implList = it->second.getListForType(type)) {
-                if (findImplsList(*implList, type, tyRes, crate.implMatcherScratch, callback)) {
-                    return true;
-                }
+            if (findImplsForType(it->second, type, tyRes, crate.implMatcherScratch, callback)) {
+                return true;
             }
 
             if (findImplsList(it->second.generic, type, tyRes, crate.implMatcherScratch, callback)) {
@@ -791,10 +824,8 @@ namespace {
     }
 
     bool findTypeImplsInt(const HIRCrate& crate, const HIRType* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) {
-        if (const auto* implList = crate.typeImpls.getListForType(type)) {
-            if (findImplsList(*implList, type, tyRes, crate.implMatcherScratch, callback)) {
-                return true;
-            }
+        if (findImplsForType(crate.typeImpls, type, tyRes, crate.implMatcherScratch, callback)) {
+            return true;
         }
 
         if (findImplsList(crate.typeImpls.generic, type, tyRes, crate.implMatcherScratch, callback)) {
@@ -1665,10 +1696,8 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
 bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) const {
     if (this->allTraitImpls.size() > 0) {
         if (const auto* group = this->traitImplsForOpt(trait)) {
-            if (const auto* implList = group->getListForType(type)) {
-                if (findImplsList(*implList, type, tyRes, implMatcherScratch, callback)) {
-                    return true;
-                }
+            if (findImplsForType(*group, type, tyRes, implMatcherScratch, callback)) {
+                return true;
             }
             if (type->is_Infer() && !type->as_Infer().isLit()) {
                 DEBUG(StringView("Search all lists"));
@@ -1702,10 +1731,8 @@ bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRType* type,
 bool HIRCrate::findAutoTraitImplsCb(const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) const {
     if (this->allMarkerImpls.size() > 0) {
         if (const auto* group = this->markerImplsForOpt(trait)) {
-            if (const auto* implList = group->getListForType(type)) {
-                if (findImplsList(*implList, type, tyRes, implMatcherScratch, callback)) {
-                    return true;
-                }
+            if (findImplsForType(*group, type, tyRes, implMatcherScratch, callback)) {
+                return true;
             }
 
             if (findImplsList(group->generic, type, tyRes, implMatcherScratch, callback)) {
@@ -1729,10 +1756,8 @@ bool HIRCrate::findAutoTraitImplsCb(const HIRSimplePath& trait, const HIRType* t
 
 bool HIRCrate::findTypeImplsCb(const HIRType* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) const {
     if (allTraitImpls.size() > 0) {
-        if (const auto* implList = this->allTypeImpls.getListForType(type)) {
-            if (findImplsList(*implList, type, tyRes, implMatcherScratch, callback)) {
-                return true;
-            }
+        if (findImplsForType(this->allTypeImpls, type, tyRes, implMatcherScratch, callback)) {
+            return true;
         }
 
         if (findImplsList(this->allTypeImpls.generic, type, tyRes, implMatcherScratch, callback)) {

@@ -79,5 +79,6 @@ generate(
         HIRCompare matchTestGenericsFuzz(const Span& sp, const HIRType* x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const;
         HIRCompare compareWithPlaceholders(const Span& sp, const HIRType* x, tCbResolveType resolvePlaceholder) const;
         const HIRSimplePath* getSortPath() const;
+        u32 simplifiedType() const;
     """,
 )
