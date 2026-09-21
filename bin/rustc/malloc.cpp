@@ -66,12 +66,6 @@ namespace {
         size_t length;
     };
 
-    struct State {
-        uint32_t mapped;
-        uint32_t metaMapped;
-        uint32_t freeSegments;
-    };
-
     constexpr uintptr_t SEGMENT_TABLE = REGION_BASE;
     constexpr size_t SEGMENT_TABLE_BYTES = REGION_SEGMENTS * sizeof(Segment);
     constexpr uintptr_t PAGE_TABLE = SEGMENT_TABLE + SEGMENT_TABLE_BYTES;
@@ -79,7 +73,9 @@ namespace {
     static_assert(PAGE_TABLE + PAGE_TABLE_BYTES <= HEAP_BASE);
 
     ClassState classes[CLASSES];
-    State state;
+    uint32_t mapped;
+    uint32_t metaMapped;
+    uint32_t freeSegments;
 
     [[noreturn]] void refuse(const char* what) {
         const char* prefix = "trustme: allocator: ";
@@ -129,11 +125,11 @@ namespace {
         auto* segment = segmentAt(index);
         segment->linked = 1;
         segment->prev = NO_SEGMENT;
-        segment->next = state.freeSegments;
-        if (state.freeSegments != NO_SEGMENT) {
-            segmentAt(state.freeSegments)->prev = index;
+        segment->next = freeSegments;
+        if (freeSegments != NO_SEGMENT) {
+            segmentAt(freeSegments)->prev = index;
         }
-        state.freeSegments = index;
+        freeSegments = index;
     }
 
     void unlinkSegment(uint32_t index) {
@@ -142,7 +138,7 @@ namespace {
         if (segment->prev != NO_SEGMENT) {
             segmentAt(segment->prev)->next = segment->next;
         } else {
-            state.freeSegments = segment->next;
+            freeSegments = segment->next;
         }
         if (segment->next != NO_SEGMENT) {
             segmentAt(segment->next)->prev = segment->prev;
@@ -159,27 +155,27 @@ namespace {
     }
 
     void mapSegment() {
-        if (state.mapped == HEAP_SEGMENTS) {
+        if (mapped == HEAP_SEGMENTS) {
             refuse("region exhausted");
         }
-        const size_t tableEnd = PAGE_TABLE + size_t(state.mapped + 1) * PAGES_PER_SEGMENT * sizeof(Page) - 1;
+        const size_t tableEnd = PAGE_TABLE + size_t(mapped + 1) * PAGES_PER_SEGMENT * sizeof(Page) - 1;
         const uint32_t metaNeeded = uint32_t((tableEnd - REGION_BASE) >> SEGMENT_SHIFT);
-        while (state.metaMapped <= metaNeeded) {
-            mapFixed(REGION_BASE + (uintptr_t(state.metaMapped) << SEGMENT_SHIFT));
-            state.metaMapped++;
+        while (metaMapped <= metaNeeded) {
+            mapFixed(REGION_BASE + (uintptr_t(metaMapped) << SEGMENT_SHIFT));
+            metaMapped++;
         }
-        const uint32_t index = uint32_t(META_SEGMENTS + state.mapped);
+        const uint32_t index = uint32_t(META_SEGMENTS + mapped);
         mapFixed(REGION_BASE + (uintptr_t(index) << SEGMENT_SHIFT));
         segmentAt(index)->freeMask = 0xFFFFFFFF;
         linkSegment(index);
-        state.mapped++;
+        mapped++;
     }
 
     Page* takePages(size_t count) {
         const uint32_t needed = count == 32 ? 0xFFFFFFFF : (uint32_t(1) << count) - 1;
         for (;;) {
             unsigned hops = 0;
-            for (uint32_t index = state.freeSegments; index != NO_SEGMENT && hops < 8; index = segmentAt(index)->next, hops++) {
+            for (uint32_t index = freeSegments; index != NO_SEGMENT && hops < 8; index = segmentAt(index)->next, hops++) {
                 auto* segment = segmentAt(index);
                 uint32_t runs = segment->freeMask;
                 for (size_t i = 1; i < count; i++) {
