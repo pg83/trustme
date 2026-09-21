@@ -1,5 +1,7 @@
 #include "rc_string.h"
 
+#include <std/rng/split_mix_64.h>
+
 #include "output.h"
 
 #include <string>
@@ -105,7 +107,19 @@ Ordering RcString::ord(const char* s, size_t len) const {
 }
 
 Ordering RcString::ord(const RcString& s) const {
+#ifdef TRUSTME_RCSTRING_ORDER_SALT
+    return ::ord(splitMix64(static_cast<u64>(id) ^ TRUSTME_RCSTRING_ORDER_SALT), splitMix64(static_cast<u64>(s.id) ^ TRUSTME_RCSTRING_ORDER_SALT));
+#else
     return ::ord(id, s.id);
+#endif
+}
+
+Ordering RcString::ordByContent(const RcString& s) const {
+    if (id == s.id) {
+        return OrdEqual;
+    }
+    const auto& b = ent(s.id);
+    return ord(b.begin, b.end - b.begin);
 }
 
 Ordering RcString::ord(const char* s) const {
