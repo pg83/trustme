@@ -542,7 +542,6 @@ struct TraitResolution::NextTraitGoalEvaluator {
     IntMap<StructuralCertaintyCacheEntry> structuralCertaintyCache_;
     u64 structuralCacheGeneration_ = 1;
     u64 structuralCacheEnvGeneration_ = ~0ull;
-    u64 structuralCacheIvarGeneration_ = ~0ull;
     u64 structuralCacheSolverEnvGeneration_ = ~0ull;
 
     ObjList<Candidate> candidateNodes;
@@ -13513,11 +13512,9 @@ auto NextTraitGoalEvaluator::evaluateStructuralTraitCertainty(const Span& callSp
     }
     const bool stableInput = !(type->flags & (HIRType::HAS_TYPE_INFER | HIRType::HAS_ASSOCIATED_TYPE | HIRType::HAS_UNEVALUATED_CONST | HIRType::HAS_DEFERRED_CONST));
     if (structuralCacheEnvGeneration_ != resolve_.eatCacheGeneration ||
-        structuralCacheIvarGeneration_ != resolve_.ivars.mutationGeneration ||
         structuralCacheSolverEnvGeneration_ != resolve_.solverEnvGeneration) {
         structuralCacheGeneration_++;
         structuralCacheEnvGeneration_ = resolve_.eatCacheGeneration;
-        structuralCacheIvarGeneration_ = resolve_.ivars.mutationGeneration;
         structuralCacheSolverEnvGeneration_ = resolve_.solverEnvGeneration;
     }
 
