@@ -1049,6 +1049,11 @@ const HIRMacroItem& HIRCrate::getMacroitemByPath(const Span& sp, const HIRSimple
 }
 
 const HIRTypeItem& HIRCrate::getTypeitemByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName, bool ignoreLastNode) const {
+    const u64 key = (reinterpret_cast<uintptr_t>(path.rawData()) << 2) | (ignoreCrateName ? 1u : 0u) | (ignoreLastNode ? 2u : 0u);
+    if (auto* cached = typeitemByPath->find(key)) {
+        return **cached;
+    }
+
     const auto& mod = getContainingModule(*this, sp, path, ignoreCrateName, ignoreLastNode);
 
     auto it = mod.modItems.find(ignoreLastNode ? path.components()[path.components().size() - 2] : path.components().back());
@@ -1056,6 +1061,7 @@ const HIRTypeItem& HIRCrate::getTypeitemByPath(const Span& sp, const HIRSimplePa
         BUG(sp, StringView("Could not find type ") << path);
     }
 
+    typeitemByPath->insert(key, &it->second->ent);
     return it->second->ent;
 }
 
@@ -2113,6 +2119,7 @@ HIRCrate::HIRCrate(ObjPool* pool, HIRTypeInterner& types)
     , types(types)
     , intrinsicOffsetof(HIRValueItem::make_Function(nullptr))
 {
+    typeitemByPath = pool->make<IntMap<const HIRTypeItem*>>(pool);
 }
 
 bool HIRCrate::isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias, const HIRSimplePath* names, size_t nameCount) const {

@@ -14,6 +14,7 @@
 #include "macro_rules_macro_rules_ptr.h"
 
 #include <std/lib/vector.h>
+#include <std/sym/i_map.h>
 #include <std/rng/split_mix_64.h>
 
 #include <set>
@@ -767,6 +768,8 @@ public:
     mutable HIRValueItem intrinsicOffsetof;
 
     mutable HIRImplMatcherScratch implMatcherScratch;
+
+    mutable stl::IntMap<const HIRTypeItem*>* typeitemByPath = nullptr;
     HIRFunction::argsT emptyMirArgs;
     HIRSimplePath emptyLangItemPath;
     RcString crateName;
