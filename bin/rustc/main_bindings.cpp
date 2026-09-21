@@ -27,6 +27,7 @@
 #include "parse_parseerror.h"
 #include "expand_proc_macro.h"
 #include "hir_main_bindings.h"
+#include "hir_typeck_resolve_common.h"
 #include "mir_main_bindings.h"
 #include "hir_inherent_cache.h"
 #include "trans_monomorphise.h"
@@ -567,6 +568,7 @@ namespace {
             {
                 TypecheckModuleLevel(wb, *hirCrate);
             }
+            wb.typingEnvironments->enable();
             {
                 TypecheckExpressions(wb, *hirCrate);
             }

@@ -6,7 +6,6 @@
 #include "hir_expr.h"
 #include "settings.h"
 #include "wire_board.h"
-#include "hir_typeck_resolve_common.h"
 #include "hir_visitor.h"
 #include "mir_helpers.h"
 #include "mir_mir_ptr.h"
@@ -2414,7 +2413,6 @@ void HIRGenerateMIRExpr(const WireBoard& wb, HIRCrate& crate, const HIRItemPath&
 }
 
 void HIRGenerateMIR(const WireBoard& wb, HIRCrate& crate) {
-    TypingEnvironmentEpoch environments(wb);
     auto callback = makeCallable<MIRExprCb>([&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
         if (!exprPtr.getMirOpt()) {
             exprPtr.setMir(LowerMIR(res, p, exprPtr, ty, args));

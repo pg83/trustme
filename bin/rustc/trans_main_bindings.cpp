@@ -2845,7 +2845,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 }
 
 TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate) {
-    TypingEnvironmentEpoch environments(wb);
     Span sp;
 
     EnumState state{wb};
@@ -2887,7 +2886,6 @@ TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate) {
 }
 
 TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
-    TypingEnvironmentEpoch environments(wb);
     Span sp;
     EnumState state{wb};
 
@@ -3004,7 +3002,6 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
 }
 
 void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList& list) {
-    TypingEnvironmentEpoch environments(wb);
     for (const auto& fcnE : list.functions) {
         auto& function = *fcnE.second->ptr;
         if (function.code.mir) {

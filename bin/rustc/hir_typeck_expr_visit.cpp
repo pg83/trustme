@@ -6,7 +6,6 @@
 #include "hir_visitor.h"
 #include "hir_expr_state.h"
 #include "hir_typeck_expr_cs.h"
-#include "hir_typeck_resolve_common.h"
 
 using namespace stl;
 
@@ -132,7 +131,6 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
 }
 
 void TypecheckExpressions(const WireBoard& wb, HIRCrate& crate) {
-    TypingEnvironmentEpoch environments(wb);
     OuterVisitor visitor{wb, crate};
     visitor.visitCrate(crate);
 }
