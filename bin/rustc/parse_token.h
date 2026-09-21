@@ -59,7 +59,7 @@ class Token {
     Token(enum eTokenType t, Data d, Position p);
 
 public:
-    virtual ~Token();
+    ~Token();
     Token();
 
     Token& operator=(Token&& t);
