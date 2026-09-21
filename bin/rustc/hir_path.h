@@ -286,6 +286,10 @@ public:
     }
 };
 
+size_t hirPathTypeChildren(const HIRPath& path, const HIRType** out, size_t capacity);
+
+bool hirPathHasValues(const HIRPath& path);
+
 struct HIRConstGenericUnevaluated {
     const HIRType* selfType = nullptr;
 

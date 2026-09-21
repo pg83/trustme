@@ -201,8 +201,19 @@ const HIRType* Monomorphiser::monomorphType(const Span& sp, const HIRType* tpl, 
         }
         case HIRType::TAG_Path: {
             auto& e = (*tpl).as_Path();
-            auto binding = e.binding.is_Opaque() ? HIRTypePathBinding() : e.binding.clone();
-            return types.internFolded(tpl, HIRType::make_Path({this->monomorphPath(sp, e.path, allowInfer), mv$(binding)}));
+            const HIRType* children[16];
+            const auto count = hirPathTypeChildren(e.path, children, 16);
+            if (e.binding.is_Opaque() || count > 16 || hirPathHasValues(e.path)) {
+                auto binding = e.binding.is_Opaque() ? HIRTypePathBinding() : e.binding.clone();
+                return types.internFolded(tpl, HIRType::make_Path({this->monomorphPath(sp, e.path, allowInfer), mv$(binding)}));
+            }
+            bool changed = false;
+            for (size_t i = 0; i < count; i++) {
+                const auto* child = this->monomorphType(sp, children[i], allowInfer);
+                changed |= child != children[i];
+                children[i] = child;
+            }
+            return changed ? types.pathType(e.path, children, e.binding) : tpl;
         }
         case HIRType::TAG_Generic: {
             auto& e = (*tpl).as_Generic();

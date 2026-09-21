@@ -502,6 +502,75 @@ HIRPath::HIRPath(const HIRType* ty, HIRGenericPath trait, RcString item, HIRPath
 {
 }
 
+namespace {
+    void pathParamChildren(const HIRPathParams& params, const HIRType** out, size_t capacity, size_t& count) {
+        for (const auto* type : params.types) {
+            if (count < capacity) {
+                out[count] = type;
+            }
+            count++;
+        }
+    }
+
+    void pathChild(const HIRType* type, const HIRType** out, size_t capacity, size_t& count) {
+        if (count < capacity) {
+            out[count] = type;
+        }
+        count++;
+    }
+}
+
+size_t hirPathTypeChildren(const HIRPath& path, const HIRType** out, size_t capacity) {
+    size_t count = 0;
+    switch (path.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            pathParamChildren(path.data.as_Generic().params, out, capacity, count);
+            break;
+        }
+        case HIRPathData::TAG_UfcsInherent: {
+            const auto& e = path.data.as_UfcsInherent();
+            pathChild(e.type, out, capacity, count);
+            pathParamChildren(e.params, out, capacity, count);
+            pathParamChildren(e.implParams, out, capacity, count);
+            break;
+        }
+        case HIRPathData::TAG_UfcsKnown: {
+            const auto& e = path.data.as_UfcsKnown();
+            pathChild(e.type, out, capacity, count);
+            pathParamChildren(e.trait.params, out, capacity, count);
+            pathParamChildren(e.params, out, capacity, count);
+            break;
+        }
+        case HIRPathData::TAG_UfcsUnknown: {
+            const auto& e = path.data.as_UfcsUnknown();
+            pathChild(e.type, out, capacity, count);
+            pathParamChildren(e.params, out, capacity, count);
+            break;
+        }
+    }
+    return count;
+}
+
+bool hirPathHasValues(const HIRPath& path) {
+    switch (path.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            return !path.data.as_Generic().params.values.empty();
+        }
+        case HIRPathData::TAG_UfcsInherent: {
+            const auto& e = path.data.as_UfcsInherent();
+            return !e.params.values.empty() || !e.implParams.values.empty();
+        }
+        case HIRPathData::TAG_UfcsKnown: {
+            const auto& e = path.data.as_UfcsKnown();
+            return !e.trait.params.values.empty() || !e.params.values.empty();
+        }
+        case HIRPathData::TAG_UfcsUnknown: {
+            return !path.data.as_UfcsUnknown().params.values.empty();
+        }
+    }
+    UNREACHABLE();
+}
+
 HIRPath HIRPath::clone() const {
     switch (data.tag()) {
         case HIRPathData::TAG_Generic: {

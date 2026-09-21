@@ -225,6 +225,7 @@ struct HIRTypeInterner {
 
     virtual stl::ObjPool& objectPool() const = 0;
     virtual const HIRType* intern(HIRType data) = 0;
+    virtual const HIRType* pathType(const HIRPath& shape, const HIRType* const* children, const HIRTypePathBinding& binding) = 0;
     virtual unsigned newAliasInputInfer() = 0;
 
     const HIRType* internFolded(const HIRType* original, HIRType data);

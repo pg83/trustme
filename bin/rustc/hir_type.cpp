@@ -671,6 +671,141 @@ namespace {
         return h;
     }
 
+    size_t hashPathParamsWith(const HIRPathParams& params, const HIRType* const*& children) {
+        size_t h = hashMix(params.types.size(), params.values.size());
+        for (size_t i = 0; i < params.types.size(); i++) {
+            h = hashMix(h, hashTypeRef(*children++));
+        }
+        for (const auto& value : params.values) {
+            h = hashMix(h, hashConstGeneric(value));
+        }
+        return h;
+    }
+
+    size_t hashPathWith(const HIRPath& shape, const HIRType* const* children) {
+        size_t h = static_cast<size_t>(shape.data.tag());
+        switch (shape.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                auto& e = shape.data.as_Generic();
+                h = hashMix(h, hashMix(hashSimplePath(e.path), hashPathParamsWith(e.params, children)));
+                break;
+            }
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& e = shape.data.as_UfcsInherent();
+                h = hashMix(h, hashTypeRef(*children++));
+                h = hashMix(h, std::hash<RcString>()(e.item));
+                h = hashMix(h, hashPathParamsWith(e.params, children));
+                h = hashMix(h, hashPathParamsWith(e.implParams, children));
+                break;
+            }
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& e = shape.data.as_UfcsKnown();
+                h = hashMix(h, hashTypeRef(*children++));
+                h = hashMix(h, hashMix(hashSimplePath(e.trait.path), hashPathParamsWith(e.trait.params, children)));
+                h = hashMix(h, std::hash<RcString>()(e.item));
+                h = hashMix(h, hashPathParamsWith(e.params, children));
+                break;
+            }
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& e = shape.data.as_UfcsUnknown();
+                h = hashMix(h, hashTypeRef(*children++));
+                h = hashMix(h, std::hash<RcString>()(e.item));
+                h = hashMix(h, hashPathParamsWith(e.params, children));
+                break;
+            }
+        }
+        return h;
+    }
+
+    bool exactPathParamsEqualWith(const HIRPathParams& a, const HIRPathParams& shape, const HIRType* const*& children) {
+        if (a.types.size() != shape.types.size() || a.values.size() != shape.values.size()) {
+            children += shape.types.size();
+            return false;
+        }
+        bool equal = true;
+        for (size_t i = 0; i < a.types.size(); i++) {
+            equal &= a.types[i] == *children++;
+        }
+        for (size_t i = 0; equal && i < a.values.size(); i++) {
+            equal = exactConstGenericEqual(a.values[i], shape.values[i]);
+        }
+        return equal;
+    }
+
+    bool exactPathEqualWith(const HIRPath& a, const HIRPath& shape, const HIRType* const* children) {
+        if (a.data.tag() != shape.data.tag()) {
+            return false;
+        }
+        switch (shape.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                auto& ae = a.data.as_Generic();
+                auto& se = shape.data.as_Generic();
+                return ae.path == se.path && exactPathParamsEqualWith(ae.params, se.params, children);
+            }
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& ae = a.data.as_UfcsInherent();
+                auto& se = shape.data.as_UfcsInherent();
+                const bool type = ae.type == *children++;
+                const bool params = exactPathParamsEqualWith(ae.params, se.params, children);
+                const bool implParams = exactPathParamsEqualWith(ae.implParams, se.implParams, children);
+                return type && ae.item == se.item && params && implParams;
+            }
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& ae = a.data.as_UfcsKnown();
+                auto& se = shape.data.as_UfcsKnown();
+                const bool type = ae.type == *children++;
+                const bool trait = ae.trait.path == se.trait.path && exactPathParamsEqualWith(ae.trait.params, se.trait.params, children);
+                const bool params = exactPathParamsEqualWith(ae.params, se.params, children);
+                return type && trait && ae.item == se.item && params;
+            }
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& ae = a.data.as_UfcsUnknown();
+                auto& se = shape.data.as_UfcsUnknown();
+                const bool type = ae.type == *children++;
+                const bool params = exactPathParamsEqualWith(ae.params, se.params, children);
+                return type && ae.item == se.item && params;
+            }
+        }
+        UNREACHABLE();
+    }
+
+    void pathParamsWith(HIRPathParams& params, const HIRType* const*& children) {
+        for (size_t i = 0; i < params.types.size(); i++) {
+            params.types[i] = *children++;
+        }
+    }
+
+    HIRPath pathWith(const HIRPath& shape, const HIRType* const* children) {
+        auto path = shape.clone();
+        switch (path.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                pathParamsWith(path.data.as_Generic().params, children);
+                break;
+            }
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& e = path.data.as_UfcsInherent();
+                e.type = *children++;
+                pathParamsWith(e.params, children);
+                pathParamsWith(e.implParams, children);
+                break;
+            }
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& e = path.data.as_UfcsKnown();
+                e.type = *children++;
+                pathParamsWith(e.trait.params, children);
+                pathParamsWith(e.params, children);
+                break;
+            }
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& e = path.data.as_UfcsUnknown();
+                e.type = *children++;
+                pathParamsWith(e.params, children);
+                break;
+            }
+        }
+        return path;
+    }
+
     size_t hashPath(const HIRPath& path) {
         size_t h = static_cast<size_t>(path.data.tag());
         switch (path.data.tag()) {
@@ -1525,6 +1660,23 @@ namespace {
                     return nullptr;
                 }
             }
+        }
+
+        const HIRType* pathType(const HIRPath& shape, const HIRType* const* children, const HIRTypePathBinding& binding) override {
+            size_t hash = static_cast<size_t>(HIRType::TAG_Path);
+            hash = hashMix(hash, hashPathWith(shape, children));
+            hash = hashMix(hash, hashBinding(binding));
+            const auto range = nodes.equal_range(hash);
+            for (auto it = range.first; it != range.second; ++it) {
+                if (!it->second->is_Path()) {
+                    continue;
+                }
+                const auto& e = it->second->as_Path();
+                if (exactPathEqualWith(e.path, shape, children) && exactBindingEqual(e.binding, binding)) {
+                    return it->second;
+                }
+            }
+            return intern(HIRType::make_Path({pathWith(shape, children), binding.clone()}));
         }
 
         const HIRType* intern(HIRType data) override {
