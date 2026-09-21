@@ -28,6 +28,11 @@ struct Context {
         const HIRType* ty;
     };
 
+    struct StallDependency {
+        unsigned index;
+        const HIRType* resolved;
+    };
+
     struct Coercion {
         unsigned ruleIdx;
         Span obligationSpan;
@@ -53,6 +58,12 @@ struct Context {
         unsigned order = 0;
         unsigned bindingOrder = 0;
         unsigned bindingStart = 0;
+        const HIRType* stallSource = nullptr;
+        bool stallExact = false;
+        stl::Vector<StallDependency> stallSnapshot;
+        stl::Vector<unsigned> refIvars;
+        ThinVector<SolverDeferredCoercion> deferred;
+        unsigned alternativeGroups = 0;
 
         Coercion(unsigned ruleIdx, const HIRType* leftTy, HIRExprNodeP* rightNodePtr);
         Coercion(unsigned ruleIdx, const Span& span, const HIRType* leftTy, const HIRType* rightTy, SolverCoercionOp op);
@@ -62,10 +73,7 @@ struct Context {
     };
 
     struct Associated {
-        struct StallDependency {
-            unsigned index;
-            const HIRType* resolved;
-        };
+        using StallDependency = Context::StallDependency;
 
         unsigned ruleIdx;
         Span span;

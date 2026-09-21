@@ -420,7 +420,11 @@ struct OrderPlace {
 
         void buildComponents();
 
-        explicit IvarCoercionIndex(const Context& context);
+        bool stallsHold(const Vector<Context::StallDependency>& stalls) const;
+
+        void refreshCoercion(Context::Coercion& bound) const;
+
+        explicit IvarCoercionIndex(Context& context);
 
         const IvarCoercionRefs& operator[](unsigned int index) const;
 
@@ -10469,38 +10473,77 @@ auto AssociatedStallCollector::collect() -> void {
 }
 
 auto IvarCoercionIndex::collectIvars(const HIRType* root, Vector<unsigned int>& out, bool throughClosures) const -> void {
-    Vector<const HIRType*> pending;
-    pending.pushBack(root);
-    Vector<const HIRType*> visited;
-    while (!pending.empty()) {
-        const auto type = pending.back();
-        pending.popBack();
-        if (std::find(visited.begin(), visited.end(), type) != visited.end()) {
-            continue;
+    visitTyWith(root, [&](const HIRType* inner) {
+        if (const auto* infer = inner->opt_Infer(); infer && infer->index != ~0u) {
+            out.pushBack(infer->index);
+            const auto& resolved = context.getType(inner);
+            if (resolved != inner) {
+                this->collectIvars(resolved, out, throughClosures);
+            }
         }
-        visited.pushBack(type);
-        visitTyWith(type, [&](const HIRType* inner) {
-            if (const auto* infer = inner->opt_Infer(); infer && infer->index != ~0u) {
-                out.pushBack(infer->index);
-                const auto& resolved = context.getType(inner);
-                if (resolved != inner) {
-                    pending.pushBack(resolved);
+        /* The type visitor stops at a closure; its signature is part of the
+           type all the same (upstream `ClosureArgs`).  A signature not yet
+           populated with variables still holds `_` placeholders. */
+        if (throughClosures && inner->is_NodeType()) {
+            if (const auto* closure = inner->as_NodeType().opt_Closure()) {
+                for (const auto& argument : (*closure)->args) {
+                    this->collectIvars(argument.second, out, throughClosures);
                 }
+                this->collectIvars((*closure)->returnType, out, throughClosures);
             }
-            /* The type visitor stops at a closure; its signature is part of the
-               type all the same (upstream `ClosureArgs`).  A signature not yet
-               populated with variables still holds `_` placeholders. */
-            if (throughClosures && inner->is_NodeType()) {
-                if (const auto* closure = inner->as_NodeType().opt_Closure()) {
-                    for (const auto& argument : (*closure)->args) {
-                        pending.pushBack(argument.second);
-                    }
-                    pending.pushBack((*closure)->returnType);
-                }
-            }
+        }
+        return false;
+    });
+}
+
+auto IvarCoercionIndex::stallsHold(const Vector<Context::StallDependency>& stalls) const -> bool {
+    for (const auto& stall : stalls) {
+        if (context.ivars.getType(stall.index) != stall.resolved) {
             return false;
-        });
+        }
     }
+    return true;
+}
+
+auto IvarCoercionIndex::refreshCoercion(Context::Coercion& bound) const -> void {
+    const auto* source = bound.sourceType();
+    if (bound.stallExact && bound.stallSource == source && stallsHold(bound.stallSnapshot)) {
+        return;
+    }
+    bound.refIvars.clear();
+    collectIvars(bound.leftTy, bound.refIvars);
+    collectIvars(source, bound.refIvars);
+    deduplicate(bound.refIvars);
+    bound.stallSnapshot.clear();
+    for (const auto index : bound.refIvars) {
+        bound.stallSnapshot.pushBack({index, context.ivars.getType(index)});
+    }
+    const auto* destination = context.getType(bound.leftTy);
+    const auto* resolvedSource = context.getType(source);
+    const auto response = context.resolve.evaluateCoercionGoal(bound.span(), destination, resolvedSource, bound.op);
+    bound.deferred.clear();
+    bound.alternativeGroups = 0;
+    ThinVector<std::pair<unsigned, unsigned>> groups;
+    for (const auto& deferred : response.deferred) {
+        unsigned group = 0;
+        if (deferred.alternativeGroup != 0) {
+            const auto found = std::find_if(groups.begin(), groups.end(), [&](const auto& existing) {
+                return existing.first == deferred.alternativeGroup;
+            });
+            if (found == groups.end()) {
+                group = ++bound.alternativeGroups;
+                groups.push_back({deferred.alternativeGroup, group});
+            } else {
+                group = found->second;
+            }
+        }
+        bound.deferred.push_back(SolverDeferredCoercion{deferred.destination, deferred.source, deferred.op, group});
+    }
+    const auto trackable = [](const HIRType* type) {
+        return (type->flags & (HIRType::HAS_UNEVALUATED_CONST | HIRType::HAS_DEFERRED_CONST)) == 0;
+    };
+    bound.stallSource = source;
+    bound.stallExact = trackable(destination) && trackable(resolvedSource);
 }
 
 auto IvarCoercionIndex::buildComponents() -> void {
@@ -10711,36 +10754,20 @@ auto IvarCoercionIndex::addEndpoint(const Context::Coercion& obligation, const S
     }
 }
 
-IvarCoercionIndex::IvarCoercionIndex(const Context& context)
+IvarCoercionIndex::IvarCoercionIndex(Context& context)
     : context(context)
     , refs(context.ivars.ivars.size())
 {
     Vector<unsigned int> dependencies;
     unsigned nextAlternativeGroup = 1;
-    for (const auto& bound : context.linkCoerce) {
-        dependencies.clear();
-        collectIvars(bound->leftTy, dependencies);
-        collectIvars(bound->sourceType(), dependencies);
-        deduplicate(dependencies);
-        addRefs(dependencies, &IvarCoercionRefs::coercions, static_cast<const Context::Coercion*>(bound.get()));
-
-        const auto response = context.resolve.evaluateCoercionGoal(bound->span(), context.getType(bound->leftTy), context.getType(bound->sourceType()), bound->op);
-        ThinVector<std::pair<unsigned, unsigned>> groups;
-        for (const auto& deferred : response.deferred) {
-            unsigned group = 0;
-            if (deferred.alternativeGroup != 0) {
-                const auto found = std::find_if(groups.begin(), groups.end(), [&](const auto& existing) {
-                    return existing.first == deferred.alternativeGroup;
-                });
-                if (found == groups.end()) {
-                    group = nextAlternativeGroup++;
-                    groups.push_back({deferred.alternativeGroup, group});
-                } else {
-                    group = found->second;
-                }
-            }
+    for (auto& bound : context.linkCoerce) {
+        refreshCoercion(*bound);
+        addRefs(bound->refIvars, &IvarCoercionRefs::coercions, static_cast<const Context::Coercion*>(bound.get()));
+        for (const auto& deferred : bound->deferred) {
+            const unsigned group = deferred.alternativeGroup == 0 ? 0 : nextAlternativeGroup + deferred.alternativeGroup - 1;
             addEndpoint(*bound, deferred, group);
         }
+        nextAlternativeGroup += bound->alternativeGroups;
     }
 
     for (const auto& rule : context.linkAssoc) {
