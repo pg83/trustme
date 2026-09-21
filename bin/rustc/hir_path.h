@@ -222,6 +222,9 @@ auto HIRParamsList<T>::data() const -> const T* {
     return begin();
 }
 
+u64 hirConstGenericExactHash(const HIRConstGeneric& value);
+bool hirConstGenericExactEqual(const HIRConstGeneric& a, const HIRConstGeneric& b);
+
 struct HIRPathParamsBuilder;
 
 struct HIRPathParams {
@@ -276,14 +279,19 @@ struct HIRPathParamsBuilder {
 
 template <typename F, typename G>
 HIRPathParams HIRPathParams::map(F typeFn, G valueFn) const {
-    if (values.empty() && types.size() <= 16) {
-        const HIRType* folded[16];
+    if (types.size() <= 16 && values.size() <= 4) {
+        const HIRType* foldedTypes[16];
+        HIRConstGeneric foldedValues[4];
         bool changed = false;
         for (size_t i = 0; i < types.size(); i++) {
-            folded[i] = typeFn(types[i]);
-            changed |= folded[i] != types[i];
+            foldedTypes[i] = typeFn(types[i]);
+            changed |= foldedTypes[i] != types[i];
         }
-        return changed ? fromTypes(folded, types.size()) : *this;
+        for (size_t i = 0; i < values.size(); i++) {
+            foldedValues[i] = valueFn(values[i]);
+            changed |= !hirConstGenericExactEqual(foldedValues[i], values[i]);
+        }
+        return changed ? fromView(foldedTypes, types.size(), foldedValues, values.size()) : *this;
     }
     HIRPathParamsBuilder builder;
     builder.types.reserve(types.size());
@@ -302,8 +310,6 @@ HIRPathParams HIRPathParams::mapTypes(F typeFn) const {
     return map(typeFn, [](const HIRConstGeneric& value) { return value.clone(); });
 }
 
-u64 hirConstGenericExactHash(const HIRConstGeneric& value);
-bool hirConstGenericExactEqual(const HIRConstGeneric& a, const HIRConstGeneric& b);
 
 class HIRGenericPath {
 public:
