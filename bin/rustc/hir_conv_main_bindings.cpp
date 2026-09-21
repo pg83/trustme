@@ -698,10 +698,10 @@ namespace {
     void pushIndexImpls(HIRCrate& dst, const HIRCrate& src) {
         pushIndexImplGroup(dst.allTypeImpls, src.typeImpls);
         for (const auto& ig : src.traitImpls) {
-            pushIndexImplGroup(dst.allTraitImpls[ig.first], ig.second);
+            pushIndexImplGroup(dst.traitImplsFor(ig.first), ig.second);
         }
         for (const auto& ig : src.markerImpls) {
-            pushIndexImplGroup(dst.allMarkerImpls[ig.first], ig.second);
+            pushIndexImplGroup(dst.markerImplsFor(ig.first), ig.second);
         }
         dst.implGeneration++;
     }

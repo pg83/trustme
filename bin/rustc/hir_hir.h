@@ -833,6 +833,14 @@ public:
     std::map<HIRSimplePath, ImplGroup<const HIRTraitImpl*>> allTraitImpls;
     std::map<HIRSimplePath, ImplGroup<const HIRMarkerImpl*>> allMarkerImpls;
 
+    mutable stl::IntMap<ImplGroup<const HIRTraitImpl*>*>* allTraitImplsByPath = nullptr;
+    mutable stl::IntMap<ImplGroup<const HIRMarkerImpl*>*>* allMarkerImplsByPath = nullptr;
+
+    ImplGroup<const HIRTraitImpl*>& traitImplsFor(const HIRSimplePath& trait);
+    ImplGroup<const HIRMarkerImpl*>& markerImplsFor(const HIRSimplePath& trait);
+    const ImplGroup<const HIRTraitImpl*>* traitImplsForOpt(const HIRSimplePath& trait) const;
+    const ImplGroup<const HIRMarkerImpl*>* markerImplsForOpt(const HIRSimplePath& trait) const;
+
     u64 implGeneration = 1;
 
     stl::Vector<RcString> exportedMacroNames;

@@ -988,7 +988,7 @@ namespace {
         };
         auto pushTraitImpl = [&](const HIRSimplePath& p, std::unique_ptr<HIRTraitImpl> ptr) {
             checkState(*ptr);
-            auto& traitImplListR = crate.allTraitImpls[p].getListForTypeMut(ptr->type);
+            auto& traitImplListR = crate.traitImplsFor(p).getListForTypeMut(ptr->type);
             traitImplListR.push_back(ptr.get());
             auto& traitImplList = crate.traitImpls[p].getListForTypeMut(ptr->type);
             traitImplList.push_back(mv$(ptr));
@@ -3634,7 +3634,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
                 /*source module*/ HIRSimplePath(resolve_.hirCrate().crateName, {})
             }
         ));
-        crate.allTraitImpls[langCopy].getListForTypeMut(closureType).push_back(v.back().get());
+        crate.traitImplsFor(langCopy).getListForTypeMut(closureType).push_back(v.back().get());
         crate.implGeneration++;
     }
 

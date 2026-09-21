@@ -1664,23 +1664,22 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
 
 bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) const {
     if (this->allTraitImpls.size() > 0) {
-        auto it = this->allTraitImpls.find(trait);
-        if (it != this->allTraitImpls.end()) {
-            if (const auto* implList = it->second.getListForType(type)) {
+        if (const auto* group = this->traitImplsForOpt(trait)) {
+            if (const auto* implList = group->getListForType(type)) {
                 if (findImplsList(*implList, type, tyRes, implMatcherScratch, callback)) {
                     return true;
                 }
             }
             if (type->is_Infer() && !type->as_Infer().isLit()) {
                 DEBUG(StringView("Search all lists"));
-                for (const auto& list : it->second.named) {
+                for (const auto& list : group->named) {
                     if (findImplsList(list.second, type, tyRes, implMatcherScratch, callback)) {
                         return true;
                     }
                 }
             }
 
-            if (findImplsList(it->second.generic, type, tyRes, implMatcherScratch, callback)) {
+            if (findImplsList(group->generic, type, tyRes, implMatcherScratch, callback)) {
                 return true;
             }
         }
@@ -1702,15 +1701,14 @@ bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRType* type,
 
 bool HIRCrate::findAutoTraitImplsCb(const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) const {
     if (this->allMarkerImpls.size() > 0) {
-        auto it = this->allMarkerImpls.find(trait);
-        if (it != this->allMarkerImpls.end()) {
-            if (const auto* implList = it->second.getListForType(type)) {
+        if (const auto* group = this->markerImplsForOpt(trait)) {
+            if (const auto* implList = group->getListForType(type)) {
                 if (findImplsList(*implList, type, tyRes, implMatcherScratch, callback)) {
                     return true;
                 }
             }
 
-            if (findImplsList(it->second.generic, type, tyRes, implMatcherScratch, callback)) {
+            if (findImplsList(group->generic, type, tyRes, implMatcherScratch, callback)) {
                 return true;
             }
         }
@@ -2120,6 +2118,38 @@ HIRCrate::HIRCrate(ObjPool* pool, HIRTypeInterner& types)
     , intrinsicOffsetof(HIRValueItem::make_Function(nullptr))
 {
     typeitemByPath = pool->make<IntMap<const HIRTypeItem*>>(pool);
+    allTraitImplsByPath = pool->make<IntMap<ImplGroup<const HIRTraitImpl*>*>>(pool);
+    allMarkerImplsByPath = pool->make<IntMap<ImplGroup<const HIRMarkerImpl*>*>>(pool);
+}
+
+auto HIRCrate::traitImplsFor(const HIRSimplePath& trait) -> ImplGroup<const HIRTraitImpl*>& {
+    const auto key = reinterpret_cast<uintptr_t>(trait.rawData());
+    if (auto* found = allTraitImplsByPath->find(key)) {
+        return **found;
+    }
+    auto& group = allTraitImpls[trait];
+    *allTraitImplsByPath->insert(key) = &group;
+    return group;
+}
+
+auto HIRCrate::markerImplsFor(const HIRSimplePath& trait) -> ImplGroup<const HIRMarkerImpl*>& {
+    const auto key = reinterpret_cast<uintptr_t>(trait.rawData());
+    if (auto* found = allMarkerImplsByPath->find(key)) {
+        return **found;
+    }
+    auto& group = allMarkerImpls[trait];
+    *allMarkerImplsByPath->insert(key) = &group;
+    return group;
+}
+
+auto HIRCrate::traitImplsForOpt(const HIRSimplePath& trait) const -> const ImplGroup<const HIRTraitImpl*>* {
+    auto* found = allTraitImplsByPath->find(reinterpret_cast<uintptr_t>(trait.rawData()));
+    return found ? *found : nullptr;
+}
+
+auto HIRCrate::markerImplsForOpt(const HIRSimplePath& trait) const -> const ImplGroup<const HIRMarkerImpl*>* {
+    auto* found = allMarkerImplsByPath->find(reinterpret_cast<uintptr_t>(trait.rawData()));
+    return found ? *found : nullptr;
 }
 
 bool HIRCrate::isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias, const HIRSimplePath* names, size_t nameCount) const {
