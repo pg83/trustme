@@ -4,7 +4,6 @@
 generate(
     name="TypeckValuePtr",
     default="NotFound",
-    clone=False,
     variants=[
         v("NotFound"),
         v("NotYetKnown"),

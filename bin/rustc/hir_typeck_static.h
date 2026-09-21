@@ -65,6 +65,53 @@ enum class InteriorMutability {
     Unknown,
 };
 
+struct TraitValueCache {
+    struct Entry {
+        Entry* next = nullptr;
+        u64 hash = 0;
+
+        const HIRGenericParams* implGenerics = nullptr;
+        const HIRGenericParams* itemGenerics = nullptr;
+        MetadataType selfMetadata = MetadataType::Unknown;
+        OpaqueReveal reveal = OpaqueReveal::UserFacing;
+        const HIRSimplePathData* trait = nullptr;
+        HIRPathParams traitParams;
+        const HIRType* type = nullptr;
+        RcString item;
+
+        TypeckValuePtr value;
+        const HIRTraitImpl* impl = nullptr;
+        HIRPathParams implParams;
+    };
+
+    struct Key {
+        const HIRGenericParams* implGenerics;
+        const HIRGenericParams* itemGenerics;
+        MetadataType selfMetadata;
+        OpaqueReveal reveal;
+        const HIRSimplePath& trait;
+        const HIRPathParams& traitParams;
+        const HIRType* type;
+        const RcString& item;
+    };
+
+    stl::ObjPool::Ref pool;
+    stl::IntMap<Entry*>* index = nullptr;
+    u64 generation = 0;
+
+    TraitValueCache();
+
+    static u64 hashKey(const Key& key);
+
+    void reset(u64 crateGeneration);
+
+    const Entry* find(u64 hash, const Key& key) const;
+
+    Entry* insert(u64 hash, const Key& key);
+};
+
+void StaticCreateTraitValueCache(WireBoard& wb, stl::ObjPool& pool);
+
 class StaticTraitResolve: public TraitResolveCommon {
     class NextSolverBridge;
 

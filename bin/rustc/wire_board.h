@@ -15,6 +15,7 @@ class LangItems;
 struct Settings;
 struct TargetSpec;
 struct NextSolverCrateCache;
+struct TraitValueCache;
 struct HIRMutableOwnerCache;
 struct TransLinkFunctionCache;
 
@@ -54,6 +55,8 @@ struct WireBoard {
     HIRInherentCache* inherentMethods = nullptr;
 
     NextSolverCrateCache* solverCache = nullptr;
+
+    TraitValueCache* traitValues = nullptr;
 
     HIRMutableOwnerCache* hirOwners = nullptr;
 

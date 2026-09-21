@@ -18,6 +18,73 @@
 
 using namespace stl;
 
+TraitValueCache::TraitValueCache()
+    : pool(ObjPool::fromMemory())
+{
+    index = pool.mutPtr()->make<IntMap<Entry*>>(pool.mutPtr());
+}
+
+void StaticCreateTraitValueCache(WireBoard& wb, ObjPool& pool) {
+    BUG_ASSERT(!wb.traitValues);
+    wb.traitValues = pool.make<TraitValueCache>();
+}
+
+auto TraitValueCache::hashKey(const Key& key) -> u64 {
+    u64 hash = splitMix64(reinterpret_cast<uintptr_t>(key.implGenerics));
+    hash = splitMix64(hash ^ reinterpret_cast<uintptr_t>(key.itemGenerics));
+    hash = splitMix64(hash ^ (static_cast<u64>(key.selfMetadata) * 8 + static_cast<u64>(key.reveal)));
+    hash = splitMix64(hash ^ reinterpret_cast<uintptr_t>(key.trait.rawData()));
+    for (const auto* param : key.traitParams.types) {
+        hash = splitMix64(hash ^ reinterpret_cast<uintptr_t>(param));
+    }
+    hash = splitMix64(hash ^ key.traitParams.values.size());
+    hash = splitMix64(hash ^ reinterpret_cast<uintptr_t>(key.type));
+    return splitMix64(hash ^ key.item.rawId());
+}
+
+void TraitValueCache::reset(u64 crateGeneration) {
+    generation = crateGeneration;
+    pool = ObjPool::fromMemory();
+    index = pool.mutPtr()->make<IntMap<Entry*>>(pool.mutPtr());
+}
+
+auto TraitValueCache::find(u64 hash, const Key& key) const -> const Entry* {
+    auto* head = index->find(hash);
+    for (const Entry* entry = head ? *head : nullptr; entry; entry = entry->next) {
+        if (entry->type == key.type
+            && entry->implGenerics == key.implGenerics
+            && entry->itemGenerics == key.itemGenerics
+            && entry->selfMetadata == key.selfMetadata
+            && entry->reveal == key.reveal
+            && entry->trait == key.trait.rawData()
+            && entry->item == key.item
+            && hirPathParamsIdentical(entry->traitParams, key.traitParams)) {
+            return entry;
+        }
+    }
+    return nullptr;
+}
+
+auto TraitValueCache::insert(u64 hash, const Key& key) -> Entry* {
+    auto* entry = pool.mutPtr()->make<Entry>();
+    entry->hash = hash;
+    entry->implGenerics = key.implGenerics;
+    entry->itemGenerics = key.itemGenerics;
+    entry->selfMetadata = key.selfMetadata;
+    entry->reveal = key.reveal;
+    entry->trait = key.trait.rawData();
+    entry->traitParams = key.traitParams.clone();
+    entry->type = key.type;
+    entry->item = key.item;
+    if (auto* head = index->find(hash)) {
+        entry->next = *head;
+        *head = entry;
+    } else {
+        index->insert(hash, entry);
+    }
+    return entry;
+}
+
 namespace {
     struct ProvenGenericParamMatcher final: HIRMatchGenerics {
         struct TypeBinding {
@@ -1968,6 +2035,25 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     }
                 }
             } else {
+                auto& cache = *board().traitValues;
+                if (cache.generation != crate.implGeneration) {
+                    cache.reset(crate.implGeneration);
+                }
+                const TraitValueCache::Key cacheKey{implGenerics_, itemGenerics_, selfMetadata, reveal_, pe.trait.path, pe.trait.params, pe.type, pe.item};
+                const auto cacheHash = TraitValueCache::hashKey(cacheKey);
+                if (const auto* hit = cache.find(cacheHash, cacheKey)) {
+                    const auto& impl = *hit->impl;
+                    if (outImplParamsDef) {
+                        *outImplParamsDef = &impl.params;
+                    }
+                    if (outTraitImplPath && !impl.params.isGeneric()) {
+                        outTraitImplPath->type = impl.type;
+                        outTraitImplPath->traitParams = impl.traitArgs.clone();
+                    }
+                    outParams.ppImpl = &outParams.ppImplData;
+                    outParams.ppImplData = hit->implParams.clone();
+                    return hit->value.clone();
+                }
                 bool selectedIsSpecialisable = false;
                 bool hasBoundedImpl = false;
                 bool hasAmbiguousImpl = false;
@@ -2085,6 +2171,10 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 outParams.ppImplData = selected.implParams.clone();
                 completeOpenImplParams(sp, *this, impl, outParams.ppImplData);
                 ASSERT_BUG(sp, !rv.is_NotFound(), StringView(""));
+                auto* entry = cache.insert(cacheHash, cacheKey);
+                entry->value = rv.clone();
+                entry->impl = &impl;
+                entry->implParams = outParams.ppImplData.clone();
                 return rv;
             }
             UNREACHABLE();

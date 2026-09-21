@@ -3417,10 +3417,12 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 hirImpl->isConst = impl.def().isConst();
                 hirImpl->isReservation = i->attrs.has("rustc_reservation_impl");
                 hirCrate.traitImpls[mv$(traitName)].generic.push_back(mv$(hirImpl));
+                hirCrate.implGeneration++;
             } else if (impl.def().type()->data.is_None()) {
             } else {
                 auto type = LowerHIRType(impl.def().type());
                 hirCrate.markerImpls[mv$(traitName)].generic.push_back(box$(HIRMarkerImpl{mv$(params), mv$(traitArgs), true, mv$(type), modPath}));
+                hirCrate.implGeneration++;
             }
         } else {
             auto type = LowerHIRType(impl.def().type());
@@ -3491,6 +3493,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
         auto traitArgs = mv$(trait.params);
 
         hirCrate.markerImpls[mv$(traitName)].generic.push_back(box$(HIRMarkerImpl{mv$(params), mv$(traitArgs), false, mv$(type), modPath}));
+        hirCrate.implGeneration++;
     }
 }
 

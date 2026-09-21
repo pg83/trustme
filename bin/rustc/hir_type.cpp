@@ -952,6 +952,10 @@ namespace {
     }
 }
 
+bool hirPathParamsIdentical(const HIRPathParams& a, const HIRPathParams& b) {
+    return exactPathParamsEqual(a, b);
+}
+
 Ordering ord(const HIRType* l, const HIRType* r) {
     if (l == r) {
         return OrdEqual;

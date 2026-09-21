@@ -6,6 +6,7 @@
 #include "trans_mangling.h"
 #include "hir_conv_constant_evaluation.h"
 #include "hir_typeck_helpers.h"
+#include "hir_typeck_static.h"
 #include "hir_hir.h"
 #include "trans_main_bindings.h"
 
@@ -21,6 +22,7 @@ WireBoard::WireBoard(ObjPool* pool)
     MIRCreateOperationsContext(*this, *pool);
     CtfeCreateContext(*this, *pool);
     NextSolverCreateCrateCache(*this, *pool);
+    StaticCreateTraitValueCache(*this, *pool);
     HIRCreateMutableOwnerCache(*this, *pool);
     TransCreateManglingContext(*this, *pool);
     TransCreateLinkFunctionCache(*this, *pool);

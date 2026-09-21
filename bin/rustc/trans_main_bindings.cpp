@@ -407,6 +407,7 @@ namespace {
         auto& list = state.crate.traitImpls[state.langClone].getListForTypeMut(impl.type);
         list.push_back(box$(impl));
         state.crate.allTraitImpls[state.langClone].getListForTypeMut(list.back()->type).push_back(list.back().get());
+        state.crate.implGeneration++;
     }
 
     MIRLValue derefBox(MIRLValue box) {
@@ -2078,6 +2079,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             auto& list = state.crate.traitImpls[langFnPtr].getListForTypeMut(impl.type);
             list.push_back(box$(impl));
             state.crate.allTraitImpls[langFnPtr].getListForTypeMut(list.back()->type).push_back(list.back().get());
+            state.crate.implGeneration++;
 
             {
                 auto p = HIRPath(ty, HIRGenericPath(langFnPtr), "addr");

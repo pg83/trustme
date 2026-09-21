@@ -703,6 +703,7 @@ namespace {
         for (const auto& ig : src.markerImpls) {
             pushIndexImplGroup(dst.allMarkerImpls[ig.first], ig.second);
         }
+        dst.implGeneration++;
     }
 
     void pushIndexInherentMethodsList(HIRInherentCache& icache, const HIRSimplePath& langBox, const std::vector<std::unique_ptr<HIRTypeImpl>>& src) {

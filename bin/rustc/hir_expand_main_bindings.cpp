@@ -992,6 +992,7 @@ namespace {
             traitImplListR.push_back(ptr.get());
             auto& traitImplList = crate.traitImpls[p].getListForTypeMut(ptr->type);
             traitImplList.push_back(mv$(ptr));
+            crate.implGeneration++;
         };
         for (auto& impl : this->implsClosure) {
             switch (impl.first) {
@@ -3634,6 +3635,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
             }
         ));
         crate.allTraitImpls[langCopy].getListForTypeMut(closureType).push_back(v.back().get());
+        crate.implGeneration++;
     }
 
     HIRPathParams traitParams;

@@ -830,6 +830,8 @@ public:
     std::map<HIRSimplePath, ImplGroup<const HIRTraitImpl*>> allTraitImpls;
     std::map<HIRSimplePath, ImplGroup<const HIRMarkerImpl*>> allMarkerImpls;
 
+    u64 implGeneration = 1;
+
     stl::Vector<RcString> exportedMacroNames;
 
     std::unordered_map<RcString, HIRSimplePath> langItems;

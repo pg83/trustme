@@ -244,6 +244,8 @@ struct HIRTypeInterner {
     static HIRTypeInterner* create(stl::ObjPool& pool, u32& id);
 };
 
+bool hirPathParamsIdentical(const HIRPathParams& a, const HIRPathParams& b);
+
 inline bool operator==(const HIRType* ty, HIRCoreType ct) {
     return ty && ty->is_Primitive() && ty->as_Primitive() == ct;
 }
