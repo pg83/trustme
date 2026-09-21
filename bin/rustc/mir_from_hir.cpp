@@ -7397,9 +7397,8 @@ void MirBuilder::dropScopeValues(ScopeDef& sd, bool preserveStates /*=false*/) {
     switch (sd.data.tag()) {
         case ScopeType::TAG_Owning: {
             auto& e = sd.data.as_Owning();
-            const auto dropSlots = e.dropSlots;
-            for (size_t i = dropSlots.length(); i > 0; i--) {
-                const auto& slot = dropSlots[i - 1];
+            for (size_t i = e.dropSlots.length(); i > 0; i--) {
+                const auto slot = e.dropSlots[i - 1];
                 const auto slotType = slot.isArgument ? SlotType::Argument : SlotType::Local;
                 auto lvalue = slot.isArgument ? MIRLValue::newArgument(slot.index) : MIRLValue::newLocal(slot.index);
                 if (buildingCleanup) {
