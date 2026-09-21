@@ -60,11 +60,6 @@ public:
     void visitTypeDataChildren(HIRType& data);
 
     [[nodiscard]] const HIRType* visitTypeViaHooks(const HIRType* ty) {
-        if (ty->is_Path()) {
-            HIRTypeInterner::PathFold fold(typeInterner(), ty);
-            visitPath(fold.path(), PathContext::TYPE);
-            return fold.intern();
-        }
         auto data = ty->cloneData();
         visitTypeDataChildren(data);
         return typeInterner().internFolded(ty, mv$(data));

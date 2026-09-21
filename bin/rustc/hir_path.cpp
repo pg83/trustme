@@ -502,58 +502,6 @@ HIRPath::HIRPath(const HIRType* ty, HIRGenericPath trait, RcString item, HIRPath
 {
 }
 
-void hirPathParamsAssign(HIRPathParams& dst, const HIRPathParams& src) {
-    dst.types.assign(src.types);
-    dst.values.clear();
-    dst.values.reserve(src.values.size());
-    for (const auto& value : src.values) {
-        dst.values.push_back(value.clone());
-    }
-}
-
-void hirPathAssign(HIRPath& dst, const HIRPath& src) {
-    if (dst.data.tag() != src.data.tag()) {
-        dst = src.clone();
-        return;
-    }
-    switch (src.data.tag()) {
-        case HIRPathData::TAG_Generic: {
-            auto& d = dst.data.as_Generic();
-            const auto& s = src.data.as_Generic();
-            d.path = s.path;
-            hirPathParamsAssign(d.params, s.params);
-            break;
-        }
-        case HIRPathData::TAG_UfcsInherent: {
-            auto& d = dst.data.as_UfcsInherent();
-            const auto& s = src.data.as_UfcsInherent();
-            d.type = s.type;
-            d.item = s.item;
-            hirPathParamsAssign(d.params, s.params);
-            hirPathParamsAssign(d.implParams, s.implParams);
-            break;
-        }
-        case HIRPathData::TAG_UfcsKnown: {
-            auto& d = dst.data.as_UfcsKnown();
-            const auto& s = src.data.as_UfcsKnown();
-            d.type = s.type;
-            d.trait.path = s.trait.path;
-            hirPathParamsAssign(d.trait.params, s.trait.params);
-            d.item = s.item;
-            hirPathParamsAssign(d.params, s.params);
-            break;
-        }
-        case HIRPathData::TAG_UfcsUnknown: {
-            auto& d = dst.data.as_UfcsUnknown();
-            const auto& s = src.data.as_UfcsUnknown();
-            d.type = s.type;
-            d.item = s.item;
-            hirPathParamsAssign(d.params, s.params);
-            break;
-        }
-    }
-}
-
 HIRPath HIRPath::clone() const {
     switch (data.tag()) {
         case HIRPathData::TAG_Generic: {

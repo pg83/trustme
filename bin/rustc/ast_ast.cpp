@@ -640,10 +640,3 @@ template <>
 void stl::output<ZeroCopyOutput, std::vector<ASTUseItem::Ent>>(ZeroCopyOutput& out, const std::vector<ASTUseItem::Ent>& values) {
     outCont(out, values);
 }
-
-const ASTPath& ASTModule::astPath() const {
-    if (!astPath_) {
-        astPath_.emplace(myPath);
-    }
-    return *astPath_;
-}

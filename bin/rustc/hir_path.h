@@ -286,10 +286,6 @@ public:
     }
 };
 
-void hirPathParamsAssign(HIRPathParams& dst, const HIRPathParams& src);
-
-void hirPathAssign(HIRPath& dst, const HIRPath& src);
-
 struct HIRConstGenericUnevaluated {
     const HIRType* selfType = nullptr;
 

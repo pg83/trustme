@@ -409,8 +409,6 @@ struct OrderPlace {
            revisited in it (none when there is none): upstream resolved that method
            call or operator before it checked anything after it. */
         Vector<OrderPlace> pendingNodeCut;
-        mutable Vector<const HIRType*> pendingTypes_;
-        mutable Vector<const HIRType*> visitedTypes_;
 
         void collectIvars(const HIRType* root, Vector<unsigned int>& out, bool throughClosures = false) const;
         static void deduplicate(Vector<unsigned int>& values);
@@ -10471,11 +10469,9 @@ auto AssociatedStallCollector::collect() -> void {
 }
 
 auto IvarCoercionIndex::collectIvars(const HIRType* root, Vector<unsigned int>& out, bool throughClosures) const -> void {
-    auto& pending = pendingTypes_;
-    pending.clear();
+    Vector<const HIRType*> pending;
     pending.pushBack(root);
-    auto& visited = visitedTypes_;
-    visited.clear();
+    Vector<const HIRType*> visited;
     while (!pending.empty()) {
         const auto type = pending.back();
         pending.popBack();

@@ -3477,7 +3477,7 @@ namespace {
             }
         }
 
-        bool wasImport = !ir.isAbsoluteChildOf(mod.path(), name);
+        bool wasImport = (ir != mod.path() + name);
         if (list.count(name) > 0) {
             auto& e = list.at(name);
             if (e.path == ir) {

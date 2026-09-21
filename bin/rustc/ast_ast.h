@@ -15,7 +15,6 @@
 #include "parse_tokentree.h"
 #include "macro_rules_macro_rules_ptr.h"
 
-#include <optional>
 #include <std/lib/vector.h>
 
 #include <map>
@@ -722,7 +721,6 @@ public:
 
 class ASTModule {
     ASTAbsolutePath myPath;
-    mutable std::optional<ASTPath> astPath_;
 
 public:
     std::vector<std::unique_ptr<ASTNamed<ASTItem>>> items;
@@ -820,8 +818,6 @@ public:
     const ASTAbsolutePath& path() const {
         return myPath;
     }
-
-    const ASTPath& astPath() const;
 
     std::vector<std::shared_ptr<ASTModule>>& anonMods() {
         return anonModules;

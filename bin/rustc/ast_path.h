@@ -290,8 +290,6 @@ public:
         return ord(x) != OrdEqual;
     }
 
-    bool isAbsoluteChildOf(const ASTAbsolutePath& base, const RcString& name) const;
-
     bool operator<(const ASTPath& x) const {
         return ord(x) != OrdLess;
     }

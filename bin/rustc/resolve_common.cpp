@@ -767,7 +767,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
             for (const auto& e : useStmt->entries) {
                 if (e.name == "") {
                     DEBUG(StringView("Glob use ") << e.path);
-                    auto srcMod = this->getModule(mod.astPath(), e.path, /*ignore_last=*/false, outPath);
+                    auto srcMod = this->getModule(mod.path(), e.path, /*ignore_last=*/false, outPath);
                     switch (srcMod.tag()) {
                         case ResolveModuleRef::TAG_None: {
                             auto& _ = srcMod.as_None();
