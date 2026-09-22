@@ -676,6 +676,16 @@ bool Lexer::trySkipInitialFrontmatter() {
     return false;
 }
 
+static FloatValue parseWholeFloat(StringView whole) {
+    StringBuilder text;
+    for (auto c : whole) {
+        if (c != '_') {
+            text.append(&c, 1);
+        }
+    }
+    return parseFloatValue(text.cStr());
+}
+
 Token Lexer::getTokenInt() {
     if (!this->nextTokens.empty()) {
         auto rv = std::move(this->nextTokens.back());
@@ -710,10 +720,13 @@ Token Lexer::getTokenInt() {
                 NumMode numMode = NumMode::DEC;
 
                 this->ungetc();
+                this->startSpelling("");
                 auto val = this->parseInt(&numMode);
+                const RcString intSpelling = this->takeSpelling();
                 ch = this->getc();
 
                 if (ch == 'e' || ch == 'E' || ch == '.') {
+                    const bool dotted = ch == '.';
                     if (ch == '.') {
                         ch = this->getc();
 
@@ -727,7 +740,7 @@ Token Lexer::getTokenInt() {
                                 this->ungetc();
                                 this->nextTokens.push_back(TOK_DOUBLE_DOT);
                             }
-                            return Token(val, CORETYPE_ANY);
+                            return Token(val, CORETYPE_ANY, intSpelling);
                         }
 
                         if (!ch.isdigit()) {
@@ -739,10 +752,10 @@ Token Lexer::getTokenInt() {
                             this->ungetc();
                             if (ch.isdigit() || (issym(ch) && !sawSpace)) {
                                 this->nextTokens.push_back(TOK_DOT);
-                                return Token(val, CORETYPE_ANY);
+                                return Token(val, CORETYPE_ANY, intSpelling);
                             } else {
-                                FloatValue fval = val.toDouble();
-                                return Token::makeFloat(fval, CORETYPE_ANY);
+                                FloatValue fval = numMode == NumMode::DEC ? parseWholeFloat(StringView(spelling_)) : val.toDouble();
+                                return Token::makeFloat(fval, CORETYPE_ANY, RcString::newInterned(FMT(intSpelling << StringView("."))));
                             }
                         } else {
                         }
@@ -752,7 +765,11 @@ Token Lexer::getTokenInt() {
                     }
 
                     this->ungetc();
-                    FloatValue fval = this->parseFloat(val);
+                    if (dotted) {
+                        spelling_.append(".", 1);
+                    }
+                    FloatValue fval = this->parseFloat(StringView(spelling_));
+                    const RcString floatSpelling = this->takeSpelling();
                     if (fval != fval) {
                         BUG_ASSERT(!this->nextTokens.empty());
                         auto t = std::move(this->nextTokens.back());
@@ -778,13 +795,13 @@ Token Lexer::getTokenInt() {
                         } else if (suffix == "f128") {
                             numType = CORETYPE_F128;
                         } else {
-                            auto tok = Token::makeFloat(fval, CORETYPE_ANY);
+                            auto tok = Token::makeFloat(fval, CORETYPE_ANY, floatSpelling);
                             return Token(TOK_LITERAL_SUFFIXED, tok.toStr() + suffix, this->realGetHygiene());
                         }
                     } else {
                         this->ungetc();
                     }
-                    return Token::makeFloat(fval, numType);
+                    return Token::makeFloat(fval, numType, floatSpelling);
                 } else if (issym(ch)) {
                     std::string suffix;
                     while (issym(ch)) {
@@ -828,13 +845,13 @@ Token Lexer::getTokenInt() {
                     } else if (suffix == "f128") {
                         numType = CORETYPE_F128;
                     } else {
-                        auto tok = Token(val, CORETYPE_ANY);
+                        auto tok = Token(val, CORETYPE_ANY, intSpelling);
                         return Token(TOK_LITERAL_SUFFIXED, tok.toStr() + suffix, this->realGetHygiene());
                     }
-                    return Token(val, numType);
+                    return Token(val, numType, intSpelling);
                 } else {
                     this->ungetc();
-                    return Token(val, numType);
+                    return Token(val, numType, intSpelling);
                 }
             } else if (ch == 'b' || ch == 'r') {
                 bool isByte = false;
@@ -850,6 +867,7 @@ Token Lexer::getTokenInt() {
 
                     if (ch == '"') {
                         std::string str;
+                        this->startSpelling("b\"");
                         while ((ch = this->getc()) != '"') {
                             if (ch == '\\') {
                                 auto v = this->parseEscape('"');
@@ -863,7 +881,7 @@ Token Lexer::getTokenInt() {
                                 str += ch;
                             }
                         }
-                        return this->withLiteralSuffix(Token(TOK_BYTESTRING, mv$(str), realGetHygiene()));
+                        return this->withLiteralSuffix(Token(TOK_BYTESTRING, mv$(str), this->takeSpelling(), realGetHygiene()));
                     } else if (ch == '\'') {
                         ch = this->getc();
                         if (ch == '\\') {
@@ -894,7 +912,9 @@ Token Lexer::getTokenInt() {
                 auto ch = this->getc();
                 this->ungetc();
                 if (ch.isdigit()) {
+                    this->startSpelling("");
                     auto val = this->parseInt(nullptr);
+                    spellingOn_ = false;
                     ch = this->getc();
                     if (ch == '.') {
                         ch = this->getc();
@@ -911,7 +931,8 @@ Token Lexer::getTokenInt() {
                             nextTokens.push_back(Token(val, CORETYPE_ANY));
                         } else if (ch.isdigit()) {
                             this->ungetc();
-                            auto fval = this->parseFloat(val);
+                            auto fval = this->parseFloat(StringView(spelling_));
+                            spellingOn_ = false;
                             if (fval == fval) {
                                 nextTokens.push_back(Token::makeFloat(fval, CORETYPE_ANY));
                             }
@@ -1081,6 +1102,7 @@ Token Lexer::getTokenInt() {
                 }
                 case DOUBLEQUOTE: {
                     std::string str;
+                    this->startSpelling("\"");
                     while ((ch = this->getc()) != '"') {
                         if (ch == '\\') {
                             auto v = this->parseEscape('"');
@@ -1091,7 +1113,7 @@ Token Lexer::getTokenInt() {
                             str += ch;
                         }
                     }
-                    return this->withLiteralSuffix(Token(TOK_STRING, mv$(str), realGetHygiene()));
+                    return this->withLiteralSuffix(Token(TOK_STRING, mv$(str), this->takeSpelling(), realGetHygiene()));
                 }
                 default:
                     BUG_ASSERT(!"bugcheck");
@@ -1105,6 +1127,7 @@ Token Lexer::getTokenInt() {
 
 Token Lexer::getTokenIntRawString(eTokenType kind) {
     const bool isByte = (kind == TOK_BYTESTRING);
+    this->startSpelling(isByte ? "br" : kind == TOK_CSTRING ? "cr" : "r");
     Codepoint ch = this->getc();
     unsigned int hashes = 0;
     while (ch == '#') {
@@ -1112,6 +1135,7 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
         ch = this->getc();
     }
     if (ch != '"') {
+        spellingOn_ = false;
         if (hashes == 0) {
             this->ungetc();
             if (isByte) {
@@ -1167,7 +1191,7 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
             }
         }
     }
-    return this->withLiteralSuffix(Token(kind, mv$(val), realGetHygiene()));
+    return this->withLiteralSuffix(Token(kind, mv$(val), this->takeSpelling(), realGetHygiene()));
 }
 
 Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool parseReservedWord) {
@@ -1187,6 +1211,7 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
     if (ch == '\"') {
         if (str == "c") {
             str = "";
+            this->startSpelling("c\"");
             while ((ch = this->getc()) != '"') {
                 if (ch == '\\') {
                     bool isByteEscape;
@@ -1202,7 +1227,7 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
                     str += ch;
                 }
             }
-            return this->withLiteralSuffix(Token(TOK_CSTRING, mv$(str), realGetHygiene()));
+            return this->withLiteralSuffix(Token(TOK_CSTRING, mv$(str), this->takeSpelling(), realGetHygiene()));
         }
     }
 
@@ -1283,8 +1308,17 @@ U128 Lexer::parseInt(NumMode* numModeOut) {
     return val;
 }
 
-FloatValue Lexer::parseFloat(U128 whole) {
-    std::string sbuf = FMT(whole << StringView("."));
+FloatValue Lexer::parseFloat(StringView whole) {
+    std::string sbuf;
+    for (auto c : whole) {
+        if (c != '_') {
+            sbuf += char(c);
+        }
+    }
+    if (sbuf.empty() || sbuf.back() != '.') {
+        sbuf += '.';
+    }
+    spellingOn_ = true;
 
     auto ch = this->getcNum();
 #define PUTC(ch)                                                                                                                          \
@@ -1491,6 +1525,30 @@ char Lexer::getcByte() {
     return rv;
 }
 
+static size_t encodeUtf8(const Codepoint& cp, char* out) {
+    if (cp.v < 0x80) {
+        out[0] = (char)cp.v;
+        return 1;
+    } else if (cp.v < (0x1F + 1) << (1 * 6)) {
+        out[0] = (char)(0xC0 | ((cp.v >> 6) & 0x1F));
+        out[1] = (char)(0x80 | ((cp.v >> 0) & 0x3F));
+        return 2;
+    } else if (cp.v < (0x0F + 1) << (2 * 6)) {
+        out[0] = (char)(0xE0 | ((cp.v >> 12) & 0x0F));
+        out[1] = (char)(0x80 | ((cp.v >> 6) & 0x3F));
+        out[2] = (char)(0x80 | ((cp.v >> 0) & 0x3F));
+        return 3;
+    } else if (cp.v < (0x07 + 1) << (3 * 6)) {
+        out[0] = (char)(0xF0 | ((cp.v >> 18) & 0x07));
+        out[1] = (char)(0x80 | ((cp.v >> 12) & 0x3F));
+        out[2] = (char)(0x80 | ((cp.v >> 6) & 0x3F));
+        out[3] = (char)(0x80 | ((cp.v >> 0) & 0x3F));
+        return 4;
+    } else {
+        BUG(Span(), StringView("Bad unicode codepoint encountered - ") << formatHex(cp.v));
+    }
+}
+
 Codepoint Lexer::getc() {
     if (lastCharValid) {
         lastCharValid = false;
@@ -1522,6 +1580,11 @@ Codepoint Lexer::getc() {
 #ifdef TRACE_CHARS
         sysO << StringView("getc(): U+") << formatHex(lastChar.v) << endL;
 #endif
+    }
+    if (spellingOn_) {
+        char bytes[4];
+        spellingBeforeLast_ = spelling_.used();
+        spelling_.append(bytes, encodeUtf8(lastChar, bytes));
     }
     return lastChar;
 }
@@ -1587,6 +1650,20 @@ void Lexer::ungetc() {
 #endif
     BUG_ASSERT(!lastCharValid);
     lastCharValid = true;
+    if (spellingOn_) {
+        spelling_.seekAbsolute(spellingBeforeLast_);
+    }
+}
+
+void Lexer::startSpelling(StringView prefix) {
+    spelling_.reset();
+    spelling_.append(prefix.data(), prefix.length());
+    spellingOn_ = true;
+}
+
+RcString Lexer::takeSpelling() {
+    spellingOn_ = false;
+    return RcString::newInterned(static_cast<const char*>(spelling_.data()), spelling_.used());
 }
 
 bool Codepoint::isspace() const {
@@ -1617,23 +1694,8 @@ bool Codepoint::isxdigit() const {
 }
 
 std::string& operator+=(std::string& s, const Codepoint& cp) {
-    if (cp.v < 0x80) {
-        s += (char)cp.v;
-    } else if (cp.v < (0x1F + 1) << (1 * 6)) {
-        s += (char)(0xC0 | ((cp.v >> 6) & 0x1F));
-        s += (char)(0x80 | ((cp.v >> 0) & 0x3F));
-    } else if (cp.v < (0x0F + 1) << (2 * 6)) {
-        s += (char)(0xE0 | ((cp.v >> 12) & 0x0F));
-        s += (char)(0x80 | ((cp.v >> 6) & 0x3F));
-        s += (char)(0x80 | ((cp.v >> 0) & 0x3F));
-    } else if (cp.v < (0x07 + 1) << (3 * 6)) {
-        s += (char)(0xF0 | ((cp.v >> 18) & 0x07));
-        s += (char)(0x80 | ((cp.v >> 12) & 0x3F));
-        s += (char)(0x80 | ((cp.v >> 6) & 0x3F));
-        s += (char)(0x80 | ((cp.v >> 0) & 0x3F));
-    } else {
-        BUG(Span(), StringView("Bad unicode codepoint encountered - ") << formatHex(cp.v));
-    }
+    char bytes[4];
+    s.append(bytes, encodeUtf8(cp, bytes));
     return s;
 }
 

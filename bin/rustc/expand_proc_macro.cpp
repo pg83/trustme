@@ -161,7 +161,7 @@ namespace {
 
         void sendString(const std::string& s);
 
-        void sendRawLiteral(const std::string& s);
+        void sendRawLiteral(StringView s);
 
         void sendBytestring(const std::string& s);
 
@@ -802,6 +802,9 @@ Token ProcMacroInv::realGetToken_() {
             auto token = lexer.getToken();
             ASSERT_BUG(this->parentSpan, token != TOK_EOF, StringView("Empty raw literal from child process"));
             ASSERT_BUG(this->parentSpan, lexer.getToken() == TOK_EOF, StringView("Raw literal contains multiple tokens: `") << text << StringView("`"));
+            if (token == TOK_STRING || token == TOK_BYTESTRING || token == TOK_CSTRING) {
+                token = Token(token.type(), mv$(token.str()), token.spelling(), receivedHygiene);
+            }
             token.setPos(this->getPosition());
             return token;
         }
@@ -986,9 +989,9 @@ auto ProcMacroInv::sendString(const std::string& s) -> void {
     this->sendBytes(s.data(), s.size());
 }
 
-auto ProcMacroInv::sendRawLiteral(const std::string& s) -> void {
+auto ProcMacroInv::sendRawLiteral(StringView s) -> void {
     this->sendU8(static_cast<u8>(TokenClass::RawLiteral));
-    this->sendBytes(s.data(), s.size());
+    this->sendBytes(s.data(), s.length());
 }
 
 auto ProcMacroInv::sendBytestring(const std::string& s) -> void {
@@ -1262,6 +1265,9 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_INTEGER:
             if (tok.datatype() == CORETYPE_CHAR) {
                 pmi.sendChar(tok.intval().truncateU64());
+            } else if (tok.spelling() != RcString()) {
+                auto text = tok.toStr();
+                pmi.sendRawLiteral(StringView(reinterpret_cast<const u8*>(text.data()), text.size()));
             } else {
                 pmi.sendInt(tok.datatype(), tok.intval());
             }
@@ -1270,20 +1276,29 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             pmi.sendChar(tok.intval().truncateU64());
             break;
         case TOK_FLOAT:
-            pmi.sendFloat(tok.datatype(), tok.floatval());
+            if (tok.spelling() != RcString()) {
+                auto text = tok.toStr();
+                pmi.sendRawLiteral(StringView(reinterpret_cast<const u8*>(text.data()), text.size()));
+            } else {
+                pmi.sendFloat(tok.datatype(), tok.floatval());
+            }
             break;
         case TOK_STRING:
-            pmi.sendSpan(tok.strHygiene(), at);
-            pmi.sendString(tok.str());
-            break;
         case TOK_BYTESTRING:
-            pmi.sendSpan(tok.strHygiene(), at);
-            pmi.sendBytestring(tok.str());
-            break;
         case TOK_CSTRING:
-            TODO(sp, StringView("TOK_CSTRING"));
+            pmi.sendSpan(tok.strHygiene(), at);
+            if (tok.spelling() != RcString()) {
+                pmi.sendRawLiteral(StringView(reinterpret_cast<const u8*>(tok.spelling().c_str()), tok.spelling().size()));
+            } else if (tok.type() == TOK_STRING) {
+                pmi.sendString(tok.str());
+            } else if (tok.type() == TOK_BYTESTRING) {
+                pmi.sendBytestring(tok.str());
+            } else {
+                TODO(sp, StringView("TOK_CSTRING"));
+            }
+            break;
         case TOK_LITERAL_SUFFIXED:
-            pmi.sendRawLiteral(tok.str());
+            pmi.sendRawLiteral(StringView(reinterpret_cast<const u8*>(tok.str().data()), tok.str().size()));
             break;
 
         case TOK_HASH:

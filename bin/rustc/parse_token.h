@@ -75,9 +75,10 @@ public:
 
     Token(enum eTokenType type);
     Token(enum eTokenType type, std::string str, Ident::Hygiene h);
+    Token(enum eTokenType type, std::string str, RcString spelling, Ident::Hygiene h);
     Token(enum eTokenType type, Ident i);
-    Token(U128 val, enum eCoreType datatype);
-    static Token makeFloat(FloatValue val, enum eCoreType datatype);
+    Token(U128 val, enum eCoreType datatype, RcString spelling = RcString());
+    static Token makeFloat(FloatValue val, enum eCoreType datatype, RcString spelling = RcString());
     Token(const InterpolatedFragment&);
 
     struct TagTakeIP {};
@@ -101,11 +102,24 @@ public:
     }
 
     std::string& str() {
-        return data_.as_String();
+        return data_.as_String().value;
     }
 
     const std::string& str() const {
-        return data_.as_String();
+        return data_.as_String().value;
+    }
+
+    RcString spelling() const {
+        switch (data_.tag()) {
+            case Data::TAG_String:
+                return data_.as_String().spelling;
+            case Data::TAG_Integer:
+                return data_.as_Integer().spelling;
+            case Data::TAG_Float:
+                return data_.as_Float().spelling;
+            default:
+                return RcString();
+        }
     }
 
     const Ident::Hygiene& strHygiene() const {

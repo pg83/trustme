@@ -1819,8 +1819,11 @@ auto HirDeserialiser::deserialiseTokendata() -> TokenData {
     switch (tag) {
         case TokenData::TAG_None:
             return TokenData::make_None({});
-        case TokenData::TAG_String:
-            return TokenData::make_String(in.readString());
+        case TokenData::TAG_String: {
+            auto value = in.readString();
+            auto spelling = in.readIstring();
+            return TokenData::make_String({mv$(value), spelling});
+        }
         case TokenData::TAG_Ident: {
             auto hygine = deserialiseHygine();
             auto name = in.readIstring();
@@ -1828,11 +1831,13 @@ auto HirDeserialiser::deserialiseTokendata() -> TokenData {
         }
         case TokenData::TAG_Integer: {
             auto dty = static_cast<eCoreType>(in.readTag());
-            return TokenData::make_Integer({dty, in.readU128()});
+            auto value = in.readU128();
+            return TokenData::make_Integer({dty, value, in.readIstring()});
         }
         case TokenData::TAG_Float: {
             auto dty = static_cast<eCoreType>(in.readTag());
-            return TokenData::make_Float({dty, in.readFloatValue()});
+            auto value = in.readFloatValue();
+            return TokenData::make_Float({dty, value, in.readIstring()});
         }
         default:
             BUG(Span(), StringView("Bad tag for Token::Data - ") << static_cast<int>(tag));
@@ -3814,7 +3819,8 @@ auto HirSerialiser::serialise(const TokenData& td) -> void {
             break;
         case TokenData::TAG_String: {
             auto& e = td.as_String();
-            out.writeString(e);
+            out.writeString(e.value);
+            out.writeString(e.spelling);
         } break;
             break;
         case TokenData::TAG_Ident: {
@@ -3827,12 +3833,14 @@ auto HirSerialiser::serialise(const TokenData& td) -> void {
             auto& e = td.as_Integer();
             out.writeTag(e.datatype);
             out.writeU128(e.intval);
+            out.writeString(e.spelling);
         } break;
             break;
         case TokenData::TAG_Float: {
             auto& e = td.as_Float();
             out.writeTag(e.datatype);
             out.writeFloatValue(e.floatval);
+            out.writeString(e.spelling);
         } break;
             break;
         case TokenData::TAG_Fragment: {

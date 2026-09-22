@@ -8,14 +8,19 @@ generate(
     variants=[
         v("None"),
         v("Ident", "Ident"),
-        v("String", "std::string"),
+        v("String", fields=[
+            ("std::string", "value"),
+            ("RcString", "spelling"),
+        ]),
         v("Integer", fields=[
             ("enum eCoreType", "datatype"),
             ("U128", "intval"),
+            ("RcString", "spelling"),
         ]),
         v("Float", fields=[
             ("enum eCoreType", "datatype"),
             ("FloatValue", "floatval"),
+            ("RcString", "spelling"),
         ]),
         v("Fragment", "void*"),
     ],

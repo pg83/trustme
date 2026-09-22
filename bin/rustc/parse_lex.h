@@ -65,6 +65,9 @@ class Lexer: public TokenStream {
     stl::Vector<Codepoint> replayChars;
     size_t replayCharOffset;
     std::vector<Token> nextTokens;
+    bool spellingOn_ = false;
+    size_t spellingBeforeLast_ = 0;
+    stl::Buffer spelling_;
 
     ASTEdition edition;
     Ident::Hygiene hygiene_;
@@ -90,6 +93,8 @@ private:
     Token getTokenIntRawString(eTokenType kind);
     Token getTokenIntIdentifier(Codepoint ch, Codepoint ch2 = '\0', bool parseReservedWord = true);
     Token withLiteralSuffix(Token tok);
+    void startSpelling(stl::StringView prefix);
+    RcString takeSpelling();
     enum class NumMode {
         BIN,
         OCT,
@@ -97,7 +102,7 @@ private:
         HEX,
     };
     U128 parseInt(NumMode* numMode);
-    FloatValue parseFloat(U128 whole);
+    FloatValue parseFloat(stl::StringView whole);
     u32 parseEscape(char enclosing, bool* isByteEscape = nullptr);
 
     void pushHygine() override;

@@ -98,3 +98,19 @@ pub fn check_token_streams(_input: TokenStream) -> TokenStream {
 
     TokenStream::new()
 }
+
+// A literal the lexer read reaches the macro as it is written, the way indoc reads its
+// argument back: a raw string keeps its hashes and its line breaks.
+#[proc_macro]
+pub fn check_source_literals(input: TokenStream) -> TokenStream {
+    let written: Vec<String> = input.into_iter().map(|token| token.to_string()).collect();
+    assert_eq!(
+        written,
+        [
+            "r#\"\n    a \"b\"\n    \"#",
+            "\"\n    c\\n\"",
+            "br\"\n    d\"",
+        ],
+    );
+    TokenStream::new()
+}
