@@ -3479,6 +3479,8 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansio
         void emitToken(Token& tok) {
             switch (tok.type()) {
                 case TOK_INTERPOLATED_PATH:
+                    emitPath(tok.fragPath());
+                    break;
                 case TOK_INTERPOLATED_PATTERN:
                 case TOK_INTERPOLATED_STMT:
                 case TOK_INTERPOLATED_STMT_ITEM:
