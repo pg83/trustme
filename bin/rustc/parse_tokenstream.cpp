@@ -38,6 +38,14 @@ Token TokenStream::innerGetToken() {
 }
 
 Token TokenStream::getToken() {
+    Token ret = takeToken();
+    if (record_) {
+        record_->pushBack(typePool().make<RecordedToken>(ret.clone(), edition, hygiene_));
+    }
+    return ret;
+}
+
+Token TokenStream::takeToken() {
     if (cacheValid) {
         cacheValid = false;
         return mv$(cache);
@@ -72,6 +80,9 @@ void TokenStream::putback(Token tok) {
     } else {
         cacheValid = true;
         cache = mv$(tok);
+        if (record_ && !record_->empty()) {
+            record_->popBack();
+        }
     }
 }
 

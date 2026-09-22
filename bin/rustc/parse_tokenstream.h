@@ -43,6 +43,12 @@ public:
     ASTModule& getCurrentMod();
 };
 
+struct RecordedToken {
+    Token tok;
+    ASTEdition edition;
+    Ident::Hygiene hygiene;
+};
+
 class TokenStream {
     friend class TTLexer;
 
@@ -69,11 +75,18 @@ class TokenStream {
 
     ParseState parseState_;
     bool macroExpansionPlaceholder_ = false;
+    stl::Vector<RecordedToken*>* record_ = nullptr;
+
+    Token takeToken();
 
 public:
     TokenStream(ParseState ps);
     virtual ~TokenStream();
     Token getToken();
+
+    void recordInto(stl::Vector<RecordedToken*>* out) {
+        record_ = out;
+    }
 
     bool getTokenIf(eTokenType exp);
 

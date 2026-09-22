@@ -12,6 +12,7 @@
 #include "expand_cfg.h"
 #include "wire_board.h"
 #include "parse_tokentree.h"
+#include "parse_ttstream.h"
 #include "parse_parseerror.h"
 #include "macro_rules_macro_rules.h"
 #include "parse_interpolated_fragment.h"
@@ -4779,6 +4780,38 @@ void ParseParentAttrs(TokenStream& lex, ASTAttributeList& out) {
     }
 }
 
+namespace {
+    bool isLiteralToken(eTokenType t) {
+        switch (t) {
+            case TOK_INTEGER:
+            case TOK_CHAR:
+            case TOK_FLOAT:
+            case TOK_STRING:
+            case TOK_BYTESTRING:
+            case TOK_CSTRING:
+            case TOK_RWORD_TRUE:
+            case TOK_RWORD_FALSE:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    bool endsAttributeValue(eTokenType t) {
+        switch (t) {
+            case TOK_SQUARE_CLOSE:
+            case TOK_PAREN_CLOSE:
+            case TOK_BRACE_CLOSE:
+            case TOK_COMMA:
+            case TOK_SEMICOLON:
+            case TOK_EOF:
+                return true;
+            default:
+                return false;
+        }
+    }
+}
+
 ASTAttribute ParseMetaItem(TokenStream& lex) {
     TRACE_FUNCTION;
     Token tok;
@@ -4805,8 +4838,21 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
         case TOK_EQUAL: {
             std::vector<TokenTree> tt;
             tt.push_back(std::move(tok));
-            while (lex.lookahead(0) != TOK_EOF && lex.lookahead(0) != TOK_SQUARE_CLOSE && lex.lookahead(0) != TOK_PAREN_CLOSE && lex.lookahead(0) != TOK_BRACE_CLOSE && lex.lookahead(0) != TOK_COMMA && lex.lookahead(0) != TOK_SEMICOLON) {
+            if (isLiteralToken(lex.lookahead(0)) && endsAttributeValue(lex.lookahead(1))) {
                 tt.push_back(ParseTT(lex, false));
+            } else {
+                Vector<RecordedToken*> value;
+                lex.recordInto(&value);
+                ParseExpr(lex);
+                lex.recordInto(nullptr);
+                for (const auto* recorded : value) {
+                    tt.push_back(TokenTree(recorded->edition, recorded->hygiene, recorded->tok.clone()));
+                }
+                TTStreamO replay(lex.pointSpan(), lex.parseState(), TokenTree(lex.getEdition(), lex.getHygiene(), std::move(tt)));
+                tt.clear();
+                while (replay.lookahead(0) != TOK_EOF) {
+                    tt.push_back(ParseTT(replay, false));
+                }
             }
             attrData = TokenTree(lex.getEdition(), lex.getHygiene(), std::move(tt));
         } break;
