@@ -2345,7 +2345,7 @@ auto ProcMacroVisitor::visitAttrs(const ASTAttributeList& attrs) -> void {
 
 auto ProcMacroVisitor::visitAttr(const ASTAttribute& a) -> void {
     if (a.name() == "cfg_attr") {
-        auto newAttrs = checkCfgAttr(settings, a);
+        auto newAttrs = checkCfgAttr(wb, a);
         for (const auto& na : newAttrs) {
             this->visitAttr(na);
         }

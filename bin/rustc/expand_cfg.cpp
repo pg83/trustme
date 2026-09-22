@@ -324,18 +324,21 @@ bool checkCfgAttrs(const Settings& settings, const ASTAttributeList& attrs) {
     return true;
 }
 
-std::vector<ASTAttribute> checkCfgAttr(const Settings& settings, const ASTAttribute& mi) {
-    const auto& cfg = *settings.cfg;
-    TTStream lex(mi.span(), ParseState(), mi.data());
+std::vector<ASTAttribute> checkCfgAttr(const WireBoard& wb, const ASTAttribute& mi) {
+    const auto& cfg = *wb.settings->cfg;
+    ParseState ps;
+    ps.wb = &wb;
+    TTStream lex(mi.span(), ps, mi.data());
 
     Token tok;
     std::vector<ASTAttribute> rv;
     lex.getTokenCheck(TOK_PAREN_OPEN);
     auto cfgRes = checkCfgInner(cfg, lex);
-    while (lex.lookahead(0) == TOK_COMMA) {
+    while (lex.lookahead(0) == TOK_COMMA && lex.lookahead(1) != TOK_PAREN_CLOSE) {
         lex.getTokenCheck(TOK_COMMA);
         rv.push_back(ParseMetaItem(lex));
     }
+    lex.getTokenIf(TOK_COMMA);
     lex.getTokenCheck(TOK_PAREN_CLOSE);
     lex.getTokenCheck(TOK_EOF);
     if (cfgRes) {

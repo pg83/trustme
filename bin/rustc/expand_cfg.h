@@ -16,6 +16,7 @@ class TokenStream;
 
 class ASTAttribute;
 class ASTAttributeList;
+struct WireBoard;
 
 Settings::CfgState* CfgCreateState(stl::ObjPool& pool);
 
@@ -64,4 +65,4 @@ bool checkCfg(const Settings& settings, const Span& sp, const ASTAttribute& mi);
 
 bool checkCfgStream(const Settings& settings, TokenStream& lex);
 
-std::vector<ASTAttribute> checkCfgAttr(const Settings& settings, const ASTAttribute& mi);
+std::vector<ASTAttribute> checkCfgAttr(const WireBoard& wb, const ASTAttribute& mi);

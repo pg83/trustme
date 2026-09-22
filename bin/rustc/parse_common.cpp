@@ -2001,7 +2001,7 @@ namespace {
             const RcString rcstringCfgAttr = RcString::newInterned("cfg_attr");
             for (auto it = attrs.items.begin(); it != attrs.items.end();) {
                 if (it->name() == rcstringCfgAttr) {
-                    auto produced = checkCfgAttr(*wb->settings, *it);
+                    auto produced = checkCfgAttr(*wb, *it);
                     it = attrs.items.erase(it);
                     it = attrs.items.insert(it, std::make_move_iterator(produced.begin()), std::make_move_iterator(produced.end()));
                 } else {
@@ -5563,7 +5563,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 if (a.name() == "path") {
                     pathAttr = a.parseEqualsString(*lex.parseState().wb, *lex.parseState().crate, *lex.parseState().module);
                 } else if (a.name() == "cfg_attr") {
-                    for (const auto& a2 : checkCfgAttr(*lex.parseState().wb->settings, a)) {
+                    for (const auto& a2 : checkCfgAttr(*lex.parseState().wb, a)) {
                         DEBUG(StringView("[mod path_attr cfg_attr] ") << a2);
                         if (a2.name() == "path") {
                             pathAttr = a2.parseEqualsString(*lex.parseState().wb, *lex.parseState().crate, *lex.parseState().module);

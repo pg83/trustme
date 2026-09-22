@@ -14,13 +14,13 @@
 using namespace stl;
 
 namespace {
-    bool checkAttributeCfg(const Settings& settings, const ASTAttribute& attr) {
+    bool checkAttributeCfg(const WireBoard& wb, const ASTAttribute& attr) {
         if (attr.name() == "cfg") {
-            return checkCfg(settings, attr.span(), attr);
+            return checkCfg(*wb.settings, attr.span(), attr);
         }
         if (attr.name() == "cfg_attr") {
-            for (const auto& expanded : checkCfgAttr(settings, attr)) {
-                if (!checkAttributeCfg(settings, expanded)) {
+            for (const auto& expanded : checkCfgAttr(wb, attr)) {
+                if (!checkAttributeCfg(wb, expanded)) {
                     return false;
                 }
             }
@@ -28,9 +28,9 @@ namespace {
         return true;
     }
 
-    bool checkItemCfg(const Settings& settings, const ASTAttributeList& attrs) {
+    bool checkItemCfg(const WireBoard& wb, const ASTAttributeList& attrs) {
         for (const auto& at : attrs.items) {
-            if (!checkAttributeCfg(settings, at)) {
+            if (!checkAttributeCfg(wb, at)) {
                 return false;
             }
         }
@@ -38,12 +38,12 @@ namespace {
     }
 
     template <typename F>
-    void iterateModule(const Settings& settings, ASTModule& mod, F fcn) {
+    void iterateModule(const WireBoard& wb, ASTModule& mod, F fcn) {
         fcn(mod);
         for (auto& sm : mod.items) {
             if (auto* e = sm->data.opt_Module()) {
-                if (checkItemCfg(settings, sm->attrs)) {
-                    iterateModule(settings, *e, fcn);
+                if (checkItemCfg(wb, sm->attrs)) {
+                    iterateModule(wb, *e, fcn);
                 }
             }
         }
@@ -92,7 +92,7 @@ void ASTCrate::loadExterns(Settings& settings) {
     auto cb = [this, &settings](ASTModule& mod) {
         for (/*const*/ auto& it : mod.items) {
             if (auto* c = it->data.opt_Crate()) {
-                if (checkItemCfg(settings, it->attrs)) {
+                if (checkItemCfg(wb, it->attrs)) {
                     if (c->name == "") {
                     } else {
                         c->name = loadExternCrate(settings, it->span, c->name);
@@ -101,8 +101,8 @@ void ASTCrate::loadExterns(Settings& settings) {
             }
         }
     };
-    if (checkItemCfg(settings, attrs)) {
-        iterateModule(settings, rootModule_, cb);
+    if (checkItemCfg(wb, attrs)) {
+        iterateModule(wb, rootModule_, cb);
     }
 
     bool noStd = false;
@@ -116,7 +116,7 @@ void ASTCrate::loadExterns(Settings& settings) {
             noCore = true;
         }
         if (a.name() == "cfg_attr") {
-            for (const auto& a2 : checkCfgAttr(settings, a)) {
+            for (const auto& a2 : checkCfgAttr(wb, a)) {
                 if (a2.name() == "no_std") {
                     noStd = true;
                 }
