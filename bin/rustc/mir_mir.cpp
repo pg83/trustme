@@ -38,8 +38,11 @@ using namespace stl;
         case MIRConstant::TAG_Float: {
             auto& ae = (*this).as_Float();
             auto& be = b.as_Float();
-            if (ae.v != be.v) {
-                return ae.v > be.v ? OrdGreater : OrdLess;
+            if (ae.v.bitsHi() != be.v.bitsHi()) {
+                return ::ord(ae.v.bitsHi(), be.v.bitsHi());
+            }
+            if (ae.v.bitsLo() != be.v.bitsLo()) {
+                return ::ord(ae.v.bitsLo(), be.v.bitsLo());
             }
             return ::ord((unsigned)ae.t, (unsigned)be.t);
             break;
