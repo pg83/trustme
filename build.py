@@ -916,6 +916,143 @@ num_bigint = add_project_test(
     lockfile="$(S)/tst/projects/num-bigint/Cargo.lock",
 )
 
+# Sixteen crates added together on 2026-09-22 (lockfiles from cargo 1.90.0,
+# sources pinned at the release tags). Their first run took 5m45s for all
+# sixteen in parallel at -j 40, src and vendor nodes included. The three that
+# passed - memchr, semver, pulldown-cmark - are budgeted at twice that bound
+# by the tier rule; the thirteen red ones fail inside the compiler or a
+# dependency before or during their tests, so their full duration is
+# unmeasured and they keep the heavy budget until they run to the end.
+hashbrown_0_17_1 = add_project_test(
+    name="hashbrown_0_17_1",
+    url="https://github.com/rust-lang/hashbrown.git",
+    rev="c62a63a61b7caf2de8f9ecb7b06a66b0ab6bdf3d",
+    lockfile="$(S)/tst/projects/hashbrown_0_17_1/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+indexmap_2_14_2 = add_project_test(
+    name="indexmap_2_14_2",
+    url="https://github.com/indexmap-rs/indexmap.git",
+    rev="41a870887c4c77adf665886e63df08f406bfe37a",
+    lockfile="$(S)/tst/projects/indexmap_2_14_2/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+memchr_2_8_3 = add_project_test(
+    name="memchr_2_8_3",
+    url="https://github.com/BurntSushi/memchr.git",
+    rev="5fdb40c054e1fff359a2f7bdf7f87a13b34b465d",
+    lockfile="$(S)/tst/projects/memchr_2_8_3/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+serde_json_1_0_151 = add_project_test(
+    name="serde_json_1_0_151",
+    url="https://github.com/serde-rs/json.git",
+    rev="de8500740cdcabffb9734f503e4889def823cf10",
+    lockfile="$(S)/tst/projects/serde_json_1_0_151/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+once_cell_1_21_4 = add_project_test(
+    name="once_cell_1_21_4",
+    url="https://github.com/matklad/once_cell.git",
+    rev="80fe900b21f6d76c1a2ed74d3343e8a3a88c46d0",
+    lockfile="$(S)/tst/projects/once_cell_1_21_4/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+smallvec_1_16_2 = add_project_test(
+    name="smallvec_1_16_2",
+    url="https://github.com/servo/rust-smallvec.git",
+    rev="ccf5fc71044d491c46a3d79e7ed53948e6da1590",
+    lockfile="$(S)/tst/projects/smallvec_1_16_2/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+regex_1_13_1 = add_project_test(
+    name="regex_1_13_1",
+    url="https://github.com/rust-lang/regex.git",
+    rev="2b527599eb9eea0dcc288c704584f242f26a5c61",
+    lockfile="$(S)/tst/projects/regex_1_13_1/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+aho_corasick_1_1_5 = add_project_test(
+    name="aho_corasick_1_1_5",
+    url="https://github.com/BurntSushi/aho-corasick.git",
+    rev="5178060ce73d91938f8582d0360e3be031380440",
+    lockfile="$(S)/tst/projects/aho_corasick_1_1_5/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+bytes_1_12_1 = add_project_test(
+    name="bytes_1_12_1",
+    url="https://github.com/tokio-rs/bytes.git",
+    rev="76c0fbb54ed4336caf9d2311658a2f4a5627c21d",
+    lockfile="$(S)/tst/projects/bytes_1_12_1/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+petgraph_0_8_3 = add_project_test(
+    name="petgraph_0_8_3",
+    url="https://github.com/petgraph/petgraph.git",
+    rev="162903562ce5b00cdba390a0d9c1bb80f1c75bf5",
+    lockfile="$(S)/tst/projects/petgraph_0_8_3/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+ryu_1_0_23 = add_project_test(
+    name="ryu_1_0_23",
+    url="https://github.com/dtolnay/ryu.git",
+    rev="f0b52bb194befe6fd242154f2182fafd43a819b8",
+    lockfile="$(S)/tst/projects/ryu_1_0_23/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+semver_1_0_28 = add_project_test(
+    name="semver_1_0_28",
+    url="https://github.com/dtolnay/semver.git",
+    rev="7625c7aa3f0e8ba21e099d1765bcebcb72aa8816",
+    lockfile="$(S)/tst/projects/semver_1_0_28/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+bumpalo_3_20_3 = add_project_test(
+    name="bumpalo_3_20_3",
+    url="https://github.com/fitzgen/bumpalo.git",
+    rev="84654ace6be4444da3ff102a0a0af3b38c4df4fb",
+    lockfile="$(S)/tst/projects/bumpalo_3_20_3/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+nom_8_0_0 = add_project_test(
+    name="nom_8_0_0",
+    url="https://github.com/rust-bakery/nom.git",
+    rev="2cec1b3e4c9ccac62c902d60c00de6d1549ccbe1",
+    lockfile="$(S)/tst/projects/nom_8_0_0/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+sqlparser_0_63_0 = add_project_test(
+    name="sqlparser_0_63_0",
+    url="https://github.com/apache/datafusion-sqlparser-rs.git",
+    rev="85b1a6f2223bf95d98cf1bc504971abd191dc869",
+    lockfile="$(S)/tst/projects/sqlparser_0_63_0/Cargo.lock",
+    timeout=HEAVY_PROJECT_TIMEOUT,
+)
+
+pulldown_cmark_0_13_4 = add_project_test(
+    name="pulldown_cmark_0_13_4",
+    url="https://github.com/pulldown-cmark/pulldown-cmark.git",
+    rev="38e4d08f14ec4bd9783270e9623db7681ebed968",
+    manifest="pulldown-cmark",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/pulldown_cmark_0_13_4/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
 # Unit regressions: one self-contained tst/unit/test_*.rs per compiler fix,
 # each its own node — compiled against the shared libstd and run (must exit 0).
 unit_tests = [
