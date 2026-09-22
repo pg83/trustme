@@ -1666,7 +1666,7 @@ namespace {
                         rv.align = innerRepr->align;
                     } else {
                         rv.size = 0;
-                        rv.align = 0;
+                        rv.align = 1;
                     }
                 } else {
                     struct Variant {
@@ -2051,6 +2051,9 @@ namespace {
                     }
                     DEBUG(StringView("vals = ") << vals);
                     rv.variants = TypeRepr::VariantMode::make_Values({{0, static_cast<u8>(rv.size), {}}, std::move(vals)});
+                } else {
+                    rv.size = 0;
+                    rv.align = 1;
                 }
             } break;
         }
