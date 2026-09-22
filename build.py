@@ -101,6 +101,11 @@ SRC = RUSTC_CPP_SRC
 # and are linked into the rustc_ut runner, not into the compiler.
 UT_SRC = sorted(s for s in SRC if s.endswith("_ut.cpp"))
 SRC = [s for s in SRC if not s.endswith("_ut.cpp")]
+# A sanitizer owns malloc; the process allocator stays out of a sanitized build.
+SANITIZED = any(
+    flag.startswith("-fsanitize=") for flag in (*build.cflags, *build.cxxflags)
+)
+SRC = [s for s in SRC if not (SANITIZED and s.endswith("/malloc.cpp"))]
 
 # The tu_gen.py sample fixture is exercised by tagged_union_sample_ut.cpp in
 # the rustc_ut runner; it is not part of the compiler.
@@ -375,9 +380,6 @@ TESTS_LIB = [*TIMEOUT_INPUT, "$(S)/tst/lib.py", "$(S)/tst/wrap_gdb.py"]
 # is here to catch a hang, not to time the sanitizer, so each one stretches by
 # that measured factor when the toolchain carries a sanitizer, and is left
 # exactly as measured when it does not.
-SANITIZED = any(
-    flag.startswith("-fsanitize=") for flag in (*build.cflags, *build.cxxflags)
-)
 TIMEOUT_SCALE = 5 if SANITIZED else 1
 
 
