@@ -772,7 +772,7 @@ namespace {
                                 }
                             }
 
-                            if (e.data.is_Data() && e.data.as_Data()[idx].isStruct) {
+                            if ((e.data.is_Data() && e.data.as_Data()[idx].isStruct) || mode == Context::LookupMode::Type || mode == Context::LookupMode::Namespace || mode == Context::LookupMode::PatternType) {
                                 path.bindings.type.set(ap, ASTPathBindingType::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &e}));
                             } else {
                                 path.bindings.value.set(ap, ASTPathBindingValue::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &e}));
@@ -1490,7 +1490,7 @@ namespace {
                                     auto newPath = std::move(p);
                                     newPath.append(name);
                                     const bool isStruct = enm.data.is_Data() && enm.data.as_Data()[idx].isStruct;
-                                    if (isStruct) {
+                                    if (isStruct || mode == Context::LookupMode::Type || mode == Context::LookupMode::Namespace || mode == Context::LookupMode::PatternType) {
                                         newPath.bindings.type.set(p2, ASTPathBindingType::make_EnumVar({nullptr, static_cast<unsigned>(idx), &enm}));
                                     } else {
                                         newPath.bindings.value.set(p2, ASTPathBindingValue::make_EnumVar({nullptr, static_cast<unsigned>(idx), &enm}));
