@@ -2816,6 +2816,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     }
     rv.returnType = LowerHIRType(f.rettype());
     rv.source = SourceLocation(f.sp());
+    rv.span = f.sp();
     rv.code = LowerHIRExpr(f.code());
     if (rv.code) {
         bool neverArg = false;

@@ -136,8 +136,11 @@ auto UnsafeCodeVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitI
 auto UnsafeCodeVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     const auto saved = level_;
     level_ = ApplyLintLevelOverrides(settings_, item.markings.lintLevels, LINT_NAME, level_);
-    if (item.unsafe && item.code && !spanIsNotUserCode(item.code->span(), crateName_)) {
-        report(level_, item.code->span(), "an `unsafe` function");
+    if (item.unsafe && item.code) {
+        const Span& declaration = item.span ? item.span : item.code->span();
+        if (!spanIsNotUserCode(declaration, crateName_)) {
+            report(level_, declaration, "an `unsafe` function");
+        }
     }
     HIRVisitor::visitFunction(p, item);
     level_ = saved;

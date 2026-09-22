@@ -187,6 +187,7 @@ public:
     std::optional<const HIRType*> traitReturnType;
 
     SourceLocation source;
+    Span span;
     HIRExprPtr code;
 
     std::vector<HIRSimplePath> defineOpaque;
