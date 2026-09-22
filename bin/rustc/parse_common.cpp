@@ -574,11 +574,7 @@ namespace {
                                     val->setSpan(lex.subSpan(methodPosition));
                                     break;
                                 case TOK_DOUBLE_COLON:
-                                    if (lex.getTokenIf(TOK_DOUBLE_LT)) {
-                                        lex.putback(Token(TOK_LT));
-                                    } else {
-                                        GET_CHECK_TOK(tok, lex, TOK_LT);
-                                    }
+                                    ParseGenericOpen(lex);
                                     pn.args() = ParsePathGenericList(lex);
                                     val = NEWNODE(ASTExprNodeCallMethod, std::move(val), std::move(pn), ParseParenList(lex));
                                     val->setSpan(lex.subSpan(methodPosition));
@@ -4229,14 +4225,7 @@ std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode 
                 GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
             }
             if (lex.lookahead(0) == TOK_LT || lex.lookahead(0) == TOK_DOUBLE_LT || lex.lookahead(0) == TOK_THINARROW_LEFT) {
-                GET_TOK(tok, lex);
-                if (tok.type() == TOK_DOUBLE_LT) {
-                    lex.putback(Token(TOK_LT));
-                }
-                if (tok.type() == TOK_THINARROW_LEFT) {
-                    lex.putback(Token(TOK_DASH));
-                }
-
+                ParseGenericOpen(lex);
                 params = ParsePathGenericList(lex);
             } else if (lex.lookahead(0) == TOK_PAREN_OPEN) {
                 auto ps = lex.startSpan();
@@ -4298,6 +4287,25 @@ std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode 
     }
     DEBUG(StringView("ret = ") << ret);
     return ret;
+}
+
+/* The `<` that opens generic arguments, taken out of the `<<` or `<-` the
+   lexer made of it, as upstream's `break_two_token_op` does. */
+void ParseGenericOpen(TokenStream& lex) {
+    Token tok;
+    GET_TOK(tok, lex);
+    switch (tok.type()) {
+        case TOK_LT:
+            break;
+        case TOK_DOUBLE_LT:
+            lex.putback(Token(TOK_LT));
+            break;
+        case TOK_THINARROW_LEFT:
+            lex.putback(Token(TOK_DASH));
+            break;
+        default:
+            parseErrorUnexpected(lex, tok, TOK_LT);
+    }
 }
 
 ASTPathParams ParsePathGenericList(TokenStream& lex) {

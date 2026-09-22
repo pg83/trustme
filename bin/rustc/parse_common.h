@@ -33,6 +33,7 @@ ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode);
 ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMode);
 std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode genericMode);
 ASTPathParams ParsePathGenericList(TokenStream& lex);
+void ParseGenericOpen(TokenStream& lex);
 
 ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted = true);
 ASTHigherRankedBounds ParseHRB(TokenStream& lex);

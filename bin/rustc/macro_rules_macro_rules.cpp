@@ -469,6 +469,12 @@ namespace {
         return true;
     }
 
+    /* `<`, or the `<<` and `<-` the lexer fuses it into, opens generic
+       arguments; upstream splits the fused token (`break_two_token_op`). */
+    static bool opensAngle(eTokenType t) {
+        return t == TOK_LT || t == TOK_DOUBLE_LT || t == TOK_THINARROW_LEFT;
+    }
+
     bool consumeTtAngle(TokenStreamRO& lex) {
         TRACE_FUNCTION;
         unsigned int level = (lex.next() == TOK_DOUBLE_LT ? 2 : 1);
@@ -476,7 +482,7 @@ namespace {
         // TODO: Can expressions show up on this context?
         lex.consume();
         for (;;) {
-            if (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT) {
+            if (opensAngle(lex.next())) {
                 level += (lex.next() == TOK_DOUBLE_LT ? 2 : 1);
             } else if (lex.next() == TOK_DOUBLE_GT_EQUAL) {
                 BUG_ASSERT(level > 0);
@@ -544,7 +550,7 @@ namespace {
                 break;
             case TOK_IDENT:
                 lex.consume();
-                if (typeMode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT || lex.next() == TOK_PAREN_OPEN))
+                if (typeMode && (opensAngle(lex.next()) || lex.next() == TOK_PAREN_OPEN))
                     ;
                 else if (lex.next() != TOK_DOUBLE_COLON) {
                     return true;
@@ -564,7 +570,7 @@ namespace {
                 return false;
         }
 
-        if (typeMode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
+        if (typeMode && (opensAngle(lex.next()))) {
             if (!consumeTtAngle(lex)) {
                 return false;
             }
@@ -574,13 +580,13 @@ namespace {
             lex.consume();
             if (lex.next() == TOK_STRING) {
                 lex.consume();
-            } else if (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT) {
+            } else if (opensAngle(lex.next())) {
                 if (!consumeTtAngle(lex)) {
                     return false;
                 }
             } else if (lex.next() == TOK_IDENT || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_RWORD_CRATE) {
                 lex.consume();
-                if (typeMode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
+                if (typeMode && (opensAngle(lex.next()))) {
                     if (!consumeTtAngle(lex)) {
                         return false;
                     }
@@ -1180,7 +1186,7 @@ namespace {
                         exprIsComplete = false;
                         if (lex.consumeIf(TOK_IDENT)) {
                             if (lex.consumeIf(TOK_DOUBLE_COLON)) {
-                                if (!(lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
+                                if (!(opensAngle(lex.next()))) {
                                     return false;
                                 }
                                 if (!consumeTtAngle(lex)) {
