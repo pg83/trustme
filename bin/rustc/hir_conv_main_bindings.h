@@ -26,6 +26,7 @@ HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& 
 void ConvertHIRExpandAliases(const WireBoard& wb, HIRCrate& crate);
 void ConvertHIRValidateReceivers(const WireBoard& wb, HIRCrate& crate);
 void ConvertHIRExpandAliasesSelf(HIRCrate& crate);
+const HIRType* ConvertHIRExpandAliasesSelfType(const HIRCrate& crate, const HIRType* implType, const HIRType* ty);
 const HIRType* ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRType* implType, std::vector<std::pair<HIRPattern, const HIRType*>>& args, const HIRType* retTy, HIRExprPtr& expr);
 const HIRType* ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr);
 void ConvertHIRBind(const WireBoard& wb, HIRCrate& crate);

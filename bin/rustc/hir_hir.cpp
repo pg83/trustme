@@ -1892,6 +1892,8 @@ HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath
                 ep.state->stage = HIRExprState::Stage::Mir;
             }
             BUG_ASSERT(ep.mir);
+        } else if (ep.state && ep.state->currentSelfType) {
+            retTy = ConvertHIRExpandAliasesSelfType(*this, ep.state->currentSelfType, retTy);
         }
         return {&*ep.mir, retTy};
     }

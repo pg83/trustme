@@ -837,6 +837,11 @@ void ConvertHIRExpandAliasesSelf(HIRCrate& crate) {
     exp.visitCrate(crate);
 }
 
+const HIRType* ConvertHIRExpandAliasesSelfType(const HIRCrate& crate, const HIRType* implType, const HIRType* ty) {
+    ExpanderSelf exp{crate, implType};
+    return exp.visitType(ty);
+}
+
 const HIRType* ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRType* implType, std::vector<std::pair<HIRPattern, const HIRType*>>& args, const HIRType* retTy, HIRExprPtr& expr) {
     ExpanderSelf exp{crate, implType};
     for (auto& arg : args) {
@@ -1410,6 +1415,7 @@ auto BindVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     checkImplParamsConstrained(impl.params, impl.type, nullptr);
     auto _ = this->ms.setImplGenerics(impl.params);
     const auto oldSelfType = selfType;
+    impl.type = visitType(impl.type);
     selfType = impl.type;
 
     auto modIp = HIRItemPath(impl.srcModule);
@@ -1439,6 +1445,7 @@ auto BindVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
     auto _1 = this->ms.setCurrentTrait(traitGpath);
     auto _ = this->ms.setImplGenerics(impl.params);
     const auto oldSelfType = selfType;
+    impl.type = visitType(impl.type);
     selfType = impl.type;
 
     auto modIp = HIRItemPath(impl.srcModule);
@@ -1460,6 +1467,7 @@ auto BindVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
 auto BindVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) -> void {
     auto _ = this->ms.setImplGenerics(impl.params);
     const auto oldSelfType = selfType;
+    impl.type = visitType(impl.type);
     selfType = impl.type;
 
     auto modIp = HIRItemPath(impl.srcModule);
@@ -3720,6 +3728,9 @@ auto UfcsVisitor::visitExpr(HIRExprPtr& expr) -> void {
         }
     };
 
+    if (expr.state && expr.state->stage >= HIRExprState::Stage::ConstEval) {
+        return;
+    }
     if (visitExprs_ && expr.get() != nullptr) {
         auto savedInExpr = inExpr;
         const auto* savedDefiningOpaqueAliases = definingOpaqueAliases_;
