@@ -1019,7 +1019,43 @@ namespace {
         return visitor.visit(node);
     }
 
+    const ASTAttributeList* genericParamAttrs(const GenericParam& param) {
+        switch (param.tag()) {
+            case GenericParam::TAG_Lifetime:
+                return &param.as_Lifetime().attrs();
+            case GenericParam::TAG_Type:
+                return &param.as_Type().attrs();
+            case GenericParam::TAG_Value:
+                return &param.as_Value().attrs();
+            case GenericParam::TAG_None:
+                break;
+        }
+        return nullptr;
+    }
+
+    void StripConfiguredOutGenericParams(const Settings& settings, ASTGenericParams& params) {
+        for (size_t idx = params.params.size(); idx-- > 0;) {
+            const auto* attrs = genericParamAttrs(params.params[idx]);
+            if (!attrs || checkCfgAttrs(settings, *attrs)) {
+                continue;
+            }
+            const size_t start = params.params[idx].boundsStart;
+            const size_t end = params.params[idx].boundsEnd;
+            if (start != SIZE_MAX && end > start) {
+                params.bounds.erase(params.bounds.begin() + start, params.bounds.begin() + end);
+                for (auto& other : params.params) {
+                    if (other.boundsStart != SIZE_MAX && other.boundsStart >= end) {
+                        other.boundsStart -= end - start;
+                        other.boundsEnd -= end - start;
+                    }
+                }
+            }
+            params.params.erase(params.params.begin() + idx);
+        }
+    }
+
     void ExpandGenericParams(const ExpandState& es, ASTModule& mod, ASTGenericParams& params) {
+        StripConfiguredOutGenericParams(*es.wb.settings, params);
         for (auto& paramDef : params.params) {
             switch (paramDef.tag()) {
                 case GenericParam::TAG_None: {
@@ -1346,6 +1382,7 @@ namespace {
                 switch (i.data.tag()) {
                     case ASTItem::TAG_Struct: {
                         auto& str = i.data.as_Struct();
+                        StripConfiguredOutGenericParams(*es.wb.settings, str.params());
                         switch (str.data.tag()) {
                             case ASTStructData::TAG_Unit: {
                                 break;
@@ -1365,11 +1402,13 @@ namespace {
                     }
                     case ASTItem::TAG_Union: {
                         auto& unm = i.data.as_Union();
+                        StripConfiguredOutGenericParams(*es.wb.settings, unm.params());
                         H::filterCfg(*es.wb.settings, unm.variants);
                         break;
                     }
                     case ASTItem::TAG_Enum: {
                         auto& enm = i.data.as_Enum();
+                        StripConfiguredOutGenericParams(*es.wb.settings, enm.params());
                         for (auto it = enm.variants().begin(); it != enm.variants().end();) {
                             if (!checkCfgAttrs(*es.wb.settings, it->attrs)) {
                                 it = enm.variants().erase(it);
