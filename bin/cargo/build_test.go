@@ -309,6 +309,7 @@ func TestTestHarnessLeavesTheProgramItsOwnName(t *testing.T) {
 
 	outputDir := builder.outputDir(true)
 	program := filepath.Join(outputDir, "prog"+executableSuffix())
+	example := filepath.Join(outputDir, "examples", "ex"+executableSuffix())
 	deps := filepath.Join(outputDir, "deps")
 	installed := map[string]InstallArtifact{}
 
@@ -321,7 +322,7 @@ func TestTestHarnessLeavesTheProgramItsOwnName(t *testing.T) {
 	}
 
 	for path, artifact := range installed {
-		if path == program {
+		if path == program || path == example {
 			continue
 		}
 		if filepath.Dir(path) != deps {
@@ -349,6 +350,47 @@ func TestTestHarnessLeavesTheProgramItsOwnName(t *testing.T) {
 
 	if want := 3; harnesses != want {
 		t.Fatalf("reported %d harnesses, want %d (lib, bin, integration test)", harnesses, want)
+	}
+}
+
+// `cargo test` builds every example as the program it is, to check that it
+// compiles (`new_units`, cargo/ops/cargo_compile/unit_generator.rs), and puts
+// it in `target/<profile>/examples`, where once_cell's `reentrant_init` runs
+// `reentrant_init_deadlocks` from. An example is not a harness and is not run.
+func TestATestRunBuildsTheExamplesAsPrograms(t *testing.T) {
+	pkg := devDependentPackage(t)
+	builder := builderFor(pkg, BuildOptions{command: "test"})
+	_, artifacts, reports := builder.rootTasks()
+
+	example := filepath.Join(builder.outputDir(true), "examples", "ex"+executableSuffix())
+	var installed *InstallArtifact
+
+	for i := range artifacts {
+		if artifacts[i].path == example {
+			installed = &artifacts[i]
+		}
+	}
+
+	if installed == nil {
+		t.Fatalf("no artifact installs the example %s: %v", example, artifactPaths(artifacts))
+	}
+	if installed.binary {
+		t.Fatal("the example is run as if it were a test harness")
+	}
+	reported := false
+
+	for _, report := range reports {
+		if report.target.kind != "example" {
+			continue
+		}
+		if report.testProfile {
+			t.Fatal("the example is reported as a test harness")
+		}
+		reported = reported || report.path == example
+	}
+
+	if !reported {
+		t.Fatal("the example is not reported as the program it is")
 	}
 }
 

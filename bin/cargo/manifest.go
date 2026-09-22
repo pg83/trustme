@@ -537,7 +537,7 @@ func parseTarget(kind string, table map[string]any, pkg *Package) *Target {
 		path:             stringValue(table["path"]),
 		edition:          stringValue(table["edition"]),
 		crateTypes:       stringsValue(table["crate-type"]),
-		test:             boolValue(table["test"], true),
+		test:             boolValue(table["test"], kind != "example" && kind != "bench"),
 		doctest:          boolValue(table["doctest"], true),
 		bench:            boolValue(table["bench"], true),
 		doc:              boolValue(table["doc"], true),

@@ -487,6 +487,7 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 				target.kind == "bin" && target.test && !explicit ||
 				target.kind == "bin" && selectors.bins ||
 				target.kind == "bin" && contains(selectors.bin, target.name) ||
+				target.kind == "example" && target.test && !explicit ||
 				target.kind == "example" && (selectors.examples || contains(selectors.example, target.name)) ||
 				target.kind == "bench" && (selectors.benches || contains(selectors.bench, target.name))
 
@@ -516,20 +517,24 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 		// harness - so a build holding one builds every bin of the package as
 		// the program it is, on top of the harness the same source makes
 		// (`compute_deps`, cargo/core/compiler/unit_dependencies.rs).
-		if runsPrograms {
-			for _, target := range root.targets {
-				if target.kind != "bin" || !targetFeaturesEnabled(root, target) {
-					continue
-				}
-
-				final := b.finalTask(b.targetTask(root, target, isHost))
-				tasks = append(tasks, final)
-				path := b.artifact(root, target, isHost)
-				artifacts = append(artifacts, InstallArtifact{task: final, index: 0, path: path})
-				reports = append(reports, ArtifactReport{
-					pkg: root, target: target, task: final, path: path, executable: true,
-				})
+		//
+		// An example no one asked for is built as the program it is, to show it
+		// compiles; it is not run (`new_units`,
+		// cargo/ops/cargo_compile/unit_generator.rs).
+		for _, target := range root.targets {
+			programs := target.kind == "bin" && runsPrograms ||
+				target.kind == "example" && !target.test && !explicit
+			if !programs || !targetFeaturesEnabled(root, target) {
+				continue
 			}
+
+			final := b.finalTask(b.targetTask(root, target, isHost))
+			tasks = append(tasks, final)
+			path := b.artifact(root, target, isHost)
+			artifacts = append(artifacts, InstallArtifact{task: final, index: 0, path: path})
+			reports = append(reports, ArtifactReport{
+				pkg: root, target: target, task: final, path: path, executable: true,
+			})
 		}
 	}
 
@@ -1658,7 +1663,13 @@ func (b *Builder) conditionMatches(pkg *Package, condition string) bool {
 	return condition == b.context.target
 }
 
+// Cargo uplifts an example to `target/<profile>/examples`, beside no program
+// of the package (`Layout::examples`, cargo/core/compiler/layout.rs).
 func (b *Builder) artifact(pkg *Package, target *Target, isHost bool) string {
+	if target.kind == "example" {
+		return filepath.Join(b.outputDir(isHost), "examples", b.artifactName(pkg, target))
+	}
+
 	return filepath.Join(b.outputDir(isHost), b.artifactName(pkg, target))
 }
 
