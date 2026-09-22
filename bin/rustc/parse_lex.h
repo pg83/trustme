@@ -43,6 +43,7 @@ std::string& operator+=(std::string& s, const Codepoint& cp);
 Token LexFindOperator(stl::StringView s);
 Token LexFindOperator(const std::string& s);
 Token LexFindReservedWord(const std::string& s, ASTEdition edition);
+void LexOutputIdentName(stl::ZeroCopyOutput& os, const RcString& name);
 
 typedef Codepoint uchar;
 

@@ -5,6 +5,7 @@
 #include "ast_expr.h"
 #include "ast_crate.h"
 #include "output_file.h"
+#include "parse_lex.h"
 
 #include <limits>
 #include <fstream>
@@ -539,7 +540,8 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                 os << StringView("ref mut ");
                 break;
         }
-        os << pb.name << StringView("/*") << pb.slot << StringView("*/");
+        LexOutputIdentName(os, pb.name.name);
+        os << StringView("/*") << pb.slot << StringView("*/");
         if (!isRefutable && p.bindings().size() == 1 && p.data().is_Any()) {
             return;
         }
@@ -632,7 +634,8 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                 const auto& v = p.data().as_Struct();
                 os << v.path << StringView("{");
                 for (const auto& sp : v.subPatterns) {
-                    os << sp.name << StringView(": ");
+                    LexOutputIdentName(os, sp.name);
+                    os << StringView(": ");
                     printPattern(sp.pat, isRefutable);
                     os << StringView(",");
                 }
@@ -684,7 +687,8 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                         os << StringView("ref mut ");
                         break;
                 }
-                os << b.name << StringView("/*") << b.slot << StringView("*/");
+                LexOutputIdentName(os, b.name.name);
+                os << StringView("/*") << b.slot << StringView("*/");
             }
             os << StringView("..");
             needsComma = true;
@@ -1664,7 +1668,8 @@ auto RustPrinter::visit(ASTExprNodeNamedValue& n) -> void {
 auto RustPrinter::visit(ASTExprNodeField& n) -> void {
     exprRoot = false;
     visitWithParensIf<ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf>(n.obj);
-    os << StringView(".") << n.name;
+    os << StringView(".");
+    LexOutputIdentName(os, n.name);
 }
 
 auto RustPrinter::visit(ASTExprNodeIndex& n) -> void {

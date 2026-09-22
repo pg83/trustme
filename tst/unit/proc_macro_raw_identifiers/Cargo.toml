@@ -1,0 +1,11 @@
+[package]
+name = "proc-macro-raw-identifiers-unit"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "proc_macro_raw_identifiers_unit"
+path = "src/main.rs"
+
+[dependencies]
+raw-identifiers-macro = { path = "raw-identifiers-macro" }

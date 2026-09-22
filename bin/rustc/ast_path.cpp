@@ -4,6 +4,7 @@
 #include "ast_ast.h"
 #include "ast_expr.h"
 #include "ast_types.h"
+#include "parse_lex.h"
 #include "parse_parseerror.h"
 
 #include <std/lib/vector.h>
@@ -190,7 +191,7 @@ Ordering ASTPathNode::ord(const ASTPathNode& x) const {
 }
 
 void ASTPathNode::printPretty(ZeroCopyOutput& os, bool isTypeContext) const {
-    os << ident_.name;
+    LexOutputIdentName(os, ident_.name);
     if (!params_.isEmpty()) {
         if (!isTypeContext) {
             os << StringView("::");

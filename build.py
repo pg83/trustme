@@ -1798,6 +1798,27 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_proc_macro_raw_identifiers",
+    inputs=[
+        "$(S)/tst/unit/test_proc_macro_raw_identifiers.py",
+        *build.glob("$(S)/tst/unit/proc_macro_raw_identifiers/**/*.toml"),
+        *build.glob("$(S)/tst/unit/proc_macro_raw_identifiers/**/*.rs"),
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/proc_macro_raw_identifiers.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_proc_macro_raw_identifiers.py",
+        "$(S)/tst/unit/proc_macro_raw_identifiers/Cargo.toml",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/proc_macro_raw_identifiers.stamp",
+    ],
+    deps=[libstd, rustc, cargo],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_proc_macro_span_location",
     inputs=[
         "$(S)/tst/unit/test_proc_macro_span_location.py",

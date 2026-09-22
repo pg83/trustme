@@ -1691,6 +1691,13 @@ Token LexFindReservedWord(const std::string& s, ASTEdition edition) {
     return TOK_NULL;
 }
 
+void LexOutputIdentName(ZeroCopyOutput& os, const RcString& name) {
+    if (name != "self" && name != "super" && name != "crate" && name != "Self" && name != "_" && LexFindReservedWord(name.c_str(), ASTEdition::Rust2021) != TOK_NULL) {
+        os << StringView("r#");
+    }
+    os << name;
+}
+
 Codepoint::Codepoint()
     : v(0)
 {
