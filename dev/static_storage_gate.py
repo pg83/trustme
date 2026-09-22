@@ -107,6 +107,13 @@ def tls_names(archive):
     return names
 
 
+def archive_members(archive):
+    output = subprocess.run(
+        ["ar", "t", archive], check=True, stdout=subprocess.PIPE, text=True,
+    ).stdout
+    return frozenset(output.split())
+
+
 def object_name(location):
     opening = location.rfind("[")
     if opening != -1 and location.endswith("]"):
@@ -160,7 +167,12 @@ def main():
                          if symbol[:2] in tls or symbol[2] not in "rR")
 
     observed_allowed = {symbol[:3] for symbol in allowed}
-    missing_allowed = allowed_names - observed_allowed
+    # An exception is stale when its object is in the archive without the
+    # symbol; an object the build left out (malloc.cpp under a sanitizer)
+    # takes its exceptions with it.
+    members = archive_members(archive)
+    missing_allowed = {name for name in allowed_names - observed_allowed
+                       if name[0] in members}
     duplicate_allowed = len(allowed) != len(observed_allowed)
 
     counts = collections.defaultdict(lambda: [0, 0, 0])
