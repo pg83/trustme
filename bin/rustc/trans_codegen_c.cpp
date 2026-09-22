@@ -2542,6 +2542,10 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
                the index vector second, the reverse of the order the
                instruction itself spells its two sources in. */
             of << StringView("\tu32 lanes[8], index[8], result[8];\n") << StringView("\tmemcpy(lanes, &arg0, sizeof(lanes)); memcpy(index, &arg1, sizeof(index));\n") << StringView("\tfor(unsigned i = 0; i < 8; i ++) result[i] = lanes[index[i] & 7];\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
+        } else if (item.linkage.name == "llvm.x86.avx.vzeroupper" || item.linkage.name == "llvm.x86.avx.vzeroall") {
+            of << StringView("\treturn;\n");
+        } else if (item.linkage.name == "llvm.x86.avx2.vperm2i128") {
+            of << StringView("\tu64 halves[8], result[4];\n") << StringView("\tmemcpy(halves, &arg0, 32); memcpy(halves + 4, &arg1, 32);\n") << StringView("\tfor(unsigned h = 0; h < 2; h ++) {\n") << StringView("\t\tu8 control = (u8)arg2 >> (4 * h);\n") << StringView("\t\tresult[2*h] = (control & 8) ? 0 : halves[2 * (control & 3)];\n") << StringView("\t\tresult[2*h+1] = (control & 8) ? 0 : halves[2 * (control & 3) + 1];\n") << StringView("\t}\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.pmadd.ub.sw.128" || item.linkage.name == "llvm.x86.avx2.pmadd.ub.sw") {
             int n = (item.linkage.name == "llvm.x86.avx2.pmadd.ub.sw" ? 32 : 16);
             of << StringView("\tconst u8* a = (const u8*)&arg0;\n") << StringView("\tconst i8* b = (const i8*)&arg1;\n") << StringView("\ti16* dst = (i16*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << n / 2 << StringView("; i ++) {\n") << StringView("\t\ti32 v = (i32)a[2*i]*b[2*i] + (i32)a[2*i+1]*b[2*i+1];\n") << StringView("\t\tdst[i] = (i16)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));\n") << StringView("\t}\n") << StringView("\treturn rv;\n");
