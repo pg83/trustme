@@ -1330,7 +1330,7 @@ namespace {
                         default:
                             break;
                         case MacroRef::TAG_ExternalProcMacro: {
-                            auto& pm = macImport.ref.as_ExternalProcMacro();
+                            const auto pm = macImport.ref.as_ExternalProcMacro();
                             DEBUG(StringView("proc_macro ") << pm->path);
                             macPath.pushBack(pm->path.crateName());
                             for (const auto& component : pm->path.components()) {
@@ -1353,7 +1353,7 @@ namespace {
                     break;
                 }
                 case MacroRef::TAG_ExternalProcMacro: {
-                    auto& extProcMac = mac.as_ExternalProcMacro();
+                    const auto extProcMac = mac.as_ExternalProcMacro();
                     macPath.pushBack(extProcMac->path.crateName());
                     for (const auto& component : extProcMac->path.components()) {
                         macPath.pushBack(component);

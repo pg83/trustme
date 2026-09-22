@@ -291,7 +291,7 @@ namespace {
             DEBUG(a.name() << StringView(" : ") << m.tagStr());
             if (m.is_None()) {
             } else if (const auto* procMacP = m.opt_ExternalProcMacro()) {
-                const auto* procMac = *procMacP;
+                const auto* procMac = procMacP;
 
                 struct ProcMacroDecorator: public ExpandDecorator {
                     Vector<RcString> macPath;
@@ -576,7 +576,7 @@ namespace {
                 return std::unique_ptr<TokenStream>();
             }
             case MacroRef::TAG_ExternalProcMacro: {
-                auto& procMac = mac.as_ExternalProcMacro();
+                const auto procMac = mac.as_ExternalProcMacro();
                 Vector<RcString> macPath;
                 macPath.pushBack(procMac->path.crateName());
                 for (const auto& component : procMac->path.components()) {
@@ -586,13 +586,13 @@ namespace {
                 break;
             }
             case MacroRef::TAG_BuiltinProcMacro: {
-                auto& procMac = mac.as_BuiltinProcMacro();
+                const auto procMac = mac.as_BuiltinProcMacro();
                 ASSERT_BUG(miSpan, procMac, StringView("null BuiltinProcMacro? ") << path);
                 rv = inputIdent == "" ? procMac->expand(miSpan, wb, crate, inputTt, mod) : procMac->expandIdent(miSpan, wb, crate, inputIdent, inputTt, mod);
                 break;
             }
             case MacroRef::TAG_MacroRules: {
-                auto& mrPtr = mac.as_MacroRules();
+                const auto mrPtr = mac.as_MacroRules();
                 if (inputIdent != "") {
                     ERROR(miSpan, E0000, StringView("macro_rules! macros can't take an ident"));
                 }
@@ -1498,12 +1498,12 @@ namespace {
                                     break;
                                 }
                                 case ResolveItemRefMacro::TAG_ProcMacro: {
-                                    auto& pm = m.as_ProcMacro();
+                                    const auto pm = m.as_ProcMacro();
                                     ref = pm;
                                     break;
                                 }
                                 case ResolveItemRefMacro::TAG_MacroRules: {
-                                    auto& mr = m.as_MacroRules();
+                                    const auto mr = m.as_MacroRules();
                                     ref = mr;
                                     break;
                                 }
@@ -2038,15 +2038,15 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
             return MacroRef();
         }
         case ResolveItemRefMacro::TAG_InternalMacro: {
-            auto& pm = rv.as_InternalMacro();
+            const auto pm = rv.as_InternalMacro();
             return pm;
         }
         case ResolveItemRefMacro::TAG_ProcMacro: {
-            auto& pm = rv.as_ProcMacro();
+            const auto pm = rv.as_ProcMacro();
             return pm;
         }
         case ResolveItemRefMacro::TAG_MacroRules: {
-            auto& p = rv.as_MacroRules();
+            const auto p = rv.as_MacroRules();
             return p;
         }
     }

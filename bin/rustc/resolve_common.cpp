@@ -76,7 +76,7 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
     }
     switch (mod.tag()) {
         case ResolveModuleRef::TAG_Ast: {
-            auto& modPtr = mod.as_Ast();
+            const auto modPtr = mod.as_Ast();
             auto rv = rs.findItem(*modPtr, itemName, ResolveNamespace::Macro, outPath);
             if (rv.is_None()) {
                 return ResolveItemRefMacro::make_None({});
@@ -85,7 +85,7 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
             return std::move(rv.as_Macro());
         }
         case ResolveModuleRef::TAG_Hir: {
-            auto& modPtr = mod.as_Hir();
+            const auto modPtr = mod.as_Hir();
             const HIRSimplePath* visPath = nullptr;
             HIRSimplePath tmpP;
             if (path.cls.is_Relative() && path.cls.as_Relative().hygiene.hasModPath()) {
@@ -119,7 +119,7 @@ ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& s
     auto mod = rs.getModule(basePath, path, true, outPath);
     switch (mod.tag()) {
         case ResolveModuleRef::TAG_Ast: {
-            auto& modPtr = mod.as_Ast();
+            const auto modPtr = mod.as_Ast();
             ASTAbsolutePath tmp;
             if (!outPath) {
                 outPath = &tmp;
@@ -225,7 +225,7 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                 auto realMod = as_Namespace(this->findItem(startMod, name, ResolveNamespace::Namespace, outPath));
                 switch (realMod.tag()) {
                     case ResolveItemRefType::TAG_Ast: {
-                        auto& iData = realMod.as_Ast();
+                        const auto iData = realMod.as_Ast();
                         // TODO: What about an enum?
                         switch ((*iData).tag()) {
                             default: {
@@ -249,18 +249,18 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                         break;
                     }
                     case ResolveItemRefType::TAG_AstRoot: {
-                        auto& m = realMod.as_AstRoot();
+                        const auto m = realMod.as_AstRoot();
                         if (outPath) {
                             *outPath = ASTAbsolutePath("", {});
                         }
                         return getModuleAst(*m, path, 1, ignoreLast, outPath);
                     }
                     case ResolveItemRefType::TAG_HirRoot: {
-                        auto& hirCrate = realMod.as_HirRoot();
+                        const auto hirCrate = realMod.as_HirRoot();
                         return getModuleHir(hirCrate->rootModule, path, 1, ignoreLast, outPath);
                     }
                     case ResolveItemRefType::TAG_Hir: {
-                        auto& iEntPtr = realMod.as_Hir();
+                        const auto iEntPtr = realMod.as_Hir();
                         ASSERT_BUG(sp, !iEntPtr->is_Import(), StringView(""));
                         if (iEntPtr->is_Enum()) {
                             DEBUG(StringView("Enum"));
@@ -414,7 +414,7 @@ auto ResolveState::getModuleAst(const ASTModule& startMod, const ASTPath& path, 
                 return ResolveModuleRef();
             }
             case ResolveItemRefType::TAG_Ast: {
-                auto& e = r.as_Ast();
+                const auto e = r.as_Ast();
                 if (e->is_Module()) {
                     mod = &e->as_Module();
                 } else if (const auto* i = e->opt_Crate()) {
@@ -434,12 +434,12 @@ auto ResolveState::getModuleAst(const ASTModule& startMod, const ASTPath& path, 
                 break;
             }
             case ResolveItemRefType::TAG_AstRoot: {
-                auto& e = r.as_AstRoot();
+                const auto e = r.as_AstRoot();
                 mod = e;
                 break;
             }
             case ResolveItemRefType::TAG_Hir: {
-                auto& e = r.as_Hir();
+                const auto e = r.as_Hir();
                 if (const auto* i = e->opt_Module()) {
                     return getModuleHir(*i, path, idx + 1, ignoreLast, outPath);
                 } else {
@@ -449,7 +449,7 @@ auto ResolveState::getModuleAst(const ASTModule& startMod, const ASTPath& path, 
                 break;
             }
             case ResolveItemRefType::TAG_HirRoot: {
-                auto& e = r.as_HirRoot();
+                const auto e = r.as_HirRoot();
                 if (outPath) {
                     outPath->crate = e->crateName;
                     outPath->nodes.clear();
@@ -612,15 +612,15 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                         break;
                     }
                     case MacroRef::TAG_MacroRules: {
-                        auto& me = mac.ref.as_MacroRules();
+                        const auto me = mac.ref.as_MacroRules();
                         return ResolveItemRefMacro(me);
                     }
                     case MacroRef::TAG_BuiltinProcMacro: {
-                        auto& me = mac.ref.as_BuiltinProcMacro();
+                        const auto me = mac.ref.as_BuiltinProcMacro();
                         return ResolveItemRefMacro(me);
                     }
                     case MacroRef::TAG_ExternalProcMacro: {
-                        auto& me = mac.ref.as_ExternalProcMacro();
+                        const auto me = mac.ref.as_ExternalProcMacro();
                         return ResolveItemRefMacro(me);
                     }
                 }
@@ -689,7 +689,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                             auto tgtMod = this->getModule(mod.path(), e.path, false, &tmp);
                             switch (tgtMod.tag()) {
                                 case ResolveModuleRef::TAG_Ast: {
-                                    auto& modPtr = tgtMod.as_Ast();
+                                    const auto modPtr = tgtMod.as_Ast();
                                     if (outPath) {
                                         *outPath = tmp;
                                     }
@@ -719,7 +719,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                     DEBUG(tgtMod.tagStr());
                     switch (tgtMod.tag()) {
                         case ResolveModuleRef::TAG_Ast: {
-                            auto& modPtr = tgtMod.as_Ast();
+                            const auto modPtr = tgtMod.as_Ast();
                             auto rv = this->findItem(*modPtr, itemName, ns, outPath);
                             if (!rv.is_None()) {
                                 DEBUG(StringView("Found in AST use"));
@@ -728,7 +728,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                             break;
                         }
                         case ResolveModuleRef::TAG_Hir: {
-                            auto& modPtr = tgtMod.as_Hir();
+                            const auto modPtr = tgtMod.as_Hir();
                             auto rv = this->findItemHir(*modPtr, itemName, ns, outPath);
                             if (!rv.is_None()) {
                                 DEBUG(StringView("Found in HIR use"));
@@ -770,7 +770,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                     auto srcMod = this->getModule(mod.path(), e.path, /*ignore_last=*/false, outPath);
                     switch (srcMod.tag()) {
                         case ResolveModuleRef::TAG_None: {
-                            auto& _ = srcMod.as_None();
+                            const auto _ = srcMod.as_None();
                             DEBUG(StringView("Unable to find ") << e.path);
                             break;
                         }
@@ -779,7 +779,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                             break;
                         }
                         case ResolveModuleRef::TAG_Ast: {
-                            auto& sm = srcMod.as_Ast();
+                            const auto sm = srcMod.as_Ast();
                             auto rv = findItem(*sm, name, ns, outPath);
                             if (!rv.is_None()) {
                                 DEBUG(StringView("Found in AST glob"));
@@ -788,7 +788,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                             break;
                         }
                         case ResolveModuleRef::TAG_Hir: {
-                            auto& sm = srcMod.as_Hir();
+                            const auto sm = srcMod.as_Hir();
                             auto rv = this->findItemHir(*sm, name, ns, outPath);
                             if (!rv.is_None()) {
                                 DEBUG(StringView("Found HIR glob"));

@@ -86,6 +86,10 @@ class Variant:
     def is_empty(self):
         return self.type is None and not self.fields
 
+    @property
+    def is_pointer(self):
+        return self.fields is None and self.type is not None and self.type.strip().endswith("*")
+
 
 class Union:
     def __init__(self, *, name, default, variants, extra="", extra_fields=(),
@@ -112,6 +116,10 @@ class Union:
         self.clone = clone
         self.output = output
         self.doc = doc
+        # Every payload a pointer or nothing: the whole union is one word,
+        # the tag in the top bits, the pointer in the low 48.
+        self.packed = (not allow_incomplete and not self.extra_fields
+                       and all(v.is_empty or (v.is_pointer and not v.deep) for v in self.variants))
 
 
 def load(path):
@@ -223,8 +231,17 @@ def emit_header_union(out, union):
     out.depth += 1
     out.line("// The reserved value 0: the moved-from state, outside the enum.")
     out.line("static constexpr Tag deadTag = static_cast<Tag>(0);")
-    out.line("Tag tag_;")
-    if union.allow_incomplete:
+    if union.packed:
+        out.line("static constexpr unsigned tagShift = 48;")
+        out.line("static constexpr ::std::uintptr_t payloadMask = (::std::uintptr_t(1) << tagShift) - 1;")
+        out.line("::std::uintptr_t bits_;")
+        out.line("static ::std::uintptr_t pack(Tag tag, const void* payload);")
+        out.line("Tag rawTag() const;")
+    else:
+        out.line("Tag tag_;")
+    if union.packed:
+        pass
+    elif union.allow_incomplete:
         out.line("void* ptr_;")
         for variant in union.variants:
             if variant.is_empty:
@@ -238,7 +255,8 @@ def emit_header_union(out, union):
         out.open("~DataUnion() {")
         out.close()
         out.close("} data_;")
-    out.line("void dropPayload();")
+    if not union.packed:
+        out.line("void dropPayload();")
     out.line()
     out.depth -= 1
     out.line("public:")
@@ -258,12 +276,25 @@ def emit_header_union(out, union):
     for variant in union.variants:
         data = variant.data_name
         out.line()
+        if union.packed and variant.is_pointer:
+            out.line(f"{union.name}({data} v);")
+            out.line(f"static {union.name} make_{variant.tag}({data} v);")
+            out.line(f"bool is_{variant.tag}() const;")
+            out.line(f"{data} opt_{variant.tag}() const;")
+            out.line(f"{data} as_{variant.tag}() const;")
+            out.line(f"{data} unwrap_{variant.tag}();")
+            continue
         out.line(f"{union.name}({data}&& v);")
         out.line(f"static {union.name} make_{variant.tag}({data}&& v);")
         if variant.copy:
             out.line(f"{union.name}(const {data}& v);")
             out.line(f"static {union.name} make_{variant.tag}(const {data}& v);")
         out.line(f"bool is_{variant.tag}() const;")
+        if union.packed:
+            out.line(f"bool opt_{variant.tag}() const;")
+            out.line(f"{data} as_{variant.tag}() const;")
+            out.line(f"{data} unwrap_{variant.tag}();")
+            continue
         out.line(f"const {data}* opt_{variant.tag}() const;")
         out.line(f"{data}* opt_{variant.tag}();")
         out.line(f"const {data}& as_{variant.tag}() const;")
@@ -349,7 +380,148 @@ def emit_clone_helper(out):
     out.close()
 
 
+def emit_cpp_packed(out, union):
+    name = union.name
+    default = next(v for v in union.variants if v.tag == union.default)
+    out.open(f"::std::uintptr_t {name}::pack(Tag tag, const void* payload) {{")
+    out.line("const auto bits = reinterpret_cast<::std::uintptr_t>(payload);")
+    out.line('assert((bits >> tagShift) == 0 && "pointer does not fit under the tag");')
+    out.line("return (static_cast<::std::uintptr_t>(tag) << tagShift) | bits;")
+    out.close()
+    out.line()
+    out.open(f"{name}::Tag {name}::rawTag() const {{")
+    out.line("return static_cast<Tag>(bits_ >> tagShift);")
+    out.close()
+    out.line()
+    out.line(f"{name}::{name}()")
+    out.line(f"    : bits_(pack(TAG_{union.default}, nullptr))")
+    out.open("{")
+    out.close()
+    out.line()
+    out.line(f"{name}::{name}({name}&& x) noexcept")
+    out.line("    : bits_(x.bits_)")
+    out.open("{")
+    out.line("x.bits_ = 0;")
+    out.close()
+    out.line()
+    out.open(f"{name}& {name}::operator=({name}&& x) {{")
+    out.open("if (this != &x) {")
+    out.line("bits_ = x.bits_;")
+    out.line("x.bits_ = 0;")
+    out.close()
+    out.line("return *this;")
+    out.close()
+    out.line()
+    out.open(f"{name}::~{name}() {{")
+    out.line("bits_ = 0;")
+    out.close()
+    out.line()
+    out.open(f"bool {name}::isDead() const {{")
+    out.line("return rawTag() == deadTag;")
+    out.close()
+    out.line()
+    out.open(f"{name}::Tag {name}::tag() const {{")
+    out.line('assert(!isDead() && "destructed tagged union used");')
+    out.line("return rawTag();")
+    out.close()
+    out.line()
+    out.open(f"const char* {name}::tagStr() const {{")
+    out.open("if (isDead()) {")
+    out.line('return "ERR:DEAD";')
+    out.close()
+    out.line("return tagToStr(rawTag());")
+    out.close()
+    out.line()
+    if union.clone:
+        out.open(f"{name} {name}::clone() const {{")
+        out.line(f"{name} result;")
+        out.line("result.bits_ = bits_;")
+        out.line("return result;")
+        out.close()
+        out.line()
+    out.open(f"const char* {name}::tagToStr(Tag tag) {{")
+    out.open("switch (tag) {")
+    for variant in union.variants:
+        out.open(f"case TAG_{variant.tag}: {{")
+        out.line(f'return "{variant.tag}";')
+        out.close()
+    out.close()
+    out.line('return "";')
+    out.close()
+    for variant in union.variants:
+        tag = variant.tag
+        data = f"{name}::{variant.data_name}"
+        out.line()
+        if variant.is_pointer:
+            out.line(f"{name}::{name}({data} v)")
+            out.line(f"    : bits_(pack(TAG_{tag}, v))")
+            out.open("{")
+            out.close()
+            out.line()
+            out.open(f"{name} {name}::make_{tag}({data} v) {{")
+            out.line(f"return {name}(v);")
+            out.close()
+            out.line()
+            out.open(f"bool {name}::is_{tag}() const {{")
+            out.line(f"return rawTag() == TAG_{tag};")
+            out.close()
+            out.line()
+            out.open(f"{data} {name}::opt_{tag}() const {{")
+            out.line(f"return rawTag() == TAG_{tag} ? reinterpret_cast<{data}>(bits_ & payloadMask) : nullptr;")
+            out.close()
+            out.line()
+            out.open(f"{data} {name}::as_{tag}() const {{")
+            out.line(f"assert(rawTag() == TAG_{tag});")
+            out.line(f"return reinterpret_cast<{data}>(bits_ & payloadMask);")
+            out.close()
+            out.line()
+            out.open(f"{data} {name}::unwrap_{tag}() {{")
+            out.line(f"return as_{tag}();")
+            out.close()
+            continue
+        out.line(f"{name}::{name}({data}&& v)")
+        out.line(f"    : bits_(pack(TAG_{tag}, nullptr))")
+        out.open("{")
+        out.line("(void)v;")
+        out.close()
+        out.line()
+        out.open(f"{name} {name}::make_{tag}({data}&& v) {{")
+        out.line(f"return {name}(::std::move(v));")
+        out.close()
+        if variant.copy:
+            out.line()
+            out.line(f"{name}::{name}(const {data}& v)")
+            out.line(f"    : bits_(pack(TAG_{tag}, nullptr))")
+            out.open("{")
+            out.line("(void)v;")
+            out.close()
+            out.line()
+            out.open(f"{name} {name}::make_{tag}(const {data}& v) {{")
+            out.line(f"return {name}(v);")
+            out.close()
+        out.line()
+        out.open(f"bool {name}::is_{tag}() const {{")
+        out.line(f"return rawTag() == TAG_{tag};")
+        out.close()
+        out.line()
+        out.open(f"bool {name}::opt_{tag}() const {{")
+        out.line(f"return rawTag() == TAG_{tag};")
+        out.close()
+        out.line()
+        out.open(f"{data} {name}::as_{tag}() const {{")
+        out.line(f"assert(rawTag() == TAG_{tag});")
+        out.line("return {};")
+        out.close()
+        out.line()
+        out.open(f"{data} {name}::unwrap_{tag}() {{")
+        out.line(f"return as_{tag}();")
+        out.close()
+
+
 def emit_cpp_union(out, union):
+    if union.packed:
+        emit_cpp_packed(out, union)
+        return
     name = union.name
     default = next(v for v in union.variants if v.tag == union.default)
 
@@ -631,6 +803,8 @@ def main():
     header = Writer()
     header.line(banner)
     header.line("#pragma once")
+    if any(union.packed for union in unions):
+        header.line("#include <cstdint>")
     for union in unions:
         header.line()
         emit_header_union(header, union)

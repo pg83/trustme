@@ -1192,7 +1192,7 @@ namespace {
                             break;
                         }
                         case HIRTypePathBinding::TAG_Struct: {
-                            auto& pbe = e.binding.as_Struct();
+                            const auto pbe = e.binding.as_Struct();
                             switch (pbe->data.tag()) {
                                 case HIRStructData::TAG_Unit: {
                                     BUG(sp, StringView("Destructuring an unit-like tuple - ") << curTy);
@@ -1218,7 +1218,7 @@ namespace {
                             break;
                         }
                         case HIRTypePathBinding::TAG_Union: {
-                            auto& pbe = e.binding.as_Union();
+                            const auto pbe = e.binding.as_Union();
                             ASSERT_BUG(sp, idx < pbe->variants.size(), StringView("Union variant index (") << idx << StringView(") out of range (") << pbe->variants.size() << StringView(") in ") << curTy);
                             const auto& fld = pbe->variants[idx];
                             curTy = monomorphToPtr(fld.ty);
@@ -1226,7 +1226,7 @@ namespace {
                             break;
                         }
                         case HIRTypePathBinding::TAG_Enum: {
-                            auto& pbe = e.binding.as_Enum();
+                            const auto pbe = e.binding.as_Enum();
                             ASSERT_BUG(sp, pbe->data.is_Data(), StringView("Value enum being destructured - ") << curTy);
                             const auto& variants = pbe->data.as_Data();
                             ASSERT_BUG(sp, idx < variants.size(), StringView("Variant index (") << idx << StringView(") out of range (") << variants.size() << StringView(") for enum ") << curTy);
@@ -1699,7 +1699,7 @@ namespace {
                             break;
                         }
                         case HIRTypePathBinding::TAG_Struct: {
-                            auto& pbe = te.binding.as_Struct();
+                            const auto pbe = te.binding.as_Struct();
                             const auto& strData = pbe->data;
                             switch (strData.tag()) {
                                 case HIRStructData::TAG_Unit: {
@@ -1726,7 +1726,7 @@ namespace {
                             break;
                         }
                         case HIRTypePathBinding::TAG_Enum: {
-                            auto& pbe = te.binding.as_Enum();
+                            const auto pbe = te.binding.as_Enum();
                             auto monomorph = [&](const auto& ty) {
                                 auto rv = MonomorphStatePtr(builder.resolve().crate.types, nullptr, &te.path.data.as_Generic().params, nullptr).monomorphType(sp, ty);
                                 rv = builder.resolve().expandAssociatedTypes(sp, rv);
@@ -3976,7 +3976,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     break;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& pbe = e.binding.as_Struct();
+                    const auto pbe = e.binding.as_Struct();
                     const auto& strData = pbe->data;
 
                     if (langBox && e.path.data.as_Generic().path == *langBox) {
@@ -4090,7 +4090,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    auto& pbe = e.binding.as_Union();
+                    const auto pbe = e.binding.as_Union();
                     switch (pat.data.tag()) {
                         default:
                             TODO(sp, StringView("Match over union - ") << ty << StringView(" with ") << pat);
@@ -4737,7 +4737,7 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
                     break;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& pbe = te.binding.as_Struct();
+                    const auto pbe = te.binding.as_Struct();
                     const auto& strData = pbe->data;
                     switch (strData.tag()) {
                         case HIRStructData::TAG_Unit: {
@@ -6766,7 +6766,7 @@ const HIRType* MirBuilder::valType(const Span& sp, const MIRLValue& val, const M
                     case HIRType::TAG_Path: {
                         auto& te = (*currentTy).as_Path();
                         if (const auto* tep = te.binding.opt_Struct()) {
-                            const auto& str = **tep;
+                            const auto& str = *tep;
                             switch (str.data.tag()) {
                                 case HIRStructData::TAG_Unit: {
                                     BUG(sp, StringView("Field on unit-like struct - ") << currentTy);
@@ -6855,7 +6855,7 @@ const HIRType* MirBuilder::valType(const Span& sp, const MIRLValue& val, const M
                     case HIRType::TAG_Path: {
                         auto& te = (*currentTy).as_Path();
                         if (const auto* pbe = te.binding.opt_Enum()) {
-                            const auto& enm = **pbe;
+                            const auto& enm = *pbe;
                             ASSERT_BUG(sp, enm.data.is_Data(), StringView("Downcast on non-data enum"));
                             const auto& variants = enm.data.as_Data();
                             ASSERT_BUG(sp, variantIndex < variants.size(), StringView("Variant index out of range"));
@@ -6863,7 +6863,7 @@ const HIRType* MirBuilder::valType(const Span& sp, const MIRLValue& val, const M
 
                             ty = maybeMonomorph(enm.params, te.path, variant.type);
                         } else if (const auto* pbe = te.binding.opt_Union()) {
-                            const auto& unm = **pbe;
+                            const auto& unm = *pbe;
                             ASSERT_BUG(sp, variantIndex < unm.variants.size(), StringView("Variant index out of range"));
                             const auto& variant = unm.variants.at(variantIndex);
 
@@ -7190,7 +7190,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                             const auto& enm = *pb.as_Enum();
                             varCount = enm.numVariants();
                         } else if (const auto* pbe = pb.opt_Union()) {
-                            const auto& unm = **pbe;
+                            const auto& unm = *pbe;
                             varCount = unm.variants.size();
                         } else {
                             BUG(sp, StringView("Downcast on non-Enum/Union - ") << ty);
@@ -8016,12 +8016,12 @@ auto ExprVisitorConv::emitDropFields(const Span& sp, const HIRType* ty, const MI
     }
 
     auto monomorph = MonomorphStatePtr(builder.crate().types, ty, &generic.params, nullptr);
-    switch (((*str)->data).tag()) {
+    switch ((str->data).tag()) {
         case HIRStructData::TAG_Unit: {
             break;
         }
         case HIRStructData::TAG_Tuple: {
-            auto& fields = ((*str)->data).as_Tuple();
+            auto& fields = (str->data).as_Tuple();
             for (size_t i = 0; i < fields.size(); i++) {
                 auto fieldTy = monomorph.monomorphType(sp, fields[i].ent);
                 fieldTy = builder.resolve().expandAssociatedTypes(sp, fieldTy);
@@ -8033,7 +8033,7 @@ auto ExprVisitorConv::emitDropFields(const Span& sp, const HIRType* ty, const MI
             break;
         }
         case HIRStructData::TAG_Named: {
-            auto& fields = ((*str)->data).as_Named();
+            auto& fields = (str->data).as_Named();
             for (size_t i = 0; i < fields.size(); i++) {
                 auto fieldTy = monomorph.monomorphType(sp, fields[i].ty);
                 fieldTy = builder.resolve().expandAssociatedTypes(sp, fieldTy);
@@ -10813,14 +10813,14 @@ auto ExprVisitorConv::visit(HIRExprNodeField& node) -> void {
         std::stringstream(node.field.c_str()) >> idx;
         builder.setResult(node.span(), MIRLValue::newField(mv$(val), idx));
     } else if (const auto* bep = valTy->as_Path().binding.opt_Struct()) {
-        const auto& str = **bep;
+        const auto& str = *bep;
         const auto& fields = str.data.as_Named();
         idx = std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
             return x.name == node.field;
         }) - fields.begin();
         builder.setResult(node.span(), MIRLValue::newField(mv$(val), idx));
     } else if (const auto* bep = valTy->as_Path().binding.opt_Union()) {
-        const auto& unm = **bep;
+        const auto& unm = *bep;
         const auto& fields = unm.variants;
         idx = std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
             return x.name == node.field;
@@ -11142,7 +11142,7 @@ auto ExprVisitorConv::visit(HIRExprNodeStructLiteral& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Enum: {
-                auto& e = tuMatch.as_Enum();
+                const auto e = tuMatch.as_Enum();
                 auto enumPath = tyPath.clone();
                 auto varName = enumPath.path.popComponent();
 
@@ -11166,7 +11166,7 @@ auto ExprVisitorConv::visit(HIRExprNodeStructLiteral& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Union: {
-                auto& e = tuMatch.as_Union();
+                const auto e = tuMatch.as_Union();
                 const auto& variantName = node.values.front().first;
                 auto& valueNode = node.values.front().second;
                 this->visitNodePtr(valueNode);
@@ -11190,7 +11190,7 @@ auto ExprVisitorConv::visit(HIRExprNodeStructLiteral& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Struct: {
-                auto& e = tuMatch.as_Struct();
+                const auto e = tuMatch.as_Struct();
                 if (e->data.is_Unit()) {
                     builder.setResult(node.span(), MIRRValue::make_Struct({tyPath.clone(), {}}));
                     return;

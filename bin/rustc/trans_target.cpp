@@ -2154,7 +2154,7 @@ namespace {
                 }
                 UNREACHABLE();
             case HIRType::TAG_NodeType:
-                if (const auto* closure = ty->as_NodeType().opt_Closure(); closure && closureHasNoCaptures(resolve, **closure)) {
+                if (const auto* closure = ty->as_NodeType().opt_Closure(); closure && closureHasNoCaptures(resolve, *closure)) {
                     auto repr = box$(TypeRepr());
                     repr->align = 1;
                     return repr;
@@ -2543,7 +2543,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         case HIRType::TAG_NodeType: {
             auto& te = (*ty).as_NodeType();
-            if (const auto* closure = te.opt_Closure(); closure && closureHasNoCaptures(resolve, **closure)) {
+            if (const auto* closure = te.opt_Closure(); closure && closureHasNoCaptures(resolve, *closure)) {
                 outSize = 0;
                 outAlign = 1;
                 return true;

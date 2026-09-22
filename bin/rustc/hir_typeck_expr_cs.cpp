@@ -2325,12 +2325,12 @@ struct OrderPlace {
             const auto* closure = implType->is_NodeType() ? implType->as_NodeType().opt_Closure() : nullptr;
             const auto* expectedOutput = context.getType(v.leftTy);
             const bool divergingClosureOutput = closure
-                && (*closure)->returnType->is_Infer()
-                && (context.getType((*closure)->returnType)->is_Diverge() || context.usedNeverFallback((*closure)->returnType));
+                && closure->returnType->is_Infer()
+                && (context.getType(closure->returnType)->is_Diverge() || context.usedNeverFallback(closure->returnType));
             if (divergingClosureOutput && !expectedOutput->is_Diverge() && !context.ivars.typeContainsIvars(expectedOutput)) {
                 DEBUG(StringView("[check_associated] - apply late expected output ") << expectedOutput << StringView(" to diverging closure"));
-                context.registerClosureReturnObligation(sp, *closure, expectedOutput);
-                return (*closure)->returnType;
+                context.registerClosureReturnObligation(sp, closure, expectedOutput);
+                return closure->returnType;
             }
             return static_cast<const HIRType*>(nullptr);
         };
@@ -2456,7 +2456,7 @@ struct OrderPlace {
                 if (v.name != "" && (v.trait == context.resolve.langFn() || v.trait == context.resolve.langFnMut() || v.trait == context.resolve.langFnOnce())) {
                     const auto* implType = context.getType(v.implTy);
                     const auto* closure = implType->is_NodeType() ? implType->as_NodeType().opt_Closure() : nullptr;
-                    if (closure && context.ivars.typesEqual(v.leftTy, (*closure)->returnType)) {
+                    if (closure && context.ivars.typesEqual(v.leftTy, closure->returnType)) {
                         return AssociatedCheckResult::Complete;
                     }
                 }
@@ -3142,8 +3142,8 @@ struct OrderPlace {
                         if (const auto* function = possible.ty->opt_NamedFunction()) {
                             candidate = function->decay(context.crate.types, sp);
                         } else if (const auto* closure = ((*possible.ty).is_NodeType() ? ((*possible.ty).as_NodeType().opt_Closure()) : nullptr)) {
-                            candidate = HIRTypeDataFunctionPointer{false, false, RcString::newInterned(ABI_RUST), (*closure)->returnType, {}};
-                            for (const auto& argument : (*closure)->args) {
+                            candidate = HIRTypeDataFunctionPointer{false, false, RcString::newInterned(ABI_RUST), closure->returnType, {}};
+                            for (const auto& argument : closure->args) {
                                 candidate.argTypes.pushBack(argument.second);
                             }
                         } else {
@@ -6421,17 +6421,17 @@ void Context::requireSized(const Span& sp, const HIRType* ty_) {
                 break;
             }
             case HIRTypePathBinding::TAG_Enum: {
-                auto& pb = e->binding.as_Enum();
+                const auto pb = e->binding.as_Enum();
                 paramsDef = &pb->params;
                 break;
             }
             case HIRTypePathBinding::TAG_Union: {
-                auto& pb = e->binding.as_Union();
+                const auto pb = e->binding.as_Union();
                 paramsDef = &pb->params;
                 break;
             }
             case HIRTypePathBinding::TAG_Struct: {
-                auto& pb = e->binding.as_Struct();
+                const auto pb = e->binding.as_Struct();
                 paramsDef = &pb->params;
 
                 switch (pb->structMarkings.dstType) {
@@ -8625,13 +8625,13 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                 }
                 case HIRType::TAG_NodeType: {
                     auto& sE = (*srcTy).as_NodeType();
-                    if (const auto* const* snPp = sE.opt_Closure()) {
-                        if ((*snPp)->args.size() != e.argTypes.length()) {
+                    if (const auto* snPp = sE.opt_Closure()) {
+                        if (snPp->args.size() != e.argTypes.length()) {
                             bad_cast(sp, srcTy, tgtTy, "fcn nargs");
                         }
-                        this->context.equateTypes(sp, e.rettype, (*snPp)->returnType);
+                        this->context.equateTypes(sp, e.rettype, snPp->returnType);
                         for (size_t i = 0; i < e.argTypes.length(); i++) {
-                            this->context.equateTypes(sp, e.argTypes[i], (*snPp)->args[i].second);
+                            this->context.equateTypes(sp, e.argTypes[i], snPp->args[i].second);
                         }
                         this->completed = true;
                     } else {
@@ -9719,7 +9719,7 @@ auto ExprVisitorApply::visit(HIRExprNodeStructLiteral& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Enum: {
-                auto& e = tuMatch.as_Enum();
+                const auto e = tuMatch.as_Enum();
                 const auto& varName = tyPath.path.components().back();
                 const auto& enm = *e;
                 auto idx = enm.findVariant(varName);
@@ -9733,7 +9733,7 @@ auto ExprVisitorApply::visit(HIRExprNodeStructLiteral& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Union: {
-                auto& e = tuMatch.as_Union();
+                const auto e = tuMatch.as_Union();
                 fieldsPtr = &e->variants;
                 ASSERT_BUG(node.span(), node.values.size() > 0, StringView("Union with no values"));
                 ASSERT_BUG(node.span(), node.values.size() == 1, StringView("Union with multiple values"));
@@ -9745,7 +9745,7 @@ auto ExprVisitorApply::visit(HIRExprNodeStructLiteral& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Struct: {
-                auto& e = tuMatch.as_Struct();
+                const auto e = tuMatch.as_Struct();
                 if (e->data.is_Unit()) {
                     ASSERT_BUG(node.span(), node.values.size() == 0, StringView("Values provided for unit-like struct"));
                     ASSERT_BUG(node.span(), !node.baseValue, StringView("Values provided for unit-like struct"));
@@ -10579,10 +10579,10 @@ auto IvarCoercionIndex::collectIvars(const HIRType* root, Vector<unsigned int>& 
            populated with variables still holds `_` placeholders. */
         if (throughClosures && inner->is_NodeType()) {
             if (const auto* closure = inner->as_NodeType().opt_Closure()) {
-                for (const auto& argument : (*closure)->args) {
+                for (const auto& argument : closure->args) {
                     this->collectIvars(argument.second, out, throughClosures);
                 }
-                this->collectIvars((*closure)->returnType, out, throughClosures);
+                this->collectIvars(closure->returnType, out, throughClosures);
             }
         }
         return false;
@@ -11063,17 +11063,17 @@ auto ExprVisitorAddIvars::innerVisitType(const HIRType* ty) -> const HIRType* {
                 const HIRGenericParams* paramDefs = nullptr;
                 switch (te->binding.tag()) {
                     case HIRTypePathBinding::TAG_Struct: {
-                        auto& pbe = te->binding.as_Struct();
+                        const auto pbe = te->binding.as_Struct();
                         paramDefs = &pbe->params;
                         break;
                     }
                     case HIRTypePathBinding::TAG_Enum: {
-                        auto& pbe = te->binding.as_Enum();
+                        const auto pbe = te->binding.as_Enum();
                         paramDefs = &pbe->params;
                         break;
                     }
                     case HIRTypePathBinding::TAG_Union: {
-                        auto& pbe = te->binding.as_Union();
+                        const auto pbe = te->binding.as_Union();
                         paramDefs = &pbe->params;
                         break;
                     }
@@ -12029,7 +12029,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeTupleVariant& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Enum: {
-                auto& e = tuMatch.as_Enum();
+                const auto e = tuMatch.as_Enum();
                 const auto& varName = node.path.path.components().back();
                 const auto& enm = *e;
                 generics = &enm.params;
@@ -12044,7 +12044,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeTupleVariant& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Struct: {
-                auto& e = tuMatch.as_Struct();
+                const auto e = tuMatch.as_Struct();
                 ASSERT_BUG(sp, e->data.is_Tuple(), StringView("Pointed struct in TupleVariant (") << node.path << StringView(") isn't a Tuple"));
                 fieldsPtr = &e->data.as_Tuple();
                 generics = &e->params;
@@ -12157,7 +12157,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Enum: {
-                auto& e = tuMatch.as_Enum();
+                const auto e = tuMatch.as_Enum();
                 const auto& varName = tyPath.path.components().back();
                 const auto& enm = *e;
                 auto idx = enm.findVariant(varName);
@@ -12177,7 +12177,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Union: {
-                auto& e = tuMatch.as_Union();
+                const auto e = tuMatch.as_Union();
                 fieldsPtr = &e->variants;
                 generics = &e->params;
                 if (node.baseValue) {
@@ -12188,7 +12188,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Struct: {
-                auto& e = tuMatch.as_Struct();
+                const auto e = tuMatch.as_Struct();
                 if (e->data.is_Tuple() && !node.values.empty()) {
                     const auto& tuple = e->data.as_Tuple();
                     for (size_t i = 0; i < tuple.size(); i++) {
@@ -12282,7 +12282,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeUnitVariant& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Enum: {
-                auto& e = tuMatch.as_Enum();
+                const auto e = tuMatch.as_Enum();
                 generics = &e->params;
                 break;
             }
@@ -12293,7 +12293,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeUnitVariant& node) -> void {
                 break;
             }
             case HIRTypePathBinding::TAG_Struct: {
-                auto& e = tuMatch.as_Struct();
+                const auto e = tuMatch.as_Struct();
                 generics = &e->params;
                 break;
             }

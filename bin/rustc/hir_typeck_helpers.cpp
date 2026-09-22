@@ -328,12 +328,12 @@ namespace {
                 if (!closure) {
                     return false;
                 }
-                for (const auto& arg : (*closure)->args) {
+                for (const auto& arg : closure->args) {
                     if (visitTyWith(arg.second, [](const HIRType* t) { return inferIsUnknown(t); })) {
                         return true;
                     }
                 }
-                return visitTyWith((*closure)->returnType, [](const HIRType* t) { return inferIsUnknown(t); });
+                return visitTyWith(closure->returnType, [](const HIRType* t) { return inferIsUnknown(t); });
             });
         };
         if (hasLive(projection.type)) {
@@ -1279,7 +1279,7 @@ void HMTypeInferrence::printType(ZeroCopyOutput& os, const HIRType* tr, LList<co
             e.fmt(os);
             switch (e.tag()) {
                 case HIRTypeDataNodeType::TAG_Closure: {
-                    auto& nodeP = e.as_Closure();
+                    const auto nodeP = e.as_Closure();
                     os << StringView("(");
                     for (const auto& arg : nodeP->args) {
                         this->printType(os, arg.second, stack);
@@ -2520,18 +2520,18 @@ bool HMTypeInferrence::containsLiveIvar(const HIRType* type, unsigned int rootIn
                generic arguments, so the occurs check walks them; here the node
                is the type, and its signature is walked by hand. */
             if (const auto* closure = node->opt_Closure()) {
-                for (const auto& arg : (*closure)->args) {
+                for (const auto& arg : closure->args) {
                     if (this->containsLiveIvar(arg.second, rootIndex)) {
                         return true;
                     }
                 }
-                return this->containsLiveIvar((*closure)->returnType, rootIndex);
+                return this->containsLiveIvar(closure->returnType, rootIndex);
             }
             if (const auto* generator = node->opt_Generator()) {
-                return this->containsLiveIvar((*generator)->resumeTy, rootIndex) || this->containsLiveIvar((*generator)->yieldTy, rootIndex) || this->containsLiveIvar((*generator)->returnType, rootIndex);
+                return this->containsLiveIvar(generator->resumeTy, rootIndex) || this->containsLiveIvar(generator->yieldTy, rootIndex) || this->containsLiveIvar(generator->returnType, rootIndex);
             }
             if (const auto* async = node->opt_Async()) {
-                return ((*async)->yieldTy && this->containsLiveIvar((*async)->yieldTy, rootIndex)) || this->containsLiveIvar((*async)->returnType, rootIndex);
+                return (async->yieldTy && this->containsLiveIvar(async->yieldTy, rootIndex)) || this->containsLiveIvar(async->returnType, rootIndex);
             }
             return false;
         }
@@ -3805,7 +3805,7 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
             auto& e = (*type).as_NodeType();
             switch (e.tag()) {
                 case HIRTypeDataNodeType::TAG_Closure: {
-                    auto& nodeP = e.as_Closure();
+                    const auto nodeP = e.as_Closure();
                     if (isAsyncCallableTrait) {
                         bool supportsShared = true;
                         bool supportsMutable = true;
@@ -3842,7 +3842,7 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                     break;
                 }
                 case HIRTypeDataNodeType::TAG_Generator: {
-                    auto& nodeP = e.as_Generator();
+                    const auto nodeP = e.as_Generator();
                     if (trait == langGenerator()) {
                         const RcString rcstringYield = RcString::newInterned("Yield");
                         const RcString rcstringReturn = RcString::newInterned("Return");
@@ -3854,7 +3854,7 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                     break;
                 }
                 case HIRTypeDataNodeType::TAG_Async: {
-                    auto& nodeP = e.as_Async();
+                    const auto nodeP = e.as_Async();
                     if (nodeP->isAsyncGen) {
                         if (trait == langAsyncIterator()) {
                             const RcString rcstringItem = RcString::newInterned("Item");
@@ -6000,8 +6000,8 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
     const bool erasedClosureExpectation = closure && resolvedDestination->is_ErasedType();
     if (erasedClosureExpectation && result.effects.certainty == SolverCertainty::Proven) {
         Vector<const HIRType*> closureArgs;
-        closureArgs.grow((*closure)->args.size());
-        for (const auto& argument : (*closure)->args) {
+        closureArgs.grow(closure->args.size());
+        for (const auto& argument : closure->args) {
             closureArgs.pushBack(argument.second);
         }
         HIRPathParams desiredParams{crate.types.tuple(std::move(closureArgs))};
@@ -6014,7 +6014,7 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
                 return false;
             }
             const auto& arguments = params.types.front()->as_Tuple();
-            if (arguments.length() != (*closure)->args.size()) {
+            if (arguments.length() != closure->args.size()) {
                 return false;
             }
             auto output = impl.getType(crate.types, "Output", {});
@@ -6065,7 +6065,7 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
         if (foundExpectation) {
             for (size_t i = 0; i < expectedArgs.length(); i++) {
                 if (expectedArgs[i] != nullptr) {
-                    result.effects.equalities.push_back(SolverTypeEquality{(*closure)->args[i].second, expectedArgs[i]});
+                    result.effects.equalities.push_back(SolverTypeEquality{closure->args[i].second, expectedArgs[i]});
                 }
             }
             if (expectedOutput != nullptr) {
@@ -6073,9 +6073,9 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
                     HIRTraitPath::assocListT associated;
                     auto future = HIRGenericPath(langFuture(), {});
                     associated.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{future.clone(), {}, expectedOutput}));
-                    result.effects.obligations.push_back(SolverObligation{(*closure)->returnType, HIRTraitPath(std::move(future), std::move(associated), {})});
+                    result.effects.obligations.push_back(SolverObligation{closure->returnType, HIRTraitPath(std::move(future), std::move(associated), {})});
                 } else {
-                    result.effects.equalities.push_back(SolverTypeEquality{(*closure)->returnType, expectedOutput});
+                    result.effects.equalities.push_back(SolverTypeEquality{closure->returnType, expectedOutput});
                 }
             }
         }
@@ -6089,7 +6089,7 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
             }
         }
         if (expectedOutput) {
-            const auto* closureOutput = (*closure)->returnType;
+            const auto* closureOutput = closure->returnType;
             size_t kept = 0;
             for (size_t i = 0; i < result.effects.equalities.size(); i++) {
                 auto& equality = result.effects.equalities[i];
@@ -9342,7 +9342,7 @@ const HIRType* TraitResolution::findField(const Span& sp, const HIRType* ty, con
                 break;
             }
             case HIRTypePathBinding::TAG_Struct: {
-                auto& be = e->binding.as_Struct();
+                const auto be = e->binding.as_Struct();
                 const auto& str = *be;
                 const auto& params = e->path.data.as_Generic().params;
                 auto monomorph = MonomorphStatePtr(crate.types, ty, &params, nullptr);
@@ -9380,7 +9380,7 @@ const HIRType* TraitResolution::findField(const Span& sp, const HIRType* ty, con
                 break;
             }
             case HIRTypePathBinding::TAG_Union: {
-                auto& be = e->binding.as_Union();
+                const auto be = e->binding.as_Union();
                 const auto& unm = *be;
                 const auto& params = e->path.data.as_Generic().params;
                 auto monomorph = MonomorphStatePtr(crate.types, ty, &params, nullptr);
@@ -9693,17 +9693,17 @@ auto CanonicalizeTraitGoal::monomorphType(const Span& sp, const HIRType* ty, boo
             /* A signature variable may resolve to a projection over the closure
                itself (`<closure as FnOnce<()>>::Output`); the closure is visited once. */
             for (const auto* inProgress : closuresInProgress_) {
-                if (inProgress == *closure) {
+                if (inProgress == closure) {
                     return ty;
                 }
             }
-            closuresInProgress_.pushBack(*closure);
+            closuresInProgress_.pushBack(closure);
             Vector<const HIRType*> signature;
-            signature.grow((*closure)->args.size() + 1);
-            for (const auto& arg : (*closure)->args) {
+            signature.grow(closure->args.size() + 1);
+            for (const auto& arg : closure->args) {
                 signature.pushBack(this->monomorphType(sp, arg.second, allowInfer));
             }
-            signature.pushBack(this->monomorphType(sp, (*closure)->returnType, allowInfer));
+            signature.pushBack(this->monomorphType(sp, closure->returnType, allowInfer));
             closuresInProgress_.popBack();
             if (!frozen_ && !sealed_) {
                 environment_.closureSignatures.pushBack(types.tuple(std::move(signature)));
@@ -10739,7 +10739,7 @@ auto NextTraitGoalEvaluator::orphanVisitResolvedType(const HIRType* type, Orphan
         }
 
         const auto* strPtr = path->binding.opt_Struct();
-        if (strPtr && (*strPtr)->structMarkings.isFundamental) {
+        if (strPtr && strPtr->structMarkings.isFundamental) {
             for (const auto& param : generic->params.types) {
                 const auto result = orphanVisitType(param, perspective);
                 if (result != OrphanVisit::NonLocal) {
@@ -13795,7 +13795,7 @@ auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, con
                 }
                 Certainty result = Certainty::Proven;
                 if (const auto* strPtr = e.binding.opt_Struct()) {
-                    const auto& str = **strPtr;
+                    const auto& str = *strPtr;
                     switch (str.data.tag()) {
                         case HIRStruct::Data::TAG_Unit: {
                             break;
@@ -13822,7 +13822,7 @@ auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, con
                         }
                     }
                 } else if (const auto* enmPtr = e.binding.opt_Enum()) {
-                    const auto& enm = **enmPtr;
+                    const auto& enm = *enmPtr;
                     if (const auto* variants = enm.data.opt_Data()) {
                         for (const auto& variant : *variants) {
                             combine(result, evaluateField(variant.type));
@@ -13832,7 +13832,7 @@ auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, con
                         }
                     }
                 } else if (const auto* unnPtr = e.binding.opt_Union()) {
-                    const auto& unn = **unnPtr;
+                    const auto& unn = *unnPtr;
                     for (const auto& field : unn.variants) {
                         combine(result, evaluateField(field.ty));
                         if (result == Certainty::NoSolution) {
@@ -15557,12 +15557,12 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 if (!closure) {
                     return false;
                 }
-                for (const auto& arg : (*closure)->args) {
+                for (const auto& arg : closure->args) {
                     if (resolve_.typeContainsIvars(arg.second)) {
                         return true;
                     }
                 }
-                return resolve_.typeContainsIvars((*closure)->returnType);
+                return resolve_.typeContainsIvars(closure->returnType);
             });
         };
         if (selfIsTypeVariable || holdsOpaque || (selfIsAlias && !definitelyRigidAlias(resolvedType) && (aliasHoldsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)))) {

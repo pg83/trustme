@@ -1513,10 +1513,10 @@ auto AnnotateExprVisitorMark::visitRoot(HIRExprPtr& rootPtr) -> void {
 
     for (auto* call : pendingCalls) {
         const auto* nodePp = (*call->value->resType).is_NodeType() ? ((*call->value->resType).as_NodeType().opt_Closure()) : nullptr;
-        if (!nodePp || !*nodePp) {
+        if (!nodePp) {
             continue;
         }
-        switch ((*nodePp)->cls) {
+        switch (nodePp->cls) {
             case HIRExprNodeClosure::Class::Unknown:
                 break;
             case HIRExprNodeClosure::Class::NoCapture:
@@ -1945,12 +1945,12 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeCallValue& node) -> void {
     HIRValueUsage vu = HIRValueUsage::Borrow;
 
     if (const auto* nodePp = ((*node.value->resType).is_NodeType() ? ((*node.value->resType).as_NodeType().opt_Closure()) : nullptr)) {
-        BUG_ASSERT(*nodePp);
-        if ((*nodePp)->cls == HIRExprNodeClosure::Class::Unknown) {
+        BUG_ASSERT(nodePp);
+        if (nodePp->cls == HIRExprNodeClosure::Class::Unknown) {
             auto _ = pushUsage(HIRValueUsage::Move);
             this->visitNodePtr(node.value);
         }
-        switch ((*nodePp)->cls) {
+        switch (nodePp->cls) {
             case HIRExprNodeClosure::Class::Unknown:
                 node.traitUsed = HIRExprNodeCallValue::TraitUsed::FnOnce;
                 pendingCalls.pushBack(&node);
@@ -3256,7 +3256,7 @@ auto ClosureExprVisitorFixup::visit(HIRExprNodeCast& node) -> void {
 
 auto ClosureExprVisitorFixup::visit(HIRExprNodeCallValue& node) -> void {
     if (const auto* nodePp = ((*node.value->resType).is_NodeType() ? ((*node.value->resType).as_NodeType().opt_Closure()) : nullptr)) {
-        switch ((*nodePp)->cls) {
+        switch (nodePp->cls) {
             case HIRExprNodeClosure::Class::Unknown:
                 BUG(node.span(), StringView("References an ::Unknown closure"));
             case HIRExprNodeClosure::Class::NoCapture:
@@ -6225,7 +6225,7 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
     // TODO: You can call via &-ptrs, but that currently isn't handled in typeck
     if (const auto* nodePp = ((*node.value->resType).is_NodeType() ? ((*node.value->resType).as_NodeType().opt_Closure()) : nullptr)) {
         if (node.traitUsed == HIRExprNodeCallValue::TraitUsed::Unknown) {
-            switch ((*nodePp)->cls) {
+            switch (nodePp->cls) {
                 case HIRExprNodeClosure::Class::Unknown:
                     BUG(sp, StringView("References an ::Unknown closure"));
                 case HIRExprNodeClosure::Class::NoCapture:

@@ -4979,7 +4979,7 @@ namespace {
                                 break;
                             }
                             case MacroRef::TAG_MacroRules: {
-                                auto& e = mac.ref.as_MacroRules();
+                                const auto e = mac.ref.as_MacroRules();
                                 rv.macro.set(mac.path, ASTPathBindingMacro::make_MacroRules({nullptr, e}));
                                 break;
                             }

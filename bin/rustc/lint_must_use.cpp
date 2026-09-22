@@ -59,15 +59,15 @@ namespace {
                 default:
                     return false;
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& be = pe->binding.as_Struct();
+                    const auto be = pe->binding.as_Struct();
                     return be->mustUse;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    auto& be = pe->binding.as_Enum();
+                    const auto be = pe->binding.as_Enum();
                     return be->mustUse;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    auto& be = pe->binding.as_Union();
+                    const auto be = pe->binding.as_Union();
                     return be->mustUse;
                 }
             }

@@ -216,7 +216,7 @@ auto CodeGeneratorMonoMir::metadataType(const HIRType* ty) const -> MetadataType
         switch (te.binding.tag()) {
             break;
             case HIRTypePathBinding::TAG_Struct: {
-                auto& tpb = te.binding.as_Struct();
+                const auto tpb = te.binding.as_Struct();
                 {
                     switch (tpb->structMarkings.dstType) {
                         case HIRStructMarkings::DstType::None:

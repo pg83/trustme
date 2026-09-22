@@ -146,23 +146,23 @@ namespace {
                 return true;
             }
             case HIRTypePathBinding::TAG_ExternType: {
-                auto& ae = a.as_ExternType();
-                auto& be = b.as_ExternType();
+                const auto ae = a.as_ExternType();
+                const auto be = b.as_ExternType();
                 return ae == be;
             }
             case HIRTypePathBinding::TAG_Struct: {
-                auto& ae = a.as_Struct();
-                auto& be = b.as_Struct();
+                const auto ae = a.as_Struct();
+                const auto be = b.as_Struct();
                 return ae == be;
             }
             case HIRTypePathBinding::TAG_Union: {
-                auto& ae = a.as_Union();
-                auto& be = b.as_Union();
+                const auto ae = a.as_Union();
+                const auto be = b.as_Union();
                 return ae == be;
             }
             case HIRTypePathBinding::TAG_Enum: {
-                auto& ae = a.as_Enum();
-                auto& be = b.as_Enum();
+                const auto ae = a.as_Enum();
+                const auto be = b.as_Enum();
                 return ae == be;
             }
         }
@@ -648,22 +648,22 @@ namespace {
                 break;
             }
             case HIRTypePathBinding::TAG_ExternType: {
-                auto& e = binding.as_ExternType();
+                const auto e = binding.as_ExternType();
                 h = hashMix(h, reinterpret_cast<uintptr_t>(e));
                 break;
             }
             case HIRTypePathBinding::TAG_Struct: {
-                auto& e = binding.as_Struct();
+                const auto e = binding.as_Struct();
                 h = hashMix(h, reinterpret_cast<uintptr_t>(e));
                 break;
             }
             case HIRTypePathBinding::TAG_Union: {
-                auto& e = binding.as_Union();
+                const auto e = binding.as_Union();
                 h = hashMix(h, reinterpret_cast<uintptr_t>(e));
                 break;
             }
             case HIRTypePathBinding::TAG_Enum: {
-                auto& e = binding.as_Enum();
+                const auto e = binding.as_Enum();
                 h = hashMix(h, reinterpret_cast<uintptr_t>(e));
                 break;
             }
@@ -830,17 +830,17 @@ namespace {
                 auto& e = type.as_NodeType();
                 switch (e.tag()) {
                     case HIRTypeDataNodeType::TAG_Closure: {
-                        auto& p = e.as_Closure();
+                        const auto p = e.as_Closure();
                         h = hashMix(h, reinterpret_cast<uintptr_t>(p));
                         break;
                     }
                     case HIRTypeDataNodeType::TAG_Generator: {
-                        auto& p = e.as_Generator();
+                        const auto p = e.as_Generator();
                         h = hashMix(h, reinterpret_cast<uintptr_t>(p));
                         break;
                     }
                     case HIRTypeDataNodeType::TAG_Async: {
-                        auto& p = e.as_Async();
+                        const auto p = e.as_Async();
                         h = hashMix(h, reinterpret_cast<uintptr_t>(p));
                         break;
                     }
@@ -1342,20 +1342,20 @@ Ordering HIRTypeDataNodeType::ord(const HIRTypeDataNodeType& x) const {
     ORD(static_cast<int>(this->tag()), static_cast<int>(x.tag()));
     switch ((*this).tag()) {
         case HIRTypeDataNodeType::TAG_Closure: {
-            auto& te = (*this).as_Closure();
-            auto& xe = x.as_Closure();
+            const auto te = (*this).as_Closure();
+            const auto xe = x.as_Closure();
             ORD(reinterpret_cast<uintptr_t>(te), reinterpret_cast<uintptr_t>(xe));
             break;
         }
         case HIRTypeDataNodeType::TAG_Generator: {
-            auto& te = (*this).as_Generator();
-            auto& xe = x.as_Generator();
+            const auto te = (*this).as_Generator();
+            const auto xe = x.as_Generator();
             ORD(reinterpret_cast<uintptr_t>(te), reinterpret_cast<uintptr_t>(xe));
             break;
         }
         case HIRTypeDataNodeType::TAG_Async: {
-            auto& te = (*this).as_Async();
-            auto& xe = x.as_Async();
+            const auto te = (*this).as_Async();
+            const auto xe = x.as_Async();
             ORD(reinterpret_cast<uintptr_t>(te), reinterpret_cast<uintptr_t>(xe));
             break;
         }
@@ -1366,17 +1366,17 @@ Ordering HIRTypeDataNodeType::ord(const HIRTypeDataNodeType& x) const {
 void HIRTypeDataNodeType::fmt(ZeroCopyOutput& os) const {
     switch ((*this).tag()) {
         case HIRTypeDataNodeType::TAG_Closure: {
-            auto& e = (*this).as_Closure();
+            const auto e = (*this).as_Closure();
             os << StringView("closure[") << static_cast<const void*>(e) << StringView("]");
             break;
         }
         case HIRTypeDataNodeType::TAG_Generator: {
-            auto& e = (*this).as_Generator();
+            const auto e = (*this).as_Generator();
             os << StringView("generator[") << static_cast<const void*>(e) << StringView("]");
             break;
         }
         case HIRTypeDataNodeType::TAG_Async: {
-            auto& e = (*this).as_Async();
+            const auto e = (*this).as_Async();
             os << StringView("async[") << static_cast<const void*>(e) << StringView("]");
             break;
         }
@@ -1386,15 +1386,15 @@ void HIRTypeDataNodeType::fmt(ZeroCopyOutput& os) const {
 HIRTypeDataNodeType HIRTypeDataNodeType::clone() const {
     switch ((*this).tag()) {
         case HIRTypeDataNodeType::TAG_Closure: {
-            auto& e = (*this).as_Closure();
+            const auto e = (*this).as_Closure();
             return e;
         }
         case HIRTypeDataNodeType::TAG_Generator: {
-            auto& e = (*this).as_Generator();
+            const auto e = (*this).as_Generator();
             return e;
         }
         case HIRTypeDataNodeType::TAG_Async: {
-            auto& e = (*this).as_Async();
+            const auto e = (*this).as_Async();
             return e;
         }
     }
@@ -2361,19 +2361,19 @@ HIRTypePathBinding HIRTypePathBinding::clone() const {
             return HIRTypePathBinding::make_Opaque({});
         }
         case HIRTypePathBinding::TAG_ExternType: {
-            auto& e = (*this).as_ExternType();
+            const auto e = (*this).as_ExternType();
             return HIRTypePathBinding(e);
         }
         case HIRTypePathBinding::TAG_Struct: {
-            auto& e = (*this).as_Struct();
+            const auto e = (*this).as_Struct();
             return HIRTypePathBinding(e);
         }
         case HIRTypePathBinding::TAG_Union: {
-            auto& e = (*this).as_Union();
+            const auto e = (*this).as_Union();
             return HIRTypePathBinding(e);
         }
         case HIRTypePathBinding::TAG_Enum: {
-            auto& e = (*this).as_Enum();
+            const auto e = (*this).as_Enum();
             return HIRTypePathBinding(e);
         }
     }
@@ -2393,23 +2393,23 @@ bool HIRTypePathBinding::operator==(const HIRTypePathBinding& x) const {
             return true;
         }
         case HIRTypePathBinding::TAG_ExternType: {
-            auto& te = (*this).as_ExternType();
-            auto& xe = x.as_ExternType();
+            const auto te = (*this).as_ExternType();
+            const auto xe = x.as_ExternType();
             return te == xe;
         }
         case HIRTypePathBinding::TAG_Struct: {
-            auto& te = (*this).as_Struct();
-            auto& xe = x.as_Struct();
+            const auto te = (*this).as_Struct();
+            const auto xe = x.as_Struct();
             return te == xe;
         }
         case HIRTypePathBinding::TAG_Union: {
-            auto& te = (*this).as_Union();
-            auto& xe = x.as_Union();
+            const auto te = (*this).as_Union();
+            const auto xe = x.as_Union();
             return te == xe;
         }
         case HIRTypePathBinding::TAG_Enum: {
-            auto& te = (*this).as_Enum();
-            auto& xe = x.as_Enum();
+            const auto te = (*this).as_Enum();
+            const auto xe = x.as_Enum();
             return te == xe;
         }
     }
@@ -2426,28 +2426,28 @@ const HIRTraitMarkings* HIRTypePathBinding::getTraitMarkings() const {
             break;
         }
         case HIRTypePathBinding::TAG_ExternType: {
-            auto& tpb = (*this).as_ExternType();
+            const auto tpb = (*this).as_ExternType();
             if (tpb) {
                 markingsPtr = &tpb->markings;
             }
             break;
         }
         case HIRTypePathBinding::TAG_Struct: {
-            auto& tpb = (*this).as_Struct();
+            const auto tpb = (*this).as_Struct();
             if (tpb) {
                 markingsPtr = &tpb->markings;
             }
             break;
         }
         case HIRTypePathBinding::TAG_Union: {
-            auto& tpb = (*this).as_Union();
+            const auto tpb = (*this).as_Union();
             if (tpb) {
                 markingsPtr = &tpb->markings;
             }
             break;
         }
         case HIRTypePathBinding::TAG_Enum: {
-            auto& tpb = (*this).as_Enum();
+            const auto tpb = (*this).as_Enum();
             if (tpb) {
                 markingsPtr = &tpb->markings;
             }
@@ -2470,21 +2470,21 @@ const HIRGenericParams* HIRTypePathBinding::getGenerics() const {
             break;
         }
         case HIRTypePathBinding::TAG_Struct: {
-            auto& tpb = (*this).as_Struct();
+            const auto tpb = (*this).as_Struct();
             if (tpb) {
                 rv = &tpb->params;
             }
             break;
         }
         case HIRTypePathBinding::TAG_Union: {
-            auto& tpb = (*this).as_Union();
+            const auto tpb = (*this).as_Union();
             if (tpb) {
                 rv = &tpb->params;
             }
             break;
         }
         case HIRTypePathBinding::TAG_Enum: {
-            auto& tpb = (*this).as_Enum();
+            const auto tpb = (*this).as_Enum();
             if (tpb) {
                 rv = &tpb->params;
             }

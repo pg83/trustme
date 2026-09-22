@@ -1148,7 +1148,7 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRType* ty) con
                     return false;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& pbe = e.binding.as_Struct();
+                    const auto pbe = e.binding.as_Struct();
                     const auto& params = e.path.data.as_Generic().params;
                     const auto& str = *pbe;
                     switch (str.data.tag()) {
@@ -1181,7 +1181,7 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRType* ty) con
                     break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    auto& pbe = e.binding.as_Enum();
+                    const auto pbe = e.binding.as_Enum();
                     const auto& params = e.path.data.as_Generic().params;
                     switch (pbe->data.tag()) {
                         case HIREnumClass::TAG_Value: {
@@ -1290,7 +1290,7 @@ InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, con
                     return InteriorMutability::No;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& pbe = e.binding.as_Struct();
+                    const auto pbe = e.binding.as_Struct();
                     const HIRGenericPath& p = e.path.data.as_Generic();
                     if (p.path == crate.getLangItemPath(sp, "unsafe_cell")) {
                         return InteriorMutability::Yes;
@@ -1333,7 +1333,7 @@ InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, con
                     break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    auto& pbe = e.binding.as_Enum();
+                    const auto pbe = e.binding.as_Enum();
                     switch (pbe->data.tag()) {
                         case HIREnumClass::TAG_Value: {
                             auto& _ = pbe->data.as_Value();
@@ -1357,7 +1357,7 @@ InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, con
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    auto& pbe = e.binding.as_Union();
+                    const auto pbe = e.binding.as_Union();
                     for (const auto& var : pbe->variants) {
                         switch (this->typeIsInteriorMutable(sp, monomorph(var.ty))) {
                             case InteriorMutability::Yes:
@@ -1408,7 +1408,7 @@ InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, con
             auto& e = (*ty).as_NodeType();
             switch (e.tag()) {
                 case HIRTypeDataNodeType::TAG_Closure: {
-                    auto& nodeP = e.as_Closure();
+                    const auto nodeP = e.as_Closure();
                     if (nodeP->cls == HIRExprNodeClosure::Class::Unknown) {
                         return InteriorMutability::Unknown;
                     }
@@ -1424,7 +1424,7 @@ InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, con
                     return InteriorMutability::No;
                 }
                 case HIRTypeDataNodeType::TAG_Generator: {
-                    auto& nodeP = e.as_Generator();
+                    const auto nodeP = e.as_Generator();
                     for (const auto& c : nodeP->captures) {
                         auto rv = this->typeIsInteriorMutable(sp, c->resType);
                         if (rv != InteriorMutability::No) {
@@ -1520,7 +1520,7 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRType* ty,
                     return MetadataType::None;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& pbe = e.binding.as_Struct();
+                    const auto pbe = e.binding.as_Struct();
                     switch (pbe->structMarkings.dstType) {
                         case HIRStructMarkings::DstType::Slice:
                             return MetadataType::Slice;
@@ -1663,7 +1663,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) co
                     return true;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& pbe = e.binding.as_Struct();
+                    const auto pbe = e.binding.as_Struct();
                     switch (pbe->data.tag()) {
                         case HIRStructData::TAG_Unit: {
                             break;
@@ -1692,7 +1692,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) co
                     break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    auto& pbe = e.binding.as_Enum();
+                    const auto pbe = e.binding.as_Enum();
                     if (const auto* e = pbe->data.opt_Data()) {
                         for (const auto& var : *e) {
                             if (typeNeedsDropGlue(sp, monomorph(var.type))) {
@@ -1826,7 +1826,7 @@ bool StaticTraitResolve::typeNeedsAsyncDropInner(const Span& sp, const HIRType* 
             auto monomorph = MonomorphStatePtr(crate.types, ty, &generic->params, nullptr);
             if (const auto* str = pathTy->binding.opt_Struct()) {
                 if (pathTy->isFuture() || pathTy->isGenerator()) {
-                    const auto* fields = (*str)->data.opt_Tuple();
+                    const auto* fields = str->data.opt_Tuple();
                     ASSERT_BUG(sp, fields && !fields->empty(), StringView("coroutine without its state field: ") << ty);
                     for (size_t i = 0; i < fields->size(); i++) {
                         auto fieldTy = monomorph.monomorphType(sp, fields->at(i).ent);
@@ -1844,11 +1844,11 @@ bool StaticTraitResolve::typeNeedsAsyncDropInner(const Span& sp, const HIRType* 
                     stack.erase(ty);
                     return rv;
                 }
-                switch (((*str)->data).tag()) {
+                switch ((str->data).tag()) {
                     case HIRStructData::TAG_Unit:
                         break;
                     case HIRStructData::TAG_Tuple:
-                        for (const auto& field : ((*str)->data).as_Tuple()) {
+                        for (const auto& field : (str->data).as_Tuple()) {
                             auto fieldTy = monomorph.monomorphType(sp, field.ent);
                             fieldTy = expandAssociatedTypes(sp, fieldTy);
                             if (typeNeedsAsyncDropInner(sp, fieldTy, stack)) {
@@ -1858,7 +1858,7 @@ bool StaticTraitResolve::typeNeedsAsyncDropInner(const Span& sp, const HIRType* 
                         }
                         break;
                     case HIRStructData::TAG_Named:
-                        for (const auto& field : ((*str)->data).as_Named()) {
+                        for (const auto& field : (str->data).as_Named()) {
                             auto fieldTy = monomorph.monomorphType(sp, field.ty);
                             fieldTy = expandAssociatedTypes(sp, fieldTy);
                             if (typeNeedsAsyncDropInner(sp, fieldTy, stack)) {
@@ -1869,7 +1869,7 @@ bool StaticTraitResolve::typeNeedsAsyncDropInner(const Span& sp, const HIRType* 
                         break;
                 }
             } else if (const auto* enm = pathTy->binding.opt_Enum()) {
-                if (const auto* variants = (*enm)->data.opt_Data()) {
+                if (const auto* variants = enm->data.opt_Data()) {
                     for (const auto& variant : *variants) {
                         auto fieldTy = monomorph.monomorphType(sp, variant.type);
                         fieldTy = expandAssociatedTypes(sp, fieldTy);
@@ -1951,7 +1951,7 @@ const HIRType* StaticTraitResolve::getFieldType(const Span& sp, const HIRType* t
                 default:
                     BUG(sp, StringView("Getting field on invalid type - ") << ty);
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& pbe = te.binding.as_Struct();
+                    const auto pbe = te.binding.as_Struct();
                     MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
                     switch (pbe->data.tag()) {
                         case HIRStructData::TAG_Named: {
@@ -1978,7 +1978,7 @@ const HIRType* StaticTraitResolve::getFieldType(const Span& sp, const HIRType* t
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    auto& pbe = te.binding.as_Union();
+                    const auto pbe = te.binding.as_Union();
                     MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
                     for (const auto& f : pbe->variants) {
                         if (f.name == name) {

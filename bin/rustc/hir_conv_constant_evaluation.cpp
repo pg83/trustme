@@ -2825,8 +2825,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                                 U128 only(0);
                                 if (ty->is_Path()) {
                                     if (const auto* enmpp = ty->as_Path().binding.opt_Enum()) {
-                                        if ((*enmpp)->numVariants() == 1) {
-                                            only = U128((*enmpp)->getDiscriminant(0));
+                                        if (enmpp->numVariants() == 1) {
+                                            only = U128(enmpp->getDiscriminant(0));
                                         }
                                     }
                                 }
@@ -3215,7 +3215,7 @@ void HIREvaluator::runConstDrop(MIREvalCallStackEntry& localState, const HIRType
                     break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    auto& pbe = te.binding.as_Enum();
+                    const auto pbe = te.binding.as_Enum();
                     if (!pbe->data.is_Data()) {
                         return;
                     }
@@ -4707,7 +4707,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
                     return false;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    auto& pbe = te.binding.as_Enum();
+                    const auto pbe = te.binding.as_Enum();
                     const auto* variants = pbe->data.opt_Data();
                     if (!variants) {
                         return false;
@@ -5916,15 +5916,15 @@ auto Expander::visitArraysize(HIRArraySize& as) -> void {
         if (const auto* te = ty->opt_Path()) {
             switch (te->binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
-                    auto& _ = te->binding.as_Unbound();
+                    const auto _ = te->binding.as_Unbound();
                     break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    auto& _ = te->binding.as_Opaque();
+                    const auto _ = te->binding.as_Opaque();
                     break;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& pbe = te->binding.as_Struct();
+                    const auto pbe = te->binding.as_Struct();
                     auto savedIp = implParams;
                     implParams = nullptr;
                     this->visitStruct(te->path.data.as_Generic().path, crate.getStructByPathMut(Span(), te->path.data.as_Generic().path));

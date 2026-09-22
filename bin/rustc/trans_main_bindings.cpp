@@ -1500,7 +1500,7 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             break;
         }
         case EntPtr::TAG_Function: {
-            auto& e = itemRef.as_Function();
+            const auto e = itemRef.as_Function();
             evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, e->params, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG(StringView("> Already enumerated after const evaluation"));
@@ -1510,7 +1510,7 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             break;
         }
         case EntPtr::TAG_Static: {
-            auto& e = itemRef.as_Static();
+            const auto e = itemRef.as_Static();
             evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, e->params, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG(StringView("> Already enumerated after const evaluation"));
@@ -1522,7 +1522,7 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             break;
         }
         case EntPtr::TAG_Constant: {
-            auto& e = itemRef.as_Constant();
+            const auto e = itemRef.as_Constant();
             evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, e->params, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG(StringView("> Already enumerated after const evaluation"));
@@ -2649,7 +2649,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Struct: {
-                                auto& pbe = te.binding.as_Struct();
+                                const auto pbe = te.binding.as_Struct();
                                 auto customDropCall = static_cast<MIRBasicBlockId>(~0u);
                                 if (pbe->markings.hasDropImpl) {
                                     customDropCall = builder.pushCallDrop(ty);
@@ -2679,7 +2679,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Union: {
-                                auto& pbe = te.binding.as_Union();
+                                const auto pbe = te.binding.as_Union();
                                 if (pbe->markings.hasDropImpl) {
                                     builder.pushCallDrop(ty);
                                     hasDrop = true;
@@ -2687,7 +2687,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Enum: {
-                                auto& pbe = te.binding.as_Enum();
+                                const auto pbe = te.binding.as_Enum();
                                 auto customDropCall = static_cast<MIRBasicBlockId>(~0u);
                                 if (pbe->markings.hasDropImpl) {
                                     customDropCall = builder.pushCallDrop(ty);
@@ -3769,17 +3769,17 @@ auto TypeVisitor::visitType(const HIRType* ty, Mode mode) -> void {
                         break;
                     }
                     case HIRTypePathBinding::TAG_Struct: {
-                        auto& tpb = te.binding.as_Struct();
+                        const auto tpb = te.binding.as_Struct();
                         visitStruct(ty, te.path.data.as_Generic(), *tpb);
                         break;
                     }
                     case HIRTypePathBinding::TAG_Union: {
-                        auto& tpb = te.binding.as_Union();
+                        const auto tpb = te.binding.as_Union();
                         visitUnion(ty, te.path.data.as_Generic(), *tpb);
                         break;
                     }
                     case HIRTypePathBinding::TAG_Enum: {
-                        auto& tpb = te.binding.as_Enum();
+                        const auto tpb = te.binding.as_Enum();
                         TargetGetTypeRepr(sp, resolve, ty);
                         visitEnum(ty, te.path.data.as_Generic(), *tpb);
                         break;

@@ -9109,7 +9109,7 @@ auto CodeGeneratorC::fieldIsUnderaligned(const MIRLValue& slot, const HIRType* t
             const auto* outerTy = mirRes->getLvalueType(inner);
             if (const auto* te = outerTy->opt_Path()) {
                 if (const auto* str = te->binding.opt_Struct()) {
-                    const unsigned packedTo = (**str).maxFieldAlignment;
+                    const unsigned packedTo = (*str).maxFieldAlignment;
                     if (packedTo != 0 && packedTo < align) {
                         return true;
                     }
@@ -9985,7 +9985,7 @@ auto CodeGeneratorC::getInnerUnsizedType(const HIRType* ty) -> const HIRType* {
                     return ty;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& tpb = tuMatch.as_Struct();
+                    const auto tpb = tuMatch.as_Struct();
                     switch (tpb->structMarkings.dstType) {
                         case HIRStructMarkings::DstType::None:
                             return nullptr;

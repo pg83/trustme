@@ -104,17 +104,17 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
                         break;
                     }
                     case HIRTypePathBinding::TAG_Struct: {
-                        auto& tpb = te->binding.as_Struct();
+                        const auto tpb = te->binding.as_Struct();
                         codegen->emitStruct(sp, te->path.data.as_Generic(), *tpb);
                         break;
                     }
                     case HIRTypePathBinding::TAG_Union: {
-                        auto& tpb = te->binding.as_Union();
+                        const auto tpb = te->binding.as_Union();
                         codegen->emitUnion(sp, te->path.data.as_Generic(), *tpb);
                         break;
                     }
                     case HIRTypePathBinding::TAG_Enum: {
-                        auto& tpb = te->binding.as_Enum();
+                        const auto tpb = te->binding.as_Enum();
                         codegen->emitEnum(sp, te->path.data.as_Generic(), *tpb);
                         break;
                     }

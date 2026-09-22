@@ -608,7 +608,7 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
                     auto& te = (*ty).as_Path();
                     // TODO: Cache result (to avoid needing to re-monomorph)
                     if (const auto* tep = te.binding.opt_Struct()) {
-                        const auto& str = **tep;
+                        const auto& str = *tep;
                         auto maybeMonomorph = [&](const auto& fieldType) {
                             return resolve.monomorphExpandOpt(sp, fieldType, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                         };
@@ -631,7 +631,7 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
                             }
                         }
                     } else if (const auto* tep = te.binding.opt_Union()) {
-                        const auto& unm = **tep;
+                        const auto& unm = *tep;
                         auto maybeMonomorph = [&](const HIRType* t) -> const HIRType* {
                             return resolve.monomorphExpandOpt(sp, t, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                         };
@@ -938,7 +938,7 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRType* ty, const std::vector<MI
                         idx = static_cast<size_t>(numericIdx);
                     } else if (const auto* tyPath = curTy->opt_Path()) {
                         if (const auto* bep = tyPath->binding.opt_Struct()) {
-                            const auto& str = **bep;
+                            const auto& str = *bep;
                             switch (str.data.tag()) {
                                 case HIRStructData::TAG_Named: {
                                     auto& fields = str.data.as_Named();
@@ -958,13 +958,13 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRType* ty, const std::vector<MI
                                 }
                             }
                         } else if (const auto* bep = tyPath->binding.opt_Union()) {
-                            const auto& unm = **bep;
+                            const auto& unm = *bep;
                             const auto& fields = unm.variants;
                             idx = std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
                                 return x.name == fieldName;
                             }) - fields.begin();
                         } else if (const auto* bep = tyPath->binding.opt_Enum()) {
-                            const auto& enm = **bep;
+                            const auto& enm = *bep;
                             MIR_ASSERT(*this, enm.data.is_Data(), StringView("Non-Data enum: ") << curTy << StringView(" .") << fieldName);
                             const auto& fields = enm.data.as_Data();
                             idx = std::find_if(fields.begin(), fields.end(), [&](const auto& x) {

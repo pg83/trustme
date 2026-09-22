@@ -198,20 +198,20 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
                     break;
                 }
                 case MacroRef::TAG_MacroRules: {
-                    auto& a = imp.ref.as_MacroRules();
-                    auto& b = mr.as_MacroRules();
+                    const auto a = imp.ref.as_MacroRules();
+                    const auto b = mr.as_MacroRules();
                     rv = (a == b);
                     break;
                 }
                 case MacroRef::TAG_BuiltinProcMacro: {
-                    auto& a = imp.ref.as_BuiltinProcMacro();
-                    auto& b = mr.as_BuiltinProcMacro();
+                    const auto a = imp.ref.as_BuiltinProcMacro();
+                    const auto b = mr.as_BuiltinProcMacro();
                     rv = (a == b);
                     break;
                 }
                 case MacroRef::TAG_ExternalProcMacro: {
-                    auto& a = imp.ref.as_ExternalProcMacro();
-                    auto& b = mr.as_ExternalProcMacro();
+                    const auto a = imp.ref.as_ExternalProcMacro();
+                    const auto b = mr.as_ExternalProcMacro();
                     rv = (a == b);
                     break;
                 }
