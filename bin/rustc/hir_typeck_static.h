@@ -207,6 +207,7 @@ public:
     void evaluateConstGeneric(const Span& sp, HIRConstGeneric& value) const;
     void evaluatePathParams(const Span& sp, HIRPathParams& params) const;
     const HIRType* expandAssociatedTypesSingle(const Span& sp, const HIRType* input) const;
+    const HIRType* normalizeForItemLookup(const Span& sp, const HIRType* input) const;
     bool typesEqualResolvingOpaque(const Span& sp, const HIRType* left, const HIRType* right) const;
 
     const HIRType* monomorphExpandOpt(const Span& sp, const HIRType* input, const Monomorphiser& m) const;

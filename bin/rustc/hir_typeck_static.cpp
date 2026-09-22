@@ -910,6 +910,30 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span&
     return MonomorphStatePtr(crate.types, pe.type, &implParams, &itemParams).monomorphType(sp, alias.type);
 }
 
+const HIRType* StaticTraitResolve::normalizeForItemLookup(const Span& sp, const HIRType* input) const {
+    const auto* path = input->opt_Path();
+    if (!path || !path->path.data.is_UfcsKnown()) {
+        return input;
+    }
+    unsigned placeholders = 0;
+    input = rewriteTyWith(crate.types, input, [&](const HIRType* type) -> const HIRType* {
+        const auto* infer = type->opt_Infer();
+        if (infer && infer->index == ~0u && placeholders < 256) {
+            return crate.types.generic(HIRGenericRef(RcString::newInterned("_"), GENERICPlaceholder, static_cast<u16>(placeholders++)));
+        }
+        return nullptr;
+    });
+    if (const auto* replacement = this->replaceEqualities(input)) {
+        return replacement;
+    }
+    if (!nextSolver) {
+        ASSERT_BUG(sp, crate.pool, StringView("next-solver requires the crate object pool"));
+        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
+    }
+    const auto* output = nextSolver->normalize(sp, implGenerics_, itemGenerics_, input);
+    return output ? output : input;
+}
+
 const HIRType* StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, const HIRType* input, bool recurse /*=true*/) const {
     TRACE_FUNCTION_FR(input, input);
     ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsKnown(), input);

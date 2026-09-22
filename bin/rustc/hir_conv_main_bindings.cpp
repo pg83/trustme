@@ -3929,7 +3929,7 @@ auto UfcsVisitor::locateInTraitImplAndSet(const Span& sp, HIRVisitor::PathContex
 auto UfcsVisitor::resolve_UfcsUnknown_inherent(const HIRSimplePath& visPath, const HIRPath& p, HIRVisitor::PathContext pc, HIRPath::Data& pd) -> bool {
     auto& e = pd.as_UfcsUnknown();
     TRACE_FUNCTION_F(e.type);
-    return crate.findTypeImpls(e.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
+    return crate.findTypeImpls(resolve_.normalizeForItemLookup(Span(), e.type), HIRResolvePlaceholdersNop(), [&](const auto& impl) {
         DEBUG(StringView("- matched inherent impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);
         switch (pc) {
             case HIRVisitor::PathContext::VALUE:
