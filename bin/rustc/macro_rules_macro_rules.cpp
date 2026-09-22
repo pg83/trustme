@@ -801,8 +801,12 @@ namespace {
                     return true;
                 case TOK_BYTESTRING:
                 case TOK_STRING:
+                case TOK_CSTRING:
+                case TOK_CHAR:
                 case TOK_INTEGER:
                 case TOK_FLOAT:
+                case TOK_RWORD_TRUE:
+                case TOK_RWORD_FALSE:
                     lex.consume();
                     break;
                 case TOK_DASH:
@@ -823,7 +827,10 @@ namespace {
                         case TOK_INTERPOLATED_PATH:
                             consumePath(lex);
                             break;
+                        case TOK_BYTESTRING:
                         case TOK_STRING:
+                        case TOK_CSTRING:
+                        case TOK_CHAR:
                         case TOK_INTEGER:
                         case TOK_FLOAT:
                             lex.consume();
@@ -857,7 +864,10 @@ namespace {
                     case TOK_INTERPOLATED_PATH:
                         consumePath(lex);
                         break;
+                    case TOK_BYTESTRING:
                     case TOK_STRING:
+                    case TOK_CSTRING:
+                    case TOK_CHAR:
                     case TOK_INTEGER:
                     case TOK_FLOAT:
                         lex.consume();
