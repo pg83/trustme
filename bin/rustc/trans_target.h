@@ -39,6 +39,8 @@ struct TargetArch {
 
         Alignments(u8 u16 = 2, u8 u32 = 4, u8 u64 = 8, u8 u128 = 16, u8 f32 = 4, u8 f64 = 8, u8 ptr = 4);
     } alignments;
+
+    stl::Vector<const char*> features = {};
 };
 
 struct BackendOptsC {

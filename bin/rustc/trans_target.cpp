@@ -209,7 +209,7 @@ namespace {
     using TargetLayoutContext = WireBoard::TargetLayoutContext;
 
     TargetArch archX86_64() {
-        return {
+        TargetArch rv{
             "x86_64",
             64,
             false,
@@ -217,10 +217,16 @@ namespace {
             TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)
             //TargetArch::Alignments(2, 4, 8, 8, 4, 8, 8) // TODO: Alignment of u128 is 8 with rustc, but gcc uses 16
         };
+        rv.features.pushBack("fxsr");
+        rv.features.pushBack("sse");
+        rv.features.pushBack("sse2");
+        return rv;
     }
 
     TargetArch archX32() {
-        return {"x86_64", 32, false, archX86_64().atomics, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4)};
+        TargetArch rv{"x86_64", 32, false, archX86_64().atomics, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4)};
+        rv.features = archX86_64().features;
+        return rv;
     }
 
     TargetArch archX86() {
@@ -2344,9 +2350,9 @@ void TargetSetCfg(WireBoard& wb, const std::string& targetName) {
     if (tgt.arch.atomics.ptr) {
         CfgSetValue(settings, "target_has_atomic", "cas");
     }
-    CfgSetValueCb(settings, "target_feature", [](const std::string& s) {
-        return false;
-    });
+    for (const auto* feature : tgt.arch.features) {
+        CfgSetValue(settings, "target_feature", feature);
+    }
 }
 
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t& outSize, size_t& outAlign) {
