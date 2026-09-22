@@ -5310,7 +5310,9 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeStructLiteral& v) -> void {
                     if (var.type == ctx.crate->types.unit()) {
                         kind = EmptyKind::Unit;
                     } else {
-                        const auto& str = *var.type->as_Path().binding.as_Struct();
+                        const auto& varPath = var.type->as_Path();
+                        const auto* bound = varPath.binding.opt_Struct();
+                        const auto& str = bound ? *bound : ctx.crate->getStructByPath(v.span(), varPath.path.data.as_Generic().path);
                         kind = str.data.is_Unit() ? EmptyKind::Unit : str.data.is_Tuple() && str.data.as_Tuple().empty() ? EmptyKind::Tuple : EmptyKind::None;
                     }
                 }
