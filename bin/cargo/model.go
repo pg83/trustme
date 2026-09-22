@@ -85,6 +85,7 @@ type Package struct {
 	defaultFeature []string
 	activeFeatures map[string]bool
 	buildOutput    BuildScriptOutput
+	metadataEnv    map[string]string
 	magic          bool
 
 	featureMu sync.Mutex
@@ -100,6 +101,7 @@ type Workspace struct {
 	exclude        []string
 	dependencies   map[string]*Dependency
 	patches        map[string]string
+	packageTable   map[string]any
 }
 
 type Repository struct {

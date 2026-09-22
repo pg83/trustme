@@ -1100,6 +1100,10 @@ func (b *Builder) commonEnv(pkg *Package) map[string]string {
 		"CARGO_PKG_VERSION_PRE":   pkg.version.pre,
 	}
 
+	for key, value := range pkg.metadataEnv {
+		env[key] = value
+	}
+
 	for _, dep := range b.mainDependencies(pkg, false) {
 		for key, value := range dep.packageRef.buildOutput.downstream {
 			env[key] = value

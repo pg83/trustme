@@ -272,3 +272,50 @@ func writeTestFile(t *testing.T, path, contents string) {
 		t.Fatal(err)
 	}
 }
+
+// Cargo gives rustc the package's metadata as `CARGO_PKG_*` variables
+// (`metadata_envs!`, cargo/core/manifest.rs): authors joined by `:`, a field
+// inherited from `[workspace.package]` resolved, a missing one empty, and the
+// readme found among README.md, README.txt and README when none is named.
+// clap 2's examples read `CARGO_PKG_AUTHORS` through `crate_authors!`.
+func TestPackageMetadataReachesTheCompilerEnvironment(t *testing.T) {
+	dir := t.TempDir()
+
+	writeTestFile(t, filepath.Join(dir, "src", "lib.rs"), "")
+	writeTestFile(t, filepath.Join(dir, "README.txt"), "")
+
+	manifest := `[package]
+name = "demo"
+version = "1.0.0"
+authors = ["Ann <ann@example.org>", "Bo"]
+description = "A demo"
+license.workspace = true
+rust-version = "1.70"
+`
+	path := filepath.Join(dir, "Cargo.toml")
+	writeTestFile(t, path, manifest)
+
+	workspace := &Workspace{
+		dir: dir, dependencies: map[string]*Dependency{}, patches: map[string]string{},
+		packageTable: map[string]any{"license": "MIT"},
+	}
+	pkg := parsePackage(path, readToml(path), workspace)
+	env := (&Builder{}).commonEnv(pkg)
+	want := map[string]string{
+		"CARGO_PKG_AUTHORS":      "Ann <ann@example.org>:Bo",
+		"CARGO_PKG_DESCRIPTION":  "A demo",
+		"CARGO_PKG_LICENSE":      "MIT",
+		"CARGO_PKG_RUST_VERSION": "1.70",
+		"CARGO_PKG_README":       "README.txt",
+		"CARGO_PKG_HOMEPAGE":     "",
+		"CARGO_PKG_REPOSITORY":   "",
+		"CARGO_PKG_LICENSE_FILE": "",
+	}
+
+	for key, value := range want {
+		got, set := env[key]
+		if !set || got != value {
+			t.Fatalf("%s = %q (set %v), want %q", key, got, set, value)
+		}
+	}
+}

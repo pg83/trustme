@@ -168,6 +168,7 @@ func loadWorkspace(path string) *Workspace {
 
 	if packageTable != nil {
 		workspace.edition = stringValue(packageTable["edition"])
+		workspace.packageTable = packageTable
 	}
 
 	for key, value := range mapValue(table["dependencies"]) {
@@ -363,6 +364,8 @@ func parsePackage(path string, doc map[string]any, workspace *Workspace) *Packag
 	if pkg.edition == "" {
 		pkg.edition = "2015"
 	}
+
+	pkg.metadataEnv = packageMetadataEnv(dir, table, workspace)
 
 	switch value := table["build"].(type) {
 	case string:
@@ -568,6 +571,51 @@ func parseTarget(kind string, table map[string]any, pkg *Package) *Target {
 	}
 
 	return target
+}
+
+// The package metadata Cargo hands rustc as `CARGO_PKG_*` (`metadata_envs!`,
+// cargo/core/manifest.rs): a field may be inherited from `[workspace.package]`,
+// a missing one is empty, and an unnamed readme is the first of Cargo's
+// default names found beside the manifest (`DEFAULT_README_FILES`).
+func packageMetadataEnv(dir string, table map[string]any, workspace *Workspace) map[string]string {
+	field := func(key string) any {
+		value := table[key]
+		if inherited := mapValue(value); inherited != nil && boolValue(inherited["workspace"], false) {
+			if workspace == nil || workspace.packageTable == nil {
+				return nil
+			}
+			return workspace.packageTable[key]
+		}
+		return value
+	}
+
+	readme := ""
+	switch value := field("readme").(type) {
+	case string:
+		readme = value
+	case bool:
+		if value {
+			readme = "README.md"
+		}
+	case nil:
+		for _, name := range []string{"README.md", "README.txt", "README"} {
+			if fileExists(filepath.Join(dir, name)) {
+				readme = name
+				break
+			}
+		}
+	}
+
+	return map[string]string{
+		"CARGO_PKG_DESCRIPTION":  stringValue(field("description")),
+		"CARGO_PKG_HOMEPAGE":     stringValue(field("homepage")),
+		"CARGO_PKG_REPOSITORY":   stringValue(field("repository")),
+		"CARGO_PKG_LICENSE":      stringValue(field("license")),
+		"CARGO_PKG_LICENSE_FILE": stringValue(field("license-file")),
+		"CARGO_PKG_AUTHORS":      strings.Join(stringsValue(field("authors")), ":"),
+		"CARGO_PKG_RUST_VERSION": stringValue(field("rust-version")),
+		"CARGO_PKG_README":       readme,
+	}
 }
 
 func inferTargetPath(pkg *Package, kind, name string) string {
