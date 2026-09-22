@@ -3092,7 +3092,7 @@ namespace {
                 DEBUG(thisVar << StringView(" - Multi-use non-shared borrow, too complex to do"));
                 continue;
             }
-            DEBUG(thisVar << StringView(" - Borrow of ") << srcLv << StringView(" at ") << slot.setLoc << StringView(", used ") << slot.nDerefRead << StringView(" times (dropped {") << slot.dropLocs << StringView("})"));
+            DEBUG(thisVar << StringView(" - Borrow of ") << srcLv << StringView(" at ") << slot.setLoc << StringView(", used ") << slot.nDerefRead << StringView(" times (first drop ") << slot.firstDrop << StringView(")"));
             bool srcCopy = state.lvalueIsCopy(srcLv);
 
             auto curLoc = slot.setLoc;
