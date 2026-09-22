@@ -1040,7 +1040,7 @@ sqlparser_0_63_0 = add_project_test(
     url="https://github.com/apache/datafusion-sqlparser-rs.git",
     rev="85b1a6f2223bf95d98cf1bc504971abd191dc869",
     lockfile="$(S)/tst/projects/sqlparser_0_63_0/Cargo.lock",
-    timeout=HEAVY_PROJECT_TIMEOUT,
+    timeout=NESTED_PROJECT_TIMEOUT,
 )
 
 pulldown_cmark_0_13_4 = add_project_test(

@@ -160,6 +160,7 @@ def main() -> int:
         env = dict(os.environ)
         env["TRUSTME_PATH"] = lib.trustme_link(work)
         env.setdefault("CC", "cc")
+        env.setdefault("RUST_MIN_STACK", str(64 * 1024 * 1024))
 
         src = lib.untar(src_tar, os.path.join(work, "src"))
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
