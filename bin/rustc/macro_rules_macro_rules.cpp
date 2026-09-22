@@ -855,7 +855,7 @@ namespace {
             if (lex.consumeIf(TOK_AT)) {
                 continue;
             }
-            if (lex.consumeIf(TOK_TRIPLE_DOT) || lex.consumeIf(TOK_DOUBLE_DOT_EQUAL)) {
+            if (lex.consumeIf(TOK_TRIPLE_DOT) || lex.consumeIf(TOK_DOUBLE_DOT_EQUAL) || lex.consumeIf(TOK_DOUBLE_DOT)) {
                 switch (lex.next()) {
                     case TOK_IDENT:
                     case TOK_RWORD_SUPER:
@@ -880,7 +880,7 @@ namespace {
                         lex.consume();
                         break;
                     default:
-                        return false;
+                        break;
                 }
             }
             if (allowOr && lex.consumeIf(TOK_PIPE)) {
