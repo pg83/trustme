@@ -53,7 +53,7 @@ namespace {
     struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
         const HIRType& getTyData(const HIRType* ty) const override;
 
-        bool visitPathParams(const HIRPathParams& pp) override;
+        bool visitConstGeneric(const HIRConstGeneric& value) override;
 
         bool visitType(const HIRType* ty) override;
     };
@@ -1136,14 +1136,16 @@ auto TyVisitorMonomorphNeeded::getTyData(const HIRType* ty) const -> const HIRTy
     return *ty;
 }
 
-auto TyVisitorMonomorphNeeded::visitPathParams(const HIRPathParams& pp) -> bool {
-    for (const auto& v : pp.values) {
-        if (v.is_Generic()) {
-            return true;
-        }
+auto TyVisitorMonomorphNeeded::visitConstGeneric(const HIRConstGeneric& value) -> bool {
+    if (value.is_Generic()) {
+        return true;
     }
-    return TyVisitor::visitPathParams(pp);
+    if (const auto* unevaluated = value.opt_Unevaluated()) {
+        return ((*unevaluated)->selfType && visitType((*unevaluated)->selfType)) || visitPathParams((*unevaluated)->paramsImpl) || visitPathParams((*unevaluated)->paramsItem);
+    }
+    return false;
 }
+
 
 auto TyVisitorMonomorphNeeded::visitType(const HIRType* ty) -> bool {
     if (ty->is_Generic()) {
