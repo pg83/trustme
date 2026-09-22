@@ -1415,8 +1415,7 @@ auto BindVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     checkImplParamsConstrained(impl.params, impl.type, nullptr);
     auto _ = this->ms.setImplGenerics(impl.params);
     const auto oldSelfType = selfType;
-    impl.type = visitType(impl.type);
-    selfType = impl.type;
+    const auto oldModule = curModule;
 
     auto modIp = HIRItemPath(impl.srcModule);
     auto* mod = (impl.srcModule != HIRSimplePath() ? &crate.getModByPathMut(Span(), impl.srcModule) : nullptr);
@@ -1425,10 +1424,13 @@ auto BindVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
         curModule.ptr = mod;
         curModule.path = &modIp;
     }
+    impl.type = visitType(impl.type);
+    selfType = impl.type;
     HIRVisitor::visitTypeImpl(impl);
     if (mod) {
         ms.popTraits(*mod);
     }
+    curModule = oldModule;
     selfType = oldSelfType;
 }
 
@@ -1445,8 +1447,7 @@ auto BindVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
     auto _1 = this->ms.setCurrentTrait(traitGpath);
     auto _ = this->ms.setImplGenerics(impl.params);
     const auto oldSelfType = selfType;
-    impl.type = visitType(impl.type);
-    selfType = impl.type;
+    const auto oldModule = curModule;
 
     auto modIp = HIRItemPath(impl.srcModule);
     auto* mod = (impl.srcModule != HIRSimplePath() ? &crate.getModByPathMut(Span(), impl.srcModule) : nullptr);
@@ -1455,20 +1456,22 @@ auto BindVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
         curModule.ptr = mod;
         curModule.path = &modIp;
     }
+    impl.type = visitType(impl.type);
+    selfType = impl.type;
     ms.traits.push_back(std::make_pair(&traitPath, &this->ms.crate.getTraitByPath(Span(), traitPath)));
     HIRVisitor::visitTraitImpl(traitPath, impl);
     ms.traits.pop_back();
     if (mod) {
         ms.popTraits(*mod);
     }
+    curModule = oldModule;
     selfType = oldSelfType;
 }
 
 auto BindVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) -> void {
     auto _ = this->ms.setImplGenerics(impl.params);
     const auto oldSelfType = selfType;
-    impl.type = visitType(impl.type);
-    selfType = impl.type;
+    const auto oldModule = curModule;
 
     auto modIp = HIRItemPath(impl.srcModule);
     auto* mod = (impl.srcModule != HIRSimplePath() ? &crate.getModByPathMut(Span(), impl.srcModule) : nullptr);
@@ -1477,10 +1480,13 @@ auto BindVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl&
         curModule.ptr = mod;
         curModule.path = &modIp;
     }
+    impl.type = visitType(impl.type);
+    selfType = impl.type;
     HIRVisitor::visitMarkerImpl(traitPath, impl);
     if (mod) {
         ms.popTraits(*mod);
     }
+    curModule = oldModule;
     selfType = oldSelfType;
 }
 
