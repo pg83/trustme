@@ -51,6 +51,8 @@ class Lexer: public TokenStream {
     RcString path_;
     unsigned int line;
     unsigned int lineOfs;
+    unsigned int prevLine;
+    unsigned int prevOfs;
 
     stl::Buffer source_;
     size_t sourcePos_;

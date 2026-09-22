@@ -1798,6 +1798,27 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_proc_macro_span_location",
+    inputs=[
+        "$(S)/tst/unit/test_proc_macro_span_location.py",
+        *build.glob("$(S)/tst/unit/proc_macro_span_location/**/*.toml"),
+        *build.glob("$(S)/tst/unit/proc_macro_span_location/**/*.rs"),
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/proc_macro_span_location.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_proc_macro_span_location.py",
+        "$(S)/tst/unit/proc_macro_span_location/Cargo.toml",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/proc_macro_span_location.stamp",
+    ],
+    deps=[libstd, rustc, cargo],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_proc_macro_call_site_locals",
     inputs=[
         "$(S)/tst/unit/test_proc_macro_call_site_locals.py",

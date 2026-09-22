@@ -21,6 +21,8 @@ public:
     RcString filename;
     unsigned int line;
     unsigned int ofs;
+    unsigned int endLine;
+    unsigned int endOfs;
 
     Position();
 

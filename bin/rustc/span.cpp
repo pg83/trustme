@@ -12,7 +12,7 @@ Span::Span(Span parent, RcString filename, unsigned int startLine, unsigned int 
 }
 
 Span::Span(Span parent, const Position& pos)
-    : ptr(SpanInnerSource::alloc(parent, pos.filename, pos.line, pos.ofs, pos.line, pos.ofs))
+    : ptr(SpanInnerSource::alloc(parent, pos.filename, pos.line, pos.ofs, pos.endLine, pos.endOfs))
 {
 }
 

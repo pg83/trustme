@@ -1,0 +1,11 @@
+[package]
+name = "proc-macro-span-location-unit"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "proc_macro_span_location_unit"
+path = "src/main.rs"
+
+[dependencies]
+span-location-macro = { path = "span-location-macro" }

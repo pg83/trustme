@@ -20,7 +20,8 @@ impl Span
         lh[idx] = Some(RealSpan {
             file: source_file,
             lines,
-            bytes: ofs,
+            ofs,
+            context: idx,
             });
     }
     pub(crate) fn freeze_definitions() {
@@ -31,8 +32,35 @@ impl Span
     }
     /// The index the compiler knows this span by - echoed back so that a token
     /// this macro passes through keeps the resolution context it arrived with.
+    /// A span this macro derived (`start()`, `end()`) answers with its parent's.
     pub(crate) fn to_raw(&self) -> usize {
-        self.0
+        match self.entry() {
+        Some(v) => v.context,
+        None => self.0,
+        }
+    }
+    fn entry(&self) -> Option<&'static RealSpan> {
+        unsafe { assert!(SPANS_COMPLETE); SPANS.get(self.0).and_then(|e| e.as_ref()) }
+    }
+    /// The definition behind this span; the mixed site has none of its own and
+    /// is located at the call site, as upstream's is.
+    fn real(&self) -> &'static RealSpan {
+        match self.entry().or_else(|| Span(1).entry()) {
+        Some(v) => v,
+        None => panic!("Undefined span #{}", self.0),
+        }
+    }
+    /// An empty span at one position of this span's file, in this span's context.
+    fn derived(&self, line: usize, ofs: usize) -> Span {
+        let parent = self.real();
+        let lh = unsafe { &mut SPANS };
+        lh.push(Some(RealSpan {
+            file: parent.file.clone(),
+            lines: line..line,
+            ofs: ofs..ofs,
+            context: parent.context,
+            }));
+        Span(lh.len() - 1)
     }
 }
 
@@ -76,10 +104,35 @@ impl Span
 
     // Unstable at 1.54
     pub fn source_file(&self) -> SourceFile {
-        match unsafe { assert!(SPANS_COMPLETE); SPANS.get(self.0) } {
-        Some(&Some(ref v)) => v.file.clone(),
-        _ => panic!("Undefined span #{}", self.0),
-        }
+        self.real().file.clone()
+    }
+
+    // 1.88: an empty span directly before this one
+    pub fn start(&self) -> Span {
+        let v = self.real();
+        self.derived(v.lines.start, v.ofs.start)
+    }
+
+    // 1.88: an empty span directly after this one
+    pub fn end(&self) -> Span {
+        let v = self.real();
+        self.derived(v.lines.end, v.ofs.end)
+    }
+
+    // 1.88: the one-indexed line where this span starts
+    pub fn line(&self) -> usize {
+        self.real().lines.start
+    }
+
+    // 1.88: the one-indexed column where this span starts; the compiler's
+    // offset within the line counts from zero
+    pub fn column(&self) -> usize {
+        self.real().ofs.start + 1
+    }
+
+    // 1.88: the source path for display
+    pub fn file(&self) -> String {
+        self.real().file.0.display().to_string()
     }
 
     // 1.88
@@ -92,11 +145,13 @@ impl Span
     }
 }
 
-/// The inner definition of a span
+/// The inner definition of a span: its position, and the index the compiler
+/// knows its resolution context by.
 struct RealSpan {
     file: SourceFile,
     lines: ::std::ops::Range<usize>,
-    bytes: ::std::ops::Range<usize>,
+    ofs: ::std::ops::Range<usize>,
+    context: usize,
 }
 
 

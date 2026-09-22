@@ -237,6 +237,8 @@ Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edi
     , path_(filename.c_str())
     , line(1)
     , lineOfs(0)
+    , prevLine(1)
+    , prevOfs(0)
     , sourcePos_(0)
     , lastCharValid(false)
     , initialShebangChecked(false)
@@ -274,6 +276,8 @@ Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition,
     , path_("-")
     , line(1)
     , lineOfs(0)
+    , prevLine(1)
+    , prevOfs(0)
     , sourcePos_(0)
     , lastCharValid(false)
     , initialShebangChecked(false)
@@ -372,6 +376,8 @@ Token Lexer::realGetToken() {
             }
             default:
                 if (tok.getPos().filename == "" && !tok.getPos().span) {
+                    tokenPosition.endLine = lastCharValid ? prevLine : line;
+                    tokenPosition.endOfs = lastCharValid ? prevOfs : lineOfs;
                     tok.setPos(std::move(tokenPosition));
                 }
                 return tok;
@@ -1492,6 +1498,8 @@ Codepoint Lexer::getc() {
         sysO << StringView("getc(): U+") << formatHex(lastChar.v) << StringView(" (cached)") << endL;
 #endif
     } else if (replayCharOffset < replayChars.length()) {
+        prevLine = line;
+        prevOfs = lineOfs;
         lastChar = replayChars[replayCharOffset++];
         if (lastChar == '\n') {
             line += 1;
@@ -1505,6 +1513,8 @@ Codepoint Lexer::getc() {
     } else {
         replayChars.clear();
         replayCharOffset = 0;
+        prevLine = line;
+        prevOfs = lineOfs;
         lastChar = this->getcCp();
         if (lastChar != '\n') {
             lineOfs += 1;

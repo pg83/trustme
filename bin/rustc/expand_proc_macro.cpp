@@ -17,12 +17,12 @@
 
 #include <std/str/view.h>
 #include <std/lib/vector.h>
+#include <std/sym/i_map.h>
 
 #include <spawn.h>
 #include <sstream>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <unordered_set>
 
 using namespace stl;
 
@@ -88,17 +88,24 @@ namespace {
         ZeroCopyOutput* dumpFileOut = nullptr;
         ZeroCopyOutput* dumpFileRes = nullptr;
 
-        std::unordered_map<const SpanInner*, size_t> knownSpans;
-        std::unordered_set<size_t> sentSpans;
+        ObjPool& pool;
         size_t nextSpanIndex = 2;
 
         /* Upstream hands the macro every token's own `Span` and takes it back
            unchanged on the tokens the macro passes through
            (rustc_expand/src/proc_macro_server.rs, `FromInternal for
            Vec<TokenTree<..>>`), so such a token still resolves in the context it
-           was written in. Our bridge names a context by a span index instead:
-           `spanContexts[i]` is the hygiene behind index `i + 2`, index 1 is the
-           call site, and the child echoes the index back with the token. */
+           was written in. Our bridge names a span by an index instead: an index
+           stands for one (context, position) pair, `spanContexts[i]` is the
+           hygiene behind index `i + 2`, index 1 is the call site, and the child
+           echoes the index back with the token. `spanSlots` finds the index of a
+           pair again by the position's address and a chain over its contexts. */
+        struct SpanSlot {
+            Ident::Hygiene hygiene;
+            size_t index;
+            SpanSlot* next;
+        };
+        IntMap<SpanSlot*> spanSlots{&pool};
         Vector<Ident::Hygiene> spanContexts;
         size_t lastSentSpan = 1;
         Ident::Hygiene receivedHygiene;
@@ -138,11 +145,15 @@ namespace {
 
         void sendIdent(const Ident::Hygiene& h, const char* val);
 
+        void sendIdent(const Ident::Hygiene& h, const Span& sp, const char* val);
+
         void sendIdent(const Ident& val);
 
         void sendLifetime(const char* val);
 
         void sendLifetime(const Ident::Hygiene& h, const char* val);
+
+        void sendLifetime(const Ident::Hygiene& h, const Span& sp, const char* val);
 
         void sendIdent_(const char* val);
 
@@ -162,9 +173,10 @@ namespace {
 
         void sendSpanDef(size_t index, const Span& sp);
 
-        size_t spanForHygiene(const Ident::Hygiene& h);
+        size_t spanFor(const Ident::Hygiene& h, const Span& sp);
 
         void sendSpan(const Ident::Hygiene& h);
+        void sendSpan(const Ident::Hygiene& h, const Span& sp);
 
         bool attrIsUsed(const RcString& n) const;
 
@@ -427,6 +439,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
 
 ProcMacroInv::ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc)
     : TokenStream(ParseState())
+    , pool(pool)
     , parentSpan(sp)
     , thisSpan(Span(parentSpan, procMacroDesc.path.crateName(), procMacroDesc.name))
     , procMacroDesc(procMacroDesc)
@@ -927,6 +940,11 @@ auto ProcMacroInv::sendIdent(const Ident::Hygiene& h, const char* val) -> void {
     this->sendIdent_(val);
 }
 
+auto ProcMacroInv::sendIdent(const Ident::Hygiene& h, const Span& sp, const char* val) -> void {
+    this->sendSpan(h, sp);
+    this->sendIdent_(val);
+}
+
 auto ProcMacroInv::sendIdent_(const char* val) -> void {
     this->sendU8(static_cast<u8>(TokenClass::Ident));
     if (LexFindReservedWord(val, edition) != TOK_NULL) {
@@ -950,6 +968,11 @@ auto ProcMacroInv::sendLifetime(const char* val) -> void {
 
 auto ProcMacroInv::sendLifetime(const Ident::Hygiene& h, const char* val) -> void {
     this->sendSpan(h);
+    this->sendLifetime_(val);
+}
+
+auto ProcMacroInv::sendLifetime(const Ident::Hygiene& h, const Span& sp, const char* val) -> void {
+    this->sendSpan(h, sp);
     this->sendLifetime_(val);
 }
 
@@ -1065,9 +1088,6 @@ auto ProcMacroInv::sendFloat(eCoreType ct, FloatValue v) -> void {
 }
 
 auto ProcMacroInv::sendSpanDef(size_t index, const Span& sp) -> void {
-    this->knownSpans[sp.get()] = index;
-    this->sentSpans.insert(index);
-
     this->sendU8(static_cast<u8>(TokenClass::SpanDef));
     this->sendV128u(index);
     this->sendV128u(0); // TODO: Parent span
@@ -1088,25 +1108,39 @@ auto ProcMacroInv::sendSpanDef(size_t index, const Span& sp) -> void {
     }
 }
 
-auto ProcMacroInv::spanForHygiene(const Ident::Hygiene& h) -> size_t {
-    if (h == Ident::Hygiene()) {
+/* A token's span on the wire is its own position in its own context, as
+   upstream's is; a position the compiler has no source for (a token it printed
+   out of an AST, or one made by an expansion) is the invocation's. */
+auto ProcMacroInv::spanFor(const Ident::Hygiene& h, const Span& sp) -> size_t {
+    const Span& at = cast<const SpanInnerSource>(sp.get()) ? sp : parentSpan;
+    if (h == Ident::Hygiene() && at.get() == parentSpan.get()) {
         return 1;
     }
-    for (size_t i = 0; i < spanContexts.length(); i++) {
-        if (spanContexts[i] == h) {
-            return i + 2;
+    const auto key = reinterpret_cast<u64>(at.get());
+    SpanSlot** head = spanSlots.find(key);
+    for (const auto* slot = head ? *head : nullptr; slot; slot = slot->next) {
+        if (slot->hygiene == h) {
+            return slot->index;
         }
     }
-    spanContexts.pushBack(h);
     const size_t index = nextSpanIndex++;
-    /* The child keeps a definition per index; give the new one the invocation's
-       location, which is what every token of this call reported before. */
-    this->sendSpanDef(index, parentSpan);
+    spanContexts.pushBack(h);
+    auto* slot = pool.make<SpanSlot>(h, index, head ? *head : nullptr);
+    if (head) {
+        *head = slot;
+    } else {
+        spanSlots.insert(key, slot);
+    }
+    this->sendSpanDef(index, at);
     return index;
 }
 
 auto ProcMacroInv::sendSpan(const Ident::Hygiene& h) -> void {
-    const auto index = this->spanForHygiene(h);
+    this->sendSpan(h, parentSpan);
+}
+
+auto ProcMacroInv::sendSpan(const Ident::Hygiene& h, const Span& sp) -> void {
+    const auto index = this->spanFor(h, sp);
     if (index == lastSentSpan) {
         return;
     }
@@ -1146,6 +1180,33 @@ auto ProcMacroVisitor::visitBoundConstness(ASTBoundConstness constness) -> void 
 }
 
 auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
+    const auto& pos = tok.getPos();
+    const Span at = pos.span ? pos.span : (pos.filename == "" ? sp : Span(sp, pos));
+    switch (tok.type()) {
+        case TOK_NULL:
+        case TOK_EOF:
+        case TOK_NEWLINE:
+        case TOK_WHITESPACE:
+        case TOK_COMMENT:
+        case TOK_IDENT:
+        case TOK_LIFETIME:
+        case TOK_STRING:
+        case TOK_BYTESTRING:
+        case TOK_INTERPOLATED_TYPE:
+        case TOK_INTERPOLATED_PATH:
+        case TOK_INTERPOLATED_PATTERN:
+        case TOK_INTERPOLATED_STMT:
+        case TOK_INTERPOLATED_BLOCK:
+        case TOK_INTERPOLATED_EXPR:
+        case TOK_INTERPOLATED_STMT_ITEM:
+        case TOK_INTERPOLATED_ITEM:
+        case TOK_INTERPOLATED_META:
+        case TOK_INTERPOLATED_VIS:
+            break;
+        default:
+            pmi.sendSpan(Ident::Hygiene(), at);
+            break;
+    }
     switch (tok.type()) {
         case TOK_NULL:
             BUG(sp, StringView("Unexpected NUL in token stream"));
@@ -1193,10 +1254,10 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_IDENT:
             /* A token of the invocation is passed through with the context it
                was written in - that is what the macro gives back for it. */
-            pmi.sendIdent(tok.ident().hygiene, tok.ident().name.c_str());
+            pmi.sendIdent(tok.ident().hygiene, at, tok.ident().name.c_str());
             break; // TODO: Raw idents
         case TOK_LIFETIME:
-            pmi.sendLifetime(tok.ident().hygiene, tok.ident().name.c_str());
+            pmi.sendLifetime(tok.ident().hygiene, at, tok.ident().name.c_str());
             break;
         case TOK_INTEGER:
             if (tok.datatype() == CORETYPE_CHAR) {
@@ -1212,11 +1273,11 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             pmi.sendFloat(tok.datatype(), tok.floatval());
             break;
         case TOK_STRING:
-            pmi.sendSpan(tok.strHygiene());
+            pmi.sendSpan(tok.strHygiene(), at);
             pmi.sendString(tok.str());
             break;
         case TOK_BYTESTRING:
-            pmi.sendSpan(tok.strHygiene());
+            pmi.sendSpan(tok.strHygiene(), at);
             pmi.sendBytestring(tok.str());
             break;
         case TOK_CSTRING:

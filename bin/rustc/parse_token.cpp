@@ -905,6 +905,8 @@ Position::Position()
     : filename("")
     , line(0)
     , ofs(0)
+    , endLine(0)
+    , endOfs(0)
 {
 }
 
@@ -913,6 +915,8 @@ Position::Position(Span sp)
     , filename("")
     , line(0)
     , ofs(0)
+    , endLine(0)
+    , endOfs(0)
 {
 }
 
@@ -920,6 +924,8 @@ Position::Position(RcString filename, unsigned int line, unsigned int ofs)
     : filename(filename)
     , line(line)
     , ofs(ofs)
+    , endLine(line)
+    , endOfs(ofs)
 {
 }
 
