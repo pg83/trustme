@@ -104,6 +104,8 @@ public:
 
     HIRExprStatePtr state;
 
+    const HIRType* extResultType = nullptr;
+
 public:
     HIRExprPtr();
     HIRExprPtr(HIRExprNodeP node);
@@ -150,6 +152,8 @@ public:
 
     const MIRFunction* getExtMir() const;
     MIRFunction* getExtMirMut();
+
+    const HIRType* resultType() const;
 
     void setMir(MIRFunctionPointer mir);
 };

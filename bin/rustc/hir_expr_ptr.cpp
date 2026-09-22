@@ -18,6 +18,10 @@ HIRExprPtr::~HIRExprPtr() = default;
 HIRExprPtr::HIRExprPtr(HIRExprPtr&&) = default;
 HIRExprPtr& HIRExprPtr::operator=(HIRExprPtr&&) = default;
 
+const HIRType* HIRExprPtr::resultType() const {
+    return node ? node->resType : extResultType;
+}
+
 HIRExprNodeP HIRExprPtr::takeNode() {
     return HIRExprNodeP(node.release());
 }

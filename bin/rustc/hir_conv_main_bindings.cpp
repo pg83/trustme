@@ -1073,7 +1073,7 @@ auto BindVisitor::visitPattern(HIRPattern& pat) -> void {
 auto BindVisitor::visitConstgeneric(HIRConstGeneric& value) -> void {
     HIRVisitor::visitConstgeneric(value);
     if (auto* unevaluated = value.opt_Unevaluated()) {
-        if ((*unevaluated)->expr && (*unevaluated)->expr->state) {
+        if ((*unevaluated)->expr && (*unevaluated)->expr->state && (*unevaluated)->expr->get()) {
             /* Upstream `lower_const_path_to_const_arg` / `lower_anon_const_to_const_arg`:
                under `min_generic_const_args` a const argument that is a bare path
                (a block around one included) is `ConstArgKind::Path`, resolved in the

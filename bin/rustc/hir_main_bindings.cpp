@@ -1849,6 +1849,9 @@ auto HirDeserialiser::deserialiseExprptr() -> HIRExprPtr {
     auto _ = in.openObject("HIR::ExprPtr");
     if (in.readBool()) {
         rv.mir = deserialiseMir();
+        if (in.readBool()) {
+            rv.extResultType = deserialiseType();
+        }
     }
     rv.erasedTypes = deserialiseVector<const HIRType*>();
     return rv;
@@ -3907,6 +3910,11 @@ auto HirSerialiser::serialise(const HIRExprPtr& exp, bool saveMir) -> void {
     out.writeBool(saveMir);
     if (saveMir) {
         serialise(*exp.mir);
+        const HIRType* resultType = exp.resultType();
+        out.writeBool(resultType != nullptr);
+        if (resultType) {
+            serialiseType(resultType);
+        }
     }
     serialiseVec(exp.erasedTypes);
 }

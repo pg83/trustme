@@ -570,8 +570,11 @@ namespace {
     }
 
     bool unevaluatedUsedSlotsAreConcrete(HIRTypeInterner& types, const HIRConstGenericUnevaluated& ue) {
-        if (!ue.expr || !*ue.expr || !(*ue.expr).state) {
+        if (!ue.expr || !(*ue.expr).state) {
             return false;
+        }
+        if (!*ue.expr) {
+            return unevaluatedEnvIsConcrete(ue);
         }
         const auto& caps = exprCaptures(types, *ue.expr);
         if (caps.unknown) {
@@ -3439,11 +3442,14 @@ void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb,
 void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, HIRConstGeneric& cg) {
     if (const auto* value = cg.opt_Unevaluated()) {
         const auto& expr = *(*value)->expr;
+        if (!expr.resultType()) {
+            return;
+        }
         MonomorphState ms(crate.types);
         ms.selfTy = (*value)->selfType;
         ms.ppImpl = &(*value)->paramsImpl;
         ms.ppMethod = &(*value)->paramsItem;
-        auto type = ms.monomorphType(sp, expr->resType);
+        auto type = ms.monomorphType(sp, expr.resultType());
         if (visitTyWith(type, [](const HIRType* t) {
             return t->is_Infer();
         })) {
