@@ -46,11 +46,11 @@ ASTPathParamEnt ASTPathParamEnt::clone() const {
             return v;
         }
         case ASTPathParamEnt::TAG_Type: {
-            auto& v = (*this).as_Type();
+            const auto v = (*this).as_Type();
             return v->clone();
         }
         case ASTPathParamEnt::TAG_Value: {
-            auto& v = (*this).as_Value();
+            const auto v = (*this).as_Value();
             return v->clone();
         }
         case ASTPathParamEnt::TAG_AssociatedTyEqual: {
@@ -84,13 +84,13 @@ Ordering ASTPathParamEnt::ord(const ASTPathParamEnt& x) const {
             return ::ord(v1, v2);
         }
         case ASTPathParamEnt::TAG_Type: {
-            auto& v1 = (*this).as_Type();
-            auto& v2 = x.as_Type();
+            const auto v1 = (*this).as_Type();
+            const auto v2 = x.as_Type();
             return ::ord(v1, v2);
         }
         case ASTPathParamEnt::TAG_Value: {
-            auto& v1 = (*this).as_Value();
-            auto& v2 = x.as_Value();
+            const auto v1 = (*this).as_Value();
+            const auto v2 = x.as_Value();
             return ::ord((uintptr_t)v1, (uintptr_t)v2);
         }
         case ASTPathParamEnt::TAG_AssociatedTyEqual: {
@@ -131,12 +131,12 @@ void ASTPathParamEnt::fmt(ZeroCopyOutput& os) const {
             break;
         }
         case ASTPathParamEnt::TAG_Type: {
-            auto& v = (*this).as_Type();
+            const auto v = (*this).as_Type();
             os << v;
             break;
         }
         case ASTPathParamEnt::TAG_Value: {
-            auto& v = (*this).as_Value();
+            const auto v = (*this).as_Value();
             v->print(os);
             break;
         }
@@ -731,7 +731,7 @@ void stl::output<ZeroCopyOutput, ASTPathParams>(ZeroCopyOutput& os, const ASTPat
         return;
     }
     if (x.isParen) {
-        auto& t = x.entries.at(0).as_Type();
+        const auto t = x.entries.at(0).as_Type();
         os << t;
         auto& rv = x.entries.at(1).as_AssociatedTyEqual();
         os << StringView("->");

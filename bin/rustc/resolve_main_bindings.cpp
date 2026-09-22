@@ -6039,7 +6039,7 @@ auto Context::getSelf() const -> ::ASTType* {
     for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
         switch ((*it).tag()) {
             case Ent::TAG_ConcreteSelf: {
-                auto& e = (*it).as_ConcreteSelf();
+                const auto e = (*it).as_ConcreteSelf();
                 if (false && e) {
                     return (*e)->clone();
                 } else {
@@ -6476,7 +6476,7 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                 break;
             }
             case Ent::TAG_ConcreteSelf: {
-                auto& e = (*it).as_ConcreteSelf();
+                const auto e = (*it).as_ConcreteSelf();
                 DEBUG(StringView("- ConcreteSelf"));
                 if (name == selfName()) {
                     switch (mode) {

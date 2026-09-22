@@ -51,6 +51,12 @@ class TuError(RuntimeError):
     pass
 
 
+SCALAR_TYPES = {
+    "bool", "char", "int", "unsigned", "unsigned int", "size_t", "uintptr_t",
+    "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128",
+}
+
+
 class Variant:
     def __init__(self, tag, type=None, *, fields=None, copy=True, deep=False,
                  doc=None):
@@ -89,6 +95,15 @@ class Variant:
     @property
     def is_pointer(self):
         return self.fields is None and self.type is not None and self.type.strip().endswith("*")
+
+    @property
+    def by_value(self):
+        # A payload that is a pointer or a builtin scalar is read by value:
+        # a const accessor returns the value, not a reference to it.
+        if self.fields is not None or self.type is None:
+            return False
+        compact = " ".join(self.type.split())
+        return compact.endswith("*") or compact in SCALAR_TYPES
 
 
 class Union:
@@ -297,7 +312,10 @@ def emit_header_union(out, union):
             continue
         out.line(f"const {data}* opt_{variant.tag}() const;")
         out.line(f"{data}* opt_{variant.tag}();")
-        out.line(f"const {data}& as_{variant.tag}() const;")
+        if variant.by_value:
+            out.line(f"{data} as_{variant.tag}() const;")
+        else:
+            out.line(f"const {data}& as_{variant.tag}() const;")
         out.line(f"{data}& as_{variant.tag}();")
         out.line(f"{data} unwrap_{variant.tag}();")
     for field in union.extra_fields:
@@ -717,7 +735,10 @@ def emit_cpp_union(out, union):
         out.line("return nullptr;")
         out.close()
         out.line()
-        out.open(f"const {data}& {name}::as_{tag}() const {{")
+        if variant.by_value:
+            out.open(f"{data} {name}::as_{tag}() const {{")
+        else:
+            out.open(f"const {data}& {name}::as_{tag}() const {{")
         out.line(f"assert(tag_ == TAG_{tag});")
         out.line(f"return {store};")
         out.close()

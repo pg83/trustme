@@ -1354,7 +1354,7 @@ void HMTypeInferrence::printType(ZeroCopyOutput& os, const HIRType* tr, LList<co
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& ee = e.inner.as_Known();
+                    const auto ee = e.inner.as_Known();
                     printType(os, ee, stack);
                     break;
                 }
@@ -2282,7 +2282,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRType* ty, bool onlyUnbound) co
                     return pathContainsIvars(ee.origin, onlyUnbound);
                 }
                 case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& ee = e.inner.as_Known();
+                    const auto ee = e.inner.as_Known();
                     return typeContainsIvars(ee, onlyUnbound);
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
@@ -2481,8 +2481,8 @@ bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
                     return H::comparePath(*this, l.origin, r.origin);
                 }
                 case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& l = le.inner.as_Known();
-                    auto& r = re.inner.as_Known();
+                    const auto l = le.inner.as_Known();
+                    const auto r = re.inner.as_Known();
                     return typesEqual(l, r);
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
@@ -4631,7 +4631,7 @@ bool TraitResolution::hasAssociatedType(const HIRType* input) const {
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& ee = e.inner.as_Known();
+                    const auto ee = e.inner.as_Known();
                     if (hasAssociatedType(ee)) {
                         return true;
                     }

@@ -934,8 +934,8 @@ namespace {
                 return OrdEqual;
             }
             case PatternRule::TAG_Bool: {
-                auto& ae = a.as_Bool();
-                auto& be = b.as_Bool();
+                const auto ae = a.as_Bool();
+                const auto be = b.as_Bool();
                 return ::ord(ae, be);
             }
             case PatternRule::TAG_Value: {
@@ -2980,8 +2980,8 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
             return ::ord(te.trailing, xe.trailing);
         }
         case PatternRule::TAG_Bool: {
-            auto& te = (*this).as_Bool();
-            auto& xe = x.as_Bool();
+            const auto te = (*this).as_Bool();
+            const auto xe = x.as_Bool();
             return ::ord(te, xe);
         }
         case PatternRule::TAG_Value: {
@@ -3029,7 +3029,7 @@ PatternRule PatternRule::clone() const {
                     return PatternRule::make_SplitSlice({te.minLen, te.trailingLen, H::cloneList(te.leading), H::cloneList(te.trailing)});
                 }
                 case PatternRule::TAG_Bool: {
-                    auto& te = t.as_Bool();
+                    const auto te = t.as_Bool();
                     return te;
                 }
                 case PatternRule::TAG_Value: {
@@ -3099,8 +3099,8 @@ PatternRule PatternRule::clone() const {
             break;
         }
         case PatternRule::TAG_Bool: {
-            auto& le = l.as_Bool();
-            auto& re = r.as_Bool();
+            const auto le = l.as_Bool();
+            const auto re = r.as_Bool();
             return ::ord(le, re);
         }
         case PatternRule::TAG_Value: {
@@ -7645,7 +7645,7 @@ VarState VarState::clone() const {
             return VarState(e);
         }
         case VarState::TAG_Optional: {
-            auto& e = (*this).as_Optional();
+            const auto e = (*this).as_Optional();
             return VarState(e);
         }
         case VarState::TAG_MovedOut: {
@@ -7689,8 +7689,8 @@ bool VarState::operator==(const VarState& x) const {
             return true;
         }
         case VarState::TAG_Optional: {
-            auto& te = (*this).as_Optional();
-            auto& xe = x.as_Optional();
+            const auto te = (*this).as_Optional();
+            const auto xe = x.as_Optional();
             return te == xe;
         }
         case VarState::TAG_MovedOut: {
@@ -7738,7 +7738,7 @@ bool VarState::getUsedDropFlags(std::set<unsigned>* out) const {
     bool rv = false;
     switch ((*this).tag()) {
         case VarState::TAG_Optional: {
-            auto& ve = (*this).as_Optional();
+            const auto ve = (*this).as_Optional();
             if (out) {
                 out->insert(ve);
             }
@@ -10203,7 +10203,7 @@ auto ExprVisitorConv::visit(HIRExprNodeUnsize& node) -> void {
                             break;
                         }
                         case HIRArraySize::TAG_Known: {
-                            auto& se = inArray.size.as_Known();
+                            const auto se = inArray.size.as_Known();
                             sizeVal = MIRConstant::make_Uint({U128(se), HIRCoreType::Usize});
                             break;
                         }
@@ -10320,7 +10320,7 @@ auto ExprVisitorConv::visit(HIRExprNodeIndex& node) -> void {
                     break;
                 }
                 case HIRArraySize::TAG_Known: {
-                    auto& se = e.size.as_Known();
+                    const auto se = e.size.as_Known();
                     limitVal = MIRConstant::make_Uint({U128(se), HIRCoreType::Usize});
                     break;
                 }

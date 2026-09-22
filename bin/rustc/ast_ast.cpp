@@ -268,7 +268,7 @@ ASTGlobalAsm ASTGlobalAsm::clone() const {
     for (const auto& operand : operands) {
         switch (operand.tag()) {
             case ASTGlobalAsmOperand::TAG_Const: {
-                auto& expr = operand.as_Const();
+                const auto expr = operand.as_Const();
                 clonedOperands.push_back(Operand::make_Const(expr->clone()));
                 break;
             }

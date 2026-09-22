@@ -1969,7 +1969,7 @@ auto VisitorPost::visitModule(HIRItemPath p, HIRModule& mod) -> void {
                 default:
                     TODO(sp, StringView("Resolve external NamedFunction type - ") << te->path << StringView(" : ") << v.tagStr());
                 case TypeckValuePtr::TAG_Function: {
-                    auto& e = v.as_Function();
+                    const auto e = v.as_Function();
                     te->def = e;
                     break;
                 }

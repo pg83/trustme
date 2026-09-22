@@ -864,8 +864,8 @@ bool HIRConstGeneric::operator==(const HIRConstGeneric& x) const {
             return te.index == xe.index;
         }
         case HIRConstGeneric::TAG_Unevaluated: {
-            auto& te = (*this).as_Unevaluated();
-            auto& xe = x.as_Unevaluated();
+            const auto te = (*this).as_Unevaluated();
+            const auto xe = x.as_Unevaluated();
             return te->equivalent(*xe);
         }
         case HIRConstGeneric::TAG_Generic: {
@@ -874,8 +874,8 @@ bool HIRConstGeneric::operator==(const HIRConstGeneric& x) const {
             return te == xe;
         }
         case HIRConstGeneric::TAG_Evaluated: {
-            auto& te = (*this).as_Evaluated();
-            auto& xe = x.as_Evaluated();
+            const auto te = (*this).as_Evaluated();
+            const auto xe = x.as_Evaluated();
             return EncodedLiteralSlice(*te) == EncodedLiteralSlice(*xe);
         }
     }
@@ -896,8 +896,8 @@ Ordering HIRConstGeneric::ord(const HIRConstGeneric& x) const {
             break;
         }
         case HIRConstGeneric::TAG_Unevaluated: {
-            auto& te = (*this).as_Unevaluated();
-            auto& xe = x.as_Unevaluated();
+            const auto te = (*this).as_Unevaluated();
+            const auto xe = x.as_Unevaluated();
             if (te->equivalent(*xe)) {
                 return OrdEqual;
             }
@@ -912,8 +912,8 @@ Ordering HIRConstGeneric::ord(const HIRConstGeneric& x) const {
             break;
         }
         case HIRConstGeneric::TAG_Evaluated: {
-            auto& te = (*this).as_Evaluated();
-            auto& xe = x.as_Evaluated();
+            const auto te = (*this).as_Evaluated();
+            const auto xe = x.as_Evaluated();
             if (auto cmp = ::ord(EncodedLiteralSlice(*te), EncodedLiteralSlice(*xe))) {
                 return cmp;
             }
@@ -2011,7 +2011,7 @@ const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIR
             break;
         }
         case HIRPatternPathBinding::TAG_Struct: {
-            auto& be = binding.as_Struct();
+            const auto be = binding.as_Struct();
             strP = be;
             break;
         }

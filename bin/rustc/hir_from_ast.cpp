@@ -1274,13 +1274,13 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
                 if (inferredConst) {
                     params.values.push_back(HIRConstGeneric::make_Infer({}));
                 } else {
-                    auto& ty = param.as_Type();
+                    const auto ty = param.as_Type();
                     params.types.push_back(LowerHIRType(ty));
                 }
                 break;
             }
             case ASTPathParamEnt::TAG_Value: {
-                auto& iv = param.as_Value();
+                const auto iv = param.as_Value();
                 ASSERT_BUG(sp, iv, StringView("Value parameter with null node"));
                 params.values.push_back(LowerHIRConstGeneric(*iv));
                 break;
@@ -1501,11 +1501,11 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                 break;
             }
             case ASTPathParamEnt::TAG_Type: {
-                auto& _ = e.as_Type();
+                const auto _ = e.as_Type();
                 break;
             }
             case ASTPathParamEnt::TAG_Value: {
-                auto& _ = e.as_Value();
+                const auto _ = e.as_Value();
                 break;
             }
             case ASTPathParamEnt::TAG_AssociatedTyEqual: {

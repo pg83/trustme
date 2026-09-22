@@ -7591,12 +7591,12 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         }
                         switch (fcnTy.def.tag()) {
                             case HIRTypeDataNamedFunctionTy::TAG_Function: {
-                                auto& _ = fcnTy.def.as_Function();
+                                const auto _ = fcnTy.def.as_Function();
                                 e.fcn = fcnTy.path.clone();
                                 break;
                             }
                             case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
-                                auto& _ = fcnTy.def.as_StructConstructor();
+                                const auto _ = fcnTy.def.as_StructConstructor();
                                 MIR_BUG(state, StringView("Struct constructor used as an explicit tail-call target"));
                                 break;
                             }

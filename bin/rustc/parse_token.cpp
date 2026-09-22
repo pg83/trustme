@@ -397,7 +397,7 @@ Token Token::clone() const {
             break;
         }
         case Data::TAG_Fragment: {
-            auto& e = data_.as_Fragment();
+            const auto e = data_.as_Fragment();
             BUG_ASSERT(e);
             switch (type_) {
                 case TOK_INTERPOLATED_TYPE:

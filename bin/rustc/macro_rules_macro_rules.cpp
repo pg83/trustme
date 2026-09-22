@@ -2000,7 +2000,7 @@ namespace {
                     break;
                 }
                 case MacroExpansionEnt::TAG_NamedValue: {
-                    auto& e = (*entPtr).as_NamedValue();
+                    const auto e = (*entPtr).as_NamedValue();
                     switch (e & ~NAMEDVALUE_VALMASK) {
                         case 0:
                             boundTts.incCount(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
@@ -2020,7 +2020,7 @@ namespace {
                                 break;
                             }
                             case MacroExpansionConcatEnt::TAG_Named: {
-                                auto& e = ccEnt.as_Named();
+                                const auto e = ccEnt.as_Named();
                                 switch (e & ~NAMEDVALUE_VALMASK) {
                                     case 0:
                                     case NAMEDVALUE_TY_IGNORE:
@@ -3148,7 +3148,7 @@ Token MacroExpander::realGetToken() {
                 break;
             }
             case MacroExpansionEnt::TAG_NamedValue: {
-                auto& e = ent.as_NamedValue();
+                const auto e = ent.as_NamedValue();
                 switch (e & ~NAMEDVALUE_VALMASK) {
                     default:
                         BUG(this->pointSpan(), StringView("Unknown macro metavar - 0x") << formatHex(e));
@@ -3221,7 +3221,7 @@ Token MacroExpander::realGetToken() {
                 for (const auto& ent : e) {
                     switch (ent.tag()) {
                         case MacroExpansionConcatEnt::TAG_Named: {
-                            auto& v = ent.as_Named();
+                            const auto v = ent.as_Named();
                             bool canSteal = (mappings_.decCount(this->pointSpan(), state.iterations(), v) == false);
                             auto* frag = mappings_.get(this->pointSpan(), state.iterations(), v);
                             ASSERT_BUG(this->pointSpan(), frag, StringView("Cannot find '") << v << StringView("' for ") << state.iterations());

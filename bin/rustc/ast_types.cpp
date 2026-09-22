@@ -82,7 +82,7 @@ ASTType* ASTType::clone() const {
         break;
 #define _CLONE(VAR, ...)                                            \
     case TypeData::TAG_##VAR: {                                     \
-        auto& old = data.as_##VAR();                                \
+        const auto& old = data.as_##VAR();                          \
         return mkType(p, span_, TypeData::make_##VAR(__VA_ARGS__)); \
     } break;
         _COPY(None)
@@ -236,8 +236,8 @@ Ordering ASTType::ord(const ASTType& x) const {
             return ::ord(ent.name, xEnt.name);
         }
         case TypeData::TAG_Path: {
-            auto& ent = data.as_Path();
-            auto& xEnt = x.data.as_Path();
+            const auto ent = data.as_Path();
+            const auto xEnt = x.data.as_Path();
             return ent->ord(*xEnt);
         }
         case TypeData::TAG_TraitObject: {
@@ -246,8 +246,8 @@ Ordering ASTType::ord(const ASTType& x) const {
             return ::ord(ent.traits, xEnt.traits);
         }
         case TypeData::TAG_ErasedType: {
-            auto& ent = data.as_ErasedType();
-            auto& xEnt = x.data.as_ErasedType();
+            const auto ent = data.as_ErasedType();
+            const auto xEnt = x.data.as_ErasedType();
             ORD(ent->traits, xEnt->traits);
             ORD(ent->maybeTraits, xEnt->maybeTraits);
             ORD(ent->lifetimes, xEnt->lifetimes);

@@ -2022,7 +2022,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
             size_t count = 0;
             switch (e.count.tag()) {
                 case HIRArraySize::TAG_Known: {
-                    auto& v = e.count.as_Known();
+                    const auto v = e.count.as_Known();
                     count = v;
                     break;
                 }
@@ -5263,7 +5263,7 @@ auto MIREvalCallStackEntry::getConst(const HIRConstGeneric& v, EncodedLiteral& t
             BUG(state.sp, StringView("Generic const ") << v << StringView(" during concrete evaluation"));
         }
         case HIRConstGeneric::TAG_Unevaluated: {
-            auto& ve = v.as_Unevaluated();
+            const auto ve = v.as_Unevaluated();
             if (!typeCanMonomorph(ve->selfType, ms) || !pathParamsCanMonomorph(ve->paramsImpl, ms) || !pathParamsCanMonomorph(ve->paramsItem, ms)) {
                 BUG(state.sp, StringView("Unevaluated const cannot monomorph during concrete evaluation"));
             }
@@ -5281,7 +5281,7 @@ auto MIREvalCallStackEntry::getConst(const HIRConstGeneric& v, EncodedLiteral& t
             return tmp;
         }
         case HIRConstGeneric::TAG_Evaluated: {
-            auto& ve = v.as_Evaluated();
+            const auto ve = v.as_Evaluated();
             return *ve;
         }
     }

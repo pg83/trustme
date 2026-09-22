@@ -373,7 +373,7 @@ NODE(
         for (const auto& p : params) {
             switch (p.tag()) {
                 case ASTAsmParam::TAG_Const: {
-                    auto& e = p.as_Const();
+                    const auto e = p.as_Const();
                     os << StringView("const ") << *e;
                     break;
                 }
@@ -419,7 +419,7 @@ NODE(
         for (const auto& p : this->params) {
             switch (p.tag()) {
                 case ASTAsmParam::TAG_Const: {
-                    auto& e = p.as_Const();
+                    const auto e = p.as_Const();
                     params.push_back(Param::make_Const(e->clone()));
                     break;
                 }

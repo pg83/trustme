@@ -3201,7 +3201,7 @@ auto HirSerialiser::serialiseArraysize(const HIRArraySize& as) -> void {
             break;
         }
         case HIRArraySize::TAG_Known: {
-            auto& se = as.as_Known();
+            const auto se = as.as_Known();
             out.writeU64(se);
             break;
         }
@@ -3759,7 +3759,7 @@ auto HirSerialiser::serialise(const ::MacroExpansionEnt& ent) -> void {
             break;
         }
         case MacroExpansionEnt::TAG_NamedValue: {
-            auto& e = ent.as_NamedValue();
+            const auto e = ent.as_NamedValue();
             out.writeTag(1);
             out.writeU8(e >> 24);
             out.writeCount(e & 0x00FFFFFF);
@@ -3792,7 +3792,7 @@ auto HirSerialiser::serialise(const ::MacroExpansionConcatEnt& e) -> void {
             break;
         }
         case MacroExpansionConcatEnt::TAG_Named: {
-            auto& i = e.as_Named();
+            const auto i = e.as_Named();
             serialise(i);
             break;
         }
@@ -3876,7 +3876,7 @@ auto HirSerialiser::serialise(const HIRConstGeneric& v) -> void {
             break;
         }
         case HIRConstGeneric::TAG_Unevaluated: {
-            auto& e = v.as_Unevaluated();
+            const auto e = v.as_Unevaluated();
             serialise(*e);
             break;
         }
@@ -3886,7 +3886,7 @@ auto HirSerialiser::serialise(const HIRConstGeneric& v) -> void {
             break;
         }
         case HIRConstGeneric::TAG_Evaluated: {
-            auto& e = v.as_Evaluated();
+            const auto e = v.as_Evaluated();
             serialise(*e);
             break;
         }

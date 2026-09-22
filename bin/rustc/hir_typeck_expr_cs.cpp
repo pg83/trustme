@@ -4107,8 +4107,8 @@ void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType*
                             break;
                         }
                         case TypeDataErasedTypeInner::TAG_Known: {
-                            auto& lee = lE.inner.as_Known();
-                            auto& ree = rE.inner.as_Known();
+                            const auto lee = lE.inner.as_Known();
+                            const auto ree = rE.inner.as_Known();
                             equateTypesInner(sp, lee, ree);
                             break;
                         }
@@ -5559,14 +5559,14 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     break;
                 }
                 case HIRPatternPathBinding::TAG_Struct: {
-                    auto& be = binding.as_Struct();
+                    const auto be = binding.as_Struct();
                     auto& p = path.data.as_Generic();
                     BUG_ASSERT(be);
                     context.addIvarsParams(p.params);
                     return context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                 }
                 case HIRPatternPathBinding::TAG_Union: {
-                    auto& be = binding.as_Union();
+                    const auto be = binding.as_Union();
                     auto& p = path.data.as_Generic();
                     BUG_ASSERT(be);
                     context.addIvarsParams(p.params);
@@ -10255,8 +10255,8 @@ auto ConstExprEquate::equateLiteral(const HIRExprNodeLiteral& left, const HIRExp
             return l.type == r.type && l.value == r.value;
         }
         case HIRExprLiteral::TAG_Boolean: {
-            auto& l = left.data.as_Boolean();
-            auto& r = right.data.as_Boolean();
+            const auto l = left.data.as_Boolean();
+            const auto r = right.data.as_Boolean();
             return l == r;
         }
         case HIRExprLiteral::TAG_String: {

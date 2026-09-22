@@ -253,7 +253,7 @@ const HIRType* Monomorphiser::monomorphType(const Span& sp, const HIRType* tpl, 
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& ee = e.inner.as_Known();
+                    const auto ee = e.inner.as_Known();
                     inner = this->monomorphType(sp, ee, allowInfer);
                     break;
                 }
@@ -829,7 +829,7 @@ auto TyVisitor<W>::visitType(const HIRType* ty) -> bool {
                         break;
                     }
                     case TypeDataErasedTypeInner::TAG_Known: {
-                        auto& ee = e.inner.as_Known();
+                        const auto ee = e.inner.as_Known();
                         if (visitType(ee)) {
                             return true;
                         }

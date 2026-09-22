@@ -93,8 +93,8 @@ namespace {
                 return l.type == r.type && l.value == r.value;
             }
             case HIRExprLiteral::TAG_Boolean: {
-                auto& l = left.data.as_Boolean();
-                auto& r = right.data.as_Boolean();
+                const auto l = left.data.as_Boolean();
+                const auto r = right.data.as_Boolean();
                 return l == r;
             }
             case HIRExprLiteral::TAG_String: {
@@ -1456,7 +1456,7 @@ HIRConstGeneric HIRConstGeneric::clone() const {
             return e;
         }
         case HIRConstGeneric::TAG_Unevaluated: {
-            auto& e = (*this).as_Unevaluated();
+            const auto e = (*this).as_Unevaluated();
             return e;
         }
         case HIRConstGeneric::TAG_Generic: {
@@ -1464,7 +1464,7 @@ HIRConstGeneric HIRConstGeneric::clone() const {
             return e;
         }
         case HIRConstGeneric::TAG_Evaluated: {
-            auto& e = (*this).as_Evaluated();
+            const auto e = (*this).as_Evaluated();
             return e;
         }
     }

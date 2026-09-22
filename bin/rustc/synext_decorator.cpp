@@ -2762,7 +2762,7 @@ auto Deriver::addFieldBoundFromTy(const ASTGenericParams& params, Vector<ASTType
                         default:
                             break;
                         case ASTPathParamEnt::TAG_Type: {
-                            auto& ty = e.as_Type();
+                            const auto ty = e.as_Type();
                             self.addFieldBoundFromTy(params, outList, ty);
                             break;
                         }

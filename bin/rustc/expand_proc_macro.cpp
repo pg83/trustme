@@ -1775,7 +1775,7 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
             break;
         }
         case TypeData::TAG_Path: {
-            auto& te = ty->data.as_Path();
+            const auto te = ty->data.as_Path();
             this->visitPath(*te);
             break;
         }
@@ -1806,7 +1806,7 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
             break;
         }
         case TypeData::TAG_ErasedType: {
-            auto& te = ty->data.as_ErasedType();
+            const auto te = ty->data.as_ErasedType();
             pmi.sendRword("impl");
             bool needsPlus = false;
             for (const auto& t : te->traits) {
@@ -1869,7 +1869,7 @@ auto ProcMacroVisitor::visitPathNode(const ASTPathNode& e, bool isExpr) -> void 
             return;
         }
         if (e.args().isParen) {
-            auto& t = e.args().entries.at(0).as_Type();
+            const auto t = e.args().entries.at(0).as_Type();
             this->visitType(t);
             auto& rv = e.args().entries.at(1).as_AssociatedTyEqual();
             pmi.sendSymbol("->");
@@ -1894,13 +1894,13 @@ auto ProcMacroVisitor::visitPathNode(const ASTPathNode& e, bool isExpr) -> void 
                     break;
                 }
                 case ASTPathParamEnt::TAG_Type: {
-                    auto& t = ent.as_Type();
+                    const auto t = ent.as_Type();
                     this->visitType(t);
                     pmi.sendSymbol(",");
                     break;
                 }
                 case ASTPathParamEnt::TAG_Value: {
-                    auto& n = ent.as_Value();
+                    const auto n = ent.as_Value();
                     pmi.sendSymbol("{");
                     this->visitNode(*n);
                     pmi.sendSymbol("}");

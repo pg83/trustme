@@ -180,8 +180,8 @@ namespace {
                 return ae.index == be.index && exactPathEqual(ae.origin, be.origin);
             }
             case TypeDataErasedTypeInner::TAG_Known: {
-                auto& ae = a.as_Known();
-                auto& be = b.as_Known();
+                const auto ae = a.as_Known();
+                const auto be = b.as_Known();
                 return ae == be;
             }
             case TypeDataErasedTypeInner::TAG_Alias: {
@@ -199,8 +199,8 @@ namespace {
         }
         switch (a.tag()) {
             case HIRArraySize::TAG_Known: {
-                auto& ae = a.as_Known();
-                auto& be = b.as_Known();
+                const auto ae = a.as_Known();
+                const auto be = b.as_Known();
                 return ae == be;
             }
             case HIRArraySize::TAG_Unevaluated: {
@@ -304,8 +304,8 @@ namespace {
                 }
                 switch (ae.def.tag()) {
                     case HIRTypeDataNamedFunctionTy::TAG_Function: {
-                        auto& ad = ae.def.as_Function();
-                        auto& bd = be.def.as_Function();
+                        const auto ad = ae.def.as_Function();
+                        const auto bd = be.def.as_Function();
                         return ad == bd;
                     }
                     case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
@@ -314,8 +314,8 @@ namespace {
                         return ad.e == bd.e && ad.v == bd.v;
                     }
                     case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
-                        auto& ad = ae.def.as_StructConstructor();
-                        auto& bd = be.def.as_StructConstructor();
+                        const auto ad = ae.def.as_StructConstructor();
+                        const auto bd = be.def.as_StructConstructor();
                         return ad == bd;
                     }
                 }
@@ -462,7 +462,7 @@ namespace {
                             break;
                         }
                         case TypeDataErasedTypeInner::TAG_Known: {
-                            auto& inner = tuMatch.as_Known();
+                            const auto inner = tuMatch.as_Known();
                             addTypeFlags(flags, inner);
                             break;
                         }
@@ -730,7 +730,7 @@ namespace {
                             break;
                         }
                         case TypeDataErasedTypeInner::TAG_Known: {
-                            auto& inner = tuMatch.as_Known();
+                            const auto inner = tuMatch.as_Known();
                             h = hashMix(h, hashTypeRef(inner));
                             break;
                         }
@@ -752,7 +752,7 @@ namespace {
                     auto& tuMatch = e.size;
                     switch (tuMatch.tag()) {
                         case HIRArraySize::TAG_Known: {
-                            auto& size = tuMatch.as_Known();
+                            const auto size = tuMatch.as_Known();
                             h = hashMix(h, size);
                             break;
                         }
@@ -884,16 +884,16 @@ namespace {
                 UNREACHABLE();
             }
             case HIRConstGeneric::TAG_Unevaluated: {
-                auto& te = t.as_Unevaluated();
-                auto& xe = x.as_Unevaluated();
+                const auto te = t.as_Unevaluated();
+                const auto xe = x.as_Unevaluated();
                 return te->equivalent(*xe) ? HIRCompare::Equal : HIRCompare::Unequal;
             }
             case HIRConstGeneric::TAG_Generic: {
                 UNREACHABLE();
             }
             case HIRConstGeneric::TAG_Evaluated: {
-                auto& te = t.as_Evaluated();
-                auto& xe = x.as_Evaluated();
+                const auto te = t.as_Evaluated();
+                const auto xe = x.as_Evaluated();
                 return *te == *xe ? HIRCompare::Equal : HIRCompare::Unequal;
             }
         }
@@ -988,8 +988,8 @@ Ordering HIRArraySize::ord(const HIRArraySize& x) const {
             return ::ord(tse, xse);
         }
         case HIRArraySize::TAG_Known: {
-            auto& tse = (*this).as_Known();
-            auto& xse = x.as_Known();
+            const auto tse = (*this).as_Known();
+            const auto xse = x.as_Known();
             return ::ord(tse, xse);
         }
     }
@@ -1003,7 +1003,7 @@ HIRArraySize HIRArraySize::clone() const {
             return se.clone();
         }
         case HIRArraySize::TAG_Known: {
-            auto& se = (*this).as_Known();
+            const auto se = (*this).as_Known();
             return se;
         }
     }
@@ -1058,7 +1058,7 @@ HIRTypeDataFunctionPointer HIRType::Data_NamedFunction::decay(HIRTypeInterner& t
 
     switch (this->def.tag()) {
         case HIRTypeDataNamedFunctionTy::TAG_Function: {
-            auto& fp = this->def.as_Function();
+            const auto fp = this->def.as_Function();
             ASSERT_BUG(sp, fp, StringView("Non-initialised NamedFunction definition: ") << this->path);
             switch (this->path.data.tag()) {
                 case HIRPathData::TAG_Generic: {
@@ -1111,7 +1111,7 @@ HIRTypeDataFunctionPointer HIRType::Data_NamedFunction::decay(HIRTypeInterner& t
             return ft;
         }
         case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
-            auto& p = this->def.as_StructConstructor();
+            const auto p = this->def.as_StructConstructor();
             const auto& e = this->path.data.as_Generic();
             MonomorphStatePtr ms{types, nullptr, &e.params, nullptr};
             HIRTypeDataFunctionPointer ft{false, false, RcString::newInterned(ABI_RUST), types.path(this->path.clone(), HIRTypePathBinding::make_Struct(p)), {}};
@@ -1221,7 +1221,7 @@ void HIRType::fmt(ZeroCopyOutput& os) const {
             os << StringView("/*");
             switch (e.inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& ee = e.inner.as_Known();
+                    const auto ee = e.inner.as_Known();
                     os << StringView("= ") << ee;
                     break;
                 }
@@ -1786,8 +1786,8 @@ Ordering ord(const TypeDataErasedTypeInner& l, const TypeDataErasedTypeInner& r)
     ORD(static_cast<unsigned int>(l.tag()), static_cast<unsigned int>(r.tag()));
     switch (l.tag()) {
         case TypeDataErasedTypeInner::TAG_Known: {
-            auto& le = l.as_Known();
-            auto& re = r.as_Known();
+            const auto le = l.as_Known();
+            const auto re = r.as_Known();
             return le->ordIgnoringRegions(re);
         }
         case TypeDataErasedTypeInner::TAG_Alias: {
@@ -2223,8 +2223,8 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRType* tyL, const H
             }
             switch (te.inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& l = te.inner.as_Known();
-                    auto& r = xe.inner.as_Known();
+                    const auto l = te.inner.as_Known();
+                    const auto r = xe.inner.as_Known();
                     return l->matchTestGenericsFuzz(sp, r, resolvePlaceholder, *this);
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
@@ -2497,7 +2497,7 @@ const HIRGenericParams* HIRTypePathBinding::getGenerics() const {
 HIRTypeDataNamedFunctionTy HIRTypeDataNamedFunctionTy::clone() const {
     switch ((*this).tag()) {
         case HIRTypeDataNamedFunctionTy::TAG_Function: {
-            auto& e = (*this).as_Function();
+            const auto e = (*this).as_Function();
             return e;
         }
         case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
@@ -2505,7 +2505,7 @@ HIRTypeDataNamedFunctionTy HIRTypeDataNamedFunctionTy::clone() const {
             return e;
         }
         case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
-            auto& e = (*this).as_StructConstructor();
+            const auto e = (*this).as_StructConstructor();
             return e;
         }
     }
@@ -2560,7 +2560,7 @@ HIRType HIRType::cloneData() const {
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& ee = e.inner.as_Known();
+                    const auto ee = e.inner.as_Known();
                     inner = ee;
                     break;
                 }
@@ -2858,8 +2858,8 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
             }
             switch (le.inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& l = le.inner.as_Known();
-                    auto& r = re.inner.as_Known();
+                    const auto l = le.inner.as_Known();
+                    const auto r = re.inner.as_Known();
                     return l->compareWithPlaceholders(sp, r, resolvePlaceholder);
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
