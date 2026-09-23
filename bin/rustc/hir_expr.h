@@ -762,7 +762,7 @@ struct HIRExprNodeAsyncBlock: public HIRExprNode {
     bool isUse;
 
     bool isAsyncGen = false;
-    const HIRType* yieldTy;
+    const HIRType* yieldTy = nullptr;
 
     HIRExprNodeGenerator::AvuCache avuCache;
 
