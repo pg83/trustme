@@ -1047,6 +1047,19 @@ namespace {
         if (ty->is_Path() && ty->as_Path().binding.is_Struct()) {
             const auto& te = ty->as_Path();
             const auto& str = *te.binding.as_Struct();
+            if (str.repr == HIRStruct::Repr::Simd && str.maxFieldAlignment == 0 && repr->size != SIZE_MAX) {
+                size_t vectorAlign = 1;
+                while (vectorAlign < repr->size) {
+                    vectorAlign <<= 1;
+                }
+                if (vectorAlign > repr->align) {
+                    repr->align = vectorAlign;
+                    repr->userAlign = true;
+                }
+                while (repr->size % repr->align != 0) {
+                    repr->size++;
+                }
+            }
             if (str.structMarkings.isAsyncDropGlue && !monomorphiseTypeNeeded(ty) && !extendAsyncDropGlueRepr(sp, resolve, ty, *repr)) {
                 return nullptr;
             }
