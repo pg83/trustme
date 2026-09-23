@@ -99,6 +99,7 @@ public:
     Token getTokenCheck(eTokenType exp);
     void putback(Token tok);
     eTokenType lookahead(unsigned int count);
+    ASTEdition lookaheadEdition(unsigned int count);
 
     bool lookaheadIdentIs(unsigned int count, const char* name);
 

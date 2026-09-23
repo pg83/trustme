@@ -820,7 +820,7 @@ namespace {
             }
             PUTBACK(tok, lex);
         }
-        if (lex.editionAfter(ASTEdition::Rust2021) && lex.lookahead(0) == TOK_IDENT && ((lex.lookahead(1) == TOK_RWORD_MOVE && lex.lookahead(2) == TOK_BRACE_OPEN) || lex.lookahead(1) == TOK_BRACE_OPEN)) {
+        if (lex.lookahead(0) == TOK_IDENT && lex.lookaheadEdition(0) >= ASTEdition::Rust2024 && ((lex.lookahead(1) == TOK_RWORD_MOVE && lex.lookahead(2) == TOK_BRACE_OPEN) || lex.lookahead(1) == TOK_BRACE_OPEN)) {
             GET_TOK(tok, lex);
             if (tok.ident().name == "gen") {
                 bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);

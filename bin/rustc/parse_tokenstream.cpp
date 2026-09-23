@@ -147,6 +147,17 @@ eTokenType TokenStream::lookahead(unsigned int i) {
     return lookaheadAt(i).tok.type();
 }
 
+ASTEdition TokenStream::lookaheadEdition(unsigned int i) {
+    this->lookahead(i);
+    if (cacheValid) {
+        if (i == 0) {
+            return edition;
+        }
+        i--;
+    }
+    return lookaheadAt(i).edition;
+}
+
 bool TokenStream::lookaheadIdentIs(unsigned int i, const char* name) {
     if (this->lookahead(i) != TOK_IDENT) {
         return false;
