@@ -693,9 +693,23 @@ namespace {
                 break;
             }
             case ASTPatternData::TAG_Value: {
+                auto& e = pat.data().as_Value();
+                if (auto* path = e.start.opt_Named()) {
+                    ExpandPath(es, mod, *path);
+                }
+                if (auto* path = e.end.opt_Named()) {
+                    ExpandPath(es, mod, *path);
+                }
                 break;
             }
             case ASTPatternData::TAG_ValueLeftInc: {
+                auto& e = pat.data().as_ValueLeftInc();
+                if (auto* path = e.start.opt_Named()) {
+                    ExpandPath(es, mod, *path);
+                }
+                if (auto* path = e.end.opt_Named()) {
+                    ExpandPath(es, mod, *path);
+                }
                 break;
             }
             case ASTPatternData::TAG_Tuple: {
@@ -710,6 +724,7 @@ namespace {
             }
             case ASTPatternData::TAG_StructTuple: {
                 auto& e = pat.data().as_StructTuple();
+                ExpandPath(es, mod, e.path);
                 for (auto& sp : e.tupPat.start) {
                     ExpandPattern(es, mod, sp, isRefutable);
                 }
@@ -720,6 +735,7 @@ namespace {
             }
             case ASTPatternData::TAG_Struct: {
                 auto& e = pat.data().as_Struct();
+                ExpandPath(es, mod, e.path);
                 for (auto& subpat : e.subPatterns) {
                     if (!ExpandAttrsCfgOnly(es, subpat.attrs)) {
                         subpat.name = RcString();
