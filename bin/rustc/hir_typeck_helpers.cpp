@@ -1412,11 +1412,11 @@ const HIRType* HMTypeInferrence::expandIvars(const HIRType* type) {
     };
 
     if (type->is_Infer()) {
-        const auto& resolved = this->getType(type);
-        if (resolved != type) {
-            type = resolved;
+        const auto* resolved = this->getType(type);
+        if (resolved == type || resolved->is_Infer()) {
+            return resolved;
         }
-        return type;
+        return this->expandIvars(resolved);
     }
 
     if (const auto* e = type->opt_Path()) {
