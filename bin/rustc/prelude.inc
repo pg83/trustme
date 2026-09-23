@@ -366,7 +366,9 @@ static inline bool mul128s_o(int128_t a, int128_t b, int128_t* out) {
     if (sign_a) a = neg128s(a);
     if (sign_b) b = neg128s(b);
     bool overflow = mul128_o(*(uint128_t*)&a, *(uint128_t*)&b, (uint128_t*)out);
-    if (sign_a != sign_b) *out = neg128s(*out);
+    bool negative = sign_a != sign_b;
+    if ((out->hi >> 63) && !(negative && out->hi == (1ull << 63) && out->lo == 0)) overflow = true;
+    if (negative) *out = neg128s(*out);
     return overflow;
 }
 

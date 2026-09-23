@@ -104,6 +104,24 @@ STD_TEST_SUITE(PreludeInt128) {
         STD_INSIST(same(out, u128(UINT64_MAX - 1, 1)));
     }
 
+    STD_TEST(testSignedMulOverflow) {
+        int128_t out;
+        const auto min = i128(0x8000000000000000, 0);
+        STD_INSIST(!mul128s_o(make128s(-1), make128s(-1), &out) && sameS(out, make128s(1)));
+        STD_INSIST(!mul128s_o(min, make128s(1), &out) && sameS(out, min));
+        STD_INSIST(mul128s_o(min, make128s(-1), &out) && sameS(out, min));
+
+        const auto quarter = i128(0x4000000000000000, 0);
+        STD_INSIST(!mul128s_o(quarter, make128s(-2), &out) && sameS(out, min));
+        STD_INSIST(mul128s_o(quarter, make128s(2), &out) && sameS(out, min));
+
+        const auto third = i128(0x2AAAAAAAAAAAAAAA, 0xAAAAAAAAAAAAAAAA);
+        STD_INSIST(mul128s_o(third, make128s(4), &out));
+        STD_INSIST(sameS(out, i128(0xAAAAAAAAAAAAAAAA, 0xAAAAAAAAAAAAAAA8)));
+        STD_INSIST(mul128s_o(make128s(-4), third, &out));
+        STD_INSIST(sameS(out, i128(0x5555555555555555, 0x5555555555555558)));
+    }
+
     STD_TEST(testDivMod) {
         uint128_t quotient, remainder;
         STD_INSIST(!div128_o(make128(17), make128(5), &quotient, &remainder));
