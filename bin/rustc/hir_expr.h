@@ -375,7 +375,7 @@ struct HIRExprNodeIndex: public HIRExprNode {
     HIRExprNodeP index;
 
     struct {
-        const HIRType* indexTy;
+        const HIRType* indexTy = nullptr;
     } cache;
 
     HIRExprNodeIndex(Span sp, HIRExprNodeP val, HIRExprNodeP index);
@@ -721,7 +721,7 @@ struct HIRExprNodeGenerator: public HIRExprNode {
 
     std::vector<HIRExprNodeP> captures;
 
-    const HIRType* stateDataType;
+    const HIRType* stateDataType = nullptr;
 
     HIRExprNodeGenerator(Span sp, const HIRType* rv, const HIRType* resumeTy, HIRPattern resumePattern, bool hasResumePattern, const HIRType* yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody);
 
@@ -741,7 +741,7 @@ struct HIRExprNodeGeneratorWrapper: public HIRExprNode {
     const HIRStruct* objPtr = nullptr;
     HIRGenericPath objPath;
 
-    const HIRType* stateDataType;
+    const HIRType* stateDataType = nullptr;
     HIRSimplePath stateIdxEnum;
 
     HIRFunction* dropFcnPtr = nullptr;
@@ -772,7 +772,7 @@ struct HIRExprNodeAsyncBlock: public HIRExprNode {
 
     std::vector<HIRExprNodeP> captures;
 
-    const HIRType* stateDataType;
+    const HIRType* stateDataType = nullptr;
 
     HIRExprNodeAsyncBlock(Span sp, const HIRType* returnType, HIRExprNodeP code, bool isMove, bool isUse);
 
