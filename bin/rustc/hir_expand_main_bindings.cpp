@@ -1103,6 +1103,10 @@ namespace {
                 root = &unsize->value;
                 continue;
             }
+            if (auto* field = cast<HIRExprNodeField>(root->get())) {
+                root = &field->value;
+                continue;
+            }
             return root;
         }
     }
