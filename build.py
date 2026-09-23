@@ -1549,7 +1549,7 @@ unit_tests.append(command(
         "$(S)/tst/rust_lib/upstream/coretests/preamble.rs",
         "$(S)/tst/rust_lib/upstream/coretests/tests/ops.rs",
         "$(S)/tst/rust_lib/upstream/coretests/tests/ops/control_flow.rs",
-        *TIMEOUT_INPUT,
+        *TESTS_LIB,
     ],
     outputs=["$(B)/tst/unit/rust_lib_import.stamp"],
     cmd=[
@@ -2142,6 +2142,8 @@ unit_tests.append(command(
 ))
 unit_tests.append(command(
     name="unit_system_rustc_mode",
+    # Generates the whole build graph in system-rustc mode: it reads the tree.
+    local=True,
     inputs=[
         "$(S)/build.py",
         "$(S)/tst/system_rustc.py",
@@ -2211,7 +2213,7 @@ unit_tests.append(command(
 rust_unit_tests = []
 # Files a unit test pulls in with `#[path]`, which are inputs of every unit
 # node because the node cannot tell which test names them.
-unit_aux = build.glob("$(S)/tst/unit/aux/**/*.rs")
+unit_aux = build.glob("$(S)/tst/unit/aux/**/*.rs") + build.glob("$(S)/tst/unit/support/**/*.rs")
 
 for _src in build.glob("$(S)/tst/unit/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]

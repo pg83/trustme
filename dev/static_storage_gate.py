@@ -2,13 +2,20 @@
 """Fail while compiler object files contain static-storage state."""
 
 import collections
+import os
 import re
+import shutil
 import subprocess
 import sys
 
 
 STORAGE_TYPES = frozenset("bBcCdDgGrRsSuVv")
 MAX_STORAGE_OBJECTS = 0
+# The binutils this gate reads objects with: the build's own where it names
+# them, the GNU names where a PATH has them, the LLVM names a realm carries.
+NM = os.environ.get("NM") or shutil.which("nm") or "llvm-nm"
+AR = os.environ.get("AR") or shutil.which("ar") or "llvm-ar"
+READELF = os.environ.get("READELF") or shutil.which("readelf") or "llvm-readelf"
 MAX_WRITABLE_BYTES = 0
 
 # nm also exposes data emitted by the C++ ABI and the compiler itself.  None of
@@ -83,12 +90,20 @@ ALLOWED_MUTABLE = frozenset((
     ("malloc.cpp.o", "_ZN12_GLOBAL__N_110metaMappedE", "b"),
     ("malloc.cpp.o", "_ZN12_GLOBAL__N_112freeSegmentsE", "b"),
 ))
+# A constant table with pointers in it is .data.rel.ro under a toolchain that
+# emits relocatable code and .rodata under one that does not: nm reports d/D
+# for the first and r/R for the second.  Both are the same admitted object,
+# and read-only is the stricter of the two.
+READONLY = {"d": "r", "D": "R"}
+ALLOWED_IMMUTABLE_ANY = ALLOWED_IMMUTABLE | frozenset(
+    (member, name, READONLY.get(kind, kind))
+    for member, name, kind in ALLOWED_IMMUTABLE)
 READELF_MEMBER = re.compile(r"^File: .+\(([^()]*)\)$")
 
 
 def tls_names(archive):
     output = subprocess.run(
-        ["readelf", "--wide", "--symbols", archive],
+        [READELF, "--wide", "--symbols", archive],
         check=True,
         stdout=subprocess.PIPE,
         text=True,
@@ -109,7 +124,7 @@ def tls_names(archive):
 
 def archive_members(archive):
     output = subprocess.run(
-        ["ar", "t", archive], check=True, stdout=subprocess.PIPE, text=True,
+        [AR, "t", archive], check=True, stdout=subprocess.PIPE, text=True,
     ).stdout
     return frozenset(output.split())
 
@@ -123,7 +138,7 @@ def object_name(location):
 
 def storage_symbols(archive):
     output = subprocess.run(
-        ["nm", "--print-file-name", "--format=posix", "--print-size",
+        [NM, "--print-file-name", "--format=posix", "--print-size",
          "--defined-only", archive],
         check=True,
         stdout=subprocess.PIPE,
@@ -149,12 +164,12 @@ def main():
     archive, stamp = sys.argv[1:]
     tls = tls_names(archive)
     all_symbols = storage_symbols(archive)
-    allowed_names = ALLOWED_IMMUTABLE | ALLOWED_MUTABLE
+    allowed_names = ALLOWED_IMMUTABLE_ANY | ALLOWED_MUTABLE
     allowed = [symbol for symbol in all_symbols
                if symbol[:3] in allowed_names
                and symbol[:2] not in tls]
     allowed_immutable_count = sum(
-        symbol[:3] in ALLOWED_IMMUTABLE for symbol in allowed)
+        symbol[:3] in ALLOWED_IMMUTABLE_ANY for symbol in allowed)
     allowed_mutable_count = sum(
         symbol[:3] in ALLOWED_MUTABLE for symbol in allowed)
     symbols = [symbol for symbol in all_symbols if symbol not in allowed]
@@ -167,12 +182,13 @@ def main():
                          if symbol[:2] in tls or symbol[2] not in "rR")
 
     observed_allowed = {symbol[:3] for symbol in allowed}
+    observed_objects = {symbol[:2] for symbol in allowed}
     # An exception is stale when its object is in the archive without the
     # symbol; an object the build left out (malloc.cpp under a sanitizer)
     # takes its exceptions with it.
     members = archive_members(archive)
-    missing_allowed = {name for name in allowed_names - observed_allowed
-                       if name[0] in members}
+    missing_allowed = {name for name in ALLOWED_IMMUTABLE | ALLOWED_MUTABLE
+                       if name[:2] not in observed_objects and name[0] in members}
     duplicate_allowed = len(allowed) != len(observed_allowed)
 
     counts = collections.defaultdict(lambda: [0, 0, 0])

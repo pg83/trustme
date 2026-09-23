@@ -2179,7 +2179,7 @@ class ExecService:
                 self._send({"t": "have", "digests": present})
             elif kind == "job":
                 self._touch()
-                self.pool.submit(self._guarded_job, frame)
+                self.pool.submit(self._guarded_job, frame, time.monotonic())
             elif kind == "bye":
                 self.pool.shutdown(wait=True)
                 shutil.rmtree(self.session, ignore_errors=True)
@@ -2197,17 +2197,22 @@ class ExecService:
         self.pool.shutdown(wait=True, cancel_futures=True)
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def _guarded_job(self, frame: dict[str, Any]) -> None:
+    def _guarded_job(self, frame: dict[str, Any], received: float) -> None:
         uid = frame["uid"]
         try:
-            self._job(frame)
+            self._job(frame, received)
         except BaseException as exc:
             if not self.stopping:
                 self._send({"t": "result", "uid": uid, "rc": 1, "stdout": "",
                             "stderr": f"build exec: {exc!r}", "manifest": {}})
 
-    def _job(self, frame: dict[str, Any]) -> None:
+    def _job(self, frame: dict[str, Any], received: float) -> None:
         uid = frame["uid"]
+        started = time.monotonic()
+        # How long the job waited for a worker here, and how long it ran:
+        # the controller reports both, so a slow host and a slow link are
+        # told apart.
+        timing = {"queued": started - received}
         work = self.tmp / uid
         shutil.rmtree(work, ignore_errors=True)
         work.mkdir(parents=True)
@@ -2290,9 +2295,10 @@ class ExecService:
                             "t": "blob", "digest": entry["cas"],
                             "size": path.stat().st_size, "mode": entry["mode"],
                         }, path)
+                timing["ran"] = time.monotonic() - started
                 _dist_write(self.stdout, {
                     "t": "result", "uid": uid, "rc": 0, "stdout": stdout_text,
-                    "stderr": stderr_text, "manifest": manifest,
+                    "stderr": stderr_text, "manifest": manifest, "timing": timing,
                 })
         finally:
             shutil.rmtree(work, ignore_errors=True)
@@ -2387,7 +2393,7 @@ class RemoteHost:
         options: list[str] = []
         if base and Path(base[0]).name == "ssh":
             options = ["-o", "BatchMode=yes", "-o", "ServerAliveInterval=10",
-                       "-o", "ServerAliveCountMax=3", "-C"]
+                       "-o", "ServerAliveCountMax=3"]
         remote = shlex.join(["python3", "-c", DIST_BOOTSTRAP, "exec", self.session])
         return [*base, *options, self.name, remote]
 
@@ -2503,18 +2509,25 @@ class RemoteHost:
                 if process is None:
                     raise HostLost(self.name)
                 self.pending[uid] = reply
-                needed = [d for d in blobs if d not in self.sent]
+            sent_at = time.monotonic()
+            needed: list[str] = []
             try:
                 with self.write_lock:
+                    # Claim the blobs under the write lock: every write to the
+                    # host goes through it, so a job that finds a digest here
+                    # writes its frame only after that blob has gone over.
+                    with self.state_lock:
+                        needed = [d for d in blobs if d not in self.sent]
+                        self.sent.update(needed)
                     for digest in needed:
                         path, mode, size = blobs[digest]
                         _dist_write(process.stdin, {
                             "t": "blob", "digest": digest, "size": size, "mode": mode,
                         }, path)
-                        with self.state_lock:
-                            self.sent.add(digest)
                     _dist_write(process.stdin, job)
             except OSError:
+                with self.state_lock:
+                    self.sent.difference_update(needed)
                 self._lost(process)
                 raise HostLost(self.name)
             reply.event.wait()
@@ -2532,6 +2545,10 @@ class RemoteHost:
                 for entry in frame["manifest"].values():
                     if "cas" in entry:
                         self.sent.add(entry["cas"])
+            if "timing" in frame:
+                # Round trip minus the host's own accounting: link and queues.
+                timing = frame["timing"]
+                timing["transit"] = time.monotonic() - sent_at - timing["queued"] - timing["ran"]
             return frame
 
     def close(self) -> None:
@@ -2874,6 +2891,12 @@ class Executor:
                 if "cas" in entry and not self._cas_path(entry["cas"]).is_file():
                     raise BuildError(f"[{host.name}] output blob missing after transfer: {symbolic}")
             self._write_manifest(node.uid, manifest)
+            if self.verbose and "timing" in result:
+                timing = result["timing"]
+                self._report(
+                    f"DONE {node.descr} {self._node_name(node)} @{host.name}"
+                    f" queued {timing['queued']:.1f}s ran {timing['ran']:.1f}s"
+                    f" transit {timing['transit']:.1f}s")
             self._progress(node)
         finally:
             os.close(fd)

@@ -27,7 +27,9 @@ PATTERNS = [
     ("shared_ptr", re.compile(r"\bshared_ptr\b")),
     ("make_unique", re.compile(r"\bmake_unique\b")),
     ("make_shared", re.compile(r"\bmake_shared\b")),
-    ("new", re.compile(r"\bnew\b(?!\s*\()")),  # raw heap new; placement new is pool machinery
+    # raw heap new; placement new is pool machinery, and `operator new[]`
+    # is the allocator defining the array form, not a heap allocation.
+    ("new", re.compile(r"\bnew\b(?!\s*[(\[])")),
     ("std::vector", re.compile(r"\bstd\s*::\s*vector\b")),
     ("std::map", re.compile(r"\bstd\s*::\s*(?:multi)?map\b")),
     ("std::set", re.compile(r"\bstd\s*::\s*(?:multi)?set\b")),
