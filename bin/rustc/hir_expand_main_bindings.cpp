@@ -6835,15 +6835,8 @@ VisitorImplTrait::VisitorImplTrait(HIRTypeInterner& types)
                 return ty;
             }
             const HIRPath& origin = e->inner.as_Fcn().origin;
-            // TODO: Do a stricter check, but this is probably good enough for now?
-
-            if (origin.data.is_Generic() && origin.data.as_Generic().path.components().back() != methodName) {
-                return ty;
-            }
-            if (origin.data.is_UfcsKnown() && origin.data.as_UfcsKnown().item != methodName) {
-                return ty;
-            }
-            if (origin.data.is_UfcsInherent() && origin.data.as_UfcsInherent().item != methodName) {
+            const auto* originMethod = origin.data.opt_UfcsKnown();
+            if (!originMethod || originMethod->item != methodName || originMethod->trait.path != *traitPath) {
                 return ty;
             }
             auto tyName = RcString::newInterned(FMT(ATY_PREFIX_ERASED << methodName << StringView("_") << varIndex));
