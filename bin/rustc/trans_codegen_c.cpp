@@ -1784,7 +1784,9 @@ auto CodeGeneratorC::emitType(const HIRType* ty) -> void {
             emitCtype(ty);
             of << StringView(" { ");
             if (isZeroSized && options.disallowEmptyStructs) {
-                of << StringView("char _d;");
+                of << StringView("union { char _d; ");
+                emitCtype(te.inner);
+                of << StringView(" DATA[0]; };");
             } else if (isZeroSized) {
                 if (te.size.as_Known() > 0) {
                     emitCtype(te.inner);
