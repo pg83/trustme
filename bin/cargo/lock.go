@@ -28,6 +28,8 @@ func parseLock(path string) []Pkg {
 	var cur *Pkg
 
 	inPackage := false
+	inMetadata := false
+	metadataChecksums := map[string]string{}
 
 	flush := func() {
 		if cur != nil {
@@ -54,6 +56,15 @@ func parseLock(path string) []Pkg {
 
 			flush()
 			inPackage = false
+			inMetadata = line == "[metadata]"
+
+			continue
+		}
+
+		if inMetadata {
+			if key, sum, ok := parseMetadataChecksum(line); ok {
+				metadataChecksums[key] = sum
+			}
 
 			continue
 		}
@@ -82,6 +93,12 @@ func parseLock(path string) []Pkg {
 
 	flush()
 	throw(sc.Err())
+
+	for i := range pkgs {
+		if pkgs[i].checksum == "" {
+			pkgs[i].checksum = metadataChecksums[pkgs[i].name+" "+pkgs[i].version+" ("+pkgs[i].source+")"]
+		}
+	}
 
 	if len(pkgs) == 0 {
 		throwFmt("%s: no [[package]] entries found", path)
@@ -112,4 +129,24 @@ func splitKV(line string) (key, val string, ok bool) {
 	}
 
 	return key, rest[1 : 1+end], true
+}
+
+func parseMetadataChecksum(line string) (key, sum string, ok bool) {
+	const prefix = "\"checksum "
+
+	if !strings.HasPrefix(line, prefix) {
+		return "", "", false
+	}
+
+	end := strings.IndexByte(line[len(prefix):], '"')
+
+	if end < 0 {
+		return "", "", false
+	}
+
+	key = line[len(prefix) : len(prefix)+end]
+
+	_, sum, ok = splitKV("k" + line[len(prefix)+end+1:])
+
+	return key, sum, ok
 }
