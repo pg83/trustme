@@ -152,7 +152,7 @@ Ordering ord(const std::map<T, U>& l, const std::map<T, U>& r) {
         }
         ++rIt;
     }
-    return OrdEqual;
+    return rIt == r.end() ? OrdEqual : OrdLess;
 }
 
 #define ORD(a, b)                     \

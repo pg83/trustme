@@ -681,11 +681,20 @@ namespace {
 
         for (const auto& traitPathRaw : tr.allParentTraits) {
             auto traitPathMono = monomorphCb.monomorphTraitpath(sp, traitPathRaw, false);
+            for (const auto& binding : curTrait.typeBounds) {
+                if (binding.second.sourceTrait == traitPathMono.path) {
+                    traitPathMono.typeBounds.insert(std::make_pair(binding.first, binding.second.clone()));
+                }
+            }
+            for (const auto& binding : curTrait.traitBounds) {
+                if (binding.second.sourceTrait == traitPathMono.path) {
+                    traitPathMono.traitBounds.insert(std::make_pair(binding.first, binding.second.clone()));
+                }
+            }
             rv.push_back(HIRGenericBound::make_TraitBound({type, mv$(traitPathMono), HIRBoundConstness::Never, isTrivial}));
         }
 
         // TODO: Add traits from `Self: Foo` bounds?
-        // TODO: Move associated types to the source trait.
     }
 
     std::vector<HIRGenericBound> flattenBounds(HIRTypeInterner& types, const std::vector<HIRGenericBound>& bounds) {
@@ -1685,6 +1694,23 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
                 for (unsigned int i = 0; i < paramsT.types.size(); i++) {
                     if (paramsT.types[i] != paramsO.types[i] && paramsT.types[i] == bT.type) {
                         return true;
+                    }
+                }
+                if (paramsT == paramsO) {
+                    const auto bindingsCover = [](const HIRTraitPath& wider, const HIRTraitPath& narrower) {
+                        for (const auto& binding : narrower.typeBounds) {
+                            auto it = wider.typeBounds.find(binding.first);
+                            if (it == wider.typeBounds.end() || it->second.type != binding.second.type) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    };
+                    if (bindingsCover(bT.trait, bO.trait)) {
+                        return true;
+                    }
+                    if (bindingsCover(bO.trait, bT.trait)) {
+                        return false;
                     }
                 }
                 TODO(sp, *itT << StringView(" ?= ") << *itO);
