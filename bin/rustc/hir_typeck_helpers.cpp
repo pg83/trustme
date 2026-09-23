@@ -8246,6 +8246,8 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     /* Method parameters an argument must not read its own type into yet: a bound
        naming them still has other open inputs (see `decideMethodParamsBeforeArguments`). */
     ThinVector<unsigned> heldMethodSlots;
+    bool earlierArgumentWaits = false;
+    ThinVector<unsigned> earlierArgumentVariables;
     const auto evaluateMethodArgument = [&](const HIRType* expected, const HIRType* actual, unsigned sourceInput, SolverResponse& effects) {
         const auto equalitySnapshot = resolve_.ivars.snapshot();
         /* Read before relating: relating is what would fill the slot, and the question is
@@ -8303,6 +8305,13 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             DEBUG(StringView("method argument ") << sourceInput << StringView(" leaves the held parameter ") << expected << StringView(" open"));
             resolve_.ivars.rollbackTo(equalitySnapshot);
             appendCoercion();
+            earlierArgumentWaits = true;
+            return Certainty::Proven;
+        }
+        if (earlierArgumentWaits && equalityOutcome == Unifier::Outcome::Proven && sourceInput != ~0u && !actualIsClosure) {
+            DEBUG(StringView("method argument ") << sourceInput << StringView(" waits for an earlier argument's coercion"));
+            resolve_.ivars.rollbackTo(equalitySnapshot);
+            appendCoercion();
             return Certainty::Proven;
         }
         /* A relation that fixed one of the argument's own variables from the
@@ -8311,12 +8320,20 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
            variable settled by the rules before the call when the argument is
            coerced, and the coercion is what binds it if not.  The coercion is
            exported instead and made in the argument-bindings phase. */
-        if (equalityOutcome == Unifier::Outcome::Proven && std::any_of(argumentVariables.begin(), argumentVariables.end(), [&](unsigned index) {
-            return !resolve_.ivars.getType(index)->is_Infer();
-        })) {
+        const auto fixesArgumentVariable = [&](const ThinVector<unsigned>& variables) {
+            return std::any_of(variables.begin(), variables.end(), [&](unsigned index) {
+                return !resolve_.ivars.getType(index)->is_Infer();
+            });
+        };
+        const bool fixesArgumentVariables = fixesArgumentVariable(argumentVariables) || (sourceInput != ~0u && fixesArgumentVariable(earlierArgumentVariables));
+        for (auto index : argumentVariables) {
+            earlierArgumentVariables.push_back(index);
+        }
+        if (equalityOutcome == Unifier::Outcome::Proven && fixesArgumentVariables) {
             DEBUG(StringView("method argument ") << sourceInput << StringView(" keeps its own variables for the coercion"));
             resolve_.ivars.rollbackTo(equalitySnapshot);
             appendCoercion();
+            earlierArgumentWaits = true;
             return Certainty::Proven;
         }
         if (equalityOutcome == Unifier::Outcome::Proven && !expected->is_ErasedType()) {
@@ -8660,6 +8677,8 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         }
 
         if (function.fixedArgCount() == argumentTypes.size() + 1) {
+            earlierArgumentWaits = false;
+            earlierArgumentVariables.clear();
             for (size_t i = 0; i < argumentTypes.size(); i++) {
                 const auto* expectedArgument = normalizeSignatureType(methodMonomorph.monomorphType(callSpan, function.args[i + 1].second, true), argumentTypes[i], signatureEffects);
                 const auto argumentApplicability = evaluateMethodArgument(expectedArgument, argumentTypes[i], i, signatureEffects);
@@ -9004,6 +9023,8 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                     if (!boundsFirst) {
                         decideMethodParamsBeforeArguments(method.data.params, methodParams, argumentTypes.size(), [&](size_t i) -> const HIRType* { return method.data.args[i + 1].second; }, methodMonomorph, signatureEffects);
                     }
+                    earlierArgumentWaits = false;
+                    earlierArgumentVariables.clear();
                     for (size_t i = 0; i < argumentTypes.size(); i++) {
                         const auto* expectedArgument = normalizeSignatureType(methodMonomorph.monomorphType(callSpan, method.data.args[i + 1].second, true), argumentTypes[i], signatureEffects);
                         const auto argumentApplicability = evaluateMethodArgument(expectedArgument, argumentTypes[i], i, signatureEffects);
