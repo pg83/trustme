@@ -255,7 +255,8 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             ms.ppMethod = &pp.ppMethod;
             {
                 auto newLit = eval.evaluateConstant(path, s.value, std::move(ty), std::move(ms));
-                s.monomorphCache.insert(std::make_pair(path.clone(), std::move(newLit)));
+                auto inserted = s.monomorphCache.insert(std::make_pair(path.clone(), std::move(newLit)));
+                generatedLiterals.pushBack(&inserted.first->second);
             }
         }
 

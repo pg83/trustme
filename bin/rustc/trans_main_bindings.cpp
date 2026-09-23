@@ -505,7 +505,7 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath path);
 
 static void TransEnumerateFillFromFunction(EnumState& state, const HIRPath& path, const HIRFunction& function, const TransParams& pp);
 
-static void TransEnumerateFillFromStatic(EnumState& state, const HIRStatic& stat, TransListStatic& statOut, TransParams pp);
+static void TransEnumerateFillFromStatic(EnumState& state, const HIRPath& path, const HIRStatic& stat, TransListStatic& statOut, TransParams pp);
 
 static void TransEnumerateFillFromVTable(EnumState& state, HIRPath vtablePath, const TransParams& pp);
 
@@ -589,14 +589,14 @@ static void enumerateDestructorType(EnumState& state, const HIRType* type) {
     }
 }
 
-static void TransEnumerateGenericFunctionItems(EnumState& state, const Span& sp, const HIRFunction& e, MonomorphStatePtr ms, bool hasConditionalBounds) {
-    if (e.code.mir) {
-        const auto& mirFcn = *e.code.mir;
+static void TransEnumerateGenericBodyItems(EnumState& state, const Span& sp, const HIRExprPtr& code, MonomorphStatePtr ms, bool hasConditionalBounds) {
+    if (code.mir) {
+        const auto& mirFcn = *code.mir;
         auto params = HIRPathParams();
         ms.ppMethod = &params;
         if (!mirFcn.transEnumState) {
             auto* esp = new MIREnumCache();
-            TransEnumerateFillFromMIR(*esp, *e.code.mir);
+            TransEnumerateFillFromMIR(*esp, *code.mir);
             mirFcn.transEnumState = MIREnumCachePtr(esp);
         }
 
@@ -623,6 +623,10 @@ static void TransEnumerateGenericFunctionItems(EnumState& state, const Span& sp,
             }
         }
     }
+}
+
+static void TransEnumerateGenericFunctionItems(EnumState& state, const Span& sp, const HIRFunction& e, MonomorphStatePtr ms, bool hasConditionalBounds) {
+    TransEnumerateGenericBodyItems(state, sp, e.code, ms, hasConditionalBounds);
 }
 
 static void TransEnumerateValItem(EnumState& state, HIRValueItem& vi, bool isVisible, TransPathCallback& getPath) {
@@ -676,9 +680,10 @@ static void TransEnumerateValItem(EnumState& state, HIRValueItem& vi, bool isVis
                 if (e.type->is_Infer()) {
                     break;
                 }
-                auto* ptr = state.rv.addStatic(state.crate.types, getPath.get());
+                auto staticPath = getPath.get();
+                auto* ptr = state.rv.addStatic(state.crate.types, staticPath.clone());
                 if (ptr) {
-                    TransEnumerateFillFromStatic(state, e, *ptr, TransParams(state.crate.types));
+                    TransEnumerateFillFromStatic(state, staticPath, e, *ptr, TransParams(state.crate.types));
                 }
 
                 state.rv.roots.push_back(getPath.get());
@@ -1516,8 +1521,9 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 DEBUG(StringView("> Already enumerated after const evaluation"));
                 return;
             }
+            auto staticPath = pathMono.clone();
             if (auto* ptr = state.rv.addStatic(state.crate.types, mv$(pathMono))) {
-                TransEnumerateFillFromStatic(state, *e, *ptr, mv$(subPp));
+                TransEnumerateFillFromStatic(state, staticPath, *e, *ptr, mv$(subPp));
             }
             break;
         }
@@ -1534,6 +1540,9 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 case HIRConstant::ValueState::Unknown:
                     BUG(sp, StringView("Unevaluated constant: ") << pathMono);
                 case HIRConstant::ValueState::Generic:
+                    if (auto it = e->monomorphCache.find(pathMono); it != e->monomorphCache.end()) {
+                        TransEnumerateFillFromLiteral(state, it->second, subPp);
+                    }
                     if (auto* slot = state.rv.addConst(state.crate.types, mv$(pathMono))) {
                         slot->ptr = e;
                         slot->pp = std::move(subPp);
@@ -1993,11 +2002,14 @@ static void TransEnumerateFillFromFunction(EnumState& state, const HIRPath& p, c
     }
 }
 
-static void TransEnumerateFillFromStatic(EnumState& state, const HIRStatic& item, TransListStatic& outStat, TransParams pp) {
+static void TransEnumerateFillFromStatic(EnumState& state, const HIRPath& path, const HIRStatic& item, TransListStatic& outStat, TransParams pp) {
     if (item.params.isGeneric()) {
         MIREnumCache es;
         TransEnumerateFillFromMIR(es, *item.value.mir);
         es.apply(state, pp);
+        if (auto it = item.monomorphCache.find(path); it != item.monomorphCache.end()) {
+            TransEnumerateFillFromLiteral(state, it->second, pp);
+        }
     } else if (item.type->is_Infer()) {
         BUG(Span(), StringView("Enumerating static with no assigned type (unused elevated literal)"));
     } else if (item.valueGenerated) {
@@ -2947,6 +2959,9 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
                 TransParams tp(state.crate.types);
                 tp.ppImpl = HIRPathParams();
                 TransEnumerateFillFromLiteral(state, e.second.data.valueRes, std::move(tp));
+                if (impl.params.isGeneric() || e.second.data.params.isGeneric()) {
+                    TransEnumerateGenericBodyItems(state, Span(), e.second.data.value, ms, !impl.params.bounds.empty() || !e.second.data.params.bounds.empty());
+                }
 
                 if (e.second.publicity.isGlobal() && !impl.params.isGeneric() && !e.second.data.params.isGeneric()) {
                     auto ppMethod = HIRPathParams();

@@ -5374,10 +5374,8 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodePathValue& node) -> void {
     auto v = resolve_.getValue(node.span(), node.path, ms, /*signature_only*/ true);
     switch (v.tag()) {
         case StaticTraitResolve::ValuePtr::TAG_Constant:
-            if (!monomorphisePathNeeded(node.path)) {
-                isConstant = !isMaybeInteriorMut(node);
-                DEBUG(node.path << StringView(" m_is_constant=") << isConstant);
-            }
+            isConstant = !isMaybeInteriorMut(node);
+            DEBUG(node.path << StringView(" m_is_constant=") << isConstant);
             break;
         case StaticTraitResolve::ValuePtr::TAG_Function:
             isConstant = true;
