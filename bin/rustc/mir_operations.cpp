@@ -380,11 +380,13 @@ namespace {
                 auto count = te.size.as_Known();
 
                 bool isAllSame;
-                if (count > 1) {
+                if (count > 1 && size == 0) {
+                    isAllSame = true;
+                } else if (count > 1) {
                     isAllSame = true;
                     size_t ofs = size;
                     auto element0 = lit.slice(0, size);
-                    for (unsigned int i = 1; i < count; i++) {
+                    for (u64 i = 1; i < count; i++) {
                         auto cur = lit.slice(ofs, size);
                         if (element0 != cur) {
                             isAllSame = false;
@@ -399,13 +401,13 @@ namespace {
                 if (isAllSame) {
                     auto rval = MIRCleanupLiteralToRValue(state, mutator, lit.slice(0, size), te.inner, params, HIRGenericPath());
                     auto dataLval = mutator.inTemporary(te.inner, mv$(rval));
-                    return MIRRValue::make_SizedArray({mv$(dataLval), static_cast<unsigned int>(count)});
+                    return MIRRValue::make_SizedArray({mv$(dataLval), HIRArraySize::make_Known(count)});
                 } else {
                     std::vector<MIRParam> lvals;
                     lvals.reserve(te.size.as_Known());
 
                     size_t ofs = 0;
-                    for (unsigned int i = 0; i < count; i++) {
+                    for (u64 i = 0; i < count; i++) {
                         auto rval = MIRCleanupLiteralToRValue(state, mutator, lit.slice(ofs, size), te.inner, params, HIRGenericPath());
                         lvals.push_back(mutator.inTemporary(te.inner, mv$(rval)));
                         ofs += size;
