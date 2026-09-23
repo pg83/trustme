@@ -2241,6 +2241,10 @@ class ExecService:
             env.update({key: mount(value) for key, value in frame["env"].items()})
             env["BUILD_JOBS"] = str(self.cores)
             env["TMPDIR"] = str(work / "B")
+            # The build's PATH is the controller's: tools are looked up in the
+            # same places on every host, and this host's own PATH follows.
+            if frame.get("path"):
+                env["PATH"] = frame["path"] + ":" + env.get("PATH", "")
             (work / "B").mkdir(exist_ok=True)
             cwd = mount(frame["cwd"])
             Path(cwd).mkdir(parents=True, exist_ok=True)
@@ -2835,7 +2839,14 @@ class Executor:
                     self._describe_source(self.context.physical(path), path, files, blobs)
             job = {
                 "t": "job", "uid": node.uid, "name": self._node_name(node),
-                "cmd": node.commands, "cwd": node.cwd, "env": node.env,
+                "cmd": node.commands, "cwd": node.cwd,
+                # The toolchain the build was configured with, for commands
+                # that spawn a compiler themselves, and its PATH.
+                "env": {
+                    "CC": self.context.cc, "CXX": self.context.cxx, "AR": self.context.ar,
+                    **node.env,
+                },
+                "path": os.environ.get("PATH", ""),
                 "outputs": node.outputs, "files": files,
             }
             if self.verbose:

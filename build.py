@@ -106,6 +106,11 @@ SANITIZED = any(
     flag.startswith("-fsanitize=") for flag in (*build.cflags, *build.cxxflags)
 )
 SRC = [s for s in SRC if not (SANITIZED and s.endswith("/malloc.cpp"))]
+# The allocator's object goes first on the link line.  A toolchain wrapper
+# may name libc before the objects, and lld resolves such backward references
+# eagerly: the first object that calls free would then extract libc's own
+# free.o, and the allocator's definition later on the line collides with it.
+SRC = sorted(SRC, key=lambda s: not s.endswith("/malloc.cpp"))
 
 # The tu_gen.py sample fixture is exercised by tagged_union_sample_ut.cpp in
 # the rustc_ut runner; it is not part of the compiler.
@@ -483,6 +488,8 @@ else:
     # Build the standard library (+ libproc_macro) once, from that source.
     libstd = command(
         name="libstd",
+        # Reads the multi-gigabyte Rust source archive: that stays here.
+        local=True,
         inputs=(
             ["$(S)/tst/std/build.py"]
             + build.glob("$(S)/lib/proc_macro/**/*.rs")
@@ -504,6 +511,7 @@ else:
 
 rust_test_helpers = command(
     name="rust_test_helpers",
+    local=True,
     inputs=["$(S)/tst/rust_1_90/build_native.py", *TESTS_LIB],
     outputs=["$(B)/tst/rust_1_90/native/librust_test_helpers.a"],
     cmd=[
@@ -520,6 +528,7 @@ rust_test_helpers = command(
 if system_rustc_mode:
     rust_lib_dependencies = command(
         name="rust_lib_dependencies",
+        local=True,
         inputs=(
             [
                 "$(S)/tst/rust_lib/build_system_dependencies.py",
@@ -548,6 +557,7 @@ if system_rustc_mode:
 else:
     rust_lib_dependencies = command(
         name="rust_lib_dependencies",
+        local=True,
         inputs=(
             [
                 "$(S)/tst/rust_lib/build_dependencies.py",
