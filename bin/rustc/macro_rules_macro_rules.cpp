@@ -321,6 +321,17 @@ namespace {
     void MacroInitDefaults() {
     }
 
+    bool fragmentIsLiteralMaybeMinus(const Token& tok) {
+        if (tok.type() != TOK_INTERPOLATED_EXPR || tok.rawData().as_Fragment().ptr == nullptr) {
+            return false;
+        }
+        const ASTExprNode* node = &tok.fragNode();
+        if (const auto* negation = cast<const ASTExprNodeUniOp>(node); negation && negation->type == ASTExprNodeUniOp::NEGATE) {
+            node = negation->value;
+        }
+        return cast<const ASTExprNodeInteger>(node) || cast<const ASTExprNodeFloat>(node) || cast<const ASTExprNodeString>(node) || cast<const ASTExprNodeByteString>(node) || cast<const ASTExprNodeCString>(node) || cast<const ASTExprNodeBool>(node) || cast<const ASTExprNodeSuffixedLiteral>(node);
+    }
+
     InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type type, bool stmtIsItem) {
         Token tok;
         switch (type) {
@@ -397,6 +408,9 @@ namespace {
                 return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
             case MacroPatEnt::PAT_LITERAL:
                 GET_TOK(tok, lex);
+                if (fragmentIsLiteralMaybeMinus(tok)) {
+                    return InterpolatedFragment(InterpolatedFragment::EXPR, tok.takeFragNode());
+                }
                 if (tok.type() == TOK_DASH) {
                     std::vector<TokenTree> toks;
                     switch (lex.lookahead(0)) {
@@ -1839,6 +1853,10 @@ namespace {
             case MacroPatEnt::PAT_LIFETIME:
                 return lex.consumeIf(TOK_LIFETIME);
             case MacroPatEnt::PAT_LITERAL:
+                if (fragmentIsLiteralMaybeMinus(lex.nextTok())) {
+                    lex.consume();
+                    return true;
+                }
                 switch (lex.next()) {
                     case TOK_DASH: {
                         auto tmp = lex.clone();
