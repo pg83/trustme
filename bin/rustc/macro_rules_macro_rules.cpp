@@ -911,7 +911,10 @@ namespace {
             consumeTt(lex);
         }
 
-        if (lex.next() == TOK_RWORD_MOVE || lex.next() == TOK_PIPE || lex.next() == TOK_DOUBLE_PIPE) {
+        const auto startsClosure = [&]() {
+            return lex.next() == TOK_RWORD_MOVE || lex.next() == TOK_PIPE || lex.next() == TOK_DOUBLE_PIPE;
+        };
+        const auto consumeClosure = [&]() {
             lex.consumeIf(TOK_RWORD_MOVE);
             if (lex.consumeIf(TOK_PIPE)) {
                 do {
@@ -935,6 +938,22 @@ namespace {
                 }
             }
             return consumeExpr(lex);
+        };
+
+        const auto consumeCondition = [&]() {
+            if (lex.consumeIf(TOK_RWORD_LET)) {
+                if (!consumePat(lex)) {
+                    return false;
+                }
+                if (!lex.consumeIf(TOK_EQUAL)) {
+                    return false;
+                }
+            }
+            return consumeExpr(lex, true);
+        };
+
+        if (startsClosure()) {
+            return consumeClosure();
         }
 
         do {
@@ -969,6 +988,10 @@ namespace {
                         break;
                 }
             } while (innerCont);
+
+            if (startsClosure()) {
+                return consumeClosure();
+            }
 
             switch (lex.next()) {
                 case TOK_RWORD_CONTINUE:
@@ -1120,7 +1143,7 @@ namespace {
                     break;
                 case TOK_RWORD_WHILE:
                     lex.consume();
-                    if (!consumeExpr(lex, true)) {
+                    if (!consumeCondition()) {
                         return false;
                     }
                     if (lex.next() != TOK_BRACE_OPEN) {
@@ -1143,17 +1166,7 @@ namespace {
                     while (1) {
                         BUG_ASSERT(lex.next() == TOK_RWORD_IF);
                         lex.consume();
-                        if (lex.next() == TOK_RWORD_LET) {
-                            lex.consume();
-                            if (!consumePat(lex)) {
-                                return false;
-                            }
-                            if (lex.next() != TOK_EQUAL) {
-                                return false;
-                            }
-                            lex.consume();
-                        }
-                        if (!consumeExpr(lex, true)) {
+                        if (!consumeCondition()) {
                             return false;
                         }
                         if (lex.next() != TOK_BRACE_OPEN) {
