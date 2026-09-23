@@ -10602,6 +10602,22 @@ auto NextTraitGoalEvaluator::selfIsUnresolvedProjectionOverIvar(const HIRType* t
     if (resolve_.typeContainsIvars(type)) {
         return true;
     }
+    const auto closureIsOpen = visitTyWith(type, [&](const HIRType* inner) {
+        const auto* node = inner->opt_NodeType();
+        const auto* closure = node ? node->opt_Closure() : nullptr;
+        if (!closure) {
+            return false;
+        }
+        for (const auto& arg : closure->args) {
+            if (resolve_.typeContainsIvars(arg.second)) {
+                return true;
+            }
+        }
+        return resolve_.typeContainsIvars(closure->returnType);
+    });
+    if (closureIsOpen) {
+        return true;
+    }
     /* Upstream normalizes the self type before assembling anything, and a projection
        over an inference variable - here the existential of an impl parameter its head
        left open - normalizes to a fresh one: the goal is as ambiguous as any on an
