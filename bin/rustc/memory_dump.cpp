@@ -15,11 +15,8 @@
 #include <std/ios/fs_utils.h>
 #include <std/mem/obj_pool.h>
 
+#include <zstd.h>
 #include <stdlib.h>
-
-#if defined(__linux__)
-    #include <zlib.h>
-#endif
 
 using namespace stl;
 
@@ -169,7 +166,9 @@ void memoryDump(unsigned& sequence, const char* phase) {
             u32 chunkSize;
         } fileHdr;
 
-        memCpy(fileHdr.magic, "FullDump\x97\r\n", sizeof(fileHdr.magic));
+        /* Chunks are zstd frames, each preceded by its compressed length;
+           the magic tells a reader of the older zlib-chunked dumps apart. */
+        memCpy(fileHdr.magic, "ZstdDump\x97\r\n", sizeof(fileHdr.magic));
         fileHdr.nRanges = ranges.length();
         fileHdr.nChunks = chunkCount;
         fileHdr.chunkSize = chunkSize;
@@ -197,8 +196,7 @@ void memoryDump(unsigned& sequence, const char* phase) {
             put(&hdr, sizeof(hdr));
             put(r.name.data(), r.name.length());
         }
-        Vector<unsigned char> zlibBuffer;
-        zlibBuffer.zero(16 * 1024);
+        Buffer packed(ZSTD_compressBound(chunkSize));
         Vector<u8> buf;
         buf.zero(chunkSize);
         size_t chunkCountFlushed = 0;
@@ -208,55 +206,17 @@ void memoryDump(unsigned& sequence, const char* phase) {
     #endif
             put(&chunkAddr, sizeof(chunkAddr));
             chunkCountFlushed += 1;
-            z_stream zstream;
-            zstream.zalloc = Z_NULL;
-            zstream.zfree = Z_NULL;
-            zstream.opaque = Z_NULL;
 
-            const int COMPRESSION_LEVEL = Z_BEST_COMPRESSION;
-            int ret = deflateInit(&zstream, COMPRESSION_LEVEL);
-            if (ret != Z_OK) {
-                compileErrorGeneric("zlib init failure");
+            /* A dump is many chunks of a large process: a fast level keeps the
+               pause short, and the frames still shrink zeroed pages to nothing. */
+            const int COMPRESSION_LEVEL = 3;
+            const auto len = ZSTD_compress(packed.mutData(), packed.capacity(), buf.data(), buf.length(), COMPRESSION_LEVEL);
+            if (ZSTD_isError(len)) {
+                compileErrorGeneric("zstd compression of a memory dump chunk failed");
             }
-
-            zstream.avail_out = zlibBuffer.length();
-            zstream.next_out = zlibBuffer.mutData();
-
-            zstream.avail_in = buf.length();
-            zstream.next_in = reinterpret_cast<unsigned char*>(buf.mutData());
-
-            while (zstream.avail_in > 0) {
-                BUG_ASSERT(zstream.avail_out != 0);
-
-                int ret = deflate(&zstream, Z_NO_FLUSH);
-                if (ret == Z_STREAM_ERROR) {
-                    compileErrorGeneric("zlib deflate stream error");
-                }
-
-                if (zstream.avail_out < zlibBuffer.length()) {
-                    size_t bytes = zlibBuffer.length() - zstream.avail_out;
-                    put(zlibBuffer.data(), bytes);
-
-                    zstream.avail_out = zlibBuffer.length();
-                    zstream.next_out = zlibBuffer.mutData();
-                }
-            }
-
-            do {
-                ret = deflate(&zstream, Z_FINISH);
-                if (ret == Z_STREAM_ERROR) {
-                    sysE << StringView("ERROR: zlib deflate stream error (cleanup)");
-                    abort();
-                }
-                if (zstream.avail_out != zlibBuffer.length()) {
-                    size_t bytes = zlibBuffer.length() - zstream.avail_out;
-                    put(zlibBuffer.data(), bytes);
-
-                    zstream.avail_out = zlibBuffer.length();
-                    zstream.next_out = zlibBuffer.mutData();
-                }
-            } while (ret == Z_OK);
-            deflateEnd(&zstream);
+            const u32 packedLength = len;
+            put(&packedLength, sizeof(packedLength));
+            put(packed.data(), len);
             memZero(buf.mutBegin(), buf.mutEnd());
         };
         u64 lastVaddr = 0;

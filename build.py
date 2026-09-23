@@ -168,8 +168,10 @@ for tu_src in sorted(build.glob("$(S)/bin/rustc/*.tu")):
         descr="TU",
     )
     if not tu_local:
+        # The generated cpp includes its context header and output.h (see
+        # tu_gen.py); both are declared so their include closures are inputs.
         tu_generated_srcs.append(
-            {"src": tu_gen_cpp, "inputs": [f"$(S)/bin/rustc/{tu_context}"]}
+            {"src": tu_gen_cpp, "inputs": [f"$(S)/bin/rustc/{tu_context}", "$(S)/bin/rustc/output.h"]}
         )
 
 # Real compiler unions link into the compiler (and, via SRC, into rustc_ut);
@@ -214,7 +216,7 @@ else:
         # the platform library joins in so ObjPool inlines too.
         deps=[platform_libstd_lto, codegen_c_prelude, unicode_nfc_tables],
         cxxflags=["-flto=thin"],
-        ldflags=["-lz", "-lzstd", "-flto=thin"],
+        ldflags=["-lzstd", "-flto=thin"],
     )
 
     rustc_debug = program(
@@ -224,7 +226,7 @@ else:
         deps=[platform_libstd_lto, codegen_c_prelude, unicode_nfc_tables],
         cppflags=["-DTRUSTME_DEBUG=1"],
         cxxflags=["-flto=thin"],
-        ldflags=["-lz", "-lzstd", "-flto=thin"],
+        ldflags=["-lzstd", "-flto=thin"],
     )
 
     # The production compiler uses ThinLTO, which can hide static storage by
@@ -277,7 +279,7 @@ rustc_ut = program(
     ],
     output="$(B)/tst/unit/rustc_ut",
     deps=[platform_libstd, float128_ut_vectors, codegen_c_prelude, unicode_nfc_tables],
-    ldflags=["-lz", "-lzstd"],
+    ldflags=["-lzstd"],
 )
 
 node_cast_test = program(
@@ -310,6 +312,8 @@ CARGO_SOURCES = (
 
 cargo = command(
     name="cargo",
+    # Go lives on this machine only.
+    local=True,
     inputs=CARGO_SOURCES,
     outputs=["$(B)/bin/cargo"],
     cmd=[
@@ -333,6 +337,7 @@ cargo = command(
 # those only through whatever it fails to build, half an hour later.
 cargo_test = command(
     name="cargo_test",
+    local=True,
     inputs=CARGO_SOURCES + [
         _path for _path in build.glob("$(S)/bin/cargo/testdata/**/*")
         if Path(__file__).parent.joinpath(_path[len("$(S)/"):]).is_file()

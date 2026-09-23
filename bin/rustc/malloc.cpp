@@ -1,13 +1,12 @@
 #include "malloc.h"
 
-#include <sys/mman.h>
-#include <unistd.h>
-
+#include <new>  // escape: std::nothrow_t is the signature of the nothrow operator new the compiler imports
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <new>  // escape: std::nothrow_t is the signature of the nothrow operator new the compiler imports
+#include <unistd.h>
+#include <sys/mman.h>
 
 #if !TRUSTME_SANITIZER_BUILD && !defined(__SANITIZE_ADDRESS__)
 
@@ -398,17 +397,17 @@ namespace {
 }
 
 extern "C" {
-    void* malloc(size_t n) noexcept {
+    void* malloc(size_t n) {
         return allocate(n, 16);
     }
 
-    void free(void* p) noexcept {
+    void free(void* p) {
         if (p) {
             release(p);
         }
     }
 
-    void* calloc(size_t count, size_t size) noexcept {
+    void* calloc(size_t count, size_t size) {
         size_t total;
         if (__builtin_mul_overflow(count, size, &total)) {
             errno = ENOMEM;
@@ -421,7 +420,7 @@ extern "C" {
         return p;
     }
 
-    void* realloc(void* p, size_t n) noexcept {
+    void* realloc(void* p, size_t n) {
         if (!p) {
             return allocate(n, 16);
         }
@@ -442,15 +441,15 @@ extern "C" {
         return fresh;
     }
 
-    void* memalign(size_t align, size_t n) noexcept {
+    void* memalign(size_t align, size_t n) {
         return allocate(n, align < 16 ? 16 : align);
     }
 
-    void* aligned_alloc(size_t align, size_t n) noexcept {
+    void* aligned_alloc(size_t align, size_t n) {
         return memalign(align, n);
     }
 
-    int posix_memalign(void** out, size_t align, size_t n) noexcept {
+    int posix_memalign(void** out, size_t align, size_t n) {
         void* p = memalign(align, n);
         if (!p) {
             return ENOMEM;
@@ -459,19 +458,22 @@ extern "C" {
         return 0;
     }
 
-    void* valloc(size_t n) noexcept {
+    void* valloc(size_t n) {
         return memalign(OS_PAGE, n);
     }
 
-    void* pvalloc(size_t n) noexcept {
+    void* pvalloc(size_t n) {
         return memalign(OS_PAGE, (n + OS_PAGE - 1) & ~(OS_PAGE - 1));
     }
 
-    size_t malloc_usable_size(void* p) noexcept {
+    size_t malloc_usable_size(void* p) {
         return p ? usableSize(p) : 0;
     }
 }
 
+/* Every replaceable allocation function is defined here, the array and
+   aligned forms included: a static link pulls in whatever allocator archive
+   defines the first one left out, and that archive then defines them all. */
 void* operator new(size_t n) {
     return allocateOrDie(n, 16);
 }
@@ -480,11 +482,75 @@ void* operator new(size_t n, const std::nothrow_t&) noexcept {
     return allocate(n, 16);
 }
 
+void* operator new(size_t n, std::align_val_t align) {
+    return allocateOrDie(n, static_cast<size_t>(align));
+}
+
+void* operator new(size_t n, std::align_val_t align, const std::nothrow_t&) noexcept {
+    return allocate(n, static_cast<size_t>(align));
+}
+
+void* operator new[](size_t n) {
+    return allocateOrDie(n, 16);
+}
+
+void* operator new[](size_t n, const std::nothrow_t&) noexcept {
+    return allocate(n, 16);
+}
+
+void* operator new[](size_t n, std::align_val_t align) {
+    return allocateOrDie(n, static_cast<size_t>(align));
+}
+
+void* operator new[](size_t n, std::align_val_t align, const std::nothrow_t&) noexcept {
+    return allocate(n, static_cast<size_t>(align));
+}
+
 void operator delete(void* p) noexcept {
     free(p);
 }
 
 void operator delete(void* p, size_t) noexcept {
+    free(p);
+}
+
+void operator delete(void* p, const std::nothrow_t&) noexcept {
+    free(p);
+}
+
+void operator delete(void* p, std::align_val_t) noexcept {
+    free(p);
+}
+
+void operator delete(void* p, size_t, std::align_val_t) noexcept {
+    free(p);
+}
+
+void operator delete(void* p, std::align_val_t, const std::nothrow_t&) noexcept {
+    free(p);
+}
+
+void operator delete[](void* p) noexcept {
+    free(p);
+}
+
+void operator delete[](void* p, size_t) noexcept {
+    free(p);
+}
+
+void operator delete[](void* p, const std::nothrow_t&) noexcept {
+    free(p);
+}
+
+void operator delete[](void* p, std::align_val_t) noexcept {
+    free(p);
+}
+
+void operator delete[](void* p, size_t, std::align_val_t) noexcept {
+    free(p);
+}
+
+void operator delete[](void* p, std::align_val_t, const std::nothrow_t&) noexcept {
     free(p);
 }
 
