@@ -1419,7 +1419,10 @@ class BuildContext:
         self.file_hashes[path] = digest
         return digest
 
-    def calculate_uids(self, roots: Iterable[Node]) -> None:
+    def calculate_uids(self, roots: Iterable[Node], *, resolve_tools: bool = True) -> None:
+        """With resolve_tools a command's tool becomes the path PATH gives it
+        here, which pins the toolchain into the uid.  A distributed build
+        keeps the bare name: every host looks it up in its own PATH."""
         active: set[Node] = set()
         def calc(node: Node) -> str:
             if node.uid is not None:
@@ -1429,7 +1432,7 @@ class BuildContext:
             active.add(node)
             for command in node.commands:
                 head = command[0] if command else ""
-                if head and not head.startswith((S + "/", B + "/")) and not os.path.isabs(head):
+                if resolve_tools and head and not head.startswith((S + "/", B + "/")) and not os.path.isabs(head):
                     command[0] = self.resolve_tool(head)
             dep_uids = [calc(dep) for dep in node.deps]
             inputs = [[path, self.source_hash(path)] for path in sorted(node.source_inputs)]
@@ -2106,7 +2109,7 @@ def _drop_privileges(base: Path) -> None:
     os.environ["USER"] = os.environ["LOGNAME"] = account.pw_name
     if not os.access(base, os.R_OK | os.W_OK | os.X_OK):
         raise BuildError(
-            f"{base} is not usable as {account.pw_name}: run build exec from a "
+            f"{base} is not usable as {account.pw_name}: TMPDIR must be a "
             "directory nobody can traverse")
 
 
@@ -2327,8 +2330,11 @@ def exec_main(argv: list[str]) -> int:
     if not re.fullmatch(r"[0-9a-f]{32}", session_id):
         print("build exec: session id must be 32 hex digits", file=sys.stderr)
         return 2
-    base = Path.cwd() / ".build-exec"
+    # The service lives under the host's TMPDIR (the login directory only
+    # when there is none) and creates one directory of its own there.
+    base = Path(os.environ.get("TMPDIR") or os.getcwd()) / ".build-exec"
     try:
+        base.mkdir(parents=True, exist_ok=True)
         _drop_privileges(base)
     except (OSError, KeyError, BuildError) as exc:
         print(f"build exec: {exc}", file=sys.stderr)
@@ -3305,7 +3311,10 @@ def main(argv: list[str] | None = None) -> int:
             publish.extend(selected)
         selected = _uniq(selected)
         roots = _uniq(target.root for target in selected if target.root is not None)
-        context.calculate_uids(roots)
+        dist = [host.strip() for spec in args.dist for host in spec.split(",") if host.strip()]
+        if dist and args.strace:
+            raise BuildError("--strace and --dist are mutually exclusive")
+        context.calculate_uids(roots, resolve_tools=not dist)
         cache_root = (
             source_root / args.cache_dir
             if args.cache_dir is not None
@@ -3315,9 +3324,6 @@ def main(argv: list[str] | None = None) -> int:
             for directory in ("cas", "uid", "tmp", "grb"):
                 shutil.rmtree(cache_root / directory, ignore_errors=True)
         context.build_root.mkdir(parents=True, exist_ok=True)
-        dist = [host.strip() for spec in args.dist for host in spec.split(",") if host.strip()]
-        if dist and args.strace:
-            raise BuildError("--strace and --dist are mutually exclusive")
         Executor(
             context,
             args.jobs,
