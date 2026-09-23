@@ -1452,40 +1452,6 @@ FloatValue Lexer::parseFloat(StringView whole) {
             queueFloat();
             return std::numeric_limits<double>::quiet_NaN();
         }
-    } else if (ch.isspace()) {
-        while (ch.isspace()) {
-            ch = this->getc();
-        }
-        if (ch != '.') {
-            this->ungetc();
-            return queueFloat();
-        }
-
-        ch = this->getc();
-        if (ch == '.') {
-            switch (this->getc().v) {
-                case '.':
-                    nextTokens.push_back(TOK_TRIPLE_DOT);
-                    break;
-                case '=':
-                    nextTokens.push_back(TOK_DOUBLE_DOT_EQUAL);
-                    break;
-                default:
-                    this->ungetc();
-                    nextTokens.push_back(TOK_DOUBLE_DOT);
-                    break;
-            }
-            nextTokens.push_back(Token::makeFloat(parseFloatValue(sbuf.c_str()), CORETYPE_ANY));
-
-            return std::numeric_limits<double>::quiet_NaN();
-        }
-        while (ch.isspace()) {
-            ch = this->getc();
-        }
-        this->ungetc();
-        nextTokens.push_back(TOK_DOT);
-        queueFloat();
-        return std::numeric_limits<double>::quiet_NaN();
     } else {
         if (ch == 'e' || ch == 'E') {
             PUTC(ch);
