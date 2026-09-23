@@ -11615,10 +11615,6 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
     const bool diverges = leftDiverges || (rightDiverges && node.op != HIRExprNodeBinOp::Op::BoolAnd && node.op != HIRExprNodeBinOp::Op::BoolOr);
     node.diverges = diverges;
     const HIRType* operatorResultType = node.resType;
-    if (diverges) {
-        operatorResultType = this->context.ivars.newIvarTr();
-        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
-    }
 
     switch (node.op) {
         case HIRExprNodeBinOp::Op::CmpEqu:
