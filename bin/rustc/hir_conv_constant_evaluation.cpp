@@ -3416,7 +3416,7 @@ void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve,
     auto nvs = NewvalState(e.value.state->module, modIp, FMT(StringView("const") << static_cast<const void*>(&e) << StringView("#")), callerResolve.board().itemSerial);
     auto eval = HIREvaluator(e.value.span(), callerResolve.board(), nvs);
     eval.resolve.setBothGenericsRaw(resolvedImplParams, &e.params);
-    auto type = constMs.monomorphType(e.value.span(), e.type);
+    auto type = resolve.expandAssociatedTypes(e.value.span(), constMs.monomorphType(e.value.span(), e.type));
     auto literal = eval.evaluateConstant(HIRItemPath(path), e.value, std::move(type), std::move(constMs));
     e.monomorphCache.emplace(path.clone(), std::move(literal));
 }
@@ -4793,7 +4793,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy) -> MI
     if (ent.is_Static()) {
         auto& item = rootResolve.hirCrateMut().findStaticMut(rootResolve.board(), state.sp, p, *ent.as_Static());
         const auto& s = item;
-        auto staticTy = constMs.monomorphType(state.sp, s.type);
+        auto staticTy = rootResolve.expandAssociatedTypes(state.sp, constMs.monomorphType(state.sp, s.type));
         size_t staticSize;
         if (!TargetGetSizeOf(state.sp, rootResolve, staticTy, staticSize)) {
             BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << staticTy);
@@ -5116,7 +5116,7 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, const HIRType** outTy) 
         }
     }
     if (outTy) {
-        *outTy = constMs.monomorphType(state.sp, c.type);
+        *outTy = rootResolve.expandAssociatedTypes(state.sp, constMs.monomorphType(state.sp, c.type));
     }
     if (c.valueState == HIRConstant::ValueState::Generic) {
         auto it = c.monomorphCache.find(p);
@@ -5128,7 +5128,7 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, const HIRType** outTy) 
 
             DEBUG(StringView("- Evaluate monomorphed ") << p);
             DEBUG(StringView("> const_ms=") << constMs);
-            auto ty = constMs.monomorphType(item.value.span(), item.type);
+            auto ty = rootResolve.expandAssociatedTypes(item.value.span(), constMs.monomorphType(item.value.span(), item.type));
             auto val = eval.evaluateConstant(HIRItemPath(p), item.value, std::move(ty), std::move(constMs));
 
             auto insertRes = item.monomorphCache.insert(std::make_pair(p.clone(), std::move(val)));
