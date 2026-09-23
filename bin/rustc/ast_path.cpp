@@ -23,6 +23,7 @@ ASTPathParams& ASTPathParams::operator=(ASTPathParams&&) = default;
 ASTPathParams::ASTPathParams(const ASTPathParams& x)
     : isParen(x.isParen)
     , isRtn(x.isRtn)
+    , inferArgs(x.inferArgs)
 {
     entries.reserve(x.entries.size());
     for (const auto& e : x.entries) {

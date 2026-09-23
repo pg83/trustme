@@ -430,6 +430,26 @@ namespace {
         return np;
     }
 
+    void markValuePathType(ASTPath& path, Context::LookupMode mode) {
+        if (mode == Context::LookupMode::Type || mode == Context::LookupMode::Namespace || !path.cls.is_UFCS()) {
+            return;
+        }
+        auto* type = path.cls.as_UFCS().type;
+        if (!type || !type->isPath()) {
+            return;
+        }
+        auto& typePath = type->path();
+        if (typePath.cls.is_Local() || typePath.cls.is_Invalid() || typePath.nodes().empty()) {
+            return;
+        }
+        auto& args = typePath.nodes().back().args();
+        bool onlyLifetimes = true;
+        for (const auto& ent : args.entries) {
+            onlyLifetimes &= ent.is_Lifetime();
+        }
+        args.inferArgs |= onlyLifetimes;
+    }
+
     ASTPath splitIntoUfcsTy(ObjPool& pool, const Span& sp, const ASTPath& path, unsigned int i /*item_name_idx*/) {
         const auto& pathAbs = path.cls.as_Absolute();
         auto typePath = ASTPath(path);
@@ -450,6 +470,8 @@ namespace {
         auto typePath = ASTPath(tyPathTpl);
         if (!n.args().isEmpty()) {
             typePath.nodes().back().args() = mv$(n.args());
+        } else {
+            typePath.nodes().back().args().inferArgs = n.args().inferArgs;
         }
         auto newPath = ASTPath::newUfcsTy(::mkType(pool, sp, mv$(typePath)));
         for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
@@ -745,6 +767,7 @@ namespace {
                 case HIRTypeItem::TAG_Union:
                     path = splitIntoCrate(sp, mv$(path), start, crate.name);
                     path = splitIntoUfcsTy(context.typePool(), sp, mv$(path), i - start);
+                    markValuePathType(path, mode);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 case HIRTypeItem::TAG_Enum: {
                     auto& e = it->second->ent.as_Enum();
@@ -783,6 +806,7 @@ namespace {
                     }
                     path = splitIntoCrate(sp, mv$(path), start, crate.name);
                     path = splitIntoUfcsTy(context.typePool(), sp, mv$(path), i - start);
+                    markValuePathType(path, mode);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
             }
@@ -1002,6 +1026,7 @@ namespace {
                         ERROR(sp, E0000, StringView("Encountered non-namespace item '") << n.name() << StringView("' (") << nameRef.path << StringView(") in path ") << path);
                     case ASTPathBindingType::TAG_TypeAlias: {
                         path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
+                        markValuePathType(path, mode);
                         return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                     }
                     case ASTPathBindingType::TAG_Crate: {
@@ -1138,16 +1163,20 @@ namespace {
                             }
 
                             path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
+
+                            markValuePathType(path, mode);
                             return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                         }
                         break;
                     }
                     case ASTPathBindingType::TAG_Struct: {
                         path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
+                        markValuePathType(path, mode);
                         return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                     }
                     case ASTPathBindingType::TAG_Union: {
                         path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
+                        markValuePathType(path, mode);
                         return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                     }
                     case ASTPathBindingType::TAG_Module: {
@@ -1288,6 +1317,8 @@ namespace {
                             BUG_ASSERT(p.nodes().size() > 0);
                             BUG_ASSERT(p.nodes().back().args().isEmpty());
                             p.nodes().back().args() = mv$(e.nodes[0].args());
+                        } else if (!p.nodes().empty()) {
+                            p.nodes().back().args().inferArgs = e.nodes[0].args().inferArgs;
                         }
                         for (unsigned int i = 1; i < e.nodes.size(); i++) {
                             p.nodes().push_back(mv$(e.nodes[i]));

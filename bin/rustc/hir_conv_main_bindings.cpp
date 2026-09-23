@@ -1185,19 +1185,70 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                     }
                     case HIRTypeItem::TAG_Struct: {
                         auto& e3 = item.as_Struct();
-                        fixParamCount(crate.types, sp, pe, e3.params, pe.params, /*fill_infer=*/inExpr != 0);
+                        this->visitPathParams(pe.params);
+                        const size_t explicitTypes = pe.params.types.size();
+                        const size_t explicitValues = pe.params.values.size();
+                        fixParamCount(crate.types, sp, pe, e3.params, pe.params, /*fill_infer=*/false);
+                        size_t typeIndex = 0;
+                        size_t valueIndex = 0;
+                        pe.params = pe.params.map(
+                            [&](const HIRType* arg) {
+                                return typeIndex++ < explicitTypes ? arg : this->visitType(arg);
+                            },
+                            [&](const HIRConstGeneric& arg) {
+                                auto next = arg.clone();
+                                if (valueIndex++ >= explicitValues) {
+                                    this->visitConstgeneric(next);
+                                }
+                                return next;
+                            });
+                        dataVisited = true;
                         e->binding = HIRTypePathBinding::make_Struct(&e3);
                         break;
                     }
                     case HIRTypeItem::TAG_Union: {
                         auto& e3 = item.as_Union();
-                        fixParamCount(crate.types, sp, pe, e3.params, pe.params, /*fill_infer=*/inExpr != 0);
+                        this->visitPathParams(pe.params);
+                        const size_t explicitTypes = pe.params.types.size();
+                        const size_t explicitValues = pe.params.values.size();
+                        fixParamCount(crate.types, sp, pe, e3.params, pe.params, /*fill_infer=*/false);
+                        size_t typeIndex = 0;
+                        size_t valueIndex = 0;
+                        pe.params = pe.params.map(
+                            [&](const HIRType* arg) {
+                                return typeIndex++ < explicitTypes ? arg : this->visitType(arg);
+                            },
+                            [&](const HIRConstGeneric& arg) {
+                                auto next = arg.clone();
+                                if (valueIndex++ >= explicitValues) {
+                                    this->visitConstgeneric(next);
+                                }
+                                return next;
+                            });
+                        dataVisited = true;
                         e->binding = HIRTypePathBinding::make_Union(&e3);
                         break;
                     }
                     case HIRTypeItem::TAG_Enum: {
                         auto& e3 = item.as_Enum();
-                        fixParamCount(crate.types, sp, pe, e3.params, pe.params, /*fill_infer=*/inExpr != 0);
+                        this->visitPathParams(pe.params);
+                        const size_t explicitTypes = pe.params.types.size();
+                        const size_t explicitValues = pe.params.values.size();
+                        fixParamCount(crate.types, sp, pe, e3.params, pe.params, /*fill_infer=*/false);
+                        size_t typeIndex = 0;
+                        size_t valueIndex = 0;
+                        pe.params = pe.params.map(
+                            [&](const HIRType* arg) {
+                                return typeIndex++ < explicitTypes ? arg : this->visitType(arg);
+                            },
+                            [&](const HIRConstGeneric& arg) {
+                                auto next = arg.clone();
+                                if (valueIndex++ >= explicitValues) {
+                                    this->visitConstgeneric(next);
+                                }
+                                return next;
+                            });
+                        dataVisited = true;
                         e->binding = HIRTypePathBinding::make_Enum(&e3);
                         break;
                     }

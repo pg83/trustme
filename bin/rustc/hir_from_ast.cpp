@@ -94,7 +94,7 @@ namespace {
         HIRPattern LowerHIRPattern(const ASTPattern& pat);
         HIRExprPtr LowerHIRExpr(ASTExprNode* e);
         HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric = false);
-        HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs = {});
+        HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs = {}, bool typeSegment = false);
         HIRConstGeneric LowerHIRConstGeneric(ASTExprNode& nodeRef);
         HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
         HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds = false, ASTBoundConstness constness = ASTBoundConstness::Never);
@@ -453,14 +453,14 @@ namespace {
         }
 
         const auto& binding = path.bindings.type.binding;
-        if (const auto* e = binding.opt_Struct()) {
-            return e->struct_ ? GenericParamLayout{&e->struct_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        if (const auto* e = binding.opt_Struct(); e && (e->struct_ || e->hir)) {
+            return e->struct_ ? GenericParamLayout{&e->struct_->params(), nullptr} : GenericParamLayout{nullptr, &e->hir->params};
         }
-        if (const auto* e = binding.opt_Enum()) {
-            return e->enum_ ? GenericParamLayout{&e->enum_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        if (const auto* e = binding.opt_Enum(); e && (e->enum_ || e->hir)) {
+            return e->enum_ ? GenericParamLayout{&e->enum_->params(), nullptr} : GenericParamLayout{nullptr, &e->hir->params};
         }
-        if (const auto* e = binding.opt_Union()) {
-            return e->union_ ? GenericParamLayout{&e->union_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        if (const auto* e = binding.opt_Union(); e && (e->union_ || e->hir)) {
+            return e->union_ ? GenericParamLayout{&e->union_->params(), nullptr} : GenericParamLayout{nullptr, &e->hir->params};
         }
         if (const auto* e = binding.opt_Trait()) {
             return e->trait_ ? GenericParamLayout{&e->trait_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
@@ -475,10 +475,19 @@ namespace {
             if (e->alias_) {
                 return {&e->alias_->params(), nullptr};
             }
-            if (const auto* item = crate.getTypeitemByPathOpt(hirPath)) {
-                if (const auto* alias = item->opt_TypeAlias()) {
-                    return {nullptr, &alias->params};
-                }
+        }
+        if (const auto* item = crate.getTypeitemByPathOpt(hirPath)) {
+            if (const auto* alias = item->opt_TypeAlias()) {
+                return {nullptr, &alias->params};
+            }
+            if (const auto* e = item->opt_Struct()) {
+                return {nullptr, &e->params};
+            }
+            if (const auto* e = item->opt_Enum()) {
+                return {nullptr, &e->params};
+            }
+            if (const auto* e = item->opt_Union()) {
+                return {nullptr, &e->params};
             }
         }
         return {};
@@ -1220,7 +1229,7 @@ HIRSimplePath AST2HIR::LowerHIRSimplePath(const Span& sp, const ASTPath& path, F
     return HIRSimplePath((ap->crate == "" ? crateName : ap->crate), ap->nodes);
 }
 
-HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs) {
+HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs, bool typeSegment) {
     HIRPathParamsBuilder params;
 
     size_t numLft = 0;
@@ -1308,6 +1317,29 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
         }
     }
 
+    if (typeSegment && srcParams.inferArgs && numTy == 0 && numVal == 0) {
+        size_t typeCount = 0;
+        size_t valueCount = 0;
+        if (paramDefs.hir) {
+            typeCount = paramDefs.hir->types.size();
+            valueCount = paramDefs.hir->values.size();
+        } else if (paramDefs.ast) {
+            for (const auto& param : paramDefs.ast->params) {
+                if (param.is_Type()) {
+                    typeCount++;
+                } else if (param.is_Value()) {
+                    valueCount++;
+                }
+            }
+        }
+        for (size_t i = 0; i < typeCount; i++) {
+            params.types.push_back(crate->types.infer());
+        }
+        for (size_t i = 0; i < valueCount; i++) {
+            params.values.push_back(HIRConstGeneric::make_Infer({}));
+        }
+    }
+
     return HIRPathParams(mv$(params));
 }
 
@@ -1335,7 +1367,7 @@ HIRGenericPath AST2HIR::LowerHIRGenericPath(const Span& sp, const ASTPath& path,
     if (const auto* e = path.cls.opt_Absolute()) {
         auto simpepath = LowerHIRSimplePath(sp, path, pc, /*allow_params*/ true);
         auto paramDefs = getPathGenericParams(sp, *crate, simpepath, path, pc);
-        HIRPathParams params = LowerHIRPathParams(sp, e->nodes.back().args(), allowAssoc, paramDefs);
+        HIRPathParams params = LowerHIRPathParams(sp, e->nodes.back().args(), allowAssoc, paramDefs, pc == FromASTPathClass::Type);
         auto rv = HIRGenericPath(mv$(simpepath), mv$(params));
         DEBUG(path << StringView(" => ") << rv);
         return rv;
@@ -5230,6 +5262,14 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeClosure& v) -> void {
 }
 
 auto LowerHIRExprNodeVisitor::visit(ASTExprNodeStructLiteral& v) -> void {
+    if (!v.path.cls.is_Local() && !v.path.cls.is_Invalid() && !v.path.nodes().empty()) {
+        auto& args = v.path.nodes().back().args();
+        bool onlyLifetimes = true;
+        for (const auto& ent : args.entries) {
+            onlyLifetimes &= ent.is_Lifetime();
+        }
+        args.inferArgs |= onlyLifetimes;
+    }
     if (v.path.bindings.type.binding.is_Union()) {
         if (v.values.size() != 1) {
             ERROR(v.span(), E0000, StringView("Union constructors can only specify a single field"));

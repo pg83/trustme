@@ -4284,6 +4284,7 @@ std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode 
             }
         }
         if (lex.lookahead(0) != TOK_DOUBLE_COLON) {
+            params.inferArgs = genericMode == PATH_GENERIC_EXPR;
             ret.push_back(ASTPathNode(component.hygiene, component.name, mv$(params)));
             break;
         }
@@ -4298,11 +4299,17 @@ std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode 
             }
 
             params = ParsePathGenericList(lex);
+            params.inferArgs = true;
+            for (const auto& ent : params.entries) {
+                params.inferArgs &= ent.is_Lifetime();
+            }
             if (lex.lookahead(0) != TOK_DOUBLE_COLON) {
                 ret.push_back(ASTPathNode(component.hygiene, component.name, mv$(params)));
                 break;
             }
             GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
+        } else {
+            params.inferArgs = genericMode == PATH_GENERIC_EXPR;
         }
         ret.push_back(ASTPathNode(component.hygiene, component.name, mv$(params)));
     }

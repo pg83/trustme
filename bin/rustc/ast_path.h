@@ -100,6 +100,7 @@ struct ASTPathParams {
     std::vector<ASTPathParamEnt> entries;
     bool isParen = false;
     bool isRtn = false;
+    bool inferArgs = false;
 
     ASTPathParams(ASTPathParams&& x);
     ASTPathParams(const ASTPathParams& x);

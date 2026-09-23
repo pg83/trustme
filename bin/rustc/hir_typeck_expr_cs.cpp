@@ -959,8 +959,6 @@ struct OrderPlace {
 
         void visitNodePtr(HIRExprNodeP& nodePtr) override;
 
-        const HIRType* innerVisitType(const HIRType* ty);
-
         void visitPathParams(HIRPathParams& pp) override;
 
         [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
@@ -3454,20 +3452,6 @@ struct OrderPlace {
     }
 
     bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr, const HIRTypeImpl* selectedImpl);
-
-    void populateDefaults(const Span& sp, Context& context, const MonomorphStatePtr& ms, const HIRGenericParams& paramDefs, const HIRPathParams& params) {
-        for (size_t i = 0; i < paramDefs.types.size(); i++) {
-            const auto& ty = params.types[i];
-            const auto& typ = paramDefs.types[i];
-            if (const auto* te = ty->opt_Infer()) {
-                if (!typ.defaultValue->is_Infer()) {
-                    auto defTy = ms.monomorphType(sp, typ.defaultValue);
-                    DEBUG(StringView("Added default for ") << ty << StringView(": ") << defTy);
-                    context.addIvarDefault(sp, te->index, defTy);
-                }
-            }
-        }
-    }
 
     template <typename T>
     void fix_param_count_(const Span& sp, Context& context, const HIRType* selfTy, bool useDefaults, const T& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
@@ -7986,7 +7970,9 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
                     while (expr.erasedTypes.length() <= ee->index) {
                         expr.erasedTypes.pushBack(nullptr);
                     }
-                    ASSERT_BUG(sp, expr.erasedTypes[ee->index] == nullptr, StringView("Multiple-visits to erased type #") << ee->index);
+                    if (expr.erasedTypes[ee->index] != nullptr) {
+                        return expr.erasedTypes[ee->index];
+                    }
                     expr.erasedTypes.mut(ee->index) = context.ivars.newIvarTr();
                     auto rv = expr.erasedTypes[ee->index];
                     context.addRpitType(ee->origin, ee->index, rv);
@@ -11055,55 +11041,12 @@ void ExprVisitorAddIvars::visitNodePtr(HIRExprNodeP& nodePtr) {
     nodePtr->checkOrderEnd = this->order;
 }
 
-auto ExprVisitorAddIvars::innerVisitType(const HIRType* ty) -> const HIRType* {
-    return rewriteTyWith(context.crate.types, ty, [this](const HIRType* type) -> const HIRType* {
-        if (const auto* te = type->opt_Path()) {
-            if (te->path.data.is_Generic()) {
-                const auto& params = te->path.data.as_Generic().params;
-                const HIRGenericParams* paramDefs = nullptr;
-                switch (te->binding.tag()) {
-                    case HIRTypePathBinding::TAG_Struct: {
-                        const auto pbe = te->binding.as_Struct();
-                        paramDefs = &pbe->params;
-                        break;
-                    }
-                    case HIRTypePathBinding::TAG_Enum: {
-                        const auto pbe = te->binding.as_Enum();
-                        paramDefs = &pbe->params;
-                        break;
-                    }
-                    case HIRTypePathBinding::TAG_Union: {
-                        const auto pbe = te->binding.as_Union();
-                        paramDefs = &pbe->params;
-                        break;
-                    }
-                    case HIRTypePathBinding::TAG_ExternType: {
-                        break;
-                    }
-                    case HIRTypePathBinding::TAG_Opaque: {
-                        break;
-                    }
-                    case HIRTypePathBinding::TAG_Unbound: {
-                        break;
-                    }
-                }
-                if (paramDefs) {
-                    populateDefaults(Span(), context, MonomorphStatePtr(context.crate.types, nullptr, &params, nullptr), *paramDefs, params);
-                }
-            }
-        }
-        return nullptr;
-    });
-}
-
 auto ExprVisitorAddIvars::visitPathParams(HIRPathParams& pp) -> void {
     this->context.ivars.addIvarsParams(pp);
-    pp = pp.mapTypes([&](const HIRType* ty) { return innerVisitType(ty); });
 }
 
 [[nodiscard]] auto ExprVisitorAddIvars::visitType(const HIRType* ty) -> const HIRType* {
     ty = this->context.addIvars(ty);
-    ty = innerVisitType(ty);
     visitTyWith(ty, [&](const HIRType* inner) {
         if (const auto* path = inner->opt_Path()) {
             if (const auto* projection = path->path.data.opt_UfcsKnown()) {
