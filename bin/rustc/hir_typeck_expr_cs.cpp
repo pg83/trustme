@@ -47,7 +47,7 @@ namespace {
     };
 
     ArgumentBinding variableBinding(const Context& context, const IvarCoercionIndex& coercionIndex, const Context::Coercion& rule);
-    bool openPointeeAwaitsItsProducer(const Context& context, const HIRType* pointee);
+    bool openPointeeAwaitsItsProducer(const Context& context, const Context::Coercion& rule, const HIRType* pointee);
 
     struct MonomorphEraseHrls: public Monomorphiser {
         explicit MonomorphEraseHrls(HIRTypeInterner& types);
@@ -713,7 +713,7 @@ struct OrderPlace {
                     if (context.getType(destinationInner)->is_TraitObject() && knownSized) {
                         return {};
                     }
-                    if (openPointeeAwaitsItsProducer(context, sourceInner)) {
+                    if (openPointeeAwaitsItsProducer(context, rule, sourceInner)) {
                         return {};
                     }
                     return {sourceInner, destinationInner, false};
@@ -1665,7 +1665,7 @@ struct OrderPlace {
             if (context.getType(destinationInner)->is_TraitObject() && knownSized) {
                 return {};
             }
-            if (openPointeeAwaitsItsProducer(context, sourceInner)) {
+            if (openPointeeAwaitsItsProducer(context, rule, sourceInner)) {
                 return {};
             }
             return {sourceInner, destinationInner, false};
@@ -2079,8 +2079,16 @@ struct OrderPlace {
        upstream makes once the result is known: `tl_buf.as_mut().unwrap()` is `&mut
        Formatter`, which reaches a `&mut Formatter` parameter by one dereference
        (env_logger's `Logger::log`). */
-    bool openPointeeAwaitsItsProducer(const Context& context, const HIRType* pointee) {
-        return isResultOfPendingRevisit(context, context.getType(pointee));
+    bool openPointeeAwaitsItsProducer(const Context& context, const Context::Coercion& rule, const HIRType* pointee) {
+        const auto* resolved = context.getType(pointee);
+        if (isResultOfPendingRevisit(context, resolved)) {
+            return true;
+        }
+        const auto place = bindingPlace(rule);
+        return std::any_of(context.linkCoerce.begin(), context.linkCoerce.end(), [&](const auto& other) {
+            return other.get() != &rule && other->rightNodePtr && other->op == SolverCoercionOp::Coercion && !other->assignmentSite
+                && context.getType(other->leftTy) == resolved && place.after(bindingPlace(*other));
+        });
     }
 
     AssociatedCheckResult checkAssociated(Context& context, const IvarCoercionIndex& coercionIndex, Context::Associated& v, const Vector<OrderPlace>* cuts = nullptr) {
@@ -8683,6 +8691,21 @@ auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
             return;
         }
 
+        const HIRType* builtinElement = nullptr;
+        if (const auto* array = ty->opt_Array()) {
+            builtinElement = array->inner;
+        } else if (const auto* slice = ty->opt_Slice()) {
+            builtinElement = slice->inner;
+        }
+        const auto* indexType = this->context.getType(node.index->resType);
+        const auto* indexPrimitive = indexType->opt_Primitive();
+        const auto* indexInfer = indexType->opt_Infer();
+        if (builtinElement && ((indexPrimitive && *indexPrimitive == HIRCoreType::Usize) || (indexInfer && indexInfer->tyClass == HIRInferClass::Integer))) {
+            this->context.equateTypes(node.span(), node.cache.indexTy, this->context.crate.types.primitive(HIRCoreType::Usize));
+            this->context.equateTypes(node.span(), node.resType, builtinElement);
+            break;
+        }
+
         bool hasResponse = false;
         bool selected = false;
         this->context.resolve.probeTraitGoalMayApply(
@@ -11853,6 +11876,24 @@ auto ExprVisitorEnum::visit(HIRExprNodeIndex& node) -> void {
     this->inheritDivergence(node, *node.index);
     this->context.equateTypesCoerce(node.index->span(), node.cache.indexTy, node.index);
 
+    const auto* baseType = this->context.getType(node.value->resType);
+    while (const auto* borrow = baseType->opt_Borrow()) {
+        baseType = this->context.getType(borrow->inner);
+    }
+    const HIRType* elementType = nullptr;
+    if (const auto* array = baseType->opt_Array()) {
+        elementType = array->inner;
+    } else if (const auto* slice = baseType->opt_Slice()) {
+        elementType = slice->inner;
+    }
+    const auto* indexType = this->context.getType(node.index->resType);
+    const auto* indexInfer = indexType->opt_Infer();
+    const auto* indexPrimitive = indexType->opt_Primitive();
+    if (elementType && ((indexPrimitive && *indexPrimitive == HIRCoreType::Usize) || (indexInfer && indexInfer->tyClass == HIRInferClass::Integer))) {
+        this->context.equateTypes(node.span(), node.cache.indexTy, this->context.crate.types.primitive(HIRCoreType::Usize));
+        this->context.equateTypes(node.span(), node.resType, elementType);
+    }
+
     this->context.addRevisit(node);
 }
 
@@ -12559,10 +12600,26 @@ auto ExprVisitorEnum::visit(HIRExprNodeArraySized& node) -> void {
         this->context.ivars.addIvars(node.size.as_Unevaluated());
     }
 
-    auto ty = this->context.crate.types.array(context.ivars.newIvarTr(), node.size.clone());
+    const HIRType* expectedElement = nullptr;
+    if (const auto* expected = this->expectationFor(node)) {
+        const auto* expectedType = this->context.getType(expected);
+        if (const auto* array = expectedType->opt_Array()) {
+            expectedElement = array->inner;
+        } else if (const auto* slice = expectedType->opt_Slice()) {
+            expectedElement = slice->inner;
+        }
+        if (expectedElement && this->context.getType(expectedElement)->is_Infer()) {
+            expectedElement = nullptr;
+        }
+    }
+    auto ty = this->context.crate.types.array(expectedElement ? expectedElement : context.ivars.newIvarTr(), node.size.clone());
     this->context.equateTypes(node.span(), node.resType, ty);
     const auto& innerTy = ty->as_Array().inner;
-    this->equateTypesInnerCoerce(node.span(), innerTy, node.val);
+    if (expectedElement) {
+        this->equateTypesInnerCoerce(node.span(), innerTy, node.val);
+    } else {
+        this->context.equateTypes(node.span(), innerTy, node.val->resType);
+    }
 
     this->visitChild(*node.val);
     node.diverges = this->nodeDiverges(*node.val);
