@@ -1604,8 +1604,14 @@ struct OrderPlace {
     ArgumentBinding argumentBinding(const Context& context, const Context::Coercion& rule) {
         const auto* destination = context.ivars.getType(rule.leftTy);
         const auto* source = context.ivars.getType(rule.sourceType());
-        if (source->is_Infer() || source->is_Diverge()) {
+        if (source->is_Diverge()) {
             return {};
+        }
+        if (const auto* sourceInfer = source->opt_Infer()) {
+            if (sourceInfer->isLit() || sourceInfer->index == ~0u || destination->is_Infer() || destination->is_Diverge()) {
+                return {};
+            }
+            return {source, destination, true};
         }
         const auto isOpen = [&](const HIRType* type) {
             const auto* infer = context.getType(type)->opt_Infer();
