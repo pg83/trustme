@@ -304,9 +304,13 @@ namespace {
                         return false;
                     }
 
+                    bool wantsAllAttrs() const override {
+                        return true;
+                    }
+
                     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
                         if (!i.is_None()) {
-                            auto lex = ProcMacroInvoke(sp, wb, crate, this->macPath, attr.data(), attrs, vis, path.nodes.back(), i);
+                            auto lex = ProcMacroInvoke(sp, wb, crate, this->macPath, attr, attrs, vis, path.nodes.back(), i);
                             if (lex) {
                                 // TODO: `derive_where` returns its own attribute invocation in the output, between two other additions
 
@@ -322,7 +326,7 @@ namespace {
 
                     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
                         if (!i.is_None()) {
-                            auto lex = ProcMacroInvoke(sp, wb, crate, this->macPath, attr.data(), attrs, vis, name, i);
+                            auto lex = ProcMacroInvoke(sp, wb, crate, this->macPath, attr, attrs, vis, name, i);
                             if (lex) {
                                 i = ASTItem::make_None({});
                                 BUG_ASSERT(currentMod);
@@ -529,7 +533,8 @@ namespace {
     void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, ASTModule& mod, ASTImpl& impl, const ASTVisibility& vis, const RcString& name, ASTItem& item) {
         ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
             if (!item.is_None()) {
-                d.handle(sp, a, es.wb, es.crate, impl, name, getAttrsAfter(attrs, a), vis, item);
+                auto attrsSlice = d.wantsAllAttrs() ? slice<const ASTAttribute>(attrs.items.data(), attrs.items.size()) : getAttrsAfter(attrs, a);
+                d.handle(sp, a, es.wb, es.crate, impl, name, attrsSlice, vis, item);
             }
         }));
     }

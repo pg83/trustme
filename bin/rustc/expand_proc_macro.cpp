@@ -224,6 +224,7 @@ namespace {
         ProcMacroInv& pmi;
         bool emitAllAttrs;
         bool skipDeriveAttrs = false;
+        const ASTAttribute* invokedAttr = nullptr;
 
         ProcMacroVisitor(const WireBoard& wb, const Span& sp, const Settings& settings, ProcMacroInv& pmi);
 
@@ -439,9 +440,10 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
     });
 }
 
-std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const TokenTree& tt, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTItem& i) {
-    return ProcMacroInvoke(sp, wb, crate, macPath, &tt, [&](ProcMacroVisitor& v) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const ASTAttribute& invoked, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTItem& i) {
+    return ProcMacroInvoke(sp, wb, crate, macPath, &invoked.data(), [&](ProcMacroVisitor& v) {
         v.emitAllAttrs = true;
+        v.invokedAttr = &invoked;
         v.visitTopAttrs(attrs);
         v.visitItem(itemName, vis, i);
     });
@@ -2366,7 +2368,15 @@ auto ProcMacroVisitor::parseString(const std::string& s) -> void {
 }
 
 auto ProcMacroVisitor::visitTopAttrs(slice<const ASTAttribute>& attrs) -> void {
+    bool beforeInvoked = this->invokedAttr != nullptr;
     for (const auto& a : attrs) {
+        if (&a == this->invokedAttr) {
+            beforeInvoked = false;
+            continue;
+        }
+        if (beforeInvoked && a.name().isTrivial() && (a.name().asTrivial() == "cfg" || a.name().asTrivial() == "cfg_attr" || a.name().asTrivial() == "derive" || a.name().asTrivial() == "derive_const")) {
+            continue;
+        }
         this->visitAttr(a);
     }
 }
