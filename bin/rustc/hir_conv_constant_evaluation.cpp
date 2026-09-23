@@ -3627,7 +3627,7 @@ auto MonomorphAvailability::visitConstgeneric(HIRConstGeneric& value) -> void {
     }
     if (const auto* unevaluated = value.opt_Unevaluated()) {
         if ((*unevaluated)->selfType) {
-            visitType((*unevaluated)->selfType);
+            [[maybe_unused]] const auto* selfType = visitType((*unevaluated)->selfType);
         }
         auto paramsImpl = (*unevaluated)->paramsImpl;
         auto paramsItem = (*unevaluated)->paramsItem;
