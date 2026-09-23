@@ -4139,6 +4139,14 @@ ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode) {
         case TOK_INTERPOLATED_PATH:
             return mv$(tok.fragPath());
 
+        case TOK_INTERPOLATED_TYPE: {
+            const ASTType* type = tok.fragType();
+            if (!type->data.is_Path() || type->data.as_Path()->cls.is_UFCS()) {
+                parseErrorUnexpected(lex, tok, {TOK_INTERPOLATED_PATH});
+            }
+            return *type->data.as_Path();
+        }
+
         case TOK_RWORD_SELF:
             if (lex.lookahead(0) != TOK_DOUBLE_COLON) {
                 return ASTPath::newSelf({});
@@ -4868,7 +4876,22 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
     auto ps = lex.startSpan();
 
     ASTAttributeName name;
-    if (lex.lookahead(0) != TOK_IDENT && lex.lookahead(0) != TOK_DOUBLE_COLON && !Token::typeIsRword(lex.lookahead(0))) {
+    if (lex.lookahead(0) == TOK_INTERPOLATED_TYPE || lex.lookahead(0) == TOK_INTERPOLATED_PATH) {
+        auto path = ParsePath(lex, PATH_GENERIC_NONE);
+        if (path.isTrivial()) {
+            name.elems.pushBack(path.asTrivial());
+        } else if (path.cls.is_Relative()) {
+            for (const auto& node : path.cls.as_Relative().nodes) {
+                if (!node.args().isEmpty()) {
+                    ERROR(lex.pointSpan(), E0000, StringView("An attribute path takes no generic arguments - ") << path);
+                }
+                name.elems.pushBack(node.name());
+            }
+        } else {
+            ERROR(lex.pointSpan(), E0000, StringView("Unexpected attribute path - ") << path);
+        }
+        GET_TOK(tok, lex);
+    } else if (lex.lookahead(0) != TOK_IDENT && lex.lookahead(0) != TOK_DOUBLE_COLON && !Token::typeIsRword(lex.lookahead(0))) {
         tok = Token(TOK_EQUAL);
     } else {
         name.hasLeading = lex.getTokenIf(TOK_DOUBLE_COLON);
