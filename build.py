@@ -1053,6 +1053,176 @@ pulldown_cmark_0_13_4 = add_project_test(
     timeout=NESTED_PROJECT_TIMEOUT,
 )
 
+tokio_1_53_1 = add_project_test(
+    name="tokio_1_53_1",
+    url="https://github.com/tokio-rs/tokio.git",
+    rev="75fef53d0a8590c2d1dbb63672aa7b7d1ef51155",
+    manifest="tokio",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/tokio_1_53_1/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+futures_0_3_34 = add_project_test(
+    name="futures_0_3_34",
+    url="https://github.com/rust-lang/futures-rs.git",
+    rev="705e6b5c0f06535b1aac1cb1989a172b3d45be8c",
+    manifest="futures",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/futures_0_3_34/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+quick_xml_0_42_0 = add_project_test(
+    name="quick_xml_0_42_0",
+    url="https://github.com/tafia/quick-xml.git",
+    rev="36a2c52a4f6c90878c3f60c3c3b5c62efaef28a9",
+    lockfile="$(S)/tst/projects/quick_xml_0_42_0/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+async_trait_0_1_92 = add_project_test(
+    name="async_trait_0_1_92",
+    url="https://github.com/dtolnay/async-trait.git",
+    rev="82e7e9edd60f622294373a23c0ce9c0077ad0263",
+    lockfile="$(S)/tst/projects/async_trait_0_1_92/Cargo.lock",
+)
+
+tracing_0_1_44 = add_project_test(
+    name="tracing_0_1_44",
+    url="https://github.com/tokio-rs/tracing.git",
+    rev="2d55f6faf9be83e7e4634129fb96813241aac2b8",
+    manifest="tracing",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/tracing_0_1_44/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+csv_1_4_0 = add_project_test(
+    name="csv_1_4_0",
+    url="https://github.com/BurntSushi/rust-csv.git",
+    rev="4a3997e91d668ea1d8595bdef15625a77cf2308a",
+    lockfile="$(S)/tst/projects/csv_1_4_0/Cargo.lock",
+)
+
+unicode_segmentation_1_13_13 = add_project_test(
+    name="unicode_segmentation_1_13_13",
+    url="https://github.com/unicode-rs/unicode-segmentation.git",
+    rev="66a032fd8d667bc47ac5b640b151dff3f5356d07",
+    lockfile="$(S)/tst/projects/unicode_segmentation_1_13_13/Cargo.lock",
+)
+
+encoding_rs_0_8_41 = add_project_test(
+    name="encoding_rs_0_8_41",
+    url="https://github.com/hsivonen/encoding_rs.git",
+    rev="08604915e6f1a3b7a93398aec0bb92d7a6611a6a",
+    lockfile="$(S)/tst/projects/encoding_rs_0_8_41/Cargo.lock",
+)
+
+toml_1_1_6 = add_project_test(
+    name="toml_1_1_6",
+    url="https://github.com/toml-rs/toml.git",
+    rev="572c005d80cca5f7bd163805c2f33ba0a5207b6d",
+    manifest="crates/toml",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/toml_1_1_6/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+rand_0_9_5 = add_project_test(
+    name="rand_0_9_5",
+    url="https://github.com/rust-random/rand.git",
+    rev="3474ec047279e5de32676c50154ff7d76d12a94e",
+    lockfile="$(S)/tst/projects/rand_0_9_5/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+chrono_0_4_45 = add_project_test(
+    name="chrono_0_4_45",
+    url="https://github.com/chronotope/chrono.git",
+    rev="170338250e836976a211e64728ec956e45e78a39",
+    lockfile="$(S)/tst/projects/chrono_0_4_45/Cargo.lock",
+    adapter_args=["--xfail", "gen_bindings"],
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+url_2_5_8 = add_project_test(
+    name="url_2_5_8",
+    url="https://github.com/servo/rust-url.git",
+    rev="d6ea13c5f8e7e6e627f6390161b3e185bda5e5ce",
+    manifest="url",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/url_2_5_8/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+uuid_1_26_1 = add_project_test(
+    name="uuid_1_26_1",
+    url="https://github.com/uuid-rs/uuid.git",
+    rev="9f927126c89892ddfed6cd2f92df16852f3f9aa6",
+    lockfile="$(S)/tst/projects/uuid_1_26_1/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+anyhow_1_0_104 = add_project_test(
+    name="anyhow_1_0_104",
+    url="https://github.com/dtolnay/anyhow.git",
+    rev="1dbe1862aae650423e3361fbd20b7d17c5109cc3",
+    lockfile="$(S)/tst/projects/anyhow_1_0_104/Cargo.lock",
+)
+
+thiserror_2_0_20 = add_project_test(
+    name="thiserror_2_0_20",
+    url="https://github.com/dtolnay/thiserror.git",
+    rev="b1d5db5e039275d95bf7536a2b2192aeb4dc28bf",
+    lockfile="$(S)/tst/projects/thiserror_2_0_20/Cargo.lock",
+)
+
+arrayvec_0_7_8 = add_project_test(
+    name="arrayvec_0_7_8",
+    url="https://github.com/bluss/arrayvec.git",
+    rev="0cb664cf505844348538230479b0040b44f3faf1",
+    lockfile="$(S)/tst/projects/arrayvec_0_7_8/Cargo.lock",
+)
+
+crossbeam_channel_0_5_17 = add_project_test(
+    name="crossbeam_channel_0_5_17",
+    url="https://github.com/crossbeam-rs/crossbeam.git",
+    rev="2920c984290229ab4e0ca0452ef09e48a82063f3",
+    manifest="crossbeam-channel",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/crossbeam_channel_0_5_17/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+parking_lot_0_12_5 = add_project_test(
+    name="parking_lot_0_12_5",
+    url="https://github.com/Amanieu/parking_lot.git",
+    rev="d7828fff7b5d6327ae608e82db45f888b344449a",
+    lockfile="$(S)/tst/projects/parking_lot_0_12_5/Cargo.lock",
+)
+
+strum_0_28_0 = add_project_test(
+    name="strum_0_28_0",
+    url="https://github.com/Peternator7/strum.git",
+    rev="7376771128834d28bb9beba5c39846cba62e71ec",
+    manifest="strum_tests",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/strum_0_28_0/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
+time_0_3_55 = add_project_test(
+    name="time_0_3_55",
+    url="https://github.com/time-rs/time.git",
+    rev="857d9c404c5b6f6cb64d1bfa604c695be3369e12",
+    manifest="time",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/time_0_3_55/Cargo.lock",
+    adapter_args=["--all-features"],
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
 # Unit regressions: one self-contained tst/unit/test_*.rs per compiler fix,
 # each its own node — compiled against the shared libstd and run (must exit 0).
 unit_tests = [
