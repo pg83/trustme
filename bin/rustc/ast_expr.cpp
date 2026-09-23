@@ -307,7 +307,9 @@ NODE(
         for (const auto& n : nodes) {
             newNodes.push_back({n.hasSemicolon, n.node->clone()});
         }
-        return NEWNODE(ASTExprNodeBlock, blockType, mv$(newNodes), localMod);
+        auto* rv = NEWNODE(ASTExprNodeBlock, blockType, mv$(newNodes), localMod);
+        static_cast<ASTExprNodeBlock&>(*rv).label = label;
+        return rv;
     }
 )
 
