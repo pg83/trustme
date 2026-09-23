@@ -9117,7 +9117,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
                     continue;
                 }
                 const auto* left = this->context.getType(rule.leftTy)->opt_Infer();
-                if (left && left->index == infer->index && (node.checkOrderEnd == 0 || !OrderPlace{rule.order, rule.order}.after(callPlace))) {
+                if (left && left->index == infer->index && !this->context.getType(rule.implTy)->is_Infer() && (node.checkOrderEnd == 0 || !OrderPlace{rule.order, rule.order}.after(callPlace))) {
                     DEBUG(StringView("receiver variable ") << infer->index << StringView(" is owed to R") << rule.ruleIdx << StringView(" at ") << rule.order);
                     hasPendingReceiverCoercion = true;
                 }
@@ -11775,9 +11775,19 @@ auto ExprVisitorEnum::visit(HIRExprNodeUniOp& node) -> void {
             inputType = expectedType;
         }
     }
+    const auto* resolvedInput = this->context.getType(inputType);
+    const auto* inputPrimitive = resolvedInput->opt_Primitive();
+    const auto* inputInfer = resolvedInput->opt_Infer();
+    const bool integral = (inputPrimitive && isInteger(*inputPrimitive)) || (inputInfer && inputInfer->tyClass == HIRInferClass::Integer);
+    const bool numeric = integral || (inputPrimitive && isFloat(*inputPrimitive)) || (inputInfer && inputInfer->tyClass == HIRInferClass::Float);
+    const bool builtin = node.op == HIRExprNodeUniOp::Op::Negate ? numeric : integral || (inputPrimitive && *inputPrimitive == HIRCoreType::Bool);
     const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
     if (!opTrait.components().empty()) {
-        this->context.equateTypesAssoc(node.span(), node.resType, opTrait, HIRPathParams{}, inputType, "Output", {}, true, operatorKind);
+        const auto* result = builtin ? this->context.ivars.newIvarTr() : node.resType;
+        this->context.equateTypesAssoc(node.span(), result, opTrait, HIRPathParams{}, inputType, "Output", {}, true, operatorKind);
+        if (builtin) {
+            this->context.equateTypes(node.span(), node.resType, inputType);
+        }
     } else {
         this->context.equateTypes(node.span(), node.resType, inputType);
     }
