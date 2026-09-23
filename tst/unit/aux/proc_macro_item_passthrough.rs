@@ -95,3 +95,11 @@ pub fn raw_name(input: TokenStream) -> TokenStream {
     TokenTree::from(Literal::string(&name)).into()
 }
 
+// Function-like: the input's top-level tokens, each as the compiler handed it
+// over, joined by spaces into a string literal.
+#[proc_macro]
+pub fn token_texts(input: TokenStream) -> TokenStream {
+    use proc_macro::{Literal, TokenTree};
+    let texts: Vec<String> = input.into_iter().map(|token| token.to_string()).collect();
+    TokenTree::from(Literal::string(&texts.join(" "))).into()
+}

@@ -1009,10 +1009,11 @@ Token Lexer::getTokenInt() {
                             nextTokens.push_back(Token(val, CORETYPE_ANY));
                         } else if (ch.isdigit()) {
                             this->ungetc();
+                            spelling_.append(".", 1);
                             auto fval = this->parseFloat(StringView(spelling_));
-                            spellingOn_ = false;
+                            const RcString floatSpelling = this->takeSpelling();
                             if (fval == fval) {
-                                nextTokens.push_back(Token::makeFloat(fval, CORETYPE_ANY));
+                                nextTokens.push_back(Token::makeFloat(fval, CORETYPE_ANY, floatSpelling));
                             }
                         } else {
                             this->ungetc();
