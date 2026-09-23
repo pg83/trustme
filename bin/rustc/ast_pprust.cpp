@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "floats.h"
+#include "ast_ast.h"
 #include "ast_expr.h"
 #include "ast_path.h"
 #include "coretypes.h"
@@ -309,6 +310,8 @@ namespace {
     struct State: Printer {
         using Printer::Printer;
 
+        PprustBlockItems* blockItems = nullptr;
+
         void printTts(const TokenTree& tts);
         void printExpr(PExpr e, Fixup fixup);
         void printPatTop(const ASTPattern& pat);
@@ -339,7 +342,7 @@ namespace {
         void printPats(const ASTPattern* pats, size_t count, Breaks breaks);
         void printBindingHead(const ASTPatternBinding& binding);
         void printPatValue(const ASTPatternValue& value);
-        void printMac(const ASTPath& path, bool isBraced, bool isBracketed, const TokenTree& tokens);
+        void printMac(const ASTPath& path, const RcString& ident, bool isBraced, bool isBracketed, const TokenTree& tokens);
         void printLiteral(const ASTExprNode& node);
 
         void printExprCondParen(PExpr e, bool needsPar, Fixup fixup);
@@ -1789,7 +1792,7 @@ void State::printType(const ASTType* ty) {
             break;
         case TypeData::TAG_Macro: {
             const auto* inv = data.as_Macro().inv;
-            this->printMac(inv->path(), false, false, inv->inputTt());
+            this->printMac(inv->path(), RcString(), false, false, inv->inputTt());
             break;
         }
         case TypeData::TAG_Primitive:
@@ -2048,7 +2051,7 @@ void State::printPatData(const ASTPattern& pat) {
             break;
         case ASTPatternData::TAG_Macro: {
             const auto& inv = *data.as_Macro().inv;
-            this->printMac(inv.path(), false, false, inv.inputTt());
+            this->printMac(inv.path(), RcString(), false, false, inv.inputTt());
             break;
         }
         case ASTPatternData::TAG_Any:
@@ -2241,13 +2244,17 @@ void State::printPatData(const ASTPattern& pat) {
     }
 }
 
-void State::printMac(const ASTPath& path, bool isBraced, bool isBracketed, const TokenTree& tokens) {
+void State::printMac(const ASTPath& path, const RcString& ident, bool isBraced, bool isBracketed, const TokenTree& tokens) {
     const bool empty = tokens.isToken() ? false : tokens.size() == 0;
     if (isBraced) {
         this->cbox(INDENT_UNIT);
     }
     this->printPath(path, false);
     this->word(StringView("!"));
+    if (ident != RcString()) {
+        this->nbsp();
+        this->printIdent(ident);
+    }
     if (isBraced) {
         this->nbsp();
         this->word(StringView("{"));
@@ -2579,7 +2586,7 @@ void State::printStmt(const ASTExprNode* node, bool hasSemicolon) {
     if (kindOf(e) == Kind::MacCall) {
         const auto* mac = cast<const ASTExprNodeMacro>(node);
         this->spaceIfNotBol();
-        this->printMac(mac->path, mac->isBraced, mac->isBracketed, mac->tokens);
+        this->printMac(mac->path, mac->ident, mac->isBraced, mac->isBracketed, mac->tokens);
         if (hasSemicolon) {
             this->word(StringView(";"));
         }
@@ -2598,6 +2605,18 @@ void State::printBlock(const ASTExprNodeBlock& block, bool hasCb) {
     }
     this->word(StringView("{"));
     this->end();
+    bool printedItem = false;
+    if (this->blockItems && block.localMod) {
+        for (size_t i = 0; i < block.localMod->items.size(); i++) {
+            if (block.localMod->items[i]->data.is_None()) {
+                continue;
+            }
+            this->spaceIfNotBol();
+            const auto marker = this->blockItems->marker(*block.localMod, i);
+            this->word(StringView(reinterpret_cast<const u8*>(marker.c_str()), marker.size()));
+            printedItem = true;
+        }
+    }
     for (size_t i = 0; i < block.nodes.size(); i++) {
         const auto& line = block.nodes[i];
         const bool isTail = i + 1 == block.nodes.size() && !line.hasSemicolon && !cast<const ASTExprNodeLetBinding>(line.node) && !cast<const ASTExprNodeMacro>(line.node);
@@ -2608,7 +2627,7 @@ void State::printBlock(const ASTExprNodeBlock& block, bool hasCb) {
             this->printStmt(line.node, line.hasSemicolon);
         }
     }
-    const bool noSpace = block.nodes.empty();
+    const bool noSpace = block.nodes.empty() && !printedItem;
     if (!noSpace) {
         this->breakOffsetIfNotBol(1, -INDENT_UNIT);
     }
@@ -3115,7 +3134,7 @@ void State::printExprKind(PExpr e, Kind kind, Fixup fixup) {
         }
         case Kind::MacCall: {
             const auto* n = cast<const ASTExprNodeMacro>(node);
-            this->printMac(n->path, n->isBraced, n->isBracketed, n->tokens);
+            this->printMac(n->path, n->ident, n->isBraced, n->isBracketed, n->tokens);
             break;
         }
         case Kind::LetStmt:
@@ -3134,8 +3153,9 @@ void pprustTtsToString(ZeroCopyOutput& out, const TokenTree& tts) {
     state.eof();
 }
 
-void pprustExprToString(ZeroCopyOutput& out, const ASTExprNode& expr) {
+void pprustExprToString(ZeroCopyOutput& out, const ASTExprNode& expr, PprustBlockItems* blockItems) {
     State state(out);
+    state.blockItems = blockItems;
     state.printExpr(nodeExpr(&expr), Fixup());
     state.eof();
 }

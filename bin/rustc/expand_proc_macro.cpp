@@ -220,6 +220,15 @@ namespace {
         U128 recvV128uU128();
     };
 
+    struct BlockItemMarkers final: PprustBlockItems {
+        Vector<const ASTNamed<ASTItem>*> items;
+
+        RcString marker(const ASTModule& module, size_t index) override {
+            items.pushBack(module.items[index].get());
+            return RcString::newInterned(FMT(StringView("__trustme_block_item_") << (items.length() - 1)));
+        }
+    };
+
     struct ProcMacroVisitor {
         const WireBoard& wb;
         const Span& sp;
@@ -262,7 +271,7 @@ namespace {
 
         void visitNode(const ASTExprNode& e);
 
-        void parseString(const std::string& s);
+        void parseString(const std::string& s, const BlockItemMarkers* markers = nullptr);
 
         void visitTopAttrs(slice<const ASTAttribute>& attrs);
 
@@ -1742,15 +1751,56 @@ auto ProcMacroVisitor::visitPattern(const ASTPattern& pat) -> void {
             pmi.sendSymbol("{");
             for (const auto& spe : e.subPatterns) {
                 this->visitAttrs(spe.attrs);
-                pmi.sendIdent(spe.name);
+                if (spe.name.c_str()[0] >= '0' && spe.name.c_str()[0] <= '9') {
+                    pmi.sendRawLiteral(StringView(reinterpret_cast<const u8*>(spe.name.c_str()), spe.name.size()));
+                } else {
+                    pmi.sendIdent(spe.name);
+                }
                 pmi.sendSymbol(":");
                 this->visitPattern(spe.pat);
                 pmi.sendSymbol(",");
             }
             if (!e.isExhaustive) {
-                pmi.sendSymbol("...");
+                pmi.sendSymbol("..");
             }
             pmi.sendSymbol("}");
+            break;
+        }
+        case ASTPatternData::TAG_StructTuple: {
+            auto& e = pat.data().as_StructTuple();
+            this->visitPath(e.path);
+            pmi.sendSymbol("(");
+            visitTuplePattern(e.tupPat);
+            pmi.sendSymbol(")");
+            break;
+        }
+        case ASTPatternData::TAG_Ref: {
+            auto& e = pat.data().as_Ref();
+            pmi.sendSymbol("&");
+            if (e.mut) {
+                pmi.sendRword("mut");
+            }
+            visitPattern(*e.sub);
+            break;
+        }
+        case ASTPatternData::TAG_Slice: {
+            auto& e = pat.data().as_Slice();
+            pmi.sendSymbol("[");
+            for (const auto& sub : e.subPats) {
+                visitPattern(sub);
+                pmi.sendSymbol(",");
+            }
+            pmi.sendSymbol("]");
+            break;
+        }
+        case ASTPatternData::TAG_Or: {
+            auto& e = pat.data().as_Or();
+            for (const auto& alternative : e) {
+                if (&alternative != &e.front()) {
+                    pmi.sendSymbol("|");
+                }
+                visitPattern(alternative);
+            }
             break;
         }
     }
@@ -2356,15 +2406,16 @@ auto ProcMacroVisitor::visitNode(const ASTExprNode& e) -> void {
     // TODO: Dump to a string, then re-parse into a TT and then send that TT
 
     StringBuilder ss;
-    pprustExprToString(ss, e);
+    BlockItemMarkers markers;
+    pprustExprToString(ss, e, &markers);
     ss << StringView(" ");
 
     const std::string text(static_cast<const char*>(ss.data()), ss.length());
     DEBUG(StringView("STRING: ") << text);
-    parseString(text);
+    parseString(text, &markers);
 }
 
-auto ProcMacroVisitor::parseString(const std::string& s) -> void {
+auto ProcMacroVisitor::parseString(const std::string& s, const BlockItemMarkers* markers) -> void {
     std::istringstream iss{s};
     Lexer l{wb.id, *wb.pool, iss, ASTEdition::Rust2021, {}};
     for (;;) {
@@ -2378,6 +2429,18 @@ auto ProcMacroVisitor::parseString(const std::string& s) -> void {
            around them is written in. */
         // TODO: If this is an ident, then get the comment after it that specifies the hygine info
         if (t == TOK_IDENT) {
+            const StringView name(reinterpret_cast<const u8*>(t.ident().name.c_str()), t.ident().name.size());
+            const StringView markerPrefix("__trustme_block_item_");
+            if (markers && name.startsWith(markerPrefix)) {
+                size_t index = 0;
+                for (size_t i = markerPrefix.length(); i < name.length(); i++) {
+                    index = index * 10 + (name[i] - '0');
+                }
+                const auto& item = *markers->items[index];
+                this->visitAttrs(item.attrs);
+                this->visitItem(item.name, item.vis, item.data);
+                continue;
+            }
             pmi.sendIdent(t.ident().name.c_str());
             continue;
         }
@@ -2746,13 +2809,37 @@ auto ProcMacroVisitor::visitTrait(const RcString& name, const ASTVisibility& vis
             }
             case ASTItem::TAG_Type: {
                 auto& e = i.data.as_Type();
-                if (!e.selfBounds.bounds.empty()) {
-                    TODO(i.span, StringView("visit_trait - associated type with bounds - ") << i.name);
-                }
                 this->visitVis(itemVis);
                 pmi.sendRword("type");
                 pmi.sendIdent(i.name.c_str());
                 this->visitParams(e.params_);
+                bool firstBound = true;
+                for (const auto& bound : e.selfBounds.bounds) {
+                    switch (bound.tag()) {
+                        case ASTGenericBound::TAG_IsTrait: {
+                            const auto& be = bound.as_IsTrait();
+                            pmi.sendSymbol(firstBound ? ":" : "+");
+                            this->visitHrbs(be.innerHrbs);
+                            this->visitBoundConstness(be.constness);
+                            this->visitPath(be.trait);
+                            break;
+                        }
+                        case ASTGenericBound::TAG_MaybeTrait: {
+                            pmi.sendSymbol(firstBound ? ":" : "+");
+                            pmi.sendSymbol("?");
+                            this->visitPath(bound.as_MaybeTrait().trait);
+                            break;
+                        }
+                        case ASTGenericBound::TAG_TypeLifetime: {
+                            pmi.sendSymbol(firstBound ? ":" : "+");
+                            pmi.sendLifetime(bound.as_TypeLifetime().bound.name().name.c_str());
+                            break;
+                        }
+                        default:
+                            TODO(i.span, StringView("visit_trait - associated type bound - ") << bound);
+                    }
+                    firstBound = false;
+                }
                 if (e.type_->isValid()) {
                     pmi.sendSymbol("=");
                     this->visitType(e.type_);
@@ -2771,6 +2858,10 @@ auto ProcMacroVisitor::visitImpl(const ASTImpl& impl) -> void {
     for (const auto& i : impl.items()) {
         const auto& sp = i.sp;
         const auto& item = *i.data;
+        this->visitAttrs(i.attrs);
+        if (i.isSpecialisable) {
+            pmi.sendIdent("default");
+        }
         switch (item.tag()) {
             default:
                 TODO(sp, StringView("Item ") << item.tagStr());
@@ -2783,6 +2874,19 @@ auto ProcMacroVisitor::visitImpl(const ASTImpl& impl) -> void {
             case ASTItem::TAG_Static: {
                 auto& e = item.as_Static();
                 visitStatic(i.name.c_str(), i.vis, e);
+                break;
+            }
+            case ASTItem::TAG_Type: {
+                auto& e = item.as_Type();
+                this->visitVis(i.vis);
+                pmi.sendRword("type");
+                pmi.sendIdent(i.name.c_str());
+                this->visitParams(e.params_);
+                if (e.type_->isValid()) {
+                    pmi.sendSymbol("=");
+                    this->visitType(e.type_);
+                }
+                pmi.sendSymbol(";");
                 break;
             }
         }
@@ -2833,6 +2937,32 @@ auto ProcMacroVisitor::visitItem(const RcString& name, const ASTVisibility& vis,
         case ASTItem::TAG_Static: {
             auto& e = item.as_Static();
             visitStatic(name, vis, e);
+            break;
+        }
+        case ASTItem::TAG_Module: {
+            auto& e = item.as_Module();
+            visitVis(vis);
+            pmi.sendRword("mod");
+            pmi.sendIdent(name.c_str());
+            pmi.sendSymbol("{");
+            for (const auto& inner : e.items) {
+                if (inner->data.is_None()) {
+                    continue;
+                }
+                visitAttrs(inner->attrs);
+                visitItem(inner->name, inner->vis, inner->data);
+            }
+            pmi.sendSymbol("}");
+            break;
+        }
+        case ASTItem::TAG_MacroInv: {
+            auto& e = item.as_MacroInv();
+            visitPath(e.path());
+            pmi.sendSymbol("!");
+            pmi.sendSymbol("(");
+            visitTokentree(e.inputTt());
+            pmi.sendSymbol(")");
+            pmi.sendSymbol(";");
             break;
         }
     }
