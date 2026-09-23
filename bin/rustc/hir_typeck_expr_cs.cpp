@@ -11472,6 +11472,14 @@ auto ExprVisitorEnum::visit(HIRExprNodeMatch& node) -> void {
     /* Upstream `check_expr_match`: the match's expectation is each arm's
        (`adjust_for_branches`). */
     const auto* expected = this->expectationFor(node);
+    if (expected) {
+        const auto* target = this->context.getType(this->context.expandAssociatedTypes(node.span(), this->context.getType(expected)));
+        const auto* targetPath = target->opt_Path();
+        const bool openProjection = targetPath && targetPath->binding.is_Unbound() && targetPath->path.data.is_UfcsKnown() && this->context.ivars.typeContainsIvars(target);
+        if (!target->is_Infer() && !openProjection && target != this->context.crate.types.unit()) {
+            this->context.equateTypes(node.span(), node.resType, target);
+        }
+    }
 
     {
         auto _ = this->pushInnerCoerceScoped(true);
