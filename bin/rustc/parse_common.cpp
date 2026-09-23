@@ -1930,14 +1930,14 @@ namespace {
                 auto ref = getLifetimeRef(lex, mv$(tok));
                 if (GET_TOK(tok, lex) == TOK_COLON) {
                     boundStart = ret.bounds.size();
-                    if (lex.lookahead(0) == TOK_LIFETIME) {
-                        do {
-                            GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
-                            ret.addBound(ASTGenericBound::make_Lifetime({ASTLifetimeRef(ref), getLifetimeRef(lex, mv$(tok))}));
-                        } while (GET_TOK(tok, lex) == TOK_PLUS);
-                    } else {
+                    while (lex.lookahead(0) == TOK_LIFETIME) {
                         GET_TOK(tok, lex);
+                        ret.addBound(ASTGenericBound::make_Lifetime({ASTLifetimeRef(ref), getLifetimeRef(lex, mv$(tok))}));
+                        if (!lex.getTokenIf(TOK_PLUS)) {
+                            break;
+                        }
                     }
+                    GET_TOK(tok, lex);
                     boundEnd = ret.bounds.size();
                 }
                 ret.addLftParam(ASTLifetimeParam(lex.pointSpan(), std::move(attrs), paramName), boundStart, boundEnd);
@@ -1992,11 +1992,14 @@ namespace {
             if (lex.getTokenIf(TOK_LIFETIME, tok)) {
                 auto lhs = getLifetimeRef(lex, std::move(tok));
                 GET_CHECK_TOK(tok, lex, TOK_COLON);
-                do {
-                    GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
+                while (lex.lookahead(0) == TOK_LIFETIME) {
+                    GET_TOK(tok, lex);
                     auto rhs = getLifetimeRef(lex, mv$(tok));
                     params.addBound(ASTGenericBound::make_Lifetime({lhs, rhs}));
-                } while (lex.getTokenIf(TOK_PLUS));
+                    if (!lex.getTokenIf(TOK_PLUS)) {
+                        break;
+                    }
+                }
             } else if (lex.getTokenIf(TOK_RWORD_FOR)) {
                 auto hrbs = ParseHRB(lex);
                 const bool bindsTypes = !hrbs.types.empty();
