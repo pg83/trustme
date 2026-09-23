@@ -6522,6 +6522,7 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                             return rv;
                         }
                         case LookupMode::Constant:
+                        case LookupMode::PatternValue:
                         case LookupMode::Variable:
                             // TODO: Ensure validity? (I.e. that `Self` is a unit or tuple struct
                             if (const auto* p = (*e)->data.opt_Path()) {
