@@ -20,6 +20,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import queue
 import re
 import shlex
 import shutil
@@ -2125,9 +2126,30 @@ class ExecService:
         self.out_lock = threading.Lock()
         self.cores = os.cpu_count() or 1
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=self.cores)
+        # A worker hands its finished job to the sender and takes the next
+        # one; the link is written by this one thread, never by a worker.
+        self.outbox: queue.Queue[list[tuple[dict[str, Any], Path | None]] | None] = queue.Queue()
+        self.sender = threading.Thread(target=self._send_loop, daemon=True)
+        self.sender.start()
         self.children: set[subprocess.Popen] = set()
         self.children_lock = threading.Lock()
         self.stopping = False
+
+    def _send_loop(self) -> None:
+        while True:
+            batch = self.outbox.get()
+            if batch is None:
+                return
+            try:
+                with self.out_lock:
+                    for frame, payload in batch:
+                        _dist_write(self.stdout, frame, payload)
+            except OSError:
+                return
+
+    def _flush_sender(self) -> None:
+        self.outbox.put(None)
+        self.sender.join(timeout=60)
 
     def _send(self, frame: dict[str, Any], payload: Path | None = None) -> None:
         with self.out_lock:
@@ -2182,6 +2204,7 @@ class ExecService:
                 self.pool.submit(self._guarded_job, frame, time.monotonic())
             elif kind == "bye":
                 self.pool.shutdown(wait=True)
+                self._flush_sender()
                 shutil.rmtree(self.session, ignore_errors=True)
                 self._send({"t": "bye"})
                 return 0
@@ -2195,6 +2218,7 @@ class ExecService:
                 except ProcessLookupError:
                     pass
         self.pool.shutdown(wait=True, cancel_futures=True)
+        self._flush_sender()
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _guarded_job(self, frame: dict[str, Any], received: float) -> None:
@@ -2287,19 +2311,23 @@ class ExecService:
                 self._send({"t": "result", "uid": uid, "rc": 1, "stdout": stdout_text,
                             "stderr": str(exc), "manifest": {}})
                 return
-            with self.out_lock:
-                for entry in manifest.values():
-                    if "cas" in entry:
-                        path = self._cas_path(entry["cas"])
-                        _dist_write(self.stdout, {
-                            "t": "blob", "digest": entry["cas"],
-                            "size": path.stat().st_size, "mode": entry["mode"],
-                        }, path)
-                timing["ran"] = time.monotonic() - started
-                _dist_write(self.stdout, {
-                    "t": "result", "uid": uid, "rc": 0, "stdout": stdout_text,
-                    "stderr": stderr_text, "manifest": manifest, "timing": timing,
-                })
+            # Outputs are in the cache already: the batch reads them from
+            # there, so the work directory can go while the batch is in the
+            # outbox and this worker is on to the next job.
+            batch: list[tuple[dict[str, Any], Path | None]] = []
+            for entry in manifest.values():
+                if "cas" in entry:
+                    path = self._cas_path(entry["cas"])
+                    batch.append(({
+                        "t": "blob", "digest": entry["cas"],
+                        "size": path.stat().st_size, "mode": entry["mode"],
+                    }, path))
+            timing["ran"] = time.monotonic() - started
+            batch.append(({
+                "t": "result", "uid": uid, "rc": 0, "stdout": stdout_text,
+                "stderr": stderr_text, "manifest": manifest, "timing": timing,
+            }, None))
+            self.outbox.put(batch)
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
@@ -2496,8 +2524,11 @@ class RemoteHost:
             self.reconnector.start()
 
     def free_slots(self, used: int) -> int:
+        """Jobs the host can take: one per core running, and as many again
+        waiting in its queue, so a result in transit never leaves a core
+        idle.  The host's own pool is still one worker per core."""
         with self.state_lock:
-            return self.cores - used
+            return 2 * self.cores - used
 
     def execute(self, uid: str, job: dict[str, Any],
                 blobs: dict[str, tuple[Path, int, int]]) -> dict[str, Any]:
@@ -2646,7 +2677,7 @@ class Executor:
         running: dict[concurrent.futures.Future[None], tuple[Node, RemoteHost | None]] = {}
         used: dict[RemoteHost | None, int] = defaultdict(int)
         completed = 0
-        workers = self.jobs + 64 * max(1, len(self.hosts))
+        workers = self.jobs + 512 * max(1, len(self.hosts))
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             while ready or running:
                 while ready:
