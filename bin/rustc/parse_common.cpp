@@ -4242,7 +4242,7 @@ std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode 
         }
 
         if (genericMode == PATH_GENERIC_TYPE) {
-            if (lex.lookahead(0) == TOK_DOUBLE_COLON && (lex.lookahead(1) == TOK_LT || lex.lookahead(1) == TOK_DOUBLE_LT || lex.lookahead(1) == TOK_THINARROW_LEFT)) {
+            if (lex.lookahead(0) == TOK_DOUBLE_COLON && (lex.lookahead(1) == TOK_LT || lex.lookahead(1) == TOK_DOUBLE_LT || lex.lookahead(1) == TOK_THINARROW_LEFT || lex.lookahead(1) == TOK_PAREN_OPEN)) {
                 GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
             }
             if (lex.lookahead(0) == TOK_LT || lex.lookahead(0) == TOK_DOUBLE_LT || lex.lookahead(0) == TOK_THINARROW_LEFT) {
