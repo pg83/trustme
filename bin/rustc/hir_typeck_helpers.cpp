@@ -2305,7 +2305,15 @@ bool HMTypeInferrence::typeContainsIvars(const HIRType* ty, bool onlyUnbound) co
 }
 
 bool HMTypeInferrence::pathparamsEqual(const HIRPathParams& ppsL, const HIRPathParams& ppsR) const {
-    return typeListEqual(*this, ppsL.types, ppsR.types);
+    if (!typeListEqual(*this, ppsL.types, ppsR.types) || ppsL.values.size() != ppsR.values.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < ppsL.values.size(); i++) {
+        if (getValue(ppsL.values[i]) != getValue(ppsR.values[i])) {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
