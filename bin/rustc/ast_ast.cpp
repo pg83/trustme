@@ -44,7 +44,9 @@ ASTImpl::ASTImpl(ASTImpl&&) = default;
 ASTImpl& ASTImpl::operator=(ASTImpl&&) = default;
 
 ASTStructItem ASTStructItem::clone() const {
-    return ASTStructItem(attrs.clone(), vis, name, type->clone(), defaultValue ? defaultValue->clone() : nullptr);
+    ASTStructItem rv(attrs.clone(), vis, name, type->clone(), defaultValue ? defaultValue->clone() : nullptr);
+    rv.nameIsRaw = nameIsRaw;
+    return rv;
 }
 
 ASTTupleItem ASTTupleItem::clone() const {

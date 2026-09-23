@@ -2306,11 +2306,13 @@ namespace {
 
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     auto name = tok.ident().name;
+                    const bool nameIsRaw = tok.ident().isRaw;
                     GET_CHECK_TOK(tok, lex, TOK_COLON);
                     ASTType* type = ParseType(lex);
                     ASTExprNode* defaultValue = lex.getTokenIf(TOK_EQUAL) ? ParseExpr(lex) : nullptr;
 
                     items.push_back(ASTStructItem(mv$(itemAttrs), vis, mv$(name), mv$(type), defaultValue));
+                    items.back().nameIsRaw = nameIsRaw;
                     if (GET_TOK(tok, lex) == TOK_BRACE_CLOSE) {
                         break;
                     }
@@ -2485,10 +2487,12 @@ namespace {
 
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     auto name = tok.ident().name;
+                    const bool nameIsRaw = tok.ident().isRaw;
                     GET_CHECK_TOK(tok, lex, TOK_COLON);
                     auto ty = ParseType(lex);
                     auto* def = lex.getTokenIf(TOK_EQUAL) ? ParseExpr(lex) : nullptr;
                     fields.push_back(ASTStructItem(mv$(fieldAttrs), ASTVisibility::makeGlobal(), mv$(name), mv$(ty), def));
+                    fields.back().nameIsRaw = nameIsRaw;
                 } while (GET_TOK(tok, lex) == TOK_COMMA);
                 CHECK_TOK(tok, TOK_BRACE_CLOSE);
 
@@ -2540,11 +2544,13 @@ namespace {
 
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             auto name = tok.ident().name;
+            const bool nameIsRaw = tok.ident().isRaw;
             GET_CHECK_TOK(tok, lex, TOK_COLON);
 
             auto ty = ParseType(lex);
 
             variants.push_back(ASTStructItem(mv$(itemAttrs), mv$(vis), mv$(name), mv$(ty), {}));
+            variants.back().nameIsRaw = nameIsRaw;
         } while (GET_TOK(tok, lex) == TOK_COMMA);
         CHECK_TOK(tok, TOK_BRACE_CLOSE);
 

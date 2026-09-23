@@ -156,11 +156,11 @@ namespace {
 
         void sendRword(const char* val);
 
-        void sendIdent(const char* val);
+        void sendIdent(const char* val, bool raw = false);
 
         void sendIdent(const Ident::Hygiene& h, const char* val);
 
-        void sendIdent(const Ident::Hygiene& h, const Span& sp, const char* val);
+        void sendIdent(const Ident::Hygiene& h, const Span& sp, const char* val, bool raw = false);
 
         void sendIdent(const Ident& val);
 
@@ -170,7 +170,7 @@ namespace {
 
         void sendLifetime(const Ident::Hygiene& h, const Span& sp, const char* val);
 
-        void sendIdent_(const char* val);
+        void sendIdent_(const char* val, bool raw);
 
         void sendLifetime_(const char* val);
 
@@ -949,24 +949,24 @@ auto ProcMacroInv::sendRword(const char* val) -> void {
    went out last - a `#[values(..)]` on a parameter left the parameter's name in the
    attribute's context while the body around it was written at the call site, and the
    two stopped naming the same binding (base64's rstest cases). */
-auto ProcMacroInv::sendIdent(const char* val) -> void {
+auto ProcMacroInv::sendIdent(const char* val, bool raw) -> void {
     this->sendSpan(Ident::Hygiene());
-    this->sendIdent_(val);
+    this->sendIdent_(val, raw);
 }
 
 auto ProcMacroInv::sendIdent(const Ident::Hygiene& h, const char* val) -> void {
     this->sendSpan(h);
-    this->sendIdent_(val);
+    this->sendIdent_(val, false);
 }
 
-auto ProcMacroInv::sendIdent(const Ident::Hygiene& h, const Span& sp, const char* val) -> void {
+auto ProcMacroInv::sendIdent(const Ident::Hygiene& h, const Span& sp, const char* val, bool raw) -> void {
     this->sendSpan(h, sp);
-    this->sendIdent_(val);
+    this->sendIdent_(val, raw);
 }
 
-auto ProcMacroInv::sendIdent_(const char* val) -> void {
+auto ProcMacroInv::sendIdent_(const char* val, bool raw) -> void {
     this->sendU8(static_cast<u8>(TokenClass::Ident));
-    if (LexFindReservedWord(val, edition) != TOK_NULL) {
+    if (raw || LexFindReservedWord(val, edition) != TOK_NULL) {
         auto size = std::strlen(val);
         this->sendV128u(2 + size);
         this->sendBytesRaw("r#", 2);
@@ -977,7 +977,7 @@ auto ProcMacroInv::sendIdent_(const char* val) -> void {
 }
 
 auto ProcMacroInv::sendIdent(const Ident& val) -> void {
-    sendIdent(val.name.c_str());
+    sendIdent(val.name.c_str(), val.isRaw);
 }
 
 auto ProcMacroInv::sendLifetime(const char* val) -> void {
@@ -1273,8 +1273,8 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_IDENT:
             /* A token of the invocation is passed through with the context it
                was written in - that is what the macro gives back for it. */
-            pmi.sendIdent(tok.ident().hygiene, at, tok.ident().name.c_str());
-            break; // TODO: Raw idents
+            pmi.sendIdent(tok.ident().hygiene, at, tok.ident().name.c_str(), tok.ident().isRaw);
+            break;
         case TOK_LIFETIME:
             pmi.sendLifetime(tok.ident().hygiene, at, tok.ident().name.c_str());
             break;
@@ -2494,7 +2494,7 @@ auto ProcMacroVisitor::visitStruct(const RcString& name, const ASTVisibility& vi
             for (const auto& si : se.ents) {
                 this->visitAttrs(si.attrs);
                 this->visitVis(si.vis);
-                pmi.sendIdent(si.name.c_str());
+                pmi.sendIdent(si.name.c_str(), si.nameIsRaw);
                 pmi.sendSymbol(":");
                 this->visitType(si.type);
                 if (si.defaultValue) {
@@ -2540,7 +2540,7 @@ auto ProcMacroVisitor::visitEnum(const RcString& name, const ASTVisibility& vis,
                 pmi.sendSymbol("{");
                 for (const auto& f : e.fields) {
                     this->visitAttrs(f.attrs);
-                    pmi.sendIdent(f.name.c_str());
+                    pmi.sendIdent(f.name.c_str(), f.nameIsRaw);
                     pmi.sendSymbol(":");
                     this->visitType(f.type);
                     pmi.sendSymbol(",");

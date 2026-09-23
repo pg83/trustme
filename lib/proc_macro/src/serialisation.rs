@@ -58,7 +58,10 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
                         },
                     }
                     },
-                Token::Ident(val) => Ident { span: *span, is_raw: false, val }.into(),
+                Token::Ident(val) => match val.strip_prefix("r#") {
+                    Some(name) => Ident { span: *span, is_raw: true, val: name.to_owned() }.into(),
+                    None => Ident { span: *span, is_raw: false, val }.into(),
+                    },
                 Token::Lifetime(val) => {
                     let mut p = Punct::new('\'', Spacing::Joint);
                     p.span = *span;
@@ -157,7 +160,12 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                 },
             TokenTree::Ident(i) => {
                 set_span(s, last, i.span);
-                s.write_ent(Token::Ident(i.val));
+                if i.is_raw {
+                    s.write_ent(Token::Ident(format!("r#{}", i.val)));
+                }
+                else {
+                    s.write_ent(Token::Ident(i.val));
+                }
                 },
             TokenTree::Punct(p) => {
                 set_span(s, last, p.span);

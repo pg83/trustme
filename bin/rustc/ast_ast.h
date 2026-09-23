@@ -37,6 +37,7 @@ struct ASTStructItem {
     ASTAttributeList attrs;
     ASTVisibility vis;
     RcString name;
+    bool nameIsRaw = false;
     ASTType* type;
 
     ASTExprNode* defaultValue = nullptr;

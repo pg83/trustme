@@ -75,3 +75,23 @@ pub fn echo_item_without_added_type_parens(_attribute: TokenStream, item: TokenS
     walk(item.clone());
     item
 }
+
+// Function-like: `raw_member!(value)` is `value.r#fn`, the member written
+// with `Ident::new_raw`, and `raw_name!(r#fn)` is the name the compiler
+// handed over, as a string literal.
+#[proc_macro]
+pub fn raw_member(input: TokenStream) -> TokenStream {
+    use proc_macro::{Ident, Punct, Spacing, Span, TokenTree};
+    let mut output: Vec<TokenTree> = input.into_iter().collect();
+    output.push(Punct::new('.', Spacing::Alone).into());
+    output.push(Ident::new_raw("fn", Span::call_site()).into());
+    output.into_iter().collect()
+}
+
+#[proc_macro]
+pub fn raw_name(input: TokenStream) -> TokenStream {
+    use proc_macro::{Literal, TokenTree};
+    let name = input.into_iter().next().unwrap().to_string();
+    TokenTree::from(Literal::string(&name)).into()
+}
+
