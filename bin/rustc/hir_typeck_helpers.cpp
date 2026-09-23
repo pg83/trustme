@@ -7728,6 +7728,36 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         if (possibilities.size() - firstPossibility <= 1) {
             return Certainty::Proven;
         }
+        const auto& first = possibilities[firstPossibility];
+        const auto* firstRoute = first.path.data.opt_UfcsKnown();
+        const bool oneTrait = firstRoute && !first.inherentImpl && std::all_of(possibilities.begin() + firstPossibility, possibilities.end(), [&](const MethodCandidate& candidate) {
+            const auto* route = candidate.path.data.opt_UfcsKnown();
+            return route && !candidate.inherentImpl && candidate.borrow == first.borrow && route->trait.path == firstRoute->trait.path && route->item == firstRoute->item && route->type == firstRoute->type;
+        });
+        const HIRTrait* collapsedTraitPtr = oneTrait ? &crate.getTraitByPath(callSpan, firstRoute->trait.path) : nullptr;
+        if (collapsedTraitPtr && collapsedTraitPtr->params.types.size() <= typeIvarCount && collapsedTraitPtr->params.values.size() <= methodIvars.length() - typeIvarCount) {
+            const auto& collapsedTrait = *collapsedTraitPtr;
+            HIRPathParamsBuilder traitParams;
+            for (size_t i = 0; i < collapsedTrait.params.types.size(); i++) {
+                traitParams.types.push_back(crate.types.infer(methodIvars[i], HIRInferClass::None));
+            }
+            for (size_t i = 0; i < collapsedTrait.params.values.size(); i++) {
+                traitParams.values.push_back(HIRConstGeneric::make_Infer({methodIvars[typeIvarCount + i]}));
+            }
+            auto collapsed = std::move(possibilities[firstPossibility]);
+            auto route = collapsed.path.data.as_UfcsKnown();
+            route.trait.params = HIRPathParams(std::move(traitParams));
+            collapsed.path = HIRPath(route.type, std::move(route.trait), route.item, std::move(route.params));
+            collapsed.effects = SolverResponse{};
+            collapsed.effects.certainty = Certainty::Proven;
+            collapsed.routeTraitParams = HIRPathParams();
+            DEBUG(StringView("candidates of one trait collapse into ") << collapsed.path);
+            while (possibilities.size() > firstPossibility) {
+                possibilities.pop_back();
+            }
+            possibilities.push_back(std::move(collapsed));
+            return Certainty::Proven;
+        }
         if (mustDecide && !traitRoutesAreComplete) {
             ERROR(callSpan, E0000, StringView("multiple applicable items in scope for {") << receiver << StringView("}.") << methodName << StringView(": ") << possibilities);
         }

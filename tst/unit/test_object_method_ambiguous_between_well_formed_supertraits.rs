@@ -1,4 +1,4 @@
-//@ compile-fail: multiple applicable items
+//@ compile-fail: type annotations needed
 
 // With `P: WithAssoc` in the environment both supertraits of `dyn Trait<P>`
 // are well-formed routes to `method`, and upstream reports the call as
