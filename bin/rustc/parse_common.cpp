@@ -790,11 +790,13 @@ namespace {
         }
 
         auto rt = mkType(lex.typePool(), lex.pointSpan());
+        ASTExprNode* code = nullptr;
         if (lex.getTokenIf(TOK_THINARROW)) {
             rt = ParseType(lex);
+            code = ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare);
+        } else {
+            code = ParseExpr0(lex);
         }
-
-        auto code = ParseExpr0(lex);
         if (isAsync) {
             code = NEWNODE(ASTExprNodeAsyncBlock, std::move(code), /*isMove=*/true, isUse);
         }
