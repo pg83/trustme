@@ -33,6 +33,21 @@ extern char** environ;
 #define NEWNODE(ty, ...) makeAstExprNode<ASTExprNode##ty>(*crate.pool __VA_OPT__(, ) __VA_ARGS__)
 
 namespace {
+    bool typeOfSeveralBounds(const ASTType* ty) {
+        size_t bounds = 0;
+        if (const auto* object = ty->data.opt_TraitObject()) {
+            bounds = object->traits.size();
+            for (const auto& lifetime : object->lifetimes) {
+                if (lifetime != ASTLifetimeRef()) {
+                    bounds++;
+                }
+            }
+        } else if (const auto* erased = ty->data.opt_ErasedType()) {
+            bounds = (*erased)->traits.size() + (*erased)->maybeTraits.size() + (*erased)->lifetimes.length();
+        }
+        return bounds > 1;
+    }
+
     enum class TokenClass {
         EndOfStream = 0,
         Symbol = 1,
@@ -227,6 +242,7 @@ namespace {
         void visitTypeAsText(const ASTType* ty);
 
         void visitType(const ::ASTType* ty);
+        void visitTypeBehindPointer(const ASTType* ty);
 
         void visitHrbs(const ASTHigherRankedBounds& hrbs);
 
@@ -1748,6 +1764,16 @@ auto ProcMacroVisitor::visitTypeAsText(const ASTType* ty) -> void {
     parseString(std::string(static_cast<const char*>(ss.data()), ss.length()));
 }
 
+auto ProcMacroVisitor::visitTypeBehindPointer(const ASTType* ty) -> void {
+    if (!typeOfSeveralBounds(ty)) {
+        this->visitType(ty);
+        return;
+    }
+    pmi.sendSymbol("(");
+    this->visitType(ty);
+    pmi.sendSymbol(")");
+}
+
 auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
     // TODO: Correct handling of visit_type
     switch (ty->data.tag()) {
@@ -1802,9 +1828,7 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
             if (te.isMut) {
                 pmi.sendRword("mut");
             }
-            pmi.sendSymbol("(");
-            this->visitType(te.inner);
-            pmi.sendSymbol(")");
+            this->visitTypeBehindPointer(te.inner);
             break;
         }
         case TypeData::TAG_Pointer: {
@@ -1815,9 +1839,7 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
             } else {
                 pmi.sendRword("const");
             }
-            pmi.sendSymbol("(");
-            this->visitType(te.inner);
-            pmi.sendSymbol(")");
+            this->visitTypeBehindPointer(te.inner);
             break;
         }
         case TypeData::TAG_Array: {
@@ -1857,7 +1879,6 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
         }
         case TypeData::TAG_TraitObject: {
             auto& te = ty->data.as_TraitObject();
-            pmi.sendSymbol("(");
             pmi.sendRword("dyn");
             bool needsPlus = false;
             for (const auto& t : te.traits) {
@@ -1878,7 +1899,6 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
                     this->visitLifetime(lft);
                 }
             }
-            pmi.sendSymbol(")");
             break;
         }
         case TypeData::TAG_ErasedType: {
@@ -1908,7 +1928,6 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
                     pmi.sendSymbol("+");
                 }
                 needsPlus = true;
-                pmi.sendSymbol("+");
                 this->visitLifetime(lft);
             }
             if (te->use) {

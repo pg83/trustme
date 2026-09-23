@@ -32,3 +32,46 @@ pub fn echo_item_spelled(attribute: TokenStream, item: TokenStream) -> TokenStre
     );
     item
 }
+
+// Attribute: the item comes back unchanged, after checking that its tokens hold
+// no parentheses around a type that a source without them would not need: a
+// group right after `&`, `&mut`, `*const` or `*mut`, or one opening with `dyn`,
+// is only there for a type of several bounds (`&(dyn A + Send)`).
+#[proc_macro_attribute]
+pub fn echo_item_without_added_type_parens(_attribute: TokenStream, item: TokenStream) -> TokenStream {
+    use proc_macro::{Delimiter, TokenTree};
+
+    fn is_punct(token: Option<&TokenTree>, c: char) -> bool {
+        matches!(token, Some(TokenTree::Punct(p)) if p.as_char() == c)
+    }
+
+    fn is_ident(token: Option<&TokenTree>, name: &str) -> bool {
+        matches!(token, Some(TokenTree::Ident(i)) if i.to_string() == name)
+    }
+
+    fn walk(stream: TokenStream) {
+        let tokens: Vec<TokenTree> = stream.into_iter().collect();
+        for (i, token) in tokens.iter().enumerate() {
+            let TokenTree::Group(group) = token else { continue };
+            if group.delimiter() == Delimiter::Parenthesis {
+                let inner: Vec<TokenTree> = group.stream().into_iter().collect();
+                let previous = if i > 0 { tokens.get(i - 1) } else { None };
+                let before = if i > 1 { tokens.get(i - 2) } else { None };
+                let after_pointer = is_punct(previous, '&')
+                    || ((is_ident(previous, "mut") || is_ident(previous, "const"))
+                        && (is_punct(before, '&') || is_punct(before, '*')));
+                let opens_dyn = is_ident(inner.first(), "dyn");
+                let several_bounds = inner.iter().any(|t| is_punct(Some(t), '+'));
+                assert!(
+                    !(after_pointer || opens_dyn) || several_bounds,
+                    "parentheses the source did not need: {}",
+                    group
+                );
+            }
+            walk(group.stream());
+        }
+    }
+
+    walk(item.clone());
+    item
+}
