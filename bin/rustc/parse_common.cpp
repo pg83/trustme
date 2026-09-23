@@ -4940,6 +4940,11 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
                     impl.addStatic(item.span, std::move(item.attrs), item.vis, false, item.name, std::move(e));
                     break;
                 }
+                case ASTItem::TAG_MacroInv: {
+                    impl.addMacroInvocation(std::move(item.data.as_MacroInv()));
+                    impl.items().back().attrs = std::move(item.attrs);
+                    break;
+                }
             }
             return;
         }
