@@ -103,3 +103,16 @@ pub fn token_texts(input: TokenStream) -> TokenStream {
     let texts: Vec<String> = input.into_iter().map(|token| token.to_string()).collect();
     TokenTree::from(Literal::string(&texts.join(" "))).into()
 }
+
+// A literal parsed from its text, the text given as a string literal:
+// `literal_from_text!("-5")` is `"-5".parse::<Literal>()`.
+#[proc_macro]
+pub fn literal_from_text(input: TokenStream) -> TokenStream {
+    use proc_macro::{Literal, TokenTree};
+    let quoted = input.to_string();
+    let text = quoted.trim().trim_matches('"');
+    let literal: Literal = text.parse().unwrap();
+    assert!("- 5".parse::<Literal>().is_err());
+    assert!("-\"s\"".parse::<Literal>().is_err());
+    TokenTree::from(literal).into()
+}

@@ -237,6 +237,14 @@ impl ::std::str::FromStr for Literal
 {
     type Err = crate::lex::LexError;
     fn from_str(v: &str) -> Result<Self,Self::Err> {
+        if let Some(rest) = v.strip_prefix('-') {
+            let number = rest.starts_with(|c: char| c.is_ascii_digit());
+            let literal = Literal::from_str(rest)?;
+            return match literal.val {
+                LiteralValue::UnsignedInt(..) | LiteralValue::SignedInt(..) | LiteralValue::Float(..) | LiteralValue::Raw(_) if number => Ok(Literal { span: literal.span, val: LiteralValue::Raw(format!("-{}", literal)) }),
+                _ => Err(crate::lex::LexError { inner: "Wasn't a literal" }),
+            };
+        }
         let mut ts = crate::TokenStream::from_str(v)?.inner;
         match &mut ts[..] {
         &mut [TokenTree::Literal(ref mut rv)] => Ok(::std::mem::replace(rv, Literal { span: Span::from_raw(0), val: LiteralValue::CharLit('\0') })),

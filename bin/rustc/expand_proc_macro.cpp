@@ -140,6 +140,7 @@ namespace {
         bool eofHit = false;
         Vector<u8> pendingSymbols;
         size_t pendingSymbolOffset = 0;
+        Token pendingLiteral;
 
         ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
         ProcMacroInv(const ProcMacroInv&) = delete;
@@ -665,6 +666,11 @@ Token ProcMacroInv::realGetToken_() {
     if (pendingSymbolOffset != pendingSymbols.length()) {
         return this->takePendingSymbol();
     }
+    if (pendingLiteral != TOK_NULL) {
+        auto literal = mv$(pendingLiteral);
+        pendingLiteral = Token();
+        return literal;
+    }
     if (eofHit) {
         return Token(TOK_EOF);
     }
@@ -815,15 +821,24 @@ Token ProcMacroInv::realGetToken_() {
         }
         case TokenClass::RawLiteral: {
             auto text = this->recvBytes();
+            const bool negative = !text.empty() && text[0] == '-';
+            if (negative) {
+                text.erase(0, 1);
+            }
             std::istringstream input(text + " ");
             Lexer lexer(this->parseState().wb->id, this->typePool(), input, edition, this->parseState());
             auto token = lexer.getToken();
-            ASSERT_BUG(this->parentSpan, token != TOK_EOF, StringView("Empty raw literal from child process"));
+            ASSERT_BUG(this->parentSpan, token != TOK_EOF, StringView("Empty raw literal from child process: `") << text << StringView("`"));
             ASSERT_BUG(this->parentSpan, lexer.getToken() == TOK_EOF, StringView("Raw literal contains multiple tokens: `") << text << StringView("`"));
             if (token == TOK_STRING || token == TOK_BYTESTRING || token == TOK_CSTRING) {
                 token = Token(token.type(), mv$(token.str()), token.spelling(), receivedHygiene);
             }
             token.setPos(this->getPosition());
+            if (negative) {
+                ASSERT_BUG(this->parentSpan, token == TOK_INTEGER || token == TOK_FLOAT, StringView("Negative raw literal that is not a number: `-") << text << StringView("`"));
+                pendingLiteral = mv$(token);
+                return Token(TOK_DASH);
+            }
             return token;
         }
 
