@@ -12758,6 +12758,21 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
             candidate.relationEqualities.push_back(SolverTypeEquality{left, pending.right});
         }
     }
+    for (const auto& binding : typeBindings) {
+        const auto* stable = binding.stable->opt_Infer();
+        if (!stable || stable->index == ~0u || (isAliasInputInfer(stable->index) && !isSolverCanonicalInfer(stable->index))) {
+            continue;
+        }
+        const auto* resolved = resolve_.ivars.getType(binding.probe);
+        if (MaterializeCandidate::isProbeVariable(binding, resolved)) {
+            continue;
+        }
+        const auto* value = materialize.monomorphType(span(), resolved, true);
+        if (value == binding.stable || visitTyWith(value, [&](const HIRType* inner) { return isProbe(inner) || bornInProbe(inner); })) {
+            continue;
+        }
+        candidate.relationEqualities.push_back(SolverTypeEquality{binding.stable, value});
+    }
     const bool changed = output != original;
     if (changed) {
         params = std::move(output);
