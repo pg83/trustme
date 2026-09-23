@@ -2907,6 +2907,18 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
             return Outcome::Mismatch;
         }
     }
+    {
+        const auto* leftPath = left->opt_Path();
+        const auto* rightPath = right->opt_Path();
+        const auto* leftRigid = leftPath && leftPath->binding.is_Opaque() ? leftPath->path.data.opt_UfcsKnown() : nullptr;
+        const auto* rightRigid = rightPath && rightPath->binding.is_Opaque() ? rightPath->path.data.opt_UfcsKnown() : nullptr;
+        if (leftRigid && rightRigid && leftRigid->trait.path == rightRigid->trait.path && leftRigid->item == rightRigid->item && !projectionIsOpen(*leftRigid) && !projectionIsOpen(*rightRigid)) {
+            if (this->unifyResolved(leftRigid->type, rightRigid->type) == Outcome::Mismatch || this->unifyParams(leftRigid->trait.params, rightRigid->trait.params) == Outcome::Mismatch || this->unifyParams(leftRigid->params, rightRigid->params) == Outcome::Mismatch) {
+                return Outcome::Mismatch;
+            }
+            return Outcome::Proven;
+        }
+    }
     if (typeIsRigidUnknown(left) || typeIsRigidUnknown(right)) {
         return this->defer(left, right);
     }
@@ -5667,7 +5679,14 @@ const HIRType* TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span
         return this->expandAssociatedTypesInplace(sp, input, effects);
     }
 
-    if (!this->ivars.typeContainsIvars(input, false)) {
+    const auto* projection = input->as_Path().path.data.opt_UfcsKnown();
+    bool selectionHasIvars = projection ? this->ivars.typeContainsIvars(projection->type, false) : this->ivars.typeContainsIvars(input, false);
+    if (projection) {
+        for (const auto* param : projection->trait.params.types) {
+            selectionHasIvars |= this->ivars.typeContainsIvars(param, false);
+        }
+    }
+    if (!selectionHasIvars) {
         auto data = input->cloneData();
         data.as_Path().binding = HIRTypePathBinding::make_Opaque({});
         input = crate.types.intern(std::move(data));
@@ -14849,9 +14868,6 @@ auto NextTraitGoalEvaluator::matchRootAssociated(const HIRSimplePath& trait, Can
     const auto& impl = candidate.impl;
     const HIRPathParams noParams;
     const auto& params = assocParams ? *assocParams : noParams;
-    if (!impl.isTraitImpl() && params.hasParams()) {
-        return Certainty::Ambiguous;
-    }
     auto output = impl.getType(crate.types, assocName, params);
     if (output == nullptr) {
         if (impl.isTraitImpl()) {
