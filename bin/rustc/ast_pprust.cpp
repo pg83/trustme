@@ -1,15 +1,16 @@
 #include "ast_pprust.h"
 
 #include "common.h"
+#include "floats.h"
 #include "ast_expr.h"
 #include "ast_path.h"
-#include "ast_types.h"
-#include "floats.h"
 #include "coretypes.h"
+#include "ast_types.h"
 #include "ast_pattern.h"
-#include "ast_generics.h"
 #include "parse_token.h"
+#include "ast_generics.h"
 #include "parse_tokentree.h"
+#include "parse_tokenstream.h"
 
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
@@ -139,13 +140,25 @@ namespace {
         return token;
     }
 
-    bool isDelimitedGroup(const TokenTree& tree) {
-        if (tree.isToken() || tree.size() < 2 || !tree[0].isToken() || !tree[tree.size() - 1].isToken()) {
-            return false;
+    struct FlatTok {
+        const Token* tok = nullptr;
+        u8 invisible = 0;
+    };
+
+    bool flatIsOpen(const FlatTok& flat) {
+        if (flat.tok == nullptr) {
+            return flat.invisible == 1;
         }
-        const auto open = tree[0].tok().type();
-        const auto close = tree[tree.size() - 1].tok().type();
-        return (open == TOK_PAREN_OPEN && close == TOK_PAREN_CLOSE) || (open == TOK_SQUARE_OPEN && close == TOK_SQUARE_CLOSE) || (open == TOK_BRACE_OPEN && close == TOK_BRACE_CLOSE);
+        const auto type = flat.tok->type();
+        return type == TOK_PAREN_OPEN || type == TOK_SQUARE_OPEN || type == TOK_BRACE_OPEN;
+    }
+
+    bool flatIsClose(const FlatTok& flat) {
+        if (flat.tok == nullptr) {
+            return flat.invisible == 2;
+        }
+        const auto type = flat.tok->type();
+        return type == TOK_PAREN_CLOSE || type == TOK_SQUARE_CLOSE || type == TOK_BRACE_CLOSE;
     }
 
     bool isReservedIdent(const Token& tok) {
@@ -155,11 +168,7 @@ namespace {
         return tok.type() == TOK_IDENT && !tok.ident().isRaw && tok.ident().name == "Self";
     }
 
-    bool spaceBetween(const TokenTree& tt1, const TokenTree& tt2) {
-        const bool tt1Delimited = !tt1.isToken();
-        const bool tt2Delimited = !tt2.isToken();
-        const Token* tok1 = tt1Delimited ? nullptr : &tt1.tok();
-        const Token* tok2 = tt2Delimited ? nullptr : &tt2.tok();
+    bool spaceBetween(const Token* tok1, const Token* tok2, eTokenType tt2Open) {
         const bool tt1IsPunct = tok1 != nullptr && tok1->isPunct();
         const bool tt2IsPunct = tok2 != nullptr && tok2->isPunct();
         if (tok1 != nullptr && tok1->type() == TOK_DOT && !tt2IsPunct) {
@@ -177,13 +186,13 @@ namespace {
                 return false;
             }
         }
-        if (tt1IsIdent && tt2Delimited && tt2[0].tok().type() == TOK_PAREN_OPEN) {
+        if (tt1IsIdent && tok2 == nullptr && tt2Open == TOK_PAREN_OPEN) {
             const bool exempt = tok1->type() == TOK_RWORD_FN || tok1->type() == TOK_RWORD_PUB || (tok1->type() == TOK_IDENT && (tok1->ident().isRaw || tok1->ident().name == "Self"));
             if (!isReservedIdent(*tok1) || exempt) {
                 return false;
             }
         }
-        if (tok1 != nullptr && tok1->type() == TOK_HASH && tt2Delimited && tt2[0].tok().type() == TOK_SQUARE_OPEN) {
+        if (tok1 != nullptr && tok1->type() == TOK_HASH && tok2 == nullptr && tt2Open == TOK_SQUARE_OPEN) {
             return false;
         }
         return true;
@@ -302,12 +311,15 @@ namespace {
 
         void printTts(const TokenTree& tts);
         void printExpr(PExpr e, Fixup fixup);
+        void printPatTop(const ASTPattern& pat);
+        void printTypeTop(const ASTType& type);
 
     private:
-        void collectTrees(const TokenTree& tree, Vector<const TokenTree*>& out);
-        TokenSpacing printTt(const TokenTree& tt);
-        void printTtsItems(const Vector<const TokenTree*>& items);
-        void printDelimited(const TokenTree& group);
+        void flattenTree(const TokenTree& tree, Vector<FlatTok>& out);
+        void flattenToken(const Token& tok, Vector<FlatTok>& out);
+        size_t matchingClose(const Vector<FlatTok>& flat, size_t open);
+        TokenSpacing printFlatItem(const Vector<FlatTok>& flat, size_t index, size_t& next);
+        void printFlat(const Vector<FlatTok>& flat, size_t begin, size_t end);
 
         void printIdent(const RcString& name);
         void printLifetimeName(const RcString& name);
@@ -737,80 +749,112 @@ void Printer::breakOffsetIfNotBol(i64 n, i64 off) {
 
 
 
-void State::collectTrees(const TokenTree& tree, Vector<const TokenTree*>& out) {
-    if (tree.isToken() || isDelimitedGroup(tree)) {
-        out.pushBack(&tree);
+void State::flattenToken(const Token& tok, Vector<FlatTok>& out) {
+    if (const auto* recorded = tok.fragmentTokens()) {
+        out.pushBack(FlatTok{nullptr, 1});
+        for (const auto* token : *recorded) {
+            this->flattenToken(token->tok, out);
+        }
+        out.pushBack(FlatTok{nullptr, 2});
+        return;
+    }
+    out.pushBack(FlatTok{&tok, 0});
+}
+
+void State::flattenTree(const TokenTree& tree, Vector<FlatTok>& out) {
+    if (tree.isToken()) {
+        this->flattenToken(tree.tok(), out);
         return;
     }
     for (size_t i = 0; i < tree.size(); i++) {
-        this->collectTrees(tree[i], out);
+        this->flattenTree(tree[i], out);
     }
 }
 
-TokenSpacing State::printTt(const TokenTree& tt) {
-    if (tt.isToken()) {
-        const auto text = tt.tok().toStr();
-        this->word(StringView(reinterpret_cast<const u8*>(text.data()), text.size()));
-        return tt.tok().spacing();
-    }
-    this->printDelimited(tt);
-    return tt[tt.size() - 1].tok().spacing();
-}
-
-void State::printTtsItems(const Vector<const TokenTree*>& items) {
-    for (size_t i = 0; i < items.length(); i++) {
-        const TokenSpacing spacing = this->printTt(*items[i]);
-        if (i + 1 < items.length()) {
-            if (spacing == TokenSpacing::Alone && spaceBetween(*items[i], *items[i + 1])) {
-                this->space();
+size_t State::matchingClose(const Vector<FlatTok>& flat, size_t open) {
+    size_t depth = 0;
+    for (size_t i = open; i < flat.length(); i++) {
+        if (flatIsOpen(flat[i])) {
+            depth++;
+        } else if (flatIsClose(flat[i])) {
+            depth--;
+            if (depth == 0) {
+                return i;
             }
         }
     }
+    return flat.length() - 1;
 }
 
-void State::printTts(const TokenTree& tts) {
-    Vector<const TokenTree*> items;
-    if (tts.isToken()) {
-        items.pushBack(&tts);
-    } else {
-        for (size_t i = 0; i < tts.size(); i++) {
-            this->collectTrees(tts[i], items);
+TokenSpacing State::printFlatItem(const Vector<FlatTok>& flat, size_t index, size_t& next) {
+    const FlatTok& item = flat[index];
+    if (!flatIsOpen(item)) {
+        next = index + 1;
+        if (item.tok == nullptr) {
+            return TokenSpacing::Alone;
         }
+        const auto text = item.tok->toStr();
+        this->word(StringView(reinterpret_cast<const u8*>(text.data()), text.size()));
+        return item.tok->spacing();
     }
-    this->printTtsItems(items);
-}
-
-void State::printDelimited(const TokenTree& group) {
-    Vector<const TokenTree*> inner;
-    for (size_t i = 1; i + 1 < group.size(); i++) {
-        this->collectTrees(group[i], inner);
+    const size_t close = this->matchingClose(flat, index);
+    next = close + 1;
+    if (item.tok == nullptr) {
+        this->word(StringView(""));
+        this->ibox(0);
+        this->printFlat(flat, index + 1, close);
+        this->end();
+        this->word(StringView(""));
+        return TokenSpacing::Alone;
     }
-    const Token& open = group[0].tok();
-    const Token& close = group[group.size() - 1].tok();
-    if (open.type() == TOK_BRACE_OPEN) {
+    if (item.tok->type() == TOK_BRACE_OPEN) {
         this->cbox(INDENT_UNIT);
         this->word(StringView("{"));
-        const bool openSpace = open.spacing() == TokenSpacing::Alone && !inner.empty();
+        const bool openSpace = item.tok->spacing() == TokenSpacing::Alone && close > index + 1;
         if (openSpace) {
             this->space();
         }
         this->ibox(0);
-        this->printTtsItems(inner);
+        this->printFlat(flat, index + 1, close);
         this->end();
         if (openSpace) {
             this->breakOffsetIfNotBol(1, -INDENT_UNIT);
         }
         this->word(StringView("}"));
         this->end();
-        return;
+    } else {
+        const auto openText = item.tok->toStr();
+        this->word(StringView(reinterpret_cast<const u8*>(openText.data()), openText.size()));
+        this->ibox(0);
+        this->printFlat(flat, index + 1, close);
+        this->end();
+        const auto closeText = flat[close].tok ? flat[close].tok->toStr() : openText;
+        this->word(StringView(reinterpret_cast<const u8*>(closeText.data()), closeText.size()));
     }
-    const auto openText = open.toStr();
-    this->word(StringView(reinterpret_cast<const u8*>(openText.data()), openText.size()));
-    this->ibox(0);
-    this->printTtsItems(inner);
-    this->end();
-    const auto closeText = close.toStr();
-    this->word(StringView(reinterpret_cast<const u8*>(closeText.data()), closeText.size()));
+    return flat[close].tok ? flat[close].tok->spacing() : TokenSpacing::Alone;
+}
+
+void State::printFlat(const Vector<FlatTok>& flat, size_t begin, size_t end) {
+    size_t i = begin;
+    while (i < end) {
+        size_t next = i + 1;
+        const TokenSpacing spacing = this->printFlatItem(flat, i, next);
+        if (next < end && spacing == TokenSpacing::Alone) {
+            const Token* tok1 = flatIsOpen(flat[i]) ? nullptr : flat[i].tok;
+            const Token* tok2 = flatIsOpen(flat[next]) ? nullptr : flat[next].tok;
+            const eTokenType tt2Open = flat[next].tok ? flat[next].tok->type() : TOK_NULL;
+            if (spaceBetween(tok1, tok2, tt2Open)) {
+                this->space();
+            }
+        }
+        i = next;
+    }
+}
+
+void State::printTts(const TokenTree& tts) {
+    Vector<FlatTok> flat;
+    this->flattenTree(tts, flat);
+    this->printFlat(flat, 0, flat.length());
 }
 
 namespace {
@@ -1460,6 +1504,14 @@ namespace {
         }
         return precedenceOf(e);
     }
+}
+
+void State::printPatTop(const ASTPattern& pat) {
+    this->printPat(pat);
+}
+
+void State::printTypeTop(const ASTType& type) {
+    this->printType(&type);
 }
 
 void State::printIdent(const RcString& name) {
@@ -3084,4 +3136,21 @@ void pprustExprToString(ZeroCopyOutput& out, const ASTExprNode& expr) {
     State state(out);
     state.printExpr(nodeExpr(&expr), Fixup());
     state.eof();
+}
+
+void pprustPatToString(ZeroCopyOutput& out, const ASTPattern& pat) {
+    State state(out);
+    state.printPatTop(pat);
+    state.eof();
+}
+
+void pprustTypeToString(ZeroCopyOutput& out, const ASTType& type) {
+    State state(out);
+    state.printTypeTop(type);
+    state.eof();
+}
+
+bool pprustExprIsAtom(const ASTExprNode& expr) {
+    const PExpr e = nodeExpr(&expr);
+    return precedenceOf(e) == Prec::Unambiguous && !exprIsComplete(e);
 }

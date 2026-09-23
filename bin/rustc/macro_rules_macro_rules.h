@@ -100,7 +100,15 @@ struct MacroRulesArm {
 
     std::vector<MacroExpansionEnt> contents;
 
+    stl::Vector<u8> tokenCaptures;
+
     ~MacroRulesArm();
+
+    void findTokenCaptures();
+
+    bool capturesTokens(unsigned int index) const {
+        return index < tokenCaptures.length() && tokenCaptures[index] != 0;
+    }
 
     MacroRulesArm();
 

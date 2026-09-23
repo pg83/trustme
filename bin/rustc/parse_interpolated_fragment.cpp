@@ -42,6 +42,7 @@ InterpolatedFragment::~InterpolatedFragment() {
 InterpolatedFragment::InterpolatedFragment(InterpolatedFragment&& x)
     : type(x.type)
     , span(std::move(x.span))
+    , tokens(x.tokens)
 {
     ptr = x.ptr, x.ptr = nullptr;
 }
@@ -50,6 +51,7 @@ InterpolatedFragment& InterpolatedFragment::operator=(InterpolatedFragment&& x) 
     type = x.type;
     ptr = x.ptr, x.ptr = nullptr;
     span = std::move(x.span);
+    tokens = x.tokens;
     return *this;
 }
 

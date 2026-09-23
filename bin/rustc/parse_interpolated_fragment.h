@@ -6,6 +6,7 @@
 
 struct ASTType;
 class TokenTree;
+struct RecordedTokens;
 struct Ident;
 
 class ASTVisibility;
@@ -37,6 +38,7 @@ public:
 
     void* ptr;
     Span span;
+    const RecordedTokens* tokens = nullptr;
 
     InterpolatedFragment(InterpolatedFragment&&);
     InterpolatedFragment& operator=(InterpolatedFragment&&);

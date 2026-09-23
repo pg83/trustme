@@ -34,7 +34,41 @@ Token TokenStream::innerGetToken() {
     if (ret != TOK_EOF && ret.getPos().filename == "" && !ret.getPos().span) {
         ret.setPos(this->getPosition());
     }
+    if (sourceRecord_ && ret != TOK_EOF) {
+        auto recorded = ret.fragmentTokens() ? Token::tokensOf(ret) : ret.clone();
+        sourceRecord_->pushBack(typePool().make<RecordedToken>(mv$(recorded), this->realGetEdition(), this->realGetHygiene()));
+    }
     return ret;
+}
+
+void TokenStream::startSourceRecording(Vector<RecordedToken*>* out) {
+    BUG_ASSERT(sourceRecord_ == nullptr);
+    if (cacheValid && cache != TOK_EOF) {
+        auto recorded = cache.fragmentTokens() ? Token::tokensOf(cache) : cache.clone();
+        out->pushBack(typePool().make<RecordedToken>(mv$(recorded), edition, hygiene_));
+    }
+    for (unsigned i = 0; i < lookaheadCount_; i++) {
+        const auto& ent = lookaheadAt(i);
+        if (ent.tok != TOK_EOF) {
+            auto recorded = ent.tok.fragmentTokens() ? Token::tokensOf(ent.tok) : ent.tok.clone();
+            out->pushBack(typePool().make<RecordedToken>(mv$(recorded), ent.edition, ent.hygiene));
+        }
+    }
+    sourceRecord_ = out;
+}
+
+void TokenStream::stopSourceRecording() {
+    unsigned pending = cacheValid && cache != TOK_EOF ? 1 : 0;
+    for (unsigned i = 0; i < lookaheadCount_; i++) {
+        if (lookaheadAt(i).tok != TOK_EOF) {
+            pending++;
+        }
+    }
+    while (pending > 0 && !sourceRecord_->empty()) {
+        sourceRecord_->popBack();
+        pending--;
+    }
+    sourceRecord_ = nullptr;
 }
 
 Token TokenStream::getToken() {

@@ -46,6 +46,20 @@ template <typename T>
 struct ASTNamed;
 
 class InterpolatedFragment;
+struct RecordedToken;
+
+struct RecordedTokens {
+    RecordedToken* const* items = nullptr;
+    size_t count = 0;
+
+    RecordedToken* const* begin() const {
+        return items;
+    }
+
+    RecordedToken* const* end() const {
+        return items + count;
+    }
+};
 
 #include "parse_token_tu.h"
 
@@ -97,6 +111,7 @@ public:
     }
 
     static Token fromSerialised(enum eTokenType type, TokenData data);
+    static Token tokensOf(const Token& fragment);
 
     const TokenData& rawData() const;
 
@@ -219,6 +234,10 @@ public:
     }
 
     bool isPunct() const;
+
+    const RecordedTokens* fragmentTokens() const {
+        return data_.is_Fragment() ? data_.as_Fragment().tokens : nullptr;
+    }
 
     static bool typeIsRword(enum eTokenType type) {
         return type >= TOK_RWORD_PUB && type <= TOK_RWORD_TRY;

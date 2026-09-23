@@ -1763,6 +1763,7 @@ auto HirDeserialiser::deserialiseMacrorulesarm() -> ::MacroRulesArm {
     rv.contents = deserialiseVecC<::MacroExpansionEnt>([&]() {
         return deserialiseMacroexpansionent();
     });
+    rv.findTokenCaptures();
     return rv;
 }
 

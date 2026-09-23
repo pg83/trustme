@@ -6,6 +6,7 @@
 #include "ast_expr.h"
 #include "ast_crate.h"
 #include "wire_board.h"
+#include "ast_pprust.h"
 #include "parse_common.h"
 #include "parse_ttstream.h"
 #include "parse_tokentree.h"
@@ -1988,7 +1989,21 @@ namespace {
                         ASSERT_BUG(sp, stmtCaptureIndex < stmtIsItemHistory.length(), StringView("Missing statement fragment classification"));
                         stmtIsItem = stmtIsItemHistory[stmtCaptureIndex++];
                     }
+                    const bool recordsTokens = e->type != MacroPatEnt::PAT_TT && e->type != MacroPatEnt::PAT_IDENT && e->type != MacroPatEnt::PAT_LIFETIME && e->type != MacroPatEnt::PAT_LITERAL && rules.rules[i].capturesTokens(e->idx);
+                    Vector<RecordedToken*> recorded;
+                    if (recordsTokens) {
+                        lex.startSourceRecording(&recorded);
+                    }
                     auto cap = MacroHandlePatternCap(lex, e->type, stmtIsItem);
+                    if (recordsTokens) {
+                        lex.stopSourceRecording();
+                        auto& pool = lex.typePool();
+                        auto** items = recorded.empty() ? nullptr : static_cast<RecordedToken**>(pool.allocate(recorded.length() * sizeof(RecordedToken*)));
+                        for (size_t k = 0; k < recorded.length(); k++) {
+                            items[k] = recorded[k];
+                        }
+                        cap.tokens = pool.make<RecordedTokens>(RecordedTokens{items, recorded.length()});
+                    }
 
                     unsigned int capIdx = captures.size();
                     captures.push_back(mv$(cap));
@@ -2506,6 +2521,7 @@ namespace {
         auto ruleSequence = macroPatternToSimple(patSp, pattern);
         auto arm = MacroRulesArm(mv$(ruleSequence), mv$(contents));
         enumerateNames(pattern, arm.paramNames);
+        arm.findTokenCaptures();
         return arm;
     }
 
@@ -3512,6 +3528,20 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansio
         }
 
         void emitToken(Token& tok) {
+            if (const auto* recorded = tok.fragmentTokens()) {
+                const bool grouped = tok.type() == TOK_INTERPOLATED_EXPR && (tok.rawData().as_Fragment().ptr == nullptr || !pprustExprIsAtom(tok.fragNode()));
+                if (grouped) {
+                    out.push_back(Token(TOK_PAREN_OPEN));
+                }
+                for (const auto* token : *recorded) {
+                    auto inner = token->tok.clone();
+                    emitToken(inner);
+                }
+                if (grouped) {
+                    out.push_back(Token(TOK_PAREN_CLOSE));
+                }
+                return;
+            }
             switch (tok.type()) {
                 case TOK_INTERPOLATED_PATH:
                     emitPath(tok.fragPath());
@@ -3655,6 +3685,93 @@ MacroPatEnt::MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, std
 }
 
 MacroRulesArm::MacroRulesArm() {
+}
+
+namespace {
+    struct TokenCaptureScan {
+        Vector<u8>& captures;
+        Vector<u8> groups;
+        size_t insideCall = 0;
+        bool afterName = false;
+        bool afterBang = false;
+        bool afterCallName = false;
+
+        template <typename Ents>
+        void scan(const Ents& ents) {
+            for (const auto& ent : ents) {
+                if (const auto* loop = ent.opt_Loop()) {
+                    this->scan(loop->entries);
+                } else if (const auto* tok = ent.opt_Token()) {
+                    this->token(tok->type());
+                } else if (const auto* value = ent.opt_NamedValue()) {
+                    if ((*value & ~NAMEDVALUE_VALMASK) == 0) {
+                        if (insideCall > 0) {
+                            while (captures.length() <= *value) {
+                                captures.pushBack(0);
+                            }
+                            captures.mut(*value) = 1;
+                        }
+                    }
+                    this->name();
+                } else {
+                    this->name();
+                }
+            }
+        }
+
+        void name() {
+            afterCallName = afterBang;
+            afterName = !afterBang;
+            afterBang = false;
+        }
+
+        void token(eTokenType type) {
+            switch (type) {
+                case TOK_PAREN_OPEN:
+                case TOK_SQUARE_OPEN:
+                case TOK_BRACE_OPEN: {
+                    const bool isCall = afterBang || afterCallName;
+                    groups.pushBack(isCall ? 1 : 0);
+                    if (isCall) {
+                        insideCall++;
+                    }
+                    break;
+                }
+                case TOK_PAREN_CLOSE:
+                case TOK_SQUARE_CLOSE:
+                case TOK_BRACE_CLOSE:
+                    if (!groups.empty()) {
+                        if (groups.popBack() != 0) {
+                            insideCall--;
+                        }
+                    }
+                    break;
+                case TOK_EXCLAM:
+                    afterBang = afterName;
+                    afterName = false;
+                    afterCallName = false;
+                    return;
+                case TOK_IDENT:
+                    this->name();
+                    return;
+                default:
+                    if (Token::typeIsRword(type)) {
+                        this->name();
+                        return;
+                    }
+                    break;
+            }
+            afterName = false;
+            afterBang = false;
+            afterCallName = false;
+        }
+    };
+}
+
+void MacroRulesArm::findTokenCaptures() {
+    tokenCaptures.clear();
+    TokenCaptureScan scan{tokenCaptures};
+    scan.scan(contents);
 }
 
 MacroRulesArm::MacroRulesArm(std::vector<SimplePatEnt> pattern, std::vector<MacroExpansionEnt> contents)

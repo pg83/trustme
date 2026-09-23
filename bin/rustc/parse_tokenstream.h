@@ -76,6 +76,7 @@ class TokenStream {
     ParseState parseState_;
     bool macroExpansionPlaceholder_ = false;
     stl::Vector<RecordedToken*>* record_ = nullptr;
+    stl::Vector<RecordedToken*>* sourceRecord_ = nullptr;
 
     Token takeToken();
 
@@ -83,6 +84,9 @@ public:
     TokenStream(ParseState ps);
     virtual ~TokenStream();
     Token getToken();
+
+    void startSourceRecording(stl::Vector<RecordedToken*>* out);
+    void stopSourceRecording();
 
     void recordInto(stl::Vector<RecordedToken*>* out) {
         record_ = out;

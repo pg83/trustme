@@ -22,6 +22,9 @@ generate(
             ("FloatValue", "floatval"),
             ("RcString", "spelling"),
         ]),
-        v("Fragment", "void*"),
+        v("Fragment", fields=[
+            ("void*", "ptr"),
+            ("const RecordedTokens*", "tokens"),
+        ]),
     ],
 )
