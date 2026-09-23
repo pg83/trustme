@@ -124,6 +124,7 @@ namespace {
         Vector<Ident::Hygiene> spanContexts;
         size_t lastSentSpan = 1;
         Ident::Hygiene receivedHygiene;
+        bool receivedFromInput = false;
 
         struct Handles {
             Handles();
@@ -197,6 +198,7 @@ namespace {
         bool attrIsUsed(const RcString& n) const;
 
         virtual Position getPosition() const override;
+        virtual Span outerSpan() const override;
         virtual Token realGetToken() override;
 
         virtual ASTEdition realGetEdition() const override;
@@ -653,7 +655,11 @@ U128 ProcMacroInv::recvV128uU128() {
 }
 
 Position ProcMacroInv::getPosition() const {
-    return Position(parentSpan);
+    return Position(receivedFromInput ? parentSpan : thisSpan);
+}
+
+Span ProcMacroInv::outerSpan() const {
+    return parentSpan;
 }
 
 Token ProcMacroInv::realGetToken() {
@@ -681,7 +687,8 @@ Token ProcMacroInv::realGetToken_() {
        with, one the macro made names the call site. */
     while (static_cast<TokenClass>(v) == TokenClass::SpanRef) {
         const auto index = this->recvV128u();
-        this->receivedHygiene = (index >= 2 && index - 2 < spanContexts.length()) ? spanContexts[index - 2] : Ident::Hygiene();
+        this->receivedFromInput = index >= 2 && index - 2 < spanContexts.length();
+        this->receivedHygiene = this->receivedFromInput ? spanContexts[index - 2] : Ident::Hygiene();
         v = this->recvU8();
     }
 

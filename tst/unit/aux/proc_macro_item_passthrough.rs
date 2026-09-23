@@ -116,3 +116,9 @@ pub fn literal_from_text(input: TokenStream) -> TokenStream {
     assert!("-\"s\"".parse::<Literal>().is_err());
     TokenTree::from(literal).into()
 }
+
+// Items the macro writes itself, `unsafe` among them.
+#[proc_macro]
+pub fn made_unsafe_items(_input: TokenStream) -> TokenStream {
+    "unsafe fn made_unsafe() -> u8 { 3 } fn call_made() -> u8 { unsafe { made_unsafe() } }".parse().unwrap()
+}
