@@ -3986,8 +3986,33 @@ auto UfcsVisitor::locateInTraitImplAndSet(const Span& sp, HIRVisitor::PathContex
 auto UfcsVisitor::resolve_UfcsUnknown_inherent(const HIRSimplePath& visPath, const HIRPath& p, HIRVisitor::PathContext pc, HIRPath::Data& pd) -> bool {
     auto& e = pd.as_UfcsUnknown();
     TRACE_FUNCTION_F(e.type);
-    return crate.findTypeImpls(resolve_.normalizeForItemLookup(Span(), e.type), HIRResolvePlaceholdersNop(), [&](const auto& impl) {
+    const auto* lookupType = resolve_.normalizeForItemLookup(Span(), e.type);
+    return crate.findTypeImpls(lookupType, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
         DEBUG(StringView("- matched inherent impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);
+        HIRImplMatcherScratch scratch;
+        if (impl.matchesType(lookupType, HIRResolvePlaceholdersNop(), scratch)) {
+            const auto sizedMayHold = [&](const HIRType* type) {
+                const bool standsForInference = visitTyWith(type, [&](const HIRType* inner) {
+                    if (inner->is_Infer()) {
+                        return true;
+                    }
+                    const auto* generic = inner->opt_Generic();
+                    if (!generic || generic->isSelf()) {
+                        return false;
+                    }
+                    const auto* scope = generic->group() == GENERICImpl ? resolve_.implGenericsPtr() : generic->group() == GENERICItem ? resolve_.itemGenericsPtr() : nullptr;
+                    return !scope || generic->idx() >= scope->types.size();
+                });
+                return standsForInference || resolve_.typeIsSized(Span(), type);
+            };
+            const auto& bound = scratch.buffers[0];
+            for (size_t i = 0; i < impl.params.types.size() && i < bound.length(); i++) {
+                if (impl.params.types[i].isSized && bound[i] && !sizedMayHold(bound[i])) {
+                    DEBUG(StringView("- impl needs ") << bound[i] << StringView(": Sized"));
+                    return false;
+                }
+            }
+        }
         switch (pc) {
             case HIRVisitor::PathContext::VALUE:
                 if (impl.methods.find(e.item) != impl.methods.end()) {
