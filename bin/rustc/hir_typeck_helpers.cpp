@@ -8359,7 +8359,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         const auto* methodReturn = monomorph.monomorphType(callSpan, returnTypeTemplate, true);
         const auto snapshot = resolve_.ivars.snapshot();
         Unifier relation(callSpan, resolve_.ivars, &resolve_, {.relateProjectionInputs = true});
-        if (relation.unify(methodReturn, expectedResult) == Unifier::Outcome::Proven) {
+        if (relation.unify(methodReturn, expectedResult) != Unifier::Outcome::Mismatch) {
             resolve_.ivars.commit(snapshot);
         } else {
             resolve_.ivars.rollbackTo(snapshot);
