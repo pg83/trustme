@@ -5161,6 +5161,12 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeBorrow& node) -> void {
                     return true;
                 }
             }
+            const bool holdsClosure = visitTyWith(valuePtr->resType, [](const HIRType* inner) {
+                return inner->is_NodeType() && inner->as_NodeType().is_Closure();
+            });
+            if (holdsClosure) {
+                return false;
+            }
             size_t v = 1, unusedAlign = 0;
             TargetGetSizeAndAlignOf(valuePtr->span(), resolve_, valuePtr->resType, v, unusedAlign);
             isUnsized = (v == SIZE_MAX);
