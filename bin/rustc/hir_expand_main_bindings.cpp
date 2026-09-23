@@ -5422,43 +5422,74 @@ auto StaticBorrowExprVisitorMark::nodeIsConstant(HIRExprNodeP& node) -> bool {
     return rv;
 }
 
+namespace {
+    bool promotedValueNeedsDrop(const StaticTraitResolve& resolve, const HIRExprNode& node, unsigned depth) {
+        if (depth > 64) {
+            return resolve.typeNeedsDropGlue(node.span(), node.resType);
+        }
+        const auto operandsNeedDrop = [&](const auto& operands) {
+            for (const auto& operand : operands) {
+                if (promotedValueNeedsDrop(resolve, *operand, depth + 1)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        if (const auto* e = cast<const HIRExprNodeStructLiteral>(&node)) {
+            if (resolve.typeHasDropImpl(node.span(), node.resType)) {
+                return true;
+            }
+            for (const auto& value : e->values) {
+                if (promotedValueNeedsDrop(resolve, *value.second, depth + 1)) {
+                    return true;
+                }
+            }
+            return e->baseValue && promotedValueNeedsDrop(resolve, *e->baseValue, depth + 1);
+        }
+        if (const auto* e = cast<const HIRExprNodeTupleVariant>(&node)) {
+            return resolve.typeHasDropImpl(node.span(), node.resType) || operandsNeedDrop(e->args);
+        }
+        if (cast<const HIRExprNodeUnitVariant>(&node)) {
+            return resolve.typeHasDropImpl(node.span(), node.resType);
+        }
+        if (const auto* e = cast<const HIRExprNodeTuple>(&node)) {
+            return operandsNeedDrop(e->vals);
+        }
+        if (const auto* e = cast<const HIRExprNodeField>(&node)) {
+            return promotedValueNeedsDrop(resolve, *e->value, depth + 1);
+        }
+        if (const auto* e = cast<const HIRExprNodeArrayList>(&node)) {
+            return operandsNeedDrop(e->vals);
+        }
+        if (const auto* e = cast<const HIRExprNodeArraySized>(&node)) {
+            return promotedValueNeedsDrop(resolve, *e->val, depth + 1);
+        }
+        if (const auto* e = cast<const HIRExprNodeBlock>(&node)) {
+            if (e->nodes.empty() && e->valueNode) {
+                return promotedValueNeedsDrop(resolve, *e->valueNode, depth + 1);
+            }
+        }
+        if (const auto* e = cast<const HIRExprNodePathValue>(&node)) {
+            if (!monomorphisePathNeeded(e->path)) {
+                MonomorphState ms(resolve.hirCrate().types);
+                auto value = resolve.getValue(node.span(), e->path, ms, /*signature_only*/ true);
+                if (const auto* constant = value.opt_Constant()) {
+                    const auto& body = (*constant)->value;
+                    const bool typed = body && body->resType && !visitTyWith(body->resType, [](const HIRType* t) {
+                        return t->is_Infer();
+                    });
+                    if (typed) {
+                        return promotedValueNeedsDrop(resolve, *body, depth + 1);
+                    }
+                }
+            }
+        }
+        return resolve.typeNeedsDropGlue(node.span(), node.resType);
+    }
+}
+
 auto StaticBorrowExprVisitorMark::candidateNeedsDrop(HIRExprNodeP& root) const -> bool {
-    struct Visitor: public HIRExprVisitorDef {
-        const StaticTraitResolve& resolve;
-        bool needsDrop = false;
-
-        explicit Visitor(const StaticTraitResolve& resolve)
-            : HIRExprVisitorDef(resolve.hirCrate().types)
-            , resolve(resolve)
-        {
-        }
-
-        void visitNodePtr(HIRExprNodeP& node) override {
-            if (needsDrop) {
-                return;
-            }
-            if (resolve.typeNeedsDropGlue(node->span(), node->resType)) {
-                needsDrop = true;
-                return;
-            }
-            HIRExprVisitorDef::visitNodePtr(node);
-        }
-
-        void visit(HIRExprNodeClosure&) override {
-        }
-
-        void visit(HIRExprNodeGenerator&) override {
-        }
-
-        void visit(HIRExprNodeGeneratorWrapper&) override {
-        }
-
-        void visit(HIRExprNodeAsyncBlock&) override {
-        }
-    } visitor(resolve_);
-
-    visitor.visitNodePtr(root);
-    return visitor.needsDrop;
+    return promotedValueNeedsDrop(resolve_, *root, 0);
 }
 
 auto StaticBorrowExprVisitorMark::isMaybeInteriorMut(const HIRExprNode& node) const -> bool {

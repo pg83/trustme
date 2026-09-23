@@ -1620,6 +1620,16 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRType* ty,
     UNREACHABLE();
 }
 
+bool StaticTraitResolve::typeHasDropImpl(const Span& sp, const HIRType* ty) const {
+    if (langDrop().components().empty() || !ty->is_Path() || ty->as_Path().binding.is_Opaque()) {
+        return false;
+    }
+    auto pp = HIRPathParams();
+    return this->findImpl(sp, langDrop(), &pp, ty, [&](SolverSelection) {
+        return true;
+    });
+}
+
 bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) const {
     if (langDrop().components().empty()) {
         return false;

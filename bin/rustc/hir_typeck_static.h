@@ -254,6 +254,7 @@ public:
     MetadataType metadataType(const Span& sp, const HIRType* ty, bool errOnUnknown = false) const;
 
     bool typeNeedsDropGlue(const Span& sp, const HIRType* ty) const;
+    bool typeHasDropImpl(const Span& sp, const HIRType* ty) const;
 
     const HIRType* findAsyncDrop(const Span& sp, const HIRType* ty, HIRPath& path) const;
 
