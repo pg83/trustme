@@ -5743,16 +5743,12 @@ auto StaticBorrowExprVisitorMutate::extractNode(HIRExprNodeP& node, StaticTraitR
         void visitPattern(const Span& sp, HIRPattern& pat) override {
             HIRExprVisitorDef::visitPattern(sp, pat);
             for (auto& pb : pat.bindings) {
-                auto idx = static_cast<unsigned>(bindingMapping.size());
-                bindingMapping.insert(std::make_pair(pb.slot, idx));
-                pb.slot = idx;
+                pb.slot = bindingMapping.insert(std::make_pair(pb.slot, static_cast<unsigned>(bindingMapping.size()))).first->second;
             }
 
             if (auto* e = pat.data.opt_SplitSlice()) {
                 if (e->extraBind.isValid()) {
-                    auto idx = static_cast<unsigned>(bindingMapping.size());
-                    bindingMapping.insert(std::make_pair(e->extraBind.slot, idx));
-                    e->extraBind.slot = idx;
+                    e->extraBind.slot = bindingMapping.insert(std::make_pair(e->extraBind.slot, static_cast<unsigned>(bindingMapping.size()))).first->second;
                 }
             }
         }
