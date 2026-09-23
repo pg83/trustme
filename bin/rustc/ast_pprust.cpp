@@ -1971,7 +1971,9 @@ void State::printPatValue(const ASTPatternValue& value) {
         case ASTPatternValue::TAG_Integer: {
             const auto& e = value.as_Integer();
             StringBuilder text;
-            if (e.type == CORETYPE_CHAR) {
+            if (e.type == CORETYPE_BOOL) {
+                text << (e.value != U128(0) ? StringView("true") : StringView("false"));
+            } else if (e.type == CORETYPE_CHAR) {
                 appendCharLiteral(text, static_cast<u32>(e.value.truncateU64()));
             } else {
                 const bool isSigned = e.type == CORETYPE_I8 || e.type == CORETYPE_I16 || e.type == CORETYPE_I32 || e.type == CORETYPE_I64 || e.type == CORETYPE_I128 || e.type == CORETYPE_INT || e.type == CORETYPE_ANY;

@@ -4,13 +4,13 @@
 #include "synext.h"
 #include "ast_ast.h"
 #include "hir_hir.h"
-#include "ast_dump.h"
 #include "ast_expr.h"
 #include "settings.h"
 #include "ast_crate.h"
 #include "parse_lex.h"
 #include "expand_cfg.h"
 #include "wire_board.h"
+#include "ast_pprust.h"
 #include "output_file.h"
 #include "main_bindings.h"
 #include "parse_ttstream.h"
@@ -2334,7 +2334,7 @@ auto ProcMacroVisitor::visitNode(const ASTExprNode& e) -> void {
     // TODO: Dump to a string, then re-parse into a TT and then send that TT
 
     StringBuilder ss;
-    DumpASTNode(ss, e);
+    pprustExprToString(ss, e);
     ss << StringView(" ");
 
     const std::string text(static_cast<const char*>(ss.data()), ss.length());
