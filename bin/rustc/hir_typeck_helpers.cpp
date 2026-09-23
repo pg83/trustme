@@ -5114,9 +5114,6 @@ Unifier::Outcome TraitResolution::relateInherentImplHeader(const Span& sp, const
 
     const auto* normalizedReceiver = this->expandAssociatedTypes(sp, receiver);
     const auto* normalizedCandidate = this->expandAssociatedTypes(sp, candidate);
-    if (normalizedReceiver == receiver && normalizedCandidate == candidate) {
-        return outcome;
-    }
     Unifier normalizedRelation(
         sp,
         ivars,
@@ -5124,6 +5121,7 @@ Unifier::Outcome TraitResolution::relateInherentImplHeader(const Span& sp, const
         {
             .bindRigidValues = true,
             .relateProjectionInputs = true,
+            .rigidProjectionsAreDistinct = true,
         }
     );
     return normalizedRelation.unify(normalizedReceiver, normalizedCandidate);
