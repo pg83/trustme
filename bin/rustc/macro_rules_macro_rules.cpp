@@ -381,6 +381,7 @@ namespace {
             } break;
             case MacroPatEnt::PAT_IDENT:
                 GET_TOK(tok, lex);
+                tok.setSpacing(TokenSpacing::Alone);
                 if (Token::typeIsRword(tok.type())) {
                     return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
                 } else {
@@ -391,6 +392,7 @@ namespace {
                 return InterpolatedFragment(ParsePublicity(lex, /*allow_restricted=*/true));
             case MacroPatEnt::PAT_LIFETIME:
                 GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
+                tok.setSpacing(TokenSpacing::Alone);
                 return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
             case MacroPatEnt::PAT_LITERAL:
                 GET_TOK(tok, lex);
@@ -405,6 +407,7 @@ namespace {
                             parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT});
                     }
                     GET_TOK(tok, lex);
+                    tok.setSpacing(TokenSpacing::Alone);
                     toks.push_back(tok);
                     return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), std::move(toks)));
                 }
@@ -421,6 +424,7 @@ namespace {
                     default:
                         parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT, TOK_STRING, TOK_BYTESTRING, TOK_CSTRING, TOK_RWORD_TRUE, TOK_RWORD_FALSE});
                 }
+                tok.setSpacing(TokenSpacing::Alone);
                 return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
         }
         UNREACHABLE();
@@ -3157,9 +3161,22 @@ Token MacroExpander::realGetToken() {
                         DEBUG(StringView("Updated hygine: ") << rv);
                         return rv;
                     }
-                    default:
+                    default: {
                         DEBUG(StringView("Raw token: ") << e);
-                        return e.clone();
+                        auto rv = e.clone();
+                        switch (e.type()) {
+                            case TOK_PAREN_OPEN:
+                            case TOK_PAREN_CLOSE:
+                            case TOK_SQUARE_OPEN:
+                            case TOK_BRACE_OPEN:
+                            case TOK_BRACE_CLOSE:
+                                break;
+                            default:
+                                rv.setSpacing(TokenSpacing::Alone);
+                                break;
+                        }
+                        return rv;
+                    }
                 }
                 break;
             }
@@ -3271,7 +3288,9 @@ Token MacroExpander::realGetToken() {
             case MacroExpansionEnt::TAG_Loop: {
                 auto& e = ent.as_Loop();
                 DEBUG(StringView("Loop joiner ") << e.joiner);
-                return e.joiner;
+                auto joiner = e.joiner.clone();
+                joiner.setSpacing(TokenSpacing::Alone);
+                return joiner;
             }
         }
     }

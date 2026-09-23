@@ -1049,16 +1049,31 @@ namespace {
 
             case TOK_UNDERSCORE:
                 return NEWNODE(ASTExprNodeWildcardPattern);
-            case TOK_INTEGER:
-                return NEWNODE(ASTExprNodeInteger, tok.intval(), tok.datatype());
-            case TOK_FLOAT:
-                return NEWNODE(ASTExprNodeFloat, tok.floatval(), tok.datatype());
-            case TOK_STRING:
-                return NEWNODE(ASTExprNodeString, tok.str(), tok.strHygiene());
-            case TOK_BYTESTRING:
-                return NEWNODE(ASTExprNodeByteString, tok.str());
-            case TOK_CSTRING:
-                return NEWNODE(ASTExprNodeCString, tok.str());
+            case TOK_INTEGER: {
+                auto* rv = NEWNODE(ASTExprNodeInteger, tok.intval(), tok.datatype());
+                static_cast<ASTExprNodeInteger*>(rv)->spelling = tok.spelling();
+                return rv;
+            }
+            case TOK_FLOAT: {
+                auto* rv = NEWNODE(ASTExprNodeFloat, tok.floatval(), tok.datatype());
+                static_cast<ASTExprNodeFloat*>(rv)->spelling = tok.spelling();
+                return rv;
+            }
+            case TOK_STRING: {
+                auto* rv = NEWNODE(ASTExprNodeString, tok.str(), tok.strHygiene());
+                static_cast<ASTExprNodeString*>(rv)->spelling = tok.spelling();
+                return rv;
+            }
+            case TOK_BYTESTRING: {
+                auto* rv = NEWNODE(ASTExprNodeByteString, tok.str());
+                static_cast<ASTExprNodeByteString*>(rv)->spelling = tok.spelling();
+                return rv;
+            }
+            case TOK_CSTRING: {
+                auto* rv = NEWNODE(ASTExprNodeCString, tok.str());
+                static_cast<ASTExprNodeCString*>(rv)->spelling = tok.spelling();
+                return rv;
+            }
             case TOK_LITERAL_SUFFIXED:
                 return NEWNODE(ASTExprNodeSuffixedLiteral, tok.str());
             case TOK_RWORD_TRUE:
@@ -1073,7 +1088,8 @@ namespace {
                     CLEAR_PARSE_FLAGS_EXPR(lex);
 
                     ASTExprNode* rv = ParseExpr0(lex);
-                    if (GET_TOK(tok, lex) == TOK_COMMA) {
+                    const bool isTuple = GET_TOK(tok, lex) == TOK_COMMA;
+                    if (isTuple) {
                         std::vector<ASTExprNode*> ents;
                         ents.push_back(std::move(rv));
                         do {
@@ -1089,6 +1105,9 @@ namespace {
                         if (e->type == ASTExprNodeBinOp::RANGE && !e->left && !e->right) {
                             e->parenthesised = true;
                         }
+                    }
+                    if (!isTuple) {
+                        rv->setParens(rv->parens() + 1);
                     }
                     return rv;
                 }
@@ -1136,6 +1155,7 @@ namespace {
         bool isMacro = (path.isTrivial() && path.asTrivial() == "macro_rules");
 
         bool isBraced = lex.lookahead(0) == TOK_BRACE_OPEN;
+        bool isBracketed = lex.lookahead(0) == TOK_SQUARE_OPEN;
 
         if (isMacro) {
             lex.pushHygine();
@@ -1150,6 +1170,7 @@ namespace {
 
         DEBUG(StringView("name=") << path << StringView(", ident=") << ident << StringView(", tt=") << tt);
         auto rv = NEWNODE(ASTExprNodeMacro, mv$(path), mv$(ident), mv$(tt), isBraced, mv$(definitionHygiene));
+        static_cast<ASTExprNodeMacro*>(rv)->isBracketed = isBracketed;
         rv->setSpan(mv$(pathSpan));
         return rv;
     }

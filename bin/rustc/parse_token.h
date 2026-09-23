@@ -49,6 +49,12 @@ class InterpolatedFragment;
 
 #include "parse_token_tu.h"
 
+enum class TokenSpacing : u8 {
+    Alone,
+    Joint,
+    JointHidden,
+};
+
 class Token {
     using Data = TokenData;
 
@@ -57,6 +63,7 @@ class Token {
     Position pos;
     Ident::Hygiene hygiene_;
     bool isDocComment_ = false;
+    TokenSpacing spacing_ = TokenSpacing::Alone;
 
     Token(enum eTokenType t, Data d, Position p);
 
@@ -203,6 +210,16 @@ public:
         return isDocComment_;
     }
 
+    TokenSpacing spacing() const {
+        return spacing_;
+    }
+
+    void setSpacing(TokenSpacing spacing) {
+        spacing_ = spacing;
+    }
+
+    bool isPunct() const;
+
     static bool typeIsRword(enum eTokenType type) {
         return type >= TOK_RWORD_PUB && type <= TOK_RWORD_TRY;
     }
@@ -214,4 +231,3 @@ public:
 
 void printEscapedLiteral(stl::ZeroCopyOutput& os, eTokenType type, const u8* value, size_t size);
 
-bool tokensNeedSpace(eTokenType prev, eTokenType cur);

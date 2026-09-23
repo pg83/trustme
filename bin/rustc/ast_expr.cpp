@@ -198,6 +198,11 @@ namespace {
         return en;
     }
 
+    static inline ASTExprNode* withParens(unsigned parens, ASTExprNode* en) {
+        en->setParens(parens);
+        return en;
+    }
+
     bool macroTokenNeedsSpace(eTokenType previous, eTokenType current) {
         switch (current) {
             case TOK_PAREN_CLOSE:
@@ -246,7 +251,7 @@ namespace {
         }
     }
 
-#define NEWNODE(type, ...) mkExprnodep(span(), attrs(), makeAstExprNode<type>(pool() __VA_OPT__(, ) __VA_ARGS__))
+#define NEWNODE(type, ...) withParens(parens(), mkExprnodep(span(), attrs(), makeAstExprNode<type>(pool() __VA_OPT__(, ) __VA_ARGS__)))
 
     void fmtIfletConditions(ZeroCopyOutput& os, const std::vector<ASTIfLetCondition>& conditions) {
         for (const auto& cond : conditions) {
@@ -324,7 +329,11 @@ NODE(
         printMacroTokens(os, tokens, hasPrevious, previous);
         os << (isBraced ? " }" : ")");
     },
-    { return NEWNODE(ASTExprNodeMacro, ASTPath(path), ident, tokens.clone(), isBraced, definitionHygiene); }
+    {
+        auto* rv = NEWNODE(ASTExprNodeMacro, ASTPath(path), ident, tokens.clone(), isBraced, definitionHygiene);
+        static_cast<ASTExprNodeMacro*>(rv)->isBracketed = isBracketed;
+        return rv;
+    }
 )
 
 NODE(
@@ -696,7 +705,11 @@ NODE(
             }
         }
     },
-    { return NEWNODE(ASTExprNodeInteger, value, datatype); }
+    {
+        auto* rv = NEWNODE(ASTExprNodeInteger, value, datatype);
+        static_cast<ASTExprNodeInteger*>(rv)->spelling = spelling;
+        return rv;
+    }
 )
 NODE(
     ASTExprNodeFloat,
@@ -706,12 +719,28 @@ NODE(
             os << coretypeName(datatype);
         }
     },
-    { return NEWNODE(ASTExprNodeFloat, value, datatype); }
+    {
+        auto* rv = NEWNODE(ASTExprNodeFloat, value, datatype);
+        static_cast<ASTExprNodeFloat*>(rv)->spelling = spelling;
+        return rv;
+    }
 )
 NODE(ASTExprNodeBool, { os << value; }, { return NEWNODE(ASTExprNodeBool, value); })
-NODE(ASTExprNodeString, { printEscapedLiteral(os, TOK_STRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, { return NEWNODE(ASTExprNodeString, value, hygiene); })
-NODE(ASTExprNodeByteString, { printEscapedLiteral(os, TOK_BYTESTRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, { return NEWNODE(ASTExprNodeByteString, value); })
-NODE(ASTExprNodeCString, { printEscapedLiteral(os, TOK_CSTRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, { return NEWNODE(ASTExprNodeCString, value); })
+NODE(ASTExprNodeString, { printEscapedLiteral(os, TOK_STRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, {
+    auto* rv = NEWNODE(ASTExprNodeString, value, hygiene);
+    static_cast<ASTExprNodeString*>(rv)->spelling = spelling;
+    return rv;
+})
+NODE(ASTExprNodeByteString, { printEscapedLiteral(os, TOK_BYTESTRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, {
+    auto* rv = NEWNODE(ASTExprNodeByteString, value);
+    static_cast<ASTExprNodeByteString*>(rv)->spelling = spelling;
+    return rv;
+})
+NODE(ASTExprNodeCString, { printEscapedLiteral(os, TOK_CSTRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, {
+    auto* rv = NEWNODE(ASTExprNodeCString, value);
+    static_cast<ASTExprNodeCString*>(rv)->spelling = spelling;
+    return rv;
+})
 NODE(ASTExprNodeSuffixedLiteral, { os << text; }, { return NEWNODE(ASTExprNodeSuffixedLiteral, text); })
 
 NODE(

@@ -4,6 +4,7 @@
 #include "output.h"
 #include "ast_ast.h"
 #include "ast_expr.h"
+#include "ast_pprust.h"
 #include "ast_types.h"
 #include "parse_parseerror.h"
 #include "parse_interpolated_fragment.h"
@@ -122,25 +123,14 @@ namespace {
         return needed;
     }
 
-    static void appendTokenTreeSource(StringBuilder& out, const TokenTree& tt, eTokenType& prev) {
-        if (tt.isToken()) {
-            if (!out.empty() && tokensNeedSpace(prev, tt.tok().type())) {
-                out.append(" ", 1);
-            }
-            auto text = tt.tok().toStr();
-            out.append(text.data(), text.size());
-            prev = tt.tok().type();
-        }
-        for (size_t i = 0; i < tt.size(); i++) {
-            appendTokenTreeSource(out, tt[i], prev);
-        }
-    }
-
     static void attributeToSource(StringBuilder& out, const ASTAttribute& attr) {
         auto name = FMT(attr.name());
         out.append(name.data(), name.size());
-        auto prev = TOK_IDENT;
-        appendTokenTreeSource(out, attr.data(), prev);
+        const auto& data = attr.data();
+        if (!data.isToken() && data.size() > 0 && data[0].isToken() && data[0].tok().type() == TOK_EQUAL) {
+            out.append(" ", 1);
+        }
+        pprustTtsToString(out, data);
     }
 }
 
@@ -339,6 +329,7 @@ Token::Token(const Token& t)
     , pos(t.pos)
     , hygiene_(t.hygiene_)
     , isDocComment_(t.isDocComment_)
+    , spacing_(t.spacing_)
 {
     BUG_ASSERT(!t.data_.isDead());
     switch (t.data_.tag()) {
@@ -377,6 +368,7 @@ Token Token::clone() const {
     rv.pos = pos;
     rv.hygiene_ = hygiene_;
     rv.isDocComment_ = isDocComment_;
+    rv.spacing_ = spacing_;
 
     BUG_ASSERT(!data_.isDead());
     switch (data_.tag()) {
@@ -536,40 +528,58 @@ void printEscapedLiteral(ZeroCopyOutput& os, eTokenType type, const u8* value, s
     }
 }
 
-bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
-    switch (cur) {
+bool Token::isPunct() const {
+    switch (type_) {
+        case TOK_HASH:
+        case TOK_LT:
+        case TOK_GT:
         case TOK_COMMA:
         case TOK_SEMICOLON:
-        case TOK_DOT:
-        case TOK_PAREN_CLOSE:
-        case TOK_SQUARE_CLOSE:
-        case TOK_QMARK:
+        case TOK_COLON:
         case TOK_DOUBLE_COLON:
-            return false;
-        default:
-            break;
-    }
-    switch (prev) {
+        case TOK_STAR:
+        case TOK_AMP:
+        case TOK_PIPE:
+        case TOK_FATARROW:
+        case TOK_THINARROW:
+        case TOK_THINARROW_LEFT:
+        case TOK_PLUS:
+        case TOK_DASH:
+        case TOK_EXCLAM:
+        case TOK_PERCENT:
+        case TOK_SLASH:
         case TOK_DOT:
-        case TOK_HASH:
+        case TOK_DOUBLE_DOT:
+        case TOK_DOUBLE_DOT_EQUAL:
+        case TOK_TRIPLE_DOT:
+        case TOK_EQUAL:
+        case TOK_PLUS_EQUAL:
+        case TOK_DASH_EQUAL:
+        case TOK_PERCENT_EQUAL:
+        case TOK_SLASH_EQUAL:
+        case TOK_STAR_EQUAL:
+        case TOK_AMP_EQUAL:
+        case TOK_PIPE_EQUAL:
+        case TOK_DOUBLE_EQUAL:
+        case TOK_EXCLAM_EQUAL:
+        case TOK_GTE:
+        case TOK_LTE:
+        case TOK_DOUBLE_AMP:
+        case TOK_DOUBLE_PIPE:
+        case TOK_DOUBLE_LT:
+        case TOK_DOUBLE_GT:
+        case TOK_DOUBLE_LT_EQUAL:
+        case TOK_DOUBLE_GT_EQUAL:
         case TOK_DOLLAR:
-        case TOK_PAREN_OPEN:
-        case TOK_SQUARE_OPEN:
-        case TOK_DOUBLE_COLON:
-            return false;
+        case TOK_QMARK:
+        case TOK_AT:
+        case TOK_TILDE:
+        case TOK_CARET:
+        case TOK_CARET_EQUAL:
+            return true;
         default:
-            break;
+            return false;
     }
-    if (cur == TOK_EXCLAM && (prev == TOK_IDENT || Token::typeIsRword(prev))) {
-        return false;
-    }
-    if (prev == TOK_EXCLAM && (cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN || cur == TOK_BRACE_OPEN)) {
-        return false;
-    }
-    if ((cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN) && (prev == TOK_IDENT || prev == TOK_PAREN_CLOSE || prev == TOK_SQUARE_CLOSE)) {
-        return false;
-    }
-    return true;
 }
 
 std::string Token::toStr() const {
@@ -627,6 +637,9 @@ std::string Token::toStr() const {
             auto v = data_.as_Integer().intval;
             switch (data_.as_Integer().datatype) {
                 case CORETYPE_CHAR:
+                    if (data_.as_Integer().spelling != RcString()) {
+                        return FMT(data_.as_Integer().spelling);
+                    }
                     if (v >= 0x20 && v < 128) {
                         switch (v.truncateU64()) {
                             case '\'':
@@ -644,6 +657,9 @@ std::string Token::toStr() const {
                     }
                     return FMT(data_.as_Integer().intval);
                 default:
+                    if (StringView(reinterpret_cast<const u8*>(data_.as_Integer().spelling.c_str()), data_.as_Integer().spelling.size()).startsWith(StringView("b'"))) {
+                        return FMT(data_.as_Integer().spelling);
+                    }
                     if (data_.as_Integer().spelling != RcString()) {
                         return FMT(data_.as_Integer().spelling << coretypeName(data_.as_Integer().datatype));
                     }
@@ -987,6 +1003,7 @@ Token::Token(Token&& t)
     , pos(std::move(t.pos))
     , hygiene_(std::move(t.hygiene_))
     , isDocComment_(t.isDocComment_)
+    , spacing_(t.spacing_)
 {
     t.type_ = TOK_NULL;
 }

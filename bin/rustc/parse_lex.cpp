@@ -380,8 +380,85 @@ Token Lexer::realGetToken() {
                     tokenPosition.endOfs = lastCharValid ? prevOfs : lineOfs;
                     tok.setPos(std::move(tokenPosition));
                 }
+                if (docTokensPending_ > 0) {
+                    docTokensPending_--;
+                } else {
+                    tok.setSpacing(this->spacingAfterToken());
+                }
                 return tok;
         }
+    }
+}
+
+size_t Lexer::peekChars(Codepoint* out, size_t max) const {
+    size_t count = 0;
+    if (lastCharValid && count < max) {
+        out[count++] = lastChar;
+    }
+    for (size_t i = replayCharOffset; i < replayChars.length() && count < max; i++) {
+        out[count++] = replayChars[i];
+    }
+    const auto* bytes = static_cast<const u8*>(source_.data());
+    size_t pos = sourcePos_;
+    while (count < max && pos < source_.length()) {
+        const u8 lead = bytes[pos++];
+        if (lead < 0x80) {
+            out[count++] = Codepoint(lead);
+            continue;
+        }
+        size_t continuation = lead >= 0xF0 ? 3 : lead >= 0xE0 ? 2 : lead >= 0xC0 ? 1 : 0;
+        u32 value = lead & (0x3F >> continuation);
+        while (continuation > 0 && pos < source_.length()) {
+            value = (value << 6) | (bytes[pos++] & 0x3F);
+            continuation--;
+        }
+        out[count++] = Codepoint(value);
+    }
+    return count;
+}
+
+TokenSpacing Lexer::spacingAfterToken() const {
+    if (!nextTokens.empty()) {
+        return nextTokens.back().isPunct() ? TokenSpacing::Joint : TokenSpacing::JointHidden;
+    }
+    Codepoint next[4];
+    const size_t count = this->peekChars(next, 4);
+    if (count == 0 || next[0].isspace()) {
+        return TokenSpacing::Alone;
+    }
+    if (next[0] == '/' && count >= 2 && next[1] == '/') {
+        const bool isDoc = count >= 3 && (next[2] == '!' || (next[2] == '/' && (count < 4 || next[3] != '/')));
+        return isDoc ? TokenSpacing::JointHidden : TokenSpacing::Alone;
+    }
+    if (next[0] == '/' && count >= 2 && next[1] == '*') {
+        const bool isDoc = count >= 3 && (next[2] == '!' || (next[2] == '*' && count >= 4 && next[3] != '*' && next[3] != '/'));
+        return isDoc ? TokenSpacing::JointHidden : TokenSpacing::Alone;
+    }
+    switch (next[0].v) {
+        case '=':
+        case '<':
+        case '>':
+        case '!':
+        case '~':
+        case '|':
+        case '&':
+        case '+':
+        case '-':
+        case '*':
+        case '/':
+        case '%':
+        case '^':
+        case '@':
+        case '.':
+        case ',':
+        case ';':
+        case ':':
+        case '#':
+        case '$':
+        case '?':
+            return TokenSpacing::Joint;
+        default:
+            return TokenSpacing::JointHidden;
     }
 }
 
@@ -883,18 +960,19 @@ Token Lexer::getTokenInt() {
                         }
                         return this->withLiteralSuffix(Token(TOK_BYTESTRING, mv$(str), this->takeSpelling(), realGetHygiene()));
                     } else if (ch == '\'') {
+                        this->startSpelling("b'");
                         ch = this->getc();
                         if (ch == '\\') {
                             u32 val = this->parseEscape('\'');
                             if (this->getc() != '\'') {
                                 compileErrorGeneric(*this, "Multi-byte character literal");
                             }
-                            return this->withLiteralSuffix(Token(U128(val), CORETYPE_U8));
+                            return this->withLiteralSuffix(Token(U128(val), CORETYPE_U8, this->takeSpelling()));
                         } else {
                             if (this->getc() != '\'') {
                                 compileErrorGeneric(*this, "Multi-byte character literal");
                             }
-                            return this->withLiteralSuffix(Token(U128(ch.v), CORETYPE_U8));
+                            return this->withLiteralSuffix(Token(U128(ch.v), CORETYPE_U8, this->takeSpelling()));
                         }
                     } else {
                         BUG_ASSERT(isByte);
@@ -983,11 +1061,15 @@ Token Lexer::getTokenInt() {
                         nextTokens.push_back(TOK_EQUAL);
                         nextTokens.push_back(Token(TOK_IDENT, RcString::newInterned("doc")));
                         nextTokens.push_back(TOK_SQUARE_OPEN);
+                        nextTokens.back().setSpacing(TokenSpacing::JointHidden);
                         if (isPdoc) {
                             nextTokens.push_back(TOK_EXCLAM);
+                            nextTokens.back().setSpacing(TokenSpacing::JointHidden);
                         }
+                        docTokensPending_ = nextTokens.size() + 1;
                         auto rv = Token(TOK_HASH);
                         rv.markAsDocComment();
+                        rv.setSpacing(isPdoc ? TokenSpacing::Joint : TokenSpacing::JointHidden);
                         return rv;
                     }
                     return Token(TOK_COMMENT, str, realGetHygiene());
@@ -1050,30 +1132,36 @@ Token Lexer::getTokenInt() {
                         nextTokens.push_back(TOK_EQUAL);
                         nextTokens.push_back(Token(TOK_IDENT, RcString::newInterned("doc")));
                         nextTokens.push_back(TOK_SQUARE_OPEN);
+                        nextTokens.back().setSpacing(TokenSpacing::JointHidden);
                         if (isPdoc) {
                             nextTokens.push_back(TOK_EXCLAM);
+                            nextTokens.back().setSpacing(TokenSpacing::JointHidden);
                         }
+                        docTokensPending_ = nextTokens.size() + 1;
                         auto rv = Token(TOK_HASH);
                         rv.markAsDocComment();
+                        rv.setSpacing(isPdoc ? TokenSpacing::Joint : TokenSpacing::JointHidden);
                         return rv;
                     }
                     return Token(TOK_COMMENT, str, realGetHygiene());
                 }
                 case SINGLEQUOTE: {
+                    this->startSpelling("'");
                     auto firstchar = this->getc();
                     if (firstchar.v == '\\') {
                         u32 val = this->parseEscape('\'');
                         if (this->getc() != '\'') {
                             TODO(this->pointSpan(), StringView("Proper error for lex failures - multi-char const?"));
                         }
-                        return this->withLiteralSuffix(Token(U128(val), CORETYPE_CHAR));
+                        return this->withLiteralSuffix(Token(U128(val), CORETYPE_CHAR, this->takeSpelling()));
                     } else if (firstchar.v == '\'') {
                         TODO(this->pointSpan(), StringView("Proper error for empty char literals"));
                     } else {
                         ch = this->getc();
                         if (ch == '\'') {
-                            return this->withLiteralSuffix(Token(U128(firstchar.v), CORETYPE_CHAR));
+                            return this->withLiteralSuffix(Token(U128(firstchar.v), CORETYPE_CHAR, this->takeSpelling()));
                         } else if (firstchar == 'r' && ch == '#' && this->editionAfter(ASTEdition::Rust2018)) {
+                            spellingOn_ = false;
                             std::string str;
                             ch = this->getc();
                             if (!issym(ch)) {
@@ -1086,6 +1174,7 @@ Token Lexer::getTokenInt() {
                             this->ungetc();
                             return Token(TOK_LIFETIME, Ident(this->realGetHygiene(), RcString::newInterned(str)));
                         } else if (issym(firstchar.v)) {
+                            spellingOn_ = false;
                             std::string str;
                             str += firstchar;
                             while (issym(ch)) {

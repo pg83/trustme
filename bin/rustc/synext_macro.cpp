@@ -5,6 +5,7 @@
 #include "hir_asm.h"
 #include "hir_hir.h"
 #include "ast_expr.h"
+#include "ast_pprust.h"
 #include "settings.h"
 #include "ast_crate.h"
 #include "parse_lex.h"
@@ -2257,15 +2258,11 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
         toks.push_back(Token(TOK_PAREN_CLOSE));
     } else if (tok == TOK_EOF) {
         StringBuilder ss;
-        n->print(ss);
+        pprustExprToString(ss, *n);
         std::string conditionText(static_cast<const char*>(ss.data()), ss.length());
 
         const auto genericAssert = RcString::newInterned("generic_assert");
         if (crate.features.count(genericAssert) != 0) {
-            if (n->nodeKind() == ASTExprNodeBinOp::kind && conditionText.size() >= 2) {
-                conditionText.erase(conditionText.begin());
-                conditionText.pop_back();
-            }
             GenericAssertCaptureVisitor captureVisitor(*crate.pool, crate.extCratenameCore, expansionHygiene);
             n = captureVisitor.manage(n);
 
@@ -2806,22 +2803,9 @@ auto CExpanderBuildDiagnosticArray::expand(const Span& sp, const WireBoard& wb, 
 }
 
 auto CExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
-    Token tok;
-    std::string rv;
-    eTokenType prev = TOK_NULL;
-
-    auto lex = TTStream(sp, ParseState(), tt);
-    lex.parseState().wb = &wb;
-    while (GET_TOK(tok, lex) != TOK_EOF) {
-        if (!rv.empty() && tokensNeedSpace(prev, tok.type())) {
-            rv += " ";
-        }
-        DEBUG(StringView(" += ") << tok);
-        rv += tok.toStr();
-        prev = tok.type();
-    }
-
-    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(rv), {}))));
+    StringBuilder text;
+    pprustTtsToString(text, tt);
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, std::string(static_cast<const char*>(text.data()), text.length()), {}))));
 }
 
 template <>

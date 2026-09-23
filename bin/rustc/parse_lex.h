@@ -65,6 +65,7 @@ class Lexer: public TokenStream {
     stl::Vector<Codepoint> replayChars;
     size_t replayCharOffset;
     std::vector<Token> nextTokens;
+    size_t docTokensPending_ = 0;
     bool spellingOn_ = false;
     size_t spellingBeforeLast_ = 0;
     stl::Buffer spelling_;
@@ -87,6 +88,8 @@ private:
     void checkInitialShebang();
     bool trySkipInitialFrontmatter();
     Token getTokenInt();
+    TokenSpacing spacingAfterToken() const;
+    size_t peekChars(Codepoint* out, size_t max) const;
 
     signed int getSymbol();
 

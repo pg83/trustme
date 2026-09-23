@@ -1811,7 +1811,9 @@ auto HirDeserialiser::deserialiseMacroexpansionconcatent() -> ::MacroExpansionCo
 auto HirDeserialiser::deserialiseToken() -> ::Token {
     auto ty = static_cast<enum eTokenType>(in.readTag());
     auto d = deserialiseTokendata();
-    return ::Token::fromSerialised(ty, std::move(d));
+    auto rv = ::Token::fromSerialised(ty, std::move(d));
+    rv.setSpacing(static_cast<TokenSpacing>(in.readU8()));
+    return rv;
 }
 
 auto HirDeserialiser::deserialiseTokendata() -> TokenData {
@@ -3810,6 +3812,7 @@ auto HirSerialiser::serialise(const ::MacroExpansionConcatEnt& e) -> void {
 auto HirSerialiser::serialise(const ::Token& tok) -> void {
     out.writeTag(tok.type());
     serialise(tok.rawData());
+    out.writeU8(static_cast<u8>(tok.spacing()));
     // TODO: Position information.
 }
 

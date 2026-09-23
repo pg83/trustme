@@ -21,6 +21,7 @@ class ASTExprNode {
     ASTAttributeList attrs_;
     Span span_;
     stl::ObjPool* pool_ = nullptr;
+    u8 parens_ = 0;
 
 public:
     virtual ~ASTExprNode() = 0;
@@ -49,6 +50,14 @@ public:
     }
 
     void setAttrs(ASTAttributeList&& mi);
+
+    unsigned parens() const {
+        return parens_;
+    }
+
+    void setParens(unsigned parens) {
+        parens_ = static_cast<u8>(parens < 255 ? parens : 255);
+    }
 
     ASTAttributeList& attrs() {
         return attrs_;
@@ -153,6 +162,7 @@ struct ASTExprNodeMacro: public ASTExprNode {
     RcString ident;
     ::TokenTree tokens;
     bool isBraced;
+    bool isBracketed = false;
     Ident::Hygiene definitionHygiene;
 
     ASTExprNodeMacro(ASTPath name, RcString ident, ::TokenTree&& tokens, bool isBraced = false, Ident::Hygiene definitionHygiene = {});
@@ -424,6 +434,7 @@ struct ASTExprNodeWildcardPattern: public ASTExprNode {
 struct ASTExprNodeInteger: public ASTExprNode {
     enum eCoreType datatype;
     U128 value;
+    RcString spelling;
 
     ASTExprNodeInteger(U128 value, enum eCoreType datatype);
 
@@ -437,6 +448,7 @@ struct ASTExprNodeInteger: public ASTExprNode {
 struct ASTExprNodeFloat: public ASTExprNode {
     enum eCoreType datatype;
     FloatValue value;
+    RcString spelling;
 
     ASTExprNodeFloat(FloatValue value, enum eCoreType datatype);
 
@@ -461,6 +473,7 @@ struct ASTExprNodeBool: public ASTExprNode {
 
 struct ASTExprNodeString: public ASTExprNode {
     std::string value;
+    RcString spelling;
 
     Ident::Hygiene hygiene;
 
@@ -475,6 +488,7 @@ struct ASTExprNodeString: public ASTExprNode {
 
 struct ASTExprNodeByteString: public ASTExprNode {
     std::string value;
+    RcString spelling;
 
     ASTExprNodeByteString(std::string value);
 
@@ -487,6 +501,7 @@ struct ASTExprNodeByteString: public ASTExprNode {
 
 struct ASTExprNodeCString: public ASTExprNode {
     std::string value;
+    RcString spelling;
 
     ASTExprNodeCString(std::string value);
 
