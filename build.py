@@ -192,6 +192,7 @@ def compiler_source(source, *generated_inputs):
 if system_rustc_mode:
     rustc = command(
         name="rustc",
+        local=True,
         inputs=["$(S)/tst/system_rustc.py"],
         outputs=["$(B)/bin/rustc"],
         cmd=[
@@ -301,12 +302,15 @@ ident_ordering_test = program(
 # Go. Dependencies are checked in under bin/cargo/vendor, so this node is
 # offline. Rust 1.90 source adjustments belong to std_src below; Cargo has no
 # toolchain-specific override configuration.
+CARGO_SOURCES = (
+    build.glob("$(S)/bin/cargo/**/*.go")
+    + build.glob("$(S)/bin/cargo/**/*.s")
+    + ["$(S)/bin/cargo/go.mod", "$(S)/bin/cargo/go.sum", "$(S)/bin/cargo/vendor/modules.txt"]
+)
+
 cargo = command(
     name="cargo",
-    inputs=(
-        build.glob("$(S)/bin/cargo/**/*.go")
-        + ["$(S)/bin/cargo/go.mod", "$(S)/bin/cargo/go.sum", "$(S)/bin/cargo/vendor/modules.txt"]
-    ),
+    inputs=CARGO_SOURCES,
     outputs=["$(B)/bin/cargo"],
     cmd=[
         "go", "build",
@@ -329,10 +333,10 @@ cargo = command(
 # those only through whatever it fails to build, half an hour later.
 cargo_test = command(
     name="cargo_test",
-    inputs=(
-        build.glob("$(S)/bin/cargo/**/*.go")
-        + ["$(S)/bin/cargo/go.mod", "$(S)/bin/cargo/go.sum", "$(S)/bin/cargo/vendor/modules.txt"]
-    ),
+    inputs=CARGO_SOURCES + [
+        _path for _path in build.glob("$(S)/bin/cargo/testdata/**/*")
+        if Path(__file__).parent.joinpath(_path[len("$(S)/"):]).is_file()
+    ],
     outputs=["$(B)/tst/unit/cargo.stamp"],
     cmd=[
         ["go", "test", "-timeout", "120s", "./..."],
@@ -443,6 +447,7 @@ LIBSTD_TIMEOUT = budget(minutes=10)
 # std_src: fetch + adjust the rust-1.90 source, add the shim, pack it.
 std_src = command(
     name="std_src",
+    local=True,
     inputs=["$(S)/tst/std/fetch.py"] + TESTS_LIB,
     outputs=["$(B)/tst/rust-src.tar"],
     cmd=[
@@ -459,6 +464,7 @@ std_src = command(
 if system_rustc_mode:
     libstd = command(
         name="libstd",
+        local=True,
         inputs=["$(S)/tst/system_rustc.py"],
         outputs=["$(B)/tst/libstd.tar"],
         cmd=[
@@ -594,6 +600,7 @@ def add_project_test(
 
     source = command(
         name=name + "_src",
+        local=True,
         inputs=source_inputs,
         outputs=[source_archive],
         cmd=source_cmd,
@@ -603,6 +610,7 @@ def add_project_test(
 
     vendor = command(
         name=name + "_vendor",
+        local=True,
         inputs=["$(S)/tst/vendor.py"] + TESTS_LIB,
         outputs=[vendor_archive],
         cmd=[
@@ -1331,6 +1339,9 @@ style += [
     ),
     command(
         name="unit_std_ratchet",
+        # Rewrites dev/std_ratchet.baseline in the source tree when the
+        # count shrinks: that must happen here, not in a remote mirror.
+        local=True,
         inputs=[
             "$(S)/dev/std_ratchet.py",
             "$(S)/dev/std_ratchet.baseline",

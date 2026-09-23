@@ -60,6 +60,26 @@ hermetic vendor tree between isolated nodes.
 See [`tst/README.md`](tst/README.md) for how a project test is wired as a
 graph of nodes (fetch → vendor → build against a from-source libstd → run).
 
+### distributed builds
+
+```
+./build --dist=lab1,lab2 --dist=lab3:32 unit
+```
+
+`--dist` adds ssh hosts as workers. Each host gets one ssh session; the
+engine sends itself over as `build exec` and then streams jobs to it. A job
+carries its command, environment and the manifests of its declared inputs;
+the host keeps a per-session content-addressed cache under `./.build-exec`
+in the login directory, so every blob crosses the link at most once. Results
+land in the local CAS exactly as if the node had run here. Dropped sessions
+reconnect with backoff, in-flight nodes go back to the queue. `HOST:N`
+overrides the slot count (default: the host's cores). Hosts run whatever the
+login shell provides: the same toolchain paths as here are assumed, not
+checked. A node that must stay on this machine (network fetches, anything
+writing into the source tree) is declared with `local=True`. A remote host
+only sees a node's declared inputs, so `--dist` also acts as a hermeticity
+gate. Set `BUILD_DIST_SSH` to use another ssh command.
+
 ## license
 
 mrustc is MIT licensed; see [`bin/rustc/LICENCE-MIT`](bin/rustc/LICENCE-MIT).
