@@ -499,6 +499,9 @@ DEF_VISIT_H(HIRExprNodeAsyncBlock, node) {
     if (node.code) {
         visitNodePtr(node.code);
     } else {
+        for (auto& cap : node.captures) {
+            visitNodePtr(cap);
+        }
     }
 }
 
