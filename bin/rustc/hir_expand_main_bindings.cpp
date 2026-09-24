@@ -1141,6 +1141,7 @@ void HIRExpandAnalyseClosureCaptures(const WireBoard& wb, const HIRExprState& st
     struct Saved: public HIRExprVisitorDef {
         Vector<std::pair<HIRExprNodeClosure*, HIRExprNodeClosure::Class>> closures;
         Vector<std::pair<HIRExprNodeCallValue*, HIRExprNodeCallValue::TraitUsed>> calls;
+        Vector<HIRExprNodeGenerator::AvuCache*> coroutineCaches;
 
         explicit Saved(HIRTypeInterner& types)
             : HIRExprVisitorDef(types)
@@ -1154,6 +1155,16 @@ void HIRExpandAnalyseClosureCaptures(const WireBoard& wb, const HIRExprState& st
 
         void visit(HIRExprNodeCallValue& node) override {
             calls.pushBack({&node, node.traitUsed});
+            HIRExprVisitorDef::visit(node);
+        }
+
+        void visit(HIRExprNodeGenerator& node) override {
+            coroutineCaches.pushBack(&node.avuCache);
+            HIRExprVisitorDef::visit(node);
+        }
+
+        void visit(HIRExprNodeAsyncBlock& node) override {
+            coroutineCaches.pushBack(&node.avuCache);
             HIRExprVisitorDef::visit(node);
         }
     } saved(resolve.hirCrate().types);
@@ -1196,6 +1207,10 @@ void HIRExpandAnalyseClosureCaptures(const WireBoard& wb, const HIRExprState& st
         }
         closure.typeckCapturesKnown = true;
         closure.cls = entry.second;
+        closure.avuCache = {};
+    }
+    for (auto* cache : saved.coroutineCaches) {
+        *cache = {};
     }
     for (const auto& entry : saved.calls) {
         entry.first->traitUsed = entry.second;
