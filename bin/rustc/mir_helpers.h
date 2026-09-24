@@ -353,6 +353,11 @@ public:
                 visitPath(*e.p);
                 break;
             }
+            case MIRConstant::TAG_Function: {
+                auto& e = c.as_Function();
+                visitPath(*e.p);
+                break;
+            }
         }
         return false;
     }
