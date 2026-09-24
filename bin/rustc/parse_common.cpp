@@ -185,6 +185,9 @@ namespace {
         }
 
         if (!lex.getTokenIf(TOK_SEMICOLON)) {
+            if (auto* mac = cast<ASTExprNodeMacro>(&*ret); mac && lex.lookahead(0) == TOK_BRACE_CLOSE) {
+                mac->isTailExpression = true;
+            }
             switch (lex.lookahead(0)) {
                 case TOK_EOF:
                 case TOK_BRACE_CLOSE:

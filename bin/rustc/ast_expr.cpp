@@ -334,6 +334,7 @@ NODE(
     {
         auto* rv = NEWNODE(ASTExprNodeMacro, ASTPath(path), ident, tokens.clone(), isBraced, definitionHygiene);
         static_cast<ASTExprNodeMacro*>(rv)->isBracketed = isBracketed;
+        static_cast<ASTExprNodeMacro*>(rv)->isTailExpression = isTailExpression;
         return rv;
     }
 )

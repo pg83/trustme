@@ -163,6 +163,7 @@ struct ASTExprNodeMacro: public ASTExprNode {
     ::TokenTree tokens;
     bool isBraced;
     bool isBracketed = false;
+    bool isTailExpression = false;
     Ident::Hygiene definitionHygiene;
 
     ASTExprNodeMacro(ASTPath name, RcString ident, ::TokenTree&& tokens, bool isBraced = false, Ident::Hygiene definitionHygiene = {});

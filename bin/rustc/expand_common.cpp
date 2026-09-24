@@ -2549,6 +2549,16 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
 
             BUG_ASSERT(it->node == nodeMac);
 
+            if (!definesMacro && nodeMac->isTailExpression) {
+                it->node = this->visit(it->node);
+                if (!it->node) {
+                    it = node.nodes.erase(it);
+                } else {
+                    ++it;
+                }
+                continue;
+            }
+
             std::vector<ASTExprNodeBlock::Line> newNodes;
             this->visitMacro(*nodeMac, &newNodes);
             if (!hasLocalMod && node.localMod) {
