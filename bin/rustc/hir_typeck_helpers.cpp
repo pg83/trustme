@@ -12523,7 +12523,12 @@ auto NextTraitGoalEvaluator::assembleTraitImplCandidates(size_t frameIndex, cons
            it applied to every `T`, and the general impl outranked it. */
         const auto* resolvedPath = resolvedType->opt_Path();
         const bool constituentsUnknown = resolvedType->is_Generic() || resolvedType->is_TraitObject() || (resolvedPath && resolvedPath->path.data.is_UfcsKnown());
-        if (includeMagicCandidates && !constituentsUnknown && !hasAutoTraitImpl) {
+        const auto* nodeType = resolvedType->opt_NodeType();
+        const auto* coroutineStruct = resolvedPath ? resolvedPath->binding.opt_Struct() : nullptr;
+        const bool immovableCoroutine = (nodeType && (nodeType->is_Async() || (nodeType->is_Generator() && nodeType->as_Generator()->isPinned)))
+            || (coroutineStruct && coroutineStruct->structMarkings.isImmovableCoroutine);
+        const bool unpinOfImmovable = immovableCoroutine && trait == resolve_.board().langItems->unpin();
+        if (includeMagicCandidates && !constituentsUnknown && !hasAutoTraitImpl && !unpinOfImmovable) {
             const auto structuralRelation = resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(params) ? Certainty::Ambiguous : Certainty::Proven;
             pushCandidate(frameIndex, SolverImpl(resolvedType, params.clone(), HIRTraitPath::assocListT()), structuralRelation == Certainty::Proven, structuralRelation, nullptr, {}, true, CandidateSource::Builtin);
         }

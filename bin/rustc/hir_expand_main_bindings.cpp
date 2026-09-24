@@ -3985,6 +3985,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
 
     auto genStr = HIRStruct{params.clone(), HIRStruct::Repr::Rust, HIRStruct::Data::make_Tuple(mv$(crVars.structEnts))};
     genStr.markings.hasDropImpl = true;
+    genStr.structMarkings.isImmovableCoroutine = node.isPinned;
     HIRSimplePath genStructPath;
     HIRTypeItem* genStructPtr;
     std::tie(genStructPath, genStructPtr) = out.newType->create(GENERATOR_PATH_PREFIX, newTypeSuffix, mv$(genStr));
@@ -4146,6 +4147,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     auto genStr = HIRStruct{params.clone(), HIRStruct::Repr::Rust, HIRStruct::Data::make_Tuple(std::move(crVars.structEnts))};
     genStr.markings.hasDropImpl = true;
     genStr.structMarkings.isAsyncDropGlue = isAsyncDropGlue;
+    genStr.structMarkings.isImmovableCoroutine = true;
     HIRSimplePath genStructPath;
     HIRTypeItem* genStructPtr;
     std::tie(genStructPath, genStructPtr) = out.newType->create(PATH_PREFIX_FUTURE, newTypeSuffix, mv$(genStr));

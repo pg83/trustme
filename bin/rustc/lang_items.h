@@ -22,6 +22,7 @@ public:
     virtual const HIRSimplePath& asyncFnOnce() const = 0;
     virtual const HIRSimplePath& box() const = 0;
     virtual const HIRSimplePath& phantomData() const = 0;
+    virtual const HIRSimplePath& unpin() const = 0;
     virtual const HIRSimplePath& generator() const = 0;
     virtual const HIRSimplePath& discriminantKind() const = 0;
     virtual const HIRSimplePath& pointee() const = 0;

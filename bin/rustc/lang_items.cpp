@@ -21,6 +21,7 @@ namespace {
         HIRSimplePath asyncFnOnce_;
         HIRSimplePath box_;
         HIRSimplePath phantomData_;
+        HIRSimplePath unpin_;
         HIRSimplePath generator_;
         HIRSimplePath discriminantKind_;
         HIRSimplePath pointee_;
@@ -63,6 +64,7 @@ namespace {
         const HIRSimplePath& box() const override;
 
         const HIRSimplePath& phantomData() const override;
+        const HIRSimplePath& unpin() const override;
 
         const HIRSimplePath& generator() const override;
 
@@ -112,6 +114,7 @@ LangItemsImpl::LangItemsImpl(const HIRCrate& crate)
     , asyncFnOnce_(crate.getLangItemPathOpt("async_fn_once"))
     , box_(crate.getLangItemPathOpt("owned_box"))
     , phantomData_(crate.getLangItemPathOpt("phantom_data"))
+    , unpin_(crate.getLangItemPathOpt("unpin"))
     , generator_(crate.getLangItemPathOpt("coroutine"))
     , discriminantKind_(crate.getLangItemPathOpt("discriminant_kind"))
     , pointee_(crate.getLangItemPathOpt("pointee_trait"))
@@ -179,6 +182,10 @@ auto LangItemsImpl::box() const -> const HIRSimplePath& {
 
 auto LangItemsImpl::phantomData() const -> const HIRSimplePath& {
     return phantomData_;
+}
+
+auto LangItemsImpl::unpin() const -> const HIRSimplePath& {
+    return unpin_;
 }
 
 auto LangItemsImpl::generator() const -> const HIRSimplePath& {

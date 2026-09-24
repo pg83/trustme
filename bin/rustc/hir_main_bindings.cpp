@@ -2152,6 +2152,7 @@ auto HirDeserialiser::deserialiseStrMarkings() -> HIRStructMarkings {
     BIT(3, m.isFundamental)
     BIT(4, m.isNoNiche)
     BIT(5, m.isAsyncDropGlue)
+    BIT(6, m.isImmovableCoroutine)
 #undef BIT
     m.dstType = static_cast<HIRStructMarkings::DstType>(in.readTag());
     m.coerceUnsized = static_cast<HIRStructMarkings::Coerce>(in.readTag());
@@ -4712,6 +4713,7 @@ auto HirSerialiser::serialise(const HIRStructMarkings& m) -> void {
     BIT(3, m.isFundamental)
     BIT(4, m.isNoNiche)
     BIT(5, m.isAsyncDropGlue)
+    BIT(6, m.isImmovableCoroutine)
 #undef BIT
     out.writeU8(bitflag1);
 

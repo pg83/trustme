@@ -274,6 +274,8 @@ struct HIRTraitMarkings {
 struct HIRStructMarkings {
     bool isAsyncDropGlue = false;
 
+    bool isImmovableCoroutine = false;
+
     bool isFundamental = false;
 
     bool canUnsize = false;
