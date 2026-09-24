@@ -1093,6 +1093,7 @@ futures_0_3_34 = add_project_test(
     manifest="futures",
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/futures_0_3_34/Cargo.lock",
+    adapter_args=["--features", "default,thread-pool,io-compat"],
     timeout=NESTED_PROJECT_TIMEOUT,
 )
 
