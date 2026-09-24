@@ -8541,7 +8541,9 @@ auto ExprVisitorConv::generatorMakeDrop(const Span& sp, MirBuilder& outBuilder, 
     for (size_t i = 0; i + 1 < generatorState.states.size(); i++) {
         arms.pushBack(outBuilder.newBbUnlinked());
         outBuilder.setCurBlock(arms.back());
-        for (const auto& v : generatorState.states[i].saved) {
+        const auto& saved = generatorState.states[i].saved;
+        for (auto it = saved.rbegin(); it != saved.rend(); ++it) {
+            const auto& v = *it;
             if (v.first == 0) {
                 continue;
             }
