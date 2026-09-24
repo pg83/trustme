@@ -161,6 +161,8 @@ namespace {
 
         void appendImplicitLifetime();
 
+        bool bindsLifetime(const ASTLifetimeRef& value) const;
+
         void lifetime(const ASTLifetimeRef& value);
 
         void pathParams(const ASTPathParams& params);
@@ -3910,6 +3912,7 @@ auto LifetimeIdentity::appendBound(Binder& owner, size_t canonical) -> void {
         ASSERT_BUG(Span(), current, StringView("Lifetime binder is not active"));
         depth++;
     }
+    hasLifetime = true;
     rememberInput(owner, canonical);
     append('b');
     appendNumber(depth);
@@ -3918,7 +3921,7 @@ auto LifetimeIdentity::appendBound(Binder& owner, size_t canonical) -> void {
 
 auto LifetimeIdentity::appendImplicitLifetime() -> void {
     if (!binder) {
-        append('u');
+        append('e');
         return;
     }
     if (binder->phase == Phase::Output && binder->inputLifetimes.length() == 1) {
@@ -3928,19 +3931,37 @@ auto LifetimeIdentity::appendImplicitLifetime() -> void {
     appendBound(*binder, binder->nextCanonical++);
 }
 
+auto LifetimeIdentity::bindsLifetime(const ASTLifetimeRef& value) const -> bool {
+    switch (value.binding()) {
+        case ASTLifetimeRef::BINDING_STATIC:
+        case ASTLifetimeRef::BINDING_UNBOUND:
+            return false;
+        case ASTLifetimeRef::BINDING_UNSPECIFIED:
+        case ASTLifetimeRef::BINDING_INFER:
+            return binder != nullptr;
+    }
+    if ((value.binding() >> 8) == 3) {
+        for (auto* owner = binder; owner; owner = owner->parent) {
+            for (const auto& parameter : owner->bounds.lifetimes) {
+                if (parameter.name().name == value.name().name) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 auto LifetimeIdentity::lifetime(const ASTLifetimeRef& value) -> void {
-    hasLifetime = true;
     append('l');
     switch (value.binding()) {
         case ASTLifetimeRef::BINDING_STATIC:
-            append('s');
+        case ASTLifetimeRef::BINDING_UNBOUND:
+            append('e');
             return;
         case ASTLifetimeRef::BINDING_UNSPECIFIED:
         case ASTLifetimeRef::BINDING_INFER:
             appendImplicitLifetime();
-            return;
-        case ASTLifetimeRef::BINDING_UNBOUND:
-            append('x');
             return;
     }
 
@@ -3956,8 +3977,7 @@ auto LifetimeIdentity::lifetime(const ASTLifetimeRef& value) -> void {
     }
 
     hasFreeLifetime = true;
-    append('g');
-    appendNumber(value.binding());
+    append('e');
 }
 
 auto LifetimeIdentity::pathParams(const ASTPathParams& params) -> void {
@@ -4120,7 +4140,7 @@ auto LifetimeIdentity::type(const ASTType& value) -> void {
                 traitPath(trait);
             }
             for (const auto& bound : object.lifetimes) {
-                if (bound.binding() != ASTLifetimeRef::BINDING_UNSPECIFIED) {
+                if (bound.binding() != ASTLifetimeRef::BINDING_UNSPECIFIED && bindsLifetime(bound)) {
                     lifetime(bound);
                 }
             }
