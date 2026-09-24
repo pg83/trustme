@@ -2256,7 +2256,15 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
                 }
                 SolverMayApplyCb<decltype(visitImpl)> callback(visitImpl);
+                const auto* selfPath = pe.type->opt_Path();
+                const bool closureCallTrait = selfPath && selfPath->isClosure()
+                    && (pe.trait.path == crate.getLangItemPathOpt("fn") || pe.trait.path == crate.getLangItemPathOpt("fn_mut") || pe.trait.path == crate.getLangItemPathOpt("fn_once"));
                 nextSolver->findValue(sp, implGenerics_, itemGenerics_, pe.trait.path, pe.trait.params, pe.type, pe.item.c_str(), callback);
+                if (!selectedImpl && closureCallTrait) {
+                    hasAmbiguousImpl = false;
+                    hasBoundedImpl = false;
+                    nextSolver->findImpl(sp, implGenerics_, itemGenerics_, pe.trait.path, nullptr, pe.type, callback);
+                }
                 if (!selectedImpl) {
                     if (hasBoundedImpl || hasAmbiguousImpl) {
                         DEBUG(StringView("Trait item depends on an in-scope bound or fuzzy impl"));
