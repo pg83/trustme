@@ -12899,7 +12899,17 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
     }
 
     bool changed = false;
+    const auto requiresProjection = [](const HIRType* type) {
+        return visitTyWith(type, [](const HIRType* inner) {
+            const auto* path = inner->opt_Path();
+            return path && path->path.data.is_UfcsKnown();
+        });
+    };
+    for (const bool projectionPass : {false, true})
     for (const auto& requirement : associated) {
+        if (requiresProjection(requirement.second.type) != projectionPass) {
+            continue;
+        }
         auto candidateOutput = useCandidateResponse ? candidate.impl.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams) : nullptr;
         auto responseBinding = CandidateBindingResult::Unchanged;
         if (!useCandidateResponse) {
