@@ -465,8 +465,6 @@ struct TraitResolution::NextTraitGoalEvaluator {
         Candidate(SolverImpl impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool assemblyEffectful, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {});
 
         bool isNegative() const;
-
-        bool isPositiveMarkerImpl() const;
     };
 
     struct CandidateFrame {
@@ -12500,6 +12498,7 @@ auto NextTraitGoalEvaluator::assembleTraitImplCandidates(size_t frameIndex, cons
             return false;
         });
     } else {
+        bool hasAutoTraitImpl = false;
         crate.findAutoTraitImpls(trait, resolvedType, resolve_.ivars.callbackResolveInfer(), [&](const HIRMarkerImpl& impl) {
             HIRPathParams implParams;
             bool headNormalizationAmbiguity = false;
@@ -12507,6 +12506,7 @@ auto NextTraitGoalEvaluator::assembleTraitImplCandidates(size_t frameIndex, cons
             ThinVector<SolverValueEquality> headValueEqualities;
             const auto relation = this->unifyImplHead(impl.params, impl.traitArgs, impl.type, params, resolvedType, implParams, headNormalizationAmbiguity, headEqualities, headValueEqualities);
             if (relation != Certainty::NoSolution) {
+                hasAutoTraitImpl = true;
                 auto monomorph = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr);
                 auto responseType = monomorph.monomorphType(span(), impl.type, false);
                 auto responseParams = monomorph.monomorphPathParams(span(), impl.traitArgs, false);
@@ -12522,8 +12522,8 @@ auto NextTraitGoalEvaluator::assembleTraitImplCandidates(size_t frameIndex, cons
            of the alias.  Assuming it instead let `impl<T: Send> Select for T` look like
            it applied to every `T`, and the general impl outranked it. */
         const auto* resolvedPath = resolvedType->opt_Path();
-        const bool constituentsUnknown = resolvedType->is_Generic() || (resolvedPath && resolvedPath->path.data.is_UfcsKnown());
-        if (includeMagicCandidates && !constituentsUnknown) {
+        const bool constituentsUnknown = resolvedType->is_Generic() || resolvedType->is_TraitObject() || (resolvedPath && resolvedPath->path.data.is_UfcsKnown());
+        if (includeMagicCandidates && !constituentsUnknown && !hasAutoTraitImpl) {
             const auto structuralRelation = resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(params) ? Certainty::Ambiguous : Certainty::Proven;
             pushCandidate(frameIndex, SolverImpl(resolvedType, params.clone(), HIRTraitPath::assocListT()), structuralRelation == Certainty::Proven, structuralRelation, nullptr, {}, true, CandidateSource::Builtin);
         }
@@ -13902,6 +13902,9 @@ auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, con
                 if (e.binding.is_Unbound() || e.binding.is_Opaque()) {
                     return Certainty::Ambiguous;
                 }
+                if (e.binding.is_Struct() && pe->path == resolve_.board().langItems->phantomData() && !pe->params.types.empty()) {
+                    return evaluateInner(pe->params.types[0]);
+                }
                 Certainty result = Certainty::Proven;
                 if (const auto* strPtr = e.binding.opt_Struct()) {
                     const auto& str = *strPtr;
@@ -13975,6 +13978,15 @@ auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, con
         case HIRType::TAG_Array: {
             auto& e = (*type).as_Array();
             return evaluateInner(e.inner);
+        }
+        case HIRType::TAG_Slice: {
+            return evaluateInner((*type).as_Slice().inner);
+        }
+        case HIRType::TAG_Borrow: {
+            return evaluateInner((*type).as_Borrow().inner);
+        }
+        case HIRType::TAG_Pointer: {
+            return evaluateInner((*type).as_Pointer().inner);
         }
     }
     UNREACHABLE();
@@ -14782,9 +14794,6 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     }
 
     bool sawAmbiguous = false;
-    bool suppressAutoBuiltin = false;
-    bool negativeProven = false;
-    bool negativeAmbiguous = false;
     Certainty autoBuiltinResult = Certainty::NoSolution;
     const size_t candidateCount = frames[frameIndex]->candidates.length();
     const size_t paramEnvCandidateCount = static_cast<size_t>(std::count_if(
@@ -14797,15 +14806,12 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
         auto* candidate = frames[frameIndex]->candidates[i];
         candidate->certainty = result;
         if (candidate->isNegative()) {
-            negativeProven |= result == Certainty::Proven;
-            negativeAmbiguous |= result == Certainty::Ambiguous;
             continue;
         }
         if (candidate->autoBuiltin) {
             autoBuiltinResult = result;
             continue;
         }
-        suppressAutoBuiltin |= candidate->isPositiveMarkerImpl() && result != Certainty::NoSolution;
         if (result == Certainty::Proven) {
             const bool identityResponse = !canonicalAssociated && candidate->source == CandidateSource::ParamEnv &&
                 paramEnvCandidateCount == 1 && paramEnvCandidateIsNonGlobal(*candidate) &&
@@ -14817,15 +14823,10 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
         }
         sawAmbiguous |= result == Certainty::Ambiguous;
     }
-    if (!suppressAutoBuiltin && !negativeProven) {
-        if (negativeAmbiguous && autoBuiltinResult == Certainty::Proven) {
-            autoBuiltinResult = Certainty::Ambiguous;
-        }
-        if (autoBuiltinResult == Certainty::Proven) {
-            return cacheResult(Certainty::Proven);
-        }
-        sawAmbiguous |= autoBuiltinResult == Certainty::Ambiguous;
+    if (autoBuiltinResult == Certainty::Proven) {
+        return cacheResult(Certainty::Proven);
     }
+    sawAmbiguous |= autoBuiltinResult == Certainty::Ambiguous;
     const auto* selfPath = resolvedType->opt_Path();
     const bool selfIsAlias = selfPath && (selfPath->binding.is_Opaque() || selfPath->binding.is_Unbound());
     const auto* selfErased = resolvedType->opt_ErasedType();
@@ -16504,9 +16505,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         return emitNoViable();
     }
     DEBUG(StringView("next-solver assembled ") << candidateCount << StringView(" candidate(s) for ") << type << StringView(": ") << trait << params);
-    bool suppressAutoBuiltin = false;
-    bool negativeProven = false;
-    bool negativeAmbiguous = false;
     const HIRType* candidateAssocType = canonicalAssocType;
     if (candidateAssocType) {
         if (const auto* erased = candidateAssocType->opt_ErasedType()) {
@@ -16651,11 +16649,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         candidate->certainty = certainty;
         DEBUG(StringView("next-solver candidate ") << candidate->impl << StringView(" => ") << static_cast<unsigned>(certainty));
         if (candidate->isNegative()) {
-            negativeProven |= certainty == Certainty::Proven;
-            negativeAmbiguous |= certainty == Certainty::Ambiguous;
             return false;
         }
-        suppressAutoBuiltin |= candidate->isPositiveMarkerImpl() && certainty != Certainty::NoSolution;
         if (certainty != Certainty::NoSolution) {
             frame.viable.pushBack(candidate);
         }
@@ -16687,25 +16682,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             evaluateCandidateAt(i);
         }
     }
-    if (suppressAutoBuiltin || negativeProven) {
-        auto& viable = frame.viable;
-        size_t kept = 0;
-        for (auto* candidate : viable) {
-            if (!candidate->autoBuiltin) {
-                viable.mut(kept++) = candidate;
-            }
-        }
-        while (viable.length() > kept) {
-            viable.popBack();
-        }
-    } else if (negativeAmbiguous) {
-        for (auto* candidate : frame.viable) {
-            if (candidate->autoBuiltin && candidate->certainty == Certainty::Proven) {
-                candidate->certainty = Certainty::Ambiguous;
-            }
-        }
-    }
-
     if (coercionSelectsCandidate) {
         struct RelatedCandidate {
             Candidate* candidate;
@@ -17169,10 +17145,6 @@ NextTraitGoalEvaluator::Candidate::Candidate(SolverImpl impl, bool headExact, Ce
 
 auto NextTraitGoalEvaluator::Candidate::isNegative() const -> bool {
     return markerImpl && !markerImpl->isPositive;
-}
-
-auto NextTraitGoalEvaluator::Candidate::isPositiveMarkerImpl() const -> bool {
-    return markerImpl && markerImpl->isPositive;
 }
 
 NextTraitGoalEvaluator::CandidateFrame::CandidateFrame() {
