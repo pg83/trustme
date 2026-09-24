@@ -2207,6 +2207,9 @@ auto CodeGeneratorC::emitStaticExt(const HIRPath& p, const HIRStatic& item, cons
 
     emitExternTypeDefinition(type);
     of << StringView("extern ");
+    if (item.isThreadLocal) {
+        of << StringView("__thread ");
+    }
     emitStaticTy(type, p, /*is_proto=*/true, item.explicitAlignment);
     if (linkageName != "") {
         if (TargetGetCurSpec(wb_).osName == "macos") {
@@ -2256,6 +2259,9 @@ auto CodeGeneratorC::emitStaticProto(const HIRPath& p, const HIRStatic& item, co
     }
     emitExternTypeDefinition(type);
     of << StringView("extern ");
+    if (item.isThreadLocal) {
+        of << StringView("__thread ");
+    }
     emitStaticTy(type, p, /*is_proto=*/true, item.explicitAlignment);
     if (item.explicitAlignment != 0) {
         of << StringView(" __attribute__((aligned(") << item.explicitAlignment << StringView(")))");
@@ -2332,7 +2338,7 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
     const bool isZero = isZeroLiteral(type, encoded, params);
 
     const bool blobLinkage = item.linkage.type == HIRLinkage::Type::Auto || item.linkage.type == HIRLinkage::Type::Weak;
-    if (!isZero && encoded.bytes.length() >= 64 * 1024 && encoded.relocations.empty() && TargetGetCurSpec(wb_).osName == "linux" && blobLinkage && item.linkage.name.empty() && item.linkage.section.empty() && literalBlobNameIsSafe()) {
+    if (!isZero && encoded.bytes.length() >= 64 * 1024 && encoded.relocations.empty() && TargetGetCurSpec(wb_).osName == "linux" && blobLinkage && !item.isThreadLocal && item.linkage.name.empty() && item.linkage.section.empty() && literalBlobNameIsSafe()) {
         size_t size = 0;
         size_t align = 0;
         MIR_ASSERT(topMirRes, TargetGetSizeAndAlignOf(sp, resolve_, type, size, align), StringView("Unsized static ") << p);
@@ -2358,6 +2364,9 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
 
     if (item.params.isGeneric()) {
         of << StringView("__attribute__((weak)) ");
+    }
+    if (item.isThreadLocal) {
+        of << StringView("__thread ");
     }
     bool isPacked = emitStaticTy(type, p, /*is_proto=*/false, item.explicitAlignment);
     if (item.explicitAlignment != 0) {

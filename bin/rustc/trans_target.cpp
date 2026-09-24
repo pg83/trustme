@@ -526,6 +526,10 @@ namespace {
         UNREACHABLE();
     }
 
+    bool osHasThreadLocal(const TargetSpec& spec) {
+        return spec.osName == "linux" || spec.osName == "freebsd" || spec.osName == "netbsd" || spec.osName == "dragonfly" || spec.osName == "macos";
+    }
+
     bool closureHasNoCaptures(const StaticTraitResolve& resolve, const HIRExprNodeClosure& closure) {
         if (closure.cls == HIRExprNodeClosure::Class::NoCapture) {
             return true;
@@ -2277,6 +2281,7 @@ void TargetExportCurSpec(const WireBoard& wb, const std::string& filename) {
 void TargetSetCfg(WireBoard& wb, const std::string& targetName) {
     auto& settings = *wb.settings;
     auto* spec = wb.pool->make<TargetSpec>(initFromSpecName(targetName));
+    spec->hasThreadLocal = osHasThreadLocal(*spec);
     wb.target = spec;
     if (spec->arch.pointerBits != 64 || spec->arch.bigEndian) {
         sysE << StringView("error: unsupported target `") << targetName << StringView("`: only 64-bit little-endian targets are supported") << endL;
@@ -2326,6 +2331,9 @@ void TargetSetCfg(WireBoard& wb, const std::string& targetName) {
     CfgSetValue(settings, "target_endian", tgt.arch.bigEndian ? "big" : "little");
     CfgSetValue(settings, "target_arch", tgt.arch.name);
     CfgSetValue(settings, "target_abi", "llvm");
+    if (tgt.hasThreadLocal) {
+        CfgSetFlag(settings, "target_thread_local");
+    }
     if (tgt.arch.atomics.u8) {
         CfgSetValue(settings, "target_has_atomic", "8");
         CfgSetValue(settings, "target_has_atomic_load_store", "8");

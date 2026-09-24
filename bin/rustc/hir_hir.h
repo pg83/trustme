@@ -124,6 +124,8 @@ public:
 
     bool isPromoted = false;
 
+    bool isThreadLocal = false;
+
     mutable std::map<HIRPath, EncodedLiteral> monomorphCache;
 
     HIRStatic(HIRLinkage linkage, bool isMut, const HIRType* type, HIRExprPtr value);

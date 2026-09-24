@@ -2994,7 +2994,9 @@ HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attr
             linkage.name = name.c_str();
         }
 
-        return HIRValueItem::make_Static(crate->pool->make<HIRStatic>(HIRStatic(mv$(linkage), (e.sClass() == ASTStatic::MUT), LowerHIRType(e.type()), mv$(value))));
+        auto* rv = crate->pool->make<HIRStatic>(HIRStatic(mv$(linkage), (e.sClass() == ASTStatic::MUT), LowerHIRType(e.type()), mv$(value)));
+        rv->isThreadLocal = e.markings.isThreadLocal;
+        return HIRValueItem::make_Static(rv);
     }
 }
 

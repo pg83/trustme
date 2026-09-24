@@ -58,6 +58,8 @@ struct TargetSpec {
 
     BackendOptsC backendC;
     TargetArch arch;
+
+    bool hasThreadLocal = false;
 };
 
 struct TypeReprFieldPath {

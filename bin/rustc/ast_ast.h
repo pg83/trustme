@@ -123,6 +123,7 @@ public:
         std::string linkName;
         std::string linkSection;
         ASTLinkage linkage = ASTLinkage::Default;
+        bool isThreadLocal = false;
     } markings;
 
     ASTStatic(Class sClass, ASTType* type, ASTExprNode* value, ASTGenericParams params = {});

@@ -2103,16 +2103,19 @@ auto HirDeserialiser::deserialiseStatic() -> HIRStatic {
     bool saveLiteral;
     bool hasExplicitAlignment;
     bool isPromoted;
+    bool isThreadLocal;
     BIT(0, isMut);
     BIT(1, saveLiteral);
     BIT(2, hasExplicitAlignment);
     BIT(3, isPromoted);
+    BIT(4, isThreadLocal);
 #undef BIT
     auto explicitAlignment = hasExplicitAlignment ? in.readCount() : 0;
     auto ty = deserialiseType();
     auto rv = HIRStatic(mv$(linkage), isMut, mv$(ty), {});
     rv.explicitAlignment = explicitAlignment;
     rv.isPromoted = isPromoted;
+    rv.isThreadLocal = isThreadLocal;
     if (params.isGeneric()) {
         rv.value = deserialiseExprptr();
     }
@@ -4622,6 +4625,7 @@ auto HirSerialiser::serialise(const HIRStatic& item) -> void {
     BIT(1, item.saveLiteral)
     BIT(2, item.explicitAlignment != 0)
     BIT(3, item.isPromoted)
+    BIT(4, item.isThreadLocal)
 #undef BIT
     out.writeU8(bitflag1);
     if (item.explicitAlignment != 0) {

@@ -116,6 +116,12 @@ namespace {
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
     };
 
+    struct CHandlerThreadLocal: public ExpandDecorator {
+        AttrStage stage() const override;
+
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
+
     struct CHandlerLinkage: public ExpandDecorator {
         AttrStage stage() const override;
 
@@ -1775,6 +1781,7 @@ void RegisterBuiltinDecorators(ExpandRegistry& registry) {
     registry.addDecorator<CHandlerLinkSection>("link_section");
     registry.addDecorator<CHandlerLink>("link");
     registry.addDecorator<CHandlerLinkage>("linkage");
+    registry.addDecorator<CHandlerThreadLocal>("thread_local");
     registry.addDecorator<CHandlerTargetFeature>("target_feature");
     registry.addDecorator<CHandlerRustcIntrinsic>("rustc_intrinsic");
     registry.addDecorator<CHandlerTrackCaller>("track_caller");
@@ -2331,6 +2338,20 @@ auto CHandlerLink::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
         lex.getTokenCheck(TOK_EOF);
     } else {
         TODO(sp, StringView("#[link] on ") << i.tagStr());
+    }
+}
+
+auto CHandlerThreadLocal::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerThreadLocal::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (i.is_None()) {
+    } else if (auto* st = i.opt_Static()) {
+        ASSERT_BUG(sp, st->sClass() != ASTStatic::CONST, StringView("#[thread_local] on `const`"));
+        st->markings.isThreadLocal = true;
+    } else {
+        ERROR(sp, E0000, StringView("#[thread_local] on ") << i.tagStr());
     }
 }
 
