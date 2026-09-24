@@ -763,15 +763,6 @@ HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& 
     };
     HIRPathParamsBuilder next(pp);
 
-    if (isExpr && next.types.empty()) {
-        while (next.types.size() < paramsDef.types.size()) {
-            next.types.push_back(types.infer());
-        }
-    }
-    if (isExpr && next.values.empty()) {
-        next.values.resize(paramsDef.values.size());
-    }
-
     if (isExpr) {
         for (auto& type : next.types) {
             if (const auto* infer = type->opt_Infer(); infer && infer->index == ~0u) {
