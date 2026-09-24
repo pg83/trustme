@@ -554,6 +554,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
     const Span* span_ = nullptr;
     bool coherenceMode = false;
     mutable u64 cycleHits_ = 0;
+    mutable u64 captureWaits_ = 0;
     mutable u64 ivarGenerationSeen_ = ~0ull;
     const GoalContext* context_ = nullptr;
 
@@ -13353,7 +13354,10 @@ auto NextTraitGoalEvaluator::evaluateBuiltinUnsize(Candidate& candidate, const H
             if (result == Certainty::NoSolution) {
                 break;
             }
-            combine(require(HIRTraitPath(marker.clone())));
+            const auto nested = require(HIRTraitPath(marker.clone()));
+            if (nested != Certainty::Ambiguous) {
+                combine(nested);
+            }
         }
         return result;
     }
@@ -13986,6 +13990,24 @@ auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, con
         }
         case HIRType::TAG_Slice: {
             return evaluateInner((*type).as_Slice().inner);
+        }
+        case HIRType::TAG_NodeType: {
+            const auto* closure = (*type).as_NodeType().opt_Closure();
+            if (!closure) {
+                return Certainty::Proven;
+            }
+            if (!closure->typeckCapturesKnown) {
+                captureWaits_++;
+                return Certainty::Ambiguous;
+            }
+            Certainty result = Certainty::Proven;
+            for (const auto* capture : closure->typeckCaptureTypes) {
+                combine(result, evaluateInner(capture));
+                if (result == Certainty::NoSolution) {
+                    return result;
+                }
+            }
+            return result;
         }
         case HIRType::TAG_Borrow: {
             return evaluateInner((*type).as_Borrow().inner);
@@ -14758,6 +14780,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     };
 
     const auto cycleHitsBefore = cycleHits_;
+    const auto captureWaitsBefore = captureWaits_;
     const bool rigidKey = canonicalGoalIsRigid(canonical, canonicalizer.alphaSolverEnvironment());
     auto cacheResult = [&](Certainty certainty, bool identityResponse = false) {
         DEBUG(StringView("solveGoal ") << trait << StringView(" for ") << type << StringView(" => ") << static_cast<unsigned>(certainty));
@@ -14765,10 +14788,13 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
             *responseIsIdentity = identityResponse;
         }
         const bool restsOnCycle = cycleHits_ != cycleHitsBefore;
-        if (crateCacheable && rigidKey && !restsOnCycle) {
+        const bool awaitsCaptures = captureWaits_ != captureWaitsBefore;
+        if (crateCacheable && rigidKey && !restsOnCycle && !awaitsCaptures) {
             crateCache().insert(crateHash, trait, canonical.params.clone(), canonical.type, crateCacheEnvKey, certainty);
         }
-        cacheGoal(goalKey, certainty, restsOnCycle, identityResponse);
+        if (!awaitsCaptures) {
+            cacheGoal(goalKey, certainty, restsOnCycle, identityResponse);
+        }
         prepareResponseMemo(goalKey);
         return certainty;
     };
@@ -15803,6 +15829,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
     }
     const auto cycleHitsBefore = cycleHits_;
+    const auto captureWaitsBefore = captureWaits_;
     const bool rigidKey = canonicalGoalIsRigid(canonical, canonicalizer.alphaSolverEnvironment());
     const auto appendAssociatedEquality = [&](auto& response, const HIRType* required, const HIRType* output) {
         DEBUG(StringView("response associated equality ") << required << StringView(" == ") << output);
@@ -16365,7 +16392,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
             solverResponse.obligations.resize(kept);
         }
-        if (!cacheableResponse || canonicalizer.sawForeignIvar() || canonicalizer.sawForeignSolverExistential()) {
+        if (!cacheableResponse || canonicalizer.sawForeignIvar() || canonicalizer.sawForeignSolverExistential() || captureWaits_ != captureWaitsBefore) {
             return deliverResponse(solverResponse, exposeImpl ? &response : nullptr);
         }
         const bool restsOnCycle = cycleHits_ != cycleHitsBefore;

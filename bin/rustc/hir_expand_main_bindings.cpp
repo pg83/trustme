@@ -61,6 +61,9 @@ namespace {
     struct AnnotateExprVisitorMark: public HIRExprVisitor {
         const StaticTraitResolve& resolve_;
         const Vector<const HIRType*>& variableTypes;
+        const HIRAnnotateTypeView* typeView = nullptr;
+
+        const HIRType* viewed(const HIRType* type) const;
 
         Vector<HIRValueUsage> usage;
         std::vector<Scope> closureStack;
@@ -83,6 +86,8 @@ namespace {
         AnnotateExprVisitorMark(const StaticTraitResolve& resolve, const Vector<const HIRType*>& variableTypes);
 
         void visitRoot(HIRExprPtr& rootPtr);
+
+        void visitRootNode(HIRExprNode& root);
 
         void visitNodePtr(HIRExprNodeP& nodePtr) override;
 
@@ -180,7 +185,7 @@ namespace {
 
         HIRValueUsage getUsageForPattern(const Span& sp, const HIRPattern& pat, const HIRType* outerTy) const;
 
-        bool typeIsCopyHere(const Span& sp, const HIRType* type);
+        bool typeIsCopyHere(const Span& sp, const HIRType* type) const;
 
         HIRValueUsage getRealUsage(const Span& sp, unsigned slot, const Vector<RcString>& fields, HIRValueUsage usage);
 
@@ -1126,6 +1131,70 @@ void HIRExpandAnnotateUsageExpr(const WireBoard& wb, const HIRCrate& crate, cons
     ev.visitRoot(exp);
 }
 
+void HIRExpandAnalyseClosureCaptures(const WireBoard& wb, const HIRExprState& state, const Vector<HIRExprNode*>& closures, const Vector<const HIRType*>& variableTypes, const HIRAnnotateTypeView& view) {
+    TRACE_FUNCTION;
+    StaticTraitResolve resolve{wb};
+    resolve.setBothGenericsRaw(state.implGenerics, state.itemGenerics);
+
+    struct Saved: public HIRExprVisitorDef {
+        Vector<std::pair<HIRExprNodeClosure*, HIRExprNodeClosure::Class>> closures;
+        Vector<std::pair<HIRExprNodeCallValue*, HIRExprNodeCallValue::TraitUsed>> calls;
+
+        explicit Saved(HIRTypeInterner& types)
+            : HIRExprVisitorDef(types)
+        {
+        }
+
+        void visit(HIRExprNodeClosure& node) override {
+            closures.pushBack({&node, node.cls});
+            HIRExprVisitorDef::visit(node);
+        }
+
+        void visit(HIRExprNodeCallValue& node) override {
+            calls.pushBack({&node, node.traitUsed});
+            HIRExprVisitorDef::visit(node);
+        }
+    } saved(resolve.hirCrate().types);
+    for (auto* closure : closures) {
+        closure->visit(saved);
+    }
+
+    AnnotateExprVisitorMark ev{resolve, variableTypes};
+    ev.typeView = &view;
+    for (auto* closure : closures) {
+        closure->visit(ev);
+    }
+    ev.pendingCalls.clear();
+
+    for (const auto& entry : saved.closures) {
+        auto& closure = *entry.first;
+        closure.typeckCaptureTypes.clear();
+        for (const auto& capture : closure.avuCache.capturedVars) {
+            const auto* type = variableTypes[capture.rootSlot];
+            for (const auto& field : capture.fields) {
+                type = resolve.expandAssociatedTypes(closure.span(), resolve.getFieldType(closure.span(), type, field));
+            }
+            switch (capture.usage) {
+                case HIRValueUsage::Unknown:
+                case HIRValueUsage::Move:
+                    break;
+                case HIRValueUsage::Borrow:
+                    type = resolve.hirCrate().types.borrow(HIRBorrowType::Shared, type);
+                    break;
+                case HIRValueUsage::Mutate:
+                    type = resolve.hirCrate().types.borrow(HIRBorrowType::Unique, type);
+                    break;
+            }
+            closure.typeckCaptureTypes.pushBack(type);
+        }
+        closure.typeckCapturesKnown = true;
+        closure.cls = entry.second;
+    }
+    for (const auto& entry : saved.calls) {
+        entry.first->traitUsed = entry.second;
+    }
+}
+
 void HIRExpandAnnotateUsage(const WireBoard& wb, HIRCrate& crate) {
     AnnotateOuterVisitor ov(wb);
     ov.visitCrate(crate);
@@ -1490,7 +1559,17 @@ AnnotateExprVisitorMark::AnnotateExprVisitorMark(const StaticTraitResolve& resol
 {
 }
 
+auto AnnotateExprVisitorMark::viewed(const HIRType* type) const -> const HIRType* {
+    return typeView ? typeView->type(type) : type;
+}
+
 auto AnnotateExprVisitorMark::visitRoot(HIRExprPtr& rootPtr) -> void {
+    BUG_ASSERT(rootPtr);
+    visitRootNode(*rootPtr);
+}
+
+auto AnnotateExprVisitorMark::visitRootNode(HIRExprNode& root) -> void {
+    auto* rootPtr = &root;
     // HACK: Pre-visit all nodes to find closures, and mark those as !Copy
 
     {
@@ -1516,7 +1595,7 @@ auto AnnotateExprVisitorMark::visitRoot(HIRExprPtr& rootPtr) -> void {
     BUG_ASSERT(usage.length() == expectedSize);
 
     for (auto* call : pendingCalls) {
-        const auto* nodePp = (*call->value->resType).is_NodeType() ? ((*call->value->resType).as_NodeType().opt_Closure()) : nullptr;
+        const auto* nodePp = (*viewed(call->value->resType)).is_NodeType() ? ((*viewed(call->value->resType)).as_NodeType().opt_Closure()) : nullptr;
         if (!nodePp) {
             continue;
         }
@@ -1664,8 +1743,8 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeAWait& node) -> void {
 }
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeUse& node) -> void {
-    const auto* type = node.value->resType;
-    const auto innerUsage = resolve_.typeIsCopy(node.span(), type) || typeIsUseCloned(resolve_, node.span(), type) ? HIRValueUsage::Borrow : HIRValueUsage::Move;
+    const auto* type = viewed(node.value->resType);
+    const auto innerUsage = typeIsCopyHere(node.span(), type) || typeIsUseCloned(resolve_, node.span(), type) ? HIRValueUsage::Borrow : HIRValueUsage::Move;
     auto _ = pushUsage(innerUsage);
     this->visitNodePtr(node.value);
 }
@@ -1673,7 +1752,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeUse& node) -> void {
 auto AnnotateExprVisitorMark::visit(HIRExprNodeLet& node) -> void {
     addDefsFromPattern(node.span(), node.pattern);
     if (node.value) {
-        auto _ = this->pushUsage(this->getUsageForPattern(node.span(), node.pattern, node.type));
+        auto _ = this->pushUsage(this->getUsageForPattern(node.span(), node.pattern, viewed(node.type)));
         this->visitNodePtr(node.value);
     }
 }
@@ -1731,7 +1810,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeLoopControl& node) -> void {
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeMatch& node) -> void {
     {
-        const auto& valTy = node.value->resType;
+        const auto& valTy = viewed(node.value->resType);
         HIRValueUsage vu = HIRValueUsage::Unknown;
         for (const auto& arm : node.arms) {
             for (const auto& pat : arm.patterns) {
@@ -1753,7 +1832,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeMatch& node) -> void {
             addDefsFromPattern(node.span(), pat);
         }
         for (auto& c : arm.guards) {
-            auto _ = this->pushUsage(this->getUsageForPattern(c.val->span(), c.pat, c.val->resType));
+            auto _ = this->pushUsage(this->getUsageForPattern(c.val->span(), c.pat, viewed(c.val->resType)));
             this->visitNodePtr(c.val);
             addDefsFromPattern(node.span(), c.pat);
         }
@@ -1849,7 +1928,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeUnsize& node) -> void {
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeIndex& node) -> void {
     // TODO: Override to ::Borrow if Res: Copy and moving
-    if (this->getUsage() == HIRValueUsage::Move && resolve_.typeIsCopy(node.span(), node.resType)) {
+    if (this->getUsage() == HIRValueUsage::Move && typeIsCopyHere(node.span(), viewed(node.resType))) {
         auto _ = pushUsage(HIRValueUsage::Borrow);
         this->visitNodePtr(node.value);
     } else {
@@ -1861,10 +1940,10 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeIndex& node) -> void {
 }
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeDeref& node) -> void {
-    if (this->getUsage() == HIRValueUsage::Move && resolve_.typeIsCopy(node.span(), node.resType)) {
+    if (this->getUsage() == HIRValueUsage::Move && typeIsCopyHere(node.span(), viewed(node.resType))) {
         auto _ = pushUsage(HIRValueUsage::Borrow);
         this->visitNodePtr(node.value);
-    } else if (node.value->resType->is_Pointer()) {
+    } else if (viewed(node.value->resType)->is_Pointer()) {
         auto _ = pushUsage(HIRValueUsage::Borrow);
         this->visitNodePtr(node.value);
     } else {
@@ -1888,7 +1967,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeEmplace& node) -> void {
 }
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeField& node) -> void {
-    bool isCopy = resolve_.typeIsCopy(node.span(), node.resType);
+    bool isCopy = typeIsCopyHere(node.span(), viewed(node.resType));
 
     DEBUG(StringView("ty = ") << node.resType << StringView(", is_copy=") << isCopy);
     bool savedIgnoreVariableCapure = ignoreVariableCapture;
@@ -1903,7 +1982,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeField& node) -> void {
                 inner = innerField->value.get();
             }
             if (auto* innerDeref = cast<HIRExprNodeDeref>(inner)) {
-                if (innerDeref->value->resType->is_Borrow()) {
+                if (viewed(innerDeref->value->resType)->is_Borrow()) {
                     fields.pushBack(RcString());
                     inner = innerDeref->value.get();
                 }
@@ -1948,7 +2027,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeCallValue& node) -> void {
     // TODO: Different usage based on trait.
     HIRValueUsage vu = HIRValueUsage::Borrow;
 
-    if (const auto* nodePp = ((*node.value->resType).is_NodeType() ? ((*node.value->resType).as_NodeType().opt_Closure()) : nullptr)) {
+    if (const auto* nodePp = ((*viewed(node.value->resType)).is_NodeType() ? ((*viewed(node.value->resType)).as_NodeType().opt_Closure()) : nullptr)) {
         BUG_ASSERT(nodePp);
         if (nodePp->cls == HIRExprNodeClosure::Class::Unknown) {
             auto _ = pushUsage(HIRValueUsage::Move);
@@ -2059,7 +2138,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeStructLiteral& node) -> void {
     const auto& tyPath = node.realPath;
     if (node.baseValue) {
         bool isMoved = false;
-        const auto& tpb = node.baseValue->resType->as_Path().binding;
+        const auto& tpb = viewed(node.baseValue->resType)->as_Path().binding;
         const tStructFields* fieldsPtr;
         tStructFields tupleFields;
         if (tpb.is_Enum()) {
@@ -2102,7 +2181,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeStructLiteral& node) -> void {
                 const auto& tyO = fields[i].ty;
                 const HIRType* tmp;
                 const auto& tyM = monomorphiseTypeWithOpt(node.span(), tyO, monomorphCb);
-                bool isCopy = resolve_.typeIsCopy(node.span(), tyM);
+                bool isCopy = typeIsCopyHere(node.span(), tyM);
                 if (!isCopy) {
                     DEBUG(StringView("- Field ") << i << StringView(" ") << fields[i].name << StringView(": ") << tyM << StringView(" moved"));
                     isMoved = true;
@@ -2210,7 +2289,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeClosure& node) -> void {
                         tmpTy = resolve_.getFieldType(node.span(), *ty, fld);
                         ty = &tmpTy;
                     }
-                    if (!resolve_.typeIsCopy(node.span(), *ty)) {
+                    if (!typeIsCopyHere(node.span(), *ty)) {
                         node.isCopy = false;
                     }
                     break;
@@ -2418,7 +2497,7 @@ auto AnnotateExprVisitorMark::addDefsFromPattern(const Span& sp, const HIRPatter
 auto AnnotateExprVisitorMark::getUsageForPatternBinding(const Span& sp, const HIRPatternBinding& pb, const HIRType* ty) const -> HIRValueUsage {
     switch (pb.type) {
         case HIRPatternBinding::Type::Move:
-            if (resolve_.typeIsCopy(sp, ty)) {
+            if (typeIsCopyHere(sp, ty)) {
                 return HIRValueUsage::Borrow;
             } else {
                 return HIRValueUsage::Move;
@@ -2467,7 +2546,7 @@ auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPatter
             auto& pe = pat.data.as_Deref();
             ASSERT_BUG(sp, pe.kind != HIRPattern::DerefKind::Unknown && pe.targetType, StringView("Untyped deref pattern"));
             if (pe.kind == HIRPattern::DerefKind::Box) {
-                return getUsageForPattern(sp, *pe.sub, pe.targetType);
+                return getUsageForPattern(sp, *pe.sub, viewed(pe.targetType));
             }
             return pe.kind == HIRPattern::DerefKind::Unique ? HIRValueUsage::Mutate : HIRValueUsage::Borrow;
         }
@@ -2521,11 +2600,11 @@ auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPatter
 
             auto rv = HIRValueUsage::Borrow;
             for (unsigned int i = 0; i < pe.leading.size(); i++) {
-                auto sty = resolve_.monomorphExpand(sp, flds[i].ent, monomorphState);
+                auto sty = viewed(resolve_.monomorphExpand(sp, flds[i].ent, monomorphState));
                 rv = std::max(rv, getUsageForPattern(sp, pe.leading[i], sty));
             }
             for (unsigned int i = 0; i < pe.trailing.size(); i++) {
-                auto sty = resolve_.monomorphExpand(sp, flds[flds.size() - pe.trailing.size() + i].ent, monomorphState);
+                auto sty = viewed(resolve_.monomorphExpand(sp, flds[flds.size() - pe.trailing.size() + i].ent, monomorphState));
                 rv = std::max(rv, getUsageForPattern(sp, pe.trailing[i], sty));
             }
             return rv;
@@ -2551,7 +2630,7 @@ auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPatter
                 });
                 ASSERT_BUG(sp, fldIt != flds.end(), StringView("Unable to find field ") << fldPat.first);
 
-                auto sty = resolve_.monomorphExpand(sp, fldIt->ty, monomorphState);
+                auto sty = viewed(resolve_.monomorphExpand(sp, fldIt->ty, monomorphState));
                 rv = std::max(rv, getUsageForPattern(sp, fldPat.second, sty));
             }
             return rv;
@@ -2605,9 +2684,9 @@ auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPatter
    a closure that holds a String look copyable.  Whoever then consumes such a
    closure captures it by reference, and moving out through a reference is not
    something MIR can express. */
-auto AnnotateExprVisitorMark::typeIsCopyHere(const Span& sp, const HIRType* type) -> bool {
+auto AnnotateExprVisitorMark::typeIsCopyHere(const Span& sp, const HIRType* type) const -> bool {
     if (!type->is_NodeType() || !type->as_NodeType().is_Closure()) {
-        return resolve_.typeIsCopy(sp, type);
+        return typeView ? typeView->typeIsCopy(sp, type) : resolve_.typeIsCopy(sp, type);
     }
     for (const auto& capture : type->as_NodeType().as_Closure()->avuCache.capturedVars) {
         switch (capture.usage) {

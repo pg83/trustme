@@ -682,6 +682,9 @@ struct HIRExprNodeClosure: public HIRExprNode {
         std::vector<Capture> capturedVars;
     } avuCache;
 
+    bool typeckCapturesKnown = false;
+    stl::Vector<const HIRType*> typeckCaptureTypes;
+
     const HIRStruct* objPtr = nullptr;
     HIRGenericPath objPathBase;
     HIRGenericPath objPath;

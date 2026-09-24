@@ -1,4 +1,5 @@
 #include "hir_typeck_expr_cs.h"
+#include "hir_expand_main_bindings.h"
 
 #include "output.h"
 #include "hir_hir.h"
@@ -2469,6 +2470,14 @@ struct OrderPlace {
                 return response.certainty == SolverCertainty::Proven ? AssociatedCheckResult::Complete : AssociatedCheckResult::Ambiguous;
             }
             if (response.certainty == SolverCertainty::Ambiguous) {
+                const bool awaitsClosureCaptures = visitTyWith(context.getType(v.implTy), [&](const HIRType* inner) {
+                    const auto* node = context.getType(inner)->opt_NodeType();
+                    const auto* closure = node ? node->opt_Closure() : nullptr;
+                    return closure && !closure->typeckCapturesKnown;
+                });
+                if (awaitsClosureCaptures && context.crate.getTraitByPath(sp, v.trait).isMarker) {
+                    return AssociatedCheckResult::Stalled;
+                }
                 if (!response.obligations.empty()) {
                     return AssociatedCheckResult::Complete;
                 }
@@ -7058,6 +7067,139 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
     }
 }
 
+HIRExprNodeCallValue::TraitUsed callValueTraitUsed(Context& context, const HIRExprNodeCallValue& node, const HIRType* ty) {
+    if (ty->is_NodeType() && ty->as_NodeType().is_Closure()) {
+        return HIRExprNodeCallValue::TraitUsed::Unknown;
+    }
+    if (ty->opt_Function()) {
+        return HIRExprNodeCallValue::TraitUsed::Fn;
+    }
+    Vector<const HIRType*> argTypes;
+    for (const auto& argTy : node.argIvars) {
+        argTypes.pushBack(context.getType(argTy));
+    }
+    const HIRPathParams traitPp(context.crate.types.tuple(mv$(argTypes)));
+    if (!context.resolve.langFn().components().empty() && context.resolve.selectTraitGoal(node.span(), context.resolve.langFn(), traitPp, ty, [&](SolverSelection) {
+        return true;
+    })) {
+        DEBUG(StringView("-- Using Fn"));
+        return HIRExprNodeCallValue::TraitUsed::Fn;
+    }
+    if (!context.resolve.langFnMut().components().empty() && context.resolve.selectTraitGoal(node.span(), context.resolve.langFnMut(), traitPp, ty, [&](SolverSelection) {
+        return true;
+    })) {
+        DEBUG(StringView("-- Using FnMut"));
+        return HIRExprNodeCallValue::TraitUsed::FnMut;
+    }
+    DEBUG(StringView("-- Using FnOnce (default)"));
+    return HIRExprNodeCallValue::TraitUsed::FnOnce;
+}
+
+namespace {
+    struct IvarTypeView: public HIRAnnotateTypeView {
+        Context& context;
+
+        explicit IvarTypeView(Context& context);
+
+        const HIRType* type(const HIRType* type) const override;
+
+        bool typeIsCopy(const Span& sp, const HIRType* type) const override;
+    };
+
+    IvarTypeView::IvarTypeView(Context& context)
+        : context(context)
+    {
+    }
+
+    auto IvarTypeView::type(const HIRType* type) const -> const HIRType* {
+        return context.ivars.expandIvars(type);
+    }
+
+    auto IvarTypeView::typeIsCopy(const Span& sp, const HIRType* type) const -> bool {
+        return context.resolve.typeIsCopy(sp, type) == SolverCertainty::Proven;
+    }
+
+    void analyseClosureCaptures(Context& context, const HIRExprState& state, HIRExprNode& root) {
+        Vector<const HIRExprNodeClosure*> awaited;
+        const auto collect = [&](const HIRType* type) {
+            visitTyWith(context.getType(type), [&](const HIRType* inner) {
+                const auto* node = context.getType(inner)->opt_NodeType();
+                const auto* closure = node ? node->opt_Closure() : nullptr;
+                if (closure && !closure->typeckCapturesKnown) {
+                    awaited.pushBack(closure);
+                }
+                return false;
+            });
+        };
+        for (const auto& rule : context.linkAssoc) {
+            collect(rule.implTy);
+            for (const auto* type : rule.params.types) {
+                collect(type);
+            }
+        }
+        if (awaited.empty()) {
+            return;
+        }
+        struct Outermost: public HIRExprVisitorDef {
+            const Vector<const HIRExprNodeClosure*>& awaited;
+            Vector<HIRExprNode*> found;
+
+            Outermost(HIRTypeInterner& types, const Vector<const HIRExprNodeClosure*>& awaited)
+                : HIRExprVisitorDef(types)
+                , awaited(awaited)
+            {
+            }
+
+            void visit(HIRExprNodeClosure& node) override {
+                if (std::find(awaited.begin(), awaited.end(), &node) != awaited.end()) {
+                    found.pushBack(&node);
+                    return;
+                }
+                HIRExprVisitorDef::visit(node);
+            }
+        } outermost(context.crate.types, awaited);
+        root.visit(outermost);
+        if (outermost.found.empty()) {
+            return;
+        }
+        Vector<const HIRType*> variableTypes;
+        variableTypes.grow(context.bindings.size());
+        for (const auto& binding : context.bindings) {
+            variableTypes.pushBack(context.ivars.expandIvars(binding.ty));
+        }
+        struct CallValues: public HIRExprVisitorDef {
+            Context& context;
+            Vector<std::pair<HIRExprNodeCallValue*, HIRExprNodeCallValue::TraitUsed>> original;
+
+            CallValues(Context& context)
+                : HIRExprVisitorDef(context.crate.types)
+                , context(context)
+            {
+            }
+
+            void visit(HIRExprNodeCallValue& node) override {
+                original.pushBack({&node, node.traitUsed});
+                if (node.traitUsed == HIRExprNodeCallValue::TraitUsed::Unknown) {
+                    node.traitUsed = callValueTraitUsed(context, node, context.getType(node.value->resType));
+                }
+                HIRExprVisitorDef::visit(node);
+            }
+        } callValues(context);
+        for (auto* closure : outermost.found) {
+            closure->visit(callValues);
+        }
+        IvarTypeView view{context};
+        HIRExpandAnalyseClosureCaptures(context.resolve.board(), state, outermost.found, variableTypes, view);
+        for (const auto& entry : callValues.original) {
+            entry.first->traitUsed = entry.second;
+        }
+        for (auto& rule : context.linkAssoc) {
+            rule.stalledOn.clear();
+        }
+        context.ivars.markChange();
+    }
+}
+
 void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* resultType, HIRExprPtr& expr) {
     TRACE_FUNCTION;
     HIRExprNodeP rootPtr(expr.get());
@@ -7141,6 +7283,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
 
     const unsigned int MAX_ITERATIONS = 5000;
     unsigned int count = 0;
+    bool closureCapturesAnalysed = false;
     while (context.takeChanged() /*&& context.has_rules()*/ && count < MAX_ITERATIONS) {
         context.pendingCutHolds = 0;
         TRACE_FUNCTION_F(StringView("=== PASS ") << count << StringView(" ==="));
@@ -7535,6 +7678,11 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             if (appliedDefault) {
                 context.ivars.markChange();
             }
+        }
+
+        if (!context.ivars.peekChanged() && !closureCapturesAnalysed && expr.state) {
+            closureCapturesAnalysed = true;
+            analyseClosureCaptures(context, *expr.state, *rootPtr);
         }
 
         count++;
@@ -9690,35 +9838,7 @@ auto ExprVisitorApply::visit(HIRExprNodeCallValue& node) -> void {
             default:
                 break;
         }
-        if (ty->is_NodeType() && ty->as_NodeType().is_Closure()) {
-            node.traitUsed = HIRExprNodeCallValue::TraitUsed::Unknown;
-        } else if (/*const auto* e =*/ty->opt_Function()) {
-            node.traitUsed = HIRExprNodeCallValue::TraitUsed::Fn;
-        } else {
-            HIRPathParams traitPp;
-            {
-                Vector<const HIRType*> argTypes;
-                for (const auto& argTy : node.argIvars) {
-                    argTypes.pushBack(this->context.getType(argTy));
-                }
-                traitPp = HIRPathParams(context.crate.types.tuple(mv$(argTypes)));
-            }
-
-            if (!this->context.resolve.langFn().components().empty() && this->context.resolve.selectTraitGoal(node.span(), this->context.resolve.langFn(), traitPp, ty, [&](SolverSelection) {
-                return true;
-            })) {
-                DEBUG(StringView("-- Using Fn"));
-                node.traitUsed = HIRExprNodeCallValue::TraitUsed::Fn;
-            } else if (!this->context.resolve.langFnMut().components().empty() && this->context.resolve.selectTraitGoal(node.span(), this->context.resolve.langFnMut(), traitPp, ty, [&](SolverSelection) {
-                return true;
-            })) {
-                DEBUG(StringView("-- Using FnMut"));
-                node.traitUsed = HIRExprNodeCallValue::TraitUsed::FnMut;
-            } else {
-                DEBUG(StringView("-- Using FnOnce (default)"));
-                node.traitUsed = HIRExprNodeCallValue::TraitUsed::FnOnce;
-            }
-        }
+        node.traitUsed = callValueTraitUsed(context, node, ty);
     }
 
     HIRExprVisitorDef::visit(node);
