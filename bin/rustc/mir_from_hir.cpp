@@ -6307,7 +6307,22 @@ void MirBuilder::terminateScope(const Span& sp, ScopeHandle scope, bool emitClea
 }
 
 void MirBuilder::raiseAll(const Span& sp, ScopeHandle source, const ScopeHandle& target) {
-    TRACE_FUNCTION_F(StringView("scope ") << source.idx << StringView(" => ") << target.idx);
+    raiseAllInto(sp, mv$(source), target.idx);
+}
+
+void MirBuilder::raiseToEnclosingTemporaries(const Span& sp, ScopeHandle source) {
+    for (size_t i = scopeStack.length() - 1; i-- > 0;) {
+        const auto* owning = scopes.at(scopeStack[i]).data.opt_Owning();
+        if (owning && owning->isTemporary) {
+            raiseAllInto(sp, mv$(source), scopeStack[i]);
+            return;
+        }
+    }
+    terminateScope(sp, mv$(source));
+}
+
+void MirBuilder::raiseAllInto(const Span& sp, ScopeHandle source, unsigned int targetIdx) {
+    TRACE_FUNCTION_F(StringView("scope ") << source.idx << StringView(" => ") << targetIdx);
     if (scopeStack.empty() || scopeStack.back() != source.idx) {
         DEBUG(StringView("- m_scope_stack = [") << scopeStack << StringView("]"));
         auto it = std::find(scopeStack.begin(), scopeStack.end(), source.idx);
@@ -6323,13 +6338,12 @@ void MirBuilder::raiseAll(const Span& sp, ScopeHandle source, const ScopeHandle&
     auto& srcList = srcScopeDef.data.as_Owning().slots;
     for (auto idx : srcList) {
         DEBUG(StringView("> Raising ") << MIRLValue::newLocal(idx));
-        BUG_ASSERT(idx >= firstTempIdx);
     }
 
     size_t stackPos = scopeStack.length() - 1;
     while (stackPos > 0) {
         auto scopeIdx = scopeStack[--stackPos];
-        if (scopeIdx == target.idx) {
+        if (scopeIdx == targetIdx) {
             break;
         }
         auto& scopeDef = scopes.at(scopeIdx);
@@ -6370,11 +6384,11 @@ void MirBuilder::raiseAll(const Span& sp, ScopeHandle source, const ScopeHandle&
             }
         }
     }
-    if (scopeStack[stackPos] != target.idx) {
-        BUG(sp, StringView("Moving values to a scope not on the stack - scope ") << target.idx);
+    if (scopeStack[stackPos] != targetIdx) {
+        BUG(sp, StringView("Moving values to a scope not on the stack - scope ") << targetIdx);
     }
-    auto& tgtScopeDef = scopes.at(target.idx);
-    DEBUG(StringView("To S") << target.idx << StringView(": ") << tgtScopeDef.data.tagStr());
+    auto& tgtScopeDef = scopes.at(targetIdx);
+    DEBUG(StringView("To S") << targetIdx << StringView(": ") << tgtScopeDef.data.tagStr());
     ASSERT_BUG(sp, tgtScopeDef.data.is_Owning(), StringView("Rasising scopes can only be done on temporaries (target)"));
     ASSERT_BUG(sp, tgtScopeDef.data.as_Owning().isTemporary, StringView("Rasising scopes can only be done on temporaries (target)"));
 
@@ -8693,7 +8707,11 @@ auto ExprVisitorConv::visit(HIRExprNodeBlock& node) -> void {
         }
         builder.terminateScope(node.span(), mv$(tmpScope), builder.blockActive());
         builder.terminateScope(node.span(), mv$(scope), builder.blockActive());
-        builder.terminateScope(node.span(), mv$(tailTmpScope), builder.blockActive());
+        if (!stmtScope && builder.blockActive()) {
+            builder.raiseToEnclosingTemporaries(node.span(), mv$(tailTmpScope));
+        } else {
+            builder.terminateScope(node.span(), mv$(tailTmpScope), builder.blockActive());
+        }
     } else {
         if (diverged) {
             builder.terminateScope(node.span(), mv$(tmpScope), false);

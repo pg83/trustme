@@ -332,6 +332,10 @@ public:
 
     void raiseAll(const Span& sp, ScopeHandle src, const ScopeHandle& target);
 
+    void raiseAllInto(const Span& sp, ScopeHandle src, unsigned int targetIdx);
+
+    void raiseToEnclosingTemporaries(const Span& sp, ScopeHandle src);
+
     void terminateScope(const Span& sp, ScopeHandle, bool cleanup = true);
 
     void terminateScopeEarly(const Span& sp, const ScopeHandle&, bool loopExit = false);
