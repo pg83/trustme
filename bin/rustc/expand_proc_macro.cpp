@@ -2734,18 +2734,25 @@ auto ProcMacroVisitor::visitUse(const RcString& /*name*/, const ASTVisibility& v
     this->visitVis(vis);
     pmi.sendRword("use");
 
-    if (item.entries.size() == 1) {
-        visitPath(item.entries[0].path);
-        if (item.entries[0].name == "") {
+    auto visitEntry = [&](const auto& entry) {
+        visitPath(entry.path);
+        if (entry.name == "") {
             pmi.sendSymbol("::");
             pmi.sendSymbol("*");
-        } else if (item.entries[0].name != item.entries[0].path.nodes().back().name()) {
+        } else if (entry.name != entry.path.nodes().back().name()) {
             pmi.sendRword("as");
-            pmi.sendIdent(item.entries[0].name.c_str());
-        } else {
+            pmi.sendIdent(entry.name.c_str());
         }
+    };
+    if (item.entries.size() == 1) {
+        visitEntry(item.entries[0]);
     } else {
-        TODO(sp, StringView("Multiple items"));
+        pmi.sendSymbol("{");
+        for (const auto& entry : item.entries) {
+            visitEntry(entry);
+            pmi.sendSymbol(",");
+        }
+        pmi.sendSymbol("}");
     }
     pmi.sendSymbol(";");
 }
