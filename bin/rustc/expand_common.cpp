@@ -232,9 +232,42 @@ namespace {
             f.run(sp, d, a);
             a.markInert();
         };
+        const bool singleName = a.name().elems.length() == 1;
+        int importedProcMacro = -1;
+        const auto namesImportedProcMacro = [&]() {
+            if (importedProcMacro < 0) {
+                importedProcMacro = 0;
+                const auto& want = a.name().elems[0];
+                for (const auto* ll = &es.modstack; ll && importedProcMacro == 0; ll = ll->prev) {
+                    if (!ll->item) {
+                        continue;
+                    }
+                    for (const auto& i : ll->item->items) {
+                        const auto* u = i->data.opt_Use();
+                        if (!u) {
+                            continue;
+                        }
+                        bool binds = false;
+                        for (const auto& ent : u->entries) {
+                            binds |= ent.name == want;
+                        }
+                        if (binds) {
+                            importedProcMacro = ExpandLookupMacro(sp, es.wb, es.crate, es.modstack, a.name()).is_ExternalProcMacro() ? 1 : 0;
+                            break;
+                        }
+                    }
+                }
+            }
+            return importedProcMacro == 1;
+        };
+        const auto isPreludeAttributeMacro = [](const RcString& name) {
+            return name == "test" || name == "bench" || name == "derive" || name == "derive_const" || name == "global_allocator";
+        };
         const RcString* builtinName = nullptr;
-        if (a.name().elems.length() == 1) {
-            builtinName = &a.name().elems[0];
+        if (singleName) {
+            if (!isPreludeAttributeMacro(a.name().elems[0]) || !namesImportedProcMacro()) {
+                builtinName = &a.name().elems[0];
+            }
         } else if (a.name().elems.length() == 4 && a.name().elems[0] == "core" && a.name().elems[1] == "prelude" && a.name().elems[2] == "v1") {
             // HACK: Handle `::core::prelude::v1::<FOO>`.
             builtinName = &a.name().elems[3];
@@ -249,8 +282,8 @@ namespace {
                 }
             }
         }
-        if (!found) {
-            if (a.name().elems.length() == 1) {
+        if (!found && singleName && !namesImportedProcMacro()) {
+            {
                 const auto& want = a.name().elems[0];
                 for (const auto* ll = &es.modstack; ll && !found; ll = ll->prev) {
                     if (!ll->item) {

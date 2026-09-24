@@ -122,3 +122,23 @@ pub fn literal_from_text(input: TokenStream) -> TokenStream {
 pub fn made_unsafe_items(_input: TokenStream) -> TokenStream {
     "unsafe fn made_unsafe() -> u8 { 3 } fn call_made() -> u8 { unsafe { made_unsafe() } }".parse().unwrap()
 }
+
+// An attribute named `test` in the manner of `tokio::test`: the annotated
+// async fn comes back as a plain `#[test]` function of the same name, its
+// body dropped.
+#[proc_macro_attribute]
+pub fn test(_attribute: TokenStream, item: TokenStream) -> TokenStream {
+    use proc_macro::TokenTree;
+    let mut after_fn = false;
+    let mut name = None;
+    for token in item {
+        if let TokenTree::Ident(ident) = &token {
+            if after_fn {
+                name = Some(ident.to_string());
+                break;
+            }
+            after_fn = ident.to_string() == "fn";
+        }
+    }
+    format!("#[::core::prelude::v1::test] fn {}() {{}}", name.unwrap()).parse().unwrap()
+}
