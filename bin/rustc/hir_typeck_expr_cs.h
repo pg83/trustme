@@ -21,6 +21,8 @@ struct Context {
         virtual bool revisit(Context& context, bool isFallback) = 0;
         virtual void collectInferenceDependencies(const Context&, stl::Vector<unsigned>&) const {
         }
+        virtual void collectPatternVariables(const Context&, stl::Vector<unsigned>&) const {
+        }
     };
 
     struct Binding {

@@ -4492,6 +4492,10 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                 }
             }
 
+            void collectPatternVariables(const Context& context, Vector<unsigned>& variables) const override {
+                collectBindingDependencies(context, sp, pattern, variables);
+            }
+
             void collectInferenceDependencies(const Context& context, Vector<unsigned>& dependencies) const override {
                 visitTyWith(outerTy, [&](const HIRType* inner) {
                     const auto* resolved = context.getType(inner);
@@ -7465,12 +7469,20 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             for (size_t i = 0; i < count; i++) {
                 earliest.pushBack(nullptr);
             }
+            Vector<unsigned> patternVariables;
+            for (const auto& revisit : context.advRevisits) {
+                revisit->collectPatternVariables(context, patternVariables);
+            }
             for (const auto& rule : context.linkCoerce) {
                 if (!rule->rightNodePtr) {
                     continue;
                 }
                 const auto binding = rule->argumentSite ? argumentBinding(context, *rule) : variableBinding(context, *ivarCoercionIndex, *rule);
                 if (!binding.destination) {
+                    continue;
+                }
+                if (const auto* open = context.getType(binding.destination)->opt_Infer(); open && open->index != ~0u
+                    && std::find(patternVariables.begin(), patternVariables.end(), open->index) != patternVariables.end()) {
                     continue;
                 }
                 ivars.clear();
