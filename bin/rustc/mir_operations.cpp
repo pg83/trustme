@@ -6885,6 +6885,8 @@ namespace {
                         usedDfs.mut(e->other) = true;
                     }
                     usedDfs.mut(e->idx) = true;
+                } else if (const auto* e = stmt.opt_SaveDropFlag()) {
+                    usedDfs.mut(e->idx) = true;
                 } else if (const auto* e = stmt.opt_LoadDropFlag()) {
                     usedDfs.mut(e->idx) = true;
                 }
