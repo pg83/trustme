@@ -142,3 +142,10 @@ pub fn test(_attribute: TokenStream, item: TokenStream) -> TokenStream {
     }
     format!("#[::core::prelude::v1::test] fn {}() {{}}", name.unwrap()).parse().unwrap()
 }
+
+// Source text parsed back into tokens, as pest_derive does through
+// `quote`: the expansion is the character literal `'\x41'`.
+#[proc_macro]
+pub fn hex_escaped_char(_input: TokenStream) -> TokenStream {
+    "'\\x41'".parse().unwrap()
+}

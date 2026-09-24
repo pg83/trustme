@@ -222,6 +222,17 @@ impl ::std::str::FromStr for TokenStream {
                                 Ok(c) => c,
                                 Err(e) => return err(e),
                                 },
+                            'x' => {
+                                let mut v = 0u32;
+                                for _ in 0 .. 2 {
+                                    let d = some_else!(it.consume() => return err("Unterminated `\\x` escape"));
+                                    v = v * 16 + some_else!(d.to_digit(16) => return err("Invalid hex digit in `\\x` escape"));
+                                }
+                                if v > 0x7f {
+                                    return err("Out of range `\\x` escape in char literal");
+                                }
+                                some_else!(::std::char::from_u32(v) => return err("Invalid `\\x` escape"))
+                                },
                             c @ _ => panic!("TODO: char literal with escape - '\\{}'", c),
                             }
                         }
