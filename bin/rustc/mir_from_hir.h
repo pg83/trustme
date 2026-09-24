@@ -239,6 +239,8 @@ public:
 
     void pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bool updateDestState = true);
 
+    bool assignReplacing(const Span& sp, const MIRLValue& dst, const MIRLValue& rhs);
+
     void pushStmtDrop(const Span& sp, MIRLValue val, unsigned int dropFlag = ~0u);
 
     void pushStmtDropRaw(const Span& sp, MIRLValue val, unsigned int dropFlag = ~0u);

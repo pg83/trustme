@@ -5754,6 +5754,49 @@ void MirBuilder::pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bo
     this->pushStmt(sp, MIRStatement::make_Assign({mv$(dst), mv$(val)}));
 }
 
+bool MirBuilder::assignReplacing(const Span& sp, const MIRLValue& dst, const MIRLValue& rhs) {
+    if (buildingCleanup || dropEmitter || dst.root.is_Return()) {
+        return false;
+    }
+    if (!resolve_.typeNeedsDropGlue(sp, valType(sp, dst))) {
+        return false;
+    }
+    VarState* dstState = getValStateMutP(sp, dst, false);
+    if (dstState && !dstState->is_Valid()) {
+        return false;
+    }
+    VarState* rhsState = getValStateMutP(sp, rhs, false);
+    if (!rhsState || rhsState->is_Invalid()) {
+        return false;
+    }
+    auto rhsBefore = mv$(*rhsState);
+    *rhsState = VarState::make_Invalid(InvalidType::Moved);
+    auto afterReplace = makeUnwindAction(sp, nullptr);
+    *rhsState = mv$(rhsBefore);
+
+    const auto nextBlock = newBbUnlinked();
+    if (afterReplace.is_Terminate() || afterReplace.is_Unreachable()) {
+        endBlock(MIRTerminator::make_Drop({MIRDropKind::DEEP, dst.clone(), ~0u, nextBlock, mv$(afterReplace)}));
+    } else {
+        const auto replaceBlock = newBbUnlinked();
+        endBlock(MIRTerminator::make_Drop({MIRDropKind::DEEP, dst.clone(), ~0u, nextBlock, MIRUnwindAction::make_Cleanup(replaceBlock)}));
+        setCurBlock(replaceBlock);
+        pushStmt(sp, MIRStatement::make_Assign({dst.clone(), MIRRValue::make_Use(rhs.clone())}));
+        if (const auto* cleanup = afterReplace.opt_Cleanup()) {
+            endBlock(MIRTerminator::make_Goto(*cleanup));
+        } else {
+            endBlock(MIRTerminator::make_UnwindResume({}));
+        }
+    }
+    setCurBlock(nextBlock);
+    movedLvalue(sp, rhs);
+    if (dstState) {
+        *dstState = VarState::make_Valid({});
+    }
+    pushStmt(sp, MIRStatement::make_Assign({dst.clone(), MIRRValue::make_Use(rhs.clone())}));
+    return true;
+}
+
 void MirBuilder::pushStmtDrop(const Span& sp, MIRLValue val, unsigned int flag /*=~0u*/) {
     ASSERT_BUG(sp, blockActive_, StringView("Pushing statement with no active block"));
 
@@ -9773,7 +9816,9 @@ auto ExprVisitorConv::visit(HIRExprNodeAssign& node) -> void {
 #undef _
     } else {
         ASSERT_BUG(sp, tySlot == tyVal || tySlot->equalsIgnoringRegions(tyVal), StringView("Types must match for assignment - ") << tySlot << StringView(" != ") << tyVal);
-        builder.pushStmtAssign(node.span(), mv$(dst), MIRRValue::make_Use(mv$(rhs)));
+        if (!builder.assignReplacing(node.span(), dst, rhs)) {
+            builder.pushStmtAssign(node.span(), mv$(dst), MIRRValue::make_Use(mv$(rhs)));
+        }
     }
     builder.setResult(node.span(), MIRRValue::make_Tuple({}));
 }
