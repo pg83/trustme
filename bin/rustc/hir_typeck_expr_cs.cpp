@@ -804,7 +804,8 @@ struct OrderPlace {
                 continue;
             }
             const auto component = coercionIndex.componentOf(index);
-            if (!cuts.empty() && !cuts[component].isNone() && place.after(cuts[component])) {
+            if (!cuts.empty() && !cuts[component].isNone() && place.after(cuts[component])
+                && (rule.assignmentSite || !(place.start <= cuts[component].start && place.end >= cuts[component].end))) {
                 DEBUG(StringView("- Coercion R") << rule.ruleIdx << StringView(" at ") << place.end << StringView(" waits for the binding at ") << cuts[component].end);
                 return true;
             }
