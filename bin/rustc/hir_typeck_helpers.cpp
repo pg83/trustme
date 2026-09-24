@@ -11890,7 +11890,17 @@ auto NextTraitGoalEvaluator::paramEnvCandidateIsNonGlobal(const Candidate& candi
     };
     {
         const auto* implSelf = resolve_.resolveType(candidate.impl.getImplType(crate.types));
-        if (const auto* selfPath = implSelf->opt_Path(); selfPath && selfPath->binding.is_Opaque()) {
+        const auto projectionRootIsOpaque = [&](const HIRType* type) {
+            while (const auto* path = type->opt_Path()) {
+                if (!path->path.data.is_UfcsKnown()) {
+                    return path->binding.is_Opaque();
+                }
+                type = resolve_.resolveType(path->path.data.as_UfcsKnown().type);
+            }
+            return type->is_ErasedType();
+        };
+        if (const auto* selfPath = implSelf->opt_Path(); selfPath && selfPath->binding.is_Opaque()
+            && (!selfPath->path.data.is_UfcsKnown() || pathHasUnknownTypes(selfPath->path) || projectionRootIsOpaque(implSelf))) {
             return true;
         }
     }
