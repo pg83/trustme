@@ -154,9 +154,9 @@ func requestDependencyFeature(pkg *Package, depName, depFeature string) bool {
 
 	depName = strings.TrimSuffix(depName, "?")
 
-	dep := findDependency(pkg, depName)
+	deps := findDependencies(pkg, depName)
 
-	if dep == nil {
+	if len(deps) == 0 {
 		return false
 	}
 
@@ -166,24 +166,43 @@ func requestDependencyFeature(pkg *Package, depName, depFeature string) bool {
 		changed = enableDependency(pkg, depName)
 	}
 
-	if !contains(dep.features, depFeature) {
-		dep.features = append(dep.features, depFeature)
-		changed = true
+	for _, dep := range deps {
+		if !contains(dep.features, depFeature) {
+			dep.features = append(dep.features, depFeature)
+			changed = true
+		}
 	}
 
 	return changed
 }
 
+// A dependency may be declared in several tables - `[dependencies]` and
+// target tables of different conditions - and a feature naming it speaks of
+// all of them, as cargo resolves the feature against every declaration of the
+// name.
 func enableDependency(pkg *Package, name string) bool {
-	dep := findDependency(pkg, name)
+	changed := false
 
-	if dep == nil || dep.enabled {
-		return false
+	for _, dep := range findDependencies(pkg, name) {
+		if !dep.enabled {
+			dep.enabled = true
+			changed = true
+		}
 	}
 
-	dep.enabled = true
+	return changed
+}
 
-	return true
+func findDependencies(pkg *Package, name string) []*Dependency {
+	var result []*Dependency
+
+	for _, dep := range allDependencies(pkg) {
+		if dep.key == name {
+			result = append(result, dep)
+		}
+	}
+
+	return result
 }
 
 func findDependency(pkg *Package, name string) *Dependency {
