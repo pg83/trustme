@@ -1456,7 +1456,7 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             pmi.sendSymbol("+=");
             break;
         case TOK_DASH_EQUAL:
-            pmi.sendSymbol("-");
+            pmi.sendSymbol("-=");
             break;
         case TOK_PERCENT_EQUAL:
             pmi.sendSymbol("%=");
@@ -1500,10 +1500,10 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             pmi.sendSymbol(">>");
             break;
         case TOK_DOUBLE_LT_EQUAL:
-            pmi.sendSymbol("<=");
+            pmi.sendSymbol("<<=");
             break;
         case TOK_DOUBLE_GT_EQUAL:
-            pmi.sendSymbol(">=");
+            pmi.sendSymbol(">>=");
             break;
 
         case TOK_DOLLAR:
