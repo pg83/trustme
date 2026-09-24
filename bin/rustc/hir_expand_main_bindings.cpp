@@ -5149,7 +5149,7 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeBorrow& node) -> void {
             }
             if (auto* innerNode = cast<HIRExprNodeDeref>(vpp->get())) {
                 allConstant_ = savedAllConstant;
-                isConstant = true;
+                isConstant = wholeValueIsConstant;
                 return;
             }
         }
