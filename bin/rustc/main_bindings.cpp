@@ -301,7 +301,6 @@ namespace {
                     auto testCrateName = RcString::newInterned("test");
                     const auto realName = crate.loadExternCrate(*wb.settings, Span(), testCrateName);
                     crate.markExternCrateUsed(realName);
-                    wb.settings->implicitCrates.insert(std::make_pair(testCrateName, realName));
                 }
             }
             {
