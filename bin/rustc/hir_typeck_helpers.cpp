@@ -3553,9 +3553,10 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
             case HIRType::TAG_Pointer:
             case HIRType::TAG_NamedFunction:
             case HIRType::TAG_Function:
-            case HIRType::TAG_NodeType:
             case HIRType::TAG_Pattern:
                 return callback.visit(SolverImpl(type, nullptr, nullptr));
+            case HIRType::TAG_NodeType:
+                return type->as_NodeType().is_Closure() && callback.visit(SolverImpl(type, nullptr, nullptr));
             default:
                 return false;
         }
@@ -3594,9 +3595,10 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
             case HIRType::TAG_Tuple:
             case HIRType::TAG_NamedFunction:
             case HIRType::TAG_Function:
-            case HIRType::TAG_NodeType:
             case HIRType::TAG_Pattern:
                 return callback.visit(SolverImpl(type, nullptr, nullptr));
+            case HIRType::TAG_NodeType:
+                return type->as_NodeType().is_Closure() && callback.visit(SolverImpl(type, nullptr, nullptr));
             case HIRType::TAG_Path:
                 return type->as_Path().isClosure() && callback.visit(SolverImpl(type, nullptr, nullptr));
             default:
