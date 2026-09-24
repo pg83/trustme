@@ -507,6 +507,7 @@ struct OrderPlace {
            revisited in it (none when there is none): upstream resolved that method
            call or operator before it checked anything after it. */
         const OrderPlace* pendingNodeCut = nullptr;
+        const OrderPlace* pendingObligationCut = nullptr;
 
         void collectIvars(const HIRType* root, Vector<unsigned int>& out, bool throughClosures = false) const;
         static void deduplicate(Vector<unsigned int>& values);
@@ -792,7 +793,7 @@ struct OrderPlace {
        ready binding of its component it waits like an obligation would. */
     bool coercionPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<OrderPlace>& cuts, Vector<unsigned>& ivars, const Context::Coercion& rule) {
         const auto count = coercionIndex.count;
-        const auto place = coercionPlace(rule);
+        const auto place = rule.assignmentSite ? bindingPlace(rule) : coercionPlace(rule);
         ivars.clear();
         coercionIndex.collectIvars(context.getType(rule.leftTy), ivars);
         coercionIndex.collectIvars(context.getType(rule.sourceType()), ivars);
@@ -814,6 +815,12 @@ struct OrderPlace {
             if (pendingCuts && !pendingCuts[component].isNone() && place.after(pendingCuts[component])
                 && !(place.start <= pendingCuts[component].start && place.end >= pendingCuts[component].end)) {
                 DEBUG(StringView("- Coercion R") << rule.ruleIdx << StringView(" at ") << place.end << StringView(" waits for the pending node at ") << pendingCuts[component].end);
+                context.pendingCutHolds++;
+                return true;
+            }
+            const auto* obligationCuts = coercionIndex.pendingObligationCut;
+            if (rule.assignmentSite && obligationCuts && !obligationCuts[component].isNone() && place.after(obligationCuts[component])) {
+                DEBUG(StringView("- Coercion R") << rule.ruleIdx << StringView(" at ") << place.end << StringView(" waits for the obligation at ") << obligationCuts[component].end);
                 context.pendingCutHolds++;
                 return true;
             }
@@ -2316,7 +2323,7 @@ struct OrderPlace {
                    has not happened yet (`Err(From::from(e))`'s coercion of the inner
                    call's result while `e` is still to bind `?E`): it says nothing about
                    the goal's self. */
-                if (endpoint.obligation && cuts && (!cuts->empty() || coercionIndex.pendingNodeCut) && coercionPastArgumentCut(context, coercionIndex, *cuts, cutIvars, *endpoint.obligation)) {
+                if (endpoint.obligation && cuts && (!cuts->empty() || coercionIndex.pendingNodeCut || coercionIndex.pendingObligationCut) && coercionPastArgumentCut(context, coercionIndex, *cuts, cutIvars, *endpoint.obligation)) {
                     continue;
                 }
                 append(endpoint);
@@ -6920,6 +6927,17 @@ bool anyOrderCut(const Context& context) {
             return true;
         }
     }
+    const bool anyAssignment = std::any_of(context.linkCoerce.begin(), context.linkCoerce.end(), [](const auto& rule) { return rule->assignmentSite; });
+    if (anyAssignment && !context.pendingCutsLifted) {
+        for (const auto& rule : context.linkAssoc) {
+            if (rule.order != 0 && std::any_of(rule.stalledOn.begin(), rule.stalledOn.end(), [&](const auto& dependency) { return context.ivars.getType(dependency.index) != dependency.resolved; })) {
+                return true;
+            }
+            if (rule.order != 0 && rule.stalledOn.empty()) {
+                return true;
+            }
+        }
+    }
     return false;
 }
 
@@ -7148,7 +7166,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 coercionSettled = false;
                 for (size_t i = 0; i < context.linkCoerce.size();) {
                     auto ent = mv$(context.linkCoerce[i]);
-                    if (ivarCoercionIndex && (!coercionCuts.empty() || ivarCoercionIndex->pendingNodeCut) && coercionPastArgumentCut(context, *ivarCoercionIndex, coercionCuts, cutIvars, *ent)) {
+                    if (ivarCoercionIndex && (!coercionCuts.empty() || ivarCoercionIndex->pendingNodeCut || ivarCoercionIndex->pendingObligationCut) && coercionPastArgumentCut(context, *ivarCoercionIndex, coercionCuts, cutIvars, *ent)) {
                         context.linkCoerce[i] = mv$(ent);
                         ++i;
                         continue;
@@ -10797,6 +10815,35 @@ auto IvarCoercionIndex::buildComponents() -> void {
     }
     for (size_t i = 0; i < count; i++) {
         componentRoots[i] = find(static_cast<unsigned int>(i));
+    }
+    if (!context.pendingCutsLifted) {
+        OrderPlace* cuts = nullptr;
+        Vector<unsigned int> ruleIvars;
+        for (const auto& rule : context.linkAssoc) {
+            if (rule.order == 0 || associatedStillStalled(context, *this, rule)) {
+                continue;
+            }
+            ruleIvars.clear();
+            collectIvars(context.getType(rule.implTy), ruleIvars);
+            for (const auto* type : rule.params.types) {
+                collectIvars(context.getType(type), ruleIvars);
+            }
+            if (ruleIvars.empty() || ruleIvars[0] >= count) {
+                continue;
+            }
+            if (!cuts) {
+                cuts = static_cast<OrderPlace*>(pool->allocate(count * sizeof(OrderPlace)));
+                for (size_t i = 0; i < count; i++) {
+                    cuts[i] = OrderPlace{};
+                }
+            }
+            const auto component = componentRoots[ruleIvars[0]];
+            const OrderPlace place{rule.order, rule.order};
+            if (cuts[component].isNone() || cuts[component].after(place)) {
+                cuts[component] = place;
+            }
+        }
+        pendingObligationCut = cuts;
     }
     if (!pendingNodes.empty() && !context.pendingCutsLifted) {
         auto* cuts = static_cast<OrderPlace*>(pool->allocate(count * sizeof(OrderPlace)));
