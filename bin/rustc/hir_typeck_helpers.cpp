@@ -9248,6 +9248,17 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     if (foundBound && foundNonGlobalBound) {
         return inherentSourceAmbiguous && !traitRoutesAreComplete ? emitAmbiguous() : finishProven();
     }
+    if (!foundBound && !inherentSourceAmbiguous && possibilities.size() == firstPossibility && ambiguousBoundTraits.size() == 1 && boundsAmbiguousCandidates.size() == 1) {
+        DEBUG(StringView("where-clause method candidate with ambiguous bounds is the one pick"));
+        auto candidate = std::move(boundsAmbiguousCandidates.front());
+        candidate.effects = std::move(ambiguousBoundEffects.front());
+        candidate.effects.certainty = Certainty::Proven;
+        boundsAmbiguousCandidates.clear();
+        ambiguousBoundTraits.clear();
+        ambiguousBoundEffects.clear();
+        possibilities.push_back(std::move(candidate));
+        return finishProven();
+    }
     const auto restoreUncoveredBoundAmbiguities = [&]() {
         bool uncovered = false;
         for (size_t i = 0; i < ambiguousBoundTraits.size(); i++) {
@@ -9263,6 +9274,19 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         ambiguousBoundTraits.clear();
         ambiguousBoundEffects.clear();
         return uncovered;
+    };
+    const auto boundsAmbiguousPickOrAmbiguous = [&](bool uncoveredBounds) -> Certainty {
+        if (!uncoveredBounds && !inherentSourceAmbiguous && possibilities.size() == firstPossibility && ambiguousResponses.size() == 1 && boundsAmbiguousCandidates.size() == 1) {
+            DEBUG(StringView("method candidate with ambiguous bounds is the one pick"));
+            auto candidate = std::move(boundsAmbiguousCandidates.front());
+            candidate.effects = std::move(ambiguousResponses.front());
+            candidate.effects.certainty = Certainty::Proven;
+            ambiguousResponses.clear();
+            boundsAmbiguousCandidates.clear();
+            possibilities.push_back(std::move(candidate));
+            return finishProven();
+        }
+        return emitAmbiguous();
     };
 
     const auto getInnerType = [&](const HIRType* type, auto predicate) -> const HIRType* {
@@ -9288,8 +9312,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             objectAmbiguous |= result == Certainty::Ambiguous;
         });
         if (objectAmbiguous) {
-            restoreUncoveredBoundAmbiguities();
-            return emitAmbiguous();
+            return boundsAmbiguousPickOrAmbiguous(restoreUncoveredBoundAmbiguities());
         }
         if (foundObjectMethod) {
             if (restoreUncoveredBoundAmbiguities()) {
@@ -9307,8 +9330,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             });
         }
         if (erasedAmbiguous) {
-            restoreUncoveredBoundAmbiguities();
-            return emitAmbiguous();
+            return boundsAmbiguousPickOrAmbiguous(restoreUncoveredBoundAmbiguities());
         }
     } else if (const auto* projectionType = singleTraitScope ? nullptr : getInnerType(receiver, [](const HIRType* type) {
         const auto* path = type->opt_Path();
@@ -9330,8 +9352,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             return false;
         });
         if (projectionAmbiguous) {
-            restoreUncoveredBoundAmbiguities();
-            return emitAmbiguous();
+            return boundsAmbiguousPickOrAmbiguous(restoreUncoveredBoundAmbiguities());
         }
     }
 
@@ -9356,23 +9377,12 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         });
     }
     if (inScopeAmbiguous) {
-        const bool uncoveredBounds = restoreUncoveredBoundAmbiguities();
         /* The one in-scope candidate, its trait obligation proven and only its bounds
            still ambiguous (`T: Add<i32, Output = T>` on a literal `T` in rayon's
            `fold_chunks_with(2, 0, sum)`), is upstream's unique pick: left ambiguous,
            the method is never selected, its argument coercions never made, and the
            literal `chunk_size` is defaulted before `usize` can take it. */
-        if (!uncoveredBounds && !inherentSourceAmbiguous && possibilities.size() == firstPossibility && ambiguousResponses.size() == 1 && boundsAmbiguousCandidates.size() == 1) {
-            DEBUG(StringView("method candidate with ambiguous bounds is the one pick"));
-            auto candidate = std::move(boundsAmbiguousCandidates.front());
-            candidate.effects = std::move(ambiguousResponses.front());
-            candidate.effects.certainty = Certainty::Proven;
-            ambiguousResponses.clear();
-            boundsAmbiguousCandidates.clear();
-            possibilities.push_back(std::move(candidate));
-            return finishProven();
-        }
-        return emitAmbiguous();
+        return boundsAmbiguousPickOrAmbiguous(restoreUncoveredBoundAmbiguities());
     }
 
     if (restoreUncoveredBoundAmbiguities()) {
