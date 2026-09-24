@@ -6396,6 +6396,10 @@ void MirBuilder::terminateScope(const Span& sp, ScopeHandle scope, bool emitClea
 
     if (emitCleanup && scopeDef.complete == false) {
         dropScopeValues(scopeDef);
+    } else if (const auto* owning = scopeDef.data.opt_Owning()) {
+        for (auto idx : owning->slots) {
+            getSlotStateMut(sp, idx, SlotType::Local) = VarState::make_Invalid(InvalidType::Descoped);
+        }
     }
 
     scopeStack.popBack();
