@@ -62,12 +62,61 @@ namespace {
         return blocks;
     }
 
+    struct LoopAssignedVariables: public HIRExprVisitorDef {
+        Vector<unsigned int> assigned;
+        Vector<unsigned int> bound;
+
+        explicit LoopAssignedVariables(HIRTypeInterner& types)
+            : HIRExprVisitorDef(types)
+        {
+        }
+
+        void visit(HIRExprNodeAssign& node) override {
+            if (node.op == HIRExprNodeAssign::Op::None) {
+                HIRExprNode* root = node.slot.get();
+                for (;;) {
+                    if (auto* field = cast<HIRExprNodeField>(root)) {
+                        root = field->value.get();
+                    } else if (auto* deref = cast<HIRExprNodeDeref>(root)) {
+                        root = deref->value.get();
+                    } else {
+                        break;
+                    }
+                }
+                if (auto* var = cast<HIRExprNodeVariable>(root)) {
+                    if (std::find(assigned.begin(), assigned.end(), var->slot) == assigned.end()) {
+                        assigned.pushBack(var->slot);
+                    }
+                }
+            }
+            HIRExprVisitorDef::visit(node);
+        }
+
+        void visitPattern(const Span& sp, HIRPattern& pattern) override {
+            for (const auto& binding : pattern.bindings) {
+                bound.pushBack(binding.slot);
+            }
+            if (const auto* split = pattern.data.opt_SplitSlice(); split && split->extraBind.isValid()) {
+                bound.pushBack(split->extraBind.slot);
+            }
+            HIRExprVisitorDef::visitPattern(sp, pattern);
+        }
+    };
+
+    struct LoopHead {
+        LoopHead* next;
+        MIRLValue var;
+        VarState head;
+    };
+
     struct ExprVisitorConv: public MirConverter, public MIRDropEmitter {
         MirBuilder& builder;
 
         const Vector<const HIRType*>& variableTypes;
 
         bool isGenerator;
+
+        ObjPool::Ref loopHeadPool = ObjPool::fromMemory();
 
         struct LoopDesc {
             ScopeHandle scope;
@@ -76,7 +125,12 @@ namespace {
             unsigned int cur;
             unsigned int next;
             MIRLValue resValue;
+            LoopHead* heads;
         };
+
+        LoopHead* enterLoopHeads(const Span& sp, HIRExprNode& body);
+
+        void writeLoopHeads(const Span& sp, const LoopHead* heads);
 
         std::vector<LoopDesc> loopStack;
 
@@ -7486,6 +7540,194 @@ void MirBuilder::dropScopeValues(ScopeDef& sd, bool preserveStates /*=false*/) {
     }
 }
 
+bool MirBuilder::enterLoopHead(const Span& sp, const MIRLValue& var, VarState& head) {
+    const auto type = var.root.is_Argument() ? SlotType::Argument : SlotType::Local;
+    const auto idx = var.root.is_Argument() ? var.root.as_Argument() : var.root.as_Local();
+    const auto& entry = getSlotState(sp, idx, type);
+    if (entry.is_Valid()) {
+        return false;
+    }
+    head = entry.clone();
+    loopHeadTemplate(sp, head);
+    getSlotStateMut(sp, idx, type) = head.clone();
+    return true;
+}
+
+void MirBuilder::loopHeadTemplate(const Span& sp, VarState& state) {
+    switch (state.tag()) {
+        case VarState::TAG_Invalid: {
+            const auto flag = newDropFlag(false);
+            pushStmtSetDropflagVal(sp, flag, false);
+            state = VarState::make_Optional(flag);
+            break;
+        }
+        case VarState::TAG_Valid: {
+            const auto flag = newDropFlag(true);
+            pushStmtSetDropflagVal(sp, flag, true);
+            state = VarState::make_Optional(flag);
+            break;
+        }
+        case VarState::TAG_Optional: {
+            const auto flag = newDropFlag(false);
+            pushStmtSetDropflagOther(sp, flag, state.as_Optional());
+            state = VarState::make_Optional(flag);
+            break;
+        }
+        case VarState::TAG_Partial: {
+            auto& e = state.as_Partial();
+            for (auto& inner : e.innerStates) {
+                loopHeadTemplate(sp, inner);
+            }
+            if (e.outerFlag != ~0u) {
+                const auto flag = newDropFlag(false);
+                pushStmtSetDropflagOther(sp, flag, e.outerFlag);
+                e.outerFlag = flag;
+            }
+            break;
+        }
+        case VarState::TAG_MovedOut: {
+            auto& e = state.as_MovedOut();
+            loopHeadTemplate(sp, *e.innerState);
+            if (e.outerFlag != ~0u) {
+                const auto flag = newDropFlag(false);
+                pushStmtSetDropflagOther(sp, flag, e.outerFlag);
+                e.outerFlag = flag;
+            }
+            break;
+        }
+        case VarState::TAG_PartialArray: {
+            auto& e = state.as_PartialArray();
+            loopHeadTemplate(sp, *e.fillState);
+            for (auto& kv : e.otherStates) {
+                loopHeadTemplate(sp, kv.second);
+            }
+            break;
+        }
+    }
+}
+
+void MirBuilder::writeLoopHead(const Span& sp, const MIRLValue& var, const VarState& head) {
+    const auto type = var.root.is_Argument() ? SlotType::Argument : SlotType::Local;
+    const auto idx = var.root.is_Argument() ? var.root.as_Argument() : var.root.as_Local();
+    writeLoopHeadState(sp, var, head, getSlotState(sp, idx, type));
+}
+
+void MirBuilder::writeLoopHeadState(const Span& sp, const MIRLValue& lv, const VarState& head, const VarState& cur) {
+    switch (head.tag()) {
+        case VarState::TAG_Optional: {
+            writeLoopHeadWhole(sp, lv, head.as_Optional(), cur);
+            break;
+        }
+        case VarState::TAG_Partial: {
+            const auto& he = head.as_Partial();
+            const auto* ty = valType(sp, lv);
+            const bool isEnum = ty->is_Path() && ty->as_Path().binding.is_Enum();
+            auto innerLv = [&](size_t i) {
+                return isEnum ? MIRLValue::newDowncast(lv.clone(), static_cast<unsigned int>(i)) : MIRLValue::newField(lv.clone(), static_cast<unsigned int>(i));
+            };
+            if (const auto* ce = cur.opt_Partial()) {
+                ASSERT_BUG(sp, ce->innerStates.size() == he.innerStates.size(), StringView("Loop back edge changes the shape of ") << lv);
+                for (size_t i = 0; i < he.innerStates.size(); i++) {
+                    writeLoopHeadState(sp, innerLv(i), he.innerStates[i], ce->innerStates[i]);
+                }
+                if (he.outerFlag != ~0u) {
+                    if (ce->outerFlag == ~0u) {
+                        pushStmtSetDropflagVal(sp, he.outerFlag, true);
+                    } else if (ce->outerFlag != he.outerFlag) {
+                        pushStmtSetDropflagOther(sp, he.outerFlag, ce->outerFlag);
+                    }
+                } else {
+                    ASSERT_BUG(sp, ce->outerFlag == ~0u, StringView("Loop back edge leaves the discriminant of ") << lv << StringView(" maybe-uninitialised"));
+                }
+            } else {
+                ASSERT_BUG(sp, !cur.is_MovedOut() && !cur.is_PartialArray(), StringView("Loop back edge changes the shape of ") << lv);
+                for (size_t i = 0; i < he.innerStates.size(); i++) {
+                    writeLoopHeadState(sp, innerLv(i), he.innerStates[i], cur);
+                }
+                if (he.outerFlag != ~0u) {
+                    writeLoopHeadWhole(sp, lv, he.outerFlag, cur);
+                }
+            }
+            break;
+        }
+        case VarState::TAG_MovedOut: {
+            const auto& he = head.as_MovedOut();
+            if (const auto* ce = cur.opt_MovedOut()) {
+                writeLoopHeadState(sp, MIRLValue::newDeref(lv.clone()), *he.innerState, *ce->innerState);
+                if (he.outerFlag != ~0u) {
+                    if (ce->outerFlag == ~0u) {
+                        pushStmtSetDropflagVal(sp, he.outerFlag, true);
+                    } else if (ce->outerFlag != he.outerFlag) {
+                        pushStmtSetDropflagOther(sp, he.outerFlag, ce->outerFlag);
+                    }
+                }
+            } else {
+                ASSERT_BUG(sp, !cur.is_Partial() && !cur.is_PartialArray(), StringView("Loop back edge changes the shape of ") << lv);
+                writeLoopHeadState(sp, MIRLValue::newDeref(lv.clone()), *he.innerState, cur);
+                if (he.outerFlag != ~0u) {
+                    writeLoopHeadWhole(sp, lv, he.outerFlag, cur);
+                }
+            }
+            break;
+        }
+        case VarState::TAG_PartialArray: {
+            const auto& he = head.as_PartialArray();
+            if (const auto* ce = cur.opt_PartialArray()) {
+                writeLoopHeadState(sp, MIRLValue::newField(lv.clone(), 0), *he.fillState, *ce->fillState);
+                for (const auto& kv : he.otherStates) {
+                    auto it = ce->otherStates.find(kv.first);
+                    writeLoopHeadState(sp, MIRLValue::newField(lv.clone(), kv.first), kv.second, it != ce->otherStates.end() ? it->second : *ce->fillState);
+                }
+            } else {
+                ASSERT_BUG(sp, !cur.is_Partial() && !cur.is_MovedOut(), StringView("Loop back edge changes the shape of ") << lv);
+                writeLoopHeadState(sp, MIRLValue::newField(lv.clone(), 0), *he.fillState, cur);
+                for (const auto& kv : he.otherStates) {
+                    writeLoopHeadState(sp, MIRLValue::newField(lv.clone(), kv.first), kv.second, cur);
+                }
+            }
+            break;
+        }
+        case VarState::TAG_Invalid:
+        case VarState::TAG_Valid: {
+            BUG(sp, StringView("Loop head state of ") << lv << StringView(" has no drop flag"));
+        }
+    }
+}
+
+void MirBuilder::writeLoopHeadWhole(const Span& sp, const MIRLValue& lv, unsigned int flag, const VarState& cur) {
+    switch (cur.tag()) {
+        case VarState::TAG_Valid: {
+            pushStmtSetDropflagVal(sp, flag, true);
+            break;
+        }
+        case VarState::TAG_Invalid: {
+            pushStmtSetDropflagVal(sp, flag, false);
+            break;
+        }
+        case VarState::TAG_Optional: {
+            if (cur.as_Optional() != flag) {
+                pushStmtSetDropflagOther(sp, flag, cur.as_Optional());
+            }
+            break;
+        }
+        case VarState::TAG_Partial: {
+            const auto& ce = cur.as_Partial();
+            const auto* ty = valType(sp, lv);
+            ASSERT_BUG(sp, ty->is_Path() && ty->as_Path().binding.is_Enum(), StringView("Loop back edge leaves ") << lv << StringView(" partially moved"));
+            if (ce.outerFlag == ~0u) {
+                pushStmtSetDropflagVal(sp, flag, true);
+            } else if (ce.outerFlag != flag) {
+                pushStmtSetDropflagOther(sp, flag, ce.outerFlag);
+            }
+            break;
+        }
+        case VarState::TAG_MovedOut:
+        case VarState::TAG_PartialArray: {
+            BUG(sp, StringView("Loop back edge leaves ") << lv << StringView(" partially moved"));
+        }
+    }
+}
+
 void MirBuilder::movedLvalue(const Span& sp, const MIRLValue& lv) {
     if (!lvalueIsCopy(sp, lv)) {
         auto* vsP = getValStateMutP(sp, lv);
@@ -9174,8 +9416,32 @@ auto ExprVisitorConv::visit(HIRExprNodeLet& node) -> void {
     builder.setResult(node.span(), MIRRValue::make_Tuple({}));
 }
 
+auto ExprVisitorConv::enterLoopHeads(const Span& sp, HIRExprNode& body) -> LoopHead* {
+    LoopAssignedVariables scan{builder.resolve().hirCrateMut().types};
+    body.visit(scan);
+    LoopHead* heads = nullptr;
+    for (auto slot : scan.assigned) {
+        if (std::find(scan.bound.begin(), scan.bound.end(), slot) != scan.bound.end() || builder.getVariableAlias(sp, slot)) {
+            continue;
+        }
+        auto var = builder.getVariable(sp, slot);
+        auto head = VarState::make_Valid({});
+        if (builder.enterLoopHead(sp, var, head)) {
+            heads = loopHeadPool->make<LoopHead>(LoopHead{heads, mv$(var), mv$(head)});
+        }
+    }
+    return heads;
+}
+
+auto ExprVisitorConv::writeLoopHeads(const Span& sp, const LoopHead* heads) -> void {
+    for (const auto* h = heads; h; h = h->next) {
+        builder.writeLoopHead(sp, h->var, h->head);
+    }
+}
+
 auto ExprVisitorConv::visit(HIRExprNodeLoop& node) -> void {
     TRACE_FUNCTION_FR(StringView("_Loop"), StringView("_Loop"));
+    auto* heads = builder.blockActive() ? enterLoopHeads(node.span(), *node.code) : nullptr;
     auto loopBlock = builder.newBbLinked();
     auto loopBodyScope = builder.newScopeLoop(node.span());
     auto loopNext = builder.newBbUnlinked();
@@ -9185,7 +9451,7 @@ auto ExprVisitorConv::visit(HIRExprNodeLoop& node) -> void {
     auto loopTmpScope = builder.newScopeTemp(node.span());
     auto _ = saveAndEdit(stmtScope, &loopTmpScope);
 
-    loopStack.push_back(LoopDesc{mv$(loopBodyScope), node.label, node.requireLabel, loopBlock, loopNext, loopResultLvaue.clone()});
+    loopStack.push_back(LoopDesc{mv$(loopBodyScope), node.label, node.requireLabel, loopBlock, loopNext, loopResultLvaue.clone(), heads});
     this->visitNodePtr(node.code);
     auto loopScope = mv$(loopStack.back().scope);
     loopStack.pop_back();
@@ -9196,6 +9462,7 @@ auto ExprVisitorConv::visit(HIRExprNodeLoop& node) -> void {
         builder.getResult(node.span());
     }
     if (builder.blockActive()) {
+        writeLoopHeads(node.span(), heads);
         builder.terminateScope(node.span(), mv$(loopTmpScope));
         builder.terminateScope(node.span(), mv$(loopScope));
         builder.endBlock(MIRTerminator::make_Goto(loopBlock));
@@ -9263,6 +9530,7 @@ auto ExprVisitorConv::visit(HIRExprNodeLoopControl& node) -> void {
     const LoopDesc& targetBlock = this->findLoop(node.span(), node.label);
 
     if (node.isContinue) {
+        writeLoopHeads(node.span(), targetBlock.heads);
         builder.terminateScopeEarly(node.span(), targetBlock.scope, /*loop_exit=*/false);
         builder.endBlock(MIRTerminator::make_Goto(targetBlock.cur));
     } else {

@@ -370,7 +370,17 @@ public:
 
     void movedLvalue(const Span& sp, const MIRLValue& lv);
 
+    bool enterLoopHead(const Span& sp, const MIRLValue& var, VarState& head);
+
+    void writeLoopHead(const Span& sp, const MIRLValue& var, const VarState& head);
+
 private:
+    void loopHeadTemplate(const Span& sp, VarState& state);
+
+    void writeLoopHeadState(const Span& sp, const MIRLValue& lv, const VarState& head, const VarState& cur);
+
+    void writeLoopHeadWhole(const Span& sp, const MIRLValue& lv, unsigned int flag, const VarState& cur);
+
     enum class SlotType {
         Local,
 
