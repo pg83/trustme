@@ -197,8 +197,13 @@ namespace {
                                 }
                                 break;
                             case MIRValUsage::Borrow:
-                                DEBUG(mirRes << StringView("Borrowed"));
-                                state.markBorrowed(stmtIdx);
+                                if (std::any_of(lv.wrappers.begin(), lv.wrappers.end(), [](const auto& w) { return w.is_Deref(); })) {
+                                    DEBUG(mirRes << StringView("Read (borrow through a deref)"));
+                                    state.markRead(stmtIdx);
+                                } else {
+                                    DEBUG(mirRes << StringView("Borrowed"));
+                                    state.markBorrowed(stmtIdx);
+                                }
                                 wasUpdated = true;
                                 break;
                             case MIRValUsage::Write:

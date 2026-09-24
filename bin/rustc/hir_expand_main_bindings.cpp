@@ -286,6 +286,8 @@ namespace {
 
         void visit(HIRExprNodeField& node) override;
 
+        void visit(HIRExprNodeDeref& node) override;
+
         void visit(HIRExprNodeConstParam& node) override;
 
         HIRExprNodeP getSelf(const Span& sp) const;
@@ -1172,6 +1174,11 @@ void HIRExpandAnalyseClosureCaptures(const WireBoard& wb, const HIRExprState& st
         for (const auto& capture : closure.avuCache.capturedVars) {
             const auto* type = variableTypes[capture.rootSlot];
             for (const auto& field : capture.fields) {
+                if (field == RcString()) {
+                    const auto* reference = type->opt_Borrow();
+                    type = reference ? reference->inner : type->as_Pointer().inner;
+                    continue;
+                }
                 type = resolve.expandAssociatedTypes(closure.span(), resolve.getFieldType(closure.span(), type, field));
             }
             switch (capture.usage) {
@@ -1940,6 +1947,20 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeIndex& node) -> void {
 }
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeDeref& node) -> void {
+    const auto* referenceType = viewed(node.value->resType)->opt_Borrow();
+    auto* variable = cast<HIRExprNodeVariable>(node.value.get());
+    const auto* innermostClosure = closureStack.empty() ? nullptr : closureStack.back().opt_Closure();
+    if (resolve_.hirCrate().edition >= ASTEdition::Rust2021 && innermostClosure && !ignoreVariableCapture && variable && referenceType
+        && referenceType->type == HIRBorrowType::Unique && this->getUsage() != HIRValueUsage::Move) {
+        Vector<RcString> fields;
+        fields.pushBack(RcString());
+        markUsedVariable(node.span(), variable->slot, fields, this->getUsage());
+        const bool savedIgnoreVariableCapture = ignoreVariableCapture;
+        ignoreVariableCapture = true;
+        this->visitNodePtr(node.value);
+        ignoreVariableCapture = savedIgnoreVariableCapture;
+        return;
+    }
     if (this->getUsage() == HIRValueUsage::Move && typeIsCopyHere(node.span(), viewed(node.resType))) {
         auto _ = pushUsage(HIRValueUsage::Borrow);
         this->visitNodePtr(node.value);
@@ -3166,6 +3187,34 @@ auto ClosureExprVisitorMutate::visit(HIRExprNodeField& node) -> void {
         }
     }
 
+    HIRExprVisitorDef::visit(node);
+}
+
+#undef NEWNODE
+
+#ifdef NEWNODE
+    #undef NEWNODE
+#endif
+#define NEWNODE(TY, CLASS, ...) closureMkExprnodep(pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
+
+auto ClosureExprVisitorMutate::visit(HIRExprNodeDeref& node) -> void {
+    if (auto* innerVar = cast<HIRExprNodeVariable>(node.value.get())) {
+        auto bindingIt = std::find_if(captures.begin(), captures.end(), [&](const HIRExprNodeClosure::AvuCache::Capture& x) {
+            return x.rootSlot == innerVar->slot && x.fields.length() == 1 && x.fields[0] == RcString();
+        });
+        if (bindingIt != captures.end()) {
+            replacement_ = NEWNODE(node.resType, Field, node.span(), getSelf(node.span()), RcString::newInterned(FMT(bindingIt - captures.begin())));
+            if (bindingIt->usage != HIRValueUsage::Move) {
+                auto bt = (bindingIt->usage == HIRValueUsage::Mutate ? HIRBorrowType::Unique : HIRBorrowType::Shared);
+
+                replacement_->resType = visitType(replacement_->resType);
+                replacement_->resType = monomorphiser.typeInterner().borrow(bt, replacement_->resType);
+                replacement_ = NEWNODE(node.resType, Deref, node.span(), mv$(replacement_));
+            }
+            replacement_->usage = node.usage;
+            return;
+        }
+    }
     HIRExprVisitorDef::visit(node);
 }
 
@@ -5104,9 +5153,6 @@ auto ReborrowExprVisitorMutate::visit(HIRExprNodeUnsize& node) -> void {
 
 auto ReborrowExprVisitorMutate::visit(HIRExprNodeClosure& node) -> void {
     HIRExprVisitorDef::visit(node);
-    for (auto& arg : node.captures) {
-        arg = doReborrow(mv$(arg));
-    }
 }
 
 auto ReborrowExprVisitorMutate::visit(HIRExprNodeGenerator& node) -> void {
