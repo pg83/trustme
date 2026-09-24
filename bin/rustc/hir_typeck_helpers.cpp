@@ -8641,6 +8641,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         auto methodParams = paramsForMethod(function.params);
         heldMethodSlots.clear();
         auto applicability = Certainty::Proven;
+        auto signatureApplicability = Certainty::Proven;
         SolverResponse signatureEffects;
         const HIRType* selfType;
 
@@ -8654,6 +8655,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                     break;
                 case Unifier::Outcome::Ambiguous:
                     applicability = Certainty::Ambiguous;
+                    signatureApplicability = Certainty::Ambiguous;
                     break;
                 case Unifier::Outcome::Mismatch:
                     return Certainty::NoSolution;
@@ -8715,6 +8717,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                     return Certainty::NoSolution;
                 }
                 merge(applicability, argumentApplicability);
+                merge(signatureApplicability, argumentApplicability);
             }
         }
 
@@ -8747,6 +8750,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             }
             if (!expectedGuidesProof) {
                 merge(applicability, resultApplicability);
+                merge(signatureApplicability, resultApplicability);
             }
         }
 
@@ -8842,6 +8846,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                         return Certainty::NoSolution;
                     }
                     merge(applicability, resultApplicability);
+                    merge(signatureApplicability, resultApplicability);
                 }
             }
         }
@@ -8884,7 +8889,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
            method, and the literal argument is defaulted before it is coerced. */
         /* Upstream matches on the trait obligation *may* holding (`predicate_may_hold`):
            `Iter<{integer}>: ParallelIterator` with `{integer}: Sync` still open counts. */
-        const bool boundsAmbiguous = applicability == Certainty::Ambiguous && proofApplicability != Certainty::NoSolution;
+        const bool boundsAmbiguous = applicability == Certainty::Ambiguous && proofApplicability != Certainty::NoSolution && signatureApplicability == Certainty::Proven;
         if (applicability != Certainty::Proven) {
             DEBUG(StringView("method candidate ambiguous: applicability ") << static_cast<unsigned>(applicability) << StringView(" (proof ") << static_cast<unsigned>(proofApplicability) << StringView(", complete bounds ") << static_cast<unsigned>(completeBounds) << StringView(")"));
             ambiguousResponses.push_back(std::move(effects));

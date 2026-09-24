@@ -792,6 +792,36 @@ struct OrderPlace {
     /* A coercion decided in the sweep - `Err(From::from(e))`'s outer coercion of the
        inner call's result variable - comes at its argument's place too, and past a
        ready binding of its component it waits like an obligation would. */
+    bool cutInsideClosureOf(HIRTypeInterner& types, HIRExprNode& source, const OrderPlace& cut) {
+        struct Finder: public HIRExprVisitorDef {
+            const OrderPlace& cut;
+            bool found = false;
+
+            Finder(HIRTypeInterner& types, const OrderPlace& cut)
+                : HIRExprVisitorDef(types)
+                , cut(cut)
+            {
+            }
+
+            void visitNodePtr(HIRExprNodeP& nodePtr) override {
+                if (found || !nodePtr || (nodePtr->checkOrder && !(nodePtr->checkOrder <= cut.start && cut.end <= nodePtr->checkOrderEnd))) {
+                    return;
+                }
+                HIRExprVisitorDef::visitNodePtr(nodePtr);
+            }
+
+            void visit(HIRExprNodeClosure& node) override {
+                if (node.checkOrder <= cut.start && cut.end <= node.checkOrderEnd) {
+                    found = true;
+                    return;
+                }
+                HIRExprVisitorDef::visit(node);
+            }
+        } finder(types, cut);
+        source.visit(finder);
+        return finder.found;
+    }
+
     bool coercionPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<OrderPlace>& cuts, Vector<unsigned>& ivars, const Context::Coercion& rule) {
         const auto count = coercionIndex.count;
         const auto place = rule.assignmentSite ? bindingPlace(rule) : coercionPlace(rule);
@@ -805,7 +835,8 @@ struct OrderPlace {
             }
             const auto component = coercionIndex.componentOf(index);
             if (!cuts.empty() && !cuts[component].isNone() && place.after(cuts[component])
-                && (rule.assignmentSite || !(place.start <= cuts[component].start && place.end >= cuts[component].end))) {
+                && (rule.assignmentSite || !rule.rightNodePtr || !(place.start <= cuts[component].start && place.end >= cuts[component].end)
+                    || !cutInsideClosureOf(context.crate.types, **rule.rightNodePtr, cuts[component]))) {
                 DEBUG(StringView("- Coercion R") << rule.ruleIdx << StringView(" at ") << place.end << StringView(" waits for the binding at ") << cuts[component].end);
                 return true;
             }
