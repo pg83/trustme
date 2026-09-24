@@ -1083,6 +1083,7 @@ tokio_1_53_1 = add_project_test(
     manifest="tokio",
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/tokio_1_53_1/Cargo.lock",
+    adapter_args=["--features", "full"],
     timeout=NESTED_PROJECT_TIMEOUT,
 )
 
