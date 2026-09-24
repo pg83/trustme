@@ -8427,6 +8427,9 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
             break;
         }
         case HIRType::TAG_Path: {
+            if (!this->isFallback && this->context.ivars.typeContainsIvars(srcTy)) {
+                return;
+            }
             this->context.equateTypesCoerce(sp, tgtTy, node.value);
             this->completed = true;
             return;
