@@ -69,6 +69,7 @@ namespace {
         std::vector<Scope> closureStack;
         Vector<HIRExprNodeCallValue*> pendingCalls;
         bool ignoreVariableCapture;
+        bool capturedByValue = false;
 
         struct UsageGuard {
             AnnotateExprVisitorMark& parent;
@@ -2337,9 +2338,12 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeClosure& node) -> void {
 
     if (!closureStack.empty()) {
         DEBUG(StringView("> Apply to parent"));
+        const bool savedCapturedByValue = capturedByValue;
+        capturedByValue = true;
         for (const auto& v : scope.capturedVars) {
             markUsedVariable(node.span(), v.rootSlot, v.fields, v.usage);
         }
+        capturedByValue = savedCapturedByValue;
     }
 
     node.avuCache.capturedVars = std::move(scope.capturedVars);
@@ -2756,7 +2760,7 @@ auto AnnotateExprVisitorMark::getRealUsage(const Span& sp, unsigned slot, const 
 
         if (typeIsCopyHere(sp, *ty)) {
             usage = HIRValueUsage::Borrow;
-        } else if ((*ty)->is_Borrow() && (*ty)->as_Borrow().type == HIRBorrowType::Unique) {
+        } else if (!capturedByValue && (*ty)->is_Borrow() && (*ty)->as_Borrow().type == HIRBorrowType::Unique) {
             usage = HIRValueUsage::Mutate;
         } else {
         }
