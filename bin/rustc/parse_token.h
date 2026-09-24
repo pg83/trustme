@@ -181,6 +181,7 @@ public:
     ASTPath& fragPath();
 
     ASTPattern& fragPattern();
+    const ASTPattern& fragPattern() const;
 
     ASTAttribute& fragMeta();
 

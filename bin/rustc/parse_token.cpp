@@ -1046,6 +1046,11 @@ ASTPattern& Token::fragPattern() {
     return *reinterpret_cast<ASTPattern*>(data_.as_Fragment().ptr);
 }
 
+const ASTPattern& Token::fragPattern() const {
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_PATTERN);
+    return *reinterpret_cast<const ASTPattern*>(data_.as_Fragment().ptr);
+}
+
 ASTAttribute& Token::fragMeta() {
     BUG_ASSERT(type_ == TOK_INTERPOLATED_META);
     return *reinterpret_cast<ASTAttribute*>(data_.as_Fragment().ptr);

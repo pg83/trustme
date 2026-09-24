@@ -273,6 +273,8 @@ namespace {
 
         void parseString(const std::string& s, const BlockItemMarkers* markers = nullptr);
 
+        void parseText(const StringBuilder& text, const BlockItemMarkers* markers = nullptr);
+
         void visitTopAttrs(slice<const ASTAttribute>& attrs);
 
         void visitAttrs(const ASTAttributeList& attrs);
@@ -1275,8 +1277,13 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             break;
         case TOK_INTERPOLATED_PATH:
             TODO(sp, StringView("TOK_INTERPOLATED_PATH"));
-        case TOK_INTERPOLATED_PATTERN:
-            TODO(sp, StringView("TOK_INTERPOLATED_PATTERN"));
+        case TOK_INTERPOLATED_PATTERN: {
+            StringBuilder ss;
+            pprustPatToString(ss, tok.fragPattern());
+            ss << StringView(" ");
+            parseText(ss);
+            break;
+        }
         case TOK_INTERPOLATED_STMT:
         case TOK_INTERPOLATED_BLOCK:
         case TOK_INTERPOLATED_EXPR:
@@ -1835,7 +1842,7 @@ auto ProcMacroVisitor::visitLifetime(const ASTLifetimeRef& x) -> void {
 auto ProcMacroVisitor::visitTypeAsText(const ASTType* ty) -> void {
     StringBuilder ss;
     ss << ty << StringView(" ");
-    parseString(std::string(static_cast<const char*>(ss.data()), ss.length()));
+    parseText(ss);
 }
 
 auto ProcMacroVisitor::visitTypeBehindPointer(const ASTType* ty) -> void {
@@ -2409,10 +2416,12 @@ auto ProcMacroVisitor::visitNode(const ASTExprNode& e) -> void {
     BlockItemMarkers markers;
     pprustExprToString(ss, e, &markers);
     ss << StringView(" ");
+    parseText(ss, &markers);
+}
 
-    const std::string text(static_cast<const char*>(ss.data()), ss.length());
-    DEBUG(StringView("STRING: ") << text);
-    parseString(text, &markers);
+auto ProcMacroVisitor::parseText(const StringBuilder& text, const BlockItemMarkers* markers) -> void {
+    DEBUG(StringView("STRING: ") << StringView(text));
+    parseString(std::string(static_cast<const char*>(text.data()), text.length()), markers);
 }
 
 auto ProcMacroVisitor::parseString(const std::string& s, const BlockItemMarkers* markers) -> void {
