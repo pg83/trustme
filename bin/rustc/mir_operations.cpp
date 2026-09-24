@@ -5176,7 +5176,7 @@ namespace {
                                         break;
                                 }
                                 if (newValue != MIRParam()) {
-                                    DEBUG(state << StringView(" ") << e->src << StringView(" = ") << newValue);
+                                    DEBUG(state << StringView(" ") << e->dst << StringView(" = ") << newValue);
                                     switch (newValue.tag()) {
                                         case MIRParam::TAG_LValue: {
                                             auto& v = newValue.as_LValue();
