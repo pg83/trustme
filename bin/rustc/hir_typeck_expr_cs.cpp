@@ -7342,6 +7342,13 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 for (size_t i = 0; i < context.linkCoerce.size();) {
                     auto ent = mv$(context.linkCoerce[i]);
                     if (ivarCoercionIndex && (!coercionCuts.empty() || ivarCoercionIndex->pendingNodeCut || ivarCoercionIndex->pendingObligationCut) && coercionPastArgumentCut(context, *ivarCoercionIndex, coercionCuts, cutIvars, *ent)) {
+                        if (ent->assignmentSite && !ent->expectationDelivered && ent->rightNodePtr) {
+                            const auto* placeType = context.getType(ent->leftTy);
+                            if (!placeType->is_Infer()) {
+                                ent->expectationDelivered = true;
+                                LateExpectation(context, ent->span(), placeType).expect(*ent->rightNodePtr, placeType);
+                            }
+                        }
                         context.linkCoerce[i] = mv$(ent);
                         ++i;
                         continue;

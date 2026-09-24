@@ -48,6 +48,7 @@ struct Context {
            only demands the value reach it, so the rule conforms to that type rather
            than taking part in deciding it (see `variableBinding`). */
         bool assignmentSite = false;
+        bool expectationDelivered = false;
         /* A closure body's coercion into the closure's return type, with the closure's
            own type: upstream deduces that type from the bound the closure's parameter
            carries before the body is checked, so the body binds it only when no such
