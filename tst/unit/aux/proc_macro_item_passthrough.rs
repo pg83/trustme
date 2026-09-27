@@ -149,3 +149,12 @@ pub fn test(_attribute: TokenStream, item: TokenStream) -> TokenStream {
 pub fn hex_escaped_char(_input: TokenStream) -> TokenStream {
     "'\\x41'".parse().unwrap()
 }
+
+// A `macro_rules!` whose body names `$crate`, every token written by the
+// macro itself, as proc-macro-hack's exported macros derive through
+// `$crate::_proc_macro_hack_*`.
+#[proc_macro]
+pub fn made_crate_macro(_input: TokenStream) -> TokenStream {
+    "macro_rules! call_helper { () => { $crate::helper() } }".parse().unwrap()
+}
+

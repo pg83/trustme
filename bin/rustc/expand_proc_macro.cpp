@@ -473,7 +473,7 @@ ProcMacroInv::ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition ed
     : TokenStream(ParseState())
     , pool(pool)
     , parentSpan(sp)
-    , thisSpan(Span(parentSpan, procMacroDesc.path.crateName(), procMacroDesc.name))
+    , thisSpan(Span(parentSpan, procMacroDesc.path.crateName(), procMacroDesc.name, true))
     , procMacroDesc(procMacroDesc)
     , edition(edition)
 {

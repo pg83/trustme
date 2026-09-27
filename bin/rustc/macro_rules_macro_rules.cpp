@@ -2548,7 +2548,7 @@ namespace {
 
     MacroRulesPtr makeMrPtr(TokenStream& lex) {
         auto s = lex.pointSpan();
-        auto rv = MacroRulesPtr(new MacroRules(lex.parseState().wb->id, s->crateName(), lex.getEdition()));
+        auto rv = MacroRulesPtr(new MacroRules(lex.parseState().wb->id, s.dollarCrateName(), lex.getEdition()));
         rv->hygiene = lex.getHygiene();
         return rv;
     }

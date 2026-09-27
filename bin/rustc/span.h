@@ -45,7 +45,7 @@ public:
 
     Span(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs);
     Span(Span parent, const Position& position);
-    Span(Span parent, RcString sourceCrate, RcString macroName);
+    Span(Span parent, RcString sourceCrate, RcString macroName, bool transparent = false);
     ~Span();
 
     Span(const Span& x);
@@ -77,6 +77,7 @@ public:
     }
 
     const SpanInnerSource& getTopFileSpan() const;
+    RcString dollarCrateName() const;
 
     [[noreturn]] void bugCb(SpanMessageCallback& msg) const;
     [[noreturn]] void errorCb(ErrorType tag, SpanMessageCallback& msg) const;
@@ -187,6 +188,7 @@ struct SpanInnerMacro: public SpanInner {
     unsigned int nodeKind() const override;
     RcString crate;
     RcString macro;
+    bool transparent = false;
 
     ~SpanInnerMacro() override;
     void fmt(stl::ZeroCopyOutput& os) const override;
@@ -194,7 +196,7 @@ struct SpanInnerMacro: public SpanInner {
     RcString crateName() const override;
 
 private:
-    static SpanInner* alloc(Span parent, RcString crate, RcString macro);
+    static SpanInner* alloc(Span parent, RcString crate, RcString macro, bool transparent);
 };
 
 [[noreturn]] void spanUnreachableAt(const char* file, int line);

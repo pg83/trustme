@@ -16,9 +16,16 @@ Span::Span(Span parent, const Position& pos)
 {
 }
 
-Span::Span(Span parent, RcString sourceCrate, RcString macroName)
-    : ptr(SpanInnerMacro::alloc(parent, sourceCrate, macroName))
+Span::Span(Span parent, RcString sourceCrate, RcString macroName, bool transparent)
+    : ptr(SpanInnerMacro::alloc(parent, sourceCrate, macroName, transparent))
 {
+}
+
+RcString Span::dollarCrateName() const {
+    if (ptr->nodeKind() == SpanInnerMacro::kind && static_cast<const SpanInnerMacro*>(ptr)->transparent) {
+        return RcString();
+    }
+    return ptr->crateName();
 }
 
 Span::Span(const Span& x)
@@ -146,12 +153,13 @@ void SpanInnerMacro::fmt(ZeroCopyOutput& os) const {
     os << StringView("MACRO<::\"") << this->crate << StringView("\"::") << this->macro << StringView(">");
 }
 
-/*static*/ SpanInner* SpanInnerMacro::alloc(Span parent, RcString crate, RcString macro) {
+/*static*/ SpanInner* SpanInnerMacro::alloc(Span parent, RcString crate, RcString macro, bool transparent) {
     auto rv = new SpanInnerMacro;
     rv->referenceCount = 1;
     rv->parentSpan = std::move(parent);
     rv->crate = std::move(crate);
     rv->macro = std::move(macro);
+    rv->transparent = transparent;
     return rv;
 }
 
