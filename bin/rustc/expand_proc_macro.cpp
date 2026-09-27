@@ -166,15 +166,15 @@ namespace {
 
         void sendIdent(const Ident& val);
 
-        void sendLifetime(const char* val);
+        void sendLifetime(const char* val, bool raw = false);
 
         void sendLifetime(const Ident::Hygiene& h, const char* val);
 
-        void sendLifetime(const Ident::Hygiene& h, const Span& sp, const char* val);
+        void sendLifetime(const Ident::Hygiene& h, const Span& sp, const char* val, bool raw = false);
 
         void sendIdent_(const char* val, bool raw);
 
-        void sendLifetime_(const char* val);
+        void sendLifetime_(const char* val, bool raw);
 
         void sendString(const std::string& s);
 
@@ -738,6 +738,11 @@ Token ProcMacroInv::realGetToken_() {
         }
         case TokenClass::Lifetime: {
             auto val = this->recvBytes();
+            if (val[0] == 'r' && val[1] == '#') {
+                Ident ident(receivedHygiene, RcString::newInterned(val.c_str() + 2));
+                ident.isRaw = true;
+                return Token(TOK_LIFETIME, std::move(ident));
+            }
             return Token(TOK_LIFETIME, Ident(receivedHygiene, RcString::newInterned(val)));
         }
         case TokenClass::String: {
@@ -1015,24 +1020,31 @@ auto ProcMacroInv::sendIdent(const Ident& val) -> void {
     sendIdent(val.name.c_str(), val.isRaw);
 }
 
-auto ProcMacroInv::sendLifetime(const char* val) -> void {
+auto ProcMacroInv::sendLifetime(const char* val, bool raw) -> void {
     this->sendSpan(Ident::Hygiene());
-    this->sendLifetime_(val);
+    this->sendLifetime_(val, raw);
 }
 
 auto ProcMacroInv::sendLifetime(const Ident::Hygiene& h, const char* val) -> void {
     this->sendSpan(h);
-    this->sendLifetime_(val);
+    this->sendLifetime_(val, false);
 }
 
-auto ProcMacroInv::sendLifetime(const Ident::Hygiene& h, const Span& sp, const char* val) -> void {
+auto ProcMacroInv::sendLifetime(const Ident::Hygiene& h, const Span& sp, const char* val, bool raw) -> void {
     this->sendSpan(h, sp);
-    this->sendLifetime_(val);
+    this->sendLifetime_(val, raw);
 }
 
-auto ProcMacroInv::sendLifetime_(const char* val) -> void {
+auto ProcMacroInv::sendLifetime_(const char* val, bool raw) -> void {
     this->sendU8(static_cast<u8>(TokenClass::Lifetime));
-    this->sendBytes(val, std::strlen(val));
+    if (raw) {
+        auto size = std::strlen(val);
+        this->sendV128u(2 + size);
+        this->sendBytesRaw("r#", 2);
+        this->sendBytesRaw(val, size);
+    } else {
+        this->sendBytes(val, std::strlen(val));
+    }
 }
 
 auto ProcMacroInv::sendString(const std::string& s) -> void {
@@ -1316,7 +1328,7 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             pmi.sendIdent(tok.ident().hygiene, at, tok.ident().name.c_str(), tok.ident().isRaw);
             break;
         case TOK_LIFETIME:
-            pmi.sendLifetime(tok.ident().hygiene, at, tok.ident().name.c_str());
+            pmi.sendLifetime(tok.ident().hygiene, at, tok.ident().name.c_str(), tok.ident().isRaw);
             break;
         case TOK_INTEGER:
             if (tok.datatype() == CORETYPE_CHAR) {
@@ -2454,7 +2466,7 @@ auto ProcMacroVisitor::parseString(const std::string& s, const BlockItemMarkers*
             continue;
         }
         if (t == TOK_LIFETIME) {
-            pmi.sendLifetime(t.ident().name.c_str());
+            pmi.sendLifetime(t.ident().name.c_str(), t.ident().isRaw);
             continue;
         }
         visitToken(t);

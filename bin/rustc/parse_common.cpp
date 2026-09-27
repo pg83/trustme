@@ -49,6 +49,12 @@ using namespace stl;
     })
 
 namespace {
+    Ident lifetimeIdent(const Token& tok) {
+        Ident rv = tok.ident();
+        rv.isRaw = false;
+        return rv;
+    }
+
     // TODO: Use a ProtoSpan instead of a point span?
     static inline ASTExprNode* mkExprnodep(const TokenStream& lex, ASTExprNode* en) {
         en->setSpan(lex.pointSpan());
@@ -386,7 +392,7 @@ namespace {
         if (type == ASTExprNodeFlow::CONTINUE || type == ASTExprNodeFlow::BREAK) {
             if (lex.lookahead(0) == TOK_LIFETIME) {
                 GET_TOK(tok, lex);
-                lifetime = tok.ident();
+                lifetime = lifetimeIdent(tok);
             }
         }
 
@@ -1790,7 +1796,7 @@ namespace {
 
     ASTLifetimeRef getLifetimeRef(TokenStream& lex, Token tok) {
         CHECK_TOK(tok, TOK_LIFETIME);
-        return ASTLifetimeRef(/*lex.point_span(), */ tok.ident());
+        return ASTLifetimeRef(/*lex.point_span(), */ lifetimeIdent(tok));
     }
 
     ASTBoundConstness ParseBoundConstness(TokenStream& lex) {
@@ -1929,7 +1935,7 @@ namespace {
             } else if (tok.type() == TOK_LIFETIME) {
                 size_t boundStart = SIZE_MAX;
                 size_t boundEnd = SIZE_MAX;
-                auto paramName = tok.ident();
+                auto paramName = lifetimeIdent(tok);
                 auto ref = getLifetimeRef(lex, mv$(tok));
                 if (GET_TOK(tok, lex) == TOK_COLON) {
                     boundStart = ret.bounds.size();
@@ -2393,7 +2399,7 @@ namespace {
             // TODO: Just add these as `where Self: <foo>` (would that break typecheck?)
             do {
                 if (GET_TOK(tok, lex) == TOK_LIFETIME) {
-                    lifetimes.push_back(GET_SPANNED(ASTLifetimeRef, lex, ASTLifetimeRef(tok.ident())));
+                    lifetimes.push_back(GET_SPANNED(ASTLifetimeRef, lex, ASTLifetimeRef(lifetimeIdent(tok))));
                 } else if (tok.type() == TOK_BRACE_OPEN) {
                     break;
                 } else {
@@ -3157,7 +3163,7 @@ namespace {
                 tok = lex.getToken();
                 if (tok.type() == TOK_LIFETIME) {
                     if (!lex.parseState().lifetimeIsErased(tok.ident().name)) {
-                        lifetime = ASTLifetimeRef(/*lex.point_span(), */ tok.ident());
+                        lifetime = ASTLifetimeRef(/*lex.point_span(), */ lifetimeIdent(tok));
                     }
                     tok = lex.getToken();
                 }
@@ -3349,7 +3355,7 @@ namespace {
             if (allowTraitList) {
                 while (lex.getTokenIf(TOK_PLUS)) {
                     if (lex.getTokenIf(TOK_LIFETIME, tok)) {
-                        lifetimes.pushBack(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
+                        lifetimes.pushBack(ASTLifetimeRef(/*lex.point_span(),*/ lifetimeIdent(tok)));
                     } else {
                         if (lex.lookahead(0) == TOK_RWORD_FOR) {
                             hrbs = ParseHRB(lex);
@@ -3386,7 +3392,7 @@ namespace {
                     // TODO: Error
                 }
 
-                lifetimes.pushBack(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
+                lifetimes.pushBack(ASTLifetimeRef(/*lex.point_span(),*/ lifetimeIdent(tok)));
             } else {
                 auto constness = ParseBoundConstness(lex);
                 if (lex.getTokenIf(TOK_RWORD_FOR)) {
@@ -3444,7 +3450,7 @@ namespace {
         rvData.isEdition2024OrLater = lex.editionAfter(ASTEdition::Rust2024);
         do {
             if (lex.getTokenIf(TOK_LIFETIME, tok)) {
-                rvData.lifetimes.pushBack(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
+                rvData.lifetimes.pushBack(ASTLifetimeRef(/*lex.point_span(),*/ lifetimeIdent(tok)));
             } else if (lex.getTokenIf(TOK_QMARK)) {
                 ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
                 rvData.maybeTraits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
@@ -3663,7 +3669,7 @@ ASTExprNode* ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
     };
 
     if (GET_TOK(tok, lex) == TOK_LIFETIME) {
-        auto lifetime = tok.ident();
+        auto lifetime = lifetimeIdent(tok);
         GET_CHECK_TOK(tok, lex, TOK_COLON);
 
         switch (GET_TOK(tok, lex)) {
@@ -4371,7 +4377,7 @@ ASTPathParams ParsePathGenericList(TokenStream& lex) {
         }
         switch (GET_TOK(tok, lex)) {
             case TOK_LIFETIME:
-                rv.entries.push_back(lex.parseState().lifetimeIsErased(tok.ident().name) ? ASTLifetimeRef() : ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
+                rv.entries.push_back(lex.parseState().lifetimeIsErased(tok.ident().name) ? ASTLifetimeRef() : ASTLifetimeRef(/*lex.point_span(),*/ lifetimeIdent(tok)));
                 break;
             case TOK_RWORD_TRUE:
             case TOK_RWORD_FALSE:
@@ -4620,7 +4626,7 @@ ASTHigherRankedBounds ParseHRB(TokenStream& lex) {
 
         switch (GET_TOK(tok, lex)) {
             case TOK_LIFETIME:
-                rv.lifetimes.push_back(ASTLifetimeParam(lex.pointSpan(), std::move(attrs), tok.ident()));
+                rv.lifetimes.push_back(ASTLifetimeParam(lex.pointSpan(), std::move(attrs), lifetimeIdent(tok)));
                 if (lex.getTokenIf(TOK_COLON)) {
                     do {
                         lex.getTokenCheck(TOK_LIFETIME);
@@ -5557,7 +5563,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         if (lex.lookahead(0) == TOK_LIFETIME) {
                             auto ps = lex.startSpan();
                             GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
-                            rv.lifetimes.push_back(Spanned<ASTLifetimeRef>{lex.endSpan(ps), ASTLifetimeRef(tok.ident())});
+                            rv.lifetimes.push_back(Spanned<ASTLifetimeRef>{lex.endSpan(ps), ASTLifetimeRef(lifetimeIdent(tok))});
                         } else if (lex.getTokenIf(TOK_QMARK)) {
                             (void)ParsePath(lex, PATH_GENERIC_TYPE);
                         } else {

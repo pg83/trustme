@@ -635,7 +635,7 @@ std::string Token::toStr() const {
         case TOK_IDENT:
             return data_.as_Ident().isRaw ? "r#" + std::string(data_.as_Ident().name.c_str()) : std::string(data_.as_Ident().name.c_str());
         case TOK_LIFETIME:
-            return FMT(StringView("'") << data_.as_Ident().name.c_str());
+            return FMT(StringView(data_.as_Ident().isRaw ? "'r#" : "'") << data_.as_Ident().name.c_str());
         case TOK_INTEGER: {
             auto v = data_.as_Integer().intval;
             switch (data_.as_Integer().datatype) {

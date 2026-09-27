@@ -66,7 +66,10 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
                     let mut p = Punct::new('\'', Spacing::Joint);
                     p.span = *span;
                     toks.push(p.into());
-                    Ident { span: *span, is_raw: false, val }.into()
+                    match val.strip_prefix("r#") {
+                        Some(name) => Ident { span: *span, is_raw: true, val: name.to_owned() }.into(),
+                        None => Ident { span: *span, is_raw: false, val }.into(),
+                        }
                     },
                 Token::String(val) => Literal {
                     span: *span,
@@ -173,6 +176,7 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                     // Get next, must be ident, push lifetime
                     let v = match it.next()
                         {
+                        Some(TokenTree::Ident(Ident { val: v, is_raw: true, .. })) => format!("r#{}", v),
                         Some(TokenTree::Ident(Ident { val: v, .. })) => v,
                         _ => panic!("Punct('\\'') not followed by an ident"),
                         };
