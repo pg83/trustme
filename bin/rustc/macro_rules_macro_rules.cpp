@@ -321,6 +321,23 @@ namespace {
     void MacroInitDefaults() {
     }
 
+    bool tokenIsLiteral(eTokenType type) {
+        switch (type) {
+            case TOK_INTEGER:
+            case TOK_FLOAT:
+            case TOK_CHAR:
+            case TOK_STRING:
+            case TOK_BYTESTRING:
+            case TOK_CSTRING:
+            case TOK_LITERAL_SUFFIXED:
+            case TOK_RWORD_TRUE:
+            case TOK_RWORD_FALSE:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     bool fragmentIsLiteralMaybeMinus(const Token& tok) {
         if (tok.type() != TOK_INTERPOLATED_EXPR || tok.rawData().as_Fragment().ptr == nullptr) {
             return false;
@@ -413,31 +430,17 @@ namespace {
                 }
                 if (tok.type() == TOK_DASH) {
                     std::vector<TokenTree> toks;
-                    switch (lex.lookahead(0)) {
-                        case TOK_INTEGER:
-                        case TOK_FLOAT:
-                            toks.push_back(tok);
-                            break;
-                        default:
-                            parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT});
+                    if (!tokenIsLiteral(lex.lookahead(0))) {
+                        parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT, TOK_STRING, TOK_BYTESTRING, TOK_CSTRING, TOK_RWORD_TRUE, TOK_RWORD_FALSE});
                     }
+                    toks.push_back(tok);
                     GET_TOK(tok, lex);
                     tok.setSpacing(TokenSpacing::Alone);
                     toks.push_back(tok);
                     return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), std::move(toks)));
                 }
-                switch (tok.type()) {
-                    case TOK_INTEGER:
-                    case TOK_FLOAT:
-                    case TOK_STRING:
-                    case TOK_BYTESTRING:
-                    case TOK_CSTRING:
-                    case TOK_LITERAL_SUFFIXED:
-                    case TOK_RWORD_TRUE:
-                    case TOK_RWORD_FALSE:
-                        break;
-                    default:
-                        parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT, TOK_STRING, TOK_BYTESTRING, TOK_CSTRING, TOK_RWORD_TRUE, TOK_RWORD_FALSE});
+                if (!tokenIsLiteral(tok.type())) {
+                    parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT, TOK_STRING, TOK_BYTESTRING, TOK_CSTRING, TOK_RWORD_TRUE, TOK_RWORD_FALSE});
                 }
                 tok.setSpacing(TokenSpacing::Alone);
                 return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
@@ -1859,33 +1862,21 @@ namespace {
                     lex.consume();
                     return true;
                 }
-                switch (lex.next()) {
-                    case TOK_DASH: {
-                        auto tmp = lex.clone();
-                        tmp.consume();
-                        switch (tmp.next()) {
-                            case TOK_INTEGER:
-                            case TOK_FLOAT:
-                                lex.consume();
-                                lex.consume();
-                                return true;
-                            default:
-                                return false;
-                        }
-                    } break;
-                    case TOK_INTEGER:
-                    case TOK_FLOAT:
-                    case TOK_STRING:
-                    case TOK_BYTESTRING:
-                    case TOK_CSTRING:
-                    case TOK_LITERAL_SUFFIXED:
-                    case TOK_RWORD_TRUE:
-                    case TOK_RWORD_FALSE:
-                        lex.consume();
-                        return true;
-                    default:
+                if (lex.next() == TOK_DASH) {
+                    auto tmp = lex.clone();
+                    tmp.consume();
+                    if (!tokenIsLiteral(tmp.next())) {
                         return false;
+                    }
+                    lex.consume();
+                    lex.consume();
+                    return true;
                 }
+                if (tokenIsLiteral(lex.next())) {
+                    lex.consume();
+                    return true;
+                }
+                return false;
         }
         return true;
     }
