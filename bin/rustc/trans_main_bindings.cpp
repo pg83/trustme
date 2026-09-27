@@ -2269,12 +2269,22 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         for (size_t i = 0; i < ft.argTypes.length(); i++) {
                             argParams.push_back(MIRLValue::newField(MIRLValue::newArgument(1), i));
                         }
-                        builder.terminateCall(MIRLValue::newReturn(), te->path.clone(), mv$(argParams), 1, 2);
-                        builder.ensureOpen();
-                        builder.terminateBlock(MIRTerminator::make_Return({}));
-                        builder.ensureOpen();
-                        builder.mir.blocks.back().isCleanup = true;
-                        builder.terminateBlock(MIRTerminator::make_UnwindResume({}));
+                        if (const auto* variant = te->def.opt_EnumConstructor()) {
+                            auto enumPath = te->path.data.as_Generic().clone();
+                            enumPath.path.popComponent();
+                            builder.pushStmtAssign(MIRLValue::newReturn(), MIRRValue::make_EnumVariant({mv$(enumPath), static_cast<unsigned>(variant->v), mv$(argParams)}));
+                            builder.terminateBlock(MIRTerminator::make_Return({}));
+                        } else if (te->def.is_StructConstructor()) {
+                            builder.pushStmtAssign(MIRLValue::newReturn(), MIRRValue::make_Struct({te->path.data.as_Generic().clone(), mv$(argParams)}));
+                            builder.terminateBlock(MIRTerminator::make_Return({}));
+                        } else {
+                            builder.terminateCall(MIRLValue::newReturn(), te->path.clone(), mv$(argParams), 1, 2);
+                            builder.ensureOpen();
+                            builder.terminateBlock(MIRTerminator::make_Return({}));
+                            builder.ensureOpen();
+                            builder.mir.blocks.back().isCleanup = true;
+                            builder.terminateBlock(MIRTerminator::make_UnwindResume({}));
+                        }
 
                         transList.autoFunctions.push_back(box$(fcn));
                         e->ptr = transList.autoFunctions.back().get();
