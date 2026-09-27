@@ -1095,7 +1095,17 @@ futures_0_3_34 = add_project_test(
     manifest="futures",
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/futures_0_3_34/Cargo.lock",
-    adapter_args=["--features", "default,thread-pool,io-compat"],
+    # async_await_macros.rs's stream_select asserts that 999 draws from three
+    # streams give each value at least 299 times. futures seeds each thread's
+    # xorshift with SipHash (zero keys) of a process-wide counter, so the draws
+    # depend only on how many threads asked for a seed first - which the other
+    # tests of that binary race for. Seeds 0..200 on one thread each: 18, 56
+    # and 58 fail, with the same counts under rustc 1.90 and ours; alone the
+    # test always gets seed 0. The test calls itself "a bit flaky".
+    adapter_args=[
+        "--features", "default,thread-pool,io-compat",
+        "--", "--skip", "stream_select", "--exact",
+    ],
     timeout=NESTED_PROJECT_TIMEOUT,
 )
 
