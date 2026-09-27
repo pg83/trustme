@@ -509,6 +509,13 @@ struct OrderPlace {
            call or operator before it checked anything after it. */
         const OrderPlace* pendingNodeCut = nullptr;
         const OrderPlace* pendingObligationCut = nullptr;
+        Vector<OrderPlace> pendingArgumentRegions;
+
+        bool insidePendingArguments(const OrderPlace& place) const {
+            return std::any_of(pendingArgumentRegions.begin(), pendingArgumentRegions.end(), [&](const OrderPlace& arguments) {
+                return place.start > arguments.start && place.end <= arguments.end;
+            });
+        }
 
         void collectIvars(const HIRType* root, Vector<unsigned int>& out, bool throughClosures = false) const;
         static void deduplicate(Vector<unsigned int>& values);
@@ -6845,6 +6852,11 @@ Vector<OrderPlace> argumentBindingCuts(const Context& context, const IvarCoercio
 bool associatedPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<OrderPlace>& cuts, Vector<unsigned>& ivars, const Context::Associated& rule) {
     const auto count = coercionIndex.count;
     const OrderPlace place{rule.order, rule.order};
+    if (coercionIndex.insidePendingArguments(place)) {
+        DEBUG(StringView("- R") << rule.ruleIdx << StringView(" at ") << rule.order << StringView(" waits for the method call it is an argument of"));
+        context.pendingCutHolds++;
+        return true;
+    }
     ivars.clear();
     coercionIndex.collectIvars(context.getType(rule.implTy), ivars);
     for (const auto* type : rule.params.types) {
@@ -7047,7 +7059,7 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
             bindingOrdersAt = context.linkCoerce.size();
         }
         DEBUG(StringView("- ") << rule);
-        if (associatedStillStalled(context, coercionIndex, rule) || ((!cuts.empty() || coercionIndex.pendingNodeCut) && associatedPastArgumentCut(context, coercionIndex, cuts, cutIvars, rule)) || (!bindingOrders.empty() && associatedWaitsForArgumentBinding(context, coercionIndex, bindingOrders, cutIvars, rule))) {
+        if (associatedStillStalled(context, coercionIndex, rule) || ((!cuts.empty() || coercionIndex.pendingNodeCut || !coercionIndex.pendingArgumentRegions.empty()) && associatedPastArgumentCut(context, coercionIndex, cuts, cutIvars, rule)) || (!bindingOrders.empty() && associatedWaitsForArgumentBinding(context, coercionIndex, bindingOrders, cutIvars, rule))) {
             context.storeAssociated(i, mv$(rule), indexedKey);
             if (linkAssocIterLimit-- == 0) {
                 DEBUG(StringView("link_assoc iteration limit exceeded"));
@@ -10958,6 +10970,12 @@ auto IvarCoercionIndex::buildComponents() -> void {
             collectType(type);
         }
         collectOwnTypes(*node);
+        if (node->nodeKind() == HIRExprNodeCallMethod::kind && !context.pendingCutsLifted) {
+            const auto& call = static_cast<const HIRExprNodeCallMethod&>(*node);
+            if (call.checkOrderEnd && call.value->checkOrderEnd) {
+                pendingArgumentRegions.pushBack(OrderPlace{call.checkOrderEnd, call.value->checkOrderEnd});
+            }
+        }
         if (const auto cutPlace = pendingNodeCutPlace(*node); !cutPlace.isNone()) {
             for (const auto member : members) {
                 if (member < count) {
