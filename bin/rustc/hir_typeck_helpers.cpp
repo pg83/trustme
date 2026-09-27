@@ -12811,13 +12811,22 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
         const HMTypeInferrence& table_;
         const Vector<CandidateTypeBinding>& typeBindings_;
         const Vector<CandidateValueBinding>& valueBindings_;
+        unsigned probeStart_;
 
-        MaterializeCandidate(HIRTypeInterner& types, const HMTypeInferrence& table, const Vector<CandidateTypeBinding>& typeBindings, const Vector<CandidateValueBinding>& valueBindings)
+        MaterializeCandidate(HIRTypeInterner& types, const HMTypeInferrence& table, const Vector<CandidateTypeBinding>& typeBindings, const Vector<CandidateValueBinding>& valueBindings, unsigned probeStart)
             : MonomorphiserNop(types)
             , table_(table)
             , typeBindings_(typeBindings)
             , valueBindings_(valueBindings)
+            , probeStart_(probeStart)
         {
+        }
+
+        bool namesProbeBorn(const HIRType* type) const {
+            return visitTyWith(type, [&](const HIRType* inner) {
+                const auto* infer = inner->opt_Infer();
+                return infer && !infer->isLit() && infer->index != ~0u && !isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index) && infer->index >= probeStart_;
+            });
         }
 
         /* A probe variable is known by its index: a literal class it took from a
@@ -12835,7 +12844,11 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
                     continue;
                 }
                 const auto* resolved = table_.getType(type);
-                return isProbeVariable(binding, resolved) ? binding.stable : this->monomorphType(sp, resolved, allowInfer);
+                if (isProbeVariable(binding, resolved)) {
+                    return binding.stable;
+                }
+                const auto* materialized = this->monomorphType(sp, resolved, allowInfer);
+                return namesProbeBorn(materialized) ? binding.stable : materialized;
             }
             return MonomorphiserNop::monomorphType(sp, type, allowInfer);
         }
@@ -12857,7 +12870,7 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
         }
     };
 
-    MaterializeCandidate materialize(crate.types, resolve_.ivars, typeBindings, valueBindings);
+    MaterializeCandidate materialize(crate.types, resolve_.ivars, typeBindings, valueBindings, snapshot.ivarCount);
     auto output = materialize.monomorphPathParams(span(), probeParams, true);
     /* A relation binds a variable of the goal as readily as a candidate parameter:
        `Result<T, E>` against `Result<usize, ?e>` with `E` already `u32` binds `?e`.
