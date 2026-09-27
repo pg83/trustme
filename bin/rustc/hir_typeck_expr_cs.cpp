@@ -811,7 +811,7 @@ struct OrderPlace {
             }
 
             void visit(HIRExprNodeClosure& node) override {
-                if (node.checkOrder <= cut.start && cut.end <= node.checkOrderEnd) {
+                if (node.checkOrder < cut.start && cut.end <= node.checkOrderEnd) {
                     found = true;
                     return;
                 }
