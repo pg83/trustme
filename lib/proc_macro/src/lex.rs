@@ -255,20 +255,22 @@ impl ::std::str::FromStr for TokenStream {
             }
             else
             {
-                // byte or raw string literals
-                if c == 'b' || c == 'r' || c == '"' {
+                // byte, C or raw string literals
+                if c == 'b' || c == 'c' || c == 'r' || c == '"' {
                     let mut c = c;
-                    let is_byte = if c == 'b' {
-                            c = some_else!(it.consume() => { rv.push(Ident::new("b", crate::Span::call_site()).into()); break });
-                            true
+                    let prefix = if c == 'b' || c == 'c' {
+                            let prefix = c;
+                            c = some_else!(it.consume() => { rv.push(Ident::from_name(&prefix.to_string(), false, crate::Span::call_site()).into()); break });
+                            Some(prefix)
                         } else {
-                            false
+                            None
                         };
+                    let is_byte = prefix == Some('b');
 
                     if c == 'r'
                     {
                         // TODO: If this isn't a string, start parsing an ident instead.
-                        let ident_str = if is_byte { "br" } else { "r" };
+                        let ident_str = match prefix { Some('b') => "br", Some('c') => "cr", _ => "r" };
                         c = some_else!(it.consume() => { rv.push(Ident::new(ident_str.into(), crate::Span::call_site()).into()); break });
                         let mut hashes = 0;
                         while c == '#' {
@@ -338,7 +340,11 @@ impl ::std::str::FromStr for TokenStream {
                     {
                         // Byte character literal?
                         // NOTE: That b'foo is not `b` followed by `'foo`
-                        assert!(is_byte);
+                        if !is_byte {
+                            // `c` before a character literal is an identifier
+                            rv.push(Ident::from_name("c", false, crate::Span::call_site()).into());
+                            continue 'outer;
+                        }
                         let mut spelling = String::from("b'");
                         c = some_else!(it.consume() => return err("Unterminated byte character literal"));
                         if c == '\\' {
@@ -378,7 +384,7 @@ impl ::std::str::FromStr for TokenStream {
                     else if c == '\"'
                     {
                         // String literal, kept as written between its quotes
-                        let mut spelling = String::from(if is_byte { "b\"" } else { "\"" });
+                        let mut spelling = String::from(match prefix { Some('b') => "b\"", Some('c') => "c\"", _ => "\"" });
                         loop
                         {
                             c = some_else!(it.consume() => return err("str eof"));
@@ -428,7 +434,7 @@ impl ::std::str::FromStr for TokenStream {
                     {
                         // Could be an ident starting with 'b', or it's just 'b'
                         // - Fall through
-                        let ident = get_ident(&mut it, "b".into());
+                        let ident = get_ident(&mut it, prefix.map_or(String::new(), |p| p.to_string()));
                         rv.push(Ident::from_name(&ident, false, crate::Span::call_site()).into());
                         continue 'outer;
                     }

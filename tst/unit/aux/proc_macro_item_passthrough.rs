@@ -170,3 +170,17 @@ pub fn joint_punct_before_group(_input: TokenStream) -> TokenStream {
     tokens.extend([TokenTree::from(Punct::new(';', Spacing::Joint))]);
     tokens
 }
+
+// Every literal of the input printed and parsed back, as indoc re-reads a
+// string literal after unindenting its text.
+#[proc_macro]
+pub fn reparse_literals(input: TokenStream) -> TokenStream {
+    use proc_macro::{Literal, TokenTree};
+    input
+        .into_iter()
+        .map(|token| match token {
+            TokenTree::Literal(literal) => TokenTree::from(literal.to_string().parse::<Literal>().unwrap()),
+            other => other,
+        })
+        .collect()
+}
