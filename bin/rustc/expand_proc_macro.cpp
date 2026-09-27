@@ -124,6 +124,7 @@ namespace {
         Vector<Ident::Hygiene> spanContexts;
         size_t lastSentSpan = 1;
         Ident::Hygiene receivedHygiene;
+        Ident::Hygiene callSiteHygiene;
         bool receivedFromInput = false;
 
         struct Handles {
@@ -244,6 +245,7 @@ namespace {
 
         void visitToken(const ::Token& tok);
 
+        void visitMacroInvocation(const ASTMacroInvocation& inv);
         void visitTokentree(const ::TokenTree& tt);
 
         void visitPattern(const ASTPattern& pat);
@@ -345,11 +347,13 @@ namespace {
     }
 
     template <typename F>
-    std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const TokenTree* attrInput, F cb) {
+    std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const TokenTree* attrInput, F cb, const Ident::Hygiene& callSite = Ident::Hygiene()) {
         auto pmi = ProcMacroInvokeInt(sp, wb, crate, macPath);
         if (!pmi.checkGood()) {
             return std::unique_ptr<TokenStream>();
         }
+        pmi.callSiteHygiene = callSite;
+        pmi.receivedHygiene = callSite;
         if (attrInput) {
             // TODO: Assert that this is a `#[proc_macro_attribute]` macro
             if (attrInput->size() != 0) {
@@ -466,7 +470,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const TokenTree& tt) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         v.visitTokentree(tt);
-    });
+    }, tt.hygiene());
 }
 
 ProcMacroInv::ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc)
@@ -699,7 +703,7 @@ Token ProcMacroInv::realGetToken_() {
     while (static_cast<TokenClass>(v) == TokenClass::SpanRef) {
         const auto index = this->recvV128u();
         this->receivedFromInput = index >= 2 && index - 2 < spanContexts.length();
-        this->receivedHygiene = this->receivedFromInput ? spanContexts[index - 2] : Ident::Hygiene();
+        this->receivedHygiene = this->receivedFromInput && spanContexts[index - 2] != Ident::Hygiene() ? spanContexts[index - 2] : callSiteHygiene;
         v = this->recvU8();
     }
 
@@ -1299,6 +1303,19 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_INTERPOLATED_STMT:
         case TOK_INTERPOLATED_BLOCK:
         case TOK_INTERPOLATED_EXPR:
+            if (const auto* recorded = tok.fragmentTokens()) {
+                const bool grouped = tok.type() == TOK_INTERPOLATED_EXPR && (tok.rawData().as_Fragment().ptr == nullptr || !pprustExprIsAtom(tok.fragNode()));
+                if (grouped) {
+                    pmi.sendSymbol("(");
+                }
+                for (const auto* token : *recorded) {
+                    visitToken(token->tok);
+                }
+                if (grouped) {
+                    pmi.sendSymbol(")");
+                }
+                break;
+            }
             visitNode(tok.fragNode());
             break;
         case TOK_INTERPOLATED_STMT_ITEM:
@@ -1698,6 +1715,19 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
     }
 }
 
+auto ProcMacroVisitor::visitMacroInvocation(const ASTMacroInvocation& inv) -> void {
+    visitPath(inv.path());
+    pmi.sendSymbol("!");
+    if (inv.inputIdent() != "") {
+        pmi.sendIdent(inv.inputIdent().c_str());
+    }
+    const char* open = inv.delimiter() == TOK_BRACE_OPEN ? "{" : inv.delimiter() == TOK_SQUARE_OPEN ? "[" : "(";
+    const char* close = inv.delimiter() == TOK_BRACE_OPEN ? "}" : inv.delimiter() == TOK_SQUARE_OPEN ? "]" : ")";
+    pmi.sendSymbol(open);
+    visitTokentree(inv.inputTt());
+    pmi.sendSymbol(close);
+}
+
 auto ProcMacroVisitor::visitTokentree(const ::TokenTree& tt) -> void {
     if (tt.isToken()) {
         visitToken(tt.tok());
@@ -1888,12 +1918,7 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
             break;
         }
         case TypeData::TAG_Macro: {
-            auto& te = ty->data.as_Macro();
-            visitPath(te.inv->path());
-            pmi.sendSymbol("!");
-            pmi.sendSymbol("(");
-            visitTokentree(te.inv->inputTt());
-            pmi.sendSymbol(")");
+            visitMacroInvocation(*ty->data.as_Macro().inv);
             break;
         }
         case TypeData::TAG_Primitive: {
@@ -2985,12 +3010,10 @@ auto ProcMacroVisitor::visitItem(const RcString& name, const ASTVisibility& vis,
         }
         case ASTItem::TAG_MacroInv: {
             auto& e = item.as_MacroInv();
-            visitPath(e.path());
-            pmi.sendSymbol("!");
-            pmi.sendSymbol("(");
-            visitTokentree(e.inputTt());
-            pmi.sendSymbol(")");
-            pmi.sendSymbol(";");
+            visitMacroInvocation(e);
+            if (e.delimiter() != TOK_BRACE_OPEN) {
+                pmi.sendSymbol(";");
+            }
             break;
         }
     }

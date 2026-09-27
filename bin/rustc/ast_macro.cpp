@@ -22,7 +22,9 @@ void ASTMacroInvocation::clear() {
 }
 
 ASTMacroInvocation ASTMacroInvocation::clone() const {
-    return ASTMacroInvocation(span_, ASTPath(macroPath), ident, input.clone());
+    auto rv = ASTMacroInvocation(span_, ASTPath(macroPath), ident, input.clone());
+    rv.delimiter_ = delimiter_;
+    return rv;
 }
 
 template <>

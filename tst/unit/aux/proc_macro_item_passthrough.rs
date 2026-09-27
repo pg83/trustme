@@ -184,3 +184,43 @@ pub fn reparse_literals(input: TokenStream) -> TokenStream {
         })
         .collect()
 }
+
+// The input handed back with every `[< .. >]` group replaced by the
+// identifiers inside it joined into one, spanned as the group - the shape of
+// paste's `paste!`.
+#[proc_macro]
+pub fn paste_idents(input: TokenStream) -> TokenStream {
+    use proc_macro::{Delimiter, Group, Ident, TokenTree};
+    fn joined(group: &Group) -> Option<TokenTree> {
+        let tokens: Vec<TokenTree> = group.stream().into_iter().collect();
+        let open = matches!(tokens.first(), Some(TokenTree::Punct(p)) if p.as_char() == '<');
+        let close = matches!(tokens.last(), Some(TokenTree::Punct(p)) if p.as_char() == '>');
+        if group.delimiter() != Delimiter::Bracket || !open || !close {
+            return None;
+        }
+        let mut name = String::new();
+        for token in &tokens[1..tokens.len() - 1] {
+            if let TokenTree::Ident(ident) = token {
+                name.push_str(&ident.to_string());
+            }
+        }
+        Some(TokenTree::from(Ident::new(&name, group.span())))
+    }
+    fn walk(input: TokenStream) -> TokenStream {
+        input
+            .into_iter()
+            .map(|token| match token {
+                TokenTree::Group(group) => match joined(&group) {
+                    Some(ident) => ident,
+                    None => {
+                        let mut rebuilt = Group::new(group.delimiter(), walk(group.stream()));
+                        rebuilt.set_span(group.span());
+                        TokenTree::from(rebuilt)
+                    }
+                },
+                other => other,
+            })
+            .collect()
+    }
+    walk(input)
+}

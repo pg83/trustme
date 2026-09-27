@@ -5183,6 +5183,7 @@ ASTMacroInvocation ParseMacroInvocation(ProtoSpan spanStart, ASTPath name, Token
     if (isMacro) {
         lex.pushHygine();
     }
+    const auto delimiter = lex.lookahead(0);
     TokenTree tt = ParseTT(lex, true);
     if (tt.isToken()) {
         parseErrorUnexpected(lex, tt.tok());
@@ -5191,7 +5192,9 @@ ASTMacroInvocation ParseMacroInvocation(ProtoSpan spanStart, ASTPath name, Token
         lex.popHygine();
     }
     DEBUG(StringView("name=") << name << StringView(", ident=") << ident << StringView(", tt=") << tt);
-    return ASTMacroInvocation(lex.endSpan(spanStart), mv$(name), mv$(ident), mv$(tt));
+    auto rv = ASTMacroInvocation(lex.endSpan(spanStart), mv$(name), mv$(ident), mv$(tt));
+    rv.setDelimiter(delimiter);
+    return rv;
 }
 
 ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& modFileinfo, const ASTAbsolutePath& modPath, ASTAttributeList metaItems) {

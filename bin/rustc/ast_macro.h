@@ -11,6 +11,7 @@ class ASTMacroInvocation {
     ASTPath macroPath;
     RcString ident;
     TokenTree input;
+    eTokenType delimiter_ = TOK_PAREN_OPEN;
     bool isExpanded_ = false;
 
 public:
@@ -45,6 +46,14 @@ public:
 
     const RcString& inputIdent() const {
         return ident;
+    }
+
+    eTokenType delimiter() const {
+        return delimiter_;
+    }
+
+    void setDelimiter(eTokenType delimiter) {
+        delimiter_ = delimiter;
     }
 
     const TokenTree& inputTt() const {
