@@ -94,6 +94,8 @@ bool visitPathTysWithCb(const HIRPath&, HIRTypeVisitorCallback& callback);
 
 bool typeContainsGenericGroup(const HIRType*, HIRGenericGroup group);
 bool pathParamsContainGenericGroup(const HIRPathParams&, HIRGenericGroup group);
+bool typeContainsConstGeneric(const HIRType*);
+bool pathParamsContainConstGeneric(const HIRPathParams&);
 
 template <typename F>
 bool visitTyWith(const HIRType* type, F f) {

@@ -82,6 +82,12 @@ namespace {
         bool visitType(const HIRType* ty) override;
     };
 
+    struct TyVisitorConstGeneric final: TyVisitor<WConst> {
+        const HIRType& getTyData(const HIRType* ty) const override;
+
+        bool visitConstGeneric(const HIRConstGeneric& value) override;
+    };
+
     struct TyRewriter {
         HIRTypeInterner& types;
         HIRTypeRewriteCallback& callback;
@@ -119,6 +125,16 @@ bool typeContainsGenericGroup(const HIRType* type, HIRGenericGroup group) {
 
 bool pathParamsContainGenericGroup(const HIRPathParams& params, HIRGenericGroup group) {
     TyVisitorGenericGroup visitor(group);
+    return visitor.visitPathParams(params);
+}
+
+bool typeContainsConstGeneric(const HIRType* type) {
+    TyVisitorConstGeneric visitor;
+    return visitor.visitType(type);
+}
+
+bool pathParamsContainConstGeneric(const HIRPathParams& params) {
+    TyVisitorConstGeneric visitor;
     return visitor.visitPathParams(params);
 }
 
@@ -947,6 +963,20 @@ auto TyVisitorGenericGroup::visitType(const HIRType* ty) -> bool {
         return true;
     }
     return TyVisitor::visitType(ty);
+}
+
+auto TyVisitorConstGeneric::getTyData(const HIRType* ty) const -> const HIRType& {
+    return *ty;
+}
+
+auto TyVisitorConstGeneric::visitConstGeneric(const HIRConstGeneric& value) -> bool {
+    if (value.is_Generic()) {
+        return true;
+    }
+    if (const auto* unevaluated = value.opt_Unevaluated()) {
+        return ((*unevaluated)->selfType && visitType((*unevaluated)->selfType)) || visitPathParams((*unevaluated)->paramsImpl) || visitPathParams((*unevaluated)->paramsItem);
+    }
+    return false;
 }
 
 auto TyRewriter::rewritePathParams(HIRPathParams& params) -> void {

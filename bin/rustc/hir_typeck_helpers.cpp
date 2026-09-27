@@ -11878,7 +11878,8 @@ auto NextTraitGoalEvaluator::paramEnvCandidateIsNonGlobal(const Candidate& candi
         return false;
     }
     auto typeIsNonGlobal = [&](const HIRType* type) {
-        return typeHasUnknown(resolve_.expandAssociatedTypes(span(), type));
+        const auto* expanded = resolve_.expandAssociatedTypes(span(), type);
+        return typeHasUnknown(expanded) || typeContainsConstGeneric(expanded);
     };
     auto paramsAreNonGlobal = [&](const HIRPathParams& params) {
         for (const auto& type : params.types) {
@@ -11886,7 +11887,7 @@ auto NextTraitGoalEvaluator::paramEnvCandidateIsNonGlobal(const Candidate& candi
                 return true;
             }
         }
-        return false;
+        return pathParamsContainConstGeneric(params);
     };
     {
         const auto* implSelf = resolve_.resolveType(candidate.impl.getImplType(crate.types));
