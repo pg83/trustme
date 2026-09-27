@@ -14566,34 +14566,24 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         result = Certainty::Ambiguous;
     }
 
-    {
-        for (size_t i = 0; i < implParamsDef->types.size() && i < boundParams->types.size(); i++) {
-            if (!implParamsDef->types[i].isSized) {
-                continue;
-            }
-            if (boundParams->types[i] == nullptr) {
-                continue;
-            }
-            const auto* bound = underHead(boundParams->types[i]);
-            if (typeHasCandidatePlaceholder(bound)) {
-                continue;
-            }
-            const auto sized = resolve_.typeIsSized(span(), bound);
-            if (sized == SolverCertainty::NoSolution) {
-                return Certainty::NoSolution;
-            }
-            if (sized == SolverCertainty::Ambiguous) {
-                DEBUG(StringView("candidate downgrade: implicit sized"));
-                candidate->headObligations.push_back(
-                    SolverObligation{
-                        bound,
-                        HIRTraitPath(HIRGenericPath(resolve_.langSized(), {})),
-                    }
-                );
-                candidate->ambiguityBeyondHead = true;
-                candidate->nestedAmbiguity = true;
-                result = Certainty::Ambiguous;
-            }
+    ThinVector<size_t> pendingSized;
+    for (size_t i = 0; i < implParamsDef->types.size() && i < boundParams->types.size(); i++) {
+        if (!implParamsDef->types[i].isSized) {
+            continue;
+        }
+        if (boundParams->types[i] == nullptr) {
+            continue;
+        }
+        const auto* bound = underHead(boundParams->types[i]);
+        if (typeHasCandidatePlaceholder(bound)) {
+            continue;
+        }
+        const auto sized = resolve_.typeIsSized(span(), bound);
+        if (sized == SolverCertainty::NoSolution) {
+            return Certainty::NoSolution;
+        }
+        if (sized == SolverCertainty::Ambiguous) {
+            pendingSized.push_back(i);
         }
     }
 
@@ -14722,6 +14712,25 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                 candidate->nonObligationNestedAmbiguity = true;
                 result = Certainty::Ambiguous;
             }
+        }
+    }
+    for (const auto i : pendingSized) {
+        const auto* bound = underHead(boundParams->types[i]);
+        const auto sized = typeHasCandidatePlaceholder(bound) ? SolverCertainty::Ambiguous : resolve_.typeIsSized(span(), bound);
+        if (sized == SolverCertainty::NoSolution) {
+            return Certainty::NoSolution;
+        }
+        if (sized == SolverCertainty::Ambiguous) {
+            DEBUG(StringView("candidate downgrade: implicit sized"));
+            candidate->headObligations.push_back(
+                SolverObligation{
+                    bound,
+                    HIRTraitPath(HIRGenericPath(resolve_.langSized(), {})),
+                }
+            );
+            candidate->ambiguityBeyondHead = true;
+            candidate->nestedAmbiguity = true;
+            result = Certainty::Ambiguous;
         }
     }
     return result;
