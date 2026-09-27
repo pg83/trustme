@@ -103,13 +103,16 @@ def run_tests(
         lib.run([*command, *test_args], cwd=cwd, env=env)
         return
 
-    # Compile every test before allowing an expected runtime failure to pass.
-    lib.run([*command, *cargo_args, "--no-run"], cwd=cwd, env=env)
-
     selectors = []
     if xfail_targets:
         targets = package_targets(command[0], manifest, cwd=cwd, env=env)
         selectors = target_selectors(targets, xfail_targets)
+
+    # Compile every test before allowing an expected runtime failure to pass.
+    # An expected target failure may be a failure to build, so the targets it
+    # names are left to their own run below, which must fail either way.
+    if selectors or not xfail_targets:
+        lib.run([*command, *cargo_args, *selectors, "--no-run"], cwd=cwd, env=env)
 
     skips = [argument for name in xfails for argument in ("--skip", name)]
     # An empty selection means every target of the package is an expected

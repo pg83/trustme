@@ -106,7 +106,10 @@ class ProjectXfailTest(unittest.TestCase):
         self.assertEqual(
             [call.args[0] for call in run.call_args_list],
             [
-                ["cargo", "test", "--release", "--no-run"],
+                [
+                    "cargo", "test", "--release",
+                    "--lib", "--bin", "widget-cli", "--test", "suite", "--no-run",
+                ],
                 [
                     "cargo", "test", "--release",
                     "--lib", "--bin", "widget-cli", "--test", "suite", "--",

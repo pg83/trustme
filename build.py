@@ -1418,6 +1418,13 @@ ahash_0_8_12 = add_project_test(
     url="https://github.com/tkaitchuck/aHash.git",
     rev="10c4f487e85c62bb12618ab5a4bb84b16802cdad",
     lockfile="$(S)/tst/projects/ahash_0_8_12/Cargo.lock",
+    # tests/nopanic.rs is no-panic's check: each `#[no_panic]` function
+    # guards its body with a value whose drop calls an extern symbol that
+    # does not exist, so it links only once the optimizer has proven the
+    # body cannot unwind and deleted the drop. The crate asks for that
+    # proof from opt-level 2 with fat LTO; our backend has no LTO, so the
+    # calls into ahash's rlib stay opaque, may unwind, and the link fails.
+    adapter_args=["--xfail-target", "nopanic"],
 )
 
 humantime_2_4_0 = add_project_test(
