@@ -82,22 +82,22 @@ fn group_delimiters(tokens: Vec<crate::TokenTree>) -> Result<Vec<crate::TokenTre
 
     for token in tokens {
         match token {
-        crate::TokenTree::Punct(ref punct) if punct.ch == '(' || punct.ch == '[' || punct.ch == '{' => {
-            groups.push((punct.ch, current));
+        crate::TokenTree::Punct(ref punct) if punct.as_char() == '(' || punct.as_char() == '[' || punct.as_char() == '{' => {
+            groups.push((punct.as_char(), current));
             current = Vec::new();
             },
-        crate::TokenTree::Punct(ref punct) if punct.ch == ')' || punct.ch == ']' || punct.ch == '}' => {
+        crate::TokenTree::Punct(ref punct) if punct.as_char() == ')' || punct.as_char() == ']' || punct.as_char() == '}' => {
             let (open, mut parent) = match groups.pop() {
                 Some(group) => group,
                 None => return Err(LexError { inner: "Unexpected closing delimiter" }),
                 };
-            let delimiter = match (open, punct.ch) {
+            let delimiter = match (open, punct.as_char()) {
                 ('(', ')') => crate::Delimiter::Parenthesis,
                 ('[', ']') => crate::Delimiter::Bracket,
                 ('{', '}') => crate::Delimiter::Brace,
                 _ => return Err(LexError { inner: "Mismatched closing delimiter" }),
                 };
-            parent.push(crate::Group::new(delimiter, TokenStream { inner: current }).into());
+            parent.push(crate::Group::new(delimiter, TokenStream::from_trees(current)).into());
             current = parent;
             },
         token => current.push(token),
@@ -123,6 +123,10 @@ impl ::std::str::FromStr for TokenStream {
             Err(LexError { inner: s })
         }
 
+        fn spelled(text: &str) -> Result<Literal, LexError> {
+            Literal::from_spelling(text, crate::Span::call_site()).ok_or(LexError { inner: "Malformed literal" })
+        }
+
         fn get_ident<T: Iterator<Item=char>>(it: &mut CharStream<T>, mut s: String) -> String
         {
             let mut c = it.cur();
@@ -146,41 +150,6 @@ impl ::std::str::FromStr for TokenStream {
             }
         }
 
-        fn get_unicode_escape<T: Iterator<Item=char>>(it: &mut CharStream<T>) -> Result<char, &'static str>
-        {
-            if it.consume() != Some('{') {
-                return Err("Expected `{` after `\\u` in literal");
-            }
-
-            let mut value = 0u32;
-            let mut digits = 0;
-            loop {
-                let c = match it.consume() {
-                    Some(c) => c,
-                    None => return Err("Unterminated `\\u` escape"),
-                };
-                if c == '}' {
-                    break;
-                }
-                if c == '_' {
-                    continue;
-                }
-                let digit = match c.to_digit(16) {
-                    Some(digit) => digit,
-                    None => return Err("Invalid hex digit in `\\u` escape"),
-                };
-                digits += 1;
-                if digits > 6 {
-                    return Err("Overlong `\\u` escape");
-                }
-                value = value * 16 + digit;
-            }
-            if digits == 0 {
-                return Err("Empty `\\u` escape");
-            }
-            ::std::char::from_u32(value).ok_or("Invalid Unicode scalar in `\\u` escape")
-        }
-
         'outer: while ! it.is_complete()
         {
             let mut c = it.cur();
@@ -199,50 +168,43 @@ impl ::std::str::FromStr for TokenStream {
                 if (c.is_alphabetic() || c == '_') && it.next().map(|x| x != '\'').unwrap_or(true) {
                     // Lifetime
                     let ident = get_ident(&mut it, String::new());
-                    rv.push(Punct::new('\'', Spacing::Joint).into());
-                    rv.push(Ident { is_raw: false, val: ident, span: crate::Span::call_site() }.into());
+                    rv.push(Punct::from_char('\'', Spacing::Joint, crate::Span::call_site()).into());
+                    rv.push(Ident::from_name(&ident, false, crate::Span::call_site()).into());
                 }
                 else {
-                    // Char lit
-                    let new_c = if c == '\\' {
-                            match match it.consume()
-                                {
-                                Some(c) => c,
-                                None => return err("Unterminated char literal"),
+                    // Char lit, kept as written between its quotes
+                    let mut spelling = String::from("'");
+                    spelling.push(c);
+                    if c == '\\' {
+                        let escaped = some_else!(it.consume() => return err("Unterminated char literal"));
+                        spelling.push(escaped);
+                        match escaped
+                        {
+                        '0' | 'n' | 'r' | 't' | '\\' | '\'' | '"' => {},
+                        'u' => {
+                            loop {
+                                let d = some_else!(it.consume() => return err("Unterminated `\\u` escape"));
+                                spelling.push(d);
+                                if d == '}' {
+                                    break;
                                 }
-                            {
-                            '0' => '\0',
-                            'n' => '\n',
-                            'r' => '\r',
-                            't' => '\t',
-                            '\\' => '\\',
-                            '\'' => '\'',
-                            '"' => '"',
-                            'u' => match get_unicode_escape(&mut it) {
-                                Ok(c) => c,
-                                Err(e) => return err(e),
-                                },
-                            'x' => {
-                                let mut v = 0u32;
-                                for _ in 0 .. 2 {
-                                    let d = some_else!(it.consume() => return err("Unterminated `\\x` escape"));
-                                    v = v * 16 + some_else!(d.to_digit(16) => return err("Invalid hex digit in `\\x` escape"));
-                                }
-                                if v > 0x7f {
-                                    return err("Out of range `\\x` escape in char literal");
-                                }
-                                some_else!(::std::char::from_u32(v) => return err("Invalid `\\x` escape"))
-                                },
-                            c @ _ => panic!("TODO: char literal with escape - '\\{}'", c),
                             }
+                            },
+                        'x' => {
+                            for _ in 0 .. 2 {
+                                let d = some_else!(it.consume() => return err("Unterminated `\\x` escape"));
+                                if d.to_digit(16).is_none() {
+                                    return err("Invalid hex digit in `\\x` escape");
+                                }
+                                spelling.push(d);
+                            }
+                            },
+                        _ => return err("Unknown escape in char literal"),
                         }
-                        else {
-                            c
-                        };
-                    rv.push(Literal::character(new_c).into());
+                    }
                     match it.consume()
                     {
-                    Some('\'') => {},
+                    Some('\'') => spelling.push('\''),
                     Some(c) => {
                         debug!("Stray charcter '{}'", c);
                         return err("Multiple characters in char literal");
@@ -251,6 +213,7 @@ impl ::std::str::FromStr for TokenStream {
                         return err("Unterminated char literal");
                         },
                     }
+                    rv.push(spelled(&spelling)?.into());
                     it.consume();   // Eat the final `'` returned above
                 }
             }
@@ -316,13 +279,13 @@ impl ::std::str::FromStr for TokenStream {
                         if c != '"' {
                             if hashes == 0 {
                                 let s = get_ident(&mut it, ident_str.to_string());
-                                rv.push(Ident { is_raw: false, val: s, span: crate::Span::call_site() }.into());
+                                rv.push(Ident::from_name(&s, false, crate::Span::call_site()).into());
                             }
                             else {
                                 rv.push(Ident::new(ident_str.into(), crate::Span::call_site()).into());
                             }
                             while hashes > 0 {
-                                rv.push(Punct::new('#', if hashes == 1 { Spacing::Alone } else { Spacing::Joint }).into());
+                                rv.push(Punct::from_char('#', if hashes == 1 { Spacing::Alone } else { Spacing::Joint }, crate::Span::call_site()).into());
                                 hashes -= 1;
                             }
                             continue 'outer;
@@ -368,10 +331,7 @@ impl ::std::str::FromStr for TokenStream {
                         for _ in 0 .. req_hashes {
                             spelling.push('#');
                         }
-                        rv.push(Literal {
-                            span: crate::Span::call_site(),
-                            val: crate::token_tree::LiteralValue::Raw(spelling)
-                        }.into());
+                        rv.push(spelled(&spelling)?.into());
                         continue 'outer;
                     }
                     else if c == '\''
@@ -412,68 +372,56 @@ impl ::std::str::FromStr for TokenStream {
                         None => return err("Unterminated byte character literal"),
                         }
                         it.consume();
-                        rv.push(Literal {
-                            span: crate::Span::call_site(),
-                            val: crate::token_tree::LiteralValue::Raw(spelling),
-                        }.into());
+                        rv.push(spelled(&spelling)?.into());
                         continue 'outer;
                     }
                     else if c == '\"'
                     {
-                        // String literal
-                        let mut s = String::new();
+                        // String literal, kept as written between its quotes
+                        let mut spelling = String::from(if is_byte { "b\"" } else { "\"" });
                         loop
                         {
                             c = some_else!(it.consume() => return err("str eof"));
+                            spelling.push(c);
                             if c == '"' {
                                 it.consume();
                                 break ;
                             }
                             else if c == '\\' {
-                                match some_else!(it.consume() => return err("str eof"))
+                                let escaped = some_else!(it.consume() => return err("str eof"));
+                                spelling.push(escaped);
+                                match escaped
                                 {
-                                'n' => s.push('\n'),
-                                'r' => s.push('\r'),
-                                't' => s.push('\t'),
-                                '0' => s.push('\0'),
-                                '\\' => s.push('\\'),
-                                '\'' => s.push('\''),
-                                '"' => s.push('"'),
+                                'n' | 'r' | 't' | '0' | '\\' | '\'' | '"' => {},
                                 'x' => {
-                                    let mut v = 0u32;
                                     for _ in 0 .. 2 {
                                         let d = some_else!(it.consume() => return err("str eof"));
-                                        v = v * 16 + some_else!(d.to_digit(16) => return err("Invalid hex digit in `\\x` escape"));
+                                        if d.to_digit(16).is_none() {
+                                            return err("Invalid hex digit in `\\x` escape");
+                                        }
+                                        spelling.push(d);
                                     }
-                                    s.push(some_else!(::std::char::from_u32(v) => return err("Invalid `\\x` escape")));
                                     },
                                 'u' => {
-                                    s.push(match get_unicode_escape(&mut it) {
-                                        Ok(c) => c,
-                                        Err(e) => return err(e),
-                                        });
+                                    loop {
+                                        let d = some_else!(it.consume() => return err("Unterminated `\\u` escape"));
+                                        spelling.push(d);
+                                        if d == '}' {
+                                            break;
+                                        }
+                                    }
                                     },
                                 // A backslash at end-of-line eats the newline and the next line's leading whitespace
                                 '\n' | '\r' => {
                                     while it.next().map(|c| c.is_whitespace()).unwrap_or(false) {
-                                        it.consume();
+                                        spelling.push(some_else!(it.consume() => return err("str eof")));
                                     }
                                     },
-                                c @ _ => panic!("Unknown escape in string {}", c),
+                                _ => return err("Unknown escape in string"),
                                 }
                             }
-                            else {
-                                s.push(c);
-                            }
                         }
-                        rv.push(Literal {
-                            span: crate::Span::call_site(),
-                            val: if is_byte {
-                                crate::token_tree::LiteralValue::ByteString(s.into_bytes())
-                            } else {
-                                crate::token_tree::LiteralValue::String(s)
-                            }
-                        }.into());
+                        rv.push(spelled(&spelling)?.into());
                         continue 'outer;
                     }
                     else
@@ -481,7 +429,7 @@ impl ::std::str::FromStr for TokenStream {
                         // Could be an ident starting with 'b', or it's just 'b'
                         // - Fall through
                         let ident = get_ident(&mut it, "b".into());
-                        rv.push(Ident { span: Span::call_site(), is_raw: false, val: ident }.into());
+                        rv.push(Ident::from_name(&ident, false, crate::Span::call_site()).into());
                         continue 'outer;
                     }
                 }
@@ -491,10 +439,10 @@ impl ::std::str::FromStr for TokenStream {
                 {
                     let ident = get_ident(&mut it, String::new());
                     if false && ident == "_" {
-                        rv.push(Punct::new('_', Spacing::Alone).into());
+                        rv.push(Punct::from_char('_', Spacing::Alone, crate::Span::call_site()).into());
                     }
                     else {
-                        rv.push(Ident { span: Span::call_site(), is_raw: false, val: ident }.into());
+                        rv.push(Ident::from_name(&ident, false, crate::Span::call_site()).into());
                     }
                 }
                 else if c.is_digit(10)
@@ -510,10 +458,7 @@ impl ::std::str::FromStr for TokenStream {
                             Some('o') => { number_spelling.push('o'); it.consume(); 8 },
                             Some('b') => { number_spelling.push('b'); it.consume(); 2 },
                             None => {
-                                rv.push(Literal {
-                                    span: crate::Span::call_site(),
-                                    val: crate::token_tree::LiteralValue::Raw(number_spelling),
-                                }.into());
+                                rv.push(spelled(&number_spelling)?.into());
                                 continue 'outer;
                                 },
                             _ => 10,
@@ -537,10 +482,7 @@ impl ::std::str::FromStr for TokenStream {
                                 _ => return err("Unexpected integer suffix"),
                             }
                             number_spelling.push_str(&s);
-                            rv.push(Literal {
-                                span: crate::Span::call_site(),
-                                val: crate::token_tree::LiteralValue::Raw(number_spelling),
-                            }.into());
+                            rv.push(spelled(&number_spelling)?.into());
                             continue 'outer;
                         }
                         else if c.to_digit(base).is_some() {
@@ -608,20 +550,14 @@ impl ::std::str::FromStr for TokenStream {
                                 return err("Unexpected float suffix");
                             }
 
-                            rv.push(Literal {
-                                span: crate::Span::call_site(),
-                                val: crate::token_tree::LiteralValue::Raw(number_spelling),
-                            }.into());
+                            rv.push(spelled(&number_spelling)?.into());
                             continue 'outer;
                         }
                         else {
                             break;
                         }
                     }
-                    rv.push(Literal {
-                        span: crate::Span::call_site(),
-                        val: crate::token_tree::LiteralValue::Raw(number_spelling),
-                    }.into());
+                    rv.push(spelled(&number_spelling)?.into());
                     continue 'outer;
                 }
                 // Punctuation?
@@ -669,7 +605,7 @@ impl ::std::str::FromStr for TokenStream {
                         else {
                             Spacing::Alone
                         };
-                        rv.push(Punct::new(punct as char, sep).into());
+                        rv.push(Punct::from_char(punct as char, sep, crate::Span::call_site()).into());
                     }
                 }
                 else
@@ -679,9 +615,7 @@ impl ::std::str::FromStr for TokenStream {
             }
         }
 
-        Ok(TokenStream {
-            inner: group_delimiters(rv)?,
-            })
+        Ok(TokenStream::from_trees(group_delimiters(rv)?))
     }
 }
 
@@ -721,15 +655,15 @@ mod tests {
     {
         let rv = TokenStream::from_str("foo::bar<'a>").expect("Failed to parse");
 
-        let mut it = rv.inner.into_iter();
+        let mut it = rv.into_iter();
         assert_tt_matches!(it.next(), Ident::new("foo", Span::call_site()).into());
-        assert_tt_matches!(it.next(), Punct::new(':', Spacing::Joint).into());
-        assert_tt_matches!(it.next(), Punct::new(':', Spacing::Alone).into());
+        assert_tt_matches!(it.next(), Punct::from_char(':', Spacing::Joint, crate::Span::call_site()).into());
+        assert_tt_matches!(it.next(), Punct::from_char(':', Spacing::Alone, crate::Span::call_site()).into());
         assert_tt_matches!(it.next(), Ident::new("bar", Span::call_site()).into());
-        assert_tt_matches!(it.next(), Punct::new('<', Spacing::Alone).into());
-        assert_tt_matches!(it.next(), Punct::new('\'', Spacing::Joint).into());
+        assert_tt_matches!(it.next(), Punct::from_char('<', Spacing::Alone, crate::Span::call_site()).into());
+        assert_tt_matches!(it.next(), Punct::from_char('\'', Spacing::Joint, crate::Span::call_site()).into());
         assert_tt_matches!(it.next(), Ident::new("a", Span::call_site()).into());
-        assert_tt_matches!(it.next(), Punct::new('>', Spacing::Alone).into());
+        assert_tt_matches!(it.next(), Punct::from_char('>', Spacing::Alone, crate::Span::call_site()).into());
         assert_tt_matches!(it.next());
     }
 
@@ -738,25 +672,19 @@ mod tests {
     {
         let rv = TokenStream::from_str("0").expect("Failed to parse");
 
-        let mut it = rv.inner.into_iter();
-        assert_tt_matches!(it.next(), Literal {
-            span: Span::call_site(),
-            val: crate::token_tree::LiteralValue::Raw("0".into()),
-        }.into());
+        let mut it = rv.into_iter();
+        assert_tt_matches!(it.next(), Literal::from_spelling("0", Span::call_site()).unwrap().into());
         assert_tt_matches!(it.next());
     }
     #[test]
     fn tuple_index_method()
     {
         let rv = TokenStream::from_str("key . 1 . def_id").expect("Failed to parse");
-        let mut it = rv.inner.into_iter();
+        let mut it = rv.into_iter();
         assert_tt_matches!(it.next(), Ident::new("key", Span::call_site()).into());
-        assert_tt_matches!(it.next(), Punct::new('.', Spacing::Alone).into());
-        assert_tt_matches!(it.next(), Literal {
-            span: Span::call_site(),
-            val: crate::token_tree::LiteralValue::Raw("1".into()),
-        }.into());
-        assert_tt_matches!(it.next(), Punct::new('.', Spacing::Alone).into());
+        assert_tt_matches!(it.next(), Punct::from_char('.', Spacing::Alone, crate::Span::call_site()).into());
+        assert_tt_matches!(it.next(), Literal::from_spelling("1", Span::call_site()).unwrap().into());
+        assert_tt_matches!(it.next(), Punct::from_char('.', Spacing::Alone, crate::Span::call_site()).into());
         assert_tt_matches!(it.next(), Ident::new("def_id", Span::call_site()).into());
         assert_tt_matches!(it.next());
     }

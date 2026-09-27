@@ -1,7 +1,7 @@
 //! 
 
 #[derive(Clone,Copy,Debug)]
-pub struct Span(usize);
+pub struct Span(::std::num::NonZeroU32);
 impl !Send for Span {}
 impl !Sync for Span {}
 
@@ -28,7 +28,10 @@ impl Span
         unsafe { SPANS_COMPLETE = true; }
     }
     pub(crate) fn from_raw(idx: usize) -> Self {
-        Span(idx)
+        Span(::std::num::NonZeroU32::new(idx as u32 + 1).expect("span index overflow"))
+    }
+    fn index(&self) -> usize {
+        self.0.get() as usize - 1
     }
     /// The index the compiler knows this span by - echoed back so that a token
     /// this macro passes through keeps the resolution context it arrived with.
@@ -36,18 +39,18 @@ impl Span
     pub(crate) fn to_raw(&self) -> usize {
         match self.entry() {
         Some(v) => v.context,
-        None => self.0,
+        None => self.index(),
         }
     }
     fn entry(&self) -> Option<&'static RealSpan> {
-        unsafe { assert!(SPANS_COMPLETE); SPANS.get(self.0).and_then(|e| e.as_ref()) }
+        unsafe { assert!(SPANS_COMPLETE); SPANS.get(self.index()).and_then(|e| e.as_ref()) }
     }
     /// The definition behind this span; the mixed site has none of its own and
     /// is located at the call site, as upstream's is.
     fn real(&self) -> &'static RealSpan {
-        match self.entry().or_else(|| Span(1).entry()) {
+        match self.entry().or_else(|| Span::from_raw(1).entry()) {
         Some(v) => v,
-        None => panic!("Undefined span #{}", self.0),
+        None => panic!("Undefined span #{}", self.index()),
         }
     }
     /// An empty span at one position of this span's file, in this span's context.
@@ -60,7 +63,7 @@ impl Span
             ofs: ofs..ofs,
             context: parent.context,
             }));
-        Span(lh.len() - 1)
+        Span::from_raw(lh.len() - 1)
     }
 }
 
@@ -78,23 +81,23 @@ impl Span
     }
     pub fn call_site() -> Span {
         Self::require_available();
-        Span(1)
+        Span::from_raw(1)
     }
     //pub fn def_site() -> Span {
-    //    Span(1)
+    //    Span::from_raw(1)
     //}
     // 1.45
     pub fn mixed_site() -> Span {
         Self::require_available();
-        Span(0)
+        Span::from_raw(0)
     }
     // 1.45
     pub fn resolved_at(&self, _other: Span) -> Span {
-        Span(0)
+        Span::from_raw(0)
     }
     // 1.45
     pub fn located_at(&self, _other: Span) -> Span {
-        Span(0)
+        Span::from_raw(0)
     }
 
     // 1.66
@@ -137,10 +140,10 @@ impl Span
 
     // 1.88
     pub fn local_file(&self) -> Option<::std::path::PathBuf> {
-        match unsafe { assert!(SPANS_COMPLETE); SPANS.get(self.0) } {
+        match unsafe { assert!(SPANS_COMPLETE); SPANS.get(self.index()) } {
         Some(&Some(ref v)) => Some(v.file.path()),
         Some(&None) => None,
-        _ => panic!("Undefined span #{}", self.0),
+        _ => panic!("Undefined span #{}", self.index()),
         }
     }
 }

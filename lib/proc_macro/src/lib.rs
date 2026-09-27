@@ -27,6 +27,8 @@ macro_rules! note {
 }
 
 mod span;
+mod symbol;
+mod escape;
 mod token_tree;
 /// Parse a TokenStream from a string
 mod lex;
@@ -40,10 +42,110 @@ pub mod tracked_env;
 pub mod tracked_path;
 
 pub mod token_stream {
+    use ::std::num::NonZeroU32;
 
-    #[derive(Debug,Clone,Default)]
-    pub struct TokenStream {
-        pub(crate) inner: Vec<crate::TokenTree>,
+    /// A handle to a stream in this process's stream store, as upstream's client
+    /// holds a handle to the server's: `None` is the empty stream, a clone shares
+    /// the stream, and a write to a shared one copies it first.
+    pub struct TokenStream(Option<NonZeroU32>);
+    impl !Send for TokenStream {}
+    impl !Sync for TokenStream {}
+
+    struct Slot {
+        trees: Vec<crate::TokenTree>,
+        handles: u32,
+    }
+
+    static mut SLOTS: Vec<Option<Slot>> = Vec::new();
+    static mut FREE: Vec<u32> = Vec::new();
+
+    fn slot(handle: NonZeroU32) -> &'static mut Slot {
+        // SAFE: A procedural macro runs single-threaded, and the stream is !Send
+        unsafe { SLOTS[handle.get() as usize - 1].as_mut().expect("dead token stream handle") }
+    }
+
+    impl TokenStream {
+        fn allocate(trees: Vec<crate::TokenTree>) -> NonZeroU32 {
+            let new = Slot { trees, handles: 1 };
+            // SAFE: See `slot`
+            unsafe {
+                if let Some(index) = FREE.pop() {
+                    SLOTS[index as usize] = Some(new);
+                    NonZeroU32::new(index + 1).expect("stream handle")
+                }
+                else {
+                    SLOTS.push(Some(new));
+                    NonZeroU32::new(SLOTS.len() as u32).expect("stream handle")
+                }
+            }
+        }
+        pub(crate) fn from_trees(trees: Vec<crate::TokenTree>) -> TokenStream {
+            if trees.is_empty() {
+                return TokenStream(None);
+            }
+            TokenStream(Some(TokenStream::allocate(trees)))
+        }
+        pub(crate) fn trees(&self) -> &[crate::TokenTree] {
+            match self.0 {
+            Some(handle) => &slot(handle).trees,
+            None => &[],
+            }
+        }
+        pub(crate) fn trees_mut(&mut self) -> &mut Vec<crate::TokenTree> {
+            match self.0 {
+            Some(handle) if slot(handle).handles == 1 => {},
+            Some(handle) => {
+                let copy = slot(handle).trees.clone();
+                *self = TokenStream(Some(TokenStream::allocate(copy)));
+                },
+            None => {
+                self.0 = Some(TokenStream::allocate(Vec::new()));
+                },
+            }
+            &mut slot(self.0.expect("stream handle")).trees
+        }
+        pub(crate) fn into_trees(self) -> Vec<crate::TokenTree> {
+            match self.0 {
+            Some(handle) if slot(handle).handles == 1 => ::std::mem::take(&mut slot(handle).trees),
+            Some(_) => self.trees().to_vec(),
+            None => Vec::new(),
+            }
+        }
+    }
+
+    impl Clone for TokenStream {
+        fn clone(&self) -> TokenStream {
+            if let Some(handle) = self.0 {
+                slot(handle).handles += 1;
+            }
+            TokenStream(self.0)
+        }
+    }
+    impl Drop for TokenStream {
+        fn drop(&mut self) {
+            if let Some(handle) = self.0 {
+                let entry = slot(handle);
+                entry.handles -= 1;
+                if entry.handles == 0 {
+                    // SAFE: See `slot`
+                    unsafe {
+                        SLOTS[handle.get() as usize - 1] = None;
+                        FREE.push(handle.get() - 1);
+                    }
+                }
+            }
+        }
+    }
+    impl Default for TokenStream {
+        fn default() -> TokenStream {
+            TokenStream(None)
+        }
+    }
+    impl ::std::fmt::Debug for TokenStream {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+            f.write_str("TokenStream ")?;
+            f.debug_list().entries(self.trees()).finish()
+        }
     }
 
     #[derive(Clone)]
@@ -60,13 +162,11 @@ pub mod token_stream {
     impl TokenStream {
         // 1.29
         pub fn new() -> TokenStream {
-            TokenStream {
-                inner: Vec::new(),
-            }
+            TokenStream(None)
         }
         // 1.29
         pub fn is_empty(&self) -> bool {
-            self.inner.is_empty()
+            self.trees().is_empty()
         }
     }
 
@@ -77,7 +177,7 @@ pub mod token_stream {
         type IntoIter = IntoIter;
         fn into_iter(self) -> IntoIter {
             IntoIter {
-                it: self.inner.into_iter(),
+                it: self.into_trees().into_iter(),
             }
         }
     }
@@ -86,7 +186,7 @@ pub mod token_stream {
     {
         fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
             let mut joint = false;
-            for (i, token) in self.inner.iter().enumerate() {
+            for (i, token) in self.trees().iter().enumerate() {
                 if i != 0 && !joint {
                     f.write_str(" ")?;
                 }
@@ -123,9 +223,7 @@ pub mod token_stream {
     impl From<crate::TokenTree> for TokenStream
     {
         fn from(t: crate::TokenTree) -> TokenStream {
-            TokenStream {
-                inner: vec![t],
-            }
+            TokenStream::from_trees(vec![t])
         }
     }
 
@@ -142,9 +240,7 @@ pub mod token_stream {
     {
         fn from_iter<I: IntoIterator<Item = crate::TokenTree>>(tokens: I) -> Self
         {
-            let mut rv = TokenStream::new();
-            rv.extend(tokens);
-            rv
+            TokenStream::from_trees(tokens.into_iter().collect())
         }
     }
 
@@ -152,8 +248,16 @@ pub mod token_stream {
     impl ::std::iter::Extend<TokenStream> for TokenStream
     {
         fn extend<I: IntoIterator<Item = TokenStream>>(&mut self, streams: I) {
-            for i in streams {
-                self.inner.extend(i.inner.into_iter())
+            for stream in streams {
+                if stream.is_empty() {
+                    continue;
+                }
+                if self.is_empty() {
+                    *self = stream;
+                    continue;
+                }
+                let trees = stream.into_trees();
+                self.trees_mut().extend(trees);
             }
         }
     }
@@ -162,7 +266,10 @@ pub mod token_stream {
     {
         fn extend<I: IntoIterator<Item = crate::TokenTree>>(&mut self, trees: I)
         {
-            self.inner.extend(trees)
+            let mut trees = trees.into_iter().peekable();
+            if trees.peek().is_some() {
+                self.trees_mut().extend(trees);
+            }
         }
     }
 }

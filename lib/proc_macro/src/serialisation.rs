@@ -32,8 +32,8 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
                         );
                     continue
                     },
-                Token::EndOfStream if end == "" => return TokenStream { inner: toks, },
-                Token::Symbol(ref s) if s == end => return TokenStream { inner: toks, },
+                Token::EndOfStream if end == "" => return TokenStream::from_trees(toks),
+                Token::Symbol(ref s) if s == end => return TokenStream::from_trees(toks),
                 Token::Symbol(ref s) if s == "" => panic!("Unexpected end-of-stream marker"),
                 Token::EndOfStream => panic!("Unexpected end-of-stream marker"),
                 Token::Symbol(sym) => {
@@ -47,58 +47,38 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
                         let mut c = it.next().unwrap();
                         while let Some(nc) = it.next()
                         {
-                            let mut p = Punct::new(c, Spacing::Joint);
-                            p.span = *span;
-                            toks.push(p.into());
+                            toks.push(Punct::from_char(c, Spacing::Joint, *span).into());
                             c = nc;
                         }
-                        let mut p = Punct::new(c, Spacing::Alone);
-                        p.span = *span;
-                        p.into()
+                        Punct::from_char(c, Spacing::Alone, *span).into()
                         },
                     }
                     },
                 Token::Ident(val) => match val.strip_prefix("r#") {
-                    Some(name) => Ident { span: *span, is_raw: true, val: name.to_owned() }.into(),
-                    None => Ident { span: *span, is_raw: false, val }.into(),
+                    Some(name) => Ident::from_name(name, true, *span).into(),
+                    None => Ident::from_name(&val, false, *span).into(),
                     },
                 Token::Lifetime(val) => {
-                    let mut p = Punct::new('\'', Spacing::Joint);
-                    p.span = *span;
-                    toks.push(p.into());
+                    toks.push(Punct::from_char('\'', Spacing::Joint, *span).into());
                     match val.strip_prefix("r#") {
-                        Some(name) => Ident { span: *span, is_raw: true, val: name.to_owned() }.into(),
-                        None => Ident { span: *span, is_raw: false, val }.into(),
+                        Some(name) => Ident::from_name(name, true, *span).into(),
+                        None => Ident::from_name(&val, false, *span).into(),
                         }
                     },
-                Token::String(val) => Literal {
-                    span: *span,
-                    val: crate::token_tree::LiteralValue::String(val)
-                    }.into(),
-                Token::ByteString(val) => Literal {
-                    span: *span,
-                    val: crate::token_tree::LiteralValue::ByteString(val)
-                    }.into(),
-                Token::Char(ch) => Literal {
-                    span: *span,
-                    val: crate::token_tree::LiteralValue::CharLit(ch),
-                    }.into(),
-                Token::Unsigned(val, ty) => Literal {
-                    span: *span,
-                    val: crate::token_tree::LiteralValue::UnsignedInt(val, ty),
-                    }.into(),
-                Token::Signed(val, ty) => Literal {
-                    span: *span,
-                    val: crate::token_tree::LiteralValue::SignedInt(val, ty),
-                    }.into(),
-                Token::Float(val, ty) => Literal {
-                    span: *span,
-                    val: crate::token_tree::LiteralValue::Float(val, ty),
-                    }.into(),
-                Token::RawLiteral(val) => Literal {
-                    span: *span,
-                    val: crate::token_tree::LiteralValue::Raw(val),
-                    }.into(),
+                Token::String(val) => spanned(Literal::string(&val), *span),
+                Token::ByteString(val) => spanned(Literal::byte_string(&val), *span),
+                Token::Char(ch) => spanned(Literal::character(ch), *span),
+                Token::Unsigned(val, ty) => spanned(integer(&val.to_string(), ty, "u"), *span),
+                Token::Signed(val, ty) => spanned(integer(&val.to_string(), ty, "i"), *span),
+                Token::Float(val, ty) => spanned(match ty {
+                    32 => Literal::f32_suffixed(val as f32),
+                    64 => Literal::f64_suffixed(val),
+                    _ => Literal::f64_unsuffixed(val),
+                    }, *span),
+                Token::RawLiteral(val) => match Literal::from_spelling(&val, *span) {
+                    Some(literal) => literal.into(),
+                    None => panic!("Raw literal `{}` from the compiler is no literal", val),
+                    },
                 };
             toks.push(tt);
         }
@@ -109,9 +89,31 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
     /// its contents carry on updating the same running span.
     fn group<R: ::std::io::Read>(delimiter: Delimiter, s: &mut Reader<R>, end: &'static str, span: &mut Span) -> Group {
         let open = *span;
-        let mut g = Group::new(delimiter, get_subtree(s, end, span));
-        g.span = open;
-        g
+        let stream = get_subtree(s, end, span);
+        Group {
+            delimiter,
+            stream,
+            span: crate::token_tree::DelimSpan { open, close: *span, entire: open },
+        }
+    }
+
+    fn spanned(mut literal: Literal, span: Span) -> TokenTree {
+        literal.set_span(span);
+        literal.into()
+    }
+
+    /// An integer literal of the compiler's value and width code (0 unsuffixed,
+    /// 1 pointer-sized, else the bit width).
+    fn integer(digits: &str, width: u8, sign: &str) -> Literal {
+        let suffix = match width {
+            0 => String::new(),
+            1 => format!("{}size", sign),
+            bits => format!("{}{}", sign, bits),
+        };
+        match Literal::from_spelling(&format!("{}{}", digits, suffix), Span::call_site()) {
+            Some(literal) => literal,
+            None => panic!("Integer `{}{}` from the compiler is no literal", digits, suffix),
+        }
     }
 }
 
@@ -136,14 +138,13 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
 
     fn inner<T: ::std::io::Write>(s: &mut Writer<T>, ts: TokenStream, last: &mut usize)
     {
-        use crate::token_tree::LiteralValue;
-        let mut it = ts.inner.into_iter().peekable();
+        let mut it = ts.into_trees().into_iter().peekable();
         while let Some(t) = it.next()
         {
             match t
             {
             TokenTree::Group(sg) => {
-                set_span(s, last, sg.span);
+                set_span(s, last, sg.span.open);
                 match sg.delimiter
                 {
                 Delimiter::None => {},
@@ -152,7 +153,7 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                 Delimiter::Bracket => s.write_sym_1('['),
                 }
                 inner(s, sg.stream, last);
-                set_span(s, last, sg.span);
+                set_span(s, last, sg.span.close);
                 match sg.delimiter
                 {
                 Delimiter::None => {},
@@ -164,38 +165,38 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
             TokenTree::Ident(i) => {
                 set_span(s, last, i.span);
                 if i.is_raw {
-                    s.write_ent(Token::Ident(format!("r#{}", i.val)));
+                    s.write_ent(Token::Ident(format!("r#{}", i.name())));
                 }
                 else {
-                    s.write_ent(Token::Ident(i.val));
+                    s.write_ent(Token::Ident(i.name().to_owned()));
                 }
                 },
             TokenTree::Punct(p) => {
                 set_span(s, last, p.span);
-                if p.ch == '\'' {
+                if p.as_char() == '\'' {
                     // Get next, must be ident, push lifetime
                     let v = match it.next()
                         {
-                        Some(TokenTree::Ident(Ident { val: v, is_raw: true, .. })) => format!("r#{}", v),
-                        Some(TokenTree::Ident(Ident { val: v, .. })) => v,
+                        Some(TokenTree::Ident(ident)) if ident.is_raw => format!("r#{}", ident.name()),
+                        Some(TokenTree::Ident(ident)) => ident.name().to_owned(),
                         _ => panic!("Punct('\\'') not followed by an ident"),
                         };
                     s.write_ent(Token::Lifetime(v));
                 }
-                else if p.spacing == Spacing::Alone {
-                    s.write_sym_1(p.ch);
+                else if p.spacing() == Spacing::Alone {
+                    s.write_sym_1(p.as_char());
                 }
                 else {
                     // Joint punct up to the first Alone one, or the first token that is no punct
                     let mut chars = String::new();
-                    chars.push(p.ch);
+                    chars.push(p.as_char());
                     loop
                     {
                         match it.peek()
                         {
-                        Some(TokenTree::Punct(next)) if next.ch != '\'' => {
-                            chars.push(next.ch);
-                            let joint = next.spacing == Spacing::Joint;
+                        Some(TokenTree::Punct(next)) if next.as_char() != '\'' => {
+                            chars.push(next.as_char());
+                            let joint = next.spacing() == Spacing::Joint;
                             it.next();
                             if !joint {
                                 break;
@@ -207,18 +208,9 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                     s.write_sym(chars.as_bytes());
                 }
                 },
-            TokenTree::Literal(Literal { span: sp, val: v }) => {
-                set_span(s, last, sp);
-                s.write_ent(match v
-                {
-                LiteralValue::String(v) => Token::String(v),
-                LiteralValue::ByteString(v) => Token::ByteString(v),
-                LiteralValue::CharLit(v) => Token::Char(v),
-                LiteralValue::UnsignedInt(v, sz) => Token::Unsigned(v, sz),
-                LiteralValue::SignedInt(v, sz)   => Token::Signed(v, sz),
-                LiteralValue::Float(v, sz)       => Token::Float(v, sz),
-                LiteralValue::Raw(v)             => Token::RawLiteral(v),
-                })
+            TokenTree::Literal(literal) => {
+                set_span(s, last, literal.span);
+                s.write_ent(Token::RawLiteral(literal.to_string()));
                 },
             }
         }
@@ -252,14 +244,12 @@ mod write_tests {
     fn symbols()
     {
         let mut out = Vec::new();
-        super::send_token_stream(&mut out, TokenStream {
-            inner: vec![
+        super::send_token_stream(&mut out, TokenStream::from_trees(vec![
                 Punct::new('<', Spacing::Joint).into(),
                 Punct::new('<', Spacing::Alone).into(),
 
                 Punct::new('<', Spacing::Alone).into(),
-            ]
-            });
+            ]));
 
         assert_eq!(out, &[
             0,2,b'<',b'<',
@@ -272,12 +262,10 @@ mod write_tests {
     fn lifetime()
     {
         let mut out = Vec::new();
-        super::send_token_stream(&mut out, TokenStream {
-            inner: vec![
+        super::send_token_stream(&mut out, TokenStream::from_trees(vec![
                 Punct::new('\'', Spacing::Joint).into(),
                 Ident::new("a", Span::call_site()).into(),
-            ]
-            });
+            ]));
 
         assert_eq!(out, &[
             2, 1, b'a', // Lifetime
@@ -315,7 +303,7 @@ mod read_tests {
             2, 1, b'a', // Lifetime
             0,0,    // Terminator
             ][..]);
-        let mut it = rv.inner.into_iter();
+        let mut it = rv.into_iter();
         assert_tt_matches!(it.next(), Punct::new('\'', Spacing::Joint).into());
         assert_tt_matches!(it.next(), Ident::new("a", Span::call_site()).into());
         assert_tt_matches!(it.next());
