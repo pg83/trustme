@@ -397,17 +397,17 @@ namespace {
 }
 
 extern "C" {
-    void* malloc(size_t n) {
+    void* malloc(size_t n) __THROW {
         return allocate(n, 16);
     }
 
-    void free(void* p) {
+    void free(void* p) __THROW {
         if (p) {
             release(p);
         }
     }
 
-    void* calloc(size_t count, size_t size) {
+    void* calloc(size_t count, size_t size) __THROW {
         size_t total;
         if (__builtin_mul_overflow(count, size, &total)) {
             errno = ENOMEM;
@@ -420,7 +420,7 @@ extern "C" {
         return p;
     }
 
-    void* realloc(void* p, size_t n) {
+    void* realloc(void* p, size_t n) __THROW {
         if (!p) {
             return allocate(n, 16);
         }
@@ -441,15 +441,15 @@ extern "C" {
         return fresh;
     }
 
-    void* memalign(size_t align, size_t n) {
+    void* memalign(size_t align, size_t n) __THROW {
         return allocate(n, align < 16 ? 16 : align);
     }
 
-    void* aligned_alloc(size_t align, size_t n) {
+    void* aligned_alloc(size_t align, size_t n) __THROW {
         return memalign(align, n);
     }
 
-    int posix_memalign(void** out, size_t align, size_t n) {
+    int posix_memalign(void** out, size_t align, size_t n) __THROW {
         void* p = memalign(align, n);
         if (!p) {
             return ENOMEM;
@@ -458,15 +458,15 @@ extern "C" {
         return 0;
     }
 
-    void* valloc(size_t n) {
+    void* valloc(size_t n) __THROW {
         return memalign(OS_PAGE, n);
     }
 
-    void* pvalloc(size_t n) {
+    void* pvalloc(size_t n) __THROW {
         return memalign(OS_PAGE, (n + OS_PAGE - 1) & ~(OS_PAGE - 1));
     }
 
-    size_t malloc_usable_size(void* p) {
+    size_t malloc_usable_size(void* p) __THROW {
         return p ? usableSize(p) : 0;
     }
 }
