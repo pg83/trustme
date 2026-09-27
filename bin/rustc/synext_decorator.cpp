@@ -104,6 +104,12 @@ namespace {
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
     };
 
+    struct CHandlerExportName: public ExpandDecorator {
+        AttrStage stage() const override;
+
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
+
     struct CHandlerLinkSection: public ExpandDecorator {
         AttrStage stage() const override;
 
@@ -1778,6 +1784,7 @@ void RegisterBuiltinDecorators(ExpandRegistry& registry) {
     registry.addDecorator<CHandlerRustcLayoutScalarValidRangeStart>("rustc_layout_scalar_valid_range_start");
     registry.addDecorator<CHandlerRustcLayoutScalarValidRangeEnd>("rustc_layout_scalar_valid_range_end");
     registry.addDecorator<CHandlerLinkName>("link_name");
+    registry.addDecorator<CHandlerExportName>("export_name");
     registry.addDecorator<CHandlerLinkSection>("link_section");
     registry.addDecorator<CHandlerLink>("link");
     registry.addDecorator<CHandlerLinkage>("linkage");
@@ -2259,6 +2266,20 @@ auto CHandlerLinkName::handle(const Span& sp, const ASTAttribute& mi, const Wire
         ASSERT_BUG(sp, st->markings.linkName == "", StringView("Duplicate #[link_name] attributes"));
         st->markings.linkName = linkName;
     } else {
+    }
+}
+
+auto CHandlerExportName::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerExportName::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    auto exportName = mi.parseEqualsString(wb, crate, mod);
+
+    if (auto* fcn = i.opt_Function()) {
+        fcn->markings.linkName = exportName;
+    } else if (auto* st = i.opt_Static()) {
+        st->markings.linkName = exportName;
     }
 }
 
