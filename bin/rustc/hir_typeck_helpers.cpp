@@ -761,6 +761,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
     bool isSameImpl(const SolverImpl& left, const SolverImpl& right) const;
 
     bool paramEnvCandidateIsNonGlobal(const Candidate& candidate) const;
+    bool candidateIsTrivialBuiltin(const Candidate& candidate, const HIRSimplePath& trait) const;
 
     void pushCandidate(size_t frameIndex, SolverImpl impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl = nullptr, HIRPathParams markerImplParams = {}, bool autoBuiltin = false, CandidateSource source = CandidateSource::Other, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {}, bool preserveAssemblyCandidate = false);
 
@@ -11918,6 +11919,24 @@ auto NextTraitGoalEvaluator::paramEnvCandidateIsNonGlobal(const Candidate& candi
     return false;
 }
 
+auto NextTraitGoalEvaluator::candidateIsTrivialBuiltin(const Candidate& candidate, const HIRSimplePath& trait) const -> bool {
+    if (candidate.source != CandidateSource::Builtin || candidate.autoBuiltin || candidate.markerImpl) {
+        return false;
+    }
+    const auto* type = resolve_.resolveType(candidate.impl.type);
+    const auto primitiveIsTrivial = [&]() {
+        return type->is_Primitive() && type->as_Primitive() != HIRCoreType::Str;
+    };
+    if (!resolve_.langSized().components().empty() && trait == resolve_.langSized()) {
+        return primitiveIsTrivial() || type->is_Diverge() || type->is_Borrow() || type->is_Pointer() || type->is_Array() || type->is_NamedFunction() || type->is_Function() || type->is_NodeType();
+    }
+    if ((!resolve_.langCopy().components().empty() && trait == resolve_.langCopy()) || (!resolve_.langClone().components().empty() && trait == resolve_.langClone())) {
+        return primitiveIsTrivial() || type->is_Diverge() || type->is_Pointer() || type->is_NamedFunction() || type->is_Function()
+            || (type->is_Borrow() && type->as_Borrow().type == HIRBorrowType::Shared);
+    }
+    return false;
+}
+
 auto NextTraitGoalEvaluator::pushCandidate(size_t frameIndex, SolverImpl impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool headNormalizationAmbiguity, ThinVector<SolverTypeEquality> headEqualities, ThinVector<SolverValueEquality> headValueEqualities, bool preserveAssemblyCandidate) -> void {
     auto& candidates = frames[frameIndex]->candidates;
     if (!preserveAssemblyCandidate) {
@@ -16751,7 +16770,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (source == CandidateSource::ParamEnv) {
             continue;
         }
-        if (!provenNonGlobalParamEnv || source == CandidateSource::AliasBound) {
+        if (!provenNonGlobalParamEnv || source == CandidateSource::AliasBound || candidateIsTrivialBuiltin(*frame.candidates[i], trait)) {
             evaluateCandidateAt(i);
         }
     }
@@ -16802,6 +16821,16 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     if (frame.viable.empty()) {
         DEBUG(StringView("next-solver: no viable response"));
         return emitNoViable();
+    }
+
+    for (auto* candidate : frame.viable) {
+        if (candidate->certainty == Certainty::Proven && candidateIsTrivialBuiltin(*candidate, trait)) {
+            frame.viable.mut(0) = candidate;
+            while (frame.viable.length() > 1) {
+                frame.viable.popBack();
+            }
+            break;
+        }
     }
 
     const bool hasNonGlobalParamEnv = std::any_of(frame.viable.begin(), frame.viable.end(), [&](const Candidate* candidate) {
