@@ -1442,6 +1442,13 @@ ahash_0_8_12 = add_project_test(
     # proof from opt-level 2 with fat LTO; our backend has no LTO, so the
     # calls into ahash's rlib stay opaque, may unwind, and the link fails.
     adapter_args=["--xfail-target", "nopanic"],
+    # ahash's [profile.test] asks for opt-level 2, which our cargo honours, so
+    # its whole dev-dependency graph (criterion among it) goes through the C++
+    # compiler at -O2, and the nopanic target is built a second time by its
+    # own expected-failure run. 3m53s alone at a load average of 3 - most of
+    # the five-minute budget - and killed at five minutes in three full
+    # corpus runs at load averages between 20 and 40.
+    timeout=NESTED_PROJECT_TIMEOUT,
 )
 
 humantime_2_4_0 = add_project_test(
