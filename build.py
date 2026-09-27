@@ -1218,6 +1218,13 @@ crossbeam_channel_0_5_17 = add_project_test(
     manifest="crossbeam-channel",
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/crossbeam_channel_0_5_17/Cargo.lock",
+    # golang.rs's select2 counts the whole process's net allocations through a
+    # counting #[global_allocator] and requires the second round to grow them
+    # by at most N + 10000 bytes. The 25 other tests of that binary run on
+    # other threads meanwhile and allocate through the same counter, so the
+    # bound holds only when none of them is mid-allocation across the window:
+    # measured 5/5 alone (`select2::main --exact`), 3/5 with the rest.
+    adapter_args=["--", "--skip", "select2::main"],
     timeout=NESTED_PROJECT_TIMEOUT,
 )
 
