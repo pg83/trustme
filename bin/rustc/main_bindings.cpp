@@ -1399,7 +1399,9 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 auto name = RcString::newInterned(desc, pos ? pos - desc : strlen(desc));
                 auto& spec = settings.crateOverride(name);
                 spec.isExtern = true;
-                spec.target = pos ? RcString::newInterned(pos + 1) : RcString{};
+                if (pos) {
+                    spec.target = RcString::newInterned(pos + 1);
+                }
             } else if (const auto* nameStr = checkWithArg("crate-tag")) {
                 this->crateNameSuffix = nameStr;
             } else if (const auto* nameStr = checkWithArg("crate-name")) {

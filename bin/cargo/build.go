@@ -917,6 +917,7 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 
 	args = append(args, b.commonCompilerArgs(pkg, output, unit.isHost, false)...)
 	args = append(args, "--crate-name", targetCompileName(target), "--crate-type", crateType(target))
+	args = append(args, procMacroPreludeArgs(target)...)
 
 	suffix := b.crateSuffix(pkg)
 
@@ -2235,4 +2236,14 @@ func onOff(value bool) string {
 	}
 
 	return "off"
+}
+
+// procMacroPreludeArgs import `proc_macro` into a proc-macro target's extern
+// prelude, as Cargo does for the library and for its test build alike.
+func procMacroPreludeArgs(target *Target) []string {
+	if !target.procMacro {
+		return nil
+	}
+
+	return []string{"--extern", "proc_macro"}
 }

@@ -502,3 +502,16 @@ func TestTestProfileInheritsDevAndTakesTheManifestTable(t *testing.T) {
 		t.Fatalf("custom profile = %+v", fast)
 	}
 }
+
+// indoc's unit tests build its proc-macro library as a test binary, where
+// only Cargo's `--extern proc_macro` puts `proc_macro` in the extern prelude.
+func TestProcMacroTargetImportsProcMacro(t *testing.T) {
+	library := &Target{kind: "lib", name: "m", procMacro: true, test: true}
+	if got := strings.Join(procMacroPreludeArgs(library), " "); got != "--extern proc_macro" {
+		t.Fatalf("proc-macro target args = %q", got)
+	}
+	plain := &Target{kind: "lib", name: "p", test: true}
+	if got := procMacroPreludeArgs(plain); len(got) != 0 {
+		t.Fatalf("plain library args = %q", got)
+	}
+}
