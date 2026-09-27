@@ -199,6 +199,8 @@ namespace {
         void sendSpan(const Ident::Hygiene& h);
         void sendSpan(const Ident::Hygiene& h, const Span& sp);
 
+        void sendSpanRef(size_t index);
+
         bool attrIsUsed(const RcString& n) const;
 
         virtual Position getPosition() const override;
@@ -239,6 +241,7 @@ namespace {
         const Settings& settings;
         ProcMacroInv& pmi;
         bool emitAllAttrs;
+        Ident::Hygiene groupContext;
         bool skipDeriveAttrs = false;
         const ASTAttribute* invokedAttr = nullptr;
 
@@ -717,7 +720,7 @@ Token ProcMacroInv::realGetToken_() {
         }
         const auto index = this->recvV128u();
         this->receivedFromInput = index >= 2 && index - 2 < spanContexts.length();
-        this->receivedHygiene = this->receivedFromInput && spanContexts[index - 2] != Ident::Hygiene() ? spanContexts[index - 2] : callSiteHygiene;
+        this->receivedHygiene = this->receivedFromInput ? spanContexts[index - 2] : callSiteHygiene;
         v = this->recvU8();
     }
 
@@ -1203,9 +1206,6 @@ auto ProcMacroInv::sendSpanDef(size_t index, const Span& sp) -> void {
    out of an AST, or one made by an expansion) is the invocation's. */
 auto ProcMacroInv::spanFor(const Ident::Hygiene& h, const Span& sp) -> size_t {
     const Span& at = cast<const SpanInnerSource>(sp.get()) ? sp : parentSpan;
-    if (h == Ident::Hygiene() && at.get() == parentSpan.get()) {
-        return 1;
-    }
     const auto key = reinterpret_cast<u64>(at.get());
     SpanSlot** head = spanSlots.find(key);
     for (const auto* slot = head ? *head : nullptr; slot; slot = slot->next) {
@@ -1226,11 +1226,18 @@ auto ProcMacroInv::spanFor(const Ident::Hygiene& h, const Span& sp) -> size_t {
 }
 
 auto ProcMacroInv::sendSpan(const Ident::Hygiene& h) -> void {
+    if (h == Ident::Hygiene()) {
+        this->sendSpanRef(1);
+        return;
+    }
     this->sendSpan(h, parentSpan);
 }
 
 auto ProcMacroInv::sendSpan(const Ident::Hygiene& h, const Span& sp) -> void {
-    const auto index = this->spanFor(h, sp);
+    this->sendSpanRef(this->spanFor(h, sp));
+}
+
+auto ProcMacroInv::sendSpanRef(size_t index) -> void {
     if (index == lastSentSpan) {
         return;
     }
@@ -1294,7 +1301,7 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_INTERPOLATED_VIS:
             break;
         default:
-            pmi.sendSpan(Ident::Hygiene(), at);
+            pmi.sendSpan(groupContext, at);
             break;
     }
     switch (tok.type()) {
@@ -1770,9 +1777,12 @@ auto ProcMacroVisitor::visitTokentree(const ::TokenTree& tt) -> void {
     if (tt.isToken()) {
         visitToken(tt.tok());
     } else {
+        const auto outer = groupContext;
+        groupContext = tt.hygiene();
         for (size_t i = 0; i < tt.size(); i++) {
             visitTokentree(tt[i]);
         }
+        groupContext = outer;
     }
 }
 
