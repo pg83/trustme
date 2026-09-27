@@ -6935,7 +6935,12 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
     } else if (name == "float_to_int_unchecked") {
         const auto& srcTy = params.types.at(0);
         const auto& dstTy = params.types.at(1);
-        if (this->typeIsEmulatedI128(dstTy)) {
+        if (this->typeIsEmulatedI128(dstTy) && srcTy != HIRCoreType::F128) {
+            emitLvalue(e.retVal);
+            of << StringView(dstTy == HIRCoreType::I128 ? " = cast_float_to_i128(" : " = cast_float_to_u128(");
+            emitParam(e.args.at(0));
+            of << StringView(")");
+        } else if (this->typeIsEmulatedI128(dstTy)) {
             of << StringView("abort()");
         } else if (srcTy == HIRCoreType::F128) {
             emitLvalue(e.retVal);
