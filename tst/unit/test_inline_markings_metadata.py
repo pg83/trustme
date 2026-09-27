@@ -15,7 +15,7 @@ def run(command: list[str], env: dict[str, str]) -> None:
 
 def mangled_symbol(generated: str, function: str) -> str:
     match = re.search(
-        rf"^#define (ZR[0-9a-f]{{16}}) {re.escape(function)}$",
+        rf"^[^\n]*\b(ZR[0-9a-f]{{16}})\([^;{{}}]*\) asm\(\"{re.escape(function)}\"\);$",
         generated,
         re.MULTILINE,
     )

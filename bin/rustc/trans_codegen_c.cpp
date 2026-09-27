@@ -287,7 +287,9 @@ namespace {
 
         void emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) override;
 
-        void emitFunctionLinkageAlias(const HIRPath& p, const HIRFunction& item);
+        void emitLinkageLabel(const char* name, size_t length);
+
+        void emitFunctionLinkageLabel(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef);
 
         void emitFunctionDefinitionPrefix(const HIRFunction& item, bool isExternDef);
 
@@ -2212,11 +2214,7 @@ auto CodeGeneratorC::emitStaticExt(const HIRPath& p, const HIRStatic& item, cons
     }
     emitStaticTy(type, p, /*is_proto=*/true, item.explicitAlignment);
     if (linkageName != "") {
-        if (TargetGetCurSpec(wb_).osName == "macos") {
-            of << StringView(" asm(\"_") << linkageName << StringView("\")");
-        } else {
-            of << StringView(" asm(\"") << linkageName << StringView("\")");
-        }
+        emitLinkageLabel(linkageName.c_str(), linkageName.size());
     }
     of << StringView(";\n");
 
@@ -2841,11 +2839,7 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
     }
     emitFunctionHeader(p, item, params);
     if (item.linkage.name != "") {
-        if (TargetGetCurSpec(wb_).osName == "macos") {
-            of << StringView(" asm(\"_") << item.linkage.name << StringView("\")");
-        } else {
-            of << StringView(" asm(\"") << item.linkage.name << StringView("\")");
-        }
+        emitLinkageLabel(item.linkage.name.c_str(), item.linkage.name.size());
     }
     of << StringView(";\n\n");
 
@@ -2856,9 +2850,21 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
     mirRes = nullptr;
 }
 
-auto CodeGeneratorC::emitFunctionLinkageAlias(const HIRPath& p, const HIRFunction& item) -> void {
+auto CodeGeneratorC::emitLinkageLabel(const char* name, size_t length) -> void {
+    of << StringView(" asm(");
+    if (TargetGetCurSpec(wb_).osName == "macos") {
+        of << StringView("\"_\" ");
+    }
+    printEscapedStringInner(name, name + length);
+    of << StringView(")");
+}
+
+auto CodeGeneratorC::emitFunctionLinkageLabel(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef) -> void {
     if (item.linkage.name != "" && item.linkage.name != "main") {
-        of << StringView("#define ") << TransMangleValue(p) << StringView(" ") << item.linkage.name << StringView("\n");
+        emitFunctionDefinitionPrefix(item, isExternDef);
+        emitFunctionHeader(p, item, params);
+        emitLinkageLabel(item.linkage.name.c_str(), item.linkage.name.size());
+        of << StringView(";\n");
     }
 }
 
@@ -2887,9 +2893,11 @@ auto CodeGeneratorC::emitFunctionProto(const HIRPath& p, const HIRFunction& item
     mirRes = &topMirRes;
 
     TRACE_FUNCTION_F(p);
-    emitFunctionLinkageAlias(p, item);
     emitFunctionDefinitionPrefix(item, isExternDef);
     emitFunctionHeader(p, item, params);
+    if (item.linkage.name != "" && item.linkage.name != "main") {
+        emitLinkageLabel(item.linkage.name.c_str(), item.linkage.name.size());
+    }
     of << StringView(";\n\n");
 
     if (crate.functionTracksCaller(sp, p, item)) {
@@ -2923,7 +2931,7 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
     currentFunctionTracksCaller = tracksCaller;
 
     if (!hasPrototype) {
-        emitFunctionLinkageAlias(p, item);
+        emitFunctionLinkageLabel(p, item, params, isExternDef);
     }
     emitFunctionDefinitionPrefix(item, isExternDef);
     if (exceedsBackendOptimizationBudget(item, *code)) {

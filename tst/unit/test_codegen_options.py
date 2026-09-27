@@ -163,7 +163,7 @@ def check_link_args(rustc: str, src: str, work: str) -> None:
 
 def generated_symbol(generated: str, function: str) -> str:
     match = re.search(
-        rf"^#define (ZR[0-9a-f]{{16}}) {re.escape(function)}$",
+        rf"^[^\n]*\b(ZR[0-9a-f]{{16}})\([^;{{}}]*\) asm\(\"{re.escape(function)}\"\);$",
         generated,
         re.MULTILINE,
     )
@@ -190,6 +190,9 @@ def generated_symbol_headers(generated: str, symbol: str) -> list[tuple[int, str
             cursor += 1
         while cursor < len(generated) and generated[cursor].isspace():
             cursor += 1
+        label = re.match(r'asm\("(?:[^"\\]|\\.)*"\)', generated[cursor:])
+        if label:
+            cursor += label.end()
         if cursor < len(generated) and generated[cursor] in ";{":
             headers.append((match.start(), generated[cursor]))
     return headers
@@ -423,7 +426,7 @@ def check_prototype_order(rustc: str, src: str, work: str) -> None:
     mangled = re.findall(r"\bZR[A-Za-z0-9_$]*", generated)
     if not mangled or any(re.fullmatch(r"ZR[0-9a-f]{16}", symbol) is None for symbol in mangled):
         raise RuntimeError("generated identifiers do not use short stable hashes")
-    if "#define ZRe2bff76835446371 trustme_order_root\n" not in generated:
+    if generated_symbol(generated, "trustme_order_root") != "ZRe2bff76835446371":
         raise RuntimeError("stable mangling changed for trustme_order_root")
 
     functions = (
@@ -436,11 +439,19 @@ def check_prototype_order(rustc: str, src: str, work: str) -> None:
         "trustme_order_root",
     )
     headers = {name: generated_function_headers(generated, name) for name in functions}
-    prototypes = {
-        name
-        for name, entries in headers.items()
-        if any(terminator == ";" for _, terminator in entries)
-    }
+    def declared_ahead(entries: list[tuple[int, str]]) -> bool:
+        for position, terminator in entries:
+            if terminator != ";":
+                continue
+            declaration_end = generated.find(";", position) + 1
+            if not any(
+                other == "{" and generated[declaration_end:start].strip() == ""
+                for start, other in entries
+            ):
+                return True
+        return False
+
+    prototypes = {name for name, entries in headers.items() if declared_ahead(entries)}
     if prototypes != {"trustme_recursive_a", "trustme_recursive_b"}:
         raise RuntimeError(f"unexpected internal prototypes: {sorted(prototypes)!r}")
 
