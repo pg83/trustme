@@ -751,15 +751,17 @@ namespace {
             }
         }
 
-        if (lex.consumeIf(TOK_INTERPOLATED_PATTERN)) {
-            return true;
-        }
-
         if (allowOr) {
             lex.consumeIf(TOK_PIPE);
         }
         for (;;) {
             switch (lex.next()) {
+                case TOK_INTERPOLATED_PATTERN:
+                    lex.consume();
+                    if (allowOr && lex.consumeIf(TOK_PIPE)) {
+                        continue;
+                    }
+                    return true;
                 case TOK_UNDERSCORE:
                     lex.consume();
                     if (allowOr && lex.consumeIf(TOK_PIPE)) {
