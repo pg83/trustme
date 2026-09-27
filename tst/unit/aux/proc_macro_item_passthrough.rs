@@ -158,3 +158,15 @@ pub fn made_crate_macro(_input: TokenStream) -> TokenStream {
     "macro_rules! call_helper { () => { $crate::helper() } }".parse().unwrap()
 }
 
+// A `Punct` with `Spacing::Joint` followed by something other than a
+// `Punct`: `#` joint to the attribute's bracket group, and a trailing
+// joint `;` that nothing follows.
+#[proc_macro]
+pub fn joint_punct_before_group(_input: TokenStream) -> TokenStream {
+    use proc_macro::{Delimiter, Group, Punct, Spacing, TokenTree};
+    let attribute = Group::new(Delimiter::Bracket, "allow(dead_code)".parse().unwrap());
+    let mut tokens: TokenStream = [TokenTree::from(Punct::new('#', Spacing::Joint)), attribute.into()].into_iter().collect();
+    tokens.extend("fn joint_made() -> u8 { 5 } const JOINT_END: u8 = 6".parse::<TokenStream>().unwrap());
+    tokens.extend([TokenTree::from(Punct::new(';', Spacing::Joint))]);
+    tokens
+}

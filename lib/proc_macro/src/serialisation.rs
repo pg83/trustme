@@ -137,7 +137,7 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
     fn inner<T: ::std::io::Write>(s: &mut Writer<T>, ts: TokenStream, last: &mut usize)
     {
         use crate::token_tree::LiteralValue;
-        let mut it = ts.inner.into_iter();
+        let mut it = ts.inner.into_iter().peekable();
         while let Some(t) = it.next()
         {
             match t
@@ -186,18 +186,23 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                     s.write_sym_1(p.ch);
                 }
                 else {
-                    // Consume punct until Spacing::Alone (error for any other)
+                    // Joint punct up to the first Alone one, or the first token that is no punct
                     let mut chars = String::new();
                     chars.push(p.ch);
-                    while match it.next()
-                        {
-                        Some(TokenTree::Punct(p)) => {
-                            chars.push(p.ch);
-                            p.spacing == Spacing::Joint
-                            },
-                        _ => panic!("Punct(Joint) not followed by another Punct"),
-                        }
+                    loop
                     {
+                        match it.peek()
+                        {
+                        Some(TokenTree::Punct(next)) if next.ch != '\'' => {
+                            chars.push(next.ch);
+                            let joint = next.spacing == Spacing::Joint;
+                            it.next();
+                            if !joint {
+                                break;
+                            }
+                            },
+                        _ => break,
+                        }
                     }
                     s.write_sym(chars.as_bytes());
                 }
