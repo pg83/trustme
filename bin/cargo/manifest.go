@@ -139,6 +139,7 @@ func findWorkspace(manifestPath string) *Workspace {
 		manifestPath: manifestPath,
 		dependencies: map[string]*Dependency{},
 		patches:      map[string]string{},
+		profiles:     mapValue(doc["profile"]),
 	}
 }
 
@@ -153,6 +154,7 @@ func loadWorkspace(path string) *Workspace {
 		manifestPath: path,
 		dependencies: map[string]*Dependency{},
 		patches:      map[string]string{},
+		profiles:     mapValue(doc["profile"]),
 	}
 
 	if table == nil {

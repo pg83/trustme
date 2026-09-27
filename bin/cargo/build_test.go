@@ -467,3 +467,38 @@ func TestTheJobCountIsNotPartOfABuildScriptFingerprint(t *testing.T) {
 		t.Fatalf("signature differs with the job count:\n%q\n%q", got, want)
 	}
 }
+
+// base64's `[profile.test] opt-level = 3` builds its tests optimized, with
+// the debug assertions and overflow checks `test` inherits from `dev`; the
+// flags passed are the ones that differ from the compiler's defaults at
+// that level.
+func TestTestProfileInheritsDevAndTakesTheManifestTable(t *testing.T) {
+	root := t.TempDir()
+	manifest := filepath.Join(root, "Cargo.toml")
+	text := "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[profile.test]\nopt-level = 3\n\n[profile.fast]\ninherits = \"release\"\ndebug-assertions = true\n"
+
+	if err := os.WriteFile(manifest, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspace := findWorkspace(manifest)
+
+	if name := profileName(BuildOptions{command: "test", profile: "debug"}); name != "test" {
+		t.Fatalf("cargo test selects %q, want test", name)
+	}
+	test := resolveProfile(workspace, "test")
+	if test.optLevel != "3" || !test.debug || !test.debugAssertions || !test.overflowChecks {
+		t.Fatalf("test profile = %+v", test)
+	}
+	got := strings.Join(profileCompilerArgs(test), " ")
+	if got != "-C opt-level=3 -g -C debug-assertions=on --cfg debug_assertions" {
+		t.Fatalf("test profile flags = %q", got)
+	}
+	dev := strings.Join(profileCompilerArgs(resolveProfile(workspace, "dev")), " ")
+	if dev != "-g --cfg debug_assertions" {
+		t.Fatalf("dev profile flags = %q", dev)
+	}
+	fast := resolveProfile(workspace, "fast")
+	if fast.optLevel != "3" || fast.debug || !fast.debugAssertions || fast.overflowChecks {
+		t.Fatalf("custom profile = %+v", fast)
+	}
+}

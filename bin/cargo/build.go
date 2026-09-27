@@ -888,13 +888,13 @@ func (b *Builder) codegenTask(compile *Task) *Task {
 		deps:      []*Task{compile},
 		inputs:    []string{cxx.compiler},
 		outputs:   []TaskOutput{{name: object}},
-		signature: append([]string{"compile"}, b.cxxSignature(unit.isHost)...),
+		signature: append(append([]string{"compile"}, b.cxxSignature(unit.isHost)...), b.cxxOptimizationArgs(unit.target.kind == "build-script")...),
 	}
 	b.tasks[key] = task
 	unit.cc = task
 	b.units[task] = unit
 	task.action = func(ctx *TaskContext) {
-		args := b.cxxCompileArgs(unit.isHost)
+		args := b.cxxCompileArgs(unit.isHost, unit.target.kind == "build-script")
 		// A CAS path has no neighbours, so the blob the generated C++ names in
 		// its .incbin is staged under that name and handed to the assembler as
 		// a search path.
@@ -915,7 +915,7 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 	source := targetSourcePath(pkg, target)
 	args := []string{source}
 
-	args = append(args, b.commonCompilerArgs(pkg, output, unit.isHost)...)
+	args = append(args, b.commonCompilerArgs(pkg, output, unit.isHost, false)...)
 	args = append(args, "--crate-name", targetCompileName(target), "--crate-type", crateType(target))
 
 	suffix := b.crateSuffix(pkg)
@@ -989,7 +989,7 @@ func (b *Builder) compileBuildScript(ctx *TaskContext, unit *CompileUnit) {
 	output := ctx.outputBase(unit.baseName)
 	args := []string{filepath.Join(pkg.dir, pkg.buildScript)}
 
-	args = append(args, b.commonCompilerArgs(pkg, output, true)...)
+	args = append(args, b.commonCompilerArgs(pkg, output, true, true)...)
 	args = append(args, "--crate-name", "build", "--crate-type", "bin", "--edition", pkg.edition)
 	args = append(args, "-C", "emit-cpp-only", "-C", "emit-link-manifest="+ctx.output(unit.linkManifest))
 	args = append(args, b.crateArgs(ctx, unit, b.buildDependencies(pkg))...)
@@ -1005,8 +1005,9 @@ func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Tas
 	env["TARGET"] = b.context.target
 	env["HOST"] = b.context.host
 	env["NUM_JOBS"] = strconv.Itoa(b.context.opts.jobs)
-	env["OPT_LEVEL"] = profileOptLevel(b.context.opts.profile)
-	env["DEBUG"] = profileDebug(b.context.opts.profile)
+	profile := resolveProfile(b.context.workspace, profileName(b.context.opts))
+	env["OPT_LEVEL"] = profile.optLevel
+	env["DEBUG"] = strconv.FormatBool(profile.debug)
 	env["PROFILE"] = b.context.opts.profile
 	env["RUSTC"] = b.context.compiler
 
@@ -1051,17 +1052,21 @@ func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Tas
 	}
 }
 
-func (b *Builder) commonCompilerArgs(pkg *Package, output string, isHost bool) []string {
+func (b *Builder) commonCompilerArgs(pkg *Package, output string, isHost bool, buildScript bool) []string {
 	args := []string{"-o", output}
 
-	if b.context.opts.profile == "release" {
-		args = append(args, "-O")
-	} else {
-		args = append(args, "-g")
-	}
+	if buildScript {
+		if b.context.opts.profile == "release" {
+			args = append(args, "-O")
+		} else {
+			args = append(args, "-g")
+		}
 
-	if debugAssertions(b.context.opts.profile) {
-		args = append(args, "--cfg", "debug_assertions")
+		if debugAssertions(b.context.opts.profile) {
+			args = append(args, "--cfg", "debug_assertions")
+		}
+	} else {
+		args = append(args, profileCompilerArgs(resolveProfile(b.context.workspace, profileName(b.context.opts)))...)
 	}
 
 	if b.context.opts.emitMmir {
@@ -1227,11 +1232,12 @@ func (b *Builder) rustSignature(pkg *Package, target *Target, isHost bool) []str
 // fingerprint for that reason - a `cargo build -j 24` and the `cargo build`
 // a test spawns underneath it must agree on what is already built.
 func (b *Builder) buildScriptRunSignature(pkg *Package) []string {
+	profile := resolveProfile(b.context.workspace, profileName(b.context.opts))
 	signature := []string{
 		"target=" + b.context.target,
 		"host=" + b.context.host,
-		"opt-level=" + profileOptLevel(b.context.opts.profile),
-		"debug=" + profileDebug(b.context.opts.profile),
+		"opt-level=" + profile.optLevel,
+		"debug=" + strconv.FormatBool(profile.debug),
 		"profile=" + b.context.opts.profile,
 		"rustc=" + b.context.compiler,
 	}
@@ -1306,7 +1312,7 @@ func (b *Builder) cxxSignature(isHost bool) []string {
 	return signature
 }
 
-func (b *Builder) cxxCompileArgs(isHost bool) []string {
+func (b *Builder) cxxCompileArgs(isHost bool, buildScript bool) []string {
 	cxx := b.cxxSpec(isHost)
 	args := []string{"-std=gnu++20", "-fexceptions", "-fwrapv"}
 
@@ -1315,14 +1321,36 @@ func (b *Builder) cxxCompileArgs(isHost bool) []string {
 	}
 
 	args = append(args, cxx.compile...)
+	args = append(args, b.cxxOptimizationArgs(buildScript)...)
+	args = append(args, "-fPIC")
 
-	if b.context.opts.profile == "release" {
-		args = append(args, "-O1")
-	} else {
-		args = append(args, "-O0", "-g")
+	return args
+}
+
+// cxxOptimizationArgs optimize the generated C++ as its crate's profile
+// asks: a build script keeps the command's plain profile, every other unit
+// takes the resolved one's optimization level and debug info.
+func (b *Builder) cxxOptimizationArgs(buildScript bool) []string {
+	if buildScript {
+		if b.context.opts.profile == "release" {
+			return []string{"-O1"}
+		}
+
+		return []string{"-O0", "-g"}
 	}
 
-	args = append(args, "-fPIC")
+	profile := resolveProfile(b.context.workspace, profileName(b.context.opts))
+	var args []string
+
+	if profile.optLevel == "0" {
+		args = append(args, "-O0")
+	} else {
+		args = append(args, "-O1")
+	}
+
+	if profile.debug {
+		args = append(args, "-g")
+	}
 
 	return args
 }
@@ -2084,18 +2112,127 @@ func staticLibrarySuffix() string {
 	return ".a"
 }
 
-func profileOptLevel(profile string) string {
-	if profile == "release" {
-		return "2"
-	}
 
-	return "0"
+// Profile is the part of a Cargo profile the compiler invocation reads.
+type Profile struct {
+	name            string
+	optLevel        string
+	debug           bool
+	debugAssertions bool
+	overflowChecks  bool
 }
 
-func profileDebug(profile string) string {
-	if profile == "release" {
-		return "0"
+// profileName is the profile Cargo selects for the command: `test` and
+// `bench` have profiles of their own, `--release` selects `release`, and a
+// `--profile` name is taken as given.
+func profileName(opts BuildOptions) string {
+	switch {
+	case opts.profile == "release":
+		return "release"
+	case opts.profile != "debug" && opts.profile != "":
+		return opts.profile
+	case opts.command == "test":
+		return "test"
+	case opts.command == "bench":
+		return "bench"
 	}
 
-	return "1"
+	return "dev"
+}
+
+// resolveProfile applies the workspace root manifest's `[profile.<name>]`
+// table over the profile it inherits from, as Cargo does: `test` inherits
+// `dev`, `bench` inherits `release`, a custom profile names its parent in
+// `inherits`.
+func resolveProfile(workspace *Workspace, name string) Profile {
+	var table map[string]any
+
+	if workspace != nil {
+		table = mapValue(workspace.profiles[name])
+	}
+
+	var profile Profile
+
+	switch name {
+	case "dev":
+		profile = Profile{optLevel: "0", debug: true, debugAssertions: true, overflowChecks: true}
+	case "release":
+		profile = Profile{optLevel: "3", debug: false, debugAssertions: false, overflowChecks: false}
+	case "test":
+		profile = resolveProfile(workspace, "dev")
+	case "bench":
+		profile = resolveProfile(workspace, "release")
+	default:
+		parent := stringValue(table["inherits"])
+
+		if parent == "" || parent == name {
+			throwFmt("profile `%s` does not name the profile it inherits", name)
+		}
+
+		profile = resolveProfile(workspace, parent)
+	}
+
+	profile.name = name
+
+	switch value := table["opt-level"].(type) {
+	case int64:
+		profile.optLevel = strconv.FormatInt(value, 10)
+	case string:
+		profile.optLevel = value
+	}
+
+	switch value := table["debug"].(type) {
+	case bool:
+		profile.debug = value
+	case int64:
+		profile.debug = value != 0
+	case string:
+		profile.debug = value != "none"
+	}
+
+	profile.debugAssertions = boolValue(table["debug-assertions"], profile.debugAssertions)
+	profile.overflowChecks = boolValue(table["overflow-checks"], profile.overflowChecks)
+
+	return profile
+}
+
+// profileCompilerArgs are the flags Cargo passes for a profile: a setting
+// only where it differs from what the compiler does at that optimization
+// level.
+func profileCompilerArgs(profile Profile) []string {
+	var args []string
+
+	if profile.optLevel != "0" {
+		args = append(args, "-C", "opt-level="+profile.optLevel)
+	}
+
+	if profile.debug {
+		args = append(args, "-g")
+	}
+
+	if _, disabled := os.LookupEnv(trustmeCargoNoDebugAssertions); disabled {
+		profile.debugAssertions = false
+	}
+
+	if profile.debugAssertions != (profile.optLevel == "0") {
+		args = append(args, "-C", "debug-assertions="+onOff(profile.debugAssertions))
+	}
+
+	if profile.overflowChecks != profile.debugAssertions {
+		args = append(args, "-C", "overflow-checks="+onOff(profile.overflowChecks))
+	}
+
+	if profile.debugAssertions {
+		args = append(args, "--cfg", "debug_assertions")
+	}
+
+	return args
+}
+
+func onOff(value bool) string {
+	if value {
+		return "on"
+	}
+
+	return "off"
 }

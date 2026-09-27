@@ -102,6 +102,7 @@ type Workspace struct {
 	dependencies   map[string]*Dependency
 	patches        map[string]string
 	packageTable   map[string]any
+	profiles       map[string]any
 }
 
 type Repository struct {

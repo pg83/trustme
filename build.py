@@ -681,6 +681,7 @@ base64 = add_project_test(
     name="base64",
     url="https://github.com/marshallpierce/rust-base64.git",
     rev="069bf7067b949f5c0a92b6ceb82492920502f2c2",
+    timeout=NESTED_PROJECT_TIMEOUT,
 )
 
 bitflags = add_project_test(
