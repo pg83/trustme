@@ -2198,17 +2198,14 @@ namespace {
                             auto subpat = ParseMacroRulesPat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
                             state.closeLoop();
 
-                            enum eTokenType joiner = TOK_NULL;
+                            Token joiner(TOK_NULL);
 
                             GET_TOK(tok, lex);
                             if (/*lex.edition_after(AST::Edition::Rust2018) &&*/ tok.type() == TOK_QMARK) {
                             } else if (tok.type() == TOK_PLUS || tok.type() == TOK_STAR) {
                             } else {
                                 DEBUG(StringView("joiner = ") << tok);
-                                if (tok.hasData()) {
-                                    ERROR(lex.pointSpan(), E0000, StringView("Invalid macro joiner ") << tok << StringView(", must be punctuation"));
-                                }
-                                joiner = tok.type();
+                                joiner = tok;
                                 GET_TOK(tok, lex);
                             }
                             auto sp = lex.endSpan(ps);
@@ -2234,7 +2231,7 @@ namespace {
                             }
                             BUG_ASSERT(sepFlag);
                             DEBUG(StringView("$()") << sepFlag << StringView(" ") << subpat);
-                            ret.push_back(MacroPatEnt(sp, Token(joiner), sepFlag, loopIdx, std::move(subpat)));
+                            ret.push_back(MacroPatEnt(sp, std::move(joiner), sepFlag, loopIdx, std::move(subpat)));
                             break;
                         }
                     }
@@ -2291,11 +2288,11 @@ namespace {
 
                     DEBUG(StringView("var_usage = {") << varUsage << StringView("}"));
                     GET_TOK(tok, lex);
-                    enum eTokenType joiner = TOK_NULL;
+                    Token joiner(TOK_NULL);
                     if (tok.type() == TOK_QMARK) {
                     } else if (tok.type() == TOK_PLUS || tok.type() == TOK_STAR) {
                     } else {
-                        joiner = tok.type();
+                        joiner = tok;
                         GET_TOK(tok, lex);
                     }
 
@@ -2340,8 +2337,8 @@ namespace {
                         }
                     }
 
-                    DEBUG(StringView("joiner = ") << Token(joiner) << StringView(", controlling_loops = {") << controllingLoops << StringView("}, content = ") << content);
-                    ret.push_back(MacroExpansionEnt::make_Loop({mv$(content), joiner, mv$(controllingLoops)}));
+                    DEBUG(StringView("joiner = ") << joiner << StringView(", controlling_loops = {") << controllingLoops << StringView("}, content = ") << content);
+                    ret.push_back(MacroExpansionEnt::make_Loop({mv$(content), mv$(joiner), mv$(controllingLoops)}));
                 } else if (tok.type() == TOK_BRACE_OPEN) {
                     auto ident = lex.getTokenCheck(TOK_IDENT).ident().name;
                     if (ident == "ignore") {
