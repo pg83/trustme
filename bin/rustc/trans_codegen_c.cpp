@@ -2730,7 +2730,7 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
         } else if (item.linkage.name == "llvm.x86.sse3.hadd.pd" || item.linkage.name == "llvm.x86.sse3.hsub.pd") {
             const char op = item.linkage.name == "llvm.x86.sse3.hadd.pd" ? '+' : '-';
             of << StringView("\tdouble lhs[2], rhs[2], result[2];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tresult[0] = lhs[0] ") << op << StringView(" lhs[1]; result[1] = rhs[0] ") << op << StringView(" rhs[1];\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
-        } else if (item.linkage.name == "llvm.x86.sse3.ldu.dq") {
+        } else if (item.linkage.name == "llvm.x86.sse3.ldu.dq" || item.linkage.name == "llvm.x86.avx.ldu.dq.256") {
             of << StringView("\tmemcpy(&rv, arg0, sizeof(rv));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.phadd.d.128" || item.linkage.name == "llvm.x86.ssse3.phsub.d.128") {
             const char op = item.linkage.name == "llvm.x86.ssse3.phadd.d.128" ? '+' : '-';
