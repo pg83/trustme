@@ -21,6 +21,9 @@ pub enum Token
     SpanDef(SpanDef),
     /// Literal spelling with a suffix not interpreted by the compiler.
     RawLiteral(String),
+    /// The next token is followed by the one after it with no space: 1 when
+    /// that is punctuation it joins (`Joint`), 2 otherwise (`JointHidden`).
+    Joined(u8),
 }
 pub struct SpanDef {
     pub idx: usize,
@@ -96,6 +99,7 @@ impl<R: ::std::io::Read> Reader<R>
             end_ofs: self.get_u128v() as usize,
             }),
         12 => Token::RawLiteral(self.get_string()),
+        13 => Token::Joined(self.getb().expect("getb joined")),
         _ => panic!("Unknown tag byte: {:#x}", hdr_b),
         })
     }
@@ -205,6 +209,7 @@ impl<T: ::std::io::Write> Writer<T>
             self.put_u128v(sd.end_ofs   as u128);
             },
         Token::RawLiteral(v) => { self.putb(12); self.put_bytes(v.as_bytes()); },
+        Token::Joined(v) => { self.putb(13); self.putb(v); },
         }
     }
     pub fn write_sym(&mut self, v: &[u8])

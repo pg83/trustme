@@ -11,16 +11,24 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
     // stream opens at the call site; a token handed back to the compiler with
     // this span keeps the resolution context it was written with.
     let mut span = Span::call_site();
-    return get_subtree(&mut s, "", &mut span);
+    // A `Joined` marker applies to the token after it: joint punctuation, or a
+    // join the macro cannot see but the compiler gets back with the stream.
+    let mut joined = 0;
+    return get_subtree(&mut s, "", &mut span, &mut joined);
 
-    fn get_subtree<R: ::std::io::Read>(s: &mut Reader<R>, end: &'static str, span: &mut Span) -> TokenStream {
+    fn get_subtree<R: ::std::io::Read>(s: &mut Reader<R>, end: &'static str, span: &mut Span, joined: &mut u8) -> TokenStream {
         let mut toks: Vec<TokenTree> = Vec::new();
+        let mut hidden: Vec<bool> = Vec::new();
         while let Some(t) = s.read_ent()
         {
             let tt = match t
                 {
                 Token::SpanRef(idx) => {
                     *span = crate::Span::from_raw(idx);
+                    continue
+                    },
+                Token::Joined(kind) => {
+                    *joined = kind;
                     continue
                     },
                 Token::SpanDef(sd) => {
@@ -32,16 +40,16 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
                         );
                     continue
                     },
-                Token::EndOfStream if end == "" => return TokenStream::from_trees(toks),
-                Token::Symbol(ref s) if s == end => return TokenStream::from_trees(toks),
+                Token::EndOfStream if end == "" => { hidden.resize(toks.len(), false); return TokenStream::from_received(toks, hidden) },
+                Token::Symbol(ref s) if s == end => { hidden.resize(toks.len(), false); return TokenStream::from_received(toks, hidden) },
                 Token::Symbol(ref s) if s == "" => panic!("Unexpected end-of-stream marker"),
                 Token::EndOfStream => panic!("Unexpected end-of-stream marker"),
                 Token::Symbol(sym) => {
                     match &sym[..]
                     {
-                    "{" => { group(Delimiter::Brace, s, "}", span).into() },
-                    "[" => { group(Delimiter::Bracket, s, "]", span).into() },
-                    "(" => { group(Delimiter::Parenthesis, s, ")", span).into() },
+                    "{" => { group(Delimiter::Brace, s, "}", span, joined).into() },
+                    "[" => { group(Delimiter::Bracket, s, "]", span, joined).into() },
+                    "(" => { group(Delimiter::Parenthesis, s, ")", span, joined).into() },
                     _ => {
                         let mut it = sym.chars();
                         let mut c = it.next().unwrap();
@@ -81,15 +89,24 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
                     },
                 };
             toks.push(tt);
+            hidden.resize(toks.len(), false);
+            if *joined != 0 {
+                let last = toks.len() - 1;
+                match &mut toks[last] {
+                TokenTree::Punct(p) if *joined == 1 => p.joint = true,
+                _ => hidden[last] = true,
+                }
+                *joined = 0;
+            }
         }
         panic!("Unexpected EOF")
     }
 
     /// A delimited group opens with the span in force at its opening delimiter;
     /// its contents carry on updating the same running span.
-    fn group<R: ::std::io::Read>(delimiter: Delimiter, s: &mut Reader<R>, end: &'static str, span: &mut Span) -> Group {
+    fn group<R: ::std::io::Read>(delimiter: Delimiter, s: &mut Reader<R>, end: &'static str, span: &mut Span, joined: &mut u8) -> Group {
         let open = *span;
-        let stream = get_subtree(s, end, span);
+        let stream = get_subtree(s, end, span, joined);
         Group {
             delimiter,
             stream,
@@ -138,9 +155,15 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
 
     fn inner<T: ::std::io::Write>(s: &mut Writer<T>, ts: TokenStream, last: &mut usize)
     {
+        // Joins the compiler handed over go back with a stream the macro left as it was
+        let hidden = ts.hidden_joins();
+        let hidden_at = |index: usize| hidden.get(index).copied().unwrap_or(false);
+        let mut index = 0;
         let mut it = ts.into_trees().into_iter().peekable();
         while let Some(t) = it.next()
         {
+            let this = index;
+            index += 1;
             match t
             {
             TokenTree::Group(sg) => {
@@ -154,6 +177,9 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                 }
                 inner(s, sg.stream, last);
                 set_span(s, last, sg.span.close);
+                if hidden_at(this) {
+                    s.write_ent(Token::Joined(2));
+                }
                 match sg.delimiter
                 {
                 Delimiter::None => {},
@@ -164,6 +190,9 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                 },
             TokenTree::Ident(i) => {
                 set_span(s, last, i.span);
+                if hidden_at(this) {
+                    s.write_ent(Token::Joined(2));
+                }
                 if i.is_raw {
                     s.write_ent(Token::Ident(format!("r#{}", i.name())));
                 }
@@ -181,15 +210,24 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                         Some(TokenTree::Ident(ident)) => ident.name().to_owned(),
                         _ => panic!("Punct('\\'') not followed by an ident"),
                         };
+                    index += 1;
+                    if hidden_at(this + 1) {
+                        s.write_ent(Token::Joined(2));
+                    }
                     s.write_ent(Token::Lifetime(v));
                 }
                 else if p.spacing() == Spacing::Alone {
+                    if hidden_at(this) {
+                        s.write_ent(Token::Joined(2));
+                    }
                     s.write_sym_1(p.as_char());
                 }
                 else {
                     // Joint punct up to the first Alone one, or the first token that is no punct
                     let mut chars = String::new();
                     chars.push(p.as_char());
+                    let mut end = this;
+                    let mut end_joint = true;
                     loop
                     {
                         match it.peek()
@@ -198,6 +236,9 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                             chars.push(next.as_char());
                             let joint = next.spacing() == Spacing::Joint;
                             it.next();
+                            end = index;
+                            index += 1;
+                            end_joint = joint;
                             if !joint {
                                 break;
                             }
@@ -205,11 +246,20 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                         _ => break,
                         }
                     }
+                    if hidden_at(end) {
+                        s.write_ent(Token::Joined(2));
+                    }
+                    else if end_joint {
+                        s.write_ent(Token::Joined(1));
+                    }
                     s.write_sym(chars.as_bytes());
                 }
                 },
             TokenTree::Literal(literal) => {
                 set_span(s, last, literal.span);
+                if hidden_at(this) {
+                    s.write_ent(Token::Joined(2));
+                }
                 s.write_ent(Token::RawLiteral(literal.to_string()));
                 },
             }

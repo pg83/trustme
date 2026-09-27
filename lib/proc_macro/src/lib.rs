@@ -53,6 +53,10 @@ pub mod token_stream {
 
     struct Slot {
         trees: Vec<crate::TokenTree>,
+        /// Which trees the compiler handed over joined to the next one with no
+        /// space the macro can see (upstream's `Spacing::JointHidden`): kept
+        /// while the stream is as it arrived, gone with its first change.
+        hidden: Vec<bool>,
         handles: u32,
     }
 
@@ -66,7 +70,10 @@ pub mod token_stream {
 
     impl TokenStream {
         fn allocate(trees: Vec<crate::TokenTree>) -> NonZeroU32 {
-            let new = Slot { trees, handles: 1 };
+            TokenStream::allocate_spaced(trees, Vec::new())
+        }
+        fn allocate_spaced(trees: Vec<crate::TokenTree>, hidden: Vec<bool>) -> NonZeroU32 {
+            let new = Slot { trees, hidden, handles: 1 };
             // SAFE: See `slot`
             unsafe {
                 if let Some(index) = FREE.pop() {
@@ -85,6 +92,18 @@ pub mod token_stream {
             }
             TokenStream(Some(TokenStream::allocate(trees)))
         }
+        pub(crate) fn from_received(trees: Vec<crate::TokenTree>, hidden: Vec<bool>) -> TokenStream {
+            if trees.is_empty() {
+                return TokenStream(None);
+            }
+            TokenStream(Some(TokenStream::allocate_spaced(trees, hidden)))
+        }
+        pub(crate) fn hidden_joins(&self) -> Vec<bool> {
+            match self.0 {
+            Some(handle) => slot(handle).hidden.clone(),
+            None => Vec::new(),
+            }
+        }
         pub(crate) fn trees(&self) -> &[crate::TokenTree] {
             match self.0 {
             Some(handle) => &slot(handle).trees,
@@ -102,7 +121,9 @@ pub mod token_stream {
                 self.0 = Some(TokenStream::allocate(Vec::new()));
                 },
             }
-            &mut slot(self.0.expect("stream handle")).trees
+            let entry = slot(self.0.expect("stream handle"));
+            entry.hidden.clear();
+            &mut entry.trees
         }
         pub(crate) fn into_trees(self) -> Vec<crate::TokenTree> {
             match self.0 {

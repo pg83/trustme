@@ -62,6 +62,7 @@ namespace {
         SpanRef = 10,
         SpanDef = 11,
         RawLiteral = 12,
+        Joined = 13,
     };
 
     enum class FragType {
@@ -125,6 +126,7 @@ namespace {
         size_t lastSentSpan = 1;
         Ident::Hygiene receivedHygiene;
         Ident::Hygiene callSiteHygiene;
+        TokenSpacing receivedSpacing = TokenSpacing::Alone;
         bool receivedFromInput = false;
 
         struct Handles {
@@ -180,6 +182,7 @@ namespace {
         void sendString(const std::string& s);
 
         void sendRawLiteral(StringView s);
+        void sendJoined(TokenSpacing spacing);
 
         void sendBytestring(const std::string& s);
 
@@ -679,6 +682,12 @@ Span ProcMacroInv::outerSpan() const {
 
 Token ProcMacroInv::realGetToken() {
     auto rv = this->realGetToken_();
+    if (pendingSymbolOffset != pendingSymbols.length()) {
+        rv.setSpacing(TokenSpacing::Joint);
+    } else if (receivedSpacing != TokenSpacing::Alone) {
+        rv.setSpacing(receivedSpacing);
+        receivedSpacing = TokenSpacing::Alone;
+    }
     DEBUG(StringView("ProcMacroInv: ") << rv);
     return rv;
 }
@@ -700,7 +709,12 @@ Token ProcMacroInv::realGetToken_() {
     /* A span marker gives the context of every token after it, up to the next
        marker: a token the macro passed through names the context it arrived
        with, one the macro made names the call site. */
-    while (static_cast<TokenClass>(v) == TokenClass::SpanRef) {
+    while (static_cast<TokenClass>(v) == TokenClass::SpanRef || static_cast<TokenClass>(v) == TokenClass::Joined) {
+        if (static_cast<TokenClass>(v) == TokenClass::Joined) {
+            receivedSpacing = this->recvU8() == 1 ? TokenSpacing::Joint : TokenSpacing::JointHidden;
+            v = this->recvU8();
+            continue;
+        }
         const auto index = this->recvV128u();
         this->receivedFromInput = index >= 2 && index - 2 < spanContexts.length();
         this->receivedHygiene = this->receivedFromInput && spanContexts[index - 2] != Ident::Hygiene() ? spanContexts[index - 2] : callSiteHygiene;
@@ -711,6 +725,7 @@ Token ProcMacroInv::realGetToken_() {
         case TokenClass::EndOfStream:
             TODO(this->parentSpan, StringView("EndOfStream"));
         case TokenClass::SpanRef:
+        case TokenClass::Joined:
             UNREACHABLE();
         case TokenClass::SpanDef:
             TODO(this->parentSpan, StringView("SpanDef"));
@@ -1056,6 +1071,11 @@ auto ProcMacroInv::sendString(const std::string& s) -> void {
     this->sendBytes(s.data(), s.size());
 }
 
+auto ProcMacroInv::sendJoined(TokenSpacing spacing) -> void {
+    this->sendU8(static_cast<u8>(TokenClass::Joined));
+    this->sendU8(spacing == TokenSpacing::Joint ? 1 : 2);
+}
+
 auto ProcMacroInv::sendRawLiteral(StringView s) -> void {
     this->sendU8(static_cast<u8>(TokenClass::RawLiteral));
     this->sendBytes(s.data(), s.length());
@@ -1275,6 +1295,24 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             break;
         default:
             pmi.sendSpan(Ident::Hygiene(), at);
+            break;
+    }
+    switch (tok.type()) {
+        case TOK_INTERPOLATED_TYPE:
+        case TOK_INTERPOLATED_PATH:
+        case TOK_INTERPOLATED_PATTERN:
+        case TOK_INTERPOLATED_STMT:
+        case TOK_INTERPOLATED_BLOCK:
+        case TOK_INTERPOLATED_EXPR:
+        case TOK_INTERPOLATED_STMT_ITEM:
+        case TOK_INTERPOLATED_ITEM:
+        case TOK_INTERPOLATED_META:
+        case TOK_INTERPOLATED_VIS:
+            break;
+        default:
+            if (tok.spacing() != TokenSpacing::Alone) {
+                pmi.sendJoined(tok.spacing());
+            }
             break;
     }
     switch (tok.type()) {
