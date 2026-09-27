@@ -2730,6 +2730,12 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
         } else if (item.linkage.name == "llvm.x86.sse3.hadd.pd" || item.linkage.name == "llvm.x86.sse3.hsub.pd") {
             const char op = item.linkage.name == "llvm.x86.sse3.hadd.pd" ? '+' : '-';
             of << StringView("\tdouble lhs[2], rhs[2], result[2];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tresult[0] = lhs[0] ") << op << StringView(" lhs[1]; result[1] = rhs[0] ") << op << StringView(" rhs[1];\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
+        } else if (item.linkage.name == "llvm.x86.vcvtps2ph.128" || item.linkage.name == "llvm.x86.vcvtps2ph.256") {
+            const unsigned lanes = item.linkage.name == "llvm.x86.vcvtps2ph.128" ? 4 : 8;
+            of << StringView("\tfloat src[") << lanes << StringView("]; u16 dst[8] = {0};\n") << StringView("\tmemcpy(src, &arg0, sizeof(src));\n") << StringView("\tfor(unsigned i = 0; i < ") << lanes << StringView("; i++) dst[i] = f32_to_f16_bits_rounded(src[i], (int)arg1);\n") << StringView("\tmemcpy(&rv, dst, sizeof(dst));\n") << StringView("\treturn rv;\n");
+        } else if (item.linkage.name == "llvm.x86.vcvtph2ps.128" || item.linkage.name == "llvm.x86.vcvtph2ps.256") {
+            const unsigned lanes = item.linkage.name == "llvm.x86.vcvtph2ps.128" ? 4 : 8;
+            of << StringView("\tu16 src[8]; float dst[") << lanes << StringView("];\n") << StringView("\tmemcpy(src, &arg0, sizeof(src));\n") << StringView("\tfor(unsigned i = 0; i < ") << lanes << StringView("; i++) dst[i] = (float)make_f16_bits(src[i]);\n") << StringView("\tmemcpy(&rv, dst, sizeof(dst));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse3.ldu.dq" || item.linkage.name == "llvm.x86.avx.ldu.dq.256") {
             of << StringView("\tmemcpy(&rv, arg0, sizeof(rv));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.ssse3.phadd.d.128" || item.linkage.name == "llvm.x86.ssse3.phsub.d.128") {

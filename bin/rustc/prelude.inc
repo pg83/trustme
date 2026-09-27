@@ -709,6 +709,25 @@ static inline void trustme_x86_pcmp_mask(void* output, trustme_x86_pcmp_state st
 
 typedef _Float16 f16;
 static inline f16 make_f16_bits(u16 bits) { f16 result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
+static inline u16 f32_to_f16_bits_rounded(float value, int imm8) {
+    f16 nearest = (f16)value;
+    u16 bits;
+    __builtin_memcpy(&bits, &nearest, sizeof(bits));
+    int mode = imm8 & 3;
+    if (value != value || (imm8 & 4) || mode == 0) {
+        return bits;
+    }
+    float back = (float)nearest;
+    int down = (mode == 1 && back > value) || (mode == 3 && back > value && value > 0);
+    int up = (mode == 2 && back < value) || (mode == 3 && back < value && value < 0);
+    if (down) {
+        bits = bits == 0x0000 ? 0x8001 : (bits & 0x8000) ? bits + 1 : bits - 1;
+    }
+    if (up) {
+        bits = bits == 0x8000 ? 0x0001 : (bits & 0x8000) ? bits - 1 : bits + 1;
+    }
+    return bits;
+}
 static inline float make_f32_bits(u32 bits) { float result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
 static inline double make_f64_bits(u64 bits) { double result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
 
