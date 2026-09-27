@@ -1248,6 +1248,149 @@ time_0_3_55 = add_project_test(
     timeout=NESTED_PROJECT_TIMEOUT,
 )
 
+proc_macro2_1_0_107 = add_project_test(
+    name="proc_macro2_1_0_107",
+    url="https://github.com/dtolnay/proc-macro2.git",
+    rev="ed8a5497669cd63db33bf24646f261b012bbbc4a",
+    lockfile="$(S)/tst/projects/proc_macro2_1_0_107/Cargo.lock",
+)
+
+quote_1_0_47 = add_project_test(
+    name="quote_1_0_47",
+    url="https://github.com/dtolnay/quote.git",
+    rev="723dcb47d3f0ddc896e17287c8a8d3f2ea2317d5",
+    lockfile="$(S)/tst/projects/quote_1_0_47/Cargo.lock",
+)
+
+log_0_4_34 = add_project_test(
+    name="log_0_4_34",
+    url="https://github.com/rust-lang/log.git",
+    rev="8034743dd9d7f7583bd9a670271483d176130911",
+    lockfile="$(S)/tst/projects/log_0_4_34/Cargo.lock",
+)
+
+either_1_18_0 = add_project_test(
+    name="either_1_18_0",
+    url="https://github.com/rayon-rs/either.git",
+    rev="ce6f07fc3d56d6a56ecfc32256d2c33bd0b4ad09",
+    lockfile="$(S)/tst/projects/either_1_18_0/Cargo.lock",
+)
+
+num_traits_0_2_19 = add_project_test(
+    name="num_traits_0_2_19",
+    url="https://github.com/rust-num/num-traits.git",
+    rev="7ec3d41d39b28190ec1d42db38021107b3951f3a",
+    lockfile="$(S)/tst/projects/num_traits_0_2_19/Cargo.lock",
+)
+
+byteorder_1_5_0 = add_project_test(
+    name="byteorder_1_5_0",
+    url="https://github.com/BurntSushi/byteorder.git",
+    rev="ec068eefa042d494475db125c4b034bd8e9e34dd",
+    lockfile="$(S)/tst/projects/byteorder_1_5_0/Cargo.lock",
+)
+
+hex_0_4_3 = add_project_test(
+    name="hex_0_4_3",
+    url="https://github.com/KokaKiwi/rust-hex.git",
+    rev="b2b4370b5bf021b98ee7adc92233e8de3f2de792",
+    lockfile="$(S)/tst/projects/hex_0_4_3/Cargo.lock",
+)
+
+sha2_0_10_9 = add_project_test(
+    name="sha2_0_10_9",
+    url="https://github.com/RustCrypto/hashes.git",
+    rev="82c36a428f8d6f05f3bfccdedb243e9d1f85359d",
+    manifest="sha2",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/sha2_0_10_9/Cargo.lock",
+)
+
+crc32fast_1_5_2 = add_project_test(
+    name="crc32fast_1_5_2",
+    url="https://github.com/srijs/rust-crc32fast.git",
+    rev="7eb0b8a2c9b246d27dc4cb5a53d3fc3b43a4bb83",
+    lockfile="$(S)/tst/projects/crc32fast_1_5_2/Cargo.lock",
+)
+
+flate2_1_1_10 = add_project_test(
+    name="flate2_1_1_10",
+    url="https://github.com/rust-lang/flate2-rs.git",
+    rev="ed93d4fc60eaf876c6aded741bf992d524551930",
+    lockfile="$(S)/tst/projects/flate2_1_1_10/Cargo.lock",
+)
+
+tempfile_3_27_0 = add_project_test(
+    name="tempfile_3_27_0",
+    url="https://github.com/Stebalien/tempfile.git",
+    rev="5c8fa12eb584931b4f1bccfde87eb72fbfa7dc61",
+    lockfile="$(S)/tst/projects/tempfile_3_27_0/Cargo.lock",
+)
+
+walkdir_2_5_0 = add_project_test(
+    name="walkdir_2_5_0",
+    url="https://github.com/BurntSushi/walkdir.git",
+    rev="4f26be4d450910916ea11533b2efc52b9a6483bc",
+    lockfile="$(S)/tst/projects/walkdir_2_5_0/Cargo.lock",
+)
+
+bstr_1_13_1 = add_project_test(
+    name="bstr_1_13_1",
+    url="https://github.com/BurntSushi/bstr.git",
+    rev="134195be38c7c9a4887980fd0f6f8bae042dd91e",
+    lockfile="$(S)/tst/projects/bstr_1_13_1/Cargo.lock",
+)
+
+unicode_width_0_2_2 = add_project_test(
+    name="unicode_width_0_2_2",
+    url="https://github.com/unicode-rs/unicode-width.git",
+    rev="9d98411769fe13c7c18cab0b3fbbab29ba8350ea",
+    lockfile="$(S)/tst/projects/unicode_width_0_2_2/Cargo.lock",
+)
+
+dashmap_6_2_1 = add_project_test(
+    name="dashmap_6_2_1",
+    url="https://github.com/xacrimon/dashmap.git",
+    rev="749ed1f965115e9e1920d2fc7ae65f633858b021",
+    lockfile="$(S)/tst/projects/dashmap_6_2_1/Cargo.lock",
+)
+
+slab_0_4_12 = add_project_test(
+    name="slab_0_4_12",
+    url="https://github.com/tokio-rs/slab.git",
+    rev="a1e4346070a48c936d808de75191dee5d01e433c",
+    lockfile="$(S)/tst/projects/slab_0_4_12/Cargo.lock",
+)
+
+winnow_0_7_15 = add_project_test(
+    name="winnow_0_7_15",
+    url="https://github.com/winnow-rs/winnow.git",
+    rev="eae4d4a23c400fec27a01cfb7115bc7808374f40",
+    lockfile="$(S)/tst/projects/winnow_0_7_15/Cargo.lock",
+)
+
+http_1_5_0 = add_project_test(
+    name="http_1_5_0",
+    url="https://github.com/hyperium/http.git",
+    rev="16fc9a7b840c2181e7f8b37397c107b0ffcd050d",
+    lockfile="$(S)/tst/projects/http_1_5_0/Cargo.lock",
+)
+
+httparse_1_10_1 = add_project_test(
+    name="httparse_1_10_1",
+    url="https://github.com/seanmonstar/httparse.git",
+    rev="9f29e79f9832dbd0ae5220acb17c1866745bdecd",
+    lockfile="$(S)/tst/projects/httparse_1_10_1/Cargo.lock",
+)
+
+unicode_normalization_0_1_24 = add_project_test(
+    name="unicode_normalization_0_1_24",
+    url="https://github.com/unicode-rs/unicode-normalization.git",
+    rev="c9921309f09ebd05108920fda92efbf5f8124a7d",
+    lockfile="$(S)/tst/projects/unicode_normalization_0_1_24/Cargo.lock",
+)
+
+
 # Unit regressions: one self-contained tst/unit/test_*.rs per compiler fix,
 # each its own node — compiled against the shared libstd and run (must exit 0).
 unit_tests = [
