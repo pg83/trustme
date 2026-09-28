@@ -151,6 +151,19 @@ func buildMetadata(opts MetadataOptions) MetadataOutput {
 		ids[path] = metadata.ID
 	}
 
+	if !opts.noDeps {
+		compiler := os.Getenv("TRUSTME_PATH")
+		if compiler == "" {
+			compiler = siblingCompiler()
+		}
+		cfg := compilerCfg(compiler, "", targetRustflags())
+		for _, pkg := range resolvedMetadataPackages(workspace, paths, cfg) {
+			if ids[pkg.manifestPath] == "" {
+				packages = append(packages, metadataPackage(pkg, readToml(pkg.manifestPath)))
+			}
+		}
+	}
+
 	defaultPaths := workspacePatterns(workspace, workspace.defaultMembers)
 	if len(defaultPaths) == 0 {
 		if mapValue(readToml(workspace.manifestPath)["package"]) != nil {
@@ -180,6 +193,34 @@ func buildMetadata(opts MetadataOptions) MetadataOutput {
 		WorkspaceRoot:           workspace.dir,
 		Metadata:                mapValue(readToml(workspace.manifestPath)["workspace"])["metadata"],
 	}
+}
+
+// Without `--no-deps` cargo lists every package the workspace resolves to,
+// its members' dev-dependencies included (ui_test finds a dependency's version
+// there to match the artifact of `cargo build`). The graph is the one a test
+// build of each member resolves for the host.
+func resolvedMetadataPackages(workspace *Workspace, paths []string, cfg *CfgSet) []*Package {
+	repository := newRepository(workspace, os.Getenv(trustmeCargoVendorDir))
+	seen := map[*Package]bool{}
+	var result []*Package
+
+	for _, path := range paths {
+		root := repository.loadPath(path)
+		host := hostTriple()
+		context := &BuildContext{
+			opts: BuildOptions{command: "test"}, repository: repository, root: root, workspace: workspace,
+			host: host, target: host, cfg: cfg,
+		}
+
+		for _, pkg := range resolveGraph(context) {
+			if !seen[pkg] && !pkg.magic && pkg.manifestPath != "" {
+				seen[pkg] = true
+				result = append(result, pkg)
+			}
+		}
+	}
+
+	return result
 }
 
 func metadataPackage(pkg *Package, doc map[string]any) MetadataPackage {

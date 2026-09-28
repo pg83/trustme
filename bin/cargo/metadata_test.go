@@ -74,3 +74,37 @@ func TestMetadataListsAreNeverNull(t *testing.T) {
 		t.Fatalf("an undeclared required-features is written: %s", text)
 	}
 }
+
+
+// ui_test reads `cargo metadata` without `--no-deps` for the version of each
+// dependency it built: the packages list names the resolved dependencies too.
+func TestMetadataListsTheResolvedDependencies(t *testing.T) {
+	dir := t.TempDir()
+	for path, text := range map[string]string{
+		"Cargo.toml":       "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nleaf = { path = \"leaf\" }\n\n[dev-dependencies]\ncheck = { path = \"check\" }\n",
+		"leaf/Cargo.toml":  "[package]\nname = \"leaf\"\nversion = \"1.2.0\"\n",
+		"check/Cargo.toml": "[package]\nname = \"check\"\nversion = \"0.3.0\"\n",
+	} {
+		full := filepath.Join(dir, path)
+		if err := os.MkdirAll(filepath.Join(filepath.Dir(full), "src"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(filepath.Dir(full), "src", "lib.rs"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	manifest := filepath.Join(dir, "Cargo.toml")
+	workspace := findWorkspace(manifest)
+	cfg := &CfgSet{flags: map[string]bool{"unix": true}, values: map[string]map[string]bool{}}
+	names := map[string]string{}
+	for _, pkg := range resolvedMetadataPackages(workspace, []string{manifest}, cfg) {
+		names[pkg.name] = pkg.version.string()
+	}
+	if names["leaf"] != "1.2.0" || names["check"] != "0.3.0" || names["app"] != "0.1.0" {
+		t.Fatalf("resolved packages = %v", names)
+	}
+}
