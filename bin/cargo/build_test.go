@@ -610,3 +610,41 @@ func TestAnIntegrationTestCompilesWithATargetTmpdir(t *testing.T) {
 		t.Fatalf("library test CARGO_TARGET_TMPDIR = %q, want none", got)
 	}
 }
+
+func TestALibraryRlibStandsInDeps(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "src", "lib.rs")
+
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	library := &Target{kind: "lib", name: "probe", path: "src/lib.rs", crateTypes: []string{"lib"}}
+	pkg := &Package{
+		dir: root, manifestPath: filepath.Join(root, "Cargo.toml"), name: "probe",
+		version: Version{major: 1}, targets: []*Target{library},
+		activeFeatures: map[string]bool{},
+	}
+	context := &BuildContext{
+		opts: BuildOptions{command: "build", profile: "debug", targetDir: filepath.Join(root, "target")},
+		root: pkg, workspace: &Workspace{dir: root}, host: "host", target: "host",
+	}
+	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
+	builder.rootTasks()
+
+	unit := builder.units[builder.libraryTask(pkg, true)]
+	deps := filepath.Join(root, "target", "debug", "deps", "lib"+builder.crateName(unit)+".rlib")
+	paths := artifactPaths(builder.depsArtifacts())
+
+	for _, want := range []string{deps, deps + ".o"} {
+		if !contains(paths, want) {
+			t.Fatalf("no artifact installs %s: %v", want, paths)
+		}
+	}
+	if !strings.HasPrefix(filepath.Base(deps), "libprobe-") {
+		t.Fatalf("deps rlib %s is not found by `lib<name>-*.rlib`", deps)
+	}
+}

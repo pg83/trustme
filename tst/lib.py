@@ -127,16 +127,15 @@ def extern_rlib_args(root: str, crates: list[str]) -> list[str]:
         if search_path.is_dir():
             arguments.extend(("-L", str(search_path)))
     for crate in crates:
-        matches = sorted(
-            path
-            for search_path in search_paths
-            for path in search_path.glob(f"lib{crate}-*.rlib")
-        )
+        matches = {}
+        for search_path in search_paths:
+            for path in sorted(search_path.glob(f"lib{crate}-*.rlib")):
+                matches.setdefault(path.name, path)
         if len(matches) != 1:
             raise RuntimeError(
-                f"expected one {crate} rlib under {release}, got {matches}"
+                f"expected one {crate} rlib under {release}, got {sorted(matches.values())}"
             )
-        arguments.extend(("--extern", f"{crate}={matches[0]}"))
+        arguments.extend(("--extern", f"{crate}={next(iter(matches.values()))}"))
     return arguments
 
 
