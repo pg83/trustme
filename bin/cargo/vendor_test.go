@@ -238,3 +238,32 @@ version = "0.1.0"
 		t.Fatal(err)
 	}
 }
+
+// icu4x takes diplomat from git, and diplomat's `macro/Cargo.toml` inherits
+// `version` from the repository's `[workspace.package]`: the package is found
+// by the version its manifest resolves to.
+func TestAGitPackageIsFoundByItsInheritedVersion(t *testing.T) {
+	root := t.TempDir()
+
+	for name, text := range map[string]string{
+		"Cargo.toml":       "[workspace]\nmembers = [\"macro\", \"core\"]\n\n[workspace.package]\nversion = \"0.15.0\"\n",
+		"core/Cargo.toml":  "[package]\nname = \"diplomat_core\"\nversion.workspace = true\n",
+		"macro/Cargo.toml": "[package]\nname = \"diplomat\"\nversion.workspace = true\n",
+	} {
+		path := filepath.Join(root, filepath.FromSlash(name))
+
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if dir := gitPackageDir(root, "diplomat", "0.15.0"); dir != filepath.Join(root, "macro") {
+		t.Fatalf("diplomat found at %q", dir)
+	}
+	if dir := gitPackageDir(root, "diplomat", "0.14.0"); dir != "" {
+		t.Fatalf("diplomat 0.14.0 found at %q", dir)
+	}
+}

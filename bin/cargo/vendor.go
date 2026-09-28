@@ -146,6 +146,20 @@ func fetchGitPackage(p Pkg, dest string) {
 		throw(command.Run())
 	}
 
+	packageDir := gitPackageDir(checkout, p.name, p.version)
+
+	if packageDir == "" {
+		throwFmt("no package %s %s in %s at %s", p.name, p.version, url, commit)
+	}
+
+	vendorGitPackage(packageDir, dest)
+}
+
+// Cargo finds a git dependency among the packages of the checkout by the
+// name and version their manifests resolve to (`GitSource` reads every
+// package of the repository), a version inherited from `[workspace.package]`
+// included.
+func gitPackageDir(checkout, name, version string) string {
 	var packageDir string
 
 	throw(filepath.WalkDir(checkout, func(path string, entry fs.DirEntry, err error) error {
@@ -158,7 +172,7 @@ func fetchGitPackage(p Pkg, dest string) {
 		if packageDir == "" && entry.Name() == "Cargo.toml" {
 			table := mapValue(readToml(path)["package"])
 
-			if stringValue(table["name"]) == p.name && stringValue(table["version"]) == p.version {
+			if stringValue(table["name"]) == name && stringValue(mapValue(normalizedManifest(path)["package"])["version"]) == version {
 				packageDir = filepath.Dir(path)
 			}
 		}
@@ -166,11 +180,7 @@ func fetchGitPackage(p Pkg, dest string) {
 		return nil
 	}))
 
-	if packageDir == "" {
-		throwFmt("no package %s %s in %s at %s", p.name, p.version, url, commit)
-	}
-
-	vendorGitPackage(packageDir, dest)
+	return packageDir
 }
 
 // Cargo vendors a git package as its files and the manifest it normalized
