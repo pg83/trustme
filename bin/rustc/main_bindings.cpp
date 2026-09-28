@@ -1,6 +1,8 @@
 #include "main_bindings.h"
 
 #include <sys/resource.h>
+#include <sys/stat.h>
+#include <climits>
 
 #include "ast_ast.h"
 #include "hir_hir.h"
@@ -68,6 +70,20 @@ using namespace stl;
 #define NEWNODE(ty, ...) makeAstExprNode<ASTExprNode##ty>(*crate.pool __VA_OPT__(, ) __VA_ARGS__)
 
 namespace {
+    bool createDirectories(const char* dir) {
+        char path[PATH_MAX];
+        const size_t length = strnlen(dir, sizeof(path) - 1);
+        for (size_t i = 1; i <= length; i++) {
+            if (i == length || dir[i] == '/') {
+                memcpy(path, dir, i);
+                path[i] = '\0';
+                mkdir(path, 0777);
+            }
+        }
+        struct stat status;
+        return stat(dir, &status) == 0 && S_ISDIR(status.st_mode);
+    }
+
     Vector<RcString> pathNodes(const char* first, const char* second = nullptr) {
         Vector<RcString> nodes(second ? 2 : 1);
         nodes.pushBack(RcString(first));
@@ -376,6 +392,10 @@ namespace {
                 const char* slash = strrchr(params.outfile.c_str(), '/');
                 sysO << StringView(slash ? slash + 1 : params.outfile.c_str()) << endL;
                 return 0;
+            }
+            if (params.outputDir != "" && !createDirectories(params.outputDir.c_str())) {
+                sysE << StringView("error: failed to find or create the directory specified by `--out-dir`") << endL;
+                return 1;
             }
 
             if (params.debug.dumpAst) {
