@@ -2464,6 +2464,8 @@ void StaticTraitResolve::clearBothGenerics() {
 const HIRType* StaticTraitResolve::monomorphExpandOpt(const Span& sp, const HIRType* input, const Monomorphiser& m) const {
     if (monomorphiseTypeNeeded(input)) {
         return monomorphExpand(sp, input, m);
+    } else if (input->flags & HIRType::HAS_ASSOCIATED_TYPE) {
+        return expandAssociatedTypes(sp, input);
     } else {
         return input;
     }
