@@ -9392,14 +9392,12 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         auto monomorph = MonomorphStatePtr(crate.types, projection.type, &projection.trait.params, &projection.params);
         bool projectionAmbiguous = false;
         resolve_.iterateAtyBounds(callSpan, projection, [&](const HIRTraitPath& declaredTrait) {
-            forEachTraitMethodDeclaration(declaredTrait.path, *declaredTrait.traitPtr, crate.types.self(), [&](const HIRFunction& function, HIRGenericPath methodTrait) {
-                auto proofTrait = declaredTrait.path.clone();
-                auto hrtb = HIRPathParams();
-                monomorph.ppHrb = &hrtb;
-                proofTrait = monomorph.monomorphGenericpath(callSpan, proofTrait, false);
-                methodTrait = monomorph.monomorphGenericpath(callSpan, methodTrait, false);
-                monomorph.ppHrb = nullptr;
-                projectionAmbiguous |= assembleTraitCandidate(function, std::move(proofTrait), std::move(methodTrait), nullptr) == Certainty::Ambiguous;
+            auto hrtb = HIRPathParams();
+            monomorph.ppHrb = &hrtb;
+            const auto proofTrait = monomorph.monomorphGenericpath(callSpan, declaredTrait.path, false);
+            monomorph.ppHrb = nullptr;
+            forEachTraitMethodDeclaration(proofTrait, *declaredTrait.traitPtr, projectionType, [&](const HIRFunction& function, HIRGenericPath methodTrait) {
+                projectionAmbiguous |= assembleTraitCandidate(function, proofTrait.clone(), std::move(methodTrait), nullptr) == Certainty::Ambiguous;
             });
             return false;
         });
