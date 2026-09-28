@@ -122,7 +122,7 @@ func findWorkspace(manifestPath string) *Workspace {
 		if fileExists(candidate) {
 			candidateDoc := readToml(candidate)
 
-			if mapValue(candidateDoc["workspace"]) != nil {
+			if table := mapValue(candidateDoc["workspace"]); table != nil && (candidate == manifestPath || !workspaceExcludes(dir, table, manifestPath)) {
 				return loadWorkspace(candidate)
 			}
 		}
@@ -141,6 +141,22 @@ func findWorkspace(manifestPath string) *Workspace {
 		patches:      map[string]string{},
 		profiles:     mapValue(doc["profile"]),
 	}
+}
+
+func workspaceExcludes(root string, table map[string]any, manifestPath string) bool {
+	under := func(entries []string) bool {
+		for _, entry := range entries {
+			prefix := filepath.Join(root, entry)
+
+			if manifestPath == prefix || strings.HasPrefix(manifestPath, prefix+string(filepath.Separator)) {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	return under(stringsValue(table["exclude"])) && !under(stringsValue(table["members"]))
 }
 
 func loadWorkspace(path string) *Workspace {

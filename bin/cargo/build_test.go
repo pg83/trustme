@@ -544,3 +544,32 @@ func TestPackageVersionInheritsTheWorkspaces(t *testing.T) {
 		t.Fatalf("inherited version = %q", got)
 	}
 }
+
+// RustCrypto/traits excludes `digest` from its root workspace; digest is then
+// the root of its own, with its own Cargo.lock (cargo's `is_excluded`: a path
+// under an `exclude` entry and under no `members` entry).
+func TestAnExcludedPackageIsItsOwnWorkspaceRoot(t *testing.T) {
+	root := t.TempDir()
+	digest := filepath.Join(root, "digest", "Cargo.toml")
+	aead := filepath.Join(root, "aead", "Cargo.toml")
+
+	for path, text := range map[string]string{
+		filepath.Join(root, "Cargo.toml"): "[workspace]\nmembers = [\"aead\"]\nexclude = [\"digest\"]\n",
+		digest: "[package]\nname = \"digest\"\nversion = \"0.10.7\"\n",
+		aead:   "[package]\nname = \"aead\"\nversion = \"0.5.0\"\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got := findWorkspace(digest).manifestPath; got != digest {
+		t.Fatalf("excluded package's workspace = %q, want its own manifest", got)
+	}
+	if got := findWorkspace(aead).manifestPath; got != filepath.Join(root, "Cargo.toml") {
+		t.Fatalf("member's workspace = %q, want the root", got)
+	}
+}
