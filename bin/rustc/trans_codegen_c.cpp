@@ -180,6 +180,7 @@ namespace {
         };
 
         IntMap<PromotedNode*> promotedValues;
+        IntMap<bool> indirectArgumentTypes;
 
         struct CallerLocationNode {
             CallerLocationNode* hashNext;
@@ -524,11 +525,13 @@ namespace {
         MetadataType metadataType(const HIRType* ty) const;
 
         template <typename F>
-        void emitFunctionArgument(const HIRType* ty, F inner);
+        void emitFunctionArgument(const RcString& abi, const HIRType* ty, F inner);
 
-        void emitFunctionArgumentCb(const HIRType* ty, CTypeCallback& inner);
+        void emitFunctionArgumentCb(const RcString& abi, const HIRType* ty, CTypeCallback& inner);
 
-        void emitUnsizedArgumentLocal(const HIRType* ty, unsigned index);
+        void emitUnsizedArgumentLocal(const RcString& abi, const HIRType* ty, unsigned index);
+
+        bool argumentIsIndirect(const RcString& abi, const HIRType* ty);
 
         bool isIndirectDstLvalue(const MIRLValue::CRef& value);
 
@@ -754,7 +757,8 @@ CodeGeneratorC::CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const
     , outfilePath(outfile)
     , outfilePathC(outfile + ".cpp")
     , of(*outputFile(*crate.pool, outfilePathC.c_str()))
-    , promotedValues(crate.pool) {
+    , promotedValues(crate.pool)
+    , indirectArgumentTypes(crate.pool) {
     options.emulatedI128 = TargetGetCurSpec(wb_).backendC.emulatedI128;
     if (TargetGetPointerBits() < 64 && !options.emulatedI128) {
         WARNING(Span(), W0000, StringView("Potentially misconfigured target, 32-bit targets require i128 emulation"));
@@ -1583,7 +1587,7 @@ auto CodeGeneratorC::emitTypeFn(const HIRType* ty) -> void {
                 of << StringView(",");
             }
             of << StringView(" ");
-            this->emitFunctionArgument(te.argTypes[i], FMT_CB(ss, ss << StringView("arg") << i;));
+            this->emitFunctionArgument(te.abi, te.argTypes[i], FMT_CB(ss, ss << StringView("arg") << i;));
         }
         if (te.isVariadic) {
             of << StringView(", ...");
@@ -3003,7 +3007,7 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
     }
 
     for (unsigned int i = 0; i < argTypes.size(); i++) {
-        emitUnsizedArgumentLocal(argTypes[i].second, i);
+        emitUnsizedArgumentLocal(item.abi, argTypes[i].second, i);
     }
 
     for (unsigned int i = 0; i < item.fixedArgCount(); i++) {
@@ -6451,7 +6455,7 @@ auto CodeGeneratorC::emitFunctionHeader(const HIRPath& p, const HIRFunction& ite
                 } else {
                     ss << StringView("\n\t\t");
                 }
-                this->emitFunctionArgument(ty, FMT_CB(os, os << StringView("arg") << i;));
+                this->emitFunctionArgument(item.abi, ty, FMT_CB(os, os << StringView("arg") << i;));
                 emitted++;
                 if (!compact && (item.variadic || emitted < passedCount || hasCallerLocation)) {
                     ss << StringView(",");
@@ -6518,7 +6522,7 @@ auto CodeGeneratorC::emitTrackCallerReifyWrapper(const HIRPath& p, const HIRFunc
                 MIR_BUG(*mirRes, type << StringView(" has unknown function-argument metadata"));
             case MetadataType::None:
             case MetadataType::Zero:
-                emitArgument("arg", i, "");
+                emitArgument("arg", i, argumentIsIndirect(item.abi, type) ? "_ref" : "");
                 break;
             case MetadataType::Slice:
             case MetadataType::TraitObject:
@@ -10175,18 +10179,36 @@ auto CodeGeneratorC::metadataType(const HIRType* ty) const -> MetadataType {
 }
 
 template <typename F>
-auto CodeGeneratorC::emitFunctionArgument(const HIRType* ty, F inner) -> void {
+auto CodeGeneratorC::emitFunctionArgument(const RcString& abi, const HIRType* ty, F inner) -> void {
     auto callback = makeCallable<CTypeCb>(inner);
-    emitFunctionArgumentCb(ty, callback);
+    emitFunctionArgumentCb(abi, ty, callback);
 }
 
-auto CodeGeneratorC::emitFunctionArgumentCb(const HIRType* ty, CTypeCallback& inner) -> void {
+auto CodeGeneratorC::argumentIsIndirect(const RcString& abi, const HIRType* ty) -> bool {
+    if (!(abi == ABI_RUST || abi == "unadjusted" || strncmp(abi.c_str(), "rust-", 5) == 0)) {
+        return false;
+    }
+    if (const auto* known = indirectArgumentTypes.find(reinterpret_cast<uintptr_t>(ty))) {
+        return *known;
+    }
+    size_t size = 0;
+    const bool indirect = metadataType(ty) == MetadataType::None && TargetGetSizeOf(sp, resolve_, ty, size) && size > 2 * (TargetGetPointerBits() / 8);
+    indirectArgumentTypes.insert(reinterpret_cast<uintptr_t>(ty), indirect);
+    return indirect;
+}
+
+auto CodeGeneratorC::emitFunctionArgumentCb(const RcString& abi, const HIRType* ty, CTypeCallback& inner) -> void {
     switch (this->metadataType(ty)) {
         case MetadataType::Unknown:
             MIR_BUG(*mirRes, ty << StringView(" has unknown function-argument metadata"));
         case MetadataType::None:
         case MetadataType::Zero:
-            emitCtypeCb(ty, inner);
+            if (argumentIsIndirect(abi, ty)) {
+                of << StringView("const ");
+                emitCtype(ty, FMT_CB(os, os << StringView("&") << inner << StringView("_ref");));
+            } else {
+                emitCtypeCb(ty, inner);
+            }
             break;
         case MetadataType::Slice:
             of << StringView("void* ") << inner << StringView("_ptr, uintptr_t ") << inner << StringView("_meta");
@@ -10197,12 +10219,17 @@ auto CodeGeneratorC::emitFunctionArgumentCb(const HIRType* ty, CTypeCallback& in
     }
 }
 
-auto CodeGeneratorC::emitUnsizedArgumentLocal(const HIRType* ty, unsigned index) -> void {
+auto CodeGeneratorC::emitUnsizedArgumentLocal(const RcString& abi, const HIRType* ty, unsigned index) -> void {
     switch (this->metadataType(ty)) {
         case MetadataType::Unknown:
             MIR_BUG(*mirRes, ty << StringView(" has unknown function-argument metadata"));
         case MetadataType::None:
         case MetadataType::Zero:
+            if (argumentIsIndirect(abi, ty)) {
+                of << StringView("\t");
+                emitCtype(ty, FMT_CB(os, os << StringView("arg") << index;));
+                of << StringView(" = arg") << index << StringView("_ref;\n");
+            }
             return;
         case MetadataType::Slice:
             of << StringView("\tSLICE_PTR arg") << index << StringView(" = make_sliceptr(arg") << index << StringView("_ptr, arg") << index << StringView("_meta);\n");
