@@ -4,10 +4,14 @@ a `<proj>_src` graph node.
 
     git_src.py <url> <rev> <out.tar> [lockfile [lockfile-subdir]]
 
+A pinned revision no branch or tag reaches is fetched by its id, as Cargo
+fetches a git dependency's locked revision.
+
 Set SRC_OVERRIDE to a local checkout to skip the clone.
 """
 import os
 import shutil
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -26,6 +30,10 @@ def main() -> int:
         else:
             lib.log(f"[src] cloning {url} @ {rev}")
             lib.run(["git", "clone", "--no-checkout", url, src])
+            present = subprocess.run(["git", "cat-file", "-e", rev + "^{commit}"], cwd=src,
+                                     stderr=subprocess.DEVNULL).returncode == 0
+            if not present:
+                lib.run(["git", "fetch", "-q", "origin", rev], cwd=src)
             lib.run(["git", "checkout", "-q", rev], cwd=src)
         if lockfile:
             shutil.copyfile(

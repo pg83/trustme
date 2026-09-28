@@ -3900,6 +3900,22 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_git_src_rev_off_branches",
+    inputs=[
+        "$(S)/tst/unit/test_git_src_fetches_a_rev_off_every_branch.py",
+        "$(S)/tst/git_src.py",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/git_src_rev_off_branches.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_git_src_fetches_a_rev_off_every_branch.py",
+        "$(S)/tst/git_src.py", "$(B)/tst/unit/git_src_rev_off_branches.stamp",
+    ],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_build_output_bytes",
     inputs=[
         "$(S)/build",
