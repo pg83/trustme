@@ -590,3 +590,23 @@ func TestTestProcessesFindTheLibraryDirectory(t *testing.T) {
 		t.Fatalf("TRUSTME_LIBDIR = %q", got)
 	}
 }
+
+func TestAnIntegrationTestCompilesWithATargetTmpdir(t *testing.T) {
+	root := t.TempDir()
+	pkg := &Package{dir: root, manifestPath: filepath.Join(root, "Cargo.toml"), name: "probe", activeFeatures: map[string]bool{}}
+	context := &BuildContext{
+		opts: BuildOptions{command: "test", profile: "debug", targetDir: filepath.Join(root, "target")},
+		root: pkg, workspace: &Workspace{dir: root}, host: "host", target: "host",
+	}
+	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
+
+	if got := builder.targetTmpDir(&Target{kind: "test"}, true); got != filepath.Join(root, "target", "tmp") {
+		t.Fatalf("integration test CARGO_TARGET_TMPDIR = %q", got)
+	}
+	if got := builder.targetTmpDir(&Target{kind: "bench"}, true); got != filepath.Join(root, "target", "tmp") {
+		t.Fatalf("bench CARGO_TARGET_TMPDIR = %q", got)
+	}
+	if got := builder.targetTmpDir(&Target{kind: "test", libraryTest: true}, true); got != "" {
+		t.Fatalf("library test CARGO_TARGET_TMPDIR = %q, want none", got)
+	}
+}

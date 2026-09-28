@@ -968,6 +968,14 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 	env["OUT_DIR"] = outDir
 	env["CARGO_CRATE_NAME"] = targetCompileName(target)
 
+	if tmp := b.targetTmpDir(target, unit.isHost); tmp != "" {
+		if !b.context.opts.dryRun {
+			throw(os.MkdirAll(tmp, 0o755))
+		}
+
+		env["CARGO_TARGET_TMPDIR"] = tmp
+	}
+
 	for key, value := range pkg.buildOutput.env {
 		env[key] = resolveBuildOutputPath(value, outDir)
 	}
@@ -1137,6 +1145,17 @@ func (b *Builder) taskEnv(ctx *TaskContext, pkg *Package) map[string]string {
 	}
 
 	return env
+}
+
+// Cargo compiles an integration test or a bench with CARGO_TARGET_TMPDIR, a
+// directory inside the target directory it creates for them
+// (`Layout::prepare_tmp`); libloading's tests build the library they load there.
+func (b *Builder) targetTmpDir(target *Target, isHost bool) string {
+	if (target.kind != "test" || target.libraryTest) && target.kind != "bench" {
+		return ""
+	}
+
+	return absolutePath(filepath.Join(filepath.Dir(b.outputDir(isHost)), "tmp"))
 }
 
 func (b *Builder) cacheRoot() string {
