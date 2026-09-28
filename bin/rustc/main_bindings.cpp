@@ -718,6 +718,7 @@ namespace {
                     HIRCrate crateForSer(pool, *wb.types);
                     crateForSer.crateName = hirCrate->crateName;
                     crateForSer.edition = hirCrate->edition;
+                    crateForSer.isProcMacroCrate = true;
                     for (const auto& i : hirCrate->rootModule.macroItems) {
                         DEBUG(i.first << StringView(": ") << i.second->ent.tagStr());
                         if (const auto* e = i.second->ent.opt_ProcMacro()) {

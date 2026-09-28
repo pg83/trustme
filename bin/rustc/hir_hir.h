@@ -787,6 +787,7 @@ public:
 
     bool isNoCore = false;
     bool noMain = false;
+    bool isProcMacroCrate = false;
 
     std::set<RcString> features;
 

@@ -306,6 +306,10 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         ec.procMacroFilename = artifacts->procMacroPath;
         ec.isProcMacro = artifacts->procMacroPath != "";
     }
+    if (!ec.isProcMacro && ec.hir->isProcMacroCrate) {
+        ec.isProcMacro = true;
+        ec.procMacroFilename = RcString::newInterned(path.ends_with(".rlib") ? path.substr(0, path.size() - 5) : path);
+    }
     auto res = externCrates.insert(std::make_pair(realName, mv$(ec)));
     if (!res.second) {
         DEBUG(StringView("Duplicate load of '") << realName);

@@ -1284,6 +1284,7 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     rv.crateName = this->crateName;
     loadingCrate = &rv;
     rv.edition = static_cast<ASTEdition>(in.readTag());
+    rv.isProcMacroCrate = in.readBool();
     rv.rootModule = deserialiseModule();
 
     size_t localItemTypeNamePathCount = in.readCount();
@@ -3514,6 +3515,7 @@ auto HirSerialiser::serialise(const HIRCrate::ImplGroup<T>& ig) -> void {
 auto HirSerialiser::serialiseCrate(const HIRCrate& crate) -> void {
     out.writeString(crate.crateName);
     out.writeTag(static_cast<int>(crate.edition));
+    out.writeBool(crate.isProcMacroCrate);
     serialiseModule(crate.rootModule);
 
     size_t localItemTypeNamePathCount = 0;
