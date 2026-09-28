@@ -2090,15 +2090,18 @@ auto CodeGeneratorC::emitConstructorEnum(const Span& sp, const HIRGenericPath& p
     MIRTypeResolve topMirRes{sp, resolve_, pathCallback, ty, args, emptyFcn};
     mirRes = &topMirRes;
 
+    const auto abi = RcString::newInterned(ABI_RUST);
     of << StringView("static e_") << TransMangle(p) << StringView(" ") << TransMangleValue(path) << StringView("(");
     for (unsigned int i = 0; i < e.size(); i++) {
         if (i != 0) {
             of << StringView(", ");
         }
-        const auto& ty = args[i].second;
-        emitCtype(ty, FMT_CB(ss, ss << StringView("arg") << i;));
+        emitFunctionArgument(abi, args[i].second, FMT_CB(ss, ss << StringView("arg") << i;));
     }
     of << StringView(") {\n");
+    for (unsigned int i = 0; i < e.size(); i++) {
+        emitUnsizedArgumentLocal(abi, args[i].second, i);
+    }
 
     of << StringView("\te_") << TransMangle(p) << StringView(" rv;\n");
 
@@ -2122,25 +2125,40 @@ auto CodeGeneratorC::emitConstructorStruct(const Span& sp, const HIRGenericPath&
     };
 
     const auto& e = item.data.as_Tuple();
+    HIRFunction::argsT args;
+    for (unsigned int i = 0; i < e.size(); i++) {
+        args.emplace_back(HIRPattern(), monomorph(e[i].ent));
+    }
+
+    MIRFunction emptyFcn;
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
+        os << StringView("struct cons ") << p;
+    });
+    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, crate.types.path(p.clone(), HIRTypePathBinding::make_Struct(&item)), args, emptyFcn};
+    mirRes = &topMirRes;
+
+    const auto abi = RcString::newInterned(ABI_RUST);
     of << StringView("static s_") << TransMangle(p) << StringView(" ") << TransMangleValue(p) << StringView("(");
     for (unsigned int i = 0; i < e.size(); i++) {
         if (i != 0) {
             of << StringView(", ");
         }
-        const auto& ty = monomorph(e[i].ent);
-        emitCtype(ty, FMT_CB(ss, ss << StringView("_") << i;));
+        emitFunctionArgument(abi, args[i].second, FMT_CB(ss, ss << StringView("arg") << i;));
     }
     of << StringView(") {\n");
+    for (unsigned int i = 0; i < e.size(); i++) {
+        emitUnsizedArgumentLocal(abi, args[i].second, i);
+    }
     of << StringView("\ts_") << TransMangle(p) << StringView(" rv = {};\n");
     for (unsigned int i = 0; i < e.size(); i++) {
-        const auto& ty = monomorph(e[i].ent);
-        if (this->typeIsBadZst(ty)) {
+        if (this->typeIsBadZst(args[i].second)) {
             continue;
         }
-        of << StringView("\trv._") << i << StringView(" = _") << i << StringView(";\n");
+        of << StringView("\trv._") << i << StringView(" = arg") << i << StringView(";\n");
     }
     of << StringView("\treturn rv;\n");
     of << StringView("}\n\n");
+    mirRes = nullptr;
 }
 
 auto CodeGeneratorC::emitExternTypeDefinition(const HIRType* type) -> void {
