@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -165,5 +166,75 @@ func TestAGitPackageIsVendoredUnderItsName(t *testing.T) {
 	}
 	if _, ok := layout[3]; ok {
 		t.Fatal("a workspace package is vendored")
+	}
+}
+
+// pulldown-cmark's fuzz member takes mozjs from git, and mozjs inherits
+// `edition`, `license`, `libc` and `cc` from its repository's `[workspace]`.
+// Cargo vendors a git package with the manifest it normalized, so the copy
+// loads with no workspace above it.
+func TestAVendoredGitPackageCarriesWhatItInherits(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"repo/Cargo.toml": `[workspace]
+members = ["mozjs"]
+
+[workspace.package]
+edition = "2021"
+license = "MPL-2.0"
+
+[workspace.dependencies]
+libc = "0.2"
+cc = { version = "1.0", features = ["parallel"] }
+`,
+		"repo/mozjs/Cargo.toml": `[package]
+name = "mozjs"
+version = "0.14.1"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+libc.workspace = true
+
+[build-dependencies]
+cc = { workspace = true, features = ["jobserver"] }
+`,
+		"repo/mozjs/src/lib.rs": "",
+		"project/Cargo.toml": `[package]
+name = "demo"
+version = "0.1.0"
+`,
+	}
+
+	for name, text := range files {
+		path := filepath.Join(root, filepath.FromSlash(name))
+
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	vendorDir := filepath.Join(root, "vendor")
+	vendorGitPackage(filepath.Join(root, "repo", "mozjs"), filepath.Join(vendorDir, "mozjs"))
+
+	repository := newRepository(findWorkspace(filepath.Join(root, "project", "Cargo.toml")), vendorDir)
+	mozjs := repository.byName["mozjs"]
+
+	if len(mozjs) != 1 || mozjs[0].edition != "2021" {
+		t.Fatalf("vendored mozjs = %+v", mozjs)
+	}
+	if main := mozjs[0].dependencies.main; len(main) != 1 || main[0].name != "libc" || !main[0].version.accepts(parseVersion("0.2.170")) {
+		t.Fatalf("mozjs dependencies = %+v", main)
+	}
+
+	build := mozjs[0].dependencies.build
+	if len(build) != 1 || build[0].name != "cc" || strings.Join(build[0].features, ",") != "parallel,jobserver" {
+		t.Fatalf("mozjs build-dependencies = %+v", build)
+	}
+	if _, err := os.Stat(filepath.Join(vendorDir, "mozjs", "src", "lib.rs")); err != nil {
+		t.Fatal(err)
 	}
 }

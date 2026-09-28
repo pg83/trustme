@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -169,12 +170,119 @@ func fetchGitPackage(p Pkg, dest string) {
 		throwFmt("no package %s %s in %s at %s", p.name, p.version, url, commit)
 	}
 
+	vendorGitPackage(packageDir, dest)
+}
+
+// Cargo vendors a git package as its files and the manifest it normalized
+// (`prepare_for_vendor`, cargo/ops/vendor.rs): what the package inherits from
+// the `[workspace]` of its repository is written out, since no workspace
+// stands above the vendored copy.
+func vendorGitPackage(packageDir, dest string) {
 	throw(os.RemoveAll(dest))
 	copyPackageTree(packageDir, dest)
+
+	var manifest bytes.Buffer
+
+	throw(toml.NewEncoder(&manifest).Encode(normalizedManifest(filepath.Join(packageDir, "Cargo.toml"))))
+	throw(os.WriteFile(filepath.Join(dest, "Cargo.toml"), manifest.Bytes(), 0o644))
 
 	buf := throw2(json.Marshal(map[string]any{"files": map[string]string{}, "package": nil}))
 
 	throw(os.WriteFile(filepath.Join(dest, ".cargo-checksum.json"), buf, 0o644))
+}
+
+// A field or dependency marked `workspace = true` takes the workspace's
+// value; a dependency adds its own features, `optional` and `public` to the
+// workspace's declaration and may turn back on the default features the
+// workspace turned off (`inherit_workspace_dep`, cargo/util/toml/mod.rs).
+func normalizedManifest(manifestPath string) map[string]any {
+	doc := readToml(manifestPath)
+	workspace := findWorkspace(manifestPath)
+	table := mapValue(readToml(workspace.manifestPath)["workspace"])
+	inheritedPackage := mapValue(table["package"])
+	inheritedDependencies := mapValue(table["dependencies"])
+	packageDir := filepath.Dir(manifestPath)
+
+	for key, value := range mapValue(doc["package"]) {
+		if !boolValue(mapValue(value)["workspace"], false) {
+			continue
+		}
+
+		inherited, ok := inheritedPackage[key]
+
+		if !ok {
+			throwFmt("%s: `package.%s` is not defined by the workspace", manifestPath, key)
+		}
+
+		if path, isPath := inherited.(string); isPath && (key == "readme" || key == "license-file") {
+			inherited = throw2(filepath.Rel(packageDir, filepath.Join(workspace.dir, path)))
+		}
+
+		mapValue(doc["package"])[key] = inherited
+	}
+
+	normalize := func(dependencies map[string]any) {
+		for key, value := range dependencies {
+			member := mapValue(value)
+
+			if !boolValue(member["workspace"], false) {
+				continue
+			}
+
+			declared, ok := inheritedDependencies[key]
+
+			if !ok {
+				throwFmt("workspace dependency %q is not defined", key)
+			}
+
+			resolved := map[string]any{}
+
+			if version, isVersion := declared.(string); isVersion {
+				resolved["version"] = version
+			} else {
+				for field, fieldValue := range mapValue(declared) {
+					resolved[field] = fieldValue
+				}
+			}
+
+			if path := stringValue(resolved["path"]); path != "" {
+				resolved["path"] = throw2(filepath.Rel(packageDir, filepath.Join(workspace.dir, path)))
+			}
+
+			if features := append(stringsValue(resolved["features"]), stringsValue(member["features"])...); len(features) > 0 {
+				resolved["features"] = features
+			}
+
+			for _, field := range []string{"optional", "public"} {
+				if fieldValue, present := member[field]; present {
+					resolved[field] = fieldValue
+				}
+			}
+
+			for _, field := range []string{"default-features", "default_features"} {
+				if boolValue(member[field], false) {
+					delete(resolved, "default_features")
+					resolved["default-features"] = true
+				}
+			}
+
+			dependencies[key] = resolved
+		}
+	}
+
+	sections := []string{"dependencies", "dev-dependencies", "dev_dependencies", "build-dependencies", "build_dependencies"}
+
+	for _, section := range sections {
+		normalize(mapValue(doc[section]))
+	}
+
+	for _, target := range mapValue(doc["target"]) {
+		for _, section := range sections {
+			normalize(mapValue(mapValue(target)[section]))
+		}
+	}
+
+	return doc
 }
 
 func copyPackageTree(from, to string) {
