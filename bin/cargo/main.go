@@ -98,6 +98,8 @@ parseGlobals:
 		runCommand("", nil, "", opts.dryRun, binaries[0], opts.testArgs...)
 	case "vendor":
 		cmdVendor(commandArgs)
+	case "tree":
+		cmdTree(append(global, commandArgs...))
 	case "metadata":
 		cmdMetadata(append(global, commandArgs...))
 	case "help", "-h", "--help":
@@ -119,6 +121,7 @@ Commands:
   run      Build and execute a binary target
   metadata Output package and workspace metadata
   vendor   Vendor all dependencies locally
+  tree     Display a tree visualization of a dependency graph
   help     Print this message
 
 Options:

@@ -239,13 +239,7 @@ func enabledDependencies(context *BuildContext, pkg *Package, includeDev bool) [
 	}
 
 	for condition, group := range pkg.targetDeps {
-		matches := condition == context.target
-
-		if strings.HasPrefix(condition, "cfg(") {
-			matches = context.cfg.matches(condition, pkg.activeFeatures)
-		}
-
-		if !matches {
+		if !targetTableMatches(context, pkg, condition) {
 			continue
 		}
 
@@ -257,6 +251,36 @@ func enabledDependencies(context *BuildContext, pkg *Package, includeDev bool) [
 
 		if includeDev {
 			deps = append(deps, group.dev...)
+		}
+	}
+
+	result := deps[:0]
+
+	for _, dep := range deps {
+		if !dep.optional || dep.enabled {
+			result = append(result, dep)
+		}
+	}
+
+	return result
+}
+
+func targetTableMatches(context *BuildContext, pkg *Package, condition string) bool {
+	if strings.HasPrefix(condition, "cfg(") {
+		return context.cfg.matches(condition, pkg.activeFeatures)
+	}
+
+	return condition == context.target
+}
+
+// The dependencies a package's library links: `[dependencies]` and the
+// matching target tables, less optional ones no feature enabled.
+func normalDependencies(context *BuildContext, pkg *Package) []*Dependency {
+	deps := append([]*Dependency{}, pkg.dependencies.main...)
+
+	for condition, group := range pkg.targetDeps {
+		if targetTableMatches(context, pkg, condition) {
+			deps = append(deps, group.main...)
 		}
 	}
 
