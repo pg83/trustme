@@ -160,6 +160,7 @@ type BuildContext struct {
 	workspace  *Workspace
 	compiler   string
 	cfg        *CfgSet
+	rustflags  []string
 	host       string
 	target     string
 	cross      bool

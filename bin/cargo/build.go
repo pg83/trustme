@@ -171,7 +171,8 @@ func buildPackage(opts BuildOptions, manifestPath string) []string {
 		cross:      opts.target != "" && opts.target != host && !opts.emitMmir,
 	}
 
-	context.cfg = compilerCfg(compiler, opts.target)
+	context.rustflags = targetRustflags()
+	context.cfg = compilerCfg(compiler, opts.target, context.rustflags)
 	context.cxx = compilerCxxSpec(compiler, opts.target)
 	context.hostCxx = context.cxx
 
@@ -1051,6 +1052,7 @@ func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Tas
 	env["DEBUG"] = strconv.FormatBool(profile.debug)
 	env["PROFILE"] = b.context.opts.profile
 	env["RUSTC"] = b.context.compiler
+	env["CARGO_ENCODED_RUSTFLAGS"] = strings.Join(b.context.rustflags, "\x1f")
 
 	if len(b.context.opts.libSearch) > 0 {
 		env["TRUSTME_LIBDIR"] = absolutePath(b.context.opts.libSearch[0])
@@ -1131,7 +1133,17 @@ func (b *Builder) commonCompilerArgs(pkg *Package, output string, isHost bool, b
 		args = append(args, "--cfg", "feature=\""+feature+"\"")
 	}
 
-	return args
+	return append(args, b.unitRustflags(isHost)...)
+}
+
+// With `--target` the flags are the target's only; without it every unit,
+// build scripts and proc macros included, is built with them.
+func (b *Builder) unitRustflags(isHost bool) []string {
+	if isHost && b.context.cross {
+		return nil
+	}
+
+	return b.context.rustflags
 }
 
 func (b *Builder) commonEnv(pkg *Package) map[string]string {
@@ -1275,6 +1287,10 @@ func (b *Builder) rustSignature(pkg *Package, target *Target, isHost bool) []str
 		signature = append(signature, "feature="+feature)
 	}
 
+	for _, flag := range b.unitRustflags(isHost) {
+		signature = append(signature, "rustflag="+flag)
+	}
+
 	return append(signature, b.envSignature(b.commonEnv(pkg))...)
 }
 
@@ -1292,6 +1308,7 @@ func (b *Builder) buildScriptRunSignature(pkg *Package) []string {
 		"debug=" + strconv.FormatBool(profile.debug),
 		"profile=" + b.context.opts.profile,
 		"rustc=" + b.context.compiler,
+		"rustflags=" + strings.Join(b.context.rustflags, "\x1f"),
 	}
 	if len(b.context.opts.libSearch) > 0 {
 		signature = append(signature, "trustme-libdir="+absolutePath(b.context.opts.libSearch[0]))

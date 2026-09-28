@@ -73,8 +73,24 @@ type CfgParser struct {
 	pos   int
 }
 
-func compilerCfg(compiler, target string) *CfgSet {
-	args := []string{"-Z", "print-cfgs"}
+// Cargo's flags for every compiler run of the target (`build.rustflags`):
+// CARGO_ENCODED_RUSTFLAGS split on 0x1f when it is set, even empty, else
+// RUSTFLAGS split on whitespace. They reach the `cfg` a target table is
+// matched against, as cargo learns it from `rustc --print cfg` with them.
+func targetRustflags() []string {
+	if encoded, ok := os.LookupEnv("CARGO_ENCODED_RUSTFLAGS"); ok {
+		if encoded == "" {
+			return nil
+		}
+
+		return strings.Split(encoded, "\x1f")
+	}
+
+	return strings.Fields(os.Getenv("RUSTFLAGS"))
+}
+
+func compilerCfg(compiler, target string, rustflags []string) *CfgSet {
+	args := append([]string{"-Z", "print-cfgs"}, rustflags...)
 
 	if target != "" {
 		args = append([]string{"--target", target}, args...)
