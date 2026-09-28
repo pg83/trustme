@@ -2748,7 +2748,21 @@ auto ProcMacroVisitor::visitEnum(const RcString& name, const ASTVisibility& vis,
 }
 
 auto ProcMacroVisitor::visitUnion(const RcString& name, const ASTVisibility& vis, const ASTUnion& unn) -> void {
-    TODO(sp, StringView("visit_union"));
+    this->visitVis(vis);
+    pmi.sendRword("union");
+    pmi.sendIdent(name.c_str());
+    this->visitParams(unn.params());
+    this->visitBounds(unn.params());
+    pmi.sendSymbol("{");
+    for (const auto& si : unn.variants) {
+        this->visitAttrs(si.attrs);
+        this->visitVis(si.vis);
+        pmi.sendIdent(si.name.c_str(), si.nameIsRaw);
+        pmi.sendSymbol(":");
+        this->visitType(si.type);
+        pmi.sendSymbol(",");
+    }
+    pmi.sendSymbol("}");
 }
 
 auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& vis, const ASTFunction& fcn) -> void {
