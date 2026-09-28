@@ -2624,7 +2624,9 @@ auto DecoratorCrateName::stage() const -> AttrStage {
 
 auto DecoratorCrateName::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
     auto name = mi.parseEqualsString(wb, crate, crate.rootModule_);
-    crate.setCrateName(name);
+    if (!crate.crateNameRequested) {
+        crate.setCrateName(name);
+    }
 }
 
 auto DecoratorRecursionLimit::stage() const -> AttrStage {

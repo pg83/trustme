@@ -365,9 +365,16 @@ ASTExternCrate::ASTExternCrate(u32& id, ObjPool* pool, HIRTypeInterner& types, c
     }
 }
 
+auto ASTCrate::effectiveCrateType() const -> Type {
+    if (crateTypeRequested != Type::Unknown) {
+        return crateTypeRequested;
+    }
+    return crateType != Type::Unknown ? crateType : Type::Executable;
+}
+
 void ASTCrate::setCrateName(std::string name) {
     crateNameSet = name;
-    if (crateType == Type::Executable) {
+    if (effectiveCrateType() == Type::Executable) {
         crateNameReal = "";
     } else {
         crateNameReal = crateNameSuffix != "" ? RcString::newInterned(name + "-" + crateNameSuffix) : RcString::newInterned(name);

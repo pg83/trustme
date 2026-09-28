@@ -2229,8 +2229,7 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
     ExpandAttrs(es, crate.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
         d.handle(sp, a, es.wb, crate);
     }));
-
-    // TODO: Crate name and type
+    crate.setCrateName(crate.crateNameSet);
 
     std::vector<std::unique_ptr<ASTNamed<ASTItem>>> newRootItems;
     Expand_Mod_Early(wb, crate, crate.rootModule_, newRootItems);

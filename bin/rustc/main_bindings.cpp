@@ -303,19 +303,9 @@ namespace {
                     crate.markExternCrateUsed(realName);
                 }
             }
-            {
-                auto crateType = params.crateType;
-                if (crateType == ASTCrate::Type::Unknown) {
-                    crateType = crate.crateType;
-                }
-                if (crateType == ASTCrate::Type::Unknown) {
-                    crateType = ASTCrate::Type::Executable;
-                }
-                crate.crateType = crateType;
-
-                crate.setCrateName(params.crateName != "" ? params.crateName : CrateNameFromFile(params.infile));
-                crate.crateType = ASTCrate::Type::Unknown;
-            }
+            crate.crateTypeRequested = params.testHarness ? ASTCrate::Type::Executable : params.crateType;
+            crate.crateNameRequested = params.crateName != "";
+            crate.setCrateName(params.crateName != "" ? params.crateName : CrateNameFromFile(params.infile));
 
             {
                 Expand(wb, crate);
@@ -327,13 +317,7 @@ namespace {
             {
                 LintCheckForbid(wb, crate);
             }
-            auto crateType = params.crateType;
-            if (crateType == ASTCrate::Type::Unknown) {
-                crateType = crate.crateType;
-            }
-            if (crateType == ASTCrate::Type::Unknown) {
-                crateType = ASTCrate::Type::Executable;
-            }
+            const auto crateType = crate.effectiveCrateType();
             crate.crateType = crateType;
 
             if (crate.crateType == ASTCrate::Type::ProcMacro) {
@@ -681,10 +665,6 @@ namespace {
                     manifest << StringView("object\t") << ext.objectPath << StringView("\n");
                 }
                 manifest.finish();
-            }
-
-            if (params.testHarness) {
-                crateType = ASTCrate::Type::Executable;
             }
 
             // TODO: For 1.29 executables/dylibs, add oom/panic shims

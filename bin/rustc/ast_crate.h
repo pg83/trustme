@@ -92,6 +92,8 @@ public:
         Executable,
         ProcMacro,
     } crateType = Type::Unknown;
+    Type crateTypeRequested = Type::Unknown;
+    bool crateNameRequested = false;
 
     enum LoadStd {
         LOAD_STD,
@@ -113,6 +115,8 @@ public:
     ASTModule& rootModule() {
         return rootModule_;
     }
+
+    Type effectiveCrateType() const;
 
     void setCrateName(std::string name);
 
