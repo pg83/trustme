@@ -7,6 +7,7 @@
 // before any macro scope), so after `derive_where_visited` hands the item back,
 // its `#[derive_where(Clone)]` is still the helper. Here it was resolved as the
 // attribute macro again, which gave back the same item, and so on for ever.
+// The helper covers the item's variants and fields as well.
 use proc_macro_item_passthrough::{helper_forward, helper_forward_visited, HelperForward};
 
 #[helper_forward(x)]
@@ -14,11 +15,17 @@ struct Tagged;
 
 #[helper_forward(y)]
 enum Picked {
+    #[helper_forward(z)]
     A,
+    B {
+        #[helper_forward(w)]
+        field: u8,
+    },
 }
 
 fn main() {
     assert_eq!(Tagged::helper_forward_seen(), 1);
     assert_eq!(Picked::helper_forward_seen(), 1);
     let _ = Picked::A;
+    let _ = Picked::B { field: 1 };
 }

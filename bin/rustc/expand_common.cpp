@@ -190,6 +190,37 @@ namespace {
         void visit(ASTExprNodeMacroDefinition&) override;
     };
 
+    template <typename F>
+    void forEachMemberAttr(const ASTItem& item, const F& f) {
+        const auto fields = [&](const auto& list) {
+            for (const auto& field : list) {
+                for (const auto& a : field.attrs.items) {
+                    f(a);
+                }
+            }
+        };
+        if (const auto* e = item.opt_Struct()) {
+            if (const auto* d = e->data.opt_Tuple()) {
+                fields(d->ents);
+            } else if (const auto* d = e->data.opt_Struct()) {
+                fields(d->ents);
+            }
+        } else if (const auto* e = item.opt_Enum()) {
+            for (const auto& v : e->variants()) {
+                for (const auto& a : v.attrs.items) {
+                    f(a);
+                }
+                if (const auto* d = v.data.opt_Tuple()) {
+                    fields(d->items);
+                } else if (const auto* d = v.data.opt_Struct()) {
+                    fields(d->fields);
+                }
+            }
+        } else if (const auto* e = item.opt_Union()) {
+            fields(e->variants);
+        }
+    }
+
     void ParseModRootItemsInto(ASTModule& mod, size_t idx, TokenStream& lex) {
         auto oldItems = std::move(mod.items);
         ParseModRootItems(lex, mod);
@@ -346,18 +377,25 @@ namespace {
                             auto lex = ProcMacroInvoke(sp, wb, crate, this->macPath, attr, attrs, vis, path.nodes.back(), i);
                             if (lex) {
                                 Vector<RcString> helpers;
-                                for (const auto& a : attrs) {
+                                const auto collect = [&](const ASTAttribute& a) {
                                     if (a.isDeriveHelper() && a.name().isTrivial()) {
                                         helpers.pushBack(a.name().asTrivial());
                                     }
+                                };
+                                for (const auto& a : attrs) {
+                                    collect(a);
                                 }
-                                const auto isHelper = [&](const RcString& name) {
+                                forEachMemberAttr(i, collect);
+                                const auto mark = [&](const ASTAttribute& a) {
+                                    if (!a.name().isTrivial()) {
+                                        return;
+                                    }
                                     for (const auto& helper : helpers) {
-                                        if (helper == name) {
-                                            return true;
+                                        if (helper == a.name().asTrivial()) {
+                                            a.markDeriveHelper();
+                                            return;
                                         }
                                     }
-                                    return false;
                                 };
 
                                 i = ASTItem::make_None({});
@@ -366,10 +404,9 @@ namespace {
                                 ParseModRootItemsInto(mod, modIdx, *lex);
                                 for (size_t idx = modIdx + 1; idx < modIdx + 1 + (mod.items.size() - before); idx++) {
                                     for (const auto& a : mod.items[idx]->attrs.items) {
-                                        if (a.name().isTrivial() && isHelper(a.name().asTrivial())) {
-                                            a.markDeriveHelper();
-                                        }
+                                        mark(a);
                                     }
+                                    forEachMemberAttr(mod.items[idx]->data, mark);
                                 }
                                 ExpandModExternCrates(wb, crate, mod.path(), mod, modIdx + 1);
                             } else {
