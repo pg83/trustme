@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import unittest
@@ -215,6 +216,24 @@ class ProjectXfailTest(unittest.TestCase):
                 "--manifest-path", "/src/Cargo.toml",
             ],
         )
+
+    def test_toolchain_is_on_path(self):
+        # tracing-tree's ui_test runs `rustc`, rustix's tests run `cargo tree`:
+        # an installed toolchain has both on PATH.
+        import tempfile
+        with tempfile.TemporaryDirectory() as work:
+            bindir = os.path.join(work, "bin")
+            os.makedirs(bindir)
+            compiler = os.path.join(bindir, "trustme")
+            cargo = os.path.join(work, "cargo-bin")
+            for path in (compiler, cargo):
+                with open(path, "w"):
+                    pass
+            env = {"PATH": "/usr/bin"}
+            test_project.expose_toolchain(env, compiler, cargo)
+            self.assertEqual(env["PATH"].split(os.pathsep)[0], bindir)
+            self.assertEqual(os.path.realpath(os.path.join(bindir, "rustc")), os.path.realpath(compiler))
+            self.assertEqual(os.path.realpath(os.path.join(bindir, "cargo")), os.path.realpath(cargo))
 
 
 if __name__ == "__main__":

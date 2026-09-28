@@ -150,6 +150,17 @@ def run_tests(
         lib.log(f"[xfail-target] {name}")
 
 
+def expose_toolchain(env: dict, compiler: str, cargo: str) -> None:
+    """Put `rustc` and `cargo` on PATH, as an installed toolchain has them."""
+    bindir = os.path.dirname(compiler)
+    for name, target in (("rustc", compiler), ("cargo", os.path.realpath(cargo))):
+        link = os.path.join(bindir, name)
+        if os.path.lexists(link):
+            os.remove(link)
+        os.symlink(target, link)
+    env["PATH"] = bindir + os.pathsep + env.get("PATH", "")
+
+
 def main() -> int:
     src_tar = os.path.abspath(sys.argv[1])
     vendor_tar = os.path.abspath(sys.argv[2])
@@ -162,6 +173,7 @@ def main() -> int:
     with lib.workdir() as work:
         env = dict(os.environ)
         env["TRUSTME_PATH"] = lib.trustme_link(work)
+        expose_toolchain(env, env["TRUSTME_PATH"], cargo)
         env.setdefault("CC", "cc")
         env.setdefault("RUST_MIN_STACK", str(64 * 1024 * 1024))
 
