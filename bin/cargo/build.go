@@ -207,9 +207,17 @@ func buildPackage(opts BuildOptions, manifestPath string) []string {
 			builder.reportArtifact(report)
 		}
 
-		for _, artifact := range builder.depsArtifacts() {
+		installed := builder.depsArtifacts()
+
+		for _, artifact := range installed {
 			if artifact.task.state != nil {
 				executor.install(artifact.task, artifact.index, artifact.path)
+			}
+		}
+
+		for _, report := range builder.dependencyReports(installed) {
+			if report.task.state != nil {
+				builder.reportArtifact(report)
 			}
 		}
 	}
@@ -328,6 +336,26 @@ func (b *Builder) depsArtifacts() []InstallArtifact {
 	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].path < artifacts[j].path })
 
 	return artifacts
+}
+
+// Cargo reports a `compiler-artifact` for every unit it builds, the
+// dependencies' libraries included, with the files it wrote; ui_test hands a
+// dependency's to the compiler as `--extern`. A library of another package is
+// reported by its rlib in `deps`.
+func (b *Builder) dependencyReports(installed []InstallArtifact) []ArtifactReport {
+	var reports []ArtifactReport
+
+	for _, artifact := range installed {
+		unit := b.units[artifact.task]
+
+		if unit == nil || artifact.task != unit.rs || unit.pkg == b.context.root {
+			continue
+		}
+
+		reports = append(reports, ArtifactReport{pkg: unit.pkg, target: unit.target, task: unit.rs, path: artifact.path})
+	}
+
+	return reports
 }
 
 func workspaceMemberManifests(workspace *Workspace) []string {

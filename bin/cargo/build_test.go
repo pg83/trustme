@@ -648,3 +648,19 @@ func TestALibraryRlibStandsInDeps(t *testing.T) {
 		t.Fatalf("deps rlib %s is not found by `lib<name>-*.rlib`", deps)
 	}
 }
+
+// ui_test builds its dependencies with `cargo build --message-format=json` and
+// takes each dependency's library from the stream: a package's dependency is
+// reported by its rlib in `deps`, the package's own units as before.
+func TestADependencyLibraryIsReportedAsAnArtifact(t *testing.T) {
+	pkg := devDependentPackage(t)
+	pkg.dependencies.main = pkg.dependencies.dev
+	pkg.dependencies.dev = nil
+	builder := builderFor(pkg, BuildOptions{command: "build", selectors: TargetSelectors{lib: true}})
+	builder.rootTasks()
+
+	reports := builder.dependencyReports(builder.depsArtifacts())
+	if len(reports) != 1 || reports[0].pkg.name != "helper" || filepath.Base(filepath.Dir(reports[0].path)) != "deps" {
+		t.Fatalf("dependency reports = %+v", reports)
+	}
+}
