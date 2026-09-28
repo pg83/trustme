@@ -8400,14 +8400,42 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
        claimed, which for a function item means the item's own type rather than the
        pointer it would become.  The relation is a guess: it is kept when it holds
        and dropped when it does not, and the real one still runs afterwards. */
+    struct ExpectedResultRelation {
+        Unifier::Outcome outcome;
+        bool bindsOuter;
+    };
+    const auto relateExpectedResult = [&](const HIRType* methodReturn) {
+        ThinVector<const HIRType*> outer;
+        ThinVector<const HIRType*> roots;
+        visitTyWith(expectedResult, [&](const HIRType* inner) {
+            const auto* infer = inner->opt_Infer();
+            if (infer && infer->index != ~0u) {
+                const auto* root = resolve_.ivars.getType(inner);
+                if (root->is_Infer()) {
+                    outer.push_back(inner);
+                    roots.push_back(root);
+                }
+            }
+            return false;
+        });
+        Unifier relation(callSpan, resolve_.ivars, &resolve_, {.relateProjectionInputs = true});
+        const auto outcome = relation.unify(methodReturn, expectedResult);
+        bool bindsOuter = false;
+        if (outcome != Unifier::Outcome::Mismatch) {
+            for (size_t i = 0; i < outer.size(); i++) {
+                bindsOuter |= resolve_.ivars.getType(outer[i]) != roots[i];
+            }
+        }
+        return ExpectedResultRelation{outcome, bindsOuter};
+    };
     const auto guideFromExpectedResult = [&](const Monomorphiser& monomorph, const HIRType* returnTypeTemplate) {
         if (!expectedResult || returnTypeTemplate->is_ErasedType()) {
             return;
         }
         const auto* methodReturn = monomorph.monomorphType(callSpan, returnTypeTemplate, true);
         const auto snapshot = resolve_.ivars.snapshot();
-        Unifier relation(callSpan, resolve_.ivars, &resolve_, {.relateProjectionInputs = true});
-        if (relation.unify(methodReturn, expectedResult) != Unifier::Outcome::Mismatch) {
+        const auto relation = relateExpectedResult(methodReturn);
+        if (relation.outcome != Unifier::Outcome::Mismatch && !relation.bindsOuter) {
             resolve_.ivars.commit(snapshot);
         } else {
             resolve_.ivars.rollbackTo(snapshot);
@@ -9077,9 +9105,11 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                 if (expectedResult && !method.data.returnType->is_ErasedType()) {
                     const auto* methodReturn = methodMonomorph.monomorphType(callSpan, method.data.returnType, true);
                     const auto resultSnapshot = resolve_.ivars.snapshot();
-                    Unifier relation(callSpan, resolve_.ivars, &resolve_, {.relateProjectionInputs = true});
-                    const auto outcome = relation.unify(methodReturn, expectedResult);
-                    if (outcome == Unifier::Outcome::Mismatch) {
+                    const auto relation = relateExpectedResult(methodReturn);
+                    const auto outcome = relation.outcome;
+                    if (outcome != Unifier::Outcome::Mismatch && relation.bindsOuter) {
+                        resolve_.ivars.rollbackTo(resultSnapshot);
+                    } else if (outcome == Unifier::Outcome::Mismatch) {
                         resolve_.ivars.rollbackTo(resultSnapshot);
                         const auto* destinationPointer = resolve_.ivars.getType(expectedResult)->opt_Pointer();
                         const auto* sourcePointer = resolve_.ivars.getType(methodReturn)->opt_Pointer();
