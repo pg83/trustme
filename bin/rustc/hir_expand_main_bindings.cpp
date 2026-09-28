@@ -3717,6 +3717,26 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
             captureTypes[i].ent = fixup.visitType(tyMono);
         }
     }
+
+    std::vector<HIRPattern> argsPatInner;
+    for (const auto& arg : node.args) {
+        argsPatInner.push_back(arg.first.clone());
+        ev.visitPattern(sp, argsPatInner.back());
+    }
+    HIRPattern argsPat{HIRPatternBinding(), HIRPattern::Data::make_Tuple({mv$(argsPatInner)})};
+
+    HIRExprPtr bodyCode{mv$(node.code)};
+    bodyCode.bindings = mv$(localTypes);
+
+    {
+        DEBUG(StringView("-- Fixing types in body code"));
+        ClosureExprVisitorFixup fixup{resolve_.board(), &params, monomorphCb, &out, true};
+        fixup.visitRoot(bodyCode);
+
+        DEBUG(StringView("-- Fixing types in signature"));
+        argsTy = fixup.visitType(argsTy);
+        retType = fixup.visitType(retType);
+    }
     monomorphCb.addBounds(sp, resolve_);
 
     DEBUG(StringView("params = ") << params.fmtArgs() << params.fmtBounds());
@@ -3747,26 +3767,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
     node.captures = mv$(captureNodes);
     DEBUG(StringView("-- Object name: ") << node.objPath);
     const HIRType* closureType = resolve_.hirCrate().types.path(HIRGenericPath(node.objPath.path.clone(), mv$(implPathParams)), HIRTypePathBinding::make_Struct(&closureStructRef));
-    std::vector<HIRPattern> argsPatInner;
-    for (const auto& arg : node.args) {
-        argsPatInner.push_back(arg.first.clone());
-        ev.visitPattern(sp, argsPatInner.back());
-    }
-    HIRPattern argsPat{HIRPatternBinding(), HIRPattern::Data::make_Tuple({mv$(argsPatInner)})};
-
-    HIRExprPtr bodyCode{mv$(node.code)};
-    bodyCode.bindings = mv$(localTypes);
-
-    {
-        DEBUG(StringView("-- Fixing types in body code"));
-        ClosureExprVisitorFixup fixup{resolve_.board(), &params, monomorphCb, &out, true};
-        fixup.visitRoot(bodyCode);
-
-        DEBUG(StringView("-- Fixing types in signature"));
-        argsTy = fixup.visitType(argsTy);
-        retType = fixup.visitType(retType);
-        // TODO: Replace erased types too
-    }
 
     DEBUG(StringView("args_ty = ") << argsTy << StringView(", ret_type = ") << retType);
     const auto& langCopy = resolve_.hirCrate().getLangItemPathOpt("copy");
