@@ -94,6 +94,7 @@ struct Context {
         bool isAmbiguous = false;
         /* The check-order place of the node the rule was registered for. */
         unsigned order = 0;
+        unsigned orderEnd = 0;
 
         stl::Vector<StallDependency> stalledOn;
     };
@@ -109,6 +110,7 @@ struct Context {
     /* The check-order place (`HIRExprNode::checkOrder`) a rule registered now belongs
        to: the node being visited, or the rule being checked; 0 outside both. */
     unsigned currentOrder = 0;
+    unsigned currentOrderEnd = 0;
     /* Rules held back this pass by a node still to be revisited, and whether such
        cuts were given up: upstream resolved every such node before checking what
        follows, but this checker's lookup may need what only a later rule gives

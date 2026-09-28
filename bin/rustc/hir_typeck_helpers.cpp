@@ -15632,6 +15632,41 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             return callback.visit(std::move(response));
         }
     }
+    bool coercionOnlyFillsParams = coercionSelectsCandidate && !resolve_.typeContainsIvars(resolvedType);
+    for (size_t i = 0; coercionOnlyFillsParams && i < query.coercions->size(); i++) {
+        const auto& constraint = (*query.coercions)[i];
+        coercionOnlyFillsParams = !constraint.isSelf && constraint.direction == SolverCoercionConstraint::Direction::InputIsDestination;
+    }
+    if (coercionOnlyFillsParams) {
+        TraitGoalQuery plainQuery = query;
+        plainQuery.coercions = nullptr;
+        SolverResponse plainResponse;
+        const SolverImpl* plainApplicable = nullptr;
+        auto plainCallback = makeCallable<SolverMayApplyCb>([&](SolverMayApply probe) {
+            plainResponse = mv$(probe.effects);
+            plainApplicable = probe.candidate;
+            return true;
+        });
+        evaluateTyped(callSpan, trait, goalParams, resolvedType, plainCallback, plainQuery, true, includeRootMagicCandidates);
+        if (plainApplicable && plainResponse.certainty != Certainty::NoSolution) {
+            const auto candidateParams = plainApplicable->getTraitParams(crate.types);
+            ThinVector<SolverTypeEquality> coercionEqualities;
+            bool coercionsHold = candidateParams.types.size() == goalParams.types.size();
+            for (size_t i = 0; coercionsHold && i < query.coercions->size(); i++) {
+                const auto& constraint = (*query.coercions)[i];
+                coercionsHold = resolve_.evaluateCoercionConstraint(callSpan, constraint, candidateParams.types[constraint.typeIndex], &coercionEqualities, &plainResponse) != Certainty::NoSolution;
+            }
+            if (coercionsHold) {
+                for (auto& equality : coercionEqualities) {
+                    plainResponse.equalities.push_back(mv$(equality));
+                }
+                if (plainResponse.certainty == Certainty::Proven) {
+                    return callback.visit(SolverSelection{mv$(plainResponse), *plainApplicable});
+                }
+                return callback.visit(SolverMayApply{mv$(plainResponse), plainApplicable});
+            }
+        }
+    }
     if (coercionSelectsCandidate) {
         auto guidedType = resolvedType;
         HIRPathParamsBuilder guidedBuilder(goalParams);
@@ -15640,7 +15675,15 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         guidedParam.zero(guidedBuilder.types.size());
         bool hasGuidance = false;
         bool exactGuidance = true;
+        const bool selfStillOpen = visitTyWith(resolve_.ivars.expandIvars(resolvedType), [](const HIRType* inner) {
+            const auto* infer = inner->opt_Infer();
+            return infer && infer->index != ~0u && !infer->isLit();
+        });
         for (const auto& constraint : *query.coercions) {
+            if (!constraint.isSelf && constraint.direction == SolverCoercionConstraint::Direction::InputIsDestination && selfStillOpen) {
+                exactGuidance = false;
+                break;
+            }
             if (constraint.alternativeGroup != 0 && std::count_if(query.coercions->begin(), query.coercions->end(), [&](const SolverCoercionConstraint& alternative) {
                 return alternative.alternativeGroup == constraint.alternativeGroup;
             }) != 1) {

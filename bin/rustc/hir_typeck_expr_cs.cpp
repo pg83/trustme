@@ -6336,6 +6336,7 @@ void Context::equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimple
     });
     this->linkAssoc.push_back(Associated{this->nextRuleIdx++, sp, ruleLeftTy, trait.clone(), mv$(ruleParams), ruleImplTy, ruleName, mv$(ruleAtyPp), isOp, operatorKind});
     this->linkAssoc.back().order = this->currentOrder;
+    this->linkAssoc.back().orderEnd = this->currentOrderEnd;
     this->indexAssociated(this->linkAssoc.size() - 1);
     DEBUG(StringView("++ ") << this->linkAssoc.back());
     this->ivars.markChange();
@@ -6849,9 +6850,13 @@ Vector<OrderPlace> argumentBindingCuts(const Context& context, const IvarCoercio
     return cuts;
 }
 
+OrderPlace associatedPlace(const Context::Associated& rule) {
+    return OrderPlace{rule.orderEnd ? rule.orderEnd : rule.order, rule.order};
+}
+
 bool associatedPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<OrderPlace>& cuts, Vector<unsigned>& ivars, const Context::Associated& rule) {
     const auto count = coercionIndex.count;
-    const OrderPlace place{rule.order, rule.order};
+    const OrderPlace place = associatedPlace(rule);
     if (coercionIndex.insidePendingArguments(place)) {
         DEBUG(StringView("- R") << rule.ruleIdx << StringView(" at ") << rule.order << StringView(" waits for the method call it is an argument of"));
         context.pendingCutHolds++;
@@ -7053,6 +7058,7 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
         rule.isAmbiguous = indexedRule.isAmbiguous;
         rule.stalledOn = indexedRule.stalledOn;
         rule.order = indexedRule.order;
+        rule.orderEnd = indexedRule.orderEnd;
 
         if (bindingOrdersAt != context.linkCoerce.size()) {
             bindingOrders = argumentBindingOrders(context);
@@ -11027,7 +11033,7 @@ auto IvarCoercionIndex::buildComponents() -> void {
                 }
             }
             const auto component = componentRoots[ruleIvars[0]];
-            const OrderPlace place{rule.order, rule.order};
+            const OrderPlace place = associatedPlace(rule);
             if (cuts[component].isNone() || cuts[component].after(place)) {
                 cuts[component] = place;
             }
@@ -11929,7 +11935,10 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
 
             auto operatorKind = node.op == HIRExprNodeBinOp::Op::CmpEqu || node.op == HIRExprNodeBinOp::Op::CmpNEqu ? TypeckPrimitiveOperator::Equal : TypeckPrimitiveOperator::Order;
             if (!opTrait.components().empty()) {
+                const auto parentOrderEnd = this->context.currentOrderEnd;
+                this->context.currentOrderEnd = node.checkOrderEnd;
                 this->context.equateTypesAssoc(node.span(), this->context.crate.types.infer(), opTrait, HIRPathParams(rightTy), leftTy, "", {}, true, operatorKind);
+                this->context.currentOrderEnd = parentOrderEnd;
             } else {
                 this->context.equateTypes(node.span(), leftTy, rightTy);
             }
@@ -12010,7 +12019,10 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
             const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
 
             if (!opTrait.components().empty()) {
+                const auto parentOrderEnd = this->context.currentOrderEnd;
+                this->context.currentOrderEnd = node.checkOrderEnd;
                 this->context.equateTypesAssoc(node.span(), operatorResultType, opTrait, HIRPathParams(rightTy), leftTy, "Output", {}, true, operatorKind);
+                this->context.currentOrderEnd = parentOrderEnd;
             } else {
                 this->context.equateTypes(node.span(), operatorResultType, leftTy);
                 if (operatorKind != TypeckPrimitiveOperator::Shl && operatorKind != TypeckPrimitiveOperator::Shr) {
