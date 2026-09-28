@@ -3406,6 +3406,22 @@ unit_tests.append(command(
     descr="UT",
     color="green",
 ))
+unit_tests.append(command(
+    name="unit_emit_llvm_ir_driver",
+    inputs=["$(S)/tst/unit/test_emit_llvm_ir.py", *TESTS_LIB],
+    outputs=["$(B)/tst/unit/emit_llvm_ir_driver.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_emit_llvm_ir.py",
+        "$(B)/bin/rustc",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/emit_llvm_ir_driver.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
 rust_unit_tests = []
 # Files a unit test pulls in with `#[path]`, which are inputs of every unit
 # node because the node cannot tell which test names them.

@@ -89,6 +89,10 @@ namespace {
         } lastStage = STAGE_ALL;
 
         bool emitMetadataOnly = false;
+        bool emitLink = true;
+        bool emitLlvmIr = false;
+        RcString emitLlvmIrPath;
+        bool emitDepInfo = false;
 
         std::string infile;
         std::string outfile;
@@ -336,6 +340,13 @@ namespace {
             }
             crate.setCrateName(crateName);
 
+            const bool outfileGiven = params.outfile != "";
+            if (params.emitDepInfo && params.emitDepfile == "") {
+                params.emitDepfile = FMT(params.outputDir << crate.crateNameSet << StringView(".d"));
+            }
+            if (params.emitLlvmIr && params.emitLlvmIrPath == "") {
+                params.emitLlvmIrPath = RcString::newInterned(outfileGiven && !params.emitLink ? params.outfile : FMT(params.outputDir << crate.crateNameSet << StringView(".ll")));
+            }
             if (params.outfile == "") {
                 switch (crate.crateType) {
                     case ASTCrate::Type::RustLib:
@@ -725,6 +736,20 @@ namespace {
                 MIRCleanupCrate(wb, *hirCrate);
             }
             memoryDump(memoryDumpSequence, "Trans");
+
+            if (!params.emitLink) {
+                if (params.emitLlvmIr) {
+                    MIROptimiseCrateInlining(wb, *hirCrate, items, true, mirOptLevel, enableMirInlining);
+                    TransEnumerateCleanup(wb, *hirCrate, items);
+                    const auto base = FMT(params.emitLlvmIrPath << StringView(".tmp"));
+                    transOpt.emitCppOnly = true;
+                    const auto output = crateType == ASTCrate::Type::Executable || crateType == ASTCrate::Type::ProcMacro ? CodegenOutput::Executable : crateType == ASTCrate::Type::RustLib ? CodegenOutput::StaticLibrary : CodegenOutput::DynamicLibrary;
+                    TransCodegen(wb, base, output, transOpt, hirCrate, std::move(items), "");
+                    ::rename(FMT(base << StringView(".cpp")).c_str(), params.emitLlvmIrPath.c_str());
+                    ::remove(FMT(base << StringView(".blob")).c_str());
+                }
+                return 0;
+            }
 
             std::string hirFile;
             switch (crateType) {
@@ -1454,11 +1479,40 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 }
                 CfgSetLintCap(settings, level);
             } else if (const char* emit = checkWithArg("emit")) {
-                if (std::strcmp(emit, "metadata") == 0) {
-                    this->emitMetadataOnly = true;
-                } else {
-                    sysE << StringView("Ignoring `--emit ") << emit << StringView("` for compatability with rustc") << endL;
+                this->emitLink = false;
+                bool emitMetadata = false;
+                for (const char* item = emit; *item;) {
+                    const char* end = item;
+                    while (*end && *end != ',') {
+                        end++;
+                    }
+                    const char* equals = item;
+                    while (equals < end && *equals != '=') {
+                        equals++;
+                    }
+                    const size_t kindLength = equals - item;
+                    const auto kindIs = [&](const char* kind) {
+                        return strlen(kind) == kindLength && strncmp(item, kind, kindLength) == 0;
+                    };
+                    const auto path = equals < end ? RcString::newInterned(equals + 1, end - equals - 1) : RcString();
+                    if (kindIs("link")) {
+                        this->emitLink = true;
+                    } else if (kindIs("metadata")) {
+                        emitMetadata = true;
+                    } else if (kindIs("llvm-ir")) {
+                        this->emitLlvmIr = true;
+                        this->emitLlvmIrPath = path;
+                    } else if (kindIs("dep-info")) {
+                        this->emitDepInfo = true;
+                        if (path != "") {
+                            this->emitDepfile = path.c_str();
+                        }
+                    } else {
+                        sysE << StringView("Ignoring `--emit ") << RcString::newInterned(item, kindLength) << StringView("` for compatability with rustc") << endL;
+                    }
+                    item = *end ? end + 1 : end;
                 }
+                this->emitMetadataOnly = emitMetadata && !this->emitLink && !this->emitLlvmIr;
             } else if (const char* targetName = checkWithArg("target")) {
                 this->target = targetName;
             } else if (strcmp(arg, "--dump-target-spec") == 0) {
