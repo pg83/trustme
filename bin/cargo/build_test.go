@@ -573,3 +573,20 @@ func TestAnExcludedPackageIsItsOwnWorkspaceRoot(t *testing.T) {
 		t.Fatalf("member's workspace = %q, want the root", got)
 	}
 }
+
+// A test binary may run the compiler itself (autocfg's probes, libloading's
+// helper library): with rustc its sysroot comes along, and ours is the library
+// directory a build script is given as well.
+func TestTestProcessesFindTheLibraryDirectory(t *testing.T) {
+	root := t.TempDir()
+	pkg := &Package{dir: root, manifestPath: filepath.Join(root, "Cargo.toml"), name: "probe", activeFeatures: map[string]bool{}}
+	context := &BuildContext{
+		opts: BuildOptions{command: "test", profile: "debug", libSearch: []string{filepath.Join(root, "lib")}},
+		root: pkg, workspace: &Workspace{dir: root}, host: "host", target: "host",
+	}
+	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
+
+	if got := builder.testEnv()["TRUSTME_LIBDIR"]; got != filepath.Join(root, "lib") {
+		t.Fatalf("TRUSTME_LIBDIR = %q", got)
+	}
+}

@@ -1991,6 +1991,10 @@ func runRetryingTextBusy(run func() error) error {
 }
 
 func (b *Builder) runTest(binary string, args []string) {
+	runCommand(b.context.root.dir, b.testEnv(), "", b.context.opts.dryRun, binary, args...)
+}
+
+func (b *Builder) testEnv() map[string]string {
 	env := b.commonEnv(b.context.root)
 	if cargo, err := os.Executable(); err == nil {
 		env["CARGO"] = cargo
@@ -2003,8 +2007,10 @@ func (b *Builder) runTest(binary string, args []string) {
 	}
 	if len(b.context.opts.libSearch) > 0 {
 		env[trustmeCargoLibSearch] = strings.Join(b.context.opts.libSearch, string(os.PathListSeparator))
+		env["TRUSTME_LIBDIR"] = absolutePath(b.context.opts.libSearch[0])
 	}
-	runCommand(b.context.root.dir, env, "", b.context.opts.dryRun, binary, args...)
+
+	return env
 }
 
 func shellCommand(command string) []string {
