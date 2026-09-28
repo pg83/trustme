@@ -1492,6 +1492,16 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     exit(1);
                 }
                 CfgSetLintCap(settings, level);
+            } else if (const char* format = checkWithArg("error-format")) {
+                if (strcmp(format, "human-unicode") == 0 || strcmp(format, "human-annotate-rs") == 0 || strcmp(format, "pretty-json") == 0) {
+                    sysE << StringView("error: `--error-format=") << format << StringView("` is unstable") << endL;
+                    exit(1);
+                }
+                if (strcmp(format, "human") != 0 && strcmp(format, "short") != 0 && strcmp(format, "json") != 0) {
+                    sysE << StringView("error: argument for `--error-format` must be `human`, `human-annotate-rs`, `human-unicode`, `json`, `pretty-json` or `short` (instead was `")
+                         << format << StringView("`)") << endL;
+                    exit(1);
+                }
             } else if (const char* request = checkWithArg("print")) {
                 if (strcmp(request, "cfg") == 0) {
                     this->printCfg = true;

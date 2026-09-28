@@ -3423,6 +3423,22 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_error_format_driver",
+    inputs=["$(S)/tst/unit/test_error_format.py", *TESTS_LIB],
+    outputs=["$(B)/tst/unit/error_format_driver.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_error_format.py",
+        "$(B)/bin/rustc",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/error_format_driver.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_print_file_names_driver",
     inputs=["$(S)/tst/unit/test_print_file_names.py", *TESTS_LIB],
     outputs=["$(B)/tst/unit/print_file_names_driver.stamp"],
