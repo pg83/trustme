@@ -75,7 +75,7 @@ type MetadataTarget struct {
 	Doc              bool     `json:"doc"`
 	Doctest          bool     `json:"doctest"`
 	Test             bool     `json:"test"`
-	RequiredFeatures []string `json:"required-features"`
+	RequiredFeatures []string `json:"required-features,omitempty"`
 }
 
 func cmdMetadata(args []string) {
@@ -186,9 +186,9 @@ func metadataPackage(pkg *Package, doc map[string]any) MetadataPackage {
 	table := mapValue(doc["package"])
 	features := map[string][]string{}
 	for name, values := range pkg.features {
-		features[name] = append([]string(nil), values...)
+		features[name] = append([]string{}, values...)
 	}
-	features["default"] = append([]string(nil), pkg.defaultFeature...)
+	features["default"] = append([]string{}, pkg.defaultFeature...)
 
 	result := MetadataPackage{
 		Name: pkg.name, Version: pkg.version.string(), ID: metadataPackageID(pkg),
@@ -196,12 +196,13 @@ func metadataPackage(pkg *Package, doc map[string]any) MetadataPackage {
 		Description: nullableString(table["description"]), Source: nil,
 		Targets: metadataTargets(pkg), Features: features, ManifestPath: pkg.manifestPath,
 		Metadata: mapValue(table["metadata"]), Publish: metadataPublish(table["publish"]),
-		Authors: stringsValue(table["authors"]), Categories: stringsValue(table["categories"]),
-		Keywords: stringsValue(table["keywords"]), Readme: nullablePath(pkg.dir, table["readme"]),
+		Authors: append([]string{}, stringsValue(table["authors"])...), Categories: append([]string{}, stringsValue(table["categories"])...),
+		Keywords: append([]string{}, stringsValue(table["keywords"])...), Readme: nullablePath(pkg.dir, table["readme"]),
 		Repository: nullableString(table["repository"]), Homepage: nullableString(table["homepage"]),
 		Documentation: nullableString(table["documentation"]), Edition: pkg.edition,
 		Links: nullableString(table["links"]), DefaultRun: nullableString(table["default-run"]),
 		RustVersion: nullableString(table["rust-version"]),
+		Dependencies: []MetadataDependency{},
 	}
 
 	result.Dependencies = appendMetadataDependencies(result.Dependencies, pkg.dependencies.main, nil, nil)
@@ -258,7 +259,7 @@ func appendMetadataDependencies(out []MetadataDependency, deps []*Dependency, ki
 		out = append(out, MetadataDependency{
 			Name: dep.name, Source: source, Req: dep.version.string(), Kind: kind,
 			Rename: rename, Optional: dep.optional, UsesDefaultFeatures: dep.defaultFeatures,
-			Features: append([]string(nil), dep.features...), Target: target, Registry: nil, Path: path,
+			Features: append([]string{}, dep.features...), Target: target, Registry: nil, Path: path,
 		})
 	}
 	return out

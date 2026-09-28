@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
+	"strings"
 	"path/filepath"
 	"testing"
 )
@@ -41,5 +43,34 @@ func TestMetadataNoDepsWorkspace(t *testing.T) {
 	}
 	if output.TargetDirectory != filepath.Join(dir, "out") || output.WorkspaceRoot != dir {
 		t.Fatalf("unexpected paths: %#v", output)
+	}
+}
+
+// ui_test reads `cargo metadata` with the cargo_metadata crate, whose lists
+// are sequences: cargo writes an empty list as `[]`, and leaves out
+// `required-features` a target does not declare.
+func TestMetadataListsAreNeverNull(t *testing.T) {
+	dir := t.TempDir()
+	manifest := filepath.Join(dir, "Cargo.toml")
+	if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifest, []byte("[package]\nname = \"deps\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nglob = \"0.3\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "src", "lib.rs"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	encoded, err := json.Marshal(buildMetadata(MetadataOptions{manifestPath: manifest, format: "1", noDeps: true}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(encoded)
+	if strings.Contains(text, `"features":null`) || strings.Contains(text, `"authors":null`) || strings.Contains(text, `"keywords":null`) {
+		t.Fatalf("a list is null: %s", text)
+	}
+	if strings.Contains(text, `"required-features"`) {
+		t.Fatalf("an undeclared required-features is written: %s", text)
 	}
 }

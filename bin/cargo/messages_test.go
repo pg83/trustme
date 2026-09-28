@@ -79,16 +79,20 @@ func TestCompilerMessageStartsWithReason(t *testing.T) {
 
 // escargot deserializes a `compiler-message` into shapes whose lists are
 // sequences, so a target naming none of its kinds has to say so with an empty
-// list rather than with a null.
+// list rather than with a null. `required-features` cargo writes only when the
+// target declares it (`SerializedTarget`), and both readers default it.
 func TestMessageTargetListsAreNeverNull(t *testing.T) {
 	pkg := &Package{dir: "/src", manifestPath: "/src/Cargo.toml", name: "demo"}
 	target := &Target{kind: "example", name: "demo", path: "examples/demo.rs", edition: "2021"}
 	data := string(throw2(json.Marshal(messageTarget(pkg, target))))
 
-	for _, field := range []string{`"kind":["example"]`, `"crate_types":["bin"]`, `"required-features":[]`} {
+	for _, field := range []string{`"kind":["example"]`, `"crate_types":["bin"]`} {
 		if !strings.Contains(data, field) {
 			t.Fatalf("message target %s lacks %s", data, field)
 		}
+	}
+	if strings.Contains(data, `null`) || strings.Contains(data, `"required-features"`) {
+		t.Fatalf("message target %s writes a null or an undeclared required-features", data)
 	}
 }
 
