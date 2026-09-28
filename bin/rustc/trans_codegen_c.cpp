@@ -2261,6 +2261,9 @@ auto CodeGeneratorC::emitStaticProto(const HIRPath& p, const HIRStatic& item, co
         of << StringView("__thread ");
     }
     emitStaticTy(type, p, /*is_proto=*/true, item.explicitAlignment);
+    if (item.linkage.name != "") {
+        emitLinkageLabel(item.linkage.name.c_str(), item.linkage.name.size());
+    }
     if (item.explicitAlignment != 0) {
         of << StringView(" __attribute__((aligned(") << item.explicitAlignment << StringView(")))");
     }

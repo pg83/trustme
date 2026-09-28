@@ -2988,6 +2988,8 @@ HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attr
 
         if (e.markings.linkName != "") {
             linkage.name = e.markings.linkName;
+        } else if (attrs.get("no_mangle")) {
+            linkage.name = name.c_str();
         }
         // If there's no code, demangle the name (TODO: By ABI) and set linkage.
         else if (linkage.name == "" && !e.value()) {
