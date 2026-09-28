@@ -2,7 +2,10 @@
 """Vendor a project's locked dependencies into a hermetic tar.zst with the Go
 cargo. This is a `<proj>_vendor` graph node.
 
-    vendor.py <project-src.tar> <manifest-subdir> <out.tar.zst>
+    vendor.py <project-src.tar> <manifest-subdir> <out.tar.zst> [<sync-manifest>...]
+
+Each sync manifest (relative to the source root) is a further package whose own
+lockfile is vendored with the project's: `cargo vendor --sync`.
 
 Environment: CARGO. Set SSL_CERT_FILE if the environment lacks system certs.
 """
@@ -21,8 +24,12 @@ def main() -> int:
 
     with lib.workdir() as work:
         src = lib.untar(src_tar, os.path.join(work, "src"))
+        sync = []
+        for manifest in sys.argv[4:]:
+            sync += ["--sync", os.path.join(src, manifest)]
         lib.run([cargo, "vendor",
                  "--manifest-path", os.path.join(src, subdir, "Cargo.toml"),
+                 *sync,
                  "-Zarchive=" + out])
     return 0
 

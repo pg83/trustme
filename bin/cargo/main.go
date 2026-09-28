@@ -338,6 +338,7 @@ func cmdVendor(args []string) {
 	archive := ""
 	versioned := false
 	positional := false
+	var syncManifests []string
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -357,6 +358,8 @@ func cmdVendor(args []string) {
 			manifestPath = value()
 		case "--versioned-dirs":
 			versioned = true
+		case "--sync", "-s":
+			syncManifests = append(syncManifests, value())
 		case "--locked", "--offline", "--respect-source-config", "--no-delete":
 		case "-h", "--help":
 			vendorUsage()
@@ -364,6 +367,8 @@ func cmdVendor(args []string) {
 		default:
 			if strings.HasPrefix(arg, "-Zarchive=") {
 				archive = strings.TrimPrefix(arg, "-Zarchive=")
+			} else if strings.HasPrefix(arg, "--sync=") {
+				syncManifests = append(syncManifests, strings.TrimPrefix(arg, "--sync="))
 			} else if strings.HasPrefix(arg, "-") {
 				throwFmt("unexpected argument %q for cargo vendor", arg)
 			} else if positional {
@@ -379,6 +384,10 @@ func cmdVendor(args []string) {
 
 	lockPath := filepath.Join(filepath.Dir(manifestPath), "Cargo.lock")
 	pkgs := parseLock(lockPath)
+
+	for _, sync := range syncManifests {
+		pkgs = mergeLockPackages(pkgs, parseLock(filepath.Join(filepath.Dir(absolutePath(sync)), "Cargo.lock")))
+	}
 
 	if archive != "" {
 		work := throw2(os.MkdirTemp("", "cargo-vendor-"))
@@ -412,6 +421,7 @@ Usage: cargo vendor [OPTIONS] [PATH]
 Options:
       --manifest-path <PATH>  Path to Cargo.toml
       --versioned-dirs        Always include versions in directory names
+  -s, --sync <TOML>           Additional Cargo.toml to sync and vendor
   -Zarchive=<PATH>            Pack the vendor tree as a reproducible tar.zst
 `)
 }

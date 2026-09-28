@@ -133,3 +133,37 @@ func readTestArchive(t *testing.T, data []byte) []testArchiveEntry {
 
 	return entries
 }
+
+// tracing-tree's ui tests build `test_dependencies/Cargo.toml`, a package with
+// a lockfile of its own; `cargo vendor --sync` vendors both lockfiles' packages.
+func TestVendorSyncTakesTheUnionOfTheLockfiles(t *testing.T) {
+	registry := "registry+https://github.com/rust-lang/crates.io-index"
+	log := Pkg{name: "log", version: "0.4.22", source: registry, checksum: "a"}
+	futures := Pkg{name: "futures", version: "0.3.31", source: registry, checksum: "b"}
+
+	got := mergeLockPackages([]Pkg{log}, []Pkg{log, futures})
+
+	if len(got) != 2 || got[0] != log || got[1] != futures {
+		t.Fatalf("merged = %v", got)
+	}
+}
+
+// pin-project-lite's dev-dependencies come from git; cargo vendor copies such a
+// package into the vendor directory under its name, as a registry one.
+func TestAGitPackageIsVendoredUnderItsName(t *testing.T) {
+	pkgs := []Pkg{
+		{name: "macrotest", version: "1.2.1", source: "git+https://github.com/taiki-e/macrotest.git?branch=dev-old-msrv#07ad470b0c8aa315c808adb692ed8292b5bf89e8"},
+		{name: "prettyplease", version: "0.1.25", source: "git+https://github.com/taiki-e/prettyplease.git?branch=dev-old-msrv#cd08a29d5e6b6c10784c08caca2361a31f992a3a"},
+		{name: "prettyplease", version: "0.2.37", source: "registry+https://github.com/rust-lang/crates.io-index", checksum: "c"},
+		{name: "pin-project-lite", version: "0.2.16"},
+	}
+
+	layout := vendorLayout(pkgs, false)
+
+	if layout[0] != "macrotest" || layout[1] != "prettyplease-0.1.25" || layout[2] != "prettyplease-0.2.37" {
+		t.Fatalf("layout = %v", layout)
+	}
+	if _, ok := layout[3]; ok {
+		t.Fatal("a workspace package is vendored")
+	}
+}

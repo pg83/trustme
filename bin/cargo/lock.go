@@ -17,6 +17,28 @@ func (p Pkg) isRegistry() bool {
 	return strings.HasPrefix(p.source, "registry+") && p.checksum != ""
 }
 
+func (p Pkg) isGit() bool {
+	return strings.HasPrefix(p.source, "git+")
+}
+
+// `cargo vendor --sync` vendors the packages of every lockfile it is given.
+func mergeLockPackages(pkgs []Pkg, more []Pkg) []Pkg {
+	seen := map[Pkg]bool{}
+
+	for _, p := range pkgs {
+		seen[p] = true
+	}
+
+	for _, p := range more {
+		if !seen[p] {
+			seen[p] = true
+			pkgs = append(pkgs, p)
+		}
+	}
+
+	return pkgs
+}
+
 func parseLock(path string) []Pkg {
 	f := throw2(os.Open(path))
 

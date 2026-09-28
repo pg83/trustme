@@ -595,6 +595,7 @@ def add_project_test(
     adapter_args=(),
     adapter_inputs=(),
     lockfile=None,
+    vendor_sync=(),
     timeout=PROJECT_TIMEOUT,
 ):
     """Add the source, vendor and build+test nodes for one pinned project."""
@@ -630,7 +631,7 @@ def add_project_test(
         outputs=[vendor_archive],
         cmd=[
             "python3", "$(S)/tst/vendor.py",
-            source_archive, vendor_manifest, vendor_archive,
+            source_archive, vendor_manifest, vendor_archive, *vendor_sync,
         ],
         deps=[source, cargo],
         env={"CARGO": "$(B)/bin/cargo"},
@@ -2286,6 +2287,7 @@ tracing_tree_0_3_1 = add_project_test(
     url="https://github.com/davidbarsky/tracing-tree.git",
     rev="bbe6596fbe5e0bd637c40c955be55d7a569e8668",
     lockfile="$(S)/tst/projects/tracing_tree_0_3_1/Cargo.lock",
+    vendor_sync=["test_dependencies/Cargo.toml"],
 )
 
 twox_hash_1_6_3 = add_project_test(

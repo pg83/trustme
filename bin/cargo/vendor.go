@@ -9,8 +9,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -26,7 +28,7 @@ func vendorLayout(pkgs []Pkg, versioned bool) map[int]string {
 	counts := map[string]int{}
 
 	for _, p := range pkgs {
-		if p.isRegistry() {
+		if p.isRegistry() || p.isGit() {
 			counts[p.name]++
 		}
 	}
@@ -34,7 +36,7 @@ func vendorLayout(pkgs []Pkg, versioned bool) map[int]string {
 	names := map[int]string{}
 
 	for i, p := range pkgs {
-		if !p.isRegistry() {
+		if !p.isRegistry() && !p.isGit() {
 			continue
 		}
 
@@ -68,7 +70,11 @@ func vendorAll(pkgs []Pkg, vendorDir string, versioned bool) {
 		fmt.Fprintf(os.Stderr, "vendoring (%d/%d) %s %s\n", n, total, p.name, p.version)
 
 		try(func() {
-			fetchCrate(client, p, dest)
+			if p.isGit() {
+				fetchGitPackage(p, dest)
+			} else {
+				fetchCrate(client, p, dest)
+			}
 		}).catch(func(e *Exception) {
 			throwFmt("%s %s: %v", p.name, p.version, e.error())
 		})
@@ -102,6 +108,103 @@ func fetchCrate(client *http.Client, p Pkg, dest string) {
 	buf := throw2(json.Marshal(meta))
 
 	throw(os.WriteFile(filepath.Join(dest, ".cargo-checksum.json"), buf, 0o644))
+}
+
+// A git source is `git+<url>?<reference>#<commit>`; cargo vendor checks out the
+// locked commit and copies the package of that name out of the repository, with
+// a checksum file whose `package` is null (`cargo_util::vendor`, git sources).
+func fetchGitPackage(p Pkg, dest string) {
+	url := strings.TrimPrefix(p.source, "git+")
+	commit := ""
+
+	if i := strings.IndexByte(url, '#'); i >= 0 {
+		url, commit = url[:i], url[i+1:]
+	}
+
+	if i := strings.IndexByte(url, '?'); i >= 0 {
+		url = url[:i]
+	}
+
+	if commit == "" {
+		throwFmt("git source %s has no locked commit", p.source)
+	}
+
+	checkout := throw2(os.MkdirTemp("", "cargo-vendor-git-"))
+
+	defer func() {
+		throw(os.RemoveAll(checkout))
+	}()
+
+	for _, args := range [][]string{
+		{"init", "-q", checkout},
+		{"-C", checkout, "fetch", "-q", "--depth", "1", url, commit},
+		{"-C", checkout, "checkout", "-q", "FETCH_HEAD"},
+	} {
+		command := exec.Command("git", args...)
+		command.Stderr = os.Stderr
+		throw(command.Run())
+	}
+
+	var packageDir string
+
+	throw(filepath.WalkDir(checkout, func(path string, entry fs.DirEntry, err error) error {
+		throw(err)
+
+		if entry.IsDir() && (entry.Name() == ".git" || entry.Name() == "target") {
+			return filepath.SkipDir
+		}
+
+		if packageDir == "" && entry.Name() == "Cargo.toml" {
+			table := mapValue(readToml(path)["package"])
+
+			if stringValue(table["name"]) == p.name && stringValue(table["version"]) == p.version {
+				packageDir = filepath.Dir(path)
+			}
+		}
+
+		return nil
+	}))
+
+	if packageDir == "" {
+		throwFmt("no package %s %s in %s at %s", p.name, p.version, url, commit)
+	}
+
+	throw(os.RemoveAll(dest))
+	copyPackageTree(packageDir, dest)
+
+	buf := throw2(json.Marshal(map[string]any{"files": map[string]string{}, "package": nil}))
+
+	throw(os.WriteFile(filepath.Join(dest, ".cargo-checksum.json"), buf, 0o644))
+}
+
+func copyPackageTree(from, to string) {
+	throw(filepath.WalkDir(from, func(path string, entry fs.DirEntry, err error) error {
+		throw(err)
+
+		rel := throw2(filepath.Rel(from, path))
+		target := filepath.Join(to, rel)
+
+		if entry.IsDir() {
+			if rel != "." && (entry.Name() == ".git" || entry.Name() == "target") {
+				return filepath.SkipDir
+			}
+
+			throw(os.MkdirAll(target, 0o755))
+
+			return nil
+		}
+
+		if !entry.Type().IsRegular() {
+			return nil
+		}
+
+		info := throw2(entry.Info())
+		data := throw2(os.ReadFile(path))
+
+		throw(os.WriteFile(target, data, info.Mode().Perm()))
+
+		return nil
+	}))
 }
 
 func extractCrate(data []byte, dest string) {
