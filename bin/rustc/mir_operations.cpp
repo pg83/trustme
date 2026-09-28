@@ -7510,7 +7510,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
                         auto nArgs = fcnTy.decay(state.crate.types, state.sp).argTypes.length();
                         MIR_ASSERT(state, e.args.size() == 2, StringView("Fn* call requires two arguments"));
-                        auto fcnLvalue = mv$(e.args[0].as_LValue());
                         auto argsLvalue = mv$(e.args[1].as_LValue());
 
                         DEBUG(StringView("Convert named function pointer call"));
