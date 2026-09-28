@@ -1571,20 +1571,6 @@ adler2_2_0_1 = add_project_test(
     lockfile="$(S)/tst/projects/adler2_2_0_1/Cargo.lock",
 )
 
-allocator_api2_0_2_21 = add_project_test(
-    name="allocator_api2_0_2_21",
-    url="https://github.com/zakarumych/allocator-api2.git",
-    rev="63cd7fcc2f8854b5821c7054d026e8a4647acde1",
-    lockfile="$(S)/tst/projects/allocator_api2_0_2_21/Cargo.lock",
-)
-
-annotate_snippets_0_11_5 = add_project_test(
-    name="annotate_snippets_0_11_5",
-    url="https://github.com/rust-lang/annotate-snippets-rs.git",
-    rev="72dd8c7b9210bace1be990e3e3018fab46fd8291",
-    lockfile="$(S)/tst/projects/annotate_snippets_0_11_5/Cargo.lock",
-)
-
 anstyle_1_0_11 = add_project_test(
     name="anstyle_1_0_11",
     url="https://github.com/rust-cli/anstyle.git",
@@ -1592,13 +1578,6 @@ anstyle_1_0_11 = add_project_test(
     manifest="crates/anstyle",
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/anstyle_1_0_11/Cargo.lock",
-)
-
-ar_archive_writer_0_4_2 = add_project_test(
-    name="ar_archive_writer_0_4_2",
-    url="https://github.com/rust-lang/ar_archive_writer.git",
-    rev="afb4ac079a6e18d89ad3fb155712399b5cb672b7",
-    lockfile="$(S)/tst/projects/ar_archive_writer_0_4_2/Cargo.lock",
 )
 
 arrayref_0_3_9 = add_project_test(
@@ -1763,13 +1742,6 @@ displaydoc_0_2_5 = add_project_test(
     lockfile="$(S)/tst/projects/displaydoc_0_2_5/Cargo.lock",
 )
 
-elsa_1_11_2 = add_project_test(
-    name="elsa_1_11_2",
-    url="https://github.com/manishearth/elsa.git",
-    rev="00efa68a37b1995e777189feb5dd2f62e2581550",
-    lockfile="$(S)/tst/projects/elsa_1_11_2/Cargo.lock",
-)
-
 ena_0_14_3 = add_project_test(
     name="ena_0_14_3",
     url="https://github.com/rust-lang/ena.git",
@@ -1830,13 +1802,6 @@ foldhash_0_1_5 = add_project_test(
     lockfile="$(S)/tst/projects/foldhash_0_1_5/Cargo.lock",
 )
 
-generic_array_0_14_7 = add_project_test(
-    name="generic_array_0_14_7",
-    url="https://github.com/fizyk20/generic-array.git",
-    rev="1397d2bb40c406901b7827161b73b34b056cbe3a",
-    lockfile="$(S)/tst/projects/generic_array_0_14_7/Cargo.lock",
-)
-
 getopts_0_2_23 = add_project_test(
     name="getopts_0_2_23",
     url="https://github.com/rust-lang/getopts.git",
@@ -1858,15 +1823,6 @@ gsgdt_0_1_2 = add_project_test(
     lockfile="$(S)/tst/projects/gsgdt_0_1_2/Cargo.lock",
 )
 
-icu_list_1_5_0 = add_project_test(
-    name="icu_list_1_5_0",
-    url="https://github.com/unicode-org/icu4x.git",
-    rev="55cd12ebb25c6261492e1e3dfa2e6453c54dde31",
-    manifest="components/list",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/icu_list_1_5_0/Cargo.lock",
-)
-
 icu_list_data_1_5_1 = add_project_test(
     name="icu_list_data_1_5_1",
     url="https://github.com/unicode-org/icu4x.git",
@@ -1885,15 +1841,6 @@ icu_locid_1_5_0 = add_project_test(
     lockfile="$(S)/tst/projects/icu_locid_1_5_0/Cargo.lock",
 )
 
-icu_locid_transform_1_5_0 = add_project_test(
-    name="icu_locid_transform_1_5_0",
-    url="https://github.com/unicode-org/icu4x.git",
-    rev="55cd12ebb25c6261492e1e3dfa2e6453c54dde31",
-    manifest="components/locid_transform",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/icu_locid_transform_1_5_0/Cargo.lock",
-)
-
 icu_locid_transform_data_1_5_1 = add_project_test(
     name="icu_locid_transform_data_1_5_1",
     url="https://github.com/unicode-org/icu4x.git",
@@ -1901,33 +1848,6 @@ icu_locid_transform_data_1_5_1 = add_project_test(
     manifest="provider/baked/locid_transform",
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/icu_locid_transform_data_1_5_1/Cargo.lock",
-)
-
-icu_provider_1_5_0 = add_project_test(
-    name="icu_provider_1_5_0",
-    url="https://github.com/unicode-org/icu4x.git",
-    rev="55cd12ebb25c6261492e1e3dfa2e6453c54dde31",
-    manifest="provider/core",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/icu_provider_1_5_0/Cargo.lock",
-)
-
-icu_provider_adapters_1_5_0 = add_project_test(
-    name="icu_provider_adapters_1_5_0",
-    url="https://github.com/unicode-org/icu4x.git",
-    rev="599f3366f901eb0cc0af9de6c9de99998734bb8a",
-    manifest="provider/adapters",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/icu_provider_adapters_1_5_0/Cargo.lock",
-)
-
-icu_provider_macros_1_5_0 = add_project_test(
-    name="icu_provider_macros_1_5_0",
-    url="https://github.com/unicode-org/icu4x.git",
-    rev="55cd12ebb25c6261492e1e3dfa2e6453c54dde31",
-    manifest="provider/core/macros",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/icu_provider_macros_1_5_0/Cargo.lock",
 )
 
 ident_case_1_0_1 = add_project_test(
@@ -1955,25 +1875,11 @@ intl_pluralrules_7_0_2 = add_project_test(
     lockfile="$(S)/tst/projects/intl_pluralrules_7_0_2/Cargo.lock",
 )
 
-jiff_0_2_15 = add_project_test(
-    name="jiff_0_2_15",
-    url="https://github.com/BurntSushi/jiff.git",
-    rev="8842b0fcf7af2651f9d6de5689780d71088a2d7e",
-    lockfile="$(S)/tst/projects/jiff_0_2_15/Cargo.lock",
-)
-
 jobserver_0_1_33 = add_project_test(
     name="jobserver_0_1_33",
     url="https://github.com/rust-lang/jobserver-rs.git",
     rev="65921f1d58ebb4a2511d45aadcc31d586042d73c",
     lockfile="$(S)/tst/projects/jobserver_0_1_33/Cargo.lock",
-)
-
-lazy_static_1_5_0 = add_project_test(
-    name="lazy_static_1_5_0",
-    url="https://github.com/rust-lang-nursery/lazy-static.rs.git",
-    rev="be7c1c43f264699f956b70ce8e29941bd1e61bde",
-    lockfile="$(S)/tst/projects/lazy_static_1_5_0/Cargo.lock",
 )
 
 leb128_0_2_5 = add_project_test(
@@ -2002,15 +1908,6 @@ linux_raw_sys_0_9_4 = add_project_test(
     url="https://github.com/sunfishcode/linux-raw-sys.git",
     rev="d7d733c04380b4f15e97806b61da254c4e649887",
     lockfile="$(S)/tst/projects/linux_raw_sys_0_9_4/Cargo.lock",
-)
-
-litemap_0_7_5 = add_project_test(
-    name="litemap_0_7_5",
-    url="https://github.com/unicode-org/icu4x.git",
-    rev="f4290a877dfcb0f87cad6de4abdd65f0cbb33c9c",
-    manifest="utils/litemap",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/litemap_0_7_5/Cargo.lock",
 )
 
 lock_api_0_4_13 = add_project_test(
@@ -2063,25 +1960,11 @@ miniz_oxide_0_8_9 = add_project_test(
     lockfile="$(S)/tst/projects/miniz_oxide_0_8_9/Cargo.lock",
 )
 
-nix_0_30_1 = add_project_test(
-    name="nix_0_30_1",
-    url="https://github.com/nix-rust/nix.git",
-    rev="3cf9007216086b17a6ef5a09fa42dc00cde5c2bf",
-    lockfile="$(S)/tst/projects/nix_0_30_1/Cargo.lock",
-)
-
 nu_ansi_term_0_50_1 = add_project_test(
     name="nu_ansi_term_0_50_1",
     url="https://github.com/nushell/nu-ansi-term.git",
     rev="0912f8f6a3b29a8409cf5cab25e8865f5766ea96",
     lockfile="$(S)/tst/projects/nu_ansi_term_0_50_1/Cargo.lock",
-)
-
-object_0_37_1 = add_project_test(
-    name="object_0_37_1",
-    url="https://github.com/gimli-rs/object.git",
-    rev="4b833202b2a11cc2aab884dec711b9b660082ff0",
-    lockfile="$(S)/tst/projects/object_0_37_1/Cargo.lock",
 )
 
 odht_0_3_1 = add_project_test(
@@ -2112,15 +1995,6 @@ pathdiff_0_2_3 = add_project_test(
     url="https://github.com/Manishearth/pathdiff.git",
     rev="5180ff5b23d9d7eef0a14de13a3d814eb5d8d65c",
     lockfile="$(S)/tst/projects/pathdiff_0_2_3/Cargo.lock",
-)
-
-perf_event_open_sys_3_0_0 = add_project_test(
-    name="perf_event_open_sys_3_0_0",
-    url="https://github.com/jimblandy/perf-event.git",
-    rev="6218ac1912aa2210b46713d5c5c51ddb4be805f5",
-    manifest="perf-event-open-sys",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/perf_event_open_sys_3_0_0/Cargo.lock",
 )
 
 pin_project_lite_0_2_16 = add_project_test(
@@ -2382,38 +2256,11 @@ thread_local_1_1_9 = add_project_test(
     lockfile="$(S)/tst/projects/thread_local_1_1_9/Cargo.lock",
 )
 
-tikv_jemalloc_sys_0_6_0 = add_project_test(
-    name="tikv_jemalloc_sys_0_6_0",
-    url="https://github.com/tikv/jemallocator.git",
-    rev="f260a80f21b7f9eb1212809720d9a5f7f0cf0e8b",
-    manifest="jemalloc-sys",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/tikv_jemalloc_sys_0_6_0/Cargo.lock",
-)
-
-tinystr_0_8_1 = add_project_test(
-    name="tinystr_0_8_1",
-    url="https://github.com/unicode-org/icu4x.git",
-    rev="f4290a877dfcb0f87cad6de4abdd65f0cbb33c9c",
-    manifest="utils/tinystr",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/tinystr_0_8_1/Cargo.lock",
-)
-
 tinyvec_macros_0_1_1 = add_project_test(
     name="tinyvec_macros_0_1_1",
     url="https://github.com/Soveu/tinyvec_macros.git",
     rev="860c23a09d91c8b9203134a81de7888b7191d5f2",
     lockfile="$(S)/tst/projects/tinyvec_macros_0_1_1/Cargo.lock",
-)
-
-tracing_attributes_0_1_30 = add_project_test(
-    name="tracing_attributes_0_1_30",
-    url="https://github.com/tokio-rs/tracing.git",
-    rev="e63ef57f3d686abe3727ddd586eb9af73d6715b7",
-    manifest="tracing-attributes",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/tracing_attributes_0_1_30/Cargo.lock",
 )
 
 tracing_core_0_1_30 = add_project_test(
@@ -2432,15 +2279,6 @@ tracing_log_0_2_0 = add_project_test(
     manifest="tracing-log",
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/tracing_log_0_2_0/Cargo.lock",
-)
-
-tracing_subscriber_0_3_18 = add_project_test(
-    name="tracing_subscriber_0_3_18",
-    url="https://github.com/tokio-rs/tracing.git",
-    rev="8b7a1dde69797b33ecfa20da71e72eb5e61f0b25",
-    manifest="tracing-subscriber",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/tracing_subscriber_0_3_18/Cargo.lock",
 )
 
 tracing_tree_0_3_1 = add_project_test(
@@ -2583,15 +2421,6 @@ writeable_0_5_5 = add_project_test(
     lockfile="$(S)/tst/projects/writeable_0_5_5/Cargo.lock",
 )
 
-yoke_0_7_5 = add_project_test(
-    name="yoke_0_7_5",
-    url="https://github.com/unicode-org/icu4x.git",
-    rev="6bd4893cc44c2ca2718de47a119a31cc40045fe5",
-    manifest="utils/yoke",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/yoke_0_7_5/Cargo.lock",
-)
-
 yoke_derive_0_7_5 = add_project_test(
     name="yoke_derive_0_7_5",
     url="https://github.com/unicode-org/icu4x.git",
@@ -2599,33 +2428,6 @@ yoke_derive_0_7_5 = add_project_test(
     manifest="utils/yoke/derive",
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/yoke_derive_0_7_5/Cargo.lock",
-)
-
-zerofrom_0_1_6 = add_project_test(
-    name="zerofrom_0_1_6",
-    url="https://github.com/unicode-org/icu4x.git",
-    rev="f4290a877dfcb0f87cad6de4abdd65f0cbb33c9c",
-    manifest="utils/zerofrom",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/zerofrom_0_1_6/Cargo.lock",
-)
-
-zerofrom_derive_0_1_6 = add_project_test(
-    name="zerofrom_derive_0_1_6",
-    url="https://github.com/unicode-org/icu4x.git",
-    rev="f4290a877dfcb0f87cad6de4abdd65f0cbb33c9c",
-    manifest="utils/zerofrom/derive",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/zerofrom_derive_0_1_6/Cargo.lock",
-)
-
-zerovec_0_10_4 = add_project_test(
-    name="zerovec_0_10_4",
-    url="https://github.com/unicode-org/icu4x.git",
-    rev="3c47d82f8ba9f36699b71566844ed28b3f742b21",
-    manifest="utils/zerovec",
-    vendor_manifest=".",
-    lockfile="$(S)/tst/projects/zerovec_0_10_4/Cargo.lock",
 )
 
 zerovec_derive_0_10_3 = add_project_test(
