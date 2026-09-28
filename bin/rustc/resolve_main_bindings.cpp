@@ -1029,6 +1029,15 @@ namespace {
                         markValuePathType(path, mode);
                         return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                     }
+                    case ASTPathBindingType::TAG_Primitive: {
+                        const auto coreType = nameRef.path.bindings.type.binding.as_Primitive();
+                        auto newPath = ASTPath::newUfcsTy(mkType(context.typePool(), sp, coreType));
+                        for (size_t j = i + 1; j < pathAbs.nodes.size(); j++) {
+                            newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
+                        }
+                        path = mv$(newPath);
+                        return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
+                    }
                     case ASTPathBindingType::TAG_Crate: {
                         auto& e = nameRef.path.bindings.type.binding.as_Crate();
                         ResolveAbsolutePathBindAbsoluteHirFrom(context, sp, mode, path, *e.crate_, i + 1);
