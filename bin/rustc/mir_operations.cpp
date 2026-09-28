@@ -2209,25 +2209,17 @@ namespace {
 
         struct InlineEvent {
             HIRPath path;
-            Vector<size_t> bbList;
+            size_t parent;
 
-            InlineEvent(HIRPath p)
+            InlineEvent(HIRPath p, size_t parent)
                 : path(std::move(p))
+                , parent(parent)
             {
-            }
-
-            bool hasBb(size_t i) const {
-                return std::find(this->bbList.begin(), this->bbList.end(), i) != this->bbList.end();
-            }
-
-            void addRange(size_t start, size_t count) {
-                for (size_t j = 0; j < count; j++) {
-                    this->bbList.pushBack(start + j);
-                }
             }
         };
 
         std::vector<InlineEvent> inlinedFunctions;
+        Vector<size_t> blockEvents;
 
         struct H {
             struct Source {
@@ -2557,8 +2549,9 @@ namespace {
                 const auto& path = te->fcn.as_Path();
 
                 DEBUG(state << fcn.blocks[i].terminator);
-                for (const auto& e : inlinedFunctions) {
-                    if (path == e.path && e.hasBb(i)) {
+                const size_t blockEvent = i < blockEvents.length() ? blockEvents[i] : 0;
+                for (size_t e = blockEvent; e != 0; e = inlinedFunctions[e - 1].parent) {
+                    if (path == inlinedFunctions[e - 1].path) {
                         MIR_BUG(state, StringView("Recursive inline of ") << path);
                     }
                 }
@@ -2631,16 +2624,15 @@ namespace {
                 }
                 cloner.constAssignments.clear();
 
-                for (auto& e : inlinedFunctions) {
-                    if (e.hasBb(i)) {
-                        e.addRange(cloner.bbBase, newBlocks.size());
-                    }
+                inlinedFunctions.push_back(InlineEvent(path.clone(), blockEvent));
+                while (blockEvents.length() < cloner.bbBase) {
+                    blockEvents.pushBack(0);
                 }
-                inlinedFunctions.push_back(InlineEvent(path.clone()));
-                inlinedFunctions.back().addRange(cloner.bbBase, newBlocks.size());
+                for (size_t j = 0; j < newBlocks.size(); j++) {
+                    blockEvents.pushBack(inlinedFunctions.size());
+                }
 
                 DEBUG(StringView("- Append new blocks"));
-                fcn.blocks.reserve(fcn.blocks.size() + newBlocks.size());
                 for (auto& b : newBlocks) {
                     fcn.blocks.push_back(mv$(b));
                 }
