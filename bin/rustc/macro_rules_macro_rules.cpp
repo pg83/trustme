@@ -1834,8 +1834,10 @@ namespace {
             case MacroPatEnt::PAT_META:
                 if (lex.next() == TOK_INTERPOLATED_META) {
                     lex.consume();
-                } else if (lex.next() == TOK_IDENT) {
+                } else if (lex.next() == TOK_RWORD_UNSAFE) {
                     lex.consume();
+                    return lex.next() == TOK_PAREN_OPEN && consumeTt(lex);
+                } else if (lex.next() != TOK_LT && lex.next() != TOK_DOUBLE_LT && consumePath(lex)) {
                     switch (lex.next()) {
                         case TOK_PAREN_OPEN:
                         case TOK_SQUARE_OPEN:
