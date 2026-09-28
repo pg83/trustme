@@ -649,6 +649,7 @@ func TestALibraryRlibStandsInDeps(t *testing.T) {
 	}
 }
 
+
 // ui_test builds its dependencies with `cargo build --message-format=json` and
 // takes each dependency's library from the stream: a package's dependency is
 // reported by its rlib in `deps`, the package's own units as before.
@@ -690,5 +691,43 @@ func TestABuildCompilesTheObjectOfEveryDependencyLibrary(t *testing.T) {
 	object := filepath.Join(builder.outputDir(true), "deps", "lib"+builder.crateName(helper)+".rlib.o")
 	if !contains(artifactPaths(builder.depsArtifacts()), object) {
 		t.Fatalf("no artifact installs %s", object)
+	}
+}
+
+// ui_test's examples use futures, whose `join!` expands through the
+// futures-macro plugin: a proc macro's metadata and its plugin both stand in
+// `deps`, where a dependent that names the macro crate finds them.
+func TestAProcMacroStandsInDepsWithItsPlugin(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "src", "lib.rs")
+
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	library := &Target{kind: "lib", name: "derive_it", path: "src/lib.rs", crateTypes: []string{"proc-macro"}, procMacro: true}
+	pkg := &Package{
+		dir: root, manifestPath: filepath.Join(root, "Cargo.toml"), name: "derive-it",
+		version: Version{major: 1}, targets: []*Target{library},
+		activeFeatures: map[string]bool{},
+	}
+	context := &BuildContext{
+		opts: BuildOptions{command: "build", profile: "debug", targetDir: filepath.Join(root, "target")},
+		root: pkg, workspace: &Workspace{dir: root}, host: "host", target: "host",
+	}
+	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
+	builder.rootTasks()
+
+	unit := builder.units[builder.libraryTask(pkg, true)]
+	metadata := filepath.Join(root, "target", "debug", "deps", "lib"+builder.crateName(unit)+".rlib")
+	paths := artifactPaths(builder.depsArtifacts())
+
+	for _, want := range []string{metadata, strings.TrimSuffix(metadata, ".rlib")} {
+		if !contains(paths, want) {
+			t.Fatalf("no artifact installs %s: %v", want, paths)
+		}
 	}
 }

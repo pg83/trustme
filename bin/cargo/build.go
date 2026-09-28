@@ -319,20 +319,25 @@ func (b *Builder) publishedDependencies() ([]*Task, []InstallArtifact) {
 // Cargo writes every library it compiles to `target/<profile>/deps` as
 // `lib<name>-<metadata>.rlib` (`Layout::deps`), where a compiler given
 // `-L target/<profile>/deps` finds it by name: autocfg's tests probe their own
-// crate that way. The object a link of it needs stands beside it.
+// crate that way. The object a link of it needs stands beside it; a proc
+// macro's plugin stands beside its metadata, named without `.rlib`, where the
+// compiler looks for it when a dependency names the macro crate.
 func (b *Builder) depsArtifacts() []InstallArtifact {
 	var artifacts []InstallArtifact
 
 	for task, unit := range b.units {
-		if task != unit.rs || unit.target.kind != "lib" || unit.metadata < 0 ||
-			unit.target.procMacro || crateType(unit.target) == "dylib" {
+		if task != unit.rs || unit.target.kind != "lib" || unit.metadata < 0 || crateType(unit.target) == "dylib" {
 			continue
 		}
 
 		path := filepath.Join(b.outputDir(unit.isHost), "deps", "lib"+b.crateName(unit)+".rlib")
 		artifacts = append(artifacts, InstallArtifact{task: unit.rs, index: unit.metadata, path: path})
 
-		if unit.cc != nil {
+		if unit.target.procMacro {
+			if unit.final != nil {
+				artifacts = append(artifacts, InstallArtifact{task: unit.final, index: 0, path: strings.TrimSuffix(path, ".rlib")})
+			}
+		} else if unit.cc != nil {
 			artifacts = append(artifacts, InstallArtifact{task: unit.cc, index: 0, path: path + ".o"})
 		}
 	}
