@@ -2358,9 +2358,7 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                                 case ASTGenericBound::TAG_IsTrait: {
                                     auto& be = tuMatch.as_IsTrait();
                                     BUG_ASSERT(be.outerHrbs.empty());
-                                    if (!be.innerHrbs.empty()) {
-                                        TODO(sp, StringView("be.inner_hrbs"));
-                                    }
+                                    visitHrbs(be.innerHrbs);
                                     visitBoundConstness(be.constness);
                                     visitPath(be.trait);
                                     break;
