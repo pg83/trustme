@@ -7113,18 +7113,18 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         const HIRType* callerTypeTmp;
         emitCtype(localMirRes.getLvalueType(e.retVal));
         of << StringView(")trustme_caller");
-    } else if (name == "offset") {
+    } else if (name == "offset" || name == "arith_offset") {
+        const auto& pointerType = localMirRes.getLvalueType(e.retVal);
+        MIR_ASSERT(localMirRes, pointerType->is_Pointer(), name << StringView(" returned ") << pointerType);
+        size_t pointeeSize = 1;
+        const bool zeroSized = TargetGetSizeOf(sp, resolve_, pointerType->as_Pointer().inner, pointeeSize) && pointeeSize == 0;
         emitLvalue(e.retVal);
         of << StringView(" = ");
         emitParam(e.args.at(0));
-        of << StringView(" + ");
-        emitParam(e.args.at(1));
-    } else if (name == "arith_offset") {
-        emitLvalue(e.retVal);
-        of << StringView(" = ");
-        emitParam(e.args.at(0));
-        of << StringView(" + ");
-        emitParam(e.args.at(1));
+        if (!zeroSized) {
+            of << StringView(" + ");
+            emitParam(e.args.at(1));
+        }
     } else if (name == "ptr_mask") {
         const HIRType* tmp;
         const auto& returnType = localMirRes.getLvalueType(e.retVal);
