@@ -65,24 +65,7 @@ def main() -> int:
                 dependencies,
                 ["rand", "rand_xorshift"],
             )
-        # `//@ aux-build: name.rs`: tst/unit/aux/name.rs built as an rlib the unit
-        # links with `--extern name=...` - named or not, as a Cargo dependency is.
-        for aux in aux_builds:
-            aux_src = os.path.join(os.path.dirname(src), "aux", aux)
-            aux_name = os.path.splitext(os.path.basename(aux))[0]
-            aux_rlib = os.path.join(work, f"lib{aux_name}.rlib")
-            # an aux crate may name its own edition (`//@ edition: 2018` in the aux)
-            with open(aux_src) as aux_file:
-                aux_edition_match = re.search(r"^//@\s*edition:\s*(\d+)", aux_file.read(), re.MULTILINE)
-            aux_edition = aux_edition_match.group(1) if aux_edition_match else edition
-            lib.run(
-                [rustc, aux_src, "-L", os.path.join(libstd, "release"),
-                 "--crate-type", "rlib", "--crate-name", aux_name, "-o", aux_rlib,
-                 "--edition", aux_edition],
-                env=env,
-            )
-            dependency_args.extend(("--extern", f"{aux_name}={aux_rlib}"))
-        # `//@ proc-macro-aux-build: name.rs`: the same, for a macro host -
+        # `//@ proc-macro-aux-build: name.rs`: an aux crate built as a macro host -
         # tst/unit/aux/name.rs built as a proc-macro crate. Ours writes the host
         # as an executable with its metadata beside it, so the unit also needs
         # `--proc-macro name=<host>`; upstream's host is a shared object that
@@ -109,6 +92,23 @@ def main() -> int:
                     "--extern", f"{aux_name}={aux_host}.rlib",
                     "--proc-macro", f"{aux_name}={aux_host}",
                 ))
+        # `//@ aux-build: name.rs`: tst/unit/aux/name.rs built as an rlib the unit
+        # links with `--extern name=...` - named or not, as a Cargo dependency is.
+        for aux in aux_builds:
+            aux_src = os.path.join(os.path.dirname(src), "aux", aux)
+            aux_name = os.path.splitext(os.path.basename(aux))[0]
+            aux_rlib = os.path.join(work, f"lib{aux_name}.rlib")
+            # an aux crate may name its own edition (`//@ edition: 2018` in the aux)
+            with open(aux_src) as aux_file:
+                aux_edition_match = re.search(r"^//@\s*edition:\s*(\d+)", aux_file.read(), re.MULTILINE)
+            aux_edition = aux_edition_match.group(1) if aux_edition_match else edition
+            lib.run(
+                [rustc, aux_src, "-L", os.path.join(libstd, "release"),
+                 "--crate-type", "rlib", "--crate-name", aux_name, "-o", aux_rlib,
+                 "--edition", aux_edition, *dependency_args],
+                env=env,
+            )
+            dependency_args.extend(("--extern", f"{aux_name}={aux_rlib}"))
         binary = os.path.join(work, "t")
         mode = ["--test"] if test_harness else ["--crate-type", crate_type]
         command = lib.wrap_gdb(

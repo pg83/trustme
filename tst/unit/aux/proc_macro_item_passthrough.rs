@@ -259,3 +259,10 @@ pub fn helper_forward_derive(item: TokenStream) -> TokenStream {
     }
     format!("impl {} {{ fn helper_forward_seen() -> u8 {{ 1 }} }}", name.unwrap()).parse().unwrap()
 }
+
+// proc-macro-hack's shape: the derive writes a `macro_rules!` whose body names
+// `$crate`, every token at the derive's call site.
+#[proc_macro_derive(CallCrateHelper)]
+pub fn call_crate_helper(_item: TokenStream) -> TokenStream {
+    "macro_rules! call_crate_helper { () => { $crate::crate_helper() } }".parse().unwrap()
+}

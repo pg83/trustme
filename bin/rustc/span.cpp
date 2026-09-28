@@ -22,10 +22,11 @@ Span::Span(Span parent, RcString sourceCrate, RcString macroName, bool transpare
 }
 
 RcString Span::dollarCrateName() const {
-    if (ptr->nodeKind() == SpanInnerMacro::kind && static_cast<const SpanInnerMacro*>(ptr)->transparent) {
-        return RcString();
+    const Span* at = this;
+    while (at->get() && at->get()->nodeKind() == SpanInnerMacro::kind && static_cast<const SpanInnerMacro*>(at->get())->transparent) {
+        at = &at->get()->parentSpan;
     }
-    return ptr->crateName();
+    return at->get() ? at->get()->crateName() : RcString();
 }
 
 Span::Span(const Span& x)
