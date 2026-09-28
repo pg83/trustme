@@ -41,7 +41,7 @@ func TestTreeInvertPrintsTheDependents(t *testing.T) {
 		context := &BuildContext{
 			opts: BuildOptions{command: "build"}, repository: repository, root: root, workspace: workspace,
 			host: "host", target: "host",
-			cfg:  &CfgSet{flags: map[string]bool{"unix": true}, values: map[string]map[string]bool{}},
+			cfg: &CfgSet{flags: map[string]bool{"unix": true}, values: map[string]map[string]bool{}},
 		}
 		resolveGraph(context)
 		var out bytes.Buffer

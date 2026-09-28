@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"os"
-	"strings"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -74,7 +74,6 @@ func TestMetadataListsAreNeverNull(t *testing.T) {
 		t.Fatalf("an undeclared required-features is written: %s", text)
 	}
 }
-
 
 // ui_test reads `cargo metadata` without `--no-deps` for the version of each
 // dependency it built: the packages list names the resolved dependencies too.

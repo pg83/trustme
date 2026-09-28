@@ -555,8 +555,8 @@ func TestAnExcludedPackageIsItsOwnWorkspaceRoot(t *testing.T) {
 
 	for path, text := range map[string]string{
 		filepath.Join(root, "Cargo.toml"): "[workspace]\nmembers = [\"aead\"]\nexclude = [\"digest\"]\n",
-		digest: "[package]\nname = \"digest\"\nversion = \"0.10.7\"\n",
-		aead:   "[package]\nname = \"aead\"\nversion = \"0.5.0\"\n",
+		digest:                            "[package]\nname = \"digest\"\nversion = \"0.10.7\"\n",
+		aead:                              "[package]\nname = \"aead\"\nversion = \"0.5.0\"\n",
 	} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
@@ -648,7 +648,6 @@ func TestALibraryRlibStandsInDeps(t *testing.T) {
 		t.Fatalf("deps rlib %s is not found by `lib<name>-*.rlib`", deps)
 	}
 }
-
 
 // ui_test builds its dependencies with `cargo build --message-format=json` and
 // takes each dependency's library from the stream: a package's dependency is

@@ -242,7 +242,7 @@ func metadataPackage(pkg *Package, doc map[string]any) MetadataPackage {
 		Repository: nullableString(table["repository"]), Homepage: nullableString(table["homepage"]),
 		Documentation: nullableString(table["documentation"]), Edition: pkg.edition,
 		Links: nullableString(table["links"]), DefaultRun: nullableString(table["default-run"]),
-		RustVersion: nullableString(table["rust-version"]),
+		RustVersion:  nullableString(table["rust-version"]),
 		Dependencies: []MetadataDependency{},
 	}
 

@@ -2258,7 +2258,6 @@ func staticLibrarySuffix() string {
 	return ".a"
 }
 
-
 // Profile is the part of a Cargo profile the compiler invocation reads.
 type Profile struct {
 	name            string
