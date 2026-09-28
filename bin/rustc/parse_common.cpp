@@ -2885,6 +2885,13 @@ namespace {
             } break;
             case TOK_INTERPOLATED_PATH: {
                 path = mv$(tok.fragPath());
+                if (!lex.editionAfter(ASTEdition::Rust2018)) {
+                    if (auto* relative = path.cls.opt_Relative()) {
+                        path = ASTPath("", mv$(relative->nodes));
+                    } else if (const auto* local = path.cls.opt_Local()) {
+                        path = ASTPath("", {ASTPathNode(local->name)});
+                    }
+                }
                 if (!lex.getTokenIf(TOK_DOUBLE_COLON)) {
                     RcString name;
                     if (lex.getTokenIf(TOK_RWORD_AS)) {
