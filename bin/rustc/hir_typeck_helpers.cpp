@@ -3446,7 +3446,7 @@ bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, TraitBoundCallback& 
 bool TraitResolution::iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, TraitPathCallback& cb) const {
     HIRGenericPath traitPath;
     DEBUG(StringView("Checking ATY bounds on ") << pe.trait << StringView(" :: ") << pe.item);
-    if (!this->traitContainsType(sp, pe.trait, this->crate.getTraitByPath(sp, pe.trait.path), pe.item.c_str(), traitPath)) {
+    if (!this->traitContainsType(sp, pe.type, pe.trait, this->crate.getTraitByPath(sp, pe.trait.path), pe.item.c_str(), traitPath)) {
         BUG(sp, StringView("Cannot find associated type ") << pe.item << StringView(" anywhere in trait ") << pe.trait);
     }
     DEBUG(StringView("trait_path=") << traitPath);
@@ -5911,7 +5911,7 @@ const HIRFunction* TraitResolution::traitContainsMethod(const Span& sp, const HI
     return nullptr;
 }
 
-bool TraitResolution::traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const {
+bool TraitResolution::traitContainsType(const Span& sp, const HIRType* selfType, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const {
     TRACE_FUNCTION_FR(traitPath << StringView(" has ") << name, outPath);
     auto it = traitPtr.types.find(name);
     if (it != traitPtr.types.end()) {
@@ -5920,7 +5920,7 @@ bool TraitResolution::traitContainsType(const Span& sp, const HIRGenericPath& tr
         return true;
     }
 
-    auto monomorphCb = MonomorphStatePtr(crate.types, nullptr, &traitPath.params, nullptr);
+    auto monomorphCb = MonomorphStatePtr(crate.types, selfType, &traitPath.params, nullptr);
     for (const auto& st : traitPtr.allParentTraits) {
         if (st.traitPtr->types.count(name)) {
             DEBUG(StringView("- Found in ") << st);
@@ -12429,7 +12429,7 @@ auto NextTraitGoalEvaluator::assembleAliasBoundCandidates(size_t frameIndex, con
     }
 
     HIRGenericPath declaringTrait;
-    if (!resolve_.traitContainsType(span(), projection->trait, crate.getTraitByPath(span(), projection->trait.path), projection->item.c_str(), declaringTrait)) {
+    if (!resolve_.traitContainsType(span(), projection->type, projection->trait, crate.getTraitByPath(span(), projection->trait.path), projection->item.c_str(), declaringTrait)) {
         BUG(span(), StringView("Cannot find associated type ") << projection->item << StringView(" anywhere in trait ") << projection->trait);
     }
     const auto& declaration = crate.getTraitByPath(span(), declaringTrait.path).types.at(projection->item);
@@ -13582,7 +13582,7 @@ auto NextTraitGoalEvaluator::evaluateHeadEquality(Candidate& candidate, const So
         sawAlias = true;
 
         HIRGenericPath declaringTrait;
-        if (!resolve_.traitContainsType(span(), projection->trait, crate.getTraitByPath(span(), projection->trait.path), projection->item.c_str(), declaringTrait)) {
+        if (!resolve_.traitContainsType(span(), projection->type, projection->trait, crate.getTraitByPath(span(), projection->trait.path), projection->item.c_str(), declaringTrait)) {
             BUG(span(), StringView("Cannot find associated type ") << projection->item << StringView(" anywhere in trait ") << projection->trait);
         }
         /* The other side a placeholder of the goal - the `_` of `<T as _>::item`'s
@@ -16726,7 +16726,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         const HIRPathParams noAssocParams;
         auto sourceTrait = HIRGenericPath(trait, canonical.params.clone());
         HIRGenericPath declaringTrait;
-        if (resolve_.traitContainsType(span(), sourceTrait, crate.getTraitByPath(span(), trait), assocName, declaringTrait)) {
+        if (resolve_.traitContainsType(span(), canonical.type, sourceTrait, crate.getTraitByPath(span(), trait), assocName, declaringTrait)) {
             sourceTrait = std::move(declaringTrait);
         }
         rootAssociated.insert({RcString::newInterned(assocName), HIRTraitPath::AtyEqual{std::move(sourceTrait), canonicalAssocParams ? canonicalAssocParams->clone() : noAssocParams.clone(), candidateAssocType}});
@@ -17274,7 +17274,7 @@ auto NextTraitGoalEvaluator::evaluateNormalizesTo(const Span& callSpan, const No
     ASSERT_BUG(callSpan, projection, StringView("NormalizesTo goal is not an associated-type projection: ") << goal.projection);
 
     HIRGenericPath declaringTrait;
-    if (!resolve_.traitContainsType(callSpan, projection->trait, crate.getTraitByPath(callSpan, projection->trait.path), projection->item.c_str(), declaringTrait)) {
+    if (!resolve_.traitContainsType(callSpan, projection->type, projection->trait, crate.getTraitByPath(callSpan, projection->trait.path), projection->item.c_str(), declaringTrait)) {
         BUG(callSpan, StringView("Cannot find associated type ") << projection->item << StringView(" anywhere in trait ") << projection->trait);
     }
 
