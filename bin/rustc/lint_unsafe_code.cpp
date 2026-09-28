@@ -122,6 +122,7 @@ auto UnsafeCodeVisitor::visitModule(HIRItemPath p, HIRModule& module) -> void {
 auto UnsafeCodeVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     const auto saved = level_;
     level_ = LintLevelForModulePath(settings_, crate_, impl.srcModule, LINT_NAME, CfgLintLevel::Allow);
+    level_ = ApplyLintLevelOverrides(settings_, impl.lintLevels, LINT_NAME, level_);
     HIRVisitor::visitTypeImpl(impl);
     level_ = saved;
 }
@@ -129,6 +130,7 @@ auto UnsafeCodeVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
 auto UnsafeCodeVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
     const auto saved = level_;
     level_ = LintLevelForModulePath(settings_, crate_, impl.srcModule, LINT_NAME, CfgLintLevel::Allow);
+    level_ = ApplyLintLevelOverrides(settings_, impl.lintLevels, LINT_NAME, level_);
     HIRVisitor::visitTraitImpl(traitPath, impl);
     level_ = saved;
 }

@@ -175,6 +175,7 @@ auto MustUseOuterVisitor::visitModule(HIRItemPath p, HIRModule& module) -> void 
 auto MustUseOuterVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     const auto saved = level_;
     level_ = LintLevelForModulePath(settings_, crate_, impl.srcModule, LINT_NAME, CfgLintLevel::Warn);
+    level_ = ApplyLintLevelOverrides(settings_, impl.lintLevels, LINT_NAME, level_);
     HIRVisitor::visitTypeImpl(impl);
     level_ = saved;
 }
@@ -182,6 +183,7 @@ auto MustUseOuterVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
 auto MustUseOuterVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
     const auto saved = level_;
     level_ = LintLevelForModulePath(settings_, crate_, impl.srcModule, LINT_NAME, CfgLintLevel::Warn);
+    level_ = ApplyLintLevelOverrides(settings_, impl.lintLevels, LINT_NAME, level_);
     HIRVisitor::visitTraitImpl(traitPath, impl);
     level_ = saved;
 }

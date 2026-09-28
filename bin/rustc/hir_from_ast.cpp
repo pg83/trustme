@@ -3458,6 +3458,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                     }
                 }
                 hirImpl->isConst = impl.def().isConst();
+                hirImpl->lintLevels = impl.lintLevels;
                 hirImpl->isReservation = i->attrs.has("rustc_reservation_impl");
                 hirCrate.traitImpls[mv$(traitName)].generic.push_back(mv$(hirImpl));
                 hirCrate.implGeneration++;
@@ -3520,7 +3521,9 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 }
             }
 
-            hirCrate.typeImpls.generic.push_back(box$(HIRTypeImpl{mv$(params), mv$(type), mv$(methods), mv$(constants), mv$(types), modPath}));
+            auto hirTypeImpl = box$(HIRTypeImpl{mv$(params), mv$(type), mv$(methods), mv$(constants), mv$(types), modPath});
+            hirTypeImpl->lintLevels = impl.lintLevels;
+            hirCrate.typeImpls.generic.push_back(mv$(hirTypeImpl));
         }
     }
     for (const auto& i : astMod.items) {

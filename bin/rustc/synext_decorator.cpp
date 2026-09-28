@@ -4632,6 +4632,8 @@ auto CMultiHandlerLint::recordItemLevel(const ASTAttribute& mi, ASTItem& item) c
         overrides = &function->markings.lintLevels;
     } else if (auto* module = item.opt_Module()) {
         overrides = &module->lintLevels;
+    } else if (auto* impl = item.opt_Impl()) {
+        overrides = &impl->lintLevels;
     }
     if (!overrides) {
         return;

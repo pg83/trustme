@@ -577,6 +577,7 @@ public:
     std::map<RcString, VisImplEnt<HIRTypeAlias>> types;
 
     HIRSimplePath srcModule;
+    LintLevelOverrides lintLevels;
 
     bool matchesType(const HIRType* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 
@@ -630,6 +631,8 @@ public:
        metadata; null for the crate being compiled.  Upstream `DefId::krate`: whether
        the impl may specialize is decided by that crate's features, not the user's. */
     const HIRCrate* originCrate = nullptr;
+
+    LintLevelOverrides lintLevels;
 
     bool matchesType(const HIRType* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 

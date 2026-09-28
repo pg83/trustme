@@ -629,6 +629,8 @@ private:
     std::vector<ImplItem> items_;
 
 public:
+    LintLevelOverrides lintLevels;
+
     ASTImpl(ASTImpl&&) /*noexcept*/;
     ASTImpl(ASTImplDef def);
     ~ASTImpl();
