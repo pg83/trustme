@@ -26,6 +26,7 @@
 #include "trans_codegen.h"
 #include "mir_operations.h"
 #include "lint_unsafe_code.h"
+#include "lint_dead_code.h"
 #include "parse_parseerror.h"
 #include "expand_proc_macro.h"
 #include "hir_main_bindings.h"
@@ -570,6 +571,7 @@ namespace {
             {
                 LintUnusedMustUse(wb, *hirCrate);
                 LintUnsafeCode(wb, *hirCrate);
+                LintDeadCode(wb, *hirCrate);
             }
             {
                 HIRExpandAnnotateUsage(wb, *hirCrate);
