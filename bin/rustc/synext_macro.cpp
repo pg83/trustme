@@ -1037,6 +1037,25 @@ namespace {
             }
         }
 
+        Vector<size_t> countArgs;
+        auto countSlot = [&](size_t argIndex) -> size_t {
+            for (size_t k = 0; k < countArgs.length(); k++) {
+                if (countArgs[k] == argIndex) {
+                    return fragments.size() + k;
+                }
+            }
+            countArgs.pushBack(argIndex);
+            return fragments.size() + countArgs.length() - 1;
+        };
+        for (const auto& frag : fragments) {
+            if (frag.args.precIsArg) {
+                countSlot(frag.args.prec);
+            }
+            if (frag.args.widthIsArg) {
+                countSlot(frag.args.width);
+            }
+        }
+
         std::vector<TokenTree> toks;
         toks.push_back(TokenTree(TOK_RWORD_MATCH));
         toks.push_back(TokenTree(TOK_PAREN_OPEN));
@@ -1088,7 +1107,7 @@ namespace {
         }
 
         struct H {
-            static void argumentList(std::vector<TokenTree>& toks, const std::vector<FmtFrag>& fragments, const ASTCrate& crate) {
+            static void argumentList(std::vector<TokenTree>& toks, const std::vector<FmtFrag>& fragments, const Vector<size_t>& countArgs, const ASTCrate& crate) {
                 toks.push_back(TokenTree(TOK_AMP));
                 toks.push_back(TokenTree(TOK_SQUARE_OPEN));
                 for (const auto& frag : fragments) {
@@ -1108,6 +1127,13 @@ namespace {
                     toks.push_back(Token(TOK_PAREN_CLOSE));
                     toks.push_back(TokenTree(TOK_COMMA));
                 }
+                for (size_t k = 0; k < countArgs.length(); k++) {
+                    pushPath(toks, crate, {"fmt", "rt", "Argument", "from_usize"});
+                    toks.push_back(Token(TOK_PAREN_OPEN));
+                    toks.push_back(ident(FMT(StringView("a") << countArgs[k]).c_str()));
+                    toks.push_back(Token(TOK_PAREN_CLOSE));
+                    toks.push_back(TokenTree(TOK_COMMA));
+                }
                 toks.push_back(TokenTree(TOK_SQUARE_CLOSE));
             }
         };
@@ -1120,7 +1146,7 @@ namespace {
                 toks.push_back(ident("FRAGMENTS"));
                 toks.push_back(TokenTree(TOK_COMMA));
 
-                H::argumentList(toks, fragments, crate);
+                H::argumentList(toks, fragments, countArgs, crate);
             }
             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
         } else {
@@ -1133,7 +1159,7 @@ namespace {
 
                 // TODO: Fragments to format
 
-                H::argumentList(toks, fragments, crate);
+                H::argumentList(toks, fragments, countArgs, crate);
                 toks.push_back(TokenTree(TOK_COMMA));
 
                 toks.push_back(TokenTree(TOK_AMP));
@@ -1223,12 +1249,13 @@ namespace {
 
                         pushToks(toks, ident("precision"), TOK_COLON);
                         if (frag.args.precSet) {
-                            pushPathCount("Is");
-                            pushToks(toks, TOK_PAREN_OPEN);
                             if (frag.args.precIsArg) {
-                                pushToks(toks, TOK_STAR, ident(FMT(StringView("a") << frag.args.prec).c_str()));
-                                pushToks(toks, TOK_RWORD_AS, ident("u16"));
+                                pushPathCount("Param");
+                                pushToks(toks, TOK_PAREN_OPEN);
+                                pushToks(toks, Token(U128(countSlot(frag.args.prec)), CORETYPE_UINT));
                             } else {
+                                pushPathCount("Is");
+                                pushToks(toks, TOK_PAREN_OPEN);
                                 pushToks(toks, Token(U128(frag.args.prec), CORETYPE_U16));
                             }
                             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
@@ -1239,12 +1266,13 @@ namespace {
 
                         pushToks(toks, ident("width"), TOK_COLON);
                         if (frag.args.widthIsArg || frag.args.width != 0) {
-                            pushPathCount("Is");
-                            pushToks(toks, TOK_PAREN_OPEN);
                             if (frag.args.widthIsArg) {
-                                pushToks(toks, TOK_STAR, ident(FMT(StringView("a") << frag.args.width).c_str()));
-                                pushToks(toks, TOK_RWORD_AS, ident("u16"));
+                                pushPathCount("Param");
+                                pushToks(toks, TOK_PAREN_OPEN);
+                                pushToks(toks, Token(U128(countSlot(frag.args.width)), CORETYPE_UINT));
                             } else {
+                                pushPathCount("Is");
+                                pushToks(toks, TOK_PAREN_OPEN);
                                 pushToks(toks, Token(U128(frag.args.width), CORETYPE_U16));
                             }
                             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
