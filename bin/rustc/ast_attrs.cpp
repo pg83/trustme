@@ -66,6 +66,7 @@ ASTAttribute::ASTAttribute(Span sp, ASTAttributeName name, TokenTree data)
     , name_(std::move(name))
     , data_(std::move(data))
     , isInert_(false)
+    , isDeriveHelper_(false)
 {
 }
 
@@ -74,6 +75,7 @@ ASTAttribute::ASTAttribute(const ASTAttribute& value)
     , name_(value.name_)
     , data_(value.data_.clone())
     , isInert_(value.isInert_)
+    , isDeriveHelper_(value.isDeriveHelper_)
 {
 }
 

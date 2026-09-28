@@ -224,3 +224,38 @@ pub fn paste_idents(input: TokenStream) -> TokenStream {
     }
     walk(input)
 }
+
+// derive-where's shape: the attribute hands the item to a derive of the same
+// crate, re-attached as that derive's helper, and marks it with a no-op
+// attribute. The re-attached `#[helper_forward(..)]` is the derive's helper
+// from then on, not a second call of the attribute.
+#[proc_macro_attribute]
+pub fn helper_forward(attribute: TokenStream, item: TokenStream) -> TokenStream {
+    let mut output: TokenStream = format!("#[derive(HelperForward)] #[helper_forward({attribute})] #[helper_forward_visited]")
+        .parse()
+        .unwrap();
+    output.extend(item);
+    output
+}
+
+#[proc_macro_attribute]
+pub fn helper_forward_visited(_attribute: TokenStream, item: TokenStream) -> TokenStream {
+    item
+}
+
+#[proc_macro_derive(HelperForward, attributes(helper_forward))]
+pub fn helper_forward_derive(item: TokenStream) -> TokenStream {
+    use proc_macro::TokenTree;
+    let mut after_keyword = false;
+    let mut name = None;
+    for token in item {
+        if let TokenTree::Ident(ident) = &token {
+            if after_keyword {
+                name = Some(ident.to_string());
+                break;
+            }
+            after_keyword = matches!(ident.to_string().as_str(), "struct" | "enum" | "union");
+        }
+    }
+    format!("impl {} {{ fn helper_forward_seen() -> u8 {{ 1 }} }}", name.unwrap()).parse().unwrap()
+}

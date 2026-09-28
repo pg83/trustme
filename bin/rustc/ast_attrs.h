@@ -98,6 +98,7 @@ class ASTAttribute {
     TokenTree data_;
 
     mutable bool isInert_;
+    mutable bool isDeriveHelper_;
     // TODO: Parse as a TT then expand?
 public:
     ASTAttribute(Span sp, ASTAttributeName name, TokenTree data);
@@ -116,6 +117,15 @@ public:
 
     bool isInert() const {
         return isInert_;
+    }
+
+    void markDeriveHelper() const {
+        isInert_ = true;
+        isDeriveHelper_ = true;
+    }
+
+    bool isDeriveHelper() const {
+        return isDeriveHelper_;
     }
 
     const Span& span() const {

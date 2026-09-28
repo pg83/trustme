@@ -345,11 +345,32 @@ namespace {
                         if (!i.is_None()) {
                             auto lex = ProcMacroInvoke(sp, wb, crate, this->macPath, attr, attrs, vis, path.nodes.back(), i);
                             if (lex) {
-                                // TODO: `derive_where` returns its own attribute invocation in the output, between two other additions
+                                Vector<RcString> helpers;
+                                for (const auto& a : attrs) {
+                                    if (a.isDeriveHelper() && a.name().isTrivial()) {
+                                        helpers.pushBack(a.name().asTrivial());
+                                    }
+                                }
+                                const auto isHelper = [&](const RcString& name) {
+                                    for (const auto& helper : helpers) {
+                                        if (helper == name) {
+                                            return true;
+                                        }
+                                    }
+                                    return false;
+                                };
 
                                 i = ASTItem::make_None({});
                                 lex->parseState().module = &mod;
+                                const auto before = mod.items.size();
                                 ParseModRootItemsInto(mod, modIdx, *lex);
+                                for (size_t idx = modIdx + 1; idx < modIdx + 1 + (mod.items.size() - before); idx++) {
+                                    for (const auto& a : mod.items[idx]->attrs.items) {
+                                        if (a.name().isTrivial() && isHelper(a.name().asTrivial())) {
+                                            a.markDeriveHelper();
+                                        }
+                                    }
+                                }
                                 ExpandModExternCrates(wb, crate, mod.path(), mod, modIdx + 1);
                             } else {
                                 ERROR(sp, E0000, StringView("proc_macro expansion failed"));

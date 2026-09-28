@@ -2587,7 +2587,7 @@ auto ProcMacroVisitor::visitAttr(const ASTAttribute& a) -> void {
     const bool isRepr = a.name().isTrivial() && a.name().asTrivial() == "repr";
     if (this->emitAllAttrs || isHelper || isRepr) {
         if (isHelper) {
-            a.markInert();
+            a.markDeriveHelper();
         }
         DEBUG(StringView("Send ") << a);
         pmi.sendSymbol("#");
