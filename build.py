@@ -3422,6 +3422,21 @@ unit_tests.append(command(
     descr="UT",
     color="green",
 ))
+unit_tests.append(command(
+    name="unit_print_cfg_driver",
+    inputs=["$(S)/tst/unit/test_print_cfg.py", *TESTS_LIB],
+    outputs=["$(B)/tst/unit/print_cfg_driver.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_print_cfg.py",
+        "$(B)/bin/rustc",
+        "$(B)/tst/unit/print_cfg_driver.stamp",
+    ],
+    deps=[rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
 rust_unit_tests = []
 # Files a unit test pulls in with `#[path]`, which are inputs of every unit
 # node because the node cannot tell which test names them.

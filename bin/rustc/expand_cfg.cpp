@@ -253,6 +253,26 @@ void CfgDump(const Settings& settings, ZeroCopyOutput& os) {
     }
 }
 
+namespace {
+    bool cfgIsGated(const RcString& name) {
+        return name == "overflow_checks" || name == "ub_checks" || name == "contract_checks" || name == "fmt_debug" || name == "target_thread_local" || name == "target_has_atomic_load_store" || name == "target_has_atomic_equal_alignment" || name == "relocation_model" || name == "sanitize" || name == "sanitizer_cfi_generalize_pointers" || name == "sanitizer_cfi_normalize_integers" || name == "emscripten_wasm_eh" || name == "target_has_reliable_f16" || name == "target_has_reliable_f16_math" || name == "target_has_reliable_f128" || name == "target_has_reliable_f128_math";
+    }
+}
+
+void CfgPrintStable(const Settings& settings, ZeroCopyOutput& os) {
+    const auto& cfg = *settings.cfg;
+    for (const auto& v : cfg.values) {
+        if (!cfgIsGated(v.first)) {
+            os << v.first << StringView("=\"") << v.second << StringView("\"") << endL;
+        }
+    }
+    for (const auto& f : cfg.flags) {
+        if (!cfgIsGated(f)) {
+            os << f << endL;
+        }
+    }
+}
+
 void CfgSetFlag(Settings& settings, std::string name) {
     auto& cfg = *settings.cfg;
     cfg.flags.insert(RcString::newInterned(name));

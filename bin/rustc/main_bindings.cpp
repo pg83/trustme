@@ -123,6 +123,7 @@ namespace {
 
         std::string targetSaveback;
         bool printCfgs = false;
+        bool printCfg = false;
         bool printVersion = false;
         bool verbose = false;
 
@@ -252,6 +253,11 @@ namespace {
         if (params.printCfgs) {
             auto out = sysO;
             CfgDump(*wb.settings, out);
+            return 0;
+        }
+        if (params.printCfg) {
+            auto out = sysO;
+            CfgPrintStable(*wb.settings, out);
             return 0;
         }
         if (params.crateNameQuery != "") {
@@ -1478,6 +1484,13 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     exit(1);
                 }
                 CfgSetLintCap(settings, level);
+            } else if (const char* request = checkWithArg("print")) {
+                if (strcmp(request, "cfg") == 0) {
+                    this->printCfg = true;
+                } else {
+                    sysE << StringView("unknown print request: `") << request << StringView("`") << endL;
+                    exit(1);
+                }
             } else if (const char* emit = checkWithArg("emit")) {
                 this->emitLink = false;
                 bool emitMetadata = false;

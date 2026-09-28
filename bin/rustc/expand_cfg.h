@@ -54,6 +54,7 @@ void CfgSetValueCb(Settings& settings, CfgString name, F f) {
 }
 
 void CfgDump(const Settings& settings, stl::ZeroCopyOutput& os);
+void CfgPrintStable(const Settings& settings, stl::ZeroCopyOutput& os);
 void CfgSetFlag(Settings& settings, std::string name);
 void CfgSetValue(Settings& settings, std::string name, std::string val);
 void CfgParseOption(const std::string& spec, std::string& name, bool& hasValue, std::string& value);
