@@ -185,6 +185,10 @@ func buildPackage(opts BuildOptions, manifestPath string) []string {
 	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
 	roots, artifacts, reports := builder.rootTasks()
 
+	if opts.command != "check" {
+		roots = append(roots, builder.libraryObjectTasks()...)
+	}
+
 	if opts.publishDeps {
 		publishedRoots, publishedArtifacts := builder.publishedDependencies()
 		roots = append(roots, publishedRoots...)
@@ -604,6 +608,32 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 	}
 
 	return tasks, artifacts, reports
+}
+
+// Cargo compiles every library of a build or test with `--emit=link`
+// (`CompileMode::Build`, cargo/core/compiler/unit_dependencies.rs), so the
+// rlib it leaves in `deps` is complete whether or not the build links it; only
+// `check` stops at metadata. Here an rlib is its metadata and its object.
+func (b *Builder) libraryObjectTasks() []*Task {
+	var libraries []*Task
+
+	for task, unit := range b.units {
+		if task == unit.rs && unit.target.kind == "lib" {
+			libraries = append(libraries, task)
+		}
+	}
+
+	sort.Slice(libraries, func(i, j int) bool {
+		return libraries[i].key < libraries[j].key
+	})
+
+	tasks := make([]*Task, 0, len(libraries))
+
+	for _, library := range libraries {
+		tasks = append(tasks, b.finalTask(library))
+	}
+
+	return tasks
 }
 
 func (b *Builder) libraryTask(pkg *Package, isHost bool) *Task {

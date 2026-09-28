@@ -664,3 +664,31 @@ func TestADependencyLibraryIsReportedAsAnArtifact(t *testing.T) {
 		t.Fatalf("dependency reports = %+v", reports)
 	}
 }
+
+// ui_test builds its dependency crate with `cargo build` and links examples
+// against what lands in `deps`: a build compiles every library it needs to a
+// complete rlib, the object of one nothing in the build links included.
+func TestABuildCompilesTheObjectOfEveryDependencyLibrary(t *testing.T) {
+	pkg := devDependentPackage(t)
+	pkg.dependencies.main = pkg.dependencies.dev
+	pkg.dependencies.dev = nil
+	builder := builderFor(pkg, BuildOptions{command: "build", selectors: TargetSelectors{lib: true}})
+	builder.rootTasks()
+	roots := builder.libraryObjectTasks()
+
+	helper := builder.units[builder.libraryTask(pkg.dependencies.main[0].packageRef, true)]
+	rooted := false
+
+	for _, root := range roots {
+		rooted = rooted || helper.cc != nil && root == helper.cc
+	}
+
+	if !rooted {
+		t.Fatalf("roots %v do not compile the object of %s", roots, helper.pkg.name)
+	}
+
+	object := filepath.Join(builder.outputDir(true), "deps", "lib"+builder.crateName(helper)+".rlib.o")
+	if !contains(artifactPaths(builder.depsArtifacts()), object) {
+		t.Fatalf("no artifact installs %s", object)
+	}
+}
