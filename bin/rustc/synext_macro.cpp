@@ -358,6 +358,21 @@ namespace {
         return mv$(formatStringNp->value);
     }
 
+    bool asmArgIsTemplate(TokenStream& lex) {
+        const auto type = lex.lookahead(0);
+        if (type == TOK_EOF || type == TOK_RWORD_IN || type == TOK_RWORD_CONST) {
+            return false;
+        }
+        if (type != TOK_IDENT) {
+            return true;
+        }
+        auto tok = lex.getToken();
+        const auto& name = tok.ident().name;
+        const bool operand = lex.lookahead(0) == TOK_EQUAL || name == "out" || name == "lateout" || name == "inout" || name == "inlateout" || name == "sym" || name == "label" || name == "options" || name == "clobber_abi";
+        lex.putback(mv$(tok));
+        return !operand;
+    }
+
     RcString getTokIdentRword(TokenStream& lex) {
         Token tok;
         GET_TOK(tok, lex);
@@ -1575,7 +1590,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             break;
         }
         GET_CHECK_TOK(tok, lex, TOK_COMMA);
-    } while (lex.lookahead(0) == TOK_STRING || lex.lookahead(0) == TOK_HASH);
+    } while (asmArgIsTemplate(lex));
 
     std::vector<ASTExprNodeAsm2::Param> params;
     Vector<RcString> names;
