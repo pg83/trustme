@@ -8265,10 +8265,21 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         }
         const auto* normalized = resolve_.expandAssociatedTypes(callSpan, type);
         DEBUG(StringView("signature type ") << type << StringView(" normalizes to ") << normalized);
-        const auto* path = normalized->opt_Path();
-        const bool projection = path && (path->binding.is_Unbound() || path->binding.is_Opaque()) && path->path.data.is_UfcsKnown();
-        if (!projection || !resolve_.typeContainsIvars(normalized)) {
-            return normalized;
+        const auto isOpenProjection = [&](const HIRType* candidate) {
+            const auto* path = candidate->opt_Path();
+            return path && (path->binding.is_Unbound() || path->binding.is_Opaque()) && path->path.data.is_UfcsKnown() && resolve_.typeContainsIvars(candidate);
+        };
+        if (!isOpenProjection(normalized)) {
+            auto owed = HIRTypeCloneCb([&](const HIRType* inner) -> const HIRType* {
+                if (inner == normalized || !isOpenProjection(inner)) {
+                    return nullptr;
+                }
+                const auto* fresh = resolve_.ivars.newIvarTr();
+                DEBUG(StringView("signature projection ") << inner << StringView(" owed to ") << fresh);
+                effects.equalities.push_back(SolverTypeEquality{fresh, inner});
+                return fresh;
+            });
+            return cloneTyWithCb(crate.types, callSpan, normalized, owed);
         }
         DEBUG(StringView("signature projection ") << normalized << StringView(" owed to the argument ") << argument);
         effects.equalities.push_back(SolverTypeEquality{argument, normalized});
