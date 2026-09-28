@@ -353,6 +353,10 @@ func parsePackage(path string, doc map[string]any, workspace *Workspace) *Packag
 
 	versionText := stringValue(table["version"])
 
+	if versionTable := mapValue(table["version"]); versionTable != nil && boolValue(versionTable["workspace"], false) && workspace != nil {
+		versionText = stringValue(workspace.packageTable["version"])
+	}
+
 	if versionText == "" {
 		versionText = "0.0.0"
 	}

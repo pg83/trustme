@@ -530,3 +530,17 @@ func TestExternNameIsTheLibraryTargetUnlessRenamed(t *testing.T) {
 		t.Fatalf("renamed dependency extern name = %q, want its key", got)
 	}
 }
+
+// rustc_apfloat's `[package] version.workspace = true` takes the version its
+// workspace's `[workspace.package]` sets, and its build script checks the
+// `+llvm-..` build metadata of CARGO_PKG_VERSION.
+func TestPackageVersionInheritsTheWorkspaces(t *testing.T) {
+	workspace := &Workspace{packageTable: map[string]any{"version": "0.2.3+llvm-462a31f5a5ab"}}
+	doc := map[string]any{"package": map[string]any{
+		"name": "rustc_apfloat", "version": map[string]any{"workspace": true},
+	}}
+
+	if got := parsePackage(filepath.Join(t.TempDir(), "Cargo.toml"), doc, workspace).version.string(); got != "0.2.3+llvm-462a31f5a5ab" {
+		t.Fatalf("inherited version = %q", got)
+	}
+}
