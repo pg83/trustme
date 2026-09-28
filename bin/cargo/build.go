@@ -1483,7 +1483,7 @@ func (b *Builder) crateArgs(ctx *TaskContext, root *CompileUnit, direct []*Depen
 
 		unit := b.units[b.libraryTask(dep.packageRef, root.isHost || lib.procMacro)]
 		add(unit)
-		args = append(args, "--extern", rustName(dep.key)+"="+b.crateName(unit))
+		args = append(args, "--extern", externCrateName(dep, lib)+"="+b.crateName(unit))
 	}
 
 	return args
@@ -1817,6 +1817,14 @@ func (b *Builder) taskName(pkg *Package, target *Target, isHost bool) string {
 	}
 
 	return name
+}
+
+func externCrateName(dep *Dependency, lib *Target) string {
+	if dep.name != dep.key {
+		return rustName(dep.key)
+	}
+
+	return rustName(lib.name)
 }
 
 func packageLibrary(pkg *Package) *Target {

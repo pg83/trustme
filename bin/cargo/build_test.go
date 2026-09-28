@@ -515,3 +515,18 @@ func TestProcMacroTargetImportsProcMacro(t *testing.T) {
 		t.Fatalf("plain library args = %q", got)
 	}
 }
+
+// string_cache depends on `new_debug_unreachable`, whose library target is
+// named `debug_unreachable`, and writes `use debug_unreachable::..`. Cargo names
+// a dependency in the extern prelude after its library target, and after the
+// dependency's key only when `package = ".."` renames it.
+func TestExternNameIsTheLibraryTargetUnlessRenamed(t *testing.T) {
+	lib := &Target{kind: "lib", name: "debug_unreachable"}
+
+	if got := externCrateName(&Dependency{key: "new_debug_unreachable", name: "new_debug_unreachable"}, lib); got != "debug_unreachable" {
+		t.Fatalf("unrenamed dependency extern name = %q, want the library target's", got)
+	}
+	if got := externCrateName(&Dependency{key: "dbg-unreachable", name: "new_debug_unreachable"}, lib); got != "dbg_unreachable" {
+		t.Fatalf("renamed dependency extern name = %q, want its key", got)
+	}
+}
