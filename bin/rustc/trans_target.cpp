@@ -2035,9 +2035,7 @@ namespace {
                 // TODO: If the values aren't yet populated, force const evaluation
                 switch (enm.tagRepr) {
                     case HIREnum::Repr::Auto:
-                        if (enm.isCRepr) {
-                            rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(HIRCoreType::U32)});
-                        } else if (e.variants.size() == 1) {
+                        if (e.variants.size() == 1 && !enm.isCRepr) {
                         } else if (!e.variants.empty()) {
                             i64 minValue = INT64_MAX;
                             i64 maxValue = INT64_MIN;
@@ -2047,23 +2045,24 @@ namespace {
                                 maxValue = std::max(maxValue, value);
                             }
 
+                            const unsigned atLeast = enm.isCRepr ? 4 : 1;
                             HIRCoreType tagType;
                             if (minValue >= 0) {
                                 const auto maxUnsigned = static_cast<u64>(maxValue);
-                                if (maxUnsigned <= UINT8_MAX) {
+                                if (maxUnsigned <= UINT8_MAX && atLeast <= 1) {
                                     tagType = HIRCoreType::U8;
-                                } else if (maxUnsigned <= UINT16_MAX) {
+                                } else if (maxUnsigned <= UINT16_MAX && atLeast <= 2) {
                                     tagType = HIRCoreType::U16;
-                                } else if (maxUnsigned <= UINT32_MAX) {
+                                } else if (maxUnsigned <= UINT32_MAX && atLeast <= 4) {
                                     tagType = HIRCoreType::U32;
                                 } else {
                                     tagType = HIRCoreType::U64;
                                 }
-                            } else if (minValue >= INT8_MIN && maxValue <= INT8_MAX) {
+                            } else if (minValue >= INT8_MIN && maxValue <= INT8_MAX && atLeast <= 1) {
                                 tagType = HIRCoreType::I8;
-                            } else if (minValue >= INT16_MIN && maxValue <= INT16_MAX) {
+                            } else if (minValue >= INT16_MIN && maxValue <= INT16_MAX && atLeast <= 2) {
                                 tagType = HIRCoreType::I16;
-                            } else if (minValue >= INT32_MIN && maxValue <= INT32_MAX) {
+                            } else if (minValue >= INT32_MIN && maxValue <= INT32_MAX && atLeast <= 4) {
                                 tagType = HIRCoreType::I32;
                             } else {
                                 tagType = HIRCoreType::I64;
