@@ -125,6 +125,7 @@ namespace {
         std::string targetSaveback;
         bool printCfgs = false;
         bool printCfg = false;
+        bool printFileNames = false;
         bool printVersion = false;
         bool verbose = false;
 
@@ -370,6 +371,11 @@ namespace {
                         break;
                 }
                 DEBUG(StringView("params.outfile = ") << params.outfile);
+            }
+            if (params.printFileNames) {
+                const char* slash = strrchr(params.outfile.c_str(), '/');
+                sysO << StringView(slash ? slash + 1 : params.outfile.c_str()) << endL;
+                return 0;
             }
 
             if (params.debug.dumpAst) {
@@ -1489,6 +1495,8 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             } else if (const char* request = checkWithArg("print")) {
                 if (strcmp(request, "cfg") == 0) {
                     this->printCfg = true;
+                } else if (strcmp(request, "file-names") == 0) {
+                    this->printFileNames = true;
                 } else {
                     sysE << StringView("unknown print request: `") << request << StringView("`") << endL;
                     exit(1);
