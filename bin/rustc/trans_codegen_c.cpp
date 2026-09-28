@@ -4672,15 +4672,10 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                         }
                         case TypeReprVariantMode::TAG_Values: {
                             auto& re = repr->variants.as_Values();
-                            if (re.field.index == 0) {
-                                emitLvalue(e.dst);
-                                of << StringView(".TAG = ");
-                                emitEnumVariantVal(repr, ve.index);
-                            } else {
-                                emitLvalue(e.dst);
-                                of << StringView(".DATA.TAG = ");
-                                emitEnumVariantVal(repr, ve.index);
-                            }
+                            emitLvalue(e.dst);
+                            emitEnumPath(repr, re.field);
+                            of << StringView(" = ");
+                            emitEnumVariantVal(repr, ve.index);
                             if (!enmP->isValue()) {
                                 emitCompositeAssign(localMirRes, [&]() {
                                     emitLvalue(e.dst);

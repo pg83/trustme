@@ -1639,6 +1639,7 @@ namespace {
                 if (enm.isCRepr) {
                     size_t maxSize = 0;
                     size_t maxAlign = 0;
+                    bool hasExplicitValue = false;
                     for (const auto& var : e) {
                         auto t = monomorph(var.type);
                         size_t size, align;
@@ -1652,8 +1653,9 @@ namespace {
                         maxSize = std::max(maxSize, size);
                         maxAlign = std::max(maxAlign, align);
                         rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
-
-                        ASSERT_BUG(sp, !var.discriminantExpr, StringView("TODO: Handle explicit discriminants with repr(C) data"));
+                        if (var.discriminantExpr) {
+                            hasExplicitValue = true;
+                        }
                     }
 
                     DEBUG(StringView("max_size = ") << maxSize << StringView(", max_align = ") << maxAlign);
@@ -1675,7 +1677,15 @@ namespace {
                     while (rv.size % rv.align != 0) {
                         rv.size++;
                     }
-                    rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
+                    if (hasExplicitValue) {
+                        Vector<U128> vals;
+                        for (const auto& v : e) {
+                            vals.pushBack(v.discriminantValue);
+                        }
+                        rv.variants = TypeRepr::VariantMode::make_Values({{e.size(), tagSize, {}}, mv$(vals)});
+                    } else {
+                        rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
+                    }
                 } else if (enm.tagRepr == HIREnum::Repr::Auto && e.size() <= 1) {
                     if (e.size() == 1) {
                         auto t = monomorph(e[0].type);
