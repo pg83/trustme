@@ -2816,7 +2816,8 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     }
     linkage.section = f.markings.linkSection;
 
-    if (astCrate->testHarness && f.code()) {
+    const bool entryOfNoMainCrate = astCrate->noMain && (f.markings.linkName == "main" || (f.markings.linkName == "" && attrs.get("no_mangle") && strcmp(p.getName(), "main") == 0));
+    if (astCrate->testHarness && f.code() && !entryOfNoMainCrate) {
     } else if (f.markings.linkName != "") {
         linkage.name = f.markings.linkName;
     } else if (attrs.get("rustc_std_internal_symbol")) {
