@@ -198,6 +198,10 @@ public:
     const HIRType* fixTraitDefaultReturn(const Span& sp, const HIRItemPath& p, const HIRType* tpl) const;
 
     const HIRType* expandAssociatedTypes(const Span& sp, const HIRType* input) const;
+
+    const HIRType* normalizeEnvironmentType(const Span& sp, const HIRType* type) const override {
+        return expandAssociatedTypes(sp, type);
+    }
     const HIRType* revealOpaqueTypes(const Span& sp, const HIRType* input) const;
 
     const HIRType* revealOpaqueTypesShallow(const Span& sp, const HIRType* input) const;

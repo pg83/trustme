@@ -99,11 +99,50 @@ namespace {
 void TraitResolveCommon::prepIndexes(const Span& sp) {
     TRACE_FUNCTION_F(StringView(""));
     if (auto* interner = wb.typingEnvironments; interner && interner->enabled()) {
-        environment_ = interner->intern(*this, sp);
+        bool created = false;
+        auto* environment = interner->intern(*this, sp, created);
+        environment_ = environment;
+        if (created) {
+            normalizeIndex(sp, environment->index);
+        }
         return;
     }
     environment_ = nullptr;
     buildIndex(sp, localIndex_);
+    normalizeIndex(sp, localIndex_);
+}
+
+void TraitResolveCommon::normalizeIndex(const Span& sp, BoundIndex& index) const {
+    auto hasProjection = [](const HIRType* type) {
+        return visitTyWith(type, [](const HIRType* inner) {
+            const auto* path = inner->opt_Path();
+            if (!path || !path->path.data.is_UfcsKnown()) {
+                return false;
+            }
+            const auto* self = path->path.data.as_UfcsKnown().type;
+            return !self->is_Generic() && !(self->is_Path() && self->as_Path().path.data.is_UfcsKnown());
+        });
+    };
+    Vector<const HIRType*> equalities;
+    for (const auto& equality : index.typeEqualities) {
+        equalities.pushBack(hasProjection(equality.second.ty) ? normalizeEnvironmentType(sp, equality.second.ty) : equality.second.ty);
+    }
+    Vector<const HIRType*> associated;
+    for (const auto& bound : index.traitBounds) {
+        for (const auto& binding : bound.second.assoc) {
+            associated.pushBack(hasProjection(binding.second.type) ? normalizeEnvironmentType(sp, binding.second.type) : binding.second.type);
+        }
+    }
+    size_t i = 0;
+    for (auto& equality : index.typeEqualities) {
+        equality.second.ty = equalities[i++];
+    }
+    i = 0;
+    for (auto& bound : index.traitBounds) {
+        for (auto& binding : bound.second.assoc) {
+            binding.second.type = associated[i++];
+        }
+    }
 }
 
 size_t TraitResolveCommon::environmentHash() const {
@@ -344,14 +383,16 @@ TypingEnvironmentInterner::TypingEnvironmentInterner()
 {
 }
 
-const TypingEnvironment* TypingEnvironmentInterner::intern(const TraitResolveCommon& resolve, const Span& sp) {
+TypingEnvironment* TypingEnvironmentInterner::intern(const TraitResolveCommon& resolve, const Span& sp, bool& created) {
     const auto hash = resolve.environmentHash();
     auto* head = index.find(hash);
     for (auto* node = head ? *head : nullptr; node; node = node->next) {
         if (resolve.environmentMatches(*node)) {
+            created = false;
             return node;
         }
     }
+    created = true;
     auto* node = pool.mutPtr()->make<TypingEnvironment>(hash, pool.mutPtr(), head ? *head : nullptr);
     resolve.cloneEnvironmentInto(*node);
     resolve.buildIndex(sp, node->index);

@@ -285,9 +285,13 @@ struct TraitResolveCommon {
 
     void prepIndexes(const Span& sp);
 
+    virtual const HIRType* normalizeEnvironmentType(const Span& sp, const HIRType* type) const = 0;
+
 protected:
     BoundIndex localIndex_;
     const TypingEnvironment* environment_ = nullptr;
+
+    void normalizeIndex(const Span& sp, BoundIndex& index) const;
 
     void prepIndexesAddEquality(const Span& sp, BoundIndex& index, const HIRType* longTy, const HIRType* shortTy) const;
     void prepIndexesAddTraitBound(const Span& sp, BoundIndex& index, const HIRType* type, HIRTraitPath traitPath, bool addParents = true) const;
@@ -347,7 +351,7 @@ struct TypingEnvironmentInterner {
         return enabled_ ? environment != nullptr : environment == nullptr;
     }
 
-    const TypingEnvironment* intern(const TraitResolveCommon& resolve, const Span& sp);
+    TypingEnvironment* intern(const TraitResolveCommon& resolve, const Span& sp, bool& created);
 };
 
 void TypeckCreateEnvironmentInterner(WireBoard& wb, stl::ObjPool& pool);

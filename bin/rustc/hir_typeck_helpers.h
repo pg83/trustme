@@ -873,6 +873,10 @@ public:
 
     const HIRType* expandAssociatedTypes(const Span& sp, const HIRType* input, SolverResponseCallback* effects = nullptr) const;
 
+    const HIRType* normalizeEnvironmentType(const Span& sp, const HIRType* type) const override {
+        return expandAssociatedTypes(sp, type);
+    }
+
 
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params, SolverResponseCallback* effects = nullptr) const;
 
