@@ -5545,7 +5545,7 @@ SolverCertainty TraitResolution::probeInherentImplHeader(const Span& sp, const H
     return certainty;
 }
 
-InherentImplSelection TraitResolution::selectInherentImpl(const Span& sp, const HIRType* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams) const {
+InherentImplSelection TraitResolution::selectInherentImpl(const Span& sp, const HIRType* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams, const HIRSimplePath* scope) const {
     InherentImplSelection selected;
     crate.findTypeImpls(receiver, ivars.callbackResolveInfer(), [&](const HIRTypeImpl& impl) {
         bool hasItem = false;
@@ -5562,6 +5562,20 @@ InherentImplSelection TraitResolution::selectInherentImpl(const Span& sp, const 
         }
         if (!hasItem) {
             return false;
+        }
+        if (scope) {
+            const HIRPublicity* publicity = nullptr;
+            if (auto it = impl.methods.find(item); it != impl.methods.end()) {
+                publicity = &it->second.publicity;
+            } else if (auto constant = impl.constants.find(item); constant != impl.constants.end()) {
+                publicity = &constant->second.publicity;
+            } else if (auto type = impl.types.find(item); type != impl.types.end()) {
+                publicity = &type->second.publicity;
+            }
+            if (publicity && !publicity->isVisible(*scope)) {
+                DEBUG(StringView("inherent ") << item << StringView(" of ") << impl.type << StringView(" is not visible from ") << *scope);
+                return false;
+            }
         }
 
         HIRPathParams implParams = initialParams ? initialParams->clone() : HIRPathParams();

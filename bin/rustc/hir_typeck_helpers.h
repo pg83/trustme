@@ -951,7 +951,7 @@ public:
 
     SolverCoercionResponse evaluateCoercionGoal(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op, bool allowSourceAutoderef = false, bool unknownTargetIsFresh = false) const;
 
-    InherentImplSelection selectInherentImpl(const Span& sp, const HIRType* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams = nullptr) const;
+    InherentImplSelection selectInherentImpl(const Span& sp, const HIRType* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams = nullptr, const HIRSimplePath* scope = nullptr) const;
 
     bool findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRType* selfType, TraitPathCallback& callback) const;
 

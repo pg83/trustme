@@ -3654,7 +3654,7 @@ struct OrderPlace {
         if (selectedImpl) {
             certainty = SolverCertainty::Proven;
         } else {
-            auto selection = context.resolve.selectInherentImpl(sp, lookupType, e.item, InherentItemKind::Method, &e.implParams);
+            auto selection = context.resolve.selectInherentImpl(sp, lookupType, e.item, InherentItemKind::Method, &e.implParams, &context.resolve.visPath);
             certainty = selection.certainty;
             implPtr = selection.impl;
         }
@@ -3701,7 +3701,7 @@ struct OrderPlace {
         lookupType = context.expandAssociatedTypes(sp, std::move(lookupType));
         inherent.type = lookupType;
 
-        auto selection = context.resolve.selectInherentImpl(sp, lookupType, inherent.item, InherentItemKind::Value, &inherent.implParams);
+        auto selection = context.resolve.selectInherentImpl(sp, lookupType, inherent.item, InherentItemKind::Value, &inherent.implParams, &context.resolve.visPath);
         if (selection.certainty == SolverCertainty::Ambiguous) {
             return false;
         }
