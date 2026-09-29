@@ -1234,7 +1234,7 @@ auto ProcMacroInv::sendSpan(const Ident::Hygiene& h) -> void {
 }
 
 auto ProcMacroInv::sendSpan(const Ident::Hygiene& h, const Span& sp) -> void {
-    this->sendSpanRef(this->spanFor(h, sp));
+    this->sendSpanRef(this->spanFor(h == Ident::Hygiene() ? callSiteHygiene : h, sp));
 }
 
 auto ProcMacroInv::sendSpanRef(size_t index) -> void {
@@ -2539,6 +2539,9 @@ auto ProcMacroVisitor::parseString(const std::string& s, const BlockItemMarkers*
         if (t == TOK_LIFETIME) {
             pmi.sendLifetime(t.ident().name.c_str(), t.ident().isRaw);
             continue;
+        }
+        if (t == TOK_STRING || t == TOK_BYTESTRING || t == TOK_CSTRING) {
+            t = Token(t.type(), mv$(t.str()), t.spelling(), Ident::Hygiene());
         }
         visitToken(t);
     }
