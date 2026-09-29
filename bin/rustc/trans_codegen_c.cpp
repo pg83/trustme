@@ -5846,11 +5846,6 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         of << StringView(")");
         of << StringView(");\n");
         return;
-    }
-    // HACK: Abort on various `v*` operations, as they have overly complex register specs that gcc doesn't like
-    else if (asmLines[0].frags.size() > 0 && (false || asmLines[0].frags[0].before.find("vmov") == 0 || asmLines[0].frags[0].before.find("vexpand") == 0 || asmLines[0].frags[0].before.find("vpexpand") == 0)) {
-        of << StringView("abort();\n");
-        return;
     } else {
         Vector<unsigned> argMappings;
         argMappings.grow(asmParams.size());
