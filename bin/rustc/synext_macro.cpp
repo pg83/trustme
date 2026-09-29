@@ -1791,15 +1791,21 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         const auto& arch = TargetGetCurSpec(wb).arch.name;
         const bool isX86 = arch == "x86" || arch == "x86_64";
         const bool is64Bit = arch == "x86_64";
-        std::map<RcString, std::string> seen;
-        for (const auto& param : params) {
+        Vector<RcString> canonicals;
+        Vector<size_t> usedInputs;
+        Vector<size_t> usedOutputs;
+        for (size_t i = 0; i < params.size(); i++) {
             const AsmRegisterSpec* spec = nullptr;
-            if (const auto* e = param.opt_Reg()) {
+            AsmDirection dir = AsmDirection::In;
+            if (const auto* e = params[i].opt_Reg()) {
                 spec = &e->spec;
-            } else if (const auto* e = param.opt_RegSingle()) {
+                dir = e->dir;
+            } else if (const auto* e = params[i].opt_RegSingle()) {
                 spec = &e->spec;
+                dir = e->dir;
             }
             if (!spec || !spec->is_Explicit()) {
+                canonicals.pushBack(RcString());
                 continue;
             }
             const auto& name = spec->as_Explicit();
@@ -1808,10 +1814,21 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                     ERROR(sp, E0000, StringView("invalid register `") << name << StringView("`: ") << what << StringView(" cannot be used as an operand for inline asm"));
                 }
             }
-            const auto canonical = isX86 ? canonicalX86Register(name, is64Bit) : name;
-            auto inserted = seen.insert(std::make_pair(canonical, name));
-            if (!inserted.second) {
-                ERROR(sp, E0000, StringView("register `") << name << StringView("` conflicts with register `") << inserted.first->second << StringView("`"));
+            canonicals.pushBack(RcString::newInterned(isX86 ? canonicalX86Register(name, is64Bit) : name));
+            auto claim = [&](Vector<size_t>& used) {
+                for (auto other : used) {
+                    if (canonicals[other] == canonicals[i]) {
+                        const auto& otherSpec = params[other].is_Reg() ? params[other].as_Reg().spec : params[other].as_RegSingle().spec;
+                        ERROR(sp, E0000, StringView("register `") << name << StringView("` conflicts with register `") << otherSpec.as_Explicit() << StringView("`"));
+                    }
+                }
+                used.pushBack(i);
+            };
+            if (dir != AsmDirection::LateOut) {
+                claim(usedInputs);
+            }
+            if (dir != AsmDirection::In) {
+                claim(usedOutputs);
             }
         }
     }
