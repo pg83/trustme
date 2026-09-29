@@ -1008,7 +1008,7 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 	pkg := unit.pkg
 	target := unit.target
 	output := ctx.outputBase(unit.baseName)
-	source := targetSourcePath(pkg, target)
+	source, dir := b.sourceArgs(pkg, targetSourcePath(pkg, target))
 	args := []string{source}
 
 	args = append(args, b.commonCompilerArgs(pkg, output, unit.isHost, false)...)
@@ -1082,23 +1082,42 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 		b.runTool(pkg.dir, env, "", pkg, target, args[0], args[1:]...)
 	}
 
-	b.runCompiler("", env, pkg, target, ctx.output(unit.diag), args...)
+	b.runCompiler(dir, env, pkg, target, ctx.output(unit.diag), args...)
 
 	if !b.context.opts.dryRun {
 		makeBuildOutputPortable(ctx.output(unit.linkManifest), outDir)
 	}
 }
 
+// The source path rustc is handed and the directory it runs in, as cargo's
+// `path_args` has them: a target of a path package under the workspace root
+// is named relative to the root and compiled from there, so `file!()` reads
+// `member/src/lib.rs`; any other by its absolute path, from its package.
+func (b *Builder) sourceArgs(pkg *Package, source string) (string, string) {
+	root := b.context.workspace.dir
+
+	if b.context.repository == nil || !b.context.repository.isVendored(pkg) {
+		relative, err := filepath.Rel(root, source)
+
+		if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return relative, root
+		}
+	}
+
+	return source, pkg.dir
+}
+
 func (b *Builder) compileBuildScript(ctx *TaskContext, unit *CompileUnit) {
 	pkg := unit.pkg
 	output := ctx.outputBase(unit.baseName)
-	args := []string{filepath.Join(pkg.dir, pkg.buildScript)}
+	source, dir := b.sourceArgs(pkg, filepath.Join(pkg.dir, pkg.buildScript))
+	args := []string{source}
 
 	args = append(args, b.commonCompilerArgs(pkg, output, true, true)...)
 	args = append(args, "--crate-name", "build", "--crate-type", "bin", "--edition", pkg.edition)
 	args = append(args, "-C", "emit-cpp-only", "-C", "emit-link-manifest="+ctx.output(unit.linkManifest))
 	args = append(args, b.crateArgs(ctx, unit, b.buildDependencies(pkg))...)
-	b.runCompiler("", b.commonEnv(pkg), pkg, unit.target, ctx.output(unit.diag), args...)
+	b.runCompiler(dir, b.commonEnv(pkg), pkg, unit.target, ctx.output(unit.diag), args...)
 }
 
 func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Task) {
@@ -1188,7 +1207,7 @@ func (b *Builder) commonCompilerArgs(pkg *Package, output string, isHost bool, b
 			}
 		}
 
-		args = append(args, "-Lnative="+dir)
+		args = append(args, "-Lnative="+absolutePath(dir))
 	}
 	args = append(args, b.systemCrateArgs(isHost)...)
 
@@ -1726,7 +1745,11 @@ func (b *Builder) systemCrates(isHost bool) []ExternalCrateArtifact {
 }
 
 func (b *Builder) systemLibraryDirs(isHost bool) []string {
-	dirs := append([]string(nil), b.context.opts.libSearch...)
+	var dirs []string
+
+	for _, dir := range b.context.opts.libSearch {
+		dirs = append(dirs, absolutePath(dir))
+	}
 
 	if isHost && b.context.cross {
 		marker := "-" + b.context.target

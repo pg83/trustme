@@ -730,3 +730,32 @@ func TestAProcMacroStandsInDepsWithItsPlugin(t *testing.T) {
 		}
 	}
 }
+
+func TestAWorkspaceMemberIsCompiledFromTheWorkspaceRoot(t *testing.T) {
+	root := t.TempDir()
+	vendor := filepath.Join(root, "vendor")
+	member := &Package{dir: filepath.Join(root, "member"), name: "member"}
+	vendored := &Package{dir: filepath.Join(vendor, "dep"), name: "dep"}
+	outside := &Package{dir: filepath.Join(filepath.Dir(root), "sibling"), name: "sibling"}
+	context := &BuildContext{
+		workspace:  &Workspace{dir: root},
+		repository: &Repository{vendorDir: vendor},
+	}
+	builder := &Builder{context: context}
+
+	for _, want := range []struct {
+		pkg    *Package
+		source string
+		dir    string
+	}{
+		{member, filepath.Join("member", "tests", "integration", "main.rs"), root},
+		{vendored, filepath.Join(vendored.dir, "tests", "integration", "main.rs"), vendored.dir},
+		{outside, filepath.Join(outside.dir, "tests", "integration", "main.rs"), outside.dir},
+	} {
+		source, dir := builder.sourceArgs(want.pkg, filepath.Join(want.pkg.dir, "tests", "integration", "main.rs"))
+
+		if source != want.source || dir != want.dir {
+			t.Fatalf("%s compiles %q from %q, want %q from %q", want.pkg.name, source, dir, want.source, want.dir)
+		}
+	}
+}
