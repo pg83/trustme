@@ -1697,7 +1697,7 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             pmi.sendRword("return");
             break;
         case TOK_RWORD_YIELD:
-            pmi.sendRword("yeild");
+            pmi.sendRword("yield");
             break;
         case TOK_RWORD_BOX:
             pmi.sendRword("box");

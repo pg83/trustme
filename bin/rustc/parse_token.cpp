@@ -899,7 +899,7 @@ std::string Token::toStr() const {
         case TOK_RWORD_RETURN:
             return "return";
         case TOK_RWORD_YIELD:
-            return "yeild";
+            return "yield";
         case TOK_RWORD_BOX:
             return "box";
         case TOK_RWORD_REF:
