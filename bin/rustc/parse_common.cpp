@@ -2571,10 +2571,13 @@ namespace {
         return ASTUnion(mv$(params), mv$(variants));
     }
 
-    RcString getTokIdentRword(TokenStream& lex) {
+    RcString getTokIdentRword(TokenStream& lex, Ident::Hygiene* hygiene = nullptr) {
         Token tok;
         GET_TOK(tok, lex);
         if (tok.type() == TOK_IDENT) {
+            if (hygiene) {
+                *hygiene = tok.ident().hygiene;
+            }
             return tok.ident().name;
         }
         if (Token::typeIsRword(tok.type())) {
@@ -4917,13 +4920,8 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
         tok = Token(TOK_EQUAL);
     } else {
         name.hasLeading = lex.getTokenIf(TOK_DOUBLE_COLON);
-        if (lex.lookahead(0) == TOK_IDENT) {
-            GET_TOK(tok, lex);
-            name.hygiene = tok.ident().hygiene;
-            PUTBACK(tok, lex);
-        }
         do {
-            name.elems.pushBack(getTokIdentRword(lex));
+            name.elems.pushBack(getTokIdentRword(lex, name.elems.empty() ? &name.hygiene : nullptr));
         } while (GET_TOK(tok, lex) == TOK_DOUBLE_COLON);
     }
     DEBUG(StringView("name = ") << name);
