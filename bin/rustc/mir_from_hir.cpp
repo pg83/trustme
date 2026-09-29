@@ -8181,6 +8181,7 @@ ExprVisitorConv::ExprVisitorConv(MirBuilder& builder, const Vector<const HIRType
     , variableTypes(varTypes)
     , isGenerator(isGenerator != nullptr)
 {
+    superLetScope = &builder.fcnScope();
     if (isGenerator) {
         generatorState.isFuture = isGenerator->isFuture;
         generatorState.isAsyncGen = isGenerator->isAsyncGen;
