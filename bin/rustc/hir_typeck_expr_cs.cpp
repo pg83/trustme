@@ -7658,12 +7658,12 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             {
                 Vector<bool> advRevisitRemoveList;
                 size_t len = context.advRevisits.size();
-                for (size_t i = 0; i < len; i++) {
+                for (size_t i = 0; i < len && !context.ivars.peekChanged(); i++) {
                     auto& ent = *context.advRevisits[i];
                     DEBUG(StringView("> ") << FMT_CB(os, ent.fmt(os)));
                     advRevisitRemoveList.pushBack(ent.revisit(context, /*is_fallback=*/true));
                 }
-                for (size_t i = len; i--;) {
+                for (size_t i = advRevisitRemoveList.length(); i--;) {
                     if (advRevisitRemoveList[i]) {
                         context.advRevisits.erase(context.advRevisits.begin() + i);
                     }
