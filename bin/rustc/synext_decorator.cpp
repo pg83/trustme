@@ -976,10 +976,11 @@ namespace {
                 }
                 rv.push_back(std::move(item));
             } else {
-                auto item = ASTPath::newRelative({}, {});
-                do {
+                const auto first = lex.getTokenCheck(TOK_IDENT).ident();
+                auto item = ASTPath::newRelative(first.hygiene, {ASTPathNode(first.name)});
+                while (lex.getTokenIf(TOK_DOUBLE_COLON)) {
                     item += ASTPathNode(lex.getTokenCheck(TOK_IDENT).ident().name);
-                } while (lex.getTokenIf(TOK_DOUBLE_COLON));
+                }
                 rv.push_back(std::move(item));
             }
 
@@ -1435,7 +1436,7 @@ namespace {
 
             Vector<RcString> macPath = findMacro(sp, wb, crate, mod, traitPath);
             if (!macPath.empty()) {
-                auto lex = ProcMacroInvoke(sp, wb, crate, macPath, attrs, vis, path.nodes.back(), item);
+                auto lex = ProcMacroInvoke(sp, wb, crate, macPath, attrs, vis, path.nodes.back(), item, traitPath.cls.is_Relative() ? traitPath.cls.as_Relative().hygiene : Ident::Hygiene());
                 if (lex) {
                     lex->parseState().module = &mod;
                     ParseModRootItems(*lex, mod);

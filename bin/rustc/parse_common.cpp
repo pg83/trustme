@@ -4897,6 +4897,9 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
     ASTAttributeName name;
     if (lex.lookahead(0) == TOK_INTERPOLATED_TYPE || lex.lookahead(0) == TOK_INTERPOLATED_PATH) {
         auto path = ParsePath(lex, PATH_GENERIC_NONE);
+        if (path.cls.is_Relative()) {
+            name.hygiene = path.cls.as_Relative().hygiene;
+        }
         if (path.isTrivial()) {
             name.elems.pushBack(path.asTrivial());
         } else if (path.cls.is_Relative()) {
@@ -4914,6 +4917,11 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
         tok = Token(TOK_EQUAL);
     } else {
         name.hasLeading = lex.getTokenIf(TOK_DOUBLE_COLON);
+        if (lex.lookahead(0) == TOK_IDENT) {
+            GET_TOK(tok, lex);
+            name.hygiene = tok.ident().hygiene;
+            PUTBACK(tok, lex);
+        }
         do {
             name.elems.pushBack(getTokIdentRword(lex));
         } while (GET_TOK(tok, lex) == TOK_DOUBLE_COLON);

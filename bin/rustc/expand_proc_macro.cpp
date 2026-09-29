@@ -437,31 +437,31 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     crate.langItems["trustme-main"] = ASTAbsolutePath("", mv$(mainPath));
 }
 
-std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i, const Ident::Hygiene& callSite) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         DEBUG(StringView("derive on struct"));
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitStruct(itemName, vis, i);
-    });
+    }, callSite);
 }
 
-std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTEnum& i) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTEnum& i, const Ident::Hygiene& callSite) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         DEBUG(StringView("derive on enum"));
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitEnum(itemName, vis, i);
-    });
+    }, callSite);
 }
 
-std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTUnion& i) {
+std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTUnion& i, const Ident::Hygiene& callSite) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         DEBUG(StringView("derive on union"));
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitUnion(itemName, vis, i);
-    });
+    }, callSite);
 }
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const ASTAttribute& invoked, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTItem& i) {
@@ -470,7 +470,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
         v.invokedAttr = &invoked;
         v.visitTopAttrs(attrs);
         v.visitItem(itemName, vis, i);
-    });
+    }, invoked.name().hygiene);
 }
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const TokenTree& tt) {

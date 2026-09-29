@@ -69,6 +69,7 @@ public:
 struct ASTAttributeName {
     bool hasLeading = false;
     stl::Vector<RcString> elems;
+    Ident::Hygiene hygiene;
 
     bool isTrivial() const {
         return elems.length() == 1;
