@@ -403,6 +403,8 @@ namespace {
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
 
+        [[nodiscard]] const HIRType* visitTraitImplType(const HIRType* ty) override;
+
         void visitExpr(HIRExprPtr& expr) override;
 
         bool locateTraitItemInBounds(HIRVisitor::PathContext pc, const HIRType* tr, const HIRGenericParams& params, HIRPath::Data& pd);
@@ -3617,6 +3619,33 @@ auto UfcsVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl&
 
     currentTrait = nullptr;
     currentType_ = nullptr;
+}
+
+[[nodiscard]] auto UfcsVisitor::visitTraitImplType(const HIRType* ty) -> const HIRType* {
+    const HIRType* declared;
+    {
+        DeclaredTypeGuard declaredTypes(*this);
+        declared = visitType(ty);
+    }
+    const auto normalized = visitType(declared);
+    const bool shadowable = normalized != declared && visitTyWith(declared, [&](const HIRType* inner) {
+        const auto* path = inner->opt_Path();
+        const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
+        if (!projection) {
+            return false;
+        }
+        const auto mentionsGeneric = [](const HIRType* part) {
+            return visitTyWith(part, [](const HIRType* leaf) {
+                return leaf->is_Generic();
+            });
+        };
+        bool generic = mentionsGeneric(projection->type);
+        for (const auto* argument : projection->trait.params.types) {
+            generic |= mentionsGeneric(argument);
+        }
+        return generic;
+    });
+    return shadowable ? declared : normalized;
 }
 
 auto UfcsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {

@@ -375,6 +375,10 @@ void HIRVisitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) {
     }
 }
 
+const HIRType* HIRVisitor::visitTraitImplType(const HIRType* ty) {
+    return visitType(ty);
+}
+
 void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) {
     TRACE_FUNCTION_F(StringView("impl") << impl.params.fmtArgs() << StringView(" ") << traitPath << impl.traitArgs << StringView(" for ") << impl.type);
     if (resolve_) {
@@ -403,7 +407,7 @@ void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& im
     }
     for (auto& ent : impl.types) {
         TRACE_FUNCTION_F(StringView("type ") << ent.first << StringView(" = ") << ent.second.data);
-        ent.second.data = visitType(ent.second.data);
+        ent.second.data = visitTraitImplType(ent.second.data);
     }
     if (resolve_) {
         resolve_->clearImplGenerics();
