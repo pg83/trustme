@@ -993,9 +993,11 @@ namespace {
                     case TOK_AMP:
                         lex.consume();
                         if (lex.next() == TOK_IDENT && lex.nextTok().ident().name == "raw") {
-                            lex.consume();
-                            if (!lex.consumeIf(TOK_RWORD_CONST) && !lex.consumeIf(TOK_RWORD_MUT)) {
-                                return false;
+                            auto ahead = lex.clone();
+                            ahead.consume();
+                            if (ahead.next() == TOK_RWORD_CONST || ahead.next() == TOK_RWORD_MUT) {
+                                lex.consume();
+                                lex.consume();
                             }
                         } else {
                             lex.consumeIf(TOK_RWORD_MUT);
