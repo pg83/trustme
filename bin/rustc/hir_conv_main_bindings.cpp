@@ -67,6 +67,7 @@ namespace {
         void visitPattern(HIRPattern& pat) override;
 
         void visitConstgeneric(HIRConstGeneric& value) override;
+        void bindConstgeneric(HIRConstGeneric& value, bool repeatCount);
 
         void visitParams(HIRGenericParams& params) override;
 
@@ -1063,8 +1064,13 @@ auto BindVisitor::visitPattern(HIRPattern& pat) -> void {
 }
 
 auto BindVisitor::visitConstgeneric(HIRConstGeneric& value) -> void {
+    bindConstgeneric(value, false);
+}
+
+auto BindVisitor::bindConstgeneric(HIRConstGeneric& value, bool repeatCount) -> void {
     HIRVisitor::visitConstgeneric(value);
     if (auto* unevaluated = value.opt_Unevaluated()) {
+        bool inheritsGenerics = true;
         if ((*unevaluated)->expr && (*unevaluated)->expr->state && (*unevaluated)->expr->get()) {
             /* Upstream `lower_const_path_to_const_arg` / `lower_anon_const_to_const_arg`:
                under `min_generic_const_args` a const argument that is a bare path
@@ -1082,13 +1088,14 @@ auto BindVisitor::visitConstgeneric(HIRConstGeneric& value) -> void {
             const bool pathConstArg = crate.featureEnabled("min_generic_const_args")
                 && (root->nodeKind() == HIRExprNodePathValue::kind || root->nodeKind() == HIRExprNodeUnitVariant::kind);
             (*unevaluated)->expr->state->anonymousConst = !pathConstArg;
+            inheritsGenerics = pathConstArg || repeatCount || root->nodeKind() == HIRExprNodeConstParam::kind || crate.featureEnabled("generic_const_exprs");
         }
         auto next = (*unevaluated)->clone();
         next.selfType = selfType;
-        if (ms.implGenerics) {
+        if (inheritsGenerics && ms.implGenerics) {
             next.paramsImpl = ms.implGenerics->makeNopParams(crate.types, 0);
         }
-        if (ms.itemGenerics) {
+        if (inheritsGenerics && ms.itemGenerics) {
             next.paramsItem = ms.itemGenerics->makeNopParams(crate.types, 1);
         }
         value = HIRConstGeneric(internUnevaluated(mv$(next)));
@@ -1705,7 +1712,7 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
         void visit(HIRExprNodeArraySized& node) override {
             auto& as = node.size;
             if (as.is_Unevaluated()) {
-                upperVisitor.visitConstgeneric(as.as_Unevaluated());
+                upperVisitor.bindConstgeneric(as.as_Unevaluated(), true);
             }
             HIRExprVisitorDef::visit(node);
         }
