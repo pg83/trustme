@@ -726,6 +726,22 @@ namespace {
                     MIR_ASSERT(state, ofs <= dataReloc->bytes.size(), StringView("Offset out of range"));
                     auto s = dataReloc->bytes.begin() + ofs.truncateU64();
                     auto e = dataReloc->bytes.end();
+                    const auto available = static_cast<size_t>(e - s);
+                    size_t length = available;
+                    if (state.resolve.metadataType(state.sp, te.inner) == MetadataType::Slice) {
+                        const auto ptrSize = TargetGetPointerBits() / 8;
+                        size_t elementSize = 1;
+                        if (const auto* slice = te.inner->opt_Slice()) {
+                            MIR_ASSERT(state, TargetGetSizeOf(state.sp, state.resolve, slice->inner, elementSize), StringView("No size for slice element ") << slice->inner);
+                        }
+                        length = lit.slice(ptrSize).readUint(ptrSize).truncateU64();
+                        MIR_ASSERT(state, length * elementSize <= available, StringView("Slice constant runs past its allocation"));
+                        e = s + length * elementSize;
+                    } else if (size_t size = 0; TargetGetSizeOf(state.sp, state.resolve, te.inner, size)) {
+                        MIR_ASSERT(state, size <= available, StringView("Constant runs past its allocation"));
+                        length = size;
+                        e = s + size;
+                    }
 
                     if (te.inner->is_Slice() && te.inner->as_Slice().inner == HIRCoreType::U8) {
                         Vector<u8> bytestr;
@@ -748,7 +764,7 @@ namespace {
                         for (auto it = s; it != e; ++it) {
                             bytestr.pushBack(static_cast<u8>(*it));
                         }
-                        auto size = MIRConstant::make_Uint({U128(bytestr.length()), HIRCoreType::Usize});
+                        auto size = MIRConstant::make_Uint({U128(length), HIRCoreType::Usize});
                         auto ptr1 = MIRRValue::make_MakeDst({MIRConstant(mv$(bytestr)), std::move(size)});
                         auto lval = mutator.inTemporary(state.crate.types.pointer(HIRBorrowType::Shared, state.crate.types.slice(state.crate.types.primitive(HIRCoreType::U8))), mv$(ptr1));
                         auto rawPtrTy = state.crate.types.pointer(HIRBorrowType::Shared, te.inner);
