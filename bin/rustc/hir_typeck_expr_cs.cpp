@@ -1821,8 +1821,9 @@ struct OrderPlace {
        enumeration passes one down: into an enumerated call's inputs
        (`expected_inputs_for_expected_output`, the declared parameter then equal to
        its input - `mem::replace(&mut x.ast, empty_ast())` under `Vec<Ast>::push`
-       takes `T = Ast`, not the `Box<Ast>` its first argument would bind), a block's
-       tail, a match's arms and a borrow's operand.  Other nodes read none. */
+       takes `T = Ast`, not the `Box<Ast>` its first argument would bind), a tuple
+       variant constructor's fields, a block's tail, a match's arms and a borrow's
+       operand.  Other nodes read none. */
     struct LateExpectation: HIRExprVisitorDef {
         Context& context;
         const Span& sp;
@@ -1850,18 +1851,34 @@ struct OrderPlace {
             context.currentOrder = parentOrder;
         }
 
+        void expectInput(const HIRType* formal, const HIRType* input, HIRExprNodeP& argument) {
+            if (input != formal) {
+                if (expectedInputIsUnsizedHint(context, sp, input)) {
+                    return;
+                }
+                context.equateTypes(sp, formal, input);
+            }
+            expect(argument, input);
+        }
+
         void expectCallInputs(const Vector<const HIRType*>& argTypes, size_t firstInput, HIRExprNodeP* args, size_t argCount) {
             const auto expectedInputs = context.expectedInputsForExpectedOutput(sp, expected, argTypes, firstInput);
             for (size_t i = 0; i < argCount && i < expectedInputs.length(); i++) {
-                const auto* formal = argTypes[firstInput + i];
-                const auto* input = expectedInputs[i];
-                if (input != formal) {
-                    if (expectedInputIsUnsizedHint(context, sp, input)) {
-                        continue;
-                    }
-                    context.equateTypes(sp, formal, input);
+                expectInput(argTypes[firstInput + i], expectedInputs[i], args[i]);
+            }
+        }
+
+        void visit(HIRExprNodeTupleVariant& node) override {
+            Vector<const HIRType*> formalTypes;
+            for (size_t i = 0; i < node.args.size(); i++) {
+                formalTypes.pushBack(node.argTypes[i] ? node.argTypes[i] : node.args[i]->resType);
+            }
+            formalTypes.pushBack(node.resType);
+            const auto expectedInputs = context.expectedInputsForExpectedOutput(sp, expected, formalTypes, 0);
+            for (size_t i = 0; i < node.args.size() && i < expectedInputs.length(); i++) {
+                if (node.argTypes[i]) {
+                    expectInput(formalTypes[i], expectedInputs[i], node.args[i]);
                 }
-                expect(args[i], input);
             }
         }
 
@@ -6189,7 +6206,7 @@ void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& 
 Vector<const HIRType*> Context::expectedInputsForExpectedOutput(const Span& sp, const HIRType* expected, const Vector<const HIRType*>& argTypes, size_t firstInput) {
     Vector<const HIRType*> inputs;
     for (size_t i = firstInput; i + 1 < argTypes.length(); i++) {
-        inputs.pushBack(argTypes[i]);
+        inputs.pushBack(this->expandAssociatedTypes(sp, argTypes[i]));
     }
     if (!expected || argTypes.empty()) {
         return inputs;
@@ -9502,15 +9519,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
         }
 
         DEBUG(StringView("- fcn_path=") << node.methodPath);
-        /* Upstream `check_argument_types`: each argument is coerced into its expected
-           parameter type, and the declared parameter type is then equal to it. */
-        const auto expectedInputs = this->context.expectedInputsForExpectedOutput(sp, this->context.callExpectation(node), node.cache.argTypes, 1);
-        for (unsigned int i = 0; i < node.args.size(); i++) {
-            DEBUG(StringView("> ARG ") << i << StringView(" : ") << node.cache.argTypes[1 + i] << StringView(" expected ") << expectedInputs[i]);
-            coerceCallArgument(this->context, sp, node.cache.argTypes[1 + i], expectedInputs[i], node.args[i], true, true);
-        }
-        DEBUG(StringView("> Ret : ") << node.cache.argTypes.back());
-        this->context.equateTypes(sp, node.resType, node.cache.argTypes.back());
 
         if (derefCount > 0) {
             BUG_ASSERT(derefCount < (1 << 16));
@@ -9570,6 +9578,16 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
         }
 
         this->context.equateTypes(sp, node.cache.argTypes[0], node.value->resType);
+
+        /* Upstream `check_argument_types`: each argument is coerced into its expected
+           parameter type, and the declared parameter type is then equal to it. */
+        const auto expectedInputs = this->context.expectedInputsForExpectedOutput(sp, this->context.callExpectation(node), node.cache.argTypes, 1);
+        for (unsigned int i = 0; i < node.args.size(); i++) {
+            DEBUG(StringView("> ARG ") << i << StringView(" : ") << node.cache.argTypes[1 + i] << StringView(" expected ") << expectedInputs[i]);
+            coerceCallArgument(this->context, sp, node.cache.argTypes[1 + i], expectedInputs[i], node.args[i], true, true);
+        }
+        DEBUG(StringView("> Ret : ") << node.cache.argTypes.back());
+        this->context.equateTypes(sp, node.resType, node.cache.argTypes.back());
 
         this->completed = true;
     }
