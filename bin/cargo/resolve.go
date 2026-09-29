@@ -149,6 +149,20 @@ func expandFeatures(pkg *Package) {
 	}
 }
 
+func anyOptional(deps []*Dependency) bool {
+	for _, dep := range deps {
+		if dep.optional {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Cargo's `dep/feature` enables the optional dependency and, to keep the old
+// behaviour, the package's feature of the same name when its feature map has
+// one (`activate_dep_feature`); `dep?/feature` only adds the feature to a
+// dependency something else enables.
 func requestDependencyFeature(pkg *Package, depName, depFeature string) bool {
 	weak := strings.HasSuffix(depName, "?")
 
@@ -164,6 +178,10 @@ func requestDependencyFeature(pkg *Package, depName, depFeature string) bool {
 
 	if !weak {
 		changed = enableDependency(pkg, depName)
+
+		if _, declared := pkg.features[depName]; declared && anyOptional(deps) {
+			changed = activateFeature(pkg, depName) || changed
+		}
 	}
 
 	for _, dep := range deps {

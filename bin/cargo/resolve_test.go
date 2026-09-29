@@ -54,3 +54,50 @@ libc = { version = "0.2", optional = true }
 		}
 	}
 }
+
+// num enables `num-rational/num-bigint-std`, which num-rational declares as
+// `["num-bigint/std"]`, and gates `BigRational` on `feature = "num-bigint"`.
+// Cargo's `dep/feature` enables the optional dependency and, to keep the old
+// behaviour, the package's feature of the same name when there is one
+// (`activate_dep_feature`); `dep?/feature` enables neither.
+func TestADependencyFeatureEnablesTheFeatureNamedAfterTheDependency(t *testing.T) {
+	dir := t.TempDir()
+
+	writeTestFile(t, filepath.Join(dir, "src", "lib.rs"), "")
+
+	manifest := `[package]
+name = "demo"
+version = "1.0.0"
+edition = "2021"
+
+[features]
+num-bigint = ["dep:num-bigint"]
+num-bigint-std = ["num-bigint/std"]
+weak-std = ["num-bigint?/std"]
+
+[dependencies]
+num-bigint = { version = "0.4", optional = true }
+`
+
+	path := filepath.Join(dir, "Cargo.toml")
+
+	writeTestFile(t, path, manifest)
+
+	for _, entry := range []struct {
+		request string
+		want    bool
+	}{
+		{"num-bigint-std", true},
+		{"weak-std", false},
+	} {
+		workspace := &Workspace{dir: dir, dependencies: map[string]*Dependency{}, patches: map[string]string{}}
+		pkg := parsePackage(path, readToml(path), workspace)
+
+		requestFeatures(pkg, []string{entry.request}, false)
+		expandFeatures(pkg)
+
+		if pkg.activeFeatures["num-bigint"] != entry.want {
+			t.Fatalf("%s: feature num-bigint active = %v, want %v", entry.request, pkg.activeFeatures["num-bigint"], entry.want)
+		}
+	}
+}
