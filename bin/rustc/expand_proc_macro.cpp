@@ -3017,6 +3017,23 @@ auto ProcMacroVisitor::visitItem(const RcString& name, const ASTVisibility& vis,
             visitImpl(e);
             break;
         }
+        case ASTItem::TAG_Crate: {
+            const auto& e = item.as_Crate();
+            this->visitVis(vis);
+            pmi.sendRword("extern");
+            pmi.sendRword("crate");
+            if (e.name == "") {
+                pmi.sendRword("self");
+            } else {
+                pmi.sendIdent(e.name.c_str());
+            }
+            if (e.name == "" || name != e.name) {
+                pmi.sendRword("as");
+                pmi.sendIdent(name.c_str());
+            }
+            pmi.sendSymbol(";");
+            break;
+        }
         case ASTItem::TAG_Use: {
             auto& e = item.as_Use();
             visitUse(name, vis, e);
