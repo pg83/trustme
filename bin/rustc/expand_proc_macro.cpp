@@ -2766,14 +2766,14 @@ auto ProcMacroVisitor::visitUnion(const RcString& name, const ASTVisibility& vis
 auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& vis, const ASTFunction& fcn) -> void {
     this->visitVis(vis);
 
-    if (fcn.isUnsafe()) {
-        pmi.sendRword("unsafe");
-    }
     if (fcn.isConst()) {
         pmi.sendRword("const");
     }
     if (fcn.isAsync()) {
         pmi.sendRword("async");
+    }
+    if (fcn.isUnsafe()) {
+        pmi.sendRword("unsafe");
     }
     if (fcn.abi() != ABI_RUST) {
         pmi.sendRword("extern");
