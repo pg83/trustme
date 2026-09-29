@@ -423,6 +423,7 @@ namespace {
         bool resolve_UfcsUnknown_inherent(const HIRSimplePath& visPath, const HIRPath& p, HIRVisitor::PathContext pc, HIRPath::Data& pd);
 
         bool resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathContext pc, HIRPath::Data& pd);
+        bool traitInScope(const HIRSimplePath& path) const;
 
         [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
 
@@ -4042,6 +4043,18 @@ auto UfcsVisitor::resolve_UfcsUnknown_inherent(const HIRSimplePath& visPath, con
     });
 }
 
+auto UfcsVisitor::traitInScope(const HIRSimplePath& path) const -> bool {
+    for (const auto& traitInfo : ::reverse(traits)) {
+        if (traitInfo.first == nullptr) {
+            break;
+        }
+        if (*traitInfo.first == path) {
+            return true;
+        }
+    }
+    return false;
+}
+
 auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathContext pc, HIRPath::Data& pd) -> bool {
     Span sp;
     auto& e = pd.as_UfcsUnknown();
@@ -4306,10 +4319,16 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
             for (const auto& t : atyDef.traitBounds) {
                 auto traitPath = mstate.monomorphGenericpath(sp, t.path, /*allow_infer*/ true);
                 DEBUG(StringView("Searching ATY bound: ") << traitPath);
-                if (this->locateInTraitImplAndSet(sp, pc, mv$(traitPath), *t.traitPtr, p.data)) {
-                    BUG_ASSERT(!p.data.is_UfcsUnknown());
-                    return;
+                auto candidateData = HIRPath::Data::make_UfcsUnknown({e.type, e.item, e.params.clone()});
+                if (!this->locateInTraitImplAndSet(sp, pc, mv$(traitPath), *t.traitPtr, candidateData)) {
+                    continue;
                 }
+                if (pc == HIRVisitor::PathContext::VALUE && !traitInScope(candidateData.as_UfcsKnown().trait.path)) {
+                    DEBUG(StringView("- ") << candidateData.as_UfcsKnown().trait.path << StringView(" is not in scope"));
+                    continue;
+                }
+                p.data = mv$(candidateData);
+                return;
             }
             DEBUG(StringView("- Item ") << e.item << StringView(" not found in ATY bounds"));
             // TODO: Search bounds with `where`?
