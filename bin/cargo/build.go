@@ -1906,7 +1906,13 @@ func (b *Builder) crateSuffix(pkg *Package) string {
 
 	suffix := "-" + version
 
-	if len(pkg.activeFeatures) > 0 {
+	active := len(pkg.activeFeatures)
+
+	if pkg.activeFeatures["default"] {
+		active--
+	}
+
+	if active > 0 {
 		keys := make([]string, 0, len(pkg.features))
 
 		for feature := range pkg.features {

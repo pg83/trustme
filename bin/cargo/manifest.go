@@ -495,6 +495,7 @@ func parseFeatures(pkg *Package, value any) {
 
 		if name == "default" {
 			pkg.defaultFeature = features
+			pkg.declaresDefault = true
 		} else {
 			pkg.features[name] = features
 		}

@@ -71,22 +71,23 @@ type BuildScriptOutput struct {
 }
 
 type Package struct {
-	dir            string
-	manifestPath   string
-	name           string
-	version        Version
-	edition        string
-	links          string
-	buildScript    string
-	dependencies   Dependencies
-	targetDeps     map[string]Dependencies
-	targets        []*Target
-	features       map[string][]string
-	defaultFeature []string
-	activeFeatures map[string]bool
-	buildOutput    BuildScriptOutput
-	metadataEnv    map[string]string
-	magic          bool
+	dir             string
+	manifestPath    string
+	name            string
+	version         Version
+	edition         string
+	links           string
+	buildScript     string
+	dependencies    Dependencies
+	targetDeps      map[string]Dependencies
+	targets         []*Target
+	features        map[string][]string
+	defaultFeature  []string
+	declaresDefault bool
+	activeFeatures  map[string]bool
+	buildOutput     BuildScriptOutput
+	metadataEnv     map[string]string
+	magic           bool
 
 	featureMu sync.Mutex
 }

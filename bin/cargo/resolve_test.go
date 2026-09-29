@@ -101,3 +101,40 @@ num-bigint = { version = "0.4", optional = true }
 		}
 	}
 }
+
+// async-std gates `task::block_on` on `feature = "default"` (its
+// `cfg_default!`). `default` is a feature like any other in Cargo's map: a
+// dependency taken with its default features activates it, and rustc sees
+// `--cfg feature="default"`, `default = []` included; a package that declares
+// no `default` has no such feature.
+func TestTheDefaultFeatureIsActivatedItself(t *testing.T) {
+	for _, entry := range []struct {
+		features string
+		want     bool
+	}{
+		{"default = [\"std\"]\nstd = []\n", true},
+		{"default = []\n", true},
+		{"std = []\n", false},
+	} {
+		dir := t.TempDir()
+
+		writeTestFile(t, filepath.Join(dir, "src", "lib.rs"), "")
+
+		path := filepath.Join(dir, "Cargo.toml")
+
+		writeTestFile(t, path, "[package]\nname = \"demo\"\nversion = \"1.0.0\"\nedition = \"2021\"\n\n[features]\n"+entry.features)
+
+		workspace := &Workspace{dir: dir, dependencies: map[string]*Dependency{}, patches: map[string]string{}}
+		pkg := parsePackage(path, readToml(path), workspace)
+
+		requestFeatures(pkg, nil, true)
+		expandFeatures(pkg)
+
+		if pkg.activeFeatures["default"] != entry.want {
+			t.Fatalf("%q: feature default active = %v, want %v", entry.features, pkg.activeFeatures["default"], entry.want)
+		}
+		if entry.want && entry.features != "default = []\n" && !pkg.activeFeatures["std"] {
+			t.Fatalf("%q: std is not active", entry.features)
+		}
+	}
+}

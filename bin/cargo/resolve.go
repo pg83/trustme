@@ -12,11 +12,13 @@ func resolveGraph(context *BuildContext) []*Package {
 		for feature := range root.features {
 			activateFeature(root, feature)
 		}
+
+		if root.declaresDefault {
+			activateFeature(root, "default")
+		}
 	} else {
-		if !context.opts.noDefault {
-			for _, feature := range root.defaultFeature {
-				activateFeature(root, feature)
-			}
+		if !context.opts.noDefault && root.declaresDefault {
+			activateFeature(root, "default")
 		}
 
 		for _, feature := range context.opts.features {
@@ -99,10 +101,8 @@ func activateFeature(pkg *Package, feature string) bool {
 func requestFeatures(pkg *Package, features []string, defaults bool) bool {
 	changed := false
 
-	if defaults {
-		for _, feature := range pkg.defaultFeature {
-			changed = activateFeature(pkg, feature) || changed
-		}
+	if defaults && pkg.declaresDefault {
+		changed = activateFeature(pkg, "default") || changed
 	}
 
 	for _, feature := range features {
@@ -130,7 +130,13 @@ func expandFeatures(pkg *Package) {
 				continue
 			}
 
-			for _, sub := range pkg.features[feature] {
+			subs := pkg.features[feature]
+
+			if feature == "default" {
+				subs = pkg.defaultFeature
+			}
+
+			for _, sub := range subs {
 				depName, depFeature, hasSlash := strings.Cut(sub, "/")
 
 				if hasSlash {
