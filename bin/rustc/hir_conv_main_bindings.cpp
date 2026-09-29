@@ -3983,8 +3983,8 @@ auto UfcsVisitor::resolve_UfcsUnknown_inherent(const HIRSimplePath& visPath, con
         DEBUG(StringView("- matched inherent impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);
         HIRImplMatcherScratch scratch;
         if (impl.matchesType(lookupType, HIRResolvePlaceholdersNop(), scratch)) {
-            const auto sizedMayHold = [&](const HIRType* type) {
-                const bool standsForInference = visitTyWith(type, [&](const HIRType* inner) {
+            const auto standsForInference = [&](const HIRType* type) {
+                return visitTyWith(type, [&](const HIRType* inner) {
                     if (inner->is_Infer()) {
                         return true;
                     }
@@ -3995,12 +3995,45 @@ auto UfcsVisitor::resolve_UfcsUnknown_inherent(const HIRSimplePath& visPath, con
                     const auto* scope = generic->group() == GENERICImpl ? resolve_.implGenericsPtr() : generic->group() == GENERICItem ? resolve_.itemGenericsPtr() : nullptr;
                     return !scope || generic->idx() >= scope->types.size();
                 });
-                return standsForInference || resolve_.typeIsSized(Span(), type);
             };
             const auto& bound = scratch.buffers[0];
             for (size_t i = 0; i < impl.params.types.size() && i < bound.length(); i++) {
-                if (impl.params.types[i].isSized && bound[i] && !sizedMayHold(bound[i])) {
+                if (impl.params.types[i].isSized && bound[i] && !standsForInference(bound[i]) && !resolve_.typeIsSized(Span(), bound[i])) {
                     DEBUG(StringView("- impl needs ") << bound[i] << StringView(": Sized"));
+                    return false;
+                }
+            }
+            HIRPathParamsBuilder implArgs;
+            for (size_t i = 0; i < impl.params.types.size(); i++) {
+                implArgs.types.push_back(i < bound.length() && bound[i] ? bound[i] : crate.types.infer());
+            }
+            for (size_t i = 0; i < impl.params.values.size(); i++) {
+                implArgs.values.push_back(HIRConstGeneric());
+            }
+            const HIRPathParams implParams(std::move(implArgs));
+            const MonomorphStatePtr monomorph(crate.types, lookupType, &implParams, nullptr);
+            for (const auto& implBound : impl.params.bounds) {
+                const auto* traitBound = implBound.opt_TraitBound();
+                if (!traitBound) {
+                    continue;
+                }
+                const auto* boundType = monomorph.monomorphType(Span(), traitBound->type);
+                const auto boundTrait = monomorph.monomorphTraitpath(Span(), traitBound->trait, true);
+                bool open = standsForInference(boundType);
+                for (const auto* argument : boundTrait.path.params.types) {
+                    open |= standsForInference(argument);
+                }
+                for (const auto& value : boundTrait.path.params.values) {
+                    open |= value.is_Infer() || value.is_Unevaluated();
+                }
+                if (open) {
+                    continue;
+                }
+                const bool mayHold = resolve_.probeImplMayApply(Span(), boundTrait.path.path, boundTrait.path.params, boundType, [](SolverMayApply probe) {
+                    return probe.effects.certainty != SolverCertainty::NoSolution;
+                });
+                if (!mayHold) {
+                    DEBUG(StringView("- impl needs ") << boundType << StringView(": ") << boundTrait);
                     return false;
                 }
             }
