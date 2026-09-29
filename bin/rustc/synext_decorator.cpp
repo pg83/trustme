@@ -1331,7 +1331,7 @@ namespace {
         ERROR(sp, E0000, StringView("CoercePointee can only be derived for structs"));
     }
 
-    Vector<RcString> findMacro(const Span& sp, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const ASTPath& traitPath) {
+    Vector<RcString> findMacro(const Span& sp, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const ASTPath& traitPath, bool builtinDerive) {
         Vector<RcString> macPath;
 
         if (traitPath.isTrivial()) {
@@ -1374,11 +1374,15 @@ namespace {
                     break;
                 }
                 case MacroRef::TAG_BuiltinProcMacro: {
-                    TODO(sp, StringView("Handle builtin proc macro"));
+                    if (!builtinDerive) {
+                        TODO(sp, StringView("Handle builtin proc macro"));
+                    }
                     break;
                 }
                 case MacroRef::TAG_MacroRules: {
-                    TODO(sp, StringView("Custom derive using macro_rules?"));
+                    if (!builtinDerive) {
+                        TODO(sp, StringView("Custom derive using macro_rules?"));
+                    }
                     break;
                 }
             }
@@ -1418,7 +1422,20 @@ namespace {
                 continue;
             }
 
-            if (auto dp = findBuiltinDerive(registry, traitPath)) {
+            const auto* dp = findBuiltinDerive(registry, traitPath);
+            Vector<RcString> macPath = findMacro(sp, wb, crate, mod, traitPath, dp != nullptr);
+            if (!macPath.empty()) {
+                auto lex = ProcMacroInvoke(sp, wb, crate, macPath, attrs, vis, path.nodes.back(), item, traitPath.cls.is_Relative() ? traitPath.cls.as_Relative().hygiene : Ident::Hygiene());
+                if (lex) {
+                    lex->parseState().module = &mod;
+                    ParseModRootItems(*lex, mod);
+                } else {
+                    ERROR(sp, E0000, StringView("proc_macro derive failed"));
+                }
+                continue;
+            }
+
+            if (dp) {
                 auto derivedImpl = dp->handleItem(sp, opts, item.params(), type, item);
                 if (isConstDerive) {
                     derivedImpl.def().setIsConst();
@@ -1431,18 +1448,6 @@ namespace {
                     }
                 }
                 mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", mv$(derivedImpl), {});
-                continue;
-            }
-
-            Vector<RcString> macPath = findMacro(sp, wb, crate, mod, traitPath);
-            if (!macPath.empty()) {
-                auto lex = ProcMacroInvoke(sp, wb, crate, macPath, attrs, vis, path.nodes.back(), item, traitPath.cls.is_Relative() ? traitPath.cls.as_Relative().hygiene : Ident::Hygiene());
-                if (lex) {
-                    lex->parseState().module = &mod;
-                    ParseModRootItems(*lex, mod);
-                } else {
-                    ERROR(sp, E0000, StringView("proc_macro derive failed"));
-                }
                 continue;
             }
 
