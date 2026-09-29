@@ -14839,7 +14839,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
         }
     }
     if (const auto* infer = resolvedType->opt_Infer()) {
-        if (!infer->isLit() && !associatedConstrainsSelf) {
+        if (!infer->isLit()) {
             return Certainty::Ambiguous;
         }
         if (infer->isLit() && goalParams.types.empty() && goalParams.values.empty() && !literalClassCanMatch(trait, goalParams, infer->tyClass)) {
@@ -14852,7 +14852,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
        `impl<W: Wake> From<Arc<W>> for Waker` for the goal `Waker: From<?1>` is `?W: Wake`,
        ambiguous rather than unimplemented, so that candidate stays viable until the
        argument fixes `?1`. */
-    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && isUnknownExistentialScope(selfGeneric->solverScope) && !associatedConstrainsSelf) {
+    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && isUnknownExistentialScope(selfGeneric->solverScope)) {
         return Certainty::Ambiguous;
     }
     CanonicalizeTraitGoal canonicalizer(crate.types, &resolve_.ivars, true, alphaExistentialScopeBase_);
@@ -15609,7 +15609,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
     }
     if (const auto* infer = resolvedType->opt_Infer()) {
-        if (!infer->isLit() && !associatedConstrainsSelf && !hasSelfCoercionGoal) {
+        if (!infer->isLit() && !hasSelfCoercionGoal) {
             return emitForcedAmbiguity();
         }
         if (infer->isLit() && goalParams.types.empty() && goalParams.values.empty() && !literalClassCanMatch(trait, goalParams, infer->tyClass)) {
@@ -15621,7 +15621,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
        `_: Display` from descending through every impl's own parameters for ever.  The
        existential standing for an impl parameter of one instantiation is such a
        variable. */
-    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && isUnknownExistentialScope(selfGeneric->solverScope) && !associatedConstrainsSelf && !hasSelfCoercionGoal) {
+    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && isUnknownExistentialScope(selfGeneric->solverScope) && !hasSelfCoercionGoal) {
         return emitForcedAmbiguity();
     }
     const bool plainTraitGoal = (!assocName || !assocName[0]) && !associated && !valueName;
