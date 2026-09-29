@@ -13474,7 +13474,10 @@ auto NextTraitGoalEvaluator::evaluateBuiltinUnsize(Candidate& candidate, const H
         };
 
         if (object->trait.path.path != HIRSimplePath()) {
-            combine(require(object->trait));
+            const auto nested = require(object->trait);
+            if (nested != Certainty::Ambiguous || source->is_Infer()) {
+                combine(nested);
+            }
         }
         for (const auto& marker : object->markers) {
             if (result == Certainty::NoSolution) {
