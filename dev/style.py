@@ -3,6 +3,7 @@
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -11,9 +12,21 @@ from pathlib import Path
 ROOT = Path.cwd()
 SOURCE_PATTERNS = ("*.cpp", "*.h", "*.hpp", "*.mm")
 EXCLUDED_DIRS = {"third_party", "ext"}
+# Vendored trees keep their upstream formatting.
+VENDORED_ROOTS = (
+    ROOT / "bin" / "vulkan" / "llvm",
+    ROOT / "bin" / "vulkan" / "musl",
+    ROOT / "bin" / "vulkan" / "png",
+    ROOT / "bin" / "vulkan" / "vulkan",
+    ROOT / "bin" / "vulkan" / "zlib",
+)
 INITIALIZER_LIST = re.compile(r"^(?P<indent> +):(?=\s)")
 INCLUDE = re.compile(r'^#include\s+(?P<open>["<])(?P<path>[^">]+)[">]\s*(?P<tail>//.*)?$')
 RAW_STRING = re.compile(r'(?:u8|u|U|L)?R"(?P<delimiter>[^ ()\\\t\r\n]{0,16})\(')
+
+
+def vendored(path):
+    return any(path.is_relative_to(root) for root in VENDORED_ROOTS)
 
 
 def source_files(arguments):
@@ -23,7 +36,11 @@ def source_files(arguments):
     output = subprocess.check_output(
         ["git", "ls-files", "-z", "--", *SOURCE_PATTERNS], cwd=ROOT
     )
-    return [ROOT / name for name in output.decode().split("\0") if name]
+    return [
+        path
+        for name in output.decode().split("\0")
+        if name and not vendored(path := ROOT / name)
+    ]
 
 
 def format_sources(files):
@@ -242,9 +259,21 @@ def reorder_includes(path):
 
     pragma = []
     includes = []
+    preamble = []
     end = 0
+    in_comment = False
     for line_number, line in enumerate(lines):
         stripped = line.strip()
+        if not includes and (in_comment or stripped.startswith("/*")):
+            # The license header (and any other leading comment) sits
+            # above the include run; keep it in place verbatim.
+            preamble.append(line)
+            if in_comment:
+                in_comment = not stripped.endswith("*/")
+            else:
+                in_comment = not (stripped.endswith("*/") and len(stripped) > 3)
+            end = line_number + 1
+            continue
         if not stripped:
             end = line_number + 1
             continue
@@ -262,20 +291,27 @@ def reorder_includes(path):
         return
 
     paired = path.stem + ".h"
-    groups = ([], [], [], [])
+    groups = ([], [], [], [], [])
     for open_char, include_path, line in includes:
         if open_char == '"' and include_path == paired and path.suffix != ".h":
             group = 0
         elif open_char == '"':
             group = 1
-        elif include_path.startswith("std/"):
+        elif include_path.startswith("lib/"):
+            # Cross-library project headers by full path, e.g.
+            # <lib/vterm/...>: still project code, ahead of libstd.
             group = 2
-        else:
+        elif include_path.startswith("std/"):
             group = 3
+        else:
+            group = 4
         groups[group].append((include_path, line.rstrip("\n").rstrip("\r")))
 
     newline = "\r\n" if lines[0].endswith("\r\n") else "\n"
-    block = "".join(pragma)
+    block = "".join(preamble)
+    if preamble:
+        block += newline
+    block += "".join(pragma)
     if pragma:
         block += newline
     parts = []
@@ -292,6 +328,10 @@ def reorder_includes(path):
 
 
 def main():
+    command = shlex.split(os.environ.get("CLANG_FORMAT", "clang-format"))
+    if shutil.which(command[0]) is None:
+        raise SystemExit(f"style.py: {command[0]} not found; nothing was touched")
+
     files = [
         path
         for path in source_files(sys.argv[1:])
