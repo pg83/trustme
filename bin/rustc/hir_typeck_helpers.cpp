@@ -838,10 +838,8 @@ struct TraitResolution::NextTraitGoalEvaluator {
     };
 
     struct CandidateValueBinding {
-        RcString name;
-        unsigned stableIndex;
+        const HIRConstGeneric* stable;
         unsigned probeIndex;
-        bool isGeneric;
     };
 
     enum class CandidateBindingResult {
@@ -12786,19 +12784,15 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
 
     const auto addValueBinding = [&](const HIRConstGeneric& value) {
         const auto* generic = value.opt_Generic();
-        const auto* infer = value.opt_Infer();
-        if ((!generic || !generic->isPlaceholder()) && !infer) {
+        if ((!generic || !generic->isPlaceholder()) && !value.is_Infer()) {
             return;
         }
-        const bool isGeneric = generic != nullptr;
-        const auto name = isGeneric ? generic->name : RcString();
-        const auto stableIndex = isGeneric ? generic->binding : infer->index;
         for (const auto& binding : valueBindings) {
-            if (binding.isGeneric == isGeneric && binding.name == name && binding.stableIndex == stableIndex) {
+            if (*binding.stable == value) {
                 return;
             }
         }
-        valueBindings.pushBack(CandidateValueBinding{name, stableIndex, resolve_.ivars.newIvarVal(), isGeneric});
+        valueBindings.pushBack(CandidateValueBinding{&value, resolve_.ivars.newIvarVal()});
     };
     for (const auto& value : params.values) {
         addValueBinding(value);
@@ -12865,11 +12859,8 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
         }
 
         HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override {
-            const auto* generic = value.opt_Generic();
-            const auto* infer = value.opt_Infer();
             for (const auto& binding : valueBindings_) {
-                const bool matches = binding.isGeneric ? generic && generic->name == binding.name && generic->binding == binding.stableIndex : infer && infer->index == binding.stableIndex;
-                if (matches) {
+                if (*binding.stable == value) {
                     return HIRConstGeneric::make_Infer({binding.probeIndex});
                 }
             }
@@ -12878,7 +12869,8 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
 
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override {
             for (const auto& binding : valueBindings_) {
-                if (binding.isGeneric && binding.name == generic.name && binding.stableIndex == generic.binding) {
+                const auto* stable = binding.stable->opt_Generic();
+                if (stable && *stable == generic) {
                     return HIRConstGeneric::make_Infer({binding.probeIndex});
                 }
             }
@@ -13020,7 +13012,7 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
                     }
                     const auto& resolved = table_.getValue(value);
                     if (resolved == value) {
-                        return binding.isGeneric ? HIRConstGeneric(HIRGenericRef(binding.name, binding.stableIndex)) : HIRConstGeneric::make_Infer({binding.stableIndex});
+                        return binding.stable->clone();
                     }
                     return this->monomorphConstgeneric(sp, resolved, allowInfer);
                 }

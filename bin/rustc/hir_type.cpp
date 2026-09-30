@@ -874,6 +874,9 @@ namespace {
             ASSERT_BUG(sp, te.index != ~0u, StringView("Encountered ivar for `this` - ") << t);
             return HIRCompare::Fuzzy;
         }
+        if (const auto* xGeneric = x.opt_Generic(); xGeneric && xGeneric->isSolverExistential()) {
+            return HIRCompare::Fuzzy;
+        }
 
         if (t.tag() != x.tag()) {
             return HIRCompare::Unequal;
