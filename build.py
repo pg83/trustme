@@ -4308,6 +4308,22 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_a_constant_table_is_read_from_memory",
+    inputs=["$(S)/tst/unit/test_a_constant_table_is_read_from_memory.py", *TESTS_LIB],
+    outputs=["$(B)/tst/unit/a_constant_table_is_read_from_memory.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_a_constant_table_is_read_from_memory.py",
+        "$(B)/bin/rustc",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/a_constant_table_is_read_from_memory.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_print_cfg_driver",
     inputs=["$(S)/tst/unit/test_print_cfg.py", *TESTS_LIB],
     outputs=["$(B)/tst/unit/print_cfg_driver.stamp"],

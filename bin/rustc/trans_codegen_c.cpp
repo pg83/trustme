@@ -9662,7 +9662,7 @@ auto CodeGeneratorC::emitEncodedConstant(const HIRType* type, const EncodedLiter
     TargetGetSizeAndAlignOf(sp, resolve_, type, size, align);
     const bool pointerAligned = align * 8 >= TargetGetPointerBits();
 
-    of << StringView("([]() { union { ");
+    of << StringView("([]() -> const auto& { static const union { ");
     emitCtype(type, FMT_CB(ss, ss << StringView("val");));
     of << StringView("; ");
     if (pointerAligned) {

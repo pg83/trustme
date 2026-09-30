@@ -277,6 +277,29 @@ namespace {
         const HIRType* type;
     };
 
+    bool MIRCleanupConstantIsIndirect(const MIRTypeResolve& state, const HIRType* ty) {
+        switch (ty->tag()) {
+            case HIRType::TAG_Array:
+            case HIRType::TAG_Tuple:
+                break;
+            case HIRType::TAG_Path: {
+                const auto& binding = ty->as_Path().binding;
+                if (!binding.is_Struct() && !binding.is_Enum() && !binding.is_Union()) {
+                    return false;
+                }
+                break;
+            }
+            default:
+                return false;
+        }
+        const bool unbound = visitTyWith(ty, [](const HIRType* inner) {
+            const auto* path = inner->opt_Path();
+            return path && path->path.data.is_Generic() && path->binding.is_Unbound();
+        });
+        size_t size = 0;
+        return !unbound && TargetGetSizeOf(state.sp, state.resolve, ty, size) && size > 2 * (TargetGetPointerBits() / 8);
+    }
+
     ConstantValue MIRCleanupGetConstant(const MIRTypeResolve& state, const HIRPath& path, MonomorphState& params) {
         TRACE_FUNCTION_F(path);
         const HIRGenericParams* implParams = nullptr;
@@ -1261,7 +1284,11 @@ namespace {
             const auto constant = MIRCleanupGetConstant(state, *ce.p, params);
             const auto* litPtr = constant.literal;
             const auto* cTy = constant.type;
-            if (litPtr) {
+            if (litPtr && MIRCleanupConstantIsIndirect(state, cTy)) {
+                DEBUG(StringView("Constant ") << *ce.p << StringView(" is an allocation"));
+                auto tmpLv = mutator.inTemporary(cTy, MIRRValue::make_Constant(MIRConstant::make_Encoded({cTy, litPtr->clone()})));
+                p = MIRParam::make_LValue(std::move(tmpLv));
+            } else if (litPtr) {
                 DEBUG(StringView("Replace constant ") << *ce.p << StringView(" with ") << *litPtr);
                 auto newRval = MIRCleanupLiteralToRValue(state, mutator, *litPtr, cTy, params, mv$(*ce.p));
                 if (auto* lv = newRval.opt_Use()) {
@@ -7378,7 +7405,11 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         const auto constant = MIRCleanupGetConstant(state, *ce->p, params);
                         const auto* litPtr = constant.literal;
                         const auto* ty = constant.type;
-                        if (litPtr) {
+                        const auto* dstTy = litPtr ? state.getLvalueType(se.dst) : nullptr;
+                        if (litPtr && MIRCleanupConstantIsIndirect(state, dstTy)) {
+                            DEBUG(StringView("Constant ") << *ce->p << StringView(" is an allocation"));
+                            se.src = MIRConstant::make_Encoded({dstTy, litPtr->clone()});
+                        } else if (litPtr) {
                             DEBUG(StringView("Replace constant ") << *ce->p << StringView(" with ") << *litPtr);
                             se.src = MIRCleanupLiteralToRValue(state, mutator, *litPtr, mv$(ty), params, mv$(*ce->p));
                             if (auto* p = se.src.opt_Constant()) {

@@ -359,6 +359,20 @@ public:
                 visitPath(*e.p);
                 break;
             }
+            case MIRConstant::TAG_Encoded: {
+                auto& e = c.as_Encoded();
+                if constexpr (std::is_const_v<typename Dec<MIRConstant>::Type>) {
+                    visitType(e.type);
+                } else {
+                    e.type = visitType(e.type);
+                }
+                for (auto& reloc : e.value.relocations) {
+                    if (reloc.p) {
+                        visitPath(*reloc.p);
+                    }
+                }
+                break;
+            }
         }
         return false;
     }
