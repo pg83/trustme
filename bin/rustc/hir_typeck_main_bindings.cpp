@@ -1003,6 +1003,9 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
                     impl.types.insert(std::make_pair(name, HIRTraitImpl::ImplEnt<const HIRType*>{e.second.isSpecialisable, mapping.second}));
                 }
             }
+            for (const auto& mapping : matchCb.mapping) {
+                impl.types.insert(std::make_pair(mapping.first, HIRTraitImpl::ImplEnt<const HIRType*>{e.second.isSpecialisable, mapping.second}));
+            }
             implFcn.returnType = expRetTy;
             for (size_t i = 0; i < std::min(implFcn.args.size(), traitFcn.args.size()); i++) {
                 DEBUG(StringView("ARG") << i << StringView("> ") << traitFcn.args[i].second);
