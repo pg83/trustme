@@ -553,6 +553,28 @@ def check_relocatable_literal_blob(rustc: str, src: str, work: str) -> None:
         raise RuntimeError(f"relocated literal blob binary exited {run.returncode}")
 
 
+def check_shared_allocation(rustc: str, src: str, libstd_tar: str, work: str) -> None:
+    """Pointers into one allocation name it once: the static's slices of one
+    byte string are offsets into a single emitted array."""
+    output = os.path.join(work, "shared-allocation")
+    libstd = lib.untar(libstd_tar, os.path.join(work, "libstd-shared-allocation"))
+    result = invoke(
+        rustc,
+        src,
+        output,
+        [
+            "--crate-name", "codegen_shared_allocation",
+            "-L", os.path.join(libstd, "release"),
+            "-Cemit-cpp-only",
+        ],
+    )
+    expect_ok(result, "shared allocation codegen")
+    generated = Path(output + ".cpp").read_text()
+    count = generated.count("shared allocation marker")
+    if count != 1:
+        raise RuntimeError(f"the allocation behind a static's slices was written {count} times")
+
+
 def check_large_function_backend_budget(
     rustc: str, src: str, libstd_tar: str, work: str
 ) -> None:
@@ -578,11 +600,11 @@ def check_large_function_backend_budget(
 
 
 def main() -> int:
-    if len(sys.argv) != 14:
+    if len(sys.argv) != 15:
         raise SystemExit(
             "usage: test_codegen_options.py "
             "RUSTC MIR_RS CFG_RS LINK_RS UNWIND_RS SWITCH_RS FIELDLESS_RS "
-            "CFG_COMPACT_RS PROTO_RS LARGE_RS BLOB_RS LIBSTD_TAR STAMP"
+            "CFG_COMPACT_RS PROTO_RS LARGE_RS BLOB_RS SHARED_RS LIBSTD_TAR STAMP"
         )
     (
         rustc,
@@ -596,6 +618,7 @@ def main() -> int:
         proto_src,
         large_src,
         blob_src,
+        shared_src,
         libstd_tar,
         stamp,
     ) = map(os.path.abspath, sys.argv[1:])
@@ -674,6 +697,7 @@ def main() -> int:
         check_prototype_order(rustc, proto_src, work)
         check_large_function_backend_budget(rustc, large_src, libstd_tar, work)
         check_relocatable_literal_blob(rustc, blob_src, work)
+        check_shared_allocation(rustc, shared_src, libstd_tar, work)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)
     Path(stamp).touch()

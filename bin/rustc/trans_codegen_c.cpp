@@ -198,6 +198,18 @@ namespace {
         CallerLocationNode* lastCallerLocation = nullptr;
         u32 callerLocationCount = 0;
 
+        struct AllocationNode {
+            AllocationNode* hashNext;
+            const char* data;
+            size_t length;
+            u32 index;
+
+            AllocationNode(const char* data, size_t length, u32 index, AllocationNode* hashNext);
+        };
+
+        IntMap<AllocationNode*> allocations{callerLocationPool};
+        u32 allocationCount = 0;
+
         bool usesIntelCompilerAsmDialect() const;
 
         /* The generated C++ is cached by content and assembled from whatever
@@ -413,6 +425,14 @@ namespace {
         void emitCallerLocationPointer(const SourceLocation& source);
 
         void emitCallerLocationDefinitions();
+
+        u64 allocationHash(const char* data, size_t length) const;
+
+        AllocationNode* findAllocation(const char* data, size_t length) const;
+
+        AllocationNode* emitAllocation(const char* data, size_t length);
+
+        void printBytes(const char* data, size_t length);
 
         const HIRPath& promotedName(const HIRPath& path);
 
@@ -2257,6 +2277,13 @@ auto CodeGeneratorC::emitStaticProto(const HIRPath& p, const HIRStatic& item, co
             takePromotedHolder(p, type, *value);
         }
     }
+    if (const auto* value = promotedValue(p, item)) {
+        for (const auto& reloc : value->relocations) {
+            if (!reloc.p) {
+                emitAllocation(reloc.bytes.data(), reloc.bytes.size());
+            }
+        }
+    }
     switch (item.linkage.type) {
         case HIRLinkage::Type::External:
             break;
@@ -2385,6 +2412,11 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
         return;
     }
 
+    for (const auto& reloc : encoded.relocations) {
+        if (!reloc.p) {
+            emitAllocation(reloc.bytes.data(), reloc.bytes.size());
+        }
+    }
     if (item.params.isGeneric()) {
         of << StringView("__attribute__((weak)) ");
     }
@@ -2432,7 +2464,7 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
                             emitReifiedFunctionName(*relocIt->p, relocIt->preserveTrackCaller);
                         }
                     } else {
-                        this->printEscapedString(relocIt->bytes);
+                        of << StringView("trustme_alloc_") << emitAllocation(relocIt->bytes.data(), relocIt->bytes.size())->index;
                     }
                     if (v > 0) {
                         of << StringView("+") << v;
@@ -6317,6 +6349,52 @@ auto CodeGeneratorC::callerLocationHash(const SourceLocation& source) const -> u
     return source.filename.contentHash() ^ splitMix64(source.line + 0x9e3779b97f4a7c15ULL) ^ splitMix64(source.column + 0xd6e8feb86659fd93ULL);
 }
 
+auto CodeGeneratorC::allocationHash(const char* data, size_t length) const -> u64 {
+    u64 hash = splitMix64(length);
+    const size_t edge = length < 64 ? length : 64;
+    for (size_t i = 0; i < edge; i++) {
+        hash = splitMix64(hash ^ static_cast<u8>(data[i]));
+        hash = splitMix64(hash ^ static_cast<u8>(data[length - 1 - i]));
+    }
+    return hash;
+}
+
+auto CodeGeneratorC::findAllocation(const char* data, size_t length) const -> AllocationNode* {
+    auto* head = allocations.find(allocationHash(data, length));
+    for (auto* node = head ? *head : nullptr; node; node = node->hashNext) {
+        if (node->length == length && memcmp(node->data, data, length) == 0) {
+            return node;
+        }
+    }
+    return nullptr;
+}
+
+auto CodeGeneratorC::printBytes(const char* data, size_t length) -> void {
+    if (const auto* node = findAllocation(data, length)) {
+        of << StringView("trustme_alloc_") << node->index;
+    } else {
+        printEscapedStringInner(data, data + length);
+    }
+}
+
+auto CodeGeneratorC::emitAllocation(const char* data, size_t length) -> AllocationNode* {
+    if (auto* existing = findAllocation(data, length)) {
+        return existing;
+    }
+    const auto hash = allocationHash(data, length);
+    auto* head = allocations.find(hash);
+    auto* node = callerLocationPool->make<AllocationNode>(data, length, allocationCount++, head ? *head : nullptr);
+    if (head) {
+        *head = node;
+    } else {
+        allocations.insert(hash, node);
+    }
+    of << StringView("static const char trustme_alloc_") << node->index << StringView("[] = ");
+    printEscapedStringInner(data, data + length);
+    of << StringView(";\n");
+    return node;
+}
+
 auto CodeGeneratorC::internCallerLocation(const SourceLocation& source) -> CallerLocationNode* {
     const auto hash = callerLocationHash(source);
     auto* head = callerLocations.find(hash);
@@ -9566,7 +9644,7 @@ auto CodeGeneratorC::emitEncodedConstant(const HIRType* type, const EncodedLiter
                         emitReifiedFunctionName(*relocation->p, relocation->preserveTrackCaller);
                     }
                 } else {
-                    printEscapedString(relocation->bytes);
+                    printBytes(relocation->bytes.data(), relocation->bytes.size());
                 }
                 if (word > 0) {
                     of << StringView("+") << word;
@@ -9684,13 +9762,13 @@ auto CodeGeneratorC::emitConstant(const MIRConstant& ve, const MIRLValue* dstPtr
         case MIRConstant::TAG_Bytes: {
             auto& c = ve.as_Bytes();
             of << StringView("(void*)");
-            this->printEscapedString(c);
+            this->printBytes(reinterpret_cast<const char*>(c.data()), c.length());
             break;
         }
         case MIRConstant::TAG_StaticString: {
             auto& c = ve.as_StaticString();
             of << StringView("make_sliceptr(");
-            this->printEscapedString(c);
+            this->printBytes(c.data(), c.size());
             of << StringView(", ") << c.size() << StringView(")");
             break;
         }
@@ -10368,6 +10446,14 @@ auto CodeGeneratorC::isDst(const HIRType* ty) const -> bool {
             return true;
     }
     return false;
+}
+
+CodeGeneratorC::AllocationNode::AllocationNode(const char* data, size_t length, u32 index, AllocationNode* hashNext)
+    : hashNext(hashNext)
+    , data(data)
+    , length(length)
+    , index(index)
+{
 }
 
 CodeGeneratorC::CallerLocationNode::CallerLocationNode(const SourceLocation& source, u32 index, CallerLocationNode* hashNext)
