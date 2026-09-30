@@ -487,6 +487,7 @@ ProcMacroInv::ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition ed
     , procMacroDesc(procMacroDesc)
     , edition(edition)
 {
+    markProcMacroExpansion();
     if (getenv("TRUSTME_DUMP_PROCMACRO") && getenv("TRUSTME_DUMP_PROCMACRO")[0]) {
         // TODO: Dump both input and output, AND (optionally) dump each invocation
         std::string namePrefix;

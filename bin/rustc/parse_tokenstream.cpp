@@ -25,6 +25,14 @@ bool TokenStream::isMacroExpansionPlaceholder() const {
     return macroExpansionPlaceholder_;
 }
 
+void TokenStream::markProcMacroExpansion() {
+    procMacroExpansion_ = true;
+}
+
+bool TokenStream::isProcMacroExpansion() const {
+    return procMacroExpansion_;
+}
+
 ObjPool& TokenStream::typePool() const {
     return *parseState_.wb->pool;
 }

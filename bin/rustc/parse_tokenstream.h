@@ -75,6 +75,7 @@ class TokenStream {
 
     ParseState parseState_;
     bool macroExpansionPlaceholder_ = false;
+    bool procMacroExpansion_ = false;
     stl::Vector<RecordedToken*>* record_ = nullptr;
     stl::Vector<RecordedToken*>* sourceRecord_ = nullptr;
 
@@ -116,6 +117,10 @@ public:
     void markMacroExpansionPlaceholder();
 
     bool isMacroExpansionPlaceholder() const;
+
+    void markProcMacroExpansion();
+
+    bool isProcMacroExpansion() const;
 
     stl::ObjPool& typePool() const;
 

@@ -78,6 +78,7 @@ namespace {
 
         ASTExprNodeBlock* currentBlock = nullptr;
         bool inAssignLhs = false;
+        const ASTExprNodeMacro* optionalExpression = nullptr;
 
         /* The level `unused_attributes` reports at inside the expression being
            walked, narrowed as the walk descends into nodes that set it. Empty
@@ -2532,7 +2533,7 @@ auto CExpandExpr::visitMacro(ASTExprNodeMacro& node, std::vector<ASTExprNodeBloc
         }
         node.path = ASTPath();
 
-        if (!nodesOut && !rv) {
+        if (!nodesOut && !rv && !(&node == optionalExpression && ttl->isProcMacroExpansion())) {
             ERROR(node.span(), E0000, StringView("Macro didn't expand to anything"));
         }
     }
@@ -2552,6 +2553,9 @@ auto CExpandExpr::visit(ASTExprNodeMacro& node) -> void {
         DEBUG(StringView("--- Visiting new node"));
         auto* n = this->replacement;
         this->replacement = nullptr;
+        if (&node == optionalExpression) {
+            optionalExpression = cast<ASTExprNodeMacro>(n);
+        }
         n = this->visit(n);
         if (n) {
             BUG_ASSERT(!this->replacement);
@@ -2607,7 +2611,10 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
             BUG_ASSERT(it->node == nodeMac);
 
             if (!definesMacro && nodeMac->isTailExpression) {
+                const auto* outerOptional = optionalExpression;
+                optionalExpression = nodeMac;
                 it->node = this->visit(it->node);
+                optionalExpression = outerOptional;
                 if (!it->node) {
                     it = node.nodes.erase(it);
                 } else {
