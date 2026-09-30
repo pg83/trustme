@@ -5060,7 +5060,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     if (possibleType) {
                         DEBUG(StringView("n_deref = ") << nDeref << StringView(", possible_type = ") << *possibleType);
                         const HIRType* possibleTypeP = *possibleType;
-                        for (size_t i = 0; i < nDeref && possibleTypeP; i++) {
+                        for (size_t i = 0; i < nDeref && possibleTypeP && (*possibleType)->is_Borrow(); i++) {
                             if (const auto* te = possibleTypeP->opt_Borrow()) {
                                 possibleTypeP = te->inner;
                             } else {
