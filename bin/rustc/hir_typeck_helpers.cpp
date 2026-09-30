@@ -53,6 +53,39 @@ namespace {
         return isImplExistentialScope(scope) || scope >= SOLVER_ALPHA_SCOPE_BASE;
     }
 
+    bool typeHasOpenValue(HIRTypeInterner& types, const HMTypeInferrence& ivars, const HIRType* type) {
+        if ((type->flags & HIRType::HAS_DEFERRED_CONST) == 0) {
+            return false;
+        }
+        struct Visitor: HIRVisitor {
+            const HMTypeInferrence& ivars;
+            bool found = false;
+
+            Visitor(HIRTypeInterner& types, const HMTypeInferrence& ivars)
+                : HIRVisitor(nullptr, types)
+                , ivars(ivars)
+            {
+            }
+
+            void visitPathParams(HIRPathParams& params) override {
+                for (const auto& value : params.values) {
+                    if (value.is_Infer() && ivars.getValue(value).is_Infer()) {
+                        found = true;
+                    }
+                }
+                HIRVisitor::visitPathParams(params);
+            }
+
+            [[nodiscard]] const HIRType* visitType(const HIRType* inner) override {
+                return visitTypeDefaultViaHooks(inner);
+            }
+        } visitor(types, ivars);
+
+        const auto* ignored = visitor.visitType(type);
+        (void)ignored;
+        return visitor.found;
+    }
+
     bool typeIsConcrete(const HIRType* type) {
         return !monomorphiseTypeNeeded(type) && !visitTyWith(type, [](const HIRType* inner) {
             if (inner->is_Infer() || inner->is_ErasedType()) {
@@ -4761,7 +4794,7 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
         const bool wasOpaque = input->as_Path().binding.is_Opaque();
         if (wasUnbound || wasOpaque) {
             if (wasOpaque) {
-                const bool cacheable = !ivars.probing() && !typeContainsIvars(input);
+                const bool cacheable = !ivars.probing() && !typeContainsIvars(input) && !typeHasOpenValue(crate.types, ivars, input);
                 if (cacheable) {
                     auto* cached = eatCache.find(input->uid);
                     if (cached && cached->generation == eatCacheGeneration) {
@@ -5730,9 +5763,15 @@ const HIRType* TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span
             selectionHasIvars |= this->ivars.typeContainsIvars(param, false);
         }
     }
-    if (!selectionHasIvars && !(!answered && projection && typeIsConcrete(projection->type))) {
+    const bool selectionHasOpenValue = typeHasOpenValue(crate.types, this->ivars, input);
+    const bool unimplemented = !answered && projection && typeIsConcrete(projection->type);
+    if (!selectionHasIvars && !selectionHasOpenValue && !unimplemented) {
         auto data = input->cloneData();
         data.as_Path().binding = HIRTypePathBinding::make_Opaque({});
+        input = crate.types.intern(std::move(data));
+    } else if ((selectionHasOpenValue || unimplemented) && input->as_Path().binding.is_Opaque()) {
+        auto data = input->cloneData();
+        data.as_Path().binding = HIRTypePathBinding();
         input = crate.types.intern(std::move(data));
     }
     return input;
@@ -10778,7 +10817,7 @@ auto NextTraitGoalEvaluator::selfIsUnresolvedProjectionOverIvar(const HIRType* t
     if (!projection) {
         return false;
     }
-    if (resolve_.typeContainsIvars(type)) {
+    if (resolve_.typeContainsIvars(type) || typeHasOpenValue(crate.types, resolve_.ivars, type)) {
         return true;
     }
     const auto closureIsOpen = visitTyWith(type, [&](const HIRType* inner) {
@@ -10812,7 +10851,7 @@ auto NextTraitGoalEvaluator::selfIsUnresolvedProjectionOverIvar(const HIRType* t
 auto NextTraitGoalEvaluator::selfIsUnimplementedProjection(const HIRType* type) const -> bool {
     const auto* path = type->opt_Path();
     const auto* projection = path && path->binding.is_Unbound() ? path->path.data.opt_UfcsKnown() : nullptr;
-    return projection && !resolve_.typeContainsIvars(type) && typeIsConcrete(projection->type);
+    return projection && !resolve_.typeContainsIvars(type) && !typeHasOpenValue(crate.types, resolve_.ivars, type) && typeIsConcrete(projection->type);
 }
 
 auto NextTraitGoalEvaluator::normalizeGoalInput(const HIRType* input) const -> const HIRType* {
