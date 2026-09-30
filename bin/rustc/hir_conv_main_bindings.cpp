@@ -79,6 +79,8 @@ namespace {
 
         [[nodiscard]] const HIRType* visitTypeInner(const HIRType* ty, bool doBind = true);
 
+        [[nodiscard]] const HIRType* visitImplSelfType(const HIRType* ty) override;
+
         static void checkImplParamsConstrained(const HIRGenericParams& params, const HIRType* selfTy, const HIRPathParams* traitArgs);
 
         void visitTypeImpl(HIRTypeImpl& impl) override;
@@ -1484,6 +1486,10 @@ auto BindVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     }
     curModule = oldModule;
     selfType = oldSelfType;
+}
+
+[[nodiscard]] auto BindVisitor::visitImplSelfType(const HIRType* ty) -> const HIRType* {
+    return ty;
 }
 
 auto BindVisitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) -> void {

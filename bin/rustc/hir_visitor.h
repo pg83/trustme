@@ -57,6 +57,7 @@ public:
 
     [[nodiscard]] virtual const HIRType* visitType(const HIRType* ty);
     [[nodiscard]] virtual const HIRType* visitTraitImplType(const HIRType* ty);
+    [[nodiscard]] virtual const HIRType* visitImplSelfType(const HIRType* ty);
 
     void visitTypeDataChildren(HIRType& data);
 

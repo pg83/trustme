@@ -341,7 +341,7 @@ void HIRVisitor::visitTypeImpl(HIRTypeImpl& impl) {
         resolve_->setImplGenericsRaw(MetadataType::Unknown, impl.params);
     }
     this->visitParams(impl.params);
-    impl.type = visitType(impl.type);
+    impl.type = visitImplSelfType(impl.type);
     /* The items are named by the self type as visited: a pass that resolves
        `X::ValueType` in it hands its items the resolved type. */
     HIRItemPath p{impl.type};
@@ -379,6 +379,10 @@ const HIRType* HIRVisitor::visitTraitImplType(const HIRType* ty) {
     return visitType(ty);
 }
 
+const HIRType* HIRVisitor::visitImplSelfType(const HIRType* ty) {
+    return visitType(ty);
+}
+
 void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) {
     TRACE_FUNCTION_F(StringView("impl") << impl.params.fmtArgs() << StringView(" ") << traitPath << impl.traitArgs << StringView(" for ") << impl.type);
     if (resolve_) {
@@ -390,7 +394,7 @@ void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& im
         this->visitGenericPath(gp, PathContext::TRAIT);
         impl.traitArgs = mv$(gp.params);
     }
-    impl.type = visitType(impl.type);
+    impl.type = visitImplSelfType(impl.type);
     HIRItemPath p(impl.type, traitPath, impl.traitArgs);
 
     for (auto& ent : impl.methods) {
@@ -424,7 +428,7 @@ void HIRVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& 
         this->visitGenericPath(gp, PathContext::TRAIT);
         impl.traitArgs = mv$(gp.params);
     }
-    impl.type = visitType(impl.type);
+    impl.type = visitImplSelfType(impl.type);
     if (resolve_) {
         resolve_->clearImplGenerics();
     }
