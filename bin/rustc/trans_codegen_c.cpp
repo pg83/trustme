@@ -2874,6 +2874,25 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\t__asm__ __volatile__ (\"pause\");\n");
 
             of << StringView("\treturn ;\n");
+        } else if (item.linkage.name == "llvm.x86.avx2.psrlv.d" || item.linkage.name == "llvm.x86.avx2.psrlv.d.256" || item.linkage.name == "llvm.x86.avx2.psllv.d" || item.linkage.name == "llvm.x86.avx2.psllv.d.256" || item.linkage.name == "llvm.x86.avx2.psrav.d" || item.linkage.name == "llvm.x86.avx2.psrav.d.256" || item.linkage.name == "llvm.x86.avx2.psrlv.q" || item.linkage.name == "llvm.x86.avx2.psrlv.q.256" || item.linkage.name == "llvm.x86.avx2.psllv.q" || item.linkage.name == "llvm.x86.avx2.psllv.q.256") {
+            const StringView name(reinterpret_cast<const u8*>(item.linkage.name.c_str()), item.linkage.name.size());
+            const bool wide = name.endsWith(StringView(".256"));
+            const bool quad = name.search(StringView("v.q")) != nullptr;
+            const unsigned laneBits = quad ? 64 : 32;
+            const unsigned lanes = (wide ? 256 : 128) / laneBits;
+            const char* lane = quad ? "u64" : "u32";
+            of << StringView("\t") << lane << StringView(" value[") << lanes << StringView("], count[") << lanes << StringView("], result[") << lanes << StringView("];\n");
+            of << StringView("\tmemcpy(value, &arg0, sizeof(value)); memcpy(count, &arg1, sizeof(count));\n");
+            of << StringView("\tfor(unsigned i = 0; i < ") << lanes << StringView("; i++) ");
+            if (name.search(StringView("psrav")) != nullptr) {
+                of << StringView("result[i] = (u32)((i32)value[i] >> (count[i] > 31 ? 31 : count[i]));\n");
+            } else if (name.search(StringView("psrlv")) != nullptr) {
+                of << StringView("result[i] = count[i] >= ") << laneBits << StringView(" ? 0 : value[i] >> count[i];\n");
+            } else {
+                of << StringView("result[i] = count[i] >= ") << laneBits << StringView(" ? 0 : value[i] << count[i];\n");
+            }
+            of << StringView("\tmemcpy(&rv, result, sizeof(rv));\n");
+            of << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.aesni.aesenc" || item.linkage.name == "llvm.x86.aesni.aesenclast" || item.linkage.name == "llvm.x86.aesni.aesdec" || item.linkage.name == "llvm.x86.aesni.aesdeclast") {
             of << StringView("\ttypedef long long trustme_v2di __attribute__((vector_size(16)));\n");
             of << StringView("\ttrustme_v2di state, key;\n");
