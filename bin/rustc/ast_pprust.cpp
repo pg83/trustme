@@ -1913,6 +1913,9 @@ void State::printType(const ASTType* ty) {
                 this->printTraitPath(bound);
             }
             for (const auto& lifetime : e.lifetimes) {
+                if (lifetime.name().name == "") {
+                    continue;
+                }
                 if (!first) {
                     this->nbsp();
                     this->wordSpace(StringView("+"));
@@ -1944,6 +1947,9 @@ void State::printType(const ASTType* ty) {
                 this->printTraitPath(bound);
             }
             for (const auto& lifetime : e->lifetimes) {
+                if (lifetime.name().name == "") {
+                    continue;
+                }
                 if (!first) {
                     this->nbsp();
                     this->wordSpace(StringView("+"));
