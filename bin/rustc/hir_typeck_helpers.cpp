@@ -8636,7 +8636,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
        related first, it would have read `Rhs` off the argument as `Ref<BTreeSet>`.
        Only a parameter an argument mentions is worth the probe, and only a proof
        that decides outright is kept. */
-    const auto constrainTraitParamsBeforeArguments = [&](const HIRFunction& function, const HIRGenericPath& proofTrait, const HIRPathParams& proofParams, const HIRType* selfType, const Monomorphiser& monomorph, SolverResponse& effects) {
+    const auto constrainTraitParamsBeforeArguments = [&](const HIRFunction& function, const HIRGenericPath& proofTrait, const HIRPathParams& proofParams, const HIRType* selfType, const Monomorphiser& monomorph, SolverResponse& effects, size_t firstArgument) {
         if (function.fixedArgCount() != argumentTypes.size() + 1) {
             return;
         }
@@ -8651,7 +8651,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             return;
         }
         bool argumentMentionsSlot = false;
-        for (size_t i = 0; i < argumentTypes.size() && !argumentMentionsSlot; i++) {
+        for (size_t i = firstArgument; i < argumentTypes.size() && !argumentMentionsSlot; i++) {
             const auto* expected = monomorph.monomorphType(callSpan, function.args[i + 1].second, true);
             argumentMentionsSlot = visitTyWith(expected, [&](const HIRType* inner) {
                 const auto* infer = resolve_.ivars.getType(inner)->opt_Infer();
@@ -8678,6 +8678,28 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
            that rests on specialization is therefore not taken before the arguments. */
         if (!hasProbe || probe.effects.certainty != Certainty::Proven || !probe.candidate || probe.effects.winnowedBySpecialization || applyResponse(probe.effects) != Certainty::Proven) {
             resolve_.ivars.rollbackTo(snapshot);
+            if (firstArgument > 0 && (!hasProbe || probe.effects.certainty == Certainty::Ambiguous)) {
+                ThinVector<unsigned> mentioned;
+                const auto* expected = monomorph.monomorphType(callSpan, function.args[firstArgument + 1].second, true);
+                visitTyWith(expected, [&](const HIRType* inner) {
+                    const auto* infer = resolve_.ivars.getType(inner)->opt_Infer();
+                    if (infer && std::find(openSlots.begin(), openSlots.end(), infer->index) != openSlots.end()) {
+                        mentioned.push_back(infer->index);
+                    }
+                    return false;
+                });
+                const bool otherOpen = std::any_of(openSlots.begin(), openSlots.end(), [&](unsigned index) {
+                    return std::find(mentioned.begin(), mentioned.end(), index) == mentioned.end();
+                });
+                if (otherOpen) {
+                    for (const auto index : mentioned) {
+                        if (std::find(heldMethodSlots.begin(), heldMethodSlots.end(), index) == heldMethodSlots.end()) {
+                            DEBUG(StringView("trait parameter ") << index << StringView(" waits for the earlier arguments"));
+                            heldMethodSlots.push_back(index);
+                        }
+                    }
+                }
+            }
             return;
         }
         DEBUG(StringView("trait parameters decided before the arguments by ") << *probe.candidate);
@@ -8757,7 +8779,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         methodMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
 
         guideFromExpectedResult(methodMonomorph, function.returnType);
-        constrainTraitParamsBeforeArguments(function, proofTrait, proofParams, selfType, methodMonomorph, signatureEffects);
+        constrainTraitParamsBeforeArguments(function, proofTrait, proofParams, selfType, methodMonomorph, signatureEffects, 0);
         if (function.fixedArgCount() == argumentTypes.size() + 1) {
             decideMethodParamsBeforeArguments(function.params, methodParams, argumentTypes.size(), [&](size_t i) -> const HIRType* { return function.args[i + 1].second; }, methodMonomorph, signatureEffects);
         }
@@ -8766,6 +8788,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             earlierArgumentWaits = false;
             earlierArgumentVariables.clear();
             for (size_t i = 0; i < argumentTypes.size(); i++) {
+                if (i > 0) {
+                    constrainTraitParamsBeforeArguments(function, proofTrait, proofParams, selfType, methodMonomorph, signatureEffects, i);
+                }
                 const auto* expectedArgument = normalizeSignatureType(methodMonomorph.monomorphType(callSpan, function.args[i + 1].second, true), argumentTypes[i], signatureEffects);
                 const auto argumentApplicability = evaluateMethodArgument(expectedArgument, argumentTypes[i], i, signatureEffects);
                 if (argumentApplicability == Certainty::NoSolution) {
