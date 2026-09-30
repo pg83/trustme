@@ -8520,7 +8520,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         }
         return ExpectedResultRelation{outcome, bindsOuter};
     };
-    const auto guideFromExpectedResult = [&](const Monomorphiser& monomorph, const HIRType* returnTypeTemplate) {
+    ThinVector<const HIRType*> expectedInputs;
+    const auto guideFromExpectedResult = [&](const Monomorphiser& monomorph, const HIRType* returnTypeTemplate, size_t argCount, const auto& argumentTemplate) {
+        expectedInputs.clear();
         if (!expectedResult || returnTypeTemplate->is_ErasedType()) {
             return;
         }
@@ -8529,9 +8531,28 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         const auto relation = relateExpectedResult(methodReturn);
         if (relation.outcome != Unifier::Outcome::Mismatch && !relation.bindsOuter) {
             resolve_.ivars.commit(snapshot);
-        } else {
-            resolve_.ivars.rollbackTo(snapshot);
+            return;
         }
+        if (relation.outcome != Unifier::Outcome::Mismatch) {
+            for (size_t i = 0; i < argCount; i++) {
+                const auto* resolved = resolve_.ivars.expandIvars(monomorph.monomorphType(callSpan, argumentTemplate(i), true));
+                expectedInputs.push_back(typeHasProbeIvar(resolved, snapshot) ? nullptr : resolved);
+            }
+        }
+        resolve_.ivars.rollbackTo(snapshot);
+    };
+    const auto evaluateArgumentUnderExpectation = [&](size_t i, const HIRType* formal, const HIRType* actual, SolverResponse& effects) {
+        const auto* expectedInput = i < expectedInputs.size() ? expectedInputs[i] : nullptr;
+        if (!expectedInput || expectedInput == resolve_.ivars.expandIvars(formal) || resolve_.typeIsSized(callSpan, expectedInput) == SolverCertainty::NoSolution) {
+            return evaluateMethodArgument(formal, actual, static_cast<unsigned>(i), effects);
+        }
+        DEBUG(StringView("method argument ") << i << StringView(" is coerced into its expected input ") << expectedInput);
+        const auto coerced = evaluateMethodArgument(expectedInput, actual, static_cast<unsigned>(i), effects);
+        if (coerced == Certainty::NoSolution) {
+            return coerced;
+        }
+        const auto related = evaluateMethodArgument(formal, expectedInput, ~0u, effects);
+        return related == Certainty::Proven ? coerced : related;
     };
     const auto stableType = [&](const HIRType* original, const HMTypeInferrence::Snapshot& snapshot) {
         const auto* resolved = resolve_.ivars.expandIvars(original);
@@ -8845,7 +8866,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         auto methodMonomorph = MonomorphStatePtr(crate.types, selfType, &outputParams, &methodParams);
         methodMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
 
-        guideFromExpectedResult(methodMonomorph, function.returnType);
+        guideFromExpectedResult(methodMonomorph, function.returnType, function.fixedArgCount() == argumentTypes.size() + 1 ? argumentTypes.size() : 0, [&](size_t i) -> const HIRType* { return function.args[i + 1].second; });
         constrainTraitParamsBeforeArguments(function, proofTrait, proofParams, selfType, methodMonomorph, signatureEffects, 0);
         if (function.fixedArgCount() == argumentTypes.size() + 1) {
             decideMethodParamsBeforeArguments(function.params, methodParams, argumentTypes.size(), [&](size_t i) -> const HIRType* { return function.args[i + 1].second; }, methodMonomorph, signatureEffects);
@@ -8859,7 +8880,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                     constrainTraitParamsBeforeArguments(function, proofTrait, proofParams, selfType, methodMonomorph, signatureEffects, i);
                 }
                 const auto* expectedArgument = normalizeSignatureType(methodMonomorph.monomorphType(callSpan, function.args[i + 1].second, true), argumentTypes[i], signatureEffects);
-                const auto argumentApplicability = evaluateMethodArgument(expectedArgument, argumentTypes[i], i, signatureEffects);
+                const auto argumentApplicability = evaluateArgumentUnderExpectation(i, expectedArgument, argumentTypes[i], signatureEffects);
                 if (argumentApplicability == Certainty::NoSolution) {
                     return Certainty::NoSolution;
                 }
@@ -9200,7 +9221,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                 if (boundsFirst) {
                     constrainMethodBoundsBeforeArguments(method.data.params, methodParams, methodMonomorph, signatureEffects);
                 }
-                guideFromExpectedResult(methodMonomorph, method.data.returnType);
+                guideFromExpectedResult(methodMonomorph, method.data.returnType, method.data.fixedArgCount() == argumentTypes.size() + 1 ? argumentTypes.size() : 0, [&](size_t i) -> const HIRType* { return method.data.args[i + 1].second; });
                 if (method.data.fixedArgCount() == argumentTypes.size() + 1) {
                     if (!boundsFirst) {
                         decideMethodParamsBeforeArguments(method.data.params, methodParams, argumentTypes.size(), [&](size_t i) -> const HIRType* { return method.data.args[i + 1].second; }, methodMonomorph, signatureEffects);
@@ -9209,7 +9230,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                     earlierArgumentVariables.clear();
                     for (size_t i = 0; i < argumentTypes.size(); i++) {
                         const auto* expectedArgument = normalizeSignatureType(methodMonomorph.monomorphType(callSpan, method.data.args[i + 1].second, true), argumentTypes[i], signatureEffects);
-                        const auto argumentApplicability = evaluateMethodArgument(expectedArgument, argumentTypes[i], i, signatureEffects);
+                        const auto argumentApplicability = evaluateArgumentUnderExpectation(i, expectedArgument, argumentTypes[i], signatureEffects);
                         if (argumentApplicability == Certainty::NoSolution) {
                             return Certainty::NoSolution;
                         }
