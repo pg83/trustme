@@ -6952,8 +6952,10 @@ bool associatedWaitsForArgumentBinding(const Context& context, const IvarCoercio
        checker can read a self type of the first kind off the coercion of the call's
        own result (`checkAssociated`'s guidance), which is what lets the two cases
        meet here at all. */
+    const auto* declaredSelf = rule.implTy->opt_Infer();
     const auto* self = context.getType(rule.implTy);
     const auto* selfInfer = self->opt_Infer();
+    const bool selfIsCallVariable = declaredSelf && !declaredSelf->isLit() && declaredSelf->index != ~0u;
     if (!selfInfer || selfInfer->isLit()) {
         return false;
     }
@@ -6976,10 +6978,15 @@ bool associatedWaitsForArgumentBinding(const Context& context, const IvarCoercio
             continue;
         }
         const auto binding = argumentBinding(context, *coercion);
-        if (!binding.destination) {
+        const HIRType* destination = binding.destination;
+        const bool unreadyArgument = !destination && selfIsCallVariable && !context.pendingCutsLifted && context.getType(coercion->sourceType())->is_Infer();
+        if (unreadyArgument) {
+            destination = coercion->leftTy;
+        }
+        if (!destination) {
             continue;
         }
-        const auto* infer = context.getType(binding.destination)->opt_Infer();
+        const auto* infer = context.getType(destination)->opt_Infer();
         if (!infer || infer->isLit() || infer->index == ~0u) {
             continue;
         }
@@ -6988,6 +6995,9 @@ bool associatedWaitsForArgumentBinding(const Context& context, const IvarCoercio
                 continue;
             }
             DEBUG(StringView("- R") << rule.ruleIdx << StringView(" at ") << rule.order << StringView(" waits for the argument binding of R") << coercion->ruleIdx);
+            if (unreadyArgument) {
+                context.pendingCutHolds++;
+            }
             return true;
         }
     }
