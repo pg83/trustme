@@ -880,6 +880,9 @@ namespace {
         }
 
         if (t.tag() != x.tag()) {
+            if (t.is_Unevaluated() || x.is_Unevaluated()) {
+                return HIRCompare::Fuzzy;
+            }
             return HIRCompare::Unequal;
         }
 
