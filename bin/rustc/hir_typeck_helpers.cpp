@@ -14149,10 +14149,29 @@ auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, con
     auto evaluateInner = [&](const HIRType* inner) {
         return solveGoal(trait, params, inner, nullptr);
     };
+    const auto foreignHiddenType = [&](const HIRTypeDataErasedType& erased) -> const HIRType* {
+        const auto* opaque = erased.inner.opt_Fcn();
+        if (!opaque || type->hasTypeInfer()) {
+            return nullptr;
+        }
+        StaticTraitResolve definingResolve(resolve_.board());
+        MonomorphState monomorph(crate.types);
+        const auto value = definingResolve.getValue(span(), opaque->origin, monomorph, true);
+        const auto* function = value.opt_Function();
+        if (!function || (*function)->code || opaque->index >= (*function)->code.erasedTypes.length()) {
+            return nullptr;
+        }
+        const auto* hidden = (*function)->code.erasedTypes[opaque->index];
+        return hidden ? monomorph.monomorphType(span(), hidden) : nullptr;
+    };
 
     switch ((*type).tag()) {
         default:
             return Certainty::Proven;
+        case HIRType::TAG_ErasedType: {
+            const auto* hidden = foreignHiddenType(type->as_ErasedType());
+            return hidden ? evaluateInner(hidden) : Certainty::Proven;
+        }
         case HIRType::TAG_Path: {
             auto& e = (*type).as_Path();
             if (const auto* pe = e.path.data.opt_Generic()) {
