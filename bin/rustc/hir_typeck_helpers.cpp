@@ -10800,6 +10800,12 @@ auto NextTraitGoalEvaluator::selfIsUnresolvedProjectionOverIvar(const HIRType* t
 auto NextTraitGoalEvaluator::normalizeGoalInput(const HIRType* input) const -> const HIRType* {
     const auto* path = input->opt_Path();
     const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
+    if (projection && path->binding.is_Unbound()) {
+        const auto* selfGeneric = resolve_.resolveType(projection->type)->opt_Generic();
+        if (selfGeneric && selfGeneric->isSolverExistential() && (isUnknownExistentialScope(selfGeneric->solverScope) || isGoalExistentialScope(selfGeneric->solverScope))) {
+            return input;
+        }
+    }
     auto output = resolve_.expandAssociatedTypes(span(), input);
     if (projection && projection->type->is_Generic() && output->is_Infer()) {
         return input;
