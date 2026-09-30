@@ -254,16 +254,18 @@ Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edi
             throw std::runtime_error("Unable to open file '" + filename + "'");
         }
         readStream(fp, source_);
-        if (this->getcByte() == '\xef') {
-            if (this->getcByte() != '\xbb') {
-                throw std::runtime_error("Incomplete BOM - missing \\xBB in second position");
+        if (!source_.empty()) {
+            if (this->getcByte() == '\xef') {
+                if (this->getcByte() != '\xbb') {
+                    throw std::runtime_error("Incomplete BOM - missing \\xBB in second position");
+                }
+                if (this->getcByte() != '\xbf') {
+                    throw std::runtime_error("Incomplete BOM - missing \\xBF in third position");
+                }
+                lineOfs = 0;
+            } else {
+                this->ungetByte();
             }
-            if (this->getcByte() != '\xbf') {
-                throw std::runtime_error("Incomplete BOM - missing \\xBF in third position");
-            }
-            lineOfs = 0;
-        } else {
-            this->ungetByte();
         }
     } else {
         readStream(std::cin, source_);
