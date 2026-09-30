@@ -13339,6 +13339,59 @@ auto NextTraitGoalEvaluator::relateTypes(Candidate& candidate, const HIRType* le
     STD_DEFER {
         resolve_.ivars.rollbackTo(snapshot);
     };
+    const size_t equalitiesBefore = candidate.relationEqualities.size();
+    const size_t valueEqualitiesBefore = candidate.relationValueEqualities.size();
+    const size_t obligationsBefore = candidate.relationObligations.size();
+    STD_DEFER {
+        const bool probeMadeNothing = resolve_.ivars.ivars.size() == snapshot.ivarCount && resolve_.ivars.values.size() == snapshot.valueCount;
+        if (probeMadeNothing || (candidate.relationEqualities.size() == equalitiesBefore && candidate.relationValueEqualities.size() == valueEqualitiesBefore && candidate.relationObligations.size() == obligationsBefore)) {
+            return;
+        }
+        const auto bornInProbe = [&](const HIRType* type) {
+            return type->hasTypeInfer() && visitTyWith(type, [&](const HIRType* inner) {
+                const auto* infer = inner->opt_Infer();
+                return infer && infer->index != ~0u && !isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index) && infer->index >= snapshot.ivarCount;
+            });
+        };
+        const auto valueBornInProbe = [&](const HIRConstGeneric& value) {
+            const auto* infer = value.opt_Infer();
+            return infer && infer->index != ~0u && !isSolverCanonicalInfer(infer->index) && infer->index >= snapshot.valueCount;
+        };
+        const auto obligationBornInProbe = [&](const SolverObligation& obligation) {
+            if (bornInProbe(obligation.type)) {
+                return true;
+            }
+            for (const auto* argument : obligation.trait.path.params.types) {
+                if (bornInProbe(argument)) {
+                    return true;
+                }
+            }
+            for (const auto& associated : obligation.trait.typeBounds) {
+                if (bornInProbe(associated.second.type)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        const auto prune = [](auto& list, size_t before, const auto& dangling) {
+            size_t kept = before;
+            for (size_t i = before; i < list.size(); i++) {
+                if (dangling(list[i])) {
+                    continue;
+                }
+                if (kept != i) {
+                    list[kept] = std::move(list[i]);
+                }
+                kept++;
+            }
+            list.resize(kept);
+        };
+        const size_t countBefore = candidate.relationEqualities.size() + candidate.relationValueEqualities.size() + candidate.relationObligations.size();
+        prune(candidate.relationEqualities, equalitiesBefore, [&](const SolverTypeEquality& equality) { return bornInProbe(equality.left) || bornInProbe(equality.right); });
+        prune(candidate.relationValueEqualities, valueEqualitiesBefore, [&](const SolverValueEquality& equality) { return valueBornInProbe(equality.left) || valueBornInProbe(equality.right); });
+        prune(candidate.relationObligations, obligationsBefore, obligationBornInProbe);
+        DEBUG(StringView("relation of ") << left << StringView(" and ") << right << StringView(" for ") << candidate.impl << StringView(" kept ") << (candidate.relationEqualities.size() + candidate.relationValueEqualities.size() + candidate.relationObligations.size()) << StringView(" of ") << countBefore);
+    };
     Unifier unifier(span(), resolve_.ivars, &resolve_);
     const auto outcome = unifier.unify(left, right);
     ThinVector<SolverTypeEquality> pending;
