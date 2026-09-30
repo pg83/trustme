@@ -12910,13 +12910,15 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
         const Span& span_;
         InstantiateCandidate& instantiate_;
         Unifier& unifier_;
+        const HMTypeInferrence& table_;
 
         bool failed = false;
 
-        Relations(const Span& span, InstantiateCandidate& instantiate, Unifier& unifier)
+        Relations(const Span& span, InstantiateCandidate& instantiate, Unifier& unifier, const HMTypeInferrence& table)
             : span_(span)
             , instantiate_(instantiate)
             , unifier_(unifier)
+            , table_(table)
         {
         }
 
@@ -12948,6 +12950,13 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
             const auto pattern = instantiate_.monomorphType(span_, candidate, true);
             const auto instantiatedValue = instantiate_.monomorphType(span_, value, true);
             DEBUG(StringView("relations.candidateType pattern ") << pattern << StringView(" value ") << instantiatedValue);
+            const auto* path = instantiatedValue->opt_Path();
+            const auto* projection = path && path->binding.is_Unbound() ? path->path.data.opt_UfcsKnown() : nullptr;
+            const auto* selfInfer = projection ? table_.getType(projection->type)->opt_Infer() : nullptr;
+            if (selfInfer && selfInfer->index != ~0u && !selfInfer->isLit()) {
+                unifier_.defer(instantiatedValue, pattern);
+                return;
+            }
             failed = unifier_.unify(instantiatedValue, pattern) == Unifier::Outcome::Mismatch;
         }
 
@@ -12973,7 +12982,7 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
         }
     };
 
-    Relations relations(span(), instantiate, unifier);
+    Relations relations(span(), instantiate, unifier, resolve_.ivars);
     relate(relations);
     if (relations.failed) {
         return CandidateBindingResult::Mismatch;

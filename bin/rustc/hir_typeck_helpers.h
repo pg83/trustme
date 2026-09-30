@@ -520,6 +520,8 @@ public:
         return valueBindings_;
     }
 
+    Outcome defer(const HIRType* left, const HIRType* right);
+
 private:
     Outcome unifyResolved(const HIRType* left, const HIRType* right);
     Outcome unifyParams(const HIRPathParams& left, const HIRPathParams& right);
@@ -530,7 +532,6 @@ private:
     bool traitPathContainsLiveValueIvar(const HIRTraitPath& path, unsigned rootIndex) const;
     bool typeContainsLiveValueIvar(const HIRType* type, unsigned rootIndex) const;
     bool opaqueCanReveal(const HIRType* type) const;
-    Outcome defer(const HIRType* left, const HIRType* right);
 
     [[maybe_unused]] const Span& sp_;
     HMTypeInferrence& table_;
