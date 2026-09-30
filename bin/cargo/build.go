@@ -606,6 +606,14 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 		}
 	}
 
+	// A default test run also makes a `Doctest` unit of a library with doc
+	// tests, and that unit needs the library built (`generate_root_units`,
+	// cargo/ops/cargo_compile/unit_generator.rs); the doc tests are not run
+	// here, so this matters only where nothing else builds the library.
+	if lib := packageLibrary(root); len(tasks) == 0 && b.context.opts.command == "test" && !explicit && lib != nil && lib.doctest {
+		tasks = append(tasks, b.finalTask(b.libraryTask(root, isHost)))
+	}
+
 	if len(tasks) == 0 {
 		throwFmt("package %s has no selected targets", root.name)
 	}

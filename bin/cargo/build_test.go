@@ -759,3 +759,38 @@ func TestAWorkspaceMemberIsCompiledFromTheWorkspaceRoot(t *testing.T) {
 		}
 	}
 }
+
+// phf's library has `test = false` and the package nothing else to test:
+// cargo still makes a `Doctest` unit of the library, and that needs the
+// library built (`generate_root_units`, cargo/ops/cargo_compile/unit_generator.rs).
+func TestATestRunWithOnlyDocTestsBuildsTheLibrary(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "src", "lib.rs")
+
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	library := &Target{kind: "lib", name: "phf", path: "src/lib.rs", test: false, doctest: true}
+	pkg := &Package{
+		dir: root, manifestPath: filepath.Join(root, "Cargo.toml"), name: "phf",
+		version: Version{major: 1}, targets: []*Target{library},
+		activeFeatures: map[string]bool{},
+	}
+	context := &BuildContext{
+		opts: BuildOptions{command: "test", profile: "debug", targetDir: filepath.Join(root, "target")},
+		root: pkg, workspace: &Workspace{dir: root}, host: "host", target: "host",
+	}
+	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
+	roots, artifacts, _ := builder.rootTasks()
+
+	if len(roots) != 1 || roots[0] != builder.finalTask(builder.libraryTask(pkg, true)) {
+		t.Fatalf("root tasks = %d, want the library alone", len(roots))
+	}
+	if len(artifacts) != 0 {
+		t.Fatalf("a test run installs %d artifacts for a library it runs no test of", len(artifacts))
+	}
+}
