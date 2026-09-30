@@ -2874,8 +2874,30 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\t__asm__ __volatile__ (\"pause\");\n");
 
             of << StringView("\treturn ;\n");
-        } else if (item.linkage.name.rfind("llvm.x86.aesni.", 0) == 0) {
-            of << StringView("\tassert(!\"Unsupprorted LLVM x86 intrinsic: ") << item.linkage.name << StringView("\"); abort();\n");
+        } else if (item.linkage.name == "llvm.x86.aesni.aesenc" || item.linkage.name == "llvm.x86.aesni.aesenclast" || item.linkage.name == "llvm.x86.aesni.aesdec" || item.linkage.name == "llvm.x86.aesni.aesdeclast") {
+            of << StringView("\ttypedef long long trustme_v2di __attribute__((vector_size(16)));\n");
+            of << StringView("\ttrustme_v2di state, key;\n");
+            of << StringView("\tmemcpy(&state, &arg0, sizeof(state)); memcpy(&key, &arg1, sizeof(key));\n");
+            of << StringView("\t__asm__(\"") << StringView(item.linkage.name.c_str() + StringView("llvm.x86.aesni.").length()) << StringView(" %0, %1\" : \"+x\"(state) : \"x\"(key));\n");
+            of << StringView("\tmemcpy(&rv, &state, sizeof(rv));\n");
+            of << StringView("\treturn rv;\n");
+        } else if (item.linkage.name == "llvm.x86.aesni.aesimc") {
+            of << StringView("\ttypedef long long trustme_v2di __attribute__((vector_size(16)));\n");
+            of << StringView("\ttrustme_v2di state, result;\n");
+            of << StringView("\tmemcpy(&state, &arg0, sizeof(state));\n");
+            of << StringView("\t__asm__(\"aesimc %0, %1\" : \"=x\"(result) : \"x\"(state));\n");
+            of << StringView("\tmemcpy(&rv, &result, sizeof(rv));\n");
+            of << StringView("\treturn rv;\n");
+        } else if (item.linkage.name == "llvm.x86.aesni.aeskeygenassist") {
+            of << StringView("\tu32 words[4], out[4];\n");
+            of << StringView("\tmemcpy(words, &arg0, sizeof(words));\n");
+            of << StringView("\tauto gfmul = [](u8 a, u8 b) { u8 p = 0; while(b) { if(b & 1) p ^= a; u8 hi = a & 0x80; a <<= 1; if(hi) a ^= 0x1b; b >>= 1; } return p; };\n");
+            of << StringView("\tauto sbox = [&](u8 x) { u8 inv = 1, base = x; for(int e = 254; e; e >>= 1) { if(e & 1) inv = gfmul(inv, base); base = gfmul(base, base); } u8 s = inv, r = inv; for(int k = 0; k < 4; k++) { r = (u8)((r << 1) | (r >> 7)); s ^= r; } return (u8)(s ^ 0x63); };\n");
+            of << StringView("\tauto subWord = [&](u32 w) { return (u32)sbox((u8)w) | (u32)sbox((u8)(w >> 8)) << 8 | (u32)sbox((u8)(w >> 16)) << 16 | (u32)sbox((u8)(w >> 24)) << 24; };\n");
+            of << StringView("\tu32 rcon = (u8)arg1, low = subWord(words[1]), high = subWord(words[3]);\n");
+            of << StringView("\tout[0] = low; out[1] = ((low >> 8) | (low << 24)) ^ rcon; out[2] = high; out[3] = ((high >> 8) | (high << 24)) ^ rcon;\n");
+            of << StringView("\tmemcpy(&rv, out, sizeof(rv));\n");
+            of << StringView("\treturn rv;\n");
         } else {
             // TODO: Hand off to compiler-specific intrinsics
 
