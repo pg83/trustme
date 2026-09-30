@@ -94,13 +94,11 @@ func runBuildCommand(opts BuildOptions) {
 }
 
 func buildProject(opts BuildOptions) []string {
-	manifestPath := opts.manifestPath
+	manifestPath := absolutePath("Cargo.toml")
 
-	if manifestPath == "" {
-		manifestPath = "Cargo.toml"
+	if opts.manifestPath != "" {
+		manifestPath = requestedManifest(opts.manifestPath)
 	}
-
-	manifestPath = absolutePath(manifestPath)
 
 	workspace := findWorkspace(manifestPath)
 	doc := readToml(manifestPath)
@@ -1250,6 +1248,10 @@ func (b *Builder) commonEnv(pkg *Package) map[string]string {
 		}
 	}
 
+	if cargo, err := os.Executable(); err == nil {
+		env["CARGO"] = cargo
+	}
+
 	return env
 }
 
@@ -2156,9 +2158,6 @@ func (b *Builder) runTest(binary string, args []string) {
 
 func (b *Builder) testEnv() map[string]string {
 	env := b.commonEnv(b.context.root)
-	if cargo, err := os.Executable(); err == nil {
-		env["CARGO"] = cargo
-	}
 	if b.context.opts.targetDir != "" {
 		env["CARGO_TARGET_DIR"] = absolutePath(b.context.opts.targetDir)
 	}

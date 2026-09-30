@@ -2521,11 +2521,19 @@ brotli_9_0_0 = add_project_test(
     lockfile="$(S)/tst/projects/brotli_9_0_0/Cargo.lock",
 )
 
+# `all_the_fields` and `advanced_feature_configuration` run `cargo metadata` on
+# `tests/all`, a workspace of its own whose optional `bitflags` comes from
+# crates.io: the project's vendor directory holds only its own dependencies,
+# and no Cargo resolves it offline.
 cargo_metadata_0_23_1 = add_project_test(
     name="cargo_metadata_0_23_1",
     url="https://github.com/oli-obk/cargo_metadata.git",
     rev="c08e66cdf534313085ef810ce6f2e0df8a83fc50",
     lockfile="$(S)/tst/projects/cargo_metadata_0_23_1/Cargo.lock",
+    adapter_args=[
+        "--xfail", "all_the_fields",
+        "--xfail", "advanced_feature_configuration",
+    ],
 )
 
 cast_0_3_0 = add_project_test(

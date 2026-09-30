@@ -107,3 +107,21 @@ func TestMetadataListsTheResolvedDependencies(t *testing.T) {
 		t.Fatalf("resolved packages = %v", names)
 	}
 }
+
+func TestALibraryTargetIsReportedWithItsCrateTypesAsItsKind(t *testing.T) {
+	pkg := &Package{dir: t.TempDir(), name: "probe", edition: "2021"}
+	want := map[string][]string{"plain": {"lib"}, "shared": {"cdylib", "rlib"}, "tool": {"bin"}}
+
+	pkg.targets = []*Target{
+		parseTarget("lib", map[string]any{"name": "plain"}, pkg),
+		parseTarget("lib", map[string]any{"name": "shared", "crate-type": []any{"cdylib", "rlib"}}, pkg),
+		parseTarget("bin", map[string]any{"name": "tool"}, pkg),
+	}
+
+	for _, target := range metadataTargets(pkg) {
+		expected := strings.Join(want[target.Name], ",")
+		if strings.Join(target.Kind, ",") != expected || strings.Join(target.CrateTypes, ",") != expected {
+			t.Fatalf("%s: kind %v crate_types %v, want %s", target.Name, target.Kind, target.CrateTypes, expected)
+		}
+	}
+}

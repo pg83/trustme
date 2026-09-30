@@ -55,13 +55,11 @@ func cmdTree(args []string) {
 }
 
 func writeTree(out io.Writer, opts BuildOptions, invert []string) {
-	manifestPath := opts.manifestPath
+	manifestPath := absolutePath("Cargo.toml")
 
-	if manifestPath == "" {
-		manifestPath = "Cargo.toml"
+	if opts.manifestPath != "" {
+		manifestPath = requestedManifest(opts.manifestPath)
 	}
-
-	manifestPath = absolutePath(manifestPath)
 	workspace := findWorkspace(manifestPath)
 	repository := newRepository(workspace, opts.vendorDir)
 	root := repository.loadPath(manifestPath)

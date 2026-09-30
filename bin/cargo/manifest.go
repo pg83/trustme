@@ -317,7 +317,7 @@ func (r *Repository) resolve(dep *Dependency, from *Package) *Package {
 			features:       map[string][]string{},
 			magic:          true,
 			targetDeps:     map[string]Dependencies{},
-			targets:        []*Target{{kind: "lib", name: name, path: "src/lib.rs", crateTypes: []string{"rlib"}}},
+			targets:        []*Target{{kind: "lib", name: name, path: "src/lib.rs", crateTypes: []string{"lib"}}},
 		}
 
 		dep.packageRef = pkg
@@ -589,7 +589,7 @@ func parseTarget(kind string, table map[string]any, pkg *Package) *Target {
 		if target.procMacro {
 			target.crateTypes = []string{"proc-macro"}
 		} else {
-			target.crateTypes = []string{"rlib"}
+			target.crateTypes = []string{"lib"}
 		}
 	}
 
@@ -766,6 +766,29 @@ func allDependencies(pkg *Package) []*Dependency {
 	}
 
 	return result
+}
+
+// The manifest `--manifest-path` names, refused as cargo's `root_manifest`
+// refuses it: a path that does not end in `Cargo.toml`, one that does not
+// exist, a directory.
+func requestedManifest(manifestPath string) string {
+	path := absolutePath(manifestPath)
+
+	if filepath.Base(path) != "Cargo.toml" {
+		throwFmt("the manifest-path must be a path to a Cargo.toml file")
+	}
+
+	info, err := os.Stat(path)
+
+	if err != nil {
+		throwFmt("manifest path `%s` does not exist", manifestPath)
+	}
+
+	if info.IsDir() {
+		throwFmt("manifest path `%s` is a directory but expected a file", manifestPath)
+	}
+
+	return path
 }
 
 func absolutePath(path string) string {

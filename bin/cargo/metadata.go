@@ -92,7 +92,7 @@ func parseMetadataOptions(args []string) MetadataOptions {
 		"--config": true,
 	})
 
-	opts := MetadataOptions{manifestPath: "Cargo.toml", format: "1"}
+	opts := MetadataOptions{format: "1"}
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -129,7 +129,12 @@ func parseMetadataOptions(args []string) MetadataOptions {
 }
 
 func buildMetadata(opts MetadataOptions) MetadataOutput {
-	manifestPath := absolutePath(opts.manifestPath)
+	manifestPath := absolutePath("Cargo.toml")
+
+	if opts.manifestPath != "" {
+		manifestPath = requestedManifest(opts.manifestPath)
+	}
+
 	workspace := findWorkspace(manifestPath)
 	repository := newRepository(workspace, "")
 	paths := workspaceMemberManifests(workspace)
@@ -271,8 +276,12 @@ func metadataTargets(pkg *Package) []MetadataTarget {
 		if len(crateTypes) == 0 {
 			crateTypes = []string{"bin"}
 		}
+		kind := []string{target.kind}
+		if target.kind == "lib" {
+			kind = crateTypes
+		}
 		result = append(result, MetadataTarget{
-			Kind: []string{target.kind}, CrateTypes: crateTypes, Name: target.name,
+			Kind: kind, CrateTypes: crateTypes, Name: target.name,
 			SrcPath: absoluteFrom(pkg.dir, target.path), Edition: target.edition,
 			Doc: target.doc, Doctest: target.doctest, Test: target.test,
 			RequiredFeatures: append([]string(nil), target.requiredFeatures...),

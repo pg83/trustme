@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,6 +22,11 @@ func main() {
 	})
 }
 
+// The toolchain trustme stands in for, as cargo 1.90.0 prints itself.
+func versionLine() string {
+	return "cargo 1.90.0 (840b83a10 2025-07-30)"
+}
+
 func dispatch(args []string) {
 	if len(args) < 2 {
 		usage(os.Stderr)
@@ -38,6 +44,10 @@ parseGlobals:
 		switch arg {
 		case "-h", "--help":
 			usage(os.Stdout)
+
+			return
+		case "-V", "--version":
+			fmt.Println(versionLine())
 
 			return
 		case "-C":
@@ -77,6 +87,8 @@ parseGlobals:
 	commandArgs := args[commandIndex+1:]
 
 	switch command {
+	case "version":
+		fmt.Println(versionLine())
 	case "build", "check", "test":
 		commandArgs = append(global, commandArgs...)
 
@@ -100,6 +112,8 @@ parseGlobals:
 		cmdVendor(commandArgs)
 	case "tree":
 		cmdTree(append(global, commandArgs...))
+	case "locate-project":
+		cmdLocateProject(commandArgs)
 	case "metadata":
 		cmdMetadata(append(global, commandArgs...))
 	case "help", "-h", "--help":
@@ -427,4 +441,80 @@ Options:
   -s, --sync <TOML>           Additional Cargo.toml to sync and vendor
   -Zarchive=<PATH>            Pack the vendor tree as a reproducible tar.zst
 `)
+}
+
+// `cargo locate-project`: the manifest of the package the directory or
+// `--manifest-path` belongs to, or with `--workspace` its workspace's root
+// manifest, as JSON `{"root": ...}` or, with `--message-format plain`, the
+// bare path.
+func cmdLocateProject(args []string) {
+	manifestPath := ""
+	workspace := false
+	format := "json"
+
+	for i := 0; i < len(args); i++ {
+		name, value, hasValue := strings.Cut(args[i], "=")
+
+		switch name {
+		case "--manifest-path", "--message-format":
+			if !hasValue {
+				if i+1 >= len(args) {
+					throwFmt("option %s requires a value", name)
+				}
+
+				i++
+				value = args[i]
+			}
+
+			if name == "--manifest-path" {
+				manifestPath = value
+			} else {
+				format = value
+			}
+		case "--workspace":
+			workspace = true
+		case "-q", "--quiet", "--locked", "--offline", "--frozen":
+		default:
+			throwFmt("unexpected argument for locate-project: %s", args[i])
+		}
+	}
+
+	root := locateProject(manifestPath, workspace)
+
+	switch format {
+	case "plain":
+		fmt.Println(root)
+	case "json":
+		fmt.Println(string(throw2(json.Marshal(map[string]string{"root": root}))))
+	default:
+		throwFmt("invalid message format specifier: `%s`", format)
+	}
+}
+
+func locateProject(manifestPath string, workspace bool) string {
+	var path string
+
+	if manifestPath != "" {
+		path = requestedManifest(manifestPath)
+	} else {
+		cwd := throw2(os.Getwd())
+
+		for dir := cwd; ; dir = filepath.Dir(dir) {
+			if candidate := filepath.Join(dir, "Cargo.toml"); fileExists(candidate) {
+				path = candidate
+
+				break
+			}
+
+			if filepath.Dir(dir) == dir {
+				throwFmt("could not find `Cargo.toml` in `%s` or any parent directory", cwd)
+			}
+		}
+	}
+
+	if workspace {
+		return findWorkspace(path).manifestPath
+	}
+
+	return path
 }
