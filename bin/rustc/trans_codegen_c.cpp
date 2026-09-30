@@ -5986,11 +5986,14 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
             }
         }
 
+        const auto discardsOutput = [](const MIRAsmParam::Data_Reg& reg) {
+            return reg.input && !reg.output && (reg.dir == AsmDirection::InOut || reg.dir == AsmDirection::InLateOut);
+        };
         Vector<const MIRAsmParam::Data_Reg*> outputs;
         for (size_t i = 0; i < asmParams.size(); i++) {
             if (const auto* pe = asmParams[i].opt_Reg()) {
                 if (pe->spec.is_Explicit()) {
-                    if (pe->output) {
+                    if (pe->output || discardsOutput(*pe)) {
                         outputs.pushBack(pe);
                     }
                 } else if (!pe->output && !pe->input) {
@@ -6002,7 +6005,16 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
 
                     argMappings.mut(i) = outputs.length();
                     outputs.pushBack(pe);
-                } else if (pe->output) {
+                } else if (pe->output || discardsOutput(*pe)) {
+                    if (!pe->output && vectorShim[i] == 0) {
+                        if (!blockOpen) {
+                            blockOpen = true;
+                            of << indent << StringView("{\n");
+                        }
+                        of << indent << StringView("__typeof__(");
+                        emitParam(*pe->input);
+                        of << StringView(") asm_anon_") << outputs.length() << StringView(";\n");
+                    }
                     argMappings.mut(i) = outputs.length();
                     outputs.pushBack(pe);
                 }
@@ -6012,11 +6024,11 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         for (size_t i = 0; i < asmParams.size(); i++) {
             if (const auto* pe = asmParams[i].opt_Reg()) {
                 if (pe->spec.opt_Explicit()) {
-                    if (pe->input && !pe->output) {
+                    if (pe->input && !pe->output && !discardsOutput(*pe)) {
                         inputs.pushBack(&asmParams[i]);
                     }
                 } else if (pe->input) {
-                    if (!pe->output) {
+                    if (!pe->output && !discardsOutput(*pe)) {
                         argMappings.mut(i) = outputs.length() + inputs.length();
                     }
                     inputs.pushBack(&asmParams[i]);
@@ -6200,12 +6212,12 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                 }
             }
             of << StringView("\" (");
-            if (!p.output) {
-                of << StringView("asm_anon_") << i;
-            } else if (const auto* regnameP = p.spec.opt_Explicit()) {
+            if (const auto* regnameP = p.spec.opt_Explicit()) {
                 of << StringView("asm_") << *regnameP;
             } else if (const auto shimIdx = paramIndexOf(&p); shimIdx != asmParams.size() && vectorShim[shimIdx] != 0) {
                 of << StringView("asm_vec_") << shimIdx;
+            } else if (!p.output) {
+                of << StringView("asm_anon_") << i;
             } else {
                 emitLvalue(*p.output);
             }
@@ -6222,7 +6234,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                 case MIRAsmParam::TAG_Reg: {
                     auto& r = p.as_Reg();
                     of << StringView("\"");
-                    if (r.output && !r.spec.is_Explicit()) {
+                    if ((r.output || discardsOutput(r)) && !r.spec.is_Explicit()) {
                         const auto it = std::find(outputs.begin(), outputs.end(), &r);
                         MIR_ASSERT(localMirRes, it != outputs.end(), StringView("Missing asm output"));
                         of << (it - outputs.begin());
