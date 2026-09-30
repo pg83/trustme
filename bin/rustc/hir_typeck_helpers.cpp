@@ -9240,7 +9240,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                     }
                 }
 
-                if (expectedResult && !method.data.returnType->is_ErasedType()) {
+                if (expectedResult && !method.data.returnType->is_ErasedType() && !method.data.returnType->is_Diverge()) {
                     const auto* methodReturn = methodMonomorph.monomorphType(callSpan, method.data.returnType, true);
                     const auto resultSnapshot = resolve_.ivars.snapshot();
                     const auto relation = relateExpectedResult(methodReturn);
