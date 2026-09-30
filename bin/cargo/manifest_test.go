@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 )
 
@@ -317,5 +319,45 @@ rust-version = "1.70"
 		if !set || got != value {
 			t.Fatalf("%s = %q (set %v), want %q", key, got, set, value)
 		}
+	}
+}
+
+// regex-automata names `tests/lib.rs` as `[[test]] name = "integration"`:
+// cargo leaves out an inferred target whose path an explicit one of its kind
+// already has, as well as one whose name it has (`toml_targets_and_inferred`,
+// cargo/util/toml/targets.rs), so the file is one test, not a second `lib`.
+func TestAnExplicitTargetsPathIsNotInferredAgain(t *testing.T) {
+	dir := t.TempDir()
+
+	writeTestFile(t, filepath.Join(dir, "src", "lib.rs"), "")
+	writeTestFile(t, filepath.Join(dir, "tests", "lib.rs"), "")
+	writeTestFile(t, filepath.Join(dir, "tests", "other.rs"), "")
+	writeTestFile(t, filepath.Join(dir, "src", "bin", "tool.rs"), "")
+
+	manifest := `[package]
+name = "demo"
+version = "1.0.0"
+
+[[test]]
+name = "integration"
+path = "tests/lib.rs"
+
+[[bin]]
+name = "renamed"
+path = "src/bin/tool.rs"
+`
+	path := filepath.Join(dir, "Cargo.toml")
+	writeTestFile(t, path, manifest)
+
+	workspace := &Workspace{dir: dir, dependencies: map[string]*Dependency{}, patches: map[string]string{}}
+	pkg := parsePackage(path, readToml(path), workspace)
+	var got []string
+	for _, target := range pkg.targets {
+		got = append(got, target.kind+":"+target.name)
+	}
+	sort.Strings(got)
+	want := []string{"bin:renamed", "lib:demo", "test:integration", "test:other"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("targets = %v, want %v", got, want)
 	}
 }

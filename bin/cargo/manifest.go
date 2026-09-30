@@ -532,7 +532,7 @@ func parseTargets(pkg *Package, doc, packageTable map[string]any) {
 	}
 
 	if boolValue(packageTable["autobins"], true) {
-		addAutomaticBins(pkg)
+		addAutomaticBins(pkg, doc)
 	}
 
 	for _, kind := range []string{"test", "bench", "example"} {
@@ -551,7 +551,7 @@ func parseTargets(pkg *Package, doc, packageTable map[string]any) {
 		{"example", "examples", boolValue(packageTable["autoexamples"], true)},
 	} {
 		if automatic.enabled {
-			addAutomaticTargets(pkg, automatic.kind, automatic.dir)
+			addAutomaticTargets(pkg, doc, automatic.kind, automatic.dir)
 		}
 	}
 }
@@ -673,18 +673,34 @@ func inferTargetPath(pkg *Package, kind, name string) string {
 	return flat
 }
 
-func addAutomaticBins(pkg *Package) {
-	seen := map[string]bool{}
+// The names the explicit targets of a kind have, and the paths the manifest
+// writes for them: cargo leaves out an inferred target that repeats either
+// (`toml_targets_and_inferred`, cargo/util/toml/targets.rs).
+func explicitTargetClaims(pkg *Package, doc map[string]any, kind string) (map[string]bool, map[string]bool) {
+	names := map[string]bool{}
+	paths := map[string]bool{}
 
 	for _, target := range pkg.targets {
-		if target.kind == "bin" {
-			seen[target.name] = true
+		if target.kind == kind {
+			names[target.name] = true
 		}
 	}
 
+	for _, table := range tableArray(doc[kind]) {
+		if path := stringValue(table["path"]); path != "" {
+			paths[filepath.Clean(path)] = true
+		}
+	}
+
+	return names, paths
+}
+
+func addAutomaticBins(pkg *Package, doc map[string]any) {
+	seen, claimed := explicitTargetClaims(pkg, doc, "bin")
+
 	mainPath := filepath.Join(pkg.dir, "src", "main.rs")
 
-	if fileExists(mainPath) && !seen[strings.ReplaceAll(pkg.name, "-", "_")] {
+	if fileExists(mainPath) && !seen[strings.ReplaceAll(pkg.name, "-", "_")] && !claimed[filepath.Join("src", "main.rs")] {
 		pkg.targets = append(pkg.targets, parseTarget("bin", map[string]any{}, pkg))
 	}
 
@@ -707,7 +723,7 @@ func addAutomaticBins(pkg *Package) {
 			path = filepath.Join("src", "bin", entry.Name(), "main.rs")
 		}
 
-		if seen[name] || !fileExists(filepath.Join(pkg.dir, path)) {
+		if seen[name] || claimed[path] || !fileExists(filepath.Join(pkg.dir, path)) {
 			continue
 		}
 
@@ -715,14 +731,8 @@ func addAutomaticBins(pkg *Package) {
 	}
 }
 
-func addAutomaticTargets(pkg *Package, kind, dir string) {
-	seen := map[string]bool{}
-
-	for _, target := range pkg.targets {
-		if target.kind == kind {
-			seen[target.name] = true
-		}
-	}
+func addAutomaticTargets(pkg *Package, doc map[string]any, kind, dir string) {
+	seen, claimed := explicitTargetClaims(pkg, doc, kind)
 
 	entries, err := os.ReadDir(filepath.Join(pkg.dir, dir))
 
@@ -742,7 +752,7 @@ func addAutomaticTargets(pkg *Package, kind, dir string) {
 			path = filepath.Join(dir, entry.Name(), "main.rs")
 		}
 
-		if seen[name] || !fileExists(filepath.Join(pkg.dir, path)) {
+		if seen[name] || claimed[path] || !fileExists(filepath.Join(pkg.dir, path)) {
 			continue
 		}
 
