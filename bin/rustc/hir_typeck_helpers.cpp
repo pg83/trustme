@@ -17005,7 +17005,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     }
 
     const bool hasNonGlobalParamEnv = std::any_of(frame.viable.begin(), frame.viable.end(), [&](const Candidate* candidate) {
-        return paramEnvCandidateIsNonGlobal(*candidate) && candidate->certainty == Certainty::Proven && candidate->coercionsProven;
+        const bool applies = candidate->certainty == Certainty::Proven || (candidate->certainty == Certainty::Ambiguous && !candidate->ambiguityBeyondHead && !resolvedType->is_Infer());
+        return paramEnvCandidateIsNonGlobal(*candidate) && applies && candidate->coercionsProven;
     });
     if (hasNonGlobalParamEnv) {
         auto& viable = frame.viable;
