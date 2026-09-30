@@ -2457,7 +2457,11 @@ auto CConcatExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate
                 rv += FMT(vp->value);
             }
         } else if (auto* vp = cast<ASTExprNodeFloat>(v)) {
-            rv += formatFloatValueForToken(vp->value);
+            if (vp->spelling != RcString()) {
+                rv += vp->spelling.c_str();
+            } else {
+                rv += formatFloatValueForToken(vp->value);
+            }
         } else if (auto* vp = cast<ASTExprNodeBool>(v)) {
             rv += (vp->value ? "true" : "false");
         } else if (auto* vp = cast<ASTExprNodeUniOp>(v)) {
@@ -2468,7 +2472,11 @@ auto CConcatExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate
                 rv += FMT(StringView("-") << iv->value);
             } else if (const auto* fv = cast<const ASTExprNodeFloat>(inner)) {
                 rv += "-";
-                rv += formatFloatValueForToken(fv->value);
+                if (fv->spelling != RcString()) {
+                    rv += fv->spelling.c_str();
+                } else {
+                    rv += formatFloatValueForToken(fv->value);
+                }
             } else {
                 ERROR(sp, E0000, StringView("Unexpected expression type in concat! argument"));
             }

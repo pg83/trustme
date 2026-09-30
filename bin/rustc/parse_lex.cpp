@@ -925,6 +925,9 @@ Token Lexer::getTokenInt() {
                         auto tok = Token(val, CORETYPE_ANY, intSpelling);
                         return Token(TOK_LITERAL_SUFFIXED, tok.toStr() + suffix, this->realGetHygiene());
                     }
+                    if (numMode == NumMode::DEC && (numType == CORETYPE_F16 || numType == CORETYPE_F32 || numType == CORETYPE_F64 || numType == CORETYPE_F128)) {
+                        return Token::makeFloat(parseWholeFloat(StringView(reinterpret_cast<const u8*>(intSpelling.c_str()), intSpelling.size())), numType, intSpelling);
+                    }
                     return Token(val, numType, intSpelling);
                 } else {
                     this->ungetc();
