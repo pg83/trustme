@@ -4478,7 +4478,7 @@ HIRPathParams TraitResolution::materializeImplParams(const Span& sp, const HIRGe
                         return true;
                     });
                     if (holdsProbeVariable) {
-                        return stable.types[i];
+                        return parameter->index < externalTypeIvars ? inference.types[i] : stable.types[i];
                     }
                     return this->monomorphType(sp, resolved, allowInfer);
                 }
