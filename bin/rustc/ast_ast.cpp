@@ -77,6 +77,7 @@ ASTFunction ASTFunction::clone() const {
     decltype(args_) newArgs;
     for (const auto& arg : args_) {
         newArgs.push_back(ASTFunction::Arg(arg.pat.clone(), arg.ty->clone(), arg.attrs.clone()));
+        newArgs.back().selfShorthand = arg.selfShorthand;
     }
 
     auto rv = ASTFunction(span_, abi_, flags, params_.clone(), rettype_->clone(), mv$(newArgs), isVariadic_, hasNamedVariadic_);

@@ -169,6 +169,7 @@ public:
         ASTAttributeList attrs;
         ASTPattern pat;
         ASTType* ty;
+        bool selfShorthand = false;
 
         Arg(ASTPattern pat, ASTType* ty, ASTAttributeList attrs = {});
     };

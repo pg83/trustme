@@ -2790,6 +2790,18 @@ auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& 
     for (size_t i = 0; i < fcn.args().size(); i++) {
         const auto& arg = fcn.args()[i];
         this->visitAttrs(arg.attrs);
+        if (arg.selfShorthand) {
+            if (const auto* borrow = arg.ty->data.opt_Borrow()) {
+                pmi.sendSymbol("&");
+                this->visitLifetime(borrow->lifetime);
+                if (borrow->isMut) {
+                    pmi.sendRword("mut");
+                }
+            }
+            this->visitPattern(arg.pat);
+            pmi.sendSymbol(",");
+            continue;
+        }
         this->visitPattern(arg.pat);
         pmi.sendSymbol(":");
         if (fcn.hasNamedVariadic() && i + 1 == fcn.args().size()) {

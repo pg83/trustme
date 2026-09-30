@@ -2114,6 +2114,7 @@ namespace {
                 CHECK_TOK(tok, TOK_RWORD_SELF);
                 auto sp = lex.endSpan(ps);
                 args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(lex.typePool(), ASTTypeTags::Reference(), sp, std::move(lifetime), isMut, mkType(lex.typePool(), sp, rcstringSelf, 0xFFFF), isPin)));
+                args.back().selfShorthand = !isPin;
 
                 GET_TOK(tok, lex);
             } else {
@@ -2123,23 +2124,29 @@ namespace {
                 GET_TOK(tok, lex);
                 auto bindingSp = lex.endSpan(ps);
                 ASTType* ty = mkType(lex.typePool(), lex.pointSpan(), rcstringSelf, 0xFFFF);
+                bool shorthand = true;
                 if (GET_TOK(tok, lex) == TOK_COLON) {
                     ty = ParseType(lex);
+                    shorthand = false;
                 } else {
                     PUTBACK(tok, lex);
                 }
                 args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), bindingSp, rcstringSelfLower), mv$(ty)));
+                args.back().selfShorthand = shorthand;
                 GET_TOK(tok, lex);
             }
         } else if (tok.type() == TOK_RWORD_SELF) {
             auto bindingSp = lex.endSpan(ps);
             ASTType* ty = mkType(lex.typePool(), lex.pointSpan(), rcstringSelf, 0xFFFF);
+            bool shorthand = true;
             if (GET_TOK(tok, lex) == TOK_COLON) {
                 ty = ParseType(lex);
+                shorthand = false;
             } else {
                 PUTBACK(tok, lex);
             }
             args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), bindingSp, rcstringSelfLower), mv$(ty)));
+            args.back().selfShorthand = shorthand;
             GET_TOK(tok, lex);
         } else {
         }
