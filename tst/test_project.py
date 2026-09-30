@@ -15,6 +15,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib  # noqa: E402
@@ -170,8 +171,12 @@ def main() -> int:
     cargo = lib.require_env("CARGO")
     jobs = lib.require_env("BUILD_JOBS")
 
-    with lib.workdir() as work:
+    # A test's own temporary files go where a user's `cargo test` puts them,
+    # a short directory: under the build's node directory a unix socket path
+    # is longer than `sun_path` holds (socket2's `unix` tests).
+    with lib.workdir() as work, tempfile.TemporaryDirectory(dir="/tmp", prefix="trustme-test-") as test_tmp:
         env = dict(os.environ)
+        env["TMPDIR"] = test_tmp
         env["TRUSTME_PATH"] = lib.trustme_link(work)
         expose_toolchain(env, env["TRUSTME_PATH"], cargo)
         env.setdefault("CC", "cc")
