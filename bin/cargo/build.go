@@ -1146,8 +1146,8 @@ func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Tas
 		env["TRUSTME_LIBDIR"] = absolutePath(b.context.opts.libSearch[0])
 	}
 
-	for feature := range pkg.activeFeatures {
-		env["CARGO_FEATURE_"+cargoEnvName(feature)] = "1"
+	for key, value := range buildScriptPackageEnv(pkg) {
+		env[key] = value
 	}
 
 	for flag := range b.context.cfg.flags {
@@ -1181,6 +1181,23 @@ func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Tas
 	if !b.context.opts.dryRun {
 		makeBuildOutputPortable(output, ctx.output(1))
 	}
+}
+
+// What cargo tells a build script about its package alone (`build_work`,
+// cargo/core/compiler/custom_build.rs): its features, and its `links` when
+// the manifest has one.
+func buildScriptPackageEnv(pkg *Package) map[string]string {
+	env := map[string]string{}
+
+	if pkg.links != "" {
+		env["CARGO_MANIFEST_LINKS"] = pkg.links
+	}
+
+	for feature := range pkg.activeFeatures {
+		env["CARGO_FEATURE_"+cargoEnvName(feature)] = "1"
+	}
+
+	return env
 }
 
 func (b *Builder) commonCompilerArgs(pkg *Package, output string, isHost bool, buildScript bool) []string {

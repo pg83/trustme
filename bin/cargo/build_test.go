@@ -794,3 +794,20 @@ func TestATestRunWithOnlyDocTestsBuildsTheLibrary(t *testing.T) {
 		t.Fatalf("a test run installs %d artifacts for a library it runs no test of", len(artifacts))
 	}
 }
+
+// prettyplease's build script asserts that `CARGO_MANIFEST_LINKS` is the
+// manifest's `links`, which cargo sets for a package that has one.
+func TestABuildScriptIsToldItsPackagesLinks(t *testing.T) {
+	pkg := &Package{name: "prettyplease", links: "prettyplease03", activeFeatures: map[string]bool{"verbatim": true}}
+	env := buildScriptPackageEnv(pkg)
+
+	if env["CARGO_MANIFEST_LINKS"] != "prettyplease03" {
+		t.Fatalf("CARGO_MANIFEST_LINKS = %q, want the manifest's links", env["CARGO_MANIFEST_LINKS"])
+	}
+	if env["CARGO_FEATURE_VERBATIM"] != "1" {
+		t.Fatal("an active feature is not in the build script's environment")
+	}
+	if _, ok := buildScriptPackageEnv(&Package{name: "other"})["CARGO_MANIFEST_LINKS"]; ok {
+		t.Fatal("a package without links is told it has some")
+	}
+}
