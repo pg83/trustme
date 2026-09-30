@@ -53,12 +53,17 @@ pub mod token_stream {
 
     struct Slot {
         trees: Vec<crate::TokenTree>,
-        /// Which trees the compiler handed over joined to the next one with no
-        /// space the macro can see (upstream's `Spacing::JointHidden`): kept
-        /// while the stream is as it arrived, gone with its first change.
-        hidden: Vec<bool>,
+        /// The joins with no space the macro can see (upstream's
+        /// `Spacing::JointHidden`) the compiler handed over with each tree:
+        /// `JOINED_AFTER` the tree, `JOINED_OPEN` after a group's opening
+        /// delimiter. Kept while the stream is as it arrived, gone with its
+        /// first change.
+        hidden: Vec<u8>,
         handles: u32,
     }
+
+    pub(crate) const JOINED_AFTER: u8 = 1;
+    pub(crate) const JOINED_OPEN: u8 = 2;
 
     static mut SLOTS: Vec<Option<Slot>> = Vec::new();
     static mut FREE: Vec<u32> = Vec::new();
@@ -72,7 +77,7 @@ pub mod token_stream {
         fn allocate(trees: Vec<crate::TokenTree>) -> NonZeroU32 {
             TokenStream::allocate_spaced(trees, Vec::new())
         }
-        fn allocate_spaced(trees: Vec<crate::TokenTree>, hidden: Vec<bool>) -> NonZeroU32 {
+        fn allocate_spaced(trees: Vec<crate::TokenTree>, hidden: Vec<u8>) -> NonZeroU32 {
             let new = Slot { trees, hidden, handles: 1 };
             // SAFE: See `slot`
             unsafe {
@@ -92,13 +97,13 @@ pub mod token_stream {
             }
             TokenStream(Some(TokenStream::allocate(trees)))
         }
-        pub(crate) fn from_received(trees: Vec<crate::TokenTree>, hidden: Vec<bool>) -> TokenStream {
+        pub(crate) fn from_received(trees: Vec<crate::TokenTree>, hidden: Vec<u8>) -> TokenStream {
             if trees.is_empty() {
                 return TokenStream(None);
             }
             TokenStream(Some(TokenStream::allocate_spaced(trees, hidden)))
         }
-        pub(crate) fn hidden_joins(&self) -> Vec<bool> {
+        pub(crate) fn hidden_joins(&self) -> Vec<u8> {
             match self.0 {
             Some(handle) => slot(handle).hidden.clone(),
             None => Vec::new(),
