@@ -807,16 +807,27 @@ Token Lexer::getTokenInt() {
                 if (ch == 'e' || ch == 'E' || ch == '.') {
                     const bool dotted = ch == '.';
                     if (ch == '.') {
-                        ch = this->getc();
+                        bool atEnd = false;
+                        auto nextOrEnd = [&]() {
+                            try {
+                                return this->getc();
+                            } catch (const Lexer::EndOfFile&) {
+                                atEnd = true;
+                                return Codepoint();
+                            }
+                        };
+                        ch = nextOrEnd();
 
                         if (ch == '.') {
-                            ch = this->getc();
+                            ch = nextOrEnd();
                             if (ch == '.') {
                                 this->nextTokens.push_back(TOK_TRIPLE_DOT);
                             } else if (ch == '=') {
                                 this->nextTokens.push_back(TOK_DOUBLE_DOT_EQUAL);
                             } else {
-                                this->ungetc();
+                                if (!atEnd) {
+                                    this->ungetc();
+                                }
                                 this->nextTokens.push_back(TOK_DOUBLE_DOT);
                             }
                             return Token(val, CORETYPE_ANY, intSpelling);
@@ -824,12 +835,14 @@ Token Lexer::getTokenInt() {
 
                         if (!ch.isdigit()) {
                             bool sawSpace = false;
-                            while (ch.isspace()) {
+                            while (!atEnd && ch.isspace()) {
                                 sawSpace = true;
-                                ch = this->getc();
+                                ch = nextOrEnd();
                             }
-                            this->ungetc();
-                            if (ch.isdigit() || (issym(ch) && !sawSpace)) {
+                            if (!atEnd) {
+                                this->ungetc();
+                            }
+                            if (!atEnd && (ch.isdigit() || (issym(ch) && !sawSpace))) {
                                 this->nextTokens.push_back(TOK_DOT);
                                 return Token(val, CORETYPE_ANY, intSpelling);
                             } else {
