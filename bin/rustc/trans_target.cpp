@@ -1687,7 +1687,7 @@ namespace {
                         maxSize = std::max(maxSize, size);
                         maxAlign = std::max(maxAlign, align);
                         rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
-                        if (var.discriminantExpr) {
+                        if (var.discriminantValue != U128(static_cast<u64>(&var - e.data()))) {
                             hasExplicitValue = true;
                         }
                     }
@@ -1711,7 +1711,7 @@ namespace {
                     while (rv.size % rv.align != 0) {
                         rv.size++;
                     }
-                    if (hasExplicitValue) {
+                    if (hasExplicitValue || tagSize > sizeof(u64)) {
                         Vector<U128> vals;
                         for (const auto& v : e) {
                             vals.pushBack(v.discriminantValue);
@@ -1746,7 +1746,7 @@ namespace {
                     std::vector<Variant> variants;
                     variants.reserve(e.size());
                     for (const auto& var : e) {
-                        if (var.discriminantExpr) {
+                        if (var.discriminantValue != U128(static_cast<u64>(&var - e.data()))) {
                             hasExplcitValue = true;
                         }
 
@@ -2096,7 +2096,7 @@ namespace {
                         }
                         rv.align = maxAlign;
 
-                        if (hasExplcitValue) {
+                        if (hasExplcitValue || tagSize > sizeof(u64)) {
                             Vector<U128> vals;
                             for (const auto& v : e) {
                                 vals.pushBack(v.discriminantValue);
