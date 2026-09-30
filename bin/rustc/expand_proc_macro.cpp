@@ -123,6 +123,8 @@ namespace {
         };
         IntMap<SpanSlot*> spanSlots{&pool};
         Vector<Ident::Hygiene> spanContexts;
+        Vector<RcString> spanCrates;
+        size_t receivedSpanIndex = 1;
         size_t lastSentSpan = 1;
         Ident::Hygiene receivedHygiene;
         Ident::Hygiene callSiteHygiene;
@@ -168,6 +170,8 @@ namespace {
         void sendIdent(const Ident::Hygiene& h, const Span& sp, const char* val, bool raw = false);
 
         void sendIdent(const Ident& val);
+
+        void sendDollarCrate(const Ident::Hygiene& h, const Span& sp, const RcString& crateName);
 
         void sendLifetime(const char* val, bool raw = false);
 
@@ -722,6 +726,7 @@ Token ProcMacroInv::realGetToken_() {
         const auto index = this->recvV128u();
         this->receivedFromInput = index >= 2 && index - 2 < spanContexts.length();
         this->receivedHygiene = this->receivedFromInput ? spanContexts[index - 2] : callSiteHygiene;
+        this->receivedSpanIndex = index;
         v = this->recvU8();
     }
 
@@ -749,6 +754,10 @@ Token ProcMacroInv::realGetToken_() {
             auto val = this->recvBytes();
             if (val == "_" || val == "r#_") {
                 return TOK_UNDERSCORE;
+            }
+            if (val == "$crate" && this->receivedFromInput && spanCrates[this->receivedSpanIndex - 2] != RcString()) {
+                pendingLiteral = Token(TOK_STRING, spanCrates[this->receivedSpanIndex - 2].c_str(), {});
+                return Token(TOK_DOUBLE_COLON);
             }
             auto t = LexFindReservedWord(val, edition);
             if (t != TOK_NULL) {
@@ -1043,6 +1052,17 @@ auto ProcMacroInv::sendIdent(const Ident& val) -> void {
     sendIdent(val.name.c_str(), val.isRaw);
 }
 
+auto ProcMacroInv::sendDollarCrate(const Ident::Hygiene& h, const Span& sp, const RcString& crateName) -> void {
+    const Span& at = cast<const SpanInnerSource>(sp.get()) ? sp : parentSpan;
+    const size_t index = nextSpanIndex++;
+    spanContexts.pushBack(h == Ident::Hygiene() ? callSiteHygiene : h);
+    spanCrates.pushBack(crateName);
+    this->sendSpanDef(index, at);
+    this->sendSpanRef(index);
+    this->sendU8(static_cast<u8>(TokenClass::Ident));
+    this->sendBytes("$crate", 6);
+}
+
 auto ProcMacroInv::sendLifetime(const char* val, bool raw) -> void {
     this->sendSpan(Ident::Hygiene());
     this->sendLifetime_(val, raw);
@@ -1216,6 +1236,7 @@ auto ProcMacroInv::spanFor(const Ident::Hygiene& h, const Span& sp) -> size_t {
     }
     const size_t index = nextSpanIndex++;
     spanContexts.pushBack(h);
+    spanCrates.pushBack(RcString());
     auto* slot = pool.make<SpanSlot>(h, index, head ? *head : nullptr);
     if (head) {
         *head = slot;
@@ -1781,6 +1802,16 @@ auto ProcMacroVisitor::visitTokentree(const ::TokenTree& tt) -> void {
         const auto outer = groupContext;
         groupContext = tt.hygiene();
         for (size_t i = 0; i < tt.size(); i++) {
+            if (i + 1 < tt.size() && tt[i].isToken() && tt[i].tok().type() == TOK_DOUBLE_COLON && tt[i + 1].isToken() && tt[i + 1].tok().type() == TOK_STRING) {
+                const auto& marker = tt[i + 1].tok();
+                const auto crateName = RcString::newInterned(marker.str());
+                if (marker.spelling() == RcString() && wb.astCrate && wb.astCrate->externCrates.count(crateName)) {
+                    const auto& pos = marker.getPos();
+                    pmi.sendDollarCrate(marker.strHygiene(), pos.span ? pos.span : sp, crateName);
+                    i++;
+                    continue;
+                }
+            }
             visitTokentree(tt[i]);
         }
         groupContext = outer;
