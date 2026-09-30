@@ -449,6 +449,7 @@ namespace {
             }
             case HIRType::TAG_ErasedType: {
                 auto& e = type.as_ErasedType();
+                flags |= HIRType::HAS_ERASED_TYPE;
                 for (const auto& trait : e.traits) {
                     flags |= typeFlags(trait);
                 }

@@ -54,7 +54,12 @@ generate(
             HAS_ASSOCIATED_TYPE = 1u << 4,
             HAS_DEFERRED_CONST = 1u << 5,
             HAS_NODE_TYPE = 1u << 6,
+            HAS_ERASED_TYPE = 1u << 7,
         };
+
+        bool hasErasedType() const {
+            return flags & HAS_ERASED_TYPE;
+        }
 
         bool hasTypeInfer() const {
             return flags & HAS_TYPE_INFER;

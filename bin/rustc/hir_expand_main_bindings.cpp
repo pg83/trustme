@@ -594,6 +594,10 @@ namespace {
 
         ErasedOuterVisitorFixup(const WireBoard& wb);
 
+        void visitFunction(HIRItemPath p, HIRFunction& item) override;
+
+        void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
+
         void visitParams(HIRGenericParams& params) override;
 
         [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
@@ -1057,6 +1061,72 @@ namespace {
         return resolve.revealOpaqueTypes(sp, ty);
     }
 
+    bool namesOnlyFunctionOpaques(const HIRType* type) {
+        if (!type->hasErasedType()) {
+            return false;
+        }
+        return !visitTyWith(type, [](const HIRType* inner) {
+            const auto* erased = inner->opt_ErasedType();
+            return erased && !erased->inner.is_Fcn();
+        });
+    }
+
+    void revealForeignSignature(HIRFunction& function) {
+        if (function.revealedReturnType) {
+            function.returnType = function.revealedReturnType;
+        }
+    }
+
+    void revealForeignModule(HIRModule& module) {
+        for (auto& named : module.modItems) {
+            if (auto* inner = named.second->ent.opt_Module()) {
+                revealForeignModule(*inner);
+            }
+        }
+        for (auto& named : module.valueItems) {
+            if (auto* function = named.second->ent.opt_Function()) {
+                revealForeignSignature(**function);
+            }
+        }
+    }
+
+    template <typename Group, typename F>
+    void forEachForeignImpl(Group& group, F callback) {
+        for (auto& list : group.named) {
+            for (auto& impl : list.second) {
+                callback(*impl);
+            }
+        }
+        for (auto& impl : group.nonNamed) {
+            callback(*impl);
+        }
+        for (auto& impl : group.generic) {
+            callback(*impl);
+        }
+    }
+
+    void revealForeignOpaqueSignatures(HIRCrate& crate) {
+        for (const auto& name : crate.extCratesOrdered) {
+            auto& foreign = *crate.extCrates.at(name).data;
+            revealForeignModule(foreign.rootModule);
+            forEachForeignImpl(foreign.typeImpls, [&](HIRTypeImpl& impl) {
+                for (auto& method : impl.methods) {
+                    revealForeignSignature(method.second.data);
+                }
+            });
+            for (auto& group : foreign.traitImpls) {
+                forEachForeignImpl(group.second, [&](HIRTraitImpl& impl) {
+                    for (const auto& revealed : impl.revealedTypes) {
+                        impl.types.at(revealed.name).data = revealed.type;
+                    }
+                    for (auto& method : impl.methods) {
+                        revealForeignSignature(method.second.data);
+                    }
+                });
+            }
+        }
+    }
+
     inline HIRExprNodeP reborrowMkExprnodep(HIRExprNode* en, const HIRType* ty) {
         en->resType = mv$(ty);
         return HIRExprNodeP(en);
@@ -1372,6 +1442,8 @@ void HIRExpandErasedType(const WireBoard& wb, HIRCrate& crate) {
 
     ErasedOuterVisitorFixup ovFix(wb);
     ovFix.visitCrate(crate);
+
+    revealForeignOpaqueSignatures(crate);
 }
 
 #define NEWNODE(TY, CLASS, ...) reborrowMkExprnodep(crate.pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
@@ -5004,6 +5076,22 @@ ErasedOuterVisitorFixup::ErasedOuterVisitorFixup(const WireBoard& wb)
     : HIRVisitor(&resolve_, wb.crate->types)
     , resolve_(wb)
 {
+}
+
+auto ErasedOuterVisitorFixup::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
+    if (namesOnlyFunctionOpaques(item.returnType)) {
+        item.opaqueReturnType = item.returnType;
+    }
+    HIRVisitor::visitFunction(p, item);
+}
+
+auto ErasedOuterVisitorFixup::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
+    for (const auto& type : impl.types) {
+        if (namesOnlyFunctionOpaques(type.second.data)) {
+            impl.opaqueTypes.pushBack(HIRTraitImpl::OpaqueType{type.first, type.second.data});
+        }
+    }
+    HIRVisitor::visitTraitImpl(traitPath, impl);
 }
 
 auto ErasedOuterVisitorFixup::visitParams(HIRGenericParams& params) -> void {

@@ -188,6 +188,10 @@ public:
 
     std::optional<const HIRType*> traitReturnType;
 
+    const HIRType* opaqueReturnType = nullptr;
+
+    const HIRType* revealedReturnType = nullptr;
+
     SourceLocation source;
     Span span;
     HIRExprPtr code;
@@ -633,6 +637,15 @@ public:
     const HIRCrate* originCrate = nullptr;
 
     LintLevelOverrides lintLevels;
+
+    struct OpaqueType {
+        RcString name;
+        const HIRType* type;
+    };
+
+    stl::Vector<OpaqueType> opaqueTypes;
+
+    stl::Vector<OpaqueType> revealedTypes;
 
     bool matchesType(const HIRType* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 

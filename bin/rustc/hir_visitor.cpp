@@ -413,6 +413,9 @@ void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& im
         TRACE_FUNCTION_F(StringView("type ") << ent.first << StringView(" = ") << ent.second.data);
         ent.second.data = visitTraitImplType(ent.second.data);
     }
+    for (auto& revealed : mutRange(impl.revealedTypes)) {
+        revealed.type = visitTraitImplType(revealed.type);
+    }
     if (resolve_) {
         resolve_->clearImplGenerics();
     }
@@ -603,6 +606,9 @@ void HIRVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
     item.returnType = visitType(item.returnType);
     if (item.traitReturnType) {
         *item.traitReturnType = visitType(*item.traitReturnType);
+    }
+    if (item.revealedReturnType) {
+        item.revealedReturnType = visitType(item.revealedReturnType);
     }
     this->visitExpr(item.code);
     if (resolve_) {

@@ -740,8 +740,28 @@ const HIRType* HirDeserialiser::deserialiseType() {
         _(Path, {deserialisePath(), {}})
         _(Generic, deserialiseGenericref())
         _(TraitObject, {deserialiseTraitpath(), deserialiseVec<HIRGenericPath>(), in.readIstring(), in.readBool()})
-        case HIRType::TAG_ErasedType:
-            TODO(Span(), StringView("ErasedType"));
+        case HIRType::TAG_ErasedType: {
+            HIRTypeDataErasedType erased;
+            erased.isSized = in.readBool();
+            erased.traits = deserialiseVec<HIRTraitPath>();
+            erased.use = deserialisePathparams();
+            erased.usePresent = static_cast<HIRTypeDataErasedType::Use>(in.readTag());
+            switch (auto innerTag = in.readTag()) {
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    auto origin = deserialisePath();
+                    erased.inner = TypeDataErasedTypeInner::make_Fcn({std::move(origin), static_cast<unsigned>(in.readCount())});
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    erased.inner = TypeDataErasedTypeInner::make_Known(deserialiseType());
+                    break;
+                }
+                default:
+                    BUG(Span(), StringView("Bad tag for a serialised erased type - ") << innerTag);
+            }
+            rv = typeInterner.intern(HIRType::make_ErasedType(std::move(erased)));
+            break;
+        }
             _(Array, {deserialiseType(), deserialiseArraysize()})
             _(Slice, {deserialiseType()})
             _(Tuple, deserialiseVector<const HIRType*>())
@@ -1642,7 +1662,11 @@ auto HirDeserialiser::deserialiseTraitimpl() -> HIRTraitImpl {
         auto name = in.readIstring();
         auto isSpec = in.readBool();
         DEBUG((isSpec ? "default " : "") << StringView("type ") << name);
-        rv.types.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<const HIRType*>{isSpec, deserialiseType()}));
+        const auto* type = deserialiseType();
+        if (in.readBool()) {
+            rv.revealedTypes.pushBack(HIRTraitImpl::OpaqueType{name, deserialiseType()});
+        }
+        rv.types.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<const HIRType*>{isSpec, type}));
     }
 
     return rv;
@@ -2047,6 +2071,9 @@ auto HirDeserialiser::deserialiseFunction() -> HIRFunction {
     rv.variadic = in.readBool();
     rv.hasNamedVariadic = in.readBool();
     rv.returnType = deserialiseType();
+    if (in.readBool()) {
+        rv.revealedReturnType = deserialiseType();
+    }
     rv.source.filename = in.readIstring();
     rv.source.line = static_cast<unsigned int>(in.readCount());
     rv.source.column = static_cast<unsigned int>(in.readCount());
@@ -3282,11 +3309,26 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
         }
         case HIRType::TAG_ErasedType: {
             auto& e = (*ty).as_ErasedType();
-            TODO(Span(), StringView("Serialse ErasedType?"));
-
             out.writeBool(e.isSized);
             serialiseVec(e.traits);
             serialisePathparams(e.use);
+            out.writeTag(static_cast<int>(e.usePresent));
+            out.writeTag(static_cast<int>(e.inner.tag()));
+            switch (e.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    const auto& fcn = e.inner.as_Fcn();
+                    serialisePath(fcn.origin);
+                    out.writeCount(fcn.index);
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    serialiseType(e.inner.as_Known());
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    BUG(Span(), StringView("An opaque alias reached metadata unrevealed - ") << ty);
+                }
+            }
             break;
         }
         case HIRType::TAG_Array: {
@@ -3639,7 +3681,17 @@ auto HirSerialiser::serialiseTraitimpl(const HIRTraitImpl& impl) -> void {
         DEBUG(StringView("type ") << v.first);
         out.writeString(v.first);
         out.writeBool(v.second.isSpecialisable);
-        serialise(v.second.data);
+        const HIRType* opaque = nullptr;
+        for (const auto& entry : impl.opaqueTypes) {
+            if (entry.name == v.first) {
+                opaque = entry.type;
+            }
+        }
+        serialise(opaque ? opaque : v.second.data);
+        out.writeBool(opaque != nullptr);
+        if (opaque) {
+            serialise(v.second.data);
+        }
     }
 }
 
@@ -4582,7 +4634,11 @@ auto HirSerialiser::serialise(const HIRFunction& fcn) -> void {
     DEBUG(StringView("m_args = ") << fcn.args);
     out.writeBool(fcn.variadic);
     out.writeBool(fcn.hasNamedVariadic);
-    serialise(fcn.returnType);
+    serialise(fcn.opaqueReturnType ? fcn.opaqueReturnType : fcn.returnType);
+    out.writeBool(fcn.opaqueReturnType != nullptr);
+    if (fcn.opaqueReturnType) {
+        serialise(fcn.returnType);
+    }
     out.writeString(fcn.source.filename);
     out.writeCount(fcn.source.line);
     out.writeCount(fcn.source.column);
