@@ -793,6 +793,7 @@ private:
 
     struct SolverExistentials {
         const HIRGenericParams* definition;
+        bool goalSlots;
         HIRPathParams params;
     };
 
@@ -939,7 +940,7 @@ public:
 
     bool implsOverlap(const Span& sp, const SolverImpl& left, const SolverImpl& right) const;
 
-    const HIRPathParams& solverExistentials(const Span& sp, const HIRGenericParams& definition) const;
+    const HIRPathParams& solverExistentials(const Span& sp, const HIRGenericParams& definition, bool goalSlots = false) const;
     /* `input` with each anonymous `_` replaced by a solver existential of one fresh
        unknown scope: what a type still being resolved (`StateEntry<_>`) is to the
        solver when a path probes the traits in scope for it. */

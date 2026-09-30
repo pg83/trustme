@@ -2490,7 +2490,7 @@ auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGen
     HIRPathParams inferredParams;
     if (!params) {
         const auto& traitDef = resolve_.hirCrate().getTraitByPath(sp, trait);
-        inferredParams = resolve_.solverExistentials(sp, traitDef.params).clone();
+        inferredParams = resolve_.solverExistentials(sp, traitDef.params, true).clone();
         params = &inferredParams;
     }
 

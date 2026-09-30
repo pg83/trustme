@@ -41,6 +41,12 @@ namespace {
         return scope < SOLVER_ALPHA_SCOPE_BASE && (scope & SOLVER_IMPL_EXISTENTIAL_SCOPE) != 0;
     }
 
+    constexpr u32 SOLVER_GOAL_EXISTENTIAL_SCOPE = u32(1) << 29;
+
+    bool isGoalExistentialScope(u32 scope) {
+        return scope < SOLVER_ALPHA_SCOPE_BASE && (scope & SOLVER_IMPL_EXISTENTIAL_SCOPE) == 0 && (scope & SOLVER_GOAL_EXISTENTIAL_SCOPE) != 0;
+    }
+
     /* Only such existentials are alpha-renamed when a goal is canonicalized, so one in
        a renamed scope is the same unknown seen from inside the canonical goal. */
     bool isUnknownExistentialScope(u32 scope) {
@@ -2809,7 +2815,7 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                    fixes those from the goal before any nested obligation is
                    registered, so none is open to bind here.) */
                 const auto* otherGeneric = (leftProjection ? right : left)->opt_Generic();
-                if (otherGeneric && otherGeneric->isPlaceholder() && !(otherGeneric->isSolverExistential() && isImplExistentialScope(otherGeneric->solverScope))) {
+                if (otherGeneric && otherGeneric->isPlaceholder() && (!otherGeneric->isSolverExistential() || isGoalExistentialScope(otherGeneric->solverScope))) {
                     return this->defer(left, right);
                 }
                 if (!rigidProjectionsAreDistinct_ || projectionIsOpen(*projection)) {
@@ -4314,12 +4320,12 @@ HIRPathParams TraitResolution::makeFreshImplParams(const HIRGenericParams& param
     return HIRPathParams(std::move(result));
 }
 
-const HIRPathParams& TraitResolution::solverExistentials(const Span& sp, const HIRGenericParams& definition) const {
+const HIRPathParams& TraitResolution::solverExistentials(const Span& sp, const HIRGenericParams& definition, bool goalSlots) const {
     const auto key = splitMix64(reinterpret_cast<uintptr_t>(&definition));
     auto* bucket = solverExistentials_.find(key);
     if (bucket) {
         for (const auto& entry : *bucket) {
-            if (entry.definition == &definition) {
+            if (entry.definition == &definition && entry.goalSlots == goalSlots) {
                 return entry.params;
             }
         }
@@ -4327,8 +4333,9 @@ const HIRPathParams& TraitResolution::solverExistentials(const Span& sp, const H
         bucket = solverExistentials_.insert(key);
     }
 
-    const auto scope = ++this->board().id;
-    ASSERT_BUG(sp, scope != 0, StringView("solver existential scope exhausted"));
+    const auto id = ++this->board().id;
+    ASSERT_BUG(sp, id != 0 && (id & (SOLVER_IMPL_EXISTENTIAL_SCOPE | SOLVER_GOAL_EXISTENTIAL_SCOPE)) == 0, StringView("solver existential scope exhausted"));
+    const auto scope = goalSlots ? (SOLVER_GOAL_EXISTENTIAL_SCOPE | id) : id;
 
     HIRPathParamsBuilder params;
     params.types.reserve(definition.types.size());
@@ -4341,7 +4348,7 @@ const HIRPathParams& TraitResolution::solverExistentials(const Span& sp, const H
         ASSERT_BUG(sp, i < 256, StringView("Too many candidate value parameters"));
         params.values.push_back(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i)));
     }
-    bucket->push_back(SolverExistentials{&definition, HIRPathParams(std::move(params))});
+    bucket->push_back(SolverExistentials{&definition, goalSlots, HIRPathParams(std::move(params))});
     return bucket->back().params;
 }
 
@@ -14912,7 +14919,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
        `impl<W: Wake> From<Arc<W>> for Waker` for the goal `Waker: From<?1>` is `?W: Wake`,
        ambiguous rather than unimplemented, so that candidate stays viable until the
        argument fixes `?1`. */
-    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential()) {
+    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && (isUnknownExistentialScope(selfGeneric->solverScope) || isGoalExistentialScope(selfGeneric->solverScope))) {
         return Certainty::Ambiguous;
     }
     CanonicalizeTraitGoal canonicalizer(crate.types, &resolve_.ivars, true, alphaExistentialScopeBase_);
@@ -15681,7 +15688,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
        `_: Display` from descending through every impl's own parameters for ever.  The
        existential standing for an impl parameter of one instantiation is such a
        variable. */
-    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && !hasSelfCoercionGoal) {
+    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && (isUnknownExistentialScope(selfGeneric->solverScope) || isGoalExistentialScope(selfGeneric->solverScope)) && !hasSelfCoercionGoal) {
         return emitForcedAmbiguity();
     }
     const bool plainTraitGoal = (!assocName || !assocName[0]) && !associated && !valueName;
