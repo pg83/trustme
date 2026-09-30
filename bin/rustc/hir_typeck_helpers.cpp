@@ -4742,7 +4742,18 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
         const bool wasOpaque = input->as_Path().binding.is_Opaque();
         if (wasUnbound || wasOpaque) {
             if (wasOpaque) {
-                return this->expandAssociatedTypesInplaceUfcsKnown(sp, input, effects);
+                const bool cacheable = !ivars.probing() && !typeContainsIvars(input);
+                if (cacheable) {
+                    auto* cached = eatCache.find(input->uid);
+                    if (cached && cached->generation == eatCacheGeneration) {
+                        return cached->type;
+                    }
+                }
+                const auto* expanded = this->expandAssociatedTypesInplaceUfcsKnown(sp, input, effects);
+                if (cacheable) {
+                    eatCache.insert(input->uid, EatCacheEntry{eatCacheGeneration, expanded});
+                }
+                return expanded;
             }
 
             const auto cacheKey = input->uid;

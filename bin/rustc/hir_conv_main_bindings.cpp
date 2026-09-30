@@ -3638,6 +3638,27 @@ auto UfcsVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl&
         DeclaredTypeGuard declaredTypes(*this);
         declared = visitType(ty);
     }
+    const auto rigidInEnvironment = [&](const HIRType* inner) {
+        const auto* path = inner->opt_Path();
+        const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
+        if (!projection) {
+            return true;
+        }
+        if (!projection->type->is_Generic()) {
+            return false;
+        }
+        for (const auto& entry : resolve_.typeEqualities()) {
+            const auto* key = entry.first->opt_Path();
+            const auto* keyProjection = key ? key->path.data.opt_UfcsKnown() : nullptr;
+            if (keyProjection && keyProjection->item == projection->item && keyProjection->trait.path == projection->trait.path && keyProjection->type == projection->type) {
+                return false;
+            }
+        }
+        return true;
+    };
+    if (!visitTyWith(declared, [&](const HIRType* inner) { return !rigidInEnvironment(inner); })) {
+        return declared;
+    }
     const auto normalized = visitType(declared);
     const bool shadowable = normalized != declared && visitTyWith(declared, [&](const HIRType* inner) {
         const auto* path = inner->opt_Path();
@@ -4345,11 +4366,17 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
         if (resolve_.itemGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *resolve_.itemGenericsPtr(), p.data)) {
             DEBUG(StringView("Found in item params, p = ") << p);
             BUG_ASSERT(!p.data.is_UfcsUnknown());
+            if (auto* known = p.data.opt_UfcsKnown()) {
+                this->visitPathParams(known->trait.params);
+            }
             return;
         }
         if (resolve_.implGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *resolve_.implGenericsPtr(), p.data)) {
             DEBUG(StringView("Found in impl params, p = ") << p);
             BUG_ASSERT(!p.data.is_UfcsUnknown());
+            if (auto* known = p.data.opt_UfcsKnown()) {
+                this->visitPathParams(known->trait.params);
+            }
             return;
         }
 
