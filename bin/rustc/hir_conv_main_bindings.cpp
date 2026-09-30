@@ -2679,6 +2679,10 @@ auto Expander::visitExpr(HIRExprPtr& expr) -> void {
             return upperVisitor.visitType(ty);
         }
 
+        void visitPathParams(HIRPathParams& pp) override {
+            upperVisitor.visitPathParams(pp);
+        }
+
         void visitPattern(const Span& sp, HIRPattern& pat) override {
             upperVisitor.visitPattern(pat);
         }
