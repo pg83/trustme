@@ -2549,10 +2549,11 @@ auto Expander::visitPatternPathBinding(const Span& sp, HIRPath& path) -> HIRPatt
         if (!implType) {
             ERROR(sp, E0000, StringView("Use of `Self` pattern outside of an impl block"));
         }
-        if (!((*implType).is_Path() && ((*implType).as_Path().path.data.is_Generic()))) {
-            ERROR(sp, E0000, StringView("Use of `Self` pattern in non-struct impl block - ") << implType);
+        const auto resolvedImplType = visitType(implType);
+        if (!(resolvedImplType->is_Path() && resolvedImplType->as_Path().path.data.is_Generic())) {
+            ERROR(sp, E0000, StringView("Use of `Self` pattern in non-struct impl block - ") << resolvedImplType);
         }
-        path = implType->as_Path().path.data.as_Generic().clone();
+        path = resolvedImplType->as_Path().path.data.as_Generic().clone();
     }
 
     if (path.data.is_UfcsKnown()) {
