@@ -4474,7 +4474,7 @@ namespace {
     ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& ec, const HIRModule& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap = {});
     ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTPath& path, const ASTExternCrate& ec, unsigned int start);
 
-    ASTPath ResolveUseAbsolutisePath(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path) {
+    ASTPath ResolveUseAbsolutisePath(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, const ASTModule* currentMod, std::span<const ASTModule* const> parentModules) {
         switch (path.cls.tag()) {
             case ASTPathClass::TAG_Invalid: {
                 BUG(span, StringView("Invalid path class encountered"));
@@ -4494,7 +4494,9 @@ namespace {
                 if (crate.edition >= ASTEdition::Rust2018) {
                     const auto& name = e.nodes.at(0).name();
                     auto ecIt = settings.implicitCrates.find(name);
-                    if (ecIt != settings.implicitCrates.end()) {
+                    const bool shadowedByModule = ecIt != settings.implicitCrates.end() && currentMod && e.nodes.size() > 1
+                        && !ResolveUseGetBindingMod(resolveContext, span, settings, crate, currentMod->path(), *currentMod, name, parentModules, /*types_only*/ true).type.is_Unbound();
+                    if (ecIt != settings.implicitCrates.end() && !shadowedByModule) {
                         DEBUG(StringView("Found implict crate ") << name);
                         crate.markExternCrateUsed(ecIt->second);
                         e.nodes.erase(e.nodes.begin());
@@ -4595,7 +4597,7 @@ namespace {
                     if (superCount > 0) {
                         std::vector<ASTPathNode> nodes(path.nodes().begin() + superCount, path.nodes().end());
                         auto inner = ASTPath::newSuper(superCount, mv$(nodes));
-                        return ResolveUseAbsolutisePath(resolveContext, span, settings, crate, basePath, mv$(inner));
+                        return ResolveUseAbsolutisePath(resolveContext, span, settings, crate, basePath, mv$(inner), currentMod, parentModules);
                     }
                 }
                 // EVIL HACK: If the current module is an anon module, refer to the parent
@@ -4664,7 +4666,7 @@ namespace {
             const Span& span = useStmtData.sp;
             for (auto& useEnt : useStmtData.entries) {
                 TRACE_FUNCTION_F(useEnt);
-                useEnt.path = ResolveUseAbsolutisePath(resolveContext, span, settings, crate, path, useEnt.path);
+                useEnt.path = ResolveUseAbsolutisePath(resolveContext, span, settings, crate, path, useEnt.path, &mod, parentModules);
                 if (!useEnt.path.cls.is_Absolute()) {
                     BUG(span, StringView("Use path is not absolute after absolutisation"));
                 }
@@ -5075,7 +5077,7 @@ namespace {
                         DEBUG(StringView(" > Needs resolve p=") << static_cast<const void*>(&impE.path));
                         if (!isUseResolutionActive(resolveContext, impE.path)) {
                             ActiveUseResolution activeUse(resolveContext, impE.path);
-                            rv.mergeFrom(ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path), parentModules));
+                            rv.mergeFrom(ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path, &mod, parentModules), parentModules));
                         } else {
                             DEBUG(StringView("Recursion on path ") << static_cast<const void*>(&impE.path) << StringView(" ") << impE.path);
                         }
@@ -5118,7 +5120,7 @@ namespace {
                         auto& resolveStackPtrs = resolveContext.wildcardUses;
                         if (std::find(resolveStackPtrs.begin(), resolveStackPtrs.end(), &impData) == resolveStackPtrs.end()) {
                             resolveStackPtrs.pushBack(&impData);
-                            bindings_ = ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path), parentModules, /*type_only=*/true, /*soft_fail=*/true);
+                            bindings_ = ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path, &mod, parentModules), parentModules, /*type_only=*/true, /*soft_fail=*/true);
                             if (bindings_.type.is_Unbound()) {
                                 DEBUG(StringView("Recursion detected, skipping ") << impE.path);
                                 resolveStackPtrs.popBack();
