@@ -1589,7 +1589,8 @@ auto CodeGeneratorC::emitTypeFn(const HIRType* ty) -> void {
 
     const auto& te = ty->as_Function();
     of << StringView("typedef ");
-    if (te.rettype == crate.types.unit()) {
+    const auto returnMetadata = metadataType(te.rettype);
+    if (te.rettype == crate.types.unit() || returnMetadata == MetadataType::Slice || returnMetadata == MetadataType::TraitObject) {
         of << StringView("void");
     } else {
         // TODO: Better emit_ctype call for return type?
