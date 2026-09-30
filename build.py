@@ -3832,6 +3832,20 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_a_crate_root_named_without_a_directory",
+    inputs=["$(S)/tst/unit/test_a_crate_root_named_without_a_directory.py", *TESTS_LIB],
+    outputs=["$(B)/tst/unit/a_crate_root_named_without_a_directory.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_a_crate_root_named_without_a_directory.py",
+        "$(B)/bin/rustc",
+        "$(B)/tst/unit/a_crate_root_named_without_a_directory.stamp",
+    ],
+    deps=[rustc],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_trait_object_supertrait_binding",
     inputs=[
         "$(S)/tst/unit/test_trait_object_supertrait_binding.py",

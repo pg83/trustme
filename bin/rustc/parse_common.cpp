@@ -1775,11 +1775,14 @@ namespace {
         return Spanned<T>{lex.endSpan(ps), mv$(v)};
     }
 
-    FsPath dirname(std::string input) {
-        while (input.size() > 0 && input.back() != '/' && input.back() != '\\') {
-            input.pop_back();
+    FsPath joinDirOf(std::string file, const char* rest) {
+        while (file.size() > 0 && file.back() != '/' && file.back() != '\\') {
+            file.pop_back();
         }
-        return input;
+        if (file.empty()) {
+            return FsPath(rest);
+        }
+        return FsPath(file) / rest;
     }
 
     void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs);
@@ -5683,14 +5686,14 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             } else if (pathAttr.size() > 0) {
                 bool inSubmod = modFileinfo.path[modFileinfo.path.size() - 1] == '/';
                 if (modFileinfo.inModBlock) {
-                    subPath = dirname(modFileinfo.path) / pathAttr.c_str();
+                    subPath = joinDirOf(modFileinfo.path, pathAttr.c_str());
                 } else {
-                    subPath = dirname(lex.pointSpan().getTopFileSpan().filename.c_str()) / pathAttr.c_str();
+                    subPath = joinDirOf(lex.pointSpan().getTopFileSpan().filename.c_str(), pathAttr.c_str());
                 }
             } else if (modFileinfo.controlsDir) {
-                subPath = dirname(modFileinfo.path) / name.c_str();
+                subPath = joinDirOf(modFileinfo.path, name.c_str());
             } else {
-                subPath = dirname(modFileinfo.path) / modPath.nodes.back().c_str() / name.c_str();
+                subPath = joinDirOf(modFileinfo.path, modPath.nodes.back().c_str()) / name.c_str();
                 subFileControlsDir = false;
             }
 
@@ -5709,7 +5712,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             }
                         }
                         if (!innerPath.empty()) {
-                            subPath = dirname(lex.pointSpan().getTopFileSpan().filename.c_str()) / innerPath.c_str();
+                            subPath = joinDirOf(lex.pointSpan().getTopFileSpan().filename.c_str(), innerPath.c_str());
                         }
                     }
                     submod.fileInfo.path = subPath.str() + "/";
@@ -5730,8 +5733,8 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         break;
                     } else if (pathAttr.size() == 0 && !modFileinfo.controlsDir) {
                         ASSERT_BUG(lex.pointSpan(), modPath.nodes.length() >= 1, StringView("Crate root should control its directory?"));
-                        std::string newpathFileDirect = dirname(modFileinfo.path) / modPath.nodes.back().c_str() / name.c_str() + ".rs";
-                        std::string newpathFileMod = dirname(modFileinfo.path) / modPath.nodes.back().c_str() / name.c_str() / "mod.rs";
+                        std::string newpathFileDirect = joinDirOf(modFileinfo.path, modPath.nodes.back().c_str()) / name.c_str() + ".rs";
+                        std::string newpathFileMod = joinDirOf(modFileinfo.path, modPath.nodes.back().c_str()) / name.c_str() / "mod.rs";
 
                         DEBUG(modFileinfo.path << StringView(" ") << modPath);
                         DEBUG(StringView("newpath_file_direct = '") << newpathFileDirect << StringView("'"));
