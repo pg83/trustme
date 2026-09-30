@@ -2283,10 +2283,11 @@ auto ProcMacroVisitor::visitPath(const ASTPath& path, bool isExpr) -> void {
             auto& pe = path.cls.as_Absolute();
             if (pe.crate == "") {
                 pmi.sendRword("crate");
-            } else {
+            } else if (pe.crate.c_str()[0] == '=') {
                 pmi.sendSymbol("::");
-                BUG_ASSERT(pe.crate.c_str()[0] == '=');
                 pmi.sendIdent(pe.crate.c_str() + 1);
+            } else {
+                pmi.sendDollarCrate(Ident::Hygiene(), sp, pe.crate);
             }
             pmi.sendSymbol("::");
             nodes = &pe.nodes;
