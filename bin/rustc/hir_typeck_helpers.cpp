@@ -16962,6 +16962,44 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 candidate.ambiguityBeyondHead = true;
             }
         }
+        if (!candidate.discarded && !candidate.coercionEqualities.empty() && candidate.impl.traitImpl) {
+            const auto related = [&](const HIRType* type) {
+                return cloneTyWith(crate.types, span(), type, [&](const HIRType* inner) -> const HIRType* {
+                    if (!inner->is_Infer() && !inner->is_Generic()) {
+                        return nullptr;
+                    }
+                    for (const auto& equality : candidate.coercionEqualities) {
+                        if (equality.left == inner) {
+                            return equality.right;
+                        }
+                        if (equality.right == inner) {
+                            return equality.left;
+                        }
+                    }
+                    return nullptr;
+                });
+            };
+            auto monomorph = MonomorphStatePtr(crate.types, nullptr, &candidate.impl.implParams, nullptr);
+            for (const auto* nested : candidate.normalizationNestedGoals) {
+                const auto* traitBound = nested->opt_TraitBound();
+                if (!traitBound) {
+                    continue;
+                }
+                const auto* instantiated = monomorph.monomorphType(span(), traitBound->type, true);
+                const auto* bound = related(instantiated);
+                if (bound == instantiated || typeHasUnknown(bound)) {
+                    continue;
+                }
+                const auto trait = monomorph.monomorphTraitpath(span(), traitBound->trait, true);
+                if (paramsHaveUnknownTypes(trait.path.params) || !trait.typeBounds.empty()) {
+                    continue;
+                }
+                if (solveGoal(trait.path.path, trait.path.params, bound, nullptr) == Certainty::NoSolution) {
+                    candidate.discarded = true;
+                    break;
+                }
+            }
+        }
         const auto hasOpenInput = [](const HIRType* type) {
             return visitTyWith(type, [](const HIRType* inner) {
                 const auto* infer = inner->opt_Infer();
