@@ -12288,7 +12288,7 @@ auto NextTraitGoalEvaluator::relateAssembledHead(CandidateSource source, const H
             continue;
         }
         unresolved = true;
-        headNormalizationAmbiguity = true;
+        headNormalizationAmbiguity |= equality.left.is_Unevaluated() || equality.right.is_Unevaluated();
     }
     return unresolved ? Certainty::Ambiguous : Certainty::Proven;
 }
