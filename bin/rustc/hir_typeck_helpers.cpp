@@ -13267,7 +13267,14 @@ auto NextTraitGoalEvaluator::relateTypes(Candidate& candidate, const HIRType* le
         }
     } materializeBindings(crate.types, resolve_.ivars, localBindings);
 
-    Certainty result = pendingValues.empty() ? Certainty::Proven : Certainty::Ambiguous;
+    Certainty result = Certainty::Proven;
+    for (const auto& equality : pendingValues) {
+        const auto* leftInfer = equality.left.opt_Infer();
+        const auto* rightInfer = equality.right.opt_Infer();
+        if (!(leftInfer && isSolverCanonicalInfer(leftInfer->index)) && !(rightInfer && isSolverCanonicalInfer(rightInfer->index))) {
+            result = Certainty::Ambiguous;
+        }
+    }
     for (const auto& equality : pending) {
         const auto isSolverExistential = [](const HIRType* type) {
             const auto* infer = type->opt_Infer();
