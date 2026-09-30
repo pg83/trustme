@@ -617,6 +617,25 @@ namespace {
                             auto value = mutator.inTemporary(mv$(addressType), mv$(address));
                             return MIRRValue::make_Cast({mv$(value), mv$(ty)});
                         }
+                    } else {
+                        const auto offset = lit.readUint(TargetGetPointerBits() / 8) - EncodedLiteral::PTR_BASE;
+                        MIR_ASSERT(state, offset <= U128(reloc->bytes.size()), StringView("Offset out of range"));
+                        Vector<u8> allocation;
+                        for (auto byte : reloc->bytes) {
+                            allocation.pushBack(static_cast<u8>(byte));
+                        }
+                        const auto* byteTy = state.crate.types.primitive(HIRCoreType::U8);
+                        const auto* usizeTy = state.crate.types.primitive(HIRCoreType::Usize);
+                        auto size = MIRConstant::make_Uint({U128(allocation.length()), HIRCoreType::Usize});
+                        auto whole = mutator.inTemporary(state.crate.types.pointer(HIRBorrowType::Shared, state.crate.types.slice(byteTy)), MIRRValue::make_MakeDst({MIRConstant(mv$(allocation)), std::move(size)}));
+                        const auto* startTy = state.crate.types.pointer(HIRBorrowType::Shared, byteTy);
+                        auto start = mutator.inTemporary(startTy, MIRRValue::make_Cast({mv$(whole), startTy}));
+                        if (offset == U128(0)) {
+                            return MIRRValue::make_Cast({mv$(start), mv$(ty)});
+                        }
+                        auto address = mutator.inTemporary(usizeTy, MIRRValue::make_Cast({mv$(start), usizeTy}));
+                        auto moved = mutator.inTemporary(usizeTy, MIRRValue::make_BinOp({MIRParam(mv$(address)), MIRBinOp::ADD, MIRParam(MIRConstant::make_Uint({offset, HIRCoreType::Usize}))}));
+                        return MIRRValue::make_Cast({mv$(moved), mv$(ty)});
                     }
                     auto tyBorrow = state.crate.types.borrow(te.type, te.inner);
                     auto rval = MIRCleanupLiteralToRValue(state, mutator, lit, tyBorrow, params, mv$(path));
