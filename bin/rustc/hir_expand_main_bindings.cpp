@@ -6122,6 +6122,24 @@ auto StaticBorrowOuterVisitor::create(Span sp, const HIRType* ty, HIRExprPtr val
 auto StaticBorrowOuterVisitor::visitCrate(HIRCrate& crate) -> void {
     HIRVisitor::visitCrate(crate);
 
+    struct H {
+        static HIRConstant toConst(HIRStatic& s) {
+            HIRConstant rv{std::move(s.params), std::move(s.type), std::move(s.value)};
+            rv.valueState = rv.params.isGeneric() ? HIRConstant::ValueState::Generic : HIRConstant::ValueState::Unknown;
+            return rv;
+        }
+    };
+
+    for (auto& modList : newStatics) {
+        auto& mod = *modList.first;
+        for (auto& newStaticPair : modList.second) {
+            auto& newStatic = newStaticPair.data;
+            auto newEnt = newStaticPair.isConst ? HIRValueItem(crate.pool->make<HIRConstant>(H::toConst(newStatic))) : HIRValueItem(crate.pool->make<HIRStatic>(std::move(newStaticPair.data)));
+            auto inserted = mod.valueItems.insert(std::make_pair(newStaticPair.path.components().back(), crate.pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), std::move(newEnt)})));
+            ASSERT_BUG(Span(), inserted.second, StringView("Duplicate promoted value ") << newStaticPair.path);
+        }
+    }
+
     for (auto& modList : newStatics) {
         auto& mod = *modList.first;
         currentModule = &mod;
@@ -6164,21 +6182,6 @@ auto StaticBorrowOuterVisitor::visitCrate(HIRCrate& crate) -> void {
                 return path;
             }
         } nvs{*crate.pool, modPath, mod, modList.second.size()};
-
-        struct H {
-            static HIRConstant toConst(HIRStatic& s) {
-                HIRConstant rv{std::move(s.params), std::move(s.type), std::move(s.value)};
-                rv.valueState = rv.params.isGeneric() ? HIRConstant::ValueState::Generic : HIRConstant::ValueState::Unknown;
-                return rv;
-            }
-        };
-
-        for (auto& newStaticPair : modList.second) {
-            auto& newStatic = newStaticPair.data;
-            auto newEnt = newStaticPair.isConst ? HIRValueItem(crate.pool->make<HIRConstant>(H::toConst(newStatic))) : HIRValueItem(crate.pool->make<HIRStatic>(std::move(newStaticPair.data)));
-            auto inserted = mod.valueItems.insert(std::make_pair(newStaticPair.path.components().back(), crate.pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), std::move(newEnt)})));
-            ASSERT_BUG(Span(), inserted.second, StringView("Duplicate promoted value ") << newStaticPair.path);
-        }
 
         for (const auto& newStaticPair : modList.second) {
             Span sp;
