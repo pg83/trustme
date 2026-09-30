@@ -7821,9 +7821,6 @@ MIRBasicBlockId MirBuilder::unwindCleanupNode(const Span& sp, const ScopeDropSlo
         return target;
     }
 
-    /* Only a whole-slot drop is one block, so only it is a chain node; a
-       partially-moved or boxed-out value expands to a switch or a nested
-       drop and is built on its own. */
     unsigned int flag = ~0u;
     bool wholeSlot = false;
     switch (state.tag()) {
@@ -7838,8 +7835,8 @@ MIRBasicBlockId MirBuilder::unwindCleanupNode(const Span& sp, const ScopeDropSlo
             break;
     }
 
+    const unsigned int slotKey = slot.index * 2 + (slot.isArgument ? 1 : 0);
     if (wholeSlot) {
-        const unsigned int slotKey = slot.index * 2 + (slot.isArgument ? 1 : 0);
         if (shared) {
             while (unwindDropNodeHeads_.length() <= slotKey) {
                 unwindDropNodeHeads_.pushBack(~0u);
@@ -7862,11 +7859,25 @@ MIRBasicBlockId MirBuilder::unwindCleanupNode(const Span& sp, const ScopeDropSlo
         return block;
     }
 
+    if (shared) {
+        while (unwindStateNodeHeads_.length() <= slotKey) {
+            unwindStateNodeHeads_.pushBack(nullptr);
+        }
+        for (const auto* node = unwindStateNodeHeads_[slotKey]; node; node = node->next) {
+            if (node->target == target && node->state == state) {
+                return node->block;
+            }
+        }
+    }
+
     const auto block = newBbUnlinked();
     setCurBlock(block);
     auto expanded = state.clone();
     dropValueFromState(sp, expanded, mv$(lvalue));
     endBlock(MIRTerminator::make_Goto(target));
+    if (shared) {
+        unwindStateNodeHeads_.mut(slotKey) = unwindStatePool_->make<UnwindStateNode>(UnwindStateNode{unwindStateNodeHeads_[slotKey], target, state.clone(), block});
+    }
     return block;
 }
 

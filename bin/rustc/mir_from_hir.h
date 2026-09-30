@@ -6,6 +6,7 @@
 #include "hir_typeck_static.h"
 
 #include <std/lib/vector.h>
+#include <std/mem/obj_pool.h>
 
 #include <map>
 
@@ -413,6 +414,16 @@ private:
     stl::Vector<UnwindDropNode> unwindDropNodes_;
     stl::Vector<unsigned int> unwindDropNodeHeads_;
     MIRBasicBlockId unwindResumeBlock_ = ~0u;
+
+    struct UnwindStateNode {
+        UnwindStateNode* next;
+        MIRBasicBlockId target;
+        VarState state;
+        MIRBasicBlockId block;
+    };
+
+    stl::ObjPool::Ref unwindStatePool_ = stl::ObjPool::fromMemory();
+    stl::Vector<UnwindStateNode*> unwindStateNodeHeads_;
 
     MIRBasicBlockId unwindCleanupChain(const MIRLValue* consumedValue, bool shared);
     MIRBasicBlockId unwindCleanupNode(const Span& sp, const ScopeDropSlot& slot, const VarState& state, MIRBasicBlockId target, bool shared);
