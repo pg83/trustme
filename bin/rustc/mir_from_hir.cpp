@@ -436,6 +436,8 @@ namespace {
 
         WildcardType* wildcardTypes;
 
+        bool collapseWildcards = false;
+
         struct Ruleset {
             bool isImpossible;
             std::vector<PatternRule> rules;
@@ -2502,6 +2504,7 @@ void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, con
     auto patScope = builder.newScopeSplit(sp);
 
     auto patBuilder = PatternRulesetBuilder{builder.resolve()};
+    patBuilder.collapseWildcards = true;
     patBuilder.appendFrom(sp, pat, outerTy);
     for (auto& sr : patBuilder.rulesets) {
         auto patIdx = static_cast<unsigned>(&sr - &patBuilder.rulesets.front());
@@ -3794,6 +3797,14 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
     const HIRType* ty = *tyP;
     if (const auto* pattern = ty->opt_Pattern()) {
         ty = pattern->inner;
+    }
+
+    if (collapseWildcards && pat.data.is_Any() && rulesets.size() == 1) {
+        this->pushRule(PatternRule::make_Any({}));
+        for (size_t i = 0; i < pat.implicitDerefCount; i++) {
+            fieldPath.pop_back();
+        }
+        return;
     }
 
     // TODO: Outer handling for Value::Named patterns
