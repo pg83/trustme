@@ -1093,6 +1093,35 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::typeNameForPathArgs(const HIRPath
     return rv;
 }
 
+HIRPathParams MIRTypeResolve::typeArgsWithoutDefaults(const HIRTypeDataPath& path) const {
+    const auto& params = path.path.data.as_Generic().params;
+    const HIRGenericParams* definition = nullptr;
+    if (const auto* structure = path.binding.opt_Struct()) {
+        definition = &structure->params;
+    } else if (const auto* enumeration = path.binding.opt_Enum()) {
+        definition = &enumeration->params;
+    } else if (const auto* unionItem = path.binding.opt_Union()) {
+        definition = &unionItem->params;
+    }
+    if (!definition || !params.values.empty() || params.types.size() != definition->types.size()) {
+        return params;
+    }
+    const auto monomorph = MonomorphStatePtr(crate.types, nullptr, &params, nullptr);
+    size_t count = params.types.size();
+    while (count > 0) {
+        const auto* defaultType = definition->types[count - 1].defaultValue;
+        if (!defaultType || defaultType->is_Infer()) {
+            break;
+        }
+        const auto* instantiated = resolve.expandAssociatedTypes(Span(), monomorph.monomorphType(Span(), defaultType));
+        if (instantiated != params.types[count - 1]) {
+            break;
+        }
+        count--;
+    }
+    return count == params.types.size() ? params : HIRPathParams::fromTypes(params.types.data(), count);
+}
+
 MIRTypeResolve::TypeNameString MIRTypeResolve::typeNameForItemPath(const HIRPath& path, bool genericPlaceholders) const {
     switch (path.data.tag()) {
         case HIRPathData::TAG_Generic: {
@@ -1173,7 +1202,7 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTy
     }
     if (ty->is_Path() && ty->as_Path().path.data.is_Generic()) {
         const auto& gp = ty->as_Path().path.data.as_Generic();
-        return typeNameForSimplePath(gp.path) + typeNameForPathArgs(gp.params, nullptr, genericPlaceholders);
+        return typeNameForSimplePath(gp.path) + typeNameForPathArgs(typeArgsWithoutDefaults(ty->as_Path()), nullptr, genericPlaceholders);
     }
     if (const auto* te = ty->opt_TraitObject()) {
         std::vector<std::string> bounds;

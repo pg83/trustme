@@ -101,6 +101,7 @@ private:
 
     TypeNameString typeNameForSimplePath(const HIRSimplePath& path) const;
     TypeNameString typeNameForPathArgs(const HIRPathParams& params, const HIRTraitPath::assocListT* typeBounds, bool genericPlaceholders) const;
+    HIRPathParams typeArgsWithoutDefaults(const HIRTypeDataPath& path) const;
     TypeNameString typeNameForItemPath(const HIRPath& path, bool genericPlaceholders) const;
     TypeNameString intrinsicTypeNameImpl(const HIRType* ty, bool genericPlaceholders) const;
 
