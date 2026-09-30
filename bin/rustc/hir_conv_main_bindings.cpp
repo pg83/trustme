@@ -3915,7 +3915,8 @@ auto UfcsVisitor::locateInTraitAndSet(HIRVisitor::PathContext pc, const HIRGener
             pp = pp.appended(pd.as_UfcsUnknown().type);
             continue;
         }
-        TODO(sp, StringView("Monomorphise default arg ") << def << StringView(" for trait path ") << traitPath);
+        auto defaultMonomorph = MonomorphStatePtr(crate.types, pd.as_UfcsUnknown().type, &pp, nullptr);
+        pp = pp.appended(defaultMonomorph.monomorphType(sp, def, false));
     }
 
     auto monomorphCb = MonomorphStatePtr(crate.types, pd.as_UfcsUnknown().type, &pp, nullptr);
