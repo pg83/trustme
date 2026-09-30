@@ -2809,7 +2809,7 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                    fixes those from the goal before any nested obligation is
                    registered, so none is open to bind here.) */
                 const auto* otherGeneric = (leftProjection ? right : left)->opt_Generic();
-                if (otherGeneric && otherGeneric->isPlaceholder() && !otherGeneric->isSolverExistential()) {
+                if (otherGeneric && otherGeneric->isPlaceholder() && !(otherGeneric->isSolverExistential() && isImplExistentialScope(otherGeneric->solverScope))) {
                     return this->defer(left, right);
                 }
                 if (!rigidProjectionsAreDistinct_ || projectionIsOpen(*projection)) {
@@ -14901,7 +14901,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
        `impl<W: Wake> From<Arc<W>> for Waker` for the goal `Waker: From<?1>` is `?W: Wake`,
        ambiguous rather than unimplemented, so that candidate stays viable until the
        argument fixes `?1`. */
-    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && isUnknownExistentialScope(selfGeneric->solverScope)) {
+    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential()) {
         return Certainty::Ambiguous;
     }
     CanonicalizeTraitGoal canonicalizer(crate.types, &resolve_.ivars, true, alphaExistentialScopeBase_);
@@ -15670,7 +15670,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
        `_: Display` from descending through every impl's own parameters for ever.  The
        existential standing for an impl parameter of one instantiation is such a
        variable. */
-    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && isUnknownExistentialScope(selfGeneric->solverScope) && !hasSelfCoercionGoal) {
+    if (const auto* selfGeneric = resolvedType->opt_Generic(); selfGeneric && selfGeneric->isSolverExistential() && !hasSelfCoercionGoal) {
         return emitForcedAmbiguity();
     }
     const bool plainTraitGoal = (!assocName || !assocName[0]) && !associated && !valueName;

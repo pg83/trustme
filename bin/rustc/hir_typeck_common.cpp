@@ -1194,7 +1194,7 @@ CloneTyWithMonomorph::CloneTyWithMonomorph(HIRTypeInterner& types, HIRTypeCloneC
 }
 
 auto CloneTyWithMonomorph::getType(const Span& sp, const HIRGenericRef& g) const -> const HIRType* {
-    return types.generic(g.name, g.binding);
+    return types.generic(g);
 }
 
 auto CloneTyWithMonomorph::getValue(const Span& sp, const HIRGenericRef& g) const -> HIRConstGeneric {
