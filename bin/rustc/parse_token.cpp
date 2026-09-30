@@ -425,6 +425,14 @@ Token Token::clone() const {
                 case TOK_INTERPOLATED_META:
                     rv.data_ = Data::make_Fragment({new ASTAttribute(reinterpret_cast<ASTAttribute*>(e)->clone()), tokens});
                     break;
+                case TOK_INTERPOLATED_VIS: {
+                    InterpolatedFragment fragment(*reinterpret_cast<const ASTVisibility*>(e));
+                    fragment.tokens = tokens;
+                    Token copied(TagTakeIP{}, mv$(fragment));
+                    rv.data_ = mv$(copied.data_);
+                    copied.type_ = TOK_NULL;
+                    break;
+                }
                 case TOK_INTERPOLATED_STMT_ITEM:
                 case TOK_INTERPOLATED_ITEM: {
                     const auto& named = *reinterpret_cast<ASTNamed<ASTItem>*>(e);
