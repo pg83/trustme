@@ -9995,7 +9995,7 @@ auto ExprVisitorApply::visit(HIRExprNodeStructLiteral& node) -> void {
                     return;
                 }
                 if (e->data.is_Tuple()) {
-                    ASSERT_BUG(node.span(), node.baseValue || !node.values.empty(), StringView("Tuple struct literal has no values or base"));
+                    ASSERT_BUG(node.span(), node.baseValue || !node.values.empty() || e->data.as_Tuple().empty(), StringView("Tuple struct literal has no values or base"));
                     HIRExprVisitorDef::visit(node);
                     return;
                 }
