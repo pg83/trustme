@@ -53,6 +53,16 @@ namespace {
         return isImplExistentialScope(scope) || scope >= SOLVER_ALPHA_SCOPE_BASE;
     }
 
+    bool typeIsConcrete(const HIRType* type) {
+        return !monomorphiseTypeNeeded(type) && !visitTyWith(type, [](const HIRType* inner) {
+            if (inner->is_Infer() || inner->is_ErasedType()) {
+                return true;
+            }
+            const auto* path = inner->opt_Path();
+            return path && (path->binding.is_Unbound() || path->binding.is_Opaque());
+        });
+    }
+
     bool containsImplPlaceholder(HIRTypeInterner& types, const HIRType* type) {
         struct Visitor: HIRVisitor {
             bool found = false;
@@ -671,6 +681,8 @@ struct TraitResolution::NextTraitGoalEvaluator {
     bool goalHasUnassignedInfer(const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated) const;
 
     bool selfIsUnresolvedProjectionOverIvar(const HIRType* type) const;
+
+    bool selfIsUnimplementedProjection(const HIRType* type) const;
 
     const HIRType* normalizeGoalInput(const HIRType* input) const;
 
@@ -5696,7 +5708,7 @@ const HIRType* TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span
     eatDepth_ += 1;
 
     bool normalized = false;
-    this->solveNormalizesTo(sp, NormalizesTo{input}, [&](NormalizesToResponse response) {
+    const bool answered = this->solveNormalizesTo(sp, NormalizesTo{input}, [&](NormalizesToResponse response) {
         if (response.output == nullptr || response.output == input) {
             return true;
         }
@@ -5718,7 +5730,7 @@ const HIRType* TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span
             selectionHasIvars |= this->ivars.typeContainsIvars(param, false);
         }
     }
-    if (!selectionHasIvars) {
+    if (!selectionHasIvars && !(!answered && projection && typeIsConcrete(projection->type))) {
         auto data = input->cloneData();
         data.as_Path().binding = HIRTypePathBinding::make_Opaque({});
         input = crate.types.intern(std::move(data));
@@ -10797,6 +10809,12 @@ auto NextTraitGoalEvaluator::selfIsUnresolvedProjectionOverIvar(const HIRType* t
     return selfIsUnresolvedProjectionOverIvar(self);
 }
 
+auto NextTraitGoalEvaluator::selfIsUnimplementedProjection(const HIRType* type) const -> bool {
+    const auto* path = type->opt_Path();
+    const auto* projection = path && path->binding.is_Unbound() ? path->path.data.opt_UfcsKnown() : nullptr;
+    return projection && !resolve_.typeContainsIvars(type) && typeIsConcrete(projection->type);
+}
+
 auto NextTraitGoalEvaluator::normalizeGoalInput(const HIRType* input) const -> const HIRType* {
     const auto* path = input->opt_Path();
     const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
@@ -14904,6 +14922,9 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     if (selfIsUnresolvedProjectionOverIvar(goalType)) {
         return Certainty::Ambiguous;
     }
+    if (selfIsUnimplementedProjection(goalType)) {
+        return Certainty::NoSolution;
+    }
     const auto& resolvedType = resolve_.resolveType(goalType);
     bool associatedConstrainsSelf = false;
     if (associated) {
@@ -15673,6 +15694,9 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     goalParams = goalParams.mapTypes([&](const HIRType* param) { return normalizeGoalInput(param); });
     if (selfIsUnresolvedProjectionOverIvar(goalType)) {
         return emitForcedAmbiguity();
+    }
+    if (selfIsUnimplementedProjection(goalType)) {
+        return false;
     }
     const auto& resolvedType = resolve_.resolveType(goalType);
     bool associatedConstrainsSelf = assocName && assocName[0] && assocType && !typeHasUnknown(assocType);
