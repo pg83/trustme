@@ -373,6 +373,9 @@ namespace {
             case MacroPatEnt::PAT_EXPR:
                 return InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex));
             case MacroPatEnt::PAT_STMT:
+                if (lex.lookahead(0) == TOK_SEMICOLON) {
+                    return InterpolatedFragment(ParseTT(lex, false));
+                }
                 if (stmtIsItem) {
                     if (lex.lookahead(0) == TOK_INTERPOLATED_STMT_ITEM) {
                         tok = lex.getToken();
@@ -1337,6 +1340,9 @@ namespace {
             if (outIsItem) {
                 *outIsItem = true;
             }
+            return true;
+        }
+        if (lex.consumeIf(TOK_SEMICOLON)) {
             return true;
         }
 
