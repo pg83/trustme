@@ -1307,6 +1307,22 @@ namespace {
         return size;
     }
 
+    size_t getOffsetWithin(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, const TypeRepr::FieldPath& leafFirstPath) {
+        size_t ofs = 0;
+        for (size_t i = leafFirstPath.subFields.length(); i-- > 0;) {
+            const auto f = leafFirstPath.subFields[i];
+            if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
+                ty = ty->as_Array().inner;
+                continue;
+            }
+            const auto* r = TargetGetTypeRepr(sp, resolve, ty);
+            BUG_ASSERT(r && f < r->fields.size());
+            ofs += r->fields[f].offset;
+            ty = r->fields[f].ty;
+        }
+        return ofs;
+    }
+
     size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr* r, const TypeRepr::FieldPath& outPath) {
         BUG_ASSERT(outPath.index < r->fields.size());
         size_t ofs = r->fields[outPath.index].offset;
@@ -1328,7 +1344,38 @@ namespace {
         return ofs;
     }
 
-    bool getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t minOffset, size_t maxOffset, size_t requiredCount, TypeRepr::FieldPath& outPath, size_t& nicheStart) {
+    bool getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t minOffset, size_t maxOffset, size_t requiredCount, TypeRepr::FieldPath& outPath, size_t& nicheStart, size_t& available);
+
+    bool getFieldsNichePath(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& r, size_t minOffset, size_t maxOffset, size_t requiredCount, TypeRepr::FieldPath& outPath, size_t& nicheStart, size_t& available) {
+        bool found = false;
+        size_t bestOffset = 0;
+        for (size_t i = 0; i < r.fields.size(); i++) {
+            const auto& f = r.fields[i];
+            auto size = getSizeOrZero(sp, resolve, f.ty);
+            DEBUG(i << StringView(": ") << f.offset << StringView(" + ") << size);
+            if (f.offset >= maxOffset || f.offset + size <= minOffset) {
+                continue;
+            }
+            TypeRepr::FieldPath path;
+            size_t start = 0;
+            size_t count = 0;
+            if (!getVariantNichePath(sp, resolve, f.ty, (f.offset < minOffset ? minOffset - f.offset : 0), maxOffset - f.offset, requiredCount, path, start, count)) {
+                continue;
+            }
+            if (found && (count < available || (count == available && f.offset >= bestOffset))) {
+                continue;
+            }
+            path.subFields.pushBack(i);
+            outPath = mv$(path);
+            nicheStart = start;
+            available = count;
+            bestOffset = f.offset;
+            found = true;
+        }
+        return found;
+    }
+
+    bool getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t minOffset, size_t maxOffset, size_t requiredCount, TypeRepr::FieldPath& outPath, size_t& nicheStart, size_t& available) {
         TRACE_FUNCTION_F(ty << StringView(" min_offset=") << minOffset << StringView(" max_offset=") << maxOffset << StringView(" required_count=") << requiredCount);
         switch (ty->tag()) {
             break;
@@ -1338,23 +1385,11 @@ namespace {
                     return false;
                 }
 
-                for (size_t i = 0; i < r->fields.size(); i++) {
-                    const auto& f = r->fields[i];
-                    auto size = getSizeOrZero(sp, resolve, f.ty);
-                    DEBUG(i << StringView(": ") << f.offset << StringView(" + ") << size);
-                    if (f.offset >= maxOffset) {
-                        continue;
-                    } else if (f.offset + size > minOffset) {
-                        if (getVariantNichePath(sp, resolve, f.ty, (f.offset < minOffset ? minOffset - f.offset : 0), maxOffset - f.offset, requiredCount, outPath, nicheStart)) {
-                            outPath.subFields.pushBack(i);
-                            return true;
-                        }
-                    }
-                }
+                return getFieldsNichePath(sp, resolve, *r, minOffset, maxOffset, requiredCount, outPath, nicheStart, available);
             } break;
             case HIRType::TAG_Array: {
                 auto& te = (*ty).as_Array();
-                if (te.size.is_Known() && te.size.as_Known() > 0 && getVariantNichePath(sp, resolve, te.inner, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
+                if (te.size.is_Known() && te.size.as_Known() > 0 && getVariantNichePath(sp, resolve, te.inner, minOffset, maxOffset, requiredCount, outPath, nicheStart, available)) {
                     outPath.subFields.pushBack(TypeRepr::FieldPath::ARRAY_ELEMENT);
                     return true;
                 }
@@ -1385,6 +1420,7 @@ namespace {
                             outPath.subFields.pushBack(0);
                             outPath.size = size;
                             nicheStart = 0;
+                            available = 1;
                             return true;
                         }
                     }
@@ -1400,24 +1436,13 @@ namespace {
                                 outPath.subFields.pushBack(0);
                                 outPath.size = size;
                                 nicheStart = boundedMax + 1;
+                                available = scalarMax - boundedMax;
                                 return true;
                             }
                         }
                     }
 
-                    for (size_t i = 0; i < r->fields.size(); i++) {
-                        const auto& f = r->fields[i];
-                        auto size = getSizeOrZero(sp, resolve, f.ty);
-                        DEBUG(i << StringView(": ") << f.offset << StringView(" + ") << size);
-                        if (f.offset >= maxOffset) {
-                            continue;
-                        } else if (f.offset + size > minOffset) {
-                            if (getVariantNichePath(sp, resolve, f.ty, (f.offset < minOffset ? minOffset - f.offset : 0), maxOffset - f.offset, requiredCount, outPath, nicheStart)) {
-                                outPath.subFields.pushBack(i);
-                                return true;
-                            }
-                        }
-                    }
+                    return getFieldsNichePath(sp, resolve, *r, minOffset, maxOffset, requiredCount, outPath, nicheStart, available);
                 } else if (te.binding.is_Enum()) {
                     const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
                     if (!r) {
@@ -1429,7 +1454,7 @@ namespace {
                             if (r->fields.empty()) {
                                 return false;
                             } else {
-                                if (getVariantNichePath(sp, resolve, r->fields[0].ty, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
+                                if (getVariantNichePath(sp, resolve, r->fields[0].ty, minOffset, maxOffset, requiredCount, outPath, nicheStart, available)) {
                                     outPath.subFields.pushBack(0);
                                     return true;
                                 }
@@ -1441,13 +1466,14 @@ namespace {
                             auto& ve = r->variants.as_Linear();
                             if (ve.usesNiche()) {
                                 const auto& field = r->fields.at(ve.field.index);
-                                const size_t fieldSize = getSizeOrZero(sp, resolve, field.ty);
-                                if (field.offset < maxOffset && field.offset + fieldSize > minOffset) {
+                                const size_t nicheOffset = getOffset(sp, resolve, r, ve.field);
+                                if (minOffset <= nicheOffset && nicheOffset + ve.field.size <= maxOffset && field.offset <= nicheOffset) {
                                     const size_t occupiedCount = ve.nicheVariantCount();
                                     if (requiredCount <= SIZE_MAX - occupiedCount) {
                                         TypeRepr::FieldPath candidate;
                                         size_t candidateStart = 0;
-                                        if (getVariantNichePath(sp, resolve, field.ty, field.offset < minOffset ? minOffset - field.offset : 0, maxOffset - field.offset, requiredCount + occupiedCount, candidate, candidateStart)) {
+                                        size_t candidateAvailable = 0;
+                                        if (getVariantNichePath(sp, resolve, field.ty, nicheOffset - field.offset, nicheOffset - field.offset + ve.field.size, requiredCount + occupiedCount, candidate, candidateStart, candidateAvailable)) {
                                             auto candidateSubFields = candidate.subFields;
                                             std::reverse(candidateSubFields.mutBegin(), candidateSubFields.mutEnd());
                                             const bool sameScalar = candidate.size == ve.field.size && ::ord(candidateSubFields, ve.field.subFields) == OrdEqual;
@@ -1471,6 +1497,7 @@ namespace {
                                             candidate.subFields.pushBack(ve.field.index);
                                             outPath = std::move(candidate);
                                             nicheStart = candidateStart;
+                                            available = candidateAvailable - occupiedCount;
                                             return true;
                                         }
                                     }
@@ -1490,6 +1517,7 @@ namespace {
                                 appendReverse(outPath.subFields, ve.field.subFields);
                                 outPath.subFields.pushBack(ve.field.index);
                                 nicheStart = validEnd + 1;
+                                available = scalarMax - validEnd;
                                 return true;
                             }
                             break;
@@ -1531,6 +1559,7 @@ namespace {
                                     appendReverse(outPath.subFields, ve.field.subFields);
                                     outPath.subFields.pushBack(ve.field.index);
                                     nicheStart = bestStart;
+                                    available = bestCount;
                                     return true;
                                 }
                             }
@@ -1551,6 +1580,7 @@ namespace {
                         if (minOffset == 0 && maxOffset >= 4 && requiredCount <= UINT32_MAX - 0x10FFFF) {
                             outPath.size = 4;
                             nicheStart = 0x10FFFF + 1;
+                            available = UINT32_MAX - 0x10FFFF;
                             return true;
                         }
                         break;
@@ -1558,6 +1588,7 @@ namespace {
                         if (minOffset == 0 && maxOffset >= 1 && requiredCount <= UINT8_MAX - 1) {
                             outPath.size = 1;
                             nicheStart = 2;
+                            available = UINT8_MAX - 1;
                             return true;
                         }
                         break;
@@ -1591,6 +1622,7 @@ namespace {
                     outPath.size = scalarSize;
                     outPath.subFields.clear();
                     nicheStart = bestStart;
+                    available = bestCount;
                     return true;
                 }
                 return false;
@@ -1599,6 +1631,7 @@ namespace {
                 if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
                     outPath.size = TargetGetPointerBits() / 8;
                     nicheStart = 0;
+                    available = 1;
                     return true;
                 }
             } break;
@@ -1606,6 +1639,7 @@ namespace {
                 if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
                     outPath.size = TargetGetPointerBits() / 8;
                     nicheStart = 0;
+                    available = 1;
                     return true;
                 }
             }
@@ -1745,9 +1779,27 @@ namespace {
                             if (minSize == 0 && maxSize > 0) {
                                 unsigned nzVar = (sizes[0] == 0 ? 1 : 0);
                                 DEBUG(StringView("Variant #") << nzVar << StringView(" is populated, checking for NonZero"));
+                                size_t largestEnt = SIZE_MAX;
+                                TypeRepr::FieldPath largestPath;
+                                size_t largestAvailable = 0;
+                                for (size_t i = 0; i < variants[nzVar].ents.size(); i++) {
+                                    TypeRepr::FieldPath path;
+                                    size_t start = 0;
+                                    size_t count = 0;
+                                    if (getVariantNichePath(sp, resolve, variants[nzVar].ents[i].ty, 0, SIZE_MAX, 1, path, start, count) && count > largestAvailable) {
+                                        largestEnt = i;
+                                        largestPath = mv$(path);
+                                        largestAvailable = count;
+                                    }
+                                }
                                 for (size_t i = 0; i < variants[nzVar].ents.size(); i++) {
                                     TypeRepr::FieldPath nzPath;
                                     if (getNonzeroPath(sp, resolve, variants[nzVar].ents[i].ty, nzPath)) {
+                                        const auto* entTy = variants[nzVar].ents[i].ty;
+                                        const bool sameScalar = largestEnt == i && largestPath.size == nzPath.size && getOffsetWithin(sp, resolve, entTy, largestPath) == getOffsetWithin(sp, resolve, entTy, nzPath);
+                                        if (largestAvailable > 1 && !sameScalar) {
+                                            break;
+                                        }
                                         nzPath.subFields.pushBack(i);
                                         nzPath.index = nzVar;
                                         std::reverse(nzPath.subFields.mutBegin(), nzPath.subFields.mutEnd());
@@ -1799,12 +1851,32 @@ namespace {
                                 const size_t nicheVariantStart = biggestVar == 0 ? 1 : 0;
                                 const size_t nicheVariantEnd = biggestVar + 1 == variants.size() ? biggestVar - 1 : variants.size() - 1;
                                 const size_t requiredNicheCount = nicheVariantEnd - nicheVariantStart + 1;
+                                size_t trailingField = SIZE_MAX;
+                                TypeRepr::FieldPath trailingPath;
+                                size_t trailingStart = 0;
+                                size_t trailingAvailable = 0;
+                                for (size_t i = 0; i < reprs[biggestVar]->fields.size(); i++) {
+                                    const auto& fld = reprs[biggestVar]->fields[i];
+                                    TypeRepr::FieldPath path;
+                                    size_t start = 0;
+                                    size_t count = 0;
+                                    if (!getVariantNichePath(sp, resolve, fld.ty, (minOffset > fld.offset ? minOffset - fld.offset : 0), maxVarSize - fld.offset, requiredNicheCount, path, start, count)) {
+                                        continue;
+                                    }
+                                    if (trailingField != SIZE_MAX && (count < trailingAvailable || (count == trailingAvailable && fld.offset >= reprs[biggestVar]->fields[trailingField].offset))) {
+                                        continue;
+                                    }
+                                    trailingField = i;
+                                    trailingPath = mv$(path);
+                                    trailingStart = start;
+                                    trailingAvailable = count;
+                                }
                                 for (size_t i = 0; i < reprs[biggestVar]->fields.size(); i++) {
                                     const auto& fld = reprs[biggestVar]->fields[i];
 
-                                    TypeRepr::FieldPath nzPath;
-                                    size_t nicheStart = 0;
-                                    if (getVariantNichePath(sp, resolve, fld.ty, (minOffset > fld.offset ? minOffset - fld.offset : 0), maxVarSize - fld.offset, requiredNicheCount, nzPath, nicheStart)) {
+                                    if (i == trailingField) {
+                                        TypeRepr::FieldPath nzPath = mv$(trailingPath);
+                                        const size_t nicheStart = trailingStart;
                                         nzPath.index = i;
                                         std::reverse(nzPath.subFields.mutBegin(), nzPath.subFields.mutEnd());
                                         nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
@@ -1820,17 +1892,25 @@ namespace {
                                         break;
                                     }
 
-                                    if (fld.offset == 0) {
+                                    if (trailingField == SIZE_MAX && fld.offset == 0) {
                                         TypeRepr::FieldPath nzPath;
                                         size_t nicheStart = 0;
-                                        if (getVariantNichePath(sp, resolve, fld.ty, 0, maxVarSize - minOffset, requiredNicheCount, nzPath, nicheStart)) {
+                                        size_t available = 0;
+                                        size_t window = maxVarSize - minOffset;
+                                        bool atStart = false;
+                                        while (window > 0 && getVariantNichePath(sp, resolve, fld.ty, 0, window, requiredNicheCount, nzPath, nicheStart, available)) {
                                             nzPath.index = i;
                                             std::reverse(nzPath.subFields.mutBegin(), nzPath.subFields.mutEnd());
                                             nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
-                                            if (nicheOffset != 0) {
-                                                DEBUG(StringView("Ignore niche not at the start of the struture"));
-                                                continue;
+                                            if (nicheOffset == 0) {
+                                                atStart = true;
+                                                break;
                                             }
+                                            DEBUG(StringView("Ignore niche not at the start of the struture"));
+                                            window = nicheOffset;
+                                            nzPath = TypeRepr::FieldPath();
+                                        }
+                                        if (atStart) {
                                             std::reverse(nzPath.subFields.mutBegin(), nzPath.subFields.mutEnd());
 
                                             nzPath.subFields.pushBack(i);
