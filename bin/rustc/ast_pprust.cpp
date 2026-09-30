@@ -343,6 +343,9 @@ namespace {
         void printBindingHead(const ASTPatternBinding& binding);
         void printPatValue(const ASTPatternValue& value);
         void printMac(const ASTPath& path, const RcString& ident, bool isBraced, bool isBracketed, const TokenTree& tokens);
+        void printAttribute(const ASTAttribute& attr, bool isInline);
+        void printOuterAttributes(const ASTAttributeList& attrs, bool isInline);
+        void printExprOuterAttrStyle(PExpr e, bool isInline, Fixup fixup);
         void printLiteral(const ASTExprNode& node);
 
         void printExprCondParen(PExpr e, bool needsPar, Fixup fixup);
@@ -2460,6 +2463,7 @@ void State::printExprStruct(const ASTPath& path, const ASTExprNodeStructLiteral:
         if (isFirst) {
             this->spaceIfNotBol();
         }
+        this->printOuterAttributes(field.attrs, false);
         bool isShorthand = false;
         if (const auto* value = cast<const ASTExprNodeNamedValue>(field.value)) {
             isShorthand = field.value->parens() == 0 && value->path.isTrivial() && value->path.asTrivial() == field.name;
@@ -2532,6 +2536,7 @@ void State::printClosure(const ASTExprNodeClosure& closure) {
 void State::printStmt(const ASTExprNode* node, bool hasSemicolon) {
     const PExpr e = nodeExpr(node);
     if (const auto* let = cast<const ASTExprNodeLetBinding>(node)) {
+        this->printOuterAttributes(let->attrs(), false);
         this->spaceIfNotBol();
         this->ibox(INDENT_UNIT);
         if (let->isSuper) {
@@ -2593,7 +2598,7 @@ void State::printStmt(const ASTExprNode* node, bool hasSemicolon) {
         return;
     }
     this->spaceIfNotBol();
-    this->printExpr(e, Fixup::newStmt());
+    this->printExprOuterAttrStyle(e, false, Fixup::newStmt());
     if (hasSemicolon || exprRequiresSemiToBeStmt(e)) {
         this->word(StringView(";"));
     }
@@ -2678,9 +2683,12 @@ void State::printIf(const ASTExprNodeIf& node) {
 }
 
 void State::printArm(const ASTExprNodeMatchArm& arm) {
-    this->space();
+    if (arm.attrs.items.empty()) {
+        this->space();
+    }
     this->cbox(INDENT_UNIT);
     this->ibox(0);
+    this->printOuterAttributes(arm.attrs, false);
     if (arm.patterns.size() == 1) {
         this->printPat(arm.patterns[0]);
     } else {
@@ -2719,7 +2727,51 @@ void State::printArm(const ASTExprNodeMatchArm& arm) {
     this->end();
 }
 
+void State::printAttribute(const ASTAttribute& attr, bool isInline) {
+    if (!isInline) {
+        this->hardbreakIfNotBol();
+    }
+    this->word(StringView("#["));
+    const auto& name = attr.name();
+    if (name.hasLeading) {
+        this->word(StringView("::"));
+    }
+    for (size_t i = 0; i < name.elems.length(); i++) {
+        if (i > 0) {
+            this->word(StringView("::"));
+        }
+        this->printIdent(name.elems[i]);
+    }
+    const auto& data = attr.data();
+    if (data.isToken() || data.size() != 0) {
+        if (!data.isToken() && data[0].isToken() && data[0].tok().type() == TOK_EQUAL) {
+            this->space();
+        }
+        this->printTts(data);
+    }
+    this->word(StringView("]"));
+}
+
+void State::printOuterAttributes(const ASTAttributeList& attrs, bool isInline) {
+    for (const auto& attr : attrs.items) {
+        this->printAttribute(attr, isInline);
+        if (isInline) {
+            this->nbsp();
+        }
+    }
+    if (!attrs.items.empty() && !isInline) {
+        this->hardbreakIfNotBol();
+    }
+}
+
 void State::printExpr(PExpr e, Fixup fixup) {
+    this->printExprOuterAttrStyle(e, true, fixup);
+}
+
+void State::printExprOuterAttrStyle(PExpr e, bool isInline, Fixup fixup) {
+    if (e.node && e.parens == e.node->parens()) {
+        this->printOuterAttributes(e.node->attrs(), isInline);
+    }
     this->ibox(INDENT_UNIT);
     const bool needsPar = fixup.wouldCauseStatementBoundary(e);
     if (needsPar) {
