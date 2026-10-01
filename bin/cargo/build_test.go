@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"testing"
@@ -40,7 +41,7 @@ func TestProcMacroTestDependsOnLinkedLibrary(t *testing.T) {
 	}
 
 	testUnit := builder.units[roots[0]]
-	libraryTask := builder.libraryTask(pkg, true)
+	libraryTask := builder.libraryTask(pkg, true, false)
 	linkedLibrary := builder.finalTask(libraryTask)
 
 	if testUnit == nil || testUnit.rs == nil {
@@ -88,7 +89,7 @@ func TestLibraryTestCompilesSourceWithoutExternalSelf(t *testing.T) {
 	}
 
 	testUnit := builder.units[roots[0]]
-	libraryTask := builder.libraryTask(pkg, true)
+	libraryTask := builder.libraryTask(pkg, true, false)
 
 	if testUnit == nil || testUnit.rs == nil {
 		t.Fatal("test compile unit is missing")
@@ -165,7 +166,7 @@ func TestCdylibLibraryLinksASharedLibraryBesideItsRlib(t *testing.T) {
 		t.Fatalf("cdylib compiles as %q, want rlib", got)
 	}
 
-	unit := builder.units[builder.libraryTask(pkg, true)]
+	unit := builder.units[builder.libraryTask(pkg, true, false)]
 	if unit == nil || unit.metadata < 0 || !strings.HasSuffix(unit.rs.outputs[unit.metadata].name, ".rlib") {
 		t.Fatal("cdylib compile unit has no rlib metadata output")
 	}
@@ -265,7 +266,7 @@ func TestExampleLinksDevDependenciesAndALibraryDoesNot(t *testing.T) {
 	}
 
 	helper := pkg.dependencies.dev[0].packageRef
-	helperTask := builder.libraryTask(helper, true)
+	helperTask := builder.libraryTask(helper, true, false)
 	example := builder.units[roots[0]]
 
 	if example == nil || example.target.kind != "example" {
@@ -274,7 +275,7 @@ func TestExampleLinksDevDependenciesAndALibraryDoesNot(t *testing.T) {
 	if !containsTask(example.rs.deps, helperTask) {
 		t.Fatal("example does not link the dev-dependency it is allowed to use")
 	}
-	if library := builder.libraryTask(pkg, true); containsTask(library.deps, helperTask) {
+	if library := builder.libraryTask(pkg, true, false); containsTask(library.deps, helperTask) {
 		t.Fatal("library links a dev-dependency")
 	}
 }
@@ -421,8 +422,8 @@ func TestTheMessageFormatIsNotPartOfAUnitFingerprint(t *testing.T) {
 	stream := builderFor(pkg, BuildOptions{command: "build", messageFormat: "json"})
 	library := packageLibrary(pkg)
 
-	got := strings.Join(stream.rustSignature(pkg, library, true), "\x00")
-	want := strings.Join(plain.rustSignature(pkg, library, true), "\x00")
+	got := strings.Join(stream.rustSignature(pkg, library, true, stream.unitProfile(pkg, library, false)), "\x00")
+	want := strings.Join(plain.rustSignature(pkg, library, true, plain.unitProfile(pkg, library, false)), "\x00")
 
 	if got != want {
 		t.Fatalf("signature differs with a message stream:\n%q\n%q", got, want)
@@ -435,7 +436,7 @@ func TestACompileUnitKeepsWhatTheCompilerSaid(t *testing.T) {
 	pkg := devDependentPackage(t)
 	builder := builderFor(pkg, BuildOptions{command: "build"})
 	builder.rootTasks()
-	unit := builder.units[builder.libraryTask(pkg, true)]
+	unit := builder.units[builder.libraryTask(pkg, true, false)]
 
 	if unit == nil || unit.diag < 0 || unit.diag >= len(unit.rs.outputs) {
 		t.Fatal("compile unit has no diagnostics output")
@@ -635,7 +636,7 @@ func TestALibraryRlibStandsInDeps(t *testing.T) {
 	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
 	builder.rootTasks()
 
-	unit := builder.units[builder.libraryTask(pkg, true)]
+	unit := builder.units[builder.libraryTask(pkg, true, false)]
 	deps := filepath.Join(root, "target", "debug", "deps", "lib"+builder.crateName(unit)+".rlib")
 	paths := artifactPaths(builder.depsArtifacts())
 
@@ -676,7 +677,7 @@ func TestABuildCompilesTheObjectOfEveryDependencyLibrary(t *testing.T) {
 	builder.rootTasks()
 	roots := builder.libraryObjectTasks()
 
-	helper := builder.units[builder.libraryTask(pkg.dependencies.main[0].packageRef, true)]
+	helper := builder.units[builder.libraryTask(pkg.dependencies.main[0].packageRef, true, false)]
 	rooted := false
 
 	for _, root := range roots {
@@ -720,7 +721,7 @@ func TestAProcMacroStandsInDepsWithItsPlugin(t *testing.T) {
 	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
 	builder.rootTasks()
 
-	unit := builder.units[builder.libraryTask(pkg, true)]
+	unit := builder.units[builder.libraryTask(pkg, true, false)]
 	metadata := filepath.Join(root, "target", "debug", "deps", "lib"+builder.crateName(unit)+".rlib")
 	paths := artifactPaths(builder.depsArtifacts())
 
@@ -787,7 +788,7 @@ func TestATestRunWithOnlyDocTestsBuildsTheLibrary(t *testing.T) {
 	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
 	roots, artifacts, _ := builder.rootTasks()
 
-	if len(roots) != 1 || roots[0] != builder.finalTask(builder.libraryTask(pkg, true)) {
+	if len(roots) != 1 || roots[0] != builder.finalTask(builder.libraryTask(pkg, true, false)) {
 		t.Fatalf("root tasks = %d, want the library alone", len(roots))
 	}
 	if len(artifacts) != 0 {
@@ -809,5 +810,126 @@ func TestABuildScriptIsToldItsPackagesLinks(t *testing.T) {
 	}
 	if _, ok := buildScriptPackageEnv(&Package{name: "other"})["CARGO_MANIFEST_LINKS"]; ok {
 		t.Fatal("a package without links is told it has some")
+	}
+}
+
+// crypto-bigint's `[profile.dev] opt-level = 2` reached its proc macros and
+// their dependencies too, and syn and serde_derive compiled at -O1 -g on the
+// way to every test. Cargo compiles a for-host unit - a build script, a proc
+// macro, whatever those depend on - at opt-level 0, and leaves its debug info
+// deferred until the graph shows whether a runtime unit is the same: then the
+// two are one unit, otherwise the host one goes without (`ProfileMaker::
+// get_profile`, cargo/core/profiles.rs; `traverse_and_share`,
+// cargo/ops/cargo_compile/mod.rs). `[profile.<name>.build-override]` comes last.
+func hostGraph(t *testing.T, profiles map[string]any) (*Builder, map[string]*Package) {
+	t.Helper()
+
+	base := t.TempDir()
+	pkgs := map[string]*Package{}
+
+	for _, name := range []string{"app", "mac", "shared", "hostonly", "leaf"} {
+		dir := filepath.Join(base, name)
+		files := []string{"src/lib.rs"}
+
+		if name == "hostonly" {
+			files = append(files, "build.rs")
+		}
+		for _, file := range files {
+			path := filepath.Join(dir, filepath.FromSlash(file))
+
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		pkgs[name] = &Package{
+			dir: dir, manifestPath: filepath.Join(dir, "Cargo.toml"), name: name,
+			version: Version{major: 1}, activeFeatures: map[string]bool{},
+			targets: []*Target{{kind: "lib", name: name, path: "src/lib.rs", test: name == "app", procMacro: name == "mac"}},
+		}
+	}
+	pkgs["hostonly"].buildScript = "build.rs"
+	depend := func(from string, to ...string) {
+		for _, name := range to {
+			pkgs[from].dependencies.main = append(pkgs[from].dependencies.main, &Dependency{key: name, name: name, packageRef: pkgs[name]})
+		}
+	}
+	depend("app", "mac", "shared")
+	depend("mac", "shared", "hostonly")
+	depend("hostonly", "leaf")
+
+	app := pkgs["app"]
+	context := &BuildContext{
+		opts: BuildOptions{command: "test", profile: "debug", targetDir: filepath.Join(app.dir, "target")},
+		root: app, workspace: &Workspace{dir: app.dir, profiles: profiles}, host: "host", target: "host", cfg: &CfgSet{},
+	}
+	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
+	builder.rootTasks()
+
+	return builder, pkgs
+}
+
+func codegenFlags(builder *Builder, pkg *Package) []string {
+	var flags []string
+
+	for task, unit := range builder.units {
+		if task == unit.rs && unit.pkg == pkg && unit.target.kind == "lib" {
+			signature := builder.codegenTask(unit.rs).signature
+			flags = append(flags, strings.Join(signature[1+len(builder.cxxSignature(unit.isHost)):], " "))
+		}
+	}
+	sort.Strings(flags)
+
+	return flags
+}
+
+func TestHostUnitsCompileFastUnlessARuntimeUnitIsTheSame(t *testing.T) {
+	builder, pkgs := hostGraph(t, map[string]any{"dev": map[string]any{"opt-level": int64(2)}})
+
+	for name, want := range map[string]string{
+		"shared":   "-O0|-O1 -g",
+		"mac":      "-O0",
+		"hostonly": "-O0",
+		"leaf":     "-O0",
+	} {
+		if got := strings.Join(codegenFlags(builder, pkgs[name]), "|"); got != want {
+			t.Errorf("%s compiles its C++ with %q, want %q", name, got, want)
+		}
+	}
+	names := map[string]bool{}
+
+	for task, unit := range builder.units {
+		if task == unit.rs && unit.pkg == pkgs["shared"] {
+			names[builder.crateName(unit)] = true
+		}
+	}
+	if len(names) != 2 {
+		t.Errorf("the host and runtime units of one library are crates %v, want two of their own", names)
+	}
+	script := builder.codegenTask(builder.buildScriptCompileTask(pkgs["hostonly"])).signature
+	if got := strings.Join(script[1+len(builder.cxxSignature(true)):], " "); got != "-O0" {
+		t.Errorf("a build script compiles its C++ with %q, want -O0 without debug info", got)
+	}
+
+	builder, pkgs = hostGraph(t, nil)
+
+	for name, want := range map[string]string{
+		"shared": "-O0 -g",
+		"mac":    "-O0",
+		"leaf":   "-O0",
+	} {
+		if got := strings.Join(codegenFlags(builder, pkgs[name]), "|"); got != want {
+			t.Errorf("at the dev profile's own opt-level %s compiles with %q, want %q", name, got, want)
+		}
+	}
+
+	builder, pkgs = hostGraph(t, map[string]any{"dev": map[string]any{
+		"opt-level": int64(2), "build-override": map[string]any{"opt-level": int64(1), "debug": true},
+	}})
+
+	if got := strings.Join(codegenFlags(builder, pkgs["mac"]), "|"); got != "-O1 -g" {
+		t.Errorf("under a build-override the proc macro compiles with %q, want -O1 -g", got)
 	}
 }

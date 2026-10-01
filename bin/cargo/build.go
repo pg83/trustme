@@ -31,6 +31,7 @@ type Builder struct {
 	context            *BuildContext
 	tasks              map[string]*Task
 	units              map[*Task]*CompileUnit
+	runtimeLibraries   map[*Package]bool
 	systemHostLoaded   bool
 	systemTargetLoaded bool
 	systemHost         []ExternalCrateArtifact
@@ -48,6 +49,8 @@ type CompileUnit struct {
 	pkg          *Package
 	target       *Target
 	isHost       bool
+	forHost      bool
+	profile      Profile
 	baseName     string
 	rs           *Task
 	metadata     int
@@ -434,7 +437,28 @@ func selectWorkspacePackage(workspace *Workspace, members []string, want string)
 	return ""
 }
 
+// A for-host unit's debug info waits until the whole graph is known
+// (`traverse_and_share`, cargo/ops/cargo_compile/mod.rs), so the graph is laid
+// out once to learn which libraries runtime units link, and then for good.
 func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
+	b.runtimeLibraries = nil
+	b.collectRootTasks()
+	runtime := map[*Package]bool{}
+
+	for task, unit := range b.units {
+		if task == unit.rs && !unit.forHost && unit.target.kind == "lib" {
+			runtime[unit.pkg] = true
+		}
+	}
+
+	b.tasks = map[string]*Task{}
+	b.units = map[*Task]*CompileUnit{}
+	b.runtimeLibraries = runtime
+
+	return b.collectRootTasks()
+}
+
+func (b *Builder) collectRootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 	root := b.context.root
 	isHost := !b.context.cross
 
@@ -451,7 +475,7 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 	if b.context.opts.command == "build" || b.context.opts.command == "check" {
 		checkOnly := b.context.opts.command == "check"
 		if !explicit || selectors.lib {
-			if task := b.libraryTask(root, isHost); task != nil {
+			if task := b.rootLibraryTask(root, isHost); task != nil {
 				rootTask := task
 				if !checkOnly {
 					rootTask = b.finalTask(task)
@@ -505,7 +529,7 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 				target.kind == "test" && (selectors.tests || contains(selectors.test, target.name))
 
 			if selected && targetFeaturesEnabled(root, target) {
-				task := b.targetTask(root, target, isHost)
+				task := b.targetTask(root, target, isHost, false)
 				rootTask := task
 				if !checkOnly {
 					rootTask = b.finalTask(task)
@@ -536,7 +560,7 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 			target.name += "-test"
 			target.libraryTest = true
 
-			task := b.targetTask(root, &target, isHost)
+			task := b.targetTask(root, &target, isHost, false)
 
 			final := b.finalTask(task)
 			tasks = append(tasks, final)
@@ -565,7 +589,7 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 				copy.kind = "test"
 				runsPrograms = runsPrograms || target.kind == "test" || target.kind == "bench"
 
-				task := b.targetTask(root, &copy, isHost)
+				task := b.targetTask(root, &copy, isHost, false)
 
 				final := b.finalTask(task)
 				tasks = append(tasks, final)
@@ -596,7 +620,7 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 				continue
 			}
 
-			final := b.finalTask(b.targetTask(root, target, isHost))
+			final := b.finalTask(b.targetTask(root, target, isHost, false))
 			tasks = append(tasks, final)
 			path := b.artifact(root, target, isHost)
 			artifacts = append(artifacts, InstallArtifact{task: final, index: 0, path: path})
@@ -611,7 +635,7 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 	// cargo/ops/cargo_compile/unit_generator.rs); the doc tests are not run
 	// here, so this matters only where nothing else builds the library.
 	if lib := packageLibrary(root); len(tasks) == 0 && b.context.opts.command == "test" && !explicit && lib != nil && lib.doctest {
-		tasks = append(tasks, b.finalTask(b.libraryTask(root, isHost)))
+		tasks = append(tasks, b.finalTask(b.rootLibraryTask(root, isHost)))
 	}
 
 	if len(tasks) == 0 {
@@ -647,7 +671,7 @@ func (b *Builder) libraryObjectTasks() []*Task {
 	return tasks
 }
 
-func (b *Builder) libraryTask(pkg *Package, isHost bool) *Task {
+func (b *Builder) libraryTask(pkg *Package, isHost bool, forHost bool) *Task {
 	if pkg.magic {
 		return nil
 	}
@@ -658,17 +682,31 @@ func (b *Builder) libraryTask(pkg *Package, isHost bool) *Task {
 		return nil
 	}
 
-	return b.targetTask(pkg, target, isHost || target.procMacro)
+	return b.targetTask(pkg, target, isHost || target.procMacro, forHost || target.procMacro)
 }
 
-func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
-	key := b.unitKey("rs", pkg, target, isHost)
+// A root unit takes the profile as it is, a proc macro too: Cargo makes only
+// what the roots depend on for-host (`generate_root_units`,
+// cargo/ops/cargo_compile/unit_generator.rs).
+func (b *Builder) rootLibraryTask(pkg *Package, isHost bool) *Task {
+	target := packageLibrary(pkg)
+
+	if pkg.magic || target == nil {
+		return nil
+	}
+
+	return b.targetTask(pkg, target, isHost || target.procMacro, false)
+}
+
+func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool, forHost bool) *Task {
+	profile := b.unitProfile(pkg, target, forHost)
+	key := b.unitKey("rs", pkg, target, isHost, profile)
 
 	if task := b.tasks[key]; task != nil {
 		return task
 	}
 
-	baseName := b.artifactName(pkg, target)
+	baseName := b.artifactName(pkg, target, profile)
 	outputs := []TaskOutput{}
 	metadata := -1
 
@@ -701,7 +739,7 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 		kind:      "RS",
 		inputs:    b.targetInputs(pkg, target),
 		outputs:   outputs,
-		signature: b.rustSignature(pkg, target, isHost),
+		signature: b.rustSignature(pkg, target, isHost, profile),
 	}
 
 	if !ignoreToolTimestamps() {
@@ -711,13 +749,13 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 
 	b.tasks[key] = task
 	unit := &CompileUnit{
-		pkg: pkg, target: target, isHost: isHost, baseName: baseName, rs: task,
+		pkg: pkg, target: target, isHost: isHost, forHost: forHost, profile: profile, baseName: baseName, rs: task,
 		metadata: metadata, cpp: cpp, linkManifest: linkManifest, blob: blob, diag: diag,
 	}
 	b.units[task] = unit
 
 	if target.kind != "lib" && (!target.libraryTest || target.procMacro) {
-		if libTask := b.libraryTask(pkg, isHost); libTask != nil {
+		if libTask := b.libraryTask(pkg, isHost, unit.depsForHost()); libTask != nil {
 			if lib := packageLibrary(pkg); lib != nil && lib.procMacro {
 				task.deps = append(task.deps, b.finalTask(libTask))
 			} else {
@@ -731,13 +769,7 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 			throwFmt("internal: unresolved dependency %s of %s", dep.key, pkg.name)
 		}
 
-		depHost := isHost
-
-		if lib := packageLibrary(dep.packageRef); lib != nil && lib.procMacro {
-			depHost = true
-		}
-
-		if depTask := b.libraryTask(dep.packageRef, depHost); depTask != nil {
+		if depTask := b.libraryTask(dep.packageRef, isHost, unit.depsForHost()); depTask != nil {
 			if lib := packageLibrary(dep.packageRef); lib != nil && lib.procMacro {
 				task.deps = append(task.deps, b.finalTask(depTask))
 			} else {
@@ -780,6 +812,7 @@ func (b *Builder) buildScriptCompileTask(pkg *Package) *Task {
 	target := &Target{
 		kind: "build-script", name: "build", path: pkg.buildScript, edition: pkg.edition,
 	}
+	profile := b.unitProfile(pkg, target, true)
 	baseName := b.buildScriptBase(pkg) + "_run"
 	task := &Task{
 		key:    key,
@@ -790,7 +823,7 @@ func (b *Builder) buildScriptCompileTask(pkg *Package) *Task {
 			{name: baseName + ".cpp"}, {name: baseName + ".link"},
 			{name: baseName + ".blob"}, {name: baseName + ".diag"},
 		},
-		signature: b.rustSignature(pkg, target, true),
+		signature: b.rustSignature(pkg, target, true, profile),
 	}
 
 	if !ignoreToolTimestamps() {
@@ -800,13 +833,13 @@ func (b *Builder) buildScriptCompileTask(pkg *Package) *Task {
 
 	b.tasks[key] = task
 	unit := &CompileUnit{
-		pkg: pkg, target: target, isHost: true, baseName: baseName, rs: task,
+		pkg: pkg, target: target, isHost: true, forHost: true, profile: profile, baseName: baseName, rs: task,
 		metadata: -1, cpp: 0, linkManifest: 1, blob: 2, diag: 3,
 	}
 	b.units[task] = unit
 
 	for _, dep := range b.buildDependencies(pkg) {
-		if depTask := b.libraryTask(dep.packageRef, true); depTask != nil {
+		if depTask := b.libraryTask(dep.packageRef, true, true); depTask != nil {
 			if lib := packageLibrary(dep.packageRef); lib != nil && lib.procMacro {
 				task.deps = append(task.deps, b.finalTask(depTask))
 			} else {
@@ -849,8 +882,14 @@ func (b *Builder) buildScriptRunTask(pkg *Package) *Task {
 	compile := b.buildScriptCompileTask(pkg)
 	task.deps = append(task.deps, b.finalTask(compile))
 
+	// A build script runs after those of the dependencies that declare a
+	// `links`, which are the ones that can tell it something
+	// (`connect_run_custom_build_deps`, cargo/core/compiler/unit_dependencies.rs).
 	for _, dep := range b.mainDependencies(pkg, false) {
-		if depTask := b.libraryTask(dep.packageRef, !b.context.cross); depTask != nil {
+		if dep.packageRef.links == "" {
+			continue
+		}
+		if depTask := b.buildScriptRunTask(dep.packageRef); depTask != nil {
 			task.deps = append(task.deps, depTask)
 		}
 	}
@@ -990,13 +1029,13 @@ func (b *Builder) codegenTask(compile *Task) *Task {
 		deps:      []*Task{compile},
 		inputs:    []string{cxx.compiler},
 		outputs:   []TaskOutput{{name: object}},
-		signature: append(append([]string{"compile"}, b.cxxSignature(unit.isHost)...), b.cxxOptimizationArgs(unit.target.kind == "build-script")...),
+		signature: append(append([]string{"compile"}, b.cxxSignature(unit.isHost)...), cxxOptimizationArgs(unit.profile)...),
 	}
 	b.tasks[key] = task
 	unit.cc = task
 	b.units[task] = unit
 	task.action = func(ctx *TaskContext) {
-		args := b.cxxCompileArgs(unit.isHost, unit.target.kind == "build-script")
+		args := b.cxxCompileArgs(unit.isHost, unit.profile)
 		// A CAS path has no neighbours, so the blob the generated C++ names in
 		// its .incbin is staged under that name and handed to the assembler as
 		// a search path.
@@ -1017,11 +1056,11 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 	source, dir := b.sourceArgs(pkg, targetSourcePath(pkg, target))
 	args := []string{source}
 
-	args = append(args, b.commonCompilerArgs(pkg, output, unit.isHost, false)...)
+	args = append(args, b.commonCompilerArgs(pkg, output, unit.isHost, unit.profile)...)
 	args = append(args, "--crate-name", targetCompileName(target), "--crate-type", crateType(target))
 	args = append(args, procMacroPreludeArgs(target)...)
 
-	suffix := b.crateSuffix(pkg)
+	suffix := b.unitSuffix(pkg, unit.profile)
 
 	if suffix != "" {
 		args = append(args, "--crate-tag", strings.TrimPrefix(suffix, "-"))
@@ -1051,7 +1090,7 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 
 	if target.kind != "lib" && (!target.libraryTest || target.procMacro) {
 		if lib := packageLibrary(pkg); lib != nil {
-			dep := b.units[b.libraryTask(pkg, unit.isHost)]
+			dep := b.units[b.libraryTask(pkg, unit.isHost, unit.depsForHost())]
 			args = append(args, "--extern", lib.name+"="+b.crateName(dep))
 		}
 	}
@@ -1119,7 +1158,7 @@ func (b *Builder) compileBuildScript(ctx *TaskContext, unit *CompileUnit) {
 	source, dir := b.sourceArgs(pkg, filepath.Join(pkg.dir, pkg.buildScript))
 	args := []string{source}
 
-	args = append(args, b.commonCompilerArgs(pkg, output, true, true)...)
+	args = append(args, b.commonCompilerArgs(pkg, output, true, unit.profile)...)
 	args = append(args, "--crate-name", "build", "--crate-type", "bin", "--edition", pkg.edition)
 	args = append(args, "-C", "emit-cpp-only", "-C", "emit-link-manifest="+ctx.output(unit.linkManifest))
 	args = append(args, b.crateArgs(ctx, unit, b.buildDependencies(pkg))...)
@@ -1200,22 +1239,9 @@ func buildScriptPackageEnv(pkg *Package) map[string]string {
 	return env
 }
 
-func (b *Builder) commonCompilerArgs(pkg *Package, output string, isHost bool, buildScript bool) []string {
+func (b *Builder) commonCompilerArgs(pkg *Package, output string, isHost bool, profile Profile) []string {
 	args := []string{"-o", output}
-
-	if buildScript {
-		if b.context.opts.profile == "release" {
-			args = append(args, "-O")
-		} else {
-			args = append(args, "-g")
-		}
-
-		if debugAssertions(b.context.opts.profile) {
-			args = append(args, "--cfg", "debug_assertions")
-		}
-	} else {
-		args = append(args, profileCompilerArgs(resolveProfile(b.context.workspace, profileName(b.context.opts)))...)
-	}
+	args = append(args, profileCompilerArgs(profile)...)
 
 	if b.context.opts.emitMmir {
 		args = append(args, "-C", "codegen-type=monomir")
@@ -1321,7 +1347,7 @@ func (b *Builder) cacheRoot() string {
 	return absolutePath(dir)
 }
 
-func (b *Builder) unitKey(stage string, pkg *Package, target *Target, isHost bool) string {
+func (b *Builder) unitKey(stage string, pkg *Package, target *Target, isHost bool, profile Profile) string {
 	platform := b.context.target
 
 	if isHost {
@@ -1330,7 +1356,7 @@ func (b *Builder) unitKey(stage string, pkg *Package, target *Target, isHost boo
 
 	return strings.Join([]string{
 		stage, pkg.manifestPath, targetKey(target), platform,
-		b.context.opts.profile, b.crateSuffix(pkg),
+		b.context.opts.profile, profile.key(), b.crateSuffix(pkg),
 	}, "|")
 }
 
@@ -1377,10 +1403,11 @@ func (b *Builder) targetInputs(pkg *Package, target *Target) []string {
 	return inputs
 }
 
-func (b *Builder) rustSignature(pkg *Package, target *Target, isHost bool) []string {
+func (b *Builder) rustSignature(pkg *Package, target *Target, isHost bool, profile Profile) []string {
 	signature := []string{
 		b.context.compiler,
 		b.context.opts.profile,
+		profile.key(),
 		b.context.target,
 		fmt.Sprintf("host=%t", isHost),
 		fmt.Sprintf("emit-mmir=%t", b.context.opts.emitMmir),
@@ -1490,7 +1517,7 @@ func (b *Builder) cxxSignature(isHost bool) []string {
 	return signature
 }
 
-func (b *Builder) cxxCompileArgs(isHost bool, buildScript bool) []string {
+func (b *Builder) cxxCompileArgs(isHost bool, profile Profile) []string {
 	cxx := b.cxxSpec(isHost)
 	args := []string{"-std=gnu++20", "-fexceptions", "-fwrapv"}
 
@@ -1499,25 +1526,14 @@ func (b *Builder) cxxCompileArgs(isHost bool, buildScript bool) []string {
 	}
 
 	args = append(args, cxx.compile...)
-	args = append(args, b.cxxOptimizationArgs(buildScript)...)
+	args = append(args, cxxOptimizationArgs(profile)...)
 	args = append(args, "-fPIC")
 
 	return args
 }
 
-// cxxOptimizationArgs optimize the generated C++ as its crate's profile
-// asks: a build script keeps the command's plain profile, every other unit
-// takes the resolved one's optimization level and debug info.
-func (b *Builder) cxxOptimizationArgs(buildScript bool) []string {
-	if buildScript {
-		if b.context.opts.profile == "release" {
-			return []string{"-O1"}
-		}
-
-		return []string{"-O0", "-g"}
-	}
-
-	profile := resolveProfile(b.context.workspace, profileName(b.context.opts))
+// cxxOptimizationArgs optimize the generated C++ as its unit's profile asks.
+func cxxOptimizationArgs(profile Profile) []string {
 	var args []string
 
 	if profile.optLevel == "0" {
@@ -1619,7 +1635,7 @@ func (b *Builder) linkUnit(ctx *TaskContext, root *CompileUnit, linked []*Compil
 }
 
 func (b *Builder) crateName(unit *CompileUnit) string {
-	return unit.target.name + b.crateSuffix(unit.pkg)
+	return unit.target.name + b.unitSuffix(unit.pkg, unit.profile)
 }
 
 func (b *Builder) crateArgs(ctx *TaskContext, root *CompileUnit, direct []*Dependency) []string {
@@ -1648,7 +1664,7 @@ func (b *Builder) crateArgs(ctx *TaskContext, root *CompileUnit, direct []*Depen
 
 	if root.target.kind != "lib" && root.target.kind != "build-script" &&
 		(!root.target.libraryTest || root.target.procMacro) {
-		add(b.units[b.libraryTask(root.pkg, root.isHost)])
+		add(b.units[b.libraryTask(root.pkg, root.isHost, root.depsForHost())])
 	}
 
 	for _, dep := range direct {
@@ -1658,7 +1674,7 @@ func (b *Builder) crateArgs(ctx *TaskContext, root *CompileUnit, direct []*Depen
 			continue
 		}
 
-		unit := b.units[b.libraryTask(dep.packageRef, root.isHost || lib.procMacro)]
+		unit := b.units[b.libraryTask(dep.packageRef, root.isHost, root.depsForHost())]
 		add(unit)
 		args = append(args, "--extern", externCrateName(dep, lib)+"="+b.crateName(unit))
 	}
@@ -1881,10 +1897,10 @@ func (b *Builder) conditionMatches(pkg *Package, condition string) bool {
 // of the package (`Layout::examples`, cargo/core/compiler/layout.rs).
 func (b *Builder) artifact(pkg *Package, target *Target, isHost bool) string {
 	if target.kind == "example" {
-		return filepath.Join(b.outputDir(isHost), "examples", b.artifactName(pkg, target))
+		return filepath.Join(b.outputDir(isHost), "examples", b.artifactName(pkg, target, b.unitProfile(pkg, target, false)))
 	}
 
-	return filepath.Join(b.outputDir(isHost), b.artifactName(pkg, target))
+	return filepath.Join(b.outputDir(isHost), b.artifactName(pkg, target, b.unitProfile(pkg, target, false)))
 }
 
 // A test harness is an intermediate output, so it lives in
@@ -1894,15 +1910,15 @@ func (b *Builder) artifact(pkg *Package, target *Target, isHost bool) string {
 // is looked up - `stdio-fixture`, for clap's `tests/ui`, which trycmd resolves
 // beside the harness that asked for it.
 func (b *Builder) testArtifact(pkg *Package, target *Target, isHost bool) string {
-	key := b.unitKey("test", pkg, target, isHost)
+	key := b.unitKey("test", pkg, target, isHost, b.unitProfile(pkg, target, false))
 	digest := sha256.Sum256([]byte(key))
 	name := target.name + "-" + hex.EncodeToString(digest[:8]) + executableSuffix()
 
 	return filepath.Join(b.outputDir(isHost), "deps", name)
 }
 
-func (b *Builder) artifactName(pkg *Package, target *Target) string {
-	suffix := b.crateSuffix(pkg)
+func (b *Builder) artifactName(pkg *Package, target *Target, profile Profile) string {
+	suffix := b.unitSuffix(pkg, profile)
 
 	if pkg.version == (Version{}) || target.kind != "lib" {
 		suffix = ""
@@ -1945,6 +1961,21 @@ func (b *Builder) outputDir(isHost bool) string {
 	}
 
 	return absolutePath(dir)
+}
+
+// unitSuffix is the crate suffix of one unit of a package. Cargo hashes the
+// unit's profile into the metadata that names its symbols and files
+// (`compute_metadata`, cargo/core/compiler/build_runner/compilation_files.rs),
+// so a library built for-host beside its runtime unit is a crate of its own.
+func (b *Builder) unitSuffix(pkg *Package, profile Profile) string {
+	suffix := b.crateSuffix(pkg)
+
+	if profile != resolveProfile(b.context.workspace, profileName(b.context.opts)) {
+		digest := sha256.Sum256([]byte(profile.key()))
+		suffix += "_P" + hex.EncodeToString(digest[:4])
+	}
+
+	return suffix
 }
 
 func (b *Builder) crateSuffix(pkg *Package) string {
@@ -2287,14 +2318,6 @@ func ignoreToolTimestamps() bool {
 	return enabled
 }
 
-func debugAssertions(profile string) bool {
-	if _, disabled := os.LookupEnv(trustmeCargoNoDebugAssertions); disabled {
-		return false
-	}
-
-	return profile != "release"
-}
-
 func executableSuffix() string {
 	return ""
 }
@@ -2318,6 +2341,52 @@ type Profile struct {
 	debug           bool
 	debugAssertions bool
 	overflowChecks  bool
+}
+
+func (p Profile) key() string {
+	return fmt.Sprintf("opt-level=%s debug=%t debug-assertions=%t overflow-checks=%t",
+		p.optLevel, p.debug, p.debugAssertions, p.overflowChecks)
+}
+
+// What a unit's dependencies are built for: a for-host unit's are for-host,
+// and so are a proc macro's even where it is a root itself (`deps_of_roots`,
+// cargo/core/compiler/unit_dependencies.rs).
+func (u *CompileUnit) depsForHost() bool {
+	return u.forHost || u.target.procMacro
+}
+
+// unitProfile is the profile a unit compiles with. Cargo compiles a for-host
+// unit - a build script, a proc macro, whatever those depend on - as quickly
+// as it can: at opt-level 0, with the debug info deferred, and then
+// `[profile.<name>.build-override]` over that (`ProfileMaker::get_profile`,
+// cargo/core/profiles.rs). Deferred debug info is the profile's own when a
+// runtime unit of the same library has exactly that profile, so the two are one
+// unit, and none otherwise; a cross build shares nothing and keeps it
+// (`traverse_and_share`, cargo/ops/cargo_compile/mod.rs).
+func (b *Builder) unitProfile(pkg *Package, target *Target, forHost bool) Profile {
+	name := profileName(b.context.opts)
+	profile := resolveProfile(b.context.workspace, name)
+
+	if !forHost {
+		return profile
+	}
+
+	runtime := profile
+	profile.optLevel = "0"
+	deferred := true
+
+	for _, table := range buildOverrideTables(b.context.workspace, name) {
+		if _, set := table["debug"]; set {
+			deferred = false
+		}
+		applyProfileTable(&profile, table)
+	}
+
+	if deferred && !b.context.cross && !(target.kind == "lib" && b.runtimeLibraries[pkg] && profile == runtime) {
+		profile.debug = false
+	}
+
+	return profile
 }
 
 // profileName is the profile Cargo selects for the command: `test` and
@@ -2371,7 +2440,40 @@ func resolveProfile(workspace *Workspace, name string) Profile {
 	}
 
 	profile.name = name
+	applyProfileTable(&profile, table)
 
+	return profile
+}
+
+// The `build-override` tables a profile's for-host units take, the one it
+// inherits first: a profile's table merges over its parent's.
+func buildOverrideTables(workspace *Workspace, name string) []map[string]any {
+	var table map[string]any
+
+	if workspace != nil {
+		table = mapValue(workspace.profiles[name])
+	}
+
+	var tables []map[string]any
+
+	switch name {
+	case "dev", "release":
+	case "test":
+		tables = buildOverrideTables(workspace, "dev")
+	case "bench":
+		tables = buildOverrideTables(workspace, "release")
+	default:
+		tables = buildOverrideTables(workspace, stringValue(table["inherits"]))
+	}
+
+	if override := mapValue(table["build-override"]); override != nil {
+		tables = append(tables, override)
+	}
+
+	return tables
+}
+
+func applyProfileTable(profile *Profile, table map[string]any) {
 	switch value := table["opt-level"].(type) {
 	case int64:
 		profile.optLevel = strconv.FormatInt(value, 10)
@@ -2390,8 +2492,6 @@ func resolveProfile(workspace *Workspace, name string) Profile {
 
 	profile.debugAssertions = boolValue(table["debug-assertions"], profile.debugAssertions)
 	profile.overflowChecks = boolValue(table["overflow-checks"], profile.overflowChecks)
-
-	return profile
 }
 
 // profileCompilerArgs are the flags Cargo passes for a profile: a setting

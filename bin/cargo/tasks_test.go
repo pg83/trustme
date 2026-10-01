@@ -34,7 +34,7 @@ func TestCargoControlEnvironmentIsConsumed(t *testing.T) {
 		t.Error("TRUSTME_CARGO_IGNORE_TOOL_TIMESTAMPS was ignored")
 	}
 
-	if debugAssertions("debug") {
+	if contains(profileCompilerArgs(resolveProfile(nil, "dev")), "debug_assertions") {
 		t.Error("TRUSTME_CARGO_NO_DEBUG_ASSERTIONS was ignored")
 	}
 }
