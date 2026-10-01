@@ -85,6 +85,8 @@ struct TypeReprVariantLinear {
 
     size_t offset;
     size_t numVariants;
+    size_t nicheFirst = 0;
+    size_t nicheLast = 0;
 
     bool usesNiche() const {
         return !field.subFields.empty();
@@ -96,6 +98,10 @@ struct TypeReprVariantLinear {
 
     bool isTag(unsigned varIdx) const {
         return !usesNiche() && varIdx == field.index;
+    }
+
+    bool isAbsent(unsigned varIdx) const {
+        return usesNiche() && varIdx != field.index && (varIdx < nicheFirst || varIdx > nicheLast);
     }
 
     size_t nicheVariantStart() const;
@@ -120,6 +126,7 @@ struct TypeRepr {
     size_t size = 0;
 
     bool userAlign = false;
+    bool uninhabited = false;
 
     bool hasNiche = false;
     TypeReprNiche niche;

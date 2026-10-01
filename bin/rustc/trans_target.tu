@@ -7,6 +7,9 @@ generate(
     clone=False,
     variants=[
         v("None"),
+        v("Single", fields=[
+            ("unsigned", "index"),
+        ], doc="The enum is laid out as its one present variant"),
         v("Linear", "TypeReprVariantLinear",
           doc="Variants numbered 0 to N (potentially offset)"),
         v("Values", "TypeReprVariantValues",

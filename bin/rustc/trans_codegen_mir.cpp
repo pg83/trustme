@@ -462,6 +462,9 @@ auto CodeGeneratorMonoMir::emitEnum(const Span& sp, const HIRGenericPath& p, con
         break;
         case TypeReprVariantMode::TAG_None: {
         } break;
+        case TypeReprVariantMode::TAG_Single: {
+            of << StringView("\t@single ") << repr->variants.as_Single().index << StringView("\n");
+        } break;
         case TypeReprVariantMode::TAG_Linear: {
             auto& e = repr->variants.as_Linear();
             of << StringView("\t@[") << e.field.index << StringView(", ") << e.field.subFields << StringView("] = {\n");
@@ -470,6 +473,8 @@ auto CodeGeneratorMonoMir::emitEnum(const Span& sp, const HIRGenericPath& p, con
 
                 if (e.isNiche(i)) {
                     of << StringView("*");
+                } else if (e.isAbsent(i)) {
+                    of << StringView("!");
                 } else {
                     emitValue(e.field, U128(e.tagValue(i)));
                 }

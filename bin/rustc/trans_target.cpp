@@ -56,6 +56,7 @@ namespace {
         size_t align;
         const HIRType* ty;
         bool userAlign = false;
+        bool uninhabited = false;
         bool hasNiche = false;
         TypeReprNiche niche;
     };
@@ -633,6 +634,27 @@ namespace {
 
     bool typeNiche(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, TypeReprNiche& out);
 
+    bool typeUninhabited(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty) {
+        switch (ty->tag()) {
+            case HIRType::TAG_Diverge:
+                return true;
+            case HIRType::TAG_Array: {
+                const auto& te = ty->as_Array();
+                return te.size.is_Known() && te.size.as_Known() != 0 && typeUninhabited(sp, resolve, te.inner);
+            }
+            case HIRType::TAG_Tuple:
+            case HIRType::TAG_Path: {
+                if (const auto* path = ty->opt_Path(); path && (path->isGenerator() || path->isFuture() || path->binding.is_ExternType())) {
+                    return false;
+                }
+                const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
+                return repr && repr->uninhabited;
+            }
+            default:
+                return false;
+        }
+    }
+
     bool makeFieldEnt(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, const HIRType* ty, Ent& out) {
         size_t size, align;
         if (!TargetGetSizeAndAlignOf(sp, resolve, ty, size, align)) {
@@ -642,6 +664,7 @@ namespace {
         out = Ent{idx, size, align, nullptr, false};
         out.userAlign = TargetTypeHasUserAlignment(sp, resolve, ty);
         out.hasNiche = size != SIZE_MAX && typeNiche(sp, resolve, ty, out.niche);
+        out.uninhabited = typeUninhabited(sp, resolve, ty);
         out.ty = mv$(ty);
         return true;
     }
@@ -1141,6 +1164,9 @@ namespace {
             if (e.userAlign) {
                 rv.userAlign = true;
             }
+            if (e.uninhabited) {
+                rv.uninhabited = true;
+            }
             if (e.field != ~0u) {
                 ASSERT_BUG(sp, e.field < fields.size(), StringView("Field index out of range"));
                 ASSERT_BUG(sp, fields[e.field].ty == nullptr, StringView("Dupliate field index"));
@@ -1559,6 +1585,7 @@ namespace {
                         }
                         maxSize = std::max(maxSize, size);
                         maxAlign = std::max(maxAlign, align);
+                        rv.uninhabited = (&var == e.data() || rv.uninhabited) && typeUninhabited(sp, resolve, t);
                         rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
                         if (var.discriminantValue != U128(static_cast<u64>(&var - e.data()))) {
                             hasExplicitValue = true;
@@ -1605,6 +1632,7 @@ namespace {
                         rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
                         rv.size = innerRepr->size;
                         rv.align = innerRepr->align;
+                        rv.uninhabited = innerRepr->uninhabited;
                         if (innerRepr->hasNiche) {
                             rv.niche = nicheWithin(innerRepr->niche, 0, 0);
                             rv.hasNiche = true;
@@ -1612,6 +1640,7 @@ namespace {
                     } else {
                         rv.size = 0;
                         rv.align = 1;
+                        rv.uninhabited = true;
                     }
                 } else {
                     struct Variant {
@@ -1651,6 +1680,10 @@ namespace {
 
                         size_t enumAlign = 1;
                         size_t largest = 0;
+                        Vector<bool> uninhabited;
+                        Vector<bool> absent;
+                        size_t presentCount = 0;
+                        size_t presentFirst = 0;
                         for (size_t i = 0; i < variantCount; i++) {
                             auto& v = variants[i];
                             if (e[i].type != unitTy) {
@@ -1660,155 +1693,211 @@ namespace {
                             if (v.nicheLayout.size >= variants[largest].nicheLayout.size) {
                                 largest = i;
                             }
-                        }
-                        const size_t nicheFirst = largest == 0 ? 1 : 0;
-                        const size_t nicheLast = largest + 1 == variantCount ? variantCount - 2 : variantCount - 1;
-                        const U128 nicheCount = U128(static_cast<u64>(nicheLast - nicheFirst + 1));
-                        const auto& largestLayout = variants[largest].nicheLayout;
-                        bool nicheFits = false;
-                        U128 nicheStart;
-                        TypeReprNiche reserved;
-                        size_t nicheEnumSize = 0;
-                        Vector<size_t> shifts;
-                        if (largestLayout.hasNiche && nicheReserve(largestLayout.niche, nicheCount, nicheStart, reserved)) {
-                            nicheEnumSize = alignTo(largestLayout.size, enumAlign);
-                            nicheFits = true;
-                            for (size_t i = 0; i < variantCount; i++) {
-                                const auto& layout = variants[i].nicheLayout;
-                                size_t shift = 0;
-                                if (i != largest && layout.size > reserved.offset) {
-                                    shift = alignTo(reserved.offset + reserved.size, layout.align);
-                                    if (shift + layout.size > nicheEnumSize) {
-                                        nicheFits = false;
-                                    }
-                                }
-                                shifts.pushBack(shift);
+                            bool anyUninhabited = false;
+                            bool only1Zst = true;
+                            for (const auto& ent : v.ents) {
+                                anyUninhabited = anyUninhabited || ent.uninhabited;
+                                only1Zst = only1Zst && ent.size == 0 && ent.align <= 1;
+                            }
+                            uninhabited.pushBack(anyUninhabited);
+                            absent.pushBack(anyUninhabited && only1Zst);
+                            if (!absent[i]) {
+                                presentFirst = presentCount == 0 ? i : presentFirst;
+                                presentCount++;
                             }
                         }
 
-                        const size_t minTagSize = variantCount <= 0x100 ? 1 : variantCount <= 0x10000 ? 2 : 4;
-                        size_t startAlign = 256;
-                        for (size_t i = 0; i < variantCount; i++) {
-                            auto& v = variants[i];
-                            v.taggedLayout = univariant(v.ents.data(), v.ents.size(), StructKind::Prefixed, minTagSize, minTagSize, true, 0, v.forcedAlignment);
-                            size_t firstOffset = SIZE_MAX;
-                            size_t firstAlign = 0;
-                            for (size_t k = 0; k < v.ents.size(); k++) {
-                                const auto& ent = v.ents[k];
-                                if (ent.size == 0 && ent.align <= 1) {
-                                    continue;
-                                }
-                                if (v.taggedLayout.offsets[k] < firstOffset) {
-                                    firstOffset = v.taggedLayout.offsets[k];
-                                    firstAlign = ent.align;
-                                }
-                            }
-                            if (firstAlign != 0 && firstAlign < startAlign) {
-                                startAlign = firstAlign;
-                            }
-                        }
-                        size_t tagSize = minTagSize;
-                        const size_t widenedTagSize = startAlign < 256 ? unsignedSizeForAlign(sp, resolve, startAlign) : 0;
-                        if (widenedTagSize > minTagSize) {
-                            tagSize = widenedTagSize;
-                            for (auto& v : variants) {
-                                for (size_t k = 0; k < v.taggedLayout.offsets.length(); k++) {
-                                    if (v.taggedLayout.offsets[k] <= minTagSize) {
-                                        ASSERT_BUG(sp, v.taggedLayout.offsets[k] == minTagSize, StringView("Field before the tag in ") << v.type);
-                                        v.taggedLayout.offsets.mut(k) = tagSize;
-                                    }
-                                }
-                                if (v.taggedLayout.size <= minTagSize) {
-                                    v.taggedLayout.size = tagSize;
-                                }
-                            }
-                        }
-                        size_t taggedSize = 0;
-                        size_t taggedAlign = 1;
-                        for (const auto& v : variants) {
-                            taggedSize = taggedSize < v.taggedLayout.size ? v.taggedLayout.size : taggedSize;
-                            taggedAlign = taggedAlign < v.taggedLayout.align ? v.taggedLayout.align : taggedAlign;
-                        }
-                        taggedSize = alignTo(taggedSize, taggedAlign);
-                        TypeReprNiche tagNiche{{}, 0, tagSize, U128(0), U128(static_cast<u64>(variantCount - 1)) & nicheMask(tagSize)};
-                        tagNiche.path.pushBack(variantCount);
-
-                        const bool zeroNiche = nicheFits && nicheCount == U128(1) && nicheStart == U128(0) && variants[nicheFirst].nicheLayout.size == 0;
-                        if (nicheFits && reserved.size > 8 && !zeroNiche) {
-                            nicheFits = false;
-                        }
-                        bool useNiche = false;
-                        if (nicheFits) {
-                            if (taggedSize > nicheEnumSize) {
-                                useNiche = true;
-                            } else if (taggedSize == nicheEnumSize && nicheAvailable(tagNiche) < nicheAvailable(reserved)) {
-                                useNiche = true;
-                            }
-                        }
-                        DEBUG(StringView("tagged ") << taggedSize << StringView(" niche ") << (nicheFits ? nicheEnumSize : 0) << StringView(" use niche ") << useNiche);
-
-                        if (useNiche) {
-                            const auto* nicheTy = unsignedOfSize(resolve, reserved.size);
-                            size_t nicheTySize = 0;
-                            size_t nicheTyAlign = 1;
-                            TargetGetSizeAndAlignOf(sp, resolve, nicheTy, nicheTySize, nicheTyAlign);
+                        if (presentCount <= 1) {
                             for (size_t i = 0; i < variantCount; i++) {
                                 auto& v = variants[i];
                                 if (e[i].type != unitTy) {
-                                    auto repr = typeReprFromLayout(sp, v.type, v.ents.data(), v.ents.size(), v.nicheLayout, shifts[i], v.forcedAlignment);
-                                    if (i != largest && !zeroNiche) {
-                                        repr->fields.push_back(TypeRepr::Field{reserved.offset, nicheTy});
-                                        repr->align = repr->align < nicheTyAlign ? nicheTyAlign : repr->align;
-                                        if (repr->size < reserved.offset + reserved.size) {
-                                            repr->size = reserved.offset + reserved.size;
-                                        }
-                                        repr->size = alignTo(repr->size, repr->align);
-                                        repr->hasNiche = false;
-                                        ASSERT_BUG(sp, repr->size <= nicheEnumSize, StringView("Variant ") << i << StringView(" of ") << ty << StringView(" outgrows its enum"));
-                                    }
-                                    setTypeRepr(resolve, sp, v.type, mv$(repr));
+                                    setTypeRepr(resolve, sp, v.type, typeReprFromLayout(sp, v.type, v.ents.data(), v.ents.size(), v.nicheLayout, 0, v.forcedAlignment));
                                 }
                                 rv.fields.push_back(TypeRepr::Field{0, v.type});
                             }
-                            rv.size = nicheEnumSize;
-                            rv.align = enumAlign;
-                            TypeRepr::FieldPath field{largest, reserved.size, {}};
-                            for (const auto index : largestLayout.niche.path) {
-                                field.subFields.pushBack(index);
-                            }
-                            if (zeroNiche) {
-                                rv.variants = TypeRepr::VariantMode::make_NonZero({mv$(field), static_cast<unsigned>(nicheFirst)});
+                            const auto& layout = variants[presentFirst].nicheLayout;
+                            if (presentCount == 0) {
+                                rv.size = 0;
+                                rv.align = 1;
+                                rv.uninhabited = true;
                             } else {
-                                rv.variants = TypeRepr::VariantMode::make_Linear({mv$(field), static_cast<size_t>(nicheStart.truncateU64()), variantCount});
+                                rv.size = layout.size;
+                                rv.align = layout.align;
+                                rv.uninhabited = uninhabited[presentFirst];
+                                if (layout.hasNiche) {
+                                    rv.niche = nicheWithin(layout.niche, presentFirst, 0);
+                                    rv.hasNiche = true;
+                                }
                             }
-                            if (nicheAvailable(reserved) != U128(0)) {
-                                rv.niche = nicheWithin(reserved, largest, 0);
-                                rv.hasNiche = true;
-                            }
+                            rv.variants = TypeRepr::VariantMode::make_Single({static_cast<unsigned>(presentFirst)});
                         } else {
-                            const auto* tagTy = unsignedOfSize(resolve, tagSize);
-                            size_t tagTySize = 0;
-                            size_t tagTyAlign = 1;
-                            TargetGetSizeAndAlignOf(sp, resolve, tagTy, tagTySize, tagTyAlign);
+                            bool allUninhabited = true;
+                            size_t nicheFirst = SIZE_MAX;
+                            size_t nicheLast = 0;
+                            size_t inhabitedMin = SIZE_MAX;
+                            size_t inhabitedMax = 0;
+                            for (size_t i = 0; i < variantCount; i++) {
+                                allUninhabited = allUninhabited && uninhabited[i];
+                                if (i != largest && !absent[i]) {
+                                    nicheFirst = nicheFirst == SIZE_MAX ? i : nicheFirst;
+                                    nicheLast = i;
+                                }
+                                if (!uninhabited[i]) {
+                                    inhabitedMin = inhabitedMin == SIZE_MAX ? i : inhabitedMin;
+                                    inhabitedMax = i;
+                                }
+                            }
+                            if (inhabitedMin == SIZE_MAX) {
+                                inhabitedMin = 0;
+                            }
+                            rv.uninhabited = allUninhabited;
+                            const U128 nicheCount = U128(static_cast<u64>(nicheLast - nicheFirst + 1));
+                            const auto& largestLayout = variants[largest].nicheLayout;
+                            bool nicheFits = false;
+                            U128 nicheStart;
+                            TypeReprNiche reserved;
+                            size_t nicheEnumSize = 0;
+                            Vector<size_t> shifts;
+                            if (largestLayout.hasNiche && nicheReserve(largestLayout.niche, nicheCount, nicheStart, reserved)) {
+                                nicheEnumSize = alignTo(largestLayout.size, enumAlign);
+                                nicheFits = true;
+                                for (size_t i = 0; i < variantCount; i++) {
+                                    const auto& layout = variants[i].nicheLayout;
+                                    size_t shift = 0;
+                                    if (i != largest && layout.size > reserved.offset) {
+                                        shift = alignTo(reserved.offset + reserved.size, layout.align);
+                                        if (shift + layout.size > nicheEnumSize) {
+                                            nicheFits = false;
+                                        }
+                                    }
+                                    shifts.pushBack(shift);
+                                }
+                            }
+
+                            const size_t minTagSize = inhabitedMax < 0x100 ? 1 : inhabitedMax < 0x10000 ? 2 : 4;
+                            size_t startAlign = 256;
                             for (size_t i = 0; i < variantCount; i++) {
                                 auto& v = variants[i];
-                                if (e[i].type != unitTy) {
-                                    auto repr = typeReprFromLayout(sp, v.type, v.ents.data(), v.ents.size(), v.taggedLayout, 0, v.forcedAlignment);
-                                    repr->fields.push_back(TypeRepr::Field{0, tagTy});
-                                    repr->align = repr->align < tagTyAlign ? tagTyAlign : repr->align;
-                                    repr->size = alignTo(repr->size < tagTySize ? tagTySize : repr->size, repr->align);
-                                    ASSERT_BUG(sp, repr->size <= taggedSize, StringView("Variant ") << i << StringView(" of ") << ty << StringView(" outgrows its enum"));
-                                    repr->hasNiche = false;
-                                    setTypeRepr(resolve, sp, v.type, mv$(repr));
+                                v.taggedLayout = univariant(v.ents.data(), v.ents.size(), StructKind::Prefixed, minTagSize, minTagSize, true, 0, v.forcedAlignment);
+                                size_t firstOffset = SIZE_MAX;
+                                size_t firstAlign = 0;
+                                for (size_t k = 0; k < v.ents.size(); k++) {
+                                    const auto& ent = v.ents[k];
+                                    if (ent.size == 0 && ent.align <= 1) {
+                                        continue;
+                                    }
+                                    if (v.taggedLayout.offsets[k] < firstOffset) {
+                                        firstOffset = v.taggedLayout.offsets[k];
+                                        firstAlign = ent.align;
+                                    }
                                 }
-                                rv.fields.push_back(TypeRepr::Field{0, v.type});
+                                if (firstAlign != 0 && firstAlign < startAlign) {
+                                    startAlign = firstAlign;
+                                }
                             }
-                            rv.fields.push_back(TypeRepr::Field{0, tagTy});
-                            rv.size = taggedSize;
-                            rv.align = taggedAlign;
-                            rv.variants = TypeRepr::VariantMode::make_Linear({{variantCount, tagSize, {}}, 0, variantCount});
-                            rv.hasNiche = nicheAvailable(tagNiche) != U128(0);
-                            rv.niche = mv$(tagNiche);
+                            size_t tagSize = minTagSize;
+                            const size_t widenedTagSize = startAlign < 256 ? unsignedSizeForAlign(sp, resolve, startAlign) : 0;
+                            if (widenedTagSize > minTagSize) {
+                                tagSize = widenedTagSize;
+                                for (auto& v : variants) {
+                                    for (size_t k = 0; k < v.taggedLayout.offsets.length(); k++) {
+                                        if (v.taggedLayout.offsets[k] <= minTagSize) {
+                                            ASSERT_BUG(sp, v.taggedLayout.offsets[k] == minTagSize, StringView("Field before the tag in ") << v.type);
+                                            v.taggedLayout.offsets.mut(k) = tagSize;
+                                        }
+                                    }
+                                    if (v.taggedLayout.size <= minTagSize) {
+                                        v.taggedLayout.size = tagSize;
+                                    }
+                                }
+                            }
+                            size_t taggedSize = 0;
+                            size_t taggedAlign = 1;
+                            for (const auto& v : variants) {
+                                taggedSize = taggedSize < v.taggedLayout.size ? v.taggedLayout.size : taggedSize;
+                                taggedAlign = taggedAlign < v.taggedLayout.align ? v.taggedLayout.align : taggedAlign;
+                            }
+                            taggedSize = alignTo(taggedSize, taggedAlign);
+                            TypeReprNiche tagNiche{{}, 0, tagSize, U128(static_cast<u64>(inhabitedMin)), U128(static_cast<u64>(inhabitedMax)) & nicheMask(tagSize)};
+                            tagNiche.path.pushBack(variantCount);
+
+                            const bool zeroNiche = nicheFits && variantCount == 2 && nicheCount == U128(1) && nicheStart == U128(0) && variants[nicheFirst].nicheLayout.size == 0;
+                            if (nicheFits && reserved.size > 8 && !zeroNiche) {
+                                nicheFits = false;
+                            }
+                            bool useNiche = false;
+                            if (nicheFits) {
+                                if (taggedSize > nicheEnumSize) {
+                                    useNiche = true;
+                                } else if (taggedSize == nicheEnumSize && nicheAvailable(tagNiche) < nicheAvailable(reserved)) {
+                                    useNiche = true;
+                                }
+                            }
+                            DEBUG(StringView("tagged ") << taggedSize << StringView(" niche ") << (nicheFits ? nicheEnumSize : 0) << StringView(" use niche ") << useNiche);
+
+                            if (useNiche) {
+                                const auto* nicheTy = unsignedOfSize(resolve, reserved.size);
+                                size_t nicheTySize = 0;
+                                size_t nicheTyAlign = 1;
+                                TargetGetSizeAndAlignOf(sp, resolve, nicheTy, nicheTySize, nicheTyAlign);
+                                for (size_t i = 0; i < variantCount; i++) {
+                                    auto& v = variants[i];
+                                    if (e[i].type != unitTy) {
+                                        auto repr = typeReprFromLayout(sp, v.type, v.ents.data(), v.ents.size(), v.nicheLayout, shifts[i], v.forcedAlignment);
+                                        if (i != largest && !zeroNiche) {
+                                            repr->fields.push_back(TypeRepr::Field{reserved.offset, nicheTy});
+                                            repr->align = repr->align < nicheTyAlign ? nicheTyAlign : repr->align;
+                                            if (repr->size < reserved.offset + reserved.size) {
+                                                repr->size = reserved.offset + reserved.size;
+                                            }
+                                            repr->size = alignTo(repr->size, repr->align);
+                                            repr->hasNiche = false;
+                                            ASSERT_BUG(sp, repr->size <= nicheEnumSize, StringView("Variant ") << i << StringView(" of ") << ty << StringView(" outgrows its enum"));
+                                        }
+                                        setTypeRepr(resolve, sp, v.type, mv$(repr));
+                                    }
+                                    rv.fields.push_back(TypeRepr::Field{0, v.type});
+                                }
+                                rv.size = nicheEnumSize;
+                                rv.align = enumAlign;
+                                TypeRepr::FieldPath field{largest, reserved.size, {}};
+                                for (const auto index : largestLayout.niche.path) {
+                                    field.subFields.pushBack(index);
+                                }
+                                if (zeroNiche) {
+                                    rv.variants = TypeRepr::VariantMode::make_NonZero({mv$(field), static_cast<unsigned>(nicheFirst)});
+                                } else {
+                                    rv.variants = TypeRepr::VariantMode::make_Linear({mv$(field), static_cast<size_t>(nicheStart.truncateU64()), variantCount, nicheFirst, nicheLast});
+                                }
+                                if (nicheAvailable(reserved) != U128(0)) {
+                                    rv.niche = nicheWithin(reserved, largest, 0);
+                                    rv.hasNiche = true;
+                                }
+                            } else {
+                                const auto* tagTy = unsignedOfSize(resolve, tagSize);
+                                size_t tagTySize = 0;
+                                size_t tagTyAlign = 1;
+                                TargetGetSizeAndAlignOf(sp, resolve, tagTy, tagTySize, tagTyAlign);
+                                for (size_t i = 0; i < variantCount; i++) {
+                                    auto& v = variants[i];
+                                    if (e[i].type != unitTy) {
+                                        auto repr = typeReprFromLayout(sp, v.type, v.ents.data(), v.ents.size(), v.taggedLayout, 0, v.forcedAlignment);
+                                        repr->fields.push_back(TypeRepr::Field{0, tagTy});
+                                        repr->align = repr->align < tagTyAlign ? tagTyAlign : repr->align;
+                                        repr->size = alignTo(repr->size < tagTySize ? tagTySize : repr->size, repr->align);
+                                        ASSERT_BUG(sp, repr->size <= taggedSize, StringView("Variant ") << i << StringView(" of ") << ty << StringView(" outgrows its enum"));
+                                        repr->hasNiche = false;
+                                        setTypeRepr(resolve, sp, v.type, mv$(repr));
+                                    }
+                                    rv.fields.push_back(TypeRepr::Field{0, v.type});
+                                }
+                                rv.fields.push_back(TypeRepr::Field{0, tagTy});
+                                rv.size = taggedSize;
+                                rv.align = taggedAlign;
+                                rv.variants = TypeRepr::VariantMode::make_Linear({{variantCount, tagSize, {}}, 0, variantCount});
+                                rv.hasNiche = nicheAvailable(tagNiche) != U128(0);
+                                rv.niche = mv$(tagNiche);
+                            }
                         }
                     } else {
                         const HIRType* tagTy;
@@ -1834,9 +1923,19 @@ namespace {
                         TargetGetSizeAndAlignOf(sp, resolve, tagTy, tagSize, tagAlign);
                         size_t maxSize = tagSize;
                         size_t maxAlign = tagAlign;
+                        Vector<U128> inhabitedDiscriminants;
+                        rv.uninhabited = true;
                         for (size_t varI = 0; varI < variants.size(); varI++) {
                             auto& ents = variants[varI].ents;
                             auto& varTy = variants[varI].type;
+                            bool variantUninhabited = false;
+                            for (const auto& ent : ents) {
+                                variantUninhabited = variantUninhabited || ent.uninhabited;
+                            }
+                            if (!variantUninhabited) {
+                                inhabitedDiscriminants.pushBack(e[varI].discriminantValue);
+                                rv.uninhabited = false;
+                            }
                             if (e[varI].type != resolve.hirCrate().types.unit()) {
                                 ents.insert(ents.begin(), Ent());
                                 ents[0].align = tagAlign;
@@ -1864,7 +1963,10 @@ namespace {
                         for (const auto& v : e) {
                             discriminants.pushBack(v.discriminantValue);
                         }
-                        rv.hasNiche = discriminantNiche(discriminants, tagSize, coreTypeIsSigned(tagTy->as_Primitive()), e.size(), rv.niche);
+                        if (inhabitedDiscriminants.empty()) {
+                            inhabitedDiscriminants.pushBack(U128(0));
+                        }
+                        rv.hasNiche = discriminantNiche(mv$(inhabitedDiscriminants), tagSize, coreTypeIsSigned(tagTy->as_Primitive()), e.size(), rv.niche);
                         if (hasExplcitValue || tagSize > sizeof(u64)) {
                             DEBUG(StringView("vals = ") << discriminants);
                             rv.variants = TypeRepr::VariantMode::make_Values({{e.size(), tagSize, {}}, mv$(discriminants)});
@@ -1932,6 +2034,7 @@ namespace {
                 } else {
                     rv.size = 0;
                     rv.align = 1;
+                    rv.uninhabited = e.variants.empty();
                 }
             } break;
         }
@@ -1947,6 +2050,10 @@ namespace {
         switch (rv.variants.tag()) {
             case TypeReprVariantMode::TAG_None: {
                 DEBUG(StringView("rv.variants = None"));
+                break;
+            }
+            case TypeReprVariantMode::TAG_Single: {
+                DEBUG(StringView("rv.variants = Single { index=") << rv.variants.as_Single().index << StringView(" }"));
                 break;
             }
             case TypeReprVariantMode::TAG_Linear: {
@@ -2571,14 +2678,12 @@ size_t TypeRepr::getOffset(const Span& sp, const StaticTraitResolve& resolve, co
 
 size_t TypeRepr::VariantMode::Data_Linear::nicheVariantStart() const {
     BUG_ASSERT(this->usesNiche());
-    return this->field.index == 0 ? 1 : 0;
+    return this->nicheFirst;
 }
 
 size_t TypeRepr::VariantMode::Data_Linear::nicheVariantCount() const {
     BUG_ASSERT(this->usesNiche());
-    const size_t start = this->nicheVariantStart();
-    const size_t end = this->field.index + 1 == this->numVariants ? this->field.index - 1 : this->numVariants - 1;
-    return end - start + 1;
+    return this->nicheLast - this->nicheFirst + 1;
 }
 
 size_t TypeRepr::VariantMode::Data_Linear::tagValue(unsigned varIdx) const {
@@ -2587,6 +2692,7 @@ size_t TypeRepr::VariantMode::Data_Linear::tagValue(unsigned varIdx) const {
     }
     BUG_ASSERT(varIdx < this->numVariants);
     BUG_ASSERT(varIdx != this->field.index);
+    BUG_ASSERT(!this->isAbsent(varIdx));
     const size_t start = this->nicheVariantStart();
     return static_cast<size_t>(((U128(static_cast<u64>(this->offset)) + U128(static_cast<u64>(varIdx - start))) & nicheMask(this->field.size)).truncateU64());
 }
@@ -2607,6 +2713,10 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
     bool subHasTag = false;
     switch (this->variants.tag()) {
         case TypeReprVariantMode::TAG_None: {
+            break;
+        }
+        case TypeReprVariantMode::TAG_Single: {
+            varIdx = this->variants.as_Single().index;
             break;
         }
         case TypeReprVariantMode::TAG_Linear: {
@@ -2881,12 +2991,19 @@ auto TransmuteLayoutBuilder::enumLayout(const HIRType* ty, const TypeRepr& repr,
         }
         return combine({Segment{repr.fields[0].offset, build(repr.fields[0].ty)}}, repr.size);
     }
+    if (const auto* single = repr.variants.opt_Single()) {
+        const auto& field = repr.fields.at(single->index);
+        return combine({Segment{field.offset, build(field.ty)}}, repr.size);
+    }
 
     Vector<TransmuteNfa::Fragment> alternatives;
     if (const auto* linear = repr.variants.opt_Linear()) {
         const auto tagOffset = repr.getOffset(sp, resolve, linear->field);
         for (unsigned variant = 0; variant < linear->numVariants; variant++) {
             Built value;
+            if (linear->isAbsent(variant)) {
+                continue;
+            }
             if (linear->usesNiche() && variant == linear->field.index) {
                 const auto& field = repr.fields.at(variant);
                 value = combine({Segment{field.offset, build(field.ty)}}, repr.size);

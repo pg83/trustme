@@ -1465,6 +1465,10 @@ static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallS
     if (!enmRepr) {
         BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
     }
+    if (!enmRepr->variants.is_Values() && index < enmRepr->fields.size()) {
+        const auto* variantRepr = TargetGetTypeRepr(state.sp, resolve, enmRepr->fields[index].ty);
+        MIR_ASSERT(state, !(variantRepr && variantRepr->uninhabited), StringView("Writing uninhabited variant ") << index << StringView(" of ") << ty);
+    }
     if (valueCount > 0) {
         MIR_ASSERT(state, index < enmRepr->fields.size(), StringView("Enum representation has no variant ") << index << StringView(" for ") << ty);
         const auto ofs = enmRepr->fields[index].offset;
@@ -1483,7 +1487,8 @@ static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallS
     }
 
     switch (enmRepr->variants.tag()) {
-        case TypeReprVariantMode::TAG_None: {
+        case TypeReprVariantMode::TAG_None:
+        case TypeReprVariantMode::TAG_Single: {
             break;
         }
         case TypeReprVariantMode::TAG_NonZero: {
@@ -2834,6 +2839,10 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                                     }
                                 }
                                 dst.writeUint(state, dst.getLen() * 8, only);
+                                break;
+                            }
+                            case TypeReprVariantMode::TAG_Single: {
+                                dst.writeUint(state, dst.getLen() * 8, U128(repr->variants.as_Single().index));
                                 break;
                             }
                             case TypeReprVariantMode::TAG_Linear: {
@@ -4563,6 +4572,10 @@ auto MIREvalCallStackEntry::readEnumVariant(const HIRType* ty, MIREvalValueRef v
     unsigned variant = 0;
     switch (repr->variants.tag()) {
         case TypeReprVariantMode::TAG_None: {
+            break;
+        }
+        case TypeReprVariantMode::TAG_Single: {
+            variant = repr->variants.as_Single().index;
             break;
         }
         case TypeReprVariantMode::TAG_Linear: {

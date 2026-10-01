@@ -467,6 +467,7 @@ namespace {
         void emitDestructorCall(const MIRLValue& slot, const HIRType* ty, bool unsizedValid, unsigned indentLevel);
 
         static bool enumIsTagless(const TypeRepr* repr);
+        bool enumVariantIsUninhabited(const TypeRepr* repr, size_t index);
 
         void emitTaglessEnumDiscriminant(const HIRType* ty);
 
@@ -2045,6 +2046,8 @@ auto CodeGeneratorC::emitEnum(const Span& sp, const HIRGenericPath& p, const HIR
                 }
             }
             of << StringView("\t} DATA;\n");
+        } else if (options.disallowEmptyStructs && unionFields.length() == repr->fields.size()) {
+            of << StringView("\tchar _d;\n");
         }
     } else if (repr->fields.size() == 0) {
         if (options.disallowEmptyStructs) {
@@ -4703,6 +4706,10 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                     const auto& ty = localMirRes.getLvalueType(e.dst);
                     auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
 
+                    if (enumVariantIsUninhabited(repr, ve.index)) {
+                        of << StringView("abort()");
+                        break;
+                    }
                     switch (repr->variants.tag()) {
                         case TypeReprVariantMode::TAG_None: {
                             if (enumIsTagless(repr)) {
@@ -4712,6 +4719,13 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                                 emitLvalue(e.dst);
                                 of << StringView(".DATA.var_0");
                             }, /*repr->fields[0].ty,*/ ve.vals, indentLevel);
+                            break;
+                        }
+                        case TypeReprVariantMode::TAG_Single: {
+                            emitCompositeAssign(localMirRes, [&]() {
+                                emitLvalue(e.dst);
+                                of << StringView(".DATA.var_") << ve.index;
+                            }, ve.vals, indentLevel);
                             break;
                         }
                         case TypeReprVariantMode::TAG_NonZero: {
@@ -5105,10 +5119,12 @@ auto CodeGeneratorC::emitTermSwitchCb(const MIRTypeResolve& localMirRes, const M
 
             if (oddArm != static_cast<size_t>(-1)) {
                 of << indent << StringView("if( ");
-                if (e.isNiche(oddArm)) {
+                if (e.isAbsent(oddArm)) {
+                    of << StringView("0");
+                } else if (e.isNiche(oddArm)) {
                     bool firstComparison = true;
                     for (size_t j = 0; j < nArms; j++) {
-                        if (j == oddArm || e.isNiche(j)) {
+                        if (j == oddArm || e.isNiche(j) || e.isAbsent(j)) {
                             continue;
                         }
                         if (!firstComparison) {
@@ -5133,7 +5149,7 @@ auto CodeGeneratorC::emitTermSwitchCb(const MIRTypeResolve& localMirRes, const M
                 emitVariant();
                 of << StringView(") {\n");
                 for (size_t j = 0; j < nArms; j++) {
-                    if (e.isNiche(j)) {
+                    if (e.isNiche(j) || e.isAbsent(j)) {
                         continue;
                     }
                     of << indent << StringView("case ") << tagOf(j) << StringView("ull: ");
@@ -5252,6 +5268,12 @@ auto CodeGeneratorC::emitTermSwitchCb(const MIRTypeResolve& localMirRes, const M
         case TypeReprVariantMode::TAG_None: {
             of << indent;
             cb.emit(0);
+            of << StringView("\n");
+            break;
+        }
+        case TypeReprVariantMode::TAG_Single: {
+            of << indent;
+            cb.emit(repr->variants.as_Single().index);
             of << StringView("\n");
             break;
         }
@@ -7414,6 +7436,9 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                     of << StringView("0");
                 } break;
                     break;
+                case TypeReprVariantMode::TAG_Single: {
+                    of << repr->variants.as_Single().index;
+                } break;
                 case TypeReprVariantMode::TAG_Values: {
                     auto& ve = repr->variants.as_Values();
                     of << StringView("(*");
@@ -9443,6 +9468,14 @@ auto CodeGeneratorC::emitDestructorCall(const MIRLValue& slot, const HIRType* ty
 
 auto CodeGeneratorC::enumIsTagless(const TypeRepr* repr) -> bool {
     return repr && repr->fields.empty() && repr->variants.is_None();
+}
+
+auto CodeGeneratorC::enumVariantIsUninhabited(const TypeRepr* repr, size_t index) -> bool {
+    if (repr->variants.is_Values() || index >= repr->fields.size()) {
+        return false;
+    }
+    const auto* variant = TargetGetTypeRepr(sp, resolve_, repr->fields[index].ty);
+    return variant && variant->uninhabited;
 }
 
 auto CodeGeneratorC::emitTaglessEnumDiscriminant(const HIRType* ty) -> void {
