@@ -6,7 +6,7 @@ enum Digits {
 }
 
 fn main() {
-    assert!(size_of::<Option<Digits>>() > size_of::<Digits>());
+    assert_eq!(size_of::<Option<Digits>>(), size_of::<Digits>());
 
     let mut value: Option<Digits> = None;
     value = Some(Digits::Inline(None));

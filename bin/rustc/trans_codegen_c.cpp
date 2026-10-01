@@ -7439,14 +7439,16 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                     };
                     if (ve.usesNiche()) {
                         const auto start = tagBits(ve.field.size, ve.offset);
+                        const auto emitRelative = [&]() {
+                            of << StringView("((") << tagUnsignedType(ve.field.size) << StringView(")(");
+                            emitTag();
+                            of << StringView(" - ") << start << StringView("ull))");
+                        };
                         of << StringView("( ");
-                        emitTag();
-                        of << StringView(" >= ") << start << StringView("ull && ");
-                        emitTag();
-                        of << StringView(" < ") << (start + ve.nicheVariantCount()) << StringView("ull");
+                        emitRelative();
+                        of << StringView(" < ") << ve.nicheVariantCount() << StringView("ull");
                         of << StringView(" ? ") << ve.nicheVariantStart() << StringView(" + ");
-                        emitTag();
-                        of << StringView(" - ") << start << StringView("ull");
+                        emitRelative();
                         of << StringView(" : ");
                         of << ve.field.index;
                         of << StringView(" )");

@@ -72,6 +72,14 @@ struct TypeReprFieldPath {
     stl::Vector<size_t> subFields;
 };
 
+struct TypeReprNiche {
+    stl::Vector<size_t> path;
+    size_t offset = 0;
+    size_t size = 0;
+    U128 start;
+    U128 end;
+};
+
 struct TypeReprVariantLinear {
     TypeReprFieldPath field;
 
@@ -112,6 +120,9 @@ struct TypeRepr {
     size_t size = 0;
 
     bool userAlign = false;
+
+    bool hasNiche = false;
+    TypeReprNiche niche;
 
     using FieldPath = TypeReprFieldPath;
 
