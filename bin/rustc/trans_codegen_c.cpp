@@ -3954,8 +3954,14 @@ auto CodeGeneratorC::emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType
 
         auto fieldInner = valFp.innerRef();
         if (fieldInner.is_Downcast()) {
-            of << StringView("(void*)& ");
-            emitLvalue(fieldInner.innerRef());
+            auto variantOwner = fieldInner.innerRef();
+            const HIRType* tmp;
+            if (this->typeIsBadZst(localMirRes.getLvalueType(variantOwner))) {
+                emitBorrow(localMirRes, bt, variantOwner.clone());
+            } else {
+                of << StringView("(void*)& ");
+                emitLvalue(variantOwner);
+            }
         } else if (valFp.as_Field() == 0) {
             const HIRType* tmp;
             const auto& parentTy = localMirRes.getLvalueType(fieldInner);
