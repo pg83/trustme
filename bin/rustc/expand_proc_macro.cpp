@@ -2666,7 +2666,10 @@ auto ProcMacroVisitor::visitAttr(const ASTAttribute& a) -> void {
 }
 
 auto ProcMacroVisitor::visitMetaItem(const ASTAttribute& i) -> void {
-    if (i.name().hasLeading) {
+    if (i.name().crate != RcString()) {
+        pmi.sendDollarCrate(Ident::Hygiene(), sp, i.name().crate);
+        pmi.sendSymbol("::");
+    } else if (i.name().hasLeading) {
         pmi.sendSymbol("::");
     }
     for (const auto& e : i.name().elems) {

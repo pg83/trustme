@@ -4942,6 +4942,11 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
         tok = Token(TOK_EQUAL);
     } else {
         name.hasLeading = lex.getTokenIf(TOK_DOUBLE_COLON);
+        if (name.hasLeading && lex.lookahead(0) == TOK_STRING) {
+            name.hasLeading = false;
+            name.crate = RcString::newInterned(lex.getTokenCheck(TOK_STRING).str());
+            lex.getTokenCheck(TOK_DOUBLE_COLON);
+        }
         do {
             name.elems.pushBack(getTokIdentRword(lex, name.elems.empty() ? &name.hygiene : nullptr));
         } while (GET_TOK(tok, lex) == TOK_DOUBLE_COLON);

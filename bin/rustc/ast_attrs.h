@@ -68,6 +68,7 @@ public:
 
 struct ASTAttributeName {
     bool hasLeading = false;
+    RcString crate;
     stl::Vector<RcString> elems;
     Ident::Hygiene hygiene;
 

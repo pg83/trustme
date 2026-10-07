@@ -165,6 +165,9 @@ void stl::output<ZeroCopyOutput, ASTAttributeName>(ZeroCopyOutput& out, const AS
         out << StringView("<empty>");
         return;
     }
+    if (value.crate != RcString()) {
+        out << StringView("::\"") << value.crate << StringView("\"::");
+    }
     for (const auto& item : value.elems) {
         if (&item != value.elems.begin()) {
             out << StringView("::");

@@ -2743,7 +2743,9 @@ void State::printAttribute(const ASTAttribute& attr, bool isInline) {
     }
     this->word(StringView("#["));
     const auto& name = attr.name();
-    if (name.hasLeading) {
+    if (name.crate != RcString()) {
+        this->word(StringView("$crate::"));
+    } else if (name.hasLeading) {
         this->word(StringView("::"));
     }
     for (size_t i = 0; i < name.elems.length(); i++) {
