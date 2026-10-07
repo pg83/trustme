@@ -9,6 +9,7 @@
 
 namespace stl {
     class ObjPool;
+    class StringView;
 }
 
 struct HIRSerialiseWriter {
@@ -79,4 +80,5 @@ struct HIRSerialiseReader {
 
     static bool isMetadata(const std::string& path);
     static HIRSerialiseReader* create(stl::ObjPool& pool, const std::string& path);
+    static RcString readFirstString(stl::StringView path);
 };

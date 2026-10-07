@@ -1359,14 +1359,9 @@ HIRCrate* HIRDeserialise(u32& id, ObjPool* pool, HIRTypeInterner& types, const s
 }
 
 RcString HIRDeserialiseJustName(const std::string& filename) {
-    {
-        auto readerPool = ObjPool::fromMemory();
-        auto& in = *HIRSerialiseReader::create(*readerPool.mutPtr(), metadataFilename(filename));
-
-        auto crateName = in.readIstring();
-        BUG_ASSERT(crateName != "" && "Empty crate name loaded from metadata");
-        return crateName;
-    }
+    auto crateName = HIRSerialiseReader::readFirstString(StringView(metadataFilename(filename).c_str()));
+    BUG_ASSERT(crateName != "" && "Empty crate name loaded from metadata");
+    return crateName;
 }
 
 #undef DEF_D

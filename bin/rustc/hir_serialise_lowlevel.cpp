@@ -2,6 +2,7 @@
 
 #include "common.h"
 
+#include <std/alg/defer.h>
 #include <std/ios/fs_utils.h>
 #include <std/ios/out_fd.h>
 #include <std/sys/fd.h>
@@ -434,6 +435,45 @@ bool HIRSerialiseReader::isMetadata(const std::string& path) {
     }
 
     return magic == ZSTD_MAGICNUMBER;
+}
+
+RcString HIRSerialiseReader::readFirstString(StringView path) {
+    Buffer name(path);
+    Buffer packed;
+    readFileContent(name, packed);
+
+    auto* dctx = ZSTD_createDCtx();
+    STD_DEFER {
+        ZSTD_freeDCtx(dctx);
+    };
+    Buffer head;
+    head.grow(64 * 1024);
+    ZSTD_inBuffer in{packed.data(), packed.length(), 0};
+    ZSTD_outBuffer out{head.mutData(), head.capacity(), 0};
+    const auto* bytes = static_cast<const u8*>(out.dst);
+    auto firstLength = [&]() -> size_t {
+        u32 len = 0;
+        if (out.pos >= 2 * sizeof len) {
+            memcpy(&len, bytes + sizeof len, sizeof len);
+            if (out.pos >= 2 * sizeof len + len) {
+                return len;
+            }
+        }
+        return ~size_t(0);
+    };
+    while (firstLength() == ~size_t(0)) {
+        if (out.pos == out.size) {
+            throw std::runtime_error(FMT(StringView("First string does not fit the header buffer: ") << path));
+        }
+        auto rc = ZSTD_decompressStream(dctx, &out, &in);
+        if (ZSTD_isError(rc)) {
+            throw std::runtime_error(FMT(StringView("Unable to decompress ") << path << StringView(": ") << ZSTD_getErrorName(rc)));
+        }
+        if (rc == 0 && firstLength() == ~size_t(0)) {
+            throw std::runtime_error(FMT(StringView("Metadata ends before its first string: ") << path));
+        }
+    }
+    return RcString::newInterned(reinterpret_cast<const char*>(bytes) + 2 * sizeof(u32), firstLength());
 }
 
 HIRSerialiseReader* HIRSerialiseReader::create(ObjPool& pool, const std::string& path) {
