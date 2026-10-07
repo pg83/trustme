@@ -2354,6 +2354,7 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
             }
         }
     }
+    ExpandStopProcMacroServers(crate);
 }
 
 ExpandState::ExpandState(const WireBoard& wb, ASTCrate& crate, LList<ASTModule*> modstack, ExpandMode mode, ASTModule* currentMod)

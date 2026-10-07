@@ -324,6 +324,11 @@ pub struct MacroDesc
 }
 
 static mut IS_AVAILABLE: bool = false;
+/// The compiler starts the macro host once per compilation and sends it one
+/// invocation after another (`Ident(name)`, then the input streams), as
+/// upstream loads a proc macro crate once and runs every invocation in it: a
+/// macro's statics live from one invocation to the next. Named on the command
+/// line, a macro runs once, on stdin or on the file named after it.
 #[doc(hidden)]
 pub fn main(macros: &[MacroDesc])
 {
@@ -335,50 +340,66 @@ pub fn main(macros: &[MacroDesc])
 
     let mut args = ::std::env::args();
     let _ = args.next().expect("Should have an executable name");
-    let mac_name = args.next().expect("Was not passed a macro name");
-    let input_path = args.next();
-    //eprintln!("Searching for macro {}\r", mac_name);
-    for m in macros
-    {
-        if m.name == mac_name {
-            use std::io::Write;
-            ::std::io::stdout().write(&[0]).expect("Stdout write error?");
-            ::std::io::stdout().flush().expect("Stdout write error?");
-            debug!("Waiting for input\r");
-            let mut stdin_raw;
-            let mut fp_raw;
-            let stdin = if let Some(p) = input_path {
-                    fp_raw = ::std::fs::File::open(p).unwrap();
-                    &mut fp_raw as &mut /*dyn */::std::io::Read
-                }
-                else {
-                    stdin_raw = ::std::io::stdin().lock();
-                    &mut stdin_raw
-                };
-            let input = crate::serialisation::recv_token_stream(stdin);
-            debug!("INPUT = `{}`\r", input);
-            let output = match m.handler
-                {
-                MacroType::SingleStream(h) => {
-                    Span::freeze_definitions();
-                    (h)(input)
-                    },
-                MacroType::Attribute(h) => {
-                    let input_body = crate::serialisation::recv_token_stream(stdin);
-                    debug!("INPUT BODY = `{}`\r", input_body);
-                    Span::freeze_definitions();
-                    (h)(input, input_body)
-                    },
-                };
-            debug!("OUTPUT = `{}`\r", output);
-            let stdout = ::std::io::stdout();
-            crate::serialisation::send_token_stream(stdout.lock(), output);
-            ::std::io::Write::flush(&mut ::std::io::stdout()).expect("Stdout write error?");
-            note!("Done");
-            return ;
+    if let Some(mac_name) = args.next() {
+        let input_path = args.next();
+        let m = match macros.iter().find(|m| m.name == mac_name) {
+            Some(m) => m,
+            None => panic!("Unknown macro name '{}'", mac_name),
+            };
+        report_found(true);
+        match input_path {
+        Some(p) => run(m, &mut ::std::fs::File::open(p).unwrap()),
+        None => run(m, &mut ::std::io::stdin().lock()),
         }
+        return ;
     }
-    panic!("Unknown macro name '{}'", mac_name);
+    loop {
+        let request = crate::protocol::Reader::new(&mut ::std::io::stdin().lock()).read_ent();
+        let mac_name = match request {
+            None => return,
+            Some(crate::protocol::Token::Ident(name)) => name,
+            Some(_) => panic!("Protocol error: expected the name of a macro"),
+            };
+        let m = match macros.iter().find(|m| m.name == mac_name) {
+            Some(m) => m,
+            None => { report_found(false); return },
+            };
+        Span::reset_definitions();
+        report_found(true);
+        run(m, &mut ::std::io::stdin().lock());
+    }
+}
+
+fn report_found(found: bool)
+{
+    use std::io::Write;
+    ::std::io::stdout().write(&[if found { 0 } else { 1 }]).expect("Stdout write error?");
+    ::std::io::stdout().flush().expect("Stdout write error?");
+}
+
+fn run(m: &MacroDesc, stdin: &mut dyn ::std::io::Read)
+{
+    debug!("Waiting for input\r");
+    let input = crate::serialisation::recv_token_stream(&mut *stdin);
+    debug!("INPUT = `{}`\r", input);
+    let output = match m.handler
+        {
+        MacroType::SingleStream(h) => {
+            Span::freeze_definitions();
+            (h)(input)
+            },
+        MacroType::Attribute(h) => {
+            let input_body = crate::serialisation::recv_token_stream(&mut *stdin);
+            debug!("INPUT BODY = `{}`\r", input_body);
+            Span::freeze_definitions();
+            (h)(input, input_body)
+            },
+        };
+    debug!("OUTPUT = `{}`\r", output);
+    let stdout = ::std::io::stdout();
+    crate::serialisation::send_token_stream(stdout.lock(), output);
+    ::std::io::Write::flush(&mut ::std::io::stdout()).expect("Stdout write error?");
+    note!("Done");
 }
 
 pub fn is_available() -> bool {

@@ -9,6 +9,8 @@ struct Settings;
 
 #include <set>
 
+#include <sys/types.h>
+
 class HIRCrate;
 struct HIRTypeInterner;
 
@@ -149,6 +151,9 @@ public:
        loaded at all, its impls included.  Set while resolving, through a `const`
        crate. */
     mutable bool used = false;
+    mutable pid_t procMacroServerPid = 0;
+    mutable int procMacroServerStdin = -1;
+    mutable int procMacroServerStdout = -1;
 
     ASTExternCrate(u32& id, stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name, const std::string& path);
 

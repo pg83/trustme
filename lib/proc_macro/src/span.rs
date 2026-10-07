@@ -27,6 +27,13 @@ impl Span
     pub(crate) fn freeze_definitions() {
         unsafe { SPANS_COMPLETE = true; }
     }
+    /// Spans are defined per invocation; the next one defines its own.
+    pub(crate) fn reset_definitions() {
+        unsafe {
+            SPANS.clear();
+            SPANS_COMPLETE = false;
+        }
+    }
     pub(crate) fn from_raw(idx: usize) -> Self {
         Span(::std::num::NonZeroU32::new(idx as u32 + 1).expect("span index overflow"))
     }

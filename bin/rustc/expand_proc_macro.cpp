@@ -19,6 +19,7 @@
 #include <std/lib/vector.h>
 #include <std/sym/i_map.h>
 
+#include <fcntl.h>
 #include <spawn.h>
 #include <sstream>
 #include <unistd.h>
@@ -138,7 +139,7 @@ namespace {
             Handles(const Handles&) = delete;
             Handles& operator=(Handles&&) = delete;
             Handles& operator=(const Handles&) = delete;
-            pid_t childPid = 0;
+            const ASTExternCrate* server = nullptr;
             int childStdin = -1;
             int childStdout = -1;
         } handles;
@@ -148,7 +149,7 @@ namespace {
         size_t pendingSymbolOffset = 0;
         Token pendingLiteral;
 
-        ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
+        ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition edition, const ASTExternCrate& server, const HIRProcMacro& procMacroDesc);
         ProcMacroInv(const ProcMacroInv&) = delete;
         ProcMacroInv(ProcMacroInv&&) = default;
         ProcMacroInv& operator=(const ProcMacroInv&) = delete;
@@ -347,9 +348,7 @@ namespace {
             ERROR(sp, E0000, StringView("Unable to find referenced proc macro ") << macPath);
         }
 
-        const auto* procMacroExeName = extCrate.procMacroFilename != "" ? extCrate.procMacroFilename.c_str() : extCrate.filename.c_str();
-
-        auto rv = ProcMacroInv(*crate.pool, wb.id, sp, extCrate.hir->edition, procMacroExeName, *pmp);
+        auto rv = ProcMacroInv(*crate.pool, wb.id, sp, extCrate.hir->edition, extCrate, *pmp);
         rv.parseState().crate = &crate;
         rv.parseState().wb = &wb;
 
@@ -483,7 +482,64 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
     }, tt.hygiene());
 }
 
-ProcMacroInv::ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc)
+namespace {
+    void startProcMacroServer(const Span& sp, const ASTExternCrate& server) {
+        const auto* executable = server.procMacroFilename != "" ? server.procMacroFilename.c_str() : server.filename.c_str();
+        int stdinPipes[2];
+        if (pipe2(stdinPipes, O_CLOEXEC) != 0) {
+            BUG(sp, StringView("Unable to create stdin pipe pair for proc macro, ") << strerror(errno));
+        }
+        int stdoutPipes[2];
+        if (pipe2(stdoutPipes, O_CLOEXEC) != 0) {
+            BUG(sp, StringView("Unable to create stdout pipe pair for proc macro, ") << strerror(errno));
+        }
+
+        posix_spawn_file_actions_t file_actions;
+        posix_spawn_file_actions_init(&file_actions);
+        posix_spawn_file_actions_adddup2(&file_actions, stdinPipes[0], 0);
+        posix_spawn_file_actions_adddup2(&file_actions, stdoutPipes[1], 1);
+        posix_spawn_file_actions_addclose(&file_actions, stdinPipes[0]);
+        posix_spawn_file_actions_addclose(&file_actions, stdinPipes[1]);
+        posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[0]);
+        posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[1]);
+
+        Vector<char> executableArg(strlen(executable) + 1);
+        executableArg.append(executable, strlen(executable) + 1);
+        char* argv[2] = {executableArg.mutData(), nullptr};
+        DEBUG(argv[0]);
+        int rv = posix_spawn(&server.procMacroServerPid, executable, &file_actions, nullptr, argv, environ);
+        if (rv != 0) {
+            BUG(sp, StringView("Error in posix_spawn - ") << rv << StringView(" - can't start `") << executable << StringView("`"));
+        }
+
+        posix_spawn_file_actions_destroy(&file_actions);
+        close(stdinPipes[0]);
+        close(stdoutPipes[1]);
+        server.procMacroServerStdin = stdinPipes[1];
+        server.procMacroServerStdout = stdoutPipes[0];
+    }
+
+    void stopProcMacroServer(const ASTExternCrate& server) {
+        DEBUG(StringView("Waiting for child ") << server.procMacroServerPid << StringView(" to terminate"));
+        close(server.procMacroServerStdin);
+        close(server.procMacroServerStdout);
+        int status;
+        waitpid(server.procMacroServerPid, &status, 0);
+        server.procMacroServerPid = 0;
+        server.procMacroServerStdin = -1;
+        server.procMacroServerStdout = -1;
+    }
+}
+
+void ExpandStopProcMacroServers(const ASTCrate& crate) {
+    for (const auto& extCrate : crate.externCrates) {
+        if (extCrate.second.procMacroServerPid != 0) {
+            stopProcMacroServer(extCrate.second);
+        }
+    }
+}
+
+ProcMacroInv::ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition edition, const ASTExternCrate& server, const HIRProcMacro& procMacroDesc)
     : TokenStream(ParseState())
     , pool(pool)
     , parentSpan(sp)
@@ -492,6 +548,13 @@ ProcMacroInv::ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition ed
     , edition(edition)
 {
     markProcMacroExpansion();
+    if (server.procMacroServerPid == 0) {
+        startProcMacroServer(sp, server);
+    }
+    this->handles.server = &server;
+    this->handles.childStdin = server.procMacroServerStdin;
+    this->handles.childStdout = server.procMacroServerStdout;
+    this->sendRword(procMacroDesc.name.c_str());
     if (getenv("TRUSTME_DUMP_PROCMACRO") && getenv("TRUSTME_DUMP_PROCMACRO")[0]) {
         // TODO: Dump both input and output, AND (optionally) dump each invocation
         std::string namePrefix;
@@ -501,63 +564,24 @@ ProcMacroInv::ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition ed
         dumpFileRes = outputFile(pool, FMT(namePrefix << StringView("-res.bin")).c_str());
         DEBUG(StringView("Set TRUSTME_DUMP_PROCMACRO=procmacro_dump to dump to `procmacro_dump-NNN-{out,res}.bin`"));
     }
-    int stdinPipes[2];
-    if (pipe(stdinPipes) != 0) {
-        BUG(sp, StringView("Unable to create stdin pipe pair for proc macro, ") << strerror(errno));
-    }
-    this->handles.childStdin = stdinPipes[1];
-    int stdoutPipes[2];
-    if (pipe(stdoutPipes) != 0) {
-        BUG(sp, StringView("Unable to create stdout pipe pair for proc macro, ") << strerror(errno));
-    }
-    this->handles.childStdout = stdoutPipes[0];
-
-    posix_spawn_file_actions_t file_actions;
-    posix_spawn_file_actions_init(&file_actions);
-    posix_spawn_file_actions_adddup2(&file_actions, stdinPipes[0], 0);
-    posix_spawn_file_actions_adddup2(&file_actions, stdoutPipes[1], 1);
-    posix_spawn_file_actions_addclose(&file_actions, stdinPipes[0]);
-    posix_spawn_file_actions_addclose(&file_actions, stdinPipes[1]);
-    posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[0]);
-    posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[1]);
-
-    Vector<char> executableArg(strlen(executable) + 1);
-    executableArg.append(executable, strlen(executable) + 1);
-    auto* procMacroName = procMacroDesc.name.c_str();
-    Vector<char> procMacroNameArg(strlen(procMacroName) + 1);
-    procMacroNameArg.append(procMacroName, strlen(procMacroName) + 1);
-    char* argv[3] = {executableArg.mutData(), procMacroNameArg.mutData(), nullptr};
-    DEBUG(argv[0] << StringView(" ") << argv[1]);
-    int rv = posix_spawn(&this->handles.childPid, executable, &file_actions, nullptr, argv, environ);
-    if (rv != 0) {
-        BUG(sp, StringView("Error in posix_spawn - ") << rv << StringView(" - can't start `") << executable << StringView("`"));
-    }
-
-    posix_spawn_file_actions_destroy(&file_actions);
-    close(stdinPipes[0]);
-    close(stdoutPipes[1]);
 
     this->sendSpanDef(1, sp);
 }
 
 ProcMacroInv::Handles::Handles(Handles&& x)
-    : childPid(x.childPid)
+    : server(x.server)
     , childStdin(x.childStdin)
     , childStdout(x.childStdout)
 {
-    x.childPid = 0;
+    x.server = nullptr;
     x.childStdin = -1;
     x.childStdout = -1;
     DEBUG(StringView(""));
 }
 
 ProcMacroInv::~ProcMacroInv() {
-    if (this->handles.childPid != 0) {
-        DEBUG(StringView("Waiting for child ") << this->handles.childPid << StringView(" to terminate"));
-        int status;
-        waitpid(this->handles.childPid, &status, 0);
-        close(this->handles.childStdout);
-        close(this->handles.childStdin);
+    if (this->handles.server != nullptr && !eofHit) {
+        stopProcMacroServer(*this->handles.server);
     }
 }
 

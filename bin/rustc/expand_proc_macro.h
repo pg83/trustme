@@ -17,6 +17,8 @@ class ASTVisibility;
 
 void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate);
 
+void ExpandStopProcMacroServers(const ASTCrate& crate);
+
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const stl::Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& name, const ASTStruct& i, const Ident::Hygiene& callSite);
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const stl::Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& name, const ASTEnum& i, const Ident::Hygiene& callSite);
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const stl::Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& name, const ASTUnion& i, const Ident::Hygiene& callSite);
