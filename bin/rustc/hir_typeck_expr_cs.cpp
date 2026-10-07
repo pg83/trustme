@@ -1011,6 +1011,15 @@ struct OrderPlace {
         [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
 
         void visit(HIRExprNodeLet& node) override;
+
+        void visit(HIRExprNodeCallPath& node) override;
+
+        void visit(HIRExprNodeCallValue& node) override;
+
+        void visit(HIRExprNodeCallMethod& node) override;
+
+        template <typename Arguments>
+        void visitArgumentsClosuresLast(Arguments& args);
     };
 
     struct ExprVisitorEnum: public HIRExprVisitor {
@@ -11361,6 +11370,46 @@ void ExprVisitorAddIvars::visitNodePtr(HIRExprNodeP& nodePtr) {
 
 auto ExprVisitorAddIvars::visitPathParams(HIRPathParams& pp) -> void {
     this->context.ivars.addIvarsParams(pp);
+}
+
+template <typename Arguments>
+auto ExprVisitorAddIvars::visitArgumentsClosuresLast(Arguments& args) -> void {
+    for (auto& arg : args) {
+        if (!cast<HIRExprNodeClosure>(&*arg)) {
+            visitNodePtr(arg);
+        }
+    }
+    for (auto& arg : args) {
+        if (cast<HIRExprNodeClosure>(&*arg)) {
+            visitNodePtr(arg);
+        }
+    }
+}
+
+auto ExprVisitorAddIvars::visit(HIRExprNodeCallPath& node) -> void {
+    for (auto& type : mutRange(node.cache.argTypes)) {
+        type = visitType(type);
+    }
+    visitPath(HIRVisitor::PathContext::VALUE, node.path);
+    visitArgumentsClosuresLast(node.args);
+}
+
+auto ExprVisitorAddIvars::visit(HIRExprNodeCallValue& node) -> void {
+    for (auto& type : mutRange(node.argTypes)) {
+        type = visitType(type);
+    }
+    visitNodePtr(node.value);
+    visitArgumentsClosuresLast(node.args);
+}
+
+auto ExprVisitorAddIvars::visit(HIRExprNodeCallMethod& node) -> void {
+    visitPathParams(node.params);
+    for (auto& type : mutRange(node.cache.argTypes)) {
+        type = visitType(type);
+    }
+    visitPath(HIRVisitor::PathContext::VALUE, node.methodPath);
+    visitNodePtr(node.value);
+    visitArgumentsClosuresLast(node.args);
 }
 
 [[nodiscard]] auto ExprVisitorAddIvars::visitType(const HIRType* ty) -> const HIRType* {
