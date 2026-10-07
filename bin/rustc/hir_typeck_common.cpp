@@ -290,6 +290,7 @@ const HIRType* Monomorphiser::monomorphType(const Span& sp, const HIRType* tpl, 
         case HIRType::TAG_Pattern: {
             auto& e = (*tpl).as_Pattern();
             HIRTypePattern pattern;
+            pattern.notNull = e.pattern.notNull;
             pattern.alternatives.reserve(e.pattern.alternatives.size());
             for (const auto& range : e.pattern.alternatives) {
                 HIRTypePatternRange out{

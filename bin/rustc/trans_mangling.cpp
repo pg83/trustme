@@ -593,6 +593,9 @@ auto Mangler::fmtType(const HIRType* ty) -> void {
             auto& e = (*ty).as_Pattern();
             os << StringView("Q");
             this->fmtType(e.inner);
+            if (e.pattern.notNull) {
+                os << StringView("N");
+            }
             os << e.pattern.alternatives.size() << StringView("r");
             for (const auto& range : e.pattern.alternatives) {
                 os << (range.hasStart ? 's' : 'n');

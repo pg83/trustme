@@ -1423,8 +1423,31 @@ auto CLogSyntaxExpander::expand(const Span& sp, const WireBoard&, const ASTCrate
     return makeMacroExpansionPlaceholder(sp);
 }
 
-auto CPatternTypeExpander::expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) -> std::unique_ptr<TokenStream> {
-    return box$(TTStreamO(sp, ParseState(), tt.clone()));
+auto CPatternTypeExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().crate = &crate;
+    lex.parseState().wb = &wb;
+    lex.parseState().module = &mod;
+
+    ASTType* inner = ParseType(lex);
+    auto is = lex.getTokenCheck(TOK_IDENT);
+    if (is.ident().name != "is") {
+        parseErrorUnexpected(lex, is);
+    }
+    ASTType* rv;
+    if (lex.getTokenIf(TOK_EXCLAM)) {
+        auto null = lex.getTokenCheck(TOK_IDENT);
+        if (null.ident().name != "null") {
+            parseErrorUnexpected(lex, null);
+        }
+        rv = mkType(lex.typePool(), inner->span(), TypeData::make_Pattern({inner, nullptr, true}));
+    } else {
+        auto pat = ParsePattern(lex, AllowOrPattern::Yes);
+        rv = mkType(lex.typePool(), inner->span(), TypeData::make_Pattern({inner, lex.typePool().make<ASTPattern>(mv$(pat)), false}));
+    }
+    lex.getTokenCheck(TOK_EOF);
+
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(rv)))));
 }
 
 auto CIterExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {

@@ -772,6 +772,7 @@ const HIRType* HirDeserialiser::deserialiseType() {
         case HIRType::TAG_Pattern: {
             auto inner = deserialiseType();
             HIRTypePattern pattern;
+            pattern.notNull = in.readBool();
             auto count = in.readCount();
             pattern.alternatives.reserve(count);
             while (count--) {
@@ -3379,6 +3380,7 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
         case HIRType::TAG_Pattern: {
             auto& e = (*ty).as_Pattern();
             serialiseType(e.inner);
+            out.writeBool(e.pattern.notNull);
             out.writeCount(e.pattern.alternatives.size());
             for (const auto& range : e.pattern.alternatives) {
                 out.writeBool(range.hasStart);

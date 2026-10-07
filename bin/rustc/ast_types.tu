@@ -34,7 +34,8 @@ generate(
         v("Pattern", fields=[
             ("ASTType*", "inner"),
             ("ASTPattern*", "pattern"),
-        ]),
+            ("bool", "notNull"),
+        ], doc="`T is !null` has notNull set and a nullptr pattern"),
         v("Generic", fields=[
             ("RcString", "name"),
             ("unsigned int", "index"),

@@ -981,7 +981,9 @@ namespace {
             case TypeData::TAG_Pattern: {
                 auto& e = ty->data.as_Pattern();
                 ExpandType(es, mod, e.inner);
-                ExpandPattern(es, mod, *e.pattern, true);
+                if (e.pattern) {
+                    ExpandPattern(es, mod, *e.pattern, true);
+                }
                 break;
             }
             case TypeData::TAG_Generic: {

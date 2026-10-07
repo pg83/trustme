@@ -97,7 +97,7 @@ ASTType* ASTType::clone() const {
         _CLONE(Pointer, {old.isMut, old.inner->clone()})
         _CLONE(Array, {old.inner->clone(), old.size})
         _CLONE(Slice, {old.inner->clone()})
-        _CLONE(Pattern, {old.inner->clone(), p.make<ASTPattern>(old.pattern->clone())})
+        _CLONE(Pattern, {old.inner->clone(), old.pattern ? p.make<ASTPattern>(old.pattern->clone()) : nullptr, old.notNull})
         _COPY(Generic)
         _CLONE(Path, p.make<ASTPath>(*old))
         _COPY(TraitObject)
@@ -227,6 +227,10 @@ Ordering ASTType::ord(const ASTType& x) const {
             if (rv != OrdEqual) {
                 return rv;
             }
+            rv = ::ord(ent.notNull, xEnt.notNull);
+            if (rv != OrdEqual || ent.notNull) {
+                return rv;
+            }
             return ::ord(*ent.pattern, *xEnt.pattern);
             break;
         }
@@ -322,7 +326,7 @@ void ASTType::print(ZeroCopyOutput& os, bool isDebug /*=false*/) const {
             _(Pointer, os << StringView("*") << (ent.isMut ? "mut " : "const "); ent.inner->print(os, isDebug);)
             _(Array, os << StringView("["); ent.inner->print(os, isDebug); os << StringView("; "); if (ent.size) { os << *ent.size; } else { os << StringView("_"); } os << StringView("]");)
             _(Slice, os << StringView("["); ent.inner->print(os, isDebug); os << StringView("]");)
-            _(Pattern, ent.inner->print(os, isDebug); os << StringView(" is ") << *ent.pattern;)
+            _(Pattern, ent.inner->print(os, isDebug); os << StringView(" is "); if (ent.notNull) { os << StringView("!null"); } else { os << *ent.pattern; })
             _(Generic, if (isDebug) os << StringView("/* arg */ "); os << ent.name; if (isDebug) os << StringView("/*") << ent.index << StringView("*/");)
             _(Path, ent->printPretty(os, true, isDebug);)
             _(TraitObject, os << StringView("("); bool needsPlus = false; for (const auto& it : ent.traits) {

@@ -1860,7 +1860,11 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                         ERROR(pat.span(), E0000, StringView("pattern not supported in pattern types"));
                 }
             };
-            lowerPattern(*e.pattern);
+            if (e.notNull) {
+                pattern.notNull = true;
+            } else {
+                lowerPattern(*e.pattern);
+            }
             return crate->types.intern(HIRType::make_Pattern({LowerHIRType(e.inner), mv$(pattern)}));
         }
         case TypeData::TAG_Path: {

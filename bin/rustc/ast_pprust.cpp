@@ -1892,7 +1892,11 @@ void State::printType(const ASTType* ty) {
         case TypeData::TAG_Pattern:
             this->printType(data.as_Pattern().inner);
             this->word(StringView(" is "));
-            this->printPat(*data.as_Pattern().pattern);
+            if (data.as_Pattern().notNull) {
+                this->word(StringView("!null"));
+            } else {
+                this->printPat(*data.as_Pattern().pattern);
+            }
             break;
         case TypeData::TAG_Generic:
             this->printIdent(data.as_Generic().name);

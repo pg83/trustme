@@ -163,6 +163,7 @@ struct HIRTypePatternRange {
 
 struct HIRTypePattern {
     std::vector<HIRTypePatternRange> alternatives;
+    bool notNull = false;
 
     HIRTypePattern clone() const;
     Ordering ord(const HIRTypePattern& x) const;

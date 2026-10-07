@@ -5881,14 +5881,5 @@ ASTCrate* ParseCrate(WireBoard& wb, ObjPool* pool, std::string mainfile, ASTEdit
 #undef LOOKAHEAD2
 
 ASTType* ParseType(TokenStream& lex, bool allowTraitList) {
-    ASTType* rv = ParseTypeInt(lex, allowTraitList);
-    if (lex.lookahead(0) == TOK_IDENT) {
-        auto tok = lex.getToken();
-        if (tok.ident().name == "is") {
-            auto pat = ParsePattern(lex, AllowOrPattern::Yes);
-            return mkType(lex.typePool(), rv->span(), TypeData::make_Pattern({rv, lex.typePool().make<ASTPattern>(mv$(pat))}));
-        }
-        lex.putback(mv$(tok));
-    }
-    return rv;
+    return ParseTypeInt(lex, allowTraitList);
 }

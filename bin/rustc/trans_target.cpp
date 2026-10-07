@@ -1423,6 +1423,11 @@ namespace {
                 return true;
             }
             case HIRType::TAG_Pattern: {
+                if (ty->as_Pattern().pattern.notNull) {
+                    const size_t pointerSize = TargetGetPointerBits() / 8;
+                    out = TypeReprNiche{{}, 0, pointerSize, U128(1), nicheMask(pointerSize)};
+                    return true;
+                }
                 size_t scalarSize = 0;
                 std::vector<std::pair<size_t, size_t>> ranges;
                 if (!getPatternValidRanges(ty->as_Pattern(), scalarSize, ranges) || ranges.empty()) {

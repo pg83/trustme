@@ -1677,7 +1677,9 @@ namespace {
             case TypeData::TAG_Pattern: {
                 auto& e = type->data.as_Pattern();
                 ResolveAbsoluteType(context, e.inner);
-                ResolveAbsolutePattern(context, true, *e.pattern);
+                if (e.pattern) {
+                    ResolveAbsolutePattern(context, true, *e.pattern);
+                }
                 break;
             }
             case TypeData::TAG_Generic: {

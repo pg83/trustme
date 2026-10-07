@@ -774,6 +774,7 @@ namespace {
             case HIRType::TAG_Pattern: {
                 auto& e = type.as_Pattern();
                 h = hashMix(h, hashTypeRef(e.inner));
+                h = hashMix(h, e.pattern.notNull);
                 h = hashMix(h, e.pattern.alternatives.size());
                 for (const auto& range : e.pattern.alternatives) {
                     h = hashMix(h, range.hasStart);
@@ -961,10 +962,12 @@ HIRTypePattern HIRTypePattern::clone() const {
     for (const auto& range : alternatives) {
         rv.alternatives.push_back(range.clone());
     }
+    rv.notNull = notNull;
     return rv;
 }
 
 Ordering HIRTypePattern::ord(const HIRTypePattern& x) const {
+    ORD(notNull, x.notNull);
     ORD(alternatives.size(), x.alternatives.size());
     for (size_t i = 0; i < alternatives.size(); i++) {
         auto rv = alternatives[i].ord(x.alternatives[i]);
@@ -976,6 +979,9 @@ Ordering HIRTypePattern::ord(const HIRTypePattern& x) const {
 }
 
 void HIRTypePattern::fmt(ZeroCopyOutput& os) const {
+    if (notNull) {
+        os << StringView("!null");
+    }
     for (size_t i = 0; i < alternatives.size(); i++) {
         if (i != 0) {
             os << StringView(" | ");
