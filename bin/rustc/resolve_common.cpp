@@ -919,6 +919,9 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                     mi = &H::getCrate(sp, crate, p->path).getMacroitemByPath(sp, p->path, true);
                     if (const auto* p = mi->opt_Import()) {
                         if (p->path.crateName() == CRATE_BUILTINS) {
+                            if (outPath) {
+                                *outPath = spToAp(p->path);
+                            }
                             auto v = H2::getBuiltin(crate.wb, sp, p->path.components().back());
                             if (v.is_None()) {
                                 break;

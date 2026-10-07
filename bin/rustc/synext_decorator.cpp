@@ -12,6 +12,8 @@
 #include "ast_generics.h"
 #include "parse_common.h"
 #include "expand_common.h"
+#include "resolve_common.h"
+#include "hir_asm.h"
 #include "lint_level.h"
 #include "parse_ttstream.h"
 #include "parse_parseerror.h"
@@ -931,7 +933,7 @@ namespace {
         }
     }
 
-    static const Deriver* findBuiltinDerive(const DeriveRegistry& registry, const ASTPath& traitPath) {
+    static const Deriver* findBuiltinDerive(const DeriveRegistry& registry, const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, const ASTPath& traitPath) {
         if (traitPath.isTrivial()) {
             return registry.find(traitPath.asTrivial());
         }
@@ -944,6 +946,11 @@ namespace {
             if (!path->nodes.empty() && (path->crate == "=core" || path->crate == "=std")) {
                 return registry.find(path->nodes.back().name());
             }
+        }
+        ASTAbsolutePath resolved;
+        ResolveLookupMacro(sp, *wb.settings, crate, mod.path(), traitPath, &resolved);
+        if (resolved.crate == CRATE_BUILTINS && !resolved.nodes.empty()) {
+            return registry.find(resolved.nodes.back());
         }
         return nullptr;
     }
@@ -1422,7 +1429,7 @@ namespace {
                 continue;
             }
 
-            const auto* dp = findBuiltinDerive(registry, traitPath);
+            const auto* dp = findBuiltinDerive(registry, sp, wb, crate, mod, traitPath);
             Vector<RcString> macPath = findMacro(sp, wb, crate, mod, traitPath, dp != nullptr);
             if (!macPath.empty()) {
                 auto lex = ProcMacroInvoke(sp, wb, crate, macPath, attrs, vis, path.nodes.back(), item, traitPath.cls.is_Relative() ? traitPath.cls.as_Relative().hygiene : Ident::Hygiene());
