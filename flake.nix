@@ -22,6 +22,17 @@
 
       nixpkgsFor = system: nixpkgs.legacyPackages.${system};
 
+      # Native libraries the projects corpus links against: build scripts
+      # find them through pkg-config (openssl-sys, libsqlite3-sys for arti,
+      # libz-sys).  Every shell that builds or runs the projects has them.
+      projectDeps =
+        pkgs: with pkgs; [
+          pkg-config
+          openssl
+          sqlite
+          zlib
+        ];
+
       mkToolchain =
         pkgs:
         pkgs.gcc16Stdenv.mkDerivation {
@@ -97,6 +108,7 @@
               patch
               zstd
             ])
+            ++ projectDeps pkgs
             ++ extraPackages;
 
           SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
@@ -147,6 +159,19 @@
             # path so the generated C++ translation units use one libatomic.
             pkgs.gcc.cc.lib
           ] "-fuse-ld=lld";
+          # Upstream rustc and cargo over the same libraries, for the reference
+          # run a project has to pass before it is added (`cargo test --locked`).
+          reference = pkgs.mkShell {
+            packages =
+              (with pkgs; [
+                cacert
+                git
+                rustc
+                cargo
+              ])
+              ++ projectDeps pkgs;
+            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+          };
         }
       );
     };
