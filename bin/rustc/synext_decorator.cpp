@@ -1768,6 +1768,10 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
         add("RangeCopy", Handler(ITEM_STRUCT, handleSave));
         add("RangeInclusiveCopy", Handler(ITEM_STRUCT, handleSave));
         add("RangeFromCopy", Handler(ITEM_STRUCT, handleSave));
+        add("RangeToInclusiveCopy", Handler(ITEM_STRUCT, handleSave));
+
+        add("reborrow", Handler(ITEM_TRAIT, handleSave));
+        add("coerce_shared", Handler(ITEM_TRAIT, handleSave));
 
         add("async_drop", Handler(ITEM_TRAIT, handleSave));
         add("async_drop_in_place", Handler(ITEM_FN, handleSave));
