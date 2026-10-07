@@ -14090,6 +14090,7 @@ auto NextTraitGoalEvaluator::evaluateStructuralTraitCertainty(const Span& callSp
             case HIRType::TAG_Path: {
                 const auto& path = type->as_Path();
                 switch (path.binding.tag()) {
+                    case HIRTypePathBinding::TAG_Unbound:
                     case HIRTypePathBinding::TAG_Opaque: {
                         if (const auto* projection = path.path.data.opt_UfcsKnown()) {
                             const auto& definition = crate.getTraitByPath(callSpan, projection->trait.path);
@@ -14097,6 +14098,10 @@ auto NextTraitGoalEvaluator::evaluateStructuralTraitCertainty(const Span& callSp
                             if (associated && !associated->isSized) {
                                 break;
                             }
+                            return Certainty::Proven;
+                        }
+                        if (path.binding.is_Unbound()) {
+                            break;
                         }
                         return Certainty::Proven;
                     }
