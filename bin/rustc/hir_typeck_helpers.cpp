@@ -1074,7 +1074,8 @@ const HIRType* SolverImpl::getType(HIRTypeInterner& types, const char* name, con
     if (defaultIt == trait->types.end() || !defaultIt->second.hasDefault) {
         return nullptr;
     }
-    auto defaultType = MonomorphStatePtr(types, types.self(), &traitImpl->traitArgs, nullptr).monomorphType(sp, defaultIt->second.defaultValue);
+    const auto ownParams = defaultIt->second.generics.makeNopParams(types, 1);
+    auto defaultType = MonomorphStatePtr(types, types.self(), &traitImpl->traitArgs, &ownParams).monomorphType(sp, defaultIt->second.defaultValue);
     return SolverImplTraitMonomorph(types, *traitImpl, implParams, params).monomorphType(sp, defaultType);
 }
 
