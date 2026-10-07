@@ -7746,7 +7746,23 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
 
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Coercion consume"));
-            if (!context.linkCoerce.empty()) {
+            bool decided = false;
+            for (size_t i = 0; i < context.linkCoerce.size() && !decided; i++) {
+                auto& ent = *context.linkCoerce[i];
+                if (context.getType(ent.sourceType())->is_Diverge()) {
+                    continue;
+                }
+                ent.leftTy = context.expandAssociatedTypes(ent.span(), mv$(ent.leftTy));
+                context.currentOrder = ent.bindingOrder ? ent.bindingOrder : ent.order;
+                decided = checkCoerce(context, ent);
+                context.currentOrder = 0;
+                if (decided) {
+                    DEBUG(StringView("- Decided coercion R") << ent.ruleIdx << StringView(" ") << ent.leftTy << StringView(" := ") << ent.sourceType());
+                    context.linkCoerce.erase(context.linkCoerce.begin() + i);
+                    context.ivars.markChange();
+                }
+            }
+            if (!decided && !context.linkCoerce.empty()) {
                 auto selected = std::find_if(context.linkCoerce.begin(), context.linkCoerce.end(), [&](const auto& coercion) {
                     return !context.getType(coercion->sourceType())->is_Diverge();
                 });
