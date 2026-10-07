@@ -933,3 +933,24 @@ func TestHostUnitsCompileFastUnlessARuntimeUnitIsTheSame(t *testing.T) {
 		t.Errorf("under a build-override the proc macro compiles with %q, want -O1 -g", got)
 	}
 }
+
+// arti 2.7.0 is built as rustc 1.92 and nothing in our compiler is tied to
+// one rustc release: cargo runs the compiler, and every build script, as the
+// release its caller names, and a unit built for another release is another
+// unit.
+func TestTheCompilerRunsAsTheReleaseCargoIsGiven(t *testing.T) {
+	t.Setenv("RUSTC_OVERRIDE_VERSION_STRING", "1.92.0")
+	builder, pkgs := hostGraph(t, nil)
+	app := pkgs["app"]
+
+	if got := builder.commonEnv(app)["RUSTC_OVERRIDE_VERSION_STRING"]; got != "1.92.0" {
+		t.Fatalf("the compiler is run as %q, want the 1.92.0 cargo is given", got)
+	}
+	signature := strings.Join(builder.rustSignature(app, packageLibrary(app), true, builder.unitProfile(app, packageLibrary(app), false)), " ")
+	if !strings.Contains(signature, "rustc-version=1.92.0") {
+		t.Fatalf("a unit's signature %q does not carry the release it is built as", signature)
+	}
+	if script := strings.Join(builder.buildScriptRunSignature(pkgs["hostonly"]), " "); !strings.Contains(script, "rustc-version=1.92.0") {
+		t.Fatalf("a build script run's signature %q does not carry the release", script)
+	}
+}

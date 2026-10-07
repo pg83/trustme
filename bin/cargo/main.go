@@ -22,9 +22,16 @@ func main() {
 	})
 }
 
-// The toolchain trustme stands in for, as cargo 1.90.0 prints itself.
+// Cargo has no release of its own either: it reports the one the compiler
+// is run as, which its caller names.
 func versionLine() string {
-	return "cargo 1.90.0 (840b83a10 2025-07-30)"
+	version := os.Getenv("RUSTC_OVERRIDE_VERSION_STRING")
+
+	if version == "" {
+		throwFmt("no release to report: it comes from RUSTC_OVERRIDE_VERSION_STRING")
+	}
+
+	return "cargo " + version
 }
 
 func dispatch(args []string) {

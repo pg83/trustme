@@ -106,9 +106,17 @@ func TestAManifestPathIsRefusedAsCargoRefusesIt(t *testing.T) {
 	}
 }
 
-func TestTheVersionIsCargosOwn(t *testing.T) {
-	if got := versionLine(); got != "cargo 1.90.0 (840b83a10 2025-07-30)" {
-		t.Fatalf("cargo -V = %q", got)
+func TestTheVersionIsTheReleaseCargoIsGiven(t *testing.T) {
+	t.Setenv("RUSTC_OVERRIDE_VERSION_STRING", "1.92.0")
+
+	if got := versionLine(); got != "cargo 1.92.0" {
+		t.Fatalf("cargo -V = %q, want the 1.92.0 it is given", got)
+	}
+
+	t.Setenv("RUSTC_OVERRIDE_VERSION_STRING", "")
+
+	if exc := try(func() { versionLine() }); exc == nil {
+		t.Fatal("cargo -V reports a release nobody gave it")
 	}
 }
 

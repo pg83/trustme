@@ -18,7 +18,7 @@ def main() -> int:
     with lib.workdir() as work:
         env = dict(os.environ)
         env["TRUSTME_PATH"] = lib.trustme_link(work)
-        env["RUSTC_VERSION"] = "1.90.0"
+        env["RUSTC_VERSION"] = os.environ["RUSTC_OVERRIDE_VERSION_STRING"]
         env.setdefault("CC", "cc")
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
         out = os.path.join(work, "out")

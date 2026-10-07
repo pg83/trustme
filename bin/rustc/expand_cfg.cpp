@@ -97,14 +97,14 @@ namespace {
         std::pair<std::string, std::optional<std::string>> parseCfgOption();
     };
 
-    bool checkCfgInner1(const CfgState& cfg, const RcString& name, TokenStream& lex);
+    bool checkCfgInner1(const Settings& settings, const RcString& name, TokenStream& lex);
 
-    bool checkCfgInner(const CfgState& cfg, TokenStream& lex) {
+    bool checkCfgInner(const Settings& settings, TokenStream& lex) {
         TRACE_FUNCTION;
         if (lex.lookahead(0) == TOK_INTERPOLATED_META) {
             auto meta = std::move(lex.getTokenCheck(TOK_INTERPOLATED_META).fragMeta());
             auto ilex = TTStream(meta.span(), ParseState(), meta.data());
-            return checkCfgInner1(cfg, meta.name().asTrivial(), ilex);
+            return checkCfgInner1(settings, meta.name().asTrivial(), ilex);
         } else if (lex.lookahead(0) == TOK_RWORD_TRUE) {
             lex.getTokenCheck(TOK_RWORD_TRUE);
             return true;
@@ -113,11 +113,12 @@ namespace {
             return false;
         } else {
             auto name = lex.getTokenCheck(TOK_IDENT).ident().name;
-            return checkCfgInner1(cfg, name, lex);
+            return checkCfgInner1(settings, name, lex);
         }
     }
 
-    bool checkCfgInner1(const CfgState& cfg, const RcString& name, TokenStream& lex) {
+    bool checkCfgInner1(const Settings& settings, const RcString& name, TokenStream& lex) {
+        const auto& cfg = *settings.cfg;
         Token tok;
         switch (lex.lookahead(0)) {
             case TOK_EQUAL: {
@@ -157,7 +158,7 @@ namespace {
                 if (name == "any" || name == "cfg") {
                     bool rv = false;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-                        rv |= checkCfgInner(cfg, lex);
+                        rv |= checkCfgInner(settings, lex);
                         if (lex.lookahead(0) != TOK_COMMA) {
                             break;
                         }
@@ -166,14 +167,14 @@ namespace {
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return rv;
                 } else if (name == "not") {
-                    bool rv = checkCfgInner(cfg, lex);
+                    bool rv = checkCfgInner(settings, lex);
                     lex.getTokenIf(TOK_COMMA);
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return !rv;
                 } else if (name == "all") {
                     bool rv = true;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-                        rv &= checkCfgInner(cfg, lex);
+                        rv &= checkCfgInner(settings, lex);
                         if (lex.lookahead(0) != TOK_COMMA) {
                             break;
                         }
@@ -186,7 +187,7 @@ namespace {
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
                         const auto field = lex.getTokenCheck(TOK_IDENT).ident().name;
                         const auto canonical = RcString::newInterned(FMT(StringView("target_") << field));
-                        rv &= checkCfgInner1(cfg, canonical, lex);
+                        rv &= checkCfgInner1(settings, canonical, lex);
                         if (lex.lookahead(0) != TOK_COMMA) {
                             break;
                         }
@@ -198,31 +199,14 @@ namespace {
                     auto wanted = lex.getTokenCheck(TOK_STRING).str();
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
-                    struct H {
-                        static std::array<unsigned, 3> parse(const std::string& v) {
-                            std::array<unsigned, 3> rv = {0, 0, 0};
-                            size_t pos = 0;
-                            for (unsigned i = 0; i < 3 && pos < v.size(); i++) {
-                                unsigned val = 0;
-                                while (pos < v.size() && std::isdigit(static_cast<unsigned char>(v[pos]))) {
-                                    val = val * 10 + static_cast<unsigned>(v[pos] - '0');
-                                    pos++;
-                                }
-                                rv[i] = val;
-                                if (pos < v.size() && v[pos] == '.') {
-                                    pos++;
-                                } else {
-                                    break;
-                                }
-                            }
-                            return rv;
-                        }
-                    };
-
-                    const char* override = std::getenv("RUSTC_OVERRIDE_VERSION_STRING");
-                    auto have = H::parse(override ? std::string(override) : std::string(RUSTC_TARGET_VERSION) + ".100");
-                    auto want = H::parse(wanted);
-                    return have >= want;
+                    RustcVersion want;
+                    if (!RustcVersion::parse(StringView(wanted.c_str()), want)) {
+                        return false;
+                    }
+                    if (!settings.rustcVersionGiven) {
+                        ERROR(lex.pointSpan(), E0000, StringView("cfg(version) with no rustc version given (RUSTC_OVERRIDE_VERSION_STRING)"));
+                    }
+                    return !(settings.rustcVersion < want);
                 } else {
                     ERROR(lex.pointSpan(), E0000, StringView("Unknown cfg() function - ") << name);
                 }
@@ -313,12 +297,11 @@ void CfgSetLintCap(Settings& settings, CfgLintLevel level) {
 }
 
 bool checkCfgStream(const Settings& settings, TokenStream& lex) {
-    const auto& cfg = *settings.cfg;
     Token tok;
     bool rv = false;
     GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-        rv |= checkCfgInner(cfg, lex);
+        rv |= checkCfgInner(settings, lex);
         if (lex.lookahead(0) != TOK_COMMA) {
             break;
         }
@@ -345,7 +328,6 @@ bool checkCfgAttrs(const Settings& settings, const ASTAttributeList& attrs) {
 }
 
 std::vector<ASTAttribute> checkCfgAttr(const WireBoard& wb, const ASTAttribute& mi) {
-    const auto& cfg = *wb.settings->cfg;
     ParseState ps;
     ps.wb = &wb;
     TTStream lex(mi.span(), ps, mi.data());
@@ -353,7 +335,7 @@ std::vector<ASTAttribute> checkCfgAttr(const WireBoard& wb, const ASTAttribute& 
     Token tok;
     std::vector<ASTAttribute> rv;
     lex.getTokenCheck(TOK_PAREN_OPEN);
-    auto cfgRes = checkCfgInner(cfg, lex);
+    auto cfgRes = checkCfgInner(*wb.settings, lex);
     while (lex.lookahead(0) == TOK_COMMA && lex.lookahead(1) != TOK_PAREN_CLOSE) {
         lex.getTokenCheck(TOK_COMMA);
         rv.push_back(ParseMetaItem(lex));
@@ -526,8 +508,7 @@ auto CfgSpecParser::parseCfgOption() -> std::pair<std::string, std::optional<std
 auto CCfgExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
     DEBUG(StringView("cfg!() - ") << tt);
     auto lex = TTStream(sp, ParseState(), tt);
-    const auto& cfg = *wb.settings->cfg;
-    bool rv = checkCfgInner(cfg, lex);
+    bool rv = checkCfgInner(*wb.settings, lex);
     lex.getTokenCheck(TOK_EOF);
 
     return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, {}, rv ? TOK_RWORD_TRUE : TOK_RWORD_FALSE)));
@@ -537,8 +518,7 @@ auto CCfgSelectExpander::expand(const Span& sp, const WireBoard& wb, const ASTCr
     DEBUG(StringView("cfg_select!() - ") << tt);
     auto lex = TTStream(sp, ParseState(), tt);
     for (;;) {
-        const auto& cfg = *wb.settings->cfg;
-        bool rv = lex.getTokenIf(TOK_UNDERSCORE) || checkCfgInner(cfg, lex);
+        bool rv = lex.getTokenIf(TOK_UNDERSCORE) || checkCfgInner(*wb.settings, lex);
         lex.getTokenCheck(TOK_FATARROW);
         auto t = ParseTT(lex, true);
         if (rv) {

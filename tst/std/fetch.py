@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Fetch the rust-1.90.0 standard-library source, adjust it, drop in the
-trustme-stdlib shim, and pack the tree into a tar. This is the `std_src` graph
-node — shared by every project test.
+"""Fetch one rustc release's standard-library source, adjust it, drop in the
+trustme-stdlib shim, and pack the tree into a tar: the `std_src_<version>`
+graph node, one per release the graph builds a standard library for.
 
-    fetch.py <out.tar>
+    fetch.py <version> <out.tar>
 
-Set RUST_SRC to an already-unpacked rust-1.90.0-src tree to skip the download.
+Set RUST_SRC to an already-unpacked rustc-<version>-src tree to skip the
+download.
 """
 import os
 import shutil
@@ -14,8 +15,6 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import lib  # noqa: E402
-
-VER = "1.90.0"
 
 SHIM_TOML = """\
 [package]
@@ -158,21 +157,22 @@ def adjust_sources(src: str) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: fetch.py OUT_TAR")
-    out = os.path.abspath(sys.argv[1])
+    if len(sys.argv) != 3:
+        raise SystemExit("usage: fetch.py VERSION OUT_TAR")
+    version = sys.argv[1]
+    out = os.path.abspath(sys.argv[2])
     with lib.workdir() as work:
         src = os.path.join(work, "rust-src")
         local = os.environ.get("RUST_SRC")
         if local:
             shutil.copytree(local, src, symlinks=True)
         else:
-            lib.log(f"[std_src] downloading rustc-{VER}-src")
+            lib.log(f"[std_src] downloading rustc-{version}-src")
             tarball = os.path.join(work, "src.tar.gz")
             lib.run(["curl", "-sSL", "-o", tarball,
-                     f"https://static.rust-lang.org/dist/rustc-{VER}-src.tar.gz"])
+                     f"https://static.rust-lang.org/dist/rustc-{version}-src.tar.gz"])
             lib.run(["tar", "-C", work, "-xf", tarball])
-            os.rename(os.path.join(work, f"rustc-{VER}-src"), src)
+            os.rename(os.path.join(work, f"rustc-{version}-src"), src)
         adjust_sources(src)
         # The shim pulls std + panic_unwind + test + workspace crates into one build.
         shim = os.path.join(src, "trustme-stdlib")

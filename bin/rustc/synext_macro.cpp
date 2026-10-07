@@ -1845,7 +1845,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         }
     }
     if (hasLabel && hasOutputValue) {
-        ERROR(sp, E0000, StringView("using both label and output operands for inline assembly is unstable in Rust 1.90"));
+        ERROR(sp, E0000, StringView("using both label and output operands for inline assembly is unstable"));
     }
 
     if (!clobberAbis.empty()) {

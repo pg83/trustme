@@ -32,6 +32,7 @@ type Builder struct {
 	tasks              map[string]*Task
 	units              map[*Task]*CompileUnit
 	runtimeLibraries   map[*Package]bool
+	rustcVersion       string
 	systemHostLoaded   bool
 	systemTargetLoaded bool
 	systemHost         []ExternalCrateArtifact
@@ -442,6 +443,7 @@ func selectWorkspacePackage(workspace *Workspace, members []string, want string)
 // out once to learn which libraries runtime units link, and then for good.
 func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 	b.runtimeLibraries = nil
+	b.rustcVersion = os.Getenv("RUSTC_OVERRIDE_VERSION_STRING")
 	b.collectRootTasks()
 	runtime := map[*Package]bool{}
 
@@ -458,6 +460,10 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 	return b.collectRootTasks()
 }
 
+// The compiler has no rustc version of its own: it is run as the release
+// cargo's caller names (`RUSTC_OVERRIDE_VERSION_STRING`, which upstream rustc
+// reads for `-vV` and `cfg(version)`), and so is every build script it runs.
+// A unit built for another release is another unit.
 func (b *Builder) collectRootTasks() ([]*Task, []InstallArtifact, []ArtifactReport) {
 	root := b.context.root
 	isHost := !b.context.cross
@@ -1293,6 +1299,10 @@ func (b *Builder) commonEnv(pkg *Package) map[string]string {
 		env[key] = value
 	}
 
+	if b.rustcVersion != "" {
+		env["RUSTC_OVERRIDE_VERSION_STRING"] = b.rustcVersion
+	}
+
 	for _, dep := range b.mainDependencies(pkg, false) {
 		for key, value := range dep.packageRef.buildOutput.downstream {
 			env[key] = value
@@ -1408,6 +1418,7 @@ func (b *Builder) rustSignature(pkg *Package, target *Target, isHost bool, profi
 		b.context.compiler,
 		b.context.opts.profile,
 		profile.key(),
+		"rustc-version=" + b.rustcVersion,
 		b.context.target,
 		fmt.Sprintf("host=%t", isHost),
 		fmt.Sprintf("emit-mmir=%t", b.context.opts.emitMmir),
@@ -1444,6 +1455,7 @@ func (b *Builder) buildScriptRunSignature(pkg *Package) []string {
 		"debug=" + strconv.FormatBool(profile.debug),
 		"profile=" + b.context.opts.profile,
 		"rustc=" + b.context.compiler,
+		"rustc-version=" + b.rustcVersion,
 		"rustflags=" + strings.Join(b.context.rustflags, "\x1f"),
 	}
 	if len(b.context.opts.libSearch) > 0 {

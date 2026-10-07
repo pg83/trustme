@@ -106,7 +106,7 @@ def main() -> int:
         target = node.targets[0]
         if (
             isinstance(target, ast.Name)
-            and target.id == "libstd"
+            and target.id in ("libstd", "library")
             and isinstance(node.value, ast.Call)
         ):
             libstd_commands.append(node.value)

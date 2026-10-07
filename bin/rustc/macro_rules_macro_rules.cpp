@@ -392,7 +392,7 @@ namespace {
                     return InterpolatedFragment(InterpolatedFragment::STMT, stmt);
                 }
             case MacroPatEnt::PAT_PATH:
-                // HACK for `rustc-1.90.0-src/vendor/icu_locid_transform_data-1.5.0/data/macros.rs::23`
+                // HACK for `icu_locid_transform_data-1.5.0/data/macros.rs::23`
                 if (lex.lookahead(0) == TOK_INTERPOLATED_TYPE) {
                     return InterpolatedFragment(std::move(lex.getToken().fragType()));
                 }

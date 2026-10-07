@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Verify that the compiler has no runtime-selectable language version."""
+"""mrustc's compile-time `TARGETVER_` branches stay gone: behaviour that
+depends on the rustc release reads the version the build runs the compiler
+for (`Settings::rustcVersion`)."""
 
 import os
 from pathlib import Path
@@ -24,7 +26,7 @@ def main() -> int:
                 )
     if compatibility_branches:
         raise RuntimeError(
-            "fixed Rust 1.90 compiler must not retain target-version branches:\n"
+            "compile-time target-version branches are back:\n"
             + "\n".join(compatibility_branches)
         )
 

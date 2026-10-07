@@ -1,10 +1,22 @@
 #pragma once
 
-inline constexpr const char* RUSTC_TARGET_VERSION = "1.90";
-/* The release this toolchain reproduces, as `rustc -V` / `-vV` report it: build scripts
-   read the first line (`libc`, `rustversion`, `zerocopy`: `rustc 1.90.0 (...)`) or the
-   `release:` field (`autocfg`). */
-inline constexpr const char* RUSTC_RELEASE_VERSION = "1.90.0";
-inline constexpr const char* RUSTC_RELEASE_COMMIT = "1159e78c4747b02ef996e55082b704c09b970588";
-inline constexpr const char* RUSTC_RELEASE_COMMIT_SHORT = "1159e78c4";
-inline constexpr const char* RUSTC_RELEASE_DATE = "2025-09-14";
+#include <std/str/view.h>
+#include <std/sys/types.h>
+
+struct RustcVersion {
+    u16 major = 0;
+    u16 minor = 0;
+    u16 patch = 0;
+
+    static bool parse(stl::StringView text, RustcVersion& out);
+
+    bool operator<(const RustcVersion& other) const {
+        if (major != other.major) {
+            return major < other.major;
+        }
+        if (minor != other.minor) {
+            return minor < other.minor;
+        }
+        return patch < other.patch;
+    }
+};

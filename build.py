@@ -1,5 +1,6 @@
 import hashlib
 import json
+import types
 import re
 from pathlib import Path
 
@@ -454,60 +455,69 @@ FULL_SUITE_PROJECT_TIMEOUT = budget(minutes=100)
 # single test, but it must not leave the graph occupied indefinitely.
 LIBSTD_TIMEOUT = budget(minutes=10)
 
-# std_src: fetch + adjust the rust-1.90 source, add the shim, pack it.
-std_src = command(
-    name="std_src",
-    local=True,
-    inputs=["$(S)/tst/std/fetch.py"] + TESTS_LIB,
-    outputs=["$(B)/tst/rust-src.tar"],
-    cmd=[
-        *(LIBSTD_TIMEOUT if system_rustc_mode else []),
-        "python3", "$(S)/tst/std/fetch.py",
-        "$(B)/tst/rust-src.tar",
-    ],
-    descr="RS",
-    color="cyan",
-)
+# A standard library per rustc release: the release's source with the same
+# adjustments, built by the compiler run as that release. A node that runs the
+# compiler names the release it runs it as and links that release's library.
+def add_libstd(version):
+    tag = version.replace(".", "_")
+    source_archive = f"$(B)/tst/rust-src-{version}.tar"
+    archive = f"$(B)/tst/libstd-{version}.tar"
+    source = command(
+        name=f"std_src_{tag}",
+        local=True,
+        inputs=["$(S)/tst/std/fetch.py"] + TESTS_LIB,
+        outputs=[source_archive],
+        cmd=[
+            *(LIBSTD_TIMEOUT if system_rustc_mode else []),
+            "python3", "$(S)/tst/std/fetch.py", version, source_archive,
+        ],
+        descr="RS",
+        color="cyan",
+    )
+    # System rustc obtains its standard library from its own sysroot. The empty
+    # archive preserves the adapters' interface while making their `-L` harmless.
+    if system_rustc_mode:
+        library = command(
+            name=f"libstd_{tag}",
+            local=True,
+            inputs=["$(S)/tst/system_rustc.py"],
+            outputs=[archive],
+            cmd=[
+                "python3", "$(S)/tst/system_rustc.py", "empty-libstd", archive,
+            ],
+            descr="SL",
+            color="cyan",
+        )
+    else:
+        library = command(
+            name=f"libstd_{tag}",
+            # Reads the multi-gigabyte Rust source archive: that stays here.
+            local=True,
+            inputs=(
+                ["$(S)/tst/std/build.py"]
+                + build.glob("$(S)/lib/proc_macro/**/*.rs")
+                + build.glob("$(S)/lib/proc_macro/Cargo.toml")
+                + TESTS_LIB
+            ),
+            outputs=[archive],
+            cmd=[
+                *LIBSTD_TIMEOUT,
+                "python3", "$(S)/tst/std/build.py",
+                source_archive, archive,
+                "$(S)/lib/proc_macro/Cargo.toml",
+            ],
+            deps=[source, rustc, cargo],
+            env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": version},
+            descr="LS",
+            color="cyan",
+        )
+    return types.SimpleNamespace(
+        version=version, source=source, source_archive=source_archive,
+        node=library, archive=archive,
+    )
 
-# System rustc obtains its standard library from its own sysroot. The empty
-# archive preserves the adapters' interface while making their `-L` harmless.
-if system_rustc_mode:
-    libstd = command(
-        name="libstd",
-        local=True,
-        inputs=["$(S)/tst/system_rustc.py"],
-        outputs=["$(B)/tst/libstd.tar"],
-        cmd=[
-            "python3", "$(S)/tst/system_rustc.py", "empty-libstd",
-            "$(B)/tst/libstd.tar",
-        ],
-        descr="SL",
-        color="cyan",
-    )
-else:
-    # Build the standard library (+ libproc_macro) once, from that source.
-    libstd = command(
-        name="libstd",
-        # Reads the multi-gigabyte Rust source archive: that stays here.
-        local=True,
-        inputs=(
-            ["$(S)/tst/std/build.py"]
-            + build.glob("$(S)/lib/proc_macro/**/*.rs")
-            + build.glob("$(S)/lib/proc_macro/Cargo.toml")
-            + TESTS_LIB
-        ),
-        outputs=["$(B)/tst/libstd.tar"],
-        cmd=[
-            *LIBSTD_TIMEOUT,
-            "python3", "$(S)/tst/std/build.py",
-            "$(B)/tst/rust-src.tar", "$(B)/tst/libstd.tar",
-            "$(S)/lib/proc_macro/Cargo.toml",
-        ],
-        deps=[std_src, rustc, cargo],
-        env=TOOLCHAIN_ENV,
-        descr="LS",
-        color="cyan",
-    )
+
+LIBSTDS = {version: add_libstd(version) for version in ("1.90.0", "1.92.0")}
 
 rust_test_helpers = command(
     name="rust_test_helpers",
@@ -517,10 +527,11 @@ rust_test_helpers = command(
     cmd=[
         "python3",
         "$(S)/tst/rust_1_90/build_native.py",
-        "$(B)/tst/rust-src.tar",
+        LIBSTDS["1.90.0"].source_archive,
         "$(B)/tst/rust_1_90/native/librust_test_helpers.a",
     ],
-    deps=[std_src],
+    deps=[LIBSTDS["1.90.0"].source],
+    env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="RN",
     color="cyan",
 )
@@ -543,11 +554,11 @@ if system_rustc_mode:
             *LIBSTD_TIMEOUT,
             "python3",
             "$(S)/tst/rust_lib/build_system_dependencies.py",
-            "$(B)/tst/rust-src.tar",
+            LIBSTDS["1.90.0"].source_archive,
             "$(B)/tst/rust-lib-dependencies.tar",
         ],
-        deps=[std_src, rustc],
-        env={
+        deps=[LIBSTDS["1.90.0"].source, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", 
             "RUSTC": "$(B)/bin/rustc",
             "CARGO": build.flags.system_cargo,
         },
@@ -571,12 +582,12 @@ else:
         cmd=[
             "python3",
             "$(S)/tst/rust_lib/build_dependencies.py",
-            "$(B)/tst/rust-src.tar",
-            "$(B)/tst/libstd.tar",
+            LIBSTDS["1.90.0"].source_archive,
+            LIBSTDS["1.90.0"].archive,
             "$(B)/tst/rust-lib-dependencies.tar",
         ],
-        deps=[std_src, libstd, rustc, cargo],
-        env=TOOLCHAIN_ENV,
+        deps=[LIBSTDS["1.90.0"].source, LIBSTDS["1.90.0"].node, rustc, cargo],
+        env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
         descr="LD",
         color="cyan",
     )
@@ -589,6 +600,7 @@ def add_project_test(
     url,
     rev,
     *,
+    rust,
     manifest=".",
     vendor_manifest=None,
     adapter="$(S)/tst/test_project.py",
@@ -634,7 +646,7 @@ def add_project_test(
             source_archive, vendor_manifest, vendor_archive, *vendor_sync,
         ],
         deps=[source, cargo],
-        env={"CARGO": "$(B)/bin/cargo"},
+        env={"CARGO": "$(B)/bin/cargo", "RUSTC_OVERRIDE_VERSION_STRING": rust},
         descr="VN",
         color="magenta",
     )
@@ -652,13 +664,13 @@ def add_project_test(
             [
                 *timeout,
                 "python3", adapter,
-                source_archive, vendor_archive, "$(B)/tst/libstd.tar",
+                source_archive, vendor_archive, LIBSTDS[rust].archive,
                 manifest, *adapter_args,
             ],
             [*TEST_TIMEOUT, "sh", "-c", f"> {stamp}"],
         ],
-        deps=[source, vendor, libstd, rustc, cargo],
-        env=TOOLCHAIN_ENV,
+        deps=[source, vendor, LIBSTDS[rust].node, rustc, cargo],
+        env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": rust},
         descr="TS",
         color="magenta",
     )
@@ -668,6 +680,7 @@ def add_project_test(
 
 resvg = add_project_test(
     name="resvg",
+    rust="1.90.0",
     url="https://github.com/linebender/resvg.git",
     rev="08c79a3148df4ce8ab08fca72204b142b95423dd",
     manifest="crates/resvg",
@@ -680,6 +693,7 @@ resvg = add_project_test(
 
 base64 = add_project_test(
     name="base64",
+    rust="1.90.0",
     url="https://github.com/marshallpierce/rust-base64.git",
     rev="069bf7067b949f5c0a92b6ceb82492920502f2c2",
     timeout=NESTED_PROJECT_TIMEOUT,
@@ -687,6 +701,7 @@ base64 = add_project_test(
 
 bitflags = add_project_test(
     name="bitflags",
+    rust="1.90.0",
     url="https://github.com/bitflags/bitflags.git",
     rev="f92a2921b41644b02ca5d50a6ace542e309e6a6f",
     lockfile="$(S)/tst/projects/bitflags/Cargo.lock",
@@ -695,6 +710,7 @@ bitflags = add_project_test(
 
 itertools = add_project_test(
     name="itertools",
+    rust="1.90.0",
     url="https://github.com/rust-itertools/itertools.git",
     rev="d5084d15e959b85d89a49e5cd33ad6267bc541a3",
     lockfile="$(S)/tst/projects/itertools/Cargo.lock",
@@ -702,6 +718,7 @@ itertools = add_project_test(
 
 clap = add_project_test(
     name="clap",
+    rust="1.90.0",
     url="https://github.com/clap-rs/clap.git",
     rev="3bd502024e45cc9abef690f28783d76a9ce33500",
     timeout=FULL_SUITE_PROJECT_TIMEOUT,
@@ -709,6 +726,7 @@ clap = add_project_test(
 
 clap_2_33_3 = add_project_test(
     name="clap_2_33_3",
+    rust="1.90.0",
     url="https://github.com/clap-rs/clap.git",
     rev="33bebeda52b52c6f643b4ed6fa880671ba0ab80a",
     lockfile="$(S)/tst/projects/clap_2_33_3/Cargo.lock",
@@ -716,6 +734,7 @@ clap_2_33_3 = add_project_test(
 
 syn_0_15_44 = add_project_test(
     name="syn_0_15_44",
+    rust="1.90.0",
     url="https://github.com/dtolnay/syn.git",
     rev="6d798b63c255e90b7b1dbbfb3707fdce1704a18d",
     lockfile="$(S)/tst/projects/syn_0_15_44/Cargo.lock",
@@ -725,6 +744,7 @@ syn_0_15_44 = add_project_test(
 
 ron_0_4_2 = add_project_test(
     name="ron_0_4_2",
+    rust="1.90.0",
     url="https://github.com/ron-rs/ron.git",
     rev="be6bebab49d29bf3cf0fcf1c96fb870597e2c7b9",
     lockfile="$(S)/tst/projects/ron_0_4_2/Cargo.lock",
@@ -733,6 +753,7 @@ ron_0_4_2 = add_project_test(
 
 console_0_7_7 = add_project_test(
     name="console_0_7_7",
+    rust="1.90.0",
     url="https://github.com/mitsuhiko/console.git",
     rev="9f62b487585476f7a5ba85cd6a2b109d6d15a92f",
     lockfile="$(S)/tst/projects/console_0_7_7/Cargo.lock",
@@ -740,6 +761,7 @@ console_0_7_7 = add_project_test(
 
 insta_0_8_2 = add_project_test(
     name="insta_0_8_2",
+    rust="1.90.0",
     url="https://github.com/mitsuhiko/insta.git",
     rev="9373b2669c6c2ae44ab85afe24acb5369f839100",
     lockfile="$(S)/tst/projects/insta_0_8_2/Cargo.lock",
@@ -755,6 +777,7 @@ insta_0_8_2 = add_project_test(
 
 rayon_1_12_0 = add_project_test(
     name="rayon_1_12_0",
+    rust="1.90.0",
     url="https://github.com/rayon-rs/rayon.git",
     rev="c9ced185ae3508246a9eb70c8407a1199bb1b77f",
     lockfile="$(S)/tst/projects/rayon_1_12_0/Cargo.lock",
@@ -763,6 +786,7 @@ rayon_1_12_0 = add_project_test(
 
 crossbeam_utils_0_8_22 = add_project_test(
     name="crossbeam_utils_0_8_22",
+    rust="1.90.0",
     url="https://github.com/crossbeam-rs/crossbeam.git",
     rev="9b56303b8aa9ff8ec5bbebb9d2da05e034977889",
     manifest="crossbeam-utils",
@@ -771,6 +795,7 @@ crossbeam_utils_0_8_22 = add_project_test(
 
 gimli_0_32_3 = add_project_test(
     name="gimli_0_32_3",
+    rust="1.90.0",
     url="https://github.com/gimli-rs/gimli.git",
     rev="8bc8e622fcb9be20fc9f03c96bc6335d936b869d",
     adapter_args=["--no-default-features", "--features", "read"],
@@ -779,6 +804,7 @@ gimli_0_32_3 = add_project_test(
 
 addr2line_0_25_1 = add_project_test(
     name="addr2line_0_25_1",
+    rust="1.90.0",
     url="https://github.com/gimli-rs/addr2line.git",
     rev="f02db009deb9b441818afa49cb1b17453c1e4243",
     adapter_args=["--no-default-features"],
@@ -787,6 +813,7 @@ addr2line_0_25_1 = add_project_test(
 
 backtrace_0_3_76 = add_project_test(
     name="backtrace_0_3_76",
+    rust="1.90.0",
     url="https://github.com/rust-lang/backtrace-rs.git",
     rev="775f6a1ba62e7d35a1fac76e64c61d9d4687b5f2",
     adapter_args=[
@@ -797,6 +824,7 @@ backtrace_0_3_76 = add_project_test(
 
 pest_2_9_0 = add_project_test(
     name="pest_2_9_0",
+    rust="1.90.0",
     url="https://github.com/pest-parser/pest.git",
     rev="d9b29b61da505daafd028c19547366ace1ade7df",
     manifest="pest",
@@ -807,12 +835,14 @@ pest_2_9_0 = add_project_test(
 
 combine = add_project_test(
     name="combine",
+    rust="1.90.0",
     url="https://github.com/Marwes/combine.git",
     rev="50a71afa1c88e8564e0220a6e0625dd16a2302a2",
 )
 
 camino_1_1_12 = add_project_test(
     name="camino_1_1_12",
+    rust="1.90.0",
     url="https://github.com/camino-rs/camino.git",
     rev="e5edcb948d31dc66000a560725ed9f22c98672f3",
     adapter_args=["--all-features"],
@@ -838,6 +868,7 @@ camino_1_1_12 = add_project_test(
 # one harness thread cost.
 proptest_1_11_0 = add_project_test(
     name="proptest_1_11_0",
+    rust="1.90.0",
     url="https://github.com/proptest-rs/proptest.git",
     rev="7f1367f9a4dc8440c47b93166a38ed064f63ea8c",
     manifest="proptest",
@@ -853,6 +884,7 @@ proptest_1_11_0 = add_project_test(
 
 alloca = add_project_test(
     name="alloca",
+    rust="1.90.0",
     url="https://github.com/playXE/alloca-rs.git",
     rev="1a5ff4220155da43390f7f7ee940cb508d3db262",
     lockfile="$(S)/tst/projects/alloca/Cargo.lock",
@@ -860,6 +892,7 @@ alloca = add_project_test(
 
 zerocopy = add_project_test(
     name="zerocopy",
+    rust="1.90.0",
     url="https://github.com/google/zerocopy.git",
     rev="a986089ee73111d5bfda48b0c7d29d3f9301571c",
     manifest="zerocopy",
@@ -870,6 +903,7 @@ zerocopy = add_project_test(
 
 zerocopy_0_8_56 = add_project_test(
     name="zerocopy_0_8_56",
+    rust="1.90.0",
     url="https://github.com/google/zerocopy.git",
     rev="6dc429c451bdf1d7202ec1ec2cf426514e00d8eb",
     manifest="zerocopy",
@@ -880,6 +914,7 @@ zerocopy_0_8_56 = add_project_test(
 
 rustversion = add_project_test(
     name="rustversion",
+    rust="1.90.0",
     url="https://github.com/dtolnay/rustversion.git",
     rev="9e86f839b6a34a7d9398f243d88bf400b7fa1f7c",
     lockfile="$(S)/tst/projects/rustversion/Cargo.lock",
@@ -887,6 +922,7 @@ rustversion = add_project_test(
 
 trybuild = add_project_test(
     name="trybuild",
+    rust="1.90.0",
     url="https://github.com/dtolnay/trybuild.git",
     rev="2adc26560dba1d8eaeb596c5625f854e5d6c68b2",
     lockfile="$(S)/tst/projects/trybuild/Cargo.lock",
@@ -895,6 +931,7 @@ trybuild = add_project_test(
 
 serde = add_project_test(
     name="serde",
+    rust="1.90.0",
     url="https://github.com/serde-rs/serde.git",
     rev="7fc3b4c30c94f73a96ebd1553f2b090d928fc3a8",
     manifest="serde",
@@ -904,6 +941,7 @@ serde = add_project_test(
 
 serde_derive_1_0_229 = add_project_test(
     name="serde_derive_1_0_229",
+    rust="1.90.0",
     url="https://github.com/serde-rs/serde.git",
     rev="7fc3b4c30c94f73a96ebd1553f2b090d928fc3a8",
     manifest="serde_derive",
@@ -913,6 +951,7 @@ serde_derive_1_0_229 = add_project_test(
 
 serde_core_1_0_229 = add_project_test(
     name="serde_core_1_0_229",
+    rust="1.90.0",
     url="https://github.com/serde-rs/serde.git",
     rev="7fc3b4c30c94f73a96ebd1553f2b090d928fc3a8",
     manifest="serde_core",
@@ -922,6 +961,7 @@ serde_core_1_0_229 = add_project_test(
 
 elain = add_project_test(
     name="elain",
+    rust="1.90.0",
     url="https://github.com/jswrenn/elain.git",
     rev="a28dc120e15b915502241eab078984b1315eb9aa",
     lockfile="$(S)/tst/projects/elain/Cargo.lock",
@@ -929,6 +969,7 @@ elain = add_project_test(
 
 zmij = add_project_test(
     name="zmij",
+    rust="1.90.0",
     url="https://github.com/dtolnay/zmij.git",
     rev="7b7cc48b58028e8af7be87e94c0c1c8936f1a57c",
     lockfile="$(S)/tst/projects/zmij/Cargo.lock",
@@ -936,6 +977,7 @@ zmij = add_project_test(
 
 num_bigint = add_project_test(
     name="num_bigint",
+    rust="1.90.0",
     url="https://github.com/rust-num/num-bigint.git",
     rev="33c59ba44b7bdb09975b38a321b1b88c6a444005",
     lockfile="$(S)/tst/projects/num-bigint/Cargo.lock",
@@ -950,6 +992,7 @@ num_bigint = add_project_test(
 # unmeasured and they keep the heavy budget until they run to the end.
 hashbrown_0_17_1 = add_project_test(
     name="hashbrown_0_17_1",
+    rust="1.90.0",
     url="https://github.com/rust-lang/hashbrown.git",
     rev="c62a63a61b7caf2de8f9ecb7b06a66b0ab6bdf3d",
     lockfile="$(S)/tst/projects/hashbrown_0_17_1/Cargo.lock",
@@ -958,6 +1001,7 @@ hashbrown_0_17_1 = add_project_test(
 
 indexmap_2_14_2 = add_project_test(
     name="indexmap_2_14_2",
+    rust="1.90.0",
     url="https://github.com/indexmap-rs/indexmap.git",
     rev="41a870887c4c77adf665886e63df08f406bfe37a",
     lockfile="$(S)/tst/projects/indexmap_2_14_2/Cargo.lock",
@@ -966,6 +1010,7 @@ indexmap_2_14_2 = add_project_test(
 
 memchr_2_8_3 = add_project_test(
     name="memchr_2_8_3",
+    rust="1.90.0",
     url="https://github.com/BurntSushi/memchr.git",
     rev="5fdb40c054e1fff359a2f7bdf7f87a13b34b465d",
     lockfile="$(S)/tst/projects/memchr_2_8_3/Cargo.lock",
@@ -974,6 +1019,7 @@ memchr_2_8_3 = add_project_test(
 
 serde_json_1_0_151 = add_project_test(
     name="serde_json_1_0_151",
+    rust="1.90.0",
     url="https://github.com/serde-rs/json.git",
     rev="de8500740cdcabffb9734f503e4889def823cf10",
     lockfile="$(S)/tst/projects/serde_json_1_0_151/Cargo.lock",
@@ -982,6 +1028,7 @@ serde_json_1_0_151 = add_project_test(
 
 once_cell_1_21_4 = add_project_test(
     name="once_cell_1_21_4",
+    rust="1.90.0",
     url="https://github.com/matklad/once_cell.git",
     rev="80fe900b21f6d76c1a2ed74d3343e8a3a88c46d0",
     lockfile="$(S)/tst/projects/once_cell_1_21_4/Cargo.lock",
@@ -990,6 +1037,7 @@ once_cell_1_21_4 = add_project_test(
 
 smallvec_1_16_2 = add_project_test(
     name="smallvec_1_16_2",
+    rust="1.90.0",
     url="https://github.com/servo/rust-smallvec.git",
     rev="ccf5fc71044d491c46a3d79e7ed53948e6da1590",
     lockfile="$(S)/tst/projects/smallvec_1_16_2/Cargo.lock",
@@ -998,6 +1046,7 @@ smallvec_1_16_2 = add_project_test(
 
 regex_1_13_1 = add_project_test(
     name="regex_1_13_1",
+    rust="1.90.0",
     url="https://github.com/rust-lang/regex.git",
     rev="2b527599eb9eea0dcc288c704584f242f26a5c61",
     lockfile="$(S)/tst/projects/regex_1_13_1/Cargo.lock",
@@ -1006,6 +1055,7 @@ regex_1_13_1 = add_project_test(
 
 aho_corasick_1_1_5 = add_project_test(
     name="aho_corasick_1_1_5",
+    rust="1.90.0",
     url="https://github.com/BurntSushi/aho-corasick.git",
     rev="5178060ce73d91938f8582d0360e3be031380440",
     lockfile="$(S)/tst/projects/aho_corasick_1_1_5/Cargo.lock",
@@ -1014,6 +1064,7 @@ aho_corasick_1_1_5 = add_project_test(
 
 bytes_1_12_1 = add_project_test(
     name="bytes_1_12_1",
+    rust="1.90.0",
     url="https://github.com/tokio-rs/bytes.git",
     rev="76c0fbb54ed4336caf9d2311658a2f4a5627c21d",
     lockfile="$(S)/tst/projects/bytes_1_12_1/Cargo.lock",
@@ -1022,6 +1073,7 @@ bytes_1_12_1 = add_project_test(
 
 petgraph_0_8_3 = add_project_test(
     name="petgraph_0_8_3",
+    rust="1.90.0",
     url="https://github.com/petgraph/petgraph.git",
     rev="162903562ce5b00cdba390a0d9c1bb80f1c75bf5",
     lockfile="$(S)/tst/projects/petgraph_0_8_3/Cargo.lock",
@@ -1030,6 +1082,7 @@ petgraph_0_8_3 = add_project_test(
 
 ryu_1_0_23 = add_project_test(
     name="ryu_1_0_23",
+    rust="1.90.0",
     url="https://github.com/dtolnay/ryu.git",
     rev="f0b52bb194befe6fd242154f2182fafd43a819b8",
     lockfile="$(S)/tst/projects/ryu_1_0_23/Cargo.lock",
@@ -1038,6 +1091,7 @@ ryu_1_0_23 = add_project_test(
 
 semver_1_0_28 = add_project_test(
     name="semver_1_0_28",
+    rust="1.90.0",
     url="https://github.com/dtolnay/semver.git",
     rev="7625c7aa3f0e8ba21e099d1765bcebcb72aa8816",
     lockfile="$(S)/tst/projects/semver_1_0_28/Cargo.lock",
@@ -1046,6 +1100,7 @@ semver_1_0_28 = add_project_test(
 
 bumpalo_3_20_3 = add_project_test(
     name="bumpalo_3_20_3",
+    rust="1.90.0",
     url="https://github.com/fitzgen/bumpalo.git",
     rev="84654ace6be4444da3ff102a0a0af3b38c4df4fb",
     lockfile="$(S)/tst/projects/bumpalo_3_20_3/Cargo.lock",
@@ -1054,6 +1109,7 @@ bumpalo_3_20_3 = add_project_test(
 
 nom_8_0_0 = add_project_test(
     name="nom_8_0_0",
+    rust="1.90.0",
     url="https://github.com/rust-bakery/nom.git",
     rev="2cec1b3e4c9ccac62c902d60c00de6d1549ccbe1",
     lockfile="$(S)/tst/projects/nom_8_0_0/Cargo.lock",
@@ -1062,6 +1118,7 @@ nom_8_0_0 = add_project_test(
 
 sqlparser_0_63_0 = add_project_test(
     name="sqlparser_0_63_0",
+    rust="1.90.0",
     url="https://github.com/apache/datafusion-sqlparser-rs.git",
     rev="85b1a6f2223bf95d98cf1bc504971abd191dc869",
     lockfile="$(S)/tst/projects/sqlparser_0_63_0/Cargo.lock",
@@ -1070,6 +1127,7 @@ sqlparser_0_63_0 = add_project_test(
 
 pulldown_cmark_0_13_4 = add_project_test(
     name="pulldown_cmark_0_13_4",
+    rust="1.90.0",
     url="https://github.com/pulldown-cmark/pulldown-cmark.git",
     rev="38e4d08f14ec4bd9783270e9623db7681ebed968",
     manifest="pulldown-cmark",
@@ -1080,6 +1138,7 @@ pulldown_cmark_0_13_4 = add_project_test(
 
 tokio_1_53_1 = add_project_test(
     name="tokio_1_53_1",
+    rust="1.90.0",
     url="https://github.com/tokio-rs/tokio.git",
     rev="75fef53d0a8590c2d1dbb63672aa7b7d1ef51155",
     manifest="tokio",
@@ -1091,6 +1150,7 @@ tokio_1_53_1 = add_project_test(
 
 futures_0_3_34 = add_project_test(
     name="futures_0_3_34",
+    rust="1.90.0",
     url="https://github.com/rust-lang/futures-rs.git",
     rev="705e6b5c0f06535b1aac1cb1989a172b3d45be8c",
     manifest="futures",
@@ -1112,6 +1172,7 @@ futures_0_3_34 = add_project_test(
 
 quick_xml_0_42_0 = add_project_test(
     name="quick_xml_0_42_0",
+    rust="1.90.0",
     url="https://github.com/tafia/quick-xml.git",
     rev="36a2c52a4f6c90878c3f60c3c3b5c62efaef28a9",
     lockfile="$(S)/tst/projects/quick_xml_0_42_0/Cargo.lock",
@@ -1120,6 +1181,7 @@ quick_xml_0_42_0 = add_project_test(
 
 async_trait_0_1_92 = add_project_test(
     name="async_trait_0_1_92",
+    rust="1.90.0",
     url="https://github.com/dtolnay/async-trait.git",
     rev="82e7e9edd60f622294373a23c0ce9c0077ad0263",
     lockfile="$(S)/tst/projects/async_trait_0_1_92/Cargo.lock",
@@ -1127,6 +1189,7 @@ async_trait_0_1_92 = add_project_test(
 
 tracing_0_1_44 = add_project_test(
     name="tracing_0_1_44",
+    rust="1.90.0",
     url="https://github.com/tokio-rs/tracing.git",
     rev="2d55f6faf9be83e7e4634129fb96813241aac2b8",
     manifest="tracing",
@@ -1137,6 +1200,7 @@ tracing_0_1_44 = add_project_test(
 
 csv_1_4_0 = add_project_test(
     name="csv_1_4_0",
+    rust="1.90.0",
     url="https://github.com/BurntSushi/rust-csv.git",
     rev="4a3997e91d668ea1d8595bdef15625a77cf2308a",
     lockfile="$(S)/tst/projects/csv_1_4_0/Cargo.lock",
@@ -1144,6 +1208,7 @@ csv_1_4_0 = add_project_test(
 
 unicode_segmentation_1_13_13 = add_project_test(
     name="unicode_segmentation_1_13_13",
+    rust="1.90.0",
     url="https://github.com/unicode-rs/unicode-segmentation.git",
     rev="66a032fd8d667bc47ac5b640b151dff3f5356d07",
     lockfile="$(S)/tst/projects/unicode_segmentation_1_13_13/Cargo.lock",
@@ -1151,6 +1216,7 @@ unicode_segmentation_1_13_13 = add_project_test(
 
 encoding_rs_0_8_41 = add_project_test(
     name="encoding_rs_0_8_41",
+    rust="1.90.0",
     url="https://github.com/hsivonen/encoding_rs.git",
     rev="08604915e6f1a3b7a93398aec0bb92d7a6611a6a",
     lockfile="$(S)/tst/projects/encoding_rs_0_8_41/Cargo.lock",
@@ -1158,6 +1224,7 @@ encoding_rs_0_8_41 = add_project_test(
 
 toml_1_1_6 = add_project_test(
     name="toml_1_1_6",
+    rust="1.90.0",
     url="https://github.com/toml-rs/toml.git",
     rev="572c005d80cca5f7bd163805c2f33ba0a5207b6d",
     manifest="crates/toml",
@@ -1168,6 +1235,7 @@ toml_1_1_6 = add_project_test(
 
 rand_0_9_5 = add_project_test(
     name="rand_0_9_5",
+    rust="1.90.0",
     url="https://github.com/rust-random/rand.git",
     rev="3474ec047279e5de32676c50154ff7d76d12a94e",
     lockfile="$(S)/tst/projects/rand_0_9_5/Cargo.lock",
@@ -1176,6 +1244,7 @@ rand_0_9_5 = add_project_test(
 
 chrono_0_4_45 = add_project_test(
     name="chrono_0_4_45",
+    rust="1.90.0",
     url="https://github.com/chronotope/chrono.git",
     rev="170338250e836976a211e64728ec956e45e78a39",
     lockfile="$(S)/tst/projects/chrono_0_4_45/Cargo.lock",
@@ -1185,6 +1254,7 @@ chrono_0_4_45 = add_project_test(
 
 url_2_5_8 = add_project_test(
     name="url_2_5_8",
+    rust="1.90.0",
     url="https://github.com/servo/rust-url.git",
     rev="d6ea13c5f8e7e6e627f6390161b3e185bda5e5ce",
     manifest="url",
@@ -1195,6 +1265,7 @@ url_2_5_8 = add_project_test(
 
 uuid_1_26_1 = add_project_test(
     name="uuid_1_26_1",
+    rust="1.90.0",
     url="https://github.com/uuid-rs/uuid.git",
     rev="9f927126c89892ddfed6cd2f92df16852f3f9aa6",
     lockfile="$(S)/tst/projects/uuid_1_26_1/Cargo.lock",
@@ -1203,6 +1274,7 @@ uuid_1_26_1 = add_project_test(
 
 anyhow_1_0_104 = add_project_test(
     name="anyhow_1_0_104",
+    rust="1.90.0",
     url="https://github.com/dtolnay/anyhow.git",
     rev="1dbe1862aae650423e3361fbd20b7d17c5109cc3",
     lockfile="$(S)/tst/projects/anyhow_1_0_104/Cargo.lock",
@@ -1210,6 +1282,7 @@ anyhow_1_0_104 = add_project_test(
 
 thiserror_2_0_20 = add_project_test(
     name="thiserror_2_0_20",
+    rust="1.90.0",
     url="https://github.com/dtolnay/thiserror.git",
     rev="b1d5db5e039275d95bf7536a2b2192aeb4dc28bf",
     lockfile="$(S)/tst/projects/thiserror_2_0_20/Cargo.lock",
@@ -1217,6 +1290,7 @@ thiserror_2_0_20 = add_project_test(
 
 arrayvec_0_7_8 = add_project_test(
     name="arrayvec_0_7_8",
+    rust="1.90.0",
     url="https://github.com/bluss/arrayvec.git",
     rev="0cb664cf505844348538230479b0040b44f3faf1",
     lockfile="$(S)/tst/projects/arrayvec_0_7_8/Cargo.lock",
@@ -1224,6 +1298,7 @@ arrayvec_0_7_8 = add_project_test(
 
 crossbeam_channel_0_5_17 = add_project_test(
     name="crossbeam_channel_0_5_17",
+    rust="1.90.0",
     url="https://github.com/crossbeam-rs/crossbeam.git",
     rev="2920c984290229ab4e0ca0452ef09e48a82063f3",
     manifest="crossbeam-channel",
@@ -1241,6 +1316,7 @@ crossbeam_channel_0_5_17 = add_project_test(
 
 parking_lot_0_12_5 = add_project_test(
     name="parking_lot_0_12_5",
+    rust="1.90.0",
     url="https://github.com/Amanieu/parking_lot.git",
     rev="d7828fff7b5d6327ae608e82db45f888b344449a",
     lockfile="$(S)/tst/projects/parking_lot_0_12_5/Cargo.lock",
@@ -1248,6 +1324,7 @@ parking_lot_0_12_5 = add_project_test(
 
 strum_0_28_0 = add_project_test(
     name="strum_0_28_0",
+    rust="1.90.0",
     url="https://github.com/Peternator7/strum.git",
     rev="7376771128834d28bb9beba5c39846cba62e71ec",
     manifest="strum_tests",
@@ -1258,6 +1335,7 @@ strum_0_28_0 = add_project_test(
 
 time_0_3_55 = add_project_test(
     name="time_0_3_55",
+    rust="1.90.0",
     url="https://github.com/time-rs/time.git",
     rev="857d9c404c5b6f6cb64d1bfa604c695be3369e12",
     manifest="time",
@@ -1269,6 +1347,7 @@ time_0_3_55 = add_project_test(
 
 proc_macro2_1_0_107 = add_project_test(
     name="proc_macro2_1_0_107",
+    rust="1.90.0",
     url="https://github.com/dtolnay/proc-macro2.git",
     rev="ed8a5497669cd63db33bf24646f261b012bbbc4a",
     lockfile="$(S)/tst/projects/proc_macro2_1_0_107/Cargo.lock",
@@ -1276,6 +1355,7 @@ proc_macro2_1_0_107 = add_project_test(
 
 quote_1_0_47 = add_project_test(
     name="quote_1_0_47",
+    rust="1.90.0",
     url="https://github.com/dtolnay/quote.git",
     rev="723dcb47d3f0ddc896e17287c8a8d3f2ea2317d5",
     lockfile="$(S)/tst/projects/quote_1_0_47/Cargo.lock",
@@ -1283,6 +1363,7 @@ quote_1_0_47 = add_project_test(
 
 log_0_4_34 = add_project_test(
     name="log_0_4_34",
+    rust="1.90.0",
     url="https://github.com/rust-lang/log.git",
     rev="8034743dd9d7f7583bd9a670271483d176130911",
     lockfile="$(S)/tst/projects/log_0_4_34/Cargo.lock",
@@ -1290,6 +1371,7 @@ log_0_4_34 = add_project_test(
 
 either_1_18_0 = add_project_test(
     name="either_1_18_0",
+    rust="1.90.0",
     url="https://github.com/rayon-rs/either.git",
     rev="ce6f07fc3d56d6a56ecfc32256d2c33bd0b4ad09",
     lockfile="$(S)/tst/projects/either_1_18_0/Cargo.lock",
@@ -1297,6 +1379,7 @@ either_1_18_0 = add_project_test(
 
 num_traits_0_2_19 = add_project_test(
     name="num_traits_0_2_19",
+    rust="1.90.0",
     url="https://github.com/rust-num/num-traits.git",
     rev="7ec3d41d39b28190ec1d42db38021107b3951f3a",
     lockfile="$(S)/tst/projects/num_traits_0_2_19/Cargo.lock",
@@ -1304,6 +1387,7 @@ num_traits_0_2_19 = add_project_test(
 
 byteorder_1_5_0 = add_project_test(
     name="byteorder_1_5_0",
+    rust="1.90.0",
     url="https://github.com/BurntSushi/byteorder.git",
     rev="ec068eefa042d494475db125c4b034bd8e9e34dd",
     lockfile="$(S)/tst/projects/byteorder_1_5_0/Cargo.lock",
@@ -1311,6 +1395,7 @@ byteorder_1_5_0 = add_project_test(
 
 hex_0_4_3 = add_project_test(
     name="hex_0_4_3",
+    rust="1.90.0",
     url="https://github.com/KokaKiwi/rust-hex.git",
     rev="b2b4370b5bf021b98ee7adc92233e8de3f2de792",
     lockfile="$(S)/tst/projects/hex_0_4_3/Cargo.lock",
@@ -1318,6 +1403,7 @@ hex_0_4_3 = add_project_test(
 
 sha2_0_10_9 = add_project_test(
     name="sha2_0_10_9",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/hashes.git",
     rev="82c36a428f8d6f05f3bfccdedb243e9d1f85359d",
     manifest="sha2",
@@ -1327,6 +1413,7 @@ sha2_0_10_9 = add_project_test(
 
 crc32fast_1_5_2 = add_project_test(
     name="crc32fast_1_5_2",
+    rust="1.90.0",
     url="https://github.com/srijs/rust-crc32fast.git",
     rev="7eb0b8a2c9b246d27dc4cb5a53d3fc3b43a4bb83",
     lockfile="$(S)/tst/projects/crc32fast_1_5_2/Cargo.lock",
@@ -1334,6 +1421,7 @@ crc32fast_1_5_2 = add_project_test(
 
 flate2_1_1_10 = add_project_test(
     name="flate2_1_1_10",
+    rust="1.90.0",
     url="https://github.com/rust-lang/flate2-rs.git",
     rev="ed93d4fc60eaf876c6aded741bf992d524551930",
     lockfile="$(S)/tst/projects/flate2_1_1_10/Cargo.lock",
@@ -1341,6 +1429,7 @@ flate2_1_1_10 = add_project_test(
 
 tempfile_3_27_0 = add_project_test(
     name="tempfile_3_27_0",
+    rust="1.90.0",
     url="https://github.com/Stebalien/tempfile.git",
     rev="5c8fa12eb584931b4f1bccfde87eb72fbfa7dc61",
     lockfile="$(S)/tst/projects/tempfile_3_27_0/Cargo.lock",
@@ -1348,6 +1437,7 @@ tempfile_3_27_0 = add_project_test(
 
 walkdir_2_5_0 = add_project_test(
     name="walkdir_2_5_0",
+    rust="1.90.0",
     url="https://github.com/BurntSushi/walkdir.git",
     rev="4f26be4d450910916ea11533b2efc52b9a6483bc",
     lockfile="$(S)/tst/projects/walkdir_2_5_0/Cargo.lock",
@@ -1355,6 +1445,7 @@ walkdir_2_5_0 = add_project_test(
 
 bstr_1_13_1 = add_project_test(
     name="bstr_1_13_1",
+    rust="1.90.0",
     url="https://github.com/BurntSushi/bstr.git",
     rev="134195be38c7c9a4887980fd0f6f8bae042dd91e",
     lockfile="$(S)/tst/projects/bstr_1_13_1/Cargo.lock",
@@ -1362,6 +1453,7 @@ bstr_1_13_1 = add_project_test(
 
 unicode_width_0_2_2 = add_project_test(
     name="unicode_width_0_2_2",
+    rust="1.90.0",
     url="https://github.com/unicode-rs/unicode-width.git",
     rev="9d98411769fe13c7c18cab0b3fbbab29ba8350ea",
     lockfile="$(S)/tst/projects/unicode_width_0_2_2/Cargo.lock",
@@ -1369,6 +1461,7 @@ unicode_width_0_2_2 = add_project_test(
 
 dashmap_6_2_1 = add_project_test(
     name="dashmap_6_2_1",
+    rust="1.90.0",
     url="https://github.com/xacrimon/dashmap.git",
     rev="749ed1f965115e9e1920d2fc7ae65f633858b021",
     lockfile="$(S)/tst/projects/dashmap_6_2_1/Cargo.lock",
@@ -1376,6 +1469,7 @@ dashmap_6_2_1 = add_project_test(
 
 slab_0_4_12 = add_project_test(
     name="slab_0_4_12",
+    rust="1.90.0",
     url="https://github.com/tokio-rs/slab.git",
     rev="a1e4346070a48c936d808de75191dee5d01e433c",
     lockfile="$(S)/tst/projects/slab_0_4_12/Cargo.lock",
@@ -1383,6 +1477,7 @@ slab_0_4_12 = add_project_test(
 
 winnow_0_7_15 = add_project_test(
     name="winnow_0_7_15",
+    rust="1.90.0",
     url="https://github.com/winnow-rs/winnow.git",
     rev="eae4d4a23c400fec27a01cfb7115bc7808374f40",
     lockfile="$(S)/tst/projects/winnow_0_7_15/Cargo.lock",
@@ -1390,6 +1485,7 @@ winnow_0_7_15 = add_project_test(
 
 http_1_5_0 = add_project_test(
     name="http_1_5_0",
+    rust="1.90.0",
     url="https://github.com/hyperium/http.git",
     rev="16fc9a7b840c2181e7f8b37397c107b0ffcd050d",
     lockfile="$(S)/tst/projects/http_1_5_0/Cargo.lock",
@@ -1397,6 +1493,7 @@ http_1_5_0 = add_project_test(
 
 httparse_1_10_1 = add_project_test(
     name="httparse_1_10_1",
+    rust="1.90.0",
     url="https://github.com/seanmonstar/httparse.git",
     rev="9f29e79f9832dbd0ae5220acb17c1866745bdecd",
     lockfile="$(S)/tst/projects/httparse_1_10_1/Cargo.lock",
@@ -1404,6 +1501,7 @@ httparse_1_10_1 = add_project_test(
 
 unicode_normalization_0_1_24 = add_project_test(
     name="unicode_normalization_0_1_24",
+    rust="1.90.0",
     url="https://github.com/unicode-rs/unicode-normalization.git",
     rev="c9921309f09ebd05108920fda92efbf5f8124a7d",
     lockfile="$(S)/tst/projects/unicode_normalization_0_1_24/Cargo.lock",
@@ -1411,6 +1509,7 @@ unicode_normalization_0_1_24 = add_project_test(
 
 itoa_1_0_18 = add_project_test(
     name="itoa_1_0_18",
+    rust="1.90.0",
     url="https://github.com/dtolnay/itoa.git",
     rev="af77385d0daf4d0e949e81f2588be2e44f69f086",
     lockfile="$(S)/tst/projects/itoa_1_0_18/Cargo.lock",
@@ -1419,6 +1518,7 @@ itoa_1_0_18 = add_project_test(
 
 fnv_1_0_7 = add_project_test(
     name="fnv_1_0_7",
+    rust="1.90.0",
     url="https://github.com/servo/rust-fnv.git",
     rev="4b4784ebfd3332dc61f0640764d6f1140e03a9ab",
     lockfile="$(S)/tst/projects/fnv_1_0_7/Cargo.lock",
@@ -1426,6 +1526,7 @@ fnv_1_0_7 = add_project_test(
 
 rustc_hash_2_1_3 = add_project_test(
     name="rustc_hash_2_1_3",
+    rust="1.90.0",
     url="https://github.com/rust-lang/rustc-hash.git",
     rev="c13e7ccca705e6255387a2ebc6dca142d6881621",
     lockfile="$(S)/tst/projects/rustc_hash_2_1_3/Cargo.lock",
@@ -1433,6 +1534,7 @@ rustc_hash_2_1_3 = add_project_test(
 
 ahash_0_8_12 = add_project_test(
     name="ahash_0_8_12",
+    rust="1.90.0",
     url="https://github.com/tkaitchuck/aHash.git",
     rev="10c4f487e85c62bb12618ab5a4bb84b16802cdad",
     lockfile="$(S)/tst/projects/ahash_0_8_12/Cargo.lock",
@@ -1454,6 +1556,7 @@ ahash_0_8_12 = add_project_test(
 
 humantime_2_4_0 = add_project_test(
     name="humantime_2_4_0",
+    rust="1.90.0",
     url="https://github.com/chronotope/humantime.git",
     rev="fc092817fa8689298eaac28ff49bd8bede4ff605",
     lockfile="$(S)/tst/projects/humantime_2_4_0/Cargo.lock",
@@ -1461,6 +1564,7 @@ humantime_2_4_0 = add_project_test(
 
 glob_0_3_4 = add_project_test(
     name="glob_0_3_4",
+    rust="1.90.0",
     url="https://github.com/rust-lang/glob.git",
     rev="cfa2a58f2e44373573f657ec25b3621e44714dee",
     lockfile="$(S)/tst/projects/glob_0_3_4/Cargo.lock",
@@ -1468,6 +1572,7 @@ glob_0_3_4 = add_project_test(
 
 textwrap_0_16_4 = add_project_test(
     name="textwrap_0_16_4",
+    rust="1.90.0",
     url="https://github.com/mgeisler/textwrap.git",
     rev="5246c6367058468f5813abb47a48dcc138e2a5d5",
     lockfile="$(S)/tst/projects/textwrap_0_16_4/Cargo.lock",
@@ -1475,6 +1580,7 @@ textwrap_0_16_4 = add_project_test(
 
 strsim_0_11_1 = add_project_test(
     name="strsim_0_11_1",
+    rust="1.90.0",
     url="https://github.com/rapidfuzz/strsim-rs.git",
     rev="f72cd1cbbfc0b43db217a9c57c543b025bdba863",
     lockfile="$(S)/tst/projects/strsim_0_11_1/Cargo.lock",
@@ -1482,6 +1588,7 @@ strsim_0_11_1 = add_project_test(
 
 env_logger_0_11_11 = add_project_test(
     name="env_logger_0_11_11",
+    rust="1.90.0",
     url="https://github.com/rust-cli/env_logger.git",
     rev="b4d3f2b8dd3f1c3362f07da8f6f4a30c701358cf",
     lockfile="$(S)/tst/projects/env_logger_0_11_11/Cargo.lock",
@@ -1489,6 +1596,7 @@ env_logger_0_11_11 = add_project_test(
 
 ordered_float_5_5_0 = add_project_test(
     name="ordered_float_5_5_0",
+    rust="1.90.0",
     url="https://github.com/reem/rust-ordered-float.git",
     rev="2d56f3e8ab8bfea8d67df7d7295791ccad102f66",
     lockfile="$(S)/tst/projects/ordered_float_5_5_0/Cargo.lock",
@@ -1496,6 +1604,7 @@ ordered_float_5_5_0 = add_project_test(
 
 half_2_7_1 = add_project_test(
     name="half_2_7_1",
+    rust="1.90.0",
     url="https://github.com/VoidStarKat/half-rs.git",
     rev="8cc891f3e4aad956eca7fa79b1f42f87ecd141ae",
     lockfile="$(S)/tst/projects/half_2_7_1/Cargo.lock",
@@ -1503,6 +1612,7 @@ half_2_7_1 = add_project_test(
 
 bytemuck_1_25_2 = add_project_test(
     name="bytemuck_1_25_2",
+    rust="1.90.0",
     url="https://github.com/Lokathor/bytemuck.git",
     rev="f363643e951a7ac9e4b9921de982f2b0918902e3",
     lockfile="$(S)/tst/projects/bytemuck_1_25_2/Cargo.lock",
@@ -1510,6 +1620,7 @@ bytemuck_1_25_2 = add_project_test(
 
 tinyvec_1_13_3 = add_project_test(
     name="tinyvec_1_13_3",
+    rust="1.90.0",
     url="https://github.com/Lokathor/tinyvec.git",
     rev="e343bbbb5a6594c9d57de718e6f232e6c0115dcb",
     lockfile="$(S)/tst/projects/tinyvec_1_13_3/Cargo.lock",
@@ -1517,6 +1628,7 @@ tinyvec_1_13_3 = add_project_test(
 
 paste_1_0_15 = add_project_test(
     name="paste_1_0_15",
+    rust="1.90.0",
     url="https://github.com/dtolnay/paste.git",
     rev="a2c7e27875277450ed28147623ba5218dd23e732",
     lockfile="$(S)/tst/projects/paste_1_0_15/Cargo.lock",
@@ -1524,6 +1636,7 @@ paste_1_0_15 = add_project_test(
 
 indoc_2_0_7 = add_project_test(
     name="indoc_2_0_7",
+    rust="1.90.0",
     url="https://github.com/dtolnay/indoc.git",
     rev="8d78216b3f127f523d198475ea44090f8f6894d5",
     lockfile="$(S)/tst/projects/indoc_2_0_7/Cargo.lock",
@@ -1532,6 +1645,7 @@ indoc_2_0_7 = add_project_test(
 
 num_integer_0_1_47 = add_project_test(
     name="num_integer_0_1_47",
+    rust="1.90.0",
     url="https://github.com/rust-num/num-integer.git",
     rev="765fd9b3eb9397471d41b9f613e530f6d9d6383f",
     lockfile="$(S)/tst/projects/num_integer_0_1_47/Cargo.lock",
@@ -1539,6 +1653,7 @@ num_integer_0_1_47 = add_project_test(
 
 fixedbitset_0_5_7 = add_project_test(
     name="fixedbitset_0_5_7",
+    rust="1.90.0",
     url="https://github.com/petgraph/fixedbitset.git",
     rev="f1db5d17dabc4b8f3ba68c1228a3ee7601c7f33c",
     lockfile="$(S)/tst/projects/fixedbitset_0_5_7/Cargo.lock",
@@ -1546,6 +1661,7 @@ fixedbitset_0_5_7 = add_project_test(
 
 scopeguard_1_2_0 = add_project_test(
     name="scopeguard_1_2_0",
+    rust="1.90.0",
     url="https://github.com/bluss/scopeguard.git",
     rev="bb988222848d39b0b9037b29da3a3a1eb05ebf4b",
     lockfile="$(S)/tst/projects/scopeguard_1_2_0/Cargo.lock",
@@ -1553,6 +1669,7 @@ scopeguard_1_2_0 = add_project_test(
 
 similar_2_7_0 = add_project_test(
     name="similar_2_7_0",
+    rust="1.90.0",
     url="https://github.com/mitsuhiko/similar.git",
     rev="28c146b628119065e9a4dae569eaa570a4632c17",
     lockfile="$(S)/tst/projects/similar_2_7_0/Cargo.lock",
@@ -1560,6 +1677,7 @@ similar_2_7_0 = add_project_test(
 
 lru_0_18_5 = add_project_test(
     name="lru_0_18_5",
+    rust="1.90.0",
     url="https://github.com/jeromefroe/lru-rs.git",
     rev="f1e972197053a6814e77b77afacb51f03fc03170",
     lockfile="$(S)/tst/projects/lru_0_18_5/Cargo.lock",
@@ -1567,6 +1685,7 @@ lru_0_18_5 = add_project_test(
 
 adler2_2_0_1 = add_project_test(
     name="adler2_2_0_1",
+    rust="1.90.0",
     url="https://github.com/oyvindln/adler2.git",
     rev="89a031a0f42eeff31c70dc598b398cbf31f1680f",
     lockfile="$(S)/tst/projects/adler2_2_0_1/Cargo.lock",
@@ -1574,6 +1693,7 @@ adler2_2_0_1 = add_project_test(
 
 anstyle_1_0_11 = add_project_test(
     name="anstyle_1_0_11",
+    rust="1.90.0",
     url="https://github.com/rust-cli/anstyle.git",
     rev="886539c95318db5de9db49b6d66d19413bd308cc",
     manifest="crates/anstyle",
@@ -1583,6 +1703,7 @@ anstyle_1_0_11 = add_project_test(
 
 arrayref_0_3_9 = add_project_test(
     name="arrayref_0_3_9",
+    rust="1.90.0",
     url="https://github.com/droundy/arrayref.git",
     rev="f8d0299d863922db6c409d08098941e833b70d69",
     lockfile="$(S)/tst/projects/arrayref_0_3_9/Cargo.lock",
@@ -1590,6 +1711,7 @@ arrayref_0_3_9 = add_project_test(
 
 autocfg_1_5_0 = add_project_test(
     name="autocfg_1_5_0",
+    rust="1.90.0",
     url="https://github.com/cuviper/autocfg.git",
     rev="d912169ed67977efe5a465269b0e73cb66060c49",
     lockfile="$(S)/tst/projects/autocfg_1_5_0/Cargo.lock",
@@ -1597,6 +1719,7 @@ autocfg_1_5_0 = add_project_test(
 
 blake3_1_8_2 = add_project_test(
     name="blake3_1_8_2",
+    rust="1.90.0",
     url="https://github.com/BLAKE3-team/BLAKE3.git",
     rev="df610ddc3b93841ffc59a87e3da659a15910eb46",
     lockfile="$(S)/tst/projects/blake3_1_8_2/Cargo.lock",
@@ -1604,6 +1727,7 @@ blake3_1_8_2 = add_project_test(
 
 block_buffer_0_10_4 = add_project_test(
     name="block_buffer_0_10_4",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/utils.git",
     rev="6d35952d3d3b124bc1049ad6fb406b42b1ce4bfe",
     manifest="block-buffer",
@@ -1613,6 +1737,7 @@ block_buffer_0_10_4 = add_project_test(
 
 cc_1_2_16 = add_project_test(
     name="cc_1_2_16",
+    rust="1.90.0",
     url="https://github.com/rust-lang/cc-rs.git",
     rev="3c1325b09a78827fb2beb3ea9e8f1e3f84876b64",
     lockfile="$(S)/tst/projects/cc_1_2_16/Cargo.lock",
@@ -1620,6 +1745,7 @@ cc_1_2_16 = add_project_test(
 
 cfg_aliases_0_2_1 = add_project_test(
     name="cfg_aliases_0_2_1",
+    rust="1.90.0",
     url="https://github.com/katharostech/cfg_aliases.git",
     rev="3d55ba79872b61265a7176110a5200df0c9d9e54",
     lockfile="$(S)/tst/projects/cfg_aliases_0_2_1/Cargo.lock",
@@ -1627,6 +1753,7 @@ cfg_aliases_0_2_1 = add_project_test(
 
 cfg_if_1_0_1 = add_project_test(
     name="cfg_if_1_0_1",
+    rust="1.90.0",
     url="https://github.com/rust-lang/cfg-if.git",
     rev="dbfd66354537a7d47d84c95ea28b9a6f169ba9d1",
     lockfile="$(S)/tst/projects/cfg_if_1_0_1/Cargo.lock",
@@ -1634,6 +1761,7 @@ cfg_if_1_0_1 = add_project_test(
 
 constant_time_eq_0_3_1 = add_project_test(
     name="constant_time_eq_0_3_1",
+    rust="1.90.0",
     url="https://github.com/cesarb/constant_time_eq.git",
     rev="bea93a336b65dee32f1ed871ea1eecdf47977bb2",
     lockfile="$(S)/tst/projects/constant_time_eq_0_3_1/Cargo.lock",
@@ -1641,6 +1769,7 @@ constant_time_eq_0_3_1 = add_project_test(
 
 cpufeatures_0_2_17 = add_project_test(
     name="cpufeatures_0_2_17",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/utils.git",
     rev="9d92d5e95ab4c07c5d8bfd024bf2a17e96d20feb",
     manifest="cpufeatures",
@@ -1650,6 +1779,7 @@ cpufeatures_0_2_17 = add_project_test(
 
 crossbeam_deque_0_8_6 = add_project_test(
     name="crossbeam_deque_0_8_6",
+    rust="1.90.0",
     url="https://github.com/crossbeam-rs/crossbeam.git",
     rev="ccd83ac4108a2a1b41e9c6e79c87267167d18dfa",
     manifest="crossbeam-deque",
@@ -1659,6 +1789,7 @@ crossbeam_deque_0_8_6 = add_project_test(
 
 crossbeam_epoch_0_9_18 = add_project_test(
     name="crossbeam_epoch_0_9_18",
+    rust="1.90.0",
     url="https://github.com/crossbeam-rs/crossbeam.git",
     rev="9c3182abebb36bdc9446d75d4644190fef70fa01",
     manifest="crossbeam-epoch",
@@ -1668,6 +1799,7 @@ crossbeam_epoch_0_9_18 = add_project_test(
 
 crypto_common_0_1_6 = add_project_test(
     name="crypto_common_0_1_6",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/traits.git",
     rev="25614e2d5a4ccbb0cfde23367a93c8bcdbfe421a",
     manifest="crypto-common",
@@ -1677,6 +1809,7 @@ crypto_common_0_1_6 = add_project_test(
 
 ctrlc_3_4_7 = add_project_test(
     name="ctrlc_3_4_7",
+    rust="1.90.0",
     url="https://github.com/Detegr/rust-ctrlc.git",
     rev="ac79af3262199bce508257771b61608df4db22c4",
     lockfile="$(S)/tst/projects/ctrlc_3_4_7/Cargo.lock",
@@ -1684,6 +1817,7 @@ ctrlc_3_4_7 = add_project_test(
 
 darling_0_20_11 = add_project_test(
     name="darling_0_20_11",
+    rust="1.90.0",
     url="https://github.com/TedDriggs/darling.git",
     rev="82a51e0b65b158de02ffb5d753ea4cd03529743b",
     lockfile="$(S)/tst/projects/darling_0_20_11/Cargo.lock",
@@ -1691,6 +1825,7 @@ darling_0_20_11 = add_project_test(
 
 darling_core_0_20_11 = add_project_test(
     name="darling_core_0_20_11",
+    rust="1.90.0",
     url="https://github.com/TedDriggs/darling.git",
     rev="82a51e0b65b158de02ffb5d753ea4cd03529743b",
     manifest="core",
@@ -1700,6 +1835,7 @@ darling_core_0_20_11 = add_project_test(
 
 darling_macro_0_20_11 = add_project_test(
     name="darling_macro_0_20_11",
+    rust="1.90.0",
     url="https://github.com/TedDriggs/darling.git",
     rev="82a51e0b65b158de02ffb5d753ea4cd03529743b",
     manifest="macro",
@@ -1709,6 +1845,7 @@ darling_macro_0_20_11 = add_project_test(
 
 datafrog_2_0_1 = add_project_test(
     name="datafrog_2_0_1",
+    rust="1.90.0",
     url="https://github.com/rust-lang-nursery/datafrog.git",
     rev="9cc6b5d8e29037dc1a199420d63708b734b6cc6e",
     lockfile="$(S)/tst/projects/datafrog_2_0_1/Cargo.lock",
@@ -1716,6 +1853,7 @@ datafrog_2_0_1 = add_project_test(
 
 derive_setters_0_1_8 = add_project_test(
     name="derive_setters_0_1_8",
+    rust="1.90.0",
     url="https://github.com/Lymia/derive_setters.git",
     rev="7398bc189ac22b1bca214445a74949fe051df34a",
     lockfile="$(S)/tst/projects/derive_setters_0_1_8/Cargo.lock",
@@ -1723,6 +1861,7 @@ derive_setters_0_1_8 = add_project_test(
 
 derive_where_1_5_0 = add_project_test(
     name="derive_where_1_5_0",
+    rust="1.90.0",
     url="https://github.com/ModProg/derive-where.git",
     rev="bcd9dcc7bc6db6e4f8803671b01bfa0cec8a2fe9",
     lockfile="$(S)/tst/projects/derive_where_1_5_0/Cargo.lock",
@@ -1730,6 +1869,7 @@ derive_where_1_5_0 = add_project_test(
 
 digest_0_10_7 = add_project_test(
     name="digest_0_10_7",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/traits.git",
     rev="344389411fd9718a0742435152e933a9e71461ee",
     manifest="digest",
@@ -1738,6 +1878,7 @@ digest_0_10_7 = add_project_test(
 
 displaydoc_0_2_5 = add_project_test(
     name="displaydoc_0_2_5",
+    rust="1.90.0",
     url="https://github.com/yaahc/displaydoc.git",
     rev="e4028851bfb82998300237f7568a45f589a19e40",
     lockfile="$(S)/tst/projects/displaydoc_0_2_5/Cargo.lock",
@@ -1745,6 +1886,7 @@ displaydoc_0_2_5 = add_project_test(
 
 ena_0_14_3 = add_project_test(
     name="ena_0_14_3",
+    rust="1.90.0",
     url="https://github.com/rust-lang/ena.git",
     rev="8e88541a49fa248e15aeb138e404ac5415e862ed",
     lockfile="$(S)/tst/projects/ena_0_14_3/Cargo.lock",
@@ -1752,6 +1894,7 @@ ena_0_14_3 = add_project_test(
 
 equivalent_1_0_2 = add_project_test(
     name="equivalent_1_0_2",
+    rust="1.90.0",
     url="https://github.com/indexmap-rs/equivalent.git",
     rev="44cdd44f8b8ebb5f9ae096c7550a5e74ffb7d6ae",
     lockfile="$(S)/tst/projects/equivalent_1_0_2/Cargo.lock",
@@ -1759,6 +1902,7 @@ equivalent_1_0_2 = add_project_test(
 
 fallible_iterator_0_3_0 = add_project_test(
     name="fallible_iterator_0_3_0",
+    rust="1.90.0",
     url="https://github.com/sfackler/rust-fallible-iterator.git",
     rev="11cfa0558045e52bdb473c9eab6a1eb35a54e302",
     lockfile="$(S)/tst/projects/fallible_iterator_0_3_0/Cargo.lock",
@@ -1766,6 +1910,7 @@ fallible_iterator_0_3_0 = add_project_test(
 
 fastrand_2_3_0 = add_project_test(
     name="fastrand_2_3_0",
+    rust="1.90.0",
     url="https://github.com/smol-rs/fastrand.git",
     rev="8419f8916f08c63572b4f7cbdc07cec94c1fc5ed",
     lockfile="$(S)/tst/projects/fastrand_2_3_0/Cargo.lock",
@@ -1773,6 +1918,7 @@ fastrand_2_3_0 = add_project_test(
 
 fluent_bundle_0_16_0 = add_project_test(
     name="fluent_bundle_0_16_0",
+    rust="1.90.0",
     url="https://github.com/projectfluent/fluent-rs.git",
     rev="f22da4ea48328b4c617b7666c482634c49fbe0a7",
     manifest="fluent-bundle",
@@ -1782,6 +1928,7 @@ fluent_bundle_0_16_0 = add_project_test(
 
 fluent_langneg_0_13_0 = add_project_test(
     name="fluent_langneg_0_13_0",
+    rust="1.90.0",
     url="https://github.com/projectfluent/fluent-langneg-rs.git",
     rev="29007f8d453b931b79544566b1037865bfa7fb12",
     lockfile="$(S)/tst/projects/fluent_langneg_0_13_0/Cargo.lock",
@@ -1789,6 +1936,7 @@ fluent_langneg_0_13_0 = add_project_test(
 
 fluent_syntax_0_12_0 = add_project_test(
     name="fluent_syntax_0_12_0",
+    rust="1.90.0",
     url="https://github.com/projectfluent/fluent-rs.git",
     rev="f22da4ea48328b4c617b7666c482634c49fbe0a7",
     manifest="fluent-syntax",
@@ -1798,6 +1946,7 @@ fluent_syntax_0_12_0 = add_project_test(
 
 foldhash_0_1_5 = add_project_test(
     name="foldhash_0_1_5",
+    rust="1.90.0",
     url="https://github.com/orlp/foldhash.git",
     rev="42461756c3760f9165c90d9626a49e36980a1e47",
     lockfile="$(S)/tst/projects/foldhash_0_1_5/Cargo.lock",
@@ -1805,6 +1954,7 @@ foldhash_0_1_5 = add_project_test(
 
 getopts_0_2_23 = add_project_test(
     name="getopts_0_2_23",
+    rust="1.90.0",
     url="https://github.com/rust-lang/getopts.git",
     rev="57b183a98599261ab535401b64aa0a46ab0b6a44",
     lockfile="$(S)/tst/projects/getopts_0_2_23/Cargo.lock",
@@ -1812,6 +1962,7 @@ getopts_0_2_23 = add_project_test(
 
 getrandom_0_3_3 = add_project_test(
     name="getrandom_0_3_3",
+    rust="1.90.0",
     url="https://github.com/rust-random/getrandom.git",
     rev="82396406b28f23ba86e3e511d34a4f5dab0fda08",
     lockfile="$(S)/tst/projects/getrandom_0_3_3/Cargo.lock",
@@ -1819,6 +1970,7 @@ getrandom_0_3_3 = add_project_test(
 
 gsgdt_0_1_2 = add_project_test(
     name="gsgdt_0_1_2",
+    rust="1.90.0",
     url="https://github.com/vn-ki/gsgdt-rs.git",
     rev="96c79219f7bad57bfd951fceea92cb549e7f2ca4",
     lockfile="$(S)/tst/projects/gsgdt_0_1_2/Cargo.lock",
@@ -1826,6 +1978,7 @@ gsgdt_0_1_2 = add_project_test(
 
 icu_list_data_1_5_1 = add_project_test(
     name="icu_list_data_1_5_1",
+    rust="1.90.0",
     url="https://github.com/unicode-org/icu4x.git",
     rev="044c9659f217ad1e197fb778701829e4f597646c",
     manifest="provider/baked/list",
@@ -1835,6 +1988,7 @@ icu_list_data_1_5_1 = add_project_test(
 
 icu_locid_1_5_0 = add_project_test(
     name="icu_locid_1_5_0",
+    rust="1.90.0",
     url="https://github.com/unicode-org/icu4x.git",
     rev="55cd12ebb25c6261492e1e3dfa2e6453c54dde31",
     manifest="components/locid",
@@ -1844,6 +1998,7 @@ icu_locid_1_5_0 = add_project_test(
 
 icu_locid_transform_data_1_5_1 = add_project_test(
     name="icu_locid_transform_data_1_5_1",
+    rust="1.90.0",
     url="https://github.com/unicode-org/icu4x.git",
     rev="044c9659f217ad1e197fb778701829e4f597646c",
     manifest="provider/baked/locid_transform",
@@ -1853,6 +2008,7 @@ icu_locid_transform_data_1_5_1 = add_project_test(
 
 ident_case_1_0_1 = add_project_test(
     name="ident_case_1_0_1",
+    rust="1.90.0",
     url="https://github.com/TedDriggs/ident_case.git",
     rev="bf0d863e3006b40a0d923a81d7b2dd2db1136c2c",
     lockfile="$(S)/tst/projects/ident_case_1_0_1/Cargo.lock",
@@ -1860,6 +2016,7 @@ ident_case_1_0_1 = add_project_test(
 
 intl_memoizer_0_5_3 = add_project_test(
     name="intl_memoizer_0_5_3",
+    rust="1.90.0",
     url="https://github.com/projectfluent/fluent-rs.git",
     rev="f22da4ea48328b4c617b7666c482634c49fbe0a7",
     manifest="intl-memoizer",
@@ -1869,6 +2026,7 @@ intl_memoizer_0_5_3 = add_project_test(
 
 intl_pluralrules_7_0_2 = add_project_test(
     name="intl_pluralrules_7_0_2",
+    rust="1.90.0",
     url="https://github.com/zbraniecki/pluralrules.git",
     rev="d0715d5b7cca72e228d6e6c4de154bd30dfdd06a",
     manifest="intl_pluralrules",
@@ -1878,6 +2036,7 @@ intl_pluralrules_7_0_2 = add_project_test(
 
 jobserver_0_1_33 = add_project_test(
     name="jobserver_0_1_33",
+    rust="1.90.0",
     url="https://github.com/rust-lang/jobserver-rs.git",
     rev="65921f1d58ebb4a2511d45aadcc31d586042d73c",
     lockfile="$(S)/tst/projects/jobserver_0_1_33/Cargo.lock",
@@ -1885,6 +2044,7 @@ jobserver_0_1_33 = add_project_test(
 
 leb128_0_2_5 = add_project_test(
     name="leb128_0_2_5",
+    rust="1.90.0",
     url="https://github.com/gimli-rs/leb128.git",
     rev="34ce0fce88281a6c7e7bf4e51505ea29ef2b712f",
     lockfile="$(S)/tst/projects/leb128_0_2_5/Cargo.lock",
@@ -1892,6 +2052,7 @@ leb128_0_2_5 = add_project_test(
 
 libc_0_2_174 = add_project_test(
     name="libc_0_2_174",
+    rust="1.90.0",
     url="https://github.com/rust-lang/libc.git",
     rev="ea6f07f9828c007a752fab78eedc0565f36096df",
     lockfile="$(S)/tst/projects/libc_0_2_174/Cargo.lock",
@@ -1899,6 +2060,7 @@ libc_0_2_174 = add_project_test(
 
 libloading_0_8_8 = add_project_test(
     name="libloading_0_8_8",
+    rust="1.90.0",
     url="https://github.com/nagisa/rust_libloading.git",
     rev="83f08b8779f4ba41777c41218398df4a2977d340",
     lockfile="$(S)/tst/projects/libloading_0_8_8/Cargo.lock",
@@ -1906,6 +2068,7 @@ libloading_0_8_8 = add_project_test(
 
 linux_raw_sys_0_9_4 = add_project_test(
     name="linux_raw_sys_0_9_4",
+    rust="1.90.0",
     url="https://github.com/sunfishcode/linux-raw-sys.git",
     rev="d7d733c04380b4f15e97806b61da254c4e649887",
     lockfile="$(S)/tst/projects/linux_raw_sys_0_9_4/Cargo.lock",
@@ -1913,6 +2076,7 @@ linux_raw_sys_0_9_4 = add_project_test(
 
 lock_api_0_4_13 = add_project_test(
     name="lock_api_0_4_13",
+    rust="1.90.0",
     url="https://github.com/Amanieu/parking_lot.git",
     rev="df66e66b99f2650043b588cb0172b40958bc4277",
     manifest="lock_api",
@@ -1922,6 +2086,7 @@ lock_api_0_4_13 = add_project_test(
 
 matchers_0_1_0 = add_project_test(
     name="matchers_0_1_0",
+    rust="1.90.0",
     url="https://github.com/hawkw/matchers.git",
     rev="6e5f38da23303a0c66133c9c2981818b93ab746d",
     lockfile="$(S)/tst/projects/matchers_0_1_0/Cargo.lock",
@@ -1929,6 +2094,7 @@ matchers_0_1_0 = add_project_test(
 
 md_5_0_10_6 = add_project_test(
     name="md_5_0_10_6",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/hashes.git",
     rev="026b0e81e90ba476a5d343a8e4efbc63b814737b",
     manifest="md5",
@@ -1938,6 +2104,7 @@ md_5_0_10_6 = add_project_test(
 
 measureme_12_0_3 = add_project_test(
     name="measureme_12_0_3",
+    rust="1.90.0",
     url="https://github.com/rust-lang/measureme.git",
     rev="5ac839c602b59eee9c908b3b35b6d6c0cd1c42f7",
     manifest="measureme",
@@ -1947,6 +2114,7 @@ measureme_12_0_3 = add_project_test(
 
 memmap2_0_2_3 = add_project_test(
     name="memmap2_0_2_3",
+    rust="1.90.0",
     url="https://github.com/RazrFalcon/memmap2-rs.git",
     rev="d5ed1da121a55a571793499fa2df25a970eb2b4f",
     lockfile="$(S)/tst/projects/memmap2_0_2_3/Cargo.lock",
@@ -1954,6 +2122,7 @@ memmap2_0_2_3 = add_project_test(
 
 miniz_oxide_0_8_9 = add_project_test(
     name="miniz_oxide_0_8_9",
+    rust="1.90.0",
     url="https://github.com/Frommi/miniz_oxide.git",
     rev="44e43c7786e379b2b1a7fde4aa0e63be719e583d",
     manifest="miniz_oxide",
@@ -1963,6 +2132,7 @@ miniz_oxide_0_8_9 = add_project_test(
 
 nu_ansi_term_0_50_1 = add_project_test(
     name="nu_ansi_term_0_50_1",
+    rust="1.90.0",
     url="https://github.com/nushell/nu-ansi-term.git",
     rev="0912f8f6a3b29a8409cf5cab25e8865f5766ea96",
     lockfile="$(S)/tst/projects/nu_ansi_term_0_50_1/Cargo.lock",
@@ -1970,6 +2140,7 @@ nu_ansi_term_0_50_1 = add_project_test(
 
 odht_0_3_1 = add_project_test(
     name="odht_0_3_1",
+    rust="1.90.0",
     url="https://github.com/rust-lang/odht.git",
     rev="bc31b05fe859f4390f4cb76a90673e2e782c94a4",
     lockfile="$(S)/tst/projects/odht_0_3_1/Cargo.lock",
@@ -1977,6 +2148,7 @@ odht_0_3_1 = add_project_test(
 
 overload_0_1_1 = add_project_test(
     name="overload_0_1_1",
+    rust="1.90.0",
     url="https://github.com/danaugrs/overload.git",
     rev="4a8ec5b58afc53ea04c3a0f9b2f7a2c42208678c",
     lockfile="$(S)/tst/projects/overload_0_1_1/Cargo.lock",
@@ -1984,6 +2156,7 @@ overload_0_1_1 = add_project_test(
 
 parking_lot_core_0_9_11 = add_project_test(
     name="parking_lot_core_0_9_11",
+    rust="1.90.0",
     url="https://github.com/Amanieu/parking_lot.git",
     rev="df66e66b99f2650043b588cb0172b40958bc4277",
     manifest="core",
@@ -1993,6 +2166,7 @@ parking_lot_core_0_9_11 = add_project_test(
 
 pathdiff_0_2_3 = add_project_test(
     name="pathdiff_0_2_3",
+    rust="1.90.0",
     url="https://github.com/Manishearth/pathdiff.git",
     rev="5180ff5b23d9d7eef0a14de13a3d814eb5d8d65c",
     lockfile="$(S)/tst/projects/pathdiff_0_2_3/Cargo.lock",
@@ -2000,6 +2174,7 @@ pathdiff_0_2_3 = add_project_test(
 
 pin_project_lite_0_2_16 = add_project_test(
     name="pin_project_lite_0_2_16",
+    rust="1.90.0",
     url="https://github.com/taiki-e/pin-project-lite.git",
     rev="cca1e8ae094ceff53e74abbfec8c9f2221ebd202",
     lockfile="$(S)/tst/projects/pin_project_lite_0_2_16/Cargo.lock",
@@ -2007,6 +2182,7 @@ pin_project_lite_0_2_16 = add_project_test(
 
 polonius_engine_0_13_0 = add_project_test(
     name="polonius_engine_0_13_0",
+    rust="1.90.0",
     url="https://github.com/rust-lang-nursery/polonius.git",
     rev="741e6095fe50f468982d4d253e842eb7d12ed9d3",
     lockfile="$(S)/tst/projects/polonius_engine_0_13_0/Cargo.lock",
@@ -2014,6 +2190,7 @@ polonius_engine_0_13_0 = add_project_test(
 
 ppv_lite86_0_2_21 = add_project_test(
     name="ppv_lite86_0_2_21",
+    rust="1.90.0",
     url="https://github.com/cryptocorrosion/cryptocorrosion.git",
     rev="000a6cd6bbcb0b091381dc5f8fe6d6efa480b818",
     manifest="utils-simd/ppv-lite86",
@@ -2023,6 +2200,7 @@ ppv_lite86_0_2_21 = add_project_test(
 
 proc_macro_hack_0_5_20 = add_project_test(
     name="proc_macro_hack_0_5_20",
+    rust="1.90.0",
     url="https://github.com/dtolnay/proc-macro-hack.git",
     rev="fe0889cb7a67adfe070fad449066034e7a662f56",
     lockfile="$(S)/tst/projects/proc_macro_hack_0_5_20/Cargo.lock",
@@ -2030,6 +2208,7 @@ proc_macro_hack_0_5_20 = add_project_test(
 
 psm_0_1_26 = add_project_test(
     name="psm_0_1_26",
+    rust="1.90.0",
     url="https://github.com/rust-lang/stacker.git",
     rev="479529695172bb5bd86167fc24cb5644e90b62db",
     manifest="psm",
@@ -2038,6 +2217,7 @@ psm_0_1_26 = add_project_test(
 
 pulldown_cmark_escape_0_11_0 = add_project_test(
     name="pulldown_cmark_escape_0_11_0",
+    rust="1.90.0",
     url="https://github.com/raphlinus/pulldown-cmark.git",
     rev="d7632acbe066b81a7f4b23c72fdb18c85f9cb1ea",
     manifest="pulldown-cmark-escape",
@@ -2047,6 +2227,7 @@ pulldown_cmark_escape_0_11_0 = add_project_test(
 
 punycode_0_4_1 = add_project_test(
     name="punycode_0_4_1",
+    rust="1.90.0",
     url="https://github.com/mcarton/rust-punycode.git",
     rev="89fe5b3a74de1dd2416d62525433b2aa676ae987",
     lockfile="$(S)/tst/projects/punycode_0_4_1/Cargo.lock",
@@ -2054,6 +2235,7 @@ punycode_0_4_1 = add_project_test(
 
 rand_chacha_0_9_0 = add_project_test(
     name="rand_chacha_0_9_0",
+    rust="1.90.0",
     url="https://github.com/rust-random/rand.git",
     rev="96f8df65ee6b4368d91a006f9c5b4a8050abae49",
     manifest="rand_chacha",
@@ -2063,6 +2245,7 @@ rand_chacha_0_9_0 = add_project_test(
 
 rand_core_0_9_3 = add_project_test(
     name="rand_core_0_9_3",
+    rust="1.90.0",
     url="https://github.com/rust-random/rand.git",
     rev="340849e53b71da0f15af448d10511c2e62e50ba1",
     manifest="rand_core",
@@ -2072,6 +2255,7 @@ rand_core_0_9_3 = add_project_test(
 
 rand_xoshiro_0_7_0 = add_project_test(
     name="rand_xoshiro_0_7_0",
+    rust="1.90.0",
     url="https://github.com/rust-random/rngs.git",
     rev="242e4bdaf8d43a59d84c5511f427026026ea4c97",
     manifest="rand_xoshiro",
@@ -2081,6 +2265,7 @@ rand_xoshiro_0_7_0 = add_project_test(
 
 regex_automata_0_4_9 = add_project_test(
     name="regex_automata_0_4_9",
+    rust="1.90.0",
     url="https://github.com/rust-lang/regex.git",
     rev="1a069b9232c607b34c4937122361aa075ef573fa",
     manifest="regex-automata",
@@ -2090,6 +2275,7 @@ regex_automata_0_4_9 = add_project_test(
 
 regex_syntax_0_8_5 = add_project_test(
     name="regex_syntax_0_8_5",
+    rust="1.90.0",
     url="https://github.com/rust-lang/regex.git",
     rev="cba0fbc0194456f644040d7558ae6ed261d57cc2",
     manifest="regex-syntax",
@@ -2099,6 +2285,7 @@ regex_syntax_0_8_5 = add_project_test(
 
 rustc_apfloat_0_2_3 = add_project_test(
     name="rustc_apfloat_0_2_3",
+    rust="1.90.0",
     url="https://github.com/rust-lang/rustc_apfloat.git",
     rev="eeaacad81247af65d4043cb3e32d023a652d7951",
     lockfile="$(S)/tst/projects/rustc_apfloat_0_2_3/Cargo.lock",
@@ -2106,6 +2293,7 @@ rustc_apfloat_0_2_3 = add_project_test(
 
 rustc_demangle_0_1_25 = add_project_test(
     name="rustc_demangle_0_1_25",
+    rust="1.90.0",
     url="https://github.com/rust-lang/rustc-demangle.git",
     rev="8e15996082029a8f5e577906b7464aa412660d91",
     lockfile="$(S)/tst/projects/rustc_demangle_0_1_25/Cargo.lock",
@@ -2113,6 +2301,7 @@ rustc_demangle_0_1_25 = add_project_test(
 
 rustc_literal_escaper_0_0_5 = add_project_test(
     name="rustc_literal_escaper_0_0_5",
+    rust="1.90.0",
     url="https://github.com/rust-lang/literal-escaper.git",
     rev="f727a4df1839f0db87bd24d1aadf696ac030fe53",
     lockfile="$(S)/tst/projects/rustc_literal_escaper_0_0_5/Cargo.lock",
@@ -2120,6 +2309,7 @@ rustc_literal_escaper_0_0_5 = add_project_test(
 
 rustc_stable_hash_0_1_2 = add_project_test(
     name="rustc_stable_hash_0_1_2",
+    rust="1.90.0",
     url="https://github.com/rust-lang/rustc-stable-hash.git",
     rev="bda19e8681a381715fc3f32ee95aa5fda0a7f5d0",
     lockfile="$(S)/tst/projects/rustc_stable_hash_0_1_2/Cargo.lock",
@@ -2127,6 +2317,7 @@ rustc_stable_hash_0_1_2 = add_project_test(
 
 rustix_1_0_8 = add_project_test(
     name="rustix_1_0_8",
+    rust="1.90.0",
     url="https://github.com/bytecodealliance/rustix.git",
     rev="5b104ec6c0fd8855b341d6a2c8edf72843ad6cee",
     lockfile="$(S)/tst/projects/rustix_1_0_8/Cargo.lock",
@@ -2134,6 +2325,7 @@ rustix_1_0_8 = add_project_test(
 
 ruzstd_0_7_3 = add_project_test(
     name="ruzstd_0_7_3",
+    rust="1.90.0",
     url="https://github.com/KillingSpark/zstd-rs.git",
     rev="6b371baa8b8656bb0a14056b71377df1f1f9e50c",
     lockfile="$(S)/tst/projects/ruzstd_0_7_3/Cargo.lock",
@@ -2141,6 +2333,7 @@ ruzstd_0_7_3 = add_project_test(
 
 scoped_tls_1_0_1 = add_project_test(
     name="scoped_tls_1_0_1",
+    rust="1.90.0",
     url="https://github.com/alexcrichton/scoped-tls.git",
     rev="c0ff7bf6d33e568353ed863d90f893e7e80a0ed1",
     lockfile="$(S)/tst/projects/scoped_tls_1_0_1/Cargo.lock",
@@ -2148,6 +2341,7 @@ scoped_tls_1_0_1 = add_project_test(
 
 self_cell_1_2_0 = add_project_test(
     name="self_cell_1_2_0",
+    rust="1.90.0",
     url="https://github.com/Voultapher/self_cell.git",
     rev="5861fcdb2ca37af12387dcee6e1bdb0b5b84db0f",
     lockfile="$(S)/tst/projects/self_cell_1_2_0/Cargo.lock",
@@ -2155,6 +2349,7 @@ self_cell_1_2_0 = add_project_test(
 
 serde_path_to_error_0_1_17 = add_project_test(
     name="serde_path_to_error_0_1_17",
+    rust="1.90.0",
     url="https://github.com/dtolnay/path-to-error.git",
     rev="9cb82546aaba7371a9b0c486d2aeab2e3ea23a2b",
     lockfile="$(S)/tst/projects/serde_path_to_error_0_1_17/Cargo.lock",
@@ -2162,6 +2357,7 @@ serde_path_to_error_0_1_17 = add_project_test(
 
 sha1_0_10_6 = add_project_test(
     name="sha1_0_10_6",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/hashes.git",
     rev="7aba4b52715f9cb17a90303bab55bd59471d65ae",
     manifest="sha1",
@@ -2171,6 +2367,7 @@ sha1_0_10_6 = add_project_test(
 
 sharded_slab_0_1_7 = add_project_test(
     name="sharded_slab_0_1_7",
+    rust="1.90.0",
     url="https://github.com/hawkw/sharded-slab.git",
     rev="40579b92debe2ef283a455eb379945e023080ff3",
     lockfile="$(S)/tst/projects/sharded_slab_0_1_7/Cargo.lock",
@@ -2178,6 +2375,7 @@ sharded_slab_0_1_7 = add_project_test(
 
 shlex_1_3_0 = add_project_test(
     name="shlex_1_3_0",
+    rust="1.90.0",
     url="https://github.com/comex/rust-shlex.git",
     rev="4a0724b0b62ef715467875b040a890ce75a8a829",
     lockfile="$(S)/tst/projects/shlex_1_3_0/Cargo.lock",
@@ -2185,6 +2383,7 @@ shlex_1_3_0 = add_project_test(
 
 stable_deref_trait_1_2_0 = add_project_test(
     name="stable_deref_trait_1_2_0",
+    rust="1.90.0",
     url="https://github.com/storyyeller/stable_deref_trait.git",
     rev="66f9d8a15b7209c45f58edee6c1b6bb497b7bd31",
     lockfile="$(S)/tst/projects/stable_deref_trait_1_2_0/Cargo.lock",
@@ -2192,6 +2391,7 @@ stable_deref_trait_1_2_0 = add_project_test(
 
 stacker_0_1_21 = add_project_test(
     name="stacker_0_1_21",
+    rust="1.90.0",
     url="https://github.com/rust-lang/stacker.git",
     rev="7a3ff32d72bcd0a12a938abb21deddf9f1449cdc",
     lockfile="$(S)/tst/projects/stacker_0_1_21/Cargo.lock",
@@ -2199,6 +2399,7 @@ stacker_0_1_21 = add_project_test(
 
 static_assertions_1_1_0 = add_project_test(
     name="static_assertions_1_1_0",
+    rust="1.90.0",
     url="https://github.com/nvzqz/static-assertions-rs.git",
     rev="18bc65a094d890fe1faa5d3ccb70f12b89eabf56",
     lockfile="$(S)/tst/projects/static_assertions_1_1_0/Cargo.lock",
@@ -2206,6 +2407,7 @@ static_assertions_1_1_0 = add_project_test(
 
 synstructure_0_13_2 = add_project_test(
     name="synstructure_0_13_2",
+    rust="1.90.0",
     url="https://github.com/mystor/synstructure.git",
     rev="91ead072fa43c55f35880bd7f75a2b0eab72a04e",
     lockfile="$(S)/tst/projects/synstructure_0_13_2/Cargo.lock",
@@ -2213,6 +2415,7 @@ synstructure_0_13_2 = add_project_test(
 
 termcolor_1_4_1 = add_project_test(
     name="termcolor_1_4_1",
+    rust="1.90.0",
     url="https://github.com/BurntSushi/termcolor.git",
     rev="71f0921f1eeceda85487098588a1602979d52493",
     lockfile="$(S)/tst/projects/termcolor_1_4_1/Cargo.lock",
@@ -2220,6 +2423,7 @@ termcolor_1_4_1 = add_project_test(
 
 termize_0_2_0 = add_project_test(
     name="termize_0_2_0",
+    rust="1.90.0",
     url="https://github.com/JohnTitor/termize.git",
     rev="f4cd65bd889c15f10f0a49fd4ee4b8b730830b6c",
     lockfile="$(S)/tst/projects/termize_0_2_0/Cargo.lock",
@@ -2227,6 +2431,7 @@ termize_0_2_0 = add_project_test(
 
 thin_vec_0_2_14 = add_project_test(
     name="thin_vec_0_2_14",
+    rust="1.90.0",
     url="https://github.com/gankra/thin-vec.git",
     rev="ce8808956191d55fe5a8aedcefc7ca3a94ddea11",
     lockfile="$(S)/tst/projects/thin_vec_0_2_14/Cargo.lock",
@@ -2234,6 +2439,7 @@ thin_vec_0_2_14 = add_project_test(
 
 thiserror_impl_2_0_12 = add_project_test(
     name="thiserror_impl_2_0_12",
+    rust="1.90.0",
     url="https://github.com/dtolnay/thiserror.git",
     rev="95a512669395f30cf9ae10343149726c0563ed76",
     manifest="impl",
@@ -2243,6 +2449,7 @@ thiserror_impl_2_0_12 = add_project_test(
 
 thorin_dwp_0_9_0 = add_project_test(
     name="thorin_dwp_0_9_0",
+    rust="1.90.0",
     url="https://github.com/rust-lang/thorin.git",
     rev="256c3d1e89ba375f64a9b32965678cf905ef7745",
     manifest="thorin",
@@ -2252,6 +2459,7 @@ thorin_dwp_0_9_0 = add_project_test(
 
 thread_local_1_1_9 = add_project_test(
     name="thread_local_1_1_9",
+    rust="1.90.0",
     url="https://github.com/Amanieu/thread_local-rs.git",
     rev="4b7cc0f30b81b768fafc4b0ef4d541bfc94a0433",
     lockfile="$(S)/tst/projects/thread_local_1_1_9/Cargo.lock",
@@ -2259,6 +2467,7 @@ thread_local_1_1_9 = add_project_test(
 
 tinyvec_macros_0_1_1 = add_project_test(
     name="tinyvec_macros_0_1_1",
+    rust="1.90.0",
     url="https://github.com/Soveu/tinyvec_macros.git",
     rev="860c23a09d91c8b9203134a81de7888b7191d5f2",
     lockfile="$(S)/tst/projects/tinyvec_macros_0_1_1/Cargo.lock",
@@ -2266,6 +2475,7 @@ tinyvec_macros_0_1_1 = add_project_test(
 
 tracing_core_0_1_30 = add_project_test(
     name="tracing_core_0_1_30",
+    rust="1.90.0",
     url="https://github.com/tokio-rs/tracing.git",
     rev="8b01ea9b9c0dfc06ab101940c94e23934c4d4cc8",
     manifest="tracing-core",
@@ -2275,6 +2485,7 @@ tracing_core_0_1_30 = add_project_test(
 
 tracing_log_0_2_0 = add_project_test(
     name="tracing_log_0_2_0",
+    rust="1.90.0",
     url="https://github.com/tokio-rs/tracing.git",
     rev="4161d8137d4f6117f17b110b0ec022d9350bf8e6",
     manifest="tracing-log",
@@ -2284,6 +2495,7 @@ tracing_log_0_2_0 = add_project_test(
 
 tracing_tree_0_3_1 = add_project_test(
     name="tracing_tree_0_3_1",
+    rust="1.90.0",
     url="https://github.com/davidbarsky/tracing-tree.git",
     rev="bbe6596fbe5e0bd637c40c955be55d7a569e8668",
     lockfile="$(S)/tst/projects/tracing_tree_0_3_1/Cargo.lock",
@@ -2292,6 +2504,7 @@ tracing_tree_0_3_1 = add_project_test(
 
 twox_hash_1_6_3 = add_project_test(
     name="twox_hash_1_6_3",
+    rust="1.90.0",
     url="https://github.com/shepmaster/twox-hash.git",
     rev="79168f770e0e870a11c5bb69ec0382547ef04790",
     lockfile="$(S)/tst/projects/twox_hash_1_6_3/Cargo.lock",
@@ -2299,6 +2512,7 @@ twox_hash_1_6_3 = add_project_test(
 
 type_map_0_5_1 = add_project_test(
     name="type_map_0_5_1",
+    rust="1.90.0",
     url="https://github.com/kardeiz/type-map.git",
     rev="d3ab3e642736d87f3fa8b1e6c8f13a93fcfb72e1",
     lockfile="$(S)/tst/projects/type_map_0_5_1/Cargo.lock",
@@ -2306,6 +2520,7 @@ type_map_0_5_1 = add_project_test(
 
 typenum_1_18_0 = add_project_test(
     name="typenum_1_18_0",
+    rust="1.90.0",
     url="https://github.com/paholg/typenum.git",
     rev="67584b536d97c5503fa0f8d6ea1162eb4d9b8383",
     lockfile="$(S)/tst/projects/typenum_1_18_0/Cargo.lock",
@@ -2313,6 +2528,7 @@ typenum_1_18_0 = add_project_test(
 
 unic_langid_0_9_6 = add_project_test(
     name="unic_langid_0_9_6",
+    rust="1.90.0",
     url="https://github.com/zbraniecki/unic-locale.git",
     rev="4f37b35b55ab2354319abe11db6e84fe83abe895",
     manifest="unic-langid",
@@ -2322,6 +2538,7 @@ unic_langid_0_9_6 = add_project_test(
 
 unic_langid_impl_0_9_6 = add_project_test(
     name="unic_langid_impl_0_9_6",
+    rust="1.90.0",
     url="https://github.com/zbraniecki/unic-locale.git",
     rev="4f37b35b55ab2354319abe11db6e84fe83abe895",
     manifest="unic-langid-impl",
@@ -2331,6 +2548,7 @@ unic_langid_impl_0_9_6 = add_project_test(
 
 unic_langid_macros_0_9_6 = add_project_test(
     name="unic_langid_macros_0_9_6",
+    rust="1.90.0",
     url="https://github.com/zbraniecki/unic-locale.git",
     rev="4f37b35b55ab2354319abe11db6e84fe83abe895",
     manifest="unic-langid-macros",
@@ -2340,6 +2558,7 @@ unic_langid_macros_0_9_6 = add_project_test(
 
 unic_langid_macros_impl_0_9_6 = add_project_test(
     name="unic_langid_macros_impl_0_9_6",
+    rust="1.90.0",
     url="https://github.com/zbraniecki/unic-locale.git",
     rev="4f37b35b55ab2354319abe11db6e84fe83abe895",
     manifest="unic-langid-macros-impl",
@@ -2349,6 +2568,7 @@ unic_langid_macros_impl_0_9_6 = add_project_test(
 
 unicase_2_8_1 = add_project_test(
     name="unicase_2_8_1",
+    rust="1.90.0",
     url="https://github.com/seanmonstar/unicase.git",
     rev="c42d9624fe9043607820064c3bd375f809b7b808",
     lockfile="$(S)/tst/projects/unicase_2_8_1/Cargo.lock",
@@ -2356,6 +2576,7 @@ unicase_2_8_1 = add_project_test(
 
 unicode_ident_1_0_18 = add_project_test(
     name="unicode_ident_1_0_18",
+    rust="1.90.0",
     url="https://github.com/dtolnay/unicode-ident.git",
     rev="93ab72c02e41056e63a3414d80878d18f2f7a962",
     lockfile="$(S)/tst/projects/unicode_ident_1_0_18/Cargo.lock",
@@ -2363,6 +2584,7 @@ unicode_ident_1_0_18 = add_project_test(
 
 unicode_properties_0_1_3 = add_project_test(
     name="unicode_properties_0_1_3",
+    rust="1.90.0",
     url="https://github.com/unicode-rs/unicode-properties.git",
     rev="d36bbc07c2a240a23828bbf1c0f05057035770dc",
     lockfile="$(S)/tst/projects/unicode_properties_0_1_3/Cargo.lock",
@@ -2370,6 +2592,7 @@ unicode_properties_0_1_3 = add_project_test(
 
 unicode_script_0_5_7 = add_project_test(
     name="unicode_script_0_5_7",
+    rust="1.90.0",
     url="https://github.com/unicode-rs/unicode-script.git",
     rev="90bd26b53764c3f36b16f545a299792db31a650f",
     lockfile="$(S)/tst/projects/unicode_script_0_5_7/Cargo.lock",
@@ -2377,6 +2600,7 @@ unicode_script_0_5_7 = add_project_test(
 
 unicode_security_0_1_2 = add_project_test(
     name="unicode_security_0_1_2",
+    rust="1.90.0",
     url="https://github.com/unicode-rs/unicode-security.git",
     rev="22d684a34c3e16803555d5f5f006b194772bd155",
     lockfile="$(S)/tst/projects/unicode_security_0_1_2/Cargo.lock",
@@ -2384,6 +2608,7 @@ unicode_security_0_1_2 = add_project_test(
 
 unicode_xid_0_2_6 = add_project_test(
     name="unicode_xid_0_2_6",
+    rust="1.90.0",
     url="https://github.com/unicode-rs/unicode-xid.git",
     rev="5d50587f19713cd35f1f48e5d4d011aa9c54dbff",
     lockfile="$(S)/tst/projects/unicode_xid_0_2_6/Cargo.lock",
@@ -2391,6 +2616,7 @@ unicode_xid_0_2_6 = add_project_test(
 
 version_check_0_9_5 = add_project_test(
     name="version_check_0_9_5",
+    rust="1.90.0",
     url="https://github.com/SergioBenitez/version_check.git",
     rev="d77ef9f27cc336719b2d839d09ee6635dd22f758",
     lockfile="$(S)/tst/projects/version_check_0_9_5/Cargo.lock",
@@ -2398,6 +2624,7 @@ version_check_0_9_5 = add_project_test(
 
 wasm_encoder_0_219_2 = add_project_test(
     name="wasm_encoder_0_219_2",
+    rust="1.90.0",
     url="https://github.com/bytecodealliance/wasm-tools.git",
     rev="3a7d60de4be52c24e4392548af16c4bd5075bff3",
     manifest="crates/wasm-encoder",
@@ -2407,6 +2634,7 @@ wasm_encoder_0_219_2 = add_project_test(
 
 wasmparser_0_234_0 = add_project_test(
     name="wasmparser_0_234_0",
+    rust="1.90.0",
     url="https://github.com/bytecodealliance/wasm-tools.git",
     rev="083589ac255bb867e928b6564f5550b3770fb9e8",
     manifest="crates/wasmparser",
@@ -2416,6 +2644,7 @@ wasmparser_0_234_0 = add_project_test(
 
 writeable_0_5_5 = add_project_test(
     name="writeable_0_5_5",
+    rust="1.90.0",
     url="https://github.com/unicode-org/icu4x.git",
     rev="55cd12ebb25c6261492e1e3dfa2e6453c54dde31",
     manifest="utils/writeable",
@@ -2425,6 +2654,7 @@ writeable_0_5_5 = add_project_test(
 
 yoke_derive_0_7_5 = add_project_test(
     name="yoke_derive_0_7_5",
+    rust="1.90.0",
     url="https://github.com/unicode-org/icu4x.git",
     rev="6bd4893cc44c2ca2718de47a119a31cc40045fe5",
     manifest="utils/yoke/derive",
@@ -2434,6 +2664,7 @@ yoke_derive_0_7_5 = add_project_test(
 
 zerovec_derive_0_10_3 = add_project_test(
     name="zerovec_derive_0_10_3",
+    rust="1.90.0",
     url="https://github.com/unicode-org/icu4x.git",
     rev="e1193d0f5d343317857570e9c4e8a03c87875d8b",
     manifest="utils/zerovec/derive",
@@ -2443,6 +2674,7 @@ zerovec_derive_0_10_3 = add_project_test(
 
 aes_0_9_3 = add_project_test(
     name="aes_0_9_3",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/block-ciphers.git",
     rev="c1534361e7549e29a16c3505f45a04c92d26b62a",
     manifest="aes",
@@ -2452,6 +2684,7 @@ aes_0_9_3 = add_project_test(
 
 arc_swap_1_9_2 = add_project_test(
     name="arc_swap_1_9_2",
+    rust="1.90.0",
     url="https://github.com/vorner/arc-swap.git",
     rev="147d6c0319d389a0aaa134a67abaa00106122f7d",
     lockfile="$(S)/tst/projects/arc_swap_1_9_2/Cargo.lock",
@@ -2459,6 +2692,7 @@ arc_swap_1_9_2 = add_project_test(
 
 async_channel_2_5_0 = add_project_test(
     name="async_channel_2_5_0",
+    rust="1.90.0",
     url="https://github.com/smol-rs/async-channel.git",
     rev="35a63c456aaa1906015f5a825e7e35505a749afa",
     lockfile="$(S)/tst/projects/async_channel_2_5_0/Cargo.lock",
@@ -2466,6 +2700,7 @@ async_channel_2_5_0 = add_project_test(
 
 async_lock_3_4_2 = add_project_test(
     name="async_lock_3_4_2",
+    rust="1.90.0",
     url="https://github.com/smol-rs/async-lock.git",
     rev="f07ba65a02ec3eca32fa95e6d13dc754d619bb35",
     lockfile="$(S)/tst/projects/async_lock_3_4_2/Cargo.lock",
@@ -2473,6 +2708,7 @@ async_lock_3_4_2 = add_project_test(
 
 atomic_waker_1_1_2 = add_project_test(
     name="atomic_waker_1_1_2",
+    rust="1.90.0",
     url="https://github.com/smol-rs/atomic-waker.git",
     rev="9969a29ccd1fe298e2df7346849c0095ba303a64",
     lockfile="$(S)/tst/projects/atomic_waker_1_1_2/Cargo.lock",
@@ -2480,6 +2716,7 @@ atomic_waker_1_1_2 = add_project_test(
 
 axum_0_8_9 = add_project_test(
     name="axum_0_8_9",
+    rust="1.90.0",
     url="https://github.com/tokio-rs/axum.git",
     rev="c59208c86fded335cd85e388030ad59347b0e5ae",
     manifest="axum",
@@ -2489,6 +2726,7 @@ axum_0_8_9 = add_project_test(
 
 base64ct_1_8_3 = add_project_test(
     name="base64ct_1_8_3",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/formats.git",
     rev="9adf88fe3e6e0fb9f8cf20b54747aff67a3eca6e",
     manifest="base64ct",
@@ -2498,6 +2736,7 @@ base64ct_1_8_3 = add_project_test(
 
 bit_set_0_11_1 = add_project_test(
     name="bit_set_0_11_1",
+    rust="1.90.0",
     url="https://github.com/contain-rs/bit-vec.git",
     rev="cd5b4392be151fb507f3bdbf71ce1e73885dbc28",
     manifest="set",
@@ -2507,6 +2746,7 @@ bit_set_0_11_1 = add_project_test(
 
 bit_vec_0_10_1 = add_project_test(
     name="bit_vec_0_10_1",
+    rust="1.90.0",
     url="https://github.com/contain-rs/bit-vec.git",
     rev="cd5b4392be151fb507f3bdbf71ce1e73885dbc28",
     manifest="vec",
@@ -2516,6 +2756,7 @@ bit_vec_0_10_1 = add_project_test(
 
 brotli_9_0_0 = add_project_test(
     name="brotli_9_0_0",
+    rust="1.90.0",
     url="https://github.com/dropbox/rust-brotli.git",
     rev="a51b65e75f68e3485be12bc816118e523e95647d",
     lockfile="$(S)/tst/projects/brotli_9_0_0/Cargo.lock",
@@ -2527,6 +2768,7 @@ brotli_9_0_0 = add_project_test(
 # and no Cargo resolves it offline.
 cargo_metadata_0_23_1 = add_project_test(
     name="cargo_metadata_0_23_1",
+    rust="1.90.0",
     url="https://github.com/oli-obk/cargo_metadata.git",
     rev="c08e66cdf534313085ef810ce6f2e0df8a83fc50",
     lockfile="$(S)/tst/projects/cargo_metadata_0_23_1/Cargo.lock",
@@ -2538,6 +2780,7 @@ cargo_metadata_0_23_1 = add_project_test(
 
 cast_0_3_0 = add_project_test(
     name="cast_0_3_0",
+    rust="1.90.0",
     url="https://github.com/japaric/cast.rs.git",
     rev="052288097de1846b938e854e27845a93a6f4b59d",
     lockfile="$(S)/tst/projects/cast_0_3_0/Cargo.lock",
@@ -2545,6 +2788,7 @@ cast_0_3_0 = add_project_test(
 
 ciborium_0_2_2 = add_project_test(
     name="ciborium_0_2_2",
+    rust="1.90.0",
     url="https://github.com/enarx/ciborium.git",
     rev="fdf3ec5c53256000f8e12f06c361ca18026a8d99",
     manifest="ciborium",
@@ -2554,6 +2798,7 @@ ciborium_0_2_2 = add_project_test(
 
 cipher_0_5_2 = add_project_test(
     name="cipher_0_5_2",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/traits.git",
     rev="f836f71fadb3b975b577a293d57851d044f0a44b",
     manifest="cipher",
@@ -2563,6 +2808,7 @@ cipher_0_5_2 = add_project_test(
 
 concurrent_queue_2_5_0 = add_project_test(
     name="concurrent_queue_2_5_0",
+    rust="1.90.0",
     url="https://github.com/smol-rs/concurrent-queue.git",
     rev="e874f701f8413de01948c4903f894e5c845d8950",
     lockfile="$(S)/tst/projects/concurrent_queue_2_5_0/Cargo.lock",
@@ -2570,6 +2816,7 @@ concurrent_queue_2_5_0 = add_project_test(
 
 const_oid_0_10_2 = add_project_test(
     name="const_oid_0_10_2",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/formats.git",
     rev="385ef739bcec785472c7c971c57f26f87caca3b8",
     manifest="const-oid",
@@ -2579,6 +2826,7 @@ const_oid_0_10_2 = add_project_test(
 
 convert_case_0_12_0 = add_project_test(
     name="convert_case_0_12_0",
+    rust="1.90.0",
     url="https://github.com/rutrum/convert-case.git",
     rev="637e1aec1717e3a4af07dff1c1dec7a4eb971b2a",
     lockfile="$(S)/tst/projects/convert_case_0_12_0/Cargo.lock",
@@ -2586,6 +2834,7 @@ convert_case_0_12_0 = add_project_test(
 
 crc_3_4_0 = add_project_test(
     name="crc_3_4_0",
+    rust="1.90.0",
     url="https://github.com/mrhooray/crc-rs.git",
     rev="2c8fd9615d620b5a5f8c9556b79a4ca173d6d401",
     lockfile="$(S)/tst/projects/crc_3_4_0/Cargo.lock",
@@ -2593,6 +2842,7 @@ crc_3_4_0 = add_project_test(
 
 crossbeam_queue_0_3_14 = add_project_test(
     name="crossbeam_queue_0_3_14",
+    rust="1.90.0",
     url="https://github.com/crossbeam-rs/crossbeam.git",
     rev="2920c984290229ab4e0ca0452ef09e48a82063f3",
     manifest="crossbeam-queue",
@@ -2602,6 +2852,7 @@ crossbeam_queue_0_3_14 = add_project_test(
 
 crypto_bigint_0_7_5 = add_project_test(
     name="crypto_bigint_0_7_5",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/crypto-bigint.git",
     rev="2b54d248cce00457e3afb5650d9b14632ef4a116",
     lockfile="$(S)/tst/projects/crypto_bigint_0_7_5/Cargo.lock",
@@ -2609,6 +2860,7 @@ crypto_bigint_0_7_5 = add_project_test(
 
 curve25519_dalek_5_0_0 = add_project_test(
     name="curve25519_dalek_5_0_0",
+    rust="1.90.0",
     url="https://github.com/dalek-cryptography/curve25519-dalek.git",
     rev="07bef73ff85998a206cd2cea7f2605c801d0d1c9",
     manifest="curve25519-dalek",
@@ -2618,6 +2870,7 @@ curve25519_dalek_5_0_0 = add_project_test(
 
 data_encoding_2_11_1 = add_project_test(
     name="data_encoding_2_11_1",
+    rust="1.90.0",
     url="https://github.com/ia0/data-encoding.git",
     rev="834737d9c3dc957ce1b653959e3f35061dd77ade",
     manifest="lib",
@@ -2627,6 +2880,7 @@ data_encoding_2_11_1 = add_project_test(
 
 der_0_8_2 = add_project_test(
     name="der_0_8_2",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/formats.git",
     rev="7637997c168f710f02ae4037a9f134c31dc8f9ff",
     manifest="der",
@@ -2636,6 +2890,7 @@ der_0_8_2 = add_project_test(
 
 deranged_0_5_8 = add_project_test(
     name="deranged_0_5_8",
+    rust="1.90.0",
     url="https://github.com/jhpratt/deranged.git",
     rev="7d0c671e8c806b96d582af197df3c620e09cb33b",
     manifest="deranged",
@@ -2645,6 +2900,7 @@ deranged_0_5_8 = add_project_test(
 
 derive_more_2_1_1 = add_project_test(
     name="derive_more_2_1_1",
+    rust="1.90.0",
     url="https://github.com/JelteF/derive_more.git",
     rev="f7bb41ac054c060caaf5ff3212e74e42794cb4b4",
     adapter_args=["--features", "full", "--", "--skip", "compile_fail"],
@@ -2653,6 +2909,7 @@ derive_more_2_1_1 = add_project_test(
 
 dyn_clone_1_0_20 = add_project_test(
     name="dyn_clone_1_0_20",
+    rust="1.90.0",
     url="https://github.com/dtolnay/dyn-clone.git",
     rev="1d2d15c5d9d0d538c9da2141a75422d94c6be194",
     lockfile="$(S)/tst/projects/dyn_clone_1_0_20/Cargo.lock",
@@ -2660,6 +2917,7 @@ dyn_clone_1_0_20 = add_project_test(
 
 errno_0_3_14 = add_project_test(
     name="errno_0_3_14",
+    rust="1.90.0",
     url="https://github.com/lambda-fairy/rust-errno.git",
     rev="ffc03bfb9eb491013567115e6eea560948cd9e52",
     lockfile="$(S)/tst/projects/errno_0_3_14/Cargo.lock",
@@ -2667,6 +2925,7 @@ errno_0_3_14 = add_project_test(
 
 event_listener_5_4_2 = add_project_test(
     name="event_listener_5_4_2",
+    rust="1.90.0",
     url="https://github.com/smol-rs/event-listener.git",
     rev="77004ac77dcef7884bf71a99c276a50f83a7fa4e",
     lockfile="$(S)/tst/projects/event_listener_5_4_2/Cargo.lock",
@@ -2674,6 +2933,7 @@ event_listener_5_4_2 = add_project_test(
 
 filetime_0_2_29 = add_project_test(
     name="filetime_0_2_29",
+    rust="1.90.0",
     url="https://github.com/alexcrichton/filetime.git",
     rev="ab5ee65b5e4fe2de19dbe7d4fe08bc31e945949c",
     lockfile="$(S)/tst/projects/filetime_0_2_29/Cargo.lock",
@@ -2681,6 +2941,7 @@ filetime_0_2_29 = add_project_test(
 
 flume_0_12_0 = add_project_test(
     name="flume_0_12_0",
+    rust="1.90.0",
     url="https://github.com/zesterer/flume.git",
     rev="58e0c09b7af2c135d13017c1fd56b8ed9d0c76a5",
     lockfile="$(S)/tst/projects/flume_0_12_0/Cargo.lock",
@@ -2688,6 +2949,7 @@ flume_0_12_0 = add_project_test(
 
 futures_lite_2_6_1 = add_project_test(
     name="futures_lite_2_6_1",
+    rust="1.90.0",
     url="https://github.com/smol-rs/futures-lite.git",
     rev="226ce18976d8714d6bd9700b61dcc81d7200bc9a",
     lockfile="$(S)/tst/projects/futures_lite_2_6_1/Cargo.lock",
@@ -2695,6 +2957,7 @@ futures_lite_2_6_1 = add_project_test(
 
 generic_array_1_4_5 = add_project_test(
     name="generic_array_1_4_5",
+    rust="1.90.0",
     url="https://github.com/fizyk20/generic-array.git",
     rev="6b6c76f39994a8752686dd2d09408ad4a08c320c",
     lockfile="$(S)/tst/projects/generic_array_1_4_5/Cargo.lock",
@@ -2702,6 +2965,7 @@ generic_array_1_4_5 = add_project_test(
 
 h2_0_4_19 = add_project_test(
     name="h2_0_4_19",
+    rust="1.90.0",
     url="https://github.com/hyperium/h2.git",
     rev="d57d1b852fec9dda6d42d3454502006d52104da8",
     lockfile="$(S)/tst/projects/h2_0_4_19/Cargo.lock",
@@ -2709,6 +2973,7 @@ h2_0_4_19 = add_project_test(
 
 hashlink_0_12_2 = add_project_test(
     name="hashlink_0_12_2",
+    rust="1.90.0",
     url="https://github.com/djc/hashlink.git",
     rev="c7aaa3c2504c08baf8c97da11f3536258464da8f",
     lockfile="$(S)/tst/projects/hashlink_0_12_2/Cargo.lock",
@@ -2716,6 +2981,7 @@ hashlink_0_12_2 = add_project_test(
 
 heck_0_5_0 = add_project_test(
     name="heck_0_5_0",
+    rust="1.90.0",
     url="https://github.com/withoutboats/heck.git",
     rev="070693322aee7c5c7fbee7c9964bf8d7d3a29c96",
     lockfile="$(S)/tst/projects/heck_0_5_0/Cargo.lock",
@@ -2723,6 +2989,7 @@ heck_0_5_0 = add_project_test(
 
 hkdf_0_13_0 = add_project_test(
     name="hkdf_0_13_0",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/KDFs.git",
     rev="bfb3b209abeeaa02277935b167e06bac320b2773",
     manifest="hkdf",
@@ -2732,6 +2999,7 @@ hkdf_0_13_0 = add_project_test(
 
 hmac_0_13_0 = add_project_test(
     name="hmac_0_13_0",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/MACs.git",
     rev="0236c8eb50098dd7f277a71ab89caaeb1e7314df",
     manifest="hmac",
@@ -2741,6 +3009,7 @@ hmac_0_13_0 = add_project_test(
 
 http_body_1_1_0 = add_project_test(
     name="http_body_1_1_0",
+    rust="1.90.0",
     url="https://github.com/hyperium/http-body.git",
     rev="2fb78de9c875c364b7eb1a1a117acc3b83ffb13a",
     manifest="http-body",
@@ -2750,6 +3019,7 @@ http_body_1_1_0 = add_project_test(
 
 httpdate_1_0_3 = add_project_test(
     name="httpdate_1_0_3",
+    rust="1.90.0",
     url="https://github.com/pyfisch/httpdate.git",
     rev="638da761065df8b67282b0a1d139c0a7e4a02429",
     lockfile="$(S)/tst/projects/httpdate_1_0_3/Cargo.lock",
@@ -2757,6 +3027,7 @@ httpdate_1_0_3 = add_project_test(
 
 hyper_1_11_1 = add_project_test(
     name="hyper_1_11_1",
+    rust="1.90.0",
     url="https://github.com/hyperium/hyper.git",
     rev="6371cd425017155f7fbecef0e57b218edbe6a93a",
     adapter_args=["--features", "full"],
@@ -2765,6 +3036,7 @@ hyper_1_11_1 = add_project_test(
 
 hyper_util_0_1_21 = add_project_test(
     name="hyper_util_0_1_21",
+    rust="1.90.0",
     url="https://github.com/hyperium/hyper-util.git",
     rev="23a868965964c1d6bb1b94f30ba4c420a4bebe7c",
     adapter_args=["--features", "full"],
@@ -2773,6 +3045,7 @@ hyper_util_0_1_21 = add_project_test(
 
 iana_time_zone_0_1_65 = add_project_test(
     name="iana_time_zone_0_1_65",
+    rust="1.90.0",
     url="https://github.com/strawlab/iana-time-zone.git",
     rev="3726968181ae67d95c8de2f750a95b9c703ae4c8",
     lockfile="$(S)/tst/projects/iana_time_zone_0_1_65/Cargo.lock",
@@ -2780,6 +3053,7 @@ iana_time_zone_0_1_65 = add_project_test(
 
 idna_1_1_0 = add_project_test(
     name="idna_1_1_0",
+    rust="1.90.0",
     url="https://github.com/servo/rust-url.git",
     rev="91377f48bf35011d042aa5abef9e7f2a0a625aaa",
     manifest="idna",
@@ -2789,6 +3063,7 @@ idna_1_1_0 = add_project_test(
 
 ipnet_2_12_2 = add_project_test(
     name="ipnet_2_12_2",
+    rust="1.90.0",
     url="https://github.com/krisprice/ipnet.git",
     rev="13c5c5873c02127679b1e8e64b538e4e36942640",
     lockfile="$(S)/tst/projects/ipnet_2_12_2/Cargo.lock",
@@ -2796,6 +3071,7 @@ ipnet_2_12_2 = add_project_test(
 
 linked_hash_map_0_5_6 = add_project_test(
     name="linked_hash_map_0_5_6",
+    rust="1.90.0",
     url="https://github.com/contain-rs/linked-hash-map.git",
     rev="dfc4a57278b79314b0c1892d6c3918f2e00e249b",
     lockfile="$(S)/tst/projects/linked_hash_map_0_5_6/Cargo.lock",
@@ -2803,6 +3079,7 @@ linked_hash_map_0_5_6 = add_project_test(
 
 litemap_0_8_3 = add_project_test(
     name="litemap_0_8_3",
+    rust="1.90.0",
     url="https://github.com/unicode-org/icu4x.git",
     rev="a14f2dad852be26bad277ae704abf27a15cbfed1",
     manifest="utils/litemap",
@@ -2812,6 +3089,7 @@ litemap_0_8_3 = add_project_test(
 
 matchit_0_9_2 = add_project_test(
     name="matchit_0_9_2",
+    rust="1.90.0",
     url="https://github.com/ibraheemdev/matchit.git",
     rev="4b5a2c356022f544187d6e67325d8e98dd7f11ca",
     adapter_args=["--all-features"],
@@ -2820,6 +3098,7 @@ matchit_0_9_2 = add_project_test(
 
 memoffset_0_9_1 = add_project_test(
     name="memoffset_0_9_1",
+    rust="1.90.0",
     url="https://github.com/Gilnaa/memoffset.git",
     rev="153fc3d50f03755be53148bc3eb97390f9011e45",
     lockfile="$(S)/tst/projects/memoffset_0_9_1/Cargo.lock",
@@ -2827,6 +3106,7 @@ memoffset_0_9_1 = add_project_test(
 
 mime_guess_2_0_5 = add_project_test(
     name="mime_guess_2_0_5",
+    rust="1.90.0",
     url="https://github.com/abonander/mime_guess.git",
     rev="805964fb54871f0154ee155bf21729b77ffd4a1c",
     lockfile="$(S)/tst/projects/mime_guess_2_0_5/Cargo.lock",
@@ -2834,6 +3114,7 @@ mime_guess_2_0_5 = add_project_test(
 
 minimal_lexical_0_2_1 = add_project_test(
     name="minimal_lexical_0_2_1",
+    rust="1.90.0",
     url="https://github.com/Alexhuszagh/minimal-lexical.git",
     rev="e997c46656ebe83e696b866bd954da1fa3f64eef",
     lockfile="$(S)/tst/projects/minimal_lexical_0_2_1/Cargo.lock",
@@ -2841,6 +3122,7 @@ minimal_lexical_0_2_1 = add_project_test(
 
 mio_1_2_3 = add_project_test(
     name="mio_1_2_3",
+    rust="1.90.0",
     url="https://github.com/tokio-rs/mio.git",
     rev="da425f909dd6b86d887da9eaefcb158099b5b165",
     lockfile="$(S)/tst/projects/mio_1_2_3/Cargo.lock",
@@ -2848,6 +3130,7 @@ mio_1_2_3 = add_project_test(
 
 multimap_0_10_1 = add_project_test(
     name="multimap_0_10_1",
+    rust="1.90.0",
     url="https://github.com/havarnov/multimap.git",
     rev="7d71ab594eb4c4e60bc675ea96ebefabb0bd91a0",
     lockfile="$(S)/tst/projects/multimap_0_10_1/Cargo.lock",
@@ -2855,6 +3138,7 @@ multimap_0_10_1 = add_project_test(
 
 num_0_4_3 = add_project_test(
     name="num_0_4_3",
+    rust="1.90.0",
     url="https://github.com/rust-num/num.git",
     rev="1fec8524c4eaa27cbdf4bb3eb46782d2ff40b2ed",
     lockfile="$(S)/tst/projects/num_0_4_3/Cargo.lock",
@@ -2862,6 +3146,7 @@ num_0_4_3 = add_project_test(
 
 num_complex_0_4_6 = add_project_test(
     name="num_complex_0_4_6",
+    rust="1.90.0",
     url="https://github.com/rust-num/num-complex.git",
     rev="91fdc06356c0c868cb88b5a180859023c57e6e50",
     lockfile="$(S)/tst/projects/num_complex_0_4_6/Cargo.lock",
@@ -2869,6 +3154,7 @@ num_complex_0_4_6 = add_project_test(
 
 num_conv_0_2_2 = add_project_test(
     name="num_conv_0_2_2",
+    rust="1.90.0",
     url="https://github.com/jhpratt/num-conv.git",
     rev="b022fe87ac3ad5b0d7606ea7465549eaa92efe97",
     lockfile="$(S)/tst/projects/num_conv_0_2_2/Cargo.lock",
@@ -2876,6 +3162,7 @@ num_conv_0_2_2 = add_project_test(
 
 num_cpus_1_17_0 = add_project_test(
     name="num_cpus_1_17_0",
+    rust="1.90.0",
     url="https://github.com/seanmonstar/num_cpus.git",
     rev="342af76b486335e5a955c7314fc96cd104e7a17b",
     lockfile="$(S)/tst/projects/num_cpus_1_17_0/Cargo.lock",
@@ -2883,6 +3170,7 @@ num_cpus_1_17_0 = add_project_test(
 
 num_derive_0_5_1 = add_project_test(
     name="num_derive_0_5_1",
+    rust="1.90.0",
     url="https://github.com/rust-num/num-derive.git",
     rev="2f73ee84281877c71a262d2e6e9f9097ad308306",
     lockfile="$(S)/tst/projects/num_derive_0_5_1/Cargo.lock",
@@ -2890,6 +3178,7 @@ num_derive_0_5_1 = add_project_test(
 
 num_iter_0_1_46 = add_project_test(
     name="num_iter_0_1_46",
+    rust="1.90.0",
     url="https://github.com/rust-num/num-iter.git",
     rev="6bfec7678bae3f4a38d1eeeab20532ac0bae7c9c",
     lockfile="$(S)/tst/projects/num_iter_0_1_46/Cargo.lock",
@@ -2897,6 +3186,7 @@ num_iter_0_1_46 = add_project_test(
 
 num_rational_0_4_2 = add_project_test(
     name="num_rational_0_4_2",
+    rust="1.90.0",
     url="https://github.com/rust-num/num-rational.git",
     rev="4d55ad22ac86ebbc4cb45d79a956e4a1f7af57d1",
     lockfile="$(S)/tst/projects/num_rational_0_4_2/Cargo.lock",
@@ -2904,6 +3194,7 @@ num_rational_0_4_2 = add_project_test(
 
 pbkdf2_0_13_0 = add_project_test(
     name="pbkdf2_0_13_0",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/password-hashes.git",
     rev="eba9411513ca5a7c86d41b111106a140302a808b",
     manifest="pbkdf2",
@@ -2913,6 +3204,7 @@ pbkdf2_0_13_0 = add_project_test(
 
 pem_4_0_0 = add_project_test(
     name="pem_4_0_0",
+    rust="1.90.0",
     url="https://github.com/jcreekmore/pem-rs.git",
     rev="99c15c08f1389153ed037c33750f8605bbf8bd55",
     lockfile="$(S)/tst/projects/pem_4_0_0/Cargo.lock",
@@ -2920,6 +3212,7 @@ pem_4_0_0 = add_project_test(
 
 phf_0_14_0 = add_project_test(
     name="phf_0_14_0",
+    rust="1.90.0",
     url="https://github.com/rust-phf/rust-phf.git",
     rev="1620d169aad09b02ef02a97b272470152e100bd6",
     manifest="phf",
@@ -2930,6 +3223,7 @@ phf_0_14_0 = add_project_test(
 
 polling_3_11_0 = add_project_test(
     name="polling_3_11_0",
+    rust="1.90.0",
     url="https://github.com/smol-rs/polling.git",
     rev="f404d08dd2a61994ac5fe0ed663bc051bd94c053",
     lockfile="$(S)/tst/projects/polling_3_11_0/Cargo.lock",
@@ -2937,6 +3231,7 @@ polling_3_11_0 = add_project_test(
 
 portable_atomic_1_15_0 = add_project_test(
     name="portable_atomic_1_15_0",
+    rust="1.90.0",
     url="https://github.com/taiki-e/portable-atomic.git",
     rev="e4595528211f1d53b7f4d93e528ef84b491fc871",
     lockfile="$(S)/tst/projects/portable_atomic_1_15_0/Cargo.lock",
@@ -2944,6 +3239,7 @@ portable_atomic_1_15_0 = add_project_test(
 
 powerfmt_0_2_0 = add_project_test(
     name="powerfmt_0_2_0",
+    rust="1.90.0",
     url="https://github.com/jhpratt/powerfmt.git",
     rev="5889a2a65c99836fd718340726f6b4379bc5028f",
     manifest="powerfmt",
@@ -2953,6 +3249,7 @@ powerfmt_0_2_0 = add_project_test(
 
 prettyplease_0_3_0 = add_project_test(
     name="prettyplease_0_3_0",
+    rust="1.90.0",
     url="https://github.com/dtolnay/prettyplease.git",
     rev="49e50897b580a5b7591ead6ef73f3fe09e76d896",
     lockfile="$(S)/tst/projects/prettyplease_0_3_0/Cargo.lock",
@@ -2960,6 +3257,7 @@ prettyplease_0_3_0 = add_project_test(
 
 proc_macro_crate_3_5_0 = add_project_test(
     name="proc_macro_crate_3_5_0",
+    rust="1.90.0",
     url="https://github.com/bkchr/proc-macro-crate.git",
     rev="8f3d8b04539f732e09c07907f138a248c8d0eed9",
     lockfile="$(S)/tst/projects/proc_macro_crate_3_5_0/Cargo.lock",
@@ -2967,6 +3265,7 @@ proc_macro_crate_3_5_0 = add_project_test(
 
 ref_cast_1_0_27 = add_project_test(
     name="ref_cast_1_0_27",
+    rust="1.90.0",
     url="https://github.com/dtolnay/ref-cast.git",
     rev="971b90557fc096216a52b2672a6ab5d39523162c",
     lockfile="$(S)/tst/projects/ref_cast_1_0_27/Cargo.lock",
@@ -2974,6 +3273,7 @@ ref_cast_1_0_27 = add_project_test(
 
 same_file_1_0_6 = add_project_test(
     name="same_file_1_0_6",
+    rust="1.90.0",
     url="https://github.com/BurntSushi/same-file.git",
     rev="5799cd323b8eefd17a089c950dac113f66c89c9e",
     lockfile="$(S)/tst/projects/same_file_1_0_6/Cargo.lock",
@@ -2981,6 +3281,7 @@ same_file_1_0_6 = add_project_test(
 
 schemars_1_2_2 = add_project_test(
     name="schemars_1_2_2",
+    rust="1.90.0",
     url="https://github.com/GREsau/schemars.git",
     rev="ed6186319d5ebf1959a03f558df375d2bb5c44a6",
     manifest="schemars",
@@ -2990,6 +3291,7 @@ schemars_1_2_2 = add_project_test(
 
 serde_repr_0_1_21 = add_project_test(
     name="serde_repr_0_1_21",
+    rust="1.90.0",
     url="https://github.com/dtolnay/serde-repr.git",
     rev="205ce23cf7c55981be8c1e02ac87695c57a13ee0",
     lockfile="$(S)/tst/projects/serde_repr_0_1_21/Cargo.lock",
@@ -2997,6 +3299,7 @@ serde_repr_0_1_21 = add_project_test(
 
 serde_urlencoded_0_7_1 = add_project_test(
     name="serde_urlencoded_0_7_1",
+    rust="1.90.0",
     url="https://github.com/nox/serde_urlencoded.git",
     rev="d8bc15d16adf6b3ba6ae46d199d7109cf5079efa",
     lockfile="$(S)/tst/projects/serde_urlencoded_0_7_1/Cargo.lock",
@@ -3004,6 +3307,7 @@ serde_urlencoded_0_7_1 = add_project_test(
 
 serde_with_3_24_0 = add_project_test(
     name="serde_with_3_24_0",
+    rust="1.90.0",
     url="https://github.com/jonasbb/serde_with.git",
     rev="35ac84c8faf34d6822991bbf2397056994c9208b",
     manifest="serde_with",
@@ -3013,6 +3317,7 @@ serde_with_3_24_0 = add_project_test(
 
 signal_hook_0_4_4 = add_project_test(
     name="signal_hook_0_4_4",
+    rust="1.90.0",
     url="https://github.com/vorner/signal-hook.git",
     rev="f37a7b5918830009c83f5e17fd5a533f2dfd7f82",
     lockfile="$(S)/tst/projects/signal_hook_0_4_4/Cargo.lock",
@@ -3020,6 +3325,7 @@ signal_hook_0_4_4 = add_project_test(
 
 siphasher_1_0_4 = add_project_test(
     name="siphasher_1_0_4",
+    rust="1.90.0",
     url="https://github.com/jedisct1/rust-siphash.git",
     rev="ed028f01a16205b0819fa83b0cdc052e2d5ac3b7",
     lockfile="$(S)/tst/projects/siphasher_1_0_4/Cargo.lock",
@@ -3027,6 +3333,7 @@ siphasher_1_0_4 = add_project_test(
 
 socket2_0_6_5 = add_project_test(
     name="socket2_0_6_5",
+    rust="1.90.0",
     url="https://github.com/rust-lang/socket2.git",
     rev="239dd83a4ced08e514d2c38942aab99791119f0d",
     lockfile="$(S)/tst/projects/socket2_0_6_5/Cargo.lock",
@@ -3046,6 +3353,7 @@ socket2_0_6_5 = add_project_test(
 
 subtle_2_6_1 = add_project_test(
     name="subtle_2_6_1",
+    rust="1.90.0",
     url="https://github.com/dalek-cryptography/subtle.git",
     rev="5457b5448b021d1da101ababbb854e6657233943",
     lockfile="$(S)/tst/projects/subtle_2_6_1/Cargo.lock",
@@ -3053,6 +3361,7 @@ subtle_2_6_1 = add_project_test(
 
 sync_wrapper_1_0_2 = add_project_test(
     name="sync_wrapper_1_0_2",
+    rust="1.90.0",
     url="https://github.com/Actyx/sync_wrapper.git",
     rev="55413956c36aeab47feb8c04d1b7a044d6df336a",
     lockfile="$(S)/tst/projects/sync_wrapper_1_0_2/Cargo.lock",
@@ -3060,6 +3369,7 @@ sync_wrapper_1_0_2 = add_project_test(
 
 tap_1_0_1 = add_project_test(
     name="tap_1_0_1",
+    rust="1.90.0",
     url="https://github.com/myrrlyn/tap.git",
     rev="f5315f0f5ca90ce6399daac76c1fe3ba645a4e4e",
     lockfile="$(S)/tst/projects/tap_1_0_1/Cargo.lock",
@@ -3067,6 +3377,7 @@ tap_1_0_1 = add_project_test(
 
 target_lexicon_0_13_5 = add_project_test(
     name="target_lexicon_0_13_5",
+    rust="1.90.0",
     url="https://github.com/bytecodealliance/target-lexicon.git",
     rev="6647bd7d681d3e218c88568d8285dfd8cae2dd97",
     lockfile="$(S)/tst/projects/target_lexicon_0_13_5/Cargo.lock",
@@ -3074,6 +3385,7 @@ target_lexicon_0_13_5 = add_project_test(
 
 tiny_keccak_2_0_2 = add_project_test(
     name="tiny_keccak_2_0_2",
+    rust="1.90.0",
     url="https://github.com/debris/tiny-keccak.git",
     rev="f034411460d0012925052017c1658b3ce9cda532",
     adapter_args=["--all-features"],
@@ -3082,6 +3394,7 @@ tiny_keccak_2_0_2 = add_project_test(
 
 tinystr_0_8_4 = add_project_test(
     name="tinystr_0_8_4",
+    rust="1.90.0",
     url="https://github.com/unicode-org/icu4x.git",
     rev="a14f2dad852be26bad277ae704abf27a15cbfed1",
     manifest="utils/tinystr",
@@ -3091,6 +3404,7 @@ tinystr_0_8_4 = add_project_test(
 
 tinytemplate_1_2_1 = add_project_test(
     name="tinytemplate_1_2_1",
+    rust="1.90.0",
     url="https://github.com/bheisler/TinyTemplate.git",
     rev="522605e72e04dbd6ededa29743a485d2fad29dd4",
     lockfile="$(S)/tst/projects/tinytemplate_1_2_1/Cargo.lock",
@@ -3098,6 +3412,7 @@ tinytemplate_1_2_1 = add_project_test(
 
 tokio_stream_0_1_19 = add_project_test(
     name="tokio_stream_0_1_19",
+    rust="1.90.0",
     url="https://github.com/tokio-rs/tokio.git",
     rev="bc0933ccffb62e010d3ccb497abc22cec2e73f54",
     manifest="tokio-stream",
@@ -3107,6 +3422,7 @@ tokio_stream_0_1_19 = add_project_test(
 
 tokio_util_0_7_19 = add_project_test(
     name="tokio_util_0_7_19",
+    rust="1.90.0",
     url="https://github.com/tokio-rs/tokio.git",
     rev="f2189d3bd69d22638158a0ca8163b2e8daf18c5f",
     manifest="tokio-util",
@@ -3117,6 +3433,7 @@ tokio_util_0_7_19 = add_project_test(
 
 tower_0_5_3 = add_project_test(
     name="tower_0_5_3",
+    rust="1.90.0",
     url="https://github.com/tower-rs/tower.git",
     rev="4b0a6b0e688bd177eb2c9c97f5268dd9703c66fc",
     manifest="tower",
@@ -3127,6 +3444,7 @@ tower_0_5_3 = add_project_test(
 
 tower_http_0_7_1 = add_project_test(
     name="tower_http_0_7_1",
+    rust="1.90.0",
     url="https://github.com/tower-rs/tower-http.git",
     rev="c9414514a421b07b6520e040a3fd6a579b0c5e1b",
     manifest="tower-http",
@@ -3137,6 +3455,7 @@ tower_http_0_7_1 = add_project_test(
 
 tracing_subscriber_0_3_23 = add_project_test(
     name="tracing_subscriber_0_3_23",
+    rust="1.90.0",
     url="https://github.com/tokio-rs/tracing.git",
     rev="54ede4d5d85a536aed5485c5213011d9ec961935",
     manifest="tracing-subscriber",
@@ -3147,6 +3466,7 @@ tracing_subscriber_0_3_23 = add_project_test(
 
 tungstenite_0_30_0 = add_project_test(
     name="tungstenite_0_30_0",
+    rust="1.90.0",
     url="https://github.com/snapview/tungstenite-rs.git",
     rev="7f4aeaf0944992c5664c8fb8e0d54577c7e18020",
     lockfile="$(S)/tst/projects/tungstenite_0_30_0/Cargo.lock",
@@ -3154,6 +3474,7 @@ tungstenite_0_30_0 = add_project_test(
 
 unicode_bidi_0_3_18 = add_project_test(
     name="unicode_bidi_0_3_18",
+    rust="1.90.0",
     url="https://github.com/servo/unicode-bidi.git",
     rev="580b9c6c68fdb689916017e61d5052be3ed349b5",
     lockfile="$(S)/tst/projects/unicode_bidi_0_3_18/Cargo.lock",
@@ -3161,6 +3482,7 @@ unicode_bidi_0_3_18 = add_project_test(
 
 untrusted_0_9_0 = add_project_test(
     name="untrusted_0_9_0",
+    rust="1.90.0",
     url="https://github.com/briansmith/untrusted.git",
     rev="89c8b8415f692d3803d183fc5fbf9ec08a6adcf4",
     lockfile="$(S)/tst/projects/untrusted_0_9_0/Cargo.lock",
@@ -3168,6 +3490,7 @@ untrusted_0_9_0 = add_project_test(
 
 urlencoding_2_1_3 = add_project_test(
     name="urlencoding_2_1_3",
+    rust="1.90.0",
     url="https://github.com/kornelski/rust_urlencoding.git",
     rev="3cc277fc4e577a0bef99294d7ab9bc85232f0730",
     lockfile="$(S)/tst/projects/urlencoding_2_1_3/Cargo.lock",
@@ -3175,6 +3498,7 @@ urlencoding_2_1_3 = add_project_test(
 
 utf8parse_0_2_2 = add_project_test(
     name="utf8parse_0_2_2",
+    rust="1.90.0",
     url="https://github.com/alacritty/vte.git",
     rev="ebc4a4d7259678a8626f5c269ea9348dfc3e79b2",
     manifest="utf8parse",
@@ -3184,6 +3508,7 @@ utf8parse_0_2_2 = add_project_test(
 
 utf_8_0_7_6 = add_project_test(
     name="utf_8_0_7_6",
+    rust="1.90.0",
     url="https://github.com/SimonSapin/rust-utf8.git",
     rev="9b4165786edaea2ef9cf48f75756537eacf7f20d",
     lockfile="$(S)/tst/projects/utf_8_0_7_6/Cargo.lock",
@@ -3191,6 +3516,7 @@ utf_8_0_7_6 = add_project_test(
 
 valuable_0_1_1 = add_project_test(
     name="valuable_0_1_1",
+    rust="1.90.0",
     url="https://github.com/tokio-rs/valuable.git",
     rev="9efc29b6e58cef28f6566a47aa7e142a55fead77",
     manifest="valuable",
@@ -3201,6 +3527,7 @@ valuable_0_1_1 = add_project_test(
 
 wyz_0_6_1 = add_project_test(
     name="wyz_0_6_1",
+    rust="1.90.0",
     url="https://github.com/myrrlyn/wyz.git",
     rev="112ad644d62580d59aaaba69f3609474980fd7fb",
     lockfile="$(S)/tst/projects/wyz_0_6_1/Cargo.lock",
@@ -3208,6 +3535,7 @@ wyz_0_6_1 = add_project_test(
 
 yansi_1_0_1 = add_project_test(
     name="yansi_1_0_1",
+    rust="1.90.0",
     url="https://github.com/SergioBenitez/yansi.git",
     rev="3e35184fc181fef63bc11dedb22413e821168255",
     lockfile="$(S)/tst/projects/yansi_1_0_1/Cargo.lock",
@@ -3215,6 +3543,7 @@ yansi_1_0_1 = add_project_test(
 
 yoke_0_8_3 = add_project_test(
     name="yoke_0_8_3",
+    rust="1.90.0",
     url="https://github.com/unicode-org/icu4x.git",
     rev="a954ec29392c0225453404cb1f6a77f0ded27089",
     manifest="utils/yoke",
@@ -3225,6 +3554,7 @@ yoke_0_8_3 = add_project_test(
 
 zeroize_1_9_0 = add_project_test(
     name="zeroize_1_9_0",
+    rust="1.90.0",
     url="https://github.com/RustCrypto/utils.git",
     rev="0b715735a660a8566ccd240bf42489fe2ed98efb",
     manifest="zeroize",
@@ -3234,12 +3564,41 @@ zeroize_1_9_0 = add_project_test(
 
 zerovec_0_11_8 = add_project_test(
     name="zerovec_0_11_8",
+    rust="1.90.0",
     url="https://github.com/unicode-org/icu4x.git",
     rev="c56bbb5a7b47409759113903764c456f13b418e5",
     manifest="utils/zerovec",
     vendor_manifest=".",
     adapter_args=["--all-features"],
     lockfile="$(S)/tst/projects/zerovec_0_11_8/Cargo.lock",
+)
+
+# The latest releases, each with the lockfile it ships: bat and ripgrep stay
+# within rust-version 1.87 and 1.85, arti asks for 1.92.
+bat_0_26_1 = add_project_test(
+    name="bat_0_26_1",
+    rust="1.90.0",
+    url="https://github.com/sharkdp/bat.git",
+    rev="979ba22628bc9d8171f2cffca2bd5c90c9fc0a9e",
+    lockfile="$(S)/tst/projects/bat_0_26_1/Cargo.lock",
+)
+
+ripgrep_15_2_0 = add_project_test(
+    name="ripgrep_15_2_0",
+    rust="1.90.0",
+    url="https://github.com/BurntSushi/ripgrep.git",
+    rev="e89fff89ac9af12e8d4ce9d5fd07beb408ca730f",
+    lockfile="$(S)/tst/projects/ripgrep_15_2_0/Cargo.lock",
+)
+
+arti_2_7_0 = add_project_test(
+    name="arti_2_7_0",
+    rust="1.92.0",
+    url="https://gitlab.torproject.org/tpo/core/arti.git",
+    rev="ce8bc6e0998bd5a4efdf06dd62dce53c98ea1087",
+    manifest="crates/arti",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/arti_2_7_0/Cargo.lock",
 )
 
 
@@ -3603,6 +3962,7 @@ unit_tests.append(command(
         "$(B)/tst/unit/no_windows_support.stamp",
     ],
     deps=[rustc],
+    env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3622,6 +3982,7 @@ unit_tests.append(command(
         "$(B)/tst/unit/mir_opt_level.stamp",
     ],
     deps=[rustc],
+    env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3658,10 +4019,11 @@ unit_tests.append(command(
         "$(S)/tst/unit/test_large_function_backend_budget.rs",
         "$(S)/tst/unit/codegen_literal_blob.rs",
         "$(S)/tst/unit/codegen_shared_allocation.rs",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/codegen_options.stamp",
     ],
-    deps=[libstd, rustc],
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3680,11 +4042,11 @@ unit_tests.append(command(
         "$(B)/bin/rustc",
         "$(S)/tst/unit/local_inner_macros_producer.rs",
         "$(S)/tst/unit/local_inner_macros_consumer.rs",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/local_inner_macros_metadata.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3703,11 +4065,11 @@ unit_tests.append(command(
         "$(B)/bin/rustc",
         "$(S)/tst/unit/qualified_extern_macro_2015_producer.rs",
         "$(S)/tst/unit/qualified_extern_macro_2015_consumer.rs",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/qualified_extern_macro_2015.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3726,11 +4088,11 @@ unit_tests.append(command(
         "$(B)/bin/rustc",
         "$(S)/tst/unit/generic_default_projection_metadata_producer.rs",
         "$(S)/tst/unit/generic_default_projection_metadata_consumer.rs",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/generic_default_projection_metadata.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3749,11 +4111,11 @@ unit_tests.append(command(
         "$(B)/bin/rustc",
         "$(S)/tst/unit/forward_closure_rpit_metadata_producer.rs",
         "$(S)/tst/unit/forward_closure_rpit_metadata_consumer.rs",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/forward_closure_rpit_metadata.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3772,11 +4134,11 @@ unit_tests.append(command(
         "$(B)/bin/rustc",
         "$(S)/tst/unit/const_borrow_offset_producer.rs",
         "$(S)/tst/unit/const_borrow_offset_consumer.rs",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/const_borrow_offset_metadata.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3795,11 +4157,11 @@ unit_tests.append(command(
         "$(B)/bin/rustc",
         "$(S)/tst/unit/inline_markings_producer.rs",
         "$(S)/tst/unit/test_inline_markings_metadata.rs",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/inline_markings_metadata_driver.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3816,11 +4178,11 @@ unit_tests.append(command(
         "python3", "$(S)/tst/unit/test_closure_inline_marking.py",
         "$(B)/bin/rustc",
         "$(S)/tst/unit/closure_inline_marking_input.rs",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/closure_inline_marking.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3840,6 +4202,22 @@ unit_tests.append(command(
         "$(B)/tst/unit/attribute_targets.stamp",
     ],
     deps=[rustc],
+    env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
+    name="unit_the_version_override_reaches_every_version_report",
+    inputs=["$(S)/tst/unit/test_the_version_override_reaches_every_version_report.py", *TESTS_LIB],
+    outputs=["$(B)/tst/unit/the_version_override_reaches_every_version_report.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_the_version_override_reaches_every_version_report.py",
+        "$(B)/bin/rustc",
+        "$(B)/tst/unit/the_version_override_reaches_every_version_report.stamp",
+    ],
+    deps=[rustc],
+    env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3854,6 +4232,7 @@ unit_tests.append(command(
         "$(B)/tst/unit/a_crate_root_named_without_a_directory.stamp",
     ],
     deps=[rustc],
+    env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3870,11 +4249,11 @@ unit_tests.append(command(
         "python3", "$(S)/tst/unit/test_trait_object_supertrait_binding.py",
         "$(B)/bin/rustc",
         "$(S)/tst/unit/trait_object_supertrait_binding_input.rs",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/trait_object_supertrait_binding.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -3894,6 +4273,7 @@ unit_tests.append(command(
         "$(B)/tst/unit/driver_lint_cfg_options.stamp",
     ],
     deps=[rustc],
+    env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4014,11 +4394,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_proc_macro_attribute.py",
         "$(S)/tst/unit/proc_macro_attribute/Cargo.toml",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/proc_macro_attribute.stamp",
     ],
-    deps=[libstd, rustc, cargo],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc, cargo],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4035,11 +4415,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_proc_macro_raw_identifiers.py",
         "$(S)/tst/unit/proc_macro_raw_identifiers/Cargo.toml",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/proc_macro_raw_identifiers.stamp",
     ],
-    deps=[libstd, rustc, cargo],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc, cargo],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4056,11 +4436,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_proc_macro_span_location.py",
         "$(S)/tst/unit/proc_macro_span_location/Cargo.toml",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/proc_macro_span_location.stamp",
     ],
-    deps=[libstd, rustc, cargo],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc, cargo],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4077,11 +4457,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_proc_macro_call_site_locals.py",
         "$(S)/tst/unit/proc_macro_call_site_locals/Cargo.toml",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/proc_macro_call_site_locals.stamp",
     ],
-    deps=[libstd, rustc, cargo],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc, cargo],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4098,11 +4478,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_proc_macro_token_streams.py",
         "$(S)/tst/unit/proc_macro_token_streams/Cargo.toml",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/proc_macro_token_streams.stamp",
     ],
-    deps=[libstd, rustc, cargo],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc, cargo],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4119,11 +4499,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_proc_macro_named_test.py",
         "$(S)/tst/unit/proc_macro_named_test/Cargo.toml",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/proc_macro_named_test.stamp",
     ],
-    deps=[libstd, rustc, cargo],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc, cargo],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4140,11 +4520,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_proc_macro_repr_after_derive.py",
         "$(S)/tst/unit/proc_macro_repr_after_derive/Cargo.toml",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/proc_macro_repr_after_derive.stamp",
     ],
-    deps=[libstd, rustc, cargo],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc, cargo],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4161,11 +4541,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_transitive_proc_macro_artifact.py",
         "$(S)/tst/unit/transitive_proc_macro_artifact/Cargo.toml",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/transitive_proc_macro_artifact.stamp",
     ],
-    deps=[libstd, rustc, cargo],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc, cargo],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4208,11 +4588,11 @@ unit_tests.append(command(
         "$(B)/bin/rustc",
         "$(S)/tst/unit/test_extern_c_zst_argument.rs",
         "$(S)/tst/unit/extern_c_zst_argument.c",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/extern_c_zst_argument_driver.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4231,11 +4611,11 @@ unit_tests.append(command(
         "$(B)/bin/rustc",
         "$(S)/tst/unit/test_native_link_search.rs",
         "$(S)/tst/unit/native_link_search.c",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/native_link_search_driver.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4247,11 +4627,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_emit_llvm_ir.py",
         "$(B)/bin/rustc",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/emit_llvm_ir_driver.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4263,11 +4643,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_proc_macro_found_by_its_metadata.py",
         "$(B)/bin/rustc",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/proc_macro_metadata_driver.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4279,11 +4659,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_out_dir_is_created.py",
         "$(B)/bin/rustc",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/out_dir_driver.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4295,11 +4675,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_error_format.py",
         "$(B)/bin/rustc",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/error_format_driver.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4311,11 +4691,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_print_file_names.py",
         "$(B)/bin/rustc",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/print_file_names_driver.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4327,11 +4707,11 @@ unit_tests.append(command(
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_a_constant_table_is_read_from_memory.py",
         "$(B)/bin/rustc",
-        "$(B)/tst/libstd.tar",
+        LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/a_constant_table_is_read_from_memory.stamp",
     ],
-    deps=[libstd, rustc],
-    env=TOOLCHAIN_ENV,
+    deps=[LIBSTDS["1.90.0"].node, rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4346,7 +4726,7 @@ unit_tests.append(command(
         "$(B)/tst/unit/print_cfg_driver.stamp",
     ],
     deps=[rustc],
-    env=TOOLCHAIN_ENV,
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.90.0"},
     descr="UT",
     color="green",
 ))
@@ -4365,11 +4745,11 @@ for _src in build.glob("$(S)/tst/unit/test_*.rs"):
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/unit/run_one.py",
-            _src, "$(B)/tst/libstd.tar",
+            _src, LIBSTDS["1.90.0"].archive,
             "$(B)/tst/unit/" + _stem + ".stamp",
         ],
-        deps=[libstd, rustc] + ([rust_lib_dependencies] if _uses_rust_lib_dependencies else []),
-        env={
+        deps=[LIBSTDS["1.90.0"].node, rustc] + ([rust_lib_dependencies] if _uses_rust_lib_dependencies else []),
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", 
             "RUSTC": "$(B)/bin/rustc",
             **SYSTEM_TEST_ENV,
             **({"RUST_LIB_DEPENDENCIES": "$(B)/tst/rust-lib-dependencies.tar"}
@@ -4394,11 +4774,11 @@ for _src in build.glob("$(S)/tst/perf/test_*.rs"):
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/unit/run_one.py",
-            _src, "$(B)/tst/libstd.tar",
+            _src, LIBSTDS["1.90.0"].archive,
             "$(B)/tst/perf/" + _stem + ".stamp",
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc", **SYSTEM_TEST_ENV},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc", **SYSTEM_TEST_ENV},
         descr="PF",
         color="cyan",
     ))
@@ -4431,12 +4811,12 @@ for _case in rust_1_90_cases:
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/rust_1_90/adapter.py",
-            _case, _src, "$(B)/tst/libstd.tar",
+            _case, _src, LIBSTDS["1.90.0"].archive,
             "$(B)/tst/rust_1_90/native/librust_test_helpers.a",
             "$(B)/tst/rust_1_90/" + _case + ".stamp",
         ],
-        deps=[libstd, rust_test_helpers, rustc],
-        env={"RUSTC": "$(B)/bin/rustc", **SYSTEM_TEST_ENV},
+        deps=[LIBSTDS["1.90.0"].node, rust_test_helpers, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc", **SYSTEM_TEST_ENV},
         descr="RP",
         color="green",
     ))
@@ -4465,10 +4845,10 @@ for _index, _case in enumerate(rust_ui_compile_cases):
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/rust_ui_compile/adapter.py",
             "$(S)/tst/rust_ui_compile/cases.json", str(_index), "1",
-            "$(S)/tst/rust_ui_compile/upstream", "$(B)/tst/libstd.tar", _stamp,
+            "$(S)/tst/rust_ui_compile/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="UC",
         color="green",
     ))
@@ -4496,18 +4876,18 @@ for _case in gccrs_cases:
             *gccrs_support,
             "$(S)/tst/gccrs/adapter.py",
             "$(S)/tst/gccrs/cases.txt",
-            "$(B)/tst/libstd.tar",
+            LIBSTDS["1.90.0"].archive,
             *TESTS_LIB,
         ],
         outputs=["$(B)/tst/gccrs/" + _case + ".stamp"],
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/gccrs/adapter.py",
-            _case, _src, "$(B)/tst/libstd.tar",
+            _case, _src, LIBSTDS["1.90.0"].archive,
             "$(B)/tst/gccrs/" + _case + ".stamp",
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="GX",
         color="green",
     ))
@@ -4531,7 +4911,7 @@ for _index, _case in enumerate(gccrs_compile_cases):
         inputs=[
             "$(S)/tst/gccrs_compile/adapter.py",
             "$(S)/tst/gccrs_compile/cases.txt",
-            "$(B)/tst/libstd.tar",
+            LIBSTDS["1.90.0"].archive,
             *gccrs_compile_sources,
             *TESTS_LIB,
         ],
@@ -4540,10 +4920,10 @@ for _index, _case in enumerate(gccrs_compile_cases):
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/gccrs_compile/adapter.py",
             "$(S)/tst/gccrs_compile/cases.txt", str(_index), "1",
-            "$(S)/tst/gccrs_compile/upstream", "$(B)/tst/libstd.tar", _stamp,
+            "$(S)/tst/gccrs_compile/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="GC",
         color="green",
     ))
@@ -4570,11 +4950,11 @@ for _case in rust_quiz_cases:
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/rust_quiz/adapter.py",
-            _case, _src, _expected, "$(B)/tst/libstd.tar",
+            _case, _src, _expected, LIBSTDS["1.90.0"].archive,
             "$(B)/tst/rust_quiz/" + _case + ".stamp",
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="RQ",
         color="green",
     ))
@@ -4603,10 +4983,10 @@ for _index, (_case, _mode) in enumerate(rustlings_cases):
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/rustlings/adapter.py",
             "$(S)/tst/rustlings/cases.tsv", str(_index), "1",
-            "$(S)/tst/rustlings/upstream", "$(B)/tst/libstd.tar", _stamp,
+            "$(S)/tst/rustlings/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="RL",
         color="green",
     ))
@@ -4635,10 +5015,10 @@ for _index, (_case, _origin, _edition) in enumerate(rust_by_example_cases):
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/rust_by_example/adapter.py",
             "$(S)/tst/rust_by_example/cases.tsv", str(_index), "1",
-            "$(S)/tst/rust_by_example/upstream", "$(B)/tst/libstd.tar", _stamp,
+            "$(S)/tst/rust_by_example/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="BE",
         color="green",
     ))
@@ -4673,10 +5053,10 @@ for _index, (_case, _root, _mode, _edition) in enumerate(rust_book_cases):
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/rust_book/adapter.py",
             "$(S)/tst/rust_book/cases.tsv", str(_index), "1",
-            "$(S)/tst/rust_book/upstream", "$(B)/tst/libstd.tar", _stamp,
+            "$(S)/tst/rust_book/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="BK",
         color="green",
     ))
@@ -4709,10 +5089,10 @@ for _index, (_slug, _crate, _edition, _count) in enumerate(exercism_rust_cases):
             *EXERCISM_TIMEOUT,
             "python3", "$(S)/tst/exercism_rust/adapter.py",
             "$(S)/tst/exercism_rust/cases.tsv", str(_index), "1",
-            "$(S)/tst/exercism_rust/upstream", "$(B)/tst/libstd.tar", _stamp,
+            "$(S)/tst/exercism_rust/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="EX",
         color="green",
     ))
@@ -4741,10 +5121,10 @@ for _index, (_case, _origin, _edition, _mode) in enumerate(rust_reference_cases)
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/rust_reference/adapter.py",
             "$(S)/tst/rust_reference/cases.tsv", str(_index), "1",
-            "$(S)/tst/rust_reference/upstream", "$(B)/tst/libstd.tar", _stamp,
+            "$(S)/tst/rust_reference/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="RF",
         color="green",
     ))
@@ -4773,10 +5153,10 @@ for _index, (_case, _origin, _edition, _mode) in enumerate(nomicon_cases):
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/nomicon/adapter.py",
             "$(S)/tst/nomicon/cases.tsv", str(_index), "1",
-            "$(S)/tst/nomicon/upstream", "$(B)/tst/libstd.tar", _stamp,
+            "$(S)/tst/nomicon/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="NM",
         color="green",
     ))
@@ -4805,10 +5185,10 @@ for _index, (_case, _origin, _edition, _mode) in enumerate(async_book_cases):
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/async_book/adapter.py",
             "$(S)/tst/async_book/cases.tsv", str(_index), "1",
-            "$(S)/tst/async_book/upstream", "$(B)/tst/libstd.tar", _stamp,
+            "$(S)/tst/async_book/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="AB",
         color="green",
     ))
@@ -4875,11 +5255,11 @@ for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
             "python3", "$(S)/tst/rust_lib/case.py",
             _suite, _harness_group, _kind, _root, _edition,
             _source, _function, _hint,
-            "$(S)/tst/rust_lib/upstream", "$(B)/tst/libstd.tar",
+            "$(S)/tst/rust_lib/upstream", LIBSTDS["1.90.0"].archive,
             "$(B)/tst/rust-lib-dependencies.tar", _stamp,
         ],
-        deps=[libstd, rust_lib_dependencies, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rust_lib_dependencies, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="LT",
         color="green",
     )
@@ -4919,10 +5299,10 @@ for _case, _origin, _edition, _mode in rust_doctest_cases:
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/rust_doctest/adapter.py",
-            _origin, _src, _edition, _mode, "$(B)/tst/libstd.tar", _stamp,
+            _origin, _src, _edition, _mode, LIBSTDS["1.90.0"].archive, _stamp,
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="DT",
         color="green",
     ))
@@ -4954,10 +5334,10 @@ for _index, (_stem, _seed) in enumerate(rustsmith_cases):
             *LIBSTD_TIMEOUT,
             "python3", "$(S)/tst/rustsmith/adapter.py",
             "$(S)/tst/rustsmith/cases.tsv", str(_index), "1",
-            "$(S)/tst/rustsmith/upstream", "$(B)/tst/libstd.tar", _stamp,
+            "$(S)/tst/rustsmith/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="RS",
         color="green",
     ))
@@ -4983,10 +5363,10 @@ for _index, _case in enumerate(miri_cases):
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/miri/adapter.py",
             "$(S)/tst/miri/cases.tsv", str(_index), "1",
-            "$(S)/tst/miri/upstream", "$(B)/tst/libstd.tar", _stamp,
+            "$(S)/tst/miri/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[LIBSTDS["1.90.0"].node, rustc],
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
         descr="MI",
         color="green",
     ))

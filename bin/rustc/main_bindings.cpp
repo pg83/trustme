@@ -214,6 +214,11 @@ namespace {
         unsigned memoryDumpSequence = 0;
         wb.types = HIRTypeInterner::create(*pool, wb.id);
         wb.settings = pool->make<Settings>(pool);
+        if (const char* forcedVersion = std::getenv("RUSTC_OVERRIDE_VERSION_STRING")) {
+            if (RustcVersion::parse(StringView(forcedVersion), wb.settings->rustcVersion)) {
+                wb.settings->rustcVersionGiven = true;
+            }
+        }
         wb.settings->cfg = CfgCreateState(*pool);
         ProgramParams params(*wb.settings, argc, argv);
         wb.settings->overflowChecks = params.overflowChecksEnabled();
@@ -258,13 +263,21 @@ namespace {
            `libc`, `rustversion` and `zerocopy` parse the first line.  The host is the
            default target; there is no LLVM to report. */
         if (params.printVersion) {
-            sysO << StringView("rustc ") << StringView(RUSTC_RELEASE_VERSION) << StringView(" (") << StringView(RUSTC_RELEASE_COMMIT_SHORT) << StringView(" ") << StringView(RUSTC_RELEASE_DATE) << StringView(")") << endL;
+            if (!wb.settings->rustcVersionGiven) {
+                sysE << StringView("error: no rustc version to report: it comes from RUSTC_OVERRIDE_VERSION_STRING") << endL;
+                return 1;
+            }
+            const auto& version = wb.settings->rustcVersion;
+            const unsigned major = version.major;
+            const unsigned minor = version.minor;
+            const unsigned patch = version.patch;
+            sysO << StringView("rustc ") << major << StringView(".") << minor << StringView(".") << patch << endL;
             if (params.verbose) {
                 sysO << StringView("binary: rustc") << endL;
-                sysO << StringView("commit-hash: ") << StringView(RUSTC_RELEASE_COMMIT) << endL;
-                sysO << StringView("commit-date: ") << StringView(RUSTC_RELEASE_DATE) << endL;
+                sysO << StringView("commit-hash: unknown") << endL;
+                sysO << StringView("commit-date: unknown") << endL;
                 sysO << StringView("host: ") << StringView(DEFAULT_TARGET_NAME) << endL;
-                sysO << StringView("release: ") << StringView(RUSTC_RELEASE_VERSION) << endL;
+                sysO << StringView("release: ") << major << StringView(".") << minor << StringView(".") << patch << endL;
             }
             return 0;
         }

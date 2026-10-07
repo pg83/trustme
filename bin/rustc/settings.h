@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rc_string.h"
+#include "target_version.h"
 
 #include <std/sym/i_map.h>
 #include <std/lib/vector.h>
@@ -82,6 +83,9 @@ struct Settings {
     CrateOverride* findCrateOverride(RcString name) const {
         return crateOverrides.find(name.rawId());
     }
+
+    RustcVersion rustcVersion;
+    bool rustcVersionGiven = false;
 
     bool overflowChecks = false;
 

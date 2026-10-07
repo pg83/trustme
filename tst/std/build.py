@@ -27,7 +27,7 @@ def main() -> int:
     with lib.workdir() as work:
         env = dict(os.environ)
         env["TRUSTME_PATH"] = lib.trustme_link(work)
-        env["RUSTC_VERSION"] = "1.90.0"
+        env["RUSTC_VERSION"] = os.environ["RUSTC_OVERRIDE_VERSION_STRING"]
         env["STD_ENV_ARCH"] = env.get("STD_ENV_ARCH", "x86_64")
         env.setdefault("CC", "cc")
 

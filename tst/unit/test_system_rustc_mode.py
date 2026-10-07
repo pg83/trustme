@@ -92,9 +92,9 @@ class SystemRustcModeTest(unittest.TestCase):
         self.assertEqual(len(gccrs_nodes), 301)
         self.assertEqual(len(gccrs_compile_nodes), 570)
         for node in (*gccrs_nodes, *gccrs_compile_nodes):
-            self.assertIn("$(B)/tst/libstd.tar", node["inputs"])
+            self.assertIn("$(B)/tst/libstd-1.90.0.tar", node["inputs"])
             self.assertTrue(
-                any("$(B)/tst/libstd.tar" in command for command in node["cmd"])
+                any("$(B)/tst/libstd-1.90.0.tar" in command for command in node["cmd"])
             )
 
 
