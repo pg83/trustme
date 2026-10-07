@@ -1546,19 +1546,10 @@ func (b *Builder) cxxCompileArgs(isHost bool, profile Profile) []string {
 
 // cxxOptimizationArgs optimize the generated C++ as its unit's profile asks.
 func cxxOptimizationArgs(profile Profile) []string {
-	var args []string
-
 	if profile.optLevel == "0" {
-		args = append(args, "-O0")
-	} else {
-		args = append(args, "-O1")
+		return []string{"-O0"}
 	}
-
-	if profile.debug {
-		args = append(args, "-g")
-	}
-
-	return args
+	return []string{"-O1"}
 }
 
 func (b *Builder) linkedUnits(root *CompileUnit) []*CompileUnit {

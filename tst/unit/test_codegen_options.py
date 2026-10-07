@@ -665,23 +665,24 @@ def main() -> int:
             if expected_flag not in flags:
                 raise RuntimeError(f"opt-level={level} did not emit {expected_flag}: {flags!r}")
 
+        # Every debuginfo level is accepted, and none of them gives the C++
+        # compiler a -g: the generated C++ is compiled without debug info.
         debuginfo_cases = [
-            ("none-number", ["-Cdebuginfo=0"], None),
-            ("none-name", ["-Cdebuginfo=none"], None),
-            ("line-directives", ["-Cdebuginfo=line-directives-only"], "-g1"),
-            ("line-tables", ["-Cdebuginfo=line-tables-only"], "-g1"),
-            ("limited-number", ["-Cdebuginfo=1"], "-g1"),
-            ("limited-name", ["-Cdebuginfo=limited"], "-g1"),
-            ("full-number", ["-Cdebuginfo=2"], "-g"),
-            ("full-name", ["-Cdebuginfo=full"], "-g"),
-            ("short", ["-g"], "-g"),
+            ("none-number", ["-Cdebuginfo=0"]),
+            ("none-name", ["-Cdebuginfo=none"]),
+            ("line-directives", ["-Cdebuginfo=line-directives-only"]),
+            ("line-tables", ["-Cdebuginfo=line-tables-only"]),
+            ("limited-number", ["-Cdebuginfo=1"]),
+            ("limited-name", ["-Cdebuginfo=limited"]),
+            ("full-number", ["-Cdebuginfo=2"]),
+            ("full-name", ["-Cdebuginfo=full"]),
+            ("short", ["-g"]),
         ]
-        for name, args, expected_flag in debuginfo_cases:
+        for name, args in debuginfo_cases:
             flags = codegen_flags(rustc, mir_src, work, f"debuginfo-{name}", args)
-            actual_flags = [flag for flag in flags if flag == "-g" or flag.startswith("-g")]
-            expected_flags = [] if expected_flag is None else [expected_flag]
-            if actual_flags != expected_flags:
-                raise RuntimeError(f"debuginfo={name} emitted {actual_flags!r}, expected {expected_flags!r}")
+            actual_flags = [flag for flag in flags if flag.startswith("-g")]
+            if actual_flags:
+                raise RuntimeError(f"debuginfo={name} emitted {actual_flags!r}, expected no debug info flags")
 
         expect_error(
             invoke(rustc, cfg_src, os.path.join(work, "invalid-debuginfo"), ["-Cdebuginfo=3"]),

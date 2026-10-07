@@ -1266,18 +1266,6 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
     }
     #endif
 #endif
-    switch (opt.debugInfo) {
-        case DebugInfoLevel::None:
-            break;
-        case DebugInfoLevel::LineDirectivesOnly:
-        case DebugInfoLevel::LineTablesOnly:
-        case DebugInfoLevel::Limited:
-            args.push_back("-g1");
-            break;
-        case DebugInfoLevel::Full:
-            args.push_back("-g");
-            break;
-    }
     // TODO: Why?
     args.push_back("-fPIC");
     args.push_back("-o");

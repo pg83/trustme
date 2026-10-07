@@ -889,7 +889,7 @@ func TestHostUnitsCompileFastUnlessARuntimeUnitIsTheSame(t *testing.T) {
 	builder, pkgs := hostGraph(t, map[string]any{"dev": map[string]any{"opt-level": int64(2)}})
 
 	for name, want := range map[string]string{
-		"shared":   "-O0|-O1 -g",
+		"shared":   "-O0|-O1",
 		"mac":      "-O0",
 		"hostonly": "-O0",
 		"leaf":     "-O0",
@@ -916,7 +916,7 @@ func TestHostUnitsCompileFastUnlessARuntimeUnitIsTheSame(t *testing.T) {
 	builder, pkgs = hostGraph(t, nil)
 
 	for name, want := range map[string]string{
-		"shared": "-O0 -g",
+		"shared": "-O0",
 		"mac":    "-O0",
 		"leaf":   "-O0",
 	} {
@@ -929,8 +929,8 @@ func TestHostUnitsCompileFastUnlessARuntimeUnitIsTheSame(t *testing.T) {
 		"opt-level": int64(2), "build-override": map[string]any{"opt-level": int64(1), "debug": true},
 	}})
 
-	if got := strings.Join(codegenFlags(builder, pkgs["mac"]), "|"); got != "-O1 -g" {
-		t.Errorf("under a build-override the proc macro compiles with %q, want -O1 -g", got)
+	if got := strings.Join(codegenFlags(builder, pkgs["mac"]), "|"); got != "-O1" {
+		t.Errorf("under a build-override the proc macro compiles with %q, want -O1", got)
 	}
 }
 

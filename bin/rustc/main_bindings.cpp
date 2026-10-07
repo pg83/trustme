@@ -703,7 +703,6 @@ namespace {
             for (const char* libname : params.libraries) {
                 hirCrate->extLibs.push_back(HIRExternLibrary{libname});
             }
-            transOpt.debugInfo = params.debugInfo;
 
             if (params.codegen.emitLinkManifest != "") {
                 auto& manifest = *outputFile(*pool, params.codegen.emitLinkManifest.c_str());

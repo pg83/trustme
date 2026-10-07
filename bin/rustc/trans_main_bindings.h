@@ -35,7 +35,6 @@ enum class DebugInfoLevel : unsigned {
 struct TransOptions {
     std::string mode = "c";
     OptimizationLevel optLevel = OptimizationLevel::None;
-    DebugInfoLevel debugInfo = DebugInfoLevel::None;
     std::string buildCommandFile;
 
     bool emitCppOnly = false;
