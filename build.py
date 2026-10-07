@@ -3599,6 +3599,14 @@ arti_2_7_0 = add_project_test(
     manifest="crates/arti",
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/arti_2_7_0/Cargo.lock",
+    # reload_cfg::test::watch_single_file waits forever here with the test
+    # binary rustc 1.92 builds as well: the main thread parks in block_on
+    # with every tokio worker idle after the watcher is set up, so the
+    # reload it waits for never comes.
+    adapter_args=[
+        "--",
+        "--skip", "reload_cfg::test::watch_single_file",
+    ],
 )
 
 
