@@ -194,6 +194,7 @@ public:
     ASTNamed<ASTItem> takeFragItem();
     ASTNamed<ASTItem> takeFragStmtItem();
     ASTVisibility takeFragVis();
+    const ASTVisibility& fragVis() const;
 
     bool operator==(eTokenType tty) const {
         return type() == tty;

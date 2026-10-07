@@ -492,6 +492,11 @@ ASTNamed<ASTItem> Token::takeFragStmtItem() {
     return mv$(rv);
 }
 
+const ASTVisibility& Token::fragVis() const {
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_VIS);
+    return *reinterpret_cast<const ASTVisibility*>(data_.as_Fragment().ptr);
+}
+
 ASTVisibility Token::takeFragVis() {
     BUG_ASSERT(type_ == TOK_INTERPOLATED_VIS);
     auto ptr = reinterpret_cast<ASTVisibility*>(data_.as_Fragment().ptr);

@@ -1407,7 +1407,8 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             visitMetaItem(tok.fragMeta());
             break;
         case TOK_INTERPOLATED_VIS:
-            TODO(sp, StringView("TOK_INTERPOLATED_..."));
+            visitVis(tok.fragVis());
+            break;
         case TOK_IDENT:
             /* A token of the invocation is passed through with the context it
                was written in - that is what the macro gives back for it. */
