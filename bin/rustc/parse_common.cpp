@@ -2415,7 +2415,7 @@ namespace {
             do {
                 if (GET_TOK(tok, lex) == TOK_LIFETIME) {
                     lifetimes.push_back(GET_SPANNED(ASTLifetimeRef, lex, ASTLifetimeRef(lifetimeIdent(tok))));
-                } else if (tok.type() == TOK_BRACE_OPEN) {
+                } else if (tok.type() == TOK_BRACE_OPEN || tok.type() == TOK_RWORD_WHERE) {
                     break;
                 } else {
                     PUTBACK(tok, lex);
