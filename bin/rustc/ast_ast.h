@@ -213,6 +213,7 @@ private:
     ASTGenericParams params_;
     ASTExprNode* code_ = nullptr;
     ASTType* rettype_;
+    bool defaultReturn_ = false;
     Arglist args_;
     bool isVariadic_;
     bool hasNamedVariadic_;
@@ -303,6 +304,14 @@ public:
 
     ASTType*& rettype() {
         return rettype_;
+    }
+
+    bool hasDefaultReturn() const {
+        return defaultReturn_;
+    }
+
+    void setDefaultReturn() {
+        defaultReturn_ = true;
     }
 
     const Arglist& args() const {

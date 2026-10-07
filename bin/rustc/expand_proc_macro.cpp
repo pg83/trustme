@@ -2581,13 +2581,16 @@ auto ProcMacroVisitor::parseString(const std::string& s, const BlockItemMarkers*
 }
 
 auto ProcMacroVisitor::visitTopAttrs(slice<const ASTAttribute>& attrs) -> void {
+    const auto expandedAway = [](const RcString& name) {
+        return name == "cfg" || name == "cfg_attr" || name == "derive" || name == "derive_const" || name == "test" || name == "bench" || name == "global_allocator" || name == "alloc_error_handler";
+    };
     bool beforeInvoked = this->invokedAttr != nullptr;
     for (const auto& a : attrs) {
         if (&a == this->invokedAttr) {
             beforeInvoked = false;
             continue;
         }
-        if (beforeInvoked && a.name().isTrivial() && (a.name().asTrivial() == "cfg" || a.name().asTrivial() == "cfg_attr" || a.name().asTrivial() == "derive" || a.name().asTrivial() == "derive_const")) {
+        if (beforeInvoked && a.name().isTrivial() && expandedAway(a.name().asTrivial())) {
             continue;
         }
         this->visitAttr(a);
@@ -2847,8 +2850,10 @@ auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& 
         pmi.sendSymbol("...");
     }
     pmi.sendSymbol(")");
-    pmi.sendSymbol("->");
-    this->visitType(fcn.rettype());
+    if (!fcn.hasDefaultReturn()) {
+        pmi.sendSymbol("->");
+        this->visitType(fcn.rettype());
+    }
     this->visitBounds(fcn.params());
     if (fcn.code()) {
         this->visitNode(*fcn.code());

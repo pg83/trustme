@@ -2212,7 +2212,8 @@ namespace {
         } else {
         }
 
-        ASTType* retType = lex.getTokenIf(TOK_THINARROW) ? ParseType(lex) : mkType(lex.typePool(), ASTTypeTags::Unit(), lex.pointSpan());
+        const bool defaultReturn = !lex.getTokenIf(TOK_THINARROW);
+        ASTType* retType = defaultReturn ? mkType(lex.typePool(), ASTTypeTags::Unit(), lex.pointSpan()) : ParseType(lex);
 
         while (lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_PAREN_OPEN) {
             auto name = lex.getToken();
@@ -2229,7 +2230,11 @@ namespace {
             ParseWhereClause(lex, params);
         }
 
-        return ASTFunction(std::move(definitionSpan), mv$(abi), mv$(flags), mv$(params), mv$(retType), mv$(args), isVariadic, hasNamedVariadic);
+        auto rv = ASTFunction(std::move(definitionSpan), mv$(abi), mv$(flags), mv$(params), mv$(retType), mv$(args), isVariadic, hasNamedVariadic);
+        if (defaultReturn) {
+            rv.setDefaultReturn();
+        }
+        return rv;
     }
 
     ASTFunction ParseFunctionDefWithCode(TokenStream& lex, Span definitionSpan, bool allowSelf, std::string abi, ASTFunction::Flags flags) {
