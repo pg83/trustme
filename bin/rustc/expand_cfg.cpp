@@ -11,6 +11,7 @@
 #include "target_version.h"
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"
+#include "parse_interpolated_fragment.h"
 
 #include <std/mem/obj_pool.h>
 
@@ -517,15 +518,25 @@ auto CCfgExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
 auto CCfgSelectExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
     DEBUG(StringView("cfg_select!() - ") << tt);
     auto lex = TTStream(sp, ParseState(), tt);
-    for (;;) {
+    lex.parseState().crate = &crate;
+    lex.parseState().wb = &wb;
+    lex.parseState().module = &mod;
+    while (lex.lookahead(0) != TOK_EOF) {
         bool rv = lex.getTokenIf(TOK_UNDERSCORE) || checkCfgInner(*wb.settings, lex);
         lex.getTokenCheck(TOK_FATARROW);
-        auto t = ParseTT(lex, true);
+        if (lex.lookahead(0) == TOK_BRACE_OPEN) {
+            auto t = ParseTT(lex, true);
+            if (rv) {
+                return box$(TTStreamO(sp, ParseState(), std::move(t)));
+            }
+            continue;
+        }
+        auto* node = ParseStmt(lex);
+        lex.getTokenIf(TOK_COMMA);
         if (rv) {
-            return box$(TTStreamO(sp, ParseState(), std::move(t)));
+            return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node)))));
         }
     }
-    lex.getTokenCheck(TOK_EOF);
 
     ERROR(sp, E0000, StringView("cfg_select - Nothing matched"));
 }
