@@ -1805,7 +1805,7 @@ auto ProcMacroVisitor::visitTokentree(const ::TokenTree& tt) -> void {
             if (i + 1 < tt.size() && tt[i].isToken() && tt[i].tok().type() == TOK_DOUBLE_COLON && tt[i + 1].isToken() && tt[i + 1].tok().type() == TOK_STRING) {
                 const auto& marker = tt[i + 1].tok();
                 const auto crateName = RcString::newInterned(marker.str());
-                if (marker.spelling() == RcString() && wb.astCrate && wb.astCrate->externCrates.count(crateName)) {
+                if (marker.spelling() == RcString() && wb.astCrate && (crateName == wb.astCrate->crateNameReal || wb.astCrate->externCrates.count(crateName))) {
                     const auto& pos = marker.getPos();
                     pmi.sendDollarCrate(marker.strHygiene(), pos.span ? pos.span : sp, crateName);
                     i++;
