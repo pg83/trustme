@@ -304,7 +304,7 @@ namespace {
         }
     }
 
-    void indexMutableOwners(HIRMutableOwnerCache& cache, HIRCrate& crate) {
+    void indexMutableOwnersOfCrate(HIRMutableOwnerCache& cache, HIRCrate& crate) {
         indexMutableOwnersInModule(cache, crate.rootModule);
         for (auto& pair : crate.newValues) {
             auto& item = pair.second->ent;
@@ -337,6 +337,10 @@ namespace {
                 }
             });
         }
+    }
+
+    void indexMutableOwners(HIRMutableOwnerCache& cache, HIRCrate& crate) {
+        indexMutableOwnersOfCrate(cache, crate);
         for (auto& ext : crate.extCrates) {
             if (ext.second.data) {
                 indexMutableOwners(cache, *ext.second.data);
@@ -2322,7 +2326,7 @@ HIRFunction& HIRCrate::findFunctionMut(const WireBoard& wb, const Span& sp, cons
     if (auto* found = cache.functions.find(&function)) {
         return **found;
     }
-    indexMutableOwners(cache, *this);
+    indexMutableOwnersOfCrate(cache, *this);
     if (auto* found = cache.functions.find(&function)) {
         return **found;
     }
@@ -2342,7 +2346,7 @@ HIRStatic& HIRCrate::findStaticMut(const WireBoard& wb, const Span& sp, const HI
     if (auto* found = cache.statics.find(&item)) {
         return **found;
     }
-    indexMutableOwners(cache, *this);
+    indexMutableOwnersOfCrate(cache, *this);
     if (auto* found = cache.statics.find(&item)) {
         return **found;
     }
@@ -2362,7 +2366,7 @@ HIRConstant& HIRCrate::findConstantMut(const WireBoard& wb, const Span& sp, cons
     if (auto* found = cache.constants.find(&item)) {
         return **found;
     }
-    indexMutableOwners(cache, *this);
+    indexMutableOwnersOfCrate(cache, *this);
     if (auto* found = cache.constants.find(&item)) {
         return **found;
     }
