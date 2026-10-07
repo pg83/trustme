@@ -17,6 +17,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import lib  # noqa: E402
 
 SHIM_TOML = """\
+[workspace]
+
 [package]
 name = "trustme_standard_library"
 version = "0.0.0"
@@ -156,6 +158,20 @@ def adjust_sources(src: str) -> None:
             )
 
 
+def write_shim(src: str) -> None:
+    """The shim pulls std + panic_unwind + test + workspace crates into one
+    build. Upstream builds them in the `library/` workspace against
+    `library/Cargo.lock`; the shim is a workspace of its own carrying that
+    lockfile, not a stray member of the compiler's workspace above it."""
+    shim = os.path.join(src, "trustme-stdlib")
+    os.makedirs(shim, exist_ok=True)
+    with open(os.path.join(shim, "lib.rs"), "w") as fh:
+        fh.write("#![no_core]\n")
+    with open(os.path.join(shim, "Cargo.toml"), "w") as fh:
+        fh.write(SHIM_TOML)
+    shutil.copyfile(os.path.join(src, "library", "Cargo.lock"), os.path.join(shim, "Cargo.lock"))
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         raise SystemExit("usage: fetch.py VERSION OUT_TAR")
@@ -174,13 +190,7 @@ def main() -> int:
             lib.run(["tar", "-C", work, "-xf", tarball])
             os.rename(os.path.join(work, f"rustc-{version}-src"), src)
         adjust_sources(src)
-        # The shim pulls std + panic_unwind + test + workspace crates into one build.
-        shim = os.path.join(src, "trustme-stdlib")
-        os.makedirs(shim, exist_ok=True)
-        with open(os.path.join(shim, "lib.rs"), "w") as fh:
-            fh.write("#![no_core]\n")
-        with open(os.path.join(shim, "Cargo.toml"), "w") as fh:
-            fh.write(SHIM_TOML)
+        write_shim(src)
 
         lib.log(f"[std_src] packing {out}")
         lib.tar_dir(src, out)
