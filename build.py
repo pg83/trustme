@@ -4735,31 +4735,38 @@ rust_unit_tests = []
 # node because the node cannot tell which test names them.
 unit_aux = build.glob("$(S)/tst/unit/aux/**/*.rs") + build.glob("$(S)/tst/unit/support/**/*.rs")
 
-for _src in build.glob("$(S)/tst/unit/test_*.rs"):
-    _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
-    _uses_rust_lib_dependencies = _stem == "rust_lib_dev_dependencies"
-    _target = command(
-        name="unit_" + _stem,
-        inputs=[_src, "$(S)/tst/unit/run_one.py"] + unit_aux + TESTS_LIB,
-        outputs=["$(B)/tst/unit/" + _stem + ".stamp"],
-        cmd=[
-            *TEST_TIMEOUT,
-            "python3", "$(S)/tst/unit/run_one.py",
-            _src, LIBSTDS["1.90.0"].archive,
-            "$(B)/tst/unit/" + _stem + ".stamp",
-        ],
-        deps=[LIBSTDS["1.90.0"].node, rustc] + ([rust_lib_dependencies] if _uses_rust_lib_dependencies else []),
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", 
-            "RUSTC": "$(B)/bin/rustc",
-            **SYSTEM_TEST_ENV,
-            **({"RUST_LIB_DEPENDENCIES": "$(B)/tst/rust-lib-dependencies.tar"}
-               if _uses_rust_lib_dependencies else {}),
-        },
-        descr="UT",
-        color="green",
-    )
-    unit_tests.append(_target)
-    rust_unit_tests.append(_target)
+# A unit test runs as the rustc release of its directory, against that
+# release's standard library.
+for _release, _dir, _prefix in (
+    ("1.90.0", "tst/unit", "unit_"),
+    ("1.92.0", "tst/unit/rust_1_92", "unit_rust_1_92_"),
+):
+    for _src in build.glob(f"$(S)/{_dir}/test_*.rs"):
+        _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
+        _stamp = f"$(B)/{_dir}/{_stem}.stamp"
+        _uses_rust_lib_dependencies = _stem == "rust_lib_dev_dependencies"
+        _target = command(
+            name=_prefix + _stem,
+            inputs=[_src, "$(S)/tst/unit/run_one.py"] + unit_aux + TESTS_LIB,
+            outputs=[_stamp],
+            cmd=[
+                *TEST_TIMEOUT,
+                "python3", "$(S)/tst/unit/run_one.py",
+                _src, LIBSTDS[_release].archive, _stamp,
+            ],
+            deps=[LIBSTDS[_release].node, rustc] + ([rust_lib_dependencies] if _uses_rust_lib_dependencies else []),
+            env={
+                "RUSTC_OVERRIDE_VERSION_STRING": _release,
+                "RUSTC": "$(B)/bin/rustc",
+                **SYSTEM_TEST_ENV,
+                **({"RUST_LIB_DEPENDENCIES": "$(B)/tst/rust-lib-dependencies.tar"}
+                   if _uses_rust_lib_dependencies else {}),
+            },
+            descr="UT",
+            color="green",
+        )
+        unit_tests.append(_target)
+        rust_unit_tests.append(_target)
 
 # Compile-time performance regressions are deliberately separate from the
 # normal test groups: they are valid programs, but expensive enough to run only
