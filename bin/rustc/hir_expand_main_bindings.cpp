@@ -1517,7 +1517,7 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, HIRCrate& crate, co
 
             HIRPath newStatic(const HIRType* type, EncodedLiteral value, size_t alignment) override {
                 auto name = RcString::newInterned(FMT(StringView("lifted#C_") << ++id));
-                auto path = HIRSimplePath() + name;
+                auto path = HIRSimplePath(crate.crateName, {name});
                 auto newStatic = HIRStatic(
                     HIRLinkage(),
                     /*is_mut=*/false,
