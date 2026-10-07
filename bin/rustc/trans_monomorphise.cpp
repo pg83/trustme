@@ -460,7 +460,7 @@ auto AsyncDropPollBuilder::buildAsyncDestructor(const HIRType* ty, MIRLValue val
         construct,
         MIRUnwindAction::make_Continue({}),
         MIRLValue::newLocal(valuePinLocal),
-        HIRPath(valuePinTy, "new_unchecked"),
+        MIRPinNewUnchecked(valuePinTy),
         ::makeVec1<MIRParam>(MIRLValue::newLocal(valueRefLocal)),
     });
     output.blocks[construct].terminator = MIRTerminator::make_Call({
@@ -492,7 +492,7 @@ auto AsyncDropPollBuilder::buildAsyncDestructor(const HIRType* ty, MIRLValue val
         poll,
         MIRUnwindAction::make_Continue({}),
         MIRLValue::newLocal(futurePinLocal),
-        HIRPath(futurePinTy, "new_unchecked"),
+        MIRPinNewUnchecked(futurePinTy),
         ::makeVec1<MIRParam>(MIRLValue::newLocal(futureRefLocal)),
     });
     output.blocks[poll].terminator = MIRTerminator::make_Call({

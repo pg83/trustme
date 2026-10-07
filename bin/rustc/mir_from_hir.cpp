@@ -8291,7 +8291,7 @@ auto ExprVisitorConv::awaitFuture(const Span& sp, const HIRType* futureTy, MIRLV
     {
         auto bbRet = builder.newBbUnlinked();
         auto bbPanic = builder.newBbUnlinked();
-        builder.endBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), lvPin.clone(), HIRPath(typePin, "new_unchecked"), makeVec1(MIRParam(lvMut.clone()))}));
+        builder.endBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), lvPin.clone(), MIRPinNewUnchecked(typePin), makeVec1(MIRParam(lvMut.clone()))}));
         builder.movedLvalue(sp, std::move(lvMut));
         builder.setCurBlock(bbPanic);
         emitUnwind(sp);
@@ -8482,7 +8482,7 @@ auto ExprVisitorConv::emitAsyncDrop(const Span& sp, MIRLValue value, unsigned in
         {
             auto bbRet = builder.newBbUnlinked();
             auto bbPanic = builder.newBbUnlinked();
-            builder.endBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), pinValue.clone(), HIRPath(pinTy, "new_unchecked"), makeVec1(MIRParam(refValue.clone()))}));
+            builder.endBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), pinValue.clone(), MIRPinNewUnchecked(pinTy), makeVec1(MIRParam(refValue.clone()))}));
             builder.movedLvalue(sp, std::move(refValue));
             builder.setCurBlock(bbPanic);
             emitUnwind(sp);

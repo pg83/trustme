@@ -777,3 +777,5 @@ public:
 };
 
 MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const stl::Vector<bool>* mask = nullptr);
+
+HIRPath MIRPinNewUnchecked(const HIRType* pinTy);

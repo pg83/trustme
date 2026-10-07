@@ -2026,3 +2026,9 @@ void stl::output<ZeroCopyOutput, MIRTypeResolve>(ZeroCopyOutput& os, const MIRTy
     x.fmtPos(os);
     return;
 }
+
+HIRPath MIRPinNewUnchecked(const HIRType* pinTy) {
+    auto path = HIRPath(pinTy, "new_unchecked");
+    path.data.as_UfcsInherent().implParams = pinTy->as_Path().path.data.as_Generic().params.clone();
+    return path;
+}
