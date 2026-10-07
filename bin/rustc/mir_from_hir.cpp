@@ -7728,7 +7728,26 @@ void MirBuilder::writeLoopHeadWhole(const Span& sp, const MIRLValue& lv, unsigne
         case VarState::TAG_Partial: {
             const auto& ce = cur.as_Partial();
             const auto* ty = valType(sp, lv);
-            ASSERT_BUG(sp, ty->is_Path() && ty->as_Path().binding.is_Enum(), StringView("Loop back edge leaves ") << lv << StringView(" partially moved"));
+            if (!(ty->is_Path() && ty->as_Path().binding.is_Enum())) {
+                const auto sameState = [](const VarState& left, const VarState& right) {
+                    return left.tag() == right.tag() && (left.is_Valid() || left.is_Invalid() || left.is_Optional());
+                };
+                const VarState* common = nullptr;
+                bool uniform = ce.outerFlag == ~0u;
+                for (size_t i = 0; i < ce.innerStates.size() && uniform; i++) {
+                    if (!resolve_.typeNeedsDropGlue(sp, valType(sp, MIRLValue::newField(lv.clone(), static_cast<unsigned int>(i))))) {
+                        continue;
+                    }
+                    if (!common) {
+                        common = &ce.innerStates[i];
+                    } else {
+                        uniform = sameState(ce.innerStates[i], *common);
+                    }
+                }
+                ASSERT_BUG(sp, uniform && common, StringView("Loop back edge leaves ") << lv << StringView(" partially moved"));
+                writeLoopHeadWhole(sp, lv, flag, *common);
+                break;
+            }
             if (ce.outerFlag == ~0u) {
                 pushStmtSetDropflagVal(sp, flag, true);
             } else if (ce.outerFlag != flag) {
