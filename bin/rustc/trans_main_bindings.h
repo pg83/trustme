@@ -61,6 +61,7 @@ void TransDeleteMIREnumCache(const MIRFunction::MIREnumCache* cache);
 TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate);
 
 void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList& list);
+void TransExportLocalInstances(const WireBoard& wb, HIRCrate& crate, const TransList& list);
 
 void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList);
 

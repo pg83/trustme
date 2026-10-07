@@ -22,7 +22,8 @@ struct HIRSerialiseWriter {
         ~CloseOnDrop();
     };
 
-    virtual void open(const std::string& filename) = 0;
+    virtual void open(stl::StringView filename) = 0;
+    virtual void finish() = 0;
     virtual void write(const void* data, size_t count) = 0;
     virtual void writeU16(u16 v) = 0;
     virtual void writeU32(u32 v) = 0;

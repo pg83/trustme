@@ -290,7 +290,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         Vector<const TransListFunction*> generatedFunctions;
         for (auto& fcnEnt : list.functions) {
             auto* transFcn = fcnEnt.second.get();
-            if (!processedFunctions.insert(transFcn).second) {
+            if (!processedFunctions.insert(transFcn).second || transFcn->forcePrototype) {
                 continue;
             }
 

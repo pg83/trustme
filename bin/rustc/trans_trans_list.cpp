@@ -1,9 +1,41 @@
 #include "trans_trans_list.h"
 
+#include "hir_hir.h"
+#include "wire_board.h"
 #include "trans_mangling.h"
 #include "hir_typeck_static.h"
 
+#include <cstring>
+
 using namespace stl;
+
+TransSharedGenerics::TransSharedGenerics(ObjPool* pool)
+    : upstream(pool)
+    , placement(pool)
+{
+}
+
+void TransCreateSharedGenerics(WireBoard& wb, ObjPool& pool) {
+    wb.sharedGenerics = pool.make<TransSharedGenerics>(&pool);
+}
+
+void TransIndexUpstreamInstances(const WireBoard& wb, const HIRCrate& crate) {
+    auto& shared = *wb.sharedGenerics;
+    if (!shared.linksUpstreamInstances) {
+        return;
+    }
+    for (const auto& name : crate.extCratesOrdered) {
+        const auto& ext = *crate.extCrates.at(name).data;
+        for (const u64 identity : ext.exportedGenericInstances) {
+            auto* known = shared.upstream.find(identity);
+            if (!known) {
+                shared.upstream.insert(identity, ext.crateName);
+            } else if (strcmp(ext.crateName.c_str(), known->c_str()) < 0) {
+                *known = ext.crateName;
+            }
+        }
+    }
+}
 
 TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
     BUG_ASSERT(wb_);

@@ -194,7 +194,7 @@ namespace {
 
         void visitType(const HIRType* ty, Mode mode = Mode::Normal);
 
-        void __attribute__((noinline)) visitFunction(const HIRPath& path, const HIRFunction& fcn, const TransParams& pp);
+        void __attribute__((noinline)) visitFunction(const HIRPath& path, const HIRFunction& fcn, const TransParams& pp, bool signatureOnly);
     };
 
     MIRFunctionPointer generatedBody(MIRFunction mir = MIRFunction()) {
@@ -1012,7 +1012,7 @@ static void TransEnumerateTypes(EnumState& state) {
             const auto& pp = p->pp;
 
             TRACE_FUNCTION_F(StringView("Function ") << fcnPath);
-            tv.visitFunction(fcnPath, fcn, pp);
+            tv.visitFunction(fcnPath, fcn, pp, p->forcePrototype);
         }
         state.fcnsToTypeVisit.clear();
         // TODO: Similarly restrict revisiting of statics.
@@ -3476,6 +3476,13 @@ EnumState::EnumState(const WireBoard& wb)
 }
 
 auto EnumState::enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp) -> void {
+    auto& shared = *resolve.board().sharedGenerics;
+    u64 identity = 0;
+    const RcString* upstreamCrate = nullptr;
+    if (shared.linksUpstreamInstances && !fcn.code && pp.hasTypes() && fcn.markings.inlineType != HIRFunction::Markings::Inline::Always && fcn.linkage.name == "") {
+        identity = TransValueIdentity(resolve.board(), p);
+        upstreamCrate = shared.upstream.find(identity);
+    }
     if (auto* e = rv.addFunction(crate.types, mv$(p))) {
         auto name = TransMangleValue(resolve.board(), *e->path);
         auto inserted = emittedFunctions.insert(name).second;
@@ -3485,7 +3492,37 @@ auto EnumState::enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp) -> vo
         e->mutPtr = &crate.findFunctionMut(resolve.board(), Span(), *e->path, fcn);
         e->pp = mv$(pp);
         DEBUG(*e->path << StringView(" w/ ") << e->pp.ppImpl << StringView(" and ") << e->pp.ppMethod);
+        if (upstreamCrate) {
+            e->forcePrototype = true;
+            if (!shared.placement.find(identity)) {
+                shared.placement.insert(identity, *upstreamCrate);
+            }
+            return;
+        }
         fcnQueue.push_back(e);
+    }
+}
+
+void TransExportLocalInstances(const WireBoard& wb, HIRCrate& crate, const TransList& list) {
+    auto& shared = *wb.sharedGenerics;
+    if (!shared.exportsInstances) {
+        return;
+    }
+    for (const auto& ent : list.functions) {
+        const auto* function = ent.second.get();
+        if (!function || !function->ptr || !function->ptr->code.mir || function->forcePrototype || !function->pp.hasTypes()) {
+            continue;
+        }
+        const auto& fcn = *function->ptr;
+        if (fcn.markings.inlineType == HIRFunction::Markings::Inline::Always || fcn.linkage.name != "") {
+            continue;
+        }
+        const u64 identity = TransValueIdentity(wb, ent.first);
+        if (shared.placement.find(identity)) {
+            continue;
+        }
+        shared.placement.insert(identity, crate.crateName);
+        crate.exportedGenericInstances.pushBack(identity);
     }
 }
 
@@ -3879,7 +3916,7 @@ auto TypeVisitor::visitType(const HIRType* ty, Mode mode) -> void {
     DEBUG(StringView("Add type ") << ty << (shallow ? " (Shallow)" : "") << StringView(" ") << i);
 }
 
-void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, const HIRFunction& fcn, const TransParams& pp) {
+void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, const HIRFunction& fcn, const TransParams& pp, bool signatureOnly) {
     Span sp;
     auto& tv = *this;
 
@@ -3916,6 +3953,9 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
     for (const auto& arg : fcn.args) {
         DEBUG(arg.second);
         tv.visitType(monomorph(arg.second));
+    }
+    if (signatureOnly) {
+        return;
     }
 
     const MIRFunction* mirP = nullptr;

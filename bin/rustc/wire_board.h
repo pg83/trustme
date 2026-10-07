@@ -19,6 +19,7 @@ struct TypingEnvironmentInterner;
 struct TraitValueCache;
 struct HIRMutableOwnerCache;
 struct TransLinkFunctionCache;
+struct TransSharedGenerics;
 
 struct WireBoard {
     struct TargetLayoutContext;
@@ -64,4 +65,6 @@ struct WireBoard {
     HIRMutableOwnerCache* hirOwners = nullptr;
 
     TransLinkFunctionCache* linkFunctions = nullptr;
+
+    TransSharedGenerics* sharedGenerics = nullptr;
 };

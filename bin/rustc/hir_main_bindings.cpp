@@ -1357,6 +1357,13 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
             rv.features.insert(in.readIstring());
         }
     }
+
+    {
+        const size_t exportCount = in.readCount();
+        for (size_t i = 0; i < exportCount; i++) {
+            rv.exportedGenericInstances.pushBack(in.readU64());
+        }
+    }
 }
 
 HIRCrate* HIRDeserialise(u32& id, ObjPool* pool, HIRTypeInterner& types, const std::string& filename) {
@@ -1401,12 +1408,25 @@ void HIRDumpExpr(ZeroCopyOutput& sink, HIRExprPtr& expr) {
 
 #undef NODE_IS
 
+HIRSerialiseWriter* HIRSerialiseBegin(ObjPool& pool, StringView filename, const HIRCrate& crate) {
+    auto& out = *HIRSerialiseWriter::create(pool);
+    out.open(filename);
+    HirSerialiser s{out, crate.types, pool};
+    s.serialiseCrate(crate);
+    return &out;
+}
+
+void HIRSerialiseFinish(HIRSerialiseWriter& out, const Vector<u64>& exportedGenericInstances) {
+    out.writeCount(exportedGenericInstances.length());
+    for (const u64 identity : exportedGenericInstances) {
+        out.writeU64(identity);
+    }
+    out.finish();
+}
+
 void HIRSerialise(const std::string& filename, const HIRCrate& crate) {
     auto writerPool = ObjPool::fromMemory();
-    auto& out = *HIRSerialiseWriter::create(*writerPool.mutPtr());
-    out.open(filename);
-    HirSerialiser s{out, crate.types, *writerPool.mutPtr()};
-    s.serialiseCrate(crate);
+    HIRSerialiseFinish(*HIRSerialiseBegin(*writerPool.mutPtr(), StringView(filename.c_str()), crate), crate.exportedGenericInstances);
 }
 
 HirDeserialiser::HirDeserialiser(u32& id, ObjPool& pool, HIRSerialiseReader& in, HIRTypeInterner& typeInterner)

@@ -134,6 +134,8 @@ namespace {
         bool overflowChecksExplicit = false;
         unsigned mirOptLevel = 0;
         bool mirOptLevelExplicit = false;
+        bool shareGenerics = false;
+        bool shareGenericsExplicit = false;
         DebugInfoLevel debugInfo = DebugInfoLevel::None;
 
         bool testHarness = false;
@@ -175,6 +177,8 @@ namespace {
         bool enableMirInlining() const;
 
         bool debugAssertionsEnabled() const;
+
+        bool shareGenericsEnabled() const;
 
         bool ubChecksEnabled() const;
 
@@ -757,6 +761,10 @@ namespace {
                 return 0;
             }
 
+            wb.sharedGenerics->linksUpstreamInstances = params.shareGenericsEnabled();
+            wb.sharedGenerics->exportsInstances = params.shareGenericsEnabled() && (crateType == ASTCrate::Type::RustLib || crateType == ASTCrate::Type::RustDylib);
+            TransIndexUpstreamInstances(wb, *hirCrate);
+
             TransList items = [&]() {
                 switch (crateType) {
                     case ASTCrate::Type::Unknown:
@@ -806,25 +814,23 @@ namespace {
             switch (crateType) {
                 case ASTCrate::Type::RustLib:
                     hirFile = params.outfile;
-                    {
-                        HIRSerialise(hirFile, *hirCrate);
-                    }
                     break;
                 case ASTCrate::Type::RustDylib:
                     hirFile = params.outfile + ".rlib";
-                    {
-                        HIRSerialise(hirFile, *hirCrate);
-                    }
                     break;
                 default:
                     break;
             }
 
             {
+                auto metadataPool = ObjPool::fromMemory();
+                auto* metadata = hirFile.empty() ? nullptr : HIRSerialiseBegin(*metadataPool.mutPtr(), StringView(hirFile.c_str()), *hirCrate);
                 MIROptimiseCrateInlining(wb, *hirCrate, items, true, mirOptLevel, enableMirInlining);
-            }
-            {
                 TransEnumerateCleanup(wb, *hirCrate, items);
+                TransExportLocalInstances(wb, *hirCrate, items);
+                if (metadata) {
+                    HIRSerialiseFinish(*metadata, hirCrate->exportedGenericInstances);
+                }
             }
             switch (crateType) {
                 case ASTCrate::Type::Unknown:
@@ -1248,6 +1254,16 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         }
                         this->mirOptLevel = value;
                         this->mirOptLevelExplicit = true;
+                    } else if (optname == "share-generics" || optname == "share_generics") {
+                        if (eqPos == std::string::npos || optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
+                            this->shareGenerics = true;
+                        } else if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
+                            this->shareGenerics = false;
+                        } else {
+                            sysE << StringView("invalid value for -Z share-generics: '") << optval << StringView("'") << endL;
+                            exit(1);
+                        }
+                        this->shareGenericsExplicit = true;
                     } else if (optname == "ub-checks" || optname == "ub_checks") {
                         if (eqPos == std::string::npos || optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
                             this->ubChecks = true;
@@ -1686,6 +1702,13 @@ auto ProgramParams::effectiveMirOptLevel() const -> unsigned {
 auto ProgramParams::enableMirInlining() const -> bool {
     const auto level = effectiveMirOptLevel();
     return level >= 3 || (level == 2 && optLevel != OptimizationLevel::None && optLevel != OptimizationLevel::Less);
+}
+
+auto ProgramParams::shareGenericsEnabled() const -> bool {
+    if (shareGenericsExplicit) {
+        return shareGenerics;
+    }
+    return optLevel == OptimizationLevel::None || optLevel == OptimizationLevel::Less || optLevel == OptimizationLevel::Size || optLevel == OptimizationLevel::SizeMin;
 }
 
 auto ProgramParams::debugAssertionsEnabled() const -> bool {

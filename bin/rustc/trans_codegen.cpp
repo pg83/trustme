@@ -67,6 +67,14 @@ namespace {
         FunctionOrder(const WireBoard& wb, TransList& list, const Span& sp);
     };
 
+    bool definedPrivately(const WireBoard& wb, const HIRCrate& crate, const HIRPath& path, const HIRFunction& fcn) {
+        if (fcn.code) {
+            return false;
+        }
+        const auto* placed = wb.sharedGenerics->placement.find(TransValueIdentity(wb, path));
+        return !placed || *placed != crate.crateName;
+    }
+
     bool functionHasDefinition(const TransListFunction& function) {
         return function.ptr && function.ptr->code.mir && !function.forcePrototype;
     }
@@ -158,7 +166,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
             const auto& function = *node->function;
             DEBUG(StringView("FUNCTION PROTO ") << *function.path);
             const auto& fcn = *function.ptr;
-            const bool isExtern = !static_cast<bool>(fcn.code);
+            const bool isExtern = definedPrivately(wb, *cratePtr, *function.path, fcn);
             codegen->emitFunctionProto(*function.path, fcn, function.pp, isExtern);
         }
     } else {
@@ -166,7 +174,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
             DEBUG(StringView("FUNCTION ") << ent.first);
             BUG_ASSERT(ent.second->ptr);
             const auto& fcn = *ent.second->ptr;
-            bool isExtern = !static_cast<bool>(fcn.code);
+            bool isExtern = definedPrivately(wb, *cratePtr, ent.first, fcn);
             if (fcn.code.mir && !ent.second->forcePrototype) {
                 codegen->emitFunctionProto(ent.first, fcn, ent.second->pp, isExtern);
             }
@@ -220,7 +228,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
         const auto& pp = function.pp;
         TRACE_FUNCTION_F(path);
         DEBUG(StringView("FUNCTION CODE ") << path);
-        bool isExtern = !static_cast<bool>(fcn.code);
+        bool isExtern = definedPrivately(wb, *cratePtr, path, fcn);
         bool isMethod = (fcn.args.size() > 0 && visitTyWith(fcn.args[0].second, [&](const auto& x) {
             return x == cratePtr->types.self();
         }));

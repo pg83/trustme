@@ -4,6 +4,8 @@
 #include "hir_type.h"
 #include "hir_typeck_common.h"
 
+#include <std/sym/i_map.h>
+
 #include <unordered_map>
 
 class StaticTraitResolve;
@@ -87,6 +89,18 @@ struct TransListConst {
 
     explicit TransListConst(HIRTypeInterner& types);
 };
+
+struct TransSharedGenerics {
+    bool exportsInstances = false;
+    bool linksUpstreamInstances = false;
+    stl::IntMap<RcString> upstream;
+    stl::IntMap<RcString> placement;
+
+    explicit TransSharedGenerics(stl::ObjPool* pool);
+};
+
+void TransCreateSharedGenerics(WireBoard& wb, stl::ObjPool& pool);
+void TransIndexUpstreamInstances(const WireBoard& wb, const HIRCrate& crate);
 
 class TransList {
     const WireBoard* wb_ = nullptr;

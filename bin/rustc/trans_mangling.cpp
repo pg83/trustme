@@ -4,6 +4,7 @@
 #include "hir_hir.h"
 #include "hir_type.h"
 #include "wire_board.h"
+#include "trans_trans_list.h"
 
 #include <std/str/fmt.h>
 #include <std/sym/i_map.h>
@@ -104,16 +105,23 @@ namespace {
         return context.buffer;
     }
 
-    RcString mangleFinish(StringBuilder& sb) {
+    u64 mangleFinishHash(StringBuilder& sb) {
         const auto* data = static_cast<const char*>(sb.data());
         const auto size = static_cast<const char*>(sb.current()) - data;
-        auto hash = XXH3_64bits(data, size);
+        return XXH3_64bits(data, size);
+    }
+
+    RcString symbolOfHash(u64 hash) {
         char symbol[18] = {'Z', 'R'};
         for (size_t i = sizeof(symbol); i > 2; i--) {
             symbol[i - 1] = hexDigit(hash);
             hash >>= 4;
         }
         return RcString::newInterned(symbol, sizeof(symbol));
+    }
+
+    RcString mangleFinish(StringBuilder& sb) {
+        return symbolOfHash(mangleFinishHash(sb));
     }
 
     RcString transMangleType(ManglingContext& context, const HIRType* v, bool includeLifetimeIdentity) {
@@ -158,11 +166,7 @@ RcString TransMangle(const WireBoard& wb, const HIRPath& p) {
 }
 
 RcString TransMangleValue(const WireBoard& wb, const HIRGenericPath& p) {
-    auto& context = *wb.mangling;
-    auto& sb = mangleBegin(context);
-    sb << StringView("ZRG");
-    Mangler(context, LifetimeIdentityMode::Closed).fmtGenericPath(p);
-    return mangleFinish(sb);
+    return symbolOfHash(TransValueIdentity(wb, p));
 }
 
 RcString TransMangleValue(const WireBoard& wb, const HIRSimplePath& p) {
@@ -170,11 +174,48 @@ RcString TransMangleValue(const WireBoard& wb, const HIRSimplePath& p) {
 }
 
 RcString TransMangleValue(const WireBoard& wb, const HIRPath& p) {
+    return symbolOfHash(TransValueIdentity(wb, p));
+}
+
+u64 TransValueIdentity(const WireBoard& wb, const HIRPath& p) {
     auto& context = *wb.mangling;
     auto& sb = mangleBegin(context);
     sb << StringView("ZR");
     Mangler(context, LifetimeIdentityMode::Closed).fmtPath(p);
-    return mangleFinish(sb);
+    return mangleFinishHash(sb);
+}
+
+u64 TransValueIdentity(const WireBoard& wb, const HIRGenericPath& p) {
+    auto& context = *wb.mangling;
+    auto& sb = mangleBegin(context);
+    sb << StringView("ZRG");
+    Mangler(context, LifetimeIdentityMode::Closed).fmtGenericPath(p);
+    return mangleFinishHash(sb);
+}
+
+RcString TransMangleShared(u64 identity, const RcString& instantiatingCrate) {
+    return symbolOfHash(XXH3_64bits_withSeed(instantiatingCrate.c_str(), instantiatingCrate.size(), identity));
+}
+
+namespace {
+    RcString symbolOfIdentity(const WireBoard& wb, u64 identity) {
+        if (const auto* crate = wb.sharedGenerics->placement.find(identity)) {
+            return TransMangleShared(identity, *crate);
+        }
+        return symbolOfHash(identity);
+    }
+}
+
+RcString TransMangleSymbol(const WireBoard& wb, const HIRSimplePath& p) {
+    return TransMangleSymbol(wb, HIRGenericPath(p));
+}
+
+RcString TransMangleSymbol(const WireBoard& wb, const HIRGenericPath& p) {
+    return symbolOfIdentity(wb, TransValueIdentity(wb, p));
+}
+
+RcString TransMangleSymbol(const WireBoard& wb, const HIRPath& p) {
+    return symbolOfIdentity(wb, TransValueIdentity(wb, p));
 }
 
 RcString TransMangle(const WireBoard& wb, const HIRType* v) {

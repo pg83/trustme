@@ -46,7 +46,8 @@ namespace {
         WriterImpl();
         ~WriterImpl();
 
-        void open(const std::string& filename) override;
+        void open(StringView filename) override;
+        void finish() override;
         void write(const void* data, size_t count) override;
         void writeU16(u16 v) override;
         void writeU32(u32 v) override;
@@ -98,9 +99,14 @@ WriterImpl::WriterImpl()
 }
 
 WriterImpl::~WriterImpl() {
+    finish();
+}
+
+void WriterImpl::finish() {
     if (!recording) {
         return;
     }
+    recording = false;
 
     Buffer whole(istrings.length() * 16 + data.length() + 8);
     const u32 stringCount = static_cast<u32>(istrings.length());
@@ -129,8 +135,8 @@ WriterImpl::~WriterImpl() {
     FDOutput(fd).writeC(packed.data(), len);
 }
 
-void WriterImpl::open(const std::string& filename) {
-    path = Buffer(StringView(filename.c_str()));
+void WriterImpl::open(StringView filename) {
+    path = Buffer(filename);
     recording = true;
 }
 

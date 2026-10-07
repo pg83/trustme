@@ -687,7 +687,7 @@ auto CodeGeneratorC::TransMangle(const T& value) const -> RcString {
 
 template <typename T>
 auto CodeGeneratorC::TransMangleValue(const T& value) const -> RcString {
-    return ::TransMangleValue(wb_, value);
+    return ::TransMangleSymbol(wb_, value);
 }
 
 auto CodeGeneratorC::TransMangleTypeId(const HIRType* type) const -> RcString {

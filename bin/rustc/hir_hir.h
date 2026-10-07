@@ -903,6 +903,7 @@ public:
     std::unordered_map<RcString, HIRSimplePath> langItems;
 
     stl::Vector<RcString> extCratesOrdered;
+    stl::Vector<u64> exportedGenericInstances;
 
     std::unordered_map<RcString, HIRExternCrate> extCrates;
 

@@ -7957,6 +7957,9 @@ void MIROptimiseCrateInlining(const WireBoard& wb, HIRCrate& crate, TransList& l
 
     if (postSave) {
         for (auto& fcnEnt : list.functions) {
+            if (fcnEnt.second->forcePrototype) {
+                continue;
+            }
             MIRFunction* fcnP;
             if (fcnEnt.second->monomorphised.code) {
                 DEBUG(StringView("Generic: ") << fcnEnt.first);

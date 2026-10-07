@@ -27,4 +27,5 @@ WireBoard::WireBoard(ObjPool* pool)
     HIRCreateMutableOwnerCache(*this, *pool);
     TransCreateManglingContext(*this, *pool);
     TransCreateLinkFunctionCache(*this, *pool);
+    TransCreateSharedGenerics(*this, *pool);
 }
