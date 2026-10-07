@@ -883,6 +883,11 @@ namespace {
                             d->flagIdx = dropFlagMapping.at(d->flagIdx);
                         }
                     }
+                    if (auto* d = bb.terminator.opt_Switch()) {
+                        if (d->validFlag != ~0u) {
+                            d->validFlag = dropFlagMapping.at(d->validFlag);
+                        }
+                    }
                 }
                 genNode->dropFcnPtr->code.mir = std::move(dropImplBody);
             } else {
