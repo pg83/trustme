@@ -111,6 +111,8 @@ namespace {
         void visitConstant(HIRItemPath p, HIRConstant& item) override;
 
         void visitExpr(HIRExprPtr& expr) override;
+
+        void bindExternalMir(MIRFunction& mir);
     };
 
     struct VisitorEnumSuperTraits: public HIRVisitor {
@@ -161,6 +163,8 @@ namespace {
         void visitConstant(HIRItemPath p, HIRConstant& item) override;
 
         void visitExpr(HIRExprPtr& expr) override;
+
+        void bindExternalMir(MIRFunction& mir);
     };
 
     struct ReceiverValidator {
@@ -739,6 +743,24 @@ namespace {
         }
         pushIndexInherentMethodsList(icache, langBox, src.typeImpls.nonNamed);
         pushIndexInherentMethodsList(icache, langBox, src.typeImpls.generic);
+    }
+}
+
+namespace {
+    void bindExternalBody(const MIRLazyBody& body, MIRFunction& mir) {
+        const auto& wb = *body.wb;
+        {
+            auto bindPool = ObjPool::fromMemory();
+            BindVisitor exp{wb, bindPool.mutPtr()};
+            exp.ms.implGenerics = body.implGenerics;
+            exp.ms.itemGenerics = body.itemGenerics;
+            exp.selfType = body.selfType;
+            exp.bindExternalMir(mir);
+        }
+        VisitorPost post{wb};
+        post.ms.implGenerics = body.implGenerics;
+        post.ms.itemGenerics = body.itemGenerics;
+        post.bindExternalMir(mir);
     }
 }
 
@@ -1782,8 +1804,20 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
         (*expr).visit(v);
 
         this->inExpr--;
+    } else if (auto* body = expr.mir.pendingBody()) {
+        body->bind = &bindExternalBody;
+        body->wb = &ms.wb;
+        body->implGenerics = ms.implGenerics;
+        body->itemGenerics = ms.itemGenerics;
+        body->selfType = selfType;
     } else if (auto* mir = expr.getExtMirMut()) {
-        for (auto& type : mutRange(mir->locals)) {
+        bindExternalMir(*mir);
+    } else {
+    }
+}
+
+auto BindVisitor::bindExternalMir(MIRFunction& mir) -> void {
+        for (auto& type : mutRange(mir.locals)) {
             type = visitType(type);
         }
 
@@ -1812,14 +1846,12 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
         };
 
         MirVisitor mv(*this);
-        for (auto& block : mir->blocks) {
+        for (auto& block : mir.blocks) {
             for (auto& stmt : block.statements) {
                 mv.visitStmt(stmt);
             }
             mv.visitTerminator(block.terminator);
         }
-    } else {
-    }
 }
 
 VisitorEnumSuperTraits::VisitorEnumSuperTraits(const HIRCrate& crate)
@@ -2254,8 +2286,15 @@ auto VisitorPost::visitExpr(HIRExprPtr& expr) -> void {
     if (expr.get() != nullptr) {
         ExprVisitor v{*this};
         (*expr).visit(v);
+    } else if (expr.mir.pendingBody()) {
     } else if (auto* mir = expr.getExtMirMut()) {
-        for (auto& type : mutRange(mir->locals)) {
+        bindExternalMir(*mir);
+    } else {
+    }
+}
+
+auto VisitorPost::bindExternalMir(MIRFunction& mir) -> void {
+        for (auto& type : mutRange(mir.locals)) {
             type = visitType(type);
         }
 
@@ -2284,14 +2323,12 @@ auto VisitorPost::visitExpr(HIRExprPtr& expr) -> void {
         };
 
         MirVisitor mv(*this);
-        for (auto& block : mir->blocks) {
+        for (auto& block : mir.blocks) {
             for (auto& stmt : block.statements) {
                 mv.visitStmt(stmt);
             }
             mv.visitTerminator(block.terminator);
         }
-    } else {
-    }
 }
 
 auto Expander::typeAlias(const Span& sp, const HIRType* type) const -> const HIRTypeAlias* {

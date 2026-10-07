@@ -20,14 +20,19 @@ using namespace stl;
 namespace {
     const size_t SIMPLE_PATH_EMPTY = 0xFFFFFFFE;
     const size_t SIMPLE_PATH_FRESH = 0xFFFFFFFF;
+    const size_t NO_REGION = ~size_t(0);
 
     template <typename T>
     struct D {};
 
-    struct HirDeserialiser {
+    struct HirDeserialiser: public MIRBodySource {
         RcString crateName;
         Vector<const HIRType*> types;
         Vector<HIRSimplePath> simplePaths;
+        size_t regionTypeBase = NO_REGION;
+        size_t regionPathBase = NO_REGION;
+        Vector<const HIRType*> regionTypes;
+        Vector<HIRSimplePath> regionPaths;
         HIRSerialiseReader& in;
         HIRTypeInterner& typeInterner;
         u32& id;
@@ -145,6 +150,9 @@ namespace {
         EncodedLiteral deserialiseEncodedliteral();
 
         HIRExprPtr deserialiseExprptr();
+        HIRExprPtr deserialiseFunctionBody();
+        MIRFunction* deserialiseMirFunction();
+        MIRFunction* decodeBody(const MIRLazyBody& body) override;
 
         MIRFunctionPointer deserialiseMir();
         MIRBasicBlock deserialiseMirBasicblock();
@@ -447,6 +455,10 @@ namespace {
         std::map<RcString, size_t> types;
         IntMap<size_t> typeIds;
         IntMap<size_t> simplePathIds;
+        bool inRegion = false;
+        Vector<RcString> regionTypeNames;
+        Vector<u64> regionTypeKeys;
+        Vector<u64> regionPathKeys;
         HIRSerialiseWriter& out;
         HIRTypeInterner& typeInterner;
         unsigned unevaluatedBodyDepth = 0;
@@ -613,6 +625,8 @@ namespace {
         void serialise(const HIRConstGeneric& v);
 
         void serialise(const HIRExprPtr& exp, bool saveMir = true);
+        void serialiseFunctionBody(const HIRExprPtr& exp, bool saveMir);
+        void endRegion();
 
         void serialise(const MIRFunction& mir);
 
@@ -729,7 +743,7 @@ const HIRType* HirDeserialiser::deserialiseType() {
     auto idx = in.readCount();
     if (idx != ~0u) {
         DEBUG(StringView("#") << idx << StringView(""));
-        rv = types[idx];
+        rv = idx < regionTypeBase ? types[idx] : regionTypes[idx - regionTypeBase];
         return rv;
         DEBUG(StringView("Fresh (=") << types.length() << StringView(")"));
     }
@@ -801,7 +815,11 @@ const HIRType* HirDeserialiser::deserialiseType() {
         default:
             BUG(Span(), StringView("Bad tag for HIR::ASTType* - ") << tag);
     }
-    types.pushBack(rv);
+    if (regionTypeBase == NO_REGION) {
+        types.pushBack(rv);
+    } else {
+        regionTypes.pushBack(rv);
+    }
     return rv;
 }
 
@@ -812,7 +830,7 @@ HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
         return HIRSimplePath();
     }
     if (idx != SIMPLE_PATH_FRESH) {
-        return simplePaths[idx];
+        return idx < regionPathBase ? simplePaths[idx] : regionPaths[idx - regionPathBase];
     }
     auto members = deserialiseThinvec<RcString>();
     auto rv = members.empty() ? HIRSimplePath() : HIRSimplePath(members[0], std::span<RcString>(members.begin() + 1, members.end()));
@@ -821,7 +839,11 @@ HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
         BUG_ASSERT(crateName != "");
         rv.updateCrateName(crateName);
     }
-    simplePaths.pushBack(rv);
+    if (regionPathBase == NO_REGION) {
+        simplePaths.pushBack(rv);
+    } else {
+        regionPaths.pushBack(rv);
+    }
     return rv;
 }
 
@@ -1087,6 +1109,10 @@ EncodedLiteral HirDeserialiser::deserialiseEncodedliteral() {
 }
 
 MIRFunctionPointer HirDeserialiser::deserialiseMir() {
+    return MIRFunctionPointer(deserialiseMirFunction());
+}
+
+MIRFunction* HirDeserialiser::deserialiseMirFunction() {
     TRACE_FUNCTION;
     MIRFunction rv;
 
@@ -1094,7 +1120,22 @@ MIRFunctionPointer HirDeserialiser::deserialiseMir() {
     rv.dropFlags = deserialiseVector<bool>();
     rv.blocks = deserialiseVec<MIRBasicBlock>();
 
-    return MIRFunctionPointer(new MIRFunction(mv$(rv)));
+    return new MIRFunction(mv$(rv));
+}
+
+MIRFunction* HirDeserialiser::decodeBody(const MIRLazyBody& body) {
+    BUG_ASSERT(regionTypeBase == NO_REGION && regionPathBase == NO_REGION);
+    const size_t resume = in.getPos();
+    regionTypeBase = body.typeBase;
+    regionPathBase = body.pathBase;
+    in.setPos(body.offset);
+    auto* rv = deserialiseMirFunction();
+    regionTypeBase = NO_REGION;
+    regionPathBase = NO_REGION;
+    regionTypes.clear();
+    regionPaths.clear();
+    in.setPos(resume);
+    return rv;
 }
 
 MIRBasicBlock HirDeserialiser::deserialiseMirBasicblock() {
@@ -1367,15 +1408,12 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
 }
 
 HIRCrate* HIRDeserialise(u32& id, ObjPool* pool, HIRTypeInterner& types, const std::string& filename) {
-    {
-        auto readerPool = ObjPool::fromMemory();
-        auto& in = *HIRSerialiseReader::create(*readerPool.mutPtr(), metadataFilename(filename));
-        HirDeserialiser s{id, *pool, in, types};
+    auto& in = *HIRSerialiseReader::create(*pool, metadataFilename(filename));
+    auto& s = *pool->make<HirDeserialiser>(id, *pool, in, types);
 
-        auto* rv = pool->make<HIRCrate>(pool, types);
-        s.deserialiseCrate(*rv);
-        return rv;
-    }
+    auto* rv = pool->make<HIRCrate>(pool, types);
+    s.deserialiseCrate(*rv);
+    return rv;
 }
 
 RcString HIRDeserialiseJustName(const std::string& filename) {
@@ -1902,6 +1940,21 @@ auto HirDeserialiser::deserialiseTokendata() -> TokenData {
     }
 }
 
+auto HirDeserialiser::deserialiseFunctionBody() -> HIRExprPtr {
+    HIRExprPtr rv;
+    auto _ = in.openObject("HIR::ExprPtr");
+    if (in.readBool()) {
+        const size_t length = in.readCount();
+        rv.mir = MIRFunctionPointer(pool.make<MIRLazyBody>(MIRLazyBody{this, in.getPos(), types.length(), simplePaths.length()}));
+        in.setPos(in.getPos() + length);
+        if (in.readBool()) {
+            rv.extResultType = deserialiseType();
+        }
+    }
+    rv.erasedTypes = deserialiseVector<const HIRType*>();
+    return rv;
+}
+
 auto HirDeserialiser::deserialiseExprptr() -> HIRExprPtr {
     HIRExprPtr rv;
     auto _ = in.openObject("HIR::ExprPtr");
@@ -2107,7 +2160,7 @@ auto HirDeserialiser::deserialiseFunction() -> HIRFunction {
     rv.source.filename = in.readIstring();
     rv.source.line = static_cast<unsigned int>(in.readCount());
     rv.source.column = static_cast<unsigned int>(in.readCount());
-    rv.code = deserialiseExprptr();
+    rv.code = deserialiseFunctionBody();
     return rv;
 }
 
@@ -3289,6 +3342,9 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
         out.writeCount(*known);
         return;
     }
+    if (inRegion) {
+        regionTypeKeys.pushBack(typeKey);
+    }
     auto tyStr = FMT(ty);
     if (tyStr[0] == '{') {
         auto p = tyStr.find('}');
@@ -3430,7 +3486,11 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
             break;
     }
 
-    const auto id = types.insert(std::make_pair(interned, types.size())).first->second;
+    const auto inserted = types.insert(std::make_pair(interned, types.size()));
+    if (inRegion && inserted.second) {
+        regionTypeNames.pushBack(interned);
+    }
+    const auto id = inserted.first->second;
     if (!typeIds.find(typeKey)) {
         typeIds.insert(typeKey, id);
     }
@@ -3451,6 +3511,9 @@ auto HirSerialiser::serialiseSimplepath(const HIRSimplePath& path) -> void {
     out.writeCount(SIMPLE_PATH_FRESH);
     serialiseVec(data->members);
     simplePathIds.insert(key, simplePathIds.size());
+    if (inRegion) {
+        regionPathKeys.pushBack(key);
+    }
 }
 
 auto HirSerialiser::serialisePathparams(const HIRPathParams& pp) -> void {
@@ -4004,6 +4067,42 @@ auto HirSerialiser::serialise(const HIRConstGeneric& v) -> void {
             break;
         }
     }
+}
+
+auto HirSerialiser::serialiseFunctionBody(const HIRExprPtr& exp, bool saveMir) -> void {
+    auto _ = out.openObject("HIR::ExprPtr");
+    saveMir &= static_cast<bool>(exp.mir);
+    out.writeBool(saveMir);
+    if (saveMir) {
+        BUG_ASSERT(!inRegion);
+        const size_t length = out.reserveCount();
+        inRegion = true;
+        serialise(*exp.mir);
+        endRegion();
+        out.finishCount(length);
+        const HIRType* resultType = exp.resultType();
+        out.writeBool(resultType != nullptr);
+        if (resultType) {
+            serialiseType(resultType);
+        }
+    }
+    serialiseVec(exp.erasedTypes);
+}
+
+auto HirSerialiser::endRegion() -> void {
+    for (const u64 key : regionTypeKeys) {
+        typeIds.erase(key);
+    }
+    for (const auto& name : regionTypeNames) {
+        types.erase(name);
+    }
+    for (const u64 key : regionPathKeys) {
+        simplePathIds.erase(key);
+    }
+    regionTypeKeys.clear();
+    regionTypeNames.clear();
+    regionPathKeys.clear();
+    inRegion = false;
 }
 
 auto HirSerialiser::serialise(const HIRExprPtr& exp, bool saveMir) -> void {
@@ -4683,7 +4782,7 @@ auto HirSerialiser::serialise(const HIRFunction& fcn) -> void {
     out.writeCount(fcn.source.line);
     out.writeCount(fcn.source.column);
 
-    serialise(fcn.code, fcn.saveCode || fcn.isConst);
+    serialiseFunctionBody(fcn.code, fcn.saveCode || fcn.isConst);
 }
 
 auto HirSerialiser::serialise(const HIRFunction::Markings& m) -> void {

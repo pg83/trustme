@@ -9,6 +9,7 @@
 #include <std/lib/buffer.h>
 #include <std/lib/vector.h>
 #include <std/sym/h_map.h>
+#include <std/sym/i_map.h>
 #include <std/mem/obj_pool.h>
 #include <std/rng/split_mix_64.h>
 
@@ -41,7 +42,7 @@ namespace {
         ObjPool::Ref istringPool;
         HashMap<unsigned, RcString, InternedStringHasher> istringIndex;
         Vector<RcString> istrings;
-        std::map<const char*, unsigned> objnameCache;
+        IntMap<unsigned> objectNames;
 
         WriterImpl();
         ~WriterImpl();
@@ -60,19 +61,23 @@ namespace {
         void writeString(const RcString& v) override;
         void writeString(size_t len, const char* s) override;
         void writeBool(bool v) override;
+        size_t reserveCount() override;
+        void finishCount(size_t at) override;
         CloseOnDrop openObject(const char* name) override;
         CloseOnDrop openAnonObject() override;
+
+        unsigned stringIndex(const RcString& v);
     };
 
     struct ReaderImpl final: public HIRSerialiseReader {
         Buffer data;
         size_t pos;
         Vector<RcString> strings;
-        std::vector<std::string> objnameCache;
 
         explicit ReaderImpl(const std::string& path);
 
         size_t getPos() const override;
+        void setPos(size_t at) override;
         void read(void* dst, size_t count) override;
         u8 readU8() override;
         u16 readU16() override;
@@ -95,6 +100,7 @@ WriterImpl::WriterImpl()
     : recording(false)
     , istringPool(ObjPool::fromMemory())
     , istringIndex(istringPool.mutPtr())
+    , objectNames(istringPool.mutPtr())
 {
 }
 
@@ -181,13 +187,31 @@ void WriterImpl::writeCount(size_t c) {
     writeU32(static_cast<u32>(c));
 }
 
-void WriterImpl::writeString(const RcString& v) {
+unsigned WriterImpl::stringIndex(const RcString& v) {
     const auto* found = istringIndex.find(v);
     if (!found) {
         found = istringIndex.insert(v, static_cast<unsigned>(istrings.length()));
         istrings.pushBack(v);
     }
-    this->writeCount(*found);
+    return *found;
+}
+
+void WriterImpl::writeString(const RcString& v) {
+    this->writeCount(stringIndex(v));
+}
+
+size_t WriterImpl::reserveCount() {
+    const size_t at = data.length();
+    writeU32(0);
+    return at;
+}
+
+void WriterImpl::finishCount(size_t at) {
+    BUG_ASSERT(at + sizeof(u32) <= data.length());
+    const size_t count = data.length() - at - sizeof(u32);
+    BUG_ASSERT(count <= 0xFFFFFFFFu);
+    const u32 value = static_cast<u32>(count);
+    memcpy(static_cast<u8*>(data.mutData()) + at, &value, sizeof value);
 }
 
 void WriterImpl::writeString(size_t len, const char* s) {
@@ -219,11 +243,12 @@ HIRSerialiseWriter::CloseOnDrop::~CloseOnDrop() {
 
 HIRSerialiseWriter::CloseOnDrop WriterImpl::openObject(const char* name) {
     writeU8(TAG_OPEN_NAMED);
-    auto iv = objnameCache.insert(std::make_pair(name, static_cast<unsigned>(objnameCache.size())));
-    writeCount(iv.first->second);
-    if (iv.second) {
-        writeString(strlen(name), name);
+    const auto key = reinterpret_cast<uintptr_t>(name);
+    const auto* index = objectNames.find(key);
+    if (!index) {
+        index = objectNames.insert(key, stringIndex(RcString::newInterned(name)));
     }
+    writeCount(*index);
     return CloseOnDrop(*this);
 }
 
@@ -263,6 +288,11 @@ ReaderImpl::ReaderImpl(const std::string& path)
 
 size_t ReaderImpl::getPos() const {
     return pos;
+}
+
+void ReaderImpl::setPos(size_t at) {
+    BUG_ASSERT(at <= data.length());
+    pos = at;
 }
 
 void ReaderImpl::read(void* dst, size_t count) {
@@ -364,13 +394,9 @@ HIRSerialiseReader::CloseOnDrop ReaderImpl::openObject(const char* name) {
         sysE << StringView("Expected OpenNamed(") << name << StringView("), got ") << unsigned(v) << StringView("u8") << endL;
         abort();
     }
-    auto key = readCount();
-    if (key == objnameCache.size()) {
-        objnameCache.push_back(readString());
-    }
-    BUG_ASSERT(key < objnameCache.size());
-    if (objnameCache[key] != name) {
-        sysE << StringView("Expecting OpenNamed(") << name << StringView("), got OpenNamed(") << objnameCache[key] << StringView(")") << endL;
+    const auto got = readIstring();
+    if (got != name) {
+        sysE << StringView("Expecting OpenNamed(") << name << StringView("), got OpenNamed(") << got << StringView(")") << endL;
         abort();
     }
     return CloseOnDrop(*this);

@@ -36,6 +36,8 @@ struct HIRSerialiseWriter {
     virtual void writeString(const RcString& v) = 0;
     virtual void writeString(size_t len, const char* s) = 0;
     virtual void writeBool(bool v) = 0;
+    virtual size_t reserveCount() = 0;
+    virtual void finishCount(size_t at) = 0;
     virtual CloseOnDrop openObject(const char* name) = 0;
     virtual CloseOnDrop openAnonObject() = 0;
 
@@ -59,6 +61,7 @@ struct HIRSerialiseReader {
     };
 
     virtual size_t getPos() const = 0;
+    virtual void setPos(size_t at) = 0;
     virtual void read(void* dst, size_t count) = 0;
     virtual u8 readU8() = 0;
     virtual u16 readU16() = 0;
