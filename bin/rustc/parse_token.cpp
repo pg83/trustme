@@ -1064,6 +1064,11 @@ ASTAttribute& Token::fragMeta() {
     return *reinterpret_cast<ASTAttribute*>(data_.as_Fragment().ptr);
 }
 
+const ASTAttribute& Token::fragMeta() const {
+    BUG_ASSERT(type_ == TOK_INTERPOLATED_META);
+    return *reinterpret_cast<const ASTAttribute*>(data_.as_Fragment().ptr);
+}
+
 bool Token::operator==(const Token& r) const {
     if (type() != r.type()) {
         return false;

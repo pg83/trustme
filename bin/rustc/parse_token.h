@@ -184,6 +184,7 @@ public:
     const ASTPattern& fragPattern() const;
 
     ASTAttribute& fragMeta();
+    const ASTAttribute& fragMeta() const;
 
     ASTExprNode& fragNode();
     const ASTExprNode& fragNode() const;

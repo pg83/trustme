@@ -1404,6 +1404,8 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             break;
         }
         case TOK_INTERPOLATED_META:
+            visitMetaItem(tok.fragMeta());
+            break;
         case TOK_INTERPOLATED_VIS:
             TODO(sp, StringView("TOK_INTERPOLATED_..."));
         case TOK_IDENT:
