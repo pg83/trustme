@@ -282,6 +282,10 @@ namespace {
                                 ResolveAbsoluteType(context, t);
                             }
                         } else {
+                            const auto coreType = coretypeFromstring(p.nodes[0].name().c_str());
+                            if (coreType != CORETYPE_INVAL && newPath.bindings.type.binding.is_Module()) {
+                                newPath = ASTPath::newUfcsTy(mkType(context.typePool(), sp, coreType));
+                            }
                             *t->data.as_Path() = std::move(newPath);
                             ResolveAbsoluteType(context, t);
                         }
