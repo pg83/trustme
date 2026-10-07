@@ -4684,7 +4684,10 @@ namespace {
                 if (useEnt.name != "" && useStmt->vis.isGlobal()) {
                     const auto* macroBinding = useEnt.path.bindings.macro.binding.opt_MacroRules();
                     if (macroBinding && macroBinding->mac && macroBinding->mac->definitionSpan && !macroBinding->mac->exported) {
-                        ERROR(span, E0000, StringView("Macro is only public within the crate and cannot be re-exported outside"));
+                        if (useEnt.path.bindings.type.is_Unbound() && useEnt.path.bindings.value.is_Unbound()) {
+                            ERROR(span, E0000, StringView("Macro is only public within the crate and cannot be re-exported outside"));
+                        }
+                        useEnt.path.bindings.macro = {};
                     }
                 }
 
