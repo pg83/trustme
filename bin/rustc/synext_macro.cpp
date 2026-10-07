@@ -936,18 +936,8 @@ namespace {
     void pushPath(std::vector<TokenTree>& toks, const ASTCrate& crate, std::initializer_list<const char*> il) {
         ASTAbsolutePath ap;
         // TODO: Inject a path fragment (interpolated path), to avoid edition parsing quirks
-        switch (crate.loadStd) {
-            case ASTCrate::LOAD_NONE:
-                break;
-            case ASTCrate::LOAD_CORE:
-                ASSERT_BUG(Span(), crate.extCratenameCore != "", StringView(""));
-                ap.crate = crate.extCratenameCore;
-                break;
-            case ASTCrate::LOAD_STD:
-                ASSERT_BUG(Span(), crate.extCratenameCore != "", StringView(""));
-                ap.crate = crate.extCratenameCore;
-                break;
-        }
+        ASSERT_BUG(Span(), crate.loadStd == ASTCrate::LOAD_NONE || crate.extCratenameCore != "", StringView(""));
+        ap.crate = crate.extCratenameCore;
         for (auto ent : il) {
             // TODO: This could be slow (looking up the interned string), but most of these are repeated a LOT
             ap.nodes.pushBack(RcString::newInterned(ent));
