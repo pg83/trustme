@@ -15,6 +15,7 @@
 
 #include <std/alg/range.h>
 #include <std/lib/vector.h>
+#include <std/sym/i_map.h>
 #include <std/mem/obj_pool.h>
 
 #include <algorithm>
@@ -46,13 +47,15 @@ namespace {
         unsigned inExpr;
         bool inImplTraitBinding = false;
         const HIRType* selfType = nullptr;
+        IntMap<const HIRType*> boundTypes;
+        bool typeUsesContext = false;
 
         HIRItemPath* fcnPath = nullptr;
         HIRFunction* fcnPtr = nullptr;
         const std::vector<HIRSimplePath>* defineOpaque = nullptr;
         unsigned int fcnErasedCount = 0;
 
-        BindVisitor(const WireBoard& wb);
+        BindVisitor(const WireBoard& wb, ObjPool* pool);
 
         HIRTypeInterner& interner() const;
 
@@ -741,7 +744,8 @@ namespace {
 
 void ConvertHIRBind(const WireBoard& wb, HIRCrate& crate) {
     {
-        BindVisitor exp{wb};
+        auto bindPool = ObjPool::fromMemory();
+        BindVisitor exp{wb, bindPool.mutPtr()};
         for (auto& ec : crate.extCrates) {
             exp.visitCrate(*ec.second.data);
         }
@@ -929,11 +933,12 @@ void ConvertHIRIndexInherentMethods(const WireBoard& wb, const HIRCrate& crate) 
     }
 }
 
-BindVisitor::BindVisitor(const WireBoard& wb)
+BindVisitor::BindVisitor(const WireBoard& wb, ObjPool* pool)
     : HIRVisitor(nullptr, wb.crate->types)
     , crate(*wb.crate)
     , ms(wb)
     , inExpr(0)
+    , boundTypes(pool)
 {
     curModule.ptr = &crate.rootModule;
     curModule.path = &rootPath;
@@ -1074,6 +1079,7 @@ auto BindVisitor::visitConstgeneric(HIRConstGeneric& value) -> void {
 auto BindVisitor::bindConstgeneric(HIRConstGeneric& value, bool repeatCount) -> void {
     HIRVisitor::visitConstgeneric(value);
     if (auto* unevaluated = value.opt_Unevaluated()) {
+        typeUsesContext = true;
         bool inheritsGenerics = true;
         if ((*unevaluated)->expr && (*unevaluated)->expr->state && (*unevaluated)->expr->get()) {
             /* Upstream `lower_const_path_to_const_arg` / `lower_anon_const_to_const_arg`:
@@ -1156,7 +1162,18 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
 }
 
 [[nodiscard]] auto BindVisitor::visitType(const HIRType* ty) -> const HIRType* {
-    return visitTypeInner(ty);
+    const u64 key = reinterpret_cast<uintptr_t>(ty) | (inExpr ? 1 : 0);
+    if (const auto* known = boundTypes.find(key)) {
+        return *known;
+    }
+    const bool outerUsesContext = typeUsesContext;
+    typeUsesContext = false;
+    const auto* rv = visitTypeInner(ty);
+    if (!typeUsesContext) {
+        boundTypes.insert(key, rv);
+    }
+    typeUsesContext |= outerUsesContext;
+    return rv;
 }
 
 [[nodiscard]] auto BindVisitor::visitTypeInner(const HIRType* ty, bool doBind) -> const HIRType* {
@@ -1291,6 +1308,7 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
             }
         }
     } else if (auto* te = data.opt_ErasedType()) {
+        typeUsesContext = true;
         const HIRType* tyEself = crate.types.generic("ErasedSelf", GENERICErasedSelf);
         for (auto& t : te->traits) {
             const auto& trait = crate.getTraitByPath(sp, t.path.path);
