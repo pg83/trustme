@@ -981,6 +981,10 @@ auto TyVisitorConstGeneric::visitConstGeneric(const HIRConstGeneric& value) -> b
 }
 
 auto TyRewriter::rewritePathParams(HIRPathParams& params) -> void {
+    if (callback.rewritesValues()) {
+        params = params.map([&](const HIRType* type) { return rewriteType(type); }, [&](const HIRConstGeneric& value) { return callback.rewriteValue(value); });
+        return;
+    }
     params = params.mapTypes([&](const HIRType* type) { return rewriteType(type); });
 }
 

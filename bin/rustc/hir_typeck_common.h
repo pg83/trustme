@@ -117,6 +117,14 @@ bool visitPathTysWith(const HIRPath& path, F f) {
 
 struct HIRTypeRewriteCallback {
     virtual const HIRType* rewrite(const HIRType* type) = 0;
+
+    virtual bool rewritesValues() const {
+        return false;
+    }
+
+    virtual HIRConstGeneric rewriteValue(const HIRConstGeneric& value) {
+        return value.clone();
+    }
 };
 
 template <typename F>
@@ -139,6 +147,36 @@ void rewritePathTysWithCb(HIRTypeInterner& types, HIRPath& path, HIRTypeRewriteC
 template <typename F>
 const HIRType* rewriteTyWith(HIRTypeInterner& types, const HIRType* ty, F f) {
     HIRTypeRewriteCb<F> cb(f);
+    return rewriteTyWithCb(types, ty, cb);
+}
+
+template <typename F, typename G>
+struct HIRTypeValueRewriteCb final: HIRTypeRewriteCallback {
+    F f;
+    G g;
+
+    HIRTypeValueRewriteCb(F f, G g)
+        : f(f)
+        , g(g)
+    {
+    }
+
+    const HIRType* rewrite(const HIRType* type) override {
+        return f(type);
+    }
+
+    bool rewritesValues() const override {
+        return true;
+    }
+
+    HIRConstGeneric rewriteValue(const HIRConstGeneric& value) override {
+        return g(value);
+    }
+};
+
+template <typename F, typename G>
+const HIRType* rewriteTyWith(HIRTypeInterner& types, const HIRType* ty, F f, G g) {
+    HIRTypeValueRewriteCb<F, G> cb(f, g);
     return rewriteTyWithCb(types, ty, cb);
 }
 

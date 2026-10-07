@@ -916,13 +916,27 @@ const HIRType* StaticTraitResolve::normalizeForItemLookup(const Span& sp, const 
         return input;
     }
     unsigned placeholders = 0;
-    input = rewriteTyWith(crate.types, input, [&](const HIRType* type) -> const HIRType* {
-        const auto* infer = type->opt_Infer();
-        if (infer && infer->index == ~0u && placeholders < 256) {
-            return crate.types.generic(HIRGenericRef(RcString::newInterned("_"), GENERICPlaceholder, static_cast<u16>(placeholders++)));
+    const auto placeholder = [&]() {
+        return HIRGenericRef(RcString::newInterned("_"), GENERICPlaceholder, static_cast<u16>(placeholders++));
+    };
+    input = rewriteTyWith(
+        crate.types,
+        input,
+        [&](const HIRType* type) -> const HIRType* {
+            const auto* infer = type->opt_Infer();
+            if (infer && infer->index == ~0u && placeholders < 256) {
+                return crate.types.generic(placeholder());
+            }
+            return nullptr;
+        },
+        [&](const HIRConstGeneric& value) {
+            const auto* infer = value.opt_Infer();
+            if (infer && infer->index == ~0u && placeholders < 256) {
+                return HIRConstGeneric::make_Generic(placeholder());
+            }
+            return value.clone();
         }
-        return nullptr;
-    });
+    );
     if (const auto* replacement = this->replaceEqualities(input)) {
         return replacement;
     }
