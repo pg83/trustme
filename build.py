@@ -3581,6 +3581,15 @@ bat_0_26_1 = add_project_test(
     url="https://github.com/sharkdp/bat.git",
     rev="979ba22628bc9d8171f2cffca2bd5c90c9fc0a9e",
     lockfile="$(S)/tst/projects/bat_0_26_1/Cargo.lock",
+    # config::get_pager_executable_with_bat_pager sets BAT_PAGER=most in the
+    # process environment while the other get_pager_executable tests run on
+    # their own threads and read it: get_pager_executable_with_pager_more_
+    # switches_to_less then sees "most". The test binary fails 8 runs in 30
+    # with every test and none in 30 without this one.
+    adapter_args=[
+        "--",
+        "--skip", "config::get_pager_executable_with_bat_pager",
+    ],
 )
 
 ripgrep_15_2_0 = add_project_test(
