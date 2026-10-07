@@ -293,16 +293,19 @@ void ASTType::print(ZeroCopyOutput& os, bool isDebug /*=false*/) const {
         case TypeData::TAG_Function: {
             auto& ent = data.as_Function();
             os << ent.info.hrbs;
-            if (ent.info.abi != "") {
-                os << StringView("extern \"") << ent.info.abi << StringView("\" ");
-            }
             if (ent.info.isUnsafe) {
                 os << StringView("unsafe ");
+            }
+            if (ent.info.abi != "") {
+                os << StringView("extern \"") << ent.info.abi << StringView("\" ");
             }
             os << StringView("fn(");
             for (const auto& arg : ent.info.argTypes) {
                 arg->print(os, isDebug);
                 os << StringView(", ");
+            }
+            if (ent.info.isVariadic) {
+                os << StringView("...");
             }
             os << StringView(")");
             if (!ent.info.rettype->isUnit()) {
